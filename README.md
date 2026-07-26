@@ -29,10 +29,17 @@ its numbers are not comparable to these. llama is `llama-bench -p 0 -n 128 -d 51
 (`-d` = KV depth), same session, auto clock.
 
 **tinygrad leads llama.cpp on 8B decode at both depths, and on 14B at ctx512 — but loses 14B at ctx4096.**
-The earlier claim of a lead "across all three models at both contexts" no longer holds: it was measured
-against llama's 2026-07-03 14B ctx4096 figure of 54.6 tok/s, and llama's deep-context 14B decode has since
-improved to 62.87. Our 14B decays -13.1% from ctx512 to ctx4096 against llama's -5.6%, so **14B
-deep-context decode is the clearest remaining decode weakness.**
+Our 14B decays −13.1% from ctx512 to ctx4096 against llama's −5.6%, so **14B deep-context decode is the
+clearest remaining decode weakness.**
+
+The earlier claim of a lead "across all three models at both contexts" is **withdrawn as unsupported**, on
+both sides of the comparison. Ours: the 68.2 quoted for 14B "ctx4096" came from the growing-window harness;
+the same code at true depth 4096 measured 59.57 on 07-16 and 59.41 today — flat, so we have not regressed.
+Llama's: the 54.6 quoted for 14B ctx4096 **does not reproduce**. The binary is unchanged since 2026-06-10,
+its 07-03 ctx512 figure does reproduce (65.6 vs 66.97 today), and its decay is flat — d0 67.69, d512 66.97,
+d2048 65.04, d4096 63.10 — yet 54.6 matches neither `-fa 1` (63.10) nor `-fa 0` (43.46) at that depth. Its
+method was never recorded, so **it should not be treated as a baseline, and no claim that we once led this
+point rests on it.**
 
 ### Decode, tinygrad vs llama.cpp (2026-07-26, same session)
 
@@ -90,7 +97,7 @@ this box should be treated as indicative only.
 | Model | Quant | Decode ctx512 | Decode ctx4096 | Notes |
 |---|---:|---:|---:|---|
 | Qwen3-8B | Q4_K_M | 103.20 ± 1.02 | 96.80 ± 0.20 | **2026-07-26, same session** (`-d 512,4096`). |
-| Qwen3-14B | Q4_K_M | 66.58 ± 0.38 | 62.87 ± 0.05 | **2026-07-26, same session.** ctx4096 was 54.6 on 07-03 — llama improved here, and now beats us at this point. |
+| Qwen3-14B | Q4_K_M | 66.58 ± 0.38 | 62.87 ± 0.05 | **2026-07-26, same session.** Beats us at ctx4096. The 07-03 figure of 54.6 does not reproduce (see above) and is not carried forward. |
 | Qwen3-32B | Q4_K_M | 31.2 tok/s | 29.7 tok/s | Decode 2026-07-03 (tg128), historical. Prefill not re-measured (we fall back on 32B). |
 
 Read these as current working numbers, not a universal claim:
