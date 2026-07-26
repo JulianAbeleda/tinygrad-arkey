@@ -1,0 +1,22 @@
+{
+  "argv": [
+    "extra/qk/decode/decode_runtime_overhead.py",
+    "--model",
+    "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+    "--ckpts",
+    "512",
+    "--max-context",
+    "4608",
+    "--nmeas",
+    "40",
+    "--reps",
+    "5",
+    "--out",
+    "/home/ubuntu/worktrees/luna-tinygrad-g5-trace/artifacts/rocprofv3-14b-decode-g5-20260726/ctx512/authority.json"
+  ],
+  "artifact": "/home/ubuntu/worktrees/luna-tinygrad-g5-trace/artifacts/rocprofv3-14b-decode-g5-20260726/ctx512/authority.json",
+  "phase": "completed",
+  "pid": 173901,
+  "schema": "tinygrad.decode.fixed_depth.lifecycle.v1",
+  "updated_unix_ns": 1785106484134135521
+}

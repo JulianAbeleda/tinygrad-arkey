@@ -1,0 +1,69 @@
+W20260726 18:53:40.340366 125298400027136 simple_timer.cpp:55] [rocprofv3] tool initialization ::     0.001081 sec
+W20260726 18:53:40.340425 125298400027136 simple_timer.cpp:55] [rocprofv3] 'python3 extra/qk/decode/decode_runtime_overhead.py --model /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --ckpts 512 --max-context 4608 --nmeas 40 --reps 5 --out /home/ubuntu/worktrees/luna-tinygrad-g5-trace/artifacts/rocprofv3-14b-decode-g5-20260726/ctx512/authority.json' ::     0.000000 sec
+@@DECODE_STATUS@@ phase=started
+@@DECODE_STATUS@@ phase=loading_model
+W20260726 18:53:51.112623 140333315006976 simple_timer.cpp:55] [rocprofv3] tool initialization ::     0.001105 sec
+W20260726 18:53:51.112679 140333315006976 simple_timer.cpp:55] [rocprofv3] '/usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(12)' ::     0.000000 sec
+W20260726 18:53:51.195910 126430503727616 simple_timer.cpp:55] [rocprofv3] tool initialization ::     0.001104 sec
+W20260726 18:53:51.195976 126430503727616 simple_timer.cpp:55] [rocprofv3] '/usr/bin/python3 -c from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=13, pipe_handle=15) --multiprocessing-fork' ::     0.000000 sec
+W20260726 18:53:53.393808 126430503727616 simple_timer.cpp:55] [rocprofv3] output generation ::     0.000724 sec
+W20260726 18:53:53.393849 126430503727616 simple_timer.cpp:55] [rocprofv3] tool finalization ::     0.000838 sec
+W20260726 18:53:53.447739 125062038901248 simple_timer.cpp:55] [rocprofv3] tool initialization ::     0.001057 sec
+W20260726 18:53:53.447791 125062038901248 simple_timer.cpp:55] [rocprofv3] '/usr/bin/python3 -c from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=13, pipe_handle=15) --multiprocessing-fork' ::     0.000000 sec
+W20260726 18:53:54.703407 125062038901248 simple_timer.cpp:55] [rocprofv3] output generation ::     0.000675 sec
+W20260726 18:53:54.703446 125062038901248 simple_timer.cpp:55] [rocprofv3] tool finalization ::     0.000789 sec
+W20260726 18:53:57.229333 124464463905280 simple_timer.cpp:55] [rocprofv3] tool initialization ::     0.001078 sec
+W20260726 18:53:57.229387 124464463905280 simple_timer.cpp:55] [rocprofv3] '/usr/bin/python3 -c from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=13, pipe_handle=15) --multiprocessing-fork' ::     0.000000 sec
+W20260726 18:53:59.068159 124464463905280 simple_timer.cpp:55] [rocprofv3] output generation ::     0.000703 sec
+W20260726 18:53:59.068199 124464463905280 simple_timer.cpp:55] [rocprofv3] tool finalization ::     0.000817 sec
+W20260726 18:53:59.120038 124155729011200 simple_timer.cpp:55] [rocprofv3] tool initialization ::     0.001048 sec
+W20260726 18:53:59.120087 124155729011200 simple_timer.cpp:55] [rocprofv3] '/usr/bin/python3 -c from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=13, pipe_handle=15) --multiprocessing-fork' ::     0.000000 sec
+W20260726 18:54:00.402942 124155729011200 simple_timer.cpp:55] [rocprofv3] output generation ::     0.000673 sec
+W20260726 18:54:00.402984 124155729011200 simple_timer.cpp:55] [rocprofv3] tool finalization ::     0.000787 sec
+W20260726 18:54:01.285089 127199949185536 simple_timer.cpp:55] [rocprofv3] tool initialization ::     0.001070 sec
+W20260726 18:54:01.285144 127199949185536 simple_timer.cpp:55] [rocprofv3] '/usr/bin/python3 -c from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=13, pipe_handle=15) --multiprocessing-fork' ::     0.000000 sec
+W20260726 18:54:02.668079 127199949185536 simple_timer.cpp:55] [rocprofv3] output generation ::     0.000719 sec
+W20260726 18:54:02.668119 127199949185536 simple_timer.cpp:55] [rocprofv3] tool finalization ::     0.000826 sec
+W20260726 18:54:02.721152 133741924049408 simple_timer.cpp:55] [rocprofv3] tool initialization ::     0.001049 sec
+W20260726 18:54:02.721203 133741924049408 simple_timer.cpp:55] [rocprofv3] '/usr/bin/python3 -c from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=13, pipe_handle=15) --multiprocessing-fork' ::     0.000000 sec
+W20260726 18:54:03.985726 133741924049408 simple_timer.cpp:55] [rocprofv3] output generation ::     0.000677 sec
+W20260726 18:54:03.985786 133741924049408 simple_timer.cpp:55] [rocprofv3] tool finalization ::     0.000812 sec
+W20260726 18:54:04.834394 136258386149888 simple_timer.cpp:55] [rocprofv3] tool initialization ::     0.001078 sec
+W20260726 18:54:04.834450 136258386149888 simple_timer.cpp:55] [rocprofv3] '/usr/bin/python3 -c from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=13, pipe_handle=15) --multiprocessing-fork' ::     0.000000 sec
+W20260726 18:54:06.263569 136258386149888 simple_timer.cpp:55] [rocprofv3] output generation ::     0.000703 sec
+W20260726 18:54:06.263610 136258386149888 simple_timer.cpp:55] [rocprofv3] tool finalization ::     0.000821 sec
+W20260726 18:54:06.316589 126096249545216 simple_timer.cpp:55] [rocprofv3] tool initialization ::     0.001049 sec
+W20260726 18:54:06.316639 126096249545216 simple_timer.cpp:55] [rocprofv3] '/usr/bin/python3 -c from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=13, pipe_handle=15) --multiprocessing-fork' ::     0.000000 sec
+W20260726 18:54:07.568997 126096249545216 simple_timer.cpp:55] [rocprofv3] output generation ::     0.000722 sec
+W20260726 18:54:07.569037 126096249545216 simple_timer.cpp:55] [rocprofv3] tool finalization ::     0.000834 sec
+W20260726 18:54:08.288631 130067695477248 simple_timer.cpp:55] [rocprofv3] tool initialization ::     0.001103 sec
+W20260726 18:54:08.288685 130067695477248 simple_timer.cpp:55] [rocprofv3] '/usr/bin/python3 -c from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=13, pipe_handle=15) --multiprocessing-fork' ::     0.000000 sec
+W20260726 18:54:09.612100 130067695477248 simple_timer.cpp:55] [rocprofv3] output generation ::     0.000680 sec
+W20260726 18:54:09.612137 130067695477248 simple_timer.cpp:55] [rocprofv3] tool finalization ::     0.000789 sec
+W20260726 18:54:09.662690 133672147943936 simple_timer.cpp:55] [rocprofv3] tool initialization ::     0.001048 sec
+W20260726 18:54:09.662739 133672147943936 simple_timer.cpp:55] [rocprofv3] '/usr/bin/python3 -c from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=13, pipe_handle=15) --multiprocessing-fork' ::     0.000000 sec
+W20260726 18:54:10.961288 133672147943936 simple_timer.cpp:55] [rocprofv3] output generation ::     0.000661 sec
+W20260726 18:54:10.961329 133672147943936 simple_timer.cpp:55] [rocprofv3] tool finalization ::     0.000761 sec
+W20260726 18:54:12.893977 138058041598464 simple_timer.cpp:55] [rocprofv3] tool initialization ::     0.001078 sec
+W20260726 18:54:12.894034 138058041598464 simple_timer.cpp:55] [rocprofv3] '/usr/bin/python3 -c from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=13, pipe_handle=15) --multiprocessing-fork' ::     0.000000 sec
+W20260726 18:54:14.892281 138058041598464 simple_timer.cpp:55] [rocprofv3] output generation ::     0.000672 sec
+W20260726 18:54:14.892324 138058041598464 simple_timer.cpp:55] [rocprofv3] tool finalization ::     0.000788 sec
+W20260726 18:54:14.945775 132077472465408 simple_timer.cpp:55] [rocprofv3] tool initialization ::     0.001077 sec
+W20260726 18:54:14.945828 132077472465408 simple_timer.cpp:55] [rocprofv3] '/usr/bin/python3 -c from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=13, pipe_handle=15) --multiprocessing-fork' ::     0.000000 sec
+W20260726 18:54:16.211544 132077472465408 simple_timer.cpp:55] [rocprofv3] output generation ::     0.000675 sec
+W20260726 18:54:16.211594 132077472465408 simple_timer.cpp:55] [rocprofv3] tool finalization ::     0.000799 sec
+@@DECODE_STATUS@@ phase=warming
+@@DECODE_STATUS@@ phase=measuring
+@@DECODE_STATUS@@ phase=measuring
+@@DECODE_STATUS@@ phase=measuring
+@@DECODE_STATUS@@ phase=measuring
+@@DECODE_STATUS@@ phase=measuring
+ctx   512: W  14.55ms (68.71 tok/s) | D  14.80ms (67.58 tok/s) | host-sync N/A (D slower than W) | flash
+@@DECODE_STATUS@@ phase=writing_artifact
+artifact: /home/ubuntu/worktrees/luna-tinygrad-g5-trace/artifacts/rocprofv3-14b-decode-g5-20260726/ctx512/authority.json
+@@DECODE_STATUS@@ phase=completed
+W20260726 18:54:44.752675 125298400027136 simple_timer.cpp:55] [rocprofv3] output generation ::     0.000879 sec
+W20260726 18:54:44.752720 125298400027136 simple_timer.cpp:55] [rocprofv3] tool finalization ::     0.000998 sec
+W20260726 18:54:44.782681 140333315006976 simple_timer.cpp:55] [rocprofv3] '/usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(12)' ::    53.670003 sec
+W20260726 18:54:44.783425 140333315006976 simple_timer.cpp:55] [rocprofv3] output generation ::     0.000620 sec
+W20260726 18:54:44.783448 140333315006976 simple_timer.cpp:55] [rocprofv3] tool finalization ::     0.000700 sec

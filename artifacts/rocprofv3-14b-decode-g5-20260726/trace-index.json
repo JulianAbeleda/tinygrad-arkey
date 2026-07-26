@@ -1,0 +1,26 @@
+{
+  "schema": "tinygrad.rocprofv3.trace-index.v1",
+  "run_id": "14b-decode-g5-20260726",
+  "git_commit": "f54f06e27e3db50f287480705d8c668106712fce",
+  "model": "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+  "profiler_command": "/opt/rocm/bin/rocprofv3 --kernel-trace --output-format json --output-directory /home/ubuntu/worktrees/luna-tinygrad-g5-trace/artifacts/rocprofv3-14b-decode-g5-20260726/ctx512/rocprof -- python3 extra/qk/decode/decode_runtime_overhead.py --model /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --ckpts 512 --max-context 4608 --nmeas 40 --reps 5 --out /home/ubuntu/worktrees/luna-tinygrad-g5-trace/artifacts/rocprofv3-14b-decode-g5-20260726/ctx512/authority.json",
+  "lock": "/tmp/gpu-bench.lock",
+  "contexts": [{
+    "ctx": 512,
+    "exit_code": 0,
+    "authority_artifact": "ctx512/authority.json",
+    "authority_bytes": 14012,
+    "authority_valid": true,
+    "route": "flash",
+    "programs_per_token": 1133,
+    "wall_ms_W": 14.554959850102023,
+    "tok_s_W": 68.70510192393218,
+    "rocprof_output_directory_exists": false,
+    "rocprof_json_artifacts": [],
+    "rocprof_saw_tinygrad_dispatches": false,
+    "fault_or_reset_evidence": false,
+    "raw_logs": ["ctx512/session.stdout", "ctx512/session.stderr", "ctx512/authority.json.status.json"]
+  }],
+  "ctx4096_not_run": "ctx512 did not produce a kernel-trace authority artifact; no dispatch evidence exists",
+  "verdict": "FAIL_CLOSED_NO_KERNEL_TRACE"
+}
