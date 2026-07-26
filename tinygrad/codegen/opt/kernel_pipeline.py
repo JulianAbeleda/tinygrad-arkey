@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable, Literal, Protocol
-from tinygrad.codegen.opt.compiler_policies import PipelinePolicy, StoragePolicy
+from tinygrad.codegen.opt.compiler_policies import PipelinePolicy, ResourcePlan, StoragePolicy
 
 from tinygrad.dtype import AddrSpace, DType, dtypes
 from tinygrad.uop.ops import AxisType, Ops, UOp
@@ -36,6 +36,20 @@ def validate_scheduler_tile_loop_pressure(*, resident_accumulator_vgprs:int,
   # The zero-reserve form retains the original pinned-carrier contract.
   if required > pinned_vgpr_budget or (transient_vgpr_reserve and required == pinned_vgpr_budget):
     raise ValueError(f"scheduler tile loop requires {required} pinned VGPRs, budget is {pinned_vgpr_budget}")
+
+def resource_plan_for_scheduler_tile_loop(*, resident_accumulator_vgprs:int, resident_fragment_vgprs:int,
+                                          transient_vgpr_reserve:int=0) -> ResourcePlan:
+  """Capture a proved scheduler tile-loop budget through the shared resource schema.
+
+  This lets custom (scheduler-owned) kernels report their resident WMMA
+  carriers through the same ``ResourcePlan`` shape as ordinary compiled
+  programs, instead of a bespoke pair of ints.  The admission check is
+  reused rather than restated, so this can never report a budget that
+  ``validate_scheduler_tile_loop_pressure`` would reject.
+  """
+  validate_scheduler_tile_loop_pressure(resident_accumulator_vgprs=resident_accumulator_vgprs,
+    resident_fragment_vgprs=resident_fragment_vgprs, transient_vgpr_reserve=transient_vgpr_reserve)
+  return ResourcePlan("pinned_budget", vgpr=resident_accumulator_vgprs + resident_fragment_vgprs)
 
 class StorageCallbacks(Protocol):
   def producer(self, epoch: UOp, slot: UOp, reuse: UOp|None = None): ...

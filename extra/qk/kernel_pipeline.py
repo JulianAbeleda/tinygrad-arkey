@@ -3,7 +3,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable, Generic, Literal, TypeVar
-from tinygrad.codegen.opt.kernel_pipeline import PINNED_WMMA_VGPR_BUDGET, validate_scheduler_tile_loop_pressure
+from tinygrad.codegen.opt.compiler_policies import ResourcePlan
+from tinygrad.codegen.opt.kernel_pipeline import (PINNED_WMMA_VGPR_BUDGET, resource_plan_for_scheduler_tile_loop,
+  validate_scheduler_tile_loop_pressure)
 
 from tinygrad.dtype import DType
 from tinygrad.uop.ops import AxisType, Ops, UOp
@@ -15,7 +17,15 @@ AttachmentT = TypeVar("AttachmentT")
 
 @dataclass(frozen=True)
 class DotUpdateRecurrencePlan:
-  """Shape and carrier types for a grouped mixed-dtype recurrence."""
+  """Shape and carrier types for a grouped mixed-dtype recurrence.
+
+  LR-021: this stays here rather than moving to the core PipelinePolicy
+  family. It has no storage kind, wait/barrier policy, or resource facts of
+  its own -- it describes the dtype/substep shape of a dot/update recurrence
+  chain, which is a different axis of knowledge than the memory/synchronization
+  contracts ``compiler_policies.py`` owns. Merging it would fabricate a
+  storage/wait story this plan does not have.
+  """
   persistent_dtype: DType
   dot_dtype: DType
   phase_count: int
@@ -171,7 +181,15 @@ class HierarchicalPipelineRole:
 
 @dataclass(frozen=True)
 class HierarchicalKernelPipelinePlan:
-  """Generic two-level lifetime contract, independent of storage or allocation."""
+  """Generic two-level lifetime contract, independent of storage or allocation.
+
+  LR-021: deliberately not expressed as a ``PipelinePolicy``. Its whole point
+  is to state role lifetimes and the produce/publish/consume/release protocol
+  without committing to an LDS/register storage kind, a wait-count policy, or
+  a resource plan -- those remain the caller's choice. Forcing a fixed
+  ``StoragePolicy``/``WaitPolicy`` onto it would assert facts this plan does
+  not know and is not supposed to know.
+  """
   persistent: HierarchicalPipelineRole
   overwriteable: HierarchicalPipelineRole
   phase_count: int = 2
@@ -262,6 +280,16 @@ class SchedulerOutputTileLoop:
       raise ValueError("output tile loop id must be a non-negative int")
     validate_scheduler_tile_loop_pressure(resident_accumulator_vgprs=self.resident_accumulator_vgprs,
                                           resident_fragment_vgprs=self.resident_fragment_vgprs)
+
+  @property
+  def resource_plan(self) -> ResourcePlan:
+    """Expose this scheduler-owned budget through the same schema as ordinary programs.
+
+    LR-021: custom-kernel resource capture must emit the same ``ResourcePlan``
+    shape ordinary compiled programs use, not a private pair of ints.
+    """
+    return resource_plan_for_scheduler_tile_loop(resident_accumulator_vgprs=self.resident_accumulator_vgprs,
+      resident_fragment_vgprs=self.resident_fragment_vgprs)
 
 @dataclass(frozen=True)
 class SchedulerOutputTileIndices:

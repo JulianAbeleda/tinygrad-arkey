@@ -5,7 +5,7 @@ from typing import Literal
 
 StorageKind = Literal["lds", "global_register_resident"]
 WaitKind = Literal["full_barrier", "targeted_vmcnt"]
-ResourceStage = Literal["host_estimate", "final_program"]
+ResourceStage = Literal["host_estimate", "final_program", "pinned_budget"]
 
 @dataclass(frozen=True)
 class StoragePolicy:
@@ -232,12 +232,22 @@ def amdllvm_wait_dependency(dep: WaitDependency) -> WaitDependency:
 
 @dataclass(frozen=True)
 class ResourcePlan:
+  """Resource facts for one compiler-owned kernel, tagged by provenance.
+
+  ``pinned_budget`` is neither a host estimate nor a measured final program:
+  it is a compile-time architectural ceiling (e.g. a scheduler-owned WMMA
+  carrier budget) that a pipeline is proved to fit within before lowering.
+  Keeping it distinct from ``host_estimate``/``final_program`` stops a pinned
+  ceiling from being misreported as either an unproven guess or a compiled
+  register count.
+  """
   stage: ResourceStage; lds_bytes: int = 0; scratch_bytes: int = 0; vgpr: int|None = None; sgpr: int|None = None
   def __post_init__(self):
-    if self.stage not in ("host_estimate","final_program"): raise ValueError("unsupported resource stage")
+    if self.stage not in ("host_estimate","final_program","pinned_budget"): raise ValueError("unsupported resource stage")
     if any(not isinstance(x,int) or x < 0 for x in (self.lds_bytes,self.scratch_bytes)): raise ValueError("resource bytes must be non-negative ints")
     if self.stage == "host_estimate" and (self.vgpr is not None or self.sgpr is not None): raise ValueError("host estimate cannot claim final register counts")
     if self.stage == "final_program" and (self.vgpr is None or self.sgpr is None): raise ValueError("final program requires VGPR and SGPR counts")
+    if self.stage == "pinned_budget" and self.vgpr is None: raise ValueError("pinned budget requires a VGPR ceiling")
 
 @dataclass(frozen=True)
 class PipelinePolicy:
