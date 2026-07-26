@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from tinygrad.uop import Ops, GroupOp, MemorySemanticOwner
 from tinygrad.uop import trace as _lower_trace   # LR-010 lowering trace; inert unless LOWER_TRACE is set
+from tinygrad.uop import invariants as _lower_check  # LR-011 pass invariants; inert unless LOWER_CHECK is set
 from tinygrad.dtype import ConstType, ImageDType, dtypes, DType, DTypeLike, to_dtype, truncate, PtrDType, least_upper_dtype, Invalid, AddrSpace
 from tinygrad.dtype import ConstFloat, PyConst, storage_fmt_for_dtype, to_storage_scalar, from_storage_scalar
 from tinygrad.device import Buffer, MultiBuffer, canonicalize_device
@@ -2625,10 +2626,13 @@ def graph_rewrite(sink:UOp, pm:PatternMatcher, ctx=None, bottom_up=False, name=N
   rewrite_ctx = RewriteContext(pm if not bottom_up else None, pm if bottom_up else bpm, ctx, enter_calls)
   # LR-010: every pass names itself here, so one hook observes the whole pipeline. Off unless LOWER_TRACE is set;
   # when off this is a single module attribute test and the graph is never walked.
-  if not _lower_trace.ENABLED: return rewrite_ctx.walk_rewrite(sink) if walk else rewrite_ctx.unified_rewrite(sink)
+  if not (_lower_trace.ENABLED or _lower_check.ENABLED):
+    return rewrite_ctx.walk_rewrite(sink) if walk else rewrite_ctx.unified_rewrite(sink)
   _t0 = time.perf_counter()
   out = rewrite_ctx.walk_rewrite(sink) if walk else rewrite_ctx.unified_rewrite(sink)
-  _lower_trace.record_rewrite(name, sink, out, bottom_up=bottom_up, walk=walk, started=_t0)
+  if _lower_trace.ENABLED: _lower_trace.record_rewrite(name, sink, out, bottom_up=bottom_up, walk=walk, started=_t0)
+  # LR-011: checking after every pass is what makes the first failure name the pass that caused it.
+  if _lower_check.ENABLED: _lower_check.check_pass(name, out)
   return out
 
 def sint_to_uop(x:sint, dtype=dtypes.weakint) -> UOp: return UOp.const(dtype, x) if isinstance(x, int) else x.cast(dtype)
