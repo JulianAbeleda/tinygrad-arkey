@@ -1,0 +1,12 @@
+{
+  "schema": "14b-depth-slope-model.v1",
+  "task_id": "LUNA-042",
+  "verdict": "INCONCLUSIVE",
+  "latency_model": "t_token(ctx)=t_weight_path+t_kv_path(ctx)+t_combine(ctx)+t_launch+t_sync+t_host+t_other",
+  "retained_full_model_observations": {"tinygrad_14b_tok_s": {"512": 68.39, "4096": 59.41}, "llama_14b_tok_s": {"512": 66.58, "4096": 62.87}},
+  "retained_focused_observations": {"g4_ns_per_tile": {"512": 217.28, "4096": 55.53}, "g5_ns_per_tile": {"512": 222.0, "4096": 73.43}, "g5_over_g4": {"512": 1.0217, "4096": 1.3223}},
+  "bounded_inference": "The retained focused authority establishes a genuine deep G5 cliff, but no family wall share connects it to the full-model 14B slope. It is not evidence of a particular allocator, spill, occupancy, or llama mechanism.",
+  "rejected_without_new_contradictory_evidence": ["KV reread per GQA group", "partial fifth wave", "split-size mistuning", "dispatch-count growth", "general VRAM pressure", "K_ONLY as a full-model improvement"],
+  "unallocated_residual": "100% of llama/tinygrad cross-runtime and per-family slope attribution; no normalized traces/resources/counters exist.",
+  "required_evidence": ["ctx512/4096 per-family device wall for both runtimes", "tinygrad G5 flash and combine code-object resources", "llama material-family resource rows", "counter data only for a named differentiating mechanism"]
+}
