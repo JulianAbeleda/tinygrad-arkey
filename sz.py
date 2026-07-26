@@ -42,7 +42,7 @@ def gen_stats(base_path="."):
           try:
             with tokenize.open(filepath) as file_:
               tokens = [t for t in tokenize.generate_tokens(file_.readline) if t.type in TOKEN_WHITELIST and not is_docstring(t)]
-          except (tokenize.TokenizeError, SyntaxError) as e:
+          except (tokenize.TokenError, SyntaxError, UnicodeDecodeError, ValueError, OSError) as e:
             print(f"WARNING: failed to tokenize {relfilepath}: {e}", file=sys.stderr); continue
           token_count, line_count = len(tokens), len(set([x for t in tokens for x in range(t.start[0], t.end[0]+1)]))
         if line_count <= 0: continue
