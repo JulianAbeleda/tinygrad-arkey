@@ -684,3 +684,1108 @@ This feature branch is temporary. After accepted Track A and Track B work has be
 6. Record branch retirement in the final findings.
 
 Do not retain the branch as a research archive. Rejected implementations remain recoverable from Git history, while durable conclusions belong in the findings documents and ledgers.
+
+## 14. Luna low-agent execution contract
+
+This section is normative for low-reasoning Luna agents. An agent receives one task card, not the entire open problem. The orchestrator owns dependency ordering, merges, GPU serialization, and final claims.
+
+### 14.1 Agent isolation
+
+- Every code-writing agent gets a child branch from `feature/14b-decode-ctx128-and-depth-decay` and a dedicated worktree under `/home/ubuntu/worktrees/`.
+- Read-only source-map agents may share the same commit but must not edit the same output file concurrently.
+- No agent checks out its branch in `/home/ubuntu/tinygrad-arkey` or another actor's worktree.
+- Only the orchestrator merges child commits into the feature branch.
+- No agent pushes to `master` or deletes the feature branch.
+- A child branch is removed after its useful commit is merged and its artifacts are promoted.
+
+Suggested child naming:
+
+```text
+agent/14b-luna-000-safety
+agent/14b-luna-010-llama-cli-map
+agent/14b-luna-021-llama-ctx128-trace
+agent/14b-luna-031-tinygrad-ctx128-capture
+agent/14b-luna-053-ctx128-candidate
+agent/14b-luna-063-depth-candidate
+```
+
+### 14.2 Agent task discipline
+
+Each agent must:
+
+1. Read this scope and only the files named by its task card.
+2. Record its starting commit and worktree before doing work.
+3. Refuse to use results from another commit without an explicit artifact identity match.
+4. Use the task-owned artifact directory.
+5. Produce the required positive control before interpreting empty or negative output.
+6. Return one of the allowed verdicts.
+7. Delete temporary probes or list them explicitly for cleanup.
+8. Commit only durable source, tests, manifests, or findings assigned by the task card.
+9. Report every file changed and every command that used the GPU.
+10. Stop at the task boundary instead of starting the next card independently.
+
+Allowed verdicts:
+
+```text
+PASS
+SUPPORTED
+REFUTED
+INCONCLUSIVE
+TOOL_FAILURE
+CODE_FAILURE
+GPU_FAULT
+NOT_RUN
+```
+
+`INCONCLUSIVE`, `TOOL_FAILURE`, `GPU_FAULT`, and `NOT_RUN` never satisfy a downstream dependency. A zero exit code with a missing positive control is `TOOL_FAILURE`, not `PASS`.
+
+### 14.3 GPU ownership
+
+- Only one GPU task card may be `in_progress` at a time.
+- The agent must acquire `/tmp/gpu-bench.lock` around the complete child process lifecycle.
+- The agent must record the lock file, PID, boot ID, power before/after, process start/end, and exit code.
+- The agent must not use `timeout`, `pkill`, `kill -9`, or Ctrl-C on an executing AMD kernel.
+- After `memory_lost=1`, the agent stops. The orchestrator establishes a fresh recovery boundary before another GPU card begins.
+- A source-map, parser, or comparison task may run concurrently only when it does not touch the GPU or mutate the measured worktree.
+
+### 14.4 Commit and handoff format
+
+Every completed card returns:
+
+```text
+task_id:
+verdict:
+start_commit:
+end_commit:
+child_branch:
+worktree:
+files_changed:
+artifacts:
+positive_controls:
+gpu_commands:
+temporary_files_deleted:
+remaining_cleanup:
+finding:
+next_unblocked_task_ids:
+```
+
+The finding must distinguish measured facts, source-proven facts, and inference.
+
+## 15. Machine-readable task state
+
+The orchestrator creates and owns:
+
+```text
+docs/task_workflow/in_progress/14b-decode-luna-state-20260726.json
+```
+
+Required top-level fields:
+
+```json
+{
+  "schema": "14b-decode-luna-state.v1",
+  "feature_branch": "feature/14b-decode-ctx128-and-depth-decay",
+  "base_commit": "<commit>",
+  "updated_unix_ns": 0,
+  "gpu_owner_task": null,
+  "tasks": []
+}
+```
+
+Each task row contains:
+
+```text
+id
+title
+status: pending|in_progress|completed|failed
+dependencies
+agent
+child_branch
+start_commit
+end_commit
+verdict
+artifact_paths
+finding_path
+cleanup_complete
+```
+
+At most one task with `uses_gpu=true` may be `in_progress`. At most one task that edits a given production file may be `in_progress`.
+
+The state file tracks execution. It does not replace evidence artifacts or findings documents.
+
+## 16. Run artifact schema
+
+Every GPU or compiler run writes a sidecar manifest. Required fields:
+
+```text
+schema
+task_id
+created_unix_ns
+branch
+commit
+worktree
+git_dirty_paths
+command_argv
+environment_overrides
+model_path
+model_size_bytes
+model_mtime_ns
+model_identity_sha256
+backend
+device
+architecture
+boot_id
+lock_path
+lock_owner_pid
+power_before
+power_after
+start_time
+end_time
+exit_code
+classification
+positive_control
+stdout_path
+stderr_path
+primary_artifact_path
+kernel_or_route_identity
+notes
+```
+
+Do not record secrets or the complete ambient environment. Record only overrides that can change route, compiler, GPU, or benchmark behavior.
+
+Raw ROCm traces remain under `bench/14b-decode-ctx128-depth-decay-20260726/` unless they are small enough and stable enough to promote. Findings commit trace hashes, summaries, commands, and source attribution rather than uncontrolled multi-gigabyte output.
+
+## 17. Dependency waves
+
+| Wave | Task IDs | Parallelism | Gate to advance |
+|---|---|---|---|
+| 0 | LUNA-000 through LUNA-003 | CPU/static parallel | Environment, binaries, schema, and lock positive controls complete |
+| 1 | LUNA-010 through LUNA-014 | CPU/static parallel | Source maps connect selection decisions to expected semantic families |
+| 2 | LUNA-020 | CPU-only | Token fixture and exact commands accepted |
+| 3 | LUNA-021 through LUNA-023 | GPU serial | Bounded llama traces for 128/512/4096 complete |
+| 4 | LUNA-024 through LUNA-026 | CPU analysis; focused GPU counters serial | llama dispatch/resource/counter ledger complete |
+| 5 | LUNA-030 through LUNA-034 | GPU/compiler serial | tinygrad control, failure, traces, and fallback attribution complete |
+| 6 | LUNA-040 through LUNA-044 | CPU analysis parallel, then synthesis | First-principles comparison accepted |
+| 7 | LUNA-050 | CPU-only | BoltBeam contract accepted |
+| 8A | LUNA-051 through LUNA-055 | Sequential by dependency | Context-128 correctness and reliability complete |
+| 8B | LUNA-060 through LUNA-064 | Sequential by dependency | Depth-decay mechanism and authority complete |
+| 9 | LUNA-070 through LUNA-074 | Mostly CPU; final authority already retained | Regression, docs, cleanup, promotion, retirement complete |
+
+Wave 8B may begin static analysis after Wave 6, but it may not promote before Track A passes. If Track A changes any 512+ route or code object, rerun LUNA-032, LUNA-033, LUNA-060, and all downstream B tasks.
+
+## 18. Detailed Luna task cards
+
+### LUNA-000: safety and ownership census
+
+Uses GPU: no.
+
+Dependencies: none.
+
+Actions:
+
+- Record feature commit, remote status, branch, worktree list, dirty files, stashes, active agents, GPU processes, lock state, boot ID, and power state.
+- Identify every active worktree owner. Do not modify them.
+- Confirm task artifact and in-progress directories can be created without overwriting retained evidence.
+
+Outputs:
+
+- `docs/task_workflow/in_progress/14b-decode-luna-state-20260726.json`
+- `bench/14b-decode-ctx128-depth-decay-20260726/luna-000-safety.json`
+
+Acceptance:
+
+- Positive control records the feature branch and exact worktree.
+- No ownership ambiguity remains for paths used by this task.
+
+Stop:
+
+- Existing branch/worktree collision, unclear unpushed ownership, or unlocked active GPU process.
+
+### LUNA-001: ROCm tool capability census
+
+Uses GPU: no dispatch; device queries only.
+
+Dependencies: LUNA-000.
+
+Actions:
+
+- Resolve exact paths and versions for `rocprofv3`, `rocprof`, `rocprof-compute` or `omniperf`, `rocm-smi`, `rocminfo`, and ROCtx support.
+- Capture help output relevant to kernel tracing, HIP API tracing, counters, output formats, kernel filters, and process scope.
+- Record which tools are absent.
+- Do not install anything.
+
+Outputs:
+
+- `bench/14b-decode-ctx128-depth-decay-20260726/luna-001-rocm-tools.json`
+- `docs/task_workflow/in_progress/14b-rocm-command-recipes-20260726.md`
+
+Acceptance:
+
+- At least one bounded kernel-dispatch trace method is positively identified.
+- Counter collection is either positively available with gfx1100 semantics or explicitly unavailable.
+
+Stop:
+
+- Installed tooling cannot trace the actual llama backend. Return `TOOL_FAILURE` with exact missing capability.
+
+### LUNA-002: llama and model identity
+
+Uses GPU: no.
+
+Dependencies: LUNA-000.
+
+Actions:
+
+- Locate the exact llama.cpp source tree that built the installed binary.
+- Record Git commit, dirty state, binary path, SHA256, linked ROCm/HIP libraries, build flags, and backend list.
+- Record GGUF identity and relevant Qwen3-14B metadata.
+- Prove the benchmark selects AMD ROCm/HIP for `-ngl 99`.
+
+Outputs:
+
+- `bench/14b-decode-ctx128-depth-decay-20260726/luna-002-llama-identity.json`
+
+Acceptance:
+
+- Source commit maps to binary build or the mismatch is explicitly documented.
+- Backend identity has a positive runtime or linkage control.
+
+Stop:
+
+- Binary provenance cannot be connected to a source tree. Do not source-map a different revision silently.
+
+### LUNA-003: run-manifest collector
+
+Uses GPU: no.
+
+Dependencies: LUNA-000.
+
+Actions:
+
+- Implement the smallest reusable collector for Section 16 fields, or extend an existing owned collector.
+- Add focused tests for dirty-path capture, boot ID, power, command argv, and missing positive controls.
+- The collector must remain side-effect free until explicitly invoked.
+
+Outputs:
+
+- Reusable collector in the existing canonical audit/benchmark utility location.
+- Focused unit tests.
+
+Acceptance:
+
+- Tests prove a known command, branch, dirty path, and worktree are recorded.
+- Missing required fields fail loudly.
+
+Stop:
+
+- An existing canonical collector already satisfies the contract. Reuse it and return `PASS` without duplication.
+
+### LUNA-010: llama benchmark and request lifecycle source map
+
+Uses GPU: no.
+
+Dependencies: LUNA-002.
+
+Read boundary:
+
+- llama-bench entry point and benchmark loop.
+- Request/token construction and decode invocation files reached directly from that loop.
+
+Actions:
+
+- Map CLI flags to prompt tokens, generation tokens, repetitions, batch, ubatch, flash attention, and GPU offload.
+- Map prompt processing, first token, steady decode, and synchronization boundaries.
+- Record exact file/function references.
+
+Outputs:
+
+- `docs/task_workflow/in_progress/luna-010-llama-request-lifecycle.md`
+
+Acceptance:
+
+- Every benchmark phase has a source owner and an observable trace boundary proposal.
+
+### LUNA-011: llama quant linear source map
+
+Uses GPU: no.
+
+Dependencies: LUNA-002.
+
+Actions:
+
+- Map Q4_K/Q6_K prompt GEMM and decode GEMV/MMQ selection from graph op to ROCm kernel.
+- Record shape predicates, M buckets, tile ownership, quant decode algebra, activation quantization if used, and fallback rules.
+- Separate prompt, first-token, and steady-decode paths.
+
+Outputs:
+
+- `docs/task_workflow/in_progress/luna-011-llama-quant-path.md`
+
+Acceptance:
+
+- Each expected kernel family is connected to a source selection predicate.
+
+### LUNA-012: llama attention and KV source map
+
+Uses GPU: no.
+
+Dependencies: LUNA-002.
+
+Actions:
+
+- Map G=5 attention ownership, flash admission, KV layout, KV writes, KV reads, split/combine behavior, masking, and causal bounds.
+- Calculate expected KV bytes per token and per context from model geometry.
+- Record source references and assumptions.
+
+Outputs:
+
+- `docs/task_workflow/in_progress/luna-012-llama-attention-kv.md`
+
+Acceptance:
+
+- Expected dispatch families and byte formulas exist for contexts 128/512/4096.
+
+### LUNA-013: llama ROCm backend source map
+
+Uses GPU: no.
+
+Dependencies: LUNA-002.
+
+Actions:
+
+- Map graph scheduling, buffer allocation, HIP stream/queue use, kernel launch, synchronization, and code-object compilation/loading.
+- Identify where grid, block, LDS, and kernel names are formed.
+- Identify the source-to-dispatch join keys usable by trace parsing.
+
+Outputs:
+
+- `docs/task_workflow/in_progress/luna-013-llama-rocm-backend.md`
+
+Acceptance:
+
+- At least one known kernel can be predicted from source and later confirmed in LUNA-021.
+
+### LUNA-014: tinygrad equivalent source map
+
+Uses GPU: no.
+
+Dependencies: LUNA-000.
+
+Actions:
+
+- Map the canonical fixed-depth decode harness through model prompt processing, prefill linear routing, attention routing, KV updates, first token, flash decode, combine, and token extraction.
+- Record where context 128 versus 512 can select different paths.
+- Record the explicit and implicit direct-packed fallback boundaries.
+
+Outputs:
+
+- `docs/task_workflow/in_progress/luna-014-tinygrad-request-map.md`
+
+Acceptance:
+
+- Every route decision needed by LUNA-034 has a named function and observable positive control.
+
+### LUNA-020: comparable workload and token fixture
+
+Uses GPU: no.
+
+Dependencies: LUNA-010, LUNA-014.
+
+Actions:
+
+- Define exact prompt token IDs for lengths 128, 512, and 4096.
+- Establish BOS/EOS handling and deterministic temperature-zero expectations.
+- Define explicit llama and tinygrad commands using the same GGUF and comparable KV depths.
+- Set trace runs to one bounded repetition and authority runs to the retained standard.
+
+Outputs:
+
+- `bench/14b-decode-ctx128-depth-decay-20260726/token-fixture.json`
+- `docs/task_workflow/in_progress/luna-020-command-matrix.md`
+
+Acceptance:
+
+- Both runtimes consume the same token fixture or the exact semantic difference is quantified.
+- Commands explicitly set batch, ubatch, flash, offload, context, generation length, and output paths.
+
+Stop:
+
+- The installed llama entry point cannot accept or reproduce the fixture. Define a bounded wrapper rather than claiming equivalence.
+
+### LUNA-021: llama context-128 bounded trace
+
+Uses GPU: yes.
+
+Dependencies: LUNA-001, LUNA-002, LUNA-003, LUNA-020.
+
+Actions:
+
+- Run one clean ordinary smoke proving context-128 output.
+- Run one bounded ROCm dispatch trace.
+- Separate prompt, transition, and one steady decode token.
+- Record exact kernel order, grid/block, durations, and source join keys.
+
+Outputs:
+
+- `bench/14b-decode-ctx128-depth-decay-20260726/llama/ctx128/`
+
+Acceptance:
+
+- Known kernel positive control from LUNA-013 appears.
+- Context 128 completes without fault and produces deterministic output.
+
+### LUNA-022: llama context-512 bounded trace
+
+Uses GPU: yes.
+
+Dependencies: LUNA-021.
+
+Actions and acceptance: identical to LUNA-021 at context 512.
+
+Outputs:
+
+- `bench/14b-decode-ctx128-depth-decay-20260726/llama/ctx512/`
+
+### LUNA-023: llama context-4096 bounded trace
+
+Uses GPU: yes.
+
+Dependencies: LUNA-022.
+
+Actions and acceptance: identical to LUNA-021 at context 4096, with raw trace size bounded by filtering to the measured request.
+
+Outputs:
+
+- `bench/14b-decode-ctx128-depth-decay-20260726/llama/ctx4096/`
+
+### LUNA-024: llama dispatch normalization
+
+Uses GPU: no.
+
+Dependencies: LUNA-021, LUNA-022, LUNA-023.
+
+Actions:
+
+- Parse traces into semantic kernel families.
+- Separate load/setup, prompt, transition, and steady decode.
+- Compute counts and wall contribution by family and context.
+- Link every material family to LUNA-010 through LUNA-013 source references.
+
+Outputs:
+
+- `bench/14b-decode-ctx128-depth-decay-20260726/llama-dispatch-ledger.json`
+
+Acceptance:
+
+- At least 95% of measured device wall is attributed or the unattributed remainder is explicitly listed.
+
+### LUNA-025: llama resources and disassembly
+
+Uses GPU: no after code objects are retained.
+
+Dependencies: LUNA-024.
+
+Actions:
+
+- Extract VGPR, SGPR, LDS, scratch/spill, wave, grid, block, and code-object identity for material families.
+- Count relevant VMEM, LDS, VALU, matrix, barrier, and wait instructions.
+- Normalize counts per token, tile, or loop trip as appropriate.
+
+Outputs:
+
+- `bench/14b-decode-ctx128-depth-decay-20260726/llama-resource-ledger.json`
+
+Acceptance:
+
+- Every family contributing at least 5% of steady decode wall has a resource row.
+
+### LUNA-026: llama focused counters
+
+Uses GPU: yes.
+
+Dependencies: LUNA-001, LUNA-024, LUNA-025.
+
+Actions:
+
+- Select counters only for material families and named hypotheses.
+- Collect the smallest number of passes required by the installed tool.
+- Record counter definitions and normalization.
+- Compare 512 versus 4096 without using profiler wall time as authority.
+
+Outputs:
+
+- `bench/14b-decode-ctx128-depth-decay-20260726/llama-counter-ledger.json`
+
+Acceptance:
+
+- Every collected counter distinguishes a stated mechanism.
+
+Stop:
+
+- Counter tooling lacks gfx1100 support or requires unsafe system changes. Return `TOOL_FAILURE`; LUNA-040 may proceed using trace/resource evidence with the limitation stated.
+
+### LUNA-030: tinygrad 8B context-128 control
+
+Uses GPU: yes.
+
+Dependencies: LUNA-003, LUNA-020.
+
+Actions:
+
+- Run the minimal context-128 setup and one decode token in a fresh process.
+- Capture route/kernel positive controls and ordinary timing.
+- Retain compiler and dispatch identity needed for comparison with 14B.
+
+Outputs:
+
+- `bench/14b-decode-ctx128-depth-decay-20260726/tinygrad/8b-ctx128/`
+
+Acceptance:
+
+- Setup and decode pass with positively identified routes.
+
+### LUNA-031: tinygrad 14B context-128 failure capture
+
+Uses GPU: compiler/setup may dispatch; lock required.
+
+Dependencies: LUNA-003, LUNA-020, LUNA-030.
+
+Actions:
+
+- Reproduce once.
+- Retain failing HIP source, function name, semantic UOp slice, full STORE ancestry, and successful dispatch prefix.
+- Classify failure before timed decode.
+- Do not repeat a deterministic failure.
+
+Outputs:
+
+- `bench/14b-decode-ctx128-depth-decay-20260726/tinygrad/14b-ctx128/`
+
+Acceptance:
+
+- Invalid destination STORE is connected to a semantic operation, not merely a C line.
+
+### LUNA-032: tinygrad 14B context-512 trace
+
+Uses GPU: yes.
+
+Dependencies: LUNA-003, LUNA-020, LUNA-031.
+
+Actions:
+
+- Collect ordinary timing and one bounded trace using the same schema as llama.
+- Retain route, dispatch, code-object, and resource identity.
+
+Outputs:
+
+- `bench/14b-decode-ctx128-depth-decay-20260726/tinygrad/14b-ctx512/`
+
+Acceptance:
+
+- Context 512 passes through the expected production route.
+
+### LUNA-033: tinygrad 14B context-4096 trace
+
+Uses GPU: yes.
+
+Dependencies: LUNA-032.
+
+Actions and acceptance: identical to LUNA-032 at context 4096.
+
+Outputs:
+
+- `bench/14b-decode-ctx128-depth-decay-20260726/tinygrad/14b-ctx4096/`
+
+### LUNA-034: implicit fallback attribution
+
+Uses GPU: no new GPU run unless existing route evidence lacks a positive control.
+
+Dependencies: LUNA-014, LUNA-031, LUNA-032.
+
+Actions:
+
+- Prove or refute direct-packed fallback selection at context 128.
+- Record the packed candidate accept/decline decision and exact shape.
+- Compare with a known packed selection at 512 and a known allowed direct-packed control.
+- Audit whether the environment-only fail-loud guard misses implicit selection.
+
+Outputs:
+
+- `docs/task_workflow/in_progress/luna-034-fallback-verdict.md`
+
+Acceptance:
+
+- Verdict is `SUPPORTED` or `REFUTED`; empty selection logs are invalid.
+
+### LUNA-040: algorithm and lifecycle comparison
+
+Uses GPU: no.
+
+Dependencies: LUNA-024, LUNA-030, LUNA-031, LUNA-032, LUNA-033.
+
+Actions:
+
+- Compare prompt, transition, attention, KV, quant linear, combine, sampling, and synchronization algorithms.
+- Identify equivalent and non-equivalent useful work.
+
+Outputs:
+
+- `docs/task_workflow/in_progress/luna-040-algorithm-comparison.md`
+
+### LUNA-041: traffic and compute model
+
+Uses GPU: no.
+
+Dependencies: LUNA-012, LUNA-024, LUNA-025, LUNA-032, LUNA-033.
+
+Actions:
+
+- Calculate weight, KV, transient, and duplicate traffic.
+- Calculate useful operations and instruction-normalized work.
+- Reconcile formulas with measured counters when available.
+
+Outputs:
+
+- `bench/14b-decode-ctx128-depth-decay-20260726/traffic-compute-model.json`
+
+Acceptance:
+
+- Formula inputs derive from model geometry and trace counts.
+
+### LUNA-042: depth-slope decomposition
+
+Uses GPU: no.
+
+Dependencies: LUNA-024, LUNA-025, LUNA-026 or recorded counter limitation, LUNA-041.
+
+Actions:
+
+- Fit the explicit latency model for llama and tinygrad.
+- Attribute `t(4096)-t(512)` by semantic family.
+- Reject families whose maximum contribution cannot explain the gap.
+
+Outputs:
+
+- `bench/14b-decode-ctx128-depth-decay-20260726/depth-slope-model.json`
+
+Acceptance:
+
+- Named owner or bounded owner set explains the measured slope within stated residual error.
+
+### LUNA-043: context-128 causal comparison
+
+Uses GPU: no.
+
+Dependencies: LUNA-021, LUNA-030, LUNA-031, LUNA-034, LUNA-040.
+
+Actions:
+
+- Compare llama 14B working context 128, tinygrad 8B working context 128, and tinygrad 14B failing context 128.
+- Identify the earliest semantic divergence that creates or avoids the illegal STORE.
+- Separate missing route coverage from generic lowering failure.
+
+Outputs:
+
+- `docs/task_workflow/in_progress/luna-043-ctx128-causal-comparison.md`
+
+Acceptance:
+
+- One causal owner and invariant set is named before candidate design.
+
+### LUNA-044: first-principles synthesis
+
+Uses GPU: no.
+
+Dependencies: LUNA-040, LUNA-041, LUNA-042, LUNA-043.
+
+Actions:
+
+- Merge the source, trace, resource, traffic, and causal findings.
+- Mark every claim measured, source-proven, inferred, refuted, or unresolved.
+- Produce the required Section L4 comparison.
+
+Outputs:
+
+- `docs/14b-llama-vs-tinygrad-first-principles-20260726.md`
+- `bench/14b-decode-ctx128-depth-decay-20260726/path-comparison.json`
+
+Acceptance:
+
+- Independent facts support the context-128 owner and depth-slope owner.
+- No open-ended candidate axis remains in the proposed search.
+
+### LUNA-050: BoltBeam search contract
+
+Uses GPU: no.
+
+Dependencies: LUNA-044.
+
+Actions:
+
+- Locate and record the actual BoltBeam entry point and schema.
+- Encode immutable facts, candidate axes, constraints, evaluation stages, and promotion rules from LUNA-044.
+- Define separate candidate families for Track A and Track B.
+- Add compile-only and correctness rejection before timing.
+
+Outputs:
+
+- `docs/task_workflow/in_progress/14b-decode-boltbeam-search-contract-20260726.md`
+
+Acceptance:
+
+- Every axis cites a measured or source-proven difference.
+- Search cannot hide context 128, change useful work silently, or promote profiler timing.
+
+### LUNA-051: context-128 STORE semantic repair design
+
+Uses GPU: no.
+
+Dependencies: LUNA-043, LUNA-050.
+
+Actions:
+
+- Specify intended destination semantics, invalid transformation, ownership boundary, and minimal repair layer.
+- Define invariants and focused tests before code.
+- Decide whether route coverage and compiler lowering require separate candidates.
+
+Outputs:
+
+- `docs/task_workflow/in_progress/luna-051-ctx128-repair-design.md`
+
+Acceptance:
+
+- Design explains why it changes underlying state correctly, not merely why HIP compiles.
+
+### LUNA-052: context-128 candidate review gate
+
+Uses GPU: no.
+
+Dependencies: LUNA-051.
+
+Actions:
+
+- Review design against UOp semantics, vector lane ownership, cache/KV bounds, genericity, 8B impact, and fallback policy.
+- Enumerate exact compile and numerical tests.
+
+Outputs:
+
+- `docs/task_workflow/in_progress/luna-052-ctx128-design-review.md`
+
+Acceptance:
+
+- Verdict `PASS` is required before implementation.
+
+### LUNA-053: implement context-128 candidate
+
+Uses GPU: compile-only first, then bounded GPU.
+
+Dependencies: LUNA-052 PASS.
+
+Actions:
+
+- Implement one reviewed candidate.
+- Add focused regression tests reproducing the illegal destination structure.
+- Run compile-only 8B/14B shape matrix.
+- Run deterministic token parity only after compile passes.
+
+Outputs:
+
+- Candidate code and focused tests on a child branch.
+- `bench/14b-decode-ctx128-depth-decay-20260726/candidates/ctx128/<candidate-id>/`
+
+Acceptance:
+
+- Context 128 compiles and updates intended state correctly.
+- 8B and 512+ code paths are unchanged or explicitly validated.
+
+Failure loop:
+
+- One agent implements one candidate only.
+- A failed candidate receives a verdict and cleanup commit.
+- LUNA-051 may be reopened with new evidence for the next bounded candidate.
+- After three mechanistically distinct failures, stop blind implementation and require a revised LUNA-044 synthesis.
+
+### LUNA-054: real short-prompt matrix
+
+Uses GPU: yes, serial separate processes.
+
+Dependencies: LUNA-053 PASS.
+
+Actions:
+
+- Run lengths `2,8,16,32,64,96,127,128,129,192,256,384,511,512`.
+- Run `"hi"` and one short sentence.
+- Produce at least eight deterministic decode tokens per admitted prompt.
+- Record prompt route, first-token route, token parity, bounds, and failure state.
+
+Outputs:
+
+- `bench/14b-decode-ctx128-depth-decay-20260726/prompt-matrix.json`
+
+Acceptance:
+
+- Every ordinary prompt succeeds or has an explicitly justified unsupported boundary that does not include `"hi"` or context 128.
+
+### LUNA-055: context-128 reliability and performance gate
+
+Uses GPU: yes.
+
+Dependencies: LUNA-054.
+
+Actions:
+
+- Run three clean context-128 processes.
+- Measure prompt setup, TTFT, and steady decode separately.
+- Verify route identity, token parity, no fallback ambiguity, and no GPU fault.
+- Compare with llama context 128 using ordinary timing.
+
+Outputs:
+
+- `docs/14b-decode-ctx128-recovery-findings-20260726.md`
+- Track A authority artifacts.
+
+Acceptance:
+
+- Track A completion criteria pass.
+
+### LUNA-060: depth-slope owner confirmation
+
+Uses GPU: focused measurement only if retained evidence is insufficient.
+
+Dependencies: LUNA-042, LUNA-044, and LUNA-055 if Track A changed 512+ code.
+
+Actions:
+
+- Confirm the named kernel/family and mechanism on the final Track A commit.
+- Recollect 512/4096 baselines if code objects changed.
+- Bound maximum Amdahl contribution.
+
+Outputs:
+
+- `docs/task_workflow/in_progress/luna-060-depth-owner.md`
+
+Acceptance:
+
+- Owner can explain enough wall time to meet the required performance target.
+
+### LUNA-061: G5 resource and lifetime design
+
+Uses GPU: no.
+
+Dependencies: LUNA-060.
+
+Actions:
+
+- Compare G4/G5 live ranges, allocation, staging, waits, barriers, loop state, and occupancy at shallow/deep contexts.
+- Propose only mechanism-linked compiler or route primitives.
+- Specify resource and traffic invariants.
+
+Outputs:
+
+- `docs/task_workflow/in_progress/luna-061-g5-design.md`
+
+Acceptance:
+
+- Candidate predicts a measurable resource or slope change and preserves useful work.
+
+### LUNA-062: BoltBeam depth candidate search
+
+Uses GPU: compile gates plus serialized bounded timings.
+
+Dependencies: LUNA-050, LUNA-061.
+
+Actions:
+
+- Run compile-only rejection across the bounded axes.
+- Reject spill, bounds, resource, route, and output failures before timing.
+- Time surviving kernels at shallow/deep geometry.
+- Rank by predicted whole-model contribution, not local percentage alone.
+
+Outputs:
+
+- Machine-readable candidate ledger with every attempted axis and verdict.
+- Cleanup list for generated probes.
+
+Acceptance:
+
+- At least one candidate meets correctness and has enough predicted contribution, or the bounded search space is completely resolved.
+
+Stop:
+
+- No candidate has adequate Amdahl contribution. Return to LUNA-061 only with new LUNA-042 evidence; do not expand axes arbitrarily.
+
+### LUNA-063: implement depth candidate
+
+Uses GPU: compile-only first, then bounded GPU.
+
+Dependencies: LUNA-062 qualifying candidate.
+
+Actions:
+
+- Promote one candidate through the normal tinygrad ownership layer.
+- Add resource, route, code-object, and correctness regression coverage.
+- Delete search-only adapters not required by production.
+
+Outputs:
+
+- Candidate code and tests.
+- Candidate authority artifact directory.
+
+Acceptance:
+
+- Kernel-level shallow/deep result matches the predicted mechanism.
+
+Failure loop:
+
+- Maximum three promoted candidate attempts before revisiting the first-principles model.
+- Each failure is reverted or removed and banked before the next attempt.
+
+### LUNA-064: full depth authority
+
+Uses GPU: yes.
+
+Dependencies: LUNA-063 PASS.
+
+Actions:
+
+- Run three same-session interleaved baseline/candidate pairs at 512/1024/2048/4096.
+- Run same-session llama at 512 and 4096.
+- Verify token parity, route identity, 8B non-regression, power, and fault state.
+- Calculate achieved bandwidth using retained formulas.
+
+Outputs:
+
+- `docs/14b-decode-depth-decay-findings-20260726.md`
+- Track B authority artifacts.
+
+Acceptance:
+
+- Context 4096 matches or beats llama.
+- Context 512 remains within noise.
+- Track B completion criteria pass.
+
+### LUNA-070: regression and policy integration
+
+Uses GPU: only already-required focused tests.
+
+Dependencies: LUNA-055, LUNA-064.
+
+Actions:
+
+- Add final context-128 regression, model-aware route policy, G5 resource/mechanism, and benchmark-entry tests.
+- Ensure explicit unsupported configurations fail loudly.
+- Ensure no test depends on task artifact paths.
+
+Outputs:
+
+- Production regression tests.
+
+### LUNA-071: manifests and current-state documentation
+
+Uses GPU: no.
+
+Dependencies: LUNA-070.
+
+Actions:
+
+- Update route/provenance manifests, current decode numbers, llama comparison, supported context range, rollback behavior, and known limitations.
+- Remove stale statements superseded by Track A/B.
+
+Outputs:
+
+- Final production documentation and manifests.
+
+### LUNA-072: probe and artifact cleanup
+
+Uses GPU: no.
+
+Dependencies: LUNA-071.
+
+Actions:
+
+- Delete temporary wrappers, monkeypatches, generated candidate scripts, duplicate traces, and rejected candidate code.
+- Retain canonical artifacts, hashes, ledgers, and findings.
+- Record recovery commits for deleted authored probes.
+
+Outputs:
+
+- Probe cleanup ledger.
+
+Acceptance:
+
+- No task-specific executable remains without owner, second use, positive control, and input contract.
+
+### LUNA-073: promotion readiness audit
+
+Uses GPU: no new measurement.
+
+Dependencies: LUNA-072.
+
+Actions:
+
+- Audit completion criteria, commits, dirty state, test evidence, authority identities, artifact retention, and cleanup.
+- Verify every promoted claim points to evidence from the final candidate commit.
+- Produce an exact promotion commit list.
+
+Outputs:
+
+- `docs/task_workflow/output/14b-decode-ctx128-depth-decay-completion-20260726.md`
+
+Acceptance:
+
+- No unresolved required criterion or unrelated commit remains.
+
+### LUNA-074: promotion and branch retirement
+
+Uses GPU: no.
+
+Dependencies: LUNA-073 PASS and operator approval.
+
+Actions:
+
+- Promote the approved commits through the repository's integration/production workflow.
+- Confirm useful code, tests, findings, manifests, and authority summaries exist on the retained branch.
+- Remove child worktrees and branches.
+- Remove the feature worktree.
+- Delete local and remote `feature/14b-decode-ctx128-and-depth-decay` after reachability is confirmed.
+- Record retirement in final findings.
+
+Acceptance:
+
+- Production contains the accepted repair and evidence.
+- Temporary branches/worktrees are gone.
+- No uncommitted or unpushed work was stranded.
+
+## 19. Orchestrator rules for low-agent continuation
+
+The orchestrator repeats this cycle until LUNA-073 passes:
+
+1. Read the state file.
+2. Select only tasks whose dependencies have accepted verdicts.
+3. Spawn CPU/static tasks in parallel only when file ownership does not overlap.
+4. Spawn at most one GPU task.
+5. Merge accepted child commits in dependency order.
+6. Update the state file and cleanup child worktree/branch.
+7. Recompute which tasks are unblocked.
+8. Stop for operator input only on a listed stop condition, required external credential, unsafe GPU state, or promotion approval.
+
+Low-agent continuation must not reinterpret `INCONCLUSIVE` as success, silently skip a failed task, or broaden a search space without updating LUNA-044 and LUNA-050.
+
+## 20. Exhaustive completion audit
+
+Before declaring completion, the orchestrator verifies:
+
+- All LUNA task rows have terminal accepted verdicts.
+- LUNA-021/022/023 trace llama at all required contexts.
+- LUNA-031 captures the original tinygrad failure causally.
+- LUNA-034 confirms or refutes implicit fallback.
+- LUNA-044 provides the first-principles comparison.
+- LUNA-050 constrains BoltBeam from that comparison.
+- LUNA-055 proves real short prompts and context 128 work.
+- LUNA-064 proves depth-decay recovery against same-session llama.
+- LUNA-070 retains regressions.
+- LUNA-072 deletes dead probes.
+- LUNA-073 proves evidence identity on the final commits.
+- LUNA-074 retires the feature branch only after promotion.
+
+If any required row is absent, stale, collected on another commit, or missing its positive control, the task is incomplete.
