@@ -18,17 +18,34 @@ The main idea is still kernel search, but the bar is strict: a route only become
 
 ## Current performance state
 
-Machine: RX 7900 XTX (24 GB), AMD gfx1100. **Prefill rows re-measured 2026-07-24** (same-session against llama-bench, see below). **Decode rows are still from 2026-07-03** and have NOT been re-measured since; treat them as historical. Decode = median steady-state W==D via `extra/llm/model_e2e_bench.py` (the retained `generate` artifact harness), auto clock; both runtimes measured the same way, same GGUFs, on the same box. New throughput claims should use the canonical authority entry below (`extra/qk/bench.py`); migrating this historical table to fixed-context authority artifacts is a separate methodology update.
+Machine: RX 7900 XTX (24 GB), AMD gfx1100. **Prefill rows re-measured 2026-07-24**, **decode rows
+re-measured 2026-07-26** — both same-session against llama-bench on the same box and GGUFs.
 
-**tinygrad now leads llama.cpp on decode across all three models at both contexts** — a few percent at ctx512, widening at ctx4096 (tinygrad decode is context-robust; llama's tg falls off with KV depth). The 07-03 lift came from an attn_v route-miss fix (+8.9% 8B / +13% 14B, byte-identical); its opt-out flag no longer exists — the legacy dispatch path was pruned in `08945aa94` (2026-07-10) and the fix is unconditional.
+Decode is now measured by the **fixed-depth authority** (`extra/qk/decode/decode_runtime_overhead.py`,
+`tinygrad.decode.fixed_depth.v2`), which prefills to exactly the stated context before timing, so the ctx
+columns are real decode depth. The previous table came from `extra/llm/model_e2e_bench.py`, which decodes
+from a **one-token seed** over a growing window — its ctx labels described KV *allocation*, not depth, and
+its numbers are not comparable to these. llama is `llama-bench -p 0 -n 128 -d 512,4096 -ngl 99 -fa 1 -r 3`
+(`-d` = KV depth), same session, auto clock.
 
-### tinygrad
+**tinygrad leads llama.cpp on 8B decode at both depths, and on 14B at ctx512 — but loses 14B at ctx4096.**
+The earlier claim of a lead "across all three models at both contexts" no longer holds: it was measured
+against llama's 2026-07-03 14B ctx4096 figure of 54.6 tok/s, and llama's deep-context 14B decode has since
+improved to 62.87. Our 14B decays -13.1% from ctx512 to ctx4096 against llama's -5.6%, so **14B
+deep-context decode is the clearest remaining decode weakness.**
 
-| Model | Quant | Decode ctx512 | Decode ctx4096 | Notes |
-|---|---:|---:|---:|---|
-| Qwen3-8B | Q4_K_M | 103.9 tok/s | 107.9 tok/s | +3.9% / +19.4% vs llama. Generated live-split/KV_BOTH attention default at long ctx. |
-| Qwen3-14B | Q4_K_M | 66.5 tok/s | 68.2 tok/s | +1.4% / +24.9% vs llama. Generated G=5 K-only attention route + attn_v fix. |
-| Qwen3-32B | Q4_K_M | 31.9 tok/s | 32.6 tok/s | +2.3% / +9.8% vs llama. Fits 24 GB (20.9/24.2 GB at ctx512/4096). |
+### Decode, tinygrad vs llama.cpp (2026-07-26, same session)
+
+| Model | Quant | ctx512 | ctx4096 | vs llama | Notes |
+|---|---:|---:|---:|---|---|
+| Qwen3-8B | Q4_K_M | **113.86** | **102.57** | **+10.3% / +6.0%** | llama 103.20 ± 1.02 / 96.80 ± 0.20 |
+| Qwen3-14B | Q4_K_M | **68.39** | **59.41** | **+2.7% / −5.5%** | llama 66.58 ± 0.38 / 62.87 ± 0.05. Loses at depth. |
+| Qwen3-32B | Q4_K_M | 31.9 | 32.6 | historical | **2026-07-03, growing-window harness — NOT re-measured, not comparable to the rows above.** |
+
+8B decode is up from a 2026-07-16 baseline of 115.31 / 102.89 after recovering two regressions
+(`f705fee2f` kernargs back to device-local VRAM, `9542e82f1` recompute cost gate); ctx512 trades ~1% for a
+full prefill recovery. The 07-03 attn_v route-miss fix is unconditional (legacy dispatch pruned in
+`08945aa94`).
 
 **tinygrad-arkey prefill** (`extra/qk/prefill/prefill_whole_synced.py --mode authority`, whole-prefill tok/s):
 
@@ -72,13 +89,15 @@ this box should be treated as indicative only.
 
 | Model | Quant | Decode ctx512 | Decode ctx4096 | Notes |
 |---|---:|---:|---:|---|
-| Qwen3-8B | Q4_K_M | 100.0 tok/s | 90.4 tok/s | Decode 2026-07-03 (tg128), historical. Prefill: see the table above. |
-| Qwen3-14B | Q4_K_M | 65.6 tok/s | 54.6 tok/s | Decode 2026-07-03 (tg128), historical. Prefill: see the table above. |
+| Qwen3-8B | Q4_K_M | 103.20 ± 1.02 | 96.80 ± 0.20 | **2026-07-26, same session** (`-d 512,4096`). |
+| Qwen3-14B | Q4_K_M | 66.58 ± 0.38 | 62.87 ± 0.05 | **2026-07-26, same session.** ctx4096 was 54.6 on 07-03 — llama improved here, and now beats us at this point. |
 | Qwen3-32B | Q4_K_M | 31.2 tok/s | 29.7 tok/s | Decode 2026-07-03 (tg128), historical. Prefill not re-measured (we fall back on 32B). |
 
-Read these as current working numbers, not a universal claim. **Decode is a tinygrad win at all sizes; prefill depends on the path:**
+Read these as current working numbers, not a universal claim:
 
-- **Decode** — tinygrad leads llama across 8B/14B/32B, widening at long context (HBM-bound; that's the fork's headline).
+- **Decode** — tinygrad leads on 8B at both depths (+10.3% / +6.0%) and on 14B at ctx512 (+2.7%), but
+  **loses 14B at ctx4096 (−5.5%)**. Our 14B decays −13.1% over that range against llama's −5.6%; 32B is
+  unmeasured since 07-03 and its historical lead should not be assumed to still hold.
 - **Prefill** — see the two prefill tables above. 8B and 14B both lead llama at every context; the promoted compiler-generated WMMA-LDS candidate set is the default for its four exact admitted fp16 roles on 8B, and the packed-WMMA candidate route (`TINYGRAD_PREFILL_PACKED_WMMA`, default ON, 6/6 combos gated at `max_abs 0.0`) is the default on 14B. Unsupported shapes use ordinary tinygrad scheduling.
 - **Prefill current state** — the canonical route, evidence, rollback, and closed-result ledger live in [docs/prefill-current-state.md](docs/prefill-current-state.md).
 - **Prefill on 14B** — live, and it does NOT use the fp16 overlay: 14B's ~29 GB fp16 footprint cannot be admitted on a 24 GB card, so the packed route reads Q4_K/Q6_K storage directly. The older README claim that big models must fall back was only ever true of the *overlay* path. OPEN: 14B end-to-end token parity has not yet been run with this route live.
