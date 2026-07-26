@@ -1,12 +1,11 @@
 {
-  "schema": "luna-safety-ownership.v1",
-  "task_id": "LUNA-000",
-  "verdict": "PASS",
+  "schema": "luna-campaign-closeout.v1",
+  "campaign": "14b-decode-ctx128-depth-decay-20260726",
+  "verdict": "BLOCKED",
   "feature_branch": "feature/14b-decode-ctx128-and-depth-decay",
   "feature_commit": "923f6ff0237f9a46aa656a27efc778f7ac6412fc",
-  "task_branch": "luna-foundation",
-  "task_worktree": "/home/ubuntu/worktrees/luna-foundation",
-  "task_worktree_dirty_paths": [],
+  "closeout_branch": "luna-campaign-closeout",
+  "closeout_worktree": "/home/ubuntu/worktrees/luna-campaign-closeout",
   "known_active_worktrees": [
     {"path": "/home/ubuntu/tinygrad-arkey", "branch": "master", "commit": "bd6092fc29fcd3abfad12d2d0ef2ea4b7b98896d"},
     {"path": "/home/ubuntu/lowering-refactor", "branch": "refactor/lowering-architecture", "commit": "ee6918ef8672cc5a71d369903c7ee95c47ef83b5"},
@@ -22,5 +21,49 @@
   "power_state": {"performance_level": "auto"},
   "artifact_paths_reserved": ["bench/14b-decode-ctx128-depth-decay-20260726/", "docs/task_workflow/in_progress/"],
   "positive_control": {"feature_branch_and_exact_worktree_recorded": true},
-  "notes": "No active GPU benchmark process was observed. Existing worktrees and stashes are ownership boundaries and were not modified."
+  "evidence_commits": [
+    "9f76c5f1a8e5459f54867647b795235270c21bc1",
+    "c43fdcc23",
+    "f0eba36bd",
+    "fa0b5f1abc38603ae023674e8cf2d66c9871a6ee",
+    "9afc642b1",
+    "1b4c11ee088c77c96b1648d9e799a8ed0c032e21",
+    "cf958dbd5"
+  ],
+  "task_verdicts": {
+    "LUNA-001": "TOOL_FAILURE",
+    "LUNA-021": "TOOL_FAILURE",
+    "LUNA-030": "NOT_RUN",
+    "LUNA-031": "NOT_RUN",
+    "LUNA-034": "NOT_RUN",
+    "LUNA-052": "TOOL_FAILURE",
+    "LUNA-055": "NOT_RUN",
+    "LUNA-060": "INCONCLUSIVE",
+    "LUNA-062": "NOT_RUN",
+    "LUNA-063": "NOT_RUN",
+    "LUNA-064": "NOT_RUN",
+    "LUNA-070": "NOT_RUN",
+    "LUNA-071": "NOT_RUN",
+    "LUNA-072": "PASS",
+    "LUNA-073": "FAIL",
+    "LUNA-074": "NOT_RUN"
+  },
+  "blocking_prerequisite": {
+    "required": ["rocprofv3 or rocprof", "a gfx1100-capable trace collector", "resource/disassembly extraction", "counter collection only when its definitions are available"],
+    "installed": ["rocm-smi", "rocminfo", "ROCtx headers and libroctx64.so.4"],
+    "missing": ["rocprofv3", "rocprof", "rocprof-compute", "omniperf"],
+    "operator_action": "Install or provide a supported ROCm profiler/collector for gfx1100 without changing system packages in this campaign, then rerun the bounded positive-control trace before reopening LUNA-030/031/034."
+  },
+  "promotion": {
+    "speculative_candidate_promotion_ready": false,
+    "reason": "No Track A repair candidate passed LUNA-052, and no Track B candidate passed LUNA-062 or LUNA-063. Final-commit authority and regressions therefore do not exist.",
+    "branch_retirement": "Do not retire feature/14b-decode-ctx128-and-depth-decay. Retain it and its canonical evidence until a candidate passes LUNA-055, LUNA-064, LUNA-070 through LUNA-073, and an operator approves LUNA-074."
+  },
+  "cleanup": {
+    "verdict": "PASS",
+    "deleted_campaign_only": ["extra/qk/decode/token_fixture.py", "bench/14b-decode-ctx128-depth-decay-20260726/token-fixture.json"],
+    "retained": ["extra/qk/decode/run_manifest.py", "test/unit/test_run_manifest.py", "bench/14b-decode-ctx128-depth-decay-20260726/"],
+    "reason": "The deleted fixture had no consuming authority entry point. The retained manifest collector has a unit test, an input contract, and a second use for future bounded runs. No unrelated path was changed."
+  },
+  "notes": "No GPU command or broad test was run during closeout. Existing worktrees and stashes remain ownership boundaries and were not modified."
 }
