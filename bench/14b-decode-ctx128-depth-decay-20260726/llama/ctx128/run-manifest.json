@@ -1,0 +1,75 @@
+{
+  "architecture": "gfx1100",
+  "backend": "llama.cpp-hip",
+  "boot_id": "298b04ee-0cec-42de-9fc1-f903fd992bf4",
+  "branch": "luna-llama-trace-128",
+  "classification": "TOOL_FAILURE",
+  "command_argv": [
+    "--",
+    "rocm-smi",
+    "--json",
+    "--showperflevel",
+    "--showclocks",
+    "--showcomputepartition",
+    "--showpids"
+  ],
+  "commit": "1405a1ca4646aa8833453efab55da548d5b79340",
+  "created_unix_ns": 1785100319034630653,
+  "device": "AMD Radeon RX 7900 XTX",
+  "end_time": 1785100319.034627,
+  "environment_overrides": {},
+  "exit_code": 0,
+  "git_dirty_paths": [],
+  "kernel_or_route_identity": "",
+  "lock_owner_pid": null,
+  "lock_path": "/tmp/gpu-bench.lock",
+  "model_identity_sha256": "500a8806e85ee9c83f3ae08420295592451379b4f8cf2d0f41c15dffeb6b81f0",
+  "model_mtime_ns": 1781139524597283444,
+  "model_path": "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+  "model_size_bytes": 9001752960,
+  "notes": "",
+  "positive_control": {
+    "dispatch_identity_proven": false,
+    "gpu_lock_acquired_nonblocking": true,
+    "lock_fd_ownership_recorded": true,
+    "rocm_smi_device_query": true,
+    "rocminfo_gfx1100_query": true
+  },
+  "power_after": {
+    "card0": {
+      "Performance Level": "auto",
+      "dcefclk clock level:": "1",
+      "dcefclk clock speed:": "(200Mhz)",
+      "fclk clock level:": "1",
+      "fclk clock speed:": "(1000Mhz)",
+      "mclk clock level:": "0",
+      "mclk clock speed:": "(96Mhz)",
+      "sclk clock level:": "1",
+      "sclk clock speed:": "(0Mhz)",
+      "socclk clock level:": "1",
+      "socclk clock speed:": "(600Mhz)"
+    }
+  },
+  "power_before": {
+    "card0": {
+      "Performance Level": "auto",
+      "dcefclk clock level:": "1",
+      "dcefclk clock speed:": "(200Mhz)",
+      "fclk clock level:": "1",
+      "fclk clock speed:": "(1000Mhz)",
+      "mclk clock level:": "0",
+      "mclk clock speed:": "(96Mhz)",
+      "sclk clock level:": "1",
+      "sclk clock speed:": "(0Mhz)",
+      "socclk clock level:": "1",
+      "socclk clock speed:": "(600Mhz)"
+    }
+  },
+  "primary_artifact_path": "bench/14b-decode-ctx128-depth-decay-20260726/llama/ctx128/run-manifest.json",
+  "schema": "14b-decode-run-manifest.v1",
+  "start_time": 1785100319.034627,
+  "stderr_path": "",
+  "stdout_path": "",
+  "task_id": "LUNA-021",
+  "worktree": "/home/ubuntu/worktrees/luna-llama-trace-128"
+}

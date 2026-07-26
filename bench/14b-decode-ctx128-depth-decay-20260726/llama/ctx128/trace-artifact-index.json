@@ -1,0 +1,34 @@
+{
+  "schema": "luna-llama-trace-artifact-index.v1",
+  "task_id": "LUNA-021",
+  "verdict": "TOOL_FAILURE",
+  "start_commit": "1405a1ca4646aa8833453efab55da548d5b79340",
+  "end_commit_before_evidence_commit": "1405a1ca4646aa8833453efab55da548d5b79340",
+  "worktree": "/home/ubuntu/worktrees/luna-llama-trace-128",
+  "artifacts": [
+    {"path": "positive-control-device-queries.txt", "kind": "lock-ownership-boot-power-and-device-query-output"},
+    {"path": "run-manifest.json", "kind": "bounded-run-manifest"}
+  ],
+  "trace": {
+    "attempted": false,
+    "collector": null,
+    "reason": "rocprofv3, rocprof, rocprof-compute, and omniperf are absent; ROCtx is not a trace collector without a profiler consumer",
+    "dispatch_identity_proven": false,
+    "kernel_order": null,
+    "grid_block": null,
+    "durations": null,
+    "source_join_keys": null
+  },
+  "positive_controls": {
+    "exclusive_gpu_lock": true,
+    "lock_fd_ownership_recorded": true,
+    "rocm_smi_device_query": true,
+    "rocminfo_gfx1100_query": true,
+    "known_mmq_kernel_observed": false
+  },
+  "not_run": [
+    "llama-bench ordinary context-128 smoke",
+    "llama-bench bounded ROCm dispatch trace"
+  ],
+  "cleanup": {"live_amd_kernel_interrupted": false, "timeout_or_pkill_or_kill9_used": false, "lock_released_on_command_exit": true}
+}
