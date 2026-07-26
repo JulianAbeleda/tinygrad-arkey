@@ -3,12 +3,18 @@
 
 Dispatches to the repo's blessed measurement authorities in isolated
 subprocesses. Report throughput from this entry point, not from generate TTFT.
+
+Entry-point hardening (see docs/decode-fix-and-fault-scope-20260726.md Phase 1):
+a dispatch target that does not exist, or a sub-run that produces no parsable
+throughput number, must fail loudly -- a non-zero/None result must never pass
+silently through `main`'s OR-of-returncodes.
 """
 from __future__ import annotations
 
 import argparse
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import time
@@ -26,10 +32,61 @@ from extra.qk.decode.decode_harness import (
 )
 from extra.qk.timing_harness import add_clock_pin_arg
 
-def _run(desc: str, argv: list[str], env_extra: dict[str, str], label: str = "authority") -> int:
+# decode_runtime_overhead.py prints: "ctx  512: W  8.67ms (115.28 tok/s) | D ..."
+DECODE_THROUGHPUT_RE = re.compile(r"ctx\s*\d+:\s*W\s*[\d.]+ms\s*\(([\d.]+)\s*tok/s\)")
+# prefill_whole_synced.py prints: "  WHOLE-PREFILL@512: 4017 tok/s"
+PREFILL_THROUGHPUT_RE = re.compile(r"WHOLE-PREFILL@\d+:\s*([\d.]+)\s*tok/s")
+
+
+class DispatchTargetMissing(RuntimeError):
+  """A bench.py dispatch target (measurement core) does not exist on disk."""
+
+
+class NoThroughputProduced(RuntimeError):
+  """A sub-run exited without printing a single parsable throughput number."""
+
+
+class BelowPerfFloor(RuntimeError):
+  """A sub-run's measured throughput fell below the caller-supplied floor."""
+
+
+def _verify_dispatch_target(desc: str, argv: list[str]) -> None:
+  target = ROOT / argv[0]
+  if not target.exists():
+    raise DispatchTargetMissing(
+      f"{desc}: dispatch target does not exist: {target} "
+      f"(argv[0]={argv[0]!r} -- the measurement core was deleted or moved without updating the argv builder)")
+
+
+def _run(desc: str, argv: list[str], env_extra: dict[str, str], label: str = "authority",
+         throughput_re: re.Pattern | None = None, min_value: float | None = None) -> int:
+  _verify_dispatch_target(desc, argv)
   print(f"\n===== {desc} ({label}) =====", flush=True)
   env = {**os.environ, "PYTHONPATH": str(ROOT), **env_extra}
-  return subprocess.run([sys.executable, *argv], cwd=str(ROOT), env=env, check=False).returncode
+  proc = subprocess.run([sys.executable, *argv], cwd=str(ROOT), env=env, check=False,
+                        capture_output=True, text=True)
+  sys.stdout.write(proc.stdout)
+  sys.stderr.write(proc.stderr)
+  sys.stdout.flush(); sys.stderr.flush()
+
+  if throughput_re is None:
+    return proc.returncode
+
+  values = [float(m) for m in throughput_re.findall(proc.stdout)]
+  if not values:
+    raise NoThroughputProduced(
+      f"{desc} ({label}) produced no parsable throughput number (rc={proc.returncode}) -- "
+      f"treating as failure even though the child may have exited 0. Expected a match for "
+      f"{throughput_re.pattern!r} in its stdout.")
+
+  if min_value is not None:
+    worst = min(values)
+    if worst < min_value:
+      raise BelowPerfFloor(
+        f"{desc} ({label}) throughput {worst:.2f} is below the required floor {min_value:.2f} "
+        f"(all measured values: {values})")
+
+  return proc.returncode
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -53,6 +110,8 @@ def main(argv: list[str] | None = None) -> int:
   ap.add_argument("--decode-max-context", type=int, default=None, help="override decode model max_context")
   ap.add_argument("--decode-reps", type=int, default=5, help="independent fixed-depth repetitions")
   ap.add_argument("--decode-out", default=None, help="decode artifact path (default: unique per invocation)")
+  ap.add_argument("--min-decode", type=float, default=None, help="fail if measured decode tok/s falls below this")
+  ap.add_argument("--min-prefill", type=float, default=None, help="fail if measured prefill tok/s falls below this")
   add_clock_pin_arg(ap)
   args = ap.parse_args(argv)
 
@@ -68,14 +127,15 @@ def main(argv: list[str] | None = None) -> int:
                                                      artifact=not args.prefill_no_artifact,
                                                      require_route=args.prefill_require_route or None,
                                                      artifact_path=args.prefill_artifact or None),
-              prefill_subprocess_env(model_profile_id=model_profile.id, model_path=args.model), label=f"{profile.mode}:{model_profile.id}") or rc
+              prefill_subprocess_env(model_profile_id=model_profile.id, model_path=args.model), label=f"{profile.mode}:{model_profile.id}",
+              throughput_re=PREFILL_THROUGHPUT_RE, min_value=args.min_prefill) or rc
   if args.decode or both:
     profile = decode_run_profile(ckpts=decode_csv_ints(args.decode_ckpts) if args.decode_ckpts else None,
                                  max_context=args.decode_max_context, nmeas=args.decode_nmeas)
     decode_out = args.decode_out or str(ROOT / "bench" / "qk-decode-runtime-overhead" /
                                         f"run-{time.time_ns()}-{os.getpid()}.json")
     rc = _run("DECODE W==D", decode_authority_argv(args.model, profile, out_path=decode_out, reps=args.decode_reps),
-              decode_subprocess_env(args.model)) or rc
+              decode_subprocess_env(args.model), throughput_re=DECODE_THROUGHPUT_RE, min_value=args.min_decode) or rc
   return rc
 
 

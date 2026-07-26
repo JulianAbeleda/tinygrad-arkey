@@ -29,9 +29,10 @@ Therefore this file asserts STRUCTURAL properties only -- what a harness measure
 no assertion about the direction or magnitude of the throughput curve. A rising decode curve is a reason to
 go and check the harness, not proof on its own that it is wrong.
 """
-import pathlib, re, unittest
+import os, pathlib, re, sys, tempfile, unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
 
 
 class TestBenchDispatchTargetsExist(unittest.TestCase):
@@ -74,6 +75,90 @@ class TestSingleDecodeAuthority(unittest.TestCase):
     self.assertIn("NOT A CTX-LABELLED DECODE AUTHORITY", src,
                   "model_e2e_bench.measure_decode decodes from a 1-token seed, so its ctx columns describe KV "
                   "allocation, not depth. It must be marked non-authoritative in-file.")
+
+
+class TestBenchEntryPointHardening(unittest.TestCase):
+  """Phase 1 of docs/decode-fix-and-fault-scope-20260726.md: bench.py must fail LOUDLY, not silently,
+  when (a) a dispatch target is missing, (b) a sub-run produces no parsable throughput number even with
+  rc==0, or (c) a perf floor is breached. This is the exact failure mode that let a 15% decode regression
+  run unmeasured for 9 days: 45cfc399c deleted decode_runtime_overhead.py, bench.py kept invoking it by
+  path, and nothing asserted a number was actually produced.
+
+  No GPU is used anywhere in this class: dispatch targets are throwaway python scripts under ROOT that just
+  print text and exit, spawned the same way bench.py spawns its real measurement cores.
+  """
+
+  def setUp(self):
+    import extra.qk.bench as bench
+    self.bench = bench
+    self._tmp_paths: list[pathlib.Path] = []
+    self.addCleanup(self._cleanup)
+
+  def _cleanup(self):
+    for p in self._tmp_paths:
+      p.unlink(missing_ok=True)
+
+  def _fake_target(self, body: str) -> str:
+    fd, path = tempfile.mkstemp(dir=str(ROOT), suffix=".py", prefix="_bench_fixture_")
+    os.close(fd)
+    p = pathlib.Path(path)
+    p.write_text(body)
+    self._tmp_paths.append(p)
+    return os.path.relpath(path, ROOT)
+
+  def test_missing_dispatch_target_fails_loudly_before_running(self):
+    missing_argv = ["extra/qk/decode/decode_runtime_overhead_DOES_NOT_EXIST.py", "--model", "x"]
+    with self.assertRaises(self.bench.DispatchTargetMissing) as ctx:
+      self.bench._run("DECODE W==D", missing_argv, {})
+    # The error must name the exact missing path -- that is the whole point of this check.
+    self.assertIn("decode_runtime_overhead_DOES_NOT_EXIST.py", str(ctx.exception))
+
+  def test_missing_dispatch_target_is_checked_before_spawning(self):
+    # A real historical case: the argv builder still hardcodes a path that was deleted.
+    argv = self.bench.decode_authority_argv("fake-model.gguf",
+                                            self.bench.decode_run_profile(), out_path="/tmp/x.json")
+    argv[0] = "extra/qk/decode/decode_runtime_overhead_WAS_DELETED.py"
+    with self.assertRaises(self.bench.DispatchTargetMissing):
+      self.bench._run("DECODE W==D", argv, {})
+
+  def test_sub_run_with_no_throughput_line_fails_even_on_rc_zero(self):
+    rel = self._fake_target("print('nothing useful here')\nraise SystemExit(0)\n")
+    with self.assertRaises(self.bench.NoThroughputProduced) as ctx:
+      self.bench._run("DECODE W==D", [rel], {}, throughput_re=self.bench.DECODE_THROUGHPUT_RE)
+    self.assertIn("no parsable throughput number", str(ctx.exception))
+
+  def test_sub_run_that_crashes_before_printing_a_number_fails(self):
+    rel = self._fake_target("import sys\nprint('boom')\nsys.exit(1)\n")
+    with self.assertRaises(self.bench.NoThroughputProduced):
+      self.bench._run("PREFILL pp@L", [rel], {}, throughput_re=self.bench.PREFILL_THROUGHPUT_RE)
+
+  def test_sub_run_that_prints_the_real_decode_line_is_parsed_and_passes(self):
+    rel = self._fake_target(
+      "print('ctx   512: W   8.67ms (115.28 tok/s) | D   1.23ms (812.34 tok/s) | overhead 6.2%')\n")
+    rc = self.bench._run("DECODE W==D", [rel], {}, throughput_re=self.bench.DECODE_THROUGHPUT_RE)
+    self.assertEqual(rc, 0)
+
+  def test_sub_run_that_prints_the_real_prefill_line_is_parsed_and_passes(self):
+    rel = self._fake_target("print('  WHOLE-PREFILL@512: 4017 tok/s')\n")
+    rc = self.bench._run("PREFILL pp@L", [rel], {}, throughput_re=self.bench.PREFILL_THROUGHPUT_RE)
+    self.assertEqual(rc, 0)
+
+  def test_perf_floor_triggers_when_measured_value_is_below_it(self):
+    rel = self._fake_target("print('ctx   512: W   8.67ms (98.00 tok/s) | D   1.23ms (812.34 tok/s)')\n")
+    with self.assertRaises(self.bench.BelowPerfFloor) as ctx:
+      self.bench._run("DECODE W==D", [rel], {}, throughput_re=self.bench.DECODE_THROUGHPUT_RE, min_value=115.0)
+    self.assertIn("98.00", str(ctx.exception))
+    self.assertIn("115.00", str(ctx.exception))
+
+  def test_perf_floor_does_not_trigger_when_measured_value_meets_it(self):
+    rel = self._fake_target("print('ctx   512: W   8.67ms (115.28 tok/s) | D   1.23ms (812.34 tok/s)')\n")
+    rc = self.bench._run("DECODE W==D", [rel], {}, throughput_re=self.bench.DECODE_THROUGHPUT_RE, min_value=115.0)
+    self.assertEqual(rc, 0)
+
+  def test_perf_floor_flags_exist_and_are_optional(self):
+    src = pathlib.Path(self.bench.__file__).read_text()
+    self.assertIn("--min-decode", src)
+    self.assertIn("--min-prefill", src)
 
 
 if __name__ == "__main__":
