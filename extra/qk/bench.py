@@ -37,6 +37,15 @@ DECODE_THROUGHPUT_RE = re.compile(r"ctx\s*\d+:\s*W\s*[\d.]+ms\s*\(([\d.]+)\s*tok
 # prefill_whole_synced.py prints: "  WHOLE-PREFILL@512: 4017 tok/s"
 PREFILL_THROUGHPUT_RE = re.compile(r"WHOLE-PREFILL@\d+:\s*([\d.]+)\s*tok/s")
 
+# 14B authority was promoted and recorded at these flash-decode checkpoints. The generic ctx128
+# checkpoint exercises a separate 14B prompt-finalization compiler defect (non-assignable float32
+# vector store) before decode timing begins; keep it available only as an explicit diagnostic.
+DECODE_DEFAULT_CKPTS_BY_PROFILE = {"qwen3_14b_q4k_m_gfx1100": (512, 1024, 4096)}
+
+
+def _decode_ckpts(raw:str|None, model_profile_id:str) -> tuple[int, ...]|None:
+  return decode_csv_ints(raw) if raw else DECODE_DEFAULT_CKPTS_BY_PROFILE.get(model_profile_id)
+
 
 class DispatchTargetMissing(RuntimeError):
   """A bench.py dispatch target (measurement core) does not exist on disk."""
@@ -118,9 +127,9 @@ def main(argv: list[str] | None = None) -> int:
   args = ap.parse_args(argv)
 
   both = not (args.prefill or args.decode)
+  model_profile = resolve_prefill_model_profile(args.model_profile or None, model_path=args.model)
   rc = 0
   if args.prefill or both:
-    model_profile = resolve_prefill_model_profile(args.model_profile or None, model_path=args.model)
     profile = prefill_run_profile(args.prefill_mode, K=args.prefill_K, warmups=args.prefill_warmups,
                                   rounds=args.prefill_rounds,
                                   start_positions=csv_ints(args.prefill_start_positions) if args.prefill_start_positions else None,
@@ -132,7 +141,7 @@ def main(argv: list[str] | None = None) -> int:
               prefill_subprocess_env(model_profile_id=model_profile.id, model_path=args.model), label=f"{profile.mode}:{model_profile.id}",
               throughput_re=PREFILL_THROUGHPUT_RE, min_value=args.min_prefill) or rc
   if args.decode or both:
-    profile = decode_run_profile(ckpts=decode_csv_ints(args.decode_ckpts) if args.decode_ckpts else None,
+    profile = decode_run_profile(ckpts=_decode_ckpts(args.decode_ckpts, model_profile.id),
                                  max_context=args.decode_max_context, nmeas=args.decode_nmeas)
     decode_out = args.decode_out or str(ROOT / "bench" / "qk-decode-runtime-overhead" /
                                         f"run-{time.time_ns()}-{os.getpid()}.json")

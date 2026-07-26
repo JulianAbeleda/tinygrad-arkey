@@ -9,7 +9,7 @@ and a genuinely empty run must still fail loudly.
 import re
 import pytest
 
-from extra.qk.bench import _run, BelowPerfFloor, NoThroughputProduced
+from extra.qk.bench import _decode_ckpts, _run, BelowPerfFloor, NoThroughputProduced
 
 DECODE_RE = re.compile(r"ctx\s*\d+:\s*W\s*[\d.]+ms\s*\(([\d.]+)\s*tok/s\)")
 ROW = "ctx   512: W   8.82ms (113.35 tok/s) | D   9.08ms (110.19 tok/s)"
@@ -35,3 +35,9 @@ def test_min_value_is_enforced_against_the_scanned_number(tmp_path, capfd):
   """Also proves the floor is checked against the number scanned off stderr, not a default."""
   with pytest.raises(BelowPerfFloor, match="113.35"):
     _run("probe", _emit(tmp_path, "stderr", ROW), {}, throughput_re=DECODE_RE, min_value=1e6)
+
+
+def test_decode_checkpoint_defaults_are_model_aware():
+  assert _decode_ckpts(None, "qwen3_8b_q4k_m_gfx1100") is None
+  assert _decode_ckpts(None, "qwen3_14b_q4k_m_gfx1100") == (512, 1024, 4096)
+  assert _decode_ckpts("128", "qwen3_14b_q4k_m_gfx1100") == (128,)
