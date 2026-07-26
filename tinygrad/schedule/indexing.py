@@ -12,20 +12,17 @@ from tinygrad.helpers import argsort, all_same, cpu_profile, PCONTIG, colored, C
 from tinygrad.schedule.realize import (ALWAYS_CONTIGUOUS, realize, realize_srcs,  # noqa: F401
                                        realize_store_after_src, pm_generate_realize_map)
 
+# LR-042: BufferizeOpts moved to its owner, tinygrad/schedule/buffer_plan.py (alongside the new storage-decision
+# recorder). Re-exported here so this module's public surface is unchanged and every existing caller that reaches
+# it as `tinygrad.schedule.indexing.BufferizeOpts` (directly or via rangeify.py's re-export) is unaffected.
+from tinygrad.schedule.buffer_plan import BufferizeOpts  # noqa: F401
+
 def _resolve_composite_axis_owner(owner_ranges:tuple[UOp, ...], axis:int|None) -> UOp|None:
   """Return the live RANGE owning a logical axis, or None if collapsed/local."""
   if axis is None or axis == -1 or not isinstance(axis, int): return None
   if axis < 0 or axis >= len(owner_ranges): return None
   owner = owner_ranges[axis]
   return owner if owner.op is Ops.RANGE else None
-
-@dataclass(frozen=True)
-class BufferizeOpts:
-  # on AddrSpace.LOCAL, device is the id
-  device: str|tuple[str, ...]|int|None
-  addrspace: AddrSpace = AddrSpace.GLOBAL
-  removable: bool = True
-  composite_consumer: bool = False
 
 @dataclass
 class IndexingContext:
