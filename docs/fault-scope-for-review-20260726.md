@@ -289,15 +289,40 @@ fixed address, and it does not establish that the primary defect is gone.
 
 ## 9. Investigation results (2026-07-26, four read-only agents, no GPU)
 
-### 9.1 The log counts are censored ~40x — every count in this doc was a lower bound
+### 9.1 The log counts are censored — but the suppressed number is NOT a violation count
 
 `print_sq_intr_info_error: N callbacks suppressed` sums to **36,541** additional `sq_intr` events never
 individually logged, against 894 printed. `gmc_v11_0_process_interrupt` suppressed **32,946** against 492
 page-fault lines. Suppression varies per burst (one 07-16 burst alone suppressed 8,181), so **no fixed
 correction factor recovers the truth**.
 
-This is not "5-6 incidents in 6 days". It is on the order of **37,000 memory violations**, continuous and
-almost entirely invisible. Every count previously quoted here, including the 840, was censored output.
+This is not "5-6 incidents in 6 days" — but it is **not 37,000 memory violations either**. That framing
+was mine and it is **not supported by the source** (verified against amdgpu 6.16.13):
+
+1. **The SQ counter is not MEMVIOL-specific.** `kfd_int_process_v11.c:394` calls
+   `print_sq_intr_info_error()` *unconditionally* for every `SQ_INTERRUPT_WORD_ENCODING_ERROR` packet,
+   **before** the subtype is inspected (lines 397-398). One `static DEFINE_RATELIMIT_STATE` inside that
+   function serves all four subtypes, so the 36,541 mixes **MEMVIOL with ILLEGAL_INST and EDC_FUE/EDC_FED
+   (ECC/hardware errors)**. The counter cannot distinguish them.
+2. **One bug can generate very many interrupts.** Nothing kills or masks the faulting wave on report;
+   `event_interrupt_wq_v11` logs and falls through to `kfd_signal_event_interrupt` (`:407`). Queue
+   eviction is *asynchronous* delayed work (`kfd_process.c:1598`, `:2256`), not inline with the interrupt,
+   so faults accumulate before containment lands. The driver's own comment names the phenomenon:
+   `gfxhub_v3_0.c:315` *"Send no-retry XNACK on fault to suppress VM fault storm."* (gfx11 defaults to
+   no-retry, `amdgpu_gmc.c:924-937`, so HW retry is not the amplifier here — wave count is.)
+3. **The counters aggregate across everything.** `print_sq_intr_info_error`'s state is a function-local
+   static: one instance for every PASID/VMID/process on the device. Worse, `gmc_v11_0_process_interrupt`
+   uses bare `printk_ratelimit()` (`gmc_v11_0.c:127`), whose own header warns
+   (`printk.h:171-173`) that it *"shares ratelimiting state with all other unrelated printk_ratelimit()
+   callsites"* — a single global kernel object. So 32,946 is depressed by unrelated kernel subsystems too.
+4. **Burst=10 per 5 s** (`ratelimit_types.h:9-10`) caps only *visible* messages. The suppressed value is
+   the count of invocations denied a print, with no record of which wave/PASID/address. "One wave
+   hammering the same address 36,000 times" and "36,000 distinct violations" produce an identical log line.
+
+**Correct framing: these are lower bounds on ratelimited reporter invocations, aggregated across error
+subtypes and processes. They cannot be converted to a violation count.** They still justify the bounded
+attribution run — but they establish neither severity nor frequency, and the EDC subtypes in that bucket
+mean some fraction may be ECC/hardware, not our code at all.
 
 ### 9.2 Type-1 and type-2 separate cleanly
 
@@ -380,7 +405,8 @@ prefill cost: the gate refuses a fusion in a **high-parallelism** consumer where
 ## 10. Where this leaves the investigation
 
 - The CWSR fetch fault is downstream and **not fixable by us** (9.5).
-- The fixable defect is whatever raises ~37,000 memory violations (9.1).
+- The fixable defect is whatever raises the memory violations. Their COUNT is unknown: the suppressed
+  figure is reporter invocations aggregated across MEMVIOL/ILLEGAL_INST/EDC and across processes (9.1).
 - The live evidence trail is the ~140 `0x7exx` addresses (9.4), each matchable to the allocation nearest
   below it. Extracting that mapping needs a run with allocation logging — i.e. GPU time.
 - The strongest static candidate (9.6) is real and worth fixing but is **excluded** as the cause here.

@@ -502,11 +502,40 @@ def gate_substitute(ctx, b:UOp) -> None:
 pm_gate_substitute = PatternMatcher([(UPat(GroupOp.All, name="b"), gate_substitute)], compiled=False)
 # if a buffer is being stored just for permutes or something, remove it
 # we want to reexpress the indexes of idx2 in terms of the implied b1
-# Recompute-hostile ops: inlining a WIDE producer containing these into a reduction root loses more than the
-# materialisation it saves. See the COST GATE in remove_bufferize.
+# Recompute-hostile ops: inlining a producer containing these into a low-parallelism reduction consumer
+# loses more than the materialisation it saves. See the COST GATE in remove_bufferize.
 _RECOMPUTE_HOSTILE_OPS = {Ops.LOG2, Ops.EXP2, Ops.SIN, Ops.SQRT, Ops.POW}
-# Attention producers are tile-sized; a vocab row is 151936 wide. The threshold sits between by orders of magnitude.
-_WIDE_PRODUCER_ELEMS = 65536
+# Below this many independent concurrent outputs, a GPU cannot hide the latency of a serialized transcendental
+# recompute behind other work -- there just aren't enough other warps/workgroups in flight. The pathological
+# case (Gumbel-max argmax) measured 128 (and 1); the attention softmax case that must NOT gate measured 131072.
+# Any threshold in that gap is structurally correct; the exact knee needs a GPU sweep to pin down (see report).
+_MAX_HIDDEN_PARALLELISM = 4096
+# Below this reduction trip count, even zero hidden parallelism only duplicates the hostile op a handful of
+# times -- not worth forcing a materialisation for. The pathological case measured 1187 (and 128).
+_MIN_RECOMPUTE_TRIP = 16
+
+def _range_extent(r:UOp) -> int|None:
+  e = r.src[0]
+  return e.arg if e.op is Ops.CONST else None
+
+def _consumer_parallelism_and_trip(idx:UOp) -> tuple[int, int]|None:
+  # The ranges that flow through idx's substitution values are exactly the loop structure the producer
+  # would be pulled into if inlined at this use site -- i.e. this consumer's iteration space, not the
+  # producer's own shape. AxisType.REDUCE is assigned when a REDUCE op's ranges are created (schedule/
+  # indexing.py), which runs before remove_bufferize, so REDUCE-vs-other is already known here. GLOBAL/
+  # LOCAL/UPCAST are NOT yet assigned (that split happens later, in kernel opts) -- everything that isn't
+  # REDUCE is still AxisType.LOOP at this point, so "parallelism" below is a proxy (independent-output
+  # count), not an actual workgroup/thread count.
+  all_ranges: dict[UOp, None] = {}
+  for s in idx.src[1:]: all_ranges.update(s.ranges)
+  parallel, trip = 1, 1
+  for r in all_ranges:
+    if r.op is not Ops.RANGE: continue
+    ext = _range_extent(r)
+    if ext is None: return None  # symbolic extent: can't resolve, caller must not gate on it
+    if r.arg[1] is AxisType.REDUCE: trip *= ext
+    else: parallel *= ext
+  return parallel, trip
 
 def remove_bufferize(src:UOp, buf:UOp, idx:UOp):
   # see if we can't do it, should this ever hit?
@@ -516,23 +545,35 @@ def remove_bufferize(src:UOp, buf:UOp, idx:UOp):
   # if it's user contiguous, we never remove it
   if src.op in ALWAYS_RUN_OPS or not buf.arg.removable: return None
 
-  # COST GATE (2026-07-26): do not duplicate an expensive WIDE producer across reduction roots.
-  # remove_bufferize runs once per consumer, and every path here ends in src.substitute(...), which INLINES
-  # the producer into that consumer. For a cheap producer that is exactly what fusion is for. For a wide
-  # producer holding transcendentals it is ruinous: the work is recomputed once per consumer, inside
-  # whatever parallelism that consumer happens to have.
+  # COST GATE (2026-07-26, revised): do not duplicate an expensive producer across a low-parallelism
+  # reduction consumer. remove_bufferize runs once per consumer, and every path here ends in
+  # src.substitute(...), which INLINES the producer into that consumer. For a cheap producer, or a producer
+  # feeding a highly-parallel consumer, that is exactly what fusion is for. It is only ruinous when the
+  # consumer that inherits the inlined work has too few independent outputs to hide the hostile op's
+  # latency across many concurrent warps/workgroups.
   #
-  # Measured: Gumbel-max sampling. A (151936,) producer with 2 transcendentals was substituted into BOTH
-  # argmax reductions. argmax lowers to a low-parallelism reduce, so the emitted log2 calls ran 1187 times
-  # in a ONE-workgroup/32-thread kernel -- 417us + 92us per token, against 13.8us to materialise the row
-  # once across 1187 workgroups. 8B decode ctx512 109.7 -> ~115.3 tok/s.
+  # This predicate looks at the CONSUMER (via idx's range substitution, i.e. this use site's iteration
+  # space), not the producer's raw element count. Raw producer width doesn't distinguish the two measured
+  # cases: Gumbel-max argmax (151936-wide producer, but only 128 -- or 1 -- independent outputs, gates) from
+  # prefill attention softmax (32*4096*4096-wide producer, but 131072 independent outputs, must not gate).
+  # A prior version of this gate used prod(buf.shape) and gated both; that cost prefill ~2.5% throughput.
   #
-  # Structural on purpose: keyed on producer width x transcendental presence, never on an expression or op
-  # name, so it cannot become a Gumbel/argmax special case. Attention producers are tile-sized, orders of
-  # magnitude below the threshold, so the intended attention fusion is unaffected.
-  if prod([x for x in buf.shape if isinstance(x, int)] or [0]) >= _WIDE_PRODUCER_ELEMS and \
-     any(u.op in _RECOMPUTE_HOSTILE_OPS for u in src.toposort()):
-    return None
+  # Measured pathological case: Gumbel-max sampling. A (151936,) producer with 2 transcendentals was
+  # substituted into BOTH argmax reductions. argmax lowers to a low-parallelism reduce (128, then 1,
+  # independent outputs; REDUCE trip 1187, then 128), so the emitted log2 calls ran 1187 times in a
+  # ONE-workgroup/32-thread kernel -- 417us + 92us per token, against 13.8us to materialise the row once
+  # across 1187 workgroups. 8B decode ctx512 109.7 -> ~115.3 tok/s.
+  #
+  # Structural on purpose: keyed on consumer parallelism/trip x transcendental presence, never on an
+  # expression or op name, so it cannot become a Gumbel/argmax special case.
+  if any(u.op in _RECOMPUTE_HOSTILE_OPS for u in src.toposort()):
+    pt = _consumer_parallelism_and_trip(idx)
+    # pt is None when a range extent is symbolic and can't be resolved -- conservatively don't gate,
+    # matching the previous predicate's behaviour on symbolic shapes (it dropped them from the product).
+    if pt is not None:
+      parallel, trip = pt
+      if trip >= _MIN_RECOMPUTE_TRIP and parallel <= _MAX_HIDDEN_PARALLELISM:
+        return None
 
   # *** here is where we compute the cost ***
   # if we return None, the bufferize is kept
