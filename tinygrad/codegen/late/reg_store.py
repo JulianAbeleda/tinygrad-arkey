@@ -227,7 +227,8 @@ def _devec_stack_store(tgt:UOp, val:UOp, gate:UOp|None=None) -> UOp|None:
   return UOp.group(*stores)
 
 def _output_load_lane(u:UOp) -> tuple[UOp, int]|None:
-  # (GLOBAL INDEX, float4-lane) if u == GEP(LOAD([CAST] INDEX(GLOBAL buf, addr)), lane), else None.
+  # (GLOBAL INDEX, load-lane) if u is a scalar LOAD(INDEX(...)) or
+  # GEP(LOAD([CAST] INDEX(...)), lane), else None.
   # This is an output address that add_loads turned into a wide vector LOAD, whose lanes were then read
   # back as the (unassignable) STORE target instead of staying an addressable INDEX.
   # GLOBAL-only ON PURPOSE (see _devec_output_projection_store): the only validated producer is the GLOBAL
@@ -235,14 +236,15 @@ def _output_load_lane(u:UOp) -> tuple[UOp, int]|None:
   # combine intermediate whose reduction may be MAX (gmax) or MUL -- ADD-combining that would be silently
   # wrong (the reduce op is unrecoverable at this stage), so those are excluded here and owned by
   # reduce_acc_upcast_fix / a future op-aware combine lowering.
-  if u.op is not Ops.GEP or not isinstance(u.arg, tuple) or len(u.arg) != 1: return None
-  ld = u.src[0]
+  if u.op is Ops.LOAD: ld, lane = u, 0
+  elif u.op is Ops.GEP and isinstance(u.arg, tuple) and len(u.arg) == 1: ld, lane = u.src[0], u.arg[0]
+  else: return None
   if ld.op is not Ops.LOAD: return None
   idx = ld.src[0]
   if idx.op is Ops.CAST: idx = idx.src[0]
   if idx.op is not Ops.INDEX or len(idx.src) < 2: return None
   if getattr(idx.src[0], "addrspace", None) is not AddrSpace.GLOBAL: return None
-  return (idx, u.arg[0])
+  return (idx, lane)
 
 def _devec_output_projection_store(tgt:UOp, val:UOp) -> UOp|None:
   # Sibling of the bare-LOAD(INDEX) output-projection restoration in codegen/__init__.py:235-244

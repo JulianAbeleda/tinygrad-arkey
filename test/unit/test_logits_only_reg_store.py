@@ -48,7 +48,7 @@ from tinygrad.renderer import Target
 _LHS_MAKE_FLOAT = re.compile(r"make_float\d*\([^=]*\)\s*=")
 
 
-def _build_output_projection_store(nload=2, width=4, dup=2, nelem=256, addrspace=AddrSpace.GLOBAL):
+def _build_output_projection_store(nload=2, width=4, dup=2, nelem=256, addrspace=AddrSpace.GLOBAL, scalar_loads=False):
   # STORE(STACK(GEP(LOAD(INDEX(data0_GLOBAL, addr)), lane) ...), STACK(distinct scalars))
   # models the LM-head output projection: nload*width distinct output slots, each fed by
   # `dup` distinct partial-reduction lanes that must be summed into the output address.
@@ -58,7 +58,7 @@ def _build_output_projection_store(nload=2, width=4, dup=2, nelem=256, addrspace
     idx = data0.index(UOp.const(dtypes.weakint, r * width))
     load = idx.cast(dtypes.float.vec(width).ptr(nelem, addrspace=addrspace)).load(dtype=dtypes.float.vec(width))
     for lane in range(width):
-      gep = load.gep((lane,))
+      gep = data0.index(UOp.const(dtypes.weakint, r * width + lane)).load() if scalar_loads else load.gep((lane,))
       for _ in range(dup):
         tgt_lanes.append(gep)
         val_lanes.append(UOp.const(dtypes.float, c)); c += 1.0
@@ -108,6 +108,17 @@ def test_output_projection_devec_is_global_add_only():
   loc = _build_output_projection_store(addrspace=AddrSpace.LOCAL).src[0]
   assert _devec_output_projection_store(loc.src[0], loc.src[1]) is None, \
     "LOCAL lanes (possible non-ADD combine intermediate) must be declined, not silently ADD-combined"
+
+
+def test_scalar_output_projection_store_is_assignable():
+  # ctx128 prefill takes the scalar-load variant: each duplicated target is a
+  # bare LOAD(INDEX(GLOBAL,...)), not a GEP of a wide load. It is lane zero.
+  sink = graph_rewrite(_build_output_projection_store(scalar_loads=True), pm_distinct_reg_store_devec,
+                       name="distinct reg store devec")
+  assert not [u for u in sink.backward_slice if u.op is Ops.STORE and u.src[0].op in (Ops.STACK, Ops.VCAT)], \
+    "scalar duplicated output-load store target was not lowered"
+  bad = [ln for ln in _finalize_and_render(sink).splitlines() if _LHS_MAKE_FLOAT.search(ln)]
+  assert not bad, "rendered source has an unassignable make_floatN(...) scalar store LHS:\n" + "\n".join(bad)
 
 
 def test_manual_accumulator_widener_does_not_claim_the_output_projection():
