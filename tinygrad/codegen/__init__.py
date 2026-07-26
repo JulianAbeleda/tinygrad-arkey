@@ -22,6 +22,7 @@ from tinygrad.codegen.late.devectorizer import load_store_folding, load_store_in
   correct_load_store, pm_render, pm_add_loads, pm_make_images
 from tinygrad.codegen.late.reduce_lowering import pm_reduce, ReduceContext
 from tinygrad.codegen.late.reg_store import pm_reduce_acc_upcast_fix, pm_distinct_reg_store_devec, pm_group_wmma_reg_store
+from tinygrad.codegen.late.coalesced_load import coalesce_loads
 from tinygrad.codegen.opt.postrange import apply_opts
 from tinygrad.codegen import experimental as cg_extras
 from tinygrad.codegen.late.gater import pm_move_gates_from_index
@@ -128,10 +129,12 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
 
   # opt-in (COALESCED_LOAD_LOWERING): predicate-driven promotion of unit-stride load axes to UPCAST so the
   # existing expander+devectorizer vectorize the load (codegen realization of the layout-IR OptOps.COALESCE).
-  # The shared register-store lowering keeps accumulator stores scalar. See
-  # extra/qk/coalesced_load_lowering.py + docs/decode-coalesced-load-primitive-scope-20260626.md.
+  # The shared register-store lowering keeps accumulator stores scalar. Pass promoted to core codegen (LR-050);
+  # see tinygrad/codegen/late/coalesced_load.py + docs/decode-coalesced-load-primitive-scope-20260626.md. The
+  # AMD-only restriction is a validation-scope gate (only this backend's path is proven), not a property of the
+  # pass itself.
   if getenv("COALESCED_LOAD_LOWERING") and ren.target.device == "AMD":
-    sink = cg_extras.coalesce_loads(sink)
+    sink = coalesce_loads(sink)
 
   # expand
   # opt-in (WARP_REDUCE_LOWERING): auto-lower a full-warp REDUCE to the AMD ds_bpermute cross-lane ladder BEFORE

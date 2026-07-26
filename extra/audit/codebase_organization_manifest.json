@@ -778,29 +778,28 @@
       "allowed_dependency_domains": [
         "codegen_lowering"
       ],
-      "authority_keys": [
-        "coalesce_loads.upcast_promotion_rule"
-      ],
+      "authority_keys": [],
       "classification_confidence": "high",
       "default_path": false,
       "deletion_confidence": "retain_active",
-      "disposition": "keep",
+      "disposition": "consolidate",
       "domain": "codegen_lowering",
       "duplication_group": null,
       "evidence": [
-        "tinygrad/codegen/__init__.py:133 and :247 gate calls behind getenv(\"COALESCED_LOAD_LOWERING\") and ren.target.device==\"AMD\""
+        "LR-050: implementation moved to tinygrad/codegen/late/coalesced_load.py (pure UOp/AxisType transform, no backend-specific assumptions); this file is now a re-export shim",
+        "tinygrad/codegen/__init__.py:133 imports coalesce_loads directly from tinygrad.codegen.late.coalesced_load and gates the call behind getenv(\"COALESCED_LOAD_LOWERING\") and ren.target.device==\"AMD\" (validation-scope gate, kept at the call site)"
       ],
       "path": "extra/qk/coalesced_load_lowering.py",
-      "promotion_target": null,
+      "promotion_target": "tinygrad/codegen/late/coalesced_load.py",
+      "promotion_decision": "promoted under LR-050; this file re-exports coalesce_loads rather than forking it",
       "public_surface": [
         "coalesce_loads"
       ],
-      "purpose": "Promotes unit-stride LOOP/REDUCE axes feeding a load to AxisType.UPCAST using the axis_stride coalescing predicate, so the existing expander/devectorizer vectorize the load into a wide global load, gated by COALESCED_LOAD_LOWERING on AMD.",
+      "purpose": "Re-exports the core coalesce_loads pass (tinygrad/codegen/late/coalesced_load.py) for extra/qk callers, so this file no longer forks the implementation.",
       "responsibilities": [
-        "find candidate unit-stride load axes",
-        "promote them to UPCAST via substitution"
+        "re-export coalesce_loads from core codegen"
       ],
-      "retention_criterion": "needed while COALESCED_LOAD_LOWERING remains opt-in research infrastructure rather than promoted to always-on",
+      "retention_criterion": "kept as a stable extra/qk import path for existing callers; safe to delete once nothing in extra/qk imports it directly instead of the core module",
       "reusable_assets": [],
       "role": "authority",
       "status": "fallback",
@@ -1643,12 +1642,11 @@
       "duplication_group": null,
       "evidence": [
         "restored from 348dceeec on branch refactor/lowering-architecture: the lowering-refactor scope names it as a source for LR-021, and it was retired with the DEV=AMD:ISA chain on 2026-07-26 before that scope was executed",
-        "depends only on core tinygrad (codegen.opt.kernel_pipeline, dtype, uop.ops) -- none of the retired ISA chain",
-        "its three test files were restored with it and pass: 22 tests + 10 subtests",
-        "test_dynamic_tile_owner.py was NOT restored; it also needs dynamic_tile_owner.py, which stays retired"
+        "LR-050: every contract this file used to define (DotUpdateRecurrencePlan family, HierarchicalKernelPipelinePlan family, SchedulerOutputTileLoop family) is generic -- built only on core UOp/AxisType/Ops, no backend-specific assumption -- and was harvested into tinygrad/codegen/opt/kernel_pipeline.py; this file is now a re-export shim",
+        "its three test files (test_hierarchical_kernel_pipeline.py, test_grouped_dot_update_pipeline.py, test_scheduler_output_tile_loop.py) still import from extra.qk.kernel_pipeline and pass unchanged against the shim"
       ],
       "path": "extra/qk/kernel_pipeline.py",
-      "promotion_decision": "harvest into tinygrad/codegen/opt/kernel_pipeline.py under LR-021, then retire again",
+      "promotion_decision": "harvested into tinygrad/codegen/opt/kernel_pipeline.py under LR-050; this file re-exports rather than forking",
       "promotion_target": "tinygrad/codegen/opt/kernel_pipeline.py",
       "public_surface": [
         "DotUpdateRecurrencePlan",
@@ -1657,13 +1655,11 @@
         "SchedulerOutputTileLoop",
         "build_scheduler_output_tile_loop"
       ],
-      "purpose": "Typed plans and ownership proofs for staged kernel pipelines: dot-update recurrence graphs and proofs, hierarchical lifecycle events, and the scheduler output tile loop that enforces the core VGPR budget.",
+      "purpose": "Re-exports the core kernel-pipeline contracts (tinygrad/codegen/opt/kernel_pipeline.py) for extra/qk and existing test callers: dot-update recurrence graphs and proofs, hierarchical lifecycle events, and the scheduler output tile loop that enforces the core VGPR budget.",
       "responsibilities": [
-        "recurrence plan/proof contracts",
-        "hierarchical stage lifecycle",
-        "scheduler output tile loop and its VGPR budget check"
+        "re-export the recurrence/hierarchical/tile-loop contracts from core codegen"
       ],
-      "retention_criterion": "until LR-021 has extracted the durable contracts into the core kernel_pipeline owner; this file is restored to be harvested, not to be kept",
+      "retention_criterion": "kept as a stable extra/qk import path for existing callers/tests; safe to delete once callers import tinygrad.codegen.opt.kernel_pipeline directly",
       "reusable_assets": [],
       "role": "authority",
       "status": "retained_reference",
@@ -1866,33 +1862,31 @@
       "allowed_dependency_domains": [
         "codegen_lowering"
       ],
-      "authority_keys": [
-        "axis_stride.coalescing_definition"
-      ],
+      "authority_keys": [],
       "classification_confidence": "high",
       "default_path": false,
       "deletion_confidence": "retain_active",
-      "disposition": "keep",
+      "disposition": "consolidate",
       "domain": "codegen_lowering",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/coalesced_load_lowering.py:22 imports axis_stride and calls it at line 59",
-        "extra/qk/bubblebeam_futuresight.py:15 imports axis_stride, vector_width"
+        "LR-050: promoted to tinygrad/codegen/late/coalesced_load.py alongside coalesce_loads (same file owns predicate + pass); this module is now a re-export shim",
+        "extra/qk/coalesced_load_lowering.py imports axis_stride from the core module (indirectly via the promoted coalesce_loads)",
+        "extra/qk/bubblebeam_futuresight.py:15 imports axis_stride, vector_width from this shim"
       ],
       "path": "extra/qk/layout_coalesce_check.py",
-      "promotion_target": "candidate for tinygrad/codegen/opt/ as a general OptOps.COALESCE-style predicate, per its own docstring framing it as 'the first-class predicate the layout IR needs (M0)'; not promoted here because promotion requires a real core owner decision outside this file's scope",
+      "promotion_target": "tinygrad/codegen/late/coalesced_load.py",
+      "promotion_decision": "promoted under LR-050; this file re-exports axis_stride/is_coalesced/vector_width rather than forking them",
       "public_surface": [
         "axis_stride",
         "is_coalesced",
         "vector_width"
       ],
-      "purpose": "Defines the static coalescing predicate axis_stride/is_coalesced/vector_width: whether a RANGE's stride in an INDEX expression is 1 (i.e., unit-stride / coalesced for a thread axis), computed via symbolic graph_rewrite rather than benchmarked.",
+      "purpose": "Re-exports the core coalescing predicate axis_stride/is_coalesced/vector_width (tinygrad/codegen/late/coalesced_load.py) for extra/qk callers.",
       "responsibilities": [
-        "stride computation via substitution+graph_rewrite",
-        "coalesced boolean predicate",
-        "vector-width heuristic"
+        "re-export the coalescing predicate from core codegen"
       ],
-      "retention_criterion": "needed while coalesced_load_lowering.py (opt-in) and bubblebeam_futuresight.py (production decode path) both depend on it",
+      "retention_criterion": "kept as a stable extra/qk import path for existing callers (coalesced_load_lowering.py, bubblebeam_futuresight.py); safe to delete once they import the core module directly",
       "reusable_assets": [],
       "role": "authority",
       "status": "production",
