@@ -1,0 +1,9 @@
+{
+  "schema": "14b-path-comparison.v1",
+  "task_id": "LUNA-044",
+  "verdict": "INCONCLUSIVE",
+  "claim_classes": {"source_proven": ["llama lifecycle/source join keys", "tinygrad route boundaries", "G=5 geometry assumption", "logical F16 KV formula"], "retained_measurement": ["full-model context throughput rows", "focused G4/G5 normalized timing"], "missing": ["both-runtime dispatch", "resources", "counters", "token parity", "ctx128 semantic capture"]},
+  "blocked_by": ["LUNA-021 TOOL_FAILURE", "LUNA-022 NOT_RUN", "LUNA-023 NOT_RUN", "LUNA-030 NOT_RUN", "LUNA-031 NOT_RUN", "LUNA-032 NOT_RUN", "LUNA-033 NOT_RUN", "LUNA-034 NOT_RUN"],
+  "approved_candidate_families": {"track_a": [], "track_b": ["G5 lifetime/address recomputation or register-allocation ordering, only after code-object evidence"]},
+  "forbidden": ["raw llama HIP/vendor-source search", "unjustified schedule axes", "ctx128 coverage exclusion", "silent useful-work change", "profiler-wall promotion"]
+}
