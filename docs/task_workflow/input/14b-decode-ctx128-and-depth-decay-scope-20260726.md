@@ -21,6 +21,24 @@ Solve two distinct 14B decode problems in order:
 
 The first track is correctness and availability. The second track is performance. Do not accept a benchmark exclusion, a fail-loud guard, or a faster invalid route as completion of the first track.
 
+### 1.1 Mandatory investigation order
+
+This task is reference-first. Do not begin by tuning tinygrad or searching its schedule space.
+
+Required order:
+
+```text
+llama.cpp source map
+-> llama.cpp bounded ROCm trace at ctx128/512/4096
+-> tinygrad equivalent trace and compile capture
+-> first-principles path comparison
+-> named mechanism and candidate contract
+-> BoltBeam constrained search
+-> tinygrad correctness and authority promotion
+```
+
+llama.cpp is a structural and measured reference, not code to vendor. BoltBeam must search reusable tinygrad candidates derived from demonstrated differences rather than blindly copying a llama kernel or exhaustively sweeping unrelated axes.
+
 ## 2. Current production state
 
 ### 2.1 Working published path
@@ -131,6 +149,219 @@ Ratios:
 - Deep G5/G4: `1.3223x`
 
 The remaining lead is compiler allocation, lifetime, occupancy, or a G5-specific long-loop interaction. It is not yet proven to be register spilling.
+
+### 4.3 Required llama-first reference investigation
+
+The phases below precede Track A Phase A0 and Track B Phase B0. They are shared evidence for both tracks.
+
+#### Phase L0: establish tracing authority
+
+Record the exact reference environment before collecting data:
+
+- llama.cpp repository path, Git commit, dirty state, build command, build backend, and binary SHA256.
+- Proof that the installed `llama-bench` uses the ROCm/HIP backend on gfx1100 rather than Vulkan, CPU, or another device path.
+- tinygrad commit and worktree identity.
+- GGUF path, byte size, modification time, and identity digest.
+- ROCm version, kernel driver version, GPU identity, active compute partition, power state, and available tracing tools.
+- Positive control showing one known llama kernel and one known tinygrad kernel in a bounded trace.
+
+Check availability explicitly for the installed ROCm generation:
+
+```text
+rocprofv3
+rocprof
+rocprof-compute or omniperf
+rocm-smi
+rocminfo
+ROCtx marker support
+```
+
+Do not assume a tool exists because ROCm is installed. Do not install or replace system ROCm packages inside this task without operator approval.
+
+Timing and counter collection are separate regimes:
+
+- Use ordinary authority runs for publishable wall time.
+- Use bounded trace runs for kernel sequence and attribution.
+- Use focused counter runs only after a kernel family is named.
+- Never publish profiler-instrumented wall time as ordinary throughput.
+
+Deliverable: `bench/14b-decode-ctx128-depth-decay-20260726/l0-environment.json`.
+
+#### Phase L1: map llama.cpp from CLI to hardware
+
+Trace the source path before tracing performance. Produce a call and ownership map with exact file/function references for:
+
+- `llama-bench` argument parsing and prompt/decode benchmark loops.
+- Model load, tokenizer/BOS handling, prompt construction, and fixed-depth KV population.
+- `llama_decode` or current equivalent graph construction.
+- GGML graph nodes for Q4_K linear layers, normalization, RoPE, attention, softmax, KV write/read, and output sampling.
+- ROCm backend graph scheduling, buffer placement, stream/queue ownership, and kernel dispatch.
+- Prompt-path GEMM/MMQ selection by M, N, K, quant type, batch size, and ubatch size.
+- Decode-path GEMV/MMQ selection for Q4_K and Q6_K roles.
+- Flash-attention admission and its context/head geometry.
+- GQA ownership for `Hq=40`, `Hkv=8`, and G=5.
+- KV-cache layout, datatype, write ownership, and read/coalescing pattern.
+- Any split-KV, reduction, combine, or multi-pass attention lifecycle.
+
+For each decision, record whether it is:
+
+- Algorithmic.
+- Shape-policy driven.
+- Backend-policy driven.
+- Compile-time generated.
+- Runtime selected.
+- Hardware-specific to gfx1100.
+
+Do not infer the path from kernel names alone. Connect source selection to a positively observed dispatch.
+
+Deliverable: `docs/14b-llama-rocm-path-map-20260726.md`.
+
+#### Phase L2: collect bounded llama.cpp ROCm traces
+
+Use the same GGUF and explicit benchmark settings. Run context/prompt lengths in separate processes:
+
+```text
+128
+512
+4096
+```
+
+Make batch, ubatch, flash-attention, generation length, repetition count, and GPU-offload settings explicit. Retain the exact generated command. Start with one warmup and one measured repetition for traces; collect ordinary five-repetition timing separately.
+
+The trace must distinguish:
+
+- Model load and first-use compilation/setup.
+- Prompt processing.
+- First-token transition.
+- Steady decode token.
+- Synchronization and host-visible token extraction.
+
+Use ROCtx markers if the installed llama binary or a bounded wrapper can provide them without changing kernel selection. Otherwise derive phase boundaries from positively identified dispatch sequences and document the inference.
+
+For every dispatched kernel retain or derive:
+
+- Kernel name and semantic family.
+- Dispatch order and count.
+- Grid and workgroup dimensions.
+- Wave size and waves/workgroup.
+- Kernel duration distribution.
+- Code-object identity.
+- VGPR, SGPR, LDS, private/scratch, and spill metadata.
+- Global-read/write byte model.
+- KV bytes versus weight bytes.
+- WMMA/MFMA, VALU, VMEM, LDS, barrier, and wait instruction counts where disassembly permits.
+
+After the dispatch map is stable, run focused counters for only the kernel families that explain material wall time or depth slope. Candidate counters include:
+
+- Wave occupancy and active waves.
+- VALU and matrix instruction utilization.
+- VMEM/LDS instruction and busy cycles.
+- L0/L1/L2 hit behavior.
+- HBM read/write traffic.
+- Stall and wait reasons supported by the installed gfx1100 tooling.
+- Scratch/spill traffic.
+
+Counter availability and semantics must be recorded from the installed ROCm tool. Do not invent gfx1100 counter meanings or compare counters with different normalization bases.
+
+Required llama artifacts:
+
+- Ordinary timing JSON for ctx128/512/4096.
+- One bounded dispatch trace per context.
+- One kernel/resource ledger.
+- Focused counter artifacts only for named owners.
+- A trace-to-source attribution table.
+
+#### Phase L3: collect the equivalent tinygrad evidence
+
+Use identical model geometry and, where possible, identical token IDs and prompt lengths. If tokenizer behavior differs, create and retain a token-ID fixture consumed by both paths or document the exact unavoidable difference.
+
+For tinygrad context 512 and 4096 collect the same categories as llama:
+
+- Prompt setup and steady decode separated.
+- Dispatch sequence and kernel-family ownership.
+- Grid/workgroup/wave geometry.
+- Code-object and resource metadata.
+- Modeled weight and KV bytes.
+- Focused counters using the same definitions and normalization as llama.
+
+For tinygrad context 128:
+
+- Retain the compile failure and semantic UOp/HIP slice.
+- Record every successful dispatch before the compiler failure.
+- Do not fabricate hardware counters for a kernel that never compiled or ran.
+- Use llama context 128 to establish the working reference lifecycle and tinygrad 8B context 128 as the same-runtime control.
+
+Run each context in a separate process. A reset or fault invalidates later traces until a fresh recovery boundary is established.
+
+#### Phase L4: first-principles llama versus tinygrad comparison
+
+Build one normalized comparison table for ctx128, ctx512, and ctx4096. It must cover:
+
+| Dimension | Required comparison |
+|---|---|
+| Algorithm | Attention, softmax, quant matmul/GEMV, KV lifecycle, sampling |
+| Shape policy | Prompt M buckets, batch/ubatch, G=5 ownership, split size |
+| Dispatch | Kernel count, fusion boundaries, launch order, synchronization |
+| Traffic | Weight bytes, KV bytes, transient bytes, duplicate reads/writes |
+| Compute | Scalar/vector/matrix instruction work and useful operations |
+| Resources | Threads, waves, VGPR, SGPR, LDS, scratch, occupancy limits |
+| Locality | Coalescing, LDS staging, cache hit behavior, reuse ownership |
+| Depth scaling | Which terms grow with context and their measured slopes |
+| Correctness | Bounds, masking, causal semantics, token parity |
+
+Use an explicit latency model:
+
+```text
+t_token(ctx) = t_weight_path + t_kv_path(ctx) + t_combine(ctx)
+             + t_launch + t_sync + t_host + t_other
+```
+
+For each term state:
+
+- How bytes or operations are calculated from model geometry.
+- Which trace kernels contribute.
+- What is measured versus inferred.
+- Whether llama and tinygrad perform equivalent useful work.
+- Whether the term can explain `t(4096) - t(512)`.
+
+The comparison must answer two separate questions:
+
+1. Why does llama complete 14B context-128 prompt setup while tinygrad emits an invalid destination STORE?
+2. Why does llama's achieved bandwidth stay flat or improve with depth while tinygrad falls from approximately 621 to 575 GB/s?
+
+Do not treat a different kernel topology as automatically superior. Quantify its work, traffic, resource use, and measured contribution.
+
+Deliverables:
+
+- `docs/14b-llama-vs-tinygrad-first-principles-20260726.md`
+- `bench/14b-decode-ctx128-depth-decay-20260726/path-comparison.json`
+
+#### Phase L5: construct the BoltBeam search contract
+
+BoltBeam begins only after L4 names a mechanism and a bounded candidate family.
+
+The BoltBeam input must include:
+
+- Immutable model, device, route, and workload facts.
+- Reference llama structural facts separated from tinygrad implementation facts.
+- Candidate axes justified by a measured or source-proven difference.
+- Correctness, bounds, route-identity, resource, and performance constraints.
+- A compile-only rejection stage before GPU launch.
+- A cheap kernel-level timing stage before whole-model authority.
+- A production promotion gate and a dead-probe cleanup list.
+
+BoltBeam must not:
+
+- Search raw HIP or vendor llama source into tinygrad.
+- Treat llama's implementation as a correctness oracle without output parity.
+- Search unrelated schedule axes merely because they are available.
+- Optimize profiler-instrumented wall time.
+- Promote a local win that cannot explain the full-model deficit.
+- Bypass the context-128 defect by changing benchmark coverage.
+
+The search output must identify reusable tinygrad compiler or route primitives, not a one-shape opaque kernel unless the scope explicitly justifies that production tradeoff.
+
+Deliverable: `docs/task_workflow/in_progress/14b-decode-boltbeam-search-contract-20260726.md`.
 
 ## 5. Operational rules
 
@@ -384,6 +615,10 @@ Required safety:
 
 ## 10. Required deliverables
 
+- `docs/14b-llama-rocm-path-map-20260726.md`
+- `docs/14b-llama-vs-tinygrad-first-principles-20260726.md`
+- A machine-readable llama/tinygrad dispatch, resource, traffic, and depth-scaling comparison.
+- A bounded BoltBeam search contract derived from the first-principles comparison.
 - `docs/14b-decode-ctx128-recovery-findings-20260726.md`
 - `docs/14b-decode-depth-decay-findings-20260726.md`
 - A machine-readable prompt-length/route/failure matrix.
@@ -412,6 +647,13 @@ Stop and request review if:
 ## 12. Completion criteria
 
 The task is complete only when both are true:
+
+### Reference and first-principles authority
+
+- llama.cpp's selected ROCm path is mapped from source decision to observed dispatch at context 128, 512, and 4096.
+- llama and tinygrad have comparable bounded traces with phase, route, kernel, resource, and traffic attribution.
+- The first-principles comparison explains which mechanisms can and cannot account for the context-128 failure and depth slope.
+- BoltBeam searches only the bounded candidate families justified by that comparison.
 
 ### Context-128 recovery
 
