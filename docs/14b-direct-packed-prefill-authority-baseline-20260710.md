@@ -1,13 +1,16 @@
 # 14B Direct-Packed Prefill Authority Baseline - 2026-07-10
 
-Command:
+Canonical command:
 
 ```bash
-DEV=AMD DEBUG=0 PROFILE=0 python3 extra/qk/bench.py \
+DEV=AMD DEBUG=0 PROFILE=0 python3 extra/qk/prefill/prefill_whole_synced.py \
   --model /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf \
-  --model-profile 14b \
-  --prefill --prefill-mode authority
+  --model-profile qwen3_14b_q4k_m_gfx1100 \
+  --mode authority
 ```
+
+`--model` is required for a 14B run. The script's default model is the 8B GGUF;
+an explicit 14B profile paired with that default now fails before model loading.
 
 Artifact:
 

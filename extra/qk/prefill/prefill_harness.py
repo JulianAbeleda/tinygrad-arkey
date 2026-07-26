@@ -77,9 +77,17 @@ MODEL_HARNESS_ALIASES = tuple(profile.size_label.lower() for profile in MODEL_PR
 
 def resolve_prefill_model_profile(profile_id: str | None = None, *, model_path: str | None = None) -> PrefillModelHarnessProfile:
   if profile_id:
-    try: return MODEL_HARNESS_PROFILES[profile_by_id(profile_id).id]
+    try: selected = MODEL_HARNESS_PROFILES[profile_by_id(profile_id).id]
     except KeyError as exc:
       raise KeyError(f"unknown prefill model profile {profile_id!r}; known={sorted(MODEL_HARNESS_PROFILES)}") from exc
+    if model_path is not None:
+      try: inferred = profile_from_model_path(model_path)
+      except KeyError as exc:
+        raise ValueError(f"cannot bind explicit model profile {selected.id!r} to unrecognized model path {model_path!r}") from exc
+      if inferred.id != selected.id:
+        raise ValueError(f"model/profile mismatch: --model {model_path!r} resolves to {inferred.id!r}, "
+                         f"but --model-profile resolves to {selected.id!r}")
+    return selected
   profile = profile_from_model_path(model_path or DEFAULT_MODEL,
                                     default_profile_id=DEFAULT_MODEL_PROFILE if model_path is None else None)
   return MODEL_HARNESS_PROFILES[profile.id]
