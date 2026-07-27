@@ -6,53 +6,48 @@ A hard fork of [tinygrad](https://github.com/tinygrad/tinygrad). AMD/RDNA3 focus
 
 tinygrad is a small deep learning framework by George Hotz that lowers tensor operations to GPU kernels. This fork narrows it to one job: quantized LLM inference on AMD gfx1100, with the search/audit work split between this runtime and [BoltBeam](https://github.com/JulianAbeleda/BoltBeam).
 
-The main idea is still kernel search, but the bar is strict: a route only becomes default after it is correct, route-bound, rollback-safe, and fast enough under the authority harness. The hot default decode/prefill routes are now generated or spec-driven; owned kernels are rollback/reference material, not the target path.
+The main idea is still kernel search, but the bar is strict: a route only becomes default after it is correct, structurally route-bound, fail-closed outside its admitted shapes, and fast enough under the authority harness. The hot decode/prefill routes are generated or descriptor-driven. Fallback availability is shape-specific; an unsafe requested fallback fails loudly rather than pretending to be a rollback.
 
 ## How it differs from upstream tinygrad
 
 * **Hardware:** AMD only, currently gfx1100 / RX 7900 XTX.
 * **Scope:** quantized GGUF LLM decode and prefill.
 * **Search:** BoltBeam audits candidates and route policy; tinygrad runs the promoted routes.
-* **Defaults:** generated where proven; owned kernels stay as rollback/reference only.
-* **Instrumentation:** decode, prefill, route attribution, purity census, and compiler-lowering gates are first-class.
+* **Defaults:** generated or descriptor-owned where proven; research candidates stay off the production path.
+* **Instrumentation:** decode/prefill authority, route attribution, purity census, and compiler-lowering gates are first-class. Decode graph-PMC attribution remains open work.
 
 ## Current performance state
 
-Machine: RX 7900 XTX (24 GB), AMD gfx1100. **Prefill rows re-measured 2026-07-24**, **decode rows
-re-measured 2026-07-26** — both same-session against llama-bench on the same box and GGUFs.
+Machine: RX 7900 XTX (24 GB), AMD gfx1100. **Decode re-measured from promoted master on 2026-07-27**;
+the last complete four-point prefill curve is from **2026-07-24**, with newer bounded 14B endpoint checks
+reported separately below. Comparisons use the same box and GGUFs.
 
 Decode is now measured by the **fixed-depth authority** (`extra/qk/decode/decode_runtime_overhead.py`,
 `tinygrad.decode.fixed_depth.v2`), which prefills to exactly the stated context before timing, so the ctx
 columns are real decode depth. The previous table came from `extra/llm/model_e2e_bench.py`, which decodes
 from a **one-token seed** over a growing window — its ctx labels described KV *allocation*, not depth, and
-its numbers are not comparable to these. llama is `llama-bench -p 0 -n 128 -d 512,4096 -ngl 99 -fa 1 -r 3`
-(`-d` = KV depth), same session, auto clock.
+its numbers are not comparable to these. The current llama depth authority is `llama-bench -p 512 -n 40
+-d 512,4096 -ngl 99 -r 3 -o json` (`-d` = fixed KV depth), auto clock.
 
-**tinygrad leads llama.cpp on 8B decode at both depths, and on 14B at ctx512 — but loses 14B at ctx4096.**
-Our 14B decays −13.1% from ctx512 to ctx4096 against llama's −5.6%, so **14B deep-context decode is the
-clearest remaining decode weakness.**
+**tinygrad leads llama.cpp on 8B decode at both depths and on 14B at ctx512. At 14B ctx4096 it is now in
+practical parity: 62.45 tok/s versus llama's 62.55, a −0.15% median difference inside run variance.** The
+G=5 QG2/S32 route plus descriptor-owned width-4 K/V staging recovered the previous deep-context deficit.
 
-The earlier claim of a lead "across all three models at both contexts" is **withdrawn as unsupported**, on
-both sides of the comparison. Ours: the 68.2 quoted for 14B "ctx4096" came from the growing-window harness;
-the same code at true depth 4096 measured 59.57 on 07-16 and 59.41 today — flat, so we have not regressed.
-Llama's: the 54.6 quoted for 14B ctx4096 **does not reproduce**. The binary is unchanged since 2026-06-10,
-its 07-03 ctx512 figure does reproduce (65.6 vs 66.97 today), and its decay is flat — d0 67.69, d512 66.97,
-d2048 65.04, d4096 63.10 — yet 54.6 matches neither `-fa 1` (63.10) nor `-fa 0` (43.46) at that depth. Its
-method was never recorded, so **it should not be treated as a baseline, and no claim that we once led this
-point rests on it.**
+This does **not** mean the slope is fixed. Tinygrad still decays about 10.4% from ctx512 to ctx4096 against
+llama's 5.6%; it reaches parity at depth because it starts about 5.2% faster. The earlier 59.41 tok/s 14B
+ctx4096 result is the pre-promotion baseline, not the current result. The older llama 54.6 figure remains
+withdrawn because its method was not recorded and it does not reproduce.
 
-### Decode, tinygrad vs llama.cpp (2026-07-26, same session)
+### Decode, tinygrad vs llama.cpp (current promoted master)
 
 | Model | Quant | ctx512 | ctx4096 | vs llama | Notes |
 |---|---:|---:|---:|---|---|
-| Qwen3-8B | Q4_K_M | **113.86** | **102.57** | **+10.3% / +6.0%** | llama 103.20 ± 1.02 / 96.80 ± 0.20 |
-| Qwen3-14B | Q4_K_M | **68.39** | **59.41** | **+2.7% / −5.5%** | llama 66.58 ± 0.38 / 62.87 ± 0.05. Loses at depth. |
-| Qwen3-32B | Q4_K_M | 31.9 | 32.6 | historical | **2026-07-03, growing-window harness — NOT re-measured, not comparable to the rows above.** |
+| Qwen3-8B | Q4_K_M | **114.19** | **103.07** | **+10.7% / +6.5%** | llama 103.20 ± 1.02 / 96.80 ± 0.20; tinygrad master 2026-07-27. |
+| Qwen3-14B | Q4_K_M | **69.70** | **62.45** | **+5.2% / −0.15%** | llama 66.27 ± 0.29 / 62.55 ± 0.30; practical parity at depth. |
 
-8B decode is up from a 2026-07-16 baseline of 115.31 / 102.89 after recovering two regressions
-(`f705fee2f` kernargs back to device-local VRAM, `9542e82f1` recompute cost gate); ctx512 trades ~1% for a
-full prefill recovery. The 07-03 attn_v route-miss fix is unconditional (legacy dispatch pruned in
-`08945aa94`).
+At ctx128, production `auto` stays on SDPA and completed at 94.80 tok/s on 8B and 59.89 tok/s on 14B. The
+accelerated flash route begins at the configured threshold. The 14B flash candidate owns QG2, S32, and
+width-4 cooperative staging structurally; 8B remains on its G=4 width-1 descriptor.
 
 **tinygrad-arkey prefill** (`extra/qk/prefill/prefill_whole_synced.py --mode authority`, whole-prefill tok/s):
 
@@ -74,6 +69,12 @@ full prefill recovery. The 07-03 attn_v route-miss fix is unconditional (legacy 
 |---|---:|---:|---:|---:|
 | Qwen3-8B | +10.4% * | +6.3% | +5.1% | **+2.5%** |
 | Qwen3-14B | +5.4% * | +5.7% | +6.7% | **+8.7%** |
+
+**Newer bounded 14B prefill endpoint authority (2026-07-27):** pp512 measured 2026 / 2029 / 2023 tok/s
+(median **2026**) and pp4096 measured 1880 / 1880 / 1878 tok/s (median **1880**). These confirm that the
+promoted default is faster than the four-point 2026-07-24 row, but they are not substituted into that
+same-session curve or its llama margins. The latest 8B pp512 route-regression smoke was 3768 tok/s; it is a
+single bounded check, not a replacement authority row.
 
 \* **The pp512 column is soft.** llama's pp512 is its own least reliable point on this box: ±242 t/s (7%) on
 8B, and its curve is non-monotonic there (pp1024 3410 > pp512 3347). A cross-session check found pp4096
@@ -97,18 +98,18 @@ this box should be treated as indicative only.
 | Model | Quant | Decode ctx512 | Decode ctx4096 | Notes |
 |---|---:|---:|---:|---|
 | Qwen3-8B | Q4_K_M | 103.20 ± 1.02 | 96.80 ± 0.20 | **2026-07-26, same session** (`-d 512,4096`). |
-| Qwen3-14B | Q4_K_M | 66.58 ± 0.38 | 62.87 ± 0.05 | **2026-07-26, same session.** Beats us at ctx4096. The 07-03 figure of 54.6 does not reproduce (see above) and is not carried forward. |
-| Qwen3-32B | Q4_K_M | 31.2 tok/s | 29.7 tok/s | Decode 2026-07-03 (tg128), historical. Prefill not re-measured (we fall back on 32B). |
+| Qwen3-14B | Q4_K_M | 66.27 ± 0.29 | 62.55 ± 0.30 | **2026-07-27, same-session depth authority.** Statistically tied with tinygrad at ctx4096. |
+
+32B is omitted from the current tables because it has not been measured with the fixed-depth decode authority or the current prefill authority. Its old growing-window numbers are not comparable.
 
 Read these as current working numbers, not a universal claim:
 
-- **Decode** — tinygrad leads on 8B at both depths (+10.3% / +6.0%) and on 14B at ctx512 (+2.7%), but
-  **loses 14B at ctx4096 (−5.5%)**. Our 14B decays −13.1% over that range against llama's −5.6%; 32B is
-  unmeasured since 07-03 and its historical lead should not be assumed to still hold.
-- **Prefill** — see the two prefill tables above. 8B and 14B both lead llama at every context; the promoted compiler-generated WMMA-LDS candidate set is the default for its four exact admitted fp16 roles on 8B, and the packed-WMMA candidate route (`TINYGRAD_PREFILL_PACKED_WMMA`, default ON, 6/6 combos gated at `max_abs 0.0`) is the default on 14B. Unsupported shapes use ordinary tinygrad scheduling.
-- **Prefill current state** — the canonical route, evidence, rollback, and closed-result ledger live in [docs/prefill-current-state.md](docs/prefill-current-state.md).
+- **Decode** — tinygrad leads on 8B at both depths (+10.7% / +6.5%) and on 14B at ctx512 (+5.2%). At 14B
+  ctx4096 it is effectively tied (−0.15% by the reported medians). Tinygrad's 14B slope is still steeper,
+  10.4% versus llama's 5.6%; matching llama's depth slope remains open.
+- **Prefill** — the complete four-context tables above are dated 2026-07-24 evidence, not a fresh sweep of current `master`. Newer bounded 14B endpoint checks improved to 2026/1880 tok/s at pp512/pp4096. The compiler-generated WMMA-LDS candidate set serves its exact admitted 8B roles, while the correctness-gated packed-WMMA route is the admitted 14B path. Unsupported shapes use ordinary tinygrad scheduling.
+- **Prefill history** — [docs/prefill-current-state.md](docs/prefill-current-state.md) is a 2026-07-24 campaign ledger. It contains superseded intermediate conclusions and is not the authority for current route behavior or current performance.
 - **Prefill on 14B** — live, and it does NOT use the fp16 overlay: 14B's ~29 GB fp16 footprint cannot be admitted on a 24 GB card, so the packed route reads Q4_K/Q6_K storage directly. The older README claim that big models must fall back was only ever true of the *overlay* path. OPEN: 14B end-to-end token parity has not yet been run with this route live.
-- **Prefill on 32B** — still falls back to the slow universal path (fp16 overlay ~64 GB, and no packed-WMMA geometry is gated for its shapes). Closing that is a real project.
 
 ### Production route selection
 
@@ -118,11 +119,10 @@ are shared in `tinygrad/llm/route_selection.py`.
 
 | Phase | Canonical variable | Values | Default behavior |
 |---|---|---|---|
-| Prefill | `TINYGRAD_PREFILL_ROUTE` | `auto`, `packed_wmma`, `direct_packed`, `fp16` | `auto` selects the promoted route admitted by the model's structural facts. |
+| Prefill | `TINYGRAD_PREFILL_ROUTE` | `auto`, `packed_wmma`, `direct_packed`, `fp16` | `auto` selects the promoted route admitted by structural facts; forcing an unsafe quarantined route fails loudly. |
 | Decode | `TINYGRAD_DECODE_ROUTE` | `auto`, `flash`, `fp16` | `auto` uses SDPA for shallow context and the admitted flash candidate at the configured threshold. |
 
-The legacy `TINYGRAD_PREFILL_PACKED_WMMA` and `FLASH_DECODE` variables remain compatibility aliases. New
-automation should use the canonical variables above. Invalid values fail loudly.
+The legacy `TINYGRAD_PREFILL_PACKED_WMMA` and `FLASH_DECODE` variables remain compatibility aliases. They do not promise that every model has a usable implementation for every forced mode. New automation should use the canonical variables above. Invalid or quarantined selections fail loudly.
 
 Route ownership is structural rather than model-name based:
 
@@ -134,9 +134,11 @@ Route ownership is structural rather than model-name based:
 - `auto` never dispatches the quarantined direct implementation. Forcing it fails during model setup rather
   than after GPU submission.
 
-Validated on 2026-07-27 on RX 7900 XTX/gfx1100: 14B actual ctx128 completed on the SDPA decode path; warmed
-pp512 completed at 1960 tok/s; and the 8B warmed pp512 control completed at 3768 tok/s. These are bounded
-route-regression checks, not replacements for the multi-run authority tables above.
+Validated on 2026-07-27 on RX 7900 XTX/gfx1100: actual ctx128 completed on SDPA for both models; promoted
+master decode measured 114.19 / 103.07 tok/s on 8B and 69.70 / 62.45 on 14B at ctx512 / ctx4096; 14B
+prefill endpoint medians were 2026 at pp512 and 1880 at pp4096. The 8B warmed pp512 control completed at
+3768 tok/s. The single 8B prefill control remains a bounded route-regression check, not a replacement for
+the multi-run prefill authority table.
 
 **Measurement discipline:** report prefill/decode throughput only from the authority harnesses via `extra/qk/bench.py` (below). Never report throughput from a `model.generate` TTFT bench; it includes unrelated Python, sampling, and host overhead.
 
@@ -144,13 +146,14 @@ route-regression checks, not replacements for the multi-run authority tables abo
 
 You need an AMD GPU, the AMD backend working, and a GGUF model file. Most current gates assume gfx1100 / RX 7900 XTX. Run from the repo root using the project's virtual environment.
 
-`--max_context` defaults to `auto`: at load it probes free VRAM (`rocm-smi`) and admits the largest safe context for the model (weights + KV + prefill-score peak + flash scratch, held under an 0.8 fragmentation margin), capped at the model's trained context. Admission is a **tier ladder**, all driven by the memory arithmetic (no model-name checks):
+`--max_context` defaults to `auto`: at load it probes free VRAM (`rocm-smi`) and admits a safe context from weights, KV, prefill peak, and flash scratch under the configured safety margin, capped at the model's trained context. Admission is a **tier ladder** driven by memory arithmetic and structural support rather than model-name checks:
 
-1. **fp16 KV (lossless)** — used whenever it admits a useful context. 8B/14B admit their full trained context on a 24 GB card this way.
-2. **int8 KV-quant (`DECODE_KV_QUANT`, ~0.6% loss)** — auto-escalated when fp16 can't fit but int8 can. The resident KV cache is int8 + a tiny per-(K/V,head,token) fp16 scale; the decode flash route dequantizes in-register (no materialized fp16 KV). This is what lets **32B run long context** (~2800 tokens where fp16 admits <2000), token-identical to fp16 in practice. It's a *capacity* lever, not a decode speedup (attention decode is compute-bound, not bandwidth-bound).
-3. **refuse loud** — only when even int8 can't fit a useful context; the message points at the Q4-KV / eviction tiers (follow-ons).
+1. **fp16 KV exact context** — preferred whenever the requested or automatic context fits.
+2. **int8 KV exact context** — considered when fp16 cannot fit and the model geometry plus decode route support a quantized cache. The resident cache is int8 with per-(K/V, head, token) fp16 scales; supported flash routes dequantize in-register. Quality and performance require model-specific evidence.
+3. **fp16 ring streaming** — an explicitly lossy, bounded physical window for unbounded logical generation when streaming is allowed and the geometry supports it. It is not used to silently satisfy an explicit exact-context request.
+4. **refuse loudly** — when no admissible exact tier fits, or a requested streaming mode is unsupported.
 
-An explicit `--max_context N` is still admission-checked and auto-upgrades through the ladder to honor the request, failing loud only if no tier fits. All of this relies on the seqlen-bound decode attention route (decode work scales with live context, not `max_context`), so raising the cap does not collapse decode.
+An explicit `--max_context N` is admission-checked and may select a supported exact tier to honor the request, failing loudly if none fits. Decode route selection is based on live context and admitted structural facts rather than allocating work merely because `max_context` is large.
 
 ```sh
 # THE benchmark — the single canonical entry. Dispatches to the synced authority harnesses (prefill + decode),
@@ -175,13 +178,13 @@ Start with these files and the documentation map in [docs/README.md](docs/README
 * `extra/qk/decode/decode_harness.py` — decode speed across context lengths.
 * `extra/qk/prefill/prefill_whole_synced.py` — prefill speed.
 * `extra/audit/pure_machine_search_default_path_census.py` — current generated/default-route census.
-* `extra/qk/route_manifest.py` — runtime-facing route manifest, rollback flags, provenance, and refuted axes. BoltBeam owns the policy/search copy.
+* `extra/qk/route_manifest.py` — candidate registry and provenance input. Runtime policy validates selected manifest rows rather than treating the manifest global as semantic authority.
 * `extra/qk/decode/flash_decode_attention_spec.py`, `extra/qk/decode/flash_decode_attention_executor.py` — generated flash/decode attention routes.
 * `extra/qk/gemv_g3_codegen_lowering.py`, `extra/qk/q6k_route_spec.py`, `extra/qk/prefill/prefill_graph_gemm_route.py` — generated route/runtime surfaces.
 * `extra/qk/prefill/packed_wmma_prefill_candidates.py` — the packed-WMMA prefill candidates that are the 14B default (frozen per-(quant,role) geometry + load-time correctness gate).
 * `extra/qk/microbench/wmma_peak.cpp` — measured achievable WMMA peak (~105 TFLOPS on gfx1100); use it as the denominator for any efficiency claim.
 
-BoltBeam owns model facts, candidate/search schema, evaluation policy, ledgers, roofline attribution, and reports. tinygrad owns runtime execution, compiler/backend lowering, and hardware gates.
+BoltBeam owns search/audit adapters, interchange schemas, evaluation policy, ledgers, roofline attribution, and reports. tinygrad owns runtime model facts, route admission and execution, compiler/backend lowering, and hardware gates. Profiler adapters do not imply that decode hardware-counter attribution is complete.
 
 ## License
 
