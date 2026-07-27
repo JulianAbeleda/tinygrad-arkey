@@ -4,6 +4,9 @@
 This is the first executable lowering hook after G2: build a named wave32 gate/up
 program from the bridge-independent Q4KGateUpLaneMap. It intentionally does not
 import or call qk_q4k_lane_partition_gemv.py.
+
+Machine-search lifecycle and static-promotion rationale:
+README.md#why-this-is-machine-search-even-though-the-runtime-is-static
 """
 from __future__ import annotations
 

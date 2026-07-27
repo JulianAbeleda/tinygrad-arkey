@@ -51,6 +51,8 @@ class _Q4KDecodeCandidate:
     _out = Tensor.empty(binding.N, dtype=dtypes.float32, device=x.device)
     return _out.custom_kernel(_w, _xv, fxn=qk_ops.q4k_g3_lanemap_gemv_kernel(binding.N, binding.K))[0].reshape(1, 1, binding.N)
 
+# This is a statically promoted result of offline machine search, not an online
+# autotuner. See README.md#why-this-is-machine-search-even-though-the-runtime-is-static.
 Q4K_DECODE_CANDIDATE = _Q4KDecodeCandidate()
 
 def q4k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], Tensor], arch_ok:bool) -> Tensor:

@@ -3,6 +3,9 @@ selects each one, what it rolls back to, and its current disposition. PMS-R1 of
 docs/pure-machine-search-remaining-hot-kernels-scope-20260630.md (supersedes the Phase-1 draft of
 docs/claude-active-work-audit-and-agnostic-search-scope-20260630.md).
 
+For why machine-searched routes are frozen into static runtime artifacts, see
+README.md#why-this-is-machine-search-even-though-the-runtime-is-static.
+
 This module is DATA + tiny helpers. It changes NO defaults and runs NO kernels; gates import it instead of copying
 ad-hoc env maps. For each route, `env` is what you SET to force that route onto the active path; an empty `env` ({})
 means the route is ALREADY the shipped default (no flag needed). `rollback` is the exact env to leave it.
