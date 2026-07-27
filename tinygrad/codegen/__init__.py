@@ -22,6 +22,8 @@ from tinygrad.codegen.late.devectorizer import load_store_folding, load_store_in
   correct_load_store, pm_render, pm_add_loads, pm_make_images
 from tinygrad.codegen.late.reduce_lowering import pm_reduce, ReduceContext
 from tinygrad.codegen.late.reg_store import pm_reduce_acc_upcast_fix, pm_distinct_reg_store_devec, pm_group_wmma_reg_store
+from tinygrad.codegen.late.coalesced_load import coalesce_loads
+from tinygrad.codegen.plan import PLAN_GATES, observed_gate_values  # noqa: F401  (PLAN_GATES re-exported for callers)
 from tinygrad.codegen.opt.postrange import apply_opts
 from tinygrad.codegen import experimental as cg_extras
 from tinygrad.codegen.late.gater import pm_move_gates_from_index
@@ -72,6 +74,16 @@ pm_remove_vec_dtypes = PatternMatcher([
 ])+pm_clean_up_group_sink
 
 def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
+  # LR-011: name the stage so stage-scoped invariants can fire. Everything below this point is the codegen stage;
+  # a CONTIGUOUS still carrying schedule hints here is the AttributeError documented in uop/invariants.py.
+  from tinygrad.uop import invariants as _inv
+  _prev_stage = _inv.set_stage("codegen") if _inv.ENABLED else None
+  try:
+    return _full_rewrite_to_sink(ast, ren, optimize)
+  finally:
+    if _inv.ENABLED: _inv.set_stage(_prev_stage)
+
+def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   if VIZ: graph_rewrite(ast, PatternMatcher([]), name="View Base AST")
   if DEBUG >= 5: print(pyrender(ast))
   if (_u:=getenv("SCHED_UNROLL")) > 1 and ren.target.device == "AMD":
@@ -128,10 +140,12 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
 
   # opt-in (COALESCED_LOAD_LOWERING): predicate-driven promotion of unit-stride load axes to UPCAST so the
   # existing expander+devectorizer vectorize the load (codegen realization of the layout-IR OptOps.COALESCE).
-  # The shared register-store lowering keeps accumulator stores scalar. See
-  # extra/qk/coalesced_load_lowering.py + docs/decode-coalesced-load-primitive-scope-20260626.md.
+  # The shared register-store lowering keeps accumulator stores scalar. Pass promoted to core codegen (LR-050);
+  # see tinygrad/codegen/late/coalesced_load.py + docs/decode-coalesced-load-primitive-scope-20260626.md. The
+  # AMD-only restriction is a validation-scope gate (only this backend's path is proven), not a property of the
+  # pass itself.
   if getenv("COALESCED_LOAD_LOWERING") and ren.target.device == "AMD":
-    sink = cg_extras.coalesce_loads(sink)
+    sink = coalesce_loads(sink)
 
   # expand
   # opt-in (WARP_REDUCE_LOWERING): auto-lower a full-warp REDUCE to the AMD ds_bpermute cross-lane ladder BEFORE
@@ -497,7 +511,22 @@ def _lower_cache_table() -> str:
 to_program_cache: dict[tuple, UOp] = {}
 def to_program(ast:UOp, renderer:Renderer) -> UOp:
   config = (NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, IMAGE, DISABLE_FAST_IDIV, TRANSCENDENTAL, ALLOW_TF32)
-  key = (ast.key, type(renderer), renderer.target, *[x.value for x in config], getenv("WARP_REDUCE_LOWERING"), getenv("V_DOT2_LOWERING"), getenv("SCHED_UNROLL"), getenv("SCHED_LIST"), getenv("COALESCED_LOAD_LOWERING"), getenv("DECODE_FAST_EXP2"))
+  # LR-051: the gate suffix is derived from PLAN_GATES -- the declared gate inventory -- rather than a
+  # second hand-picked getenv(...) list. That hand-picked list is how PREFILL_SOFTMAX_REDUCE_FUSE,
+  # UNSAFE_DISABLE_MASK and REGALLOC_ADDR_REMAT went missing from this key: they change generated code inside
+  # do_to_program's lowering pipeline but were absent here. Deriving from PLAN_GATES means a gate added to the
+  # inventory is part of the cache key automatically instead of requiring someone to update a second place.
+  #
+  # LR-019: read via observed_gate_values(), NOT os.environ. An earlier version of this line read os.environ live,
+  # which was wrong in a way that looked correct. The passes inside do_to_program read these gates through
+  # `getenv`, which is @functools.cache'd and frozen at first read. So flipping a gate mid-process moved THIS key
+  # while changing nothing the lowering actually saw: the cache missed, do_to_program recompiled from the same
+  # frozen values, and the byte-identical program was stored under a second key asserting the new gate setting.
+  # Demonstrated in-tree with UNSAFE_DISABLE_MASK: 1 -> 2 cache entries, identical program UOp key. That is worse
+  # than the stale HIT it replaced, because a cache that quietly holds two keys for one program is harder to
+  # notice than one that returns an obviously stale answer. The key must describe what was compiled.
+  gate_values = observed_gate_values()
+  key = (ast.key, type(renderer), renderer.target, *[x.value for x in config], *gate_values)
   if (prg:=to_program_cache.get(key)) is not None: return prg
   _dk = None
   if LOWER_DISK_CACHE:

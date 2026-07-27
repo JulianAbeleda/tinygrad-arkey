@@ -12,7 +12,7 @@ from tinygrad.dtype import dtypes
 from tinygrad.uop.ops import UOp
 from extra.qk.amd_warp_reduce import WARP
 from extra.qk.lane_partition_reduce import LanePartition, q4k_packed_word_index
-from extra.qk.layout_coalesce_check import axis_stride, vector_width
+from tinygrad.codegen.late.coalesced_load import axis_stride, vector_width
 from extra.qk.route_manifest import ROUTES
 
 @dataclass(frozen=True)

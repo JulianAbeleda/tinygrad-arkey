@@ -896,24 +896,6 @@ def _remat_final_const_add_ins(ctx:IselContext, addr:UOp, dep:UOp|None) -> UOp:
   if not (addr.src[0].op is Ops.CONST or addr.src[1].op is Ops.CONST): return addr
   return UOp(Ops.INS, addr.dtype, src=addr.src[:2] + ((dep,) if dep is not None else ()), arg=addr.arg, tag=_vreg_def(ctx))
 
-def _remat_lds_load_addr(ctx:IselContext, addr:UOp, dep:UOp|None, deep:bool=False) -> UOp:
-  if addr.op is not Ops.INS: return addr
-  if addr.arg is AMDOps.V_OFFSET and len(addr.src) >= 2:
-    base = _remat_lds_load_addr(ctx, addr.src[0], dep, deep)
-    return addr if base is addr.src[0] else UOp(Ops.INS, addr.dtype, src=(base,) + addr.src[1:], arg=addr.arg, tag=_vreg_def(ctx))
-  if addr.arg is AMDOps.V_IADD and len(addr.src) >= 2 and (addr.src[0].op is Ops.CONST or addr.src[1].op is Ops.CONST):
-    src0, src1 = addr.src[:2]
-    if deep:
-      src0 = _remat_lds_load_addr(ctx, src0, dep, False)
-      src1 = _remat_lds_load_addr(ctx, src1, dep, False)
-    return UOp(Ops.INS, addr.dtype, src=(src0, src1) + ((dep,) if dep is not None else ()), arg=addr.arg, tag=_vreg_def(ctx))
-  if deep and addr.arg in (AMDOps.V_IMUL, AMDOps.V_AND) and len(addr.src) >= 2:
-    src0, src1 = addr.src[:2]
-    if addr.arg is AMDOps.V_IMUL:
-      src0 = _remat_lds_load_addr(ctx, src0, dep, False)
-      src1 = _remat_lds_load_addr(ctx, src1, dep, False)
-    return UOp(Ops.INS, addr.dtype, src=(src0, src1) + ((dep,) if dep is not None else ()), arg=addr.arg, tag=_vreg_def(ctx))
-  return addr
 
 def _split_store_final_const_add(ctx:IselContext, addr:UOp) -> UOp:
   if addr.op is Ops.INS and addr.arg is AMDOps.V_OFFSET and len(addr.src) >= 2:
@@ -1276,20 +1258,6 @@ def _emit_dbuf_stage_store(ctx:IselContext, st:UOp, dep:tuple[UOp,...]) -> tuple
   return UOp(Ops.INS, dtypes.void, src=(addr,) + bdata + _lds_b128_store_deps(val) + extra_deps + (a.src[1], UOp.const(dtypes.int32, lds_imm).rtag()),
              arg=AMDOps.DS_STORE_B128), "ok"
 
-def _dbuf_d3a_probe_marker(ctx:IselContext, tile:UOp, dep:tuple[UOp,...]) -> tuple[UOp,...]:
-  return dep
-  if not dep: return dep
-  out = dep
-  for role, carrier in (("A", tile.src[0]), ("B", tile.src[1])):
-    if role == "A":
-      continue
-    if role == "B":
-      continue
-    cand, _reason = _dbuf_stage_candidate(carrier)
-    if cand is None: continue
-    st, _reason = _emit_dbuf_stage_store(ctx, cand, out)
-    if st is not None: out = (st,)
-  return out
 
 # B0.M residency: build ONE subtile v_wmma from ALREADY-PACKED resident A/B fragments (apk,bpk) + this subtile's 8 cin
 # accumulator lanes. Same element/lane order as _build_wmma_tile (A0..A7,B0..B7,C0..C7; def -> cbase) -- only the packs
@@ -1921,27 +1889,6 @@ def _dbuf_store_addr_seed(x:UOp) -> UOp|None:
   rs = sorted([r for r in x.ranges if r.op is Ops.RANGE and r.arg[-1] is AxisType.REDUCE], key=lambda r: r.arg)
   return rs[0] if rs else None
 
-def _pack_withlocal_lds_stores(x:UOp):
-  return None
-  def fail(reason:str): return None
-  if len(x.src) < 2 or len(x.src) % 2 != 0 or not all(st.op is Ops.STORE for st in x.src): return fail("shape")
-  infos = [_local_vec4_store_info(st) for st in x.src]
-  if any(info is None for info in infos): return fail("store_info")
-  if any(_has_local_axis(info[6]) and not _has_local_axis(info[2]) for info in infos): return fail("local_identity")
-  packed = []
-  prev = _dbuf_store_addr_seed(x)
-  for i in range(0, len(infos), 2):
-    idx0, _val0, base0, lconst0, gidx0, gbuf0, gbase0, gconst0, tag0 = infos[i]
-    _idx1, _val1, base1, lconst1, _gidx1, gbuf1, gbase1, gconst1, _tag1 = infos[i+1]
-    if base1 is not base0 or lconst1 != lconst0 + 4: return fail("local_pair")
-    if gbuf1 is not gbuf0 or gbase1 is not gbase0 or gconst1 != gconst0 + 4: return fail("global_pair")
-    if lconst0 % 8 != 0 or gconst0 % 8 != 0: return fail("align")
-    carrier = UOp(Ops.NOOP, dtypes.half.vec(8), (gidx0,) + ((prev,) if prev is not None else ()), arg=("global_b128", gidx0))
-    tag = tag0 or _tc_stage_tag(idx0) or _tc_stage_tag_from_buffer(idx0, lconst0, 8)
-    sidx = _retag_tc_stage_index(_index_after_dep(_split_dbuf_lds_index(idx0, "store"), prev), tag)
-    prev = _retag_tc_stage_store(sidx.store(carrier), tag)
-    packed.append(prev)
-  return UOp.group(*packed)
 
 def _store_local_scalar_info(st:UOp):
   if st.op is not Ops.STORE or len(st.src) != 3: return None
@@ -1954,34 +1901,6 @@ def _store_local_scalar_info(st:UOp):
   if base_expr is None: return None
   return idx, val, gate, base_expr, local_const, stage_tag
 
-def _pack_b_tilekey_lds_stores(x:UOp):
-  return None
-  def fail(reason:str): return None
-  if len(x.src) != 16 or not all(g.op is Ops.GROUP and len(g.src) > 0 for g in x.src): return fail("shape")
-  infos = [[_store_local_scalar_info(st) for st in g.src] for g in x.src]
-  if any(info is None for row in infos for info in row): return fail("scalar_info")
-  gate = infos[0][0][2]
-  base_expr = infos[0][0][3]
-  if any(info[2] is not gate or info[3] is not base_expr for row in infos for info in row): return fail("gate_or_base")
-  packed = []
-  prev = _dbuf_store_addr_seed(x)
-  for tile in range(len(infos[0])):
-    for half_row in range(2):
-      frag0 = half_row * 8
-      row = [infos[frag][tile] for frag in range(frag0, frag0 + 8)]
-      const0 = row[0][4]
-      if const0 % 8 != 0: return fail("const_align")
-      if [info[4] for info in row] != list(range(const0, const0 + 8)): return fail("const_sequence")
-      vals = tuple(_after_load_addr(info[1], prev) for info in row)
-      packs = tuple(UOp(Ops.INS, dtypes.int32, src=(vals[2*i], vals[2*i+1]) + ((prev,) if prev is not None else ()),
-                        arg=AMDOps.V_PACK, tag=_pin(LDS_PACK_BASE, i)) for i in range(4))
-      carrier = UOp(Ops.NOOP, dtypes.int32.vec(4), packs)
-      if prev is not None: carrier = carrier.after(prev)
-      tag = row[0][5] or _tc_stage_tag(row[0][0]) or _tc_stage_tag_from_buffer(row[0][0], const0, 8)
-      sidx = _retag_tc_stage_index(_index_after_dep(_split_dbuf_lds_index(row[0][0], "store"), prev), tag)
-      prev = _retag_tc_stage_store(sidx.store(carrier, gate), tag)
-      packed.append(prev)
-  return UOp.group(*packed)
 
 def _pair_register_stage_stores(ctx, x:UOp):
   """Replace scalar stage STOREs with deterministic, complete fp16 pairs.

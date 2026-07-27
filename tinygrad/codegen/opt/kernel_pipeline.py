@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Literal, Protocol
-from tinygrad.codegen.opt.compiler_policies import PipelinePolicy, StoragePolicy
+from typing import Callable, Generic, Literal, Protocol, TypeVar
+from tinygrad.codegen.opt.compiler_policies import PipelinePolicy, ResourcePlan, StoragePolicy
 
 from tinygrad.dtype import AddrSpace, DType, dtypes
 from tinygrad.uop.ops import AxisType, Ops, UOp
@@ -36,6 +36,20 @@ def validate_scheduler_tile_loop_pressure(*, resident_accumulator_vgprs:int,
   # The zero-reserve form retains the original pinned-carrier contract.
   if required > pinned_vgpr_budget or (transient_vgpr_reserve and required == pinned_vgpr_budget):
     raise ValueError(f"scheduler tile loop requires {required} pinned VGPRs, budget is {pinned_vgpr_budget}")
+
+def resource_plan_for_scheduler_tile_loop(*, resident_accumulator_vgprs:int, resident_fragment_vgprs:int,
+                                          transient_vgpr_reserve:int=0) -> ResourcePlan:
+  """Capture a proved scheduler tile-loop budget through the shared resource schema.
+
+  This lets custom (scheduler-owned) kernels report their resident WMMA
+  carriers through the same ``ResourcePlan`` shape as ordinary compiled
+  programs, instead of a bespoke pair of ints.  The admission check is
+  reused rather than restated, so this can never report a budget that
+  ``validate_scheduler_tile_loop_pressure`` would reject.
+  """
+  validate_scheduler_tile_loop_pressure(resident_accumulator_vgprs=resident_accumulator_vgprs,
+    resident_fragment_vgprs=resident_fragment_vgprs, transient_vgpr_reserve=transient_vgpr_reserve)
+  return ResourcePlan("pinned_budget", vgpr=resident_accumulator_vgprs + resident_fragment_vgprs)
 
 class StorageCallbacks(Protocol):
   def producer(self, epoch: UOp, slot: UOp, reuse: UOp|None = None): ...
@@ -332,3 +346,245 @@ def validate_stage1_uop_graph(graph:KernelStage1UOpGraph) -> tuple[str, ...]:
       if out.dtype != accumulator_vec_dtype: errors.append("drain result has mixed accumulator dtype")
   if any(u.op is Ops.REDUCE for u in topo): errors.append("forbidden Ops.REDUCE")
   return tuple(errors)
+
+# ---------------------------------------------------------------------------
+# LR-050: harvested from extra/qk/kernel_pipeline.py (docs/task_workflow/input/
+# lowering-architecture-refactor-scope-20260726.md Phase 5). These are generic typed
+# plan/proof contracts for staged pipelines -- dot/update recurrence graphs, a two-level
+# produce/publish/consume/release lifecycle, and a scheduler-owned output tile loop -- built
+# only on core UOp/AxisType/Ops concepts, with no backend-specific (wave width, ISA intrinsic,
+# device string) assumptions anywhere in them. `extra/qk/kernel_pipeline.py` now re-exports
+# these rather than forking them.
+# ---------------------------------------------------------------------------
+
+HierarchicalLifetime = Literal["outer_epoch", "inner_phase"]
+HierarchicalOp = Literal["produce", "publish", "consume", "release"]
+
+AttachmentT = TypeVar("AttachmentT")
+
+@dataclass(frozen=True)
+class DotUpdateRecurrencePlan:
+  """Shape and carrier types for a grouped mixed-dtype recurrence.
+
+  Deliberately not expressed as a ``PipelinePolicy``. It has no storage kind, wait/barrier
+  policy, or resource facts of its own -- it describes the dtype/substep shape of a dot/update
+  recurrence chain, which is a different axis of knowledge than the memory/synchronization
+  contracts ``compiler_policies.py`` owns. Merging it would fabricate a storage/wait story this
+  plan does not have.
+  """
+  persistent_dtype: DType
+  dot_dtype: DType
+  phase_count: int
+  groups_per_phase: int
+  dot_substeps: int
+  dot_op: Ops = Ops.WMMA
+
+  def __post_init__(self) -> None:
+    if not isinstance(self.persistent_dtype, DType) or not isinstance(self.dot_dtype, DType):
+      raise TypeError("recurrence dtypes must be DType instances")
+    for name in ("phase_count", "groups_per_phase", "dot_substeps"):
+      value = getattr(self, name)
+      if not isinstance(value, int) or isinstance(value, bool) or value <= 0: raise ValueError(f"{name} must be a positive int")
+    if not isinstance(self.dot_op, Ops): raise TypeError("dot_op must be an Ops member")
+
+  @property
+  def group_count(self) -> int: return self.phase_count * self.groups_per_phase
+
+  @property
+  def total_dot_count(self) -> int: return self.group_count * self.dot_substeps
+
+@dataclass(frozen=True)
+class DotUpdateAttachment(Generic[AttachmentT]):
+  """Typed update sidecar and the graph values whose use is mandatory."""
+  value: AttachmentT
+  dependencies: tuple[UOp, ...] = ()
+
+  def __post_init__(self) -> None:
+    if not isinstance(self.dependencies, tuple) or any(not isinstance(x, UOp) for x in self.dependencies):
+      raise TypeError("attachment dependencies must be an immutable tuple of UOps")
+
+@dataclass(frozen=True)
+class DotUpdateGroupContext:
+  phase: int
+  group: int
+  ordinal: int
+  predecessor_update: UOp | None
+
+@dataclass(frozen=True)
+class DotUpdateGroupRecord(Generic[AttachmentT]):
+  context: DotUpdateGroupContext
+  dot_zero: UOp
+  dots: tuple[UOp, ...]
+  persistent_before: UOp
+  attachment: DotUpdateAttachment[AttachmentT]
+  update: UOp
+
+@dataclass(frozen=True)
+class DotUpdateRecurrenceGraph(Generic[AttachmentT]):
+  plan: DotUpdateRecurrencePlan
+  initial_persistent: UOp
+  groups: tuple[DotUpdateGroupRecord[AttachmentT], ...]
+  result: UOp
+  sink: UOp
+
+@dataclass(frozen=True)
+class DotUpdateRecurrenceProof:
+  passed: bool
+  errors: tuple[str, ...]
+  dot_count: int
+  update_count: int
+
+def prove_dot_update_recurrence(graph: DotUpdateRecurrenceGraph[AttachmentT]) -> DotUpdateRecurrenceProof:
+  """Prove exact grouped reset/update topology, failing closed on detached values."""
+  errors: list[str] = []
+  if not isinstance(graph, DotUpdateRecurrenceGraph): raise TypeError("expected DotUpdateRecurrenceGraph")
+  plan, groups = graph.plan, graph.groups
+  if not isinstance(groups, tuple): errors.append("groups must be an immutable tuple")
+  if graph.initial_persistent.dtype != plan.persistent_dtype: errors.append("initial persistent accumulator dtype drift")
+  if len(groups) != plan.group_count: errors.append(f"expected {plan.group_count} groups, got {len(groups)}")
+  previous = graph.initial_persistent
+  recorded_dots: list[UOp] = []
+  recorded_updates: list[UOp] = []
+  for ordinal, record in enumerate(groups):
+    if not isinstance(record, DotUpdateGroupRecord): errors.append(f"group {ordinal}: invalid record"); continue
+    phase, group = divmod(ordinal, plan.groups_per_phase)
+    if record.context != DotUpdateGroupContext(phase, group, ordinal, None if ordinal == 0 else recorded_updates[-1]):
+      errors.append(f"group {ordinal}: context or update ordering drift")
+    if record.persistent_before is not previous: errors.append(f"group {ordinal}: persistent recurrence is detached")
+    if record.persistent_before.dtype != plan.persistent_dtype or record.update.dtype != plan.persistent_dtype:
+      errors.append(f"group {ordinal}: persistent accumulator dtype drift")
+    if record.dot_zero.op is not Ops.NOOP or record.dot_zero.dtype != plan.dot_dtype or \
+       record.dot_zero.arg != ("dot_zero", ordinal) or len(record.dot_zero.src) != 1 or \
+       record.dot_zero.src[0].op is not Ops.CONST or record.dot_zero.src[0].arg != 0:
+      errors.append(f"group {ordinal}: dot accumulator does not start at a fresh typed zero")
+    if ordinal and any(record.dot_zero is old.dot_zero for old in groups[:ordinal]):
+      errors.append(f"group {ordinal}: dot accumulator zero reused across groups")
+    if not isinstance(record.dots, tuple) or len(record.dots) != plan.dot_substeps:
+      errors.append(f"group {ordinal}: expected {plan.dot_substeps} dot results")
+    prior = record.dot_zero
+    for substep, dot in enumerate(record.dots):
+      if not isinstance(dot, UOp) or dot.op is not plan.dot_op: errors.append(f"group {ordinal} dot {substep}: wrong dot operation")
+      elif dot.dtype != plan.dot_dtype: errors.append(f"group {ordinal} dot {substep}: dot dtype drift")
+      if isinstance(dot, UOp) and prior not in dot.src: errors.append(f"group {ordinal} dot {substep}: recurrence is not directly chained")
+      if ordinal and substep == 0 and previous not in dot.backward_slice:
+        errors.append(f"group {ordinal}: first dot is not ordered after the preceding update")
+      prior = dot
+    if record.dots and record.dots[-1] not in record.update.src:
+      errors.append(f"group {ordinal}: update is detached from final dot")
+    if record.persistent_before not in record.update.src:
+      errors.append(f"group {ordinal}: update is detached from persistent accumulator")
+    for dependency in record.attachment.dependencies:
+      if dependency not in record.update.backward_slice: errors.append(f"group {ordinal}: update is detached from attachment")
+    recorded_dots.extend(record.dots); recorded_updates.append(record.update); previous = record.update
+  if graph.result is not previous: errors.append("result is detached from final update")
+  topo = graph.sink.toposort()
+  actual_dots = tuple(x for x in topo if x.op is plan.dot_op)
+  if len(actual_dots) != plan.total_dot_count or set(actual_dots) != set(recorded_dots):
+    errors.append(f"expected exactly {plan.total_dot_count} dot nodes, got {len(actual_dots)}")
+  if any(update not in topo for update in recorded_updates): errors.append("an update is detached from the recurrence sink")
+  return DotUpdateRecurrenceProof(not errors, tuple(errors), len(actual_dots), len(recorded_updates))
+
+
+@dataclass(frozen=True)
+class HierarchicalPipelineRole:
+  """An operand role and the scope for which one production remains live."""
+  name: str
+  lifetime: HierarchicalLifetime
+
+  def __post_init__(self) -> None:
+    if not isinstance(self.name, str) or not self.name: raise ValueError("role name must be a non-empty string")
+    if self.lifetime not in ("outer_epoch", "inner_phase"): raise ValueError("unsupported hierarchical role lifetime")
+
+@dataclass(frozen=True)
+class HierarchicalKernelPipelinePlan:
+  """Generic two-level lifetime contract, independent of storage or allocation.
+
+  Deliberately not expressed as a ``PipelinePolicy``. Its whole point is to state role
+  lifetimes and the produce/publish/consume/release protocol without committing to an
+  LDS/register storage kind, a wait-count policy, or a resource plan -- those remain the
+  caller's choice. Forcing a fixed ``StoragePolicy``/``WaitPolicy`` onto it would assert facts
+  this plan does not know and is not supposed to know.
+  """
+  persistent: HierarchicalPipelineRole
+  overwriteable: HierarchicalPipelineRole
+  phase_count: int = 2
+
+  def __post_init__(self) -> None:
+    if not isinstance(self.persistent, HierarchicalPipelineRole) or self.persistent.lifetime != "outer_epoch":
+      raise ValueError("persistent role must have outer_epoch lifetime")
+    if not isinstance(self.overwriteable, HierarchicalPipelineRole) or self.overwriteable.lifetime != "inner_phase":
+      raise ValueError("overwriteable role must have inner_phase lifetime")
+    if self.persistent.name == self.overwriteable.name: raise ValueError("hierarchical roles must be distinct")
+    if not isinstance(self.phase_count, int) or isinstance(self.phase_count, bool) or self.phase_count <= 0:
+      raise ValueError("phase_count must be a positive int")
+
+  @property
+  def roles(self) -> tuple[HierarchicalPipelineRole, HierarchicalPipelineRole]:
+    return self.persistent, self.overwriteable
+
+@dataclass(frozen=True)
+class HierarchicalLifecycleEvent:
+  op: HierarchicalOp
+  role: str
+  phase: int | None
+
+@dataclass(frozen=True)
+class HierarchicalLifecycleProof:
+  passed: bool
+  errors: tuple[str, ...]
+  produced: tuple[tuple[str, int | None], ...]
+  consumed: tuple[tuple[str, int], ...]
+  barriers: tuple[tuple[Literal["publish", "release"], int], ...]
+
+def hierarchical_lifecycle_events(plan: HierarchicalKernelPipelinePlan) -> tuple[HierarchicalLifecycleEvent, ...]:
+  """Return the sole admitted asymmetric lifecycle; publish/release are the uniform barriers."""
+  if not isinstance(plan, HierarchicalKernelPipelinePlan): raise TypeError("expected HierarchicalKernelPipelinePlan")
+  events = [HierarchicalLifecycleEvent("produce", plan.persistent.name, None)]
+  for phase in range(plan.phase_count):
+    events.extend((HierarchicalLifecycleEvent("produce", plan.overwriteable.name, phase),
+                   HierarchicalLifecycleEvent("publish", plan.overwriteable.name, phase),
+                   HierarchicalLifecycleEvent("consume", plan.persistent.name, phase),
+                   HierarchicalLifecycleEvent("consume", plan.overwriteable.name, phase),
+                   HierarchicalLifecycleEvent("release", plan.overwriteable.name, phase)))
+  events.append(HierarchicalLifecycleEvent("release", plan.persistent.name, None))
+  return tuple(events)
+
+
+@dataclass(frozen=True)
+class SchedulerOutputTileLoop:
+  """A scheduler-owned output loop with one resident WMMA carrier set.
+
+  ``tile_count`` is deliberately a loop trip count, not an unroll factor.  The
+  owner callback receives the symbolic tile index so output addressing can be
+  carried by the compiled program; it must not replicate the host graph for
+  each output tile.
+  """
+  tile_count: int
+  loop_id: int = 9300
+  resident_accumulator_vgprs: int = 128
+  resident_fragment_vgprs: int = 64
+
+  def __post_init__(self) -> None:
+    if not isinstance(self.tile_count, int) or isinstance(self.tile_count, bool) or self.tile_count <= 0:
+      raise ValueError("output tile loop count must be a positive int")
+    if not isinstance(self.loop_id, int) or isinstance(self.loop_id, bool) or self.loop_id < 0:
+      raise ValueError("output tile loop id must be a non-negative int")
+    validate_scheduler_tile_loop_pressure(resident_accumulator_vgprs=self.resident_accumulator_vgprs,
+                                          resident_fragment_vgprs=self.resident_fragment_vgprs)
+
+  @property
+  def resource_plan(self) -> ResourcePlan:
+    """Expose this scheduler-owned budget through the same schema as ordinary programs.
+
+    Custom-kernel resource capture must emit the same ``ResourcePlan`` shape ordinary compiled
+    programs use, not a private pair of ints.
+    """
+    return resource_plan_for_scheduler_tile_loop(resident_accumulator_vgprs=self.resident_accumulator_vgprs,
+      resident_fragment_vgprs=self.resident_fragment_vgprs)
+
+@dataclass(frozen=True)
+class SchedulerOutputTileIndices:
+  """The symbolic coordinates owned by a tiled output producer."""
+  m: UOp
+  n: UOp
+  group: UOp

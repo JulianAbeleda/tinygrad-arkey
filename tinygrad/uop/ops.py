@@ -4,6 +4,8 @@ import sys, time, functools, itertools, math, operator, hashlib, os, types, pick
 from dataclasses import dataclass
 from enum import Enum, auto
 from tinygrad.uop import Ops, GroupOp, MemorySemanticOwner
+from tinygrad.uop import trace as _lower_trace   # LR-010 lowering trace; inert unless LOWER_TRACE is set
+from tinygrad.uop import invariants as _lower_check  # LR-011 pass invariants; inert unless LOWER_CHECK is set
 from tinygrad.dtype import ConstType, ImageDType, dtypes, DType, DTypeLike, to_dtype, truncate, PtrDType, least_upper_dtype, Invalid, AddrSpace
 from tinygrad.dtype import ConstFloat, PyConst, storage_fmt_for_dtype, to_storage_scalar, from_storage_scalar
 from tinygrad.device import Buffer, MultiBuffer, canonicalize_device
@@ -563,7 +565,8 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     # Ordinary INDEX nodes remain untagged and therefore cannot masquerade as
     # REDUCE_SLOT projections.
     tag = kwargs.pop("tag", None)
-    if tag is None and isinstance(self.tag, tuple) and self.tag and self.tag[0] in ("composite_slot", "composite_reduce", "composite_view"):
+    if tag is None and (isinstance(self.tag, CompositeReduceTag) or
+                        (isinstance(self.tag, tuple) and self.tag and self.tag[0] in ("composite_slot", "composite_reduce", "composite_view"))):
       tag = ("composite_view", self.tag)
     return UOp(Ops.INDEX, kwargs.pop("dtype", self.dtype if ptr else self.dtype.base), (self,)+tuple([x for x in srcs if x is not None]), tag=tag, **kwargs)
   def __getitem__(self, idx):
@@ -1389,6 +1392,28 @@ class CompositeReduce(NamedTuple):
   attention_grid: Any = None
   attention_causal: bool = False
   attention_context: Any = None
+
+@dataclass(frozen=True)
+class CompositeReduceTag:
+  """Typed provenance for a composite-reduce TUPLE result.
+
+  Replaces the legacy ``("composite_reduce", composite)`` 2-tuple tag (LR-020).
+  Producers should attach this via ``UOp.replace(tag=CompositeReduceTag(composite))``.
+  Consumers should read provenance through ``composite_reduce_provenance()``, which
+  also accepts the legacy tuple form so producers and consumers can migrate
+  independently.
+  """
+  composite: 'CompositeReduce'
+
+def composite_reduce_provenance(tag) -> 'CompositeReduce|None':
+  """Compatibility reader: recover the CompositeReduce from a tag, whether it is
+  the typed CompositeReduceTag or the legacy ("composite_reduce", composite) tuple.
+
+  Returns None if `tag` carries no composite-reduce provenance.
+  """
+  if isinstance(tag, CompositeReduceTag): return tag.composite
+  if isinstance(tag, tuple) and len(tag) == 2 and tag[0] == "composite_reduce": return tag[1]
+  return None
 
 class SharedAttentionCandidateContext(NamedTuple):
   profile: str
@@ -2622,7 +2647,16 @@ class RewriteContext:
 @profile_matches
 def graph_rewrite(sink:UOp, pm:PatternMatcher, ctx=None, bottom_up=False, name=None, bpm=None, walk=False, enter_calls=False) -> UOp:
   rewrite_ctx = RewriteContext(pm if not bottom_up else None, pm if bottom_up else bpm, ctx, enter_calls)
-  return rewrite_ctx.walk_rewrite(sink) if walk else rewrite_ctx.unified_rewrite(sink)
+  # LR-010: every pass names itself here, so one hook observes the whole pipeline. Off unless LOWER_TRACE is set;
+  # when off this is a single module attribute test and the graph is never walked.
+  if not (_lower_trace.ENABLED or _lower_check.ENABLED):
+    return rewrite_ctx.walk_rewrite(sink) if walk else rewrite_ctx.unified_rewrite(sink)
+  _t0 = time.perf_counter()
+  out = rewrite_ctx.walk_rewrite(sink) if walk else rewrite_ctx.unified_rewrite(sink)
+  if _lower_trace.ENABLED: _lower_trace.record_rewrite(name, sink, out, bottom_up=bottom_up, walk=walk, started=_t0)
+  # LR-011: checking after every pass is what makes the first failure name the pass that caused it.
+  if _lower_check.ENABLED: _lower_check.check_pass(name, out)
+  return out
 
 def sint_to_uop(x:sint, dtype=dtypes.weakint) -> UOp: return UOp.const(dtype, x) if isinstance(x, int) else x.cast(dtype)
 def to_max_shape(shape:tuple[sint, ...]) -> tuple[int, ...]: return tuple(int(x.vmax) if isinstance(x, UOp) else x for x in shape)
@@ -2679,11 +2713,12 @@ def _clear_non_composite_tag(x: UOp):
   # Backend scheduling may clear ordinary register/optimization tags, but
   # validated composite provenance is part of the REDUCE_SLOT type contract.
   if x.tag is None: return None
+  if isinstance(x.tag, CompositeReduceTag): return None
   if isinstance(x.tag, tuple) and len(x.tag) == 2:
     kind, payload = x.tag
     valid = (kind in ("composite_reduce", "composite_slot") and hasattr(payload, "slots")) or \
-            (kind == "composite_view" and isinstance(payload, tuple) and len(payload) >= 2 and
-             payload[0] in ("composite_reduce", "composite_slot", "composite_view"))
+            (kind == "composite_view" and (isinstance(payload, CompositeReduceTag) or
+             (isinstance(payload, tuple) and len(payload) >= 2 and payload[0] in ("composite_reduce", "composite_slot", "composite_view"))))
     if valid: return None
   return x.replace(tag=None)
 remove_all_tags = PatternMatcher([(UPat(GroupOp.All, name="x"), _clear_non_composite_tag)])

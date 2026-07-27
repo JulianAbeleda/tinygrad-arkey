@@ -1,6 +1,6 @@
 import math
 from typing import cast, Any
-from tinygrad.uop.ops import PatternMatcher, UPat, GroupOp, Ops, UOp, AxisType, KernelInfo, ParamArg, ScheduleHints, StateHandle
+from tinygrad.uop.ops import PatternMatcher, UPat, GroupOp, Ops, UOp, AxisType, KernelInfo, ParamArg, ScheduleHints, StateHandle, CompositeReduceTag
 from tinygrad.uop.render import print_uops, pyrender
 from tinygrad.dtype import DType, ImageDType, dtypes, PtrDType, AddrSpace, Invalid, ConstFloat
 from tinygrad.helpers import DEBUG, Context, prod, SPEC, Metadata, panic, CHECK_OOB, all_same
@@ -43,11 +43,19 @@ def _is_tagged_composite_slot_view(x: UOp) -> bool:
   tag = x.tag
   if not (isinstance(tag, tuple) and len(tag) == 2 and tag[0] == "composite_view"): return False
   provenance = tag[1]
+  if isinstance(provenance, CompositeReduceTag): return hasattr(provenance.composite, "slots")
   if not (isinstance(provenance, tuple) and len(provenance) >= 2): return False
   if provenance[0] == "composite_slot": return hasattr(provenance[1], "slots")
   if provenance[0] == "composite_reduce": return hasattr(provenance[1], "slots")
   if provenance[0] == "composite_view": return _is_tagged_composite_slot_view(x.src[0])
   return False
+
+def _composite_provenance_object(tag):
+  """Recover the CompositeReduce object from a validated composite_reduce/composite_slot
+  tag, whether it is the typed CompositeReduceTag or a legacy tuple form."""
+  if isinstance(tag, CompositeReduceTag): return tag.composite
+  if isinstance(tag, tuple) and len(tag) >= 2: return tag[1]
+  return None
 
 def type_verify(ast:UOp|list[UOp], check_spec:PatternMatcher):
   lst = list(ast.toposort()) if isinstance(ast, UOp) else ast
@@ -295,7 +303,7 @@ spec_tensor = PatternMatcher([
   (UPat(Ops.REDUCE_SLOT, src=(UPat(),), name="x"),
    lambda x: isinstance(x.arg, int) and 0 <= x.arg < (
      len(x.src[0].arg[0].slots) if x.src[0].op is Ops.REDUCE and hasattr(x.src[0].arg[0], 'slots') else
-     len(x.src[0].src[0].tag[1].slots) if _is_tagged_composite_slot_view(x.src[0]) else -1)),
+     len(_composite_provenance_object(x.src[0].src[0].tag).slots) if _is_tagged_composite_slot_view(x.src[0]) else -1)),
   (UPat(Ops.DEFERRED_REDUCE_SLOT, src=(UPat(),), allow_any_len=True, name="x"),
    lambda x: hasattr(x.arg, "slot") and hasattr(x.arg, "views") and x.src[0].op in (Ops.REDUCE, Ops.TUPLE, Ops.DEFERRED_REDUCE_OWNER)),
   (UPat(Ops.DEFERRED_REDUCE_OWNER, src=(UPat(Ops.REDUCE),), name="x"),
