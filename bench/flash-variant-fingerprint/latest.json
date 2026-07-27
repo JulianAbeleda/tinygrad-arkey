@@ -1,0 +1,27 @@
+{
+  "arms": {
+    "default": {
+      "14B.KV_BOTH": "81008920dbe1216cd86d8708b9f81a0aa92fac1b7191c76d066fea81381ead93",
+      "14B.K_ONLY": "b2d9772df22c09b3e395f96b6987ea07ae1a36497c5154274dba2e2245a49bc5",
+      "8B.KV_BOTH": "55aa6bbab8f4972de06d86435a79b6ca58419bfb544e212c67cbfea452851979",
+      "8B.K_ONLY": "580fc02a8fbbd5b70470e2266be88399ba157b26c2643a8e078c049a2eccfff1"
+    },
+    "inline_reduce": {
+      "14B.KV_BOTH": "ac69bebcc8a6875ff1224c561128a5e15f42be59689ec2f8f4045e14395a4a0d",
+      "14B.K_ONLY": "dc89c6e57f03f70c213b2ea00073c6ba0a4eb47c270ed94250a074a1d1a81c80",
+      "8B.KV_BOTH": "fab1d30840d4f6a02dcc2f73521685e8dfbe34a0f5e3eaaf8aa96843ebe59789",
+      "8B.K_ONLY": "eb0132efcc80c9f4fc63f73d7d5ecfd24aec5cc116b2455b0a47f3b09fa20e72"
+    },
+    "split_score": {
+      "14B.KV_BOTH": "3aeba5f67fb16de33fc87fd08fa5bbd3cee45b6d5dbdda769cbe4c7cdfc4cfb3",
+      "14B.K_ONLY": "4d9608734b049a2cc5e75b97c00ab2cd5ee1562eea6a212db31c702a0342e710",
+      "8B.KV_BOTH": "79cdc2c99d1223d6edb38aa7051869d929a5515a42dfa22b2162b2ab62da1aac",
+      "8B.K_ONLY": "61bcd01349a8f079e5305eaf31d5713d04c75d07f6cd9afa53e1417ea68c1b4a"
+    }
+  },
+  "header": {
+    "command": "python3 extra/audit/flash_variant_fingerprint.py",
+    "python_version": "3.12.3 (main, Jun 19 2026, 12:46:00) [GCC 13.3.0]",
+    "schema": "tinygrad.flash_variant_fingerprint.v1"
+  }
+}

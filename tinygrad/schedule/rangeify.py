@@ -2,7 +2,7 @@ from dataclasses import dataclass, field, replace
 import itertools
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace, Invalid
 from tinygrad.uop.ops import PatternMatcher, UPat, Ops, UOp, resolve, GroupOp, _substitute, KernelInfo, ParamArg, ScheduleHints, NativeAttentionRequest
-from tinygrad.uop.ops import graph_rewrite, sint, AxisType, BottomUpGate, profile_matches, identity_element, AccumulatorSlot, CompositeReduce, CompositeInputSpec, CompositeTileCarrier, AttentionSpec, AMDRowSoftmaxRepackSpec
+from tinygrad.uop.ops import graph_rewrite, sint, AxisType, BottomUpGate, profile_matches, identity_element, AccumulatorSlot, CompositeReduce, CompositeInputSpec, CompositeTileCarrier, AttentionSpec, AMDRowSoftmaxRepackSpec, composite_reduce_provenance
 from tinygrad.uop.symbolic import symbolic
 from tinygrad.helpers import prod, all_same, getenv, dedup, all_int, DEBUG, SPLIT_REDUCEOP, DEBUG_RANGEIFY, VIZ, MAX_KERNEL_BUFFERS
 from tinygrad.helpers import PCONTIG, FLOAT16, OPENPILOT_HACKS, Context, argsort, partition, get_single_element
@@ -472,7 +472,7 @@ def cleanup_dead_axes(b:UOp):
   # Generic BUFFER shape inference assumes src[0] has a concrete shape, which
   # is intentionally false for this tuple carrier.  Leave its range/lane
   # ownership untouched; REDUCE_SLOT projection resolves the per-slot shape.
-  if b.src[0].op is Ops.TUPLE and isinstance(b.src[0].tag, tuple) and b.src[0].tag[0] == "composite_reduce":
+  if b.src[0].op is Ops.TUPLE and composite_reduce_provenance(b.src[0].tag) is not None:
     return None
 
   new_rng = []
@@ -543,7 +543,8 @@ def remove_bufferize(src:UOp, buf:UOp, idx:UOp):
   assert all(x.op in {Ops.RANGE, Ops.CONST} for x in buf.src[1:])
 
   # if it's user contiguous, we never remove it
-  if src.op in ALWAYS_RUN_OPS or not buf.arg.removable: return None
+  if src.op in ALWAYS_RUN_OPS or not buf.arg.removable:
+    return None
 
   # COST GATE (2026-07-26, revised): do not duplicate an expensive producer across a low-parallelism
   # reduction consumer. remove_bufferize runs once per consumer, and every path here ends in
@@ -724,7 +725,7 @@ def limit_bufs(ctx:IndexingContext, root:UOp):
     for s in root.src:
       if s.op in GroupOp.Elementwise and s.device is not None:
         # Insert bufferize: all AxisType.REDUCE before bufferize are AxisType.LOOP
-        orig_ranges, end_ranges = s.ranges, [x.replace(arg=(next(ctx.range_idx), AxisType.LOOP)) if x.op is Ops.RANGE else x for x in s.ranges]
+        orig_ranges, end_ranges = s.ranges, [x.replace(arg=(ctx.next_range_index(), AxisType.LOOP)) if x.op is Ops.RANGE else x for x in s.ranges]
         s = s.substitute(dict(zip(orig_ranges, end_ranges))).bufferize(*end_ranges, arg=BufferizeOpts(device=s.device)).index(*orig_ranges)
       srcs.append(s)
     return root.replace(src=tuple(srcs))
@@ -780,7 +781,7 @@ def bufferize_to_store(ctx:itertools.count, x:UOp, idx:UOp, allow_locals=True):
 # collapse any BUFFERIZE to single input BUFFERIZE
 def flatten_bufferize(x:UOp):
   if len(x.src) == 2: return None
-  if x.src[0].op is Ops.TUPLE and isinstance(x.src[0].tag, tuple) and x.src[0].tag[0] == "composite_reduce":
+  if x.src[0].op is Ops.TUPLE and composite_reduce_provenance(x.src[0].tag) is not None:
     return None
   ret = x.replace(src=(x.src[0], get_single_element(apply_movement_op(Ops.RESHAPE, (prod(x.shape),), x.shape, x.src[1:]))))
   rngs = x.src[1:]

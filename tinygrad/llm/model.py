@@ -19,7 +19,7 @@ from tinygrad.llm.prefill_policy import (
   prefill_policy_uses_overlay, prefill_v2_validate_ubatch, select_prefill_runtime_policy,
   bounded_packed_projection_proven_eligible,
 )
-from tinygrad.llm.prefill_routes import is_direct_packed_prefill_linear, route_prefill_linear, validate_packed_wmma_prefill_mode
+from tinygrad.llm.prefill_routes import direct_packed_prefill_policy, is_direct_packed_prefill_linear, route_prefill_linear, validate_prefill_route_mode
 from tinygrad.llm.prefill_memory_plan import Strategy
 from tinygrad.llm.prefill_route_observer import PrefillDirectPackedBinding, PrefillRouteAttachment, prefill_route_scope, notify_prefill_route
 from tinygrad.llm.qk_primitives import (
@@ -215,7 +215,7 @@ _EXACT_ROUTE_MEMORY_KEYS = ("resident_copies", "candidate_workspace_bytes", "bat
                             "runtime_persistent_bytes", "peak_prefill_activation_bytes", "peak_prefill_output_bytes",
                             "peak_prefill_scratch_bytes")
 
-def _attach_selected_prefill_inventory(model, inventory:dict, policy, scanned_target_facts) -> None:
+def _attach_selected_prefill_inventory(model, inventory:dict, policy, scanned_target_facts, direct_packed_policy=None) -> None:
   """Attach metadata-selected rows to their exact runtime owning linears."""
   routes = dict(policy.get("routes", {})) if policy is not None else {}
   rows = inventory.get("rows", ())
@@ -248,8 +248,10 @@ def _attach_selected_prefill_inventory(model, inventory:dict, policy, scanned_ta
     # This is intentionally separate from the generic route attachment: the
     # direct helper is phase-owned and must match the selected physical M/N/K,
     # rather than treating a tensor-level route id as permission for decode.
+    candidate_policy = direct_packed_policy or direct_packed_prefill_policy(0, 0)
     setattr(obj, "_prefill_direct_packed_binding", PrefillDirectPackedBinding(
-      invocation_id, "prefill", str(row.get("role", "")), direct_shape))
+      invocation_id, "prefill", str(row.get("role", "")), direct_shape,
+      candidate_policy.lifecycle, candidate_policy.reason))
     attached.add(invocation_id)
   if attached != set(routes): raise ValueError("selected prefill inventory did not attach exactly once")
 
@@ -874,7 +876,6 @@ class Transformer:
     self._packed_wmma_warmstart_contexts:dict|None = None
     if config.prefill_v2:
       prefill_v2_validate_ubatch(config.prefill_ubatch)
-      self._pf16_warmstart = self._build_prefill_v2_warmstart()
 
   @property
   def prefill_memory_plan(self) -> str|None:
@@ -938,7 +939,7 @@ class Transformer:
     # dense fp16 path has no packed-weight PARAM, so packed_dtype=None (matches the key
     # postrange._warmstart_key computes for a kernel with no packed-weight-dtype PARAM).
     return {_warmstart_key({out_f, self.config.prefill_ubatch}, in_f): _opts(out_f, in_f)
-            for _, out_f, in_f in self._prefill_v2_covered()}
+            for lin, out_f, in_f in self._prefill_v2_covered() if getattr(lin, "_pf16_w", None) is not None}
 
   def _build_packed_wmma_warmstart(self) -> tuple[dict, dict]:
     # Only called when prefill_routes.packed_wmma_prefill_enabled() is set (see __init__). Runs the
@@ -1259,7 +1260,7 @@ class Transformer:
       prefill_v2=_v2_on, prefill_ubatch=_prefill_ubatch, prefill_concrete_kv=_concrete_kv,
       prefill_workload_reuse=_workload_reuse, flash_decode=_flash_decode, lm_head_route="lazy",
       kv_quant=_kv_quant, ring=_ring_admitted)
-    if config.prefill_v2: validate_packed_wmma_prefill_mode(config.n_heads, config.n_kv_heads)
+    if config.prefill_v2: validate_prefill_route_mode(config.n_heads, config.n_kv_heads)
     # FAST_EMPTY_INIT: every weight is REPLACED by load_state_dict below, so building the ~254 random init graphs
     # (nn.Linear Tensor.uniform / nn.Embedding glorot_uniform) is wasted work (~2.3s of the load, per profiling).
     # Init EMPTY during construction instead -- correct because nothing reads the random values before they're replaced.
@@ -1298,7 +1299,8 @@ class Transformer:
               f"q6_effective_storage_mode={q6_storage_mode}")
       if primitive_linears: model._q4k_linears = Q4KPrimitiveRegistry(primitive_linears)
     if _runtime_inventory is not None:
-      _attach_selected_prefill_inventory(model, _runtime_inventory, _runtime_policy, _device_facts)
+      _attach_selected_prefill_inventory(model, _runtime_inventory, _runtime_policy, _device_facts,
+                                         direct_packed_prefill_policy(config.n_heads, config.n_kv_heads))
     # NOTE: without this contiguous, it unpacks the weights from the model every time. we shouldn't need this, but for now it's faster
     if realize:
       for s in (params:=nn.state.get_parameters(model)): s.replace(s.contiguous())
@@ -1324,7 +1326,12 @@ class Transformer:
       if packed_wmma_prefill_enabled():
         model._packed_wmma_warmstart, model._packed_wmma_warmstart_contexts = model._build_packed_wmma_warmstart()
     # prefill v2 (opt-in): realize fp16 weights now that primitives are installed (shapes/dequant graphs ready)
-    if config.prefill_v2: model.realize_prefill_v2_weights()
+    if config.prefill_v2:
+      model.realize_prefill_v2_weights()
+      # Dense schedules belong only to linears that actually received a resident fp16 overlay.
+      # Build after memory-plan realization so packed-only models cannot match unrelated kernels
+      # through an empty-dtype shape key.
+      model._pf16_warmstart = model._build_prefill_v2_warmstart()
     # Concrete-KV is now the default prefill-v2 execution mode (see prefill_concrete_kv_auto_decision),
     # so per-start_pos jits compile LAZILY on first use by default (cached on the model instance
     # thereafter, model.py's `prefill_v2_jits.setdefault` at __call__) -- a cold prompt pays the

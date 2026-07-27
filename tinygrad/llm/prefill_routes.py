@@ -9,6 +9,7 @@ from tinygrad.llm import route_ops as qk_ops
 from tinygrad.llm.memory_semantics import (prefill_activation as _prefill_activation,
   prefill_output as _prefill_output, prefill_scratch as _prefill_scratch)
 from tinygrad.llm.prefill_route_observer import PrefillDirectPackedBinding, PrefillRouteAttachment, _ACTIVE, notify_prefill_route
+from tinygrad.llm.route_selection import RouteCandidatePolicy, RouteLifecycle, parse_route_mode
 from tinygrad.uop.ops import UOp
 
 _PREFILL_ROUTE_OVERRIDE: ContextVar[Callable[[object, Tensor], Tensor | None] | None] = \
@@ -277,8 +278,39 @@ def _run_direct_packed_baseline(lin, x:Tensor, spec:PrefillLinearRouteSpec) -> T
 
 def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
   """Production direct-packed baseline; attachment is the sole selector."""
+  binding = getattr(lin, "_prefill_direct_packed_binding", None)
+  if isinstance(binding, PrefillDirectPackedBinding) and binding.lifecycle is RouteLifecycle.QUARANTINED: return None
   spec = _attached_direct_packed_spec(lin, x)
   return None if spec is None else _run_direct_packed_baseline(lin, x, spec)
+
+
+PREFILL_PACKED_WMMA_POLICY = RouteCandidatePolicy("packed-wmma-prefill", RouteLifecycle.PROMOTED)
+PREFILL_FP16_POLICY = RouteCandidatePolicy("fp16-prefill", RouteLifecycle.FALLBACK)
+_DIRECT_PACKED_PREFILL_POLICY = RouteCandidatePolicy("direct-packed-prefill", RouteLifecycle.PROMOTED)
+_DIRECT_PACKED_PREFILL_QUARANTINE = {
+  (40, 8): "direct-packed prefill produced repeatable GPU MMU faults for Hq=40/Hkv=8",
+}
+
+
+def direct_packed_prefill_policy(n_heads:int, n_kv_heads:int) -> RouteCandidatePolicy:
+  reason = _DIRECT_PACKED_PREFILL_QUARANTINE.get((n_heads, n_kv_heads))
+  return _DIRECT_PACKED_PREFILL_POLICY if reason is None else RouteCandidatePolicy(
+    _DIRECT_PACKED_PREFILL_POLICY.candidate_id, RouteLifecycle.QUARANTINED, reason)
+
+
+def prefill_route_mode(getenv_fn=None) -> str:
+  """Canonical prefill selector with compatibility for the former boolean gate."""
+  if getenv_fn is None:
+    from tinygrad.helpers import getenv
+    getenv_fn = getenv
+  canonical = str(getenv_fn("TINYGRAD_PREFILL_ROUTE", "")).strip()
+  if canonical:
+    return parse_route_mode("TINYGRAD_PREFILL_ROUTE", allowed=("auto", "packed_wmma", "direct_packed", "fp16"),
+                            aliases={"packed-wmma": "packed_wmma", "direct-packed": "direct_packed"}, getenv_fn=getenv_fn)
+  return parse_route_mode("TINYGRAD_PREFILL_PACKED_WMMA", allowed=("auto", "direct_packed"), default="1",
+                          aliases={"1": "auto", "true": "auto", "on": "auto", "yes": "auto",
+                                   "0": "direct_packed", "false": "direct_packed", "off": "direct_packed", "no": "direct_packed"},
+                          getenv_fn=getenv_fn)
 
 
 def packed_wmma_prefill_enabled() -> bool:
@@ -290,14 +322,16 @@ def packed_wmma_prefill_enabled() -> bool:
   to revert to the direct-packed baseline only. The known-unsafe 14B Hq=40/Hkv=8 rollback
   geometry is rejected by validate_packed_wmma_prefill_mode before model construction.
   """
-  from tinygrad.helpers import getenv
-  return bool(getenv("TINYGRAD_PREFILL_PACKED_WMMA", 1))
+  return prefill_route_mode() in ("auto", "packed_wmma")
+
+
+def validate_prefill_route_mode(n_heads:int, n_kv_heads:int) -> None:
+  if prefill_route_mode() == "direct_packed": direct_packed_prefill_policy(n_heads, n_kv_heads).require_usable()
 
 
 def validate_packed_wmma_prefill_mode(n_heads:int, n_kv_heads:int) -> None:
-  if (n_heads, n_kv_heads) == (40, 8) and not packed_wmma_prefill_enabled():
-    raise RuntimeError("14B direct-packed prefill rollback is disabled after observed GPU MMU faults; "
-                       "unset TINYGRAD_PREFILL_PACKED_WMMA or set it to 1 to use the supported packed-WMMA path")
+  """Compatibility alias for external callers."""
+  validate_prefill_route_mode(n_heads, n_kv_heads)
 
 
 def route_packed_wmma_prefill(lin, x:Tensor) -> Tensor | None:
@@ -326,13 +360,15 @@ def route_prefill_linear(lin, x:Tensor) -> Tensor:
     if routed is not None: return routed
   route = _attached_production_route(lin, x)
   w = getattr(lin, "_pf16_w", None)
+  mode = prefill_route_mode()
 
-  if route in ("direct_packed", "bounded_packed"):
-    if not _exact_q6k_vocab_direct_prefill(lin, x):
+  if route in ("direct_packed", "bounded_packed") and mode != "fp16":
+    if mode in ("auto", "packed_wmma") and not _exact_q6k_vocab_direct_prefill(lin, x):
       routed = route_packed_wmma_prefill(lin, x)
       if routed is not None: return routed
-    routed = route_direct_packed_prefill(lin, x)
-    if routed is not None: return routed
+    if mode in ("auto", "direct_packed"):
+      routed = route_direct_packed_prefill(lin, x)
+      if routed is not None: return routed
 
   # Exact binding presence is the only Graph-GEMM execution authority.
   if route == "fp16" and getattr(lin, "_prefill_graph_gemm_binding", None) is not None and w is not None:

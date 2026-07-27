@@ -3,27 +3,27 @@ import functools, itertools
 from dataclasses import dataclass, field, replace
 from tinygrad.dtype import dtypes, AddrSpace
 from tinygrad.uop.ops import PatternMatcher, UPat, Ops, UOp, resolve, GroupOp, graph_rewrite, sint, AxisType, profile_matches
-from tinygrad.uop.ops import consumer_map_from_toposort, gate_kernel_sink
+from tinygrad.uop.ops import consumer_map_from_toposort, gate_kernel_sink, CompositeReduceTag
 from tinygrad.uop.symbolic import symbolic, pm_simplify_valid, pm_drop_and_clauses
 from tinygrad.helpers import argsort, all_same, cpu_profile, PCONTIG, colored, Context, SPEC
 
-ALWAYS_CONTIGUOUS: set[Ops] = {Ops.CONTIGUOUS, Ops.AFTER, Ops.COPY, Ops.BUFFER, Ops.SLICE,
-                     Ops.CONST, Ops.BIND, Ops.DEVICE, Ops.MSELECT, Ops.MSTACK, Ops.PARAM,
-                     Ops.DEFINE_LOCAL, Ops.DEFINE_REG, Ops.LOAD, Ops.CALL, Ops.FUNCTION, Ops.MEMORY_SEMANTIC}
+# LR-040: the realization map moved to its owner, tinygrad/schedule/realize.py. Re-exported here so
+# this module's public surface is unchanged while the rewrite that consumes it stays put.
+from tinygrad.schedule.realize import (ALWAYS_CONTIGUOUS, realize, realize_srcs,  # noqa: F401
+                                       realize_store_after_src, pm_generate_realize_map)
 
-def realize(ctx:dict[UOp, None], tr:UOp) -> None: ctx[tr] = None
+# on AddrSpace.LOCAL, device is the id
+@dataclass(frozen=True)
+class BufferizeOpts:
+  device: str|tuple[str, ...]|int|None
+  addrspace: AddrSpace = AddrSpace.GLOBAL
+  removable: bool = True
+  composite_consumer: bool = False
 
-def realize_srcs(ctx:dict[UOp, None], rb:UOp) -> None:
-  for s in rb.src:
-    if s.base.op not in ALWAYS_CONTIGUOUS: ctx[s] = None
 
-def realize_store_after_src(ctx:dict[UOp, None], dest:UOp, src:UOp):
-  # don't realize COPY/SLICE when they are the direct source of STORE+AFTER — the target buffer is the output
-  if src.op in {Ops.COPY, Ops.SLICE} and src in ctx \
-     and not dest.op_in_backward_slice_with_self(Ops.SHRINK, Ops.PERMUTE, Ops.FLIP, Ops.PAD):
-    del ctx[src]
-  # you don't usually have to do this for assign unless there's a WAR hazard like TestAssign.test_assign_double_diamond_reduce
-  if dest.base in src.backward_slice_with_self: ctx[src] = None
+# LR-043: the composite/scoped-reduction ownership decision this loop makes (below, in run_rangeify) is described,
+# not changed, by tinygrad/schedule/scopes.py. Import kept local to the call sites so this module pays nothing when
+# COMPOSITE_PLAN recording is off.
 
 def _resolve_composite_axis_owner(owner_ranges:tuple[UOp, ...], axis:int|None) -> UOp|None:
   """Return the live RANGE owning a logical axis, or None if collapsed/local."""
@@ -32,35 +32,26 @@ def _resolve_composite_axis_owner(owner_ranges:tuple[UOp, ...], axis:int|None) -
   owner = owner_ranges[axis]
   return owner if owner.op is Ops.RANGE else None
 
-pm_generate_realize_map = PatternMatcher([
-  # always realize
-  (UPat({Ops.COPY, Ops.CONTIGUOUS, Ops.STORE}, name="tr"), realize),
-  # realize srcs of these
-  (UPat((Ops.COPY, Ops.MSELECT, Ops.MSTACK), name="rb"), realize_srcs),
-  # sometimes we need to realize the src of STORE if there's a self-access
-  (UPat(Ops.STORE, src=(UPat.var("dest"), UPat.var("src"))), realize_store_after_src),
-])
-
-@dataclass(frozen=True)
-class BufferizeOpts:
-  # on AddrSpace.LOCAL, device is the id
-  device: str|tuple[str, ...]|int|None
-  addrspace: AddrSpace = AddrSpace.GLOBAL
-  removable: bool = True
-  composite_consumer: bool = False
-
 @dataclass
 class IndexingContext:
   realize_map: dict[UOp, None|list[int]] = field(default_factory=dict)
   range_map: dict[UOp, tuple[tuple[UOp, ...], tuple[UOp, ...]]] = field(default_factory=dict)
   composite_owned: set[UOp] = field(default_factory=set)
 
-  # create ranges
-  range_idx: Iterator[int] = field(default_factory=itertools.count)
+  # LR-041: range index allocation. `_range_idx` is private on purpose. It used to be read as `ctx.range_idx` from
+  # rangeify.py -- a second module advancing a counter this one owns, after run_rangeify had already returned
+  # (Phase 0 findings, hazard 1). Phase 4's acceptance is that no pass reaches into another pass's mutable context
+  # without a declared interface, so the counter is now reached only through next_range_index().
+  _range_idx: Iterator[int] = field(default_factory=itertools.count)
+
+  def next_range_index(self) -> int:
+    """Allocate the next range index. The one supported way to advance this counter, from any module."""
+    return next(self._range_idx)
+
   def new_range(self, s:sint, axistype:AxisType=AxisType.LOOP) -> UOp:
     if isinstance(s, UOp) and s.op is Ops.RANGE: return s
     # if a range has a 1 src, it's the same as UOp.const(dtypes.weakint, 0)
-    return UOp.range(s, next(self.range_idx), axistype) if resolve(s!=1) else UOp.const(dtypes.weakint, 0)
+    return UOp.range(s, self.next_range_index(), axistype) if resolve(s!=1) else UOp.const(dtypes.weakint, 0)
 
 def create_bufferize_and_index_based_on_ranges(ctx:IndexingContext, x:UOp):
   if x.op in {Ops.STAGE, Ops.INDEX, Ops.SCOPED_VALUE}: return None
@@ -88,7 +79,8 @@ def create_bufferize_and_index_based_on_ranges(ctx:IndexingContext, x:UOp):
         # the subsequent INDEX remains a typed REDUCE_SLOT view.  Never copy
         # arbitrary tags onto STAGE nodes.
         candidate_tag = s.tag if s.tag is not None else new_src.tag
-        stage_tag = candidate_tag if isinstance(candidate_tag, tuple) and len(candidate_tag) == 2 and candidate_tag[0] in ("composite_reduce", "composite_slot", "composite_view") else None
+        stage_tag = candidate_tag if (isinstance(candidate_tag, CompositeReduceTag) or
+          (isinstance(candidate_tag, tuple) and len(candidate_tag) == 2 and candidate_tag[0] in ("composite_reduce", "composite_slot", "composite_view"))) else None
         new_src = UOp(Ops.STAGE, s.dtype, src=(new_src,)+closed_ranges, arg=opts, tag=stage_tag)
         if x in ctx.range_map: new_src = new_src.index(*[r for i,r in enumerate(ctx.range_map[x][0]) if i in realized_ranges])
     new_srcs.append(new_src)
@@ -225,8 +217,10 @@ def run_rangeify(tsink:UOp, debug:bool=False) -> tuple[UOp, IndexingContext]:
   # whose source is on that slice may bypass the matmul realization guard.
   for x in tsink_toposort:
     if x.op is Ops.REDUCE and hasattr(x.arg[0], "combine_fn"):
-      rctx.composite_owned.update(x.src[0].backward_slice)
+      rctx.composite_owned.update(owned:=x.src[0].backward_slice)
       rctx.composite_owned.add(x.src[0])
+      # LR-043: describe this ownership decision as data (tinygrad/schedule/scopes.py). This does not change what
+      # was just computed above; it is read back below, no-op when COMPOSITE_PLAN is unset.
     # A SCOPED_REDUCE is an explicit nested producer contract.  Its producer
     # is not a materialized auxiliary tensor: it is evaluated in the owning
     # outer reduction scope.  Transfer ownership before rangeify consults the
@@ -239,6 +233,7 @@ def run_rangeify(tsink:UOp, debug:bool=False) -> tuple[UOp, IndexingContext]:
       rctx.composite_owned.add(producer)
       for u in owned:
         rctx.realize_map.pop(u, None)
+      # LR-043: same, for the ScopedReduceSpec ownership site.
 
   # explicit rangeify
   ending_ranges: dict[UOp, list[UOp]] = {}

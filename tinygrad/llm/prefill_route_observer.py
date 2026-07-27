@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Callable, Iterator
+from tinygrad.llm.route_selection import RouteLifecycle
 
 @dataclass(frozen=True)
 class PrefillRouteAttachment:
@@ -22,6 +23,8 @@ class PrefillDirectPackedBinding:
   phase: str
   role: str
   shape: tuple[int, int, int]
+  lifecycle: RouteLifecycle = RouteLifecycle.PROMOTED
+  quarantine_reason: str | None = None
 
 @dataclass(frozen=True)
 class PrefillRouteExecution:

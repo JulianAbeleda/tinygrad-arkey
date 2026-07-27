@@ -5,7 +5,7 @@ from typing import Literal
 
 StorageKind = Literal["lds", "global_register_resident"]
 WaitKind = Literal["full_barrier", "targeted_vmcnt"]
-ResourceStage = Literal["host_estimate", "final_program"]
+ResourceStage = Literal["host_estimate", "final_program", "pinned_budget"]
 
 @dataclass(frozen=True)
 class StoragePolicy:
@@ -198,46 +198,26 @@ class WaveLDSFence(WaitCount):
     if any(left[1] > right[0] for left, right in zip(sorted(slices), sorted(slices)[1:])):
       raise ValueError("wave LDS fence slices must be disjoint")
 
-def wait_count_for_dependency(dep: WaitDependency, *, younger_vmem_loads: int | None = None) -> WaitCount:
-  """Create a sound AMD wait immediate from a typed staged dependency.
 
-  AMD ``vmcnt(N)`` permits *N outstanding VMEM operations*; it does not mean
-  "wait for N loads".  The sequential register pipeline therefore defaults to
-  a full VMEM drain.  A non-zero value is accepted only when a caller supplies
-  a backend-proven count of younger VMEM loads which are safe to leave in
-  flight.  Physical instruction placement remains renderer-owned.
-  """
-  if not isinstance(dep, WaitDependency):
-    raise TypeError("expected WaitDependency")
-  if dep.policy.kind != "targeted_vmcnt" or dep.policy.scope != "per_stage":
-    raise ValueError("targeted wait lowering requires a per-stage targeted dependency")
-  if dep.producer_stage is None or dep.consumer_stage is None:
-    raise ValueError("targeted wait lowering requires producer and consumer stages")
-  if younger_vmem_loads is None: younger_vmem_loads = 0
-  if not isinstance(younger_vmem_loads, int) or isinstance(younger_vmem_loads, bool) or younger_vmem_loads < 0:
-    raise ValueError("younger_vmem_loads must be a non-negative backend-proven count")
-  return WaitCount(vmcnt=younger_vmem_loads)
-
-def amdllvm_wait_dependency(dep: WaitDependency) -> WaitDependency:
-  """Validate the dependency contract still owned by the graph lifecycle.
-
-  ``WaitCount`` has a backend intrinsic seam, but graph-level dependency
-  scheduling has not yet been wired to emit it; keep this adapter fail-closed
-  until that lifecycle lowering exists.
-  """
-  if not isinstance(dep, WaitDependency): raise TypeError("expected WaitDependency")
-  if dep.policy.kind != "full_barrier" or dep.policy.scope != "workgroup":
-    raise ValueError("targeted wait dependencies are unsupported by pure AMDLLVM")
-  return dep
 
 @dataclass(frozen=True)
 class ResourcePlan:
+  """Resource facts for one compiler-owned kernel, tagged by provenance.
+
+  ``pinned_budget`` is neither a host estimate nor a measured final program:
+  it is a compile-time architectural ceiling (e.g. a scheduler-owned WMMA
+  carrier budget) that a pipeline is proved to fit within before lowering.
+  Keeping it distinct from ``host_estimate``/``final_program`` stops a pinned
+  ceiling from being misreported as either an unproven guess or a compiled
+  register count.
+  """
   stage: ResourceStage; lds_bytes: int = 0; scratch_bytes: int = 0; vgpr: int|None = None; sgpr: int|None = None
   def __post_init__(self):
-    if self.stage not in ("host_estimate","final_program"): raise ValueError("unsupported resource stage")
+    if self.stage not in ("host_estimate","final_program","pinned_budget"): raise ValueError("unsupported resource stage")
     if any(not isinstance(x,int) or x < 0 for x in (self.lds_bytes,self.scratch_bytes)): raise ValueError("resource bytes must be non-negative ints")
     if self.stage == "host_estimate" and (self.vgpr is not None or self.sgpr is not None): raise ValueError("host estimate cannot claim final register counts")
     if self.stage == "final_program" and (self.vgpr is None or self.sgpr is None): raise ValueError("final program requires VGPR and SGPR counts")
+    if self.stage == "pinned_budget" and self.vgpr is None: raise ValueError("pinned budget requires a VGPR ceiling")
 
 @dataclass(frozen=True)
 class PipelinePolicy:
@@ -284,21 +264,6 @@ class PipelinePolicy:
                resources or ResourcePlan("host_estimate"), stages)
 
 
-def pipeline_policy_for_route(route_family: str, *, buffer_count: int = 1, slot_bytes: int = 0,
-                              stages: int | None = None) -> PipelinePolicy:
-  """Resolve route names once, at the compiler policy boundary.
-
-  Callers may still carry a legacy ``route_family`` string, but all lowering
-  code receives the same typed composition after this point.
-  """
-  if route_family == "lds":
-    if slot_bytes <= 0: raise ValueError("LDS route requires positive slot_bytes")
-    return PipelinePolicy.lds(buffer_count=buffer_count, slot_bytes=slot_bytes, stages=1 if stages is None else stages)
-  if route_family == "pipe":
-    # The compiler-owned register pipe contract is specifically the proved
-    # two-stage/b128 primitive. Do not silently construct a weaker variant.
-    return RegisterPipePlan(stages=2 if stages is None else stages).policy
-  raise ValueError(f"unsupported pipeline route family {route_family!r}")
 
 @dataclass(frozen=True)
 class RegisterPipePlan:

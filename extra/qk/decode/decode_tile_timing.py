@@ -10,25 +10,26 @@ from pathlib import Path
 
 import numpy as np
 
-H_KV, H_D, MAX_CONTEXT, SPLITS = 8, 128, 4608, 48
+H_KV, H_D, MAX_CONTEXT, DEFAULT_SPLITS = 8, 128, 4608, 48
 
-def normalize_config(hq: int, tc: int) -> dict[str, int]:
-  hq, tc = int(hq), int(tc)
+def normalize_config(hq: int, tc: int, splits: int = DEFAULT_SPLITS) -> dict[str, int]:
+  hq, tc, splits = int(hq), int(tc), int(splits)
   if hq not in (32, 40): raise ValueError("Hq must be 32 or 40")
   if tc <= 0 or tc > MAX_CONTEXT: raise ValueError("Tc must be in 1..MAX_CONTEXT")
+  if splits <= 0: raise ValueError("splits must be positive")
   if hq % H_KV: raise ValueError("Hq must be divisible by Hkv")
-  aligned = ((tc + SPLITS - 1) // SPLITS + 15) // 16 * 16
+  aligned = ((tc + splits - 1) // splits + 15) // 16 * 16
   blocks = aligned // 16
   return {"Hq": hq, "Hkv": H_KV, "Hd": H_D, "MAXC": MAX_CONTEXT, "Tc": tc,
-          "S": SPLITS, "blocks_per_split": blocks, "tiles": H_KV * SPLITS * blocks}
+          "S": splits, "blocks_per_split": blocks, "tiles": H_KV * splits * blocks}
 
 def power_state() -> dict[str, str | None]:
   paths = ["/sys/class/drm/card0/device/power_dpm_force_performance_level",
            "/sys/class/drm/card0/device/pp_dpm_sclk", "/sys/class/drm/card0/device/pp_dpm_mclk"]
   return {Path(p).name: (Path(p).read_text().strip() if Path(p).exists() else None) for p in paths}
 
-def run(hq: int, tc: int, *, warmups: int = 3, samples: int = 15) -> dict:
-  cfg = normalize_config(hq, tc)
+def run(hq: int, tc: int, *, splits: int = DEFAULT_SPLITS, warmups: int = 3, samples: int = 15) -> dict:
+  cfg = normalize_config(hq, tc, splits)
   os.environ.setdefault("DEV", "AMD")
   from tinygrad import Device, Tensor, TinyJit
   from extra.qk.decode.flash_decode_attention_executor import flash_decode_live_split_block_tile
@@ -38,7 +39,7 @@ def run(hq: int, tc: int, *, warmups: int = 3, samples: int = 15) -> dict:
   cache_np[:, :, :, :cfg["Tc"], :] = rng.normal(0, .04, (2, 1, H_KV, cfg["Tc"], H_D)).astype(np.float16)
   cache = Tensor(cache_np, device="AMD")
   fn = TinyJit(lambda: flash_decode_live_split_block_tile(q, cache, cfg["Tc"], H_D, cfg["Hq"], H_KV,
-                                                           MAX_CONTEXT, SPLITS, staging="KV_BOTH", fused_combine=True))
+                                                           MAX_CONTEXT, cfg["S"], staging="KV_BOTH", fused_combine=True))
   out = fn().numpy().astype(np.float32)
   for _ in range(warmups): fn().realize()
   dev = Device["AMD"]
@@ -63,8 +64,10 @@ def main(argv=None) -> int:
   ap = argparse.ArgumentParser(description=__doc__)
   ap.add_argument("--Hq", type=int, choices=(32, 40), required=True)
   ap.add_argument("--Tc", type=int, choices=(512, 4096), required=True)
+  ap.add_argument("--splits", type=int, default=DEFAULT_SPLITS)
   ap.add_argument("--warmups", type=int, default=3); ap.add_argument("--samples", type=int, default=15)
   args = ap.parse_args(argv)
-  print(json.dumps(run(args.Hq, args.Tc, warmups=args.warmups, samples=args.samples), sort_keys=True)); return 0
+  print(json.dumps(run(args.Hq, args.Tc, splits=args.splits,
+                       warmups=args.warmups, samples=args.samples), sort_keys=True)); return 0
 
 if __name__ == "__main__": raise SystemExit(main())

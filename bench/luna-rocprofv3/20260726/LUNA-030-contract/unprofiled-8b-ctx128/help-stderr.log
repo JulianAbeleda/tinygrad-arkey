@@ -1,4 +1,0 @@
-Traceback (most recent call last):
-  File "/home/ubuntu/worktrees/luna-tinygrad-trace-8b128/extra/qk/decode/decode_runtime_overhead.py", line 17, in <module>
-    from extra.qk.decode.decode_harness import DEFAULT_MODEL, csv_ints, decode_run_profile
-ModuleNotFoundError: No module named 'extra'

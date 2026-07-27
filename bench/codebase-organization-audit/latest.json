@@ -318,9 +318,9 @@
     }
   ],
   "audited_commit": {
-    "commit": "382d43d97fdee6ab0e544ac95e9e5121cd5da1ea",
-    "described": "mac-first-boot-20260610-3421-g382d43d97-dirty",
-    "dirty": true
+    "commit": "1e4297bc85bf61ac054c789bb6b9a69ae15750f3",
+    "described": "mac-first-boot-20260610-3470-g1e4297bc8",
+    "dirty": false
   },
   "authority_keys": {
     "AMD_BACKEND_ATOM_ID": [
@@ -533,9 +533,6 @@
     "amd_warp_reduce.WARP=32": [
       "extra/qk/amd_warp_reduce.py"
     ],
-    "axis_stride.coalescing_definition": [
-      "extra/qk/layout_coalesce_check.py"
-    ],
     "boltbeam.hw_trace.v1": [
       "extra/qk/prefill/prefill_boltbeam_trace.py"
     ],
@@ -553,9 +550,6 @@
     ],
     "clock_pin.SET_AUTO_CMD": [
       "extra/qk/clock_pin.py"
-    ],
-    "coalesce_loads.upcast_promotion_rule": [
-      "extra/qk/coalesced_load_lowering.py"
     ],
     "decode_q6k_coop_generated writer identity (shared with route_manifest.py, which cites this file by name)": [
       "extra/qk/q6k_route_spec.py"
@@ -862,14 +856,14 @@
     ]
   },
   "coverage": {
-    "authored_files": 435,
-    "authored_loc": 68401,
-    "explicit_records": 96,
+    "authored_files": 450,
+    "authored_loc": 70105,
+    "explicit_records": 94,
     "generated_files": 1,
     "generated_loc": 57,
     "group_covered": 0,
-    "manifest_scope_files": 96,
-    "manifest_scope_loc": 13275,
+    "manifest_scope_files": 94,
+    "manifest_scope_loc": 13239,
     "uncovered": []
   },
   "coverage_limitations": [
@@ -924,7 +918,7 @@
       "extra/qk/runtime_specs.py",
       "extra/qk/warp_reduce_lowering.py"
     ],
-    "loc": 6241,
+    "loc": 6252,
     "production_reachable_from_tinygrad": [
       "extra/llm/cli.py",
       "extra/nv_gpu_driver/nv_ioctl.py",
@@ -932,7 +926,6 @@
       "extra/qk/amd_resource_artifact.py",
       "extra/qk/amd_warp_reduce.py",
       "extra/qk/bubblebeam_futuresight.py",
-      "extra/qk/coalesced_load_lowering.py",
       "extra/qk/codegen_list_scheduler.py",
       "extra/qk/codegen_recurrence_unroll.py",
       "extra/qk/decode/flash_decode_attention_executor.py",
@@ -946,7 +939,6 @@
       "extra/qk/kv_load.py",
       "extra/qk/lane_partition_reduce.py",
       "extra/qk/layout.py",
-      "extra/qk/layout_coalesce_check.py",
       "extra/qk/live_split_geometry.py",
       "extra/qk/memory_adaptive_allocation_observer.py",
       "extra/qk/memory_adaptive_policy.py",
@@ -992,6 +984,22 @@
     "boundary_violations": [],
     "cross_domain_cycles": [],
     "deferred_import_edges": {
+      "extra/audit/lowering_baseline.py": [
+        "extra/qk/decode/flash_decode_attention_spec.py",
+        "extra/qk/gemv_g3_codegen_lowering.py",
+        "extra/qk/prefill/flash_prefill_attention_spec.py",
+        "extra/qk/prefill/q4k_prefill_route_spec.py",
+        "extra/qk/prefill/q6k_prefill_route_spec.py",
+        "extra/qk/quant/q4_k_gemv_primitive.py",
+        "extra/qk/quant/q6_k_gemv_primitive.py",
+        "tinygrad/renderer/__init__.py",
+        "tinygrad/renderer/cstyle.py"
+      ],
+      "extra/audit/lowering_fingerprint.py": [
+        "tinygrad/__init__.py",
+        "tinygrad/uop/ops.py",
+        "tinygrad/uop/trace.py"
+      ],
       "extra/gpu_fault_analysis/bench_alloc_trace.py": [
         "tinygrad/device.py",
         "tinygrad/dtype.py",
@@ -1155,6 +1163,21 @@
         "extra/qk/layout.py",
         "tinygrad/__init__.py"
       ],
+      "test/unit/test_flash_buffer_roles.py": [
+        "extra/qk/flash_kernels.py"
+      ],
+      "test/unit/test_gate_inventory.py": [
+        "tinygrad/__init__.py",
+        "tinygrad/codegen/__init__.py",
+        "tinygrad/helpers.py",
+        "tinygrad/uop/ops.py"
+      ],
+      "test/unit/test_lowering_invariants.py": [
+        "tinygrad/uop/__init__.py"
+      ],
+      "test/unit/test_lowering_trace.py": [
+        "tinygrad/__init__.py"
+      ],
       "test/unit/test_memory_adaptive_model_integration.py": [
         "tinygrad/llm/memory_adaptive_authority.py"
       ],
@@ -1202,7 +1225,8 @@
         "tinygrad/schedule/multi.py"
       ],
       "tinygrad/codegen/__init__.py": [
-        "tinygrad/codegen/late/composite_combines.py"
+        "tinygrad/codegen/late/composite_combines.py",
+        "tinygrad/uop/invariants.py"
       ],
       "tinygrad/codegen/late/reduce_lowering.py": [
         "tinygrad/codegen/late/composite_combines.py"
@@ -1218,6 +1242,9 @@
         "tinygrad/codegen/opt/heuristic.py",
         "tinygrad/llm/fused_attention.py",
         "tinygrad/schedule/wmma/__init__.py"
+      ],
+      "tinygrad/codegen/plan.py": [
+        "tinygrad/helpers.py"
       ],
       "tinygrad/device.py": [
         "tinygrad/__init__.py"
@@ -1295,7 +1322,6 @@
     },
     "dynamic_seam_edges": {
       "tinygrad/codegen/experimental.py": [
-        "extra/qk/coalesced_load_lowering.py",
         "extra/qk/codegen_list_scheduler.py",
         "extra/qk/codegen_recurrence_unroll.py",
         "extra/qk/fdot2_lowering.py",
@@ -1326,6 +1352,15 @@
     "edges": {
       "extra/audit/codebase_organization_audit.py": [
         "sz.py"
+      ],
+      "extra/audit/lowering_baseline.py": [
+        "extra/qk/amd_resource_artifact.py",
+        "extra/qk/layout.py",
+        "extra/qk/mmq_compile_evidence.py",
+        "tinygrad/codegen/__init__.py",
+        "tinygrad/device.py",
+        "tinygrad/dtype.py",
+        "tinygrad/uop/ops.py"
       ],
       "extra/audit/pure_machine_search_default_path_census.py": [
         "extra/qk/route_manifest.py"
@@ -1451,15 +1486,9 @@
       "extra/qk/bubblebeam_futuresight.py": [
         "extra/qk/amd_warp_reduce.py",
         "extra/qk/lane_partition_reduce.py",
-        "extra/qk/layout_coalesce_check.py",
         "extra/qk/route_manifest.py",
+        "tinygrad/codegen/late/coalesced_load.py",
         "tinygrad/dtype.py",
-        "tinygrad/uop/ops.py"
-      ],
-      "extra/qk/coalesced_load_lowering.py": [
-        "extra/qk/layout_coalesce_check.py",
-        "tinygrad/dtype.py",
-        "tinygrad/helpers.py",
         "tinygrad/uop/ops.py"
       ],
       "extra/qk/codegen_list_scheduler.py": [
@@ -1563,10 +1592,6 @@
         "tinygrad/helpers.py",
         "tinygrad/llm/gguf.py",
         "tinygrad/llm/qk_layout.py"
-      ],
-      "extra/qk/layout_coalesce_check.py": [
-        "tinygrad/uop/ops.py",
-        "tinygrad/uop/symbolic.py"
       ],
       "extra/qk/live_split_geometry.py": [
         "tinygrad/dtype.py",
@@ -2057,8 +2082,26 @@
         "extra/qk/clock_pin.py",
         "extra/qk/timing_harness.py"
       ],
+      "test/unit/test_coalesced_load_lowering.py": [
+        "tinygrad/codegen/__init__.py",
+        "tinygrad/codegen/late/coalesced_load.py",
+        "tinygrad/dtype.py",
+        "tinygrad/helpers.py",
+        "tinygrad/renderer/isa/amd.py",
+        "tinygrad/uop/ops.py"
+      ],
       "test/unit/test_codebase_organization_audit.py": [
         "extra/audit/codebase_organization_audit.py"
+      ],
+      "test/unit/test_codegen_cache_key_gates.py": [
+        "tinygrad/codegen/__init__.py",
+        "tinygrad/codegen/plan.py",
+        "tinygrad/dtype.py",
+        "tinygrad/helpers.py",
+        "tinygrad/renderer/__init__.py",
+        "tinygrad/runtime/ops_python.py",
+        "tinygrad/uop/ops.py",
+        "tinygrad/uop/trace.py"
       ],
       "test/unit/test_compiler_amd_pure_disassembly_20260712.py": [
         "tinygrad/runtime/support/compiler_amd.py"
@@ -2139,10 +2182,21 @@
         "tinygrad/renderer/isa/__init__.py",
         "tinygrad/uop/ops.py"
       ],
+      "test/unit/test_flash_buffer_roles.py": [
+        "extra/qk/decode/flash_decode_attention_spec.py",
+        "tinygrad/dtype.py",
+        "tinygrad/uop/ops.py"
+      ],
       "test/unit/test_flash_decode_attention_spec.py": [
         "extra/qk/decode/flash_decode_attention_spec.py",
         "tinygrad/__init__.py",
         "tinygrad/uop/ops.py"
+      ],
+      "test/unit/test_flash_variant_fingerprint.py": [
+        "extra/audit/flash_variant_fingerprint.py"
+      ],
+      "test/unit/test_gate_inventory.py": [
+        "tinygrad/codegen/plan.py"
       ],
       "test/unit/test_gemm_consumer_adapters.py": [
         "tinygrad/codegen/opt/compiler_policies.py",
@@ -2257,6 +2311,18 @@
         "tinygrad/renderer/__init__.py",
         "tinygrad/renderer/cstyle.py",
         "tinygrad/uop/ops.py"
+      ],
+      "test/unit/test_lowering_baseline.py": [
+        "extra/audit/lowering_baseline.py"
+      ],
+      "test/unit/test_lowering_fingerprint.py": [
+        "extra/audit/lowering_fingerprint.py"
+      ],
+      "test/unit/test_lowering_invariants.py": [
+        "tinygrad/uop/invariants.py"
+      ],
+      "test/unit/test_lowering_trace.py": [
+        "tinygrad/uop/trace.py"
       ],
       "test/unit/test_measurement_authority.py": [
         "extra/qk/bench.py"
@@ -2531,6 +2597,10 @@
         "tinygrad/codegen/opt/register_contracts.py",
         "tinygrad/renderer/isa/amd_register_contracts.py"
       ],
+      "test/unit/test_route_admission_consistency.py": [
+        "extra/qk/route_manifest.py",
+        "tinygrad/llm/decode_routes.py"
+      ],
       "test/unit/test_runtime_specs.py": [
         "extra/qk/generated_candidates.py",
         "extra/qk/prefill/prefill_graph_gemm_route.py",
@@ -2645,6 +2715,7 @@
       "tinygrad/codegen/__init__.py": [
         "tinygrad/codegen/experimental.py",
         "tinygrad/codegen/gpudims.py",
+        "tinygrad/codegen/late/coalesced_load.py",
         "tinygrad/codegen/late/devectorizer.py",
         "tinygrad/codegen/late/expander.py",
         "tinygrad/codegen/late/gater.py",
@@ -2653,6 +2724,7 @@
         "tinygrad/codegen/late/reg_store.py",
         "tinygrad/codegen/late/regalloc.py",
         "tinygrad/codegen/opt/postrange.py",
+        "tinygrad/codegen/plan.py",
         "tinygrad/codegen/simplify.py",
         "tinygrad/dtype.py",
         "tinygrad/helpers.py",
@@ -2670,6 +2742,12 @@
         "tinygrad/helpers.py",
         "tinygrad/renderer/__init__.py",
         "tinygrad/uop/ops.py"
+      ],
+      "tinygrad/codegen/late/coalesced_load.py": [
+        "tinygrad/dtype.py",
+        "tinygrad/helpers.py",
+        "tinygrad/uop/ops.py",
+        "tinygrad/uop/symbolic.py"
       ],
       "tinygrad/codegen/late/composite_combines.py": [
         "tinygrad/dtype.py",
@@ -2690,8 +2768,7 @@
         "tinygrad/uop/ops.py"
       ],
       "tinygrad/codegen/late/flash_attn.py": [
-        "tinygrad/__init__.py",
-        "tinygrad/uop/ops.py"
+        "tinygrad/__init__.py"
       ],
       "tinygrad/codegen/late/gater.py": [
         "tinygrad/dtype.py",
@@ -2762,6 +2839,9 @@
       ],
       "tinygrad/codegen/opt/tc.py": [
         "tinygrad/dtype.py"
+      ],
+      "tinygrad/codegen/plan.py": [
+        "tinygrad/codegen/opt/__init__.py"
       ],
       "tinygrad/codegen/simplify.py": [
         "tinygrad/dtype.py",
@@ -3337,13 +3417,10 @@
         "tinygrad/helpers.py",
         "tinygrad/uop/ops.py"
       ],
-      "tinygrad/schedule/flash_fusion.py": [
-        "tinygrad/helpers.py",
-        "tinygrad/uop/ops.py"
-      ],
       "tinygrad/schedule/indexing.py": [
         "tinygrad/dtype.py",
         "tinygrad/helpers.py",
+        "tinygrad/schedule/realize.py",
         "tinygrad/uop/ops.py",
         "tinygrad/uop/symbolic.py"
       ],
@@ -3370,6 +3447,10 @@
         "tinygrad/schedule/multi.py",
         "tinygrad/uop/ops.py",
         "tinygrad/uop/symbolic.py"
+      ],
+      "tinygrad/schedule/realize.py": [
+        "tinygrad/dtype.py",
+        "tinygrad/uop/ops.py"
       ],
       "tinygrad/schedule/wmma/__init__.py": [
         "tinygrad/dtype.py",
@@ -3414,7 +3495,6 @@
         "tinygrad/helpers.py",
         "tinygrad/mixin/rand.py",
         "tinygrad/schedule/__init__.py",
-        "tinygrad/schedule/flash_fusion.py",
         "tinygrad/schedule/rangeify.py",
         "tinygrad/uop/ops.py"
       ],
@@ -3430,6 +3510,9 @@
         "tinygrad/helpers.py",
         "tinygrad/uop/ops.py"
       ],
+      "tinygrad/uop/invariants.py": [
+        "tinygrad/uop/__init__.py"
+      ],
       "tinygrad/uop/ops.py": [
         "tinygrad/device.py",
         "tinygrad/dtype.py",
@@ -3439,9 +3522,11 @@
         "tinygrad/renderer/__init__.py",
         "tinygrad/schedule/rangeify.py",
         "tinygrad/uop/__init__.py",
+        "tinygrad/uop/invariants.py",
         "tinygrad/uop/render.py",
         "tinygrad/uop/spec.py",
-        "tinygrad/uop/symbolic.py"
+        "tinygrad/uop/symbolic.py",
+        "tinygrad/uop/trace.py"
       ],
       "tinygrad/uop/render.py": [
         "tinygrad/dtype.py",
@@ -3519,6 +3604,9 @@
     },
     "inbound_counts": {
       "extra/audit/codebase_organization_audit.py": 1,
+      "extra/audit/flash_variant_fingerprint.py": 1,
+      "extra/audit/lowering_baseline.py": 1,
+      "extra/audit/lowering_fingerprint.py": 1,
       "extra/audit/pure_machine_search_default_path_census.py": 0,
       "extra/audit/tinygrad_provider_compat_gate.py": 0,
       "extra/audit/tinygrad_runtime_boundary_audit.py": 0,
@@ -3548,7 +3636,7 @@
       "extra/llm/sft_smoke_train.py": 0,
       "extra/nv_gpu_driver/nv_ioctl.py": 2,
       "extra/qk/amd_isa_proof.py": 2,
-      "extra/qk/amd_resource_artifact.py": 5,
+      "extra/qk/amd_resource_artifact.py": 6,
       "extra/qk/amd_warp_reduce.py": 6,
       "extra/qk/attention_harness_common.py": 8,
       "extra/qk/bench.py": 3,
@@ -3556,7 +3644,6 @@
       "extra/qk/benchmark_split_shared_attention.py": 0,
       "extra/qk/bubblebeam_futuresight.py": 1,
       "extra/qk/clock_pin.py": 1,
-      "extra/qk/coalesced_load_lowering.py": 1,
       "extra/qk/codegen_list_scheduler.py": 1,
       "extra/qk/codegen_recurrence_unroll.py": 1,
       "extra/qk/cooperative_stage_lanemap.py": 0,
@@ -3568,7 +3655,7 @@
       "extra/qk/decode/decode_runtime_overhead.py": 0,
       "extra/qk/decode/decode_tile_timing.py": 0,
       "extra/qk/decode/flash_decode_attention_executor.py": 2,
-      "extra/qk/decode/flash_decode_attention_spec.py": 2,
+      "extra/qk/decode/flash_decode_attention_spec.py": 3,
       "extra/qk/fdot2_lowering.py": 1,
       "extra/qk/flash_common.py": 1,
       "extra/qk/flash_kernels.py": 1,
@@ -3579,14 +3666,13 @@
       "extra/qk/kernel_vocabulary.py": 11,
       "extra/qk/kv_load.py": 1,
       "extra/qk/lane_partition_reduce.py": 2,
-      "extra/qk/layout.py": 19,
-      "extra/qk/layout_coalesce_check.py": 2,
+      "extra/qk/layout.py": 20,
       "extra/qk/live_split_geometry.py": 1,
       "extra/qk/memory_adaptive_allocation_observer.py": 4,
       "extra/qk/memory_adaptive_policy.py": 3,
       "extra/qk/memory_adaptive_runtime_collector.py": 3,
       "extra/qk/mmq_atom_boundary.py": 2,
-      "extra/qk/mmq_compile_evidence.py": 2,
+      "extra/qk/mmq_compile_evidence.py": 3,
       "extra/qk/mmq_ds4_logical_emitter.py": 2,
       "extra/qk/mmq_ds4_probe_contract.py": 2,
       "extra/qk/mmq_epoch_manifest_export.py": 3,
@@ -3636,7 +3722,7 @@
       "extra/qk/quant/q6_k_gemv_primitive.py": 3,
       "extra/qk/quantize.py": 1,
       "extra/qk/reg_store_devec.py": 1,
-      "extra/qk/route_manifest.py": 19,
+      "extra/qk/route_manifest.py": 20,
       "extra/qk/runtime_specs.py": 8,
       "extra/qk/shared_attention_capture.py": 4,
       "extra/qk/shared_attention_evidence.py": 4,
@@ -3685,7 +3771,9 @@
       "test/unit/test_bench_entrypoint.py": 0,
       "test/unit/test_candidate_context_propagation.py": 0,
       "test/unit/test_clock_pin.py": 0,
+      "test/unit/test_coalesced_load_lowering.py": 0,
       "test/unit/test_codebase_organization_audit.py": 0,
+      "test/unit/test_codegen_cache_key_gates.py": 0,
       "test/unit/test_compiler_amd_pure_disassembly_20260712.py": 0,
       "test/unit/test_composite_axis_constraints.py": 0,
       "test/unit/test_composite_reduce.py": 0,
@@ -3701,7 +3789,10 @@
       "test/unit/test_executable_artifact_preparation.py": 0,
       "test/unit/test_execution_bridge_contracts.py": 0,
       "test/unit/test_final_regalloc_proof_transport_20260712.py": 0,
+      "test/unit/test_flash_buffer_roles.py": 0,
       "test/unit/test_flash_decode_attention_spec.py": 0,
+      "test/unit/test_flash_variant_fingerprint.py": 0,
+      "test/unit/test_gate_inventory.py": 0,
       "test/unit/test_gemm_consumer_adapters.py": 0,
       "test/unit/test_generated_quant_binding_audit.py": 0,
       "test/unit/test_gguf_memory_scan.py": 0,
@@ -3722,6 +3813,10 @@
       "test/unit/test_llm_decode_routes.py": 0,
       "test/unit/test_llm_model_lm_head_prefill_route.py": 0,
       "test/unit/test_logits_only_reg_store.py": 0,
+      "test/unit/test_lowering_baseline.py": 0,
+      "test/unit/test_lowering_fingerprint.py": 0,
+      "test/unit/test_lowering_invariants.py": 0,
+      "test/unit/test_lowering_trace.py": 0,
       "test/unit/test_measurement_authority.py": 0,
       "test/unit/test_memory_adaptive_allocation_observer.py": 0,
       "test/unit/test_memory_adaptive_exact_ledger.py": 0,
@@ -3776,6 +3871,7 @@
       "test/unit/test_regalloc_rematerialization.py": 0,
       "test/unit/test_regalloc_spans.py": 0,
       "test/unit/test_register_contracts.py": 0,
+      "test/unit/test_route_admission_consistency.py": 0,
       "test/unit/test_runtime_specs.py": 1,
       "test/unit/test_shared_attention_compiler_capture.py": 0,
       "test/unit/test_shared_attention_evidence.py": 0,
@@ -3797,9 +3893,10 @@
       "test/unit/test_x86_encoding_fixtures.py": 0,
       "tinygrad/__init__.py": 80,
       "tinygrad/callify.py": 1,
-      "tinygrad/codegen/__init__.py": 22,
+      "tinygrad/codegen/__init__.py": 25,
       "tinygrad/codegen/experimental.py": 3,
       "tinygrad/codegen/gpudims.py": 1,
+      "tinygrad/codegen/late/coalesced_load.py": 3,
       "tinygrad/codegen/late/composite_combines.py": 2,
       "tinygrad/codegen/late/devectorizer.py": 5,
       "tinygrad/codegen/late/expander.py": 2,
@@ -3809,7 +3906,7 @@
       "tinygrad/codegen/late/reduce_lowering.py": 5,
       "tinygrad/codegen/late/reg_store.py": 4,
       "tinygrad/codegen/late/regalloc.py": 9,
-      "tinygrad/codegen/opt/__init__.py": 16,
+      "tinygrad/codegen/opt/__init__.py": 17,
       "tinygrad/codegen/opt/compiler_policies.py": 6,
       "tinygrad/codegen/opt/gemm_consumer.py": 1,
       "tinygrad/codegen/opt/heuristic.py": 0,
@@ -3819,16 +3916,17 @@
       "tinygrad/codegen/opt/postrange.py": 8,
       "tinygrad/codegen/opt/register_contracts.py": 5,
       "tinygrad/codegen/opt/tc.py": 10,
+      "tinygrad/codegen/plan.py": 3,
       "tinygrad/codegen/simplify.py": 3,
-      "tinygrad/device.py": 39,
-      "tinygrad/dtype.py": 113,
+      "tinygrad/device.py": 40,
+      "tinygrad/dtype.py": 118,
       "tinygrad/engine/jit.py": 6,
       "tinygrad/engine/realize.py": 6,
       "tinygrad/function.py": 1,
-      "tinygrad/helpers.py": 137,
+      "tinygrad/helpers.py": 138,
       "tinygrad/llm/__main__.py": 0,
       "tinygrad/llm/admission.py": 4,
-      "tinygrad/llm/decode_routes.py": 4,
+      "tinygrad/llm/decode_routes.py": 5,
       "tinygrad/llm/device_facts.py": 7,
       "tinygrad/llm/flash_prefill_attention.py": 8,
       "tinygrad/llm/fused_attention.py": 5,
@@ -3858,7 +3956,7 @@
       "tinygrad/mixin/reduce.py": 1,
       "tinygrad/nn/__init__.py": 1,
       "tinygrad/nn/state.py": 5,
-      "tinygrad/renderer/__init__.py": 21,
+      "tinygrad/renderer/__init__.py": 22,
       "tinygrad/renderer/amd/__init__.py": 1,
       "tinygrad/renderer/amd/dsl.py": 9,
       "tinygrad/renderer/amd/elf.py": 6,
@@ -3866,7 +3964,7 @@
       "tinygrad/renderer/cstyle.py": 11,
       "tinygrad/renderer/cuda.py": 4,
       "tinygrad/renderer/isa/__init__.py": 23,
-      "tinygrad/renderer/isa/amd.py": 19,
+      "tinygrad/renderer/isa/amd.py": 20,
       "tinygrad/renderer/isa/amd_addressing.py": 2,
       "tinygrad/renderer/isa/amd_attention_abi.py": 2,
       "tinygrad/renderer/isa/amd_physical_regs.py": 2,
@@ -3890,7 +3988,7 @@
       "tinygrad/runtime/ops_npy.py": 0,
       "tinygrad/runtime/ops_null.py": 0,
       "tinygrad/runtime/ops_nv.py": 0,
-      "tinygrad/runtime/ops_python.py": 4,
+      "tinygrad/runtime/ops_python.py": 5,
       "tinygrad/runtime/process_isolated.py": 3,
       "tinygrad/runtime/support/am/amdev.py": 5,
       "tinygrad/runtime/support/am/ip/__init__.py": 2,
@@ -3919,11 +4017,11 @@
       "tinygrad/runtime/support/usb.py": 2,
       "tinygrad/schedule/__init__.py": 1,
       "tinygrad/schedule/allreduce.py": 2,
-      "tinygrad/schedule/flash_fusion.py": 1,
       "tinygrad/schedule/indexing.py": 2,
       "tinygrad/schedule/memory.py": 2,
       "tinygrad/schedule/multi.py": 1,
       "tinygrad/schedule/rangeify.py": 13,
+      "tinygrad/schedule/realize.py": 1,
       "tinygrad/schedule/wmma/__init__.py": 6,
       "tinygrad/schedule/wmma/composite.py": 1,
       "tinygrad/schedule/wmma/fragments.py": 2,
@@ -3931,13 +4029,15 @@
       "tinygrad/schedule/wmma/loop_state.py": 1,
       "tinygrad/schedule/wmma/softmax.py": 3,
       "tinygrad/tensor.py": 7,
-      "tinygrad/uop/__init__.py": 16,
+      "tinygrad/uop/__init__.py": 17,
       "tinygrad/uop/decompositions.py": 3,
       "tinygrad/uop/divandmod.py": 1,
-      "tinygrad/uop/ops.py": 176,
+      "tinygrad/uop/invariants.py": 2,
+      "tinygrad/uop/ops.py": 178,
       "tinygrad/uop/render.py": 5,
       "tinygrad/uop/spec.py": 7,
       "tinygrad/uop/symbolic.py": 9,
+      "tinygrad/uop/trace.py": 3,
       "tinygrad/uop/upat.py": 0,
       "tinygrad/uop/validate.py": 0,
       "tinygrad/viz/amd.py": 4,
@@ -4030,7 +4130,9 @@
       "test/unit/test_bench_entrypoint.py",
       "test/unit/test_candidate_context_propagation.py",
       "test/unit/test_clock_pin.py",
+      "test/unit/test_coalesced_load_lowering.py",
       "test/unit/test_codebase_organization_audit.py",
+      "test/unit/test_codegen_cache_key_gates.py",
       "test/unit/test_compiler_amd_pure_disassembly_20260712.py",
       "test/unit/test_composite_axis_constraints.py",
       "test/unit/test_composite_reduce.py",
@@ -4046,7 +4148,10 @@
       "test/unit/test_executable_artifact_preparation.py",
       "test/unit/test_execution_bridge_contracts.py",
       "test/unit/test_final_regalloc_proof_transport_20260712.py",
+      "test/unit/test_flash_buffer_roles.py",
       "test/unit/test_flash_decode_attention_spec.py",
+      "test/unit/test_flash_variant_fingerprint.py",
+      "test/unit/test_gate_inventory.py",
       "test/unit/test_gemm_consumer_adapters.py",
       "test/unit/test_generated_quant_binding_audit.py",
       "test/unit/test_gguf_memory_scan.py",
@@ -4067,6 +4172,10 @@
       "test/unit/test_llm_decode_routes.py",
       "test/unit/test_llm_model_lm_head_prefill_route.py",
       "test/unit/test_logits_only_reg_store.py",
+      "test/unit/test_lowering_baseline.py",
+      "test/unit/test_lowering_fingerprint.py",
+      "test/unit/test_lowering_invariants.py",
+      "test/unit/test_lowering_trace.py",
       "test/unit/test_measurement_authority.py",
       "test/unit/test_memory_adaptive_allocation_observer.py",
       "test/unit/test_memory_adaptive_exact_ledger.py",
@@ -4121,6 +4230,7 @@
       "test/unit/test_regalloc_rematerialization.py",
       "test/unit/test_regalloc_spans.py",
       "test/unit/test_register_contracts.py",
+      "test/unit/test_route_admission_consistency.py",
       "test/unit/test_shared_attention_compiler_capture.py",
       "test/unit/test_shared_attention_evidence.py",
       "test/unit/test_shared_attention_promotion.py",
@@ -4168,54 +4278,40 @@
       "extra/hardware/sqtt/rgptool.py",
       "extra/llm/llama_kv_ctx_slope_bench.py",
       "extra/llm/sft_smoke_train.py",
-      "extra/qk/q4k_fused_mmq_contract.py",
       "extra/remote/bench.py",
       "extra/tools/amd_isa_generate.py",
       "extra/tools/check_doc_links.py",
       "scratch_attn_bench.py",
       "scratch_attn_bench2.py",
-      "test/backend/test_softmax_fusion.py",
-      "test/helpers.py",
       "test/test_guarded_execution.py",
       "test/test_runtime_bridge.py",
       "test/unit/test_alloc_trace.py",
       "test/unit/test_am_experiment_registry.py",
       "test/unit/test_am_psp_mem.py",
       "test/unit/test_amd_aql_packet_publication.py",
-      "test/unit/test_amd_attention_kv_tile_oob_guard.py",
       "test/unit/test_amd_compile_capture_fail_closed_20260712.py",
       "test/unit/test_amd_elf_entry_offset.py",
       "test/unit/test_amd_epilogue_address_schedule_probe.py",
       "test/unit/test_amd_final_elf_capture_20260712.py",
-      "test/unit/test_amd_isa_extraction_fixtures.py",
-      "test/unit/test_amd_isa_integer_vector_loads.py",
       "test/unit/test_amd_isa_integer_wmma_hardware_correctness.py",
       "test/unit/test_amd_kfd_fault_event_reset.py",
-      "test/unit/test_amd_resource_artifact.py",
-      "test/unit/test_amd_resource_artifact_intervals_20260712.py",
-      "test/unit/test_amd_wave_lds_fence.py",
-      "test/unit/test_amdllvm_waitcnt.py",
       "test/unit/test_analyze_faults.py",
-      "test/unit/test_attn_qo_register_compile.py",
       "test/unit/test_bench_entrypoint.py",
-      "test/unit/test_candidate_context_propagation.py",
       "test/unit/test_clock_pin.py",
+      "test/unit/test_coalesced_load_lowering.py",
+      "test/unit/test_codegen_cache_key_gates.py",
       "test/unit/test_compiler_amd_pure_disassembly_20260712.py",
-      "test/unit/test_composite_axis_constraints.py",
       "test/unit/test_composite_scalar_loop.py",
-      "test/unit/test_composite_tile_carrier.py",
       "test/unit/test_current_decode_execution_adapter.py",
-      "test/unit/test_current_prefill_execution_adapter.py",
       "test/unit/test_decode_resource_capture.py",
-      "test/unit/test_devectorizer_memory_widths.py",
-      "test/unit/test_devectorizer_reconstruction.py",
       "test/unit/test_disk_staging_timeout.py",
       "test/unit/test_dispatch_trace.py",
       "test/unit/test_executable_artifact_preparation.py",
       "test/unit/test_execution_bridge_contracts.py",
-      "test/unit/test_final_regalloc_proof_transport_20260712.py",
+      "test/unit/test_flash_buffer_roles.py",
       "test/unit/test_flash_decode_attention_spec.py",
-      "test/unit/test_gemm_consumer_adapters.py",
+      "test/unit/test_flash_variant_fingerprint.py",
+      "test/unit/test_gate_inventory.py",
       "test/unit/test_generated_quant_binding_audit.py",
       "test/unit/test_gguf_memory_scan.py",
       "test/unit/test_hcq_graph_profile_export.py",
@@ -4223,21 +4319,17 @@
       "test/unit/test_hcq_kernargs_contract.py",
       "test/unit/test_host_safety_canary_20260713.py",
       "test/unit/test_isolated_guarded_executor.py",
-      "test/unit/test_kernel_candidate_context.py",
-      "test/unit/test_kernel_lds_mapping.py",
-      "test/unit/test_kernel_naming.py",
-      "test/unit/test_kernel_pipeline_expansion.py",
-      "test/unit/test_linearizer_stable_priority.py",
       "test/unit/test_llama_bench_artifacts.py",
       "test/unit/test_llm_context_admission.py",
       "test/unit/test_llm_decode_correctness.py",
-      "test/unit/test_llm_decode_routes.py",
       "test/unit/test_llm_model_lm_head_prefill_route.py",
+      "test/unit/test_lowering_baseline.py",
+      "test/unit/test_lowering_fingerprint.py",
+      "test/unit/test_lowering_invariants.py",
       "test/unit/test_memory_adaptive_allocation_observer.py",
       "test/unit/test_memory_adaptive_exact_ledger.py",
       "test/unit/test_memory_adaptive_model_integration.py",
       "test/unit/test_memory_adaptive_policy.py",
-      "test/unit/test_memory_adaptive_route_manifest.py",
       "test/unit/test_memory_adaptive_runtime_collector.py",
       "test/unit/test_mmq_atom_boundary.py",
       "test/unit/test_mmq_ds4_logical_emitter.py",
@@ -4247,45 +4339,28 @@
       "test/unit/test_model_facts.py",
       "test/unit/test_model_profiles.py",
       "test/unit/test_model_route_plan.py",
-      "test/unit/test_online_softmax_state_split.py",
       "test/unit/test_operand_attribution_20260714.py",
       "test/unit/test_operand_path_execution_worker.py",
-      "test/unit/test_packed_weight.py",
       "test/unit/test_packed_wmma_compile_gate.py",
       "test/unit/test_packed_wmma_correctness_canary.py",
       "test/unit/test_pm4_ib_and_nv_cmdq_wrap_drain.py",
-      "test/unit/test_precontract_int8_lds_contract.py",
       "test/unit/test_prefill_graph_gemm_route.py",
       "test/unit/test_prefill_harness.py",
       "test/unit/test_prefill_memory_plan.py",
       "test/unit/test_prefill_memory_plan_integration.py",
       "test/unit/test_prefill_route_memory_semantics.py",
-      "test/unit/test_prefill_whole_synced.py",
       "test/unit/test_process_isolated.py",
       "test/unit/test_pure_pipe_graph_abi.py",
-      "test/unit/test_pure_register_compile_capture.py",
       "test/unit/test_pure_register_do_assemble_capture_boundary_20260712.py",
-      "test/unit/test_pure_register_evaluation_gate.py",
-      "test/unit/test_pure_register_final_program_adapter_20260712.py",
       "test/unit/test_q4_q4_owner_comparison.py",
       "test/unit/test_q4k_prefill_route_spec.py",
       "test/unit/test_q4k_q8_mmq_prefill_spec.py",
-      "test/unit/test_q4k_w_f16_decode.py",
-      "test/unit/test_qk_route_purity.py",
-      "test/unit/test_rangeify_multireduce.py",
-      "test/unit/test_recompute_hostile_cost_gate.py",
-      "test/unit/test_regalloc_addr_lifetime.py",
-      "test/unit/test_regalloc_candidate_scarcity.py",
-      "test/unit/test_regalloc_rematerialization.py",
-      "test/unit/test_regalloc_spans.py",
-      "test/unit/test_register_contracts.py",
+      "test/unit/test_route_admission_consistency.py",
       "test/unit/test_shared_attention_evidence.py",
       "test/unit/test_shared_attention_promotion.py",
       "test/unit/test_shared_attention_replay_admission.py",
       "test/unit/test_shared_attention_synchronization_capture.py",
       "test/unit/test_size_accounting.py",
-      "test/unit/test_stage1_wmma_compile_evidence.py",
-      "test/unit/test_strided_lds_record_layout.py",
       "test/unit/test_tensor_vector_load_gep_spec.py",
       "test/unit/test_viz_application_boundary.py",
       "test/unit/test_wmma_gep_spec.py",
@@ -4306,6 +4381,9 @@
     ],
     "outbound_counts": {
       "extra/audit/codebase_organization_audit.py": 1,
+      "extra/audit/flash_variant_fingerprint.py": 0,
+      "extra/audit/lowering_baseline.py": 7,
+      "extra/audit/lowering_fingerprint.py": 0,
       "extra/audit/pure_machine_search_default_path_census.py": 1,
       "extra/audit/tinygrad_provider_compat_gate.py": 0,
       "extra/audit/tinygrad_runtime_boundary_audit.py": 1,
@@ -4343,7 +4421,6 @@
       "extra/qk/benchmark_split_shared_attention.py": 4,
       "extra/qk/bubblebeam_futuresight.py": 6,
       "extra/qk/clock_pin.py": 0,
-      "extra/qk/coalesced_load_lowering.py": 4,
       "extra/qk/codegen_list_scheduler.py": 2,
       "extra/qk/codegen_recurrence_unroll.py": 2,
       "extra/qk/cooperative_stage_lanemap.py": 1,
@@ -4367,7 +4444,6 @@
       "extra/qk/kv_load.py": 2,
       "extra/qk/lane_partition_reduce.py": 4,
       "extra/qk/layout.py": 4,
-      "extra/qk/layout_coalesce_check.py": 2,
       "extra/qk/live_split_geometry.py": 2,
       "extra/qk/memory_adaptive_allocation_observer.py": 1,
       "extra/qk/memory_adaptive_policy.py": 0,
@@ -4472,7 +4548,9 @@
       "test/unit/test_bench_entrypoint.py": 1,
       "test/unit/test_candidate_context_propagation.py": 3,
       "test/unit/test_clock_pin.py": 2,
+      "test/unit/test_coalesced_load_lowering.py": 6,
       "test/unit/test_codebase_organization_audit.py": 1,
+      "test/unit/test_codegen_cache_key_gates.py": 8,
       "test/unit/test_compiler_amd_pure_disassembly_20260712.py": 1,
       "test/unit/test_composite_axis_constraints.py": 4,
       "test/unit/test_composite_reduce.py": 7,
@@ -4488,7 +4566,10 @@
       "test/unit/test_executable_artifact_preparation.py": 3,
       "test/unit/test_execution_bridge_contracts.py": 1,
       "test/unit/test_final_regalloc_proof_transport_20260712.py": 3,
+      "test/unit/test_flash_buffer_roles.py": 3,
       "test/unit/test_flash_decode_attention_spec.py": 3,
+      "test/unit/test_flash_variant_fingerprint.py": 1,
+      "test/unit/test_gate_inventory.py": 1,
       "test/unit/test_gemm_consumer_adapters.py": 5,
       "test/unit/test_generated_quant_binding_audit.py": 3,
       "test/unit/test_gguf_memory_scan.py": 2,
@@ -4509,6 +4590,10 @@
       "test/unit/test_llm_decode_routes.py": 4,
       "test/unit/test_llm_model_lm_head_prefill_route.py": 1,
       "test/unit/test_logits_only_reg_store.py": 8,
+      "test/unit/test_lowering_baseline.py": 1,
+      "test/unit/test_lowering_fingerprint.py": 1,
+      "test/unit/test_lowering_invariants.py": 1,
+      "test/unit/test_lowering_trace.py": 1,
       "test/unit/test_measurement_authority.py": 1,
       "test/unit/test_memory_adaptive_allocation_observer.py": 1,
       "test/unit/test_memory_adaptive_exact_ledger.py": 4,
@@ -4563,6 +4648,7 @@
       "test/unit/test_regalloc_rematerialization.py": 6,
       "test/unit/test_regalloc_spans.py": 4,
       "test/unit/test_register_contracts.py": 2,
+      "test/unit/test_route_admission_consistency.py": 2,
       "test/unit/test_runtime_specs.py": 5,
       "test/unit/test_shared_attention_compiler_capture.py": 5,
       "test/unit/test_shared_attention_evidence.py": 2,
@@ -4584,13 +4670,14 @@
       "test/unit/test_x86_encoding_fixtures.py": 3,
       "tinygrad/__init__.py": 7,
       "tinygrad/callify.py": 4,
-      "tinygrad/codegen/__init__.py": 21,
+      "tinygrad/codegen/__init__.py": 23,
       "tinygrad/codegen/experimental.py": 0,
       "tinygrad/codegen/gpudims.py": 4,
+      "tinygrad/codegen/late/coalesced_load.py": 4,
       "tinygrad/codegen/late/composite_combines.py": 3,
       "tinygrad/codegen/late/devectorizer.py": 5,
       "tinygrad/codegen/late/expander.py": 4,
-      "tinygrad/codegen/late/flash_attn.py": 2,
+      "tinygrad/codegen/late/flash_attn.py": 1,
       "tinygrad/codegen/late/gater.py": 2,
       "tinygrad/codegen/late/linearizer.py": 3,
       "tinygrad/codegen/late/reduce_lowering.py": 3,
@@ -4606,6 +4693,7 @@
       "tinygrad/codegen/opt/postrange.py": 9,
       "tinygrad/codegen/opt/register_contracts.py": 0,
       "tinygrad/codegen/opt/tc.py": 1,
+      "tinygrad/codegen/plan.py": 1,
       "tinygrad/codegen/simplify.py": 4,
       "tinygrad/device.py": 4,
       "tinygrad/dtype.py": 1,
@@ -4706,25 +4794,27 @@
       "tinygrad/runtime/support/usb.py": 5,
       "tinygrad/schedule/__init__.py": 6,
       "tinygrad/schedule/allreduce.py": 2,
-      "tinygrad/schedule/flash_fusion.py": 2,
-      "tinygrad/schedule/indexing.py": 4,
+      "tinygrad/schedule/indexing.py": 5,
       "tinygrad/schedule/memory.py": 5,
       "tinygrad/schedule/multi.py": 4,
       "tinygrad/schedule/rangeify.py": 9,
+      "tinygrad/schedule/realize.py": 2,
       "tinygrad/schedule/wmma/__init__.py": 6,
       "tinygrad/schedule/wmma/composite.py": 4,
       "tinygrad/schedule/wmma/fragments.py": 2,
       "tinygrad/schedule/wmma/kernels.py": 5,
       "tinygrad/schedule/wmma/loop_state.py": 2,
       "tinygrad/schedule/wmma/softmax.py": 2,
-      "tinygrad/tensor.py": 12,
+      "tinygrad/tensor.py": 11,
       "tinygrad/uop/__init__.py": 0,
       "tinygrad/uop/decompositions.py": 5,
       "tinygrad/uop/divandmod.py": 3,
-      "tinygrad/uop/ops.py": 11,
+      "tinygrad/uop/invariants.py": 1,
+      "tinygrad/uop/ops.py": 13,
       "tinygrad/uop/render.py": 4,
       "tinygrad/uop/spec.py": 6,
       "tinygrad/uop/symbolic.py": 5,
+      "tinygrad/uop/trace.py": 0,
       "tinygrad/uop/upat.py": 2,
       "tinygrad/uop/validate.py": 3,
       "tinygrad/viz/amd.py": 2,
@@ -4763,6 +4853,7 @@
         "tinygrad/schedule/indexing.py",
         "tinygrad/schedule/multi.py",
         "tinygrad/schedule/rangeify.py",
+        "tinygrad/schedule/realize.py",
         "tinygrad/uop/decompositions.py",
         "tinygrad/uop/divandmod.py",
         "tinygrad/uop/ops.py",
@@ -4843,12 +4934,12 @@
   "largest_authored_files": [
     {
       "domain": null,
-      "loc": 2267,
+      "loc": 2186,
       "path": "tinygrad/renderer/isa/amd.py"
     },
     {
       "domain": null,
-      "loc": 2124,
+      "loc": 2141,
       "path": "tinygrad/uop/ops.py"
     },
     {
@@ -4858,7 +4949,7 @@
     },
     {
       "domain": null,
-      "loc": 1067,
+      "loc": 1068,
       "path": "tinygrad/llm/model.py"
     },
     {
@@ -4883,12 +4974,12 @@
     },
     {
       "domain": null,
-      "loc": 700,
+      "loc": 698,
       "path": "tinygrad/tensor.py"
     },
     {
       "domain": null,
-      "loc": 660,
+      "loc": 661,
       "path": "tinygrad/schedule/rangeify.py"
     },
     {
@@ -4953,30 +5044,30 @@
         "loc": 256
       },
       "keep": {
-        "files": 92,
-        "loc": 12155
+        "files": 90,
+        "loc": 12119
       },
       "unclassified": {
-        "files": 339,
-        "loc": 55126
+        "files": 356,
+        "loc": 56866
       }
     },
     "domain": {
       "amd_runtime": {
         "files": 3,
-        "loc": 420
+        "loc": 421
       },
       "attention_decode": {
         "files": 10,
-        "loc": 788
+        "loc": 798
       },
       "attention_prefill": {
         "files": 4,
         "loc": 574
       },
       "codegen_lowering": {
-        "files": 10,
-        "loc": 560
+        "files": 8,
+        "loc": 510
       },
       "evidence": {
         "files": 10,
@@ -4984,7 +5075,7 @@
       },
       "measurement": {
         "files": 17,
-        "loc": 1941
+        "loc": 1944
       },
       "quant_mmq": {
         "files": 18,
@@ -4999,8 +5090,8 @@
         "loc": 1007
       },
       "unclassified": {
-        "files": 339,
-        "loc": 55126
+        "files": 356,
+        "loc": 56866
       }
     },
     "role": {
@@ -5009,8 +5100,8 @@
         "loc": 1143
       },
       "authority": {
-        "files": 51,
-        "loc": 7830
+        "files": 49,
+        "loc": 7798
       },
       "benchmark": {
         "files": 2,
@@ -5026,11 +5117,11 @@
       },
       "execution": {
         "files": 9,
-        "loc": 1811
+        "loc": 1804
       },
       "integration": {
         "files": 2,
-        "loc": 199
+        "loc": 202
       },
       "research": {
         "files": 4,
@@ -5041,8 +5132,8 @@
         "loc": 136
       },
       "unclassified": {
-        "files": 339,
-        "loc": 55126
+        "files": 356,
+        "loc": 56866
       }
     },
     "status": {
@@ -5051,20 +5142,20 @@
         "loc": 2285
       },
       "fallback": {
-        "files": 5,
-        "loc": 272
+        "files": 4,
+        "loc": 232
       },
       "historical_one_off": {
         "files": 1,
         "loc": 43
       },
       "production": {
-        "files": 67,
-        "loc": 9532
+        "files": 66,
+        "loc": 9519
       },
       "promoted_default": {
         "files": 6,
-        "loc": 648
+        "loc": 665
       },
       "refuted": {
         "files": 1,
@@ -5075,8 +5166,8 @@
         "loc": 114
       },
       "unclassified": {
-        "files": 339,
-        "loc": 55126
+        "files": 356,
+        "loc": 56866
       },
       "unresolved_reproducer": {
         "files": 2,
@@ -5112,9 +5203,30 @@
   ],
   "non_import_references": {
     "extra/audit/codebase_organization_audit.py": [
+      "docs/lowering-refactor-handoff-20260726.md",
       "docs/task_workflow/input/codebase-organization-audit-task.md",
       "docs/task_workflow/output/codebase-organization-audit-report.md",
       "test/unit/test_codebase_organization_audit.py"
+    ],
+    "extra/audit/flash_variant_fingerprint.py": [
+      "bench/flash-variant-fingerprint/latest.json",
+      "test/unit/test_flash_variant_fingerprint.py"
+    ],
+    "extra/audit/lowering_baseline.py": [
+      "bench/lowering-refactor-baseline/latest.json",
+      "docs/14b-phase0-contamination-notice-20260726.md",
+      "docs/lowering-refactor-handoff-20260726.md",
+      "docs/lowering-refactor-phase0-findings-20260726.md",
+      "extra/audit/flash_variant_fingerprint.py",
+      "extra/qk/amd_resource_artifact.py",
+      "extra/qk/decode/flash_decode_attention_spec.py",
+      "test/unit/test_flash_variant_fingerprint.py",
+      "test/unit/test_lowering_baseline.py"
+    ],
+    "extra/audit/lowering_fingerprint.py": [
+      "bench/lowering-cpu-fingerprint/latest.json",
+      "docs/lowering-refactor-handoff-20260726.md",
+      "test/unit/test_lowering_fingerprint.py"
     ],
     "extra/audit/pure_machine_search_default_path_census.py": [
       ".claude/commands/pure-search-loop.md",
@@ -5210,6 +5322,9 @@
       "test/unit/test_amd_isa_extraction_fixtures.py"
     ],
     "extra/qk/amd_resource_artifact.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
+      "docs/14b-phase0-contamination-notice-20260726.md",
+      "extra/audit/lowering_baseline.py",
       "extra/qk/prefill/pure_register_compile_capture.py",
       "extra/qk/prefill/pure_register_evaluation_gate.py",
       "test/unit/test_amd_resource_artifact.py",
@@ -5244,9 +5359,11 @@
       "docs/14b-direct-packed-prefill-authority-baseline-20260710.md",
       "docs/decode-regression-debug-scope-20260725.md",
       "docs/harness-consolidation.md",
+      "docs/lowering-refactor-e2e-validation-20260726.md",
       "docs/measurement-regime-audit-llama-prefill-20260715.md",
       "docs/non-fitting-prefill-foundation-performance-prune-scope-20260716.md",
       "docs/shared-flash-codex-M6-M8-evidence-path-20260722.md",
+      "docs/task_workflow/input/14b-prefill-fault-and-current-numbers-scope-20260726.md",
       "extra/llm/model_e2e_bench.py",
       "test/unit/test_bench_entrypoint.py",
       "test/unit/test_codebase_organization_audit.py",
@@ -5261,9 +5378,11 @@
     ],
     "extra/qk/benchmark_split_shared_attention.py": [
       "docs/attention-harness-centralization-scope-20260724.md",
+      "docs/lowering-refactor-cut-list-20260726.md",
       "docs/wmma-modularization-scope-20260724.md"
     ],
     "extra/qk/bubblebeam_futuresight.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/flash-fusion-implementation-plan.md",
       "docs/flash-prefill-wmma-mvp-scope-20260721.md",
       "docs/moe-fast-build-spec-deepseek-20260722.md",
@@ -5277,12 +5396,6 @@
       "extra/qk/README.md",
       "extra/qk/timing_harness.py"
     ],
-    "extra/qk/coalesced_load_lowering.py": [
-      "extra/qk/cooperative_stage_lanemap.py",
-      "scratchpad/audit_bfs.py",
-      "tinygrad/codegen/__init__.py",
-      "tinygrad/codegen/experimental.py"
-    ],
     "extra/qk/codegen_list_scheduler.py": [
       "scratchpad/audit_bfs.py",
       "tinygrad/codegen/experimental.py"
@@ -5295,6 +5408,7 @@
       "extra/qk/flash_kernels.py"
     ],
     "extra/qk/decode/current_decode_execution_adapter.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "extra/qk/prefill/operand_path_execution_worker.py",
       "scratchpad/audit_bfs.py"
     ],
@@ -5309,6 +5423,7 @@
     "extra/qk/decode/decode_harness.py": [
       "README.md",
       "docs/harness-consolidation.md",
+      "extra/audit/lowering_baseline.py",
       "extra/qk/bench.py",
       "extra/qk/decode/decode_runtime_overhead.py",
       "test/unit/test_measurement_authority.py"
@@ -5338,10 +5453,12 @@
       "test/unit/test_prefill_harness.py"
     ],
     "extra/qk/decode/decode_tile_timing.py": [
-      "docs/14b-decode-g5-authority-timing-20260726.json"
+      "docs/14b-decode-g5-authority-timing-20260726.json",
+      "extra/audit/lowering_baseline.py"
     ],
     "extra/qk/decode/flash_decode_attention_executor.py": [
       "README.md",
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "bench/qk-search-spaces/default_route_manifest.json",
       "docs/flash-prefill-scope-20260721.md",
       "docs/prefill-softmax-reduce-fuse-evidence-20260724.json",
@@ -5360,10 +5477,13 @@
       "bench/qk-search-spaces/default_route_manifest.json",
       "docs/HANDOFF_14b_decode_depth_decay_20260726.md",
       "docs/flash-prefill-scope-20260721.md",
+      "extra/audit/flash_variant_fingerprint.py",
+      "extra/audit/lowering_baseline.py",
       "extra/audit/pure_machine_search_default_path_census.py",
       "extra/qk/decode/flash_decode_attention_executor.py",
       "extra/qk/prefill/flash_prefill_attention_spec.py",
       "extra/qk/route_manifest.json",
+      "test/unit/test_flash_buffer_roles.py",
       "test/unit/test_flash_decode_attention_spec.py"
     ],
     "extra/qk/fdot2_lowering.py": [
@@ -5372,7 +5492,9 @@
     ],
     "extra/qk/flash_common.py": [
       "extra/qk/flash_kernels.py",
-      "extra/qk/live_split_geometry.py"
+      "extra/qk/live_split_geometry.py",
+      "test/unit/test_gate_inventory.py",
+      "tinygrad/codegen/plan.py"
     ],
     "extra/qk/flash_kernels.py": [
       "docs/14b-decode-g5-steady-state-recovery-scope-20260726.md",
@@ -5386,9 +5508,12 @@
       "docs/prefill-softmax-reduce-fuse-evidence-20260724.json",
       "docs/prefill-softmax-reduce-fuse-promotion-readiness-20260724.md",
       "docs/shared-flash-attention-codex-completion-scope-20260722.md",
+      "docs/task_workflow/input/lowering-architecture-refactor-scope-20260726.md",
       "extra/qk/decode/decode_codegen_identity_check.py",
       "extra/qk/decode/decode_hd_sweep_numerics.py",
-      "extra/qk/decode/flash_decode_attention_spec.py"
+      "extra/qk/decode/flash_decode_attention_spec.py",
+      "test/unit/test_flash_buffer_roles.py",
+      "test/unit/test_flash_variant_fingerprint.py"
     ],
     "extra/qk/gemv_g2_lanemap.py": [
       "bench/pure-machine-search-default-path-census/default_route_table.json",
@@ -5405,6 +5530,7 @@
       "bench/pure-machine-search-default-path-census/default_route_table.json",
       "bench/pure-machine-search-default-path-census/latest.json",
       "bench/qk-search-spaces/default_route_manifest.json",
+      "extra/audit/lowering_baseline.py",
       "extra/audit/pure_machine_search_default_path_census.py",
       "extra/qk/decode/current_decode_execution_adapter.py",
       "extra/qk/route_manifest.json",
@@ -5413,6 +5539,7 @@
       "tinygrad/llm/route_ops.py"
     ],
     "extra/qk/generate_shared_attention_captures.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/CLAUDE_EXECUTION_PROMPT_fused_attention_20260723.md",
       "docs/HANDOFF_fused_attention_enablement_20260723.md",
       "docs/attention-harness-centralization-scope-20260724.md",
@@ -5451,6 +5578,7 @@
       "docs/non-fitting-prefill-foundation-performance-prune-scope-20260716.md",
       "docs/task_workflow/output/codebase-organization-audit-report.md",
       "extra/audit/codebase_organization_audit.py",
+      "extra/audit/lowering_baseline.py",
       "extra/qk/gemv_g2_lanemap.py",
       "extra/qk/mmq_atom_boundary.py",
       "extra/qk/mmq_ds4_logical_emitter.py",
@@ -5473,13 +5601,6 @@
       "test/unit/test_q4k_prefill_route_spec.py",
       "test/unit/test_q4k_w_f16_decode.py",
       "tinygrad/llm/route_ops.py"
-    ],
-    "extra/qk/layout_coalesce_check.py": [
-      "docs/task_workflow/output/codebase-organization-audit-report.md",
-      "extra/audit/codebase_organization_audit.py",
-      "extra/qk/bubblebeam_futuresight.py",
-      "extra/qk/coalesced_load_lowering.py",
-      "test/unit/test_codebase_organization_audit.py"
     ],
     "extra/qk/live_split_geometry.py": [
       "bench/qk-search-spaces/default_route_manifest.json",
@@ -5513,6 +5634,7 @@
       "test/unit/test_mmq_atom_boundary.py"
     ],
     "extra/qk/mmq_compile_evidence.py": [
+      "extra/audit/lowering_baseline.py",
       "extra/qk/decode/current_decode_execution_adapter.py",
       "extra/qk/decode/decode_resource_capture.py",
       "extra/qk/phase_abi_v1_resource_probe.py",
@@ -5523,6 +5645,7 @@
       "test/unit/test_online_softmax_tile.py"
     ],
     "extra/qk/mmq_ds4_logical_emitter.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "scratchpad/audit_bfs.py",
       "test/unit/test_mmq_ds4_logical_emitter.py",
       "tinygrad/llm/route_ops.py"
@@ -5550,6 +5673,7 @@
       "test/unit/test_mmq_logical_vocabulary.py"
     ],
     "extra/qk/mmq_q4k_q8_atom.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/14b-mmq-pure-machine-search-scope-20260714.md",
       "extra/qk/mmq_compile_evidence.py",
       "extra/qk/mmq_ds4_logical_emitter.py",
@@ -5578,6 +5702,7 @@
     ],
     "extra/qk/packed_wmma_canary_evidence.py": [
       "bench/qk-search-spaces/default_route_manifest.json",
+      "docs/lowering-refactor-cut-list-20260726.md",
       "docs/packed-wmma-14b-promotion-evidence-20260725.json",
       "extra/qk/route_manifest.json"
     ],
@@ -5586,6 +5711,8 @@
       "test/unit/test_packed_wmma_compile_gate.py"
     ],
     "extra/qk/phase_abi_v1_resource_probe.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
+      "docs/lowering-refactor-cut-list-20260726.md",
       "docs/wmma-modularization-scope-20260724.md"
     ],
     "extra/qk/prefill/candidate_payloads.py": [
@@ -5593,6 +5720,7 @@
       "extra/qk/prefill/packed_wmma_prefill_candidates.py"
     ],
     "extra/qk/prefill/current_prefill_execution_adapter.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "bench/qk-search-spaces/default_route_manifest.json",
       "docs/amd-fp16-dequant-q4k-build-progress-20260720.md",
       "docs/non-fitting-prefill-foundation-performance-prune-scope-20260716.md",
@@ -5617,10 +5745,12 @@
       "test/unit/test_operand_path_execution_worker.py"
     ],
     "extra/qk/prefill/flash_prefill_attention_spec.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "bench/pure-machine-search-default-path-census/default_route_table.json",
       "bench/pure-machine-search-default-path-census/latest.json",
       "bench/qk-search-spaces/default_route_manifest.json",
       "docs/flash-prefill-pure-search-lift-scope-20260724.md",
+      "extra/audit/lowering_baseline.py",
       "extra/audit/pure_machine_search_default_path_census.py",
       "extra/qk/prefill/prefill_whole_synced.py",
       "extra/qk/route_manifest.json",
@@ -5670,6 +5800,9 @@
     ],
     "extra/qk/prefill/packed_wmma_prefill_candidates.py": [
       "README.md",
+      "bench/lowering-refactor-baseline/pass_inventory.json",
+      "bench/pure-machine-search-default-path-census/default_route_table.json",
+      "bench/pure-machine-search-default-path-census/latest.json",
       "bench/qk-search-spaces/default_route_manifest.json",
       "docs/14b-packed-wmma-warmstart-handoff-20260721.md",
       "docs/amd-fp16-dequant-q4k-build-progress-20260720.md",
@@ -5679,6 +5812,7 @@
       "docs/packed-wmma-14b-fault-trace-20260724.md",
       "docs/packed-wmma-14b-machine-search-claim-scope-20260725.md",
       "docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md",
+      "extra/audit/pure_machine_search_default_path_census.py",
       "extra/qk/packed_wmma_canary_evidence.py",
       "extra/qk/prefill/packed_wmma_prefill_promotion_gate.py",
       "extra/qk/route_manifest.json",
@@ -5687,8 +5821,11 @@
       "tinygrad/llm/route_ops.py"
     ],
     "extra/qk/prefill/packed_wmma_prefill_promotion_gate.py": [
+      "bench/pure-machine-search-default-path-census/default_route_table.json",
+      "bench/pure-machine-search-default-path-census/latest.json",
       "bench/qk-search-spaces/default_route_manifest.json",
       "docs/packed-wmma-14b-machine-search-claim-scope-20260725.md",
+      "extra/audit/pure_machine_search_default_path_census.py",
       "extra/qk/route_manifest.json"
     ],
     "extra/qk/prefill/prefill_boltbeam_trace.py": [
@@ -5714,6 +5851,7 @@
       "bench/pure-machine-search-default-path-census/latest.json",
       "bench/pure-machine-search-default-path-census/summary.md",
       "bench/qk-search-spaces/default_route_manifest.json",
+      "docs/lowering-refactor-e2e-validation-20260726.md",
       "docs/packed-wmma-14b-machine-search-claim-scope-20260725.md",
       "docs/packed-wmma-14b-promotion-evidence-20260725.json",
       "docs/prefill-R-theories-scope-20260724.md",
@@ -5727,6 +5865,7 @@
     ],
     "extra/qk/prefill/prefill_flash_perf.py": [
       "bench/qk-search-spaces/default_route_manifest.json",
+      "docs/lowering-refactor-cut-list-20260726.md",
       "docs/prefill-R-theories-scope-20260724.md",
       "docs/prefill-softmax-reduce-fuse-evidence-20260724.json",
       "extra/qk/route_manifest.json"
@@ -5773,6 +5912,7 @@
     ],
     "extra/qk/prefill/prefill_long_context_numerics.py": [
       "bench/qk-search-spaces/default_route_manifest.json",
+      "docs/lowering-refactor-cut-list-20260726.md",
       "docs/prefill-softmax-reduce-fuse-evidence-20260724.json",
       "docs/prefill-softmax-reduce-fuse-promotion-readiness-20260724.md",
       "extra/qk/route_manifest.json"
@@ -5788,17 +5928,21 @@
       "docs/prefill-R-theories-scope-20260724.md",
       "docs/prefill-softmax-reduce-fuse-evidence-20260724.json",
       "docs/prefill-softmax-reduce-fuse-promotion-readiness-20260724.md",
+      "docs/task_workflow/input/14b-prefill-fault-and-current-numbers-scope-20260726.md",
       "extra/qk/route_manifest.json",
       "tinygrad/renderer/cstyle.py"
     ],
     "extra/qk/prefill/prefill_whole_synced.py": [
       "README.md",
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/BOLTBEAM_GPU_HANG_DIAGNOSIS_HANDOFF_20260724.md",
       "docs/HANDOFF_logits_only_store_codegen_bug_20260724.md",
       "docs/amd-fp16-dequant-q4k-build-progress-20260720.md",
       "docs/attention-harness-centralization-scope-20260724.md",
       "docs/flash-prefill-wmma-mvp-scope-20260721.md",
       "docs/harness-consolidation.md",
+      "docs/lowering-refactor-e2e-validation-20260726.md",
+      "docs/lowering-refactor-phase0-findings-20260726.md",
       "docs/measurement-regime-audit-llama-prefill-20260715.md",
       "docs/non-fitting-prefill-foundation-performance-prune-scope-20260716.md",
       "docs/prefill-R-theories-scope-20260724.md",
@@ -5829,6 +5973,7 @@
       "test/unit/test_pure_register_final_program_adapter_20260712.py"
     ],
     "extra/qk/prefill/pure_register_evaluation_gate.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "extra/qk/prefill/prefill_graph_gemm_route.py",
       "extra/qk/prefill/promotion_gate_common.py",
       "test/unit/test_pure_register_compile_capture.py",
@@ -5840,6 +5985,7 @@
       "bench/qk-search-spaces/default_route_manifest.json",
       "docs/14b-mmq-pure-machine-search-scope-20260714.md",
       "docs/BOLTBEAM_Q4K_VOCAB_OUTPUT_ROUTE_SCOPE_20260723.md",
+      "extra/audit/lowering_baseline.py",
       "extra/audit/pure_machine_search_default_path_census.py",
       "extra/qk/route_manifest.json",
       "test/unit/test_q4k_prefill_route_spec.py",
@@ -5857,6 +6003,7 @@
       "bench/pure-machine-search-default-path-census/latest.json",
       "bench/qk-search-spaces/default_route_manifest.json",
       "docs/14b-mmq-pure-machine-search-scope-20260714.md",
+      "extra/audit/lowering_baseline.py",
       "extra/audit/pure_machine_search_default_path_census.py",
       "extra/qk/route_manifest.json",
       "tinygrad/llm/route_ops.py"
@@ -5869,6 +6016,9 @@
       "docs/prefill-softmax-reduce-fuse-evidence-20260724.json",
       "extra/qk/prefill/prefill_whole_synced.py",
       "tinygrad/llm/route_ops.py"
+    ],
+    "extra/qk/q4k_fused_mmq_contract.py": [
+      "docs/lowering-refactor-cut-list-20260726.md"
     ],
     "extra/qk/q4k_tile_loader.py": [
       "docs/14b-mmq-llama-kernel-reduction-roadmap-20260710.md",
@@ -5889,6 +6039,7 @@
     ],
     "extra/qk/quant/q4_k_gemv_primitive.py": [
       "bench/qk-search-spaces/quant_semantics.json",
+      "extra/audit/lowering_baseline.py",
       "extra/qk/gemv_g3_codegen_lowering.py",
       "extra/qk/mmq_q4k_q8_atom.py",
       "extra/qk/prefill/q4k_prefill_route_spec.py",
@@ -5897,6 +6048,7 @@
     ],
     "extra/qk/quant/q6_k_gemv_primitive.py": [
       "bench/qk-search-spaces/quant_semantics.json",
+      "extra/audit/lowering_baseline.py",
       "extra/qk/prefill/q6k_prefill_route_spec.py",
       "extra/qk/q6k_route_spec.py",
       "scratchpad/audit_bfs.py",
@@ -5913,6 +6065,7 @@
     "extra/qk/route_manifest.py": [
       ".claude/loop.md",
       "README.md",
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "bench/pure-machine-search-default-path-census/latest.json",
       "bench/qk-search-spaces/default_route_manifest.json",
       "bench/qk-search-spaces/refuted_axes.json",
@@ -5921,10 +6074,12 @@
       "docs/HANDOFF_14b_decode_depth_decay_20260726.md",
       "docs/flash-prefill-pure-search-lift-scope-20260724.md",
       "docs/flash-prefill-scope-20260721.md",
+      "docs/lowering-refactor-phase0-findings-20260726.md",
       "docs/packed-wmma-14b-machine-search-claim-scope-20260725.md",
       "docs/prefill-causal-tile-skip-promotion-readiness-20260724.md",
       "docs/prefill-softmax-reduce-fuse-evidence-20260724.json",
       "docs/pure-machine-search.md",
+      "docs/task_workflow/input/lowering-architecture-refactor-scope-20260726.md",
       "extra/audit/pure_machine_search_default_path_census.py",
       "extra/qk/bubblebeam_futuresight.py",
       "extra/qk/decode/current_decode_execution_adapter.py",
@@ -5945,6 +6100,7 @@
       "tinygrad/llm/route_ops.py"
     ],
     "extra/qk/runtime_specs.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "bench/prefill-pure-full-kernel/q4k-q8-phase3-ffn-down-512x5120x17408-20260716.json",
       "bench/prefill-pure-full-kernel/q4k-q8-phase3-ffn-gate-up-512x17408x5120-20260716.json",
       "docs/non-fitting-prefill-foundation-performance-prune-scope-20260716.md",
@@ -5995,6 +6151,7 @@
       "extra/qk/prefill/prefill_whole_synced.py"
     ],
     "extra/qk/warp_reduce_lowering.py": [
+      "docs/task_workflow/input/lowering-architecture-refactor-scope-20260726.md",
       "extra/qk/flash_kernels.py",
       "extra/qk/lane_partition_reduce.py",
       "scratchpad/audit_bfs.py",
@@ -6018,77 +6175,216 @@
     "test/amd/helpers.py": [
       "test/amd/disasm.py"
     ],
+    "test/backend/test_softmax_fusion.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/helpers.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
     "test/test_tiny.py": [
       "docs/flash-prefill-piece2-rest-task-deepseek-20260722.md",
       "extra/hardware/sqtt/generate_examples.py",
       "pyproject.toml"
     ],
+    "test/unit/test_amd_attention_kv_tile_oob_guard.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_amd_isa_extraction_fixtures.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
     "test/unit/test_amd_isa_frag_waitcnt.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/prefill-R-theories-scope-20260724.md"
     ],
+    "test/unit/test_amd_isa_integer_vector_loads.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
     "test/unit/test_amd_isa_structural_lifetimes.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/qwen3-14b-generated-prefill-claude-handoff-20260716.md"
     ],
     "test/unit/test_amd_isa_wmma.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/flash-fusion-route-scope-20260722.md",
       "docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md",
       "docs/qwen3-14b-generated-prefill-claude-handoff-20260716.md",
       "test/unit/test_amd_isa_extraction_fixtures.py"
     ],
+    "test/unit/test_amd_resource_artifact.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_amd_resource_artifact_intervals_20260712.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_amd_wave_lds_fence.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_amdllvm_waitcnt.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
     "test/unit/test_attention_residency_contract.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/shared-flash-codex-validation-checkpoint-20260722.md"
     ],
     "test/unit/test_attention_semantic.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/shared-flash-codex-validation-checkpoint-20260722.md"
+    ],
+    "test/unit/test_attn_qo_register_compile.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_candidate_context_propagation.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
     ],
     "test/unit/test_codebase_organization_audit.py": [
       "docs/task_workflow/input/codebase-organization-audit-task.md",
       "docs/task_workflow/output/codebase-organization-audit-report.md"
     ],
+    "test/unit/test_composite_axis_constraints.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
     "test/unit/test_composite_reduce.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/flash-HANDOFF-deepseek-multi-output-20260722.md",
       "docs/flash-composite-reduce-orchestration-plan-20260722.md",
       "docs/flash-fusion-route-scope-20260722.md",
       "docs/flash-multi-output-reduce-scope-deepseek-20260722.md"
     ],
+    "test/unit/test_composite_tile_carrier.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_current_prefill_execution_adapter.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_devectorizer_memory_widths.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_devectorizer_reconstruction.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_final_regalloc_proof_transport_20260712.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_gemm_consumer_adapters.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
     "test/unit/test_kernargs_wrap_audit.py": [
       "docs/gpu-page-fault-population-analysis-20260725.md"
     ],
+    "test/unit/test_kernel_candidate_context.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_kernel_lds_mapping.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_kernel_naming.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_kernel_pipeline_expansion.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_linearizer_stable_priority.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_llm_decode_routes.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
     "test/unit/test_logits_only_reg_store.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/HANDOFF_logits_only_store_codegen_bug_20260724.md"
+    ],
+    "test/unit/test_lowering_trace.py": [
+      "docs/14b-phase0-contamination-notice-20260726.md"
     ],
     "test/unit/test_measurement_authority.py": [
       "docs/decode-fix-and-fault-scope-20260726.md",
       "docs/decode-regression-debug-scope-20260725.md"
     ],
+    "test/unit/test_memory_adaptive_route_manifest.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
     "test/unit/test_mmq_q4k_q8_atom.py": [
-      "docs/qwen3-14b-prefill-mmq-one-role-evidence-20260718.json"
+      "docs/qwen3-14b-prefill-mmq-one-role-evidence-20260718.json",
+      "test/unit/test_lowering_baseline.py"
     ],
     "test/unit/test_mmq_q4k_q8_reference.py": [
       "docs/qwen3-14b-prefill-mmq-one-role-evidence-20260718.json"
     ],
     "test/unit/test_nested_composite_reduce.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/shared-flash-scoped-reduce-completion-scope-20260722.md"
     ],
+    "test/unit/test_online_softmax_state_split.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
     "test/unit/test_online_softmax_tile.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/CLAUDE_EXECUTION_PROMPT_fused_attention_20260723.md",
       "docs/prefill-R-theories-scope-20260724.md",
       "docs/wmma-modularization-scope-20260724.md"
+    ],
+    "test/unit/test_packed_weight.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_precontract_int8_lds_contract.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_prefill_whole_synced.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_pure_register_compile_capture.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_pure_register_evaluation_gate.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_pure_register_final_program_adapter_20260712.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
     ],
     "test/unit/test_pure_search_guard_boundary.py": [
       "docs/packed-wmma-14b-machine-search-claim-scope-20260725.md",
       "extra/qk/pure_search_guard.py"
     ],
+    "test/unit/test_q4k_w_f16_decode.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_qk_route_purity.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_rangeify_multireduce.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_recompute_hostile_cost_gate.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_regalloc_addr_lifetime.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_regalloc_candidate_scarcity.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
     "test/unit/test_regalloc_end_liveness.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/qwen3-14b-generated-prefill-claude-handoff-20260716.md"
     ],
     "test/unit/test_regalloc_pressure_schedule.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/qwen3-14b-generated-prefill-claude-handoff-20260716.md"
+    ],
+    "test/unit/test_regalloc_rematerialization.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_regalloc_spans.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
+    "test/unit/test_register_contracts.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
     ],
     "test/unit/test_runtime_specs.py": [
       "test/unit/test_attn_qo_register_compile.py"
     ],
     "test/unit/test_shared_attention_compiler_capture.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/CLAUDE_EXECUTION_PROMPT_fused_attention_20260723.md",
       "docs/wmma-modularization-scope-20260724.md"
     ],
@@ -6098,8 +6394,15 @@
     "test/unit/test_shared_prefill_policy.py": [
       "docs/boltbeam-export-triage-8b-14b-20260723.md"
     ],
+    "test/unit/test_stage1_wmma_compile_evidence.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
     "test/unit/test_state_phase_abi.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "tinygrad/renderer/isa/amd_register_contracts.py"
+    ],
+    "test/unit/test_strided_lds_record_layout.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
     ],
     "test/unit/test_tinygrad_boundary.py": [
       "docs/README.md",
@@ -6107,15 +6410,21 @@
       "tinygrad/llm/route_ops.py"
     ],
     "tinygrad/callify.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "tinygrad/tensor.py"
     ],
     "tinygrad/codegen/__init__.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/HANDOFF_logits_only_store_codegen_bug_20260724.md",
       "docs/flash-prefill-wmma-mvp-scope-20260721.md",
+      "docs/lowering-refactor-phase0-findings-20260726.md",
       "docs/qwen3-14b-generated-prefill-claude-handoff-20260716.md",
       "extra/qk/warp_reduce_lowering.py",
       "scratchpad/audit_bfs.py",
-      "test/unit/test_amd_attention_kv_tile_oob_guard.py"
+      "test/unit/test_amd_attention_kv_tile_oob_guard.py",
+      "tinygrad/codegen/experimental.py",
+      "tinygrad/codegen/late/coalesced_load.py",
+      "tinygrad/codegen/plan.py"
     ],
     "tinygrad/codegen/experimental.py": [
       "docs/HANDOFF_logits_only_store_codegen_bug_20260724.md",
@@ -6126,10 +6435,19 @@
       "tinygrad/codegen/opt/postrange.py"
     ],
     "tinygrad/codegen/gpudims.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "extra/qk/warp_reduce_lowering.py",
       "tinygrad/codegen/__init__.py"
     ],
+    "tinygrad/codegen/late/coalesced_load.py": [
+      "docs/lowering-refactor-cut-list-20260726.md",
+      "extra/qk/bubblebeam_futuresight.py",
+      "test/unit/test_coalesced_load_lowering.py",
+      "tinygrad/codegen/__init__.py",
+      "tinygrad/codegen/experimental.py"
+    ],
     "tinygrad/codegen/late/composite_combines.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/CLAUDE_EXECUTION_PROMPT_fused_attention_20260723.md",
       "docs/HANDOFF_fused_attention_enablement_20260723.md",
       "docs/flash-fusion-route-scope-20260722.md",
@@ -6143,6 +6461,7 @@
       "tinygrad/schedule/rangeify.py"
     ],
     "tinygrad/codegen/late/devectorizer.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/HANDOFF_logits_only_store_codegen_bug_20260724.md",
       "docs/authored-core-loc-consolidation-scope-20260716.md",
       "docs/flash-composite-reduce-report-20260722.md",
@@ -6156,25 +6475,31 @@
       "test/unit/test_devectorizer_memory_widths.py",
       "tinygrad/codegen/__init__.py",
       "tinygrad/codegen/late/reg_store.py",
-      "tinygrad/renderer/cstyle.py"
+      "tinygrad/renderer/cstyle.py",
+      "tinygrad/uop/trace.py"
     ],
     "tinygrad/codegen/late/expander.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/flash-multi-output-reduce-scope-deepseek-20260722.md",
       "docs/shared-flash-scoped-reduce-completion-scope-20260722.md",
       "test/unit/test_kernel_pipeline_expansion.py",
       "tinygrad/codegen/__init__.py"
     ],
     "tinygrad/codegen/late/flash_attn.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/flash-fusion-route-scope-20260722.md",
+      "docs/lowering-refactor-phase0-findings-20260726.md",
       "test/unit/test_attention_semantic.py",
       "test/unit/test_online_softmax_state_split.py",
       "tinygrad/schedule/rangeify.py",
       "tinygrad/tensor.py"
     ],
     "tinygrad/codegen/late/gater.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "tinygrad/codegen/__init__.py"
     ],
     "tinygrad/codegen/late/linearizer.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/shared-flash-attention-rotating-pv-primitive-results-20260723.md",
       "docs/shared-flash-prefill-rewrite-handoff-20260723.md",
       "extra/qk/codegen_list_scheduler.py",
@@ -6186,6 +6511,7 @@
       "tinygrad/codegen/__init__.py"
     ],
     "tinygrad/codegen/late/reduce_lowering.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "test/unit/test_composite_reduce.py",
       "test/unit/test_kernel_pipeline_expansion.py",
       "test/unit/test_nested_composite_reduce.py",
@@ -6193,6 +6519,7 @@
       "tinygrad/codegen/__init__.py"
     ],
     "tinygrad/codegen/late/reg_store.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/HANDOFF_logits_only_store_codegen_bug_20260724.md",
       "test/unit/test_devectorizer_reconstruction.py",
       "test/unit/test_kernel_pipeline_expansion.py",
@@ -6200,6 +6527,7 @@
       "tinygrad/codegen/__init__.py"
     ],
     "tinygrad/codegen/late/regalloc.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/amd-fp16-dequant-q4k-build-progress-20260720.md",
       "docs/qwen3-14b-generated-prefill-claude-handoff-20260716.md",
       "test/unit/test_amd_isa_integer_vector_loads.py",
@@ -6210,11 +6538,14 @@
       "test/unit/test_regalloc_pressure_schedule.py",
       "test/unit/test_regalloc_rematerialization.py",
       "test/unit/test_regalloc_spans.py",
-      "tinygrad/codegen/__init__.py"
+      "tinygrad/codegen/__init__.py",
+      "tinygrad/uop/trace.py"
     ],
     "tinygrad/codegen/opt/compiler_policies.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/README.md",
       "docs/pure-pipe-policy-centralization-20260712.md",
+      "docs/task_workflow/input/lowering-architecture-refactor-scope-20260726.md",
       "extra/qk/prefill/pure_register_evaluation_gate.py",
       "extra/qk/runtime_specs.py",
       "test/unit/test_amd_isa_frag_waitcnt.py",
@@ -6230,12 +6561,15 @@
       "tinygrad/renderer/llvmir.py"
     ],
     "tinygrad/codegen/opt/gemm_consumer.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "test/unit/test_gemm_consumer_adapters.py"
     ],
     "tinygrad/codegen/opt/heuristic.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "tinygrad/codegen/opt/postrange.py"
     ],
     "tinygrad/codegen/opt/kernel_lds.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/14b-packed-wmma-warmstart-handoff-20260721.md",
       "docs/amd-fp16-dequant-q4k-build-progress-20260720.md",
       "docs/amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md",
@@ -6250,6 +6584,8 @@
       "tinygrad/codegen/opt/postrange.py"
     ],
     "tinygrad/codegen/opt/kernel_pipeline.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
+      "docs/lowering-refactor-phase0-findings-20260726.md",
       "extra/qk/runtime_specs.py",
       "test/unit/test_stage1_wmma_compile_evidence.py",
       "tinygrad/codegen/opt/heuristic.py",
@@ -6257,6 +6593,7 @@
       "tinygrad/codegen/opt/postrange.py"
     ],
     "tinygrad/codegen/opt/packed_weight.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/authored-core-loc-consolidation-scope-20260716.md",
       "extra/qk/kernel_vocabulary.py",
       "extra/qk/runtime_specs.py",
@@ -6265,6 +6602,7 @@
       "tinygrad/codegen/opt/kernel_lds.py"
     ],
     "tinygrad/codegen/opt/postrange.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "bench/qk-search-spaces/default_route_manifest.json",
       "docs/14b-packed-wmma-warmstart-handoff-20260721.md",
       "docs/HANDOFF_fused_attention_enablement_20260723.md",
@@ -6276,6 +6614,7 @@
       "docs/shared-flash-attention-codex-completion-scope-20260722.md",
       "docs/shared-flash-prefill-rewrite-handoff-20260723.md",
       "docs/shared-flash-scoped-reduce-completion-scope-20260722.md",
+      "docs/task_workflow/input/lowering-architecture-refactor-scope-20260726.md",
       "extra/qk/prefill/current_prefill_execution_adapter.py",
       "extra/qk/prefill/packed_wmma_prefill_candidates.py",
       "extra/qk/prefill/prefill_graph_gemm_route.py",
@@ -6290,6 +6629,7 @@
       "tinygrad/llm/model.py"
     ],
     "tinygrad/codegen/opt/register_contracts.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "extra/qk/amd_resource_artifact.py",
       "test/unit/test_amd_resource_artifact.py",
       "test/unit/test_register_contracts.py",
@@ -6297,6 +6637,7 @@
       "tinygrad/renderer/isa/amd_register_contracts.py"
     ],
     "tinygrad/codegen/opt/tc.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "bench/qk-search-spaces/default_route_manifest.json",
       "docs/amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md",
       "docs/flash-prefill-wmma-mvp-scope-20260721.md",
@@ -6310,7 +6651,15 @@
       "tinygrad/renderer/__init__.py",
       "tinygrad/renderer/isa/amd.py"
     ],
+    "tinygrad/codegen/plan.py": [
+      "docs/lowering-refactor-cut-list-20260726.md",
+      "docs/task_workflow/input/lr-019-gate-mechanism-divergence-scope-20260726.md",
+      "test/unit/test_codegen_cache_key_gates.py",
+      "test/unit/test_gate_inventory.py",
+      "tinygrad/codegen/__init__.py"
+    ],
     "tinygrad/codegen/simplify.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/shared-flash-scoped-reduce-completion-scope-20260722.md",
       "tinygrad/codegen/__init__.py",
       "tinygrad/codegen/opt/postrange.py",
@@ -6320,6 +6669,7 @@
       "docs/BOLTBEAM_GPU_HANG_DIAGNOSIS_HANDOFF_20260724.md",
       "docs/gpu-page-fault-population-analysis-20260725.md",
       "docs/tinygrad-runtime-client-separation-implementation-status-20260630.md",
+      "extra/audit/lowering_baseline.py",
       "extra/gpu_fault_analysis/analyze_faults.py",
       "extra/gpu_fault_analysis/bench_alloc_trace.py",
       "extra/hardware/sqtt/rgptool.py",
@@ -6370,10 +6720,11 @@
       "tinygrad/viz/profile.py"
     ],
     "tinygrad/dtype.py": [
+      "extra/audit/flash_variant_fingerprint.py",
+      "extra/audit/lowering_baseline.py",
       "extra/gpu_fault_analysis/bench_alloc_trace.py",
       "extra/qk/amd_warp_reduce.py",
       "extra/qk/bubblebeam_futuresight.py",
-      "extra/qk/coalesced_load_lowering.py",
       "extra/qk/decode/current_decode_execution_adapter.py",
       "extra/qk/fdot2_lowering.py",
       "extra/qk/gemv_g3_codegen_lowering.py",
@@ -6396,11 +6747,14 @@
       "test/unit/test_amd_isa_integer_vector_loads.py",
       "test/unit/test_amd_isa_wmma.py",
       "test/unit/test_amdllvm_waitcnt.py",
+      "test/unit/test_coalesced_load_lowering.py",
+      "test/unit/test_codegen_cache_key_gates.py",
       "test/unit/test_composite_axis_constraints.py",
       "test/unit/test_composite_tile_carrier.py",
       "test/unit/test_current_decode_execution_adapter.py",
       "test/unit/test_devectorizer_memory_widths.py",
       "test/unit/test_devectorizer_reconstruction.py",
+      "test/unit/test_flash_buffer_roles.py",
       "test/unit/test_gemm_consumer_adapters.py",
       "test/unit/test_kernel_candidate_context.py",
       "test/unit/test_kernel_naming.py",
@@ -6427,6 +6781,7 @@
       "tinygrad/callify.py",
       "tinygrad/codegen/__init__.py",
       "tinygrad/codegen/gpudims.py",
+      "tinygrad/codegen/late/coalesced_load.py",
       "tinygrad/codegen/late/composite_combines.py",
       "tinygrad/codegen/late/devectorizer.py",
       "tinygrad/codegen/late/expander.py",
@@ -6473,6 +6828,7 @@
       "tinygrad/schedule/memory.py",
       "tinygrad/schedule/multi.py",
       "tinygrad/schedule/rangeify.py",
+      "tinygrad/schedule/realize.py",
       "tinygrad/schedule/wmma/__init__.py",
       "tinygrad/schedule/wmma/composite.py",
       "tinygrad/schedule/wmma/fragments.py",
@@ -6490,6 +6846,7 @@
       "tinygrad/viz/graph.py"
     ],
     "tinygrad/engine/jit.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "scratch_attn_bench2.py",
       "tinygrad/__init__.py",
       "tinygrad/runtime/graph/cuda.py",
@@ -6498,6 +6855,8 @@
       "tinygrad/tensor.py"
     ],
     "tinygrad/engine/realize.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
+      "docs/lowering-refactor-phase0-findings-20260726.md",
       "extra/qk/mmq_compile_evidence.py",
       "extra/qk/prefill/current_prefill_execution_adapter.py",
       "extra/qk/prefill/host_safety_canary.py",
@@ -6506,6 +6865,7 @@
       "tinygrad/engine/jit.py",
       "tinygrad/runtime/bridge.py",
       "tinygrad/schedule/__init__.py",
+      "tinygrad/schedule/realize.py",
       "tinygrad/tensor.py"
     ],
     "tinygrad/function.py": [
@@ -6514,6 +6874,7 @@
     "tinygrad/helpers.py": [
       "docs/flash-prefill-route-a-task-deepseek-20260721.md",
       "docs/quickstart.md",
+      "docs/task_workflow/input/lowering-architecture-refactor-scope-20260726.md",
       "extra/gpu_fault_analysis/bench_alloc_trace.py",
       "extra/hardware/amdpci/am_smi.py",
       "extra/hardware/amdpci/hive_reset.py",
@@ -6526,7 +6887,6 @@
       "extra/llm/model_e2e_bench.py",
       "extra/nv_gpu_driver/nv_ioctl.py",
       "extra/qk/amd_isa_proof.py",
-      "extra/qk/coalesced_load_lowering.py",
       "extra/qk/codegen_list_scheduler.py",
       "extra/qk/codegen_recurrence_unroll.py",
       "extra/qk/decode/current_decode_execution_adapter.py",
@@ -6567,7 +6927,10 @@
       "test/unit/test_attention_residency_contract.py",
       "test/unit/test_attention_semantic.py",
       "test/unit/test_attn_qo_register_compile.py",
+      "test/unit/test_coalesced_load_lowering.py",
+      "test/unit/test_codegen_cache_key_gates.py",
       "test/unit/test_composite_reduce.py",
+      "test/unit/test_gate_inventory.py",
       "test/unit/test_llm_decode_correctness.py",
       "test/unit/test_online_softmax_tile.py",
       "test/unit/test_prefill_graph_gemm_route.py",
@@ -6581,6 +6944,7 @@
       "tinygrad/callify.py",
       "tinygrad/codegen/__init__.py",
       "tinygrad/codegen/gpudims.py",
+      "tinygrad/codegen/late/coalesced_load.py",
       "tinygrad/codegen/late/composite_combines.py",
       "tinygrad/codegen/late/devectorizer.py",
       "tinygrad/codegen/late/expander.py",
@@ -6590,6 +6954,7 @@
       "tinygrad/codegen/late/regalloc.py",
       "tinygrad/codegen/opt/heuristic.py",
       "tinygrad/codegen/opt/postrange.py",
+      "tinygrad/codegen/plan.py",
       "tinygrad/codegen/simplify.py",
       "tinygrad/device.py",
       "tinygrad/dtype.py",
@@ -6646,7 +7011,6 @@
       "tinygrad/runtime/support/usb.py",
       "tinygrad/schedule/__init__.py",
       "tinygrad/schedule/allreduce.py",
-      "tinygrad/schedule/flash_fusion.py",
       "tinygrad/schedule/indexing.py",
       "tinygrad/schedule/memory.py",
       "tinygrad/schedule/multi.py",
@@ -6678,6 +7042,7 @@
       "tinygrad/llm/model.py"
     ],
     "tinygrad/llm/decode_routes.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "bench/pure-machine-search-default-path-census/default_route_table.json",
       "bench/pure-machine-search-default-path-census/latest.json",
       "bench/pure-machine-search-default-path-census/summary.md",
@@ -6685,8 +7050,10 @@
       "docs/14b-decode-g5-steady-state-recovery-scope-20260726.md",
       "docs/HANDOFF_14b_decode_depth_decay_20260726.md",
       "docs/flash-prefill-scope-20260721.md",
+      "docs/lowering-refactor-phase0-findings-20260726.md",
       "docs/prefill-softmax-reduce-fuse-evidence-20260724.json",
       "docs/prefill-softmax-reduce-fuse-promotion-readiness-20260724.md",
+      "docs/task_workflow/input/lowering-architecture-refactor-scope-20260726.md",
       "extra/audit/pure_machine_search_default_path_census.py",
       "extra/qk/README.md",
       "extra/qk/decode/decode_codegen_identity_check.py",
@@ -6694,6 +7061,7 @@
       "extra/qk/route_manifest.json",
       "extra/qk/route_manifest.py",
       "test/unit/test_pure_search_guard_boundary.py",
+      "test/unit/test_route_admission_consistency.py",
       "tinygrad/llm/model.py",
       "tinygrad/llm/qk_primitives.py"
     ],
@@ -6708,6 +7076,7 @@
     ],
     "tinygrad/llm/flash_prefill_attention.py": [
       "docs/shared-flash-codex-validation-checkpoint-20260722.md",
+      "docs/task_workflow/input/lowering-architecture-refactor-scope-20260726.md",
       "extra/qk/benchmark_shared_attention.py",
       "extra/qk/generate_shared_attention_captures.py",
       "test/unit/test_attention_residency_contract.py",
@@ -6721,10 +7090,13 @@
       "tinygrad/llm/model.py"
     ],
     "tinygrad/llm/fused_attention.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "bench/pure-machine-search-default-path-census/default_route_table.json",
       "bench/pure-machine-search-default-path-census/latest.json",
       "bench/qk-search-spaces/default_route_manifest.json",
       "docs/flash-prefill-pure-search-lift-scope-20260724.md",
+      "docs/lowering-refactor-phase0-findings-20260726.md",
+      "docs/task_workflow/input/lowering-architecture-refactor-scope-20260726.md",
       "extra/audit/pure_machine_search_default_path_census.py",
       "extra/qk/prefill/flash_prefill_attention_spec.py",
       "extra/qk/prefill/prefill_flash_perf.py",
@@ -6777,6 +7149,7 @@
       "tinygrad/llm/qk_primitives.py"
     ],
     "tinygrad/llm/model.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "bench/pure-machine-search-default-path-census/default_route_table.json",
       "bench/pure-machine-search-default-path-census/latest.json",
       "bench/pure-machine-search-default-path-census/summary.md",
@@ -6875,6 +7248,7 @@
       "extra/qk/route_manifest.json",
       "scratchpad/audit_bfs.py",
       "test/unit/test_pure_search_guard_boundary.py",
+      "test/unit/test_route_admission_consistency.py",
       "test/unit/test_shared_prefill_policy.py",
       "tinygrad/llm/model.py"
     ],
@@ -6937,12 +7311,18 @@
     "tinygrad/mixin/reduce.py": [
       "tinygrad/mixin/__init__.py"
     ],
+    "tinygrad/nn/__init__.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
+    ],
     "tinygrad/nn/state.py": [
       "docs/quickstart.md",
       "test/helpers.py",
       "tinygrad/engine/jit.py",
       "tinygrad/function.py",
       "tinygrad/llm/gguf.py"
+    ],
+    "tinygrad/renderer/__init__.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json"
     ],
     "tinygrad/renderer/amd/dsl.py": [
       "extra/hardware/sqtt/roc.py",
@@ -6971,6 +7351,7 @@
       "tinygrad/viz/profile.py"
     ],
     "tinygrad/renderer/cstyle.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "bench/qk-search-spaces/default_route_manifest.json",
       "docs/HANDOFF_logits_only_store_codegen_bug_20260724.md",
       "docs/flash-multi-output-reduce-scope-deepseek-20260722.md",
@@ -6979,6 +7360,7 @@
       "docs/prefill-softmax-reduce-fuse-promotion-readiness-20260724.md",
       "docs/shared-flash-attention-rotating-pv-primitive-results-20260723.md",
       "docs/shared-flash-prefill-rewrite-handoff-20260723.md",
+      "extra/audit/lowering_baseline.py",
       "extra/qk/decode/current_decode_execution_adapter.py",
       "extra/qk/decode/decode_codegen_identity_check.py",
       "extra/qk/generate_shared_attention_captures.py",
@@ -6999,15 +7381,18 @@
       "tinygrad/renderer/llvmir.py",
       "tinygrad/runtime/ops_amd.py",
       "tinygrad/runtime/ops_cpu.py",
-      "tinygrad/runtime/ops_null.py"
+      "tinygrad/runtime/ops_null.py",
+      "tinygrad/uop/trace.py"
     ],
     "tinygrad/renderer/cuda.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "tinygrad/renderer/nir.py",
       "tinygrad/renderer/ptx.py",
       "tinygrad/runtime/ops_cuda.py",
       "tinygrad/runtime/ops_nv.py"
     ],
     "tinygrad/renderer/isa/amd.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "bench/qk-search-spaces/default_route_manifest.json",
       "docs/14b-mmq-renderer-asm-proof-introspection-20260710.md",
       "docs/SHARED_ATTENTION_COMPILER_PHASE_ABI_SCOPE_20260723.md",
@@ -7032,6 +7417,7 @@
       "test/unit/test_attention_residency_contract.py",
       "test/unit/test_attention_semantic.py",
       "test/unit/test_attn_qo_register_compile.py",
+      "test/unit/test_coalesced_load_lowering.py",
       "test/unit/test_online_softmax_tile.py",
       "test/unit/test_regalloc_pressure_schedule.py",
       "test/unit/test_regalloc_rematerialization.py",
@@ -7047,6 +7433,7 @@
       "tinygrad/renderer/isa/amd_wmma_residency.py"
     ],
     "tinygrad/renderer/isa/amd_attention_abi.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/prefill-R-theories-scope-20260724.md",
       "test/unit/test_amd_attention_kv_tile_oob_guard.py",
       "test/unit/test_state_phase_abi.py",
@@ -7060,10 +7447,12 @@
       "tinygrad/renderer/isa/amd.py"
     ],
     "tinygrad/renderer/isa/amd_register_allocator.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "tinygrad/renderer/isa/amd.py",
       "tinygrad/renderer/isa/amd_wmma_residency.py"
     ],
     "tinygrad/renderer/isa/amd_register_contracts.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "test/unit/test_register_contracts.py",
       "test/unit/test_state_phase_abi.py",
       "tinygrad/renderer/isa/amd.py",
@@ -7072,6 +7461,7 @@
       "tinygrad/renderer/isa/amd_wmma_residency.py"
     ],
     "tinygrad/renderer/isa/amd_wmma_residency.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "tinygrad/renderer/isa/amd.py"
     ],
     "tinygrad/renderer/isa/extensions.py": [
@@ -7080,6 +7470,7 @@
       "tinygrad/renderer/isa/amd_wmma_residency.py"
     ],
     "tinygrad/renderer/isa/x86.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "test/unit/test_x86_encoding_fixtures.py",
       "tinygrad/renderer/isa/amd.py",
       "tinygrad/runtime/ops_cpu.py"
@@ -7088,15 +7479,18 @@
       "tinygrad/renderer/isa/x86.py"
     ],
     "tinygrad/renderer/llvmir.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/mmq-mfma-lowering-path-20260715.md",
       "test/unit/test_amdllvm_waitcnt.py",
       "tinygrad/runtime/ops_amd.py",
       "tinygrad/runtime/ops_cpu.py"
     ],
     "tinygrad/renderer/nir.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "tinygrad/runtime/ops_nv.py"
     ],
     "tinygrad/renderer/ptx.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "tinygrad/runtime/ops_cuda.py",
       "tinygrad/runtime/ops_nv.py"
     ],
@@ -7114,6 +7508,7 @@
       "tinygrad/runtime/support/hcq.py"
     ],
     "tinygrad/runtime/ops_amd.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/prefill-R-theories-scope-20260724.md",
       "docs/prefill-lessons-ledger.md",
       "docs/task_workflow/output/codebase-organization-audit-report.md",
@@ -7134,7 +7529,9 @@
       "test/unit/test_disk_staging_timeout.py"
     ],
     "tinygrad/runtime/ops_python.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "test/helpers.py",
+      "test/unit/test_codegen_cache_key_gates.py",
       "test/unit/test_kernel_candidate_context.py",
       "test/unit/test_kernel_naming.py",
       "test/unit/test_pure_pipe_graph_abi.py"
@@ -7288,21 +7685,26 @@
       "tinygrad/runtime/ops_amd.py",
       "tinygrad/runtime/support/system.py"
     ],
+    "tinygrad/schedule/__init__.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
+      "docs/lowering-refactor-phase0-findings-20260726.md",
+      "docs/task_workflow/input/lowering-architecture-refactor-scope-20260726.md"
+    ],
     "tinygrad/schedule/allreduce.py": [
       "tinygrad/schedule/multi.py",
       "tinygrad/schedule/rangeify.py"
     ],
-    "tinygrad/schedule/flash_fusion.py": [
-      "docs/flash-fusion-implementation-plan.md",
-      "tinygrad/tensor.py"
-    ],
     "tinygrad/schedule/indexing.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/shared-flash-attention-codex-completion-scope-20260722.md",
       "docs/shared-flash-scoped-reduce-completion-scope-20260722.md",
+      "docs/task_workflow/input/lowering-architecture-refactor-scope-20260726.md",
+      "extra/audit/lowering_fingerprint.py",
       "test/unit/test_attention_residency_contract.py",
       "tinygrad/schedule/rangeify.py"
     ],
     "tinygrad/schedule/memory.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "tinygrad/engine/jit.py",
       "tinygrad/schedule/__init__.py"
     ],
@@ -7311,6 +7713,7 @@
       "tinygrad/schedule/rangeify.py"
     ],
     "tinygrad/schedule/rangeify.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/CLAUDE_EXECUTION_PROMPT_fused_attention_20260723.md",
       "docs/HANDOFF_fused_attention_enablement_20260723.md",
       "docs/decode-fix-and-fault-scope-20260726.md",
@@ -7321,9 +7724,11 @@
       "docs/flash-prefill-B-task-deepseek-20260721.md",
       "docs/flash-prefill-finish-report-20260722.md",
       "docs/flash-prefill-wmma-mvp-scope-20260721.md",
+      "docs/lowering-refactor-phase0-findings-20260726.md",
       "docs/shared-flash-attention-codex-completion-scope-20260722.md",
       "docs/shared-flash-prefill-rewrite-handoff-20260723.md",
       "docs/shared-flash-scoped-reduce-completion-scope-20260722.md",
+      "docs/task_workflow/input/lowering-architecture-refactor-scope-20260726.md",
       "test/unit/test_attention_residency_contract.py",
       "test/unit/test_attention_semantic.py",
       "test/unit/test_composite_reduce.py",
@@ -7339,6 +7744,10 @@
       "tinygrad/uop/ops.py",
       "tinygrad/uop/spec.py"
     ],
+    "tinygrad/schedule/realize.py": [
+      "docs/lowering-refactor-cut-list-20260726.md",
+      "tinygrad/schedule/indexing.py"
+    ],
     "tinygrad/schedule/wmma/composite.py": [
       "tinygrad/schedule/wmma/__init__.py"
     ],
@@ -7347,6 +7756,7 @@
       "tinygrad/schedule/wmma/composite.py"
     ],
     "tinygrad/schedule/wmma/kernels.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "bench/pure-machine-search-default-path-census/default_route_table.json",
       "bench/pure-machine-search-default-path-census/latest.json",
       "bench/qk-search-spaces/default_route_manifest.json",
@@ -7371,6 +7781,7 @@
       "tinygrad/schedule/wmma/kernels.py"
     ],
     "tinygrad/tensor.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/flash-fusion-implementation-plan.md",
       "docs/flash-prefill-scope-20260721.md",
       "docs/flash-prefill-wmma-mvp-scope-20260721.md",
@@ -7397,7 +7808,13 @@
     "tinygrad/uop/divandmod.py": [
       "tinygrad/uop/symbolic.py"
     ],
+    "tinygrad/uop/invariants.py": [
+      "docs/lowering-refactor-cut-list-20260726.md",
+      "test/unit/test_lowering_invariants.py"
+    ],
     "tinygrad/uop/ops.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
+      "docs/14b-phase0-contamination-notice-20260726.md",
       "docs/HANDOFF_fused_attention_enablement_20260723.md",
       "docs/SHARED_ATTENTION_COMPILER_PHASE_ABI_SCOPE_20260723.md",
       "docs/amd-fp16-dequant-q4k-build-progress-20260720.md",
@@ -7407,11 +7824,16 @@
       "docs/flash-multi-output-reduce-scope-deepseek-20260722.md",
       "docs/flash-prefill-wmma-mvp-scope-20260721.md",
       "docs/flash-scheduler-extension-scope-deepseek-20260722.md",
+      "docs/lowering-refactor-handoff-20260726.md",
       "docs/prefill-R-theories-scope-20260724.md",
       "docs/shared-attention-fused-enablement-scope-A-20260723.md",
       "docs/shared-flash-attention-rotating-pv-primitive-results-20260723.md",
       "docs/shared-flash-prefill-rewrite-handoff-20260723.md",
       "docs/shared-flash-scoped-reduce-completion-scope-20260722.md",
+      "docs/task_workflow/input/production-development-workflow-scope-20260726.md",
+      "extra/audit/flash_variant_fingerprint.py",
+      "extra/audit/lowering_baseline.py",
+      "extra/audit/lowering_fingerprint.py",
       "extra/hardware/sqtt/roc.py",
       "extra/llm/cli.py",
       "extra/qk/amd_warp_reduce.py",
@@ -7419,7 +7841,6 @@
       "extra/qk/benchmark_shared_attention.py",
       "extra/qk/benchmark_split_shared_attention.py",
       "extra/qk/bubblebeam_futuresight.py",
-      "extra/qk/coalesced_load_lowering.py",
       "extra/qk/codegen_list_scheduler.py",
       "extra/qk/codegen_recurrence_unroll.py",
       "extra/qk/cooperative_stage_lanemap.py",
@@ -7433,7 +7854,6 @@
       "extra/qk/generate_shared_attention_captures.py",
       "extra/qk/kv_load.py",
       "extra/qk/lane_partition_reduce.py",
-      "extra/qk/layout_coalesce_check.py",
       "extra/qk/live_split_geometry.py",
       "extra/qk/mmq_compile_evidence.py",
       "extra/qk/mmq_ds4_logical_emitter.py",
@@ -7474,6 +7894,8 @@
       "test/unit/test_attention_semantic.py",
       "test/unit/test_attn_qo_register_compile.py",
       "test/unit/test_candidate_context_propagation.py",
+      "test/unit/test_coalesced_load_lowering.py",
+      "test/unit/test_codegen_cache_key_gates.py",
       "test/unit/test_composite_axis_constraints.py",
       "test/unit/test_composite_reduce.py",
       "test/unit/test_composite_tile_carrier.py",
@@ -7483,7 +7905,9 @@
       "test/unit/test_devectorizer_reconstruction.py",
       "test/unit/test_executable_artifact_preparation.py",
       "test/unit/test_final_regalloc_proof_transport_20260712.py",
+      "test/unit/test_flash_buffer_roles.py",
       "test/unit/test_flash_decode_attention_spec.py",
+      "test/unit/test_gate_inventory.py",
       "test/unit/test_gemm_consumer_adapters.py",
       "test/unit/test_kernel_candidate_context.py",
       "test/unit/test_kernel_naming.py",
@@ -7519,10 +7943,10 @@
       "tinygrad/callify.py",
       "tinygrad/codegen/__init__.py",
       "tinygrad/codegen/gpudims.py",
+      "tinygrad/codegen/late/coalesced_load.py",
       "tinygrad/codegen/late/composite_combines.py",
       "tinygrad/codegen/late/devectorizer.py",
       "tinygrad/codegen/late/expander.py",
-      "tinygrad/codegen/late/flash_attn.py",
       "tinygrad/codegen/late/gater.py",
       "tinygrad/codegen/late/linearizer.py",
       "tinygrad/codegen/late/reduce_lowering.py",
@@ -7573,11 +7997,11 @@
       "tinygrad/runtime/support/hcq.py",
       "tinygrad/schedule/__init__.py",
       "tinygrad/schedule/allreduce.py",
-      "tinygrad/schedule/flash_fusion.py",
       "tinygrad/schedule/indexing.py",
       "tinygrad/schedule/memory.py",
       "tinygrad/schedule/multi.py",
       "tinygrad/schedule/rangeify.py",
+      "tinygrad/schedule/realize.py",
       "tinygrad/schedule/wmma/__init__.py",
       "tinygrad/schedule/wmma/composite.py",
       "tinygrad/schedule/wmma/fragments.py",
@@ -7605,6 +8029,7 @@
       "tinygrad/viz/render.py"
     ],
     "tinygrad/uop/spec.py": [
+      "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/SHARED_ATTENTION_COMPILER_PHASE_ABI_SCOPE_20260723.md",
       "docs/flash-composite-reduce-report-20260722.md",
       "docs/flash-multi-output-reduce-scope-deepseek-20260722.md",
@@ -7622,17 +8047,23 @@
     "tinygrad/uop/symbolic.py": [
       "docs/flash-HANDOFF-deepseek-multi-output-20260722.md",
       "docs/flash-multi-output-reduce-scope-deepseek-20260722.md",
-      "extra/qk/layout_coalesce_check.py",
       "test/unit/test_amd_attention_kv_tile_oob_guard.py",
       "test/unit/test_composite_reduce.py",
       "test/unit/test_kernel_pipeline_expansion.py",
       "tinygrad/codegen/__init__.py",
+      "tinygrad/codegen/late/coalesced_load.py",
       "tinygrad/codegen/late/devectorizer.py",
       "tinygrad/codegen/simplify.py",
       "tinygrad/renderer/isa/amd_attention_abi.py",
       "tinygrad/schedule/indexing.py",
       "tinygrad/schedule/rangeify.py",
       "tinygrad/uop/ops.py"
+    ],
+    "tinygrad/uop/trace.py": [
+      "docs/14b-phase0-contamination-notice-20260726.md",
+      "docs/lowering-refactor-cut-list-20260726.md",
+      "docs/lowering-refactor-handoff-20260726.md",
+      "test/unit/test_codegen_cache_key_gates.py"
     ],
     "tinygrad/uop/upat.py": [
       "tinygrad/uop/ops.py"
@@ -7682,16 +8113,16 @@
     ]
   },
   "promotion_budget": {
-    "budgeted_after_pending_promotions": 34087,
-    "budgeted_loc": 34087,
+    "budgeted_after_pending_promotions": 34414,
+    "budgeted_loc": 34414,
     "cap": 35000,
     "data_file_convertible_loc": 0,
-    "headroom": 913,
+    "headroom": 586,
     "intended_cap": 30000,
     "intended_cap_note": "sz.py:13 records 35000 as temporary headroom; the standing target is 30000",
-    "over_intended_cap": 4087,
+    "over_intended_cap": 4414,
     "pending_promotion_net_cost": 0,
-    "unbudgeted_default_path_loc": 6241
+    "unbudgeted_default_path_loc": 6252
   },
   "repeated_workflow_phases": {
     "build-spec": [
@@ -8118,15 +8549,15 @@
       "warning": "extra_on_default_path"
     },
     {
-      "count": 19,
-      "message": "extra/qk/layout.py is imported by 19 modules",
+      "count": 20,
+      "message": "extra/qk/layout.py is imported by 20 modules",
       "path": "extra/qk/layout.py",
       "principle": "a widely-imported module is a de-facto authority",
       "warning": "high_fan_in"
     },
     {
-      "count": 19,
-      "message": "extra/qk/route_manifest.py is imported by 19 modules",
+      "count": 20,
+      "message": "extra/qk/route_manifest.py is imported by 20 modules",
       "path": "extra/qk/route_manifest.py",
       "principle": "a widely-imported module is a de-facto authority",
       "warning": "high_fan_in"

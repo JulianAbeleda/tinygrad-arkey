@@ -8,6 +8,8 @@ from functools import cache
 def _attr(module:str, name:str):
   return getattr(importlib.import_module(module), name)
 
+def route_manifest_route(*args, **kwargs):
+  return _attr("extra.qk.route_manifest", "route")(*args, **kwargs)
 def automatic_promoted_prefill_graph_policy(*args, **kwargs):
   return _attr("extra.qk.route_manifest", "automatic_promoted_prefill_graph_policy")(*args, **kwargs)
 def install_memory_adaptive_model_adapters():

@@ -779,42 +779,6 @@
         "codegen_lowering"
       ],
       "authority_keys": [
-        "coalesce_loads.upcast_promotion_rule"
-      ],
-      "classification_confidence": "high",
-      "default_path": false,
-      "deletion_confidence": "retain_active",
-      "disposition": "keep",
-      "domain": "codegen_lowering",
-      "duplication_group": null,
-      "evidence": [
-        "tinygrad/codegen/__init__.py:133 and :247 gate calls behind getenv(\"COALESCED_LOAD_LOWERING\") and ren.target.device==\"AMD\""
-      ],
-      "path": "extra/qk/coalesced_load_lowering.py",
-      "promotion_target": null,
-      "public_surface": [
-        "coalesce_loads"
-      ],
-      "purpose": "Promotes unit-stride LOOP/REDUCE axes feeding a load to AxisType.UPCAST using the axis_stride coalescing predicate, so the existing expander/devectorizer vectorize the load into a wide global load, gated by COALESCED_LOAD_LOWERING on AMD.",
-      "responsibilities": [
-        "find candidate unit-stride load axes",
-        "promote them to UPCAST via substitution"
-      ],
-      "retention_criterion": "needed while COALESCED_LOAD_LOWERING remains opt-in research infrastructure rather than promoted to always-on",
-      "reusable_assets": [],
-      "role": "authority",
-      "status": "fallback",
-      "surface": "off_default",
-      "test_role": "not_test_like",
-      "workflow_ids": [
-        "coalesced-load-lowering"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "codegen_lowering"
-      ],
-      "authority_keys": [
         "list_schedule.latency_model",
         "_STRUCTURAL"
       ],
@@ -1819,46 +1783,6 @@
         "quant-format-facts",
         "gguf-metadata-parsing",
         "q8-1-activation-quantize"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "codegen_lowering"
-      ],
-      "authority_keys": [
-        "axis_stride.coalescing_definition"
-      ],
-      "classification_confidence": "high",
-      "default_path": false,
-      "deletion_confidence": "retain_active",
-      "disposition": "keep",
-      "domain": "codegen_lowering",
-      "duplication_group": null,
-      "evidence": [
-        "extra/qk/coalesced_load_lowering.py:22 imports axis_stride and calls it at line 59",
-        "extra/qk/bubblebeam_futuresight.py:15 imports axis_stride, vector_width"
-      ],
-      "path": "extra/qk/layout_coalesce_check.py",
-      "promotion_target": "candidate for tinygrad/codegen/opt/ as a general OptOps.COALESCE-style predicate, per its own docstring framing it as 'the first-class predicate the layout IR needs (M0)'; not promoted here because promotion requires a real core owner decision outside this file's scope",
-      "public_surface": [
-        "axis_stride",
-        "is_coalesced",
-        "vector_width"
-      ],
-      "purpose": "Defines the static coalescing predicate axis_stride/is_coalesced/vector_width: whether a RANGE's stride in an INDEX expression is 1 (i.e., unit-stride / coalesced for a thread axis), computed via symbolic graph_rewrite rather than benchmarked.",
-      "responsibilities": [
-        "stride computation via substitution+graph_rewrite",
-        "coalesced boolean predicate",
-        "vector-width heuristic"
-      ],
-      "retention_criterion": "needed while coalesced_load_lowering.py (opt-in) and bubblebeam_futuresight.py (production decode path) both depend on it",
-      "reusable_assets": [],
-      "role": "authority",
-      "status": "production",
-      "surface": "off_default",
-      "test_role": "not_test_like",
-      "workflow_ids": [
-        "coalesced-load-lowering"
       ]
     },
     {

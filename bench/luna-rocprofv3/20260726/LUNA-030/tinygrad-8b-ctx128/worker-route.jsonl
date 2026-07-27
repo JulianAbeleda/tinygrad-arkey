@@ -1,1 +1,0 @@
-{"schema":"luna-tinygrad-worker-route.v1","status":"MISSING","reason":"worker-authority.json was not produced by the sole profiled child; no route identity, tile/combine identity, or positive program-count control is available","expected_control":"route=flash and programs_per_token_by_route.flash > 0","task":"LUNA-030","ctx":128}
