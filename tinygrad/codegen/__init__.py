@@ -511,7 +511,7 @@ def _lower_cache_table() -> str:
 to_program_cache: dict[tuple, UOp] = {}
 def to_program(ast:UOp, renderer:Renderer) -> UOp:
   config = (NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, IMAGE, DISABLE_FAST_IDIV, TRANSCENDENTAL, ALLOW_TF32)
-  # LR-051: the gate suffix is derived from PLAN_GATES -- the SAME inventory OptimizationPlan reads -- rather than a
+  # LR-051: the gate suffix is derived from PLAN_GATES -- the declared gate inventory -- rather than a
   # second hand-picked getenv(...) list. That hand-picked list is how PREFILL_SOFTMAX_REDUCE_FUSE,
   # UNSAFE_DISABLE_MASK and REGALLOC_ADDR_REMAT went missing from this key: they change generated code inside
   # do_to_program's lowering pipeline but were absent here. Deriving from PLAN_GATES means a gate added to the

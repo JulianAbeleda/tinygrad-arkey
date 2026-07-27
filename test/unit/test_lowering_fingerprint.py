@@ -174,31 +174,12 @@ def test_order_diff_is_silent_on_an_identical_order():
   assert lf._classify_order_diff({"g": ["a", "b"]}, {"g": ["a", "b"]}) == []
 
 
-def test_registry_coverage_numbers_are_recomputed_not_asserted():
-  """OBSERVED_NAME_JOIN records why the pass registry cannot be asserted against the observed pass sequence
-  (function granularity vs call granularity). Those numbers are a finding, so they must be recomputed from the
-  live registry and the live trace -- a stale comment claiming 7/64 would be worse than no comment."""
-  from tinygrad.codegen.passes import OBSERVED_NAME_JOIN, REGISTRY
-
-  orders = lf.pass_orders_in_fresh_process()
-  observed = {n for v in orders.values() for n in v}
-  assert len(observed) == OBSERVED_NAME_JOIN["distinct_observed_names"]
-
-  def norm(s: str) -> str: return s.lower().replace(" ", "-").replace("-", "_")
-  reg_leaf = {norm(pid.split(".")[-1]) for pid in REGISTRY}
-  assert sum(1 for o in observed if norm(o) in reg_leaf) == OBSERVED_NAME_JOIN["matched_by_name"]
-
-  assert len(REGISTRY) == OBSERVED_NAME_JOIN["registry_descriptors"]
-  assert len({d.owner_file for d in REGISTRY.values()}) == OBSERVED_NAME_JOIN["registry_owner_files"]
-
-  steps = [n for v in orders.values() for n in v]
-  assert len(steps) == OBSERVED_NAME_JOIN["total_collapsed_steps"]
-  assert steps.count("<unnamed>") == OBSERVED_NAME_JOIN["unnamed_collapsed_steps"]
-
-
 def test_unnamed_rewrites_are_a_bounded_and_declared_blind_spot():
-  """The order gate cannot see a reorder among rewrites that pass no name=. That limit is acceptable only while it
-  is known and bounded; if it grows, this fails and the number in passes.py has to be re-argued."""
-  from tinygrad.codegen.passes import OBSERVED_NAME_JOIN
-  frac = OBSERVED_NAME_JOIN["unnamed_collapsed_steps"] / OBSERVED_NAME_JOIN["total_collapsed_steps"]
+  """The order gate cannot see a reorder among rewrites that pass no name=. That limit is acceptable only while
+  it is known and bounded; if it grows, this fails and the gate's resolution has to be re-argued. Measured from
+  the live trace rather than a recorded constant -- the constant used to live in codegen/passes.py, which was a
+  frozen snapshot with no regeneration recipe, and it went out with that module."""
+  orders = lf.pass_orders_in_fresh_process()
+  steps = [n for v in orders.values() for n in v]
+  frac = steps.count("<unnamed>") / len(steps)
   assert frac < 0.25, f"unnamed rewrites now {frac:.0%} of the pipeline; name them or re-argue the gate's resolution"
