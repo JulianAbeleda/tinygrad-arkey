@@ -12,10 +12,14 @@ from tinygrad.helpers import argsort, all_same, cpu_profile, PCONTIG, colored, C
 from tinygrad.schedule.realize import (ALWAYS_CONTIGUOUS, realize, realize_srcs,  # noqa: F401
                                        realize_store_after_src, pm_generate_realize_map)
 
-# LR-042: BufferizeOpts moved to its owner, tinygrad/schedule/buffer_plan.py (alongside the new storage-decision
-# recorder). Re-exported here so this module's public surface is unchanged and every existing caller that reaches
-# it as `tinygrad.schedule.indexing.BufferizeOpts` (directly or via rangeify.py's re-export) is unaffected.
-from tinygrad.schedule.buffer_plan import BufferizeOpts  # noqa: F401
+# on AddrSpace.LOCAL, device is the id
+@dataclass(frozen=True)
+class BufferizeOpts:
+  device: str|tuple[str, ...]|int|None
+  addrspace: AddrSpace = AddrSpace.GLOBAL
+  removable: bool = True
+  composite_consumer: bool = False
+
 
 # LR-043: the composite/scoped-reduction ownership decision this loop makes (below, in run_rangeify) is described,
 # not changed, by tinygrad/schedule/scopes.py. Import kept local to the call sites so this module pays nothing when

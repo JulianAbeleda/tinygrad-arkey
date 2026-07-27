@@ -463,7 +463,6 @@ earliest_rewrites = mop_cleanup+PatternMatcher([
 # 3.5 cleanups
 
 from tinygrad.schedule import plan as _realize_plan  # LR-030; inert unless REALIZE_PLAN is set
-from tinygrad.schedule import buffer_plan as _buffer_plan  # LR-042; inert unless BUFFER_PLAN is set
 ALWAYS_RUN_OPS = {Ops.CONTIGUOUS, Ops.COPY, Ops.NOOP}
 
 # you don't know in the first pass if axes are going to die, this happens if there's an EXPAND to the left
@@ -768,8 +767,6 @@ def bufferize_to_store(ctx:itertools.count, x:UOp, idx:UOp, allow_locals=True):
         store_target = store_target.src[0].src[0]
       if store.src[1] is store_target: continue  # skip self-assign
       end_rngs = sorted(dedup(tuple(store_target.ranges) + tuple(rngs)), key=lambda x: x.arg)
-      if _buffer_plan.ENABLED:
-        _buffer_plan.record(x.key.hex()[:12], sdtype.addrspace, _buffer_plan.REUSED_AFTER, ranges_closed=len(end_rngs))
       ended_stores.append(store_target.replace(dtype=sdtype).store(store.src[1]).end(*end_rngs))
     return buf.after(*ended_stores)
 
@@ -781,8 +778,6 @@ def bufferize_to_store(ctx:itertools.count, x:UOp, idx:UOp, allow_locals=True):
       do_store = buf.store(x.src[0]).end(*rngs)
     else:
       do_store = buf.index(idx, dtype=sdtype).store(x.src[0]).end(*rngs)
-    if _buffer_plan.ENABLED:
-      _buffer_plan.record(x.key.hex()[:12], sdtype.addrspace, _buffer_plan.NEW_GLOBAL, ranges_closed=len(rngs), size=size)
     return buf.after(do_store)
 
   if allow_locals:
@@ -791,8 +786,6 @@ def bufferize_to_store(ctx:itertools.count, x:UOp, idx:UOp, allow_locals=True):
     store_idx = buf.broadcast(x.src[1].dtype.count).index(idx, dtype=sdtype)
     do_store = store_idx.store(x.src[0])
     do_store = do_store.end(*rngs)
-    if _buffer_plan.ENABLED:
-      _buffer_plan.record(x.key.hex()[:12], sdtype.addrspace, _buffer_plan.NEW_LOCAL, ranges_closed=len(rngs), size=size)
     return buf.after(do_store.barrier())
 
 # collapse any BUFFERIZE to single input BUFFERIZE
