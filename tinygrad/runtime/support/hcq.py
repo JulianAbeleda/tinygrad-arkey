@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import cast, Callable, Type, TypeVar, Generic, Any
-import contextlib, decimal, statistics, time, ctypes, array, os, struct, collections, functools, itertools
+import contextlib, decimal, statistics, time, ctypes, array, os, struct, collections, functools, itertools, hashlib
 from dataclasses import replace
 try: import fcntl # windows misses that
 except ImportError: fcntl = None #type:ignore[assignment]
@@ -13,6 +13,7 @@ from tinygrad.uop.ops import sym_infer, sint, UOp
 from tinygrad.runtime.autogen import libc
 from tinygrad.runtime.support.memory import BumpAllocator
 from tinygrad.renderer import Renderer
+from tinygrad.runtime.launch_observer import get_launch_observer
 
 class MMIOInterface:
   def __init__(self, addr:int, nbytes:int, fmt='B'): self.mv, self.addr, self.nbytes, self.fmt = to_mv(addr, nbytes).cast(fmt), addr, nbytes, fmt
@@ -337,6 +338,7 @@ class HCQProgram(Generic[HCQDeviceType]):
   def __init__(self, args_state_t:Type[HCQArgsState], dev:HCQDeviceType, name:str, kernargs_alloc_size:int,
                kernargs_alignment:int=16, lib:bytes|None=None, base:int|None=None):
     self.args_state_t, self.dev, self.name = args_state_t, dev, name
+    self._launch_binary = lib or b""
     self.kernargs_alloc_size, self.kernargs_alignment = kernargs_alloc_size, kernargs_alignment
     self.prof_prg_counter = next(self.dev.prof_prg_counter)
     if PROFILE: Compiled.profile_events += [ProfileProgramEvent(dev.device, name, lib, base, self.prof_prg_counter)]
@@ -388,6 +390,13 @@ class HCQProgram(Generic[HCQDeviceType]):
       Execution time of the kernel if 'wait' is True, otherwise None.
     """
 
+    observer = get_launch_observer()
+    observer_token = None
+    dispatch_id = self.dev.prof_exec_counter + 1
+    if observer is not None:
+      observer_token = observer.submit(program_id=self.prof_prg_counter, source_sha256=observer.source_sha256,
+                                       binary_sha256=hashlib.sha256(self._launch_binary).hexdigest(),
+                                       grid=global_size, workgroup=local_size, dispatch_id=dispatch_id)
     kernargs = self.fill_kernargs(bufs, vals)
     q = unwrap(self.dev.hw_compute_queue_t)().wait(self.dev.timeline_signal, self.dev.timeline_value - 1).memory_barrier()
 
@@ -398,8 +407,12 @@ class HCQProgram(Generic[HCQDeviceType]):
         "global_size": tuple(int(x) for x in global_size),
         "local_size": tuple(int(x) for x in local_size),
       })]
-    with hcq_profile(self.dev, queue=q, desc=self.name, enabled=wait or PROFILE) as (sig_st, sig_en):
-      q.exec(self, kernargs, global_size, local_size)
+    try:
+      with hcq_profile(self.dev, queue=q, desc=self.name, enabled=wait or PROFILE) as (sig_st, sig_en):
+        q.exec(self, kernargs, global_size, local_size)
+    except BaseException:
+      if observer is not None and observer_token is not None: observer.abort(observer_token)
+      raise
 
     target = self.dev.next_timeline()
     q.signal(self.dev.timeline_signal, target).submit(self.dev)
@@ -410,6 +423,8 @@ class HCQProgram(Generic[HCQDeviceType]):
       # once, at dump time, against the signal value observed then -- not here.
       alloc_trace_record_dispatch(getattr(self.dev, "device", "?"), self.name, global_size, local_size, bufs, target)
 
+    if observer is not None and observer.sync and not wait:
+      self.dev.synchronize(timeout=timeout)
     if DISPATCH_TRACE and getattr(self.dev, "timeline_signal", None) is not None:
       # DIAGNOSTIC fault-to-dispatch correlation probe (see tinygrad/device.py DISPATCH_TRACE). Serialize so
       # at most one dispatch is ever in flight, and record it before the wait that could fault on it.
@@ -417,6 +432,7 @@ class HCQProgram(Generic[HCQDeviceType]):
       self.dev.synchronize(timeout=timeout)
       _dispatch_trace_after()
     elif wait: self.dev.synchronize(timeout=timeout)
+    if observer is not None and observer_token is not None: observer.complete(observer_token)
     return (float(sig_en.timestamp - sig_st.timestamp) / 1e6) if wait else None
 
 class HCQCompiled(Compiled, Generic[SignalType]):
