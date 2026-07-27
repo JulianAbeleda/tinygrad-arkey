@@ -112,6 +112,7 @@ class _FlashDecodeBinding:
   Hkv: int
   Hd: int
   split_size: int
+  query_group_size: int | None
   staging: str
 
 @dataclass(frozen=True)
@@ -121,19 +122,22 @@ class _FlashDecodeCandidate:
   target: str = "AMD"
   query_heads: int = 32
   split_size: int = 48
+  query_group_size: int | None = None
   staging: str = "KV_BOTH"
 
   def bind(self, B:int, Hq:int, Hkv:int, Hd:int, device:str) -> _FlashDecodeBinding | None:
     if not (device == self.target or device.startswith(self.target+":")): return None
     if B != 1 or Hq != self.query_heads or Hd != 128 or Hkv != 8: return None
     return _FlashDecodeBinding(self.candidate_id, self.route_id, self.target, B, Hq, Hkv, Hd,
-                               self.split_size, self.staging)
+                               self.split_size, self.query_group_size, self.staging)
 
 FLASH_DECODE_CANDIDATE = _FlashDecodeCandidate()
 FLASH_DECODE_G5_CANDIDATE = _FlashDecodeCandidate(
   candidate_id="attention_decode.flash_live_split_g5",
   route_id="decode_flash_live_split_g5_kvboth",
   query_heads=40,
+  split_size=32,
+  query_group_size=2,
 )
 
 def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp, T:int|UOp, B:int,
@@ -163,4 +167,4 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
                        "the generated live-split route, and all handwritten fallback flash routes were deleted.")
   return qk_ops.flash_decode_live_split_block_tile(q.reshape(binding.Hq, binding.Hd), assigned_kv, _tc,
     binding.Hd, binding.Hq, binding.Hkv, MAXC, binding.split_size, staging=binding.staging,
-    fused_combine=True, kv_scale=kv_scale, freqs=freqs)
+    fused_combine=True, kv_scale=kv_scale, freqs=freqs, query_group_size=binding.query_group_size)

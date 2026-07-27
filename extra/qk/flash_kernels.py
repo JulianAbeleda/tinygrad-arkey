@@ -7,7 +7,7 @@ from extra.qk.kv_load import make_kv_element_loader  # noqa: F401
 # combine, and lifecycle variants -- ~32 functions) were deleted as orphans; only the live default
 # tile survives and is emitted through flash_decode_attention_spec.py.
 
-def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc, staging:str="KV_BOTH", quant:bool=False, rope:bool=False):
+def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc, staging:str="KV_BOTH", quant:bool=False, rope:bool=False, query_group_size:int|None=None):
   """Block-tiled generated decode candidate.
 
   Mirrors the owned tile's topology at the UOp level: one workgroup per (kvh, split), G warps per
@@ -23,7 +23,9 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
     symmetric absmax over head_dim. This is the fused-dequant path for the KV-quant long-context tier.
   """
   if Hd % 64 != 0: raise ValueError(f"block tile requires Hd%%64==0, got {Hd}")
-  G = Hq // Hkv; W = Hd + 2; LANES = 32; WARPS = G; THREADS = LANES * WARPS; TK = 16
+  G = Hq // Hkv; QG = G if query_group_size is None else query_group_size
+  if QG < 1 or QG > G: raise ValueError(f"query_group_size must be in 1..{G}, got {QG}")
+  NG = _ceildiv(G, QG); W = Hd + 2; LANES = 32; WARPS = QG; THREADS = LANES * WARPS; TK = 16
   R = Hd // LANES; RP = Hd // 64; STAGES = _ceildiv(TK * Hd, THREADS); NB = _ceildiv(L, TK)
   scale = 1.0 / (Hd ** 0.5)
   def kernel(pout:UOp, q:UOp, cache:UOp, *extra) -> UOp:
@@ -39,12 +41,16 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
     kv_load = make_kv_element_loader(cache, Hd, kvscale=kvscale, freqs=freqs)
     kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
     s = UOp.range(S, 1, AxisType.GLOBAL)
+    qg = UOp.range(NG, 9, AxisType.GLOBAL)
     # Use LOCAL ranges (not UOp.special) so add_gpudims can run and emit gidx for kvh/s.
     # UOp.special blocks add_gpudims via the any(Ops.SPECIAL) guard in gpudims.py:61.
     # AxisType.LOCAL → lidx0/lidx1 (real thread dims), correct for ds_bpermute lane addressing.
     lane = UOp.range(LANES, 10, AxisType.LOCAL)
     warp = UOp.range(WARPS, 11, AxisType.LOCAL)
-    h = kvh * G + warp
+    gh = qg * QG + warp
+    warp_active = gh < G
+    h_raw = kvh * G + gh
+    h = warp_active.where(h_raw, h_raw.const_like(0))
     tid = warp * LANES + lane
     ksh = UOp.placeholder((TK * Hd,), dtypes.half, 230, addrspace=AddrSpace.LOCAL)
     vsh = UOp.placeholder((TK * Hd,), dtypes.half, 231, addrspace=AddrSpace.LOCAL) if staging == "KV_BOTH" else None
@@ -149,8 +155,9 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
     base = (h * S + s) * W
     dd2 = UOp.range(R, 8)
     d2 = lane * R + dd2
-    pv = pout[base + d2].store(af[dd2]).end(dd2)
-    ls = pout.after(pv)[base + Hd].store(lf[0], lane.eq(0))
-    ms = pout.after(ls)[base + (Hd + 1)].store(mf[0], lane.eq(0))
-    return ms.end(kvh, s, lane, warp).sink(arg=_fki(f"flash_block_tiled_xlane_score_pv_tile_whole_cache_{Hq}_{Hd}"))
+    pv = pout[base + d2].store(af[dd2], warp_active).end(dd2)
+    ls = pout.after(pv)[base + Hd].store(lf[0], lane.eq(0) & warp_active)
+    ms = pout.after(ls)[base + (Hd + 1)].store(mf[0], lane.eq(0) & warp_active)
+    suffix = "" if QG == G else f"_qg{QG}"
+    return ms.end(kvh, s, qg, lane, warp).sink(arg=_fki(f"flash_block_tiled_xlane_score_pv_tile_whole_cache_{Hq}_{Hd}{suffix}"))
   return kernel

@@ -27,6 +27,14 @@ def test_flash_decode_attention_descriptor_defaults():
     "flash_fused_gmax_combine_40_128")
 
 
+def test_flash_decode_attention_query_group_descriptor():
+  spec = describe_flash_decode_attention(Hq=40, Hd=128, Hkv=8, MAXC=8192, S=32, fused_combine=True,
+                                         query_group_size=2)
+  assert spec.tile.query_group_size == 2
+  assert spec.tile.kernel_name == "flash_block_tiled_xlane_score_pv_tile_whole_cache_40_128_qg2"
+  assert spec.tile.to_json()["query_group_size"] == 2
+
+
 def test_tile_emit_kernel_name_matches_flash_kernels():
   spec = FlashDecodeAttentionSpec(
     tile=FlashDecodeTileSpec(Hq=32, Hd=128, Hkv=8, MAXC=8192, split_count=48, staging="KV_BOTH", quant=False),

@@ -51,6 +51,7 @@ class FlashDecodeTileSpec:
   quant: bool = False
   rope: bool = False
   token_block: int = 16
+  query_group_size: int | None = None
   target: str = "amd_gfx1100"
 
   def validate(self) -> None:
@@ -62,6 +63,10 @@ class FlashDecodeTileSpec:
       raise ValueError(f"unsupported staging={self.staging!r}; allowed {{'KV_BOTH', 'K_ONLY'}}")
     if self.token_block != 16:
       raise ValueError(f"token_block must currently be 16, got {self.token_block}")
+    if self.Hq % self.Hkv != 0:
+      raise ValueError(f"Hq must be divisible by Hkv, got Hq={self.Hq} Hkv={self.Hkv}")
+    if self.query_group_size is not None and not 1 <= self.query_group_size <= self.Hq // self.Hkv:
+      raise ValueError(f"query_group_size must be in 1..{self.Hq // self.Hkv}, got {self.query_group_size}")
     self.geometry.validate()
 
   @property
@@ -70,19 +75,20 @@ class FlashDecodeTileSpec:
 
   @property
   def kernel_name(self) -> str:
-    return f"flash_block_tiled_xlane_score_pv_tile_whole_cache_{self.Hq}_{self.Hd}"
+    suffix = "" if self.query_group_size is None else f"_qg{self.query_group_size}"
+    return f"flash_block_tiled_xlane_score_pv_tile_whole_cache_{self.Hq}_{self.Hd}{suffix}"
 
   def emit(self, Tc_u: UOp):
     """Emit the live-split tile kernel for this configuration."""
     self.validate()
     return flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(
       self.Hd, self.Hq, self.Hkv, self.MAXC, self.geometry.aligned_per_split_length(Tc_u), self.split_count,
-      Tc_u, staging=self.staging, quant=self.quant, rope=self.rope)
+      Tc_u, staging=self.staging, quant=self.quant, rope=self.rope, query_group_size=self.query_group_size)
 
   def to_json(self) -> dict[str, Any]:
     return {"Hq": self.Hq, "Hd": self.Hd, "Hkv": self.Hkv, "MAXC": self.MAXC,
             "split_count": self.split_count, "staging": self.staging, "quant": self.quant, "rope": self.rope,
-            "token_block": self.token_block, "target": self.target}
+            "token_block": self.token_block, "query_group_size": self.query_group_size, "target": self.target}
 
 
 @dataclass(frozen=True)
@@ -140,8 +146,10 @@ class FlashDecodeAttentionSpec:
 
 def describe_flash_decode_attention(Hq:int, Hd:int, Hkv:int, MAXC:int, S:int, *,
                                   staging:str="KV_BOTH", fused_combine:bool=True,
-                                  quant:bool=False, rope:bool=False, combine_stride:int|None=None) -> FlashDecodeAttentionSpec:
-  tile = FlashDecodeTileSpec(Hq=Hq, Hd=Hd, Hkv=Hkv, MAXC=MAXC, split_count=S, staging=staging, quant=quant, rope=rope)
+                                  quant:bool=False, rope:bool=False, combine_stride:int|None=None,
+                                  query_group_size:int|None=None) -> FlashDecodeAttentionSpec:
+  tile = FlashDecodeTileSpec(Hq=Hq, Hd=Hd, Hkv=Hkv, MAXC=MAXC, split_count=S, staging=staging, quant=quant, rope=rope,
+                             query_group_size=query_group_size)
   combine = FlashCombineSpec(Hd=Hd, Hq=Hq, split_count=S, stride=combine_stride) if fused_combine else None
   return FlashDecodeAttentionSpec(tile=tile, combine=combine)
 
