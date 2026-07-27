@@ -778,41 +778,6 @@
       "allowed_dependency_domains": [
         "codegen_lowering"
       ],
-      "authority_keys": [],
-      "classification_confidence": "high",
-      "default_path": false,
-      "deletion_confidence": "retain_active",
-      "disposition": "consolidate",
-      "domain": "codegen_lowering",
-      "duplication_group": null,
-      "evidence": [
-        "LR-050: implementation moved to tinygrad/codegen/late/coalesced_load.py (pure UOp/AxisType transform, no backend-specific assumptions); this file is now a re-export shim",
-        "tinygrad/codegen/__init__.py:133 imports coalesce_loads directly from tinygrad.codegen.late.coalesced_load and gates the call behind getenv(\"COALESCED_LOAD_LOWERING\") and ren.target.device==\"AMD\" (validation-scope gate, kept at the call site)"
-      ],
-      "path": "extra/qk/coalesced_load_lowering.py",
-      "promotion_decision": "promoted under LR-050; this file re-exports coalesce_loads rather than forking it",
-      "promotion_target": "tinygrad/codegen/late/coalesced_load.py",
-      "public_surface": [
-        "coalesce_loads"
-      ],
-      "purpose": "Re-exports the core coalesce_loads pass (tinygrad/codegen/late/coalesced_load.py) for extra/qk callers, so this file no longer forks the implementation.",
-      "responsibilities": [
-        "re-export coalesce_loads from core codegen"
-      ],
-      "retention_criterion": "kept as a stable extra/qk import path for existing callers; safe to delete once nothing in extra/qk imports it directly instead of the core module",
-      "reusable_assets": [],
-      "role": "authority",
-      "status": "fallback",
-      "surface": "off_default",
-      "test_role": "not_test_like",
-      "workflow_ids": [
-        "coalesced-load-lowering"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "codegen_lowering"
-      ],
       "authority_keys": [
         "list_schedule.latency_model",
         "_STRUCTURAL"
@@ -1818,44 +1783,6 @@
         "quant-format-facts",
         "gguf-metadata-parsing",
         "q8-1-activation-quantize"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "codegen_lowering"
-      ],
-      "authority_keys": [],
-      "classification_confidence": "high",
-      "default_path": false,
-      "deletion_confidence": "retain_active",
-      "disposition": "consolidate",
-      "domain": "codegen_lowering",
-      "duplication_group": null,
-      "evidence": [
-        "LR-050: promoted to tinygrad/codegen/late/coalesced_load.py alongside coalesce_loads (same file owns predicate + pass); this module is now a re-export shim",
-        "extra/qk/coalesced_load_lowering.py imports axis_stride from the core module (indirectly via the promoted coalesce_loads)",
-        "extra/qk/bubblebeam_futuresight.py:15 imports axis_stride, vector_width from this shim"
-      ],
-      "path": "extra/qk/layout_coalesce_check.py",
-      "promotion_decision": "promoted under LR-050; this file re-exports axis_stride/is_coalesced/vector_width rather than forking them",
-      "promotion_target": "tinygrad/codegen/late/coalesced_load.py",
-      "public_surface": [
-        "axis_stride",
-        "is_coalesced",
-        "vector_width"
-      ],
-      "purpose": "Re-exports the core coalescing predicate axis_stride/is_coalesced/vector_width (tinygrad/codegen/late/coalesced_load.py) for extra/qk callers.",
-      "responsibilities": [
-        "re-export the coalescing predicate from core codegen"
-      ],
-      "retention_criterion": "kept as a stable extra/qk import path for existing callers (coalesced_load_lowering.py, bubblebeam_futuresight.py); safe to delete once they import the core module directly",
-      "reusable_assets": [],
-      "role": "authority",
-      "status": "production",
-      "surface": "off_default",
-      "test_role": "not_test_like",
-      "workflow_ids": [
-        "coalesced-load-lowering"
       ]
     },
     {

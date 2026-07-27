@@ -90,18 +90,6 @@ class TestCoalesceLoadsUnit(unittest.TestCase):
     ranges = {u.arg[0]: u.arg[-1] for u in after.toposort() if u.op is Ops.RANGE}
     assert ranges == {1: AxisType.LOOP}
 
-
-class TestCoalesceLoadsNoFork(unittest.TestCase):
-  """extra/qk must import the core pass, not maintain a fork of it."""
-
-  def test_extra_qk_module_is_a_reexport_not_a_fork(self):
-    from extra.qk.coalesced_load_lowering import coalesce_loads as shim_fn
-    from extra.qk.layout_coalesce_check import axis_stride as shim_axis_stride
-    from tinygrad.codegen.late.coalesced_load import coalesce_loads as core_fn, axis_stride as core_axis_stride
-    assert shim_fn is core_fn
-    assert shim_axis_stride is core_axis_stride
-
-
 class TestCoalesceLoadsPipelineGate(unittest.TestCase):
   """Pipeline-level positive control: enable COALESCED_LOAD_LOWERING (default off) and prove the generated
   program differs. Uses the compile-only AMD:ISA oracle renderer -- no GPU involved."""

@@ -1,6 +1,6 @@
 # Codebase organization audit
 
-Audited commit: `mac-first-boot-20260610-3458-gc9b9ce929-dirty` (dirty: True)
+Audited commit: `mac-first-boot-20260610-3459-g3ba50a236-dirty` (dirty: True)
 Scope: `<repository>` | manifest coverage required for: extra/qk/
 Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 68 warnings)
 
@@ -10,9 +10,9 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 68 warnings)
 
 ## Coverage
 
-- Authored: 452 files / 70210 token-bearing LOC (sz.py rules)
+- Authored: 450 files / 70093 token-bearing LOC (sz.py rules)
 - Generated (reported, never manifested): 1 files / 57 LOC
-- Manifest scope: 96 files / 13241 LOC (96 explicit records, 0 covered by group rule, 0 uncovered)
+- Manifest scope: 94 files / 13236 LOC (94 explicit records, 0 covered by group rule, 0 uncovered)
 
 ## LOC by domain
 
@@ -21,20 +21,20 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 68 warnings)
 | amd_runtime | 3 | 421 |
 | attention_decode | 10 | 798 |
 | attention_prefill | 4 | 574 |
-| codegen_lowering | 10 | 515 |
+| codegen_lowering | 8 | 510 |
 | evidence | 10 | 1608 |
 | measurement | 17 | 1941 |
 | quant_mmq | 18 | 2930 |
 | route_authority | 16 | 3447 |
 | search_promotion | 8 | 1007 |
-| unclassified | 356 | 56969 |
+| unclassified | 356 | 56857 |
 
 ## LOC by role
 
 | role | files | loc |
 |---|---|---|
 | adapter | 11 | 1143 |
-| authority | 51 | 7803 |
+| authority | 49 | 7798 |
 | benchmark | 2 | 99 |
 | diagnostic | 11 | 1232 |
 | evidence | 5 | 438 |
@@ -42,30 +42,30 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 68 warnings)
 | integration | 2 | 199 |
 | research | 4 | 387 |
 | test | 1 | 136 |
-| unclassified | 356 | 56969 |
+| unclassified | 356 | 56857 |
 
 ## LOC by status
 
 | status | files | loc |
 |---|---|---|
 | active_research | 13 | 2285 |
-| fallback | 5 | 234 |
+| fallback | 4 | 232 |
 | historical_one_off | 1 | 43 |
-| production | 67 | 9519 |
+| production | 66 | 9516 |
 | promoted_default | 6 | 665 |
 | refuted | 1 | 21 |
 | retained_reference | 1 | 114 |
-| unclassified | 356 | 56969 |
+| unclassified | 356 | 56857 |
 | unresolved_reproducer | 2 | 360 |
 
 ## LOC by disposition
 
 | disposition | files | loc |
 |---|---|---|
-| consolidate | 4 | 869 |
+| consolidate | 2 | 864 |
 | investigate | 2 | 256 |
 | keep | 90 | 12116 |
-| unclassified | 356 | 56969 |
+| unclassified | 356 | 56857 |
 
 ## Default-path source footprint
 
@@ -118,7 +118,7 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 68 warnings)
 
 | loc | path | domain |
 |---|---|---|
-| 2267 | `tinygrad/renderer/isa/amd.py` | None |
+| 2186 | `tinygrad/renderer/isa/amd.py` | None |
 | 2141 | `tinygrad/uop/ops.py` | None |
 | 1084 | `test/unit/test_online_softmax_tile.py` | None |
 | 1067 | `tinygrad/llm/model.py` | None |
@@ -324,9 +324,9 @@ None.
 
 | path | class | former purpose | last campaign | replacement | commit | recovery | loc |
 |---|---|---|---|---|---|---|---|
-| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `c9b9ce9296a9` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
-| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `c9b9ce9296a9` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
-| `extra/qk/q4k_wmma_tile_lowering.py` | delete_after_verdict_capture | Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles. | q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14) | docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md | `c9b9ce9296a9` | git show 05b67146a -- <path> | 1138 |
+| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `3ba50a236c76` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
+| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `3ba50a236c76` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
+| `extra/qk/q4k_wmma_tile_lowering.py` | delete_after_verdict_capture | Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles. | q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14) | docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md | `3ba50a236c76` | git show 05b67146a -- <path> | 1138 |
 
 ## Workflow inventory
 
@@ -359,8 +359,8 @@ None.
 
 ## Promotion budget
 
-- Budgeted (`tinygrad`, `bench`, `structure`): **34514 / 50000** -- headroom 15486
-- Against the standing 30000 target: **4514 over**. sz.py:13 records 35000 as temporary headroom; the standing target is 30000
+- Budgeted (`tinygrad`, `bench`, `structure`): **34409 / 50000** -- headroom 15591
+- Against the standing 30000 target: **4409 over**. sz.py:13 records 35000 as temporary headroom; the standing target is 30000
 - Default-path LOC currently sitting unbudgeted in `extra/`: **6252**
 - Net budget cost of pending promotions (moved minus deleted): 0
 - Declarative LOC a data-file conversion would remove from the budget entirely: 0
