@@ -1,1 +1,3 @@
 max_context=explicit -> 4608 (free 25.5GB, budget 25.2GB with scanned reserve 0.3GB, weights 18.9GB, KV 0.15GB/1k, prefill-peak 0.07GB/1k, trained 40960, fp16-cap 29572, q8-cap 44858)
+AMD synchronization failed before finalizing: MMU fault: 0xFFFFFFBFE000 | NotPresent=1 ReadOnly=0 NoExecute=0 imprecise=0
+HW fault: reset_type=0 reset_cause=0 memory_lost=1 gpu_id=10727

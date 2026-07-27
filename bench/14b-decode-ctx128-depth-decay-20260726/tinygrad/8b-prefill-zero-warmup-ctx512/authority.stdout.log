@@ -1,1 +1,11 @@
 max_context=explicit -> 4608 (free 25.5GB, budget 25.2GB with scanned reserve 0.3GB, weights 18.9GB, KV 0.15GB/1k, prefill-peak 0.07GB/1k, trained 40960, fp16-cap 29572, q8-cap 44857)
+PREFILL AUTHORITY (synced, K=1, warmups=0, rounds=1)  model=Qwen3-8B-Q4_K_M.gguf  GRAPH_GEMM=True
+  chunk@start_pos=    0: 4643.7ms (110 tok/s)
+  chunk@start_pos=  512: 2510.5ms (204 tok/s)
+  chunk@start_pos= 1024: 2429.3ms (211 tok/s)
+  chunk@start_pos= 2048: 2459.7ms (208 tok/s)
+  chunk@start_pos= 3584: 2278.9ms (225 tok/s)
+  WHOLE-PREFILL@512: 110 tok/s
+  WHOLE-PREFILL@1024: 143 tok/s
+  WHOLE-PREFILL@2048: 170 tok/s
+  WHOLE-PREFILL@4096: 190 tok/s

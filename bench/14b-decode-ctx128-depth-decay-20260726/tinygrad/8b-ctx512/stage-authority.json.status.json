@@ -18,13 +18,9 @@
     "--out",
     "/home/ubuntu/worktrees/luna-tinygrad-worker-smoke/bench/14b-decode-ctx128-depth-decay-20260726/tinygrad/8b-ctx512/stage-authority.json"
   ],
-  "chunk_size": 32,
-  "ctx": 512,
-  "detail": "next(generate) may compile prefill graphs",
-  "phase": "warming",
+  "artifact": "/home/ubuntu/worktrees/luna-tinygrad-worker-smoke/bench/14b-decode-ctx128-depth-decay-20260726/tinygrad/8b-ctx512/stage-authority.json",
+  "phase": "completed",
   "pid": 151740,
-  "prompt_tokens": 512,
   "schema": "tinygrad.decode.fixed_depth.lifecycle.v1",
-  "stage": "prefill_first_token",
-  "updated_unix_ns": 1785103060331541034
+  "updated_unix_ns": 1785103075141227219
 }

@@ -2,3 +2,10 @@
 @@DECODE_STATUS@@ phase=loading_model
 @@DECODE_STATUS@@ phase=warming
 @@DECODE_STATUS@@ phase=warming
+@@DECODE_STATUS@@ phase=warming
+@@DECODE_STATUS@@ phase=warming
+@@DECODE_STATUS@@ phase=measuring
+ctx   512: W   8.61ms (116.16 tok/s) | D  32.61ms (30.66 tok/s) | host-sync N/A (D slower than W) | flash
+@@DECODE_STATUS@@ phase=writing_artifact
+artifact: /home/ubuntu/worktrees/luna-tinygrad-worker-smoke/bench/14b-decode-ctx128-depth-decay-20260726/tinygrad/8b-ctx512/stage-authority.json
+@@DECODE_STATUS@@ phase=completed
