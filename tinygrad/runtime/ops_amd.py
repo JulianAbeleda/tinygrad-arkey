@@ -49,6 +49,15 @@ def _publish_aql_packet(slot:MMIOInterface, packet:bytes) -> None:
   System.memory_barrier()
   slot.view(size=4, fmt='I')[0] = header_setup
 
+def _lock_pmc_profiler(kfd_fd, gpu_id:int) -> None:
+  """Enable KFD PMC access or fail before any PMC queue programming is submitted."""
+  try:
+    kfd.AMDKFD_IOC_PROFILER(kfd_fd, op=kfd.KFD_IOC_PROFILER_PMC,
+      pmc=kfd.struct_kfd_ioctl_pmc_settings(gpu_id=gpu_id, lock=1, perfcount_enable=1))
+  except OSError as e:
+    raise RuntimeError("PMC setup failed: KFD AMDKFD_IOC_PROFILER PMC ioctl was rejected; "
+                       "disable PMC or fix the KFD profiler interface permissions/state") from e
+
 @dataclass(frozen=True)
 class ProfileSQTTEvent(ProfileEvent): device:str; kern:int; se:int; blob:bytes; itrace:bool; exec_tag:int # noqa: E702
 
@@ -893,14 +902,10 @@ class KFDIface:
     # fed by it (GRBM/GL2C/SQC + SQ instruction counters) reads zero; only SQ_BUSY_CYCLES (SQ clock
     # domain) survives. This is what ROCProfiler does to enable perfcounting.
     if not getattr(self, "_pmc_profiler_locked", False):
+      _lock_pmc_profiler(KFDIface.kfd, self.gpu_id)
       self._pmc_profiler_locked = True
-      try:
-        kfd.AMDKFD_IOC_PROFILER(KFDIface.kfd, op=kfd.KFD_IOC_PROFILER_PMC,
-          pmc=kfd.struct_kfd_ioctl_pmc_settings(gpu_id=self.gpu_id, lock=1, perfcount_enable=1))
-        atexit.register(lambda: kfd.AMDKFD_IOC_PROFILER(KFDIface.kfd, op=kfd.KFD_IOC_PROFILER_PMC,
-          pmc=kfd.struct_kfd_ioctl_pmc_settings(gpu_id=self.gpu_id, lock=0, perfcount_enable=0)))
-      except OSError as e:
-        print(f"warning: KFD PROFILER PMC ioctl failed ({e}); gfx11 perfmon clock may stay gated -> only SQ_BUSY_CYCLES will read")
+      atexit.register(lambda: kfd.AMDKFD_IOC_PROFILER(KFDIface.kfd, op=kfd.KFD_IOC_PROFILER_PMC,
+        pmc=kfd.struct_kfd_ioctl_pmc_settings(gpu_id=self.gpu_id, lock=0, perfcount_enable=0)))
 
   @functools.cached_property
   def drm_dev_info(self) -> amdgpu_drm.struct_drm_amdgpu_info_device:
