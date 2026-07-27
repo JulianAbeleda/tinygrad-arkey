@@ -1,6 +1,6 @@
 # Codebase organization audit
 
-Audited commit: `mac-first-boot-20260610-3459-g3ba50a236-dirty` (dirty: True)
+Audited commit: `mac-first-boot-20260610-3470-g1e4297bc8` (dirty: False)
 Scope: `<repository>` | manifest coverage required for: extra/qk/
 Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 68 warnings)
 
@@ -10,9 +10,9 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 68 warnings)
 
 ## Coverage
 
-- Authored: 450 files / 70093 token-bearing LOC (sz.py rules)
+- Authored: 450 files / 70105 token-bearing LOC (sz.py rules)
 - Generated (reported, never manifested): 1 files / 57 LOC
-- Manifest scope: 94 files / 13236 LOC (94 explicit records, 0 covered by group rule, 0 uncovered)
+- Manifest scope: 94 files / 13239 LOC (94 explicit records, 0 covered by group rule, 0 uncovered)
 
 ## LOC by domain
 
@@ -23,11 +23,11 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 68 warnings)
 | attention_prefill | 4 | 574 |
 | codegen_lowering | 8 | 510 |
 | evidence | 10 | 1608 |
-| measurement | 17 | 1941 |
+| measurement | 17 | 1944 |
 | quant_mmq | 18 | 2930 |
 | route_authority | 16 | 3447 |
 | search_promotion | 8 | 1007 |
-| unclassified | 356 | 56857 |
+| unclassified | 356 | 56866 |
 
 ## LOC by role
 
@@ -39,10 +39,10 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 68 warnings)
 | diagnostic | 11 | 1232 |
 | evidence | 5 | 438 |
 | execution | 9 | 1804 |
-| integration | 2 | 199 |
+| integration | 2 | 202 |
 | research | 4 | 387 |
 | test | 1 | 136 |
-| unclassified | 356 | 56857 |
+| unclassified | 356 | 56866 |
 
 ## LOC by status
 
@@ -51,11 +51,11 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 68 warnings)
 | active_research | 13 | 2285 |
 | fallback | 4 | 232 |
 | historical_one_off | 1 | 43 |
-| production | 66 | 9516 |
+| production | 66 | 9519 |
 | promoted_default | 6 | 665 |
 | refuted | 1 | 21 |
 | retained_reference | 1 | 114 |
-| unclassified | 356 | 56857 |
+| unclassified | 356 | 56866 |
 | unresolved_reproducer | 2 | 360 |
 
 ## LOC by disposition
@@ -64,8 +64,8 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 68 warnings)
 |---|---|---|
 | consolidate | 2 | 864 |
 | investigate | 2 | 256 |
-| keep | 90 | 12116 |
-| unclassified | 356 | 56857 |
+| keep | 90 | 12119 |
+| unclassified | 356 | 56866 |
 
 ## Default-path source footprint
 
@@ -121,7 +121,7 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 68 warnings)
 | 2186 | `tinygrad/renderer/isa/amd.py` | None |
 | 2141 | `tinygrad/uop/ops.py` | None |
 | 1084 | `test/unit/test_online_softmax_tile.py` | None |
-| 1067 | `tinygrad/llm/model.py` | None |
+| 1068 | `tinygrad/llm/model.py` | None |
 | 903 | `tinygrad/runtime/ops_amd.py` | None |
 | 832 | `extra/qk/mmq_q4k_q8_atom.py` | quant_mmq |
 | 794 | `test/amd/disasm.py` | None |
@@ -217,7 +217,6 @@ for human classification, not a death sentence.
 - `test/unit/test_lowering_baseline.py`
 - `test/unit/test_lowering_fingerprint.py`
 - `test/unit/test_lowering_invariants.py`
-- `test/unit/test_lowering_trace.py`
 - `test/unit/test_memory_adaptive_allocation_observer.py`
 - `test/unit/test_memory_adaptive_exact_ledger.py`
 - `test/unit/test_memory_adaptive_model_integration.py`
@@ -324,9 +323,9 @@ None.
 
 | path | class | former purpose | last campaign | replacement | commit | recovery | loc |
 |---|---|---|---|---|---|---|---|
-| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `3ba50a236c76` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
-| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `3ba50a236c76` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
-| `extra/qk/q4k_wmma_tile_lowering.py` | delete_after_verdict_capture | Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles. | q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14) | docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md | `3ba50a236c76` | git show 05b67146a -- <path> | 1138 |
+| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `1e4297bc85bf` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
+| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `1e4297bc85bf` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
+| `extra/qk/q4k_wmma_tile_lowering.py` | delete_after_verdict_capture | Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles. | q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14) | docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md | `1e4297bc85bf` | git show 05b67146a -- <path> | 1138 |
 
 ## Workflow inventory
 
@@ -359,8 +358,8 @@ None.
 
 ## Promotion budget
 
-- Budgeted (`tinygrad`, `bench`, `structure`): **34409 / 50000** -- headroom 15591
-- Against the standing 30000 target: **4409 over**. sz.py:13 records 35000 as temporary headroom; the standing target is 30000
+- Budgeted (`tinygrad`, `bench`, `structure`): **34414 / 35000** -- headroom 586
+- Against the standing 30000 target: **4414 over**. sz.py:13 records 35000 as temporary headroom; the standing target is 30000
 - Default-path LOC currently sitting unbudgeted in `extra/`: **6252**
 - Net budget cost of pending promotions (moved minus deleted): 0
 - Declarative LOC a data-file conversion would remove from the budget entirely: 0

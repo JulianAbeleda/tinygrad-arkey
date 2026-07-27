@@ -318,9 +318,9 @@
     }
   ],
   "audited_commit": {
-    "commit": "3ba50a236c763ca86d2480df909878d14a3868f1",
-    "described": "mac-first-boot-20260610-3459-g3ba50a236-dirty",
-    "dirty": true
+    "commit": "1e4297bc85bf61ac054c789bb6b9a69ae15750f3",
+    "described": "mac-first-boot-20260610-3470-g1e4297bc8",
+    "dirty": false
   },
   "authority_keys": {
     "AMD_BACKEND_ATOM_ID": [
@@ -857,13 +857,13 @@
   },
   "coverage": {
     "authored_files": 450,
-    "authored_loc": 70093,
+    "authored_loc": 70105,
     "explicit_records": 94,
     "generated_files": 1,
     "generated_loc": 57,
     "group_covered": 0,
     "manifest_scope_files": 94,
-    "manifest_scope_loc": 13236,
+    "manifest_scope_loc": 13239,
     "uncovered": []
   },
   "coverage_limitations": [
@@ -4326,7 +4326,6 @@
       "test/unit/test_lowering_baseline.py",
       "test/unit/test_lowering_fingerprint.py",
       "test/unit/test_lowering_invariants.py",
-      "test/unit/test_lowering_trace.py",
       "test/unit/test_memory_adaptive_allocation_observer.py",
       "test/unit/test_memory_adaptive_exact_ledger.py",
       "test/unit/test_memory_adaptive_model_integration.py",
@@ -4950,7 +4949,7 @@
     },
     {
       "domain": null,
-      "loc": 1067,
+      "loc": 1068,
       "path": "tinygrad/llm/model.py"
     },
     {
@@ -5046,11 +5045,11 @@
       },
       "keep": {
         "files": 90,
-        "loc": 12116
+        "loc": 12119
       },
       "unclassified": {
         "files": 356,
-        "loc": 56857
+        "loc": 56866
       }
     },
     "domain": {
@@ -5076,7 +5075,7 @@
       },
       "measurement": {
         "files": 17,
-        "loc": 1941
+        "loc": 1944
       },
       "quant_mmq": {
         "files": 18,
@@ -5092,7 +5091,7 @@
       },
       "unclassified": {
         "files": 356,
-        "loc": 56857
+        "loc": 56866
       }
     },
     "role": {
@@ -5122,7 +5121,7 @@
       },
       "integration": {
         "files": 2,
-        "loc": 199
+        "loc": 202
       },
       "research": {
         "files": 4,
@@ -5134,7 +5133,7 @@
       },
       "unclassified": {
         "files": 356,
-        "loc": 56857
+        "loc": 56866
       }
     },
     "status": {
@@ -5152,7 +5151,7 @@
       },
       "production": {
         "files": 66,
-        "loc": 9516
+        "loc": 9519
       },
       "promoted_default": {
         "files": 6,
@@ -5168,7 +5167,7 @@
       },
       "unclassified": {
         "files": 356,
-        "loc": 56857
+        "loc": 56866
       },
       "unresolved_reproducer": {
         "files": 2,
@@ -5204,15 +5203,19 @@
   ],
   "non_import_references": {
     "extra/audit/codebase_organization_audit.py": [
+      "docs/lowering-refactor-handoff-20260726.md",
       "docs/task_workflow/input/codebase-organization-audit-task.md",
       "docs/task_workflow/output/codebase-organization-audit-report.md",
       "test/unit/test_codebase_organization_audit.py"
     ],
     "extra/audit/flash_variant_fingerprint.py": [
+      "bench/flash-variant-fingerprint/latest.json",
       "test/unit/test_flash_variant_fingerprint.py"
     ],
     "extra/audit/lowering_baseline.py": [
       "bench/lowering-refactor-baseline/latest.json",
+      "docs/14b-phase0-contamination-notice-20260726.md",
+      "docs/lowering-refactor-handoff-20260726.md",
       "docs/lowering-refactor-phase0-findings-20260726.md",
       "extra/audit/flash_variant_fingerprint.py",
       "extra/qk/amd_resource_artifact.py",
@@ -5222,6 +5225,7 @@
     ],
     "extra/audit/lowering_fingerprint.py": [
       "bench/lowering-cpu-fingerprint/latest.json",
+      "docs/lowering-refactor-handoff-20260726.md",
       "test/unit/test_lowering_fingerprint.py"
     ],
     "extra/audit/pure_machine_search_default_path_census.py": [
@@ -5319,6 +5323,7 @@
     ],
     "extra/qk/amd_resource_artifact.py": [
       "bench/lowering-refactor-baseline/pass_inventory.json",
+      "docs/14b-phase0-contamination-notice-20260726.md",
       "extra/audit/lowering_baseline.py",
       "extra/qk/prefill/pure_register_compile_capture.py",
       "extra/qk/prefill/pure_register_evaluation_gate.py",
@@ -5354,6 +5359,7 @@
       "docs/14b-direct-packed-prefill-authority-baseline-20260710.md",
       "docs/decode-regression-debug-scope-20260725.md",
       "docs/harness-consolidation.md",
+      "docs/lowering-refactor-e2e-validation-20260726.md",
       "docs/measurement-regime-audit-llama-prefill-20260715.md",
       "docs/non-fitting-prefill-foundation-performance-prune-scope-20260716.md",
       "docs/shared-flash-codex-M6-M8-evidence-path-20260722.md",
@@ -5845,6 +5851,7 @@
       "bench/pure-machine-search-default-path-census/latest.json",
       "bench/pure-machine-search-default-path-census/summary.md",
       "bench/qk-search-spaces/default_route_manifest.json",
+      "docs/lowering-refactor-e2e-validation-20260726.md",
       "docs/packed-wmma-14b-machine-search-claim-scope-20260725.md",
       "docs/packed-wmma-14b-promotion-evidence-20260725.json",
       "docs/prefill-R-theories-scope-20260724.md",
@@ -5934,6 +5941,7 @@
       "docs/attention-harness-centralization-scope-20260724.md",
       "docs/flash-prefill-wmma-mvp-scope-20260721.md",
       "docs/harness-consolidation.md",
+      "docs/lowering-refactor-e2e-validation-20260726.md",
       "docs/lowering-refactor-phase0-findings-20260726.md",
       "docs/measurement-regime-audit-llama-prefill-20260715.md",
       "docs/non-fitting-prefill-foundation-performance-prune-scope-20260716.md",
@@ -6284,6 +6292,9 @@
     "test/unit/test_logits_only_reg_store.py": [
       "bench/lowering-refactor-baseline/pass_inventory.json",
       "docs/HANDOFF_logits_only_store_codegen_bug_20260724.md"
+    ],
+    "test/unit/test_lowering_trace.py": [
+      "docs/14b-phase0-contamination-notice-20260726.md"
     ],
     "test/unit/test_measurement_authority.py": [
       "docs/decode-fix-and-fault-scope-20260726.md",
@@ -7803,6 +7814,7 @@
     ],
     "tinygrad/uop/ops.py": [
       "bench/lowering-refactor-baseline/pass_inventory.json",
+      "docs/14b-phase0-contamination-notice-20260726.md",
       "docs/HANDOFF_fused_attention_enablement_20260723.md",
       "docs/SHARED_ATTENTION_COMPILER_PHASE_ABI_SCOPE_20260723.md",
       "docs/amd-fp16-dequant-q4k-build-progress-20260720.md",
@@ -7812,11 +7824,13 @@
       "docs/flash-multi-output-reduce-scope-deepseek-20260722.md",
       "docs/flash-prefill-wmma-mvp-scope-20260721.md",
       "docs/flash-scheduler-extension-scope-deepseek-20260722.md",
+      "docs/lowering-refactor-handoff-20260726.md",
       "docs/prefill-R-theories-scope-20260724.md",
       "docs/shared-attention-fused-enablement-scope-A-20260723.md",
       "docs/shared-flash-attention-rotating-pv-primitive-results-20260723.md",
       "docs/shared-flash-prefill-rewrite-handoff-20260723.md",
       "docs/shared-flash-scoped-reduce-completion-scope-20260722.md",
+      "docs/task_workflow/input/production-development-workflow-scope-20260726.md",
       "extra/audit/flash_variant_fingerprint.py",
       "extra/audit/lowering_baseline.py",
       "extra/audit/lowering_fingerprint.py",
@@ -8046,7 +8060,9 @@
       "tinygrad/uop/ops.py"
     ],
     "tinygrad/uop/trace.py": [
+      "docs/14b-phase0-contamination-notice-20260726.md",
       "docs/lowering-refactor-cut-list-20260726.md",
+      "docs/lowering-refactor-handoff-20260726.md",
       "test/unit/test_codegen_cache_key_gates.py"
     ],
     "tinygrad/uop/upat.py": [
@@ -8097,14 +8113,14 @@
     ]
   },
   "promotion_budget": {
-    "budgeted_after_pending_promotions": 34409,
-    "budgeted_loc": 34409,
-    "cap": 50000,
+    "budgeted_after_pending_promotions": 34414,
+    "budgeted_loc": 34414,
+    "cap": 35000,
     "data_file_convertible_loc": 0,
-    "headroom": 15591,
+    "headroom": 586,
     "intended_cap": 30000,
     "intended_cap_note": "sz.py:13 records 35000 as temporary headroom; the standing target is 30000",
-    "over_intended_cap": 4409,
+    "over_intended_cap": 4414,
     "pending_promotion_net_cost": 0,
     "unbudgeted_default_path_loc": 6252
   },
