@@ -104,3 +104,46 @@ manifest before deleting; `codebase_organization_audit.py` will fail on a stale 
 4. Re-run GPU e2e and compare against step 1 — not against remembered numbers.
 5. Re-decide `sz.py`. After Tier 1 the branch is under 35,000 and the 50,000 cap can drop back rather than being
    inherited by a merge.
+
+---
+
+# Part 2 — decoupling levers: what one small edit unlocks
+
+Symbol-level liveness over all of `tinygrad/` (excluding `autogen/`), counting a symbol live if referenced from
+outside its own definition, in any `.py` in the tree. Two analysis traps worth recording, because both produced a
+wrong first answer here:
+
+* **Recursion looks like death.** A function whose only callers are inside its own body (`_remat_lds_load_addr`,
+  `renderer/isa/amd.py:899-916`, five self-calls at 902-914) is invisible to a naive "referenced elsewhere in the
+  module?" check. It happens to be genuinely dead — nothing external calls it — but it had to be confirmed by
+  reading the line ranges, not by the count.
+* **Symbol count is not line count.** `kernel_pipeline.py` has 14 test-only symbols, which suggested a large win.
+  Measured, it is 111 lines: most of those dataclasses are referenced internally by live functions and must stay.
+
+## Levers, by what the edit unlocks
+
+| # | decouple this | unlocks | lines |
+|---|---|---|---|
+| 1 | retire the 4 resurrected test files (Part 1, Tier 3) | `build_scheduler_output_tile_owner`, `build_scheduler_output_tile_loop`, `build_dot_update_recurrence`, `prove_hierarchical_lifecycle` in `codegen/opt/kernel_pipeline.py` — their ONLY callers are those tests | 111 core + 322 test |
+| 2 | move `BufferizeOpts` (~10 lines) back to `schedule/indexing.py` | the whole of `schedule/buffer_plan.py` | 133 |
+| 3 | delete `llm/kernel_specs.py` | `TargetCapabilities` in `codegen/plan.py` — its only prod consumer is that module | 36 |
+| 4 | nothing — already unreferenced | `_pack_b_tilekey_lds_stores`, `_pack_withlocal_lds_stores`, `_dbuf_d3a_probe_marker`, `_remat_lds_load_addr` (`renderer/isa/amd.py`); `wait_count_for_dependency`, `amdllvm_wait_dependency`, `pipeline_policy_for_route` (`codegen/opt/compiler_policies.py`) | ~108 |
+
+Lever 2 is the best ratio in the audit: one ~10-line dataclass holds a 133-line otherwise-inert module alive.
+
+## Deliberately excluded — upstream divergence, not refactor cleanup
+
+`nn/__init__.py` (`GroupNorm` 29, `InstanceNorm` 25, `LSTMCell` 23, `ConvTranspose1d` 18) and `nn/state.py`
+(`torch_load` 92, `safe_save` 21) have zero references in this fork — but they are documented upstream public API
+(`docs/nn.md:9,10,15,32`). This fork is LLM-inference-only, so they are plausibly dead weight; removing them is a
+decision to diverge from upstream and should be taken as that, separately, not folded into a refactor cleanup.
+242 lines, left in place.
+
+## Combined effect
+
+Part 1 Tiers 1-2 (~1,237) plus the levers above (~388, excluding overlap already counted) lands the branch near
+**33,600 budgeted lines** — below master's 34,313 — which is what lets `sz.py`'s 50,000 drop back at merge rather
+than be inherited.
+
+Each tier is landed as its own commit so that if the GPU e2e run later shows a regression, it is bisectable
+rather than one undifferentiated cut.
