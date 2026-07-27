@@ -8,6 +8,37 @@ tinygrad is a small deep learning framework by George Hotz that lowers tensor op
 
 The main idea is still kernel search, but the bar is strict: a route only becomes default after it is correct, structurally route-bound, fail-closed outside its admitted shapes, and fast enough under the authority harness. The hot decode/prefill routes are generated or descriptor-driven. Fallback availability is shape-specific; an unsafe requested fallback fails loudly rather than pretending to be a rollback.
 
+## Why this is machine search even though the runtime is static
+
+The search happens **offline**, not while a model is serving tokens. BoltBeam and the
+BubbleBeam/Futuresight path expand structured kernel candidates, ask tinygrad to lower them, and use
+correctness, route-attribution, resource, and measured-speed gates to reject or promote each result. The
+promoted candidate is then frozen as a descriptor, schedule, or generated UOp lowering in this repository.
+
+```text
+model + target facts
+  -> structured candidate grammar
+  -> machine-expanded candidate set
+  -> tinygrad lowering and compilation
+  -> correctness + attribution + performance gates
+  -> promoted candidate frozen into a deterministic route
+  -> normal tinygrad compilation and cached GPU execution
+```
+
+Freezing the winner is deliberate. It makes a regression attributable, keeps the exact generated program
+inspectable, avoids search and benchmark noise during startup, and provides a stable rollback target. Static
+deployment does not make the discovery manual: the candidate provenance and measured selection process are
+what make it machine search.
+
+At runtime there is no claim of unrestricted program synthesis or continuous autotuning. Model execution
+selects an already promoted route, reconstructs its UOp kernel, and hands it to tinygrad's normal
+codegen/renderer/compiler path. The resulting cached GPU binary is the repeated hot path. Some generated
+route surfaces currently live under `extra/qk` so their provenance and debugging artifacts remain explicit;
+production route adapters may import them while constructing the kernel, but the offline search itself is not
+rerun for inference.
+
+In short: **machine-searched offline, statically promoted, compiled by tinygrad, deterministic at runtime.**
+
 ## How it differs from upstream tinygrad
 
 * **Hardware:** AMD only, currently gfx1100 / RX 7900 XTX.
