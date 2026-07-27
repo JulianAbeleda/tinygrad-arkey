@@ -1,6 +1,5 @@
 from typing import cast
 import inspect
-import os
 from dataclasses import replace
 import itertools
 from tinygrad.helpers import DISABLE_FAST_IDIV, TRANSCENDENTAL, SPEC, DEBUG, VIZ, IMAGE, NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, getenv
@@ -75,6 +74,16 @@ pm_remove_vec_dtypes = PatternMatcher([
 ])+pm_clean_up_group_sink
 
 def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
+  # LR-011: name the stage so stage-scoped invariants can fire. Everything below this point is the codegen stage;
+  # a CONTIGUOUS still carrying schedule hints here is the AttributeError documented in uop/invariants.py.
+  from tinygrad.uop import invariants as _inv
+  _prev_stage = _inv.set_stage("codegen") if _inv.ENABLED else None
+  try:
+    return _full_rewrite_to_sink(ast, ren, optimize)
+  finally:
+    if _inv.ENABLED: _inv.set_stage(_prev_stage)
+
+def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   if VIZ: graph_rewrite(ast, PatternMatcher([]), name="View Base AST")
   if DEBUG >= 5: print(pyrender(ast))
   if (_u:=getenv("SCHED_UNROLL")) > 1 and ren.target.device == "AMD":

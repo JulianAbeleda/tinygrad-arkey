@@ -15,8 +15,8 @@ Contract:
     that asks for them.
   * SUBPROCESS-SAFE. Events are appended to the JSONL path with the pid recorded, so a trace taken in a child
     process (which is how this repo measures anything) is complete on its own.
-  * The gate snapshot is part of the trace. 36 of 93 passes are env-gated, so a trace without the effective gate
-    values cannot explain a result from another machine.
+  * The gate snapshot is part of the trace. 65 of the 93 registry descriptors carry at least one env flag (76
+    distinct flags), so a trace without the effective gate values cannot explain a result from another machine.
 """
 from __future__ import annotations
 import json, os, time
@@ -34,16 +34,18 @@ LOWERING_GATES: tuple[tuple[str, str], ...] = (
   ("MAX_KERNEL_BUFFERS", "0"), ("NO_MEMORY_PLANNER", "0"), ("SCACHE", "1"), ("LOWER_DISK_CACHE", "0"),
 )
 
-# HISTORICAL. These three gates change generated code and were once absent from the `to_program` cache key, so
-# flipping one in-process returned the program lowered under the OTHER setting. They are all in the key now: LR-051
-# derived its gate suffix from PLAN_GATES, which contains all three. The name of this tuple has been wrong since
-# then and is kept only because the per-gate provenance comments below are still the best record of WHERE each one
-# takes effect.
+# HISTORICAL NAME, NARROWER FACT THAN IT SUGGESTS. These three gates change generated code and were once absent
+# from the `to_program` cache key; LR-051 put them in it, and LR-019 made the key read what the passes actually see
+# rather than os.environ. The tuple is kept only because the per-gate provenance comments below are still the best
+# record of WHERE each one takes effect.
 #
-# Do not read this as "still missing from the key" -- test_lowering_gates_are_in_the_cache_key asserts the opposite.
-# The residual in-process hazard is different and lives in LR-019: `getenv` is @functools.cache'd, so a gate flipped
-# after first read never reaches the pass regardless of what the cache key says. That is why the key is built from
-# tinygrad.codegen.plan.observed_gate_values() rather than os.environ.
+# An earlier revision of this comment declared the gap CLOSED and added a test pinning that label. That was wrong,
+# and wrong in a way worth naming: deriving the cache key from PLAN_GATES removes one hand-maintained list only if
+# PLAN_GATES is itself complete, and it was not -- ALLOW_HALF8, EXPAND_SSA, SCHED_MODULO, THREADS, ALIGNED,
+# DEVECTORIZE_NO_PTR_GROUP, the MV_* family and two REGALLOC_ADDR_REMAT_* variants all changed generated code and
+# were all missing. They are in PLAN_GATES now, and completeness is no longer a claim in a comment:
+# test_no_codegen_gate_is_missing_from_the_inventory walks tinygrad/{codegen,renderer} and fails on any getenv gate
+# that is neither in PLAN_GATES nor on an explicit, reasoned exclusion list.
 LOWERING_GATES_NOT_IN_CACHE_KEY: tuple[str, ...] = (
   "PREFILL_SOFTMAX_REDUCE_FUSE",   # tinygrad/renderer/cstyle.py:126,385 -- gates fusion in emitted source
   "UNSAFE_DISABLE_MASK",           # tinygrad/codegen/late/devectorizer.py:76 -- rewrites the graph

@@ -80,7 +80,21 @@ def check_graph(sink, *, stage: str | None = None) -> list[str]:
   except Exception as e: return [f"graph is not walkable: {type(e).__name__}: {e}"]
   return _check_op_and_dtype(nodes) + _check_hinted_contiguous(nodes, stage) + _check_local_addrspace(nodes)
 
+# The lowering stage currently executing, set by the one caller that knows it (full_rewrite_to_sink). Stage-scoped
+# checks need this: _check_hinted_contiguous is only a violation AFTER rangeify has had its chance to consume the
+# hint, and graph_rewrite's hook cannot tell where in the pipeline it is. An earlier version defaulted stage to None
+# at the live hook, which meant the one check with a documented, specific hazard could never fire outside its own
+# unit test -- a checker whose best example was dead.
+_STAGE: str | None = None
+
+def set_stage(stage: str | None) -> str | None:
+  """Set the current stage, returning the previous one so callers can restore it. No-op cost when disabled."""
+  global _STAGE
+  prev, _STAGE = _STAGE, stage
+  return prev
+
 def check_pass(pass_name: str | None, sink, *, stage: str | None = None) -> None:
   """Hook body. Raises PassInvariantError naming the pass that produced the invalid graph."""
   if not ENABLED: return
-  if violations := check_graph(sink, stage=stage): raise PassInvariantError(pass_name or "<unnamed>", violations)
+  if violations := check_graph(sink, stage=_STAGE if stage is None else stage):
+    raise PassInvariantError(pass_name or "<unnamed>", violations)

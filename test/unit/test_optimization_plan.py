@@ -229,10 +229,13 @@ def test_gate_readers_match_the_real_call_sites():
   """
   import pathlib, re
   from tinygrad.codegen.plan import GATE_READERS
-  root = pathlib.Path(ROOT) / "tinygrad"
+  # Scans extra/qk as well as tinygrad/: those builders construct ASTs that feed to_program, so a gate read there
+  # is as load-bearing as one read in codegen. An earlier version scanned tinygrad/ only, which let
+  # DECODE_FAST_EXP2 be recorded as having no reader while extra/qk/flash_common.py:15 read it.
+  roots = [pathlib.Path(ROOT) / "tinygrad", pathlib.Path(ROOT) / "extra" / "qk"]
   for name, reader in GATE_READERS.items():
     getenv_defaults, ctxvar = set(), False
-    for p in root.rglob("*.py"):
+    for p in [f for r in roots for f in r.rglob("*.py")]:
       if p.name in ("plan.py", "trace.py"): continue
       text = p.read_text()
       for m in re.finditer(r'getenv\(\s*"' + re.escape(name) + r'"\s*(?:,\s*([^)]*))?\)', text):
@@ -288,15 +291,50 @@ def test_the_cache_key_no_longer_moves_without_the_program_moving():
     os.environ.pop("UNSAFE_DISABLE_MASK", None)
 
 
-def test_lowering_gates_are_in_the_cache_key():
-  """trace.py's LOWERING_GATES_NOT_IN_CACHE_KEY is historical; its name is now the opposite of the truth."""
-  from tinygrad.uop.trace import LOWERING_GATES_NOT_IN_CACHE_KEY
-  assert set(LOWERING_GATES_NOT_IN_CACHE_KEY) <= {n for n, _ in PLAN_GATES}
+# ---------------------------------------------------- LR-019b: the inventory must not fall behind the tree ----
+
+# Gates read inside codegen/renderer that are deliberately NOT in PLAN_GATES, each with the reason it cannot
+# change a compiled program. This list is the whole escape hatch: anything not here and not in PLAN_GATES fails.
+_NOT_IN_KEY_DEBUG = {          # emit logs/telemetry only; do not alter the graph or the emitted source
+  "COALESCED_LOAD_DEBUG", "DEBUG_LINEARIZE", "NOSKIP", "SCHED_LIST_REPORT", "SCHED_MODULO_PROBE", "SQTT_EVENT",
+  "REGALLOC_DEBUG", "REGALLOC_DEBUG_DETAIL", "REGALLOC_DEBUG_END_DETAIL", "REGALLOC_DEBUG_LOOP_LIVE",
+  "REGALLOC_DEBUG_NOSPILL", "REGALLOC_DEBUG_PRESSURE", "REGALLOC_DEBUG_REMAT", "REGALLOC_DEBUG_REMAT_LIMIT",
+  "REGALLOC_DEBUG_SPILLS", "REGALLOC_DEBUG_WINDOW", "REGALLOC_DEBUG_WINDOW_CENTER",
+}
+_NOT_IN_KEY_OTHER = {
+  "LOWER_DISK_CACHE",          # selects the caching mechanism itself; cannot be part of its own key
+}
 
 
-def test_decode_fast_exp2_has_no_reader_and_says_so():
-  """Kept in the inventory rather than deleted: the record that someone believed this gated lowering is worth more
-  than the line it costs. If a reader ever appears, GATE_READERS must be updated deliberately."""
-  from tinygrad.codegen.plan import GATE_READERS, observed_gate_value
-  assert GATE_READERS["DECODE_FAST_EXP2"] == ("none",)
-  assert observed_gate_value("DECODE_FAST_EXP2") is None
+def test_no_codegen_gate_is_missing_from_the_inventory():
+  """Every getenv gate in codegen/renderer is in PLAN_GATES or explicitly excused.
+
+  This is the test that was missing when LOWERING_GATES_NOT_IN_CACHE_KEY got relabelled "historical". Deriving
+  the cache key from PLAN_GATES removes one hand-maintained list only if PLAN_GATES is itself complete; without
+  this, it silently swaps one incomplete list for another. Scoped to codegen/renderer because that is
+  do_to_program's territory -- scheduler-stage gates run before it and are already captured by `ast.key`, which
+  is the first element of the key.
+  """
+  import pathlib, re
+  plan = {n for n, _ in PLAN_GATES}
+  found: dict[str, str] = {}
+  for d in ("tinygrad/codegen", "tinygrad/renderer"):
+    for p in (pathlib.Path(ROOT) / d).rglob("*.py"):
+      if p.name == "plan.py": continue
+      for m in re.finditer(r'getenv\(\s*"([A-Z][A-Z0-9_]*)"', p.read_text()):
+        found.setdefault(m.group(1), str(p.relative_to(ROOT)))
+  missing = {g: f for g, f in found.items() if g not in plan and g not in _NOT_IN_KEY_DEBUG and g not in _NOT_IN_KEY_OTHER}
+  assert missing == {}, (
+    "gates read during codegen but absent from PLAN_GATES and not excused: "
+    + ", ".join(f"{g} ({f})" for g, f in sorted(missing.items()))
+    + ". Add to PLAN_GATES + GATE_READERS, or excuse it with a reason it cannot change a compiled program.")
+
+
+def test_the_excuse_lists_are_not_a_dumping_ground():
+  """Every excused gate must still exist. A stale name here is a slot where a real gate could hide."""
+  import pathlib, re
+  src = "\n".join(p.read_text() for d in ("tinygrad/codegen", "tinygrad/renderer")
+                  for p in (pathlib.Path(ROOT) / d).rglob("*.py"))
+  live = set(re.findall(r'getenv\(\s*"([A-Z][A-Z0-9_]*)"', src))
+  stale = (_NOT_IN_KEY_DEBUG | _NOT_IN_KEY_OTHER) - live
+  assert stale == set(), f"excused gates that no longer exist: {sorted(stale)}"
