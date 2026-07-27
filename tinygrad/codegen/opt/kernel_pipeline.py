@@ -484,36 +484,6 @@ def prove_dot_update_recurrence(graph: DotUpdateRecurrenceGraph[AttachmentT]) ->
   if any(update not in topo for update in recorded_updates): errors.append("an update is detached from the recurrence sink")
   return DotUpdateRecurrenceProof(not errors, tuple(errors), len(actual_dots), len(recorded_updates))
 
-def build_dot_update_recurrence(plan: DotUpdateRecurrencePlan, initial_persistent: UOp,
-                                attachments: tuple[DotUpdateAttachment[AttachmentT], ...],
-                                dot: Callable[[DotUpdateGroupContext, int, UOp], UOp],
-                                update: Callable[[DotUpdateGroupContext, UOp, UOp, DotUpdateAttachment[AttachmentT]], UOp],
-                                *, verify: bool = True) -> DotUpdateRecurrenceGraph[AttachmentT]:
-  """Build zero -> dot chain -> immediate persistent update for every planned group."""
-  if not isinstance(plan, DotUpdateRecurrencePlan): raise TypeError("expected DotUpdateRecurrencePlan")
-  if initial_persistent.dtype != plan.persistent_dtype: raise ValueError("initial persistent accumulator dtype drift")
-  if not isinstance(attachments, tuple) or len(attachments) != plan.group_count or \
-     any(not isinstance(x, DotUpdateAttachment) for x in attachments):
-    raise ValueError(f"attachments must contain exactly {plan.group_count} typed sidecars")
-  if not callable(dot) or not callable(update): raise TypeError("dot and update callbacks must be callable")
-  persistent, records = initial_persistent, []
-  for ordinal, attachment in enumerate(attachments):
-    phase, group = divmod(ordinal, plan.groups_per_phase)
-    context = DotUpdateGroupContext(phase, group, ordinal, None if ordinal == 0 else persistent)
-    dot_zero, dot_results = UOp(Ops.NOOP, plan.dot_dtype, (UOp.const(plan.dot_dtype, 0),), ("dot_zero", ordinal)), []
-    dot_acc = dot_zero
-    for substep in range(plan.dot_substeps):
-      dot_acc = dot(context, substep, dot_acc)
-      if not isinstance(dot_acc, UOp): raise TypeError("dot callback must return a UOp")
-      dot_results.append(dot_acc)
-    updated = update(context, persistent, dot_acc, attachment)
-    if not isinstance(updated, UOp): raise TypeError("update callback must return a UOp")
-    records.append(DotUpdateGroupRecord(context, dot_zero, tuple(dot_results), persistent, attachment, updated))
-    persistent = updated
-  graph = DotUpdateRecurrenceGraph(plan, initial_persistent, tuple(records), persistent, UOp.sink(persistent))
-  if verify and not (proof := prove_dot_update_recurrence(graph)).passed:
-    raise ValueError("invalid dot/update recurrence: " + "; ".join(proof.errors))
-  return graph
 
 @dataclass(frozen=True)
 class HierarchicalPipelineRole:
@@ -579,30 +549,6 @@ def hierarchical_lifecycle_events(plan: HierarchicalKernelPipelinePlan) -> tuple
   events.append(HierarchicalLifecycleEvent("release", plan.persistent.name, None))
   return tuple(events)
 
-def prove_hierarchical_lifecycle(plan: HierarchicalKernelPipelinePlan,
-                                 events: tuple[HierarchicalLifecycleEvent, ...]) -> HierarchicalLifecycleProof:
-  """Fail-closed proof of the exact two-level role lifetime and barrier protocol."""
-  if not isinstance(plan, HierarchicalKernelPipelinePlan): raise TypeError("expected HierarchicalKernelPipelinePlan")
-  errors: list[str] = []
-  if not isinstance(events, tuple): errors.append("events must be an immutable tuple")
-  actual = events if isinstance(events, tuple) else tuple(events)
-  expected = hierarchical_lifecycle_events(plan)
-  for index in range(max(len(actual), len(expected))):
-    if index >= len(actual): errors.append(f"event {index}: missing {expected[index].op} for role {expected[index].role}")
-    elif index >= len(expected): errors.append(f"event {index}: unexpected extra event {actual[index]!r}")
-    elif not isinstance(actual[index], HierarchicalLifecycleEvent): errors.append(f"event {index}: wrong event type")
-    elif actual[index] != expected[index]:
-      want, got = expected[index], actual[index]
-      errors.append(f"event {index}: expected {want.op} role {want.role} phase {want.phase}, got {got.op} role {got.role} phase {got.phase}")
-
-  produced = tuple((event.role, event.phase) for event in actual
-                   if isinstance(event, HierarchicalLifecycleEvent) and event.op == "produce")
-  consumed = tuple((event.role, event.phase) for event in actual
-                   if isinstance(event, HierarchicalLifecycleEvent) and event.op == "consume" and event.phase is not None)
-  barriers = tuple((event.op, event.phase) for event in actual
-                   if isinstance(event, HierarchicalLifecycleEvent) and event.op in ("publish", "release") and
-                   event.role == plan.overwriteable.name and event.phase is not None)
-  return HierarchicalLifecycleProof(not errors, tuple(errors), produced, consumed, barriers)
 
 @dataclass(frozen=True)
 class SchedulerOutputTileLoop:
@@ -642,62 +588,3 @@ class SchedulerOutputTileIndices:
   m: UOp
   n: UOp
   group: UOp
-
-def build_scheduler_output_tile_owner(m_plan: SchedulerOutputTileLoop, n_plan: SchedulerOutputTileLoop,
-                                      group_plan: SchedulerOutputTileLoop,
-                                      owner: Callable[[SchedulerOutputTileIndices], UOp]) -> UOp:
-  """Lower one real M/N/group owner, without host-side tile replication.
-
-  The callback must construct the complete producer graph from these RANGE
-  values.  This deliberately admits only memory/WMMA owners: a marker graph
-  can no longer make the scheduler-loop contract appear implemented.
-  """
-  plans = (m_plan, n_plan, group_plan)
-  if any(not isinstance(x, SchedulerOutputTileLoop) for x in plans):
-    raise TypeError("scheduler output tile plans must be SchedulerOutputTileLoop instances")
-  if not callable(owner): raise TypeError("scheduler output tile owner must be callable")
-  ranges = tuple(UOp.range(p.tile_count, p.loop_id, AxisType.LOOP) for p in plans)
-  value = owner(SchedulerOutputTileIndices(*ranges))
-  if not isinstance(value, UOp): raise TypeError("scheduler output tile owner must return a UOp")
-  nodes = value.toposort()
-  effects = tuple(x for x in nodes if x.op in (Ops.LOAD, Ops.STORE, Ops.WMMA))
-  if not effects:
-    raise ValueError("scheduler output tile owner must lower tensor loads, WMMA, or stores")
-  for axis in ranges:
-    if not any(axis in x.backward_slice_with_self for x in effects):
-      raise ValueError(f"scheduler output tile index {axis.arg[0]} is detached from owner effects")
-  # Every dynamic INDEX must be rooted in the supplied owner axes or in a
-  # compile-time constant.  Silently accepting another RANGE would place
-  # addressing outside the scheduler's ownership proof.
-  allowed = set(ranges)
-  for idx in (x for x in nodes if x.op is Ops.INDEX):
-    dynamic = idx.src[1:]
-    if any(y.op is not Ops.CONST and not (y.ranges.keys() <= allowed) for y in dynamic):
-      raise ValueError("unsupported dynamic indexing outside scheduler tile ownership")
-  body = value
-  for axis in reversed(ranges):
-    body = body if axis in body.ended_ranges else body.end(axis)
-  return UOp.sink(body)
-
-def build_scheduler_output_tile_loop(plan: SchedulerOutputTileLoop,
-                                     owner: Callable[[UOp], UOp]) -> UOp:
-  """Build one symbolic loop that owns all output tiles.
-
-  This is intentionally effect-transparent: producer readiness and barriers
-  remain dependencies of the owner's returned UOp, including packed-Q4
-  producer contracts.  The loop only supplies output ownership and therefore
-  cannot widen WMMA residency as ``tile_count`` grows.
-  """
-  if not isinstance(plan, SchedulerOutputTileLoop): raise TypeError("expected SchedulerOutputTileLoop")
-  tile = UOp.range(plan.tile_count, plan.loop_id, AxisType.LOOP)
-  value = owner(tile)
-  if not isinstance(value, UOp): raise TypeError("output tile owner must return a UOp")
-  # RANGE being merely a data dependency is not enough: postrange/linearize
-  # only emits a loop when an effectful body is closed with END(range).  Close
-  # the owner seam here, after the callback has built its complete dependency
-  # graph.  In particular this keeps readiness barriers and packed-Q4 loads in
-  # the body slice instead of accidentally making them host-side prerequisites.
-  # ``end`` is deliberately applied to the callback result (rather than to
-  # individual stores): producer graphs may contain several stores and their
-  # sibling ordering must remain owned by the callback.
-  return UOp.sink(value if tile in value.ended_ranges else value.end(tile))

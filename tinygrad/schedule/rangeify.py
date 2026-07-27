@@ -462,7 +462,6 @@ earliest_rewrites = mop_cleanup+PatternMatcher([
 # *****************
 # 3.5 cleanups
 
-from tinygrad.schedule import plan as _realize_plan  # LR-030; inert unless REALIZE_PLAN is set
 ALWAYS_RUN_OPS = {Ops.CONTIGUOUS, Ops.COPY, Ops.NOOP}
 
 # you don't know in the first pass if axes are going to die, this happens if there's an EXPAND to the left
@@ -545,10 +544,6 @@ def remove_bufferize(src:UOp, buf:UOp, idx:UOp):
 
   # if it's user contiguous, we never remove it
   if src.op in ALWAYS_RUN_OPS or not buf.arg.removable:
-    if _realize_plan.ENABLED:
-      _realize_plan.record(src.key.hex()[:12], True,
-                           _realize_plan.FORCED_ALWAYS_RUN if src.op in ALWAYS_RUN_OPS
-                           else _realize_plan.FORCED_NOT_REMOVABLE)
     return None
 
   # COST GATE (2026-07-26, revised): do not duplicate an expensive producer across a low-parallelism
@@ -579,11 +574,6 @@ def remove_bufferize(src:UOp, buf:UOp, idx:UOp):
     if pt is not None:
       parallel, trip = pt
       if trip >= _MIN_RECOMPUTE_TRIP and parallel <= _MAX_HIDDEN_PARALLELISM:
-        if _realize_plan.ENABLED:
-          _realize_plan.record(src.key.hex()[:12], True, _realize_plan.FORCED_RECOMPUTE_HOSTILE,
-                               parallelism=parallel, trip=trip,
-                               hostile_ops=tuple(sorted({u.op.name for u in src.toposort()
-                                                         if u.op in _RECOMPUTE_HOSTILE_OPS})))
         return None
 
   # *** here is where we compute the cost ***

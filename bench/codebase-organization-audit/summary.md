@@ -1,6 +1,6 @@
 # Codebase organization audit
 
-Audited commit: `mac-first-boot-20260610-3457-g5ce3970b4-dirty` (dirty: True)
+Audited commit: `mac-first-boot-20260610-3458-gc9b9ce929-dirty` (dirty: True)
 Scope: `<repository>` | manifest coverage required for: extra/qk/
 Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 68 warnings)
 
@@ -10,7 +10,7 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 68 warnings)
 
 ## Coverage
 
-- Authored: 459 files / 70861 token-bearing LOC (sz.py rules)
+- Authored: 452 files / 70210 token-bearing LOC (sz.py rules)
 - Generated (reported, never manifested): 1 files / 57 LOC
 - Manifest scope: 96 files / 13241 LOC (96 explicit records, 0 covered by group rule, 0 uncovered)
 
@@ -27,7 +27,7 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 68 warnings)
 | quant_mmq | 18 | 2930 |
 | route_authority | 16 | 3447 |
 | search_promotion | 8 | 1007 |
-| unclassified | 363 | 57620 |
+| unclassified | 356 | 56969 |
 
 ## LOC by role
 
@@ -42,7 +42,7 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 68 warnings)
 | integration | 2 | 199 |
 | research | 4 | 387 |
 | test | 1 | 136 |
-| unclassified | 363 | 57620 |
+| unclassified | 356 | 56969 |
 
 ## LOC by status
 
@@ -55,7 +55,7 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 68 warnings)
 | promoted_default | 6 | 665 |
 | refuted | 1 | 21 |
 | retained_reference | 1 | 114 |
-| unclassified | 363 | 57620 |
+| unclassified | 356 | 56969 |
 | unresolved_reproducer | 2 | 360 |
 
 ## LOC by disposition
@@ -65,7 +65,7 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 68 warnings)
 | consolidate | 4 | 869 |
 | investigate | 2 | 256 |
 | keep | 90 | 12116 |
-| unclassified | 363 | 57620 |
+| unclassified | 356 | 56969 |
 
 ## Default-path source footprint
 
@@ -127,7 +127,7 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 68 warnings)
 | 794 | `test/amd/disasm.py` | None |
 | 758 | `extra/qk/runtime_specs.py` | route_authority |
 | 698 | `tinygrad/tensor.py` | None |
-| 671 | `tinygrad/schedule/rangeify.py` | None |
+| 661 | `tinygrad/schedule/rangeify.py` | None |
 | 641 | `test/unit/test_runtime_specs.py` | None |
 | 634 | `tinygrad/runtime/ops_nv.py` | None |
 | 619 | `tinygrad/renderer/isa/x86.py` | None |
@@ -193,7 +193,6 @@ for human classification, not a death sentence.
 - `test/unit/test_codegen_cache_key_gates.py`
 - `test/unit/test_compiler_amd_pure_disassembly_20260712.py`
 - `test/unit/test_composite_scalar_loop.py`
-- `test/unit/test_composite_scope_plan.py`
 - `test/unit/test_current_decode_execution_adapter.py`
 - `test/unit/test_decode_resource_capture.py`
 - `test/unit/test_disk_staging_timeout.py`
@@ -203,16 +202,14 @@ for human classification, not a death sentence.
 - `test/unit/test_flash_buffer_roles.py`
 - `test/unit/test_flash_decode_attention_spec.py`
 - `test/unit/test_flash_variant_fingerprint.py`
+- `test/unit/test_gate_inventory.py`
 - `test/unit/test_generated_quant_binding_audit.py`
 - `test/unit/test_gguf_memory_scan.py`
-- `test/unit/test_grouped_dot_update_pipeline.py`
 - `test/unit/test_hcq_graph_profile_export.py`
 - `test/unit/test_hcq_interface_allocator.py`
 - `test/unit/test_hcq_kernargs_contract.py`
-- `test/unit/test_hierarchical_kernel_pipeline.py`
 - `test/unit/test_host_safety_canary_20260713.py`
 - `test/unit/test_isolated_guarded_executor.py`
-- `test/unit/test_kernel_pipeline_resource_plan.py`
 - `test/unit/test_llama_bench_artifacts.py`
 - `test/unit/test_llm_context_admission.py`
 - `test/unit/test_llm_decode_correctness.py`
@@ -250,9 +247,7 @@ for human classification, not a death sentence.
 - `test/unit/test_q4_q4_owner_comparison.py`
 - `test/unit/test_q4k_prefill_route_spec.py`
 - `test/unit/test_q4k_q8_mmq_prefill_spec.py`
-- `test/unit/test_realization_plan.py`
 - `test/unit/test_route_admission_consistency.py`
-- `test/unit/test_scheduler_output_tile_loop.py`
 - `test/unit/test_shared_attention_evidence.py`
 - `test/unit/test_shared_attention_promotion.py`
 - `test/unit/test_shared_attention_replay_admission.py`
@@ -329,9 +324,9 @@ None.
 
 | path | class | former purpose | last campaign | replacement | commit | recovery | loc |
 |---|---|---|---|---|---|---|---|
-| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `5ce3970b4f0b` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
-| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `5ce3970b4f0b` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
-| `extra/qk/q4k_wmma_tile_lowering.py` | delete_after_verdict_capture | Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles. | q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14) | docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md | `5ce3970b4f0b` | git show 05b67146a -- <path> | 1138 |
+| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `c9b9ce9296a9` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
+| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `c9b9ce9296a9` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
+| `extra/qk/q4k_wmma_tile_lowering.py` | delete_after_verdict_capture | Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles. | q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14) | docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md | `c9b9ce9296a9` | git show 05b67146a -- <path> | 1138 |
 
 ## Workflow inventory
 
@@ -364,8 +359,8 @@ None.
 
 ## Promotion budget
 
-- Budgeted (`tinygrad`, `bench`, `structure`): **34793 / 50000** -- headroom 15207
-- Against the standing 30000 target: **4793 over**. sz.py:13 records 35000 as temporary headroom; the standing target is 30000
+- Budgeted (`tinygrad`, `bench`, `structure`): **34514 / 50000** -- headroom 15486
+- Against the standing 30000 target: **4514 over**. sz.py:13 records 35000 as temporary headroom; the standing target is 30000
 - Default-path LOC currently sitting unbudgeted in `extra/`: **6252**
 - Net budget cost of pending promotions (moved minus deleted): 0
 - Declarative LOC a data-file conversion would remove from the budget entirely: 0
