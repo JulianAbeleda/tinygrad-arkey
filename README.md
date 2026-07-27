@@ -110,6 +110,34 @@ Read these as current working numbers, not a universal claim:
 - **Prefill on 14B** — live, and it does NOT use the fp16 overlay: 14B's ~29 GB fp16 footprint cannot be admitted on a 24 GB card, so the packed route reads Q4_K/Q6_K storage directly. The older README claim that big models must fall back was only ever true of the *overlay* path. OPEN: 14B end-to-end token parity has not yet been run with this route live.
 - **Prefill on 32B** — still falls back to the slow universal path (fp16 overlay ~64 GB, and no packed-WMMA geometry is gated for its shapes). Closing that is a real project.
 
+### Production route selection
+
+Prefill and decode use the same policy contract: `auto`, an explicitly selected accelerated candidate, or
+the ordinary fp16 fallback. Candidate discovery remains phase-specific; lifecycle and selection semantics
+are shared in `tinygrad/llm/route_selection.py`.
+
+| Phase | Canonical variable | Values | Default behavior |
+|---|---|---|---|
+| Prefill | `TINYGRAD_PREFILL_ROUTE` | `auto`, `packed_wmma`, `direct_packed`, `fp16` | `auto` selects the promoted route admitted by the model's structural facts. |
+| Decode | `TINYGRAD_DECODE_ROUTE` | `auto`, `flash`, `fp16` | `auto` uses SDPA for shallow context and the admitted flash candidate at the configured threshold. |
+
+The legacy `TINYGRAD_PREFILL_PACKED_WMMA` and `FLASH_DECODE` variables remain compatibility aliases. New
+automation should use the canonical variables above. Invalid values fail loudly.
+
+Route ownership is structural rather than model-name based:
+
+- 8B's resident fp16 projections own dense tensor-core warmstarts only after `_pf16_w` overlays are realized.
+- 14B's packed-only projections do not receive dense warmstarts; this prevents shape-key collisions with
+  unrelated reductions. Its promoted packed-WMMA route remains available.
+- The Hq=40/Hkv=8 direct-packed implementation is quarantined after repeatable GPU MMU faults. The quarantine
+  applies only to that implementation, not to the shared structural binding used by packed-WMMA.
+- `auto` never dispatches the quarantined direct implementation. Forcing it fails during model setup rather
+  than after GPU submission.
+
+Validated on 2026-07-27 on RX 7900 XTX/gfx1100: 14B actual ctx128 completed on the SDPA decode path; warmed
+pp512 completed at 1960 tok/s; and the 8B warmed pp512 control completed at 3768 tok/s. These are bounded
+route-regression checks, not replacements for the multi-run authority tables above.
+
 **Measurement discipline:** report prefill/decode throughput only from the authority harnesses via `extra/qk/bench.py` (below). Never report throughput from a `model.generate` TTFT bench; it includes unrelated Python, sampling, and host overhead.
 
 ## Running it

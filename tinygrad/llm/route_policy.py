@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 from tinygrad import UOp, getenv
+from tinygrad.llm.route_selection import parse_route_mode
 
 
 def qk_generated_policy_entry(policy:dict|None, typ:int, rows:int, cols:int, name:str|None=None) -> dict|None:
@@ -176,12 +177,21 @@ def qk_route_policy_selects_q6k_generated(out_features:int, in_features:int, *, 
       return True
   return False
 
+def decode_route_mode(getenv_fn=getenv) -> str:
+  canonical = str(getenv_fn("TINYGRAD_DECODE_ROUTE", "")).strip()
+  if canonical:
+    return parse_route_mode("TINYGRAD_DECODE_ROUTE", allowed=("auto", "flash", "fp16"),
+                            aliases={"sdpa": "fp16", "fallback": "fp16"}, getenv_fn=getenv_fn)
+  return parse_route_mode("FLASH_DECODE", allowed=("auto", "flash", "fp16"),
+                          aliases={"on": "flash", "1": "flash", "true": "flash",
+                                   "off": "fp16", "0": "fp16", "false": "fp16"}, getenv_fn=getenv_fn)
+
+
 def should_use_flash_decode(start_pos, T, use_flash:bool=False, getenv_fn=getenv) -> bool:
   if not (isinstance(start_pos, UOp) and isinstance(T, int) and T == 1): return False
-  mode = str(getenv_fn("FLASH_DECODE", "auto")).lower()
-  if mode in ("0", "false", "off"): return False
-  if use_flash or mode in ("1", "true", "on"): return True
-  if mode != "auto": return False
+  mode = decode_route_mode(getenv_fn)
+  if mode == "fp16": return False
+  if use_flash or mode == "flash": return True
   try: ctx = start_pos.unbind()[1] + T
   except Exception: return False
   return ctx >= getenv_fn("FLASH_DECODE_THRESHOLD", 512)
