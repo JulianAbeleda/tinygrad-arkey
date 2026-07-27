@@ -396,7 +396,8 @@ class HCQProgram(Generic[HCQDeviceType]):
     if observer is not None:
       observer_token = observer.submit(program_id=self.prof_prg_counter, source_sha256=observer.source_sha256,
                                        binary_sha256=hashlib.sha256(self._launch_binary).hexdigest(),
-                                       grid=global_size, workgroup=local_size, dispatch_id=dispatch_id)
+                                       grid=global_size, workgroup=local_size, dispatch_id=dispatch_id,
+                                       binary=self._launch_binary)
     kernargs = self.fill_kernargs(bufs, vals)
     q = unwrap(self.dev.hw_compute_queue_t)().wait(self.dev.timeline_signal, self.dev.timeline_value - 1).memory_barrier()
 

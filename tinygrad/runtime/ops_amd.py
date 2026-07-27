@@ -900,7 +900,7 @@ class KFDIface:
         atexit.register(lambda: kfd.AMDKFD_IOC_PROFILER(KFDIface.kfd, op=kfd.KFD_IOC_PROFILER_PMC,
           pmc=kfd.struct_kfd_ioctl_pmc_settings(gpu_id=self.gpu_id, lock=0, perfcount_enable=0)))
       except OSError as e:
-        print(f"warning: KFD PROFILER PMC ioctl failed ({e}); gfx11 perfmon clock may stay gated -> only SQ_BUSY_CYCLES will read")
+        raise RuntimeError(f"KFD PROFILER PMC ioctl failed ({e}); disable PMC or fix the kernel profiler interface before collecting counters") from e
 
   @functools.cached_property
   def drm_dev_info(self) -> amdgpu_drm.struct_drm_amdgpu_info_device:
