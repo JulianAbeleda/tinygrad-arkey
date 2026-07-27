@@ -4,13 +4,13 @@ A hard fork of [tinygrad](https://github.com/tinygrad/tinygrad). AMD/RDNA3 focus
 
 ## What this is
 
-tinygrad is a small deep learning framework by George Hotz that lowers tensor operations to GPU kernels. This fork narrows it to one job: quantized LLM inference on AMD gfx1100, with the search/audit work split between this runtime and [BoltBeam](https://github.com/JulianAbeleda/BoltBeam).
+tinygrad is a small deep learning framework by George Hotz that lowers tensor operations to GPU kernels. This fork narrows it to one job: quantized LLM inference on AMD gfx1100, with the search/audit work split between this runtime and a private kernel-search tool.
 
 The main idea is still kernel search, but the bar is strict: a route only becomes default after it is correct, structurally route-bound, fail-closed outside its admitted shapes, and fast enough under the authority harness. The hot decode/prefill routes are generated or descriptor-driven. Fallback availability is shape-specific; an unsafe requested fallback fails loudly rather than pretending to be a rollback.
 
 ## Why this is machine search even though the runtime is static
 
-The search happens **offline**, not while a model is serving tokens. BoltBeam and the
+The search happens **offline**, not while a model is serving tokens. A private search/audit tool and the
 BubbleBeam/Futuresight path expand structured kernel candidates, ask tinygrad to lower them, and use
 correctness, route-attribution, resource, and measured-speed gates to reject or promote each result. The
 promoted candidate is then frozen as a descriptor, schedule, or generated UOp lowering in this repository.
@@ -43,7 +43,7 @@ In short: **machine-searched offline, statically promoted, compiled by tinygrad,
 
 * **Hardware:** AMD only, currently gfx1100 / RX 7900 XTX.
 * **Scope:** quantized GGUF LLM decode and prefill.
-* **Search:** BoltBeam audits candidates and route policy; tinygrad runs the promoted routes.
+* **Search:** a private tool audits candidates and route policy; tinygrad runs the promoted routes.
 * **Defaults:** generated or descriptor-owned where proven; research candidates stay off the production path.
 * **Instrumentation:** decode/prefill authority, route attribution, purity census, and compiler-lowering gates are first-class. Decode graph-PMC attribution remains open work.
 
@@ -215,7 +215,7 @@ Start with these files and the documentation map in [docs/README.md](docs/README
 * `extra/qk/prefill/packed_wmma_prefill_candidates.py` — the packed-WMMA prefill candidates that are the 14B default (frozen per-(quant,role) geometry + load-time correctness gate).
 * `extra/qk/microbench/wmma_peak.cpp` — measured achievable WMMA peak (~105 TFLOPS on gfx1100); use it as the denominator for any efficiency claim.
 
-BoltBeam owns search/audit adapters, interchange schemas, evaluation policy, ledgers, roofline attribution, and reports. tinygrad owns runtime model facts, route admission and execution, compiler/backend lowering, and hardware gates. Profiler adapters do not imply that decode hardware-counter attribution is complete.
+A private tool owns search/audit adapters, interchange schemas, evaluation policy, ledgers, roofline attribution, and reports. tinygrad owns runtime model facts, route admission and execution, compiler/backend lowering, and hardware gates. Profiler adapters do not imply that decode hardware-counter attribution is complete.
 
 ## License
 
