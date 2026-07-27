@@ -15,11 +15,11 @@ def _fexp(x:UOp) -> UOp:
   if getenv("DECODE_FAST_EXP2", 0): return UOp(Ops.CUSTOMI, arg.dtype, (arg,), arg="__builtin_amdgcn_exp2f({0})")
   return arg.exp2()
 def _fc(v:float) -> UOp: return UOp.const(_F32, v)
-def _fki(name:str) -> KernelInfo: return KernelInfo(name=name, opts_to_apply=())
+def _fki(name:str, *, coalesced_loads:bool=False) -> KernelInfo:
+  return KernelInfo(name=name, opts_to_apply=(), coalesced_loads=coalesced_loads)
 def _ceildiv(a:int, b:int) -> int: return (a + b - 1) // b
 
 # Single source of truth for accepted FLASH_VARIANT values (consumed by flash_decode_attention + decode_routes.py).
 # 'gqa_coop' is the shipped default; 'hoisted'/'v1' are historical/fallback. Unknown -> raise (see below).
 FLASH_DECODE_VARIANTS = ("v1", "hoisted", "gqa_coop", "gqa_coop_vec")
 FLASH_DECODE_DEFAULT_VARIANT = "gqa_coop_vec"
-

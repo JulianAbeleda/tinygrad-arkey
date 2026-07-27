@@ -4,6 +4,7 @@ import pytest
 
 from tinygrad import UOp
 from tinygrad.llm import prefill_routes
+from tinygrad.llm import decode_routes
 from tinygrad.llm.prefill_route_observer import PrefillDirectPackedBinding
 from tinygrad.llm.prefill_routes import direct_packed_prefill_policy, prefill_route_mode, validate_prefill_route_mode
 from tinygrad.llm.route_policy import decode_route_mode, should_use_flash_decode
@@ -44,6 +45,16 @@ def test_decode_uses_same_auto_forced_candidate_fallback_contract():
   assert not should_use_flash_decode(start, 1, getenv_fn=_env({"TINYGRAD_DECODE_ROUTE": "fp16"}))
   assert should_use_flash_decode(start, 1, getenv_fn=_env({"TINYGRAD_DECODE_ROUTE": "flash"}))
   assert should_use_flash_decode(start, 1, getenv_fn=_env({"TINYGRAD_DECODE_ROUTE": "auto"}))
+
+
+def test_decode_candidates_own_separate_g4_and_g5_split_geometry():
+  assert decode_routes.FLASH_DECODE_CANDIDATE.query_heads == 32
+  assert decode_routes.FLASH_DECODE_CANDIDATE.split_size == 48
+  assert decode_routes.FLASH_DECODE_CANDIDATE.stage_width == 1
+  assert decode_routes.FLASH_DECODE_G5_CANDIDATE.query_heads == 40
+  assert decode_routes.FLASH_DECODE_G5_CANDIDATE.split_size == 32
+  assert decode_routes.FLASH_DECODE_G5_CANDIDATE.query_group_size == 2
+  assert decode_routes.FLASH_DECODE_G5_CANDIDATE.stage_width == 4
 
 
 def test_invalid_route_modes_fail_loudly():

@@ -2025,6 +2025,7 @@ class KernelInfo:
   estimates: Estimates|None = None
   candidate_context: Any|None = None
   required_native_attention: NativeAttentionRequest|None = None
+  coalesced_loads: bool = False  # kernel-owned request for the AMD unit-stride load promotion pass
   # Exact CALL parameter slots whose concrete allocations inherit a scheduler
   # memory owner. Values are immutable vocabulary objects, never UOp identities.
   memory_semantic_slots: tuple[tuple[int, Any], ...] = tuple()

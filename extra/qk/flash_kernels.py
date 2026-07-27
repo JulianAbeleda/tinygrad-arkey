@@ -7,7 +7,7 @@ from extra.qk.kv_load import make_kv_element_loader  # noqa: F401
 # combine, and lifecycle variants -- ~32 functions) were deleted as orphans; only the live default
 # tile survives and is emitted through flash_decode_attention_spec.py.
 
-def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc, staging:str="KV_BOTH", quant:bool=False, rope:bool=False):
+def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc, staging:str="KV_BOTH", quant:bool=False, rope:bool=False, query_group_size:int|None=None, stage_width:int|None=None):
   """Block-tiled generated decode candidate.
 
   Mirrors the owned tile's topology at the UOp level: one workgroup per (kvh, split), G warps per
@@ -23,7 +23,9 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
     symmetric absmax over head_dim. This is the fused-dequant path for the KV-quant long-context tier.
   """
   if Hd % 64 != 0: raise ValueError(f"block tile requires Hd%%64==0, got {Hd}")
-  G = Hq // Hkv; W = Hd + 2; LANES = 32; WARPS = G; THREADS = LANES * WARPS; TK = 16
+  G = Hq // Hkv; QG = G if query_group_size is None else query_group_size
+  if QG < 1 or QG > G: raise ValueError(f"query_group_size must be in 1..{G}, got {QG}")
+  NG = _ceildiv(G, QG); W = Hd + 2; LANES = 32; WARPS = QG; THREADS = LANES * WARPS; TK = 16
   R = Hd // LANES; RP = Hd // 64; STAGES = _ceildiv(TK * Hd, THREADS); NB = _ceildiv(L, TK)
   scale = 1.0 / (Hd ** 0.5)
   def kernel(pout:UOp, q:UOp, cache:UOp, *extra) -> UOp:
@@ -42,12 +44,16 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
     kv_load = make_kv_element_loader(cache, Hd, kvscale=kvscale, freqs=freqs)
     kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
     s = UOp.range(S, 1, AxisType.GLOBAL)
+    qg = UOp.range(NG, 9, AxisType.GLOBAL)
     # Use LOCAL ranges (not UOp.special) so add_gpudims can run and emit gidx for kvh/s.
     # UOp.special blocks add_gpudims via the any(Ops.SPECIAL) guard in gpudims.py:61.
     # AxisType.LOCAL → lidx0/lidx1 (real thread dims), correct for ds_bpermute lane addressing.
     lane = UOp.range(LANES, 10, AxisType.LOCAL)
     warp = UOp.range(WARPS, 11, AxisType.LOCAL)
-    h = kvh * G + warp
+    gh = qg * QG + warp
+    warp_active = gh < G
+    h_raw = kvh * G + gh
+    h = warp_active.where(h_raw, h_raw.const_like(0))
     tid = warp * LANES + lane
     ksh = UOp.placeholder((TK * Hd,), dtypes.half, 230, addrspace=AddrSpace.LOCAL)
     vsh = UOp.placeholder((TK * Hd,), dtypes.half, 231, addrspace=AddrSpace.LOCAL) if staging == "KV_BOTH" else None
@@ -64,7 +70,7 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
     # of the TK*Hd LDS tile, so the global cache load presents a unit-stride W loop axis that
     # COALESCED_LOAD_LOWERING folds to a vectorized load (global_load_dwordx4). Default-off: original
     # one-element-per-thread staging is byte-identical. See extra/qk/cooperative_stage_lanemap.py.
-    _stage_w = getenv("DECODE_STAGE_COALESCE")
+    _stage_w = getenv("DECODE_STAGE_COALESCE") if stage_width is None else stage_width
     try:
       if _stage_w:
         from extra.qk.cooperative_stage_lanemap import CooperativeStageLaneMap
@@ -124,36 +130,22 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
       # never manifested it, but it corrupts at high warp counts (found via the M-tiled prefill clone).
       return UOp.barrier(UOp.group(mxu0)).end(b)
 
-    if getenv("DECODE_ATTN_TILE_SPLIT_SCORE", 0):
-      # REFACTOR (kernel-level recurrence pipelining): PASS 1 computes all TK independent dot+reduce scores into an
-      # LDS score buffer (the ds_bpermute reduces pipeline back-to-back, no per-token serial merge stalling each),
-      # PASS 2 runs the serial online-softmax merges reading the buffer. Lane 0 writes; lgkmcnt makes it warp-visible
-      # (wave32 lockstep -> no barrier). Default-off (DECODE_ATTN_TILE_SPLIT_SCORE=1). Gated by the microgate + W==D.
-      scsh = UOp.placeholder((WARPS * TK,), _F32, 236, addrspace=AddrSpace.LOCAL)
-      tt1 = UOp.range(TK, 5, axis_type=AxisType.REDUCE)
-      in_r1 = (s * L + b * TK + tt1) < Tc
-      scst = scsh.after(b)[warp * TK + tt1].store(in_r1.where(_dot_reduce(tt1), _fc(-float("inf"))), lane.eq(0)).end(tt1)
-      scsh = scsh.after(scst)
-      tt = UOp.range(TK, 12, axis_type=AxisType.REDUCE)
-      sc = scsh[warp * TK + tt]
-      old_m = mx.after(tt)[0]; new_m = old_m.maximum(sc)
-      corr = _fexp(old_m - new_m); p = _fexp(sc - new_m)   # sc=-inf for OOB -> corr=1, p=0 (mask folded in pass 1)
-      mxu = _merge_tail(tt, new_m, corr, p)
-    else:
-      tt = UOp.range(TK, 5, axis_type=AxisType.REDUCE)
-      in_r = (s * L + b * TK + tt) < Tc
-      sc = in_r.where(_dot_reduce(tt), _fc(-float("inf")))
-      old_m = mx.after(tt)[0]
-      new_m = old_m.maximum(sc)
-      corr = in_r.where(_fexp(old_m - new_m), _fc(1.0))
-      p = in_r.where(_fexp(sc - new_m), _fc(0.0))
-      mxu = _merge_tail(tt, new_m, corr, p)
+    tt = UOp.range(TK, 5, axis_type=AxisType.REDUCE)
+    in_r = (s * L + b * TK + tt) < Tc
+    sc = in_r.where(_dot_reduce(tt), _fc(-float("inf")))
+    old_m = mx.after(tt)[0]
+    new_m = old_m.maximum(sc)
+    corr = in_r.where(_fexp(old_m - new_m), _fc(1.0))
+    p = in_r.where(_fexp(sc - new_m), _fc(0.0))
+    mxu = _merge_tail(tt, new_m, corr, p)
     af, lf, mf = acc.after(mxu), den.after(mxu), mx.after(mxu)
     base = (h * S + s) * W
     dd2 = UOp.range(R, 8)
     d2 = lane * R + dd2
-    pv = pout[base + d2].store(af[dd2]).end(dd2)
-    ls = pout.after(pv)[base + Hd].store(lf[0], lane.eq(0))
-    ms = pout.after(ls)[base + (Hd + 1)].store(mf[0], lane.eq(0))
-    return ms.end(kvh, s, lane, warp).sink(arg=_fki(f"flash_block_tiled_xlane_score_pv_tile_whole_cache_{Hq}_{Hd}"))
+    pv = pout[base + d2].store(af[dd2], warp_active).end(dd2)
+    ls = pout.after(pv)[base + Hd].store(lf[0], lane.eq(0) & warp_active)
+    ms = pout.after(ls)[base + (Hd + 1)].store(mf[0], lane.eq(0) & warp_active)
+    suffix = "" if QG == G else f"_qg{QG}"
+    return ms.end(kvh, s, qg, lane, warp).sink(arg=_fki(
+      f"flash_block_tiled_xlane_score_pv_tile_whole_cache_{Hq}_{Hd}{suffix}", coalesced_loads=bool(_stage_w)))
   return kernel

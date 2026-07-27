@@ -144,7 +144,8 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   # see tinygrad/codegen/late/coalesced_load.py + docs/decode-coalesced-load-primitive-scope-20260626.md. The
   # AMD-only restriction is a validation-scope gate (only this backend's path is proven), not a property of the
   # pass itself.
-  if getenv("COALESCED_LOAD_LOWERING") and ren.target.device == "AMD":
+  kernel_coalesced_loads = bool(getattr(sink.arg, "coalesced_loads", False))
+  if (getenv("COALESCED_LOAD_LOWERING") or kernel_coalesced_loads) and ren.target.device == "AMD":
     sink = coalesce_loads(sink)
 
   # expand
@@ -258,7 +259,7 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
     if output_store_subs: sink = sink.substitute(output_store_subs)
   if ren.target.device == "AMD":
     sink = graph_rewrite(sink, pm_distinct_reg_store_devec, name="distinct reg store devec")
-  if getenv("COALESCED_LOAD_LOWERING") and ren.target.device == "AMD":
+  if (getenv("COALESCED_LOAD_LOWERING") or kernel_coalesced_loads) and ren.target.device == "AMD":
     sink = graph_rewrite(sink, cg_extras.reg_store_devec_pm(), name="reg store devec")
   if getenv("V_DOT2_LOWERING") and ren.target.device == "AMD":
     sink = graph_rewrite(sink, cg_extras.fdot2_pm(), name="fdot2 lowering")
