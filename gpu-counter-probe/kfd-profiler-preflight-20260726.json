@@ -1,0 +1,91 @@
+{
+  "capabilities": {
+    "cap_perfmon": false,
+    "cap_sys_admin": false,
+    "effective_hex": "0000000000000000",
+    "perf_event_paranoid": "4"
+  },
+  "captured_at_utc": "2026-07-27T02:26:46.597618+00:00",
+  "devices": [
+    {
+      "gid": 992,
+      "mode": "0660",
+      "path": "/dev/kfd",
+      "read_write_access": true,
+      "uid": 0
+    },
+    {
+      "gid": 992,
+      "mode": "0660",
+      "path": "/dev/dri/renderD128",
+      "read_write_access": true,
+      "uid": 0
+    }
+  ],
+  "kfd_ioctl_version": {
+    "major": 1,
+    "minor": 18,
+    "payload_hex": "0100000012000000",
+    "status": "ok"
+  },
+  "profiler_ioctl": {
+    "pmc_lock_result": {
+      "reason": "would change perfmon state; use explicit operator-approved flags",
+      "status": "not_attempted"
+    },
+    "pmc_operation": {
+      "arguments": {
+        "lock": 1,
+        "perfcount_enable": 1
+      },
+      "name": "KFD_IOC_PROFILER_PMC",
+      "op": 0
+    },
+    "request": "AMDKFD_IOC_PROFILER",
+    "request_hex": "0xc0284b86",
+    "version_operation": {
+      "name": "KFD_IOC_PROFILER_VERSION",
+      "op": 2
+    },
+    "version_result": {
+      "payload_hex": "02000000000000000100000000000000000000000000000000000000000000000000000000000000",
+      "status": "ok"
+    }
+  },
+  "safety": {
+    "gpu_dispatch": false,
+    "gpu_reset": false,
+    "pmc_lock_may_change_state": false,
+    "pmc_lock_probe": false,
+    "sudo": false
+  },
+  "schema": "tinygrad.kfd_profiler_preflight.v1",
+  "system": {
+    "amdgpu_module_version": "6.16.13",
+    "amdgpu_ppfeaturemask": "0xfff7bfff",
+    "kernel": "6.8.0-136-generic",
+    "rocm_version": "7.2.4"
+  },
+  "tools": [
+    {
+      "name": "llvm-readobj",
+      "path": "/opt/rocm/llvm/bin/llvm-readobj",
+      "version": "AMD LLVM version 22.0.0git"
+    },
+    {
+      "name": "rocprof",
+      "path": "/opt/rocm/bin/rocprof",
+      "version": ""
+    },
+    {
+      "name": "rocprofv3",
+      "path": "/opt/rocm/bin/rocprofv3",
+      "version": "             version: 1.1.0"
+    },
+    {
+      "name": "rocm-smi",
+      "path": "/usr/bin/rocm-smi",
+      "version": "usage: rocm-smi [-h] [-d DEVICE [DEVICE ...]] [--alldevices] [--showhw] [-a] [-i] [-v] [-e [EVENT ...]]"
+    }
+  ]
+}
