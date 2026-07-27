@@ -95,6 +95,14 @@ bench/**
 # durable compiler pathology oracle artifacts (not regenerable timing outputs)
 !bench/**/compiler_pathology*.json
 
+# durable lowering-gate baselines. These are ORACLES, not timing outputs: each is the stored side of a
+# `--check` comparison, so a gate whose baseline is untracked cannot detect drift in a fresh clone -- it only
+# compares a working tree against itself. lowering-cpu-fingerprint and lowering-refactor-baseline were already
+# tracked; flash-variant-fingerprint was added later and this exception was missed, which is how the gap showed up.
+!bench/lowering-cpu-fingerprint/latest.json
+!bench/lowering-refactor-baseline/latest.json
+!bench/flash-variant-fingerprint/latest.json
+
 # PSP boot/trace captures are local provenance (backed up outside the repo), not code.
 # The durable record lives in docs/amd-linux-psp-good-trace.md; raw captures stay local.
 extra/hardware/amdpci/captures/
