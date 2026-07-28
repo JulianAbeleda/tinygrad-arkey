@@ -91,7 +91,7 @@ The first bounded production closure promoted the live flash-prefill descriptor:
 
 | Source | Destination | Production consumers |
 |---|---|---|
-| `extra/llm_research/prefill/flash_prefill_attention_spec.py` | `tinygrad/schedule/wmma/flash_prefill.py` | `tinygrad/llm/fused_attention.py`; `tinygrad/codegen/opt/postrange.py` |
+| `extra/qk/prefill/flash_prefill_attention_spec.py` | `tinygrad/schedule/wmma/flash_prefill.py` | `tinygrad/llm/fused_attention.py`; `tinygrad/codegen/opt/postrange.py` |
 
 The descriptor contents were preserved as a rename. Both production callers now import the core descriptor directly.
 The obsolete lazy shims in `tinygrad/llm/route_ops.py` and `tinygrad/codegen/experimental.py` were removed. Active path
@@ -118,7 +118,7 @@ missing-module or import failure attributable to the move. No GPU result is clai
 ## Second bounded promotion
 
 The recurrence-unroll compiler primitive was similarly promoted from
-`extra/llm_research/codegen_recurrence_unroll.py` to `tinygrad/codegen/late/recurrence.py`. The AMD/SCHED_UNROLL call site now
+`extra/qk/codegen_recurrence_unroll.py` to `tinygrad/codegen/late/recurrence.py`. The AMD/SCHED_UNROLL call site now
 imports the core owner directly, and only the matching `codegen/experimental.py` forwarding shim was removed. The
 organization manifest and lowering findings were updated; the transform body is a byte-identical rename.
 

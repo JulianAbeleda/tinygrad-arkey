@@ -103,7 +103,7 @@ extra/llm_research/
   vendor/        retained third-party research sources such as llama.cpp MMQ material
 ```
 
-Before any subdomain split, every `extra/llm_research` file must be assigned to one of these domains or marked unresolved. Files still
+The root rename is complete; before any subdomain split, every `extra/llm_research` file must be assigned to one of these domains or marked unresolved. Files still
 reached by `tinygrad/llm/route_ops.py` are migration debt: they must move into their `tinygrad/**` owner before the
 research surface can be removed from `master`.
 
@@ -145,9 +145,17 @@ dependencies on it are forbidden.
 6. Whole-directory renames happen only after import, test, benchmark, artifact, and documentation references are
    inventoried.
 
+## Completed root rename checkpoint
+
+The opaque `extra/qk` root was renamed to `extra/llm_research` without changing its internal layout or runtime behavior.
+Current imports, manifests, and operating commands use the descriptive namespace; historical recovery commands and frozen
+evidence retain `extra/qk` where that name identifies the pre-rename source. The migration is propagated to `exp`, `dev`,
+and `master`; subdomain moves remain gated by the ledger below.
+
 ## Required next classification pass
 
 The next task is a file-level ledger for all 198 current `extra/**` files, starting with the 97 current `extra/llm_research`
 files and the mixed files under `extra/llm`, `extra/hardware`, `extra/nv_gpu_driver`, and `extra/usbgpu`. The ledger
 must record the target domain above, default-path reachability, branch owner, direct callers, tests, artifacts, and the
-migration or retention criterion. No rename is authorized until that ledger is complete and reviewed.
+migration or retention criterion. No further subdomain move or branch pruning is authorized until that ledger is complete
+and reviewed. The root rename itself was recorded in the rename checkpoint and does not move files between subdomains.

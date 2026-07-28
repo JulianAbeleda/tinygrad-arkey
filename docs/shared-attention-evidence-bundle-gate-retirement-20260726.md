@@ -5,7 +5,7 @@ Retired 2026-07-26 by organization-audit action A3. Recovered with
 
 ## What it was
 
-`extra/llm_research/shared_attention_evidence_gate.py` was a CPU-only, fail-closed classifier for a selected fused
+`extra/qk/shared_attention_evidence_gate.py` was a CPU-only, fail-closed classifier for a selected fused
 prefill-attention artifact. It defined schema `tinygrad.shared_attention_evidence_bundle.v1`, required
 `MIN_TIMING_SAMPLES = 200`, admitted only the profiles `qwen3_8b_q4k_m_gfx1100` and `qwen3_14b_q4k_m_gfx1100`, and
 exposed `classify_shared_attention_evidence` / `summarize_checkpoint` returning a `GateResult(status, reasons)`.

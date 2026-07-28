@@ -54,8 +54,8 @@ module-level bool test. They were built to answer a Phase-4 ownership question t
 
 ## Tier 3 — shims and resurrections
 
-- **`extra/llm_research/coalesced_load_lowering.py`** (12 lines) — a pure re-export of `coalesce_loads`. This is the same
-  shape as `extra/llm_research/kernel_pipeline.py`, which this branch deleted for being exactly that. Repoint its three
+- **`extra/qk/coalesced_load_lowering.py`** (12 lines) — a pure re-export of `coalesce_loads`. This is the same
+  shape as `extra/qk/kernel_pipeline.py`, which this branch deleted for being exactly that. Repoint its three
   callers (`cooperative_stage_lanemap.py`, `layout_coalesce_check.py`, `test_coalesced_load_lowering.py`) at
   `tinygrad.codegen.late.coalesced_load` and delete. Leaving it is an inconsistency, not a risk.
 - **Four test files master deliberately retired** and this branch re-added along with the now-deleted

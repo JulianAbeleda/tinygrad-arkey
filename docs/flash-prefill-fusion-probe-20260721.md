@@ -20,7 +20,7 @@ The probe code (`flash_prefill_blocked_tensor.py`) called `acc.realize(); m.real
 
 ## 1. Correct Blocked Online-Softmax Code
 
-Historical file: `extra/llm_research/prefill/flash_prefill_blocked_tensor.py`, last present before its deletion in commit
+Historical file: `extra/qk/prefill/flash_prefill_blocked_tensor.py`, last present before its deletion in commit
 `dfbaddbdf7bff9f71137cbaf0baa32e2700723ac` (recover with
 `git show dfbaddbdf7bff9f71137cbaf0baa32e2700723ac^:extra/qk/prefill/flash_prefill_blocked_tensor.py`).
 
@@ -137,6 +137,6 @@ THREE downstream operations (max + sum + matmul) across KV blocks with
 the three-element carried state — which is exactly what online-softmax
 does in place of materialized score → softmax → PV.
 
-> **Probe removed 2026-07-25.** `extra/llm_research/prefill/flash_prefill_blocked_tensor.py` is deleted; its verdict is
+> **Probe removed 2026-07-25.** `extra/qk/prefill/flash_prefill_blocked_tensor.py` is deleted; its verdict is
 > recorded above and flash prefill attention shipped as the guard-governed default. Preserving a probe past
 > its verdict is an anti-pattern (structure/Development/coding-principles.md).

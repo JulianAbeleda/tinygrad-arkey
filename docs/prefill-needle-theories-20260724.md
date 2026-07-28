@@ -168,7 +168,7 @@ was WRONG for this stride/tile geometry — 80 bytes (20 dwords, gcd(20,32)=4, p
 bank cycle already conflicts at a real but modest 1/8, and pushing to 96 bytes (24 dwords, gcd(24,32)=8,
 period 4) made it a 1/4-periodic, 4-way-heavier pattern — moved to the WORSE side of the modulus, not the
 better side. The naive "+1 element" pad trick is not safe here because the WMMA fragment-load addressing
-(`rdna3_wmma_output_coord` / `wmma_fragment_loads` in `extra/llm_research/kernel_lds.py`) is a 2D lane→row/col
+(`rdna3_wmma_output_coord` / `wmma_fragment_loads` in `extra/qk/kernel_lds.py`) is a 2D lane→row/col
 mapping, not a simple linear row scan, so the actual conflict-minimizing stride has to be derived from
 that lane mapping (or swept empirically over the 16-byte-aligned choices under `max_lds_bytes=65536`), not
 guessed. **PADDING IS EXHAUSTED — that suggested stride sweep is void.** `kernel_lds.py:238` requires "K row must
@@ -230,7 +230,7 @@ lane-quads 0..7 take rows 0,4,1,5,2,6,3,7) pairs rows four apart inside every oc
 lane-quad on one contiguous 64 B source row — so the wave issues the *same* global-memory segments, the
 LDS layout is byte-identical, LDS bytes are unchanged, and the term is loop-invariant so it hoists out of
 the K loop. `cooperative_store_row{,_rotation}` in `tinygrad/codegen/opt/kernel_lds.py`; the pure-Python
-model in `extra/llm_research/kernel_lds.py` follows it. `candidate-set.json` is untouched (identities unchanged).
+model in `extra/qk/kernel_lds.py` follows it. `candidate-set.json` is untouched (identities unchanged).
 
 *Measured, paired same-session, ctx512 PMC (attention row as an unchanged-path control):*
 

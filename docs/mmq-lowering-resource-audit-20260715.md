@@ -3,7 +3,7 @@
 `extra/llm_research/mmq_logical_vocabulary.py` describes the operation and logical axes
 (`m`, `n`, `k`, `group`, `activation_block`). `PhysicalMapping` currently
 provides only wave size, workgroup size, tile order, and WMMA shape. The new
-`extra/llm_research/mmq_lowering_audit.py` joins those facts with final compiler evidence:
+`extra/qk/mmq_lowering_audit.py` joins those facts with final compiler evidence:
 
 | logical claim | physical evidence required |
 |---|---|

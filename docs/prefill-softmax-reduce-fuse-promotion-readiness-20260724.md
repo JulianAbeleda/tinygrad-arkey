@@ -267,7 +267,7 @@ state).
 
 ## Corrections to the framing this pass inherited
 
-1. **`extra/llm_research/process_isolated.py` does not exist.** The 14B isolation was done by adding `--only` to
+1. **`extra/qk/process_isolated.py` does not exist.** The 14B isolation was done by adding `--only` to
    `prefill_flash_e2e_parity.py` instead.
 2. **14B was never blocked.** The `fp16 KV admits 0` failure was one-process VRAM exhaustion, exactly as
    suspected. Full 14B evidence — numerics, token parity, attention-local throughput and whole-model

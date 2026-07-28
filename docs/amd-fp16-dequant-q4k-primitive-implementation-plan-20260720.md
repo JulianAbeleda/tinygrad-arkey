@@ -10,7 +10,7 @@ Date: 2026-07-20. Supersedes the summary scope `amd-fp16-dequant-q4k-primitive-s
 
 ## PART I — The target algorithm (spec to generate)
 
-From `extra/llm_research/prefill/wmma.py:501-654` (`build_gemm_lds2_q4k`), shared base `build_gemm_lds2`/`LDS2PrimitiveEmitter` `:201-499`. Shipped config `WAVES_M=WAVES_N=2, WM=WN=4`.
+From `extra/qk/prefill/wmma.py:501-654` (`build_gemm_lds2_q4k`), shared base `build_gemm_lds2`/`LDS2PrimitiveEmitter` `:201-499`. Shipped config `WAVES_M=WAVES_N=2, WM=WN=4`.
 
 ### I.1 Geometry (`wmma.py:509-517`)
 ```
@@ -51,14 +51,14 @@ Kernarg = (A_ptr, W_ptr, C_ptr). **A** plain fp16 `[M,K]` (never quantized, no i
 The current kernel is a **hand-authored Python UOp graph** → `AMDISARenderer` (not scheduler-lowered). KEEP = reuse as-is; MODIFY = targeted change; REPLACE = rewrite.
 
 ### II.1 KEEP (algorithm-agnostic scaffolding)
-- `extra/llm_research/kernel_pipeline.py` — `DotUpdateRecurrencePlan`, `HierarchicalKernelPipelinePlan`, lifecycle/proof machinery (dtype/op-parametrized).
-- `extra/llm_research/kernel_writeback.py` — `WMMAWritebackDescriptor`/`build_wmma_writeback` take `accumulator_dtype`/`tc` as params; RDNA3 output-coord math is dtype-independent.
+- `extra/qk/kernel_pipeline.py` — `DotUpdateRecurrencePlan`, `HierarchicalKernelPipelinePlan`, lifecycle/proof machinery (dtype/op-parametrized).
+- `extra/qk/kernel_writeback.py` — `WMMAWritebackDescriptor`/`build_wmma_writeback` take `accumulator_dtype`/`tc` as params; RDNA3 output-coord math is dtype-independent.
 - `tinygrad/codegen/opt/kernel_lds.py` validators + `tinygrad/codegen/opt/tc.py` `amd_rdna3` — already admit `(half,float)`. **No change.**
-- `extra/llm_research/kernel_lds.py` generic parts (`PackedComponent*`/`PackedRecord*`, `validate_packed_component_templates`, `cooperative_lds_stores`, `wmma_output_owners`, `wmma_fragment_loads`) — reusable when called with the fp16 `element_bytes`/dtype.
+- `extra/qk/kernel_lds.py` generic parts (`PackedComponent*`/`PackedRecord*`, `validate_packed_component_templates`, `cooperative_lds_stores`, `wmma_output_owners`, `wmma_fragment_loads`) — reusable when called with the fp16 `element_bytes`/dtype.
 - `RecordProducerInstanceWitness` ordering machinery (`mmq_llama_record_producers.py:22-68`).
 
 ### II.2 MODIFY
-- **`extra/llm_research/kernel_lds.py`** `build_hierarchical_packed_record_stage` (~898-1055) + `prove_hierarchical_packed_record_stage` (~1056-1170) + `_hierarchical_record_roles` (~858-895): parametrize the hardcoded `dtypes.char` at `:886,911,1020,1022,1131` to `tc.dtype_in`.
+- **`extra/qk/kernel_lds.py`** `build_hierarchical_packed_record_stage` (~898-1055) + `prove_hierarchical_packed_record_stage` (~1056-1170) + `_hierarchical_record_roles` (~858-895): parametrize the hardcoded `dtypes.char` at `:886,911,1020,1022,1131` to `tc.dtype_in`.
 - **`mmq_llama_candidate_plan.py`** `_rdna3_i8_tc()` (`:30-31`): select `dtype_in==half, dtype_out==float`. `_geometry()` (`:44-56`): the **authoritative LDS layout** — replace ids/q8/q4 regions with two fp16 regions (~16 KB). Rest of `LlamaMMQCandidatePlan` (schemas, transforms, `recurrence=DotUpdateRecurrencePlan(float.vec8,int.vec8,...)` `:153`, source anchors): re-declare per §II.5.
 - **`mmq_llama_oracle_epoch.py`**: dtype/size asserts `:33,35` (q4 uint32 / q8 uint8) and the two-template call shape change; `_contracts()` (`:20-27`) stays.
 - **`mmq_llama_five_buffer_full_kernel.py`**: KEEP grid/topology/`to_program(AMDISARenderer)` plumbing (`:243-284`); FIX the **duplicate** hardcoded `FullGridTopology.lds_bytes=57856` (`:35`, not derived from geometry); shrink `_full_grid_sink` q4/values/scales/sums wiring (`:192-241`) with the ABI.
@@ -78,7 +78,7 @@ The current kernel is a **hand-authored Python UOp graph** → `AMDISARenderer` 
 Authoritative: `mmq_llama_candidate_plan.py:_geometry()` (`:44-56`). Independent copies/readers: `mmq_llama_packed_operands.py:66-71,113-121` (self-validated 2nd copy); `mmq_llama_five_buffer_full_kernel.py:35` (duplicate default); `mmq_llama_differential.py:57,60-61,94-95` (drops out); `mmq_machine_search.py:1095,1374,1384,1397` (admission — silent mis-admit if stale); plus derived readers `mmq_llama_full_kernel.py:274`, `mmq_llama_oracle_epoch.py:51,100`, `kernel_lds.py:907`, `kernel_writeback.py:129` (verify).
 
 ### II.6 ABI shrink (5 → 2-3 buffers) — declaration sites
-Two in-stack: `mmq_llama_five_buffer_graph.py:85-95` (`five_buffer_parameters`) + `mmq_llama_five_buffer_full_kernel.py:67,192-241,287-302`. Producer adapter to delete: `mmq_llama_record_producers.py:301-322` (3-q8-buffers → 1 interleaved row). Downstream canonical ABI constants (independently re-hardcoded, all must be re-declared): `extra/llm_research/prefill/frozen_exact_role_runtime.py:37-39` (`Q4_WORDS_PER_EPOCH_ROW=36`, `ABI_NAMES`, `ABI_DTYPES`), re-asserted in `mmq_frozen_epoch_program_set.py:56`, `mmq_frozen_epoch_memory_certificate.py:27`, `mmq_frozen_staged_low_level_session.py:78,96`, `mmq_staged_c7_c8_contract.py`. Shrink: keep `output`(0) + `q4`(1, decoded in-register now); collapse `q8_values/scales/sums`(2-4) → one `dtypes.half` activation buffer.
+Two in-stack: `mmq_llama_five_buffer_graph.py:85-95` (`five_buffer_parameters`) + `mmq_llama_five_buffer_full_kernel.py:67,192-241,287-302`. Producer adapter to delete: `mmq_llama_record_producers.py:301-322` (3-q8-buffers → 1 interleaved row). Downstream canonical ABI constants (independently re-hardcoded, all must be re-declared): `extra/qk/prefill/frozen_exact_role_runtime.py:37-39` (`Q4_WORDS_PER_EPOCH_ROW=36`, `ABI_NAMES`, `ABI_DTYPES`), re-asserted in `mmq_frozen_epoch_program_set.py:56`, `mmq_frozen_epoch_memory_certificate.py:27`, `mmq_frozen_staged_low_level_session.py:78,96`, `mmq_staged_c7_c8_contract.py`. Shrink: keep `output`(0) + `q4`(1, decoded in-register now); collapse `q8_values/scales/sums`(2-4) → one `dtypes.half` activation buffer.
 
 ### II.7 Identity/schema/source-pin constants a new family must re-declare (not mutate)
 Source-pins `LLAMA_SOURCE_COMMIT`/`LLAMA_MMQ_CUH` (`mmq_llama_oracle_recurrence.py:19-20` + duplicated across stack; every `__post_init__` raises on drift) — a from-scratch fp16 kernel has no mmq.cuh source; define its own identity or drop the pin. Schema strings (`PLAN_SCHEMA`, `DESCRIPTOR_ID`, per-module `SCHEMA`, transform ids) and `SOURCE_ANCHORS` tuples → new family strings so identity hashes don't collide/false-diff. `RESOURCE_BLOCKER` string (`five_buffer_full_kernel.py:26`) → adjust to the new register-pressure profile.

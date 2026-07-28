@@ -141,10 +141,10 @@ Q6, while Q4/Q6 decode grammars remain separate.
 
 ## Ownership boundaries for parallel work
 
-- Contract owner: `extra/llm_research/mmq_abi.py`, `extra/llm_research/layout.py`, reference-facing
+- Contract owner: `extra/qk/mmq_abi.py`, `extra/llm_research/layout.py`, reference-facing
   Q4/Q8 helpers, and ABI/layout tests.
 - Vocabulary owner: new logical MMQ descriptor modules and their tests.
-- Emitter owner: `extra/llm_research/q4k_q8_mmq_emitter.py` and logical-to-UOp tests.
+- Emitter owner: `extra/qk/q4k_q8_mmq_emitter.py` and logical-to-UOp tests.
 - Physical-lowering owner: generated harness, launch/metadata validation, and
   bounded emitted-candidate tests.
 - Evidence owner: search, compile evidence, owner coverage, regression gates,
