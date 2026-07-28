@@ -121,6 +121,17 @@
       "replacement": "docs/artifacts/shared-attention-benchmark-20260723/{STATUS.md,summary.json}",
       "recovery_commit": "8e829a1d3",
       "verification": "exact 16-path deletion; remaining artifact JSON parses; replay-admission test passes; no external raw-path consumers"
+    },
+    {
+      "paths": [
+        "docs/artifacts/shared-attention-benchmark-replay-20260723/raw/**",
+        "docs/artifacts/shared-attention-g2-lds-replay-20260723/raw/**",
+        "docs/artifacts/shared-attention-wave-fence-replay-20260723/raw/**"
+      ],
+      "count": 22,
+      "replacement": "corresponding summary.json/README.md compact replay conclusions",
+      "recovery_commits": ["9d7b985e8", "f3327febe", "1299e4531"],
+      "verification": "exact 22-path deletion; remaining artifact JSON parses; replay-admission test passes; no external raw-path consumers"
     }
   ],
   "completed_boundary_closures": [
