@@ -21,6 +21,14 @@ The Mac environment currently has no `llvm-readelf` (or equivalent ROCm LLVM too
 extract AMD binary metadata. The checked-in lowering fingerprint also differs from the freshly computed fingerprint.
 Neither observation is a matcher test failure, but neither may be silently accepted as a passing authority gate.
 
+## Commit-history triage
+
+The checked-in CPU fingerprint artifact was last captured at `05f86ca73`. The current tip contains subsequent codegen,
+cache-key, gate-inventory, and compiler-ownership commits before the reg-store/fdot2 centralizations. The `fdot2` hook
+is AMD-only and default-off, so its promotion cannot explain a CPU-only fingerprint delta. This provenance inference is
+enough to continue the branch reorganization and review later slices; it is not a substitute for rerunning the
+fingerprint authority or for extracting AMDHSA metadata from a compiled binary.
+
 ## Prerequisites
 
 - A clean promoted commit containing the centralization and its tests.

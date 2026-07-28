@@ -141,6 +141,11 @@ accumulator ordering, fail-closed controls, list dependency replacement, and the
 `V_DOT2_LOWERING` gate remains default-off and AMD-only; no hardware execution or speed claim is made. Lowering
 baseline/fingerprint authority remains an open verification task.
 
+Commit-history triage shows that the checked-in CPU fingerprint predates the later codegen, cache, gate, and ownership
+commits, and that the promoted `fdot2` hook is AMD-only/default-off. We therefore treat the fingerprint delta as a
+pre-existing authority mismatch for purposes of continuing reorganization, while keeping the formal baseline and
+AMDHSA metadata checks open until they can run on the required toolchain.
+
 At the current `exp` tip, `python3 sz.py` passes with 34,947 budgeted authored lines against the 40,000-line cap.
 
 ## Documentation closure completed
