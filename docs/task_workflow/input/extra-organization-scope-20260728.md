@@ -18,7 +18,7 @@ master = production authorities + supported runtime surfaces
 
 ## Current top-level inventory
 
-The current tree contains 197 tracked files:
+The current tree contains 198 tracked files:
 
 | Current path | Count | Current role | Target organization | Branch default |
 |---|---:|---|---|---|
@@ -34,6 +34,7 @@ The current tree contains 197 tracked files:
 | `extra/mesa/**` | 1 | optional Mesa setup/extraction helper | `extra/setup/mesa/**` | `master` while backend is supported |
 | root `extra/setup_*.sh` | 8 | optional backend/toolchain setup scripts | `extra/setup/**` | `master` for supported backends; TinyGPU unresolved |
 | root `extra/runtime_models.example.json` | 1 | CLI operating fixture | `extra/llm/runtime_models.example.json` | `master` with CLI |
+| `extra/other/**` | 1 | temporary unclassified-surface policy | `extra/other/**` until classified | `dev`/`exp`; never inferred as production |
 
 The count includes headers, fixtures, scripts, source files, protocol documents, and installer assets; it is not a count
 of executable hot-path modules.
@@ -60,10 +61,10 @@ Each row must record:
 The initial ledger census must assert:
 
 ```sh
-test "$(git ls-files 'extra/**' | wc -l | tr -d ' ')" = 197
+test "$(git ls-files 'extra/**' | wc -l | tr -d ' ')" = 198
 ```
 
-No rename, directory move, or branch pruning is authorized until the ledger has 197 unique paths, its consumer/link
+No rename, directory move, or branch pruning is authorized until the ledger has 198 unique paths, its consumer/link
 scan is clean, and every unresolved row names the human or follow-up task that will decide it.
 
 ## Target domains
@@ -127,6 +128,12 @@ generic hardware bucket. TinyGPU remains `exp` until its supported-product statu
 Installer and toolchain setup scripts. Setup scripts are not runtime code, but their supported backend contract must be
 documented before they remain on `master`.
 
+### `extra/other`
+
+`extra/other` is an explicit quarantine for files that do not yet fit the named domains. It is not a fourth production
+tier and must not become a dumping ground. Every file there requires a ledger row and a next disposition; new runtime
+dependencies on it are forbidden.
+
 ## Organization rules
 
 1. A directory name does not establish production ownership.
@@ -140,7 +147,7 @@ documented before they remain on `master`.
 
 ## Required next classification pass
 
-The next task is a file-level ledger for all 197 current `extra/**` files, starting with the 97 current `extra/qk`
+The next task is a file-level ledger for all 198 current `extra/**` files, starting with the 97 current `extra/qk`
 files and the mixed files under `extra/llm`, `extra/hardware`, `extra/nv_gpu_driver`, and `extra/usbgpu`. The ledger
 must record the target domain above, default-path reachability, branch owner, direct callers, tests, artifacts, and the
 migration or retention criterion. No rename is authorized until that ledger is complete and reviewed.
