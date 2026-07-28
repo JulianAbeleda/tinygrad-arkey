@@ -5,8 +5,8 @@ Updated: 2026-07-28
 
 Repository: `/Users/julianabeleda/env/tinygrad-arkey`
 
-Status: open; `master` is production, but the persistent `dev` and `exp` branches/worktrees and selective promotion
-pipeline have not been established
+Status: in progress. The persistent `master`, `dev`, and `exp` branches/worktrees were established on 2026-07-28.
+The production-boundary inventory, test-script placement, enforcement, and pilot selective promotion remain open.
 
 ## 1. Objective
 
