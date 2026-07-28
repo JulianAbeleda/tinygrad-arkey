@@ -891,6 +891,46 @@
     },
     {
       "allowed_dependency_domains": [
+        "attention_prefill",
+        "evidence"
+      ],
+      "authority_keys": [],
+      "classification_confidence": "high",
+      "default_path": false,
+      "deletion_confidence": "retain_until_conclusion",
+      "disposition": "move",
+      "domain": "evidence",
+      "duplication_group": null,
+      "evidence": [
+        "extra/qk/decode/capture_prefill_compile.py has no runtime importer; it patches HIPCompiler/HIPCCCompiler and invokes extra.llm.generate as a compile reproducer",
+        "Packet A runtime/tooling census assigns this file to dev until the vector-stack-lvalue compile conclusion is banked",
+        "recovery commit 5266ca605 introduced the reproducer alongside the renderer fix"
+      ],
+      "path": "extra/qk/decode/capture_prefill_compile.py",
+      "promotion_target": null,
+      "public_surface": [
+        "main"
+      ],
+      "purpose": "Compile-only prefill reproducer that captures the HIP compiler failure and vector-stack-lvalue renderer context; it is a debug qualification tool, not a production runtime module.",
+      "responsibilities": [
+        "patch compiler capture hooks",
+        "invoke the named prefill compile path",
+        "preserve failure reproduction until the conclusion is banked"
+      ],
+      "retention_criterion": "retain on dev until the compile-failure conclusion is recorded; then delete with recovery from 5266ca605 or the final retaining commit",
+      "reusable_assets": [
+        "compile-capture"
+      ],
+      "role": "diagnostic",
+      "status": "active_research",
+      "surface": "off_default",
+      "test_role": "operational_tool",
+      "workflow_ids": [
+        "prefill-compile-capture"
+      ]
+    },
+    {
+      "allowed_dependency_domains": [
         "attention_decode",
         "evidence",
         "quant_mmq",

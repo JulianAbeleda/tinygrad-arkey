@@ -666,8 +666,10 @@ The descriptor contents were preserved as a rename, active path references and r
 updated, and the generated organization census plus pure-machine-search census were refreshed. CPU verification
 completed for `test/unit/test_tinygrad_boundary.py`, descriptor validation/JSON, and Python compilation of the moved
 module and callers. A broader semantic/residency batch had 32 passes, 8 skips, and 12 CPU semantic/cycle or barrier
-assertion failures; it produced no missing-module or import failure attributable to this move. The audit remains
-blocked only by the pre-existing unmanifested `extra/qk/decode/capture_prefill_compile.py` record.
+assertion failures; it produced no missing-module or import failure attributable to this move. The scoped organization
+audit now reports `ORG_R1_PASS_CENSUS_PINNED` with 94 explicit records, zero hard errors, and 67 warnings after the
+compile reproducer received an evidence-based dev diagnostic record; its deletion remains blocked until its conclusion
+is banked.
 
 This checkpoint does not authorize broader pruning. The remaining R1-R7 ledgers, generated evidence ownership, and
 cross-packet conflicts must be reconciled before deleting or tier-pruning additional assets.

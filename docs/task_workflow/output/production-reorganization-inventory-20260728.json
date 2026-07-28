@@ -1,0 +1,62 @@
+{
+  "schema": "production-reorganization-inventory-20260728",
+  "status": "R7_BLOCKED",
+  "audited_worktree": "/Users/julianabeleda/env/tinygrad-arkey-exp",
+  "audited_commit": "ab162a931",
+  "comparison_base": "6e1b61f16",
+  "tier_contract": {
+    "exp": ["production", "debug", "experimental"],
+    "dev": ["production", "debug"],
+    "master": ["production"]
+  },
+  "coverage": {
+    "packet_a_runtime_tooling": 393,
+    "packet_b_tests_bench_artifacts": 380,
+    "packet_c_docs_surface": 276,
+    "root_metadata_followup": 13,
+    "packet_total": 1049,
+    "reconciled_unique_paths": 1062,
+    "packet_a_git_breakdown": {"added": 228, "modified": 135, "renamed": 30},
+    "packet_b_breakdown": {"tests": 164, "bench": 43, "docs_artifacts": 173}
+  },
+  "evidence_sources": [
+    "docs/task_workflow/output/production-reorg-packet-a-runtime-20260728.md",
+    "docs/task_workflow/output/production-reorg-packet-b-tests-evidence-20260728.md",
+    "docs/task_workflow/output/production-reorg-packet-c-docs-surface-20260728.md",
+    "docs/task_workflow/output/production-reorganization-report-20260728.md"
+  ],
+  "uniform_groups": [
+    {"paths": "tinygrad/** except route_ops.py, codegen/experimental.py, llm/__main__.py", "owner": "master", "category": "runtime/operating record", "disposition": "retain", "confidence": "high"},
+    {"paths": "tinygrad/llm/route_ops.py; tinygrad/codegen/experimental.py; tinygrad/llm/__main__.py", "owner": "master", "category": "runtime boundary adapters", "disposition": "consolidate", "destination": "direct tinygrad owners", "confidence": "high", "unresolved": true},
+    {"paths": "extra/audit/**; extra/tools/check_doc_links.py; extra/tools/amd_isa_generate.py", "owner": "master", "category": "production authority", "disposition": "retain", "confidence": "high"},
+    {"paths": "extra/llm/cli.py", "owner": "master", "category": "production CLI", "disposition": "promote", "destination": "tinygrad/llm/cli.py", "confidence": "high", "unresolved": true},
+    {"paths": "extra/gpu_fault_analysis/**; extra/hardware/**; extra/remote/**", "owner": "dev", "category": "debug tooling", "disposition": "move", "destination": "extra/debug/**", "confidence": "high", "unresolved": true},
+    {"paths": "extra/hardware/sqtt/roc.py", "owner": "unresolved", "category": "runtime/debug boundary", "disposition": "unresolved", "confidence": "high", "unresolved_reason": "tinygrad/viz/profile.py reaches extra then test.amd.disasm"},
+    {"paths": "extra/usbgpu/**; extra/setup_tinygpu_osx.sh", "owner": "unresolved", "category": "experimental backend/installer", "disposition": "unresolved", "confidence": "high", "unresolved_reason": "supported-product status is undecided"},
+    {"paths": "extra/qk/** excluding promoted flash-prefill descriptor", "owner": "master/dev/exp", "category": "mixed runtime, authority, qualification, research", "disposition": "unresolved", "confidence": "high", "unresolved_reason": "slices 2-14 and the ten uncovered manifest paths remain to be reconciled"},
+    {"paths": "test/** current fork-added or fork-modified paths", "owner": "unresolved", "category": "mixed production regression/debug/experimental", "disposition": "unresolved", "confidence": "high", "unresolved_reason": "72 tests depend on unresolved runtime ownership; 5 are explicitly mixed-owner"},
+    {"paths": "bench/** and docs/artifacts/**", "owner": "unresolved", "category": "canonical evidence/raw artifact", "disposition": "unresolved", "confidence": "high", "unresolved_reason": "102 staged/frozen artifacts need consumer and compact-replacement decisions"},
+    {"paths": "docs/*.json top-level (62)", "owner": "unresolved", "category": "evidence record", "disposition": "unresolved", "confidence": "high", "unresolved_reason": "unique conclusions and consumers are not reconciled"},
+    {"paths": "docs/** excluding artifacts and the 62 JSON records", "owner": "master/dev/exp", "category": "operating record/investigation/scratch", "disposition": "unresolved", "confidence": "high", "unresolved_reason": "maintained-index and link repairs must follow owner decisions"},
+    {"paths": "structure/**; root metadata; spec/**; .githooks/**; LICENSE; sz.py", "owner": "master", "category": "repository authority", "disposition": "retain", "confidence": "high"},
+    {"paths": "opencode.json", "owner": "dev", "category": "operator configuration", "disposition": "retain", "confidence": "medium", "unresolved_reason": "delete if OpenCode is not a supported operator tool"},
+    {"paths": "scratchpad/**; docs/scratchpad/**; root scratch_attn_bench*.py", "owner": "delete", "category": "historical/scratch", "disposition": "delete_candidate", "confidence": "high", "unresolved_reason": "deletion requires this ledger plus final link/index check"}
+  ],
+  "completed_closure": {
+    "source": "extra/qk/prefill/flash_prefill_attention_spec.py",
+    "destination": "tinygrad/schedule/wmma/flash_prefill.py",
+    "consumers": ["tinygrad/llm/fused_attention.py:162", "tinygrad/codegen/opt/postrange.py:602"],
+    "commits": {"exp": "ab162a931", "dev": "d54a64ab0", "master": "ab154b422"},
+    "focused_test": "test/unit/test_flash_prefill_spec.py",
+    "audit_state": "ORG_R1_PASS_CENSUS_PINNED; 0 hard errors and 67 warnings after adding the evidence-based dev record for capture_prefill_compile.py"
+  },
+  "blocking_conditions": [
+    "R7 inventory must resolve cross-packet ownership before broader pruning",
+    "extra/qk/decode/capture_prefill_compile.py remains deletion-blocked until its compile conclusion is banked",
+    "extra/hardware/sqtt/roc.py has a tinygrad -> extra -> test dependency",
+    "TinyGPU/USB GPU supported-product status is unresolved",
+    "72 tests, 102 artifacts, and 62 top-level JSON records lack final retention owners",
+    "docs/README.md and five documented Markdown links require repair"
+  ],
+  "removal_authorization": "only the two stale Claude prompt deletions recorded in the cleanup ledger"
+}
