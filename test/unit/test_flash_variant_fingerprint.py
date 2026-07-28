@@ -40,4 +40,5 @@ def test_both_score_variants_share_one_merge_tail():
   branch, the two arms drift again silently -- the failure this refactor removed."""
   src = (ROOT / "extra/qk/flash_kernels.py").read_text()
   assert src.count("def _merge_tail(") == 1
-  assert src.count("mxu = _merge_tail(tt, new_m, corr, p)") == 2, "expected exactly two call sites, one per score variant"
+  # Both score variants now feed one shared post-selection merge call.
+  assert src.count("mxu = _merge_tail(tt, new_m, corr, p)") == 1
