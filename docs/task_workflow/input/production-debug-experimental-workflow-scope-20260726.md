@@ -98,6 +98,9 @@ from `dev` carries only the minimum regression tests and authorities needed on `
 probes, parameter sweeps, one-off test scripts, and candidates whose production value or safety is not established.
 It is based on `dev`, so experiments can use the debug and qualification tools without copying them into production.
 
+The maintained surfaces are subtractive: `exp` contains production + debug + experimental assets, `dev` contains
+production + debug assets, and `master` contains production assets only. Confirmed dead assets belong in none of them.
+
 `exp` is a laboratory, not an archive. Failed work remains recoverable from Git history; unique conclusions move to a
 compact ledger, and dead scripts are deleted. Concurrent experimental tasks use dedicated branches and worktrees such
 as `experiment/decode-ctx128` or `experiment/prefill-search`, normally forked from `exp` and selectively folded back.
@@ -140,8 +143,9 @@ The directory names may be adjusted if occupied, but `master`, `dev`, and `exp` 
 9. A task-specific probe is deleted after its evidence is promoted unless it becomes an owned reusable diagnostic on `dev`.
 10. Recovery from Git history is acceptable for retired experiments; dead code does not remain in any tier solely to make recovery convenient.
 11. Production tests and authorities may remain even when they are not runtime-imported, provided they defend a shipped path and have a named contract.
-12. After a production promotion or hotfix, `master` is synchronized downward into `dev`, then the updated `dev` is
-    synchronized into `exp`, without pulling debug or experimental assets upward.
+12. After the tiers diverge, production behavior changes are synchronized downward as reviewed commits or bounded
+    patches. A production cleanup deletion is not propagated into a branch that owns the deleted debug or experimental
+    asset. Whole-branch equality is not a goal in either direction.
 
 ## 7. Promotion contract
 
@@ -180,7 +184,8 @@ A candidate may move from `dev` to `master` only when it has:
 6. Production gates run against that exact promotion commit; debug-only files are absent from its diff.
 7. A reviewed PR or bounded merge advances `master` from the promotion branch.
 8. The promoted commit receives a durable findings or current-state update.
-9. The new `master` tip is synchronized downward into `dev` and then `exp`.
+9. The new production commits are selectively synchronized downward into `dev` and then `exp`; tier-placement
+   deletions are excluded where the destination branch owns the asset.
 10. Temporary promotion and `experiment/*` branches/worktrees are removed after their retained work reaches its owner.
 
 Because `dev` permanently owns debug assets, do not use branch equality with `master` as a goal and do not merge
@@ -309,7 +314,7 @@ The pilot must prove:
 - Required CI and audit behavior.
 - Absence of debug-only and experimental files from the production diff.
 - Clean temporary branch/worktree retirement.
-- Downward synchronization of the new `master` tip into `dev` and `exp` after promotion.
+- Selective downward synchronization of the new production commits into `dev` and `exp` after promotion.
 
 Do not choose a lowering refactor, GPU fault repair, or performance-sensitive kernel as the pilot.
 
@@ -380,7 +385,8 @@ The task is complete only when:
 - The production worktree remains unchanged during debug and experimental work.
 - The pilot proves that debug-only and experimental files do not appear in the production promotion diff.
 - GPU evidence records exclusive lock ownership.
-- The promoted `master` commit is synchronized downward into `dev` and `exp`.
+- The promoted production behavior is selectively synchronized downward into `dev` and `exp` without deleting
+  branch-owned debug or experimental assets.
 - The final production-boundary and LOC reports are retained.
 - This bootstrap input is retired after its durable output is accepted.
 
@@ -390,3 +396,151 @@ The repository should end with three distinct working surfaces: a small, stable,
 `dev` environment for debugging, reproduction, and qualification; and an `exp` environment for disposable experiments.
 Useful work moves forward through selective gates, while production fixes synchronize downward. Failed work leaves
 durable conclusions and Git history, not permanent dead scripts in any active branch.
+
+## 16. Execution revision: exhaustive production reorganization
+
+Date authorized: 2026-07-28
+
+Active phase: scope update followed by repository census and classification from the `exp` worktree. No pruning is
+authorized until the classification ledger in R7 is complete and every removal has a destination or recovery record.
+
+### 16.1 Reorganization objective
+
+Make `master` a minimal production repository without weakening the proof of shipped behavior:
+
+- Fork-authored code executed by the production runtime belongs under `tinygrad/`, not behind an `extra/` adapter.
+- Reusable reproducers, diagnostics, qualification harnesses, debug-only tests, and detailed investigation notes
+  belong on `dev`.
+- Unproven implementations, risky probes, sweeps, scratch scripts, and disposable artifacts belong on `exp`.
+- Dead or superseded assets are deleted after their unique conclusion and recovery commit are recorded.
+- Production keeps only regression tests, canonical authorities, compact current-state records, operating instructions,
+  runtime fixtures, and manifests required to build, run, validate, or recover the shipped path.
+
+The pruning direction is mandatory:
+
+```text
+exp (production + debug + experimental)
+  -> dev (production + debug)
+    -> master (production)
+```
+
+Work is audited and made coherent on `exp` first. `dev` is then produced by removing experimental-only assets, and
+`master` is produced last by removing debug-only assets. This avoids using the most-pruned branch as the source of a
+richer branch and makes every subtraction reviewable.
+
+This applies to every current fork-added or fork-modified asset, not only `extra/qk`. Unchanged upstream files are not
+automatically deletion candidates; an upstream boundary is changed only when the Arkey production path depends on it
+or the file has an explicit fork-owned disposition.
+
+### 16.2 Measured baseline
+
+Baseline production commit before the census: `5b2439eac`.
+
+Topology at the baseline:
+
+| Branch | Worktree | State |
+|---|---|---|
+| `master` | `/Users/julianabeleda/env/tinygrad-arkey` | clean production baseline |
+| `dev` | `/Users/julianabeleda/env/tinygrad-arkey-dev` | clean, equal to baseline |
+| `exp` | `/Users/julianabeleda/env/tinygrad-arkey-exp` | clean, equal to baseline |
+
+Fork comparison base: upstream common ancestor `6e1b61f16` (2026-06-10). Current files added since that base:
+
+| Area | Added files |
+|---|---:|
+| `tinygrad/` | 97 |
+| `extra/` | 161 |
+| `test/` | 162 |
+| `docs/` | 405 |
+| `bench/` | 43 |
+| `structure/` | 27 |
+| `scratchpad/` plus root scratch scripts | 10 |
+
+Current files modified from that base include 116 under `tinygrad/`, 19 under `extra/`, 2 under `test/`, and 3 under
+`docs/`. Deleted upstream files are tracked separately as sync history and are not counted as current assets.
+
+The existing organization audit covers only `extra/qk`: 95 authored files and 13,516 token-bearing LOC. It has 94
+explicit records and one hard drift, `extra/qk/decode/capture_prefill_compile.py`. The audit conservatively reports 55
+files reachable through `tinygrad` boundary wrappers, but wrapper reachability is not proof of default-path execution.
+R2 must resolve actual consumers before promotion or removal.
+
+### 16.3 Required classification record
+
+The machine-readable inventory must give every in-scope file or explicitly uniform group:
+
+- Current path and owning branch: `master`, `dev`, `exp`, or `delete`.
+- Category: runtime, production authority, production regression, operating record, debug tool, debug test,
+  experimental candidate, one-off probe, raw artifact, generated file, vendored/upstream, or unresolved.
+- Production consumer or CLI entry point, including lazy/dynamic imports and shell/document references.
+- Default-path status and supported backend/model/route contract.
+- Disposition: retain, promote to `tinygrad`, move to `dev`, move to `exp`, consolidate, or delete.
+- Destination path when promoted, plus import and test migration requirements.
+- Retention criterion and owner for every non-runtime file retained on `master` or `dev`.
+- Last use, banked conclusion, and recovery commit for every deletion.
+- Evidence confidence and an explicit unresolved flag; unresolved files cannot be removed.
+
+File names and directory location are discovery signals, never final classification evidence.
+
+### 16.4 Work ledger
+
+| ID | Status | Work item | Completion evidence |
+|---|---|---|---|
+| R0 | completed | Establish and push the three clean worktrees | `master`, `dev`, and `exp` all at `5b2439eac` before divergence |
+| R1 | pending | Census every current fork-added and fork-modified file from `exp` | Inventory counts reconcile with Git and `sz.py`; no unclassified path |
+| R2 | pending | Resolve the production import/dispatch closure | Actual call sites distinguish live runtime dependencies from optional wrappers and test-only seams |
+| R3 | pending | Classify all tests | Production regressions stay; debug tests move to `dev`; experimental and obsolete tests move to `exp` or delete |
+| R4 | pending | Classify all docs | Master keeps current operating/contract records; detailed investigations move to `dev`; scratch and stale prompts leave master |
+| R5 | pending | Classify `bench/`, `docs/artifacts/`, and generated evidence | Runtime fixtures and canonical baselines stay; raw or replay evidence moves off master |
+| R6 | pending | Classify non-QK `extra/`, root scratch files, and `scratchpad/` | `audit`, `hardware`, `llm`, `remote`, `tools`, and `usbgpu` receive explicit owners |
+| R7 | pending | Freeze the classification and cleanup ledgers | Human-readable report and machine-readable inventory reviewed with zero unresolved removals |
+| R8 | pending | Reorganize the broad `exp` surface | Production, debug, and live experimental assets are coherent; confirmed dead assets are removed |
+| R9 | pending | Promote live production code from `extra/` on `exp` | Production runtime has no fork-owned default-path implementation in `extra/`; focused tests pass |
+| R10 | pending | Derive `dev` from the audited `exp` result | Experimental-only assets are absent; production and owned debug assets remain |
+| R11 | pending | Derive `master` from the qualified `dev` result | Debug-only assets are absent; the diff contains only ledger-authorized production placement changes |
+| R12 | pending | Verify correctness, boundaries, budget, and links on all tiers | Tier-specific audits, tests, import checks, doc links, and `sz.py` pass |
+| R13 | pending | Publish and close the migration | Clean pushed branches, final counts, recovery map, and scope moved to output |
+
+Status values are `pending`, `in progress`, `blocked`, and `completed`. A row changes only when its stated completion
+evidence exists; partial exploration does not count as completion.
+
+### 16.5 Required outputs
+
+- `docs/task_workflow/output/production-reorganization-inventory-20260728.json`
+- `docs/task_workflow/output/production-reorganization-report-20260728.md`
+- `docs/task_workflow/output/production-reorganization-cleanup-ledger-20260728.json`
+- An expanded production-boundary manifest and audit covering all fork-owned surfaces, not only `extra/qk`.
+- Before/after tracked-file, authored-LOC, test, document, and artifact counts per branch.
+- A recovery map from every deleted path to its last retaining commit or archive tag.
+
+### 16.6 Execution order and branch safety
+
+1. Move active audit execution to the `exp` worktree and complete R1-R7 there without deleting unresolved assets.
+2. On `exp`, promote required runtime code into `tinygrad/`, organize live experimental/debug assets, and delete only
+   confirmed dead assets. Run the broadest-tier gates.
+3. Apply the shared production/debug commits to `dev`, then prune every `exp`-only asset listed in the frozen ledger.
+   Run the debug/qualification gates on the exact `dev` commit.
+4. Apply the shared production commits to `master`, then prune every `dev`-only asset listed in the frozen ledger.
+   Run the production gates on the exact `master` commit.
+5. Never merge a richer tier wholesale into a cleaner tier. Use reviewed bounded commits or destination-based patches
+   so `exp`-only files cannot enter `dev` and debug-only files cannot enter `master`.
+6. Do not propagate cleaner-tier deletion commits backward into a richer tier that owns the removed files.
+7. Run R12, push all three clean branches, record their identities and counts, then complete R13.
+
+### 16.7 Reorganization completion gates
+
+The repository reorganization is complete only when:
+
+- Every fork-added and fork-modified current file has one recorded owner and disposition.
+- `exp` equals the maintained production + debug + experimental set, `dev` equals production + debug, and `master`
+  equals production; confirmed dead assets exist in none of the three branch tips.
+- No unresolved file was moved or deleted.
+- No fork-authored production runtime path depends on an implementation owned by `extra/`, `dev`, or `exp`.
+- Every `extra/` asset retained on `master` is an explicit canonical production authority, runtime fixture, or unchanged
+  upstream optional surface with a documented exception.
+- Master contains no root scratch scripts, raw benchmark dumps, stale execution prompts, completed handoffs, or
+  one-off diagnostic probes.
+- Every test retained on master names the shipped behavior or policy boundary it protects.
+- Every document retained on master is current, canonical, and linked from a maintained index or owner.
+- The expanded organization audit passes with complete manifest coverage and no hard errors.
+- Production tests and supported CPU/Metal/AMD smoke gates pass at the exact clean commit, subject to available hardware.
+- `sz.py` passes and the final report quantifies the reduction rather than asserting cleanliness qualitatively.
