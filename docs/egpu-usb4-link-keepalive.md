@@ -1,9 +1,9 @@
 # eGPU over USB4/Thunderbolt: the idle link-drop, its cause, and the keepalive fix
 
 Durable record of a hardware issue that cost real debugging time and whose fix was
-lost in a refactor. The symptom, root cause, and fix were previously recorded only in
-a commit message (`554800bef`, 2026-06-10) and in code that has since been deleted —
-banked here so it is discoverable.
+lost in a refactor. The historical symptom and root cause were previously recorded
+only in a commit message (`554800bef`, 2026-06-10) and deleted code. The current
+implementation and measured installation state are recorded below.
 
 ## Symptom
 
@@ -32,8 +32,10 @@ This is **link-side power management**, not:
 
 Suppress the low-power transitions by touching the link ~once a second whenever a device is
 open and the bridge is otherwise idle. A config-space read is harmless and keeps the link out
-of the deep ASPM/CLx states that fail to retrain. Cadence via `REMOTE_KEEPALIVE_S`
-(`0` disables); default-on only for macOS.
+of the deep ASPM/CLx states that fail to retrain. The current implementation owns cadence in
+the native DriverKit provider under the named policy `usb4_amd_744c_v1` (1000 ms interval,
+100 ms maximum leeway). `REMOTE_KEEPALIVE_S` is explicitly unsupported; Python environment
+state and TinyGPU.app liveness are not keeper evidence.
 
 Reference implementation (from the deleted `extra/remote/serve.py` @ `554800bef` — recover
 the full file with `git show 554800bef:extra/remote/serve.py`):
@@ -62,29 +64,43 @@ def keepalive_tick():
 
 The keepalive must run **in the process that holds the device** (does the config-space read).
 
-## Where the fix now has to live (architecture migration)
+## Where the fix lives (architecture migration)
 
-The keepalive lived in `extra/remote/serve.py`, a 243-LOC Python socket bridge. On 2026-06-16
-(`4c5e67cff`, "hard-fork prune Unit 1a") that bridge was deleted as part of migrating the
-remote-GPU host from the Python bridge to a **native macOS app**: the client now connects to
-`/Applications/TinyGPU.app` over a unix socket (`tinygrad/runtime/support/system.py`
-`APLRemotePCIDevice.ensure_app()` / `__init__`, spawns `[APP_PATH, "server", sock]`).
+The historical keepalive lived in `extra/remote/serve.py`, a 243-LOC Python socket bridge.
+That bridge was deleted at `4c5e67cff` during migration to a native macOS app. The current
+feature branch restores bounded TinyGPU source under `extra/usbgpu/tbgpu/installer/` and
+places the keeper in the DriverKit provider, not in Python or the workload server. Python
+negotiates the protocol and acquires workload leases, while the provider owns the timer,
+PCI read, lifecycle gate, and read-only status counters.
 
-Consequence: **the keepalive cannot be restored into this Python repo.** The device is held by
-`TinyGPU.app`, so the config-space-read loop must run inside that app. As of this writing the
-keepalive is **absent from the entire Python tree** (grep for `keepalive`/`REMOTE_KEEPALIVE`
-→ zero hits). Whether the locally-built arkey app (`org.tinygrad.arkey`, "carries local
-TinyGPU fixes" per `ensure_app`) already ports it is **unverified**.
+The wire contract is frozen in
+`extra/usbgpu/protocol/tinygpu-wire-v1.md`. The provider rejects unknown identities and
+never resets or power-cycles hardware after a failed tick. Workload DMA, BAR mappings, and
+shared memory are released at lease disconnect and are not retained by the keeper.
 
-## Action status
+## Measured implementation status (2026-07-28)
 
-- **Verify (Mac-side, only the owner can):** leave the eGPU idle past the ~40-min failure
-  window. If it survives (`0x744c` stays visible, PSP gate stays CLEAN), the app already carries
-  the keepalive and nothing more is needed. If it still drops, port the snippet above into the
-  `TinyGPU.app` server loop (gated by `REMOTE_KEEPALIVE_S`, default-on for the USB4 path).
-- **Secondary defense:** `pmset disablesleep 1` + a launchd KeepAlive daemon guard against
-  genuine macOS system-sleep tearing down the tree, but they are NOT the primary fix — the
-  keepalive is.
-- **Fallback (kept):** `extra/remote/amd_power_cycle.py` physically power-cycles via a Shelly
-  smart plug when the link is already dead. Prevention lowers frequency; it does not make the
-  power-cycle recovery obsolete.
+- Feature branch: `feature/egpu-usb4-keeper`, source commit `f23c05c57468ccdd7035789fbf38320d2c2c0d68`.
+- The audited development installer replaced `/Applications/TinyGPU.app`; the app and
+  DriverKit extension are ad-hoc signed, and DEXT
+  `org.tinygrad.arkey.tinygpu.driver2` reached `[activated enabled]` at version `1.0.0/4`.
+- A0 stopped before any workload qualification. The UT4G bridge is connected at 40 Gb/s,
+  but `system_profiler` reports no `1002:744c` PCI endpoint. The native diagnostic handshake
+  therefore cannot open the provider. This is a signal/enumeration precondition, not evidence
+  that the keeper passed or failed.
+- No reset, power-cycle, sleep, replug, workload benchmark, or idle-duration claim was made.
+- The complete machine-readable A0 artifact is
+  `docs/task_workflow/output/egpu-usb4-persistent-pcie-A0-20260728T105840Z-89079.json`.
+  The ignored installation transcript remains at
+  `docs/task_workflow/output/tinygpu-development-install-provenance.txt` for local audit.
+
+Qualification remains gated on endpoint enumeration. Once the endpoint is present, rerun A0
+and then the acceptance matrix in the authoritative scope under the GPU lock. Do not infer
+awake-idle, load-power, or sleep/wake behavior from this installation result.
+
+**Secondary defense:** `pmset disablesleep 1` and a launchd KeepAlive daemon are separate
+sleep investigations, not substitutes for the native provider keeper.
+
+**Fallback (kept):** `extra/remote/amd_power_cycle.py` physically power-cycles via a Shelly
+smart plug when the link is already dead. Prevention lowers frequency; it does not make the
+power-cycle recovery obsolete.
