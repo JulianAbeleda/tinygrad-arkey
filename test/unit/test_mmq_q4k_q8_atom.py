@@ -3,9 +3,9 @@ import pytest
 
 from tinygrad import Tensor, dtypes
 
-from extra.qk.layout import Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS, q8_1_quantize
-from extra.qk.mmq_lifecycle import COUNTER_NAMES
-from extra.qk.mmq_q4k_q8_atom import (
+from extra.llm_research.layout import Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS, q8_1_quantize
+from extra.llm_research.mmq_lifecycle import COUNTER_NAMES
+from extra.llm_research.mmq_q4k_q8_atom import (
   AMD_BACKEND_ATOM_ID, AMD_DS4_DOT4X4_BACKEND_ATOM_ID, AMD_DS4_WARP_BACKEND_ATOM_ID, AMD_STAGED_DS4_BACKEND_ATOM_ID,
   AMD_DS4_COOP_TILE_BACKEND_ATOM_ID, AMD_DS4_COOP_TILE_BLOCKER, AMD_DS4_LDS_SKELETON_BACKEND_ATOM_ID,
   AMD_WARP_BACKEND_ATOM_ID, BACKEND_ATOM_ID, q8_1_mmq_ds4_from_row_major,
@@ -17,7 +17,7 @@ from extra.qk.mmq_q4k_q8_atom import (
   run_q4k_q8_1_mmq_bounded_amd_ds4_lds_skeleton, run_q4k_q8_1_mmq_tile_amd_warp,
   run_q4k_q8_1_mmq_bounded_amd_ds4_coop_tile, run_q4k_q8_1_mmq_tile_with_lifecycle,
 )
-from extra.qk.mmq_q4k_q8_reference import (
+from extra.llm_research.mmq_q4k_q8_reference import (
   Q8_1_MMQ_DS4_LAYOUT, describe_q4k_q8_1_mmq_tile, q4k_q8_1_mmq_ds4_tile_reference,
   q4k_q8_1_mmq_tile_reference,
 )
@@ -162,7 +162,7 @@ def test_q4k_q8_1_mmq_amd_ds4_coop_tile_hash_exists():
 
 
 def test_q4k_q8_1_mmq_coop_writeback_is_explicitly_owner_only():
-  from extra.qk.mmq_q4k_q8_atom import _q4k_q8_1_bounded_ds4_coop_tile_kernel
+  from extra.llm_research.mmq_q4k_q8_atom import _q4k_q8_1_bounded_ds4_coop_tile_kernel
   from tinygrad.uop.ops import UOp
 
   fn = _q4k_q8_1_bounded_ds4_coop_tile_kernel(16, 16, 256, "test", "gated_matrix_v0")
@@ -177,7 +177,7 @@ def test_q4k_q8_1_mmq_coop_writeback_is_explicitly_owner_only():
 
 
 def test_q4k_q8_1_mmq_direct_owner_stages_reduction_before_lane_gate():
-  from extra.qk.mmq_q4k_q8_atom import _q4k_q8_1_bounded_ds4_coop_tile_kernel
+  from extra.llm_research.mmq_q4k_q8_atom import _q4k_q8_1_bounded_ds4_coop_tile_kernel
   from tinygrad.uop.ops import UOp
 
   fn = _q4k_q8_1_bounded_ds4_coop_tile_kernel(16, 16, 256, "test", "direct_owner_v0")
@@ -192,7 +192,7 @@ def test_q4k_q8_1_mmq_direct_owner_stages_reduction_before_lane_gate():
 
 
 def test_q4k_q8_1_mmq_coop_direct_owner_emits_one_dynamic_global_store():
-  from extra.qk.mmq_q4k_q8_atom import _q4k_q8_1_bounded_ds4_coop_tile_kernel
+  from extra.llm_research.mmq_q4k_q8_atom import _q4k_q8_1_bounded_ds4_coop_tile_kernel
   from tinygrad.uop.ops import Ops, UOp
 
   fn = _q4k_q8_1_bounded_ds4_coop_tile_kernel(16, 16, 256, "test", "direct_owner_v0")

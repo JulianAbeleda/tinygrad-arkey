@@ -23,7 +23,7 @@ The consolidation is complete when all of the following hold:
 5. Large diagnostic/UI modules are split only along independently testable application or protocol boundaries. Runtime/ISA hot paths are split only when fixtures prove the move mechanical.
 6. Intentional public API aggregators (`tensor.py`, `mixin/__init__.py`) and cohesive algorithms remain intact.
 7. Focused tests pass with no new failures; the three AMD baseline failures either remain byte-for-byte equivalent in cause or are fixed deliberately.
-8. Import-boundary, size-accounting, compileall, and broad relevant unit suites pass. No production core module eagerly imports research-only `extra.qk` code.
+8. Import-boundary, size-accounting, compileall, and broad relevant unit suites pass. No production core module eagerly imports research-only `extra.llm_research` code.
 9. `python3 sz.py` passes with useful headroom below 30,000. LOC reduction must come from deletion/consolidation, not generated markers or moving authored code to an unbudgeted directory.
 10. The final diff has no debug artifacts, dead compatibility aliases, unexplained hardcoded device/model choices, or unrelated worktree changes.
 
@@ -87,7 +87,7 @@ Current audit decision: AMD ISA and UOp extraction are no-go in this cycle. The 
 (three tensor-core programs emit 792/2336/1132 bytes versus stale expectations of 680/1940/772), so it cannot prove a mechanical move.
 Before extraction it needs selected-UOp snapshots at every matcher seam, fresh-process imports, interpreted/generated matcher parity, and
 exact final-stream hashes. UOp extraction additionally needs a fresh-process matrix covering interning/GC, pickle identity, metadata,
-`UPat.location`, matcher caches, tracing substitution, rewrite traversal modes, and the lazy `extra.qk` boundary.
+`UPat.location`, matcher caches, tracing substitution, rewrite traversal modes, and the lazy `extra.llm_research` boundary.
 
 These tracks are considered scoped but not automatically changed: organizational churn without a verified ownership or deduplication gain fails the completion definition.
 

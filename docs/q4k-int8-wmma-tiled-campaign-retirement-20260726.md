@@ -6,7 +6,7 @@ result, the technique, or the one reusable pattern the campaign produced.
 
 **Do not confuse this with packed-WMMA prefill**, which is a different campaign that SHIPPED and is default-on
 (`tinygrad/llm/prefill_routes.py:293`, `getenv("TINYGRAD_PREFILL_PACKED_WMMA", 1)`), owned by
-`extra/qk/prefill/packed_wmma_prefill_candidates.py`. The two share a name and nothing else. Verified 2026-07-26: no
+`extra/llm_research/prefill/packed_wmma_prefill_candidates.py`. The two share a name and nothing else. Verified 2026-07-26: no
 packed-WMMA file references any file in this campaign.
 
 ## What it tried
@@ -28,7 +28,7 @@ instructions on every 14B role shape. It lost on speed by ~2.6x. Baseline proven
 `docs/14b-direct-packed-prefill-authority-baseline-20260710.md`.
 
 Commit `45cfc399c` (2026-07-21) removed the dispatch, stating: "superseded by the shipped scheduler-native
-packed-WMMA route (`extra/qk/prefill/packed_wmma_prefill_candidates.py`)."
+packed-WMMA route (`extra/llm_research/prefill/packed_wmma_prefill_candidates.py`)."
 
 ## Techniques that existed only in this code
 
@@ -66,7 +66,7 @@ record this FAIL as historical and not a regression.
 Deleting the files alone breaks `test/unit/test_q4k_wmma_tiled_gates.py::test_q4k_wmma_tiled_authority_gate_files_exist`,
 which asserts every `.py` path named in the manifest's `authority_gate` string exists on disk. So:
 
-1. Delete `extra/qk/prefill/q4k_wmma_tile_lowering.py`, `q4k_wmma_tiled_lowering_feasibility.py`,
+1. Delete `extra/llm_research/prefill/q4k_wmma_tile_lowering.py`, `q4k_wmma_tiled_lowering_feasibility.py`,
    `q4k_wmma_tiled_microgate.py`, `q4k_wmma_tiled_surface_gate.py`, `q4k_wmma_tiled_role_shape_exec_gate.py`,
    `q4k_wmma_full_role_contract_gate.py`, `q4k_wmma_tiled_no_hand_kernel_gate.py`, `prefill_int8_wmma_spec.py`.
 2. In `route_manifest.py`, keep the route row and its `note` (that note is the only record of the measurement), but
@@ -75,18 +75,18 @@ which asserts every `.py` path named in the manifest's `authority_gate` string e
 3. Update `test/unit/test_q4k_wmma_tiled_gates.py` (delete it, or reduce it to asserting the route stays non-default).
 4. Update the five test files importing `prefill_int8_wmma_spec`: `test_amd_isa_wmma.py`, `test_q4k_wmma_value.py`,
    `test_q4k_wmma_scheduler_decomposition.py`, `test_q4_q4_owner_comparison.py`, and
-   `extra/qk/prefill/prefill_mmq_parity_gate.py`.
+   `extra/llm_research/prefill/prefill_mmq_parity_gate.py`.
 5. Remove the lazy `_attr` forwarders for `describe_q4k_int8_wmma_*` / `emit_q4k_int8_wmma_*` in
    `tinygrad/llm/route_ops.py` -- they are already never called.
 6. `bench/q4k-wmma-tiled-*/latest.json` artifacts report PASS for a route whose dispatch no longer exists; retire them
    in the same change so no future reader treats them as current.
 
-Estimated authored LOC removed: ~1,100 in `extra/qk`, plus test LOC.
+Estimated authored LOC removed: ~1,100 in `extra/llm_research`, plus test LOC.
 
 ## What actually landed (2026-07-26)
 
-Seven of the eight sources were at `extra/qk/*.py`, not `extra/qk/prefill/*.py`; only `prefill_int8_wmma_spec.py` was
-under `prefill/`. Also removed: `extra/qk/prefill/prefill_mmq_parity_gate.py` (its only two functions came from the
+Seven of the eight sources were at `extra/llm_research/*.py`, not `extra/llm_research/prefill/*.py`; only `prefill_int8_wmma_spec.py` was
+under `prefill/`. Also removed: `extra/llm_research/prefill/prefill_mmq_parity_gate.py` (its only two functions came from the
 deleted spec, and its only caller was a deleted test), three test files, and 10 `bench/q4k-wmma-*` artifact
 directories. `test/unit/test_amd_isa_wmma.py` and `test_q4_q4_owner_comparison.py` were trimmed, not deleted.
 

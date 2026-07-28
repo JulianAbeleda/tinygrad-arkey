@@ -2,7 +2,7 @@
 
 ## Goal
 Extract the attention-harness RUNTIME PRIMITIVES that are copy-pasted across ~50 harness files into ONE
-shared module, `extra/qk/attention_harness_common.py`, and re-point callers at it. Reuse, don't rewrite.
+shared module, `extra/llm_research/attention_harness_common.py`, and re-point callers at it. Reuse, don't rewrite.
 
 ## Purpose
 Every correctness/benchmark harness (and our new custom-kernel injection route) reimplements the same
@@ -11,7 +11,7 @@ gives ONE golden `reference_attention` (so A4 correctness claims are trustworthy
 timing authority, one candidate-context builder — shared by all harnesses.
 
 ## Canonical source (extract VERBATIM from here)
-`extra/qk/benchmark_shared_attention.py` has the cleanest copies. Extract these EXACT bodies:
+`extra/llm_research/benchmark_shared_attention.py` has the cleanest copies. Extract these EXACT bodies:
 - `_sha(x)`                            (line 16)  -> `content_sha(text)`
 - `_mask(q,kv,start)`                  (line 17)  -> `causal_mask(q_tokens, kv_tokens, start_pos)`
 - `_sync()`                            (line 18)  -> `amd_sync()`
@@ -26,7 +26,7 @@ timing authority, one candidate-context builder — shared by all harnesses.
 
 ### Exact new-module contract (must be behavior-identical to the extracted bodies)
 ```python
-# extra/qk/attention_harness_common.py
+# extra/llm_research/attention_harness_common.py
 import hashlib, statistics, time
 import numpy as np
 from tinygrad import Tensor, dtypes, Device
@@ -67,13 +67,13 @@ Grep each file for the local helper; if its body matches the canonical one, dele
 from `attention_harness_common`. If a file's copy DIFFERS in any way, DO NOT migrate it — leave it and add a
 one-line `# TODO(centralize): differs from attention_harness_common.<fn>` note. Report all such divergences.
 
-- `extra/qk/benchmark_shared_attention.py` — `_sha,_mask,_sync,_proof,_inputs,_baseline,_time,_summary`, ROUTES,
+- `extra/llm_research/benchmark_shared_attention.py` — `_sha,_mask,_sync,_proof,_inputs,_baseline,_time,_summary`, ROUTES,
   and the line-59 candidate-context build. (This is the canonical source; migrate it too so it consumes the module.)
-- `extra/qk/generate_shared_attention_captures.py` — `_mask`, candidate-context build, and any test-input build.
-- `extra/qk/benchmark_split_shared_attention.py` — `Device.synchronize` timing helper if a local `_sync`/`_time` exists.
-- `extra/qk/shared_attention_capture.py` — candidate-context build.
-- `extra/qk/shared_attention_evidence.py` — proof load.
-- `extra/qk/prefill/prefill_whole_synced.py` — reference SDPA + sync ONLY IF a byte-identical local copy exists (this file
+- `extra/llm_research/generate_shared_attention_captures.py` — `_mask`, candidate-context build, and any test-input build.
+- `extra/llm_research/benchmark_split_shared_attention.py` — `Device.synchronize` timing helper if a local `_sync`/`_time` exists.
+- `extra/llm_research/shared_attention_capture.py` — candidate-context build.
+- `extra/llm_research/shared_attention_evidence.py` — proof load.
+- `extra/llm_research/prefill/prefill_whole_synced.py` — reference SDPA + sync ONLY IF a byte-identical local copy exists (this file
   is subtle/authoritative; prefer leaving it and just NOTE the overlap rather than risk it).
 - sha256: files with a bare `def _sha(x): return hashlib.sha256(x.encode()).hexdigest()` may migrate to
   `content_sha`. Files whose `_sha` differs (e.g. hashes bytes, or a different digest) MUST NOT be migrated.
@@ -81,14 +81,14 @@ one-line `# TODO(centralize): differs from attention_harness_common.<fn>` note. 
 ## INVARIANTS (do not break)
 1. Behavior must be byte-identical. These are proof-gated numeric benchmarks; a changed reference/mask/seed/sha
    silently invalidates artifacts. Extract VERBATIM; do not "improve".
-2. Do NOT touch: `extra/qk/prefill/prefill_harness.py` and `extra/qk/model_profiles.py` (config, already central);
+2. Do NOT touch: `extra/llm_research/prefill/prefill_harness.py` and `extra/llm_research/model_profiles.py` (config, already central);
    `extra/llm/eval_common.py` (JSON/eval plumbing — out of scope here).
 3. Do NOT change any harness's CLI, output schema, artifact contents, or numeric tolerances.
 4. `reference_attention` must remain the exact `scaled_dot_product_attention` + `repeat_interleave(hq//hkv)`
    form — this is the correctness golden; any deviation is a false-pass risk.
 
 ## Validation the agent MUST run (no GPU required for most)
-1. `PYTHONPATH=/home/ubuntu/tinygrad-arkey .venv/bin/python -c "import extra.qk.attention_harness_common"` — imports.
+1. `PYTHONPATH=/home/ubuntu/tinygrad-arkey .venv/bin/python -c "import extra.llm_research.attention_harness_common"` — imports.
 2. For EVERY file touched: `.venv/bin/python -c "import <module.path>"` — still imports.
 3. Source-equivalence check: for each migrated helper, confirm the extracted body is character-identical to the
    original (diff the old local def against the new module fn) and report a table of {file, helper, migrated|differs}.

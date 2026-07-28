@@ -1,9 +1,9 @@
 # Cooperative MMQ compiler/resource audit
 
-`extra/qk/mmq_logical_vocabulary.py` describes the operation and logical axes
+`extra/llm_research/mmq_logical_vocabulary.py` describes the operation and logical axes
 (`m`, `n`, `k`, `group`, `activation_block`). `PhysicalMapping` currently
 provides only wave size, workgroup size, tile order, and WMMA shape. The new
-`extra/qk/mmq_lowering_audit.py` joins those facts with final compiler evidence:
+`extra/llm_research/mmq_lowering_audit.py` joins those facts with final compiler evidence:
 
 | logical claim | physical evidence required |
 |---|---|

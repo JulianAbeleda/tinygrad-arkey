@@ -4,8 +4,8 @@ import numpy as np
 from tinygrad import Tensor, dtypes
 from tinygrad.uop.ops import KernelInfo, UOp
 
-from extra.qk.layout import Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, q4_k_reference
-from extra.qk.quant.q4_k_gemv_primitive import w_f16
+from extra.llm_research.layout import Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, q4_k_reference
+from extra.llm_research.quant.q4_k_gemv_primitive import w_f16
 
 
 def _make_q4k_words(n:int, k:int, seed:int=1234) -> tuple[Tensor, Tensor]:

@@ -9,7 +9,7 @@ from tinygrad.codegen.opt.kernel_lds import (PrecontractContractSpec, Precontrac
 from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import AxisType, Ops, UOp
-from extra.qk.kernel_vocabulary import KernelLDSWindow, KernelTileGeometry
+from extra.llm_research.kernel_vocabulary import KernelLDSWindow, KernelTileGeometry
 
 
 def _tc(): return next(tc for tc in amd_rdna3 if tc.dtype_in == dtypes.char and tc.dtype_out == dtypes.int)

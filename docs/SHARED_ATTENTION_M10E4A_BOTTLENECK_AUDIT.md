@@ -11,7 +11,7 @@ The smallest next kernel optimization is a guarded one-wave synchronization chan
 
 ## Benchmark closure audit
 
-`extra/qk/benchmark_shared_attention.py` constructs Q/K/V tensors before `_time`, and the pre-timing candidate/baseline `.numpy()` calls force residency. Therefore:
+`extra/llm_research/benchmark_shared_attention.py` constructs Q/K/V tensors before `_time`, and the pre-timing candidate/baseline `.numpy()` calls force residency. Therefore:
 
 - Q/K/V host-to-device transfers are excluded from timing.
 - Candidate/baseline numeric device-to-host copies are excluded from timing.

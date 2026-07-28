@@ -3,13 +3,13 @@ import hashlib, json, pickle
 import numpy as np
 import pytest
 
-from extra.qk.prefill import current_prefill_execution_adapter as adapter
-from extra.qk.prefill.operand_path_execution_worker import AdapterRegistry
-from extra.qk.route_manifest import promoted_prefill_candidate_policy
-from extra.qk.runtime_specs import derive_packed_weight_candidate
-from extra.qk.model_profiles import MODEL_PROFILES, prefill_role_shapes
-from extra.qk.prefill.packed_wmma_correctness_canary import candidate_payload
-from extra.qk.prefill.execution_bridge_contracts import ExecutionRequest, TransportPlan
+from extra.llm_research.prefill import current_prefill_execution_adapter as adapter
+from extra.llm_research.prefill.operand_path_execution_worker import AdapterRegistry
+from extra.llm_research.route_manifest import promoted_prefill_candidate_policy
+from extra.llm_research.runtime_specs import derive_packed_weight_candidate
+from extra.llm_research.model_profiles import MODEL_PROFILES, prefill_role_shapes
+from extra.llm_research.prefill.packed_wmma_correctness_canary import candidate_payload
+from extra.llm_research.prefill.execution_bridge_contracts import ExecutionRequest, TransportPlan
 from tinygrad.uop.ops import Ops
 
 

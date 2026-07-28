@@ -22,8 +22,8 @@ from tinygrad.helpers import Target
 from tinygrad.renderer.cstyle import HIPRenderer
 from tinygrad.uop.ops import Ops, SharedAttentionCandidateContext
 from tinygrad.llm.fused_attention import custom_kernel_attention
-from extra.qk.attention_harness_common import candidate_context
-from extra.qk.mmq_compile_evidence import disassemble_amdgpu, parse_amdgpu_metadata
+from extra.llm_research.attention_harness_common import candidate_context
+from extra.llm_research.mmq_compile_evidence import disassemble_amdgpu, parse_amdgpu_metadata
 
 # The two production geometries (8B / 14B), pp512 first chunk. kv_tokens does not change the
 # loop BODY (the loop is a real runtime UOp.range over (kv_tokens+15)//16) -- only its trip count.

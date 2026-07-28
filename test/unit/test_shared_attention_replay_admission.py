@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from extra.qk.benchmark_shared_attention import _full_output_numeric_gate
+from extra.llm_research.benchmark_shared_attention import _full_output_numeric_gate
 
 
 def test_full_output_gate_records_every_element_and_identity():

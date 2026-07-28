@@ -78,7 +78,7 @@ Two parameters exposed via env vars:
 - TINYGRAD_FLASH_TK — K/V block size (default 128)
 - TINYGRAD_FLASH_M_TILE — query rows per workgroup (default from existing)
 
-Sweep via BubbleBeam (extra/qk/bubblebeam_futuresight.py) pattern:
+Sweep via BubbleBeam (extra/llm_research/bubblebeam_futuresight.py) pattern:
 - TK ∈ {64, 128, 256}
 - Stop when tm improvement < 5%
 

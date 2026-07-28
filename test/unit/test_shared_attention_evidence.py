@@ -1,5 +1,5 @@
-from extra.qk.model_profiles import MODEL_PROFILES
-from extra.qk.shared_attention_evidence import (DEFAULT_CONTEXTS, attention_workloads, authority_command,
+from extra.llm_research.model_profiles import MODEL_PROFILES
+from extra.llm_research.shared_attention_evidence import (DEFAULT_CONTEXTS, attention_workloads, authority_command,
   dual_wmma_fused_call_report, dual_wmma_fused_call_fixture, fused_wmma_role_report, geometry_candidates,
   shared_attention_proof_artifact)
 from pathlib import Path
@@ -25,7 +25,7 @@ def test_geometry_domain_is_shared_and_not_a_route_selector():
 def test_both_routes_use_the_same_pinned_whole_prefill_authority_harness():
   for profile in MODEL_PROFILES:
     argv = authority_command(profile, artifact_path=f"bench/shared-flash/{profile.id}.json")
-    assert argv[:3] == ["extra/qk/prefill/prefill_whole_synced.py", "--model", argv[2]]
+    assert argv[:3] == ["extra/llm_research/prefill/prefill_whole_synced.py", "--model", argv[2]]
     assert "--model-profile" in argv and profile.id in argv
     assert "--pin-clock" in argv
     assert "--artifact" in argv

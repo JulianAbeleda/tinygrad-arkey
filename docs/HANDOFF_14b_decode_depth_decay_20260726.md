@@ -7,7 +7,7 @@ Repo: `/home/ubuntu/tinygrad-arkey`. Everything below is measured unless marked 
 
 ## 1. The defect
 
-Decode throughput, fixed-depth authority (`extra/qk/decode/decode_runtime_overhead.py`,
+Decode throughput, fixed-depth authority (`extra/llm_research/decode/decode_runtime_overhead.py`,
 `tinygrad.decode.fixed_depth.v2` — prefills to exactly the stated context before timing, so ctx columns
 are real depth). llama is `llama-bench -p 0 -n 128 -d 512,4096 -ngl 99 -fa 1 -r 3`. Same session,
 `flock`-serialized, profile `auto`.
@@ -44,7 +44,7 @@ Both models: `Hkv=8`, `Hd=128`, `B=1`. The only structural difference is the gro
 | 8B | 36 | 32 | 8 | **4** | 128 (4 waves) |
 | 14B | 40 | 40 | 8 | **5** | 160 (5 waves) |
 
-`extra/qk/flash_kernels.py:26`:
+`extra/llm_research/flash_kernels.py:26`:
 ```python
 G = Hq // Hkv; W = Hd + 2; LANES = 32; WARPS = G; THREADS = LANES * WARPS; TK = 16
 ```
@@ -95,7 +95,7 @@ What to capture, per shape, for the flash decode kernel at ctx512 AND ctx4096:
 1. **The harness runs work in isolated subprocesses** (`tinygrad/runtime/process_isolated.py`).
    Monkeypatching `AMDProgram.__init__` in the parent observes **nothing**. A probe doing exactly this
    printed its "installed" banner and zero kernels. Instrument inside the worker.
-2. **There is no decode PMC path.** Only `extra/qk/prefill/prefill_boltbeam_trace.py` exists (prefill,
+2. **There is no decode PMC path.** Only `extra/llm_research/prefill/prefill_boltbeam_trace.py` exists (prefill,
    needs sudo). `rocprofv3` is blind to `DEV=AMD`; the native collector is
    `/home/ubuntu/BoltBeam/boltbeam/collectors/tinygrad_native_pmc.py`.
 3. **A PMC trace killed mid-run leaves `power_dpm_force_performance_level` stuck in `profile_standard`,
@@ -121,10 +121,10 @@ def bind(...):
 ```
 
 `Hq % Hkv == 0` admits **both** G=4 and G=5, so 14B silently inherits a kernel named, tuned and evidenced
-for G=4. `LiveSplitGeometrySpec` (`extra/qk/decode/flash_decode_attention_spec.py:26-40`) derives geometry
+for G=4. `LiveSplitGeometrySpec` (`extra/llm_research/decode/flash_decode_attention_spec.py:26-40`) derives geometry
 from `Tc` and `split_count` only — **no `Hq` dependence at all**.
 
-Meanwhile `extra/qk/route_manifest.py:144-163` carries `decode_flash_block_tile_g5_konly`, shape-guarded to
+Meanwhile `extra/llm_research/route_manifest.py:144-163` carries `decode_flash_block_tile_g5_konly`, shape-guarded to
 `Hq=40`, `status: promoted_default`, `staging: K_ONLY`. It is **unreachable**:
 `flash_decode_attention_route` never consults route policy for the flash candidate (unlike the Q4K/Q6K
 candidates, which do), and `decode_routes.py:151` records why — *"K_ONLY assumes the old g5 V layout and
@@ -159,7 +159,7 @@ G=5 its own searched candidate, or rename/re-evidence the route to cover both ho
 ```bash
 export PYTHONPATH=/home/ubuntu/tinygrad-arkey
 # ours (one ckpt at a time -- the multi-ckpt run hits a PRE-EXISTING gfx1100 compile bug, see below)
-flock /tmp/gpu-bench.lock python3 extra/qk/decode/decode_runtime_overhead.py \
+flock /tmp/gpu-bench.lock python3 extra/llm_research/decode/decode_runtime_overhead.py \
   --model /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --ckpts 4096 --max-context 4608 \
   --nmeas 40 --reps 5 --out /tmp/o.json
 # llama

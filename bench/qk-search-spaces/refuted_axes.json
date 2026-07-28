@@ -1,6 +1,6 @@
 {
   "_schema": "canonical refuted axes (generated FROM qk_route_manifest.REFUTED)",
-  "generated_by": "extra/qk/route_manifest.py:dump_refuted",
+  "generated_by": "extra/llm_research/route_manifest.py:dump_refuted",
   "agreement_key": "route_id when present else axis; disposition compared by class token",
   "refuted_axes": [
     {
@@ -68,7 +68,7 @@
         "live_split_geometry_8b_tile"
       ],
       "domain": "attention",
-      "disposition": "SOLVED/PROMOTED: live-context split geometry (fixed S, per=ceildiv(Tc,S)) is expressible in generated UOp; the live-split route plus KV_BOTH staging and fused combine is now the 8B generated default. extra/qk/live_split_geometry.py",
+      "disposition": "SOLVED/PROMOTED: live-context split geometry (fixed S, per=ceildiv(Tc,S)) is expressible in generated UOp; the live-split route plus KV_BOTH staging and fused combine is now the 8B generated default. extra/llm_research/live_split_geometry.py",
       "citation": "bench/tg-p9-pure-attention-primitive-route/live_split_tile_microgate.json"
     },
     {

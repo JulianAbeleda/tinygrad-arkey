@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from extra.qk.mmq_atom_boundary import (
+from extra.llm_research.mmq_atom_boundary import (
   PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_CLASSIFICATION,
   PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_ROUTE_ID,
   Prefill14BHybridMMQAtomDescriptor,
@@ -12,7 +12,7 @@ from extra.qk.mmq_atom_boundary import (
   prefill_14b_q4k_q8_1_hybrid_mmq_atom,
   prefill_14b_q4k_q8_1_hybrid_mmq_atom_descriptor,
 )
-from extra.qk.route_manifest import ROUTES, default_routes
+from extra.llm_research.route_manifest import ROUTES, default_routes
 from tinygrad.llm.route_policy import _load_qk_route_policy, _supported_qk_route_ids
 
 

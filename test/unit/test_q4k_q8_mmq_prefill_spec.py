@@ -1,7 +1,7 @@
 import json
 import pytest
-from extra.qk.prefill.q4k_q8_mmq_prefill_spec import Q4KQ8MMQPrefillSpec, enumerate_q4k_q8_mmq_candidates
-from extra.qk.prefill.prefill_primitive_spec import PrimitiveABI, LaunchMetadata
+from extra.llm_research.prefill.q4k_q8_mmq_prefill_spec import Q4KQ8MMQPrefillSpec, enumerate_q4k_q8_mmq_candidates
+from extra.llm_research.prefill.prefill_primitive_spec import PrimitiveABI, LaunchMetadata
 
 def make(**kw):
   fields = dict(workload="prefill", profile="qwen3-14b", role="ffn_gate_up", quant_format="Q4_K", activation_format="Q8_1", weight_layout="q4k_rows", output_layout="tokens_rows", m=32, n=64, k=256, abi=PrimitiveABI(), launch=LaunchMetadata(512, 16))

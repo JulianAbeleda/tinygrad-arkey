@@ -1,7 +1,7 @@
 import pytest
 
 from tinygrad.uop.ops import KernelInfo, UOp
-from extra.qk.kernel_vocabulary import KernelCandidateContext
+from extra.llm_research.kernel_vocabulary import KernelCandidateContext
 from tinygrad.codegen.opt import postrange
 
 

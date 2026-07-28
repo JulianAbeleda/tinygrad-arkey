@@ -7,7 +7,7 @@ from tinygrad.codegen.opt.kernel_pipeline import KernelStage1PipelinePlan
 from tinygrad.helpers import Target
 from tinygrad.renderer.isa.amd import AMDISARenderer
 from tinygrad.uop.ops import Ops
-from extra.qk.kernel_vocabulary import KernelCandidateContext, KernelLDSWindow, KernelTileGeometry
+from extra.llm_research.kernel_vocabulary import KernelCandidateContext, KernelLDSWindow, KernelTileGeometry
 
 
 def test_stage1_128x128x256_reaches_amd_wmma_with_lds_resource_evidence():

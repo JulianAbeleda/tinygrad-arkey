@@ -1,7 +1,7 @@
 import subprocess
 
-from extra.qk import clock_pin
-from extra.qk import timing_harness
+from extra.llm_research import clock_pin
+from extra.llm_research import timing_harness
 
 
 def test_clock_pin_commands_are_centralized_and_noninteractive():

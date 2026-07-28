@@ -389,7 +389,7 @@
     "live_gpu_execution_eligible": true,
     "reason": null,
     "required_phase_receipt_schema": "tinygrad.mmq_q4k_q8_1.frozen_staged_phase_isolation.v1",
-    "runner": "extra.qk.mmq_llama_five_buffer_gpu_harness.run_full_grid_target_role_probe_isolated",
+    "runner": "extra.llm_research.mmq_llama_five_buffer_gpu_harness.run_full_grid_target_role_probe_isolated",
     "runner_mode": "default_live_harness",
     "schema": "tinygrad.mmq_q4k_q8_1.frozen_staged_integration_capability.v1"
   },

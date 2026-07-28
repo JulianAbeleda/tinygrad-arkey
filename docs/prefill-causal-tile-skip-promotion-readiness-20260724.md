@@ -13,7 +13,7 @@ covered. Exact: a fully-masked tile is a mathematical no-op (weight 0 everywhere
 ## Promotion mechanism
 
 This is **not** a new route. It is a flag inside the already-promoted `prefill_flash_attention_generated` row in
-`extra/qk/route_manifest.py`: same route id, same kernel emitter (`amd_gfx1100_q16_grid_hd128_loop_attention`), same
+`extra/llm_research/route_manifest.py`: same route id, same kernel emitter (`amd_gfx1100_q16_grid_hd128_loop_attention`), same
 `route_attribution` chain, same `provenance` (`machine_authored_generated`) whether the flag is 0 or 1. The dynamic
 loop bound is derived entirely from descriptor fields (`query_start`, `q_tile`, `grid.q_tiles`) already threaded
 through `FlashPrefillAttentionSpec` -- it does not introduce a new handwritten kernel, ASM, or a second emitter
@@ -21,16 +21,16 @@ variant, so it stays inside `FINAL_DEFAULT_PROVENANCE` (`machine_authored_genera
 and nowhere near the forbidden set (`external_handwritten_kernel`, `hand_authored_uop_template`, `rollback_oracle`).
 
 Because the route identity does not change, promoting the flag is an **amendment to the existing row**
-(`extra/qk/route_manifest.py`'s `prefill_flash_attention_generated` `promotion_artifacts`/`note`), not a new `ROUTES`
-entry. `extra/qk/pure_search_guard.py`'s `HOT_FAMILIES["prefill_attention"]` model resolves this route unconditionally
+(`extra/llm_research/route_manifest.py`'s `prefill_flash_attention_generated` `promotion_artifacts`/`note`), not a new `ROUTES`
+entry. `extra/llm_research/pure_search_guard.py`'s `HOT_FAMILIES["prefill_attention"]` model resolves this route unconditionally
 pure regardless of the flag's value (`_prefill_attention_rolled_back` always returns `False`, since there is no env
 key that de-selects the base route) -- so the guard would not, on its own, notice a change to the flag's default.
 The authority gate below is the thing that must gate the flip, not the guard.
 
 ## Authority gate
 
-`extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py` (run: `PYTHONPATH=. python3
-extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py`):
+`extra/llm_research/prefill/prefill_causal_tile_skip_promotion_gate.py` (run: `PYTHONPATH=. python3
+extra/llm_research/prefill/prefill_causal_tile_skip_promotion_gate.py`):
 
 - Derives the **required shapes** directly from `ROUTES["prefill_flash_attention_generated"]["shape_guards"]`
   (currently 8B `Hq=32` and 14B `Hq=40`, both `Hd=128`) -- not hardcoded, so a future shape_guard addition is

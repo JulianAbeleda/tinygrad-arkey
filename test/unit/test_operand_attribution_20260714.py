@@ -2,7 +2,7 @@
 without a GPU; the real gfx1100 attn_qo capture is verified by the adapter's own path."""
 import unittest
 
-from extra.qk.operand_attribution import attribute_operands, operand_paths_for_manifest
+from extra.llm_research.operand_attribution import attribute_operands, operand_paths_for_manifest
 
 ABI = {"outs": [0], "ins": [1, 2]}  # arg0=out, arg1=a, arg2=b (a @ b.T contract)
 

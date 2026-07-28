@@ -62,9 +62,9 @@
       "WARP_REDUCE_LOWERING": null
     },
     "generator": {
-      "compile": "extra.qk.mmq_target_epoch_orchestrator.compile_target_kernel",
-      "family": "extra.qk.mmq_frozen_staged_family.produce_frozen_staged_family_manifest",
-      "freeze": "extra.qk.mmq_frozen_target_artifact.produce_frozen_target_artifact"
+      "compile": "extra.llm_research.mmq_target_epoch_orchestrator.compile_target_kernel",
+      "family": "extra.llm_research.mmq_frozen_staged_family.produce_frozen_staged_family_manifest",
+      "freeze": "extra.llm_research.mmq_frozen_target_artifact.produce_frozen_target_artifact"
     },
     "program": {
       "accumulate": true,
@@ -92,9 +92,9 @@
   },
   "schema": "tinygrad.mmq_q4k_q8_1.staged_family_generation_record.v1",
   "source_files": {
-    "extra/qk/mmq_frozen_staged_family.py": "af0c4226421a743035df835f709e4257f323d4153241d00d04517c925863b30f",
-    "extra/qk/mmq_frozen_target_artifact.py": "084de472078bf17e4e230e6b08d55ec52c63653eb18ceaad820eed5a17eacefb",
-    "extra/qk/mmq_target_epoch_orchestrator.py": "cd8cb3d85111f36e5450447e04a0a901a13c4d7c8afc9f6054f2f5ebec8556cd"
+    "extra/llm_research/mmq_frozen_staged_family.py": "af0c4226421a743035df835f709e4257f323d4153241d00d04517c925863b30f",
+    "extra/llm_research/mmq_frozen_target_artifact.py": "084de472078bf17e4e230e6b08d55ec52c63653eb18ceaad820eed5a17eacefb",
+    "extra/llm_research/mmq_target_epoch_orchestrator.py": "cd8cb3d85111f36e5450447e04a0a901a13c4d7c8afc9f6054f2f5ebec8556cd"
   },
   "state": "PASS",
   "toolchain": {

@@ -6,7 +6,7 @@ from tinygrad.dtype import dtypes
 from tinygrad.renderer import Target
 from tinygrad.runtime.ops_python import PythonRenderer
 from tinygrad.uop.ops import KernelInfo, Ops, UOp
-from extra.qk.kernel_vocabulary import KernelCandidateContext
+from extra.llm_research.kernel_vocabulary import KernelCandidateContext
 
 
 def _sink(value: int, info: KernelInfo|None=None) -> UOp:

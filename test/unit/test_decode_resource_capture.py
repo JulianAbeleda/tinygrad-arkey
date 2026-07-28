@@ -1,6 +1,6 @@
 import pytest
 
-from extra.qk.decode.decode_resource_capture import capture_report, capture_row
+from extra.llm_research.decode.decode_resource_capture import capture_report, capture_row
 
 
 def test_decode_resource_capture_fixture_is_fail_closed_and_complete():

@@ -1,4 +1,4 @@
-from extra.qk.packed_wmma_compile_gate import (CandidateEvidence, EmitterDescriptor, ProgramEvidence, ResourceEvidence,
+from extra.llm_research.packed_wmma_compile_gate import (CandidateEvidence, EmitterDescriptor, ProgramEvidence, ResourceEvidence,
   TensorEvidence, classify_packed_wmma_candidate, classify_registered_packed_wmma_candidate)
 
 

@@ -373,7 +373,7 @@ workgroup counts (occupancy vs CU count), the per-ctx optimal split S, and an Am
 measured / half / free combine. A tile A/B win alone is NOT W==D-ready.
 ```
 
-The audit is `extra/qk/split_kv_economics_audit.py` → `bench/qk-split-kv-economics-audit/latest.json`
+The audit is `extra/llm_research/split_kv_economics_audit.py` → `bench/qk-split-kv-economics-audit/latest.json`
 (`split_kv_economics_audit_v1`); BoltBeam owns the promotion binding/policy for this contract. It classifies each
 candidate:
 

@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from extra.qk.prefill.packed_wmma_correctness_canary import M, N, K, build_artifact, candidate_payload
-from extra.qk.runtime_specs import full_kernel_workload
+from extra.llm_research.prefill.packed_wmma_correctness_canary import M, N, K, build_artifact, candidate_payload
+from extra.llm_research.runtime_specs import full_kernel_workload
 
 
 @pytest.mark.parametrize("quant_format,dtype,packed_bytes", (

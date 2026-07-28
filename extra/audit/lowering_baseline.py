@@ -14,15 +14,15 @@ be proven byte-identical:
 
 This script is compile-only: it never loads a model and never executes a GPU kernel. It builds representative
 kernel graphs directly from the existing default-path route/spec builders with fixed, real Qwen3-8B/14B shapes
-(drawn from extra/qk/route_manifest.json shape_guards) and calls `tinygrad.codegen.to_program(sink,
-Device["AMD"].renderer)` -- the same compile-only entry point `extra/qk/mmq_compile_evidence.py` uses
+(drawn from extra/llm_research/route_manifest.json shape_guards) and calls `tinygrad.codegen.to_program(sink,
+Device["AMD"].renderer)` -- the same compile-only entry point `extra/llm_research/mmq_compile_evidence.py` uses
 (`do_to_program` runs under `Context(ALLOW_DEVICE_USAGE=0)`, so this never touches a device even when one is
 present). If AMD is unavailable this script fails loudly (RuntimeError), never silently substitutes another
 renderer: a fingerprint captured against the wrong target is worse than no fingerprint.
 
 Resource facts (vgpr/sgpr/lds_bytes/scratch_bytes/...) are parsed from the compiled code object with
-`extra/qk/mmq_compile_evidence.py:parse_amdgpu_metadata` (the established AMDGPU-metadata reader) and then
-typed/validated through `extra/qk/amd_resource_artifact.py:AMDResourceFacts` -- this script does not define a
+`extra/llm_research/mmq_compile_evidence.py:parse_amdgpu_metadata` (the established AMDGPU-metadata reader) and then
+typed/validated through `extra/llm_research/amd_resource_artifact.py:AMDResourceFacts` -- this script does not define a
 second resource schema. Source/binary hashing reuses that same module's `artifact_sha256` (sha256 hex of the exact bytes
 passed to the compiler) instead of a second hashing scheme.
 
@@ -35,13 +35,13 @@ record) and the module's hashing convention, but does not construct the full `AM
 is a deliberate, documented scope decision, not an oversight.
 
 Covered default-path kernel builders (see COVERAGE below for the exact call sites):
-  - extra/qk/prefill/q4k_prefill_route_spec.py   (direct-packed Q4_K prefill)
-  - extra/qk/prefill/q6k_prefill_route_spec.py   (direct-packed Q6_K prefill)
+  - extra/llm_research/prefill/q4k_prefill_route_spec.py   (direct-packed Q4_K prefill)
+  - extra/llm_research/prefill/q6k_prefill_route_spec.py   (direct-packed Q6_K prefill)
   - tinygrad/schedule/wmma/flash_prefill.py  (shipped fused prefill attention)
-  - extra/qk/decode/flash_decode_attention_spec.py    (shipped live-split decode attention: tile + combine)
-  - extra/qk/quant/q4_k_gemv_primitive.py        (Q4_K GEMV/GEMM primitive, direct_out b=1)
-  - extra/qk/quant/q6_k_gemv_primitive.py        (Q6_K GEMV/GEMM primitive, direct_out b=1)
-  - extra/qk/gemv_g3_codegen_lowering.py         (G3 lanemap-generated Q4_K decode GEMV -- the promoted default)
+  - extra/llm_research/decode/flash_decode_attention_spec.py    (shipped live-split decode attention: tile + combine)
+  - extra/llm_research/quant/q4_k_gemv_primitive.py        (Q4_K GEMV/GEMM primitive, direct_out b=1)
+  - extra/llm_research/quant/q6_k_gemv_primitive.py        (Q6_K GEMV/GEMM primitive, direct_out b=1)
+  - extra/llm_research/gemv_g3_codegen_lowering.py         (G3 lanemap-generated Q4_K decode GEMV -- the promoted default)
 
 Run:
   PYTHONPATH=. python3 extra/audit/lowering_baseline.py           # writes bench/lowering-refactor-baseline/latest.json
@@ -65,9 +65,9 @@ from tinygrad.device import Device
 from tinygrad.dtype import dtypes
 from tinygrad.uop.ops import Ops, UOp
 
-from extra.qk.mmq_compile_evidence import parse_amdgpu_metadata
-from extra.qk.amd_resource_artifact import AMDResourceFacts, artifact_sha256  # noqa: E402  (one hashing rule, not a second)
-from extra.qk.layout import (Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_ELEMS, Q6K_HALFWORDS_PER_BLOCK, Q6_K_BLOCK_ELEMS)
+from extra.llm_research.mmq_compile_evidence import parse_amdgpu_metadata
+from extra.llm_research.amd_resource_artifact import AMDResourceFacts, artifact_sha256  # noqa: E402  (one hashing rule, not a second)
+from extra.llm_research.layout import (Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_ELEMS, Q6K_HALFWORDS_PER_BLOCK, Q6_K_BLOCK_ELEMS)
 
 OUT_DIR = ROOT / "bench" / "lowering-refactor-baseline"
 OUT_PATH = OUT_DIR / "latest.json"
@@ -75,12 +75,12 @@ SCHEMA = "tinygrad.lowering_refactor_baseline.v1"
 TARGET_DEVICE = "AMD"
 AMD_TARGET = "AMD:HIP:gfx1100"   # the fingerprinted target; stated, not discovered
 
-# Qwen3-8B / Qwen3-14B role shapes, taken verbatim from extra/qk/route_manifest.json shape_guards (decode_q4k_g3_generated,
+# Qwen3-8B / Qwen3-14B role shapes, taken verbatim from extra/llm_research/route_manifest.json shape_guards (decode_q4k_g3_generated,
 # decode_q6k_coop_generated, prefill_flash_attention_generated, decode_flash_live_split_g4_kvboth,
 # decode_flash_live_split_g5_kvboth, decode_flash_block_tile_g5_konly, packed_wmma_prefill_generated). M=512 is the
 # canonical prefill token block used across every prefill shape_guard entry. MAXC/S/Tc for decode match the canonical
-# decode authority defaults in extra/qk/decode/decode_harness.py (DEFAULT_MAX_CONTEXT=4608, ckpt 4096) and
-# extra/qk/decode/decode_tile_timing.py (SPLITS=48).
+# decode authority defaults in extra/llm_research/decode/decode_harness.py (DEFAULT_MAX_CONTEXT=4608, ckpt 4096) and
+# extra/llm_research/decode/decode_tile_timing.py (SPLITS=48).
 M_PREFILL = 512
 MAXC_DECODE = 4608
 S_DECODE = 48
@@ -171,7 +171,7 @@ def compile_case(case: KernelCase, renderer) -> dict[str, Any]:
 # --------------------------------------------------------------------------------------------------------------
 
 def _q4k_prefill_cases() -> list[KernelCase]:
-  from extra.qk.prefill.q4k_prefill_route_spec import describe_q4k_packed_prefill, emit_q4k_packed_prefill_kernel
+  from extra.llm_research.prefill.q4k_prefill_route_spec import describe_q4k_packed_prefill, emit_q4k_packed_prefill_kernel
   cases = []
   for model, roles in ROLE_SHAPES.items():
     for role, dims in roles.items():
@@ -191,7 +191,7 @@ def _q4k_prefill_cases() -> list[KernelCase]:
 
 
 def _q6k_prefill_cases() -> list[KernelCase]:
-  from extra.qk.prefill.q6k_prefill_route_spec import describe_q6k_packed_prefill, emit_q6k_packed_prefill_kernel
+  from extra.llm_research.prefill.q6k_prefill_route_spec import describe_q6k_packed_prefill, emit_q6k_packed_prefill_kernel
   cases = []
   for model, roles in ROLE_SHAPES.items():
     role = "ffn_down"
@@ -231,7 +231,7 @@ def _flash_prefill_cases() -> list[KernelCase]:
 
 
 def _flash_decode_cases() -> list[KernelCase]:
-  from extra.qk.decode.flash_decode_attention_spec import describe_flash_decode_attention
+  from extra.llm_research.decode.flash_decode_attention_spec import describe_flash_decode_attention
   configs = [
     ("8B", "KV_BOTH", "decode_flash_live_split_g4_kvboth"),
     ("14B", "KV_BOTH", "decode_flash_live_split_g5_kvboth"),
@@ -265,7 +265,7 @@ def _flash_decode_cases() -> list[KernelCase]:
 
 
 def _q4k_gemv_primitive_cases() -> list[KernelCase]:
-  from extra.qk.quant.q4_k_gemv_primitive import q4k_gemm_packed_load_direct_out_kernel
+  from extra.llm_research.quant.q4_k_gemv_primitive import q4k_gemm_packed_load_direct_out_kernel
   cases = []
   for model, roles in ROLE_SHAPES.items():
     for role, dims in roles.items():
@@ -284,7 +284,7 @@ def _q4k_gemv_primitive_cases() -> list[KernelCase]:
 
 
 def _q6k_gemv_primitive_cases() -> list[KernelCase]:
-  from extra.qk.quant.q6_k_gemv_primitive import q6k_gemm_packed_load_direct_out_kernel
+  from extra.llm_research.quant.q6_k_gemv_primitive import q6k_gemm_packed_load_direct_out_kernel
   cases = []
   for model, roles in ROLE_SHAPES.items():
     role = "ffn_down"
@@ -304,7 +304,7 @@ def _q6k_gemv_primitive_cases() -> list[KernelCase]:
 
 
 def _gemv_g3_lanemap_cases() -> list[KernelCase]:
-  from extra.qk.gemv_g3_codegen_lowering import q4k_g3_lanemap_gemv_kernel
+  from extra.llm_research.gemv_g3_codegen_lowering import q4k_g3_lanemap_gemv_kernel
   cases = []
   for model, roles in ROLE_SHAPES.items():
     for role, dims in roles.items():

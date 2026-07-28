@@ -26,7 +26,7 @@ def tree(tmp_path, files: dict, manifest: dict) -> tuple[pathlib.Path, pathlib.P
     p = tmp_path / rel; p.parent.mkdir(parents=True, exist_ok=True); p.write_text(body)
   mp = tmp_path / "extra/audit/codebase_organization_manifest.json"
   mp.parent.mkdir(parents=True, exist_ok=True)
-  manifest.setdefault("config", {"manifest_scope": ["extra/qk/"]})
+  manifest.setdefault("config", {"manifest_scope": ["extra/llm_research/"]})
   mp.write_text(json.dumps(manifest))
   return tmp_path, mp
 
@@ -39,64 +39,64 @@ def run(tmp_path, files, manifest, **kw):
 
 # ----------------------------------------------------------------------------------------- coverage / schema ----
 def test_unmanifested_authored_file_is_a_hard_error(tmp_path):
-  c = run(tmp_path, {"extra/qk/a.py": "X = 1\n", "extra/qk/b.py": "Y = 2\n"}, {"files": [rec("extra/qk/a.py")]})
-  assert [e["path"] for e in errors(c, "unmanifested_file")] == ["extra/qk/b.py"]
+  c = run(tmp_path, {"extra/llm_research/a.py": "X = 1\n", "extra/llm_research/b.py": "Y = 2\n"}, {"files": [rec("extra/llm_research/a.py")]})
+  assert [e["path"] for e in errors(c, "unmanifested_file")] == ["extra/llm_research/b.py"]
   assert c["verdict"] == "ORG_R1_BLOCKED_ORGANIZATION_DRIFT"
 
 def test_stale_manifest_path_is_a_hard_error(tmp_path):
-  c = run(tmp_path, {"extra/qk/a.py": "X = 1\n"}, {"files": [rec("extra/qk/a.py"), rec("extra/qk/gone.py")]})
-  assert [e["path"] for e in errors(c, "stale_manifest_path")] == ["extra/qk/gone.py"]
+  c = run(tmp_path, {"extra/llm_research/a.py": "X = 1\n"}, {"files": [rec("extra/llm_research/a.py"), rec("extra/llm_research/gone.py")]})
+  assert [e["path"] for e in errors(c, "stale_manifest_path")] == ["extra/llm_research/gone.py"]
 
 def test_duplicate_record_and_missing_field(tmp_path):
-  bad = rec("extra/qk/a.py"); bad.pop("purpose")
-  c = run(tmp_path, {"extra/qk/a.py": "X = 1\n"}, {"files": [rec("extra/qk/a.py"), bad]})
+  bad = rec("extra/llm_research/a.py"); bad.pop("purpose")
+  c = run(tmp_path, {"extra/llm_research/a.py": "X = 1\n"}, {"files": [rec("extra/llm_research/a.py"), bad]})
   assert errors(c, "duplicate_manifest_entry")
   assert any(e["field"] == "purpose" for e in errors(c, "missing_field"))
 
 def test_placeholder_purpose_is_rejected(tmp_path):
-  c = run(tmp_path, {"extra/qk/a.py": "X = 1\n"}, {"files": [rec("extra/qk/a.py", purpose="helpers")]})
+  c = run(tmp_path, {"extra/llm_research/a.py": "X = 1\n"}, {"files": [rec("extra/llm_research/a.py", purpose="helpers")]})
   assert errors(c, "placeholder_purpose")
 
 def test_group_rule_covers_uniform_files_but_may_not_hide_a_production_file(tmp_path):
-  files = {"extra/qk/fixture_probe_a.py": "X = 1\n", "extra/qk/fixture_probe_b.py": "Y = 2\n"}
-  group = {"group_id": "probes", "path_prefixes": ["extra/qk/fixture_probe_"], "domain": "evidence", "role": "research",
+  files = {"extra/llm_research/fixture_probe_a.py": "X = 1\n", "extra/llm_research/fixture_probe_b.py": "Y = 2\n"}
+  group = {"group_id": "probes", "path_prefixes": ["extra/llm_research/fixture_probe_"], "domain": "evidence", "role": "research",
            "status": "historical_one_off", "disposition": "delete", "test_role": "historical_one_off",
            "purpose": "One-shot P2 phase probes whose verdict is recorded in the phase-ABI scope doc.",
            "why_uniform": "each is a 7-LOC single-assert probe from the same completed campaign"}
   c = run(tmp_path, files, {"files": [], "groups": [group]})
   assert not errors(c, "unmanifested_file") and c["coverage"]["group_covered"] == 2
   # now make one of them production-reachable from tinygrad/: the group must no longer be allowed to hide it
-  files2 = dict(files, **{"tinygrad/llm/route_ops.py": "from extra.qk.fixture_probe_a import X\n"})
+  files2 = dict(files, **{"tinygrad/llm/route_ops.py": "from extra.llm_research.fixture_probe_a import X\n"})
   c2 = run(tmp_path / "b", files2, {"files": [], "groups": [group]})
-  assert [e["path"] for e in errors(c2, "group_hides_production_file")] == ["extra/qk/fixture_probe_a.py"]
+  assert [e["path"] for e in errors(c2, "group_hides_production_file")] == ["extra/llm_research/fixture_probe_a.py"]
 
 def test_explicit_record_and_group_rule_may_not_both_cover_a_file(tmp_path):
-  group = {"group_id": "probes", "path_prefixes": ["extra/qk/fixture_probe_"], "domain": "evidence", "role": "research",
+  group = {"group_id": "probes", "path_prefixes": ["extra/llm_research/fixture_probe_"], "domain": "evidence", "role": "research",
            "status": "historical_one_off", "disposition": "delete", "purpose": "One-shot probes.", "why_uniform": "x"}
-  c = run(tmp_path, {"extra/qk/fixture_probe_a.py": "X = 1\n"},
-          {"files": [rec("extra/qk/fixture_probe_a.py")], "groups": [group]})
+  c = run(tmp_path, {"extra/llm_research/fixture_probe_a.py": "X = 1\n"},
+          {"files": [rec("extra/llm_research/fixture_probe_a.py")], "groups": [group]})
   assert errors(c, "ambiguous_coverage")
 
 def test_generated_file_is_counted_separately_not_manifested(tmp_path):
-  files = {"extra/qk/gen.py": "# @generated by regen\nX = 1\n", "extra/qk/a.py": "Y = 1\n"}
-  c = run(tmp_path, files, {"files": [rec("extra/qk/a.py"), rec("extra/qk/gen.py")]})
-  assert [e["path"] for e in errors(c, "generated_counted_as_authored")] == ["extra/qk/gen.py"]
+  files = {"extra/llm_research/gen.py": "# @generated by regen\nX = 1\n", "extra/llm_research/a.py": "Y = 1\n"}
+  c = run(tmp_path, files, {"files": [rec("extra/llm_research/a.py"), rec("extra/llm_research/gen.py")]})
+  assert [e["path"] for e in errors(c, "generated_counted_as_authored")] == ["extra/llm_research/gen.py"]
   assert c["coverage"]["generated_files"] == 1 and c["coverage"]["authored_files"] == 1
 
 # --------------------------------------------------------------------------------------------- authority ----
 def test_duplicate_exclusive_authority_is_a_hard_error(tmp_path):
-  files = {"extra/qk/a.py": "X = 1\n", "extra/qk/b.py": "Y = 2\n"}
-  m = {"files": [rec("extra/qk/a.py", authority_keys=["route.default_selection"]),
-                 rec("extra/qk/b.py", authority_keys=["route.default_selection"])]}
+  files = {"extra/llm_research/a.py": "X = 1\n", "extra/llm_research/b.py": "Y = 2\n"}
+  m = {"files": [rec("extra/llm_research/a.py", authority_keys=["route.default_selection"]),
+                 rec("extra/llm_research/b.py", authority_keys=["route.default_selection"])]}
   c = run(tmp_path, files, m)
-  assert errors(c, "duplicate_authority")[0]["owners"] == ["extra/qk/a.py", "extra/qk/b.py"]
+  assert errors(c, "duplicate_authority")[0]["owners"] == ["extra/llm_research/a.py", "extra/llm_research/b.py"]
 
 def test_similar_files_with_distinct_authority_keys_are_not_consolidated(tmp_path):
   """Two structurally identical files encode different knowledge; the auditor must stay silent."""
   body = "def run(x):\n  return x + 1\n"
-  files = {"extra/qk/a.py": body, "extra/qk/b.py": body}
-  m = {"files": [rec("extra/qk/a.py", authority_keys=["q4k.tile_geometry"]),
-                 rec("extra/qk/b.py", authority_keys=["q6k.tile_geometry"])]}
+  files = {"extra/llm_research/a.py": body, "extra/llm_research/b.py": body}
+  m = {"files": [rec("extra/llm_research/a.py", authority_keys=["q4k.tile_geometry"]),
+                 rec("extra/llm_research/b.py", authority_keys=["q6k.tile_geometry"])]}
   c = run(tmp_path, files, m)
   assert not c["hard_errors"]
   assert not warnings_of(c, "duplicate_authority")
@@ -106,102 +106,102 @@ def test_two_workflows_claiming_the_same_authority_rule(tmp_path):
                   "inputs": [], "outputs": [], "authority_files": [], "execution_files": [], "evidence_files": [],
                   "shared_assets": [], "default_path": False, "retention_criterion": None,
                   "authority_rules": ["route.default_selection"]}
-  c = run(tmp_path, {"extra/qk/a.py": "X = 1\n"}, {"files": [rec("extra/qk/a.py")], "workflows": [wf(1), wf(2)]})
+  c = run(tmp_path, {"extra/llm_research/a.py": "X = 1\n"}, {"files": [rec("extra/llm_research/a.py")], "workflows": [wf(1), wf(2)]})
   assert errors(c, "workflows_duplicate_authority")
 
 # ------------------------------------------------------------------------------------------- dependencies ----
 def test_forbidden_production_to_research_import(tmp_path):
-  files = {"tinygrad/llm/route_ops.py": "from extra.qk.probe import P\n", "extra/qk/probe.py": "P = 1\n"}
-  c = run(tmp_path, files, {"files": [rec("extra/qk/probe.py", role="research", status="active_research")]})
+  files = {"tinygrad/llm/route_ops.py": "from extra.llm_research.probe import P\n", "extra/llm_research/probe.py": "P = 1\n"}
+  c = run(tmp_path, files, {"files": [rec("extra/llm_research/probe.py", role="research", status="active_research")]})
   assert errors(c, "production_imports_research")
 
 def test_declared_domain_boundary_violation(tmp_path):
-  files = {"extra/qk/a.py": "from extra.qk.b import Y\n", "extra/qk/b.py": "Y = 2\n"}
-  m = {"files": [rec("extra/qk/a.py", domain="attention_prefill", allowed_dependency_domains=["codegen_lowering"]),
-                 rec("extra/qk/b.py", domain="evidence")]}
+  files = {"extra/llm_research/a.py": "from extra.llm_research.b import Y\n", "extra/llm_research/b.py": "Y = 2\n"}
+  m = {"files": [rec("extra/llm_research/a.py", domain="attention_prefill", allowed_dependency_domains=["codegen_lowering"]),
+                 rec("extra/llm_research/b.py", domain="evidence")]}
   c = run(tmp_path, files, m)
-  assert errors(c, "forbidden_dependency")[0]["to"] == "extra/qk/b.py"
+  assert errors(c, "forbidden_dependency")[0]["to"] == "extra/llm_research/b.py"
 
 def test_cross_domain_import_cycle_is_reported(tmp_path):
-  files = {"extra/qk/a.py": "from extra.qk.b import Y\nX = 1\n", "extra/qk/b.py": "from extra.qk.a import X\nY = 2\n"}
-  m = {"files": [rec("extra/qk/a.py", domain="attention_prefill"), rec("extra/qk/b.py", domain="codegen_lowering")]}
+  files = {"extra/llm_research/a.py": "from extra.llm_research.b import Y\nX = 1\n", "extra/llm_research/b.py": "from extra.llm_research.a import X\nY = 2\n"}
+  m = {"files": [rec("extra/llm_research/a.py", domain="attention_prefill"), rec("extra/llm_research/b.py", domain="codegen_lowering")]}
   c = run(tmp_path, files, m)
-  assert c["graph"]["strongly_connected_components"] == [["extra/qk/a.py", "extra/qk/b.py"]]
+  assert c["graph"]["strongly_connected_components"] == [["extra/llm_research/a.py", "extra/llm_research/b.py"]]
   assert warnings_of(c, "cross_domain_cycle")
 
 def test_relative_imports_resolve(tmp_path):
-  files = {"extra/qk/__init__.py": "", "extra/qk/prefill/__init__.py": "", "extra/qk/prefill/a.py": "from ..b import Y\n",
-           "extra/qk/b.py": "Y = 2\n"}
-  m = {"files": [rec(p) for p in ("extra/qk/__init__.py", "extra/qk/prefill/__init__.py", "extra/qk/prefill/a.py", "extra/qk/b.py")]}
+  files = {"extra/llm_research/__init__.py": "", "extra/llm_research/prefill/__init__.py": "", "extra/llm_research/prefill/a.py": "from ..b import Y\n",
+           "extra/llm_research/b.py": "Y = 2\n"}
+  m = {"files": [rec(p) for p in ("extra/llm_research/__init__.py", "extra/llm_research/prefill/__init__.py", "extra/llm_research/prefill/a.py", "extra/llm_research/b.py")]}
   c = run(tmp_path, files, m)
-  assert c["graph"]["edges"].get("extra/qk/prefill/a.py") == ["extra/qk/b.py"]
+  assert c["graph"]["edges"].get("extra/llm_research/prefill/a.py") == ["extra/llm_research/b.py"]
 
 def test_function_local_import_is_deferred_not_a_load_time_edge(tmp_path):
   """An import inside a function does not run at import time, so it must not put its target on the default path.
   Conflating the two is what made a research module look production-reachable."""
-  files = {"tinygrad/llm/route_ops.py": "from extra.qk.adapter import go\n",
-           "extra/qk/adapter.py": "def go():\n  from extra.qk.research import heavy\n  return heavy()\n",
-           "extra/qk/research.py": "def heavy(): return 1\n"}
-  m = {"files": [rec("extra/qk/adapter.py", default_path=True, promotion_decision="keep"),
-                 rec("extra/qk/research.py", role="research", status="refuted")]}
+  files = {"tinygrad/llm/route_ops.py": "from extra.llm_research.adapter import go\n",
+           "extra/llm_research/adapter.py": "def go():\n  from extra.llm_research.research import heavy\n  return heavy()\n",
+           "extra/llm_research/research.py": "def heavy(): return 1\n"}
+  m = {"files": [rec("extra/llm_research/adapter.py", default_path=True, promotion_decision="keep"),
+                 rec("extra/llm_research/research.py", role="research", status="refuted")]}
   c = run(tmp_path, files, m)
-  assert c["graph"]["edges"].get("extra/qk/adapter.py") is None          # nothing loaded at import time
-  assert c["graph"]["deferred_import_edges"]["extra/qk/adapter.py"] == ["extra/qk/research.py"]
-  assert "extra/qk/research.py" not in c["default_path_footprint"]["production_reachable_from_tinygrad"]
+  assert c["graph"]["edges"].get("extra/llm_research/adapter.py") is None          # nothing loaded at import time
+  assert c["graph"]["deferred_import_edges"]["extra/llm_research/adapter.py"] == ["extra/llm_research/research.py"]
+  assert "extra/llm_research/research.py" not in c["default_path_footprint"]["production_reachable_from_tinygrad"]
   assert not c["hard_errors"]                                            # a refuted module behind a deferred import is fine
 
 def test_module_scope_import_inside_a_try_block_still_counts(tmp_path):
   """try/if/with at module level DO run at import time -- only function bodies are deferred."""
-  files = {"extra/qk/a.py": "try:\n  from extra.qk.b import Y\nexcept ImportError:\n  Y = None\n",
-           "extra/qk/b.py": "Y = 1\n"}
-  m = {"files": [rec("extra/qk/a.py"), rec("extra/qk/b.py")]}
+  files = {"extra/llm_research/a.py": "try:\n  from extra.llm_research.b import Y\nexcept ImportError:\n  Y = None\n",
+           "extra/llm_research/b.py": "Y = 1\n"}
+  m = {"files": [rec("extra/llm_research/a.py"), rec("extra/llm_research/b.py")]}
   c = run(tmp_path, files, m)
-  assert c["graph"]["edges"]["extra/qk/a.py"] == ["extra/qk/b.py"]
+  assert c["graph"]["edges"]["extra/llm_research/a.py"] == ["extra/llm_research/b.py"]
 
 def test_lazy_attr_seam_is_seen_as_a_dependency_edge(tmp_path):
   """route_ops.py-style wrappers import by string at call time; a plain AST import graph would call the whole of
-  extra/qk unreachable from production."""
+  extra/llm_research unreachable from production."""
   seam = ('from functools import cache\n'
           '@cache\n'
           'def _attr(module, name):\n'
           '  import importlib\n'
           '  return getattr(importlib.import_module(module), name)\n'
-          'def emit(*a, **kw): return _attr("extra.qk.spec", "emit")(*a, **kw)\n')
-  files = {"tinygrad/llm/route_ops.py": seam, "extra/qk/spec.py": "def emit(): return 1\n"}
-  m = {"files": [rec("extra/qk/spec.py", default_path=True, promotion_decision="retained pending promotion")]}
+          'def emit(*a, **kw): return _attr("extra.llm_research.spec", "emit")(*a, **kw)\n')
+  files = {"tinygrad/llm/route_ops.py": seam, "extra/llm_research/spec.py": "def emit(): return 1\n"}
+  m = {"files": [rec("extra/llm_research/spec.py", default_path=True, promotion_decision="retained pending promotion")]}
   c = run(tmp_path, files, m)
-  assert c["graph"]["dynamic_seam_edges"]["tinygrad/llm/route_ops.py"] == ["extra/qk/spec.py"]
-  assert "extra/qk/spec.py" in c["default_path_footprint"]["production_reachable_from_tinygrad"]
+  assert c["graph"]["dynamic_seam_edges"]["tinygrad/llm/route_ops.py"] == ["extra/llm_research/spec.py"]
+  assert "extra/llm_research/spec.py" in c["default_path_footprint"]["production_reachable_from_tinygrad"]
   assert not c["hard_errors"]
 
 def test_seam_wrapper_onto_research_is_a_warning_not_a_hard_error(tmp_path):
   """A declared wrapper is not proof that the default path calls it -- the seam intentionally declares more."""
-  seam = 'def _attr(m, n): pass\ndef probe(): return _attr("extra.qk.research_probe", "run")()\n'
-  files = {"tinygrad/llm/route_ops.py": seam, "extra/qk/research_probe.py": "def run(): return 1\n"}
-  c = run(tmp_path, files, {"files": [rec("extra/qk/research_probe.py", role="research", status="active_research")]})
+  seam = 'def _attr(m, n): pass\ndef probe(): return _attr("extra.llm_research.research_probe", "run")()\n'
+  files = {"tinygrad/llm/route_ops.py": seam, "extra/llm_research/research_probe.py": "def run(): return 1\n"}
+  c = run(tmp_path, files, {"files": [rec("extra/llm_research/research_probe.py", role="research", status="active_research")]})
   assert warnings_of(c, "production_seam_to_research")
   assert not errors(c, "production_imports_research")
   assert c["verdict"] == "ORG_R1_PASS_CENSUS_PINNED"
 
 # ------------------------------------------------------------------------------- default path / promotion ----
 def test_default_path_file_may_not_be_a_deletion_candidate(tmp_path):
-  c = run(tmp_path, {"extra/qk/a.py": "X = 1\n"},
-          {"files": [rec("extra/qk/a.py", default_path=True, status="deletion_candidate")]})
+  c = run(tmp_path, {"extra/llm_research/a.py": "X = 1\n"},
+          {"files": [rec("extra/llm_research/a.py", default_path=True, status="deletion_candidate")]})
   assert errors(c, "default_path_dead_status")
 
 def test_ready_promotion_may_not_depend_on_research_modules(tmp_path):
-  files = {"extra/qk/prim.py": "from extra.qk.harness import H\n", "extra/qk/harness.py": "H = 1\n"}
-  m = {"files": [rec("extra/qk/prim.py"), rec("extra/qk/harness.py", role="benchmark", status="active_research")],
-       "actions": [{"path": "extra/qk/prim.py", "action": "promote", "promotion_readiness": "ready",
+  files = {"extra/llm_research/prim.py": "from extra.llm_research.harness import H\n", "extra/llm_research/harness.py": "H = 1\n"}
+  m = {"files": [rec("extra/llm_research/prim.py"), rec("extra/llm_research/harness.py", role="benchmark", status="active_research")],
+       "actions": [{"path": "extra/llm_research/prim.py", "action": "promote", "promotion_readiness": "ready",
                     "promotion_target": "tinygrad/llm/qk_primitives.py", "loc_deleted": 40}]}
   c = run(tmp_path, files, m)
   assert errors(c, "ready_promotion_research_dep")
 
 def test_valid_promotion_candidate_passes(tmp_path):
-  files = {"tinygrad/llm/route_ops.py": "from extra.qk.prim import run\n", "extra/qk/prim.py": "def run(): return 1\n"}
-  m = {"files": [rec("extra/qk/prim.py", default_path=True, promotion_decision="promote pending",
+  files = {"tinygrad/llm/route_ops.py": "from extra.llm_research.prim import run\n", "extra/llm_research/prim.py": "def run(): return 1\n"}
+  m = {"files": [rec("extra/llm_research/prim.py", default_path=True, promotion_decision="promote pending",
                      promotion_target="tinygrad/llm/qk_primitives.py")],
-       "actions": [{"path": "extra/qk/prim.py", "action": "promote", "promotion_readiness": "ready",
+       "actions": [{"path": "extra/llm_research/prim.py", "action": "promote", "promotion_readiness": "ready",
                     "promotion_target": "tinygrad/llm/qk_primitives.py", "loc_moved": 30, "loc_deleted": 12}]}
   c = run(tmp_path, files, m)
   assert not c["hard_errors"] and c["verdict"] == "ORG_R1_PASS_CENSUS_PINNED"
@@ -210,9 +210,9 @@ def test_valid_promotion_candidate_passes(tmp_path):
 def test_promotion_budget_counts_what_a_move_would_cost(tmp_path):
   """Promotion converts unbudgeted extra/ LOC into budgeted core LOC; a move that deletes nothing spends headroom."""
   files = {"tinygrad/llm/core.py": "".join(f"C{i} = {i}\n" for i in range(20)),
-           "extra/qk/prim.py": "".join(f"P{i} = {i}\n" for i in range(30))}
-  m = {"files": [rec("extra/qk/prim.py", default_path=True, promotion_decision="promote in KA-4")],
-       "actions": [{"path": "extra/qk/prim.py", "action": "promote", "promotion_readiness": "blocked",
+           "extra/llm_research/prim.py": "".join(f"P{i} = {i}\n" for i in range(30))}
+  m = {"files": [rec("extra/llm_research/prim.py", default_path=True, promotion_decision="promote in KA-4")],
+       "actions": [{"path": "extra/llm_research/prim.py", "action": "promote", "promotion_readiness": "blocked",
                     "promotion_target": "tinygrad/llm/qk_primitives.py", "loc_moved": 30, "loc_deleted": 12,
                     "loc_to_data_file": 8}]}
   c = run(tmp_path, files, m)
@@ -224,18 +224,18 @@ def test_promotion_budget_counts_what_a_move_would_cost(tmp_path):
   assert b["data_file_convertible_loc"] == 8          # sz.py counts only .py/.js, so a table costs zero
 
 def test_a_promotion_that_deletes_what_it_moves_is_budget_neutral(tmp_path):
-  files = {"tinygrad/llm/core.py": "C = 1\n", "extra/qk/prim.py": "P = 1\n"}
-  m = {"files": [rec("extra/qk/prim.py")],
-       "actions": [{"path": "extra/qk/prim.py", "action": "promote", "promotion_readiness": "ready",
+  files = {"tinygrad/llm/core.py": "C = 1\n", "extra/llm_research/prim.py": "P = 1\n"}
+  m = {"files": [rec("extra/llm_research/prim.py")],
+       "actions": [{"path": "extra/llm_research/prim.py", "action": "promote", "promotion_readiness": "ready",
                     "promotion_target": "tinygrad/llm/qk_primitives.py", "loc_moved": 40, "loc_deleted": 40}]}
   c = run(tmp_path, files, m)
   assert c["promotion_budget"]["pending_promotion_net_cost"] == 0
 
 # ------------------------------------------------------------------------------------------------ pruning ----
 def test_prune_candidate_with_live_consumer(tmp_path):
-  files = {"extra/qk/live.py": "from extra.qk.old import O\n", "extra/qk/old.py": "O = 1\n"}
-  m = {"files": [rec("extra/qk/live.py", default_path=True), rec("extra/qk/old.py", status="superseded")],
-       "actions": [{"path": "extra/qk/old.py", "action": "prune"}]}
+  files = {"extra/llm_research/live.py": "from extra.llm_research.old import O\n", "extra/llm_research/old.py": "O = 1\n"}
+  m = {"files": [rec("extra/llm_research/live.py", default_path=True), rec("extra/llm_research/old.py", status="superseded")],
+       "actions": [{"path": "extra/llm_research/old.py", "action": "prune"}]}
   c = run(tmp_path, files, m)
   assert errors(c, "prune_candidate_has_live_consumer")
 
@@ -243,106 +243,106 @@ def test_prune_candidate_named_only_by_a_retained_workflow(tmp_path):
   """The hidden consumer is workflow membership: the workflow names its files by path, never by import."""
   wf = {"workflow_id": "prefill-route-selection", "domain": "attention_prefill", "purpose": "p",
         "entry_points": [], "phases": ["execute"], "inputs": [], "outputs": [], "authority_files": [],
-        "execution_files": ["extra/qk/step.py"], "evidence_files": [], "shared_assets": [], "default_path": True,
+        "execution_files": ["extra/llm_research/step.py"], "evidence_files": [], "shared_assets": [], "default_path": True,
         "retention_criterion": "while prefill runs through this route"}
-  m = {"files": [rec("extra/qk/step.py", status="superseded")], "workflows": [wf],
-       "actions": [{"path": "extra/qk/step.py", "action": "prune"}]}
-  c = run(tmp_path, {"extra/qk/step.py": "X = 1\n"}, m)
+  m = {"files": [rec("extra/llm_research/step.py", status="superseded")], "workflows": [wf],
+       "actions": [{"path": "extra/llm_research/step.py", "action": "prune"}]}
+  c = run(tmp_path, {"extra/llm_research/step.py": "X = 1\n"}, m)
   assert errors(c, "prune_candidate_has_retained_workflow_consumer")[0]["workflows"] == ["prefill-route-selection"]
 
 def test_reproducer_protection_reads_status_as_well_as_test_role(tmp_path):
   """A record must not become prunable by declaring the reproducer in the field the gate does not read."""
-  m = {"files": [rec("extra/qk/repro.py", status="unresolved_reproducer", test_role="orphan_unknown")],
-       "actions": [{"path": "extra/qk/repro.py", "action": "prune", "deletion_confidence": "delete_after_verdict_capture",
+  m = {"files": [rec("extra/llm_research/repro.py", status="unresolved_reproducer", test_role="orphan_unknown")],
+       "actions": [{"path": "extra/llm_research/repro.py", "action": "prune", "deletion_confidence": "delete_after_verdict_capture",
                     "former_purpose": "x", "recovery": "y", "loc_removed": 1}]}
-  c = run(tmp_path, {"extra/qk/repro.py": "X = 1\n"}, m)
+  c = run(tmp_path, {"extra/llm_research/repro.py": "X = 1\n"}, m)
   assert errors(c, "reproducer_marked_for_deletion")
 
 def test_extra_on_default_path_warns_without_a_per_file_decision(tmp_path):
-  files = {"extra/qk/a.py": "X = 1\n", "extra/qk/b.py": "Y = 1\n"}
-  m = {"files": [rec("extra/qk/a.py", default_path=True),
-                 rec("extra/qk/b.py", default_path=True, promotion_decision="promote to tinygrad/llm in KA-4")]}
+  files = {"extra/llm_research/a.py": "X = 1\n", "extra/llm_research/b.py": "Y = 1\n"}
+  m = {"files": [rec("extra/llm_research/a.py", default_path=True),
+                 rec("extra/llm_research/b.py", default_path=True, promotion_decision="promote to tinygrad/llm in KA-4")]}
   c = run(tmp_path, files, m)
-  assert [w["path"] for w in warnings_of(c, "extra_on_default_path")] == ["extra/qk/a.py"]
+  assert [w["path"] for w in warnings_of(c, "extra_on_default_path")] == ["extra/llm_research/a.py"]
 
 def test_prune_candidate_with_hidden_non_import_reference(tmp_path):
   """No Python import, but a shell runner names it: delete_ready must fail."""
-  files = {"extra/qk/probe.py": "X = 1\n", "bench/run_probe.sh": "python3 extra/qk/probe.py\n"}
-  m = {"files": [rec("extra/qk/probe.py", role="research", status="historical_one_off", disposition="delete")],
-       "actions": [{"path": "extra/qk/probe.py", "action": "prune", "deletion_confidence": "delete_ready",
+  files = {"extra/llm_research/probe.py": "X = 1\n", "bench/run_probe.sh": "python3 extra/llm_research/probe.py\n"}
+  m = {"files": [rec("extra/llm_research/probe.py", role="research", status="historical_one_off", disposition="delete")],
+       "actions": [{"path": "extra/llm_research/probe.py", "action": "prune", "deletion_confidence": "delete_ready",
                     "former_purpose": "p", "recovery": "git show HEAD~1", "loc_removed": 7}]}
   c = run(tmp_path, files, m)
   assert errors(c, "delete_ready_still_wired")
-  assert c["non_import_references"]["extra/qk/probe.py"] == ["bench/run_probe.sh"]
+  assert c["non_import_references"]["extra/llm_research/probe.py"] == ["bench/run_probe.sh"]
 
 def test_standalone_script_referenced_only_by_a_document_is_not_dead(tmp_path):
-  files = {"extra/qk/tool.py": "X = 1\n", "bench/README.md": "Run `python3 extra/qk/tool.py` to re-measure.\n"}
-  m = {"files": [rec("extra/qk/tool.py", role="maintenance", status="production",
+  files = {"extra/llm_research/tool.py": "X = 1\n", "bench/README.md": "Run `python3 extra/llm_research/tool.py` to re-measure.\n"}
+  m = {"files": [rec("extra/llm_research/tool.py", role="maintenance", status="production",
                      retention_criterion="until the measurement is automated")]}
   c = run(tmp_path, files, m)
-  assert "extra/qk/tool.py" in c["graph"]["no_inbound_import"]
-  assert "extra/qk/tool.py" not in c["graph"]["no_reference_at_all"]
+  assert "extra/llm_research/tool.py" in c["graph"]["no_inbound_import"]
+  assert "extra/llm_research/tool.py" not in c["graph"]["no_reference_at_all"]
   assert not c["hard_errors"]
 
 def test_unreferenced_retained_cli_entry_point_is_not_called_dead(tmp_path):
-  c = run(tmp_path, {"extra/qk/bench.py": "def main():\n  return 1\n"},
-          {"files": [rec("extra/qk/bench.py", role="maintenance", status="production",
+  c = run(tmp_path, {"extra/llm_research/bench.py": "def main():\n  return 1\n"},
+          {"files": [rec("extra/llm_research/bench.py", role="maintenance", status="production",
                          retention_criterion="while it is the throughput entry point")]})
-  assert c["graph"]["no_reference_at_all"] == ["extra/qk/bench.py"]
+  assert c["graph"]["no_reference_at_all"] == ["extra/llm_research/bench.py"]
   assert not c["hard_errors"]                       # evidence for a human, never an automatic verdict
   assert not warnings_of(c, "research_without_owner")
 
 def test_completed_one_off_is_delete_ready_with_recovery(tmp_path):
-  m = {"files": [rec("extra/qk/fixture_probe_a.py", role="research", status="historical_one_off", disposition="delete",
+  m = {"files": [rec("extra/llm_research/fixture_probe_a.py", role="research", status="historical_one_off", disposition="delete",
                      test_role="historical_one_off")],
-       "actions": [{"path": "extra/qk/fixture_probe_a.py", "action": "prune", "deletion_confidence": "delete_ready",
+       "actions": [{"path": "extra/llm_research/fixture_probe_a.py", "action": "prune", "deletion_confidence": "delete_ready",
                     "former_purpose": "Proved the phase-ABI LDS variant regressed.", "last_campaign": "phase-abi-v1",
                     "replacement": "docs/prefill-attention-dead-end-levers", "recovery": "git show <commit>:<path>",
                     "loc_removed": 7}]}
-  c = run(tmp_path, {"extra/qk/fixture_probe_a.py": "assert True\n"}, m)
+  c = run(tmp_path, {"extra/llm_research/fixture_probe_a.py": "assert True\n"}, m)
   assert not c["hard_errors"]
-  assert c["test_inventory"]["historical_one_off"] == ["extra/qk/fixture_probe_a.py"]
+  assert c["test_inventory"]["historical_one_off"] == ["extra/llm_research/fixture_probe_a.py"]
 
 def test_delete_ready_without_recovery_information_fails(tmp_path):
-  m = {"files": [rec("extra/qk/fixture_probe_a.py", role="research", status="historical_one_off", disposition="delete")],
-       "actions": [{"path": "extra/qk/fixture_probe_a.py", "action": "prune", "deletion_confidence": "delete_ready"}]}
-  c = run(tmp_path, {"extra/qk/fixture_probe_a.py": "assert True\n"}, m)
+  m = {"files": [rec("extra/llm_research/fixture_probe_a.py", role="research", status="historical_one_off", disposition="delete")],
+       "actions": [{"path": "extra/llm_research/fixture_probe_a.py", "action": "prune", "deletion_confidence": "delete_ready"}]}
+  c = run(tmp_path, {"extra/llm_research/fixture_probe_a.py": "assert True\n"}, m)
   assert {e["field"] for e in errors(c, "delete_ready_missing_recovery")} == {"former_purpose", "recovery", "loc_removed"}
 
 def test_unique_unresolved_reproducer_may_not_be_pruned(tmp_path):
-  m = {"files": [rec("extra/qk/repro.py", role="diagnostic", status="unresolved_reproducer",
+  m = {"files": [rec("extra/llm_research/repro.py", role="diagnostic", status="unresolved_reproducer",
                      test_role="unresolved_reproducer", retention_criterion="until the compute-ring fault is closed")],
-       "actions": [{"path": "extra/qk/repro.py", "action": "prune", "deletion_confidence": "delete_ready",
+       "actions": [{"path": "extra/llm_research/repro.py", "action": "prune", "deletion_confidence": "delete_ready",
                     "former_purpose": "x", "recovery": "y", "loc_removed": 1}]}
-  c = run(tmp_path, {"extra/qk/repro.py": "X = 1\n"}, m)
+  c = run(tmp_path, {"extra/llm_research/repro.py": "X = 1\n"}, m)
   assert errors(c, "reproducer_marked_for_deletion")
 
 def test_reference_matching_respects_name_boundaries(tmp_path):
   """A mention of `layout_coalesce_check` must not count as a reference to `layout`, or every prefix looks alive."""
-  files = {"extra/qk/layout.py": "X = 1\n", "extra/qk/layout_coalesce_check.py": "Y = 1\n",
-           "bench/notes.md": "we re-ran extra.qk.layout_coalesce_check and extra/qk/layout_coalesce_check.py\n"}
-  m = {"files": [rec("extra/qk/layout.py"), rec("extra/qk/layout_coalesce_check.py")]}
+  files = {"extra/llm_research/layout.py": "X = 1\n", "extra/llm_research/layout_coalesce_check.py": "Y = 1\n",
+           "bench/notes.md": "we re-ran extra.llm_research.layout_coalesce_check and extra/llm_research/layout_coalesce_check.py\n"}
+  m = {"files": [rec("extra/llm_research/layout.py"), rec("extra/llm_research/layout_coalesce_check.py")]}
   c = run(tmp_path, files, m)
-  assert c["non_import_references"]["extra/qk/layout_coalesce_check.py"] == ["bench/notes.md"]
-  assert "extra/qk/layout.py" not in c["non_import_references"]
-  assert "extra/qk/layout.py" in c["graph"]["no_reference_at_all"]
+  assert c["non_import_references"]["extra/llm_research/layout_coalesce_check.py"] == ["bench/notes.md"]
+  assert "extra/llm_research/layout.py" not in c["non_import_references"]
+  assert "extra/llm_research/layout.py" in c["graph"]["no_reference_at_all"]
 
 def test_dynamically_collected_test_is_seen_as_referenced(tmp_path):
-  files = {"extra/qk/gate.py": "def gate():\n  return True\n",
-           "test/unit/test_registry.py": "CASES = ['extra/qk/gate.py']\n"}
-  m = {"files": [rec("extra/qk/gate.py", role="test", status="active_regression", test_role="active_regression")]}
+  files = {"extra/llm_research/gate.py": "def gate():\n  return True\n",
+           "test/unit/test_registry.py": "CASES = ['extra/llm_research/gate.py']\n"}
+  m = {"files": [rec("extra/llm_research/gate.py", role="test", status="active_regression", test_role="active_regression")]}
   c = run(tmp_path, files, m)
-  assert c["non_import_references"]["extra/qk/gate.py"] == ["test/unit/test_registry.py"]
-  assert "extra/qk/gate.py" not in c["graph"]["no_reference_at_all"]
+  assert c["non_import_references"]["extra/llm_research/gate.py"] == ["test/unit/test_registry.py"]
+  assert "extra/llm_research/gate.py" not in c["graph"]["no_reference_at_all"]
 
 # ------------------------------------------------------------------------------------------ determinism ----
 def test_json_and_markdown_output_is_deterministic(tmp_path):
-  files = {"extra/qk/a.py": "from extra.qk.b import Y\nX = 1\n", "extra/qk/b.py": "Y = 2\n",
-           "bench/notes.md": "see extra/qk/a.py\n"}
-  m = {"files": [rec("extra/qk/a.py", authority_keys=["k1"]), rec("extra/qk/b.py", domain="codegen_lowering")],
-       "workflows": [{"workflow_id": "w", "domain": "quant_mmq", "purpose": "p", "entry_points": ["extra/qk/a.py"],
-                      "phases": ["setup", "execute"], "inputs": [], "outputs": [], "authority_files": ["extra/qk/a.py"],
-                      "execution_files": ["extra/qk/b.py"], "evidence_files": [], "shared_assets": [],
+  files = {"extra/llm_research/a.py": "from extra.llm_research.b import Y\nX = 1\n", "extra/llm_research/b.py": "Y = 2\n",
+           "bench/notes.md": "see extra/llm_research/a.py\n"}
+  m = {"files": [rec("extra/llm_research/a.py", authority_keys=["k1"]), rec("extra/llm_research/b.py", domain="codegen_lowering")],
+       "workflows": [{"workflow_id": "w", "domain": "quant_mmq", "purpose": "p", "entry_points": ["extra/llm_research/a.py"],
+                      "phases": ["setup", "execute"], "inputs": [], "outputs": [], "authority_files": ["extra/llm_research/a.py"],
+                      "execution_files": ["extra/llm_research/b.py"], "evidence_files": [], "shared_assets": [],
                       "default_path": True, "retention_criterion": None}]}
   root, mp = tree(tmp_path, files, m)
   a, b = audit(root, mp), audit(root, mp)
@@ -350,27 +350,27 @@ def test_json_and_markdown_output_is_deterministic(tmp_path):
   assert _md(a) == _md(b)
 
 def test_scope_restricts_reporting_but_still_reports_crossing_edges(tmp_path):
-  files = {"tinygrad/llm/route_ops.py": "from extra.qk.a import X\n", "extra/qk/a.py": "X = 1\n"}
-  m = {"files": [rec("extra/qk/a.py", default_path=True, promotion_decision="retained pending promotion")]}
+  files = {"tinygrad/llm/route_ops.py": "from extra.llm_research.a import X\n", "extra/llm_research/a.py": "X = 1\n"}
+  m = {"files": [rec("extra/llm_research/a.py", default_path=True, promotion_decision="retained pending promotion")]}
   root, mp = tree(tmp_path, files, m)
-  c = audit(root, mp, scope="extra/qk")
-  assert c["largest_authored_files"] and all(r["path"].startswith("extra/qk") for r in c["largest_authored_files"])
-  assert {"from": "tinygrad/llm/route_ops.py", "to": "extra/qk/a.py"} in c["graph"]["scope_crossing_edges"]
+  c = audit(root, mp, scope="extra/llm_research")
+  assert c["largest_authored_files"] and all(r["path"].startswith("extra/llm_research") for r in c["largest_authored_files"])
+  assert {"from": "tinygrad/llm/route_ops.py", "to": "extra/llm_research/a.py"} in c["graph"]["scope_crossing_edges"]
 
 def test_loc_uses_sz_token_rules_not_newlines(tmp_path):
   body = '"""A docstring line that sz.py does not count."""\n\n# a comment\nX = 1\n'
-  c = run(tmp_path, {"extra/qk/a.py": body}, {"files": [rec("extra/qk/a.py")]})
+  c = run(tmp_path, {"extra/llm_research/a.py": body}, {"files": [rec("extra/llm_research/a.py")]})
   assert c["coverage"]["authored_loc"] == 1
 
 @pytest.mark.parametrize("kind", ["large_file", "fallback_without_retention", "research_without_owner"])
 def test_warnings_do_not_fail_the_check(tmp_path, kind):
   cases = {
-    "large_file": ({"extra/qk/big.py": "".join(f"X{i} = {i}\n" for i in range(50))},
-                   {"files": [rec("extra/qk/big.py")], "config": {"manifest_scope": ["extra/qk/"], "large_file_loc_threshold": 10}}),
-    "fallback_without_retention": ({"extra/qk/fb.py": "X = 1\n"},
-                                   {"files": [rec("extra/qk/fb.py", status="fallback")]}),
-    "research_without_owner": ({"extra/qk/r.py": "X = 1\n"},
-                               {"files": [rec("extra/qk/r.py", role="research", status="active_research")]}),
+    "large_file": ({"extra/llm_research/big.py": "".join(f"X{i} = {i}\n" for i in range(50))},
+                   {"files": [rec("extra/llm_research/big.py")], "config": {"manifest_scope": ["extra/llm_research/"], "large_file_loc_threshold": 10}}),
+    "fallback_without_retention": ({"extra/llm_research/fb.py": "X = 1\n"},
+                                   {"files": [rec("extra/llm_research/fb.py", status="fallback")]}),
+    "research_without_owner": ({"extra/llm_research/r.py": "X = 1\n"},
+                               {"files": [rec("extra/llm_research/r.py", role="research", status="active_research")]}),
   }
   files, m = cases[kind]
   c = run(tmp_path, files, m)

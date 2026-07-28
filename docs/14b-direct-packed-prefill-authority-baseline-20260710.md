@@ -3,7 +3,7 @@
 Command:
 
 ```bash
-DEV=AMD DEBUG=0 PROFILE=0 python3 extra/qk/bench.py \
+DEV=AMD DEBUG=0 PROFILE=0 python3 extra/llm_research/bench.py \
   --model /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf \
   --model-profile 14b \
   --prefill --prefill-mode authority

@@ -9,7 +9,7 @@ Read this whole file before doing anything. Parent context: `docs/flash-prefill-
 **You may NOT hand-author a kernel. Full stop.** Specifically banned, by name, because you already tried all three and they are the wrong approach:
 
 1. ❌ `custom_kernel()` / constructing a UOp kernel body by hand.
-2. ❌ Reusing / extracting `extra/qk/flash_kernels.py`'s decode kernel executor (`flash_decode_live_split_block_tile` etc.). It is coupled to split/combine/cache-indexing and is wrong for prefill.
+2. ❌ Reusing / extracting `extra/llm_research/flash_kernels.py`'s decode kernel executor (`flash_decode_live_split_block_tile` etc.). It is coupled to split/combine/cache-indexing and is wrong for prefill.
 3. ❌ Emitting `__builtin_amdgcn_*`, `UOp.barrier`, LDS staging, or `Ops.CUSTOMI`/`Ops.WMMA` by hand.
 
 **Litmus test:** if you find yourself writing `UOp(...)` to build the *body* of a compute kernel, or importing anything from `flash_kernels.py`, you are doing the wrong task — STOP and re-read this file. The online-softmax math being "genuine compiler work" is only true for the hand-kernel path you keep taking. **This task does not build a kernel by hand. It writes ordinary tinygrad Tensor ops and observes what the scheduler does with them.**
@@ -60,7 +60,7 @@ Diff `out` vs the golden (fp16 tol ~1e-2). Get it **correct first.** This is all
 ## 4. Deliverable + HARD STOP
 
 Write findings to `docs/flash-prefill-fusion-probe-<date>.md`:
-1. The correct blocked-online-softmax tensor code (committed, in `extra/qk/`).
+1. The correct blocked-online-softmax tensor code (committed, in `extra/llm_research/`).
 2. Kernel-count + `tm` table: SDPA vs blocked, across BLK values.
 3. Where rangeify inserts buffers (real `rangeify.py` lines) and whether the block score stays resident.
 4. **The precise missing capability** for single-kernel fusion, with the candidate rangeify mechanism.

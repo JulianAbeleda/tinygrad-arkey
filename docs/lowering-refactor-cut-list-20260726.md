@@ -3,7 +3,7 @@
 Branch `refactor/lowering-architecture` @ `bffbc256c`. Master retains everything listed here, so deletion is
 recoverable by `git show master:<path>` — that is the stated safety net for this phase.
 
-Derived from an import-graph walk over the whole tree, including the lazy `_attr("extra.qk.X", "name")` string
+Derived from an import-graph walk over the whole tree, including the lazy `_attr("extra.llm_research.X", "name")` string
 form, so "no importer" here means no *dynamic* reference either. Line counts are raw file lines; the `sz.py`
 budget counts tokens and excludes docstrings, so budget impact is smaller than LOC in the prose-heavy modules.
 
@@ -54,8 +54,8 @@ module-level bool test. They were built to answer a Phase-4 ownership question t
 
 ## Tier 3 — shims and resurrections
 
-- **`extra/qk/coalesced_load_lowering.py`** (12 lines) — a pure re-export of `coalesce_loads`. This is the same
-  shape as `extra/qk/kernel_pipeline.py`, which this branch deleted for being exactly that. Repoint its three
+- **`extra/llm_research/coalesced_load_lowering.py`** (12 lines) — a pure re-export of `coalesce_loads`. This is the same
+  shape as `extra/llm_research/kernel_pipeline.py`, which this branch deleted for being exactly that. Repoint its three
   callers (`cooperative_stage_lanemap.py`, `layout_coalesce_check.py`, `test_coalesced_load_lowering.py`) at
   `tinygrad.codegen.late.coalesced_load` and delete. Leaving it is an inconsistency, not a risk.
 - **Four test files master deliberately retired** and this branch re-added along with the now-deleted
@@ -72,9 +72,9 @@ module-level bool test. They were built to answer a Phase-4 ownership question t
 Not caused by the refactor; zero references anywhere in the tree. Listed because the cut phase is the moment to
 deal with them (338 lines):
 
-`extra/qk/prefill/prefill_long_context_numerics.py` (76), `extra/qk/phase_abi_v1_resource_probe.py` (72),
-`extra/qk/q4k_fused_mmq_contract.py` (65), `extra/qk/prefill/prefill_flash_perf.py` (55),
-`extra/qk/benchmark_split_shared_attention.py` (42), `extra/qk/packed_wmma_canary_evidence.py` (28).
+`extra/llm_research/prefill/prefill_long_context_numerics.py` (76), `extra/llm_research/phase_abi_v1_resource_probe.py` (72),
+`extra/llm_research/q4k_fused_mmq_contract.py` (65), `extra/llm_research/prefill/prefill_flash_perf.py` (55),
+`extra/llm_research/benchmark_split_shared_attention.py` (42), `extra/llm_research/packed_wmma_canary_evidence.py` (28).
 
 `extra/` is unbudgeted, so this frees no budget — it is legibility only. Check each against the organization
 manifest before deleting; `codebase_organization_audit.py` will fail on a stale record, as it did for

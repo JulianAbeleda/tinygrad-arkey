@@ -1,7 +1,7 @@
 {
   "command": [
     "/usr/bin/python3",
-    "extra/qk/prefill/q4k_q8_phase3_role_harness.py",
+    "extra/llm_research/prefill/q4k_q8_phase3_role_harness.py",
     "--role",
     "ffn_gate_up",
     "--m",
@@ -1478,7 +1478,7 @@
   "git": {
     "revision": "7b0a79041b80c856a9c26c0cc440b9516e376534",
     "status_short": [
-      " M extra/qk/runtime_specs.py",
+      " M extra/llm_research/runtime_specs.py",
       " M test/unit/test_q4k_q8_cooperative_runtime_spec.py"
     ]
   },

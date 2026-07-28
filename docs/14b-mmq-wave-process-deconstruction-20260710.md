@@ -7,7 +7,7 @@ change production dispatch.
 Source:
 
 ```text
-extra/qk/research/llama_mmq/mmq.cuh
+extra/llm_research/research/llama_mmq/mmq.cuh
 source commit: ac4cddeb0dbd778f650bf568f6f08344a06abe3a
 sha256: 6d153a9d6f293a4ff5f11e7886a48bf765b21d74075d73b2097a2b2a9149de6f
 ```
@@ -323,8 +323,8 @@ The test ladder should advance in this order:
 The executable hooks now are:
 
 ```text
-extra.qk.mmq_llama_oracle.llama_mma_writeback_owners
-extra.qk.mmq_llama_oracle.llama_mma_writeback_coverage
+extra.llm_research.mmq_llama_oracle.llama_mma_writeback_owners
+extra.llm_research.mmq_llama_oracle.llama_mma_writeback_coverage
 test/unit/test_mmq_llama_oracle.py
 ```
 

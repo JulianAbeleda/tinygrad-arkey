@@ -1,4 +1,4 @@
-from extra.qk.shared_attention_promotion import (COMPOSITE_ADMISSION_SCHEMA, RooflineMeasurement,
+from extra.llm_research.shared_attention_promotion import (COMPOSITE_ADMISSION_SCHEMA, RooflineMeasurement,
   composite_admission_errors, promotion_status)
 
 def _admission(profile, *, lowering="fused_tiled_attention", vgpr=192):
@@ -61,7 +61,7 @@ def test_composite_admission_rejects_ordinary_sdpa_and_unproven_pressure():
     ordinary,profile="qwen3_8b_q4k_m_gfx1100",context=2048,strategy="FULL_RESIDENT_OVERLAY")
   # VGPR count alone is not the gate: the production fused kernel runs at 254
   # VGPR / 0 spills and must be admitted (see justification in
-  # extra/qk/shared_attention_promotion.py). 197 no longer trips the resource
+  # extra/llm_research/shared_attention_promotion.py). 197 no longer trips the resource
   # bound; only exceeding the real gfx1100 wave32 per-thread ceiling (256), or a
   # spilling/scratching kernel, does.
   production=_admission("qwen3_8b_q4k_m_gfx1100",vgpr=254)

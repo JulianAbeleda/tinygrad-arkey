@@ -2,7 +2,7 @@
 
 ## Measured facts
 
-8B Q4_K_M, ctx512, `extra/qk/decode/decode_runtime_overhead.py` (`tinygrad.decode.fixed_depth.v2`),
+8B Q4_K_M, ctx512, `extra/llm_research/decode/decode_runtime_overhead.py` (`tinygrad.decode.fixed_depth.v2`),
 `--nmeas 40 --reps 5`, auto clock, `flash` route, fp16 KV, `flash_decode_threshold=512`:
 
 | code state | date | tok/s | per-token |
@@ -53,7 +53,7 @@ Only after Phase 2. What to compare between the fast and slow states, cheapest f
   artifact. If host-sync share grew, the regression is host-side, not kernel-side.
 - **Emitted kernel diff**: dump the decode kernels in both states and diff. A changed kernel is a codegen
   regression; identical kernels point at scheduling, dispatch, or memory layout.
-- **PMC counters** on the decode dispatch in both states (`extra/qk/prefill/prefill_boltbeam_trace.py`
+- **PMC counters** on the decode dispatch in both states (`extra/llm_research/prefill/prefill_boltbeam_trace.py`
   requires sudo; restore `power_dpm_force_performance_level` to `auto` afterwards).
 
 ## Phase 4 -- fix
@@ -71,7 +71,7 @@ Depends entirely on Phase 3. Do not pre-commit to an approach.
 
 ## Why this went unnoticed for 9 days
 
-`extra/qk/bench.py --decode` invoked `extra/qk/decode_runtime_overhead.py`, which `45cfc399c` deleted while
+`extra/llm_research/bench.py --decode` invoked `extra/llm_research/decode_runtime_overhead.py`, which `45cfc399c` deleted while
 leaving the caller intact, so the canonical decode benchmark failed with file-not-found from 07-21 until it
 was restored on 07-25. `test/unit/test_measurement_authority.py` now fails if any path `bench.py` dispatches
 to does not exist.

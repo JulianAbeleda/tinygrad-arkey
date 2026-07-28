@@ -1,7 +1,7 @@
 """LR-050: coalesced-load promotion tests.
 
-`extra/qk/coalesced_load_lowering.py` and `extra/qk/layout_coalesce_check.py` used to own this pass; it is now
-core codegen (`tinygrad/codegen/late/coalesced_load.py`), with the extra/qk modules re-exporting rather than
+`extra/llm_research/coalesced_load_lowering.py` and `extra/llm_research/layout_coalesce_check.py` used to own this pass; it is now
+core codegen (`tinygrad/codegen/late/coalesced_load.py`), with the extra/llm_research modules re-exporting rather than
 forking. These tests are CPU/compile-only (no GPU): the "AMD" renderer used below is the ISA renderer's
 compile-only oracle (`Target.parse("AMD:ISA:...")`), which never touches a device.
 

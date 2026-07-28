@@ -1,6 +1,6 @@
 import pytest
 
-from extra.qk.shared_attention_capture import SharedAttentionSynchronization, _derive_synchronization
+from extra.llm_research.shared_attention_capture import SharedAttentionSynchronization, _derive_synchronization
 
 
 HIP_WAIT = """for (int tile=0; tile<4; tile++) {

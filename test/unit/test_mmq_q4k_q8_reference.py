@@ -3,15 +3,15 @@ import pytest
 
 from tinygrad import Tensor, dtypes
 
-from extra.qk.layout import Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS, q4_k_reference, q8_1_quantize
-from extra.qk.mmq_q4k_q8_reference import (
+from extra.llm_research.layout import Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS, q4_k_reference, q8_1_quantize
+from extra.llm_research.mmq_q4k_q8_reference import (
   MMQOutputTileSpec, Q81ActivationTileSpec, Q81MMQDS4ActivationSpec, Q8_1_MMQ_DS4_BLOCK_ELEMS,
   Q8_1_MMQ_DS4_GROUPS_PER_BLOCK, Q8_1_MMQ_DS4_LAYOUT, Q8_1_MMQ_DS4_VALUES_PER_GROUP,
   describe_q4k_q8_1_mmq_tile, q4k_q8_1_mmq_ds4_tile_reference, q4k_q8_1_mmq_tile_reference,
   q8_1_mmq_ds4_dequantize_reference, q8_1_mmq_ds4_from_row_major_reference, q8_1_mmq_ds4_quantize_reference,
   q8_1_sums_reference,
 )
-from extra.qk.q4k_tile_loader import (
+from extra.llm_research.q4k_tile_loader import (
   Q4K_QS_BYTES, Q4K_QS_OFFSET, Q4K_SCALE_MIN_BYTES, Q4K_SCALE_MIN_OFFSET, Q4KTileLoadSpec, load_q4k_256_tile,
 )
 

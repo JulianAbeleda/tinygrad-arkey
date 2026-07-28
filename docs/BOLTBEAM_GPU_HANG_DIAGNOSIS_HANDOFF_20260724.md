@@ -50,7 +50,7 @@ Goal: root-cause *why fresh runs wedge* and make prefill runs reliably terminate
 ## The symptom (precise)
 A run that took ~2–3 min **early** in the session now **hangs > 240 s with no output**,
 holding ~19 GB VRAM, with **stuck child python processes**. Confirmed for:
-- `extra/qk/prefill/prefill_whole_synced.py:prefill_authority` (the heavy census path:
+- `extra/llm_research/prefill/prefill_whole_synced.py:prefill_authority` (the heavy census path:
   FULL_RESIDENT_OVERLAY + graph-GEMM candidate compilation of ~254 kernels), AND
 - a **minimal** `load_model_and_tokenizer(...) + one model.logits(512-token) forward`
   (no census, no timing bursts).

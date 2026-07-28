@@ -79,5 +79,5 @@
   },
   "regenerates_routes": [],
   "new_target_bootstrap": "to add a new <model>_<quant>_<gpu>: fill model/quant_mix/gpu/authority_contexts, derive role shapes from model dims (role_shape_derivation), then run the census (extra/audit/pure_machine_search_default_path_census.py) and BoltBeam evaluation/policy -- do NOT hand-edit route flags.",
-  "draft_provenance": "BoltBeam profile authoring; shapes derived from model dims; quant layout from extra/qk/quant_semantics.py; NO hand-edited route flags."
+  "draft_provenance": "BoltBeam profile authoring; shapes derived from model dims; quant layout from extra/llm_research/quant_semantics.py; NO hand-edited route flags."
 }

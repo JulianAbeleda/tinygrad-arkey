@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from extra.qk.mmq_logical_vocabulary import (
+from extra.llm_research.mmq_logical_vocabulary import (
   Axis, BackendCapability, DType, DotOp, EdgePredicate, LogicalMMQDescriptor,
   MMQCandidate, PhysicalMapping, Q4KDecode, Q8DS4Semantics, Stage, Staging,
   SyncScope, Synchronization,
@@ -51,7 +51,7 @@ def test_bounded_q4k_q8_descriptor_is_logical_and_json_stable():
 ])
 def test_logical_descriptor_rejects_incomplete_or_nonuniform_contract(bad):
   if "ownership" in bad:
-    from extra.qk.mmq_logical_vocabulary import Ownership
+    from extra.llm_research.mmq_logical_vocabulary import Ownership
     with pytest.raises(ValueError, match="one owner"):
       Ownership(**bad["ownership"])
   else:

@@ -17,8 +17,8 @@ The packet covers exactly 380 tracked paths:
 | All tracked `bench/**` | 43 | Complete `git ls-files` set |
 | All tracked `docs/artifacts/**` | 173 | Complete `git ls-files` set |
 
-The test import partition is exact and mutually exclusive: 65 tests import `extra.qk`, 7 import another `extra`
-package without importing `extra.qk`, 81 import `tinygrad` without importing `extra`, and 11 contain no direct
+The test import partition is exact and mutually exclusive: 65 tests import `extra.llm_research`, 7 import another `extra`
+package without importing `extra.llm_research`, 81 import `tinygrad` without importing `extra`, and 11 contain no direct
 `tinygrad` or `extra` import. It is reproducible with:
 
 ```sh
@@ -31,7 +31,7 @@ rg '^(from|import) tinygrad' <path>
 Location and imports are discovery evidence, not sufficient proof of production ownership. A test follows the final
 owner of the behavior it protects.
 
-## Reconciled `extra.qk` tests
+## Reconciled `extra.llm_research` tests
 
 ### Production regression candidates: 14
 

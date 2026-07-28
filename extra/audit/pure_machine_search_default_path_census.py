@@ -4,7 +4,7 @@
 Replaces the rough "about four hot kernels" framing with a machine-readable census of what actually runs on the default
 decode/prefill path, who writes each kernel, who selects it, and where its authority lives. Every row is derived from
 the ACTUAL model route guards (cited guard in tinygrad/llm/decode_routes.py + the route source files), NOT inferred from
-filenames. The route identity is cross-checked against extra/qk/route_manifest.py (PMS-R1).
+filenames. The route identity is cross-checked against extra/llm_research/route_manifest.py (PMS-R1).
 
 Run:  PYTHONPATH=. python3 extra/audit/pure_machine_search_default_path_census.py
 Outputs (bench/pure-machine-search-default-path-census/):
@@ -17,18 +17,18 @@ This tool reads source files and writes JSON/MD only. It runs no kernels and cha
 """
 from __future__ import annotations
 import json, pathlib
-from extra.qk.route_manifest import (ROUTES, default_routes, default_purity_report, derive_purity_status,
+from extra.llm_research.route_manifest import (ROUTES, default_routes, default_purity_report, derive_purity_status,
                                       route_provenance, validate_manifest)
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 OUT = ROOT / "bench/pure-machine-search-default-path-census"
 
 # writer taxonomy (legacy PMS-R0): generated | codegen_emitter | owned_asm | tinygrad_generated
-# provenance taxonomy (strict purity gate): see extra/qk_route_manifest.ROUTE_PROVENANCE.
+# provenance taxonomy (strict purity gate): see extra/llm_research_route_manifest.ROUTE_PROVENANCE.
 # selector taxonomy: BubbleBeam | manifest | env_guard | hardcoded_default | tinygrad_scheduler
 #
 # SINGLE SOURCE OF TRUTH: the route identity (workload, roles, quant, provenance, status, purity_status) lives in
-# extra/qk/route_manifest.ROUTES. This census used to re-declare all of that as a second parallel copy; it now DERIVES
+# extra/llm_research/route_manifest.ROUTES. This census used to re-declare all of that as a second parallel copy; it now DERIVES
 # those fields from the manifest and carries only census-specific COMMENTARY as an overlay keyed by route_id -- the
 # quoted source guard, the writer/selector taxonomy, the authority artifact, and the next-action note. A new census row
 # is a row of overlay data plus a manifest route; it cannot silently disagree with the manifest about a route's shape,
@@ -44,7 +44,7 @@ CENSUS_OVERLAY = [
     "writer": "generated",
     "selector": "env_guard",
     "route_guard": "tinygrad/llm/decode_routes.py q4k_primitive_linear_call getenv('BUBBLEBEAM_FUTURESIGHT', 1)==1 (default-on) + _qk_route_policy_selects_q4k_g3 (BoltBeam QK_ROUTE_POLICY) + DECODE_Q4K_G3_ANYSHAPE default-on -> q4k_g3_lanemap_gemv_kernel fires FIRST for eligible shapes, short-circuiting the owned-warp guards; strict policy fails loud on hidden fallback",
-    "kernel_source": "extra/qk/gemv_g3_codegen_lowering.py q4k_g3_lanemap_gemv_kernel (UOp program from extra/qk/gemv_g2_lanemap.py Q4KGateUpLaneMap)",
+    "kernel_source": "extra/llm_research/gemv_g3_codegen_lowering.py q4k_g3_lanemap_gemv_kernel (UOp program from extra/llm_research/gemv_g2_lanemap.py Q4KGateUpLaneMap)",
     "authority_artifact": "bench/amd-isa-backend-g3-weight-promotion/latest.json (AMD_ISA_G3_PROMOTION_PASS_SPEED_EQUIVALENT)",
     "rollback_flag": "BUBBLEBEAM_FUTURESIGHT=0 -> ordinary tinygrad graph; no manifest hand-kernel rollback remains",
     "next_action": "keep promoted; make BoltBeam-generated policy the selector authority; do NOT reopen Q4_K layout reshuffle while parity holds",
@@ -55,7 +55,7 @@ CENSUS_OVERLAY = [
     "writer": "generated",
     "selector": "BoltBeam_route_policy_or_env_default",
     "route_guard": "tinygrad/llm/decode_routes.py q6k_primitive_linear_call generated branch: getenv('DECODE_Q6K_GENERATED', 1) or QK_ROUTE_POLICY decode_q6k_coop_generated -> emit_q6k_gemv_kernel(spec) fires the coop/partial route; shipped hand kernels short-circuited",
-    "kernel_source": "extra/qk/q6k_route_spec.py emit_q6k_gemv_kernel (spec-driven lowering of Q6KGEMVRouteSpec -> q6k_gen_coop_* / q6k_gen_partial_*)",
+    "kernel_source": "extra/llm_research/q6k_route_spec.py emit_q6k_gemv_kernel (spec-driven lowering of Q6KGEMVRouteSpec -> q6k_gen_coop_* / q6k_gen_partial_*)",
     "authority_artifact": "bench/tg-p3-q6k-generated-coop/latest.json (TG_P3_PASS_Q6K_GENERATED_COOP: all_identical, worst gen/shipped 1.011)",
     "rollback_flag": "DECODE_Q6K_GENERATED=0 no longer selects a manifest hand-kernel rollback; generated Q6_K decode is the only manifest kernel route",
     "next_action": "keep promoted; BoltBeam owns Q6_K generated selection; TG-P4/P5 remain",
@@ -66,7 +66,7 @@ CENSUS_OVERLAY = [
     "writer": "generated",
     "selector": "BoltBeam_route_policy_or_env_default",
     "route_guard": "tinygrad/llm/decode_routes.py attention live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0): default-on DECODE_LIVE_SPLIT=1 -> FlashDecodeAttentionSpec live-split block tile + fused combine",
-    "kernel_source": "extra/qk/decode/flash_decode_attention_spec.py FlashDecodeAttentionSpec -> existing live-split UOp tile/combine emitters",
+    "kernel_source": "extra/llm_research/decode/flash_decode_attention_spec.py FlashDecodeAttentionSpec -> existing live-split UOp tile/combine emitters",
     "authority_artifact": "bench/tg-p14-amd-recovery-and-pure-attention-landing/phase2_final_result.json (PASS_PROMOTION_CANDIDATE; practical roofline closeout)",
     "rollback_flag": "DECODE_LIVE_SPLIT=0 exits the live-split default; no manifest fallback route row remains",
     "next_action": "keep promoted; no handwritten attention kernel on the hot path",
@@ -76,7 +76,7 @@ CENSUS_OVERLAY = [
     "writer": "generated",
     "selector": "BoltBeam_route_policy_or_env_default",
     "route_guard": "tinygrad/llm/decode_routes.py explicit G=5 KV_BOTH live-split candidate (B=1,Hq=40,Hkv=8,Hd=128,G=5) -> FlashDecodeAttentionSpec",
-    "kernel_source": "extra/qk/decode/flash_decode_attention_spec.py FlashDecodeAttentionSpec -> live-split block tile path (staging='KV_BOTH', seqlen-bound per-split length)",
+    "kernel_source": "extra/llm_research/decode/flash_decode_attention_spec.py FlashDecodeAttentionSpec -> live-split block tile path (staging='KV_BOTH', seqlen-bound per-split length)",
     "authority_artifact": "bench/gp-track/gp4_latest.json (GP4_PASS_TIER_A); W==D 8B/14B/32B token-identical to generic flash ref; 14B tok/s flat 69.24@MAXC1024 vs 69.04@MAXC8192 (no-collapse)",
     "rollback_flag": "DECODE_LIVE_SPLIT=0 exits the live-split default; no manifest fallback route row remains",
     "next_action": "keep promoted; G5 KV_BOTH has its own route identity and evidence boundary",
@@ -88,7 +88,7 @@ CENSUS_OVERLAY = [
     "selector": "shape_admitted_model_config_default",
     "route_guard": "tinygrad/llm/model.py Transformer._attention prefill_custom_kernel_attn branch (its own independent eligibility boundary, decoupled from the legacy prefill_tc_attn/shared_attention_proven_eligible proof): _should_use_custom_kernel_prefill_attn(n_heads, n_kv_heads, backend, arch) -> ADMITTED_GRIDS + AMD + gfx1100, threaded into TransformerConfig at model construction (P5b) -> route_prefill_attention(..., use_custom_kernel=True)",
     "kernel_source": "tinygrad/llm/fused_attention.py custom_kernel_attention -> tinygrad/schedule/wmma/flash_prefill.py FlashPrefillAttentionSpec -> tinygrad/schedule/wmma/kernels.py amd_gfx1100_q16_grid_hd128_loop_attention (descriptor owns and threads head_dim; emitter derives every Hd-adjacent extent from it)",
-    "authority_artifact": "extra/qk/prefill/prefill_flash_e2e_parity.py (real 8B/14B token-parity: SDPA=49855==FUSED=49855, SDPA=90310==FUSED=90310, AUTHORITY_GATE PASS) + extra/qk/prefill/prefill_hd_sweep_numerics.py (Hd=64/128 lowering+numerics, max_abs_err=6.104e-05)",
+    "authority_artifact": "extra/llm_research/prefill/prefill_flash_e2e_parity.py (real 8B/14B token-parity: SDPA=49855==FUSED=49855, SDPA=90310==FUSED=90310, AUTHORITY_GATE PASS) + extra/llm_research/prefill/prefill_hd_sweep_numerics.py (Hd=64/128 lowering+numerics, max_abs_err=6.104e-05)",
     "rollback_flag": "none; automatic non-admission (shape outside ADMITTED_GRIDS, non-AMD backend, or non-gfx1100 arch) falls to ordinary SDPA -- no manifest hand-kernel rollback exists or is needed",
     "next_action": "keep promoted for the proven 8B/14B Hd=128 shapes; the honest Hd<=128 wave32 VGPR ceiling and the Hd in {48,80,96,112} acc_blocks-membership-set gap (hd_blocks not in {1,2,4,8}) remain open, unrelated to the promoted shapes",
   }),
@@ -120,10 +120,10 @@ CENSUS_OVERLAY = [
     "selector": "env_default",
     "route_guard": "tinygrad/llm/prefill_routes.py route_prefill_linear -> route_packed_wmma_prefill, gated by "
                    "packed_wmma_prefill_enabled() = getenv('TINYGRAD_PREFILL_PACKED_WMMA', 1), i.e. DEFAULT-ON",
-    "kernel_source": "extra/qk/prefill/packed_wmma_prefill_candidates.py select_packed_wmma_prefill_candidate, with "
+    "kernel_source": "extra/llm_research/prefill/packed_wmma_prefill_candidates.py select_packed_wmma_prefill_candidate, with "
                      "warmstart tables built at load time by build_packed_wmma_warmstart_tables",
     "authority_artifact": "docs/packed-wmma-14b-promotion-evidence-20260725.json "
-                          "(gate: extra/qk/prefill/packed_wmma_prefill_promotion_gate.py)",
+                          "(gate: extra/llm_research/prefill/packed_wmma_prefill_promotion_gate.py)",
     "rollback_flag": "TINYGRAD_PREFILL_PACKED_WMMA=0 -> direct-packed (prefill_q4k_direct_tile4x4_default / "
                      "prefill_q6k_direct_generated)",
     "next_action": "keep promoted for 8B. NOTE: 14B on this box must currently run with "
@@ -135,7 +135,7 @@ CENSUS_OVERLAY = [
     "writer": "generated",
     "selector": "env_default",
     "route_guard": "tinygrad/llm/prefill_routes.py Q4_K direct-packed default -> Q4KPrefillRouteSpec + emit_q4k_packed_prefill_kernel; _direct_packed_opts selects LOCAL:0:16, LOCAL:1:16, UPCAST:0:4, UPCAST:1:4",
-    "kernel_source": "extra/qk/prefill/q4k_prefill_route_spec.py emit_q4k_packed_prefill_kernel (spec-driven lowering of Q4KPrefillRouteSpec -> q4k_gen_prefill_direct_out_* / q4k_gen_prefill_partials_*)",
+    "kernel_source": "extra/llm_research/prefill/q4k_prefill_route_spec.py emit_q4k_packed_prefill_kernel (spec-driven lowering of Q4KPrefillRouteSpec -> q4k_gen_prefill_direct_out_* / q4k_gen_prefill_partials_*)",
     "authority_artifact": "docs/prefill-lessons-ledger.md",
     "rollback_flag": "PREFILL_Q4K_DIRECT_SCHEDULE=legacy",
     "next_action": "keep generated descriptor binding; Q4_K int8-WMMA remains a separate research substrate, not the shipped default",
@@ -145,7 +145,7 @@ CENSUS_OVERLAY = [
     "writer": "generated",
     "selector": "env_default",
     "route_guard": "tinygrad/llm/prefill_routes.py Q6_K direct-packed branch: PREFILL_Q6K_PACKED_LOAD default-on -> Q6KPrefillRouteSpec + emit_q6k_packed_prefill_kernel; direct_out for parts==1/PREFILL_DIRECT_OUT=1, otherwise partials",
-    "kernel_source": "extra/qk/prefill/q6k_prefill_route_spec.py emit_q6k_packed_prefill_kernel (spec-driven lowering of Q6KPrefillRouteSpec -> q6k_gen_prefill_direct_out_* / q6k_gen_prefill_partials_*)",
+    "kernel_source": "extra/llm_research/prefill/q6k_prefill_route_spec.py emit_q6k_packed_prefill_kernel (spec-driven lowering of Q6KPrefillRouteSpec -> q6k_gen_prefill_direct_out_* / q6k_gen_prefill_partials_*)",
     "authority_artifact": "test/unit/test_q6k_prefill_route_spec.py + test/unit/test_llm_prefill_routes.py",
     "rollback_flag": "PREFILL_Q6K_PACKED_LOAD=0 reaches the legacy non-packed debug path; no manifest default rollback remains",
     "next_action": "keep generated descriptor binding; Q6_K direct prefill is no longer unmanifested runtime handwritten debt",
@@ -246,7 +246,7 @@ def build_census() -> dict:
     "default_route_table": default_rows,
     "fallback_table": fallback_rows,
     "tinygrad_generated_coverage": TINYGRAD_GENERATED_COVERAGE,
-    "source": "derived from tinygrad/llm/decode_routes.py route guards + extra/qk/gemv_g3_codegen_lowering.py + extra/qk/prefill/prefill_graph_gemm_route.py + live-split attention route files; cross-checked vs extra/qk/route_manifest.py",
+    "source": "derived from tinygrad/llm/decode_routes.py route guards + extra/llm_research/gemv_g3_codegen_lowering.py + extra/llm_research/prefill/prefill_graph_gemm_route.py + live-split attention route files; cross-checked vs extra/llm_research/route_manifest.py",
   }
 
 def _md(c: dict) -> str:

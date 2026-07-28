@@ -13,7 +13,7 @@ Spiked the make-or-break (reuse the decode flash kernel's LDS-staging + online-s
 
 Repo `/home/ubuntu/tinygrad-arkey`, `master @ be68175ba`. Models: Qwen3-8B (Hq=32,Hkv=8,G=4,Hd=128) and
 14B (Hq=40,Hkv=8,G=5,Hd=128), gfx1100 (RX 7900 GRE). Read+plan only; no kernel edits here — a separate
-worktree (`.claude/worktrees/agent-afe31d62421beb2b0`, untracked `extra/qk/flash_prefill_gate.py` +
+worktree (`.claude/worktrees/agent-afe31d62421beb2b0`, untracked `extra/llm_research/flash_prefill_gate.py` +
 `flash_prefill_tile_kernel.py`) is running a minimal-kernel feasibility spike in parallel; its result feeds
 Part 3 below and this doc does not duplicate it.
 
@@ -25,7 +25,7 @@ Part 3 below and this doc does not duplicate it.
   (~23ms/layer) — that's the number a working flash-prefill kernel needs to reclaim. GEMM/FFN is already
   at/ahead of llama (packed-WMMA ~1829 tok/s @ pp512 on 14B, ~parity with llama's ~1837); **attention fusion
   is the entire remaining structural gap**.
-- **Reuse strategy**: the decode flash kernel (`extra/qk/flash_kernels.py`) already has the two hard
+- **Reuse strategy**: the decode flash kernel (`extra/llm_research/flash_kernels.py`) already has the two hard
   ingredients — LDS-staged K/V tiles and online-softmax merge with d-sharded PV — but it is hard-wired to
   M=1 (one query row per workgroup-head). Turning it into flash-prefill means generalizing the *query*
   dimension from 1 to a tile of ~16-64 rows while keeping the same LDS-reuse structure, and adding causal
@@ -49,10 +49,10 @@ Part 3 below and this doc does not duplicate it.
 
 ## Part 1 — Self-review of existing code
 
-### 1.1 The decode flash kernel — `extra/qk/flash_kernels.py`
+### 1.1 The decode flash kernel — `extra/llm_research/flash_kernels.py`
 
 One live builder remains: `flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd, Hq, Hkv, MAXC, L, S,
-Tc, staging, quant, rope)` (`extra/qk/flash_kernels.py:10-146`). A header comment (line 6-8) records that ~32
+Tc, staging, quant, rope)` (`extra/llm_research/flash_kernels.py:10-146`). A header comment (line 6-8) records that ~32
 other builders (research/refuted score, PV, combine, lifecycle variants) were deleted as orphans on
 2026-07-06 — this file is now a single generated candidate, not a library.
 
@@ -99,7 +99,7 @@ parameter bump.
 against the *same* staged K/V tile — this pattern (GQA-heads-share-staged-KV) is exactly what prefill needs
 too, and transfers directly.
 
-**Quant/rope**: both fused at the load site via `extra/qk/kv_load.py`'s `make_kv_element_loader` (int8
+**Quant/rope**: both fused at the load site via `extra/llm_research/kv_load.py`'s `make_kv_element_loader` (int8
 dequant: `val*scale[which,kvh,tok]`; rope-at-read: rotate un-roped K in-register from a `freqs` buffer,
 `kv_load.py:32-40`). This load-site abstraction is reusable as-is by a prefill kernel with no changes.
 
@@ -112,12 +112,12 @@ WMMA on the QK^T (and ideally PV) to get FLOP/s, which this kernel has zero prec
 
 ### 1.2 Decode executor + spec + microgate — the custom_kernel bridge
 
-- `extra/qk/decode/flash_decode_attention_executor.py:10-25` (`flash_decode_live_split_block_tile`): flattens `q` to
+- `extra/llm_research/decode/flash_decode_attention_executor.py:10-25` (`flash_decode_live_split_block_tile`): flattens `q` to
   `[Hq*Hd]`, builds inputs `(q_f, cache_kv[, kv_scale][, freqs])`, calls
   `Tensor.empty(...).custom_kernel(*inputs, fxn=spec.emit_tile(Tc_u))[0]` for the tile kernel, then a second
   `custom_kernel` for `spec.emit_combine()` (the two-kernel split-combine; the old un-fused combine was removed
   2026-07-06, `fused_combine=False` now raises).
-- `extra/qk/decode/flash_decode_attention_spec.py`: pure dataclass descriptor layer — `LiveSplitGeometrySpec`
+- `extra/llm_research/decode/flash_decode_attention_spec.py`: pure dataclass descriptor layer — `LiveSplitGeometrySpec`
   (`split_count`, `token_block=16` fixed; `per_split_length`/`aligned_per_split_length`/`blocks` all operate on
   a possibly-symbolic `Tc:UOp` via `ceildiv_uop`, lines 26-40), `FlashDecodeTileSpec` (validates Hq/Hd/Hkv/MAXC,
   `staging∈{KV_BOTH,K_ONLY}`, `token_block` must currently be `16`; `.emit()` calls the kernel builder in
@@ -133,13 +133,13 @@ WMMA on the QK^T (and ideally PV) to get FLOP/s, which this kernel has zero prec
   — i.e. hand-authored UOp graphs bypass the normal scheduler/BEAM entirely (this is *why* this whole family
   of kernels exists: it's the only way to get hand-controlled LDS/warp-reduce/barrier structure past a backend
   where BEAM hangs).
-- **Live-split geometry / gating**: `extra/qk/live_split_geometry.py` provides `ceildiv_uop` and
+- **Live-split geometry / gating**: `extra/llm_research/live_split_geometry.py` provides `ceildiv_uop` and
   `flash_fused_gmax_combine_kernel`. Route-level gating lives in `tinygrad/llm/decode_routes.py`
   (`flash_decode_attention_route`, line 130) and `tinygrad/llm/route_policy.py`
   (`should_use_flash_decode`, line 179) — see 1.4 below; there is no separate
   `decode_attention_block_tile_microgate.py` file in the current tree (the task's cited path does not exist at
   `be68175ba`; it may have been renamed/removed in the 2026-07-06/tier-3 cleanups — the live equivalent is the
-  `_decode_attention_rolled_back` predicate in `extra/qk/pure_search_guard.py:48-51`, which reads
+  `_decode_attention_rolled_back` predicate in `extra/llm_research/pure_search_guard.py:48-51`, which reads
   `DECODE_LIVE_SPLIT` (default on) as the sole route selector).
 
 ### 1.3 The prior flash-prefill attempts — git history
@@ -151,7 +151,7 @@ Full arc, oldest to newest (all on `master`, all reachable by `git show`):
    ≤0.004) but **0.15-0.52× (SLOWER)** — the online-softmax state traffic (`acc[Hq,T,Hd]` fp32 per tile) +
    GQA `repeat_interleave` cost more than SDPA's materialized-but-reused path. Verdict: no cheap
    ops-level win; the only path to a real win is a custom fused kernel with register/LDS-resident state.
-2. `908cc8f96` **Phase 2 expressibility proof** (`extra/qk_flash_prefill_custom.py`): a single-head causal
+2. `908cc8f96` **Phase 2 expressibility proof** (`extra/llm_research_flash_prefill_custom.py`): a single-head causal
    attention custom kernel proving the compute *can* be expressed without materializing `[T,KV]` scores.
    Key finding in the file header: formulation **A** (single coupled-accumulator online softmax in one
    kernel) is **REJECTED by the linearizer** (`assert y.src[1] not in x.backward_slice_with_self` in
@@ -280,12 +280,12 @@ Three-way branch per forward call (`model.py:577,583,596`):
   cleanly; the decode kernel's `_warp_reduce_sum_staged`/`amd_warp_reduce.py` and `__builtin_amdgcn_fdot2`
   CUSTOMI usage (1.1 above) show the pattern for injecting AMD-specific intrinsics without going through the
   full ISA renderer.
-- **Pure-machine-search guard**: `extra/qk/pure_search_guard.py` classifies every hot route's provenance
+- **Pure-machine-search guard**: `extra/llm_research/pure_search_guard.py` classifies every hot route's provenance
   (`machine_authored_generated` / `tinygrad_scheduler_generated` = pure; `compiler_primitive_spec_owned` /
   `external_handwritten_kernel` / `hand_authored_uop_template` / `rollback_oracle` = impure) and can hard-fail
   a run under `PURE_MACHINE_SEARCH_ONLY=1`. A hand-authored flash-prefill custom kernel would land in one of
   the impure buckets — worth noting for whoever wires it in: it will need either an explicit manifest entry
-  (`extra/qk/route_manifest.py`) accepting it as `hand_authored_uop_template`, or it stays opt-in/env-gated
+  (`extra/llm_research/route_manifest.py`) accepting it as `hand_authored_uop_template`, or it stays opt-in/env-gated
   (as the decode flash route already is via `DECODE_LIVE_SPLIT`) so the pure-search guard isn't tripped by
   default.
 
@@ -351,7 +351,7 @@ Enumerated changes needed, each with what it reuses from 1.1/1.2 and its risk:
    against actual RDNA3 WMMA instruction shapes, not assumed). **Risk**: this is genuinely new kernel-authoring
    work (fragment load/store layout, `v_wmma` intrinsic emission via `Ops.CUSTOMI` or the AMD ISA renderer
    path from 1.5) with no working reference in-repo to copy from for *attention* WMMA specifically (the
-   existing WMMA references — `extra/gemm/rdna3_wmma_matmul.py`, `extra/qk/prefill/wmma.py:501-654`
+   existing WMMA references — `extra/gemm/rdna3_wmma_matmul.py`, `extra/llm_research/prefill/wmma.py:501-654`
    `build_gemm_lds2_q4k` — are GEMM-shaped, not flash-attention-shaped; adapting them is real work, not a
    drop-in).
 
@@ -442,7 +442,7 @@ Each step: build, measurable gate (correctness + honest `DEBUG=2` perf per the P
 ### Step 5 — Wire into `model.py` attention (route-agnostic: both fp16 and packed routes)
 - **Build**: add a fourth branch (or replace branch 2, the concrete TC-attn path) at `model.py:577-598`,
   gated the same way the other hot routes are (env-flag default-off initially, promotable later; register
-  with `extra/qk/route_manifest.py` per the pure-search-guard note in 1.5). Must not regress the
+  with `extra/llm_research/route_manifest.py` per the pure-search-guard note in 1.5). Must not regress the
   already-working decode flash route (T==1 path, untouched) or the packed-WMMA FFN routes (orthogonal —
   attention and FFN are separate route families per `pure_search_guard.py`'s `HOT_FAMILIES`).
 - **Gate**: whole-model `generate()` correctness (greedy-exact / rel RMSE / dNLL per the repo's standard

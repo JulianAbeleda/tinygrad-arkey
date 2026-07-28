@@ -1,6 +1,6 @@
 # AMD WMMA resource evidence adapter
 
-`extra.qk.amd_wmma_resource_adapter` joins final AMD evidence to the existing
+`extra.llm_research.amd_wmma_resource_adapter` joins final AMD evidence to the existing
 fail-closed `check_mmq_resource_evidence` gate.
 
 The AMD code-object notes are authoritative for allocated VGPR/SGPR, fixed LDS,

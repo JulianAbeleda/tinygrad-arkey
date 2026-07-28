@@ -2,7 +2,7 @@ import pytest
 
 from tinygrad.codegen.opt.packed_weight import PackedOperandComponent, PackedOperandRecordTransform, PackedOperandTransform
 from tinygrad.dtype import dtypes
-from extra.qk.kernel_vocabulary import (KernelCandidateContext, KernelLDSArenaRegion, KernelLDSRecordComponent, KernelLDSRecordLayout,
+from extra.llm_research.kernel_vocabulary import (KernelCandidateContext, KernelLDSArenaRegion, KernelLDSRecordComponent, KernelLDSRecordLayout,
                                         KernelLDSWindow, KernelTileGeometry)
 
 

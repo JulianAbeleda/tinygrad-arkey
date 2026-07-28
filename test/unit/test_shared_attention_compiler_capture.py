@@ -3,10 +3,10 @@ import hashlib
 
 import pytest
 
-from extra.qk.shared_attention_capture import (ACC_SLICE_CAPTURE_SCHEMA, ACC_SLICE_PASS_SCHEMA, CAPTURE_SCHEMA,
+from extra.llm_research.shared_attention_capture import (ACC_SLICE_CAPTURE_SCHEMA, ACC_SLICE_PASS_SCHEMA, CAPTURE_SCHEMA,
   PHASE_CAPTURE_SCHEMA, PHASE_PLAN_SCHEMA, SharedAttentionAccSlicePass, SharedAttentionCompilerCapture,
   SharedAttentionPhasePlan, SharedAttentionStateHandleOwnership, SharedAttentionSynchronization)
-from extra.qk.shared_attention_evidence import shared_attention_proof_artifact
+from extra.llm_research.shared_attention_evidence import shared_attention_proof_artifact
 from tinygrad import dtypes
 from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import (AttentionWMMARole, PhaseBoundarySpec, SharedAttentionCandidateContext, StateHandle,
@@ -158,7 +158,7 @@ def test_constructor_uses_actual_scheduled_call_and_final_hip_amdisa_programs():
   from tinygrad.renderer.cstyle import HIPRenderer
   from tinygrad.renderer.isa.amd import AMDISARenderer
   from tinygrad.uop.ops import Ops
-  from extra.qk.shared_attention_capture import build_shared_attention_compiler_capture
+  from extra.llm_research.shared_attention_capture import build_shared_attention_compiler_capture
   ctx=SharedAttentionCandidateContext("qwen3_8b_q4k_m_gfx1100","FULL_RESIDENT_OVERLAY",512,512,0,32,8,128,True)
   q=Tensor.empty(1,32,512,128,dtype=dtypes.float16,device="AMD")
   k=Tensor.empty(1,8,512,128,dtype=dtypes.float16,device="AMD")

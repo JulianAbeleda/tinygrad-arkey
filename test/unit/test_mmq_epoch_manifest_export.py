@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-import extra.qk.mmq_epoch_manifest_export as manifest_export
-from extra.qk.mmq_epoch_manifest_export import (
+import extra.llm_research.mmq_epoch_manifest_export as manifest_export
+from extra.llm_research.mmq_epoch_manifest_export import (
   DEFAULT_MAX_ROWS, ROW_SCHEMA, SCHEMA, build_amd_isa_proof_manifest_bundle,
   export_current_amd_isa_proof_manifest_bundle, summarize_amd_isa_proof_rows, validate_amd_isa_proof_rows)
 

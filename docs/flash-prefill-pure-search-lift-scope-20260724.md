@@ -8,7 +8,7 @@ fixed hand kernel in a dataclass). The hand-kernel custom_kernel route stays onl
 
 ## Purpose
 The custom-kernel route is `hand_authored_uop_template` and must never ship (violates the pure_machine_search
-principle: audit `extra/audit/pure_machine_search_default_path_census.py`, guard `extra/qk/pure_search_guard.py`).
+principle: audit `extra/audit/pure_machine_search_default_path_census.py`, guard `extra/llm_research/pure_search_guard.py`).
 The only principled default is a descriptor-generated route. This scope sizes and sequences that.
 
 ## Verdict from the fixed-vs-parametrizable analysis (grounded)
@@ -101,14 +101,14 @@ dispatch (a different GPU gets a different emitter fn, not a derived formula). K
 byte-identity gate is not entangled with P3's routing rewire.
 GATE: isolated captures 254/0 byte-identical (all 4 routes); unit set unchanged; a4/varkv 6.1e-5.
 
-### P4 — Manifest row + authority gate (extra/qk/route_manifest.py + a new gate)
+### P4 — Manifest row + authority gate (extra/llm_research/route_manifest.py + a new gate)
 - Add a `prefill_flash_attention_generated` (or similar) ROUTES row: `workload=prefill`, `roles=[attention_tile]`,
   `quant=[fp16]`, shape_guards for (32,8,512)/(40,8,512) [and any KV lengths], `expected_kernels`=spec's names,
   `forbidden_kernels=[fallback_graph]`, `provenance: machine_authored_generated` (JUSTIFIED: emitter derives all
   extents from spec fields, Hd pinned-but-derived like AMDAttentionGridSpec, reused across 8B/14B; NOT a fixed
   one-off), `purity_status` via derive_purity_status, `selector`, `route_attribution` through the Spec chain
   (mirror the decode row's attribution style, route_manifest.py:142-143), `authority_gate`=the new gate.
-- New authority gate (model on extra/qk/prefilled_route_parity.py / benchmark_shared_attention): proves the route
+- New authority gate (model on extra/llm_research/prefilled_route_parity.py / benchmark_shared_attention): proves the route
   is route-bound (no hidden SDPA fallback), token-parity vs SDPA on REAL 8B/14B (reuse the e2e A/B + a4_numerics
   against attention_harness_common.reference_attention), and correct+fast. Cite the numeric artifact.
 GATE: `assert_pure_machine_search({'PURE_MACHINE_SEARCH_ONLY':'1'})` still PASS with the new row present, AND the

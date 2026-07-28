@@ -18,7 +18,7 @@ not a rewrite.
 
 ## Target layout — package `tinygrad/schedule/wmma/`
 Keep `from tinygrad.schedule.wmma import <name>` working for ALL 5 importers (rangeify.py, postrange.py,
-fused_attention.py, extra/qk/phase_abi_v1_resource_probe.py, extra/qk/benchmark_split_shared_attention.py)
+fused_attention.py, extra/llm_research/phase_abi_v1_resource_probe.py, extra/llm_research/benchmark_split_shared_attention.py)
 by re-exporting the full public API from `wmma/__init__.py`. No importer changes.
 
 - `wmma/fragments.py` — tile gather / fragment index-map / WMMA-shaped emission primitives:
@@ -78,7 +78,7 @@ closure in pv_slice is stage-specific -> leave local (do not force-share).
   every symbol the 5 importers use.
 - Unit: `pytest -q test/unit/test_online_softmax_tile.py test/unit/test_shared_attention_compiler_capture.py`
   -> 6 fail / 93 pass baseline UNCHANGED (compare set, not count).
-- Isolated capture: `python -m extra.qk.generate_shared_attention_captures --output-dir <d>` -> all 4 routes
+- Isolated capture: `python -m extra.llm_research.generate_shared_attention_captures --output-dir <d>` -> all 4 routes
   254 vgpr / 0 spills / 0 scratch (byte-for-byte kernel identity is the real proof).
 - Injection numerics unaffected: a4_numerics (8B+14B) still PASS 6.1e-5; varkv still PASS.
 - Pure-search guard still passes (this refactor must not change any route provenance).

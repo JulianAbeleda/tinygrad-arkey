@@ -1,7 +1,7 @@
 """Q4-only evidence contract for the sudot4 owner decision."""
 import inspect
 
-from extra.qk import mmq_q4k_q8_atom as atom
+from extra.llm_research import mmq_q4k_q8_atom as atom
 
 
 def test_q4_candidates_have_distinct_generated_instruction_surfaces():

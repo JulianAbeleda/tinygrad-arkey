@@ -1,6 +1,6 @@
 import pytest
 
-from extra.qk.memory_adaptive_allocation_observer import (AllocationObserver, EXACT_MEMORY_KEYS,
+from extra.llm_research.memory_adaptive_allocation_observer import (AllocationObserver, EXACT_MEMORY_KEYS,
   derive_memory_facts, make_memory_facts, validate_memory_facts)
 
 
@@ -68,7 +68,7 @@ def test_nonzero_retained_counter_bytes_fail_checkpoint_completeness():
 
 
 def test_rocm_parser(monkeypatch):
-  from extra.qk import memory_adaptive_allocation_observer as module
+  from extra.llm_research import memory_adaptive_allocation_observer as module
   class Result:
     stdout = "GPU[0] : VRAM Total Memory (B): 1024\nGPU[0] : VRAM Used Memory (B): 256\n"
   monkeypatch.setattr(module.subprocess, "run", lambda *args, **kwargs: Result())

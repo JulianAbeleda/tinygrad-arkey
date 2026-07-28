@@ -9,7 +9,7 @@ decides that organization is good or bad, never scores abstraction quality, and 
 
 Run:  PYTHONPATH=. python3 extra/audit/codebase_organization_audit.py
       PYTHONPATH=. python3 extra/audit/codebase_organization_audit.py --check         # hard errors only, no writes
-      PYTHONPATH=. python3 extra/audit/codebase_organization_audit.py --scope extra/qk
+      PYTHONPATH=. python3 extra/audit/codebase_organization_audit.py --scope extra/llm_research
       PYTHONPATH=. python3 extra/audit/codebase_organization_audit.py --top 30
 Outputs (bench/codebase-organization-audit/):
   latest.json            -- full census (facts + manifest-declared findings + hard errors + warnings)
@@ -146,10 +146,10 @@ def imports_of(root: pathlib.Path, rel: str, idx: dict[str, str], scope: str = "
   return sorted(out)
 
 def dynamic_imports_of(root: pathlib.Path, rel: str, idx: dict[str, str]) -> list[str]:
-  """Edges the import graph cannot see: `importlib.import_module("extra.qk.x")` and the `_attr("extra.qk.x", "f")`
+  """Edges the import graph cannot see: `importlib.import_module("extra.llm_research.x")` and the `_attr("extra.llm_research.x", "f")`
   lazy-boundary wrappers that tinygrad/llm/route_ops.py and tinygrad/codegen/experimental.py are built from.
 
-  Without this, the entire tinygrad -> extra/qk seam is invisible and every extra/qk module looks unreachable from
+  Without this, the entire tinygrad -> extra/llm_research seam is invisible and every extra/llm_research module looks unreachable from
   production. Only constant string arguments are resolved; a computed module name is not a machine fact.
   """
   if not rel.endswith(".py"): return []
@@ -199,8 +199,8 @@ def reference_index(root: pathlib.Path, files: list[str], sources: list[str], ig
   Absence of a Python import is only one fact; standalone scripts are routinely invoked by command. Matching is on the
   full relative path and on the dotted module path -- never on the bare basename, which would produce false hits.
   """
-  # Both forms need a right boundary: without it `extra.qk.layout` matches every mention of
-  # `extra.qk.layout_coalesce_check`, and `extra/qk/bench` would match `extra/qk/benchmark_shared_attention.py`.
+  # Both forms need a right boundary: without it `extra.llm_research.layout` matches every mention of
+  # `extra.llm_research.layout_coalesce_check`, and `extra/llm_research/bench` would match `extra/llm_research/benchmark_shared_attention.py`.
   names = {}
   for rel in sources:
     forms = [rel] + ([rel[:-3].replace("/", ".")] if rel.endswith(".py") else [])
@@ -244,7 +244,7 @@ def audit(root: pathlib.Path = ROOT, manifest_path: pathlib.Path | None = None, 
   cfg = man.get("config", {})
   loc_threshold = int(cfg.get("large_file_loc_threshold", 400))
   fan_threshold = int(cfg.get("fan_threshold", 12))
-  manifest_scope = tuple(cfg.get("manifest_scope", ["extra/qk/"]))
+  manifest_scope = tuple(cfg.get("manifest_scope", ["extra/llm_research/"]))
 
   files = sorted(_tracked(root))
   sources = [f for f in files if in_source_scope(f)]

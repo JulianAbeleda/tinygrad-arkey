@@ -174,8 +174,8 @@ same configuration.
 - `gpu-counter-probe/DECODE-PMC-FAILURE.md`
 - `gpu-counter-probe/RESOURCE-AUDIT-RESULTS.md`
 - `gpu-counter-probe/resource-audit.json`
-- `extra/qk/decode/decode_launch_probe.py`
-- `extra/qk/decode/decode_resource_audit.py`
+- `extra/llm_research/decode/decode_launch_probe.py`
+- `extra/llm_research/decode/decode_resource_audit.py`
 
 ## Promotion and cleanup
 
@@ -196,7 +196,7 @@ not grant capabilities to the system-wide Python interpreter. This does not
 clear the separate `PMC_GRAPH` decode safety gate.
 
 The isolated campaign worktree provides
-`extra/qk/decode/run_pmc_privileged.py`, a capability-bounded launcher for
+`extra/llm_research/decode/run_pmc_privileged.py`, a capability-bounded launcher for
 eager PMC diagnostics. It uses `sudo -n`, an isolated root `HOME`, preserves
 only approved observation variables, and refuses `PMC_GRAPH=1` unless an
 operator explicitly overrides the guard.

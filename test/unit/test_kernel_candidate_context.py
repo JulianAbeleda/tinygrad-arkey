@@ -6,7 +6,7 @@ from tinygrad.dtype import dtypes
 from tinygrad.renderer import Target
 from tinygrad.runtime.ops_python import PythonRenderer
 from tinygrad.uop.ops import KernelInfo, UOp
-from extra.qk.kernel_vocabulary import KernelCandidateContext, KernelLDSWindow, KernelTileGeometry
+from extra.llm_research.kernel_vocabulary import KernelCandidateContext, KernelLDSWindow, KernelTileGeometry
 from tinygrad.codegen.opt import postrange
 
 

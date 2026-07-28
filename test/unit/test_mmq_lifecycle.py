@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from extra.qk.mmq_lifecycle import (
+from extra.llm_research.mmq_lifecycle import (
   COUNTER_NAMES, DEFAULT_ROUTE_ID, EPOCH_COUNTERS, MMQLifecycleRow, SCHEMA,
   aggregate_lifecycle_rows, build_lifecycle_report, validate_lifecycle_rows, zero_counters)
 

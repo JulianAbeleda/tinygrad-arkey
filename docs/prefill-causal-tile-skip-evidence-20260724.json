@@ -1,6 +1,6 @@
 {
   "_schema": "prefill-causal-tile-skip-promotion-evidence.v1",
-  "_purpose": "Structured transcription of the ALREADY-MEASURED evidence for promoting PREFILL_CAUSAL_TILE_SKIP (commit c44905a18) from default-off to default-on on the existing prefill_flash_attention_generated route. No numbers here are new measurements -- every field cites commit c44905a18 and docs/prefill-needle-theories-20260724.md THEORY 3. extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py reads this file; it does not embed thresholds/results inline so the gate and the evidence stay independently auditable.",
+  "_purpose": "Structured transcription of the ALREADY-MEASURED evidence for promoting PREFILL_CAUSAL_TILE_SKIP (commit c44905a18) from default-off to default-on on the existing prefill_flash_attention_generated route. No numbers here are new measurements -- every field cites commit c44905a18 and docs/prefill-needle-theories-20260724.md THEORY 3. extra/llm_research/prefill/prefill_causal_tile_skip_promotion_gate.py reads this file; it does not embed thresholds/results inline so the gate and the evidence stay independently auditable.",
   "flag": "PREFILL_CAUSAL_TILE_SKIP",
   "default": "0 (OFF)",
   "route_id": "prefill_flash_attention_generated",
@@ -12,9 +12,9 @@
     "8B": {
       "grid_key": "Hq=32,Hkv=8,Hd=128 (PROFILE_DECODE / PROFILE_PREFILL 8B admitted grid)",
       "numerics": {"status": "PASS", "hd64_max_abs_err": 6.104e-05, "hd128_max_abs_err": 6.104e-05,
-                   "citation": "extra/qk/prefill/prefill_hd_sweep_numerics.py, cited in c44905a18 commit message"},
+                   "citation": "extra/llm_research/prefill/prefill_hd_sweep_numerics.py, cited in c44905a18 commit message"},
       "token_parity": {"status": "PASS", "sdpa_token": 198, "fused_token": 198,
-                        "citation": "extra/qk/prefill/prefill_flash_e2e_parity.py 8B arm, cited in c44905a18 commit message"},
+                        "citation": "extra/llm_research/prefill/prefill_flash_e2e_parity.py 8B arm, cited in c44905a18 commit message"},
       "whole_model_paired_ab": {
         "status": "PASS",
         "note": "three independent same-session paired A/B runs, tok/s, flag off -> on",
@@ -45,7 +45,7 @@
       "attention_local_pmc": null,
       "status": "UNTESTED",
       "blocking_reasons": [
-        "extra/qk/prefill/prefill_flash_e2e_parity.py 14B arm fails on in-process VRAM (8B model still resident in the same process)",
+        "extra/llm_research/prefill/prefill_flash_e2e_parity.py 14B arm fails on in-process VRAM (8B model still resident in the same process)",
         "separate known packed-WMMA canary HW-fault on this box, independent of this flag"
       ],
       "note": "This is the single biggest gap in the evidence for promoting the flag's default. prefill_flash_attention_generated's own shape_guards admit BOTH the 8B (Hq=32) and 14B (Hq=40) grids, so promotion evidence restricted to 8B only proves the flag for HALF the route's admitted surface."

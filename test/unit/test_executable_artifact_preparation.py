@@ -1,6 +1,6 @@
 import pytest
 
-from extra.qk.prefill.executable_artifact_preparation import capture_record, compile_transport_evidence
+from extra.llm_research.prefill.executable_artifact_preparation import capture_record, compile_transport_evidence
 from tinygrad.codegen import _CompileCaptureAttachment
 from tinygrad.uop.ops import Ops, ProgramInfo, UOp
 
