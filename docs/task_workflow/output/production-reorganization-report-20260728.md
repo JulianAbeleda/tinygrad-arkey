@@ -156,7 +156,7 @@ The sixth slice consolidated the hand-built AMD warp primitives and the opt-in w
 experimental matcher shim and both old modules are gone, and four CPU structural/boundary tests pass. The
 `WARP_REDUCE_LOWERING` gate remains opt-in; no AMD execution or performance claim is made.
 
-At the current `exp` tip, `python3 sz.py` passes with 35,232 budgeted authored lines against the 40,000-line cap.
+At the current `exp` tip, `python3 sz.py` passes with 35,240 budgeted authored lines against the 40,000-line cap.
 
 ## Bounded raw-artifact prune
 
