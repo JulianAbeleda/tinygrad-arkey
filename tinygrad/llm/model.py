@@ -53,7 +53,7 @@ def _should_use_flash_attention(ring_freqs:Tensor|None, start_pos:int|UOp, T:int
 
 def _should_use_custom_kernel_prefill_attn(n_heads:int, n_kv_heads:int, backend:str|None, arch:str|None) -> bool:
   """Independent eligibility boundary for the proven custom-kernel-injection prefill attention route
-  (tinygrad/llm/fused_attention.py:custom_kernel_attention -> extra/qk/prefill/flash_prefill_attention_spec.py
+  (tinygrad/llm/fused_attention.py:custom_kernel_attention -> tinygrad/schedule/wmma/flash_prefill.py
   FlashPrefillAttentionSpec), decoupled from the legacy composite-reduce path's prefill_tc_attn /
   shared_attention_proven_eligible proof (that proof is unrelated evidence for the OFF-critical-path
   class-2-risk `shared_prefill_attention` route -- see fused_attention.py's module docstring; P5b,

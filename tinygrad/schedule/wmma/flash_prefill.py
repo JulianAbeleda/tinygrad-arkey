@@ -14,9 +14,9 @@ into the builder call (not just a decorative field the emitter ignored) -- `self
 AMDAttentionGridSpec and AMDAttentionOutputDrainSpec it constructs, so the descriptor genuinely owns
 head_dim end to end. Hd remains validated up to a ceiling (see validate()): the wave32 VGPR budget
 hard-ceilings at Hd=128, so Hd must be a positive 16-multiple <=128 -- form-generic + spec-threaded up
-to that ceiling. Only Hd=128 is numerically PROVEN so far (the route admits only ADMITTED_GRIDS-listed
-shapes); this validate() bound describes what the emitter can legally construct, not what is proven fast/
-correct on real hardware.
+to that ceiling. Hd=64 and Hd=128 are numerically PROVEN; the promoted default route admits only
+ADMITTED_GRIDS-listed Hd=128 shapes. This validate() bound describes what the emitter can legally
+construct, not what is proven fast/correct on every real-hardware shape.
 """
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ class FlashPrefillAttentionSpec:
 
   def validate(self) -> "FlashPrefillAttentionSpec":
     # Hd is form-generic + spec-threaded (P4a) up to the Hd<=128 wave32 VGPR-budget ceiling: Hd must
-    # be a positive 16-multiple <=128. Only Hd=128 is numerically validated/proven so far -- the route
+    # be a positive 16-multiple <=128. Hd=64 and Hd=128 are numerically validated/proven; the route
     # admits only ADMITTED_GRIDS-listed shapes (fused_attention.py), a separate, narrower gate.
     if self.Hd <= 0 or self.Hd % 16 or self.Hd > 128:
       raise ValueError(f"FlashPrefillAttentionSpec requires a positive 16-multiple head_dim <=128, got {self.Hd}")

@@ -138,7 +138,7 @@
       "authority_files": [
         "extra/qk/prefill/q4k_prefill_route_spec.py",
         "extra/qk/prefill/q6k_prefill_route_spec.py",
-        "extra/qk/prefill/flash_prefill_attention_spec.py",
+        "tinygrad/schedule/wmma/flash_prefill.py",
         "extra/qk/route_manifest.py"
       ],
       "authority_rules": [
