@@ -19,7 +19,7 @@ from tinygrad import Tensor, dtypes
 from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
 
-from extra.qk.amd_warp_reduce import _STAGE_SLOT, _staged_shfl, warp_reduce_sum
+from tinygrad.codegen.late.warp_reduce import _STAGE_SLOT, _staged_shfl, warp_reduce_sum
 from extra.qk.layout import Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS
 from extra.qk.mmq_atom_boundary import (
   PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_CLASSIFICATION,
