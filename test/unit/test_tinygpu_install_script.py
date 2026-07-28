@@ -4,6 +4,7 @@ import subprocess
 ROOT = pathlib.Path(__file__).parents[2]
 SCRIPT = ROOT / "extra/usbgpu/tbgpu/installer/install_nosip.sh"
 APP = ROOT / "extra/usbgpu/tbgpu/installer/Shared/TinyGPUApp.swift"
+CLI = ROOT / "extra/usbgpu/tbgpu/installer/Shared/TinyGPUCLIRunner.swift"
 TOKEN = "APPROVE_TINYGPU_DEVELOPMENT_INSTALL"
 
 
@@ -36,6 +37,7 @@ def test_install_requires_clean_linked_feature_source_and_inherited_lock():
   for token in ("--absolute-git-dir", "--git-common-dir", 'FEATURE_BRANCH="exp"', "status --porcelain=v1 --untracked-files=all",
                 "ls-files --error-unmatch", "TINYGRAD_GPU_LOCK_FD", "/tmp/gpu-bench.lock", "GPU lock nonce mismatch"):
     assert token in source
+  assert "systemextensionsctl developer" in source and "DriverKit development mode is off" in source
   assert source.index("validate_gpu_lock") < source.index("xcodebuild -project")
   assert source.index("validate_feature_source") < source.index("xcodebuild -project")
 
@@ -74,3 +76,10 @@ def test_gui_cannot_move_or_activate_itself_outside_audited_installer():
   assert "NSAppleScript" not in source
   assert 'run(args: ["", "install"])' not in source
   assert "audited tinygrad-arkey development installer" in source
+
+
+def test_cli_reports_system_extension_error_codes_accurately():
+  source = CLI.read_text()
+  assert "if code == 2" in source and "Missing entitlements" in source
+  assert "else if code == 4" in source and "not found" in source
+  assert "else if code == 13" in source and "Authorization is required" in source
