@@ -1,7 +1,7 @@
 {
   "schema": "production-reorganization-cleanup-ledger-20260728",
   "status": "R7_BLOCKED",
-  "audited_commit": "234dbdb46",
+  "audited_commit": "c4c0579f3",
   "authorized": [
     {"path": "docs/CLAUDE_EXECUTION_PROMPT_fused_attention_20260723.md", "action": "delete", "state": "completed", "recovery_commit": "e3778fcfb", "applied_commits": {"exp": "ab162a931", "dev": "d54a64ab0", "master": "ab154b422"}},
     {"path": "docs/CLAUDE_FLASHATTN_EXECUTION_PROMPT_20260723.md", "action": "delete", "state": "completed", "recovery_commit": "0fe7902f4", "applied_commits": {"exp": "ab162a931", "dev": "d54a64ab0", "master": "ab154b422"}}
