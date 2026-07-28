@@ -318,8 +318,8 @@
     }
   ],
   "audited_commit": {
-    "commit": "dacbdac5337b370b74b7acaac3ac02ed03087d72",
-    "described": "mac-first-boot-20260610-3496-gdacbdac53",
+    "commit": "1f3c5bd193625021ecc5cfa64a01282cf0f64d83",
+    "described": "mac-first-boot-20260610-3501-g1f3c5bd19",
     "dirty": false
   },
   "authority_keys": {
@@ -856,14 +856,14 @@
     ]
   },
   "coverage": {
-    "authored_files": 469,
-    "authored_loc": 72068,
+    "authored_files": 470,
+    "authored_loc": 72150,
     "explicit_records": 93,
     "generated_files": 1,
     "generated_loc": 57,
     "group_covered": 0,
     "manifest_scope_files": 93,
-    "manifest_scope_loc": 13338,
+    "manifest_scope_loc": 13340,
     "uncovered": []
   },
   "coverage_limitations": [
@@ -1602,7 +1602,7 @@
       "extra/qk/quant/q4_k_gemv_primitive.py": 5,
       "extra/qk/quant/q6_k_gemv_primitive.py": 3,
       "extra/qk/quantize.py": 1,
-      "extra/qk/reg_store_devec.py": 1,
+      "extra/qk/reg_store_devec.py": 2,
       "extra/qk/route_manifest.py": 20,
       "extra/qk/runtime_specs.py": 8,
       "extra/qk/shared_attention_capture.py": 4,
@@ -2586,6 +2586,10 @@
         "to": "extra/qk/route_manifest.py"
       },
       {
+        "from": "test/unit/test_reg_store_devec.py",
+        "to": "extra/qk/reg_store_devec.py"
+      },
+      {
         "from": "test/unit/test_route_admission_consistency.py",
         "to": "extra/qk/route_manifest.py"
       },
@@ -2867,7 +2871,7 @@
       },
       "keep": {
         "files": 88,
-        "loc": 12155
+        "loc": 12157
       },
       "move": {
         "files": 1,
@@ -2889,7 +2893,7 @@
       },
       "codegen_lowering": {
         "files": 7,
-        "loc": 402
+        "loc": 404
       },
       "evidence": {
         "files": 11,
@@ -2919,7 +2923,7 @@
       },
       "authority": {
         "files": 47,
-        "loc": 7633
+        "loc": 7635
       },
       "benchmark": {
         "files": 2,
@@ -2957,7 +2961,7 @@
       },
       "fallback": {
         "files": 3,
-        "loc": 124
+        "loc": 126
       },
       "historical_one_off": {
         "files": 1,
@@ -3746,7 +3750,12 @@
     ],
     "extra/qk/reg_store_devec.py": [
       "docs/HANDOFF_logits_only_store_codegen_bug_20260724.md",
+      "docs/task_workflow/input/production-debug-experimental-workflow-scope-20260726.md",
+      "docs/task_workflow/output/production-reorganization-inventory-20260728.json",
+      "docs/task_workflow/output/production-reorganization-report-20260728.md",
+      "docs/task_workflow/output/reg-store-devec-test-scope-20260728.md",
       "scratchpad/audit_bfs.py",
+      "test/unit/test_reg_store_devec.py",
       "tinygrad/codegen/experimental.py"
     ],
     "extra/qk/route_manifest.py": [
