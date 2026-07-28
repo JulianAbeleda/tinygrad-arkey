@@ -691,3 +691,14 @@ and private reinitialization-register duplication, and AMD dispatch. No AMD exec
 
 This slice also does not authorize broader pruning. Subsequent codegen, quant, decode, route-policy, and packed-WMMA
 slices still require their own tests and evidence closures.
+
+### 16.12 Third-slice blocker checkpoint
+
+The next proposed slice, `extra/qk/reg_store_devec.py` into `tinygrad/codegen/late/reg_store.py`, is **blocked**.
+Its live caller is `tinygrad/codegen/__init__.py:263-264`, and the forwarding shim is
+`tinygrad/codegen/experimental.py:15`; import-cycle risk is low. However, the extra matcher runs after the core
+`pm_distinct_reg_store_devec` rule and intentionally accepts duplicate REG pointers that the core matcher rejects.
+No focused test currently covers the required `STACK(LOAD(INDEX(REG)))` positive case, duplicate-pointer behavior,
+lane ordering, negative GLOBAL/LOCAL/non-index/mixed targets, or AMD/coalesced-load dispatch. The slice must not be
+consolidated or promoted until those tests pin the residual behavior and the lowering baseline/fingerprint are
+regenerated at the exact clean commit.

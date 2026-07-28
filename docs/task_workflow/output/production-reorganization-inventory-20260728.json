@@ -60,6 +60,15 @@
       "verification": "61 focused CPU tests pass; AMD execution remains unrun"
     }
   ],
+  "blocked_slices": [
+    {
+      "source": "extra/qk/reg_store_devec.py",
+      "proposed_destination": "tinygrad/codegen/late/reg_store.py",
+      "live_caller": "tinygrad/codegen/__init__.py:263-264",
+      "blocker": "No focused CPU coverage for STACK(LOAD(INDEX(REG))), duplicate-pointer residual behavior, negative targets, lane ordering, or AMD/coalesced-load dispatch; core matcher rejects duplicate REG pointers while extra matcher accepts them",
+      "required_before_promotion": ["focused matcher/pipeline tests", "lowering baseline regeneration", "lowering fingerprint regeneration"]
+    }
+  ],
   "blocking_conditions": [
     "R7 inventory must resolve cross-packet ownership before broader pruning",
     "extra/qk/decode/capture_prefill_compile.py remains deletion-blocked until its compile conclusion is banked",
