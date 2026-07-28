@@ -544,3 +544,93 @@ The repository reorganization is complete only when:
 - The expanded organization audit passes with complete manifest coverage and no hard errors.
 - Production tests and supported CPU/Metal/AMD smoke gates pass at the exact clean commit, subject to available hardware.
 - `sz.py` passes and the final report quantifies the reduction rather than asserting cleanliness qualitatively.
+
+### 16.8 Low-effort agent execution protocol
+
+Preferred worker profile: Luna with low reasoning effort. If the active agent runtime does not expose a Luna model
+override, use the available low-effort worker model and record that substitution in the handoff. Model availability
+must not change the evidence contract or authorize weaker classification.
+
+Agents work read-only from `/Users/julianabeleda/env/tinygrad-arkey-exp` at the exact recorded `exp` commit. During the
+census they may run searches, parsers, tests that do not require exclusive hardware, and Git history queries. They may
+not edit, move, delete, commit, push, install, run GPU workloads, change branches, or modify generated audit outputs.
+
+Each agent returns findings to the root agent rather than creating a competing inventory file. Every finding uses:
+
+```text
+path | owner_branch | category | disposition | destination | consumer_or_reference |
+retention_or_recovery | confidence | unresolved_reason
+```
+
+Allowed `owner_branch` values are `master`, `dev`, `exp`, and `delete`. Allowed dispositions are `retain`, `promote`,
+`move`, `consolidate`, `delete`, and `unresolved`. An agent must use `unresolved` rather than infer intent from a name,
+directory, age, lack of imports, or a failed test.
+
+#### Packet A: runtime and tooling boundary
+
+Owned paths:
+
+- Current fork-added or fork-modified `tinygrad/**` and `extra/**` files.
+- Root executable scripts and `scratchpad/**` only when needed to resolve a runtime/tooling reference.
+
+Required questions:
+
+- Which `extra` modules are actually executed by production rather than merely exposed by a lazy wrapper?
+- Which live production modules must move under `tinygrad`, and to what domain owner?
+- Which diagnostics and hardware tools belong on `dev`, and which unproven probes belong on `exp`?
+- Which assets are superseded or dead with a banked conclusion and recoverable commit?
+- What owns `extra/qk/decode/capture_prefill_compile.py`, the current audit coverage drift?
+
+Explicit seams to resolve include `tinygrad/llm/route_ops.py`, `tinygrad/codegen/experimental.py`,
+`tinygrad/llm/__main__.py`, `extra/qk`, `extra/llm`, `extra/audit`, `extra/hardware`, `extra/remote`,
+`extra/gpu_fault_analysis`, `extra/tools`, and `extra/usbgpu`.
+
+#### Packet B: tests, benchmarks, and evidence
+
+Owned paths:
+
+- Current fork-added or fork-modified `test/**` files.
+- `bench/**`.
+- `docs/artifacts/**`.
+
+Required questions:
+
+- Which tests defend a shipped runtime behavior or production policy boundary?
+- Which tests are debug reproducers, qualification harnesses, experimental candidates, or tests of retired code?
+- Which benchmark files are canonical inputs/baselines versus raw campaign output?
+- Which artifacts are runtime fixtures or unique promotion evidence versus replay/debug output?
+- Which retained evidence has a current consumer, owner, and bounded retention rule?
+
+Every proposed production test retention must name the shipped behavior and implementation it protects. Every artifact
+deletion must identify a compact replacement record or state that no unique conclusion exists.
+
+#### Packet C: documents and repository surface
+
+Owned paths:
+
+- `docs/**` excluding `docs/artifacts/**`.
+- `structure/**`, root scratch scripts, `.claude/**`, and `scratchpad/**`.
+
+Required questions:
+
+- Which documents are current production operating instructions, contracts, or compact findings ledgers?
+- Which are completed handoffs, stale execution prompts, duplicated scopes, detailed debug investigations, or scratch?
+- Which documents must move to `dev`, which unfinished experimental records belong on `exp`, and which are delete-ready?
+- Which retained master documents are reachable from a maintained index or explicit owner?
+- Which path references would break under each proposed move or deletion?
+
+Task-workflow inputs remain on master only while genuinely open. Completed scopes move to output, and detailed closed
+investigations still move to `dev` unless production operation requires them.
+
+#### Root reconciliation
+
+The root agent owns paths not delegated, resolves cross-packet conflicts, and produces the R7 inventory and cleanup
+ledger. It must verify:
+
+- Packet path sets cover every current fork-added and fork-modified file exactly once, with documented exclusions.
+- A production consumer overrides a lower-tier proposal until the consumer is promoted or removed safely.
+- Test and document dispositions follow the final runtime disposition, not an earlier guess.
+- Counts reconcile with Git, `sz.py`, and the expanded audit.
+- No removal begins while any cross-packet dependency or unresolved owner remains.
+
+Agent handoffs are evidence inputs, not authority. Only the reconciled, committed R7 ledgers authorize R8-R11 edits.
