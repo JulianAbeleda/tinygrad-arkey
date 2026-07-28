@@ -12,5 +12,3 @@ def _attr(module:str, name:str):
 # NOTE: coalesce_loads was promoted to core codegen (LR-050) -- tinygrad/codegen/__init__.py now imports
 # tinygrad.codegen.late.coalesced_load directly instead of going through this lazy extra.qk adapter.
 def warp_reduce_pm(): return _attr("extra.qk.warp_reduce_lowering", "pm_warp_reduce")
-def list_schedule(*args, **kwargs): return _attr("extra.qk.codegen_list_scheduler", "list_schedule")(*args, **kwargs)
-def structural_ops(): return _attr("extra.qk.codegen_list_scheduler", "_STRUCTURAL")

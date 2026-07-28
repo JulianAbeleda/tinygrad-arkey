@@ -146,6 +146,11 @@ commits, and that the promoted `fdot2` hook is AMD-only/default-off. We therefor
 pre-existing authority mismatch for purposes of continuing reorganization, while keeping the formal baseline and
 AMDHSA metadata checks open until they can run on the required toolchain.
 
+The fifth slice centralized the opt-in latency-aware list scheduler in `tinygrad/codegen/late/list_scheduler.py` and
+updated `tinygrad/codegen/late/linearizer.py` to import both the scheduler and structural-op inventory directly. The
+two experimental forwarding shims were removed, and four focused CPU boundary tests pass. `SCHED_LIST` remains
+default-off; this records ordering correctness only, not a performance or AMD execution result.
+
 At the current `exp` tip, `python3 sz.py` passes with 34,947 budgeted authored lines against the 40,000-line cap.
 
 ## Documentation closure completed
