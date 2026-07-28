@@ -148,9 +148,12 @@ final class TinyGPUCLIRunner: NSObject, OSSystemExtensionRequestDelegate {
   func request(_ request: OSSystemExtensionRequest, didFailWithError error: Error) {
     print("\nError: \(error.localizedDescription)\n")
     let code = (error as NSError).code
-    if code == 4 { print("Missing entitlements. Rebuild with proper signing.\n") }
-    else if code == 8 { print("Extension not found in app bundle.\n") }
-    else if code == 9 { print("Extension disabled by user.\n\n\(Self.approvalHelp)") }
+    if code == 2 { print("Missing entitlements. Rebuild with proper signing.\n") }
+    else if code == 4 { print("Extension not found in the containing app bundle.\n") }
+    else if code == 8 { print("Extension code signature is invalid.\n") }
+    else if code == 9 { print("Extension validation failed.\n") }
+    else if code == 10 { print("Extension is blocked by system policy.\n") }
+    else if code == 13 { print("Authorization is required to change the extension registration.\n") }
     done?(.failed)
   }
 
