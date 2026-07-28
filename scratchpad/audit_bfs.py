@@ -32,7 +32,7 @@ dynamic_roots = [
     "extra/qk/decode/current_decode_execution_adapter.py",  # operand_path_execution_worker.py _PRODUCTION_ADAPTER_LOADERS
     "tinygrad/codegen/late/recurrence.py",   # tinygrad/codegen/__init__.py direct unroll_recurrence
     "extra/qk/coalesced_load_lowering.py",     # tinygrad/codegen/__init__.py cg_extras.coalesce_loads
-    "extra/qk/warp_reduce_lowering.py",        # tinygrad/codegen/__init__.py cg_extras.warp_reduce_pm()
+    "tinygrad/codegen/late/warp_reduce.py",    # tinygrad/codegen/__init__.py direct pm_warp_reduce; qk callers use core primitives
     "tinygrad/codegen/late/reg_store.py",      # tinygrad/codegen/__init__.py direct register-store matcher
     "tinygrad/codegen/late/fdot2.py",           # tinygrad/codegen/__init__.py direct fdot2 hooks; gemm_consumer.py lower_fdot2_add
     "tinygrad/codegen/late/list_scheduler.py", # tinygrad/codegen/late/linearizer.py direct list_schedule/structural_ops

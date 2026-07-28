@@ -13,7 +13,7 @@ These are the shape-safe building blocks for reviving the flash-attention kernel
 """
 from __future__ import annotations
 
-from tinygrad.uop.ops import UOp, Ops
+from tinygrad.uop.ops import UOp, Ops, AxisType, PatternMatcher, UPat
 from tinygrad.dtype import AddrSpace, dtypes
 
 WARP = 32  # gfx1100 wave width
@@ -52,3 +52,45 @@ def warp_reduce_sum(val:UOp, lane:UOp, width:int = WARP) -> UOp:
     val = val + warp_shfl_xor(val, off, lane)
     off >>= 1
   return val   # every lane holds the width-wide sum
+
+
+# Auto-lowering for optimizer-produced lane reductions. This must stage every shuffle into a REG because an inline
+# ds_bpermute can be pulled into a divergent single-lane writeback gate. The hand-built primitives above remain
+# available to kernel authors and to the existing extra/qk emitters through this core owner.
+def _warp_reduce_sum_staged(val:UOp, lane:UOp, width:int = WARP, slot_base:int = _STAGE_SLOT) -> UOp:
+  off = width >> 1
+  while off >= 1:
+    val = val + _staged_shfl(val, off, lane, slot_base); off >>= 1
+  return val
+
+
+_LADDER = {Ops.ADD: _warp_reduce_sum_staged, Ops.MAX: warp_reduce_max}
+_LANE_AXES = (AxisType.WARP, AxisType.GROUP_REDUCE)
+_POW2_WIDTHS = (2, 4, 8, 16, 32)
+
+
+def _lane_width(r:UOp) -> int|None:
+  if r.op is Ops.RANGE and r.arg[-1] in _LANE_AXES and r.src[0].op is Ops.CONST and r.src[0].arg in _POW2_WIDTHS:
+    return r.src[0].arg
+  return None
+
+
+def lower_warp_reduce(red:UOp) -> UOp|None:
+  """Lower one scalar WARP/GROUP_REDUCE REDUCE to the staged ds_bpermute ladder."""
+  alu, _axes = red.arg
+  if alu not in _LADDER: return None
+  ranges = red.src[1:]
+  if not all(r.op is Ops.RANGE for r in ranges): return None
+  group = [r for r in ranges if r.arg[-1] in _LANE_AXES]
+  serial = [r for r in ranges if r.arg[-1] not in _LANE_AXES]
+  if len(group) != 1: return None
+  if (w := _lane_width(group[0])) is None: return None
+  if red.dtype.scalar() not in (dtypes.float32, dtypes.float): return None
+  if any(u.op is Ops.RANGE and u.arg[-1] in (AxisType.UPCAST, AxisType.UNROLL) for u in red.src[0].toposort()): return None
+  inner = red.src[0].reduce(*serial, arg=red.arg) if serial else red.src[0]
+  return _LADDER[alu](inner, group[0], w)
+
+
+pm_warp_reduce = PatternMatcher([
+  (UPat(Ops.REDUCE, name="red"), lower_warp_reduce),
+])

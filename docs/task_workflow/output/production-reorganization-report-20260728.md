@@ -151,6 +151,11 @@ updated `tinygrad/codegen/late/linearizer.py` to import both the scheduler and s
 two experimental forwarding shims were removed, and four focused CPU boundary tests pass. `SCHED_LIST` remains
 default-off; this records ordering correctness only, not a performance or AMD execution result.
 
+The sixth slice consolidated the hand-built AMD warp primitives and the opt-in warp-reduce matcher into
+`tinygrad/codegen/late/warp_reduce.py`. Core code and existing `extra/qk` emitters now import that owner directly, the
+experimental matcher shim and both old modules are gone, and four CPU structural/boundary tests pass. The
+`WARP_REDUCE_LOWERING` gate remains opt-in; no AMD execution or performance claim is made.
+
 At the current `exp` tip, `python3 sz.py` passes with 34,947 budgeted authored lines against the 40,000-line cap.
 
 ## Documentation closure completed

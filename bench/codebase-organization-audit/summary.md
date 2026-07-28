@@ -1,8 +1,8 @@
 # Codebase organization audit
 
-Audited commit: `mac-first-boot-20260610-3507-gf7231bbcf-dirty` (dirty: True)
+Audited commit: `mac-first-boot-20260610-3508-g981459f18-dirty` (dirty: True)
 Scope: `extra/qk` | manifest coverage required for: extra/qk/
-Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 67 warnings)
+Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 65 warnings)
 
 > Machine-derived facts (discovery, LOC, imports, references, coverage, boundary checks) are produced by this
 > script. Every purpose, role, status, disposition, action, and promotion/prune judgment below is human-authored
@@ -10,21 +10,21 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 67 warnings)
 
 ## Coverage
 
-- Authored: 470 files / 72210 token-bearing LOC (sz.py rules)
+- Authored: 469 files / 72137 token-bearing LOC (sz.py rules)
 - Generated (reported, never manifested): 1 files / 57 LOC
-- Manifest scope: 90 files / 13214 LOC (90 explicit records, 0 covered by group rule, 0 uncovered)
+- Manifest scope: 87 files / 13049 LOC (87 explicit records, 0 covered by group rule, 0 uncovered)
 
 ## LOC by domain
 
 | domain | files | loc |
 |---|---|---|
 | amd_runtime | 3 | 421 |
-| attention_decode | 10 | 809 |
+| attention_decode | 9 | 705 |
 | attention_prefill | 3 | 504 |
-| codegen_lowering | 4 | 278 |
+| codegen_lowering | 2 | 218 |
 | evidence | 11 | 1671 |
 | measurement | 17 | 2147 |
-| quant_mmq | 18 | 2930 |
+| quant_mmq | 18 | 2929 |
 | route_authority | 16 | 3447 |
 | search_promotion | 8 | 1007 |
 
@@ -33,11 +33,11 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 67 warnings)
 | role | files | loc |
 |---|---|---|
 | adapter | 11 | 1143 |
-| authority | 44 | 7509 |
+| authority | 42 | 7448 |
 | benchmark | 2 | 99 |
 | diagnostic | 12 | 1298 |
 | evidence | 5 | 438 |
-| execution | 9 | 1802 |
+| execution | 8 | 1698 |
 | integration | 2 | 402 |
 | research | 4 | 387 |
 | test | 1 | 136 |
@@ -48,7 +48,7 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 67 warnings)
 |---|---|---|
 | active_research | 14 | 2348 |
 | historical_one_off | 1 | 43 |
-| production | 66 | 9719 |
+| production | 63 | 9554 |
 | promoted_default | 5 | 609 |
 | refuted | 1 | 21 |
 | retained_reference | 1 | 114 |
@@ -58,18 +58,17 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 67 warnings)
 
 | disposition | files | loc |
 |---|---|---|
-| consolidate | 2 | 864 |
+| consolidate | 1 | 832 |
 | investigate | 2 | 256 |
-| keep | 85 | 12031 |
+| keep | 83 | 11898 |
 | move | 1 | 63 |
 
 ## Default-path source footprint
 
-42 declared default-path files / 6263 LOC.
+41 declared default-path files / 6154 LOC.
 
 - `extra/qk/amd_isa_proof.py`
 - `extra/qk/amd_resource_artifact.py`
-- `extra/qk/amd_warp_reduce.py`
 - `extra/qk/decode/current_decode_execution_adapter.py`
 - `extra/qk/decode/flash_decode_attention_executor.py`
 - `extra/qk/decode/flash_decode_attention_spec.py`
@@ -107,7 +106,7 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 67 warnings)
 - `extra/qk/quant/q6_k_gemv_primitive.py`
 - `extra/qk/route_manifest.py`
 - `extra/qk/runtime_specs.py`
-- `extra/qk/warp_reduce_lowering.py`
+- `tinygrad/codegen/late/warp_reduce.py`
 - `tinygrad/schedule/wmma/flash_prefill.py`
 
 ## Largest authored files
@@ -209,9 +208,9 @@ None.
 
 | path | class | former purpose | last campaign | replacement | commit | recovery | loc |
 |---|---|---|---|---|---|---|---|
-| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `f7231bbcf163` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
-| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `f7231bbcf163` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
-| `extra/qk/q4k_wmma_tile_lowering.py` | delete_after_verdict_capture | Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles. | q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14) | docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md | `f7231bbcf163` | git show 05b67146a -- <path> | 1138 |
+| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `981459f18a81` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
+| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `981459f18a81` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
+| `extra/qk/q4k_wmma_tile_lowering.py` | delete_after_verdict_capture | Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles. | q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14) | docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md | `981459f18a81` | git show 05b67146a -- <path> | 1138 |
 
 ## Workflow inventory
 
@@ -244,9 +243,9 @@ None.
 
 ## Promotion budget
 
-- Budgeted (`tinygrad`, `bench`, `structure`): **34955 / 40000** -- headroom 5045
-- Against the standing 30000 target: **4955 over**. sz.py:13 records 35000 as temporary headroom; the standing target is 30000
-- Default-path LOC currently sitting unbudgeted in `extra/`: **6193**
+- Budgeted (`tinygrad`, `bench`, `structure`): **35011 / 40000** -- headroom 4989
+- Against the standing 30000 target: **5011 over**. sz.py:13 records 35000 as temporary headroom; the standing target is 30000
+- Default-path LOC currently sitting unbudgeted in `extra/`: **6028**
 - Net budget cost of pending promotions (moved minus deleted): 0
 - Declarative LOC a data-file conversion would remove from the budget entirely: 0
 
@@ -296,7 +295,6 @@ None.
 
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/amd_isa_proof.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/amd_resource_artifact.py is on the default production path from extra/ with no promotion or retention decision
-- **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/amd_warp_reduce.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/decode/current_decode_execution_adapter.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/decode/flash_decode_attention_executor.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/decode/flash_decode_attention_spec.py is on the default production path from extra/ with no promotion or retention decision
@@ -334,7 +332,6 @@ None.
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/quant/q6_k_gemv_primitive.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/route_manifest.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/runtime_specs.py is on the default production path from extra/ with no promotion or retention decision
-- **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/warp_reduce_lowering.py is on the default production path from extra/ with no promotion or retention decision
 - **high_fan_in** (a widely-imported module is a de-facto authority): extra/qk/layout.py is imported by 20 modules
 - **high_fan_in** (a widely-imported module is a de-facto authority): extra/qk/route_manifest.py is imported by 20 modules
 - **large_file** (minimize what a reader must hold in their head): extra/qk/mmq_q4k_q8_atom.py is 832 LOC (threshold 400); responsibilities declared: 4

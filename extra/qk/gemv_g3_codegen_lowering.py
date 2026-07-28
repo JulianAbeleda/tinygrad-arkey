@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from tinygrad.uop.ops import UOp, AxisType, KernelInfo
 from tinygrad.dtype import AddrSpace, dtypes
-from extra.qk.amd_warp_reduce import WARP
+from tinygrad.codegen.late.warp_reduce import WARP
 from extra.qk.quant.q4_k_gemv_primitive import Q4_K_BLOCK_ELEMS, Q4K_WORDS_PER_BLOCK, _q4k_block_dot_packed_load
 from extra.qk.gemv_g2_lanemap import Q4KGateUpLaneMap
 from extra.qk.lane_partition_reduce import LanePartition, lane_partition_reduce_sum

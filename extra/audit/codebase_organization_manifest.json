@@ -446,11 +446,12 @@
       "domain": "codegen_lowering",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/lane_partition_reduce.py:19 imports WARP and is itself on the default decode Q4_K route (see gemv_g3_codegen_lowering.py evidence)",
-        "extra/qk/gemv_g3_codegen_lowering.py:12 imports WARP and its kernel is BUBBLEBEAM_FUTURESIGHT default-on per tinygrad/llm/route_policy.py:23"
+        "extra/qk/lane_partition_reduce.py and gemv_g3_codegen_lowering.py import the core warp primitives on the default decode Q4_K route",
+        "tinygrad/codegen/__init__.py directly imports pm_warp_reduce under getenv(\"WARP_REDUCE_LOWERING\")",
+        "test/unit/test_warp_reduce_lowering.py covers shuffle ladder structure, fail-closed axes, and old-boundary absence"
       ],
-      "path": "extra/qk/amd_warp_reduce.py",
-      "promotion_target": null,
+      "path": "tinygrad/codegen/late/warp_reduce.py",
+      "promotion_target": "tinygrad/codegen/late/warp_reduce.py (consolidated from extra/qk/amd_warp_reduce.py and extra/qk/warp_reduce_lowering.py in production reorganization slice 6)",
       "public_surface": [
         "warp_shfl_xor",
         "_staged_shfl",
@@ -458,7 +459,11 @@
         "warp_reduce_max_native_vgpr",
         "warp_reduce_sum",
         "WARP",
-        "_STAGE_SLOT"
+        "_STAGE_SLOT",
+        "_warp_reduce_sum_staged",
+        "pm_warp_reduce",
+        "lower_warp_reduce",
+        "_lane_width"
       ],
       "purpose": "Owns the shape-safe hand-authoring API for AMD ds_bpermute cross-lane warp reductions (CUSTOMI-shaped shuffle + staged-register max/sum ladders) used by kernel authors who cannot rely on generic REDUCE lowering.",
       "responsibilities": [
@@ -4866,49 +4871,6 @@
         "measurement-authority",
         "prefill-route-selection",
         "decode-throughput-measurement"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "codegen_lowering"
-      ],
-      "authority_keys": [
-        "_warp_reduce_sum_staged.single_slot_reuse_rule",
-        "lower_warp_reduce.auto_detect_rule"
-      ],
-      "classification_confidence": "high",
-      "default_path": true,
-      "deletion_confidence": "retain_active",
-      "disposition": "consolidate",
-      "domain": "codegen_lowering",
-      "duplication_group": null,
-      "evidence": [
-        "extra/qk/lane_partition_reduce.py:20,68 imports and calls _warp_reduce_sum_staged directly, and lane_partition_reduce.py is used by the shipped gemv_g3_codegen_lowering.py",
-        "tinygrad/codegen/__init__.py:142 gates pm_warp_reduce (via cg_extras.warp_reduce_pm()) behind getenv(\"WARP_REDUCE_LOWERING\")",
-        "module docstring: 'STATUS: first pass ... Pipeline-integration behind WARP_REDUCE_LOWERING is opt-in; full model wiring ... is the Milestone-6 follow-on.'"
-      ],
-      "path": "extra/qk/warp_reduce_lowering.py",
-      "promotion_target": null,
-      "public_surface": [
-        "_warp_reduce_sum_staged",
-        "pm_warp_reduce",
-        "lower_warp_reduce",
-        "_lane_width"
-      ],
-      "purpose": "Provides both (a) `_warp_reduce_sum_staged`, the staged (single-slot-reused, occupancy-friendly) warp-sum ladder consumed directly by the shipped decode lane-partition combine, and (b) `pm_warp_reduce`/`lower_warp_reduce`, an opt-in PatternMatcher rule that auto-detects a generic REDUCE over a full warp/group-reduce axis and rewrites it to the ds_bpermute ladder before pm_group_for_reduce claims it.",
-      "responsibilities": [
-        "staged warp-sum ladder (production primitive)",
-        "auto-detecting PatternMatcher REDUCE-to-ladder rule (opt-in research, Milestone 5)"
-      ],
-      "retention_criterion": "the production half (_warp_reduce_sum_staged) is needed as long as the G3 decode route exists; the research half (pm_warp_reduce/lower_warp_reduce) is needed only while WARP_REDUCE_LOWERING milestone-5 work is open -- these two lifecycles are decoupled and currently share one file",
-      "reusable_assets": [],
-      "role": "authority",
-      "status": "production",
-      "surface": "default",
-      "test_role": "not_test_like",
-      "workflow_ids": [
-        "decode-q4k-gemv-g2-g3-lanemap",
-        "warp-reduce-auto-lowering-milestone5"
       ]
     }
   ],

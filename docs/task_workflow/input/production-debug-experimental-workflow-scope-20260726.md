@@ -738,3 +738,15 @@ The opt-in latency-aware list scheduler is now centralized:
 The scheduler still only reorders within straight-line blocks, preserves topological dependencies and structural
 boundaries, and remains default-off. Four focused CPU tests cover latency-shadow ordering, structural boundaries,
 the structural inventory, and old-boundary absence. No performance or AMD execution claim is made.
+
+### 16.15 Sixth production-closure checkpoint
+
+The AMD warp primitive and auto-lowering pair is now consolidated in one core owner:
+
+| Source | Destination | Production consumer | Boundary change |
+|---|---|---|---|
+| `extra/qk/amd_warp_reduce.py` and `extra/qk/warp_reduce_lowering.py` | `tinygrad/codegen/late/warp_reduce.py` | `tinygrad/codegen/__init__.py` under `WARP_REDUCE_LOWERING`, plus existing decode/GEMV/MMQ emitters | Core owns the hand-built shuffle/reduction API and matcher; the experimental `warp_reduce_pm` shim and both old extra modules were removed |
+
+The matcher still lowers only scalar float ADD/MAX reductions over power-of-two WARP/GROUP_REDUCE axes, and remains
+default-off. Four CPU structural/boundary tests pass. AMD execution, ISA output, and performance remain outside this
+slice's claim.

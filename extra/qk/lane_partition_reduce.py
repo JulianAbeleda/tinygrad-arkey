@@ -16,8 +16,7 @@ from dataclasses import dataclass
 
 from tinygrad.uop.ops import UOp, Ops
 from tinygrad.dtype import dtypes
-from extra.qk.amd_warp_reduce import WARP
-from extra.qk.warp_reduce_lowering import _warp_reduce_sum_staged
+from tinygrad.codegen.late.warp_reduce import WARP, _warp_reduce_sum_staged
 
 class LanePartitionError(ValueError): pass
 
