@@ -50,6 +50,16 @@
     "focused_test": "test/unit/test_flash_prefill_spec.py",
     "audit_state": "ORG_R1_PASS_CENSUS_PINNED; 0 hard errors and 67 warnings after adding the evidence-based dev record for capture_prefill_compile.py"
   },
+  "completed_additional_slices": [
+    {
+      "source": "extra/qk/codegen_recurrence_unroll.py",
+      "destination": "tinygrad/codegen/late/recurrence.py",
+      "consumer": "tinygrad/codegen/__init__.py:89-91 when SCHED_UNROLL>1 on AMD",
+      "shim_removed": "tinygrad/codegen/experimental.py:unroll_recurrence",
+      "focused_test": "test/unit/test_codegen_recurrence_unroll.py",
+      "verification": "61 focused CPU tests pass; AMD execution remains unrun"
+    }
+  ],
   "blocking_conditions": [
     "R7 inventory must resolve cross-packet ownership before broader pruning",
     "extra/qk/decode/capture_prefill_compile.py remains deletion-blocked until its compile conclusion is banked",
