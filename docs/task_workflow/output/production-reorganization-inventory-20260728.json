@@ -81,6 +81,17 @@
       "focused_test": "test/unit/test_fdot2_lowering.py",
       "verification": "15 focused fdot2/GEMM CPU tests pass; gate remains V_DOT2_LOWERING plus AMD-only",
       "follow_up": "restore exact-clean-commit lowering baseline/fingerprint authorities"
+    },
+    {
+      "source": "extra/qk/codegen_list_scheduler.py",
+      "destination": "tinygrad/codegen/late/list_scheduler.py",
+      "live_callers": [
+        "tinygrad/codegen/late/linearizer.py SCHED_LIST hook and structural-boundary probes"
+      ],
+      "shim_removed": "tinygrad/codegen/experimental.py list_schedule and structural_ops",
+      "focused_test": "test/unit/test_codegen_list_scheduler.py",
+      "verification": "4 focused CPU scheduler/boundary tests pass; SCHED_LIST remains default-off",
+      "follow_up": "restore exact-clean-commit lowering baseline/fingerprint authorities"
     }
   ],
   "blocking_conditions": [

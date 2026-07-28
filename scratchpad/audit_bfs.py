@@ -35,7 +35,7 @@ dynamic_roots = [
     "extra/qk/warp_reduce_lowering.py",        # tinygrad/codegen/__init__.py cg_extras.warp_reduce_pm()
     "tinygrad/codegen/late/reg_store.py",      # tinygrad/codegen/__init__.py direct register-store matcher
     "tinygrad/codegen/late/fdot2.py",           # tinygrad/codegen/__init__.py direct fdot2 hooks; gemm_consumer.py lower_fdot2_add
-    "extra/qk/codegen_list_scheduler.py",      # tinygrad/codegen/late/linearizer.py cg_extras.list_schedule/structural_ops
+    "tinygrad/codegen/late/list_scheduler.py", # tinygrad/codegen/late/linearizer.py direct list_schedule/structural_ops
     "extra/qk/codegen_extensions.py",          # tinygrad/renderer/isa/extensions.py experimental.amd_isa_extension_descriptors
     "extra/qk/q6k_route_spec.py",              # route_ops.py qk_ops.emit_q6k_gemv_kernel / q6k_spec_for_role (called from tinygrad/llm/*)
     "extra/qk/memory_adaptive_runtime_collector.py",  # route_ops.py qk_ops.install_memory_adaptive_model_adapters

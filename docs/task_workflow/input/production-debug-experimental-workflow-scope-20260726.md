@@ -726,3 +726,15 @@ accumulator ordering, fail-closed controls, and linearized dependency replacemen
 `test/unit/test_fdot2_lowering.py`; the focused fdot2/GEMM suite passes 15 tests. This is primitive exposure only and
 does not claim AMD execution, ISA availability, or a speedup. The lowering baseline/fingerprint authority follow-up
 remains open under `docs/task_workflow/input/reg-store-devec-amd-authority-verification-scope-20260728.md`.
+
+### 16.14 Fifth production-closure checkpoint
+
+The opt-in latency-aware list scheduler is now centralized:
+
+| Source | Destination | Production consumer | Boundary change |
+|---|---|---|---|
+| `extra/qk/codegen_list_scheduler.py` | `tinygrad/codegen/late/list_scheduler.py` | `tinygrad/codegen/late/linearizer.py` under `SCHED_LIST`, plus its structural-boundary probes | Core imports are direct; the `list_schedule` and `structural_ops` forwarding shims were removed from `codegen/experimental.py` |
+
+The scheduler still only reorders within straight-line blocks, preserves topological dependencies and structural
+boundaries, and remains default-off. Four focused CPU tests cover latency-shadow ordering, structural boundaries,
+the structural inventory, and old-boundary absence. No performance or AMD execution claim is made.
