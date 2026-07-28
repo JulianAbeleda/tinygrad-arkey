@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from extra.qk.route_manifest import (canonical_candidate_set_identity, canonical_capability_identity,
+from extra.llm_research.route_manifest import (canonical_candidate_set_identity, canonical_capability_identity,
   canonical_inventory_identity, canonical_policy_rows, canonical_route_id, lookup_policy_row,
   automatic_promoted_prefill_graph_policy, promoted_prefill_candidate_policy, route,
   immutable_route_registry)

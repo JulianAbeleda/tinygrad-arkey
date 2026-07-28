@@ -33,7 +33,7 @@ what make it machine search.
 At runtime there is no claim of unrestricted program synthesis or continuous autotuning. Model execution
 selects an already promoted route, reconstructs its UOp kernel, and hands it to tinygrad's normal
 codegen/renderer/compiler path. The resulting cached GPU binary is the repeated hot path. Some generated
-route surfaces currently live under `extra/qk` so their provenance and debugging artifacts remain explicit;
+route surfaces currently live under `extra/llm_research` so their provenance and debugging artifacts remain explicit;
 production route adapters may import them while constructing the kernel, but the offline search itself is not
 rerun for inference.
 
@@ -63,7 +63,7 @@ Machine: RX 7900 XTX (24 GB), AMD gfx1100. **Decode re-measured from promoted ma
 the last complete four-point prefill curve is from **2026-07-24**, with newer bounded 14B endpoint checks
 reported separately below. Comparisons use the same box and GGUFs.
 
-Decode is now measured by the **fixed-depth authority** (`extra/qk/decode/decode_runtime_overhead.py`,
+Decode is now measured by the **fixed-depth authority** (`extra/llm_research/decode/decode_runtime_overhead.py`,
 `tinygrad.decode.fixed_depth.v2`), which prefills to exactly the stated context before timing, so the ctx
 columns are real decode depth. The previous table came from `extra/llm/model_e2e_bench.py`, which decodes
 from a **one-token seed** over a growing window — its ctx labels described KV *allocation*, not depth, and
@@ -90,7 +90,7 @@ At ctx128, production `auto` stays on SDPA and completed at 94.80 tok/s on 8B an
 accelerated flash route begins at the configured threshold. The 14B flash candidate owns QG2, S32, and
 width-4 cooperative staging structurally; 8B remains on its G=4 width-1 descriptor.
 
-**tinygrad-arkey prefill** (`extra/qk/prefill/prefill_whole_synced.py --mode authority`, whole-prefill tok/s):
+**tinygrad-arkey prefill** (`extra/llm_research/prefill/prefill_whole_synced.py --mode authority`, whole-prefill tok/s):
 
 | Model | pp512 | pp1024 | pp2048 | pp4096 | decay 1024→4096 |
 |---|---:|---:|---:|---:|---:|
@@ -181,7 +181,7 @@ prefill endpoint medians were 2026 at pp512 and 1880 at pp4096. The 8B warmed pp
 3768 tok/s. The single 8B prefill control remains a bounded route-regression check, not a replacement for
 the multi-run prefill authority table.
 
-**Measurement discipline:** report prefill/decode throughput only from the authority harnesses via `extra/qk/bench.py` (below). Never report throughput from a `model.generate` TTFT bench; it includes unrelated Python, sampling, and host overhead.
+**Measurement discipline:** report prefill/decode throughput only from the authority harnesses via `extra/llm_research/bench.py` (below). Never report throughput from a `model.generate` TTFT bench; it includes unrelated Python, sampling, and host overhead.
 
 ## Running it
 
@@ -199,8 +199,8 @@ An explicit `--max_context N` is admission-checked and may select a supported ex
 ```sh
 # THE benchmark — the single canonical entry. Dispatches to the synced authority harnesses (prefill + decode),
 # each in an isolated subprocess with the correct env. This is the ONLY sanctioned way to report throughput.
-DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python extra/qk/bench.py --model /path/to/Qwen3-8B-Q4_K_M.gguf
-#   --prefill  : prefill authority only (extra/qk/prefill/prefill_whole_synced.py, synced graph-GEMM pp@L)
+DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python extra/llm_research/bench.py --model /path/to/Qwen3-8B-Q4_K_M.gguf
+#   --prefill  : prefill authority only (extra/llm_research/prefill/prefill_whole_synced.py, synced graph-GEMM pp@L)
 #   --decode   : genuine fixed-depth decode (exact prompt prefill, production generate route, repeated medians)
 ```
 
@@ -216,14 +216,14 @@ PYTHONPATH=. .venv/bin/python extra/audit/pure_machine_search_default_path_censu
 Start with these files and the documentation map in [docs/README.md](docs/README.md):
 
 * `tinygrad/llm/` — the core runtime (command line, model, model-file loader).
-* `extra/qk/decode/decode_harness.py` — decode speed across context lengths.
-* `extra/qk/prefill/prefill_whole_synced.py` — prefill speed.
+* `extra/llm_research/decode/decode_harness.py` — decode speed across context lengths.
+* `extra/llm_research/prefill/prefill_whole_synced.py` — prefill speed.
 * `extra/audit/pure_machine_search_default_path_census.py` — current generated/default-route census.
-* `extra/qk/route_manifest.py` — candidate registry and provenance input. Runtime policy validates selected manifest rows rather than treating the manifest global as semantic authority.
-* `extra/qk/decode/flash_decode_attention_spec.py`, `extra/qk/decode/flash_decode_attention_executor.py` — generated flash/decode attention routes.
-* `extra/qk/gemv_g3_codegen_lowering.py`, `extra/qk/q6k_route_spec.py`, `extra/qk/prefill/prefill_graph_gemm_route.py` — generated route/runtime surfaces.
-* `extra/qk/prefill/packed_wmma_prefill_candidates.py` — the packed-WMMA prefill candidates that are the 14B default (frozen per-(quant,role) geometry + load-time correctness gate).
-* `extra/qk/microbench/wmma_peak.cpp` — measured achievable WMMA peak (~105 TFLOPS on gfx1100); use it as the denominator for any efficiency claim.
+* `extra/llm_research/route_manifest.py` — candidate registry and provenance input. Runtime policy validates selected manifest rows rather than treating the manifest global as semantic authority.
+* `extra/llm_research/decode/flash_decode_attention_spec.py`, `extra/llm_research/decode/flash_decode_attention_executor.py` — generated flash/decode attention routes.
+* `extra/llm_research/gemv_g3_codegen_lowering.py`, `extra/llm_research/q6k_route_spec.py`, `extra/llm_research/prefill/prefill_graph_gemm_route.py` — generated route/runtime surfaces.
+* `extra/llm_research/prefill/packed_wmma_prefill_candidates.py` — the packed-WMMA prefill candidates that are the 14B default (frozen per-(quant,role) geometry + load-time correctness gate).
+* `extra/llm_research/microbench/wmma_peak.cpp` — measured achievable WMMA peak (~105 TFLOPS on gfx1100); use it as the denominator for any efficiency claim.
 
 A private tool owns search/audit adapters, interchange schemas, evaluation policy, ledgers, roofline attribution, and reports. tinygrad owns runtime model facts, route admission and execution, compiler/backend lowering, and hardware gates. Profiler adapters do not imply that decode hardware-counter attribution is complete.
 

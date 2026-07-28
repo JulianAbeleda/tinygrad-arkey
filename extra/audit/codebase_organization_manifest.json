@@ -4,18 +4,18 @@
       "action": "centralize",
       "confidence": "high",
       "evidence": [
-        "extra/qk/amdgpu_metadata.py:11-33 and extra/qk/mmq_compile_evidence.py:80-96 parse the same .vgpr_count/.sgpr_count/.spill/.group_segment_fixed_size/.wavefront_size/amdhsa.target fields",
+        "extra/llm_research/amdgpu_metadata.py:11-33 and extra/llm_research/mmq_compile_evidence.py:80-96 parse the same .vgpr_count/.sgpr_count/.spill/.group_segment_fixed_size/.wavefront_size/amdhsa.target fields",
         "production consumers import the mmq_compile_evidence version: prefill/current_prefill_execution_adapter.py, decode/current_decode_execution_adapter.py, shared_attention_capture.py",
-        "amdgpu_metadata.py is imported only by test/unit/test_q4k_q8_mmq_uop.py, test/unit/test_online_softmax_tile.py, and extra/qk/phase_abi_v1_resource_probe.py"
+        "amdgpu_metadata.py is imported only by test/unit/test_q4k_q8_mmq_uop.py, test/unit/test_online_softmax_tile.py, and extra/llm_research/phase_abi_v1_resource_probe.py"
       ],
       "finding": "parse_amdgpu_metadata is implemented twice from the same llvm-readelf note fields; production adapters already use the mmq_compile_evidence copy, so the standalone module is a second source of truth for one rule.",
       "id": "A1",
       "loc_added": 0,
       "loc_moved": 0,
       "loc_removed": 30,
-      "path": "extra/qk/amdgpu_metadata.py",
+      "path": "extra/llm_research/amdgpu_metadata.py",
       "status": "completed",
-      "target": "extra/qk/mmq_compile_evidence.py",
+      "target": "extra/llm_research/mmq_compile_evidence.py",
       "tests_required": [
         "repoint test/unit/test_q4k_q8_mmq_uop.py and test/unit/test_online_softmax_tile.py at the surviving owner; both already project a key subset, so the extra max_workgroup_threads field is inert"
       ]
@@ -37,7 +37,7 @@
       "loc_added": 0,
       "loc_moved": 0,
       "loc_removed": 44,
-      "path": "extra/qk/p2_probe_1.py",
+      "path": "extra/llm_research/p2_probe_1.py",
       "recovery": "git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py",
       "replacement": "docs/flash-prefill-piece2-probe-20260721.md",
       "status": "completed",
@@ -48,9 +48,9 @@
       "confidence": "high",
       "deletion_confidence": "delete_after_verdict_capture",
       "evidence": [
-        "the schema string 'tinygrad.shared_attention_evidence_bundle.v1' appears exactly once repo-wide -- its own definition at extra/qk/shared_attention_evidence_gate.py:12",
+        "the schema string 'tinygrad.shared_attention_evidence_bundle.v1' appears exactly once repo-wide -- its own definition at extra/llm_research/shared_attention_evidence_gate.py:12",
         "imported only by test/unit/test_shared_attention_evidence_gate.py",
-        "contrast: extra/qk/shared_attention_promotion.py gates COMPOSITE_ADMISSION_SCHEMA, which is produced and consumed live"
+        "contrast: extra/llm_research/shared_attention_promotion.py gates COMPOSITE_ADMISSION_SCHEMA, which is produced and consumed live"
       ],
       "finding": "A validator for a bundle schema that no code in the repository ever produces.",
       "former_purpose": "Validate a shared-attention evidence bundle before admitting it as promotion evidence.",
@@ -59,10 +59,10 @@
       "loc_added": 0,
       "loc_moved": 0,
       "loc_removed": 131,
-      "path": "extra/qk/shared_attention_evidence_gate.py",
+      "path": "extra/llm_research/shared_attention_evidence_gate.py",
       "realized_note": "93 in the gate plus 38 in test/unit/test_shared_attention_evidence_gate.py; verdict captured in docs/shared-attention-evidence-bundle-gate-retirement-20260726.md",
       "recovery": "git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py",
-      "replacement": "extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer)",
+      "replacement": "extra/llm_research/shared_attention_promotion.py (the gate that acts on a schema with a real producer)",
       "status": "completed",
       "tests_required": [
         "delete test/unit/test_shared_attention_evidence_gate.py with it"
@@ -72,8 +72,8 @@
       "action": "centralize",
       "confidence": "high",
       "evidence": [
-        "writers: extra/qk/shared_attention_evidence.py:85 (v2), :156 (acc_slice_v3), :180 (phase_v4)",
-        "extra/qk/attention_harness_common.py:16-22 load_shared_attention_proof only validates status/passed"
+        "writers: extra/llm_research/shared_attention_evidence.py:85 (v2), :156 (acc_slice_v3), :180 (phase_v4)",
+        "extra/llm_research/attention_harness_common.py:16-22 load_shared_attention_proof only validates status/passed"
       ],
       "finding": "Two files appeared to own the shared_attention_proof schema keys; only one writes them. Authority recorded on the producer, and the reader documented as a consumer.",
       "id": "A4",
@@ -81,9 +81,9 @@
       "loc_moved": 0,
       "loc_removed": 0,
       "note": "no code change required; this is a manifest authority correction that keeps the duplicate-authority check honest",
-      "path": "extra/qk/attention_harness_common.py",
+      "path": "extra/llm_research/attention_harness_common.py",
       "status": "completed",
-      "target": "extra/qk/shared_attention_evidence.py",
+      "target": "extra/llm_research/shared_attention_evidence.py",
       "tests_required": [
         "existing test/unit/test_shared_attention_evidence.py already covers the producer"
       ]
@@ -95,14 +95,14 @@
         "packed_wmma_prefill_promotion_gate.py, prefill_softmax_reduce_fuse_promotion_gate.py and prefill_causal_tile_skip_promotion_gate.py each derive required shapes from route_manifest ROUTES shape_guards, read a fixed docs/*.json, check _schema/route_id/flag, fail closed, and print 'AUTHORITY_GATE: {verdict}' with an identical result dict",
         "prefill_softmax_reduce_fuse_promotion_gate.py's docstring calls itself 'Sibling of ... deliberately the same shape'",
         "the two newer gates share the MIN_PAIRS=3 / MIN_MEAN_DELTA_PCT=1.0 / MIN_SIGNAL_TO_NOISE=2.0 / MAX_NOISE_FLOOR_PCT=1.0 threshold block verbatim",
-        "EXCLUDED: extra/qk/prefill/pure_register_evaluation_gate.py has no main(), does not import route_manifest, and validates compile-artifact provenance rather than gating a route's evidence file -- different rule"
+        "EXCLUDED: extra/llm_research/prefill/pure_register_evaluation_gate.py has no main(), does not import route_manifest, and validates compile-artifact provenance rather than gating a route's evidence file -- different rule"
       ],
       "finding": "Three promotion gates repeat the same evidence-loading and verdict-emitting rule verbatim; a fourth gate that looks similar must NOT be folded in because its verdict semantics differ.",
       "id": "A5",
       "loc_added": 35,
       "loc_moved": 0,
       "loc_removed": 39,
-      "path": "extra/qk/prefill/packed_wmma_prefill_promotion_gate.py",
+      "path": "extra/llm_research/prefill/packed_wmma_prefill_promotion_gate.py",
       "proposed_interface": [
         "load_manifest_evidence(route_id, flag, schema, evidence_path) -> dict|None",
         "run_gate(gate_name, route_check, required_shapes, failures) -> dict",
@@ -110,7 +110,7 @@
       ],
       "realized_note": "39 token-LOC out of the three gates, 35 into promotion_gate_common.py; net -4. The projection of -10 was close, but the physical-line delta is +21 -- the win is one rule, not fewer lines.",
       "status": "completed",
-      "target": "extra/qk/prefill/promotion_gate_common.py (proposed)",
+      "target": "extra/llm_research/prefill/promotion_gate_common.py (proposed)",
       "tests_required": [
         "one shared test asserting fail-closed on missing/malformed evidence, plus the three existing per-gate tests unchanged (each still asserts its own thresholds and route id)"
       ]
@@ -128,7 +128,7 @@
       "loc_added": 0,
       "loc_moved": 0,
       "loc_removed": 0,
-      "path": "extra/qk/kernel_lds.py",
+      "path": "extra/llm_research/kernel_lds.py",
       "question": "Do the packed-component and hierarchical-stage clusters still have an open question, or did the record-stage design supersede them? Answer decides prune (~550 LOC + 2 test files) versus retain.",
       "status": "completed",
       "tests_required": []
@@ -137,19 +137,19 @@
       "action": "promote",
       "confidence": "high",
       "evidence": [
-        "extra/qk/kernel_lds.py:9-16 imports PackedPrecontractOperandTemplate, build_precontract_lds_stage, cooperative_store_row, validate_rdna3_wmma_descriptor and others from the core module",
+        "extra/llm_research/kernel_lds.py:9-16 imports PackedPrecontractOperandTemplate, build_precontract_lds_stage, cooperative_store_row, validate_rdna3_wmma_descriptor and others from the core module",
         "only name collision across the two symbol tables: _window (core :409-411 vs extra :65-67), byte-identical",
-        "no file outside extra/qk and test/unit imports extra/qk/kernel_lds.py"
+        "no file outside extra/llm_research and test/unit imports extra/llm_research/kernel_lds.py"
       ],
       "evidence_missing": "none; the answer is negative",
-      "finding": "There is no duplicated knowledge to delete. extra/qk/kernel_lds.py imports 20+ primitives from the core module and only adds new types on top; the sole literal duplicate is a 3-line private _window helper.",
+      "finding": "There is no duplicated knowledge to delete. extra/llm_research/kernel_lds.py imports 20+ primitives from the core module and only adds new types on top; the sole literal duplicate is a 3-line private _window helper.",
       "id": "A7",
       "invariant": "cooperative LDS ownership math (already owned by tinygrad/codegen/opt/kernel_lds.py)",
       "loc_added": 0,
       "loc_moved": 0,
       "loc_removed": 3,
       "note": "recorded so the next reader does not re-propose the move: a split here relocates ~1178 LOC and deletes 3",
-      "path": "extra/qk/kernel_lds.py",
+      "path": "extra/llm_research/kernel_lds.py",
       "promotion_readiness": "not justified",
       "promotion_target": "tinygrad/codegen/opt/kernel_lds.py",
       "status": "completed",
@@ -160,15 +160,15 @@
       "confidence": "high",
       "evidence": [
         "tinygrad/runtime/ops_amd.py:1015-1021: 'Native ISA is research tooling, not part of ordinary AMD execution. Keep it behind the explicit DEV=AMD:ISA surface so DEV=AMD does not import its prefill/debug stack.' AMDISARenderer is appended only when DEV.target('AMD').renderer == 'ISA'",
-        "the only door from that renderer into extra/qk is get_amd_isa_extension_descriptors() (tinygrad/renderer/isa/extensions.py:17-18 -> tinygrad/codegen/experimental.amd_isa_extension_descriptors)",
+        "the only door from that renderer into extra/llm_research is get_amd_isa_extension_descriptors() (tinygrad/renderer/isa/extensions.py:17-18 -> tinygrad/codegen/experimental.amd_isa_extension_descriptors)",
         "closure: codegen_extensions, amd_isa_renderer_policy, kernel_lds, kernel_pipeline, kernel_vocabulary, mmq_llama_{record_producers,packed_operands,differential,oracle}, mmq_q4k_q8_reference, q4k_q8_mmq_uop, q4k_tile_loader, prefill/prefill_value_key (layout.py is shared with the default quant path)"
       ],
-      "finding": "A 13-module, ~3.2K-LOC chain inside extra/qk exists only to serve the DEV=AMD:ISA renderer, which ordinary AMD execution never registers. It is the largest block of scope LOC with no default-path consumer and no stated retention criterion.",
+      "finding": "A 13-module, ~3.2K-LOC chain inside extra/llm_research exists only to serve the DEV=AMD:ISA renderer, which ordinary AMD execution never registers. It is the largest block of scope LOC with no default-path consumer and no stated retention criterion.",
       "id": "A8",
       "loc_added": 0,
       "loc_moved": 0,
       "loc_removed": 0,
-      "path": "extra/qk/codegen_extensions.py",
+      "path": "extra/llm_research/codegen_extensions.py",
       "question": "Does DEV=AMD:ISA remain a live research surface with an open question, or has it produced its verdict? The answer sets a retention criterion for ~3.2K LOC; nothing should be moved or deleted before it.",
       "status": "completed",
       "tests_required": []
@@ -188,7 +188,7 @@
       "loc_added": 0,
       "loc_moved": 0,
       "loc_removed": 0,
-      "path": "extra/qk/q4k_wmma_tiled_no_hand_kernel_gate.py",
+      "path": "extra/llm_research/q4k_wmma_tiled_no_hand_kernel_gate.py",
       "question": "Is the WMMA-tiled route being revived (keep the gates and fix the branch) or is it closed (retire ~1.1K LOC of gates plus the stale bench artifacts)? The measured verdict already argues for closed.",
       "resolution": "Answered 2026-07-26: retire. The route was speed-refuted (140 vs 364.5 tok/s) and its dispatch was already gone; executed as A15.",
       "status": "completed",
@@ -209,7 +209,7 @@
       "loc_moved": 0,
       "loc_removed": 0,
       "note": "the only genuinely identical core is route_manifest <-> memory_adaptive_policy, worth about 15 LOC and requiring a decision on the finite-float check. Not worth a new module; do not re-propose.",
-      "path": "extra/qk/route_manifest.py",
+      "path": "extra/llm_research/route_manifest.py",
       "tests_required": []
     },
     {
@@ -226,7 +226,7 @@
       "loc_moved": 0,
       "loc_removed": 0,
       "note": "extraction would save about 10 LOC and cost a helper plus a label argument at every call site; duplication is cheaper than that abstraction. Do not re-propose.",
-      "path": "extra/qk/mmq_q4k_q8_reference.py",
+      "path": "extra/llm_research/mmq_q4k_q8_reference.py",
       "tests_required": []
     },
     {
@@ -242,7 +242,7 @@
       "loc_added": 0,
       "loc_moved": 0,
       "loc_removed": 3,
-      "path": "extra/qk/mmq_q4k_q8_atom.py",
+      "path": "extra/llm_research/mmq_q4k_q8_atom.py",
       "realized_note": "66 -> 63 token-LOC. The value is one rule with one owner, NOT a LOC reduction; the earlier '90-100 LOC of pure repetition' estimate counted physical lines and did not survive measurement.",
       "status": "completed",
       "tests_required": []
@@ -265,7 +265,7 @@
       "loc_added": 0,
       "loc_moved": 0,
       "loc_removed": 1138,
-      "path": "extra/qk/q4k_wmma_tile_lowering.py",
+      "path": "extra/llm_research/q4k_wmma_tile_lowering.py",
       "realized_note": "8 sources + prefill_mmq_parity_gate + 3 test files + 10 bench artifact dirs. Two test files were trimmed rather than deleted. The sibling route prefill_q4k_int8_wmma_generated_research shared the implementation and is retired too, but UNMEASURED -- left as status research, not claimed refuted.",
       "recovery": "git show 05b67146a -- <path>",
       "replacement": "docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md",
@@ -276,10 +276,10 @@
       "action": "decouple",
       "confidence": "high",
       "evidence": [
-        "extra/qk/mmq_compile_evidence.py:21 'from extra.qk.mmq_q4k_q8_atom import Q4K_WORDS_PER_BLOCK, _q4k_q8_1_bounded_ds4_coop_tile_kernel'",
-        "extra/qk/prefill/current_prefill_execution_adapter.py and extra/qk/decode/current_decode_execution_adapter.py import mmq_compile_evidence at module scope, so the whole chain loads on the default path",
-        "Q4K_WORDS_PER_BLOCK is owned by extra/qk/layout.py:12; mmq_q4k_q8_atom.py:23 merely re-exports it",
-        "extra/qk/mmq_q4k_q8_atom.py in turn imports extra/qk/mmq_ds4_probe_contract.py, whose status is refuted -- this is the audit's one hard error, and it is a true positive",
+        "extra/llm_research/mmq_compile_evidence.py:21 'from extra.llm_research.mmq_q4k_q8_atom import Q4K_WORDS_PER_BLOCK, _q4k_q8_1_bounded_ds4_coop_tile_kernel'",
+        "extra/llm_research/prefill/current_prefill_execution_adapter.py and extra/llm_research/decode/current_decode_execution_adapter.py import mmq_compile_evidence at module scope, so the whole chain loads on the default path",
+        "Q4K_WORDS_PER_BLOCK is owned by extra/llm_research/layout.py:12; mmq_q4k_q8_atom.py:23 merely re-exports it",
+        "extra/llm_research/mmq_q4k_q8_atom.py in turn imports extra/llm_research/mmq_ds4_probe_contract.py, whose status is refuted -- this is the audit's one hard error, and it is a true positive",
         "mmq_q4k_q8_atom.py holds ~10 progressively elaborated kernel stages; production needs exactly one builder"
       ],
       "finding": "The shipped prefill and decode execution adapters pull the entire 835-LOC MMQ atom-search file onto the default path through one module-scope import, and with it a module whose status is refuted. One of the two imported names is a constant that layout.py already owns.",
@@ -288,12 +288,12 @@
       "loc_moved": 60,
       "loc_removed": 0,
       "note": "no LOC reduction; the value is that the default execution path stops depending on a research search file and on a refuted contract module",
-      "path": "extra/qk/mmq_compile_evidence.py",
+      "path": "extra/llm_research/mmq_compile_evidence.py",
       "proposed_interface": [
-        "take Q4K_WORDS_PER_BLOCK from extra.qk.layout",
+        "take Q4K_WORDS_PER_BLOCK from extra.llm_research.layout",
         "move _q4k_q8_1_bounded_ds4_coop_tile_kernel into its own module that the evidence path imports"
       ],
-      "target": "extra/qk/mmq_ds4_coop_tile_kernel.py (proposed)",
+      "target": "extra/llm_research/mmq_ds4_coop_tile_kernel.py (proposed)",
       "tests_required": [
         "test/unit/test_mmq_q4k_q8_atom.py keeps covering the atom search; add one assertion that the execution adapters do not import mmq_q4k_q8_atom"
       ]
@@ -303,15 +303,15 @@
       "confidence": "high",
       "evidence": [
         "only reference repo-wide is test/unit/test_runtime_specs.py",
-        "no _attr('extra.qk.quant_specs', ...) entry exists in tinygrad/llm/route_ops.py",
-        "contrast: extra/qk/generated_candidates.py LOOKED equally orphaned but is named by extra/qk/q4k_wmma_tiled_no_hand_kernel_gate.py:15 as a path-string entry, so it is NOT an orphan"
+        "no _attr('extra.llm_research.quant_specs', ...) entry exists in tinygrad/llm/route_ops.py",
+        "contrast: extra/llm_research/generated_candidates.py LOOKED equally orphaned but is named by extra/llm_research/q4k_wmma_tiled_no_hand_kernel_gate.py:15 as a path-string entry, so it is NOT an orphan"
       ],
       "finding": "A quant-format spec module with no consumer except its own unit test, including no dynamic seam entry.",
       "id": "A10",
       "loc_added": 0,
       "loc_moved": 0,
       "loc_removed": 0,
-      "path": "extra/qk/quant_specs.py",
+      "path": "extra/llm_research/quant_specs.py",
       "question": "Is quant_specs.py a not-yet-wired intended API or superseded by runtime_specs.py? Prune only if superseded.",
       "status": "completed",
       "tests_required": []
@@ -322,11 +322,11 @@
     "fan_threshold": 12,
     "large_file_loc_threshold": 400,
     "manifest_scope": [
-      "extra/qk/"
+      "extra/llm_research/"
     ]
   },
   "coverage_limitations": [
-    "Phase 1 covers extra/qk only: 123 authored files, 17675 token-bearing LOC. Files outside extra/qk appear as dependency, consumer, or reference evidence and are deliberately not classified.",
+    "Phase 1 covers extra/llm_research only: 123 authored files, 17675 token-bearing LOC. Files outside extra/llm_research appear as dependency, consumer, or reference evidence and are deliberately not classified.",
     "Out of scope by instruction and not attempted: a full tinygrad/llm census, a scheduler/codegen census, an AMD renderer/runtime census, and a full bench/ and test/ census.",
     "allowed_dependency_domains is pinned to the dependency domains observed at the audited commit. It is a drift detector for future edits, not an independently designed layering.",
     "Default-path membership is traced through tinygrad/ call sites and the lazy _attr seam. A declared seam wrapper is recorded as a warning, never as proof that the default path calls it.",
@@ -347,14 +347,14 @@
       "domain": "amd_runtime",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/amd_isa_proof.py:3-5 docstring: 'production AMD ISA renderer neither imports this module nor enables proof collection by default'",
-        "extra/qk/amd_isa_proof.py:111 install_amd_isa_proof_hook(_ProofHook())",
+        "extra/llm_research/amd_isa_proof.py:3-5 docstring: 'production AMD ISA renderer neither imports this module nor enables proof collection by default'",
+        "extra/llm_research/amd_isa_proof.py:111 install_amd_isa_proof_hook(_ProofHook())",
         "tinygrad/renderer/isa/amd_proof.py:5 def install_amd_isa_proof_hook(hook)",
         "grep hit: test/unit/test_amd_isa_extraction_fixtures.py:9 imports amd_isa_operand_path_tag, amd_isa_proof_manifest, reset_amd_isa_proof_manifest",
-        "grep hit: extra/qk/mmq_epoch_manifest_export.py:6 imports amd_isa_proof_manifest, reset_amd_isa_proof_manifest",
-        "grep hit: extra/qk/prefill/current_prefill_execution_adapter.py:98 and extra/qk/decode/current_decode_execution_adapter.py:113 import capture_amd_isa_proof_manifest"
+        "grep hit: extra/llm_research/mmq_epoch_manifest_export.py:6 imports amd_isa_proof_manifest, reset_amd_isa_proof_manifest",
+        "grep hit: extra/llm_research/prefill/current_prefill_execution_adapter.py:98 and extra/llm_research/decode/current_decode_execution_adapter.py:113 import capture_amd_isa_proof_manifest"
       ],
-      "path": "extra/qk/amd_isa_proof.py",
+      "path": "extra/llm_research/amd_isa_proof.py",
       "promotion_target": null,
       "public_surface": [
         "amd_isa_operand_path_tag",
@@ -397,12 +397,12 @@
       "domain": "amd_runtime",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/amd_resource_artifact.py:1-7 docstring: 'independent of the research-plane candidate schemas so a backend capture can be reused by any compiler-owned route'",
-        "extra/qk/amd_resource_artifact.py:217 join_amd_resource_artifact docstring: 'Build the one authoritative join'",
-        "grep: extra/qk/prefill/pure_register_evaluation_gate.py:102-106,142 and pure_register_compile_capture.py:13-14,149 are its only non-test consumers",
+        "extra/llm_research/amd_resource_artifact.py:1-7 docstring: 'independent of the research-plane candidate schemas so a backend capture can be reused by any compiler-owned route'",
+        "extra/llm_research/amd_resource_artifact.py:217 join_amd_resource_artifact docstring: 'Build the one authoritative join'",
+        "grep: extra/llm_research/prefill/pure_register_evaluation_gate.py:102-106,142 and pure_register_compile_capture.py:13-14,149 are its only non-test consumers",
         "no hits in tinygrad/ core or decode/prefill default-route adapters \u2014 not on the shipped default path"
       ],
-      "path": "extra/qk/amd_resource_artifact.py",
+      "path": "extra/llm_research/amd_resource_artifact.py",
       "promotion_target": "tinygrad/codegen/opt/ (candidate: it is a general-purpose compiler-output resource/identity join with no dependency on harness/evidence/campaign modules and a real core owner in register_contracts) \u2014 not claiming promote here since it is not yet on a shipped default path (its only consumers are pure_register_evaluation_gate.py and pure_register_compile_capture.py, both research-plane/gate modules)",
       "public_surface": [
         "AMDPhysicalInterval",
@@ -418,7 +418,7 @@
         "resource-facts type + non-negativity validation",
         "the authoritative join/validate/serialize API for the combined artifact"
       ],
-      "retention_criterion": "needed as long as the pure-register final-program capture/evaluation gate path (extra/qk/prefill/pure_register_compile_capture.py, pure_register_evaluation_gate.py) is active research infrastructure",
+      "retention_criterion": "needed as long as the pure-register final-program capture/evaluation gate path (extra/llm_research/prefill/pure_register_compile_capture.py, pure_register_evaluation_gate.py) is active research infrastructure",
       "reusable_assets": [
         "artifact-schema"
       ],
@@ -446,12 +446,12 @@
       "domain": "codegen_lowering",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/lane_partition_reduce.py and gemv_g3_codegen_lowering.py import the core warp primitives on the default decode Q4_K route",
+        "extra/llm_research/lane_partition_reduce.py and gemv_g3_codegen_lowering.py import the core warp primitives on the default decode Q4_K route",
         "tinygrad/codegen/__init__.py directly imports pm_warp_reduce under getenv(\"WARP_REDUCE_LOWERING\")",
         "test/unit/test_warp_reduce_lowering.py covers shuffle ladder structure, fail-closed axes, and old-boundary absence"
       ],
       "path": "tinygrad/codegen/late/warp_reduce.py",
-      "promotion_target": "tinygrad/codegen/late/warp_reduce.py (consolidated from extra/qk/amd_warp_reduce.py and extra/qk/warp_reduce_lowering.py in production reorganization slice 6)",
+      "promotion_target": "tinygrad/codegen/late/warp_reduce.py (consolidated from extra/llm_research/amd_warp_reduce.py and extra/llm_research/warp_reduce_lowering.py in production reorganization slice 6)",
       "public_surface": [
         "warp_shfl_xor",
         "_staged_shfl",
@@ -495,9 +495,9 @@
       "duplication_group": null,
       "evidence": [
         "grep hits above across 10+ importing files plus docs/attention-harness-centralization-scope-20260724.md which documents it as the intentional centralization target",
-        "authority correction: schema owner is extra/qk/shared_attention_evidence.py:85,112,156,158,180; this file only validates proofs it loads"
+        "authority correction: schema owner is extra/llm_research/shared_attention_evidence.py:85,112,156,158,180; this file only validates proofs it loads"
       ],
-      "path": "extra/qk/attention_harness_common.py",
+      "path": "extra/llm_research/attention_harness_common.py",
       "promotion_target": null,
       "public_surface": [
         "content_sha",
@@ -538,9 +538,9 @@
         "measurement"
       ],
       "authority_keys": [
-        "extra.qk.bench.DispatchTargetMissing",
-        "extra.qk.bench.NoThroughputProduced",
-        "extra.qk.bench.BelowPerfFloor"
+        "extra.llm_research.bench.DispatchTargetMissing",
+        "extra.llm_research.bench.NoThroughputProduced",
+        "extra.llm_research.bench.BelowPerfFloor"
       ],
       "classification_confidence": "high",
       "default_path": false,
@@ -549,10 +549,10 @@
       "domain": "measurement",
       "duplication_group": null,
       "evidence": [
-        "test/unit/test_measurement_authority.py imports and exercises extra.qk.bench directly",
+        "test/unit/test_measurement_authority.py imports and exercises extra.llm_research.bench directly",
         "README.md:113 declares it the sanctioned entry"
       ],
-      "path": "extra/qk/bench.py",
+      "path": "extra/llm_research/bench.py",
       "promotion_target": null,
       "public_surface": [
         "main",
@@ -599,11 +599,11 @@
       "domain": "measurement",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/benchmark_shared_attention.py:12-14 already imports attention_harness_common per the centralization doc",
+        "extra/llm_research/benchmark_shared_attention.py:12-14 already imports attention_harness_common per the centralization doc",
         "docs/attention-harness-centralization-scope-20260724.md:14 names this file the canonical pre-migration source, migration already applied",
         "grep: test/unit/test_shared_attention_replay_admission.py imports this module"
       ],
-      "path": "extra/qk/benchmark_shared_attention.py",
+      "path": "extra/llm_research/benchmark_shared_attention.py",
       "promotion_target": null,
       "public_surface": [
         "run_one",
@@ -646,10 +646,10 @@
       "domain": "measurement",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/benchmark_split_shared_attention.py:12-13: 'TODO(centralize): samples() differs from attention_harness_common.synced_time/timing_summary ... left as-is'",
+        "extra/llm_research/benchmark_split_shared_attention.py:12-13: 'TODO(centralize): samples() differs from attention_harness_common.synced_time/timing_summary ... left as-is'",
         "grep for 'benchmark_split_shared_attention' hits only docs, no importer beyond the wmma re-export listing"
       ],
-      "path": "extra/qk/benchmark_split_shared_attention.py",
+      "path": "extra/llm_research/benchmark_split_shared_attention.py",
       "promotion_target": null,
       "public_surface": [
         "run"
@@ -694,11 +694,11 @@
       "duplication_group": null,
       "evidence": [
         "no grep hit for should_route_q4k_lane_partition or q4k_g3_manifest_shape outside this file and the route_ops.py lazy-attr adapter \u2014 the adapter itself has zero callers in the tree",
-        "tinygrad/llm/route_ops.py:45-46 re-exports via extra.qk._attr lazy import but nothing imports route_ops.should_route_q4k_lane_partition",
+        "tinygrad/llm/route_ops.py:45-46 re-exports via extra.llm_research._attr lazy import but nothing imports route_ops.should_route_q4k_lane_partition",
         "docs/moe-fast-design-scope-20260722.md:23,44 and docs/flash-prefill-wmma-mvp-scope-20260721.md:75,211,215 cite this file as the intended geometry-search tool for future/MVP-deferred work, not a shipped default",
-        "imports extra.qk.route_manifest.ROUTES directly to read decode_q4k_g3_generated shape_guards, so it is a consumer of route_manifest, not an authority for it"
+        "imports extra.llm_research.route_manifest.ROUTES directly to read decode_q4k_g3_generated shape_guards, so it is a consumer of route_manifest, not an authority for it"
       ],
-      "path": "extra/qk/bubblebeam_futuresight.py",
+      "path": "extra/llm_research/bubblebeam_futuresight.py",
       "promotion_target": null,
       "public_surface": [
         "score_candidate",
@@ -744,13 +744,13 @@
       "domain": "measurement",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/README.md:94 explicitly states 'extra/qk/clock_pin.py owns the privileged sysfs/rocm-smi mutations'",
-        "extra/qk/timing_harness.py:32-33 imports pinned_peak and is itself imported by extra/qk/bench.py and extra/qk/prefill/prefill_whole_synced.py, both production benchmark entry points",
+        "extra/llm_research/README.md:94 explicitly states 'extra/llm_research/clock_pin.py owns the privileged sysfs/rocm-smi mutations'",
+        "extra/llm_research/timing_harness.py:32-33 imports pinned_peak and is itself imported by extra/llm_research/bench.py and extra/llm_research/prefill/prefill_whole_synced.py, both production benchmark entry points",
         "test/unit/test_clock_pin.py exercises PIN_PEAK_CMD/RESET_PERF_DETERMINISM/pinned_peak/perflevel directly",
         "docs/harness-consolidation.md:47 flags two idioms (pinned_peak vs pinned_perflevel) in this file as 'justified', i.e. an audited, accepted overlap rather than accidental duplication",
         "no route/model/ISA authority claims in this file; it is purely measurement plumbing"
       ],
-      "path": "extra/qk/clock_pin.py",
+      "path": "extra/llm_research/clock_pin.py",
       "promotion_target": null,
       "public_surface": [
         "pin_peak",
@@ -798,7 +798,7 @@
         "test/unit/test_codegen_list_scheduler.py covers latency-shadow ordering, structural boundaries, and old-boundary absence"
       ],
       "path": "tinygrad/codegen/late/list_scheduler.py",
-      "promotion_target": "tinygrad/codegen/late/list_scheduler.py (promoted from extra/qk/codegen_list_scheduler.py in production reorganization slice 5)",
+      "promotion_target": "tinygrad/codegen/late/list_scheduler.py (promoted from extra/llm_research/codegen_list_scheduler.py in production reorganization slice 5)",
       "public_surface": [
         "list_schedule",
         "_STRUCTURAL",
@@ -838,7 +838,7 @@
         "tinygrad/codegen/__init__.py direct-imports tinygrad.codegen.late.recurrence.unroll_recurrence and calls it when SCHED_UNROLL>1 on AMD"
       ],
       "path": "tinygrad/codegen/late/recurrence.py",
-      "promotion_target": "tinygrad/codegen/late/recurrence.py (promoted from extra/qk/codegen_recurrence_unroll.py in production reorganization slice 2)",
+      "promotion_target": "tinygrad/codegen/late/recurrence.py (promoted from extra/llm_research/codegen_recurrence_unroll.py in production reorganization slice 2)",
       "public_surface": [
         "unroll_recurrence"
       ],
@@ -872,9 +872,9 @@
       "domain": "codegen_lowering",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/flash_kernels.py:62-70: `if _stage_w: from extra.qk.cooperative_stage_lanemap import CooperativeStageLaneMap ... _lm.validate()`, wrapped in try/except ValueError with fallback"
+        "extra/llm_research/flash_kernels.py:62-70: `if _stage_w: from extra.llm_research.cooperative_stage_lanemap import CooperativeStageLaneMap ... _lm.validate()`, wrapped in try/except ValueError with fallback"
       ],
-      "path": "extra/qk/cooperative_stage_lanemap.py",
+      "path": "extra/llm_research/cooperative_stage_lanemap.py",
       "promotion_target": null,
       "public_surface": [
         "CooperativeStageLaneMap"
@@ -909,11 +909,11 @@
       "domain": "evidence",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/decode/capture_prefill_compile.py has no runtime importer; it patches HIPCompiler/HIPCCCompiler and invokes extra.llm.generate as a compile reproducer",
+        "extra/llm_research/decode/capture_prefill_compile.py has no runtime importer; it patches HIPCompiler/HIPCCCompiler and invokes extra.llm.generate as a compile reproducer",
         "Packet A runtime/tooling census assigns this file to dev until the vector-stack-lvalue compile conclusion is banked",
         "recovery commit 5266ca605 introduced the reproducer alongside the renderer fix"
       ],
-      "path": "extra/qk/decode/capture_prefill_compile.py",
+      "path": "extra/llm_research/decode/capture_prefill_compile.py",
       "promotion_target": null,
       "public_surface": [
         "main"
@@ -955,11 +955,11 @@
       "domain": "attention_decode",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/route_manifest.py:73-93: 'decode_q4k_g3_generated' status='promoted_default', profile_id=PROFILE_DECODE",
-        "grep: extra/qk/prefill/operand_path_execution_worker.py:56 imports extra.qk.decode.current_decode_execution_adapter",
+        "extra/llm_research/route_manifest.py:73-93: 'decode_q4k_g3_generated' status='promoted_default', profile_id=PROFILE_DECODE",
+        "grep: extra/llm_research/prefill/operand_path_execution_worker.py:56 imports extra.llm_research.decode.current_decode_execution_adapter",
         "module docstring lines 1-7: explicitly refuses to fabricate a PreparedExecution absent a real authority artifact"
       ],
-      "path": "extra/qk/decode/current_decode_execution_adapter.py",
+      "path": "extra/llm_research/decode/current_decode_execution_adapter.py",
       "promotion_target": null,
       "public_surface": [
         "CurrentDecodeExecutionAdapter",
@@ -970,13 +970,13 @@
       ],
       "purpose": "Compile-only classification and guarded-execution adapter for the promoted Qwen3-8B Q4_K G3 decode GEMV (not attention): builds/lowers the exact G3 lanemap kernel, captures ISA/resource evidence, and only dispatches when handed an immutable content-addressed packed-weight/activation/reference NPZ artifact.",
       "responsibilities": [
-        "typed compile request validation against extra.qk.route_manifest.ROUTES['decode_q4k_g3_generated']",
+        "typed compile request validation against extra.llm_research.route_manifest.ROUTES['decode_q4k_g3_generated']",
         "compile+ISA/resource evidence capture (prepare_current_decode_compile)",
         "immutable input artifact load+identity binding",
         "guarded full-output correctness dispatch (run_guarded_decode)",
         "adapter registration hook"
       ],
-      "retention_criterion": "needed until the decode_q4k_g3_generated route is superseded in extra/qk/route_manifest.py",
+      "retention_criterion": "needed until the decode_q4k_g3_generated route is superseded in extra/llm_research/route_manifest.py",
       "reusable_assets": [
         "route-spec",
         "compile-dispatch",
@@ -1008,7 +1008,7 @@
         "docs/prefill-softmax-reduce-fuse-evidence-20260724.json is a recorded run of this exact gate",
         "grep confirms tinygrad/llm/decode_routes.py:157 is the real caller this script mirrors via flash_decode_attention_executor"
       ],
-      "path": "extra/qk/decode/decode_codegen_identity_check.py",
+      "path": "extra/llm_research/decode/decode_codegen_identity_check.py",
       "promotion_target": null,
       "public_surface": [
         "collect",
@@ -1042,8 +1042,8 @@
         "measurement"
       ],
       "authority_keys": [
-        "extra.qk.decode.decode_harness.DecodeRunProfile",
-        "extra.qk.decode.decode_harness.decode_authority_argv"
+        "extra.llm_research.decode.decode_harness.DecodeRunProfile",
+        "extra.llm_research.decode.decode_harness.decode_authority_argv"
       ],
       "classification_confidence": "high",
       "default_path": false,
@@ -1052,10 +1052,10 @@
       "domain": "measurement",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/decode/decode_runtime_overhead.py:17 imports DEFAULT_MODEL, csv_ints, decode_run_profile from this module",
+        "extra/llm_research/decode/decode_runtime_overhead.py:17 imports DEFAULT_MODEL, csv_ints, decode_run_profile from this module",
         "docstring lines 1-6 explicitly separates 'process policy' (here) from 'timing method' (decode_runtime_overhead.py)"
       ],
-      "path": "extra/qk/decode/decode_harness.py",
+      "path": "extra/llm_research/decode/decode_harness.py",
       "promotion_target": null,
       "public_surface": [
         "DecodeRunProfile",
@@ -1105,7 +1105,7 @@
         "module docstring lines 18-22: explicitly a guard-bypass, not an emitter-constraint test",
         "no test/ or docs/ file found recording an actual pass/fail result for this sweep in this batch's greps"
       ],
-      "path": "extra/qk/decode/decode_hd_sweep_numerics.py",
+      "path": "extra/llm_research/decode/decode_hd_sweep_numerics.py",
       "promotion_target": null,
       "public_surface": [
         "make_qkv_hd",
@@ -1146,7 +1146,7 @@
         "docstring states the capture contract is deliberately dispatch-free and independent of the GPU runtime",
         "covered by test/unit/test_decode_resource_capture.py"
       ],
-      "path": "extra/qk/decode/decode_resource_capture.py",
+      "path": "extra/llm_research/decode/decode_resource_capture.py",
       "promotion_target": null,
       "public_surface": [],
       "purpose": "Emits a stable JSON resource row for a generated decode code object from caller-supplied bytes and launch geometry, after checking expected kernel-name positive controls.",
@@ -1180,11 +1180,11 @@
       "domain": "measurement",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/decode/decode_harness.py:59 decode_authority_argv builds this file's exact CLI",
+        "extra/llm_research/decode/decode_harness.py:59 decode_authority_argv builds this file's exact CLI",
         "grep: extra/llm/model_authority_bench.py and model_e2e_bench.py both reference this harness",
         "docs/HANDOFF_14b_decode_depth_decay_20260726.md names this as the tool used for the 14B decode-depth investigation"
       ],
-      "path": "extra/qk/decode/decode_runtime_overhead.py",
+      "path": "extra/llm_research/decode/decode_runtime_overhead.py",
       "promotion_target": null,
       "public_surface": [
         "main",
@@ -1229,7 +1229,7 @@
         "docstring states it is intentionally separate from the production model W/D authority",
         "no importer: a manually invoked timing entry point, not a library"
       ],
-      "path": "extra/qk/decode/decode_tile_timing.py",
+      "path": "extra/llm_research/decode/decode_tile_timing.py",
       "promotion_target": null,
       "public_surface": [],
       "purpose": "Replays the captured flash-decode tile path in isolation with synchronized AMD timing, allocating the exact executor tensors so tile time is measured without the whole-model W/D authority.",
@@ -1265,7 +1265,7 @@
         "tinygrad/llm/decode_routes.py:157,159 calls qk_ops.flash_decode_live_split_block_tile(...) with fused_combine=True",
         "grep: tinygrad/llm/route_ops.py appears as the sole production import path for this function, confirming this is on the shipped default decode path and fused combine is live on decode (matches prior project finding)"
       ],
-      "path": "extra/qk/decode/flash_decode_attention_executor.py",
+      "path": "extra/llm_research/decode/flash_decode_attention_executor.py",
       "promotion_target": "already effectively the tinygrad/llm production entry point via route_ops re-export; no further promotion needed",
       "public_surface": [
         "flash_decode_live_split_block_tile"
@@ -1293,8 +1293,8 @@
         "attention_decode"
       ],
       "authority_keys": [
-        "extra.qk.decode.flash_decode_attention_spec.FlashDecodeTileSpec",
-        "extra.qk.decode.flash_decode_attention_spec.FlashCombineSpec"
+        "extra.llm_research.decode.flash_decode_attention_spec.FlashDecodeTileSpec",
+        "extra.llm_research.decode.flash_decode_attention_spec.FlashCombineSpec"
       ],
       "classification_confidence": "high",
       "default_path": true,
@@ -1303,10 +1303,10 @@
       "domain": "attention_decode",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/decode/flash_decode_attention_executor.py:7 imports describe_flash_decode_attention from this module, which is on the confirmed default decode path",
+        "extra/llm_research/decode/flash_decode_attention_executor.py:7 imports describe_flash_decode_attention from this module, which is on the confirmed default decode path",
         "test/unit/test_flash_decode_attention_spec.py provides direct unit coverage"
       ],
-      "path": "extra/qk/decode/flash_decode_attention_spec.py",
+      "path": "extra/llm_research/decode/flash_decode_attention_spec.py",
       "promotion_target": null,
       "public_surface": [
         "describe_flash_decode_attention",
@@ -1317,7 +1317,7 @@
         "emit_flash_decode_tile",
         "emit_flash_decode_combine"
       ],
-      "purpose": "Typed, validated descriptor layer (LiveSplitGeometrySpec, FlashDecodeTileSpec, FlashCombineSpec, FlashDecodeAttentionSpec) that binds decode split-count/token-block geometry to the emitters in extra/qk/flash_kernels.py and extra/qk/live_split_geometry.py, so flash_decode_attention_executor.py never constructs kernel-emit arguments ad hoc.",
+      "purpose": "Typed, validated descriptor layer (LiveSplitGeometrySpec, FlashDecodeTileSpec, FlashCombineSpec, FlashDecodeAttentionSpec) that binds decode split-count/token-block geometry to the emitters in extra/llm_research/flash_kernels.py and extra/llm_research/live_split_geometry.py, so flash_decode_attention_executor.py never constructs kernel-emit arguments ad hoc.",
       "responsibilities": [
         "geometry validation (split_count, token_block==16 constraint)",
         "tile-spec validation and kernel-name derivation",
@@ -1354,7 +1354,7 @@
         "test/unit/test_fdot2_lowering.py covers pair, accumulator, fail-closed controls, and linear-list dependency replacement"
       ],
       "path": "tinygrad/codegen/late/fdot2.py",
-      "promotion_target": "tinygrad/codegen/late/fdot2.py (promoted from extra/qk/fdot2_lowering.py in production reorganization slice 4)",
+      "promotion_target": "tinygrad/codegen/late/fdot2.py (promoted from extra/llm_research/fdot2_lowering.py in production reorganization slice 4)",
       "public_surface": [
         "pm_fdot2",
         "line_lower_fdot2",
@@ -1381,8 +1381,8 @@
         "attention_decode"
       ],
       "authority_keys": [
-        "extra.qk.flash_common.FLASH_DECODE_VARIANTS",
-        "extra.qk.flash_common.FLASH_DECODE_DEFAULT_VARIANT"
+        "extra.llm_research.flash_common.FLASH_DECODE_VARIANTS",
+        "extra.llm_research.flash_common.FLASH_DECODE_DEFAULT_VARIANT"
       ],
       "classification_confidence": "high",
       "default_path": true,
@@ -1393,7 +1393,7 @@
       "evidence": [
         "only 2 importers, both live decode-kernel-generation modules; docstring self-declares the two consumers"
       ],
-      "path": "extra/qk/flash_common.py",
+      "path": "extra/llm_research/flash_common.py",
       "promotion_target": null,
       "public_surface": [
         "_fexp",
@@ -1431,10 +1431,10 @@
       "domain": "attention_decode",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/decode/flash_decode_attention_spec.py:10 imports it directly and is the shipped decode route",
+        "extra/llm_research/decode/flash_decode_attention_spec.py:10 imports it directly and is the shipped decode route",
         "file header comment lines 6-8 documents prior pruning of ~32 dead builders, current single builder is the live default"
       ],
-      "path": "extra/qk/flash_kernels.py",
+      "path": "extra/llm_research/flash_kernels.py",
       "promotion_target": null,
       "public_surface": [
         "flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel"
@@ -1473,10 +1473,10 @@
       "domain": "quant_mmq",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/gemv_g3_codegen_lowering.py:27 builds the shipped kernel from Q4KGateUpLaneMap",
+        "extra/llm_research/gemv_g3_codegen_lowering.py:27 builds the shipped kernel from Q4KGateUpLaneMap",
         "tinygrad/llm/route_policy.py:23 decode_q4k_g3_generated compat_params BUBBLEBEAM_FUTURESIGHT=1 (default-on)"
       ],
-      "path": "extra/qk/gemv_g2_lanemap.py",
+      "path": "extra/llm_research/gemv_g2_lanemap.py",
       "promotion_target": null,
       "public_surface": [
         "Q4KGateUpLaneMap",
@@ -1521,9 +1521,9 @@
       "evidence": [
         "docstring line 21-25: 'PROMOTED: this is now the default Q4_K decode GEMV route (BUBBLEBEAM_FUTURESIGHT defaults on)'",
         "tinygrad/llm/route_policy.py:23 decode_q4k_g3_generated compat_params BUBBLEBEAM_FUTURESIGHT=1",
-        "extra/qk/route_manifest.py:81-82 'DEFAULT-ON ... the owned warp kernel is the rollback/reference one flag away'"
+        "extra/llm_research/route_manifest.py:81-82 'DEFAULT-ON ... the owned warp kernel is the rollback/reference one flag away'"
       ],
-      "path": "extra/qk/gemv_g3_codegen_lowering.py",
+      "path": "extra/llm_research/gemv_g3_codegen_lowering.py",
       "promotion_target": null,
       "public_surface": [
         "q4k_g3_lanemap_gemv_kernel",
@@ -1564,10 +1564,10 @@
       "duplication_group": null,
       "evidence": [
         "docs/wmma-modularization-scope-20260724.md:81 gives the exact invocation and expected result (254 vgpr/0 spills/0 scratch for all 4 routes)",
-        "extra/qk/benchmark_shared_attention.py:17 DEFAULT_PROOF path 'shared-attention-m10e1-20260723/shared_attention_proof.json' matches this script's output naming",
+        "extra/llm_research/benchmark_shared_attention.py:17 DEFAULT_PROOF path 'shared-attention-m10e1-20260723/shared_attention_proof.json' matches this script's output naming",
         "docs/attention-harness-centralization-scope-20260724.md:72 lists this file as a migration target for its local _mask/candidate-context build, already satisfied (imports causal_mask, candidate_context from attention_harness_common at line 18)"
       ],
-      "path": "extra/qk/generate_shared_attention_captures.py",
+      "path": "extra/llm_research/generate_shared_attention_captures.py",
       "promotion_target": null,
       "public_surface": [
         "generate",
@@ -1610,10 +1610,10 @@
       "domain": "route_authority",
       "duplication_group": null,
       "evidence": [
-        "grep for select_generated_candidate|builtin_registry( across the repo (excluding extra/qk/generated_candidates.py itself) hits only test/unit/test_generated_quant_binding_audit.py and test/unit/test_runtime_specs.py",
+        "grep for select_generated_candidate|builtin_registry( across the repo (excluding extra/llm_research/generated_candidates.py itself) hits only test/unit/test_generated_quant_binding_audit.py and test/unit/test_runtime_specs.py",
         "no hit in tinygrad/llm/route_ops.py, tinygrad/llm/decode_routes.py, or tinygrad/llm/route_policy.py"
       ],
-      "path": "extra/qk/generated_candidates.py",
+      "path": "extra/llm_research/generated_candidates.py",
       "promotion_target": null,
       "public_surface": [
         "GeneratedCandidateRegistry",
@@ -1657,10 +1657,10 @@
       "domain": "codegen_lowering",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/kernel_lds.py:20 imports KernelLDSArenaRegion, KernelLDSComponentWindow, KernelLDSWindow, KernelTileGeometry from this module",
+        "extra/llm_research/kernel_lds.py:20 imports KernelLDSArenaRegion, KernelLDSComponentWindow, KernelLDSWindow, KernelTileGeometry from this module",
         "runtime_specs.py:404,430,830 import KernelCandidateContext/KernelLDSWindow/KernelTileGeometry"
       ],
-      "path": "extra/qk/kernel_vocabulary.py",
+      "path": "extra/llm_research/kernel_vocabulary.py",
       "promotion_target": null,
       "public_surface": [
         "KernelLDSWindow",
@@ -1704,9 +1704,9 @@
       "domain": "attention_decode",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/flash_kernels.py:34 `kv_load = make_kv_element_loader(cache, Hd, kvscale=kvscale, freqs=freqs)` inside the live default tile kernel builder"
+        "extra/llm_research/flash_kernels.py:34 `kv_load = make_kv_element_loader(cache, Hd, kvscale=kvscale, freqs=freqs)` inside the live default tile kernel builder"
       ],
-      "path": "extra/qk/kv_load.py",
+      "path": "extra/llm_research/kv_load.py",
       "promotion_target": null,
       "public_surface": [
         "make_kv_element_loader"
@@ -1743,9 +1743,9 @@
       "domain": "quant_mmq",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/gemv_g3_codegen_lowering.py:15,33,41,75,114 uses LanePartition and lane_partition_reduce_sum directly in all three shipped kernel builders"
+        "extra/llm_research/gemv_g3_codegen_lowering.py:15,33,41,75,114 uses LanePartition and lane_partition_reduce_sum directly in all three shipped kernel builders"
       ],
-      "path": "extra/qk/lane_partition_reduce.py",
+      "path": "extra/llm_research/lane_partition_reduce.py",
       "promotion_target": null,
       "public_surface": [
         "LanePartition",
@@ -1787,7 +1787,7 @@
       "evidence": [
         "grep for `extra\\.qk\\.layout\\b` returns 30+ distinct importing files across production (route_ops.py) and research/test code"
       ],
-      "path": "extra/qk/layout.py",
+      "path": "extra/llm_research/layout.py",
       "promotion_target": null,
       "public_surface": [
         "GGUFInfo",
@@ -1847,11 +1847,11 @@
       "domain": "attention_decode",
       "duplication_group": null,
       "evidence": [
-        "route_manifest.py rows decode_flash_live_split_g4_kvboth and decode_flash_block_tile_g5_konly (status promoted_default) attribute their route through extra/qk/decode/flash_decode_attention_executor.py -> flash_decode_attention_spec.py, which imports ceildiv_uop and flash_fused_gmax_combine_kernel directly from this file",
+        "route_manifest.py rows decode_flash_live_split_g4_kvboth and decode_flash_block_tile_g5_konly (status promoted_default) attribute their route through extra/llm_research/decode/flash_decode_attention_executor.py -> flash_decode_attention_spec.py, which imports ceildiv_uop and flash_fused_gmax_combine_kernel directly from this file",
         "route_manifest.py:517 census row names this file as the entity that SOLVED/PROMOTED the live-split geometry axis",
         "live_split_coverage_kernel is not imported anywhere outside this file/its own docstring -- it is a standalone symbolic-lowering proof kernel (diagnostic), distinct responsibility from the shipped combine kernel"
       ],
-      "path": "extra/qk/live_split_geometry.py",
+      "path": "extra/llm_research/live_split_geometry.py",
       "promotion_target": null,
       "public_surface": [
         "ceildiv_uop",
@@ -1893,11 +1893,11 @@
       "domain": "route_authority",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/memory_adaptive_allocation_observer.py:12-16 SCHEMA/MEMORY_FACT_SCHEMA/EXACT_MEMORY_KEYS",
-        "grep hit: extra/qk/memory_adaptive_runtime_collector.py:17 imports validate_memory_facts",
+        "extra/llm_research/memory_adaptive_allocation_observer.py:12-16 SCHEMA/MEMORY_FACT_SCHEMA/EXACT_MEMORY_KEYS",
+        "grep hit: extra/llm_research/memory_adaptive_runtime_collector.py:17 imports validate_memory_facts",
         "grep hit: 3 unit test files import this module directly"
       ],
-      "path": "extra/qk/memory_adaptive_allocation_observer.py",
+      "path": "extra/llm_research/memory_adaptive_allocation_observer.py",
       "promotion_target": null,
       "public_surface": [
         "AllocationObserver",
@@ -1914,7 +1914,7 @@
         "memory-fact schema validation/construction/digest sealing",
         "VRAM/counter checkpoint observation (start/poll/stop/evidence)"
       ],
-      "retention_criterion": "needed as long as memory-adaptive policy selection (extra/qk/memory_adaptive_policy.py) requires provenance-backed byte facts as promotion evidence",
+      "retention_criterion": "needed as long as memory-adaptive policy selection (extra/llm_research/memory_adaptive_policy.py) requires provenance-backed byte facts as promotion evidence",
       "reusable_assets": [
         "artifact-schema"
       ],
@@ -1944,11 +1944,11 @@
       "domain": "route_authority",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/memory_adaptive_policy.py:16-28 SCHEMA constants",
+        "extra/llm_research/memory_adaptive_policy.py:16-28 SCHEMA constants",
         "grep hit: tinygrad/llm/model.py in module-name grep (via memory_adaptive_authority.resolve_memory_adaptive_policy, tinygrad/llm/model.py:31)",
-        "extra/qk/memory_adaptive_runtime_collector.py:13-16 direct import"
+        "extra/llm_research/memory_adaptive_runtime_collector.py:13-16 direct import"
       ],
-      "path": "extra/qk/memory_adaptive_policy.py",
+      "path": "extra/llm_research/memory_adaptive_policy.py",
       "promotion_target": null,
       "public_surface": [
         "select_policy",
@@ -2000,10 +2000,10 @@
       "duplication_group": null,
       "evidence": [
         "tinygrad/llm/route_ops.py:13-14 install_memory_adaptive_model_adapters",
-        "extra/qk/memory_adaptive_runtime_collector.py:149-152 install_model_adapters -> activate_memory_adaptive_adapters",
+        "extra/llm_research/memory_adaptive_runtime_collector.py:149-152 install_model_adapters -> activate_memory_adaptive_adapters",
         "grep hit: scratchpad/audit_bfs.py names module (non-production tooling reference)"
       ],
-      "path": "extra/qk/memory_adaptive_runtime_collector.py",
+      "path": "extra/llm_research/memory_adaptive_runtime_collector.py",
       "promotion_target": null,
       "public_surface": [
         "collect_runtime_policy",
@@ -2049,11 +2049,11 @@
       "domain": "quant_mmq",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/mmq_atom_boundary.py:182-187 prefill_14b_q4k_q8_1_hybrid_mmq_atom raises Prefill14BHybridMMQAtomUnsupported unconditionally",
-        "extra/qk/mmq_q4k_q8_atom.py:24-27 imports PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_CLASSIFICATION/ROUTE_ID",
+        "extra/llm_research/mmq_atom_boundary.py:182-187 prefill_14b_q4k_q8_1_hybrid_mmq_atom raises Prefill14BHybridMMQAtomUnsupported unconditionally",
+        "extra/llm_research/mmq_q4k_q8_atom.py:24-27 imports PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_CLASSIFICATION/ROUTE_ID",
         "grep: test/unit/test_mmq_atom_boundary.py imports the module"
       ],
-      "path": "extra/qk/mmq_atom_boundary.py",
+      "path": "extra/llm_research/mmq_atom_boundary.py",
       "promotion_target": null,
       "public_surface": [
         "Prefill14BHybridMMQAtomSpec",
@@ -2098,12 +2098,12 @@
       "domain": "evidence",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/prefill/current_prefill_execution_adapter.py:143 'from extra.qk.mmq_compile_evidence import analyze_final_isa, disassemble_amdgpu, parse_amdgpu_metadata'",
-        "extra/qk/decode/current_decode_execution_adapter.py:118 same-style import",
-        "extra/qk/shared_attention_capture.py:471 'from extra.qk.mmq_compile_evidence import parse_amdgpu_metadata'",
+        "extra/llm_research/prefill/current_prefill_execution_adapter.py:143 'from extra.llm_research.mmq_compile_evidence import analyze_final_isa, disassemble_amdgpu, parse_amdgpu_metadata'",
+        "extra/llm_research/decode/current_decode_execution_adapter.py:118 same-style import",
+        "extra/llm_research/shared_attention_capture.py:471 'from extra.llm_research.mmq_compile_evidence import parse_amdgpu_metadata'",
         "no test/unit/test_mmq_compile_evidence.py found by grep; consumption is via live adapters and scratchpad tools, not a dedicated unit test"
       ],
-      "path": "extra/qk/mmq_compile_evidence.py",
+      "path": "extra/llm_research/mmq_compile_evidence.py",
       "promotion_target": null,
       "public_surface": [
         "build_mmq_sink",
@@ -2150,12 +2150,12 @@
       "domain": "quant_mmq",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/mmq_ds4_logical_emitter.py:1-7 docstring: 'This is a research lowering'",
+        "extra/llm_research/mmq_ds4_logical_emitter.py:1-7 docstring: 'This is a research lowering'",
         "tinygrad/llm/route_ops.py:37-42 six _attr(...) shims targeting this module",
         "scratchpad/audit_bfs.py:31 names prefill_research_routes.py as the real caller of these route_ops shims",
-        "extra/qk/mmq_ds4_logical_emitter.py:162-172 cooperative_128_reuse_probe is 'deliberately not wired into emit_q4k_q8_mmq_ds4'"
+        "extra/llm_research/mmq_ds4_logical_emitter.py:162-172 cooperative_128_reuse_probe is 'deliberately not wired into emit_q4k_q8_mmq_ds4'"
       ],
-      "path": "extra/qk/mmq_ds4_logical_emitter.py",
+      "path": "extra/llm_research/mmq_ds4_logical_emitter.py",
       "promotion_target": null,
       "public_surface": [
         "packed_ds4_candidate",
@@ -2200,11 +2200,11 @@
       "domain": "evidence",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/mmq_ds4_probe_contract.py:11 'status': 'BLOCKED_FAIL_CLOSED'",
-        "extra/qk/mmq_ds4_logical_emitter.py:17 imports cooperative_128_reuse_evidence",
-        "extra/qk/mmq_q4k_q8_atom.py:29 imports cooperative_128_reuse_evidence, used in run_q4k_q8_1_mmq_coop_128_reuse_probe (line ~965-976)"
+        "extra/llm_research/mmq_ds4_probe_contract.py:11 'status': 'BLOCKED_FAIL_CLOSED'",
+        "extra/llm_research/mmq_ds4_logical_emitter.py:17 imports cooperative_128_reuse_evidence",
+        "extra/llm_research/mmq_q4k_q8_atom.py:29 imports cooperative_128_reuse_evidence, used in run_q4k_q8_1_mmq_coop_128_reuse_probe (line ~965-976)"
       ],
-      "path": "extra/qk/mmq_ds4_probe_contract.py",
+      "path": "extra/llm_research/mmq_ds4_probe_contract.py",
       "promotion_target": null,
       "public_surface": [
         "COOP_128_REUSE_PROBE_ID",
@@ -2243,11 +2243,11 @@
       "domain": "evidence",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/prefill/current_prefill_execution_adapter.py:22 import",
-        "extra/qk/decode/current_decode_execution_adapter.py:17 import",
-        "extra/qk/mmq_epoch_manifest_export.py:118-135 export_current_amd_isa_proof_manifest_bundle reads the live extra.qk.amd_isa_proof recorder, not a fixture"
+        "extra/llm_research/prefill/current_prefill_execution_adapter.py:22 import",
+        "extra/llm_research/decode/current_decode_execution_adapter.py:17 import",
+        "extra/llm_research/mmq_epoch_manifest_export.py:118-135 export_current_amd_isa_proof_manifest_bundle reads the live extra.llm_research.amd_isa_proof recorder, not a fixture"
       ],
-      "path": "extra/qk/mmq_epoch_manifest_export.py",
+      "path": "extra/llm_research/mmq_epoch_manifest_export.py",
       "promotion_target": null,
       "public_surface": [
         "validate_amd_isa_proof_rows",
@@ -2293,11 +2293,11 @@
       "domain": "measurement",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/mmq_q4k_q8_atom.py:28 'from extra.qk.mmq_lifecycle import MMQLifecycleRow, zero_counters'",
-        "extra/qk/mmq_q4k_q8_atom.py:132-165,217-230 build lifecycle rows from this module's zero_counters/MMQLifecycleRow for every run_* variant",
+        "extra/llm_research/mmq_q4k_q8_atom.py:28 'from extra.llm_research.mmq_lifecycle import MMQLifecycleRow, zero_counters'",
+        "extra/llm_research/mmq_q4k_q8_atom.py:132-165,217-230 build lifecycle rows from this module's zero_counters/MMQLifecycleRow for every run_* variant",
         "explicitly not completed campaign machinery: it is a live dependency of the still-evolving atom file, not a closed-out artifact"
       ],
-      "path": "extra/qk/mmq_lifecycle.py",
+      "path": "extra/llm_research/mmq_lifecycle.py",
       "promotion_target": null,
       "public_surface": [
         "MMQLifecycleRow",
@@ -2315,7 +2315,7 @@
         "aggregation by role/tile",
         "report assembly"
       ],
-      "retention_criterion": "needed as long as extra/qk/mmq_q4k_q8_atom.py's run_* functions report lifecycle counters for the hybrid MMQ atom family",
+      "retention_criterion": "needed as long as extra/llm_research/mmq_q4k_q8_atom.py's run_* functions report lifecycle counters for the hybrid MMQ atom family",
       "reusable_assets": [
         "artifact-schema"
       ],
@@ -2344,11 +2344,11 @@
       "domain": "quant_mmq",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/mmq_ds4_logical_emitter.py:18 'from extra.qk.mmq_logical_vocabulary import DotOp, MMQCandidate, packed_ds4_geometry'",
-        "extra/qk/mmq_q4k_q8_atom.py:30 'from extra.qk.mmq_logical_vocabulary import LogicalMMQDescriptor, PhysicalMapping, packed_ds4_geometry'",
-        "extra/qk/mmq_q4k_q8_atom.py:442-476 uses packed_ds4_geometry(descriptor) to derive q4/q8 group counts for the DS4 dot4x4 kernel"
+        "extra/llm_research/mmq_ds4_logical_emitter.py:18 'from extra.llm_research.mmq_logical_vocabulary import DotOp, MMQCandidate, packed_ds4_geometry'",
+        "extra/llm_research/mmq_q4k_q8_atom.py:30 'from extra.llm_research.mmq_logical_vocabulary import LogicalMMQDescriptor, PhysicalMapping, packed_ds4_geometry'",
+        "extra/llm_research/mmq_q4k_q8_atom.py:442-476 uses packed_ds4_geometry(descriptor) to derive q4/q8 group counts for the DS4 dot4x4 kernel"
       ],
-      "path": "extra/qk/mmq_logical_vocabulary.py",
+      "path": "extra/llm_research/mmq_logical_vocabulary.py",
       "promotion_target": null,
       "public_surface": [
         "Axis",
@@ -2414,12 +2414,12 @@
       "domain": "quant_mmq",
       "duplication_group": "mmq_amd_kernel_variant_progression",
       "evidence": [
-        "extra/qk/mmq_q4k_q8_atom.py:2-9 docstring: 'not wired into whole-prefill selection...does not claim GPU performance'",
-        "extra/qk/mmq_q4k_q8_atom.py:248-658 nine near-sequential kernel builder functions (_q4k_q8_1_tile_kernel through _q4k_q8_1_bounded_ds4_coop_tile_kernel) each adding one mechanism (warp, dot4 sudot4, DS4 packing, LDS staging, coop-tile writeback) over the previous -- a staged progression, not independent knowledge, but currently all still referenced (source-hash helpers + tests) so none is a safe prune yet",
-        "extra/qk/mmq_ds4_logical_emitter.py:19 imports _q4k_q8_1_bounded_ds4_dot4x4_kernel from this file",
-        "extra/qk/mmq_compile_evidence.py:21 imports _q4k_q8_1_bounded_ds4_coop_tile_kernel from this file -- this is the currently 'live' evidence-capture target, suggesting earlier stages (naive/warp/dot4/dot4x4/ds4_warp/ds4_lds_skeleton) are candidates for archival once that is confirmed with the doc owner"
+        "extra/llm_research/mmq_q4k_q8_atom.py:2-9 docstring: 'not wired into whole-prefill selection...does not claim GPU performance'",
+        "extra/llm_research/mmq_q4k_q8_atom.py:248-658 nine near-sequential kernel builder functions (_q4k_q8_1_tile_kernel through _q4k_q8_1_bounded_ds4_coop_tile_kernel) each adding one mechanism (warp, dot4 sudot4, DS4 packing, LDS staging, coop-tile writeback) over the previous -- a staged progression, not independent knowledge, but currently all still referenced (source-hash helpers + tests) so none is a safe prune yet",
+        "extra/llm_research/mmq_ds4_logical_emitter.py:19 imports _q4k_q8_1_bounded_ds4_dot4x4_kernel from this file",
+        "extra/llm_research/mmq_compile_evidence.py:21 imports _q4k_q8_1_bounded_ds4_coop_tile_kernel from this file -- this is the currently 'live' evidence-capture target, suggesting earlier stages (naive/warp/dot4/dot4x4/ds4_warp/ds4_lds_skeleton) are candidates for archival once that is confirmed with the doc owner"
       ],
-      "path": "extra/qk/mmq_q4k_q8_atom.py",
+      "path": "extra/llm_research/mmq_q4k_q8_atom.py",
       "promotion_target": null,
       "public_surface": [
         "Q4KQ8MMQAtomResult",
@@ -2481,12 +2481,12 @@
       "domain": "quant_mmq",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/mmq_q4k_q8_atom.py:31-34 imports Q81MMQDS4Activation, Q4KQ81MMQTileSpec, Q8_1_MMQ_DS4_LAYOUT, q4k_q8_1_mmq_tile_reference, q8_1_mmq_ds4_from_row_major_reference",
-        "extra/qk/mmq_llama_oracle.py:17-19 imports the same reference family plus q4k_q8_1_mmq_ds4_tile_reference and calls it directly in run_llama_mmq_coop_tile_oracle (mmq_llama_oracle.py:269)",
-        "extra/qk/mmq_compile_evidence.py:22 imports Q4_K_BLOCK_ELEMS from this module",
+        "extra/llm_research/mmq_q4k_q8_atom.py:31-34 imports Q81MMQDS4Activation, Q4KQ81MMQTileSpec, Q8_1_MMQ_DS4_LAYOUT, q4k_q8_1_mmq_tile_reference, q8_1_mmq_ds4_from_row_major_reference",
+        "extra/llm_research/mmq_llama_oracle.py:17-19 imports the same reference family plus q4k_q8_1_mmq_ds4_tile_reference and calls it directly in run_llama_mmq_coop_tile_oracle (mmq_llama_oracle.py:269)",
+        "extra/llm_research/mmq_compile_evidence.py:22 imports Q4_K_BLOCK_ELEMS from this module",
         "3 dedicated test files (test_mmq_q4k_q8_atom.py, test_q4k_q8_mmq_uop.py, test_mmq_q4k_q8_reference.py) exercise it directly"
       ],
-      "path": "extra/qk/mmq_q4k_q8_reference.py",
+      "path": "extra/llm_research/mmq_q4k_q8_reference.py",
       "promotion_target": null,
       "public_surface": [
         "Q81ActivationTileSpec",
@@ -2537,11 +2537,11 @@
       "domain": "route_authority",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/model_profiles.py:75-93 QWEN3_8B/14B ModelProfile definitions",
-        "grep hits: extra/qk/shared_attention_evidence.py, extra/qk/q4k_wmma_tile_lowering.py, extra/qk/prefill/prefill_harness.py, extra/qk/prefill/packed_wmma_correctness_canary.py all import extra.qk.model_profiles",
-        "no hit for extra.qk.model_profiles in tinygrad/ or route_manifest.py or runtime_specs.py -- confirmed via grep"
+        "extra/llm_research/model_profiles.py:75-93 QWEN3_8B/14B ModelProfile definitions",
+        "grep hits: extra/llm_research/shared_attention_evidence.py, extra/llm_research/q4k_wmma_tile_lowering.py, extra/llm_research/prefill/prefill_harness.py, extra/llm_research/prefill/packed_wmma_correctness_canary.py all import extra.llm_research.model_profiles",
+        "no hit for extra.llm_research.model_profiles in tinygrad/ or route_manifest.py or runtime_specs.py -- confirmed via grep"
       ],
-      "path": "extra/qk/model_profiles.py",
+      "path": "extra/llm_research/model_profiles.py",
       "promotion_target": null,
       "public_surface": [
         "ModelProfile",
@@ -2587,11 +2587,11 @@
       "domain": "evidence",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/prefill/current_prefill_execution_adapter.py:144 `from extra.qk.operand_attribution import attribute_operands, operand_paths_for_manifest`",
+        "extra/llm_research/prefill/current_prefill_execution_adapter.py:144 `from extra.llm_research.operand_attribution import attribute_operands, operand_paths_for_manifest`",
         "test/unit/test_operand_attribution_20260714.py imports the module",
         "docstring line 1-13 states scope: 'exact shipping AMD final ISA', 'never guess'"
       ],
-      "path": "extra/qk/operand_attribution.py",
+      "path": "extra/llm_research/operand_attribution.py",
       "promotion_target": null,
       "public_surface": [
         "attribute_operands",
@@ -2626,10 +2626,10 @@
       "domain": "evidence",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/route_manifest.py:376 names this exact path in the shipped route's promotion_artifacts list",
+        "extra/llm_research/route_manifest.py:376 names this exact path in the shipped route's promotion_artifacts list",
         "docs/packed-wmma-14b-promotion-evidence-20260725.json:17 gives the exact invocation command"
       ],
-      "path": "extra/qk/packed_wmma_canary_evidence.py",
+      "path": "extra/llm_research/packed_wmma_canary_evidence.py",
       "promotion_target": null,
       "public_surface": [
         "main"
@@ -2657,8 +2657,8 @@
       ],
       "authority_keys": [
         "packed-wmma-compile-gate.v1",
-        "extra.qk.packed_wmma_compile_gate.REQUIRED_FP16_WMMA_FAMILY",
-        "extra.qk.packed_wmma_compile_gate.DEFAULT_MAX_LDS_BYTES"
+        "extra.llm_research.packed_wmma_compile_gate.REQUIRED_FP16_WMMA_FAMILY",
+        "extra.llm_research.packed_wmma_compile_gate.DEFAULT_MAX_LDS_BYTES"
       ],
       "classification_confidence": "high",
       "default_path": true,
@@ -2667,9 +2667,9 @@
       "domain": "route_authority",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/prefill/current_prefill_execution_adapter.py:193-204: imports it and does `if packed_gate['passed'] is not True: raise ValueError(...)` on the actual compiled program's ISA/resources -- this runs on every live packed_wmma compile, not just in tests"
+        "extra/llm_research/prefill/current_prefill_execution_adapter.py:193-204: imports it and does `if packed_gate['passed'] is not True: raise ValueError(...)` on the actual compiled program's ISA/resources -- this runs on every live packed_wmma compile, not just in tests"
       ],
-      "path": "extra/qk/packed_wmma_compile_gate.py",
+      "path": "extra/llm_research/packed_wmma_compile_gate.py",
       "promotion_target": null,
       "public_surface": [
         "TensorEvidence",
@@ -2720,7 +2720,7 @@
         "tinygrad/schedule/wmma/kernels.py:249 confirms the kernel + phase_abi_v1 param this probe targets is still live",
         "no bench/ artifact directory named for it and no test imports it -- it is a manually-invoked CLI (--output/--mode) with no automated caller found"
       ],
-      "path": "extra/qk/phase_abi_v1_resource_probe.py",
+      "path": "extra/llm_research/phase_abi_v1_resource_probe.py",
       "promotion_target": null,
       "public_surface": [
         "probe",
@@ -2758,11 +2758,11 @@
       "domain": "route_authority",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/prefill/packed_wmma_correctness_canary.py:20 imports find_role_template, load_candidate_payloads",
-        "extra/qk/prefill/packed_wmma_prefill_candidates.py:130 imports template_payload_for_role",
+        "extra/llm_research/prefill/packed_wmma_correctness_canary.py:20 imports find_role_template, load_candidate_payloads",
+        "extra/llm_research/prefill/packed_wmma_prefill_candidates.py:130 imports template_payload_for_role",
         "docstring lines 1-7 explain the dedup motivation"
       ],
-      "path": "extra/qk/prefill/candidate_payloads.py",
+      "path": "extra/llm_research/prefill/candidate_payloads.py",
       "promotion_target": null,
       "public_surface": [
         "load_candidate_payloads",
@@ -2804,12 +2804,12 @@
       "domain": "attention_prefill",
       "duplication_group": null,
       "evidence": [
-        "route_manifest.py:341 'tinygrad_scheduler_generated here. extra/qk/prefill/current_prefill_execution_adapter.py:76-87'",
+        "route_manifest.py:341 'tinygrad_scheduler_generated here. extra/llm_research/prefill/current_prefill_execution_adapter.py:76-87'",
         "route_manifest.py:380 route_attribution names current_prefill_execution_adapter.compile_current_prefill_program as the terminal step of route_packed_wmma_prefill",
         "test/unit/test_current_prefill_execution_adapter.py exists",
         "module docstring: 'Production adapter for the promoted scheduler-generated prefill GEMM'"
       ],
-      "path": "extra/qk/prefill/current_prefill_execution_adapter.py",
+      "path": "extra/llm_research/prefill/current_prefill_execution_adapter.py",
       "promotion_target": null,
       "public_surface": [
         "ADAPTER_ID",
@@ -2857,11 +2857,11 @@
       "domain": "route_authority",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/prefill/current_prefill_execution_adapter.py:17 imports compile_transport_evidence",
+        "extra/llm_research/prefill/current_prefill_execution_adapter.py:17 imports compile_transport_evidence",
         "test/unit/test_executable_artifact_preparation.py exists",
         "module docstring names it 'the narrow route seam between compile-only proof and the existing runtime bridge'"
       ],
-      "path": "extra/qk/prefill/executable_artifact_preparation.py",
+      "path": "extra/llm_research/prefill/executable_artifact_preparation.py",
       "promotion_target": null,
       "public_surface": [
         "capture_record",
@@ -2918,9 +2918,9 @@
       "evidence": [
         "module docstring line 1: 'Research-only, hardware-independent, serializable execution-bridge contracts.'",
         "4 live .py importers + 3 test files found via grep",
-        "extra/qk/prefill/current_prefill_execution_adapter.py:25 imports ExecutionRequest from this module"
+        "extra/llm_research/prefill/current_prefill_execution_adapter.py:25 imports ExecutionRequest from this module"
       ],
-      "path": "extra/qk/prefill/execution_bridge_contracts.py",
+      "path": "extra/llm_research/prefill/execution_bridge_contracts.py",
       "promotion_target": null,
       "public_surface": [
         "Contract",
@@ -2987,7 +2987,7 @@
         "docstring: 'P4a (this file) closes the last gap: Hd is now THREADED into the builder call'"
       ],
       "path": "tinygrad/schedule/wmma/flash_prefill.py",
-      "promotion_target": "tinygrad/schedule/wmma/flash_prefill.py (promoted from extra/qk/prefill/flash_prefill_attention_spec.py in the first bounded closure slice)",
+      "promotion_target": "tinygrad/schedule/wmma/flash_prefill.py (promoted from extra/llm_research/prefill/flash_prefill_attention_spec.py in the first bounded closure slice)",
       "public_surface": [
         "FlashPrefillAttentionSpec",
         "describe_flash_prefill_attention",
@@ -3027,10 +3027,10 @@
       "duplication_group": null,
       "evidence": [
         "module docstring: 'This module owns the safety mechanics shared by every compiled transport'",
-        "extra/qk/decode/current_decode_execution_adapter.py imports it, confirming reuse OUTSIDE the prefill/ directory",
+        "extra/llm_research/decode/current_decode_execution_adapter.py imports it, confirming reuse OUTSIDE the prefill/ directory",
         "3 test files + 4 in-tree .py importers found via grep"
       ],
-      "path": "extra/qk/prefill/guarded_execution.py",
+      "path": "extra/llm_research/prefill/guarded_execution.py",
       "promotion_target": null,
       "public_surface": [
         "GuardPolicy",
@@ -3079,11 +3079,11 @@
       "domain": "amd_runtime",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/prefill/current_prefill_execution_adapter.py:18 'from extra.qk.prefill.host_safety_canary import make_tiny_health_probe'",
+        "extra/llm_research/prefill/current_prefill_execution_adapter.py:18 'from extra.llm_research.prefill.host_safety_canary import make_tiny_health_probe'",
         "docstring: 'This supersedes the callback-owned canary in attn_qo_direct_l2_hardware_canary_20260712.py for the SAFETY probe'",
-        "extra/qk/decode/current_decode_execution_adapter.py also imports it, confirming cross-domain shared-asset status"
+        "extra/llm_research/decode/current_decode_execution_adapter.py also imports it, confirming cross-domain shared-asset status"
       ],
-      "path": "extra/qk/prefill/host_safety_canary.py",
+      "path": "extra/llm_research/prefill/host_safety_canary.py",
       "promotion_target": null,
       "public_surface": [
         "SCHEMA",
@@ -3138,7 +3138,7 @@
         "current_prefill_execution_adapter.py:19-20 imports isolated_guarded_executor",
         "grep: 8 real consumers across prefill/decode adapters and 3 unit tests"
       ],
-      "path": "extra/qk/prefill/isolated_guarded_executor.py",
+      "path": "extra/llm_research/prefill/isolated_guarded_executor.py",
       "promotion_target": null,
       "public_surface": [
         "ExecutableBundle",
@@ -3188,7 +3188,7 @@
         "_PRODUCTION_ADAPTER_LOADERS dict at line 50 wires current_prefill/current_decode/q4k_q8_five_buffer adapters",
         "scratchpad/audit_bfs.py names it (non-authoritative doc reference, not scored as consumer)"
       ],
-      "path": "extra/qk/prefill/operand_path_execution_worker.py",
+      "path": "extra/llm_research/prefill/operand_path_execution_worker.py",
       "promotion_target": null,
       "public_surface": [
         "PreparedExecution",
@@ -3241,10 +3241,10 @@
       "domain": "evidence",
       "duplication_group": null,
       "evidence": [
-        "packed_wmma_prefill_candidates.py:153 'from extra.qk.prefill.packed_wmma_correctness_canary import build_artifact, run_canary' inside _run_gate(), called from gate_combo() which packed-WMMA candidates call on every run()",
+        "packed_wmma_prefill_candidates.py:153 'from extra.llm_research.prefill.packed_wmma_correctness_canary import build_artifact, run_canary' inside _run_gate(), called from gate_combo() which packed-WMMA candidates call on every run()",
         "grep hits in route_manifest.py, model.py comments, 2 docs, 2 unit tests"
       ],
-      "path": "extra/qk/prefill/packed_wmma_correctness_canary.py",
+      "path": "extra/llm_research/prefill/packed_wmma_correctness_canary.py",
       "promotion_target": null,
       "public_surface": [
         "candidate_payload",
@@ -3294,7 +3294,7 @@
         "module docstring line 1-24 documents default-ON gating via packed_wmma_prefill_enabled()",
         "packed_wmma_prefill_promotion_gate.py:13-21 documents the frozen-table provenance risk this file itself carries"
       ],
-      "path": "extra/qk/prefill/packed_wmma_prefill_candidates.py",
+      "path": "extra/llm_research/prefill/packed_wmma_prefill_candidates.py",
       "promotion_target": null,
       "public_surface": [
         "PACKED_WMMA_GEOM",
@@ -3349,7 +3349,7 @@
         "docs/packed-wmma-14b-machine-search-claim-scope-20260725.md is the only doc referencing this file besides route_manifest.py and pure_search_guard.py",
         "structurally near-identical to prefill_causal_tile_skip_promotion_gate.py and prefill_softmax_reduce_fuse_promotion_gate.py: same _load_evidence/_required_shapes/evaluate/main shape, same fail-closed-on-missing-evidence contract (docstring line 9 explicitly says 'same shape as')"
       ],
-      "path": "extra/qk/prefill/packed_wmma_prefill_promotion_gate.py",
+      "path": "extra/llm_research/prefill/packed_wmma_prefill_promotion_gate.py",
       "promotion_target": null,
       "public_surface": [
         "evaluate",
@@ -3396,7 +3396,7 @@
         "test/unit/test_measurement_authority.py names its schema",
         "no test exercises build_trace()/main() directly (it requires real hardware) -- treated as an operator tool, not a regression test"
       ],
-      "path": "extra/qk/prefill/prefill_boltbeam_trace.py",
+      "path": "extra/llm_research/prefill/prefill_boltbeam_trace.py",
       "promotion_target": null,
       "public_surface": [
         "build_trace",
@@ -3442,9 +3442,9 @@
       "duplication_group": "promotion_gate_evidence_readback",
       "evidence": [
         "docs/prefill-current-state.md 'Change rule' explicitly cites this file's bar",
-        "3 promotion-gate files total in repo (find extra/qk -iname '*promotion_gate*.py'): this one, packed_wmma_prefill_promotion_gate.py, prefill_softmax_reduce_fuse_promotion_gate.py -- near-identical structure: module docstring + _required_shape(s)() derived from ROUTES manifest + _load_evidence() with fixed _schema/route_id/flag check + evaluate()/main() PASS/FAIL print, strong reusable-machinery candidate"
+        "3 promotion-gate files total in repo (find extra/llm_research -iname '*promotion_gate*.py'): this one, packed_wmma_prefill_promotion_gate.py, prefill_softmax_reduce_fuse_promotion_gate.py -- near-identical structure: module docstring + _required_shape(s)() derived from ROUTES manifest + _load_evidence() with fixed _schema/route_id/flag check + evaluate()/main() PASS/FAIL print, strong reusable-machinery candidate"
       ],
-      "path": "extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py",
+      "path": "extra/llm_research/prefill/prefill_causal_tile_skip_promotion_gate.py",
       "promotion_target": null,
       "public_surface": [
         "evaluate",
@@ -3487,7 +3487,7 @@
         "docs/packed-wmma-14b-promotion-evidence-20260725.json and docs/prefill-causal-tile-skip-evidence-20260724.json both cite this script's run command/output as their e2e_token_parity_14b / token_parity evidence source",
         "no unit test invokes it directly (requires real GPU + real GGUF weights on disk)"
       ],
-      "path": "extra/qk/prefill/prefill_flash_e2e_parity.py",
+      "path": "extra/llm_research/prefill/prefill_flash_e2e_parity.py",
       "promotion_target": null,
       "public_surface": [
         "next_tok",
@@ -3526,11 +3526,11 @@
       "domain": "measurement",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/route_manifest.py:209 lists it in promotion_artifacts and quotes its exact per-kv speedup numbers in the note",
+        "extra/llm_research/route_manifest.py:209 lists it in promotion_artifacts and quotes its exact per-kv speedup numbers in the note",
         "docs/prefill-softmax-reduce-fuse-evidence-20260724.json:115,151 records the exact harness invocation string",
         "no direct Python import found anywhere (grep for 'import prefill_flash_perf' has zero hits) -- it is invoked as a standalone script, not imported"
       ],
-      "path": "extra/qk/prefill/prefill_flash_perf.py",
+      "path": "extra/llm_research/prefill/prefill_flash_perf.py",
       "promotion_target": null,
       "public_surface": [
         "measure",
@@ -3574,7 +3574,7 @@
         "route_manifest.py:298 names this file as the route_attribution authority for the graph-gemm route",
         "test/unit/test_prefill_graph_gemm_route.py and test/unit/test_runtime_specs.py exercise it directly"
       ],
-      "path": "extra/qk/prefill/prefill_graph_gemm_route.py",
+      "path": "extra/llm_research/prefill/prefill_graph_gemm_route.py",
       "promotion_target": null,
       "public_surface": [
         "route_pf16_graph_gemm",
@@ -3624,7 +3624,7 @@
         "docs/attention-harness-centralization-scope-20260724.md:84 explicitly instructs future work not to touch this file because it is already the central config",
         "imported by 4 live modules (shared_attention_evidence, bench, prefill_whole_synced, prefill_boltbeam_trace) plus its own unit test"
       ],
-      "path": "extra/qk/prefill/prefill_harness.py",
+      "path": "extra/llm_research/prefill/prefill_harness.py",
       "promotion_target": null,
       "public_surface": [
         "PrefillRunProfile",
@@ -3671,7 +3671,7 @@
         "route_manifest.py:220 quotes 'max_abs_err=6.104e-05' directly from this file's output as promotion evidence for prefill_flash_attention_generated",
         "not imported anywhere -- invoked as a standalone script per its own __main__ block and cited by doc-command references only"
       ],
-      "path": "extra/qk/prefill/prefill_hd_sweep_numerics.py",
+      "path": "extra/llm_research/prefill/prefill_hd_sweep_numerics.py",
       "promotion_target": null,
       "public_surface": [
         "make_qkv_hd",
@@ -3708,7 +3708,7 @@
         "__main__ block prints 'The flag is DEFAULT-ON since 2026-07-24' confirming this gates an already-shipped default, not a pending research flag",
         "not imported anywhere; standalone script, invoked per doc citations"
       ],
-      "path": "extra/qk/prefill/prefill_long_context_numerics.py",
+      "path": "extra/llm_research/prefill/prefill_long_context_numerics.py",
       "promotion_target": null,
       "public_surface": [
         "ref_np",
@@ -3745,10 +3745,10 @@
       "domain": "route_authority",
       "duplication_group": null,
       "evidence": [
-        "only one real consumer found: extra/qk/prefill/q4k_q8_mmq_prefill_spec.py:5",
+        "only one real consumer found: extra/llm_research/prefill/q4k_q8_mmq_prefill_spec.py:5",
         "docs/14b-mmq-pure-machine-search-scope-20260714.md lists it as part of the 14B MMQ machine-search scope, not flagged superseded"
       ],
-      "path": "extra/qk/prefill/prefill_primitive_spec.py",
+      "path": "extra/llm_research/prefill/prefill_primitive_spec.py",
       "promotion_target": null,
       "public_surface": [
         "PrefillPrimitiveSpec",
@@ -3764,7 +3764,7 @@
         "launch metadata dataclass",
         "primitive spec + canonical identity/payload"
       ],
-      "retention_criterion": "needed while extra/qk/prefill/q4k_q8_mmq_prefill_spec.py (its only real consumer) is in use",
+      "retention_criterion": "needed while extra/llm_research/prefill/q4k_q8_mmq_prefill_spec.py (its only real consumer) is in use",
       "reusable_assets": [
         "artifact-schema"
       ],
@@ -3795,10 +3795,10 @@
         "file:1-13 doc header states purpose and sibling relationship to prefill_causal_tile_skip_promotion_gate.py",
         "grep: docs/prefill-softmax-reduce-fuse-promotion-readiness-20260724.md:7 records 'Verdict: PASS \u2014 default flipped to ON'",
         "docs file line 296 shows AUTHORITY_GATE: PASS output from running this exact file",
-        "find extra/qk -name '*promotion_gate*.py' shows 3 sibling files: packed_wmma_prefill_promotion_gate.py, prefill_causal_tile_skip_promotion_gate.py, this file \u2014 all same shape (EVIDENCE_PATH constant, _load_evidence, per-shape _check_*, evaluate(), main())",
+        "find extra/llm_research -name '*promotion_gate*.py' shows 3 sibling files: packed_wmma_prefill_promotion_gate.py, prefill_causal_tile_skip_promotion_gate.py, this file \u2014 all same shape (EVIDENCE_PATH constant, _load_evidence, per-shape _check_*, evaluate(), main())",
         "prefill_causal_tile_skip_promotion_gate.py:36,47,59,70,103,140 shows identical function names/structure to this file's evaluate/_check_shape/_load_evidence/main"
       ],
-      "path": "extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py",
+      "path": "extra/llm_research/prefill/prefill_softmax_reduce_fuse_promotion_gate.py",
       "promotion_target": null,
       "public_surface": [
         "evaluate",
@@ -3849,7 +3849,7 @@
         "docs/harness-consolidation.md:27-28 'bench.py and prefill_whole_synced.py both consume that module; the timing loop itself remains inside prefill_whole_synced.py'",
         "docs/non-fitting-prefill-foundation-performance-prune-scope-20260716.md:163 names it the prefill authority alongside decode_runtime_overhead.py"
       ],
-      "path": "extra/qk/prefill/prefill_whole_synced.py",
+      "path": "extra/llm_research/prefill/prefill_whole_synced.py",
       "promotion_target": null,
       "public_surface": [
         "prefill_authority",
@@ -3904,7 +3904,7 @@
         "deliberately excludes prefill/pure_register_evaluation_gate.py, which validates compile-artifact provenance rather than gating a route's evidence file",
         "per-route thresholds, route ids, schemas and evidence paths stay in the gates, not here"
       ],
-      "path": "extra/qk/prefill/promotion_gate_common.py",
+      "path": "extra/llm_research/prefill/promotion_gate_common.py",
       "promotion_target": null,
       "public_surface": [
         "load_evidence",
@@ -3948,10 +3948,10 @@
       "domain": "evidence",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/prefill/executable_artifact_preparation.py:12,32 imports and calls capture_final_program_compile_only inside compile_evidence(), which current_prefill_execution_adapter.py does not call directly but is the sibling entry point on the same evidence-preparation module",
+        "extra/llm_research/prefill/executable_artifact_preparation.py:12,32 imports and calls capture_final_program_compile_only inside compile_evidence(), which current_prefill_execution_adapter.py does not call directly but is the sibling entry point on the same evidence-preparation module",
         "grep: two dedicated unit test files import this module directly"
       ],
-      "path": "extra/qk/prefill/pure_register_compile_capture.py",
+      "path": "extra/llm_research/prefill/pure_register_compile_capture.py",
       "promotion_target": null,
       "public_surface": [
         "capture_final_program_compile_only",
@@ -3992,10 +3992,10 @@
       "duplication_group": null,
       "evidence": [
         "file:1-7 docstring: 'Fail-closed gates for the future pure register-resident prefill path... not a kernel builder'",
-        "grep: extra/qk/prefill/prefill_graph_gemm_route.py imports this module",
+        "grep: extra/llm_research/prefill/prefill_graph_gemm_route.py imports this module",
         "grep: two dedicated unit test files exercise it"
       ],
-      "path": "extra/qk/prefill/pure_register_evaluation_gate.py",
+      "path": "extra/llm_research/prefill/pure_register_evaluation_gate.py",
       "promotion_target": null,
       "public_surface": [
         "compile_only",
@@ -4044,10 +4044,10 @@
       "domain": "quant_mmq",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/route_manifest.py:316 'route_attribution: ... -> extra/qk/prefill/q4k_prefill_route_spec.py Q4KPrefillRouteSpec + emit_q4k_packed_prefill_kernel'",
+        "extra/llm_research/route_manifest.py:316 'route_attribution: ... -> extra/llm_research/prefill/q4k_prefill_route_spec.py Q4KPrefillRouteSpec + emit_q4k_packed_prefill_kernel'",
         "tinygrad/llm/route_ops.py:26,28 live indirection import"
       ],
-      "path": "extra/qk/prefill/q4k_prefill_route_spec.py",
+      "path": "extra/llm_research/prefill/q4k_prefill_route_spec.py",
       "promotion_target": null,
       "public_surface": [
         "Q4KPrefillRouteSpec",
@@ -4089,7 +4089,7 @@
         "docs/cooperative-mmq-integration-blocker-20260715.md:10 explicitly names this file's line 128-129 as the blocker",
         "grep shows two active unit tests and one real consumer (mmq_ds4_logical_emitter.py) still importing the descriptor class, so it is NOT dead despite the emitter stub"
       ],
-      "path": "extra/qk/prefill/q4k_q8_mmq_prefill_spec.py",
+      "path": "extra/llm_research/prefill/q4k_q8_mmq_prefill_spec.py",
       "promotion_target": null,
       "public_surface": [
         "Q4KQ8MMQPrefillSpec",
@@ -4127,11 +4127,11 @@
       "domain": "quant_mmq",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/route_manifest.py:334 route_attribution names this file directly",
+        "extra/llm_research/route_manifest.py:334 route_attribution names this file directly",
         "tinygrad/llm/route_ops.py:64,66 live indirection import",
         "docs/BOLTBEAM_Q4K_VOCAB_OUTPUT_ROUTE_SCOPE_20260723.md:30 says the actual model full-vocab route is the Q6_K emitter"
       ],
-      "path": "extra/qk/prefill/q6k_prefill_route_spec.py",
+      "path": "extra/llm_research/prefill/q6k_prefill_route_spec.py",
       "promotion_target": null,
       "public_surface": [
         "Q6KPrefillRouteSpec",
@@ -4172,12 +4172,12 @@
       "domain": "route_authority",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/pure_search_guard.py:16 docstring claims 'model.py calls assert_pure_machine_search() at Transformer init'",
-        "grep -rn assert_pure_machine_search --include=*.py . shows only: tinygrad/llm/route_ops.py:71 (a lazy _attr wrapper definition, itself uncalled by model.py), test/unit/test_pure_search_guard_boundary.py:224 (test call), extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py:137 (checks the STRING 'assert_pure_machine_search' as a guards-dict key in a JSON evidence file, not a function call)",
+        "extra/llm_research/pure_search_guard.py:16 docstring claims 'model.py calls assert_pure_machine_search() at Transformer init'",
+        "grep -rn assert_pure_machine_search --include=*.py . shows only: tinygrad/llm/route_ops.py:71 (a lazy _attr wrapper definition, itself uncalled by model.py), test/unit/test_pure_search_guard_boundary.py:224 (test call), extra/llm_research/prefill/prefill_softmax_reduce_fuse_promotion_gate.py:137 (checks the STRING 'assert_pure_machine_search' as a guards-dict key in a JSON evidence file, not a function call)",
         "grep -n 'qk_ops\\.' tinygrad/llm/model.py shows only qk_ops.install_memory_adaptive_model_adapters and qk_ops.automatic_promoted_prefill_graph_policy are called; qk_ops.assert_pure_machine_search is never invoked anywhere in tinygrad/llm/model.py or elsewhere in the repo",
         "CONCLUSION: this module's own docstring authority claim ('model.py calls assert_pure_machine_search() at Transformer init') is STALE/FALSE as of this read -- the gate is wired for tests and evidence-schema checks only, not live-enforced at model construction"
       ],
-      "path": "extra/qk/pure_search_guard.py",
+      "path": "extra/llm_research/pure_search_guard.py",
       "promotion_target": null,
       "public_surface": [
         "effective_routes",
@@ -4210,8 +4210,8 @@
         "quant_mmq"
       ],
       "authority_keys": [
-        "extra.qk.q4k_fused_mmq_contract.FUSED_Q4K_MMQ_CONTRACT",
-        "extra.qk.q4k_fused_mmq_contract.QWEN3_14B_FUSED_ROLE_SHAPES"
+        "extra.llm_research.q4k_fused_mmq_contract.FUSED_Q4K_MMQ_CONTRACT",
+        "extra.llm_research.q4k_fused_mmq_contract.QWEN3_14B_FUSED_ROLE_SHAPES"
       ],
       "classification_confidence": "high",
       "default_path": false,
@@ -4220,9 +4220,9 @@
       "domain": "quant_mmq",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/prefill/prefill_int8_wmma_spec.py:267,301 both instantiate FusedQ4KMMQTileSpec() directly, an unconditional module-level dependency"
+        "extra/llm_research/prefill/prefill_int8_wmma_spec.py:267,301 both instantiate FusedQ4KMMQTileSpec() directly, an unconditional module-level dependency"
       ],
-      "path": "extra/qk/q4k_fused_mmq_contract.py",
+      "path": "extra/llm_research/q4k_fused_mmq_contract.py",
       "promotion_target": null,
       "public_surface": [
         "FUSED_Q4K_MMQ_CONTRACT",
@@ -4234,7 +4234,7 @@
         "tile-shape validation contract",
         "LDS window compiler_geometry description"
       ],
-      "retention_criterion": "Needed as long as extra/qk/prefill/prefill_int8_wmma_spec.py's fused-MMQ tile path exists (that spec module backs the prefill_q4k_int8_wmma_tiled_research route, currently research-only per route_manifest.py, not the shipped default).",
+      "retention_criterion": "Needed as long as extra/llm_research/prefill/prefill_int8_wmma_spec.py's fused-MMQ tile path exists (that spec module backs the prefill_q4k_int8_wmma_tiled_research route, currently research-only per route_manifest.py, not the shipped default).",
       "reusable_assets": [],
       "role": "authority",
       "status": "production",
@@ -4262,9 +4262,9 @@
       "duplication_group": null,
       "evidence": [
         "module docstring: 'This module is a tinygrad-side spec ... CPU-only reference code and is not wired into production dispatch.'",
-        "only consumer is extra/qk/mmq_q4k_q8_reference.py plus its own test"
+        "only consumer is extra/llm_research/mmq_q4k_q8_reference.py plus its own test"
       ],
-      "path": "extra/qk/q4k_tile_loader.py",
+      "path": "extra/llm_research/q4k_tile_loader.py",
       "promotion_target": null,
       "public_surface": [
         "Q4KTileLoadSpec",
@@ -4303,11 +4303,11 @@
       "domain": "quant_mmq",
       "duplication_group": null,
       "evidence": [
-        "tinygrad/llm/route_ops.py:58-63 four `_attr(\"extra.qk.q6k_route_spec\", ...)` wrappers, imported at model-construction/decode-routing time",
-        "extra/qk/route_manifest.py:115 `route_attribution` field: 'writer extra/qk/q6k_route_spec.py emit_q6k_gemv_kernel (spec-driven lowering of Q6KGEMVRouteSpec)'",
-        "extra/qk/route_manifest.py status for decode_q6k_coop_generated = promoted_default, provenance = machine_authored_generated"
+        "tinygrad/llm/route_ops.py:58-63 four `_attr(\"extra.llm_research.q6k_route_spec\", ...)` wrappers, imported at model-construction/decode-routing time",
+        "extra/llm_research/route_manifest.py:115 `route_attribution` field: 'writer extra/llm_research/q6k_route_spec.py emit_q6k_gemv_kernel (spec-driven lowering of Q6KGEMVRouteSpec)'",
+        "extra/llm_research/route_manifest.py status for decode_q6k_coop_generated = promoted_default, provenance = machine_authored_generated"
       ],
-      "path": "extra/qk/q6k_route_spec.py",
+      "path": "extra/llm_research/q6k_route_spec.py",
       "promotion_target": null,
       "public_surface": [
         "Q6KGEMVRouteSpec",
@@ -4353,10 +4353,10 @@
       "duplication_group": null,
       "evidence": [
         "tinygrad/llm/route_ops.py wires the remaining Q4_K GEMM builders from this module; parse_opt is now owned by tinygrad.codegen.opt",
-        "extra/qk/gemv_g3_codegen_lowering.py:13 imports _q4k_block_dot_packed_load directly, coupling the shipped decode route to this file's internals",
-        "extra/qk/mmq_q4k_q8_atom.py:35 imports the private-underscore bitfield helpers directly (not the GEMM builders), evidencing the two responsibilities are consumed independently"
+        "extra/llm_research/gemv_g3_codegen_lowering.py:13 imports _q4k_block_dot_packed_load directly, coupling the shipped decode route to this file's internals",
+        "extra/llm_research/mmq_q4k_q8_atom.py:35 imports the private-underscore bitfield helpers directly (not the GEMM builders), evidencing the two responsibilities are consumed independently"
       ],
-      "path": "extra/qk/quant/q4_k_gemv_primitive.py",
+      "path": "extra/llm_research/quant/q4_k_gemv_primitive.py",
       "promotion_target": null,
       "public_surface": [
         "_q4k_group_params",
@@ -4410,7 +4410,7 @@
         "test/unit/test_codegen_opt_parser.py pins the shared parser and removes both route shims",
         "no test/unit/*.py file imports this module directly (checked via grep) -- production usage is exercised only through route_ops.py and downstream route-spec modules"
       ],
-      "path": "extra/qk/quant/q6_k_gemv_primitive.py",
+      "path": "extra/llm_research/quant/q6_k_gemv_primitive.py",
       "promotion_target": null,
       "public_surface": [
         "parse_opt",
@@ -4453,9 +4453,9 @@
       "domain": "quant_mmq",
       "duplication_group": null,
       "evidence": [
-        "tinygrad/llm/route_ops.py:43 def quantize_q4_k(*args, **kwargs): return _attr(\"extra.qk.quantize\", \"quantize_q4_k\")(*args, **kwargs)"
+        "tinygrad/llm/route_ops.py:43 def quantize_q4_k(*args, **kwargs): return _attr(\"extra.llm_research.quantize\", \"quantize_q4_k\")(*args, **kwargs)"
       ],
-      "path": "extra/qk/quantize.py",
+      "path": "extra/llm_research/quantize.py",
       "promotion_target": null,
       "public_surface": [
         "quantize_q4_k",
@@ -4495,7 +4495,7 @@
         "test/unit/test_reg_store_devec.py records duplicate-pointer residual behavior and gate dispatch"
       ],
       "path": "tinygrad/codegen/late/reg_store.py",
-      "promotion_target": "tinygrad/codegen/late/reg_store.py (promoted from extra/qk/reg_store_devec.py; kept as a separate matcher after the core distinct-pointer rule)",
+      "promotion_target": "tinygrad/codegen/late/reg_store.py (promoted from extra/llm_research/reg_store_devec.py; kept as a separate matcher after the core distinct-pointer rule)",
       "public_surface": [
         "pm_reg_store_devec"
       ],
@@ -4518,12 +4518,12 @@
         "route_authority"
       ],
       "authority_keys": [
-        "extra.qk.route_manifest.ROUTES",
-        "extra.qk.route_manifest.ROUTE_PROVENANCE",
-        "extra.qk.route_manifest.PURITY_STATUS_VOCAB",
-        "extra.qk.route_manifest.REFUTED",
-        "extra.qk.route_manifest.DEFERRED_CAPABILITIES",
-        "extra.qk.route_manifest.derive_purity_status"
+        "extra.llm_research.route_manifest.ROUTES",
+        "extra.llm_research.route_manifest.ROUTE_PROVENANCE",
+        "extra.llm_research.route_manifest.PURITY_STATUS_VOCAB",
+        "extra.llm_research.route_manifest.REFUTED",
+        "extra.llm_research.route_manifest.DEFERRED_CAPABILITIES",
+        "extra.llm_research.route_manifest.derive_purity_status"
       ],
       "classification_confidence": "high",
       "default_path": true,
@@ -4533,11 +4533,11 @@
       "duplication_group": null,
       "evidence": [
         "route_manifest.py:1-22 module docstring self-describes as 'the single declarative source of truth for which decode/prefill routes exist'",
-        "tinygrad/llm/route_ops.py:11-12 automatic_promoted_prefill_graph_policy(*args,**kwargs) -> _attr('extra.qk.route_manifest', 'automatic_promoted_prefill_graph_policy') -- this is the ONLY route_manifest symbol route_ops.py imports/re-exports; route_ops.py otherwise fans out to many other extra.qk.* modules (quant.q4_k_gemv_primitive, prefill.q4k_prefill_route_spec, bubblebeam_futuresight, gemv_g3_codegen_lowering, q6k_route_spec, decode.flash_decode_attention_executor, pure_search_guard, prefill.packed_wmma_prefill_candidates, mmq_ds4_logical_emitter, layout, quantize) -- route_manifest is not the sole thing route_ops depends on, but is the sole route_manifest entry point production touches through that boundary file",
+        "tinygrad/llm/route_ops.py:11-12 automatic_promoted_prefill_graph_policy(*args,**kwargs) -> _attr('extra.llm_research.route_manifest', 'automatic_promoted_prefill_graph_policy') -- this is the ONLY route_manifest symbol route_ops.py imports/re-exports; route_ops.py otherwise fans out to many other extra.llm_research.* modules (quant.q4_k_gemv_primitive, prefill.q4k_prefill_route_spec, bubblebeam_futuresight, gemv_g3_codegen_lowering, q6k_route_spec, decode.flash_decode_attention_executor, pure_search_guard, prefill.packed_wmma_prefill_candidates, mmq_ds4_logical_emitter, layout, quantize) -- route_manifest is not the sole thing route_ops depends on, but is the sole route_manifest entry point production touches through that boundary file",
         "grep: route_manifest imported by 15 test/unit files and extra/audit/pure_machine_search_default_path_census.py",
-        "extra/audit/pure_machine_search_default_path_census.py:31 'This census used to re-declare all of that as a second parallel copy; it now DERIVES ... extra/qk/route_manifest.ROUTES'"
+        "extra/audit/pure_machine_search_default_path_census.py:31 'This census used to re-declare all of that as a second parallel copy; it now DERIVES ... extra/llm_research/route_manifest.ROUTES'"
       ],
-      "path": "extra/qk/route_manifest.py",
+      "path": "extra/llm_research/route_manifest.py",
       "promotion_target": null,
       "public_surface": [
         "ROUTES",
@@ -4600,11 +4600,11 @@
         "route_authority"
       ],
       "authority_keys": [
-        "extra.qk.runtime_specs.FULL_KERNEL_CANDIDATE_SCHEMA",
-        "extra.qk.runtime_specs.FULL_KERNEL_CANDIDATE_SET_SCHEMA",
-        "extra.qk.runtime_specs.GFX1100_SINGLE_BUFFER_CAPABILITY (+ sibling *_CAPABILITY constants)",
-        "extra.qk.runtime_specs.PROVENANCE (candidate-level provenance vocabulary)",
-        "extra.qk.runtime_specs._validate_full_kernel_payload"
+        "extra.llm_research.runtime_specs.FULL_KERNEL_CANDIDATE_SCHEMA",
+        "extra.llm_research.runtime_specs.FULL_KERNEL_CANDIDATE_SET_SCHEMA",
+        "extra.llm_research.runtime_specs.GFX1100_SINGLE_BUFFER_CAPABILITY (+ sibling *_CAPABILITY constants)",
+        "extra.llm_research.runtime_specs.PROVENANCE (candidate-level provenance vocabulary)",
+        "extra.llm_research.runtime_specs._validate_full_kernel_payload"
       ],
       "classification_confidence": "high",
       "default_path": true,
@@ -4616,10 +4616,10 @@
         "runtime_specs.py:20-21 FULL_KERNEL_CANDIDATE_SCHEMA/FULL_KERNEL_CANDIDATE_SET_SCHEMA string constants checked by FullKernelCandidateSetEntry.__post_init__ and FullKernelCandidateSet.__post_init__",
         "runtime_specs.py:32-54 FullKernelCapability dataclass + GFX1100_SINGLE_BUFFER_CAPABILITY/GFX1100_TWO_BUFFER_STAGE1_CAPABILITY/GFX1100_REGISTER_RESIDENT_CAPABILITY/GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY frozen instances",
         "runtime_specs.py:515-636 _validate_full_kernel_payload is the sole strict-schema checker for the candidate JSON; called from FullKernelCandidateSetEntry, derive_q4k_q8_1_five_buffer_candidate, rebind_full_kernel_workload, admit_full_kernel_candidate, GeneratedCandidate.__post_init__",
-        "grep shows 9 non-test extra.qk modules import from runtime_specs.py, spanning route_manifest.py, memory_adaptive_runtime_collector.py, quant_specs.py, generated_candidates.py, and 4 prefill/ modules",
+        "grep shows 9 non-test extra.llm_research modules import from runtime_specs.py, spanning route_manifest.py, memory_adaptive_runtime_collector.py, quant_specs.py, generated_candidates.py, and 4 prefill/ modules",
         "NOTE: runtime_specs.py:18 defines its own PROVENANCE = ('machine_authored_generated','tinygrad_scheduler_generated','banned','unknown'), a DIFFERENT tuple (different name and different member set -- includes 'banned'/'unknown', omits 'compiler_primitive_spec_owned'/'external_handwritten_kernel'/'rollback_oracle') from route_manifest.py:50-53's ROUTE_PROVENANCE. They describe different objects (per-candidate provenance vs per-route provenance) and no code was found treating them as interchangeable, but the near-identical naming ('PROVENANCE' vs 'ROUTE_PROVENANCE', overlapping value strings) is a real risk of confusion -- flagged, not claiming a conflict since I did not find any file importing both and comparing them."
       ],
-      "path": "extra/qk/runtime_specs.py",
+      "path": "extra/llm_research/runtime_specs.py",
       "promotion_target": null,
       "public_surface": [
         "FullKernelCapability",
@@ -4689,11 +4689,11 @@
       "domain": "evidence",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/shared_attention_evidence.py:13-14 imports SharedAttentionCompilerCapture and the 3 schema constants directly",
-        "extra/qk/generate_shared_attention_captures.py:16 imports build_shared_attention_compiler_capture",
+        "extra/llm_research/shared_attention_evidence.py:13-14 imports SharedAttentionCompilerCapture and the 3 schema constants directly",
+        "extra/llm_research/generate_shared_attention_captures.py:16 imports build_shared_attention_compiler_capture",
         "file:492-499 shows schema is chosen dynamically by acc_blocks==4 (acc-slice) vs default v2, i.e. genuinely 3 separate contracts, not accidental duplication"
       ],
-      "path": "extra/qk/shared_attention_capture.py",
+      "path": "extra/llm_research/shared_attention_capture.py",
       "promotion_target": null,
       "public_surface": [
         "SharedAttentionCompilerCapture",
@@ -4746,7 +4746,7 @@
         "file:183-192 shared_attention_proof_artifact fails closed on mixed schemas across the 3 capture variants, mirroring shared_attention_capture.py's 3-schema split",
         "file has two independent responsibility clusters: proof aggregation (lines 79-192) and workload/geometry enumeration + authority_command (lines 194-262) with no shared state between them -- a decouple candidate but not yet acted on"
       ],
-      "path": "extra/qk/shared_attention_evidence.py",
+      "path": "extra/llm_research/shared_attention_evidence.py",
       "promotion_target": null,
       "public_surface": [
         "shared_attention_proof_artifact",
@@ -4793,11 +4793,11 @@
       "domain": "search_promotion",
       "duplication_group": null,
       "evidence": [
-        "extra/qk/benchmark_shared_attention.py:11,39-41: composite_admission_errors gates run_one's candidate mode, and main() still hard-refuses mode=='candidate' (line 69: 'candidate disabled; ...')",
+        "extra/llm_research/benchmark_shared_attention.py:11,39-41: composite_admission_errors gates run_one's candidate mode, and main() still hard-refuses mode=='candidate' (line 69: 'candidate disabled; ...')",
         "file:52-60: comment cites docs/SHARED_ATTENTION_LIVE_STATE_RESIDENCY_LEDGER_20260723.md and docs/ATTENTION_COMPACT_VGPR_LEASE_NEGATIVE_20260723.md as the recorded verdicts backing why VGPR alone isn't the admission criterion -- a genuine prior decision, not invented",
         "this is a DIFFERENT, live-producer schema from shared_attention_evidence_gate.py's orphaned bundle schema -- not a duplicate"
       ],
-      "path": "extra/qk/shared_attention_promotion.py",
+      "path": "extra/llm_research/shared_attention_promotion.py",
       "promotion_target": null,
       "public_surface": [
         "composite_admission_errors",
@@ -4834,7 +4834,7 @@
         "measurement"
       ],
       "authority_keys": [
-        "extra.qk.timing_harness.PIN_CLOCK_ENV"
+        "extra.llm_research.timing_harness.PIN_CLOCK_ENV"
       ],
       "classification_confidence": "high",
       "default_path": false,
@@ -4844,9 +4844,9 @@
       "duplication_group": null,
       "evidence": [
         "test/unit/test_clock_pin.py:4 imports it directly",
-        "extra/qk/bench.py:33 and extra/qk/prefill/prefill_whole_synced.py:29,336 both import it in the live measurement path"
+        "extra/llm_research/bench.py:33 and extra/llm_research/prefill/prefill_whole_synced.py:29,336 both import it in the live measurement path"
       ],
-      "path": "extra/qk/timing_harness.py",
+      "path": "extra/llm_research/timing_harness.py",
       "promotion_target": null,
       "public_surface": [
         "env_wants_clock_pin",
@@ -4860,7 +4860,7 @@
         "argparse wiring helper",
         "context-manager accessor"
       ],
-      "retention_criterion": "Live dependency of both extra/qk/bench.py (the sanctioned throughput entry) and extra/qk/prefill/prefill_whole_synced.py (the prefill authority); retire only alongside those.",
+      "retention_criterion": "Live dependency of both extra/llm_research/bench.py (the sanctioned throughput entry) and extra/llm_research/prefill/prefill_whole_synced.py (the prefill authority); retire only alongside those.",
       "reusable_assets": [
         "cli-parsing"
       ],
@@ -4879,51 +4879,51 @@
   "human_findings": {
     "not_reproposed": [
       "attention harness centralization (settled 2026-07-24; attention_harness_common.py is the owner and the character-identical migration rule stands)",
-      "extra/qk/bench.py as the throughput entry point; do not recreate harness_contract.py",
+      "extra/llm_research/bench.py as the throughput entry point; do not recreate harness_contract.py",
       "the three JSON writers (probe_io / gate_registry / eval_common.write_json) -- byte-parity differences are intentional",
       "merging the two child_env builders -- different semantics, already resolved by renaming"
     ],
     "recommended_sequence": [
       "A2: delete the six p2_probe_* files (verdict already recorded in docs/flash-prefill-piece2-probe-20260721.md).",
       "A3: capture the shared_attention_evidence_gate verdict in one line, then delete the gate and its test.",
-      "A1: collapse parse_amdgpu_metadata onto extra/qk/mmq_compile_evidence.py and repoint three call sites.",
+      "A1: collapse parse_amdgpu_metadata onto extra/llm_research/mmq_compile_evidence.py and repoint three call sites.",
       "A4: land the authority correction (manifest-only) so the duplicate-authority check stays meaningful.",
       "A5: extract promotion_gate_common.py for the three sibling gates only, leaving pure_register_evaluation_gate alone.",
       "Answer A8 (DEV=AMD:ISA retention) and A9 (WMMA-tiled route revival) before touching either block; together they govern about 4.3K of the 17.7K LOC in scope.",
       "Answer A6 and A10, then re-run the audit and report net authored LOC reduction."
     ],
     "requires_human_classification": [
-      "extra/qk/mmq_q4k_q8_atom.py -- which kernel stages still teach something",
-      "extra/qk/kernel_lds.py clusters C and E -- open question or superseded",
+      "extra/llm_research/mmq_q4k_q8_atom.py -- which kernel stages still teach something",
+      "extra/llm_research/kernel_lds.py clusters C and E -- open question or superseded",
       "the DEV=AMD:ISA surface -- live research or completed experiment",
       "the q4k int8 WMMA-tiled gate family -- revive or retire",
-      "extra/qk/quant_specs.py -- unwired API or superseded"
+      "extra/llm_research/quant_specs.py -- unwired API or superseded"
     ],
     "separation_of_concerns": "Everything in files/groups/workflows/actions is a human judgment recorded by hand. The audit script contributes only discovery, LOC, coverage, the import and seam graph, reference scanning, and boundary arithmetic."
   },
   "investigation_backlog": [
     {
-      "path": "extra/qk/mmq_q4k_q8_atom.py",
+      "path": "extra/llm_research/mmq_q4k_q8_atom.py",
       "question": "amd_warp_batched_atom_source_hash, amd_dot4_batched_atom_source_hash and amd_dot4x4_batched_atom_source_hash have no importer anywhere -- dead public API in a default-path file. Deleting them only pays if the kernel builders behind them go too, which is the same question as which atom stages still teach something."
     },
     {
-      "path": "extra/qk/mmq_q4k_q8_atom.py",
+      "path": "extra/llm_research/mmq_q4k_q8_atom.py",
       "question": "835 LOC hold ~10 progressively elaborated kernel stages (naive, warp, dot4, dot4x4, ds4 variants, coop-tile). Only the DS4 coop-tile stage is a confirmed evidence-capture target. Are the earlier stages still teaching anything, or is their verdict recorded elsewhere?"
     },
     {
-      "path": "extra/qk/decode/decode_hd_sweep_numerics.py",
+      "path": "extra/llm_research/decode/decode_hd_sweep_numerics.py",
       "question": "No recorded verdict found for Hd in {64,192,256}. Open sweep or completed one-off?"
     },
     {
-      "path": "extra/qk/benchmark_split_shared_attention.py",
+      "path": "extra/llm_research/benchmark_split_shared_attention.py",
       "question": "The split-versus-fused-recompute question has no recorded closing verdict."
     },
     {
-      "path": "extra/qk/pure_search_guard.py",
+      "path": "extra/llm_research/pure_search_guard.py",
       "question": "Its docstring claims model.py calls assert_pure_machine_search() at Transformer init, but model.py calls only install_memory_adaptive_model_adapters and automatic_promoted_prefill_graph_policy. Is the purity guard meant to be live-enforced, or is it a test-only contract?"
     },
     {
-      "path": "extra/qk/bubblebeam_futuresight.py",
+      "path": "extra/llm_research/bubblebeam_futuresight.py",
       "question": "Shares a name with the BUBBLEBEAM_FUTURESIGHT env var but never reads os.environ. Confirm the naming collision is harmless or rename one of them."
     },
     {
@@ -4936,12 +4936,12 @@
       "asset": "promotion-gate evidence loading and verdict emission",
       "call_sites": 3,
       "excluded": [
-        "extra/qk/prefill/pure_register_evaluation_gate.py -- validates compile-artifact provenance, a different rule"
+        "extra/llm_research/prefill/pure_register_evaluation_gate.py -- validates compile-artifact provenance, a different rule"
       ],
       "existing_implementations": [
-        "extra/qk/prefill/packed_wmma_prefill_promotion_gate.py",
-        "extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py",
-        "extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py"
+        "extra/llm_research/prefill/packed_wmma_prefill_promotion_gate.py",
+        "extra/llm_research/prefill/prefill_softmax_reduce_fuse_promotion_gate.py",
+        "extra/llm_research/prefill/prefill_causal_tile_skip_promotion_gate.py"
       ],
       "knowledge_duplicated": "how a route's promotion evidence file is located, schema-checked, failed closed, and reported",
       "loc_added": 30,
@@ -4949,34 +4949,34 @@
       "must_remain_explicit": [
         "each gate's own route_id, flag, evidence path, and numeric thresholds"
       ],
-      "proposed_owner": "extra/qk/prefill/promotion_gate_common.py"
+      "proposed_owner": "extra/llm_research/prefill/promotion_gate_common.py"
     },
     {
       "asset": "AMD kernel resource metadata parsing",
       "call_sites": 3,
       "existing_implementations": [
-        "extra/qk/amdgpu_metadata.py",
-        "extra/qk/mmq_compile_evidence.py"
+        "extra/llm_research/amdgpu_metadata.py",
+        "extra/llm_research/mmq_compile_evidence.py"
       ],
       "knowledge_duplicated": "the llvm-readelf note field names and their mapping to a resource dict",
       "loc_added": 0,
       "loc_removed": 30,
       "must_remain_explicit": [],
-      "proposed_owner": "extra/qk/mmq_compile_evidence.py"
+      "proposed_owner": "extra/llm_research/mmq_compile_evidence.py"
     },
     {
       "asset": "attention harness leaf helpers",
       "call_sites": 0,
       "existing_implementations": [
-        "extra/qk/attention_harness_common.py"
+        "extra/llm_research/attention_harness_common.py"
       ],
       "knowledge_duplicated": "already centralized by docs/attention-harness-centralization-scope-20260724.md",
       "loc_added": 0,
       "loc_removed": 0,
       "must_remain_explicit": [
-        "extra/qk/prefill/prefill_whole_synced.py's reference SDPA and sync, deliberately left alone"
+        "extra/llm_research/prefill/prefill_whole_synced.py's reference SDPA and sync, deliberately left alone"
       ],
-      "proposed_owner": "extra/qk/attention_harness_common.py",
+      "proposed_owner": "extra/llm_research/attention_harness_common.py",
       "status": "settled -- do not re-propose"
     }
   ],
@@ -5061,9 +5061,9 @@
   "workflows": [
     {
       "authority_files": [
-        "extra/qk/route_manifest.py",
-        "extra/qk/model_profiles.py",
-        "extra/qk/memory_adaptive_policy.py"
+        "extra/llm_research/route_manifest.py",
+        "extra/llm_research/model_profiles.py",
+        "extra/llm_research/memory_adaptive_policy.py"
       ],
       "authority_rules": [
         "route.admission"
@@ -5075,8 +5075,8 @@
       ],
       "evidence_files": [],
       "execution_files": [
-        "extra/qk/memory_adaptive_runtime_collector.py",
-        "extra/qk/memory_adaptive_allocation_observer.py"
+        "extra/llm_research/memory_adaptive_runtime_collector.py",
+        "extra/llm_research/memory_adaptive_allocation_observer.py"
       ],
       "inputs": [
         "gguf weights",
@@ -5100,9 +5100,9 @@
     },
     {
       "authority_files": [
-        "extra/qk/q6k_route_spec.py",
-        "extra/qk/decode/flash_decode_attention_spec.py",
-        "extra/qk/live_split_geometry.py"
+        "extra/llm_research/q6k_route_spec.py",
+        "extra/llm_research/decode/flash_decode_attention_spec.py",
+        "extra/llm_research/live_split_geometry.py"
       ],
       "authority_rules": [
         "route.decode_selection"
@@ -5113,13 +5113,13 @@
         "tinygrad/llm/decode_routes.py"
       ],
       "evidence_files": [
-        "extra/qk/decode/decode_runtime_overhead.py"
+        "extra/llm_research/decode/decode_runtime_overhead.py"
       ],
       "execution_files": [
-        "extra/qk/gemv_g3_codegen_lowering.py",
-        "extra/qk/decode/flash_decode_attention_executor.py",
-        "extra/qk/gemv_g2_lanemap.py",
-        "extra/qk/lane_partition_reduce.py"
+        "extra/llm_research/gemv_g3_codegen_lowering.py",
+        "extra/llm_research/decode/flash_decode_attention_executor.py",
+        "extra/llm_research/gemv_g2_lanemap.py",
+        "extra/llm_research/lane_partition_reduce.py"
       ],
       "inputs": [
         "role shape",
@@ -5144,10 +5144,10 @@
     },
     {
       "authority_files": [
-        "extra/qk/prefill/q4k_prefill_route_spec.py",
-        "extra/qk/prefill/q6k_prefill_route_spec.py",
+        "extra/llm_research/prefill/q4k_prefill_route_spec.py",
+        "extra/llm_research/prefill/q6k_prefill_route_spec.py",
         "tinygrad/schedule/wmma/flash_prefill.py",
-        "extra/qk/route_manifest.py"
+        "extra/llm_research/route_manifest.py"
       ],
       "authority_rules": [
         "route.prefill_selection"
@@ -5158,14 +5158,14 @@
         "tinygrad/llm/prefill_routes.py"
       ],
       "evidence_files": [
-        "extra/qk/prefill/packed_wmma_correctness_canary.py",
-        "extra/qk/packed_wmma_compile_gate.py"
+        "extra/llm_research/prefill/packed_wmma_correctness_canary.py",
+        "extra/llm_research/packed_wmma_compile_gate.py"
       ],
       "execution_files": [
-        "extra/qk/prefill/current_prefill_execution_adapter.py",
-        "extra/qk/prefill/guarded_execution.py",
-        "extra/qk/prefill/packed_wmma_prefill_candidates.py",
-        "extra/qk/prefill/prefill_graph_gemm_route.py"
+        "extra/llm_research/prefill/current_prefill_execution_adapter.py",
+        "extra/llm_research/prefill/guarded_execution.py",
+        "extra/llm_research/prefill/packed_wmma_prefill_candidates.py",
+        "extra/llm_research/prefill/prefill_graph_gemm_route.py"
       ],
       "inputs": [
         "token count",
@@ -5193,9 +5193,9 @@
     },
     {
       "authority_files": [
-        "extra/qk/layout.py",
-        "extra/qk/quant/q4_k_gemv_primitive.py",
-        "extra/qk/quant/q6_k_gemv_primitive.py"
+        "extra/llm_research/layout.py",
+        "extra/llm_research/quant/q4_k_gemv_primitive.py",
+        "extra/llm_research/quant/q6_k_gemv_primitive.py"
       ],
       "authority_rules": [
         "quant.block_layout"
@@ -5207,7 +5207,7 @@
       ],
       "evidence_files": [],
       "execution_files": [
-        "extra/qk/quantize.py"
+        "extra/llm_research/quantize.py"
       ],
       "inputs": [
         "packed weight words"
@@ -5229,9 +5229,9 @@
     },
     {
       "authority_files": [
-        "extra/qk/mmq_q4k_q8_reference.py",
-        "extra/qk/mmq_atom_boundary.py",
-        "extra/qk/mmq_logical_vocabulary.py"
+        "extra/llm_research/mmq_q4k_q8_reference.py",
+        "extra/llm_research/mmq_atom_boundary.py",
+        "extra/llm_research/mmq_logical_vocabulary.py"
       ],
       "authority_rules": [
         "mmq.numeric_reference"
@@ -5239,16 +5239,16 @@
       "default_path": false,
       "domain": "quant_mmq",
       "entry_points": [
-        "extra/qk/mmq_q4k_q8_atom.py"
+        "extra/llm_research/mmq_q4k_q8_atom.py"
       ],
       "evidence_files": [
-        "extra/qk/mmq_compile_evidence.py",
-        "extra/qk/mmq_lifecycle.py",
-        "extra/qk/mmq_epoch_manifest_export.py"
+        "extra/llm_research/mmq_compile_evidence.py",
+        "extra/llm_research/mmq_lifecycle.py",
+        "extra/llm_research/mmq_epoch_manifest_export.py"
       ],
       "execution_files": [
-        "extra/qk/mmq_q4k_q8_atom.py",
-        "extra/qk/mmq_ds4_logical_emitter.py"
+        "extra/llm_research/mmq_q4k_q8_atom.py",
+        "extra/llm_research/mmq_ds4_logical_emitter.py"
       ],
       "inputs": [
         "tile geometry"
@@ -5276,7 +5276,7 @@
     },
     {
       "authority_files": [
-        "extra/qk/route_manifest.py"
+        "extra/llm_research/route_manifest.py"
       ],
       "authority_rules": [
         "promotion.packed_wmma_prefill"
@@ -5284,13 +5284,13 @@
       "default_path": false,
       "domain": "search_promotion",
       "entry_points": [
-        "extra/qk/prefill/packed_wmma_prefill_promotion_gate.py"
+        "extra/llm_research/prefill/packed_wmma_prefill_promotion_gate.py"
       ],
       "evidence_files": [
-        "extra/qk/packed_wmma_canary_evidence.py"
+        "extra/llm_research/packed_wmma_canary_evidence.py"
       ],
       "execution_files": [
-        "extra/qk/prefill/packed_wmma_prefill_promotion_gate.py"
+        "extra/llm_research/prefill/packed_wmma_prefill_promotion_gate.py"
       ],
       "inputs": [
         "docs/*.json evidence bundle",
@@ -5315,7 +5315,7 @@
     },
     {
       "authority_files": [
-        "extra/qk/route_manifest.py"
+        "extra/llm_research/route_manifest.py"
       ],
       "authority_rules": [
         "promotion.prefill_softmax_reduce_fuse"
@@ -5324,11 +5324,11 @@
       "domain": "search_promotion",
       "duplicate_authority_reason": "each gate owns exactly one route's promotion rule; the shared shape is machinery, not authority",
       "entry_points": [
-        "extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py"
+        "extra/llm_research/prefill/prefill_softmax_reduce_fuse_promotion_gate.py"
       ],
       "evidence_files": [],
       "execution_files": [
-        "extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py"
+        "extra/llm_research/prefill/prefill_softmax_reduce_fuse_promotion_gate.py"
       ],
       "inputs": [
         "docs/prefill-softmax-reduce-fuse-evidence-20260724.json"
@@ -5352,7 +5352,7 @@
     },
     {
       "authority_files": [
-        "extra/qk/route_manifest.py"
+        "extra/llm_research/route_manifest.py"
       ],
       "authority_rules": [
         "promotion.prefill_causal_tile_skip"
@@ -5361,11 +5361,11 @@
       "domain": "search_promotion",
       "duplicate_authority_reason": "sibling gate for a different route; same machinery, different rule",
       "entry_points": [
-        "extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py"
+        "extra/llm_research/prefill/prefill_causal_tile_skip_promotion_gate.py"
       ],
       "evidence_files": [],
       "execution_files": [
-        "extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py"
+        "extra/llm_research/prefill/prefill_causal_tile_skip_promotion_gate.py"
       ],
       "inputs": [
         "docs/*.json evidence bundle"
@@ -5389,9 +5389,9 @@
     },
     {
       "authority_files": [
-        "extra/qk/prefill/prefill_whole_synced.py",
-        "extra/qk/prefill/prefill_harness.py",
-        "extra/qk/decode/decode_harness.py"
+        "extra/llm_research/prefill/prefill_whole_synced.py",
+        "extra/llm_research/prefill/prefill_harness.py",
+        "extra/llm_research/decode/decode_harness.py"
       ],
       "authority_rules": [
         "measurement.throughput_methodology"
@@ -5399,14 +5399,14 @@
       "default_path": false,
       "domain": "measurement",
       "entry_points": [
-        "extra/qk/bench.py"
+        "extra/llm_research/bench.py"
       ],
       "evidence_files": [
-        "extra/qk/prefill/prefill_boltbeam_trace.py"
+        "extra/llm_research/prefill/prefill_boltbeam_trace.py"
       ],
       "execution_files": [
-        "extra/qk/bench.py",
-        "extra/qk/decode/decode_runtime_overhead.py"
+        "extra/llm_research/bench.py",
+        "extra/llm_research/decode/decode_runtime_overhead.py"
       ],
       "inputs": [
         "model path",
@@ -5432,8 +5432,8 @@
     },
     {
       "authority_files": [
-        "extra/qk/shared_attention_evidence.py",
-        "extra/qk/shared_attention_promotion.py"
+        "extra/llm_research/shared_attention_evidence.py",
+        "extra/llm_research/shared_attention_promotion.py"
       ],
       "authority_rules": [
         "evidence.shared_attention_proof_schema"
@@ -5441,16 +5441,16 @@
       "default_path": false,
       "domain": "evidence",
       "entry_points": [
-        "extra/qk/generate_shared_attention_captures.py",
-        "extra/qk/benchmark_shared_attention.py"
+        "extra/llm_research/generate_shared_attention_captures.py",
+        "extra/llm_research/benchmark_shared_attention.py"
       ],
       "evidence_files": [
-        "extra/qk/benchmark_shared_attention.py",
-        "extra/qk/benchmark_split_shared_attention.py"
+        "extra/llm_research/benchmark_shared_attention.py",
+        "extra/llm_research/benchmark_split_shared_attention.py"
       ],
       "execution_files": [
-        "extra/qk/shared_attention_capture.py",
-        "extra/qk/generate_shared_attention_captures.py"
+        "extra/llm_research/shared_attention_capture.py",
+        "extra/llm_research/generate_shared_attention_captures.py"
       ],
       "inputs": [
         "compiled attention kernels"

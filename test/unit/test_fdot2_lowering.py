@@ -75,4 +75,4 @@ def test_fdot2_lowering_declines_non_add_nodes():
 def test_fdot2_core_owns_all_public_hooks():
   import importlib.util
   assert importlib.util.find_spec("tinygrad.codegen.experimental") is None
-  assert importlib.util.find_spec("extra.qk.fdot2_lowering") is None
+  assert importlib.util.find_spec("extra.llm_research.fdot2_lowering") is None

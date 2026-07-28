@@ -1,11 +1,11 @@
 import copy, json
 
-from extra.qk.memory_adaptive_policy import (
+from extra.llm_research.memory_adaptive_policy import (
   SCHEMA, build_production_eligibility, build_production_eligibility_requirement,
   make_cache_record, select_policy,
 )
-from extra.qk.memory_adaptive_runtime_collector import collect_runtime_policy, make_file_policy_collector, make_policy_collector
-from extra.qk.memory_adaptive_allocation_observer import EXACT_MEMORY_KEYS, make_memory_facts
+from extra.llm_research.memory_adaptive_runtime_collector import collect_runtime_policy, make_file_policy_collector, make_policy_collector
+from extra.llm_research.memory_adaptive_allocation_observer import EXACT_MEMORY_KEYS, make_memory_facts
 
 
 def fixture(device_facts=None):

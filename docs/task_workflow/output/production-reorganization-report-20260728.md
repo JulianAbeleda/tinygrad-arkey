@@ -91,7 +91,7 @@ The first bounded production closure promoted the live flash-prefill descriptor:
 
 | Source | Destination | Production consumers |
 |---|---|---|
-| `extra/qk/prefill/flash_prefill_attention_spec.py` | `tinygrad/schedule/wmma/flash_prefill.py` | `tinygrad/llm/fused_attention.py`; `tinygrad/codegen/opt/postrange.py` |
+| `extra/llm_research/prefill/flash_prefill_attention_spec.py` | `tinygrad/schedule/wmma/flash_prefill.py` | `tinygrad/llm/fused_attention.py`; `tinygrad/codegen/opt/postrange.py` |
 
 The descriptor contents were preserved as a rename. Both production callers now import the core descriptor directly.
 The obsolete lazy shims in `tinygrad/llm/route_ops.py` and `tinygrad/codegen/experimental.py` were removed. Active path
@@ -118,7 +118,7 @@ missing-module or import failure attributable to the move. No GPU result is clai
 ## Second bounded promotion
 
 The recurrence-unroll compiler primitive was similarly promoted from
-`extra/qk/codegen_recurrence_unroll.py` to `tinygrad/codegen/late/recurrence.py`. The AMD/SCHED_UNROLL call site now
+`extra/llm_research/codegen_recurrence_unroll.py` to `tinygrad/codegen/late/recurrence.py`. The AMD/SCHED_UNROLL call site now
 imports the core owner directly, and only the matching `codegen/experimental.py` forwarding shim was removed. The
 organization manifest and lowering findings were updated; the transform body is a byte-identical rename.
 
@@ -137,7 +137,7 @@ The required matrix and acceptance gates are now recorded in
 
 The fourth slice centralized the opt-in AMD `fdot2` matcher in `tinygrad/codegen/late/fdot2.py`, updated the two graph
 rewrite hooks, the post-linearization hook, and the typed GEMM consumer to direct core imports, and removed the three
-experimental forwarding shims plus the old `extra/qk` module. Fifteen focused CPU fdot2/GEMM tests pass, including
+experimental forwarding shims plus the old `extra/llm_research` module. Fifteen focused CPU fdot2/GEMM tests pass, including
 accumulator ordering, fail-closed controls, list dependency replacement, and the old-boundary absence check. The
 `V_DOT2_LOWERING` gate remains default-off and AMD-only; no hardware execution or speed claim is made. Lowering
 baseline/fingerprint authority remains an open verification task.
@@ -153,7 +153,7 @@ two experimental forwarding shims were removed, and four focused CPU boundary te
 default-off; this records ordering correctness only, not a performance or AMD execution result.
 
 The sixth slice consolidated the hand-built AMD warp primitives and the opt-in warp-reduce matcher into
-`tinygrad/codegen/late/warp_reduce.py`. Core code and existing `extra/qk` emitters now import that owner directly, the
+`tinygrad/codegen/late/warp_reduce.py`. Core code and existing `extra/llm_research` emitters now import that owner directly, the
 experimental matcher shim and both old modules are gone, and four CPU structural/boundary tests pass. The
 `WARP_REDUCE_LOWERING` gate remains opt-in; no AMD execution or performance claim is made.
 
@@ -180,7 +180,7 @@ parser suite passes 21 tests.
 
 The route-boundary cleanup then removed 21 `route_ops.py` adapters with no executable caller. Fifteen live adapters
 remain for model setup, selected prefill/decode routes, and packed-WMMA selection. The adapter surface is now pinned by
-`test_route_ops_exposes_only_live_route_adapters`; the retained `extra/qk` targets remain migration debt rather than a
+`test_route_ops_exposes_only_live_route_adapters`; the retained `extra/llm_research` targets remain migration debt rather than a
 blanket production classification.
 
 ## Documentation closure completed
@@ -204,15 +204,15 @@ GPU-lock tests are intentionally unresolved rather than assigned by subtraction.
 
 ## Current audit state
 
-The refreshed `extra/qk` codebase-organization audit now passes its hard-error gate:
+The refreshed `extra/llm_research` codebase-organization audit now passes its hard-error gate:
 
 ```text
 ORG_R1_PASS_CENSUS_PINNED
 0 hard errors, 64 warnings
 ```
 
-The audit sees 88 manifest-scope `extra/qk` files with 88 explicit records and no group-rule coverage. The previously
-unmanifested `extra/qk/decode/capture_prefill_compile.py` now has an evidence-based diagnostic record assigning it to
+The audit sees 88 manifest-scope `extra/llm_research` files with 88 explicit records and no group-rule coverage. The previously
+unmanifested `extra/llm_research/decode/capture_prefill_compile.py` now has an evidence-based diagnostic record assigning it to
 `dev` until its compile-failure conclusion is banked; it remains blocked for deletion, but no longer creates an audit
 hard error.
 
@@ -227,7 +227,7 @@ that the default kernel is impure.
 
 R7 and broader pruning remain blocked by the following evidence gaps:
 
-1. Packet A still has mixed or unresolved runtime/tooling groups, including the `extra/qk` default-path closure,
+1. Packet A still has mixed or unresolved runtime/tooling groups, including the `extra/llm_research` default-path closure,
    `extra/hardware/sqtt/roc.py`, TinyGPU/USB GPU support, experimental MMQ lineage, and safety ownership for
    `gpu_wait_clear.sh`.
 2. Packet B retains a conservative branch partition of 14 master tests, 25 dev-only tests, and 26 exp-only tests.
@@ -258,7 +258,7 @@ replacement and recovery path. In particular, this checkpoint does not authorize
 - any test that may defend a surviving implementation or policy;
 - any benchmark input, baseline, fixture, staged artifact, or top-level evidence JSON;
 - any task-workflow record, handoff, scratchpad group, `.claude` file, or root scratch script;
-- `extra/qk/decode/capture_prefill_compile.py` merely to clear the audit error.
+- `extra/llm_research/decode/capture_prefill_compile.py` merely to clear the audit error.
 
 The next safe action is to classify the hard-drift file and reconcile the first runtime closure records into R7. A
 subsequent bounded slice may proceed only when its implementation, tests, evidence, documents, references, and

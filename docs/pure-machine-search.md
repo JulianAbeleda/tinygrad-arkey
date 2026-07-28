@@ -22,7 +22,7 @@ cannot claim pure machine-search provenance.
 | `rollback_oracle` | no | A handwritten, owned, or specialized route retained only for rollback/reference comparison. |
 
 Only `machine_authored_generated` and `tinygrad_scheduler_generated` are allowed by `FINAL_DEFAULT_PROVENANCE` in
-`extra/qk/route_manifest.py`.
+`extra/llm_research/route_manifest.py`.
 
 ## Classification Rule
 

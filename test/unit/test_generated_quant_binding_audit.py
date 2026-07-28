@@ -1,6 +1,6 @@
-from extra.qk.generated_candidates import builtin_registry
-from extra.qk.runtime_specs import GENERATED_PROVENANCE
-from extra.qk import route_manifest
+from extra.llm_research.generated_candidates import builtin_registry
+from extra.llm_research.runtime_specs import GENERATED_PROVENANCE
+from extra.llm_research import route_manifest
 
 
 def test_builtin_generated_candidates_point_at_known_generated_routes():

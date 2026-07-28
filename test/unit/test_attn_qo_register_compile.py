@@ -9,7 +9,7 @@ from tinygrad.uop.ops import Ops
 from tinygrad.renderer.isa.amd import AMDOps
 
 from test.unit.test_runtime_specs import _single_buffer_anchor_candidate, _strict_full_kernel_candidate
-from extra.qk.runtime_specs import admit_full_kernel_candidate
+from extra.llm_research.runtime_specs import admit_full_kernel_candidate
 
 
 def test_attn_qo_register_prefill_compile_is_cpu_only_and_zero_lds():

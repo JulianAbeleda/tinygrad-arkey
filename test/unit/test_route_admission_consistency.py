@@ -8,7 +8,7 @@ rewrite of both, justified by a symmetry that is not there.
 
 What IS there is duplication of a different kind, and it is the kind that actually breaks: every admission
 guard is stated twice -- once as a field on the candidate that enforces it, and once in
-`extra/qk/route_manifest.json`, which is the file the audit, the promotion machinery and `KernelSpec` all
+`extra/llm_research/route_manifest.json`, which is the file the audit, the promotion machinery and `KernelSpec` all
 treat as authoritative. Nothing checked that the two agree. `_Q4KDecodeCandidate.k_multiple = 1024` and the
 manifest's `(K//256)%4==0` are the same constraint written in two notations, and one of those notations is a
 prose string that no code parses.
@@ -28,7 +28,7 @@ import re
 import pytest
 
 from tinygrad.llm import decode_routes
-from extra.qk import route_manifest
+from extra.llm_research import route_manifest
 
 
 def _candidates() -> dict[str, object]:

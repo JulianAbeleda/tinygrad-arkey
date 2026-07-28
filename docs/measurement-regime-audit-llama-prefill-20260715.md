@@ -30,7 +30,7 @@ decode row to be run and should be made explicit in the record for reproducibili
 
 ## Tinygrad comparison
 
-`extra/qk/prefill/prefill_harness.py:19-29,108-124` resolves the authority profile to:
+`extra/llm_research/prefill/prefill_harness.py:19-29,108-124` resolves the authority profile to:
 
 ```text
 chunk_n       = 512
@@ -48,7 +48,7 @@ The exact generated 8B invocation is:
 PYTHONPATH=/home/ubuntu/tinygrad-arkey \
 PREFILL_V2=1 BOLTBEAM_MODEL_PROFILE=qwen3_8b_q4k_m_gfx1100 \
 PREFILL_GRAPH_GEMM=1 \
-python3 extra/qk/prefill/prefill_whole_synced.py \
+python3 extra/llm_research/prefill/prefill_whole_synced.py \
   --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf \
   --mode authority --model-profile qwen3_8b_q4k_m_gfx1100 \
   -K 8 --warmups 4 --rounds 3 \
@@ -65,7 +65,7 @@ the model/compiler owns internal tiling.  The collector at lines 293-294 is a
 `candidate_route_census` around the same bursts; it records route/candidate
 binding and is not an independent timing stream.
 
-The `extra/qk/bench.py` entry point delegates to this authority through
+The `extra/llm_research/bench.py` entry point delegates to this authority through
 `prefill_authority_argv`; it does not invoke llama.cpp and does not establish
 an n_batch/ubatch equivalence.  `model_e2e_bench.py` is not a valid substitute:
 its TTFT includes host/generation behavior, while the whole-sync authority

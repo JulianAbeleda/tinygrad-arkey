@@ -53,7 +53,7 @@ them is currently unfalsifiable:
 3. **`LinearScanRegallocContext`** — ~10 mutated fields threaded through two sequential `line_rewrite` passes with
    strict positional-index alignment between them.
 4. **`_WARMSTART_OPTS` / `_WARMSTART_CANDIDATE_CONTEXTS`** (`postrange.py`) — process-global, nominally installed
-   through a save/restore contextmanager, but mutated **directly** from `extra/qk/prefill/prefill_whole_synced.py` and
+   through a save/restore contextmanager, but mutated **directly** from `extra/llm_research/prefill/prefill_whole_synced.py` and
    `prefill_graph_gemm_route.py`, bypassing that contract entirely.
 5. **`to_program_cache` / `schedule_cache`** — process-global, keyed by content hash. A cache-key bug silently reuses
    a stale schedule or lowered program, which would defeat LR-000's fingerprint.
@@ -85,7 +85,7 @@ lowering, or a trace taken on one machine will not explain a result from another
 The scope was written 2026-07-26 13:15. The `DEV=AMD:ISA` retirement landed ~14:00 the same day, so two of its
 references are stale:
 
-1. **`extra/qk/kernel_pipeline.py` no longer exists.** The scope lists it in §2 as a current file to preserve, and
+1. **`extra/llm_research/kernel_pipeline.py` no longer exists.** The scope lists it in §2 as a current file to preserve, and
    LR-050 proposes promoting "reusable parts" of it into core. It was retired with the ISA support chain because it
    was reachable only under `DEV=AMD:ISA`. It held `DotUpdateRecurrencePlan/Graph/Proof`,
    `HierarchicalKernelPipelinePlan`, `hierarchical_lifecycle_events`, `SchedulerOutputTileLoop`, and
@@ -93,7 +93,7 @@ references are stale:
    **Decision needed:** LR-050 either drops this target or harvests from history. Note the *core*
    `tinygrad/codegen/opt/kernel_pipeline.py` is a different, live module and is unaffected — §5's reference at line
    265 is to that one.
-2. The seven `extra/qk/decode/*.py` modules named at LR-070 are **proposed** decomposition targets and correctly do
+2. The seven `extra/llm_research/decode/*.py` modules named at LR-070 are **proposed** decomposition targets and correctly do
    not exist yet. Not a conflict.
 
 Also cleared: 14 stale `__pycache__/*.pyc` files for modules deleted today. One of these previously caused `sz.py` to
@@ -127,7 +127,7 @@ Recorded rather than guessed. Each gates any move that touches it:
 - `tinygrad/schedule/flash_fusion.py` and `tinygrad/codegen/late/flash_attn.py`'s top-level `flash_attention` — **no
   callers found.** Likely dead; flagged for LR-081 verification, not asserted dead here.
 - `codegen/simplify.py`'s `reduce_simplify_family` — zero external callers found.
-- `extra/qk/coalesced_load_lowering.py`, `warp_reduce_lowering.py`, `fdot2_lowering.py`, and
+- `extra/llm_research/coalesced_load_lowering.py`, `warp_reduce_lowering.py`, `fdot2_lowering.py`, and
   `codegen_list_scheduler.py` — only their `codegen/experimental.py` forwarding shims were read; internal contracts
   unverified. Recurrence unroll was later promoted to `tinygrad/codegen/late/recurrence.py` with a direct core import.
 - `tinygrad/schedule/wmma/{composite,fragments,kernels,softmax,loop_state}.py` internals — only the re-export surface.
@@ -138,7 +138,7 @@ Recorded rather than guessed. Each gates any move that touches it:
 Beyond the retired `kernel_pipeline.py` above:
 
 - **`tinygrad/llm/decode_routes.py` contains no `getenv` calls at all**, contradicting both the scope and
-  `extra/qk/route_manifest.py`'s description of it as an env-gated admission point. The flags live only as
+  `extra/llm_research/route_manifest.py`'s description of it as an env-gated admission point. The flags live only as
   declarative strings in `route_policy.py`, and `route_manifest.py` is **not imported by any runtime routing code**.
 - **`tinygrad/engine/realize.py` does not call into `schedule/__init__.py`.** The import direction is inverted
   relative to the scope's pipeline diagram; `engine/jit.py` reaches into `schedule/memory.py` and

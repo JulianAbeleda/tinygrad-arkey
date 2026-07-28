@@ -42,7 +42,7 @@ Two places tell you to run 14B with the fast path disabled. Both predate the fix
 
 - `docs/packed-wmma-14b-fault-trace-20260724.md:22-24` — calls `TINYGRAD_PREFILL_PACKED_WMMA=0` a
   "PROVEN MITIGATION" and says "the thing never to do is run it *without*".
-- `extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py:282` — "14B must run with
+- `extra/llm_research/prefill/prefill_softmax_reduce_fuse_promotion_gate.py:282` — "14B must run with
   `TINYGRAD_PREFILL_PACKED_WMMA=0` to avoid a known GPU fault, which disables its packed-WMMA prefill fast path and
   leaves the chunk ~94% GEMM-bound."
 
@@ -61,11 +61,11 @@ of the wrong premise and needs re-deriving on the default path, since the packed
 ```bash
 cd /home/ubuntu/tinygrad-arkey
 # FAULTS (2 of 2 today):
-TINYGRAD_PREFILL_PACKED_WMMA=0 PYTHONPATH=. python3 extra/qk/bench.py \
+TINYGRAD_PREFILL_PACKED_WMMA=0 PYTHONPATH=. python3 extra/llm_research/bench.py \
   --model /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --prefill
 
 # CLEAN (3 of 3 today):
-PYTHONPATH=. python3 extra/qk/bench.py --model /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --prefill
+PYTHONPATH=. python3 extra/llm_research/bench.py --model /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --prefill
 ```
 
 ```
@@ -195,7 +195,7 @@ agent's. Until then, treat the address as unreliable evidence and do not build a
 - **One point is not a slope.** Report run counts behind every number.
 - Every GPU command under `flock /tmp/gpu-bench.lock`; `power_dpm_force_performance_level` must read `auto` before
   timing and be restored and verified after.
-- Throughput only from `extra/qk/bench.py`, never from generate TTFT.
+- Throughput only from `extra/llm_research/bench.py`, never from generate TTFT.
 - `bench.py` was fixed today (`bece3963e`) to scan stdout **and** stderr; before that every successful decode run was
   discarded as a failure. **Any decode figure quoted from before that commit is suspect.**
 - Do not `git stash` to take a baseline inside an automated run without restoring it in the same step — a stash left
@@ -212,7 +212,7 @@ agent's. Until then, treat the address as unreliable evidence and do not build a
    - If confirmed: the narrowed faulting kernel or schedule difference, with `ALLOC_TRACE` output.
    - A root-cause statement, or the one experiment that would settle it.
 2. Corrections to `docs/packed-wmma-14b-fault-trace-20260724.md:22-24` and
-   `extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py:282`, plus a re-derivation of that docstring's
+   `extra/llm_research/prefill/prefill_softmax_reduce_fuse_promotion_gate.py:282`, plus a re-derivation of that docstring's
    "~94% GEMM-bound" claim on the default path.
 3. Updates to `docs/prefill-current-state.md` and `README.md` with the current numbers in §1.
 4. An explicit list of what could not be established, and why.

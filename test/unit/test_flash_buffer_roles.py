@@ -1,7 +1,7 @@
 """LR-062: the custom-kernel boundary -- a spec must be able to name the buffers its kernel binds.
 
 Before this, FlashDecodeAttentionSpec could name its emitted KERNELS (`emitted_kernel_names`) but not the
-buffers those kernels take. The binding order lived in a comment in extra/qk/flash_kernels.py and was
+buffers those kernels take. The binding order lived in a comment in extra/llm_research/flash_kernels.py and was
 re-derived by hand at every construction site. These tests make the declaration load-bearing: if the spec and
 the builder disagree about arity, shape, or order, something here fails.
 """
@@ -11,7 +11,7 @@ import pytest
 
 from tinygrad.dtype import dtypes
 from tinygrad.uop.ops import UOp
-from extra.qk.decode.flash_decode_attention_spec import describe_flash_decode_attention
+from extra.llm_research.decode.flash_decode_attention_spec import describe_flash_decode_attention
 
 
 def _spec(**kw):
@@ -36,7 +36,7 @@ def test_the_declared_contract_is_enough_to_build_the_kernel():
 
 def test_buffer_roles_match_the_builder_arity():
   import inspect
-  from extra.qk.flash_kernels import flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel as builder
+  from extra.llm_research.flash_kernels import flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel as builder
   inner = inspect.signature(builder).parameters
   assert {"quant", "rope"} <= set(inner), "builder no longer takes the flags buffer_roles keys off"
   # 3 fixed buffers, plus one per enabled optional flag

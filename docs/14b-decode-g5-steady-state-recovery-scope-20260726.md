@@ -532,7 +532,7 @@ This closes the low-risk measurement and cleanup portion of the scope. No candid
 
 ## Geometry review result (2026-07-26)
 
-The final low-cost review found no production-safe one-line G5 warp-ownership change. In `extra/qk/flash_kernels.py`, `WARPS=G`, `THREADS=32*G`, query-head ownership, cooperative staging, and both barriers are coupled. Reducing G5 to four waves would serialize the fifth query head or require a second pass/workgroup that duplicates KV traffic.
+The final low-cost review found no production-safe one-line G5 warp-ownership change. In `extra/llm_research/flash_kernels.py`, `WARPS=G`, `THREADS=32*G`, query-head ownership, cooperative staging, and both barriers are coupled. Reducing G5 to four waves would serialize the fifth query head or require a second pass/workgroup that duplicates KV traffic.
 
 The only bounded follow-on experiment worth scoping is compile-only: retain five query warps but assign K/V staging to a four-wave loader subset with explicit predicates and barriers. It is admissible for GPU timing only if it materially lowers VGPRs while preserving LDS, grid, output shape, and global-load count. Current staging has only about 1.5% final-tile lane slack, so this is expected to be neutral or worse and is not a fix claim.
 

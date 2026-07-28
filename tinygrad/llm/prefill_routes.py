@@ -316,7 +316,7 @@ def prefill_route_mode(getenv_fn=None) -> str:
 
 def packed_wmma_prefill_enabled() -> bool:
   """Gate for the packed-WMMA prefill candidates (Q4KPackedWmmaPrefillCandidate /
-  Q6KPackedWmmaPrefillCandidate, extra/qk/prefill/packed_wmma_prefill_candidates.py).
+  Q6KPackedWmmaPrefillCandidate, extra/llm_research/prefill/packed_wmma_prefill_candidates.py).
 
   Default is ON: the packed-WMMA route is correctness-gated (6/6 combos, max_abs 0.0)
   and fails closed for anything ungated or unknown-shaped. Set TINYGRAD_PREFILL_PACKED_WMMA=0

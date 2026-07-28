@@ -120,7 +120,7 @@ def _hip_native_bpermute_max(x:UOp) -> UOp|None:
   thing forcing the ladder into a register. The two are one change and share one flag deliberately.
 
   Promoted to default-ON 2026-07-24: docs/prefill-softmax-reduce-fuse-promotion-readiness-20260724.md,
-  gate extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py (AUTHORITY_GATE PASS).
+  gate extra/llm_research/prefill/prefill_softmax_reduce_fuse_promotion_gate.py (AUTHORITY_GATE PASS).
   """
   if x.dtype != dtypes.float or len(x.src) != 2: return None
   fuse = getenv("PREFILL_SOFTMAX_REDUCE_FUSE", 1)
@@ -382,7 +382,7 @@ class CStyleLanguage(Renderer):
       # attention -- decode builds float CUSTOMI too (flash_kernels.py's __builtin_amdgcn_fdot2 and
       # schedule/wmma/softmax.py's "bpermute" row-state broadcast). Decode is unaffected because its
       # cross-lane reduce is a LINEAR ladder (one consumer per rung) rather than a butterfly, and that is
-      # verified rather than assumed: extra/qk/decode/decode_codegen_identity_check.py compiles the real decode
+      # verified rather than assumed: extra/llm_research/decode/decode_codegen_identity_check.py compiles the real decode
       # graph both ways and compares code-object sha256 for both decode-admitted geometries (8B Hq=32 and
       # 14B Hq=40) -- byte-identical. Re-run it if you touch this predicate.
       customi_inline = u.op is not Ops.CUSTOMI or not (getenv("PREFILL_SOFTMAX_REDUCE_FUSE", 1) and

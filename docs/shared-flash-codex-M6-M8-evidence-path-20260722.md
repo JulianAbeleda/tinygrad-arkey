@@ -5,7 +5,7 @@ fail-closed until dual-WMMA and real hardware measurements exist.
 
 ## Machine-checkable promotion record
 
-`extra/qk/shared_attention_promotion.py` is the single validator for the final
+`extra/llm_research/shared_attention_promotion.py` is the single validator for the final
 record. It requires both model profiles, at least 200 warmed samples, generated
 source and ISA artifacts, an allocation census, and positive timing/FLOP/byte
 accounting. Missing evidence always produces `promotion_eligible=false`.
@@ -15,7 +15,7 @@ prove both contractions in the same fused call.
 
 ## One shared search domain
 
-`extra/qk/shared_attention_evidence.py` is the single workload and candidate
+`extra/llm_research/shared_attention_evidence.py` is the single workload and candidate
 manifest for both routes. It derives all rows from `MODEL_PROFILES` and produces
 the same tile labels for fp16 Q/K/V attention:
 
@@ -36,13 +36,13 @@ correctness and code generation.
 
 ```bash
 # Baseline, 8B
-PYTHONPATH=. DEV=AMD NOOPT=0 .venv/bin/python extra/qk/bench.py \
+PYTHONPATH=. DEV=AMD NOOPT=0 .venv/bin/python extra/llm_research/bench.py \
   --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --model-profile 8b \
   --prefill --prefill-mode authority --pin-clock \
   --prefill-artifact bench/shared-flash/8b-baseline.json
 
 # Baseline, 14B
-PYTHONPATH=. DEV=AMD NOOPT=0 .venv/bin/python extra/qk/bench.py \
+PYTHONPATH=. DEV=AMD NOOPT=0 .venv/bin/python extra/llm_research/bench.py \
   --model /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --model-profile 14b \
   --prefill --prefill-mode authority --pin-clock \
   --prefill-artifact bench/shared-flash/14b-baseline.json

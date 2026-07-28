@@ -9,7 +9,7 @@ This scope fixes the governance, not the kernel. No performance change is expect
 
 ## What was fact-checked first (so nobody re-litigates it)
 
-**The kernel IS generated.** `extra/qk/prefill/current_prefill_execution_adapter.py:76-87` builds an ordinary
+**The kernel IS generated.** `extra/llm_research/prefill/current_prefill_execution_adapter.py:76-87` builds an ordinary
 `(a @ b.transpose()).schedule_linear()` and compiles it via `compile_linear` under
 `Opt(OptOps.TC, 0, (-1,2,1))` plus a candidate context. So packed-WMMA is tinygrad's own
 scheduler-generated matmul shaped by a frozen opt/schedule payload -- NOT a hand-written kernel. An earlier
@@ -17,7 +17,7 @@ draft of this analysis called it "a hand-written kernel wearing generated clothe
 retracted here.
 
 **The opt values have no demonstrable search provenance.** `PACKED_WMMA_GEOM`
-(`extra/qk/prefill/packed_wmma_prefill_candidates.py:38`) cites
+(`extra/llm_research/prefill/packed_wmma_prefill_candidates.py:38`) cites
 `e2e_packed_wmma_bench_q6_nopad.py:56-75` as its source. That file has **never existed in this repo** --
 absent from the working tree, from every commit, and from the object database (`git rev-list --all
 --objects`). The only in-repo geometry sweep, `bench/wave32-geometry-compile-sweep/latest.json`, is
@@ -46,7 +46,7 @@ defensible label today: the kernel genuinely comes from tinygrad's scheduler, an
 that an emitter derives extents from descriptor fields, which the frozen shape-blind table does not do.
 **Do not overclaim here -- the whole point of this exercise is that the label must be earned.**
 
-1. **`ROUTES` row** `packed_wmma_prefill_generated` in `extra/qk/route_manifest.py`, modelled on the
+1. **`ROUTES` row** `packed_wmma_prefill_generated` in `extra/llm_research/route_manifest.py`, modelled on the
    `prefill_flash_attention_generated` row: `workload=prefill`, `status=promoted_default`,
    `provenance=tinygrad_scheduler_generated`, roles `[attn_qo, attn_kv, ffn_gate_up, ffn_down]`,
    `quant=[Q4_K, Q6_K]`, `env={"TINYGRAD_PREFILL_PACKED_WMMA": "1 (default)"}`,
@@ -57,16 +57,16 @@ that an emitter derives extents from descriptor fields, which the frozen shape-b
    `(512,5120,5120)`, `(512,1024,5120)`, `(512,17408,5120)`, `(512,5120,17408)` -- and the 8B triples where
    a geometry entry exists. This is where blocker 4 gets partially contained: the manifest records the
    shapes the route is admitted for even while the geometry table stays shape-blind internally.
-2. **`HOT_FAMILIES` entry** `prefill_packed_wmma` in `extra/qk/pure_search_guard.py`, with
+2. **`HOT_FAMILIES` entry** `prefill_packed_wmma` in `extra/llm_research/pure_search_guard.py`, with
    `rollback_active` reading `TINYGRAD_PREFILL_PACKED_WMMA` via `_env_flag(e, "TINYGRAD_PREFILL_PACKED_WMMA", 1)`
    (note the runtime default is 1, so an UNSET key must resolve to 1 -- `_env_flag` exists for exactly this,
    and `test/unit/test_pure_search_guard_boundary.py` pins these defaults against the real getenv defaults).
-3. **Authority gate** `extra/qk/prefill/packed_wmma_prefill_promotion_gate.py`, modelled on
-   `extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py` and
-   `extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py`: reads transcribed evidence only, never invents
+3. **Authority gate** `extra/llm_research/prefill/packed_wmma_prefill_promotion_gate.py`, modelled on
+   `extra/llm_research/prefill/prefill_causal_tile_skip_promotion_gate.py` and
+   `extra/llm_research/prefill/prefill_softmax_reduce_fuse_promotion_gate.py`: reads transcribed evidence only, never invents
    numbers, and **fails closed** on any manifest-admitted shape lacking evidence.
 4. **Run the missing evidence:** 14B end-to-end token parity with the route live
-   (`extra/qk/prefill/prefill_flash_e2e_parity.py --only 14B`) and the 6/6 canary gate results with `max_abs`. The
+   (`extra/llm_research/prefill/prefill_flash_e2e_parity.py --only 14B`) and the 6/6 canary gate results with `max_abs`. The
    throughput evidence already exists (paired same-session, two reps).
 
 ## PHASE 2 -- earn `machine_authored_generated` (NOT this scope)

@@ -2,7 +2,7 @@
 
 ## 1.16 DECISION 2026-07-20: AMD Q4_K prefill primitive = fp16-dequant-in-register + streamed-K (the `build_gemm_lds2_q4k` algorithm)
 
-Following the §1.15 root cause, the AMD prefill primitive for the Q4_K MMQ roles is **decided**: dequantize Q4_K weights to fp16 **in registers**, accumulate with **fp16 WMMA**, stream K at BK-granularity through a **lean (~16 KB) LDS** tile. This is the algorithm the hand kernel `build_gemm_lds2_q4k` (`extra/qk/prefill/wmma.py:501-654`, hand-asm-bisect worktree) already implements.
+Following the §1.15 root cause, the AMD prefill primitive for the Q4_K MMQ roles is **decided**: dequantize Q4_K weights to fp16 **in registers**, accumulate with **fp16 WMMA**, stream K at BK-granularity through a **lean (~16 KB) LDS** tile. This is the algorithm the hand kernel `build_gemm_lds2_q4k` (`extra/llm_research/prefill/wmma.py:501-654`, hand-asm-bisect worktree) already implements.
 
 **Why this and not the alternatives** — it is the only candidate satisfying all three hard constraints at once:
 
@@ -173,7 +173,7 @@ not only a green test). Fix the cosmetic indent while touching the file. Commit 
 **Phase B — clear C5 (the first real GPU dispatch since the §1.11 fault).** Run each step as a single guarded child
 that stops immediately on any fault, unhealthy probe, timeout, or untouched-output corruption. **No automatic
 ladder escalation** — gate every rung manually.
-- **B1.** Guarded real `(1, 1, 1)` reduced-grid dispatch via `extra/qk/mmq_ffn_gate_up_pm4_reduced_grid_runner.py`,
+- **B1.** Guarded real `(1, 1, 1)` reduced-grid dispatch via `extra/llm_research/mmq_ffn_gate_up_pm4_reduced_grid_runner.py`,
   local size `256×1×1`. With the decoder now trustworthy, the pre-submit snapshot is authoritative: either the tile
   executes clean (compare the touched `128×128` region to the declared authority, retain PASS), or it **reproduces
   the §1.11 fault** — in which case you now have a trustworthy pre-submit snapshot of the exact faulting command.
@@ -265,9 +265,9 @@ Observed blockers:
 
 Code changes currently in this branch:
 
-- `extra/qk/mmq_ffn_gate_up_guarded_correctness.py`: preserve `failed_attempt.invocation_failure` in `run_pm4_no_doorbell_child`
+- `extra/llm_research/mmq_ffn_gate_up_guarded_correctness.py`: preserve `failed_attempt.invocation_failure` in `run_pm4_no_doorbell_child`
   when a low-level invocation fails without a normal receipt path.
-- `extra/qk/mmq_llama_five_buffer_gpu_harness.py`: store pre-submit snapshot before checks and include failed key names in
+- `extra/llm_research/mmq_llama_five_buffer_gpu_harness.py`: store pre-submit snapshot before checks and include failed key names in
   the raised `RuntimeError` so a failing signature is auditable.
 
 Execution order is still blocked until v2 PM4 pre-submit decoding is corrected. Next step is to fix that decoder
@@ -944,7 +944,7 @@ This advances project Phase 3 for one of four Q4 roles; it does not close Phase 
 This section is superseded by §0.9 and retained for chronology. At that time, the repository head was
 `7b863aaec` (`[test][qk] honor ProgramInfo global buffer indices`), twelve commits ahead of
 `origin/master`; the worktree is clean. This includes the allocator lease fix at `23eaf693b` and the new
-fail-closed harness under `extra/qk/mmq_llama_five_buffer_gpu_harness.py`.
+fail-closed harness under `extra/llm_research/mmq_llama_five_buffer_gpu_harness.py`.
 
 The corrected phase-major graph and allocator lease regression coverage are structurally healthy:
 
@@ -1039,7 +1039,7 @@ Two of these have now been walked. Reproduce with:
 
 ```bash
 env PYTHONHASHSEED=0 REGALLOC_ADDR_REMAT=1 REGALLOC_END_NO_SOURCE_LIVE=1 python3 -c "
-from extra.qk.mmq_llama_five_buffer_full_kernel import (build_llama_five_buffer_full_kernel,
+from extra.llm_research.mmq_llama_five_buffer_full_kernel import (build_llama_five_buffer_full_kernel,
                                                         compile_llama_five_buffer_full_kernel)
 compile_llama_five_buffer_full_kernel(build_llama_five_buffer_full_kernel(128,128,256))"
 ```
@@ -1172,7 +1172,7 @@ Accepted and pushed: `8124ddaa9 [qk][mmq] order full-grid WMMAs behind the prece
 
 **The real cause was a missing ordering edge in the full-grid producer.** The oracle keeps the integer WMMA chain and
 the eight FP32 lane chains as separate algebraic dependencies, so a legal schedule issues every WMMA before consuming
-any C lane. `_bounded_accumulator_drain`'s docstring in `extra/qk/mmq_llama_full_kernel.py` has named this exact
+any C lane. `_bounded_accumulator_drain`'s docstring in `extra/llm_research/mmq_llama_full_kernel.py` has named this exact
 failure all along — the bounded probe has carried the edge for a long time and the full-grid seam simply never got it.
 
 Two facts that discriminated **forced dataflow** from **scheduling choice**, and are worth reusing as a method:
@@ -1782,19 +1782,19 @@ Scale and sum are independently converted to fp16 only at LDS half2 staging, pre
 
 ### Oracle and generated full-grid seam
 
-- `extra/qk/mmq_llama_candidate_plan.py`
+- `extra/llm_research/mmq_llama_candidate_plan.py`
   - Source-pinned physical schedule and identity.
-- `extra/qk/mmq_llama_oracle_epoch.py`
+- `extra/llm_research/mmq_llama_oracle_epoch.py`
   - Exact epoch construction.
-- `extra/qk/mmq_llama_oracle_recurrence.py`
+- `extra/llm_research/mmq_llama_oracle_recurrence.py`
   - Exact K32 recurrence and rounding authority.
-- `extra/qk/mmq_llama_full_kernel.py`
+- `extra/llm_research/mmq_llama_full_kernel.py`
   - Bounded callback graph and release seams.
-- `extra/qk/mmq_llama_record_producers.py`
+- `extra/llm_research/mmq_llama_record_producers.py`
   - Typed producer witnesses.
-- `extra/qk/mmq_llama_five_buffer_graph.py`
+- `extra/llm_research/mmq_llama_five_buffer_graph.py`
   - Five-buffer composition across epochs.
-- `extra/qk/mmq_llama_five_buffer_full_kernel.py`
+- `extra/llm_research/mmq_llama_five_buffer_full_kernel.py`
   - Full-grid ownership, dynamic offsets, aligned-tail policy, row-major writeback, fail-closed compilation.
 
 ### AMD selection, scheduling, and allocation
@@ -1817,9 +1817,9 @@ Scale and sum are independently converted to fp16 only at LDS half2 staging, pre
 
 ### Policy/evidence
 
-- `extra/qk/runtime_specs.py`
-- `extra/qk/prefill/six_row_policy_artifact.py`
-- `extra/qk/prefill/q4k_q8_five_buffer_role_gate.py`
+- `extra/llm_research/runtime_specs.py`
+- `extra/llm_research/prefill/six_row_policy_artifact.py`
+- `extra/llm_research/prefill/q4k_q8_five_buffer_role_gate.py`
 - `bench/prefill-pure-full-kernel/`
 
 ## 7. Current exact blocker

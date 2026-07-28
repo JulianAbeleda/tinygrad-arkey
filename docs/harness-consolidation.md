@@ -6,28 +6,28 @@ genuinely new measurement job exists (not a new *caller* of an existing job).
 
 ## The canonical harness (decided)
 
-**`extra/qk/bench.py` is THE throughput entry** (committed `8a22fba05`). It is a thin dispatcher —
+**`extra/llm_research/bench.py` is THE throughput entry** (committed `8a22fba05`). It is a thin dispatcher —
 it measures nothing itself — to the two sanctioned authorities:
 
-- **prefill** → `extra/qk/prefill/prefill_whole_synced.py :: prefill_authority()` — warmed TinyJit at a
+- **prefill** → `extra/llm_research/prefill/prefill_whole_synced.py :: prefill_authority()` — warmed TinyJit at a
   concrete start_pos, synced burst (`dev.synchronize` before+after), min-over-K → pure
   prefill-kernel tok/s. Never `model.generate` TTFT (understates prefill ~3×).
-- **decode** → `extra/qk/decode/decode_runtime_overhead.py` — genuine fixed-depth authority. Every repetition
+- **decode** → `extra/llm_research/decode/decode_runtime_overhead.py` — genuine fixed-depth authority. Every repetition
   resets request state, prefills the exact prompt through production `model.generate`, and then measures
   warmed production decode with one `.item()` readback per token. The no-item D run is diagnostic only;
   it is never called a ceiling or subtracted from W when D is slower.
 
-`DEV=AMD PYTHONPATH=. python extra/qk/bench.py --model <gguf> [--prefill|--decode]`. See memory
+`DEV=AMD PYTHONPATH=. python extra/llm_research/bench.py --model <gguf> [--prefill|--decode]`. See memory
 `prefill-bench-authority-not-ttft`. Per-kernel A/B harnesses should keep using their existing local
 timing loops unless they are being actively consolidated; do not recreate the removed
-`extra/qk/harness_contract.py` just to share `synchronize()+perf_counter()+median`.
+`extra/llm_research/harness_contract.py` just to share `synchronize()+perf_counter()+median`.
 
-**Prefill process policy** lives in `extra/qk/prefill/prefill_harness.py`. It owns the sanctioned
+**Prefill process policy** lives in `extra/llm_research/prefill/prefill_harness.py`. It owns the sanctioned
 `authority` and `smoke` profiles, CSV parsing, subprocess env, and child argv construction.
 `bench.py` and `prefill_whole_synced.py` both consume that module; the timing loop itself remains
 inside `prefill_whole_synced.py`.
 
-**Decode process policy** lives in `extra/qk/decode/decode_harness.py`. It owns checkpoint contexts,
+**Decode process policy** lives in `extra/llm_research/decode/decode_harness.py`. It owns checkpoint contexts,
 measurement count, max-context validation, subprocess env, and child argv construction.
 `bench.py` and `decode_runtime_overhead.py` both consume that module. Every child receives an explicit,
 unique output path; artifacts are versioned and atomically replaced, so consumers cannot read a stale
@@ -37,17 +37,17 @@ shared `result.json`.
 
 | Job | Canonical owner | Status |
 |---|---|---|
-| gate/probe → verdict → artifact → exit | `extra/qk/gate_registry.py` | DONE (consolidated) |
-| whole-model throughput | `extra/qk/bench.py` → the two authorities | DONE |
-| prefill process profile/env/argv | `extra/qk/prefill/prefill_harness.py` | DONE |
-| decode process profile/env/argv | `extra/qk/decode/decode_harness.py` | DONE |
+| gate/probe → verdict → artifact → exit | `extra/llm_research/gate_registry.py` | DONE (consolidated) |
+| whole-model throughput | `extra/llm_research/bench.py` → the two authorities | DONE |
+| prefill process profile/env/argv | `extra/llm_research/prefill/prefill_harness.py` | DONE |
+| decode process profile/env/argv | `extra/llm_research/decode/decode_harness.py` | DONE |
 | per-kernel timing loop | local harness loop / future explicit owner | open |
 | eval/scoring (NLL + JSON) | `extra/llm/eval_common.py` + `json_scorer.py` | ok |
-| provenance / repro-band | local to each live harness | ok (`extra/qk/harness_contract.py` removed) |
-| GPU clock pinning | `extra/qk/clock_pin.py` | ok (2 idioms, justified) |
+| provenance / repro-band | local to each live harness | ok (`extra/llm_research/harness_contract.py` removed) |
+| GPU clock pinning | `extra/llm_research/clock_pin.py` | ok (2 idioms, justified) |
 | model load + generate | `extra/llm/generate.load_model_and_tokenizer` | ok (loader); dead `generate_one` (item 3) |
 | remote device orchestration | `extra/remote/*` | ok |
-| AOT bundle / startup | `extra/qk/kernel_aot.py`, `startup_measure.py` | ok |
+| AOT bundle / startup | `extra/llm_research/kernel_aot.py`, `startup_measure.py` | ok |
 | JSON artifact IO | `probe_harness.probe_io` / `gate_registry` | ok (3 intentional conventions) |
 
 ## Dedup plan (ranked) — most items are DEFERRED behind active prefill work
@@ -59,7 +59,7 @@ shared `result.json`.
 > never in a new parallel module (that would re-fragment the wheel).
 
 1. ~~Add `time_fn` beside `repro_band` in `harness_contract.py`~~ **WITHDRAWN (2026-07-10).**
-   `extra/qk/harness_contract.py` has been removed. Do not restore a broad shared contract module
+   `extra/llm_research/harness_contract.py` has been removed. Do not restore a broad shared contract module
    only to satisfy stale benchmark imports or docs. If the remaining `*_ab`/`*_wd` timing loops are
    consolidated later, pick an explicit live owner and migrate callers in that same slice.
 2. ~~Retire `model_e2e_bench.py`~~ **WITHDRAWN (2026-07-03, verified in-tree; refreshed 2026-07-10).**
@@ -104,7 +104,7 @@ parity rather than byte-identical artifacts. All timing steps need the GPU.
 
 ## Step 1 — ~~add the shared `time_fn` to `harness_contract.py`~~ withdrawn
 
-Withdrawn 2026-07-10. `extra/qk/harness_contract.py` is deleted; do not recreate it for this.
+Withdrawn 2026-07-10. `extra/llm_research/harness_contract.py` is deleted; do not recreate it for this.
 
 ## Step 2 — migrate the clone sites (batch, run-verified)
 
@@ -153,7 +153,7 @@ Do not merge them (they share only `os.environ.copy()` — same name, different 
 scaffolding from the removed rollout harnesses (same generation as `generate_one`), and
 `harness_contract.child_env` had no call site either. Resolution:
   - Deleted the entire dead `generate.py` policy-env surface (`policy_overrides`, `child_env`, `_CLEAR_KEYS`,
-    the `extra.qk.modes` import) — `generate.py` is now just `load_model_and_tokenizer`.
+    the `extra.llm_research.modes` import) — `generate.py` is now just `load_model_and_tokenizer`.
   - Renamed the documented survivor `harness_contract.child_env` → **`qk_subprocess_env`** (declarative;
     no same-named twin remains). This is the "if it's the same name, rename it better" fix.
   - Side-fix: Step 3's deletion had removed a `build_prompt_ids` re-export that `prefilled_route_parity`

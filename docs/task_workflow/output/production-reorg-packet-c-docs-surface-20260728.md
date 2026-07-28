@@ -68,7 +68,7 @@ Packet overlap is explicit rather than hidden:
 
 ```text
 structure/** (27) | master | production_manifest_or_ledger | retain | structure/** |
-structure/INDEX.md indexes the layers; docs/README.md and extra/qk/README.md point into it |
+structure/INDEX.md indexes the layers; docs/README.md and extra/llm_research/README.md point into it |
 current model-agnostic operator and delegation contract; Git history recovery | high | none
 
 .gitignore | master | production_manifest_or_ledger | retain | .gitignore |
@@ -248,7 +248,7 @@ exactly five broken local-link occurrences:
    `/home/ubuntu/tinygrad-arkey/docs/14b-decode-g5-authority-timing-20260726.json`: absolute and absent in this
    worktree. If both records survive on dev, use the relative JSON filename; otherwise remove the link with the scope.
 5. `docs/flash-prefill-fusion-probe-20260721.md` ->
-   `/home/ubuntu/tinygrad-arkey/extra/qk/prefill/flash_prefill_blocked_tensor.py`: absolute and absent. Preserve the
+   `/home/ubuntu/tinygrad-arkey/extra/llm_research/prefill/flash_prefill_blocked_tensor.py`: absolute and absent. Preserve the
    reference only as a historical commit/path if the investigation survives on dev; otherwise prune the document.
 
 Additional exact repairs not expressed as Markdown links:

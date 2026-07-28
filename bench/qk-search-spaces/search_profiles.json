@@ -1,6 +1,6 @@
 {
   "_schema": "PMS-R3 search profile descriptor retained as tinygrad route-shape data. BoltBeam owns candidate generation/evaluation; tinygrad uses this file only as local manifest context and for route-space audits.",
-  "generated_by": "Route status + do_not_search synced from extra/qk/route_manifest.py; candidate generation lives in BoltBeam.",
+  "generated_by": "Route status + do_not_search synced from extra/llm_research/route_manifest.py; candidate generation lives in BoltBeam.",
   "scope_doc": "docs/pure-machine-search-roadmap.md",
   "target": "AMD_gfx1100",
   "route_families": [

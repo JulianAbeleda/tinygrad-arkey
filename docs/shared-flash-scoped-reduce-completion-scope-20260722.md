@@ -535,9 +535,9 @@ Reuse these owners. Do not create parallel implementations.
 | Tensor cores | `tinygrad/codegen/opt/postrange.py`, `tinygrad/codegen/opt/tc.py` | Reuse for QK and PV |
 | AMD renderer | existing AMD renderer/WMMA descriptors | Reuse unchanged unless a generic defect is proven |
 | Model adapter | `tinygrad/llm/model.py` | Shared invocation and fail-closed route census |
-| Search | `extra/qk/bubblebeam_futuresight.py` and shared candidate assets | One schema and ranking path |
+| Search | `extra/llm_research/bubblebeam_futuresight.py` and shared candidate assets | One schema and ranking path |
 | Microbenchmark | existing attention benchmark assets | Baseline/candidate in one harness |
-| Model authority | `extra/qk/prefill/prefill_whole_synced.py`, `extra/qk/prefill/prefill_harness.py` | Final 8B/14B evidence |
+| Model authority | `extra/llm_research/prefill/prefill_whole_synced.py`, `extra/llm_research/prefill/prefill_harness.py` | Final 8B/14B evidence |
 
 If repository movement has renamed a listed file, update the owner in place;
 do not fork a replacement solely because the path changed.

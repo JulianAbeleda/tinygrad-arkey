@@ -8,7 +8,7 @@ those theories look attractive in the first place.
 
 ## 1. The achievable peak is ~105 TFLOPS, not 122.8 and not 61.4
 
-Measured, not assumed: `extra/qk/microbench/wmma_peak.cpp` — pure back-to-back WMMA, 8 independent
+Measured, not assumed: `extra/llm_research/microbench/wmma_peak.cpp` — pure back-to-back WMMA, 8 independent
 accumulators, zero `global_load`, zero `ds_` in the loop (verified in the `.s`).
 
     waves=16384 iters=20000 nacc=8  ->  105.5 / 104.6 TFLOPS

@@ -80,7 +80,7 @@ Preserve phase sideband metadata through loop conversion, register allocation, a
 
 Lower publish/reload operations to existing LDS loads/stores and typed waits. Physical fragment mappings are applied only here. Generic ordinary-WMMA lowering must remain untouched.
 
-### 5. Proof/capture: `extra/qk/shared_attention_capture.py`
+### 5. Proof/capture: `extra/llm_research/shared_attention_capture.py`
 
 Record phase IDs, logical state ownership, output block ranges, graph identity, numeric evidence, and resource evidence. Aggregate validation must fail closed on overlap, gaps, mismatched graphs, or missing phase records.
 

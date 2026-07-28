@@ -32,7 +32,7 @@
             "extern __shared__ int data_mul_mat_q[]"
           ],
           "mode": "translated_structure_oracle_do_not_bind_production",
-          "numeric_oracle": "extra.qk.mmq_q4k_q8_reference.q4k_q8_1_mmq_ds4_tile_reference",
+          "numeric_oracle": "extra.llm_research.mmq_q4k_q8_reference.q4k_q8_1_mmq_ds4_tile_reference",
           "source_clone": "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/mmq.cuh",
           "vendored_cuda": false
         },
@@ -65,7 +65,7 @@
                 "extern __shared__ int data_mul_mat_q[]"
               ],
               "mode": "translated_structure_oracle_do_not_bind_production",
-              "numeric_oracle": "extra.qk.mmq_q4k_q8_reference.q4k_q8_1_mmq_ds4_tile_reference",
+              "numeric_oracle": "extra.llm_research.mmq_q4k_q8_reference.q4k_q8_1_mmq_ds4_tile_reference",
               "source_clone": "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/mmq.cuh",
               "vendored_cuda": false
             },

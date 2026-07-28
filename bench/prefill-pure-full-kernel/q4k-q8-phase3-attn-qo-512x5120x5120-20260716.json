@@ -1,7 +1,7 @@
 {
   "command": [
     "/usr/bin/python3",
-    "extra/qk/prefill/q4k_q8_phase3_role_harness.py",
+    "extra/llm_research/prefill/q4k_q8_phase3_role_harness.py",
     "--role",
     "attn_qo",
     "--m",

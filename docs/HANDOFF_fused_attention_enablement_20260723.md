@@ -32,7 +32,7 @@ can build that kernel from a real model graph. Enabling this is a **compiler-rob
 ## 3. Verified facts (hard evidence)
 
 - Isolated fused kernel: **254 VGPR / 0 spills / 512 LDS**, all 4 routes (8b/14b × first/prefix).
-  Source: `python3 -m extra.qk.generate_shared_attention_captures --output-dir <d>`.
+  Source: `python3 -m extra.llm_research.generate_shared_attention_captures --output-dir <d>`.
 - Isolated fused vs SDPA on real gfx1100 (synthetic Q/K/V): **8B 0.541ms vs 2.01ms (3.72×); 14B
   0.568ms vs 2.49ms (4.39×)**; correctness max-abs-err ~6.1e-05. (Fused number cross-checks the
   independent 0.5445ms baseline in the compact-lease doc.)
@@ -103,7 +103,7 @@ chain lets the real graph reach that swap.
 | A3 | Confirm schedule reaches `postrange.py:328` native-swap and emits the 254-VGPR single kernel on the REAL graph | after A2 |
 | A4 | End-to-end correctness: real 8B+14B fused vs SDPA (earns `model_*_prefill`) | after A3 |
 | A5 | Whole-model prefill benchmarks KV 512..4096 (note: handoff doc defers these behind an in-flight multi-wave G2/G4/G5 experiment) | after A4 |
-| A6 | **Build** decode-nonregression harness (earns `decode_nonregression_*`); none exists, nearest is `extra/qk/decode/decode_runtime_overhead.py` | after A4 |
+| A6 | **Build** decode-nonregression harness (earns `decode_nonregression_*`); none exists, nearest is `extra/llm_research/decode/decode_runtime_overhead.py` | after A4 |
 | A7 | Composite-proof collector: assemble `shared_attention_proof` (target+geometry+v2 artifact+8 flags) and wire memory-adaptive adapter activation into model load (zero production callers today) | after A4/A5/A6 |
 | A8 | BoltBeam prefill-attention route entry in `BoltBeam/boltbeam/policy/route_manifest.py` (none exists; template from `decode_attention_*`) | after A5/A6/A7 |
 
@@ -122,8 +122,8 @@ not `q_heads%16`).
 - Model call site: `tinygrad/llm/model.py:600-616` (fused branch), mask at `model.py:589`.
 - Eligibility/admission: `rangeify.py:48-49` (grid_shape), `tinygrad/uop/ops.py` `AMDAttentionGridSpec.validate`.
 - Policy gate: `tinygrad/llm/prefill_policy.py:22` (`shared_attention_proven_eligible`, the 8 flags).
-- Admission resource gate: `extra/qk/shared_attention_promotion.py:52` (VGPR cap, now 256).
-- Isolated capture / proof: `extra/qk/generate_shared_attention_captures.py`, `extra/qk/shared_attention_evidence.py`,
+- Admission resource gate: `extra/llm_research/shared_attention_promotion.py:52` (VGPR cap, now 256).
+- Isolated capture / proof: `extra/llm_research/generate_shared_attention_captures.py`, `extra/llm_research/shared_attention_evidence.py`,
   artifact `docs/artifacts/shared-attention-m10e1-20260723/shared_attention_proof.json`.
 - Repro: `/home/ubuntu/.claude/jobs/6db6b205/tmp/fused_prefill_force_8b.py`; 14B: `.../test_14b_prefill.py`.
 - Env: `DEV=AMD`, use repo `.venv/bin/python` (no `python3` on PATH); `AMD=1` is deprecated.

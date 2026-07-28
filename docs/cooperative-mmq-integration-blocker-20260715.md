@@ -7,7 +7,7 @@ fallback use is explicitly false, and `direct_packed` is recorded as rollback.
 Tests are in `test/unit/test_cooperative_mmq_gate.py`.
 
 Current blocker: no legal production cooperative candidate is available to
-admit. `extra/qk/prefill/q4k_q8_mmq_prefill_spec.py:128-129` still raises
+admit. `extra/llm_research/prefill/q4k_q8_mmq_prefill_spec.py:128-129` still raises
 `NotImplementedError` from `emit_q4k_q8_mmq_kernel`; existing cooperative atoms
 and harnesses are research-only substrates. Therefore this gate intentionally
 returns `default_off` or `blocked` and never changes runtime dispatch. Mill's

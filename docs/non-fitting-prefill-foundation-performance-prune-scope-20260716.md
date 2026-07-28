@@ -69,21 +69,21 @@ evidence still needed to diagnose the route, or optimizing on top of transitiona
 - The direct-packed non-fitting route works end to end, is memory safe, and remains the rollback/default baseline.
 - The selected-model inventory, live device scan, memory ledger, and immutable selected-plan concepts exist.
 - Full-kernel candidate payloads, semantic candidate identity, target capability, schedule admission, and packed operand
-  transforms exist in `extra/qk/runtime_specs.py`.
+  transforms exist in `extra/llm_research/runtime_specs.py`.
 - Exact production packed-source inventory exists in `tinygrad/llm/model.py`.
-- Workload projection and candidate inventory infrastructure exists in `extra/qk/prefill/workload_inventory.py`.
-- Execution, correctness, guard, timing, artifact, and dispatch contracts exist under `extra/qk/prefill/`.
+- Workload projection and candidate inventory infrastructure exists in `extra/llm_research/prefill/workload_inventory.py`.
+- Execution, correctness, guard, timing, artifact, and dispatch contracts exist under `extra/llm_research/prefill/`.
 - Isolated guarded execution, GPU health checking, final-binary identity, ISA/resource evidence, owner coverage, and
   staging evidence exist.
 - Whole-model memory-adaptive candidate and policy composition exists in
-  `extra/qk/memory_adaptive_candidate_catalog.py` and its controller.
+  `extra/llm_research/memory_adaptive_candidate_catalog.py` and its controller.
 - The Q4_K/Q8_1 numeric oracle, logical MMQ vocabulary, llama ownership oracle, and bounded cooperative proof kernels
   exist.
 - Independent Q6_K vocabulary and a direct-packed fallback exist.
 
 ### Known foundation defect
 
-`extra/qk/prefill/current_prefill_execution_adapter.py` currently expects exactly one final `PROGRAM` whose
+`extra/llm_research/prefill/current_prefill_execution_adapter.py` currently expects exactly one final `PROGRAM` whose
 `candidate_context.canonical_identity` matches the admitted candidate. The final program loses that identity in the
 current compile path, producing zero identity-bound programs. Two related AMD compile fixtures also have recorded
 resource/VGPR failures. These are foundation failures, not reasons to create a second adapter.
@@ -93,7 +93,7 @@ focused host tests. The final-program bridge must be repaired before a new bound
 
 ### Maintainability baseline
 
-A broad filename-based inventory of Python files under `extra/qk` containing `mmq`, `q4k`, `q6k`, `prefill`, or
+A broad filename-based inventory of Python files under `extra/llm_research` containing `mmq`, `q4k`, `q6k`, `prefill`, or
 `memory_adaptive` currently contains 149 files and 25,916 physical lines. It includes 53 executable CLI/main modules.
 The number is a navigation baseline, not a deletion quota: the final audit must classify actual reachability and
 ownership rather than deleting by filename.
@@ -119,7 +119,7 @@ The clearest current ownership problems are:
 
 ### Physical format ownership
 
-- `tinygrad/llm/qk_layout.py` and `extra/qk/layout.py` own canonical Q4_K, Q6_K, and Q8_1 physical constants.
+- `tinygrad/llm/qk_layout.py` and `extra/llm_research/layout.py` own canonical Q4_K, Q6_K, and Q8_1 physical constants.
 - One Q4 grammar owns Q4 block interpretation and Q4/Q8 correction semantics.
 - One independent Q6 grammar owns Q6 block interpretation.
 - The numeric reference remains independent from generated kernels and runtime selection.
@@ -159,7 +159,7 @@ whole-policy identity      -> complete invocation-to-candidate/fallback mapping 
 - `guarded_execution.py` and `isolated_guarded_executor.py` own safe compile/dispatch isolation and health behavior.
 - `candidate_inventory_execution.py` owns exact inventory-to-candidate joining and ordered execution.
 - Compile identity, final ISA, resources, staging, and owner-coverage modules each retain their narrow evidence jobs.
-- `extra/qk/bench.py` remains the only whole-model throughput entry. Prefill authority remains
+- `extra/llm_research/bench.py` remains the only whole-model throughput entry. Prefill authority remains
   `prefill_whole_synced.py`; decode authority remains `decode_runtime_overhead.py`.
 - Local kernel timing loops may remain local when their synchronization or sampling semantics differ.
 
@@ -226,8 +226,8 @@ roofline projections, and Boltbeam traces are attribution tools only.
 The tinygrad authority is:
 
 ```text
-extra/qk/bench.py --prefill
-  -> extra/qk/prefill/prefill_whole_synced.py
+extra/llm_research/bench.py --prefill
+  -> extra/llm_research/prefill/prefill_whole_synced.py
   -> synchronized production model call
 ```
 
@@ -539,7 +539,7 @@ A module or symbol may be deleted only when:
 - active route/search registries contain no refuted, stub, duplicate, or unreachable candidates;
 - compatibility aliases have owners and expiry conditions; indefinite aliases fail closeout;
 - `python3 sz.py` retains useful headroom below its repository budget;
-- core tinygrad modules do not eagerly import research-only `extra.qk` code.
+- core tinygrad modules do not eagerly import research-only `extra.llm_research` code.
 
 Commit sequence:
 

@@ -37,43 +37,43 @@
   "done_components": [
     {
       "component": "DS4 layout",
-      "implementation": "extra.qk.mmq_q4k_q8_reference.Q81MMQDS4ActivationSpec",
+      "implementation": "extra.llm_research.mmq_q4k_q8_reference.Q81MMQDS4ActivationSpec",
       "proof": "test/unit/test_mmq_q4k_q8_reference.py",
       "status": "done"
     },
     {
       "component": "DS4 reference correctness",
-      "implementation": "extra.qk.mmq_q4k_q8_reference.q8_1_mmq_ds4_quantize_reference",
+      "implementation": "extra.llm_research.mmq_q4k_q8_reference.q8_1_mmq_ds4_quantize_reference",
       "proof": "test/unit/test_mmq_q4k_q8_reference.py",
       "status": "done"
     },
     {
       "component": "Q4_K x DS4 formula",
-      "implementation": "extra.qk.mmq_q4k_q8_reference.q4k_q8_1_mmq_ds4_tile_reference",
+      "implementation": "extra.llm_research.mmq_q4k_q8_reference.q4k_q8_1_mmq_ds4_tile_reference",
       "proof": "test/unit/test_mmq_q4k_q8_reference.py",
       "status": "done"
     },
     {
       "component": "Q4_K tile loader",
-      "implementation": "extra.qk.q4k_tile_loader.load_q4k_256_tile",
+      "implementation": "extra.llm_research.q4k_tile_loader.load_q4k_256_tile",
       "proof": "test/unit/test_mmq_q4k_q8_reference.py",
       "status": "done"
     },
     {
       "component": "sudot4 primitive availability",
-      "implementation": "extra.qk.mmq_q4k_q8_atom._sudot4",
+      "implementation": "extra.llm_research.mmq_q4k_q8_atom._sudot4",
       "proof": "test/unit/test_mmq_q4k_q8_atom.py",
       "status": "done"
     },
     {
       "component": "direct DS4 GPU atom",
-      "implementation": "extra.qk.mmq_q4k_q8_atom.run_q4k_q8_1_mmq_bounded_amd_ds4_warp",
+      "implementation": "extra.llm_research.mmq_q4k_q8_atom.run_q4k_q8_1_mmq_bounded_amd_ds4_warp",
       "proof": "test/unit/test_mmq_q4k_q8_atom.py",
       "status": "done"
     },
     {
       "component": "R3 LDS skeleton atom",
-      "implementation": "extra.qk.mmq_q4k_q8_atom.run_q4k_q8_1_mmq_bounded_amd_ds4_lds_skeleton",
+      "implementation": "extra.llm_research.mmq_q4k_q8_atom.run_q4k_q8_1_mmq_bounded_amd_ds4_lds_skeleton",
       "proof": "test/unit/test_mmq_q4k_q8_atom.py",
       "status": "done"
     },
@@ -86,14 +86,14 @@
     },
     {
       "component": "R4 llama cooperative tile oracle",
-      "implementation": "extra.qk.mmq_llama_oracle.run_llama_mmq_coop_tile_oracle",
+      "implementation": "extra.llm_research.mmq_llama_oracle.run_llama_mmq_coop_tile_oracle",
       "proof": "test/unit/test_mmq_llama_oracle.py",
       "status": "done"
     },
     {
       "component": "R5 bounded cooperative numeric atom",
       "evidence": "16x16x256 DS4 coop numeric atom emits and passes bounded correctness; store-owner proof remains separate and route promotion is not claimed",
-      "implementation": "extra.qk.mmq_q4k_q8_atom.run_q4k_q8_1_mmq_bounded_amd_ds4_coop_tile",
+      "implementation": "extra.llm_research.mmq_q4k_q8_atom.run_q4k_q8_1_mmq_bounded_amd_ds4_coop_tile",
       "proof": "test/unit/test_mmq_bounded_harness.py",
       "status": "done"
     }
@@ -8617,7 +8617,7 @@
         "unique_store_count": 256
       },
       "oracle_backend": "llama_mmq_q4k_q8_1_coop_tile_oracle",
-      "oracle_source": "extra.qk.mmq_llama_oracle.llama_mma_writeback_coverage",
+      "oracle_source": "extra.llm_research.mmq_llama_oracle.llama_mma_writeback_coverage",
       "production_dispatch_changed": false,
       "research_only": true,
       "schema": "tinygrad.mmq_owner_coverage.v1",
@@ -8639,7 +8639,7 @@
         "block_elems": 256,
         "bytes_per_tile": 2304,
         "layout": "ggml_q4_k_256_block",
-        "source": "extra.qk.q4k_tile_loader",
+        "source": "extra.llm_research.q4k_tile_loader",
         "status": "present",
         "tile_shape": {
           "K": 256,
@@ -8651,7 +8651,7 @@
         "bytes_per_tile": 4096,
         "layout": "q8_1_mmq_ds4_transposed_blocks",
         "panels": 2,
-        "source": "extra.qk.mmq_q4k_q8_reference",
+        "source": "extra.llm_research.mmq_q4k_q8_reference",
         "status": "present",
         "tile_shape": {
           "K": 256,
@@ -10504,7 +10504,7 @@
               "extern __shared__ int data_mul_mat_q[]"
             ],
             "mode": "translated_structure_oracle_do_not_bind_production",
-            "numeric_oracle": "extra.qk.mmq_q4k_q8_reference.q4k_q8_1_mmq_ds4_tile_reference",
+            "numeric_oracle": "extra.llm_research.mmq_q4k_q8_reference.q4k_q8_1_mmq_ds4_tile_reference",
             "source_clone": "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/mmq.cuh",
             "vendored_cuda": false
           },
@@ -10537,7 +10537,7 @@
                   "extern __shared__ int data_mul_mat_q[]"
                 ],
                 "mode": "translated_structure_oracle_do_not_bind_production",
-                "numeric_oracle": "extra.qk.mmq_q4k_q8_reference.q4k_q8_1_mmq_ds4_tile_reference",
+                "numeric_oracle": "extra.llm_research.mmq_q4k_q8_reference.q4k_q8_1_mmq_ds4_tile_reference",
                 "source_clone": "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/mmq.cuh",
                 "vendored_cuda": false
               },

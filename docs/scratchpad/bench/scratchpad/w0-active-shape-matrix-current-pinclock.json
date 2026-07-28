@@ -32,10 +32,10 @@
         "structure_stdout_tail": [],
         "structure_stderr_tail": [
           "    _generated_structure_worker()",
-          "  File \"/home/ubuntu/tinygrad-arkey/extra/qk/prefill/hand_vs_generated_shape_matrix.py\", line 171, in _generated_structure_worker",
+          "  File \"/home/ubuntu/tinygrad-arkey/extra/llm_research/prefill/hand_vs_generated_shape_matrix.py\", line 171, in _generated_structure_worker",
           "    final_uops = sp._final_stream(Device[Device.DEFAULT].renderer, lin_uop.src)",
           "                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
-          "  File \"/home/ubuntu/tinygrad-arkey/extra/qk/prefill/native_isa_l4_stream_probe.py\", line 93, in _final_stream",
+          "  File \"/home/ubuntu/tinygrad-arkey/extra/llm_research/prefill/native_isa_l4_stream_probe.py\", line 93, in _final_stream",
           "    if getenv(\"AMD_ISA_SCHED\", 1): uops = ren._schedule(uops)",
           "                                          ^^^^^^^^^^^^^",
           "AttributeError: 'HIPRenderer' object has no attribute '_schedule'"
@@ -104,10 +104,10 @@
         "structure_stdout_tail": [],
         "structure_stderr_tail": [
           "    _generated_structure_worker()",
-          "  File \"/home/ubuntu/tinygrad-arkey/extra/qk/prefill/hand_vs_generated_shape_matrix.py\", line 171, in _generated_structure_worker",
+          "  File \"/home/ubuntu/tinygrad-arkey/extra/llm_research/prefill/hand_vs_generated_shape_matrix.py\", line 171, in _generated_structure_worker",
           "    final_uops = sp._final_stream(Device[Device.DEFAULT].renderer, lin_uop.src)",
           "                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
-          "  File \"/home/ubuntu/tinygrad-arkey/extra/qk/prefill/native_isa_l4_stream_probe.py\", line 93, in _final_stream",
+          "  File \"/home/ubuntu/tinygrad-arkey/extra/llm_research/prefill/native_isa_l4_stream_probe.py\", line 93, in _final_stream",
           "    if getenv(\"AMD_ISA_SCHED\", 1): uops = ren._schedule(uops)",
           "                                          ^^^^^^^^^^^^^",
           "AttributeError: 'HIPRenderer' object has no attribute '_schedule'"
@@ -176,10 +176,10 @@
         "structure_stdout_tail": [],
         "structure_stderr_tail": [
           "    _generated_structure_worker()",
-          "  File \"/home/ubuntu/tinygrad-arkey/extra/qk/prefill/hand_vs_generated_shape_matrix.py\", line 171, in _generated_structure_worker",
+          "  File \"/home/ubuntu/tinygrad-arkey/extra/llm_research/prefill/hand_vs_generated_shape_matrix.py\", line 171, in _generated_structure_worker",
           "    final_uops = sp._final_stream(Device[Device.DEFAULT].renderer, lin_uop.src)",
           "                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
-          "  File \"/home/ubuntu/tinygrad-arkey/extra/qk/prefill/native_isa_l4_stream_probe.py\", line 93, in _final_stream",
+          "  File \"/home/ubuntu/tinygrad-arkey/extra/llm_research/prefill/native_isa_l4_stream_probe.py\", line 93, in _final_stream",
           "    if getenv(\"AMD_ISA_SCHED\", 1): uops = ren._schedule(uops)",
           "                                          ^^^^^^^^^^^^^",
           "AttributeError: 'HIPRenderer' object has no attribute '_schedule'"

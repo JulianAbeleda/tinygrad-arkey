@@ -82,8 +82,8 @@ def measure_decode(model, n_tokens:int, skip:int):
   "ctx512" to "ctx4096". At batch=1 decode is HBM-bound -- every token reads every weight plus the whole KV
   cache at the current depth -- so tok/s MUST fall with depth (~9% for 8B over that range). It cannot rise.
 
-  The ctx-labelled authority is extra/qk/decode/decode_runtime_overhead.py, which prefills to exactly ctx
-  through the production generate path before timing, and is reached via `extra/qk/bench.py --decode`.
+  The ctx-labelled authority is extra/llm_research/decode/decode_runtime_overhead.py, which prefills to exactly ctx
+  through the production generate path before timing, and is reached via `extra/llm_research/bench.py --decode`.
   This function stays for the VRAM/correctness role it also serves; its throughput number is a
   growing-window figure and must not be reported as a fixed-context one.
   Contract pinned by test/unit/test_measurement_authority.py.

@@ -35,7 +35,7 @@
     {"paths": "extra/gpu_fault_analysis/**; extra/hardware/**; extra/remote/**", "owner": "dev", "category": "debug tooling", "disposition": "move", "destination": "extra/debug/**", "confidence": "high", "unresolved": true},
     {"paths": "extra/hardware/sqtt/roc.py", "owner": "unresolved", "category": "runtime/debug boundary", "disposition": "unresolved", "confidence": "high", "unresolved_reason": "tinygrad/viz/profile.py reaches extra then test.amd.disasm"},
     {"paths": "extra/usbgpu/**; extra/setup_tinygpu_osx.sh", "owner": "unresolved", "category": "experimental backend/installer", "disposition": "unresolved", "confidence": "high", "unresolved_reason": "supported-product status is undecided"},
-    {"paths": "extra/qk/** excluding promoted flash-prefill descriptor", "owner": "master/dev/exp", "category": "mixed runtime, authority, qualification, research", "disposition": "unresolved", "confidence": "high", "unresolved_reason": "slices 2-14 and the ten uncovered manifest paths remain to be reconciled"},
+    {"paths": "extra/llm_research/** excluding promoted flash-prefill descriptor", "owner": "master/dev/exp", "category": "mixed runtime, authority, qualification, research", "disposition": "unresolved", "confidence": "high", "unresolved_reason": "slices 2-14 and the ten uncovered manifest paths remain to be reconciled"},
     {"paths": "test/unit/test_* production closure set (14 exact paths)", "owner": "master", "category": "production regressions and authority", "disposition": "retain", "confidence": "high"},
     {"paths": "test/** current fork-added or fork-modified paths outside the explicit partition", "owner": "unresolved", "category": "mixed production regression/debug/experimental", "disposition": "unresolved", "confidence": "high", "unresolved_reason": "mixed-owner, TinyGPU-dependent, and GPU-lock tests remain unresolved; no tier is inferred by subtraction"},
     {"paths": "bench/** and docs/artifacts/**", "owner": "unresolved", "category": "canonical evidence/raw artifact", "disposition": "unresolved", "confidence": "high", "unresolved_reason": "102 staged/frozen artifacts need consumer and compact-replacement decisions"},
@@ -46,7 +46,7 @@
     {"paths": "scratchpad/**; docs/scratchpad/**; root scratch_attn_bench*.py", "owner": "delete", "category": "historical/scratch", "disposition": "delete_candidate", "confidence": "high", "unresolved_reason": "deletion requires this ledger plus final link/index check"}
   ],
   "completed_closure": {
-    "source": "extra/qk/prefill/flash_prefill_attention_spec.py",
+    "source": "extra/llm_research/prefill/flash_prefill_attention_spec.py",
     "destination": "tinygrad/schedule/wmma/flash_prefill.py",
     "consumers": ["tinygrad/llm/fused_attention.py:162", "tinygrad/codegen/opt/postrange.py:602"],
     "commits": {"exp": "ab162a931", "dev": "d54a64ab0", "master": "ab154b422"},
@@ -55,7 +55,7 @@
   },
   "completed_additional_slices": [
     {
-      "source": "extra/qk/codegen_recurrence_unroll.py",
+      "source": "extra/llm_research/codegen_recurrence_unroll.py",
       "destination": "tinygrad/codegen/late/recurrence.py",
       "consumer": "tinygrad/codegen/__init__.py:89-91 when SCHED_UNROLL>1 on AMD",
       "shim_removed": "tinygrad/codegen/experimental.py:unroll_recurrence",
@@ -65,7 +65,7 @@
   ],
   "completed_centralization_slices": [
     {
-      "source": "extra/qk/reg_store_devec.py",
+      "source": "extra/llm_research/reg_store_devec.py",
       "destination": "tinygrad/codegen/late/reg_store.py",
       "live_caller": "tinygrad/codegen/__init__.py:264",
       "matcher": "pm_reg_store_devec remains separate after pm_distinct_reg_store_devec",
@@ -74,7 +74,7 @@
       "follow_up": "restore exact-clean-commit lowering baseline/fingerprint authorities"
     },
     {
-      "source": "extra/qk/fdot2_lowering.py",
+      "source": "extra/llm_research/fdot2_lowering.py",
       "destination": "tinygrad/codegen/late/fdot2.py",
       "live_callers": [
         "tinygrad/codegen/__init__.py graph rewrite and post-linearization hooks",
@@ -86,7 +86,7 @@
       "follow_up": "restore exact-clean-commit lowering baseline/fingerprint authorities"
     },
     {
-      "source": "extra/qk/codegen_list_scheduler.py",
+      "source": "extra/llm_research/codegen_list_scheduler.py",
       "destination": "tinygrad/codegen/late/list_scheduler.py",
       "live_callers": [
         "tinygrad/codegen/late/linearizer.py SCHED_LIST hook and structural-boundary probes"
@@ -97,11 +97,11 @@
       "follow_up": "restore exact-clean-commit lowering baseline/fingerprint authorities"
     },
     {
-      "source": ["extra/qk/amd_warp_reduce.py", "extra/qk/warp_reduce_lowering.py"],
+      "source": ["extra/llm_research/amd_warp_reduce.py", "extra/llm_research/warp_reduce_lowering.py"],
       "destination": "tinygrad/codegen/late/warp_reduce.py",
       "live_callers": [
         "tinygrad/codegen/__init__.py WARP_REDUCE_LOWERING matcher",
-        "extra/qk lane-partition, GEMV, MMQ, and flash emitters now import the core owner"
+        "extra/llm_research lane-partition, GEMV, MMQ, and flash emitters now import the core owner"
       ],
       "shim_removed": "tinygrad/codegen/experimental.py warp_reduce_pm",
       "focused_test": "test/unit/test_warp_reduce_lowering.py",
@@ -111,7 +111,7 @@
   ],
   "blocking_conditions": [
     "R7 inventory must resolve cross-packet ownership before broader pruning",
-    "extra/qk/decode/capture_prefill_compile.py remains deletion-blocked until its compile conclusion is banked",
+    "extra/llm_research/decode/capture_prefill_compile.py remains deletion-blocked until its compile conclusion is banked",
     "extra/hardware/sqtt/roc.py has a tinygrad -> extra -> test dependency",
     "TinyGPU/USB GPU supported-product status is unresolved",
     "14 master tests, 25 dev-only tests, and 26 exp-only tests are partitioned; mixed-owner tests remain unresolved; 102 staged/frozen artifacts and 62 top-level JSON records lack final retention owners",
@@ -139,7 +139,7 @@
   ],
   "completed_boundary_closures": [
     {
-      "source": ["extra/qk/quant/q4_k_gemv_primitive.py", "extra/qk/quant/q6_k_gemv_primitive.py"],
+      "source": ["extra/llm_research/quant/q4_k_gemv_primitive.py", "extra/llm_research/quant/q6_k_gemv_primitive.py"],
       "destination": "tinygrad/codegen/opt.parse_opt",
       "live_callers": ["tinygrad/llm/prefill_routes.py", "tinygrad/llm/qk_primitives.py"],
       "shim_removed": "tinygrad/llm/route_ops.py q4k_parse_opt and q6k_parse_opt",
@@ -160,7 +160,7 @@
     "retained_callers": ["tinygrad/llm/model.py", "tinygrad/llm/prefill_routes.py", "tinygrad/llm/decode_routes.py"],
     "focused_test": "test/unit/test_tinygrad_boundary.py::test_route_ops_exposes_only_live_route_adapters",
     "verification": "43 route, boundary, parser, and purity tests pass; route selection semantics unchanged",
-    "next_step": "migrate retained extra/qk targets into tinygrad domain owners before deleting remaining adapters"
+    "next_step": "migrate retained extra/llm_research targets into tinygrad domain owners before deleting remaining adapters"
   },
   "removal_authorization": "two stale prompt deletions, exact 16-path and 22-path compact raw-artifact prunes, and bounded production ownership moves recorded in the scope; no other pruning is authorized"
 }

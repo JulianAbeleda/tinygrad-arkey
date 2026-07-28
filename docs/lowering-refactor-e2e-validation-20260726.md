@@ -10,7 +10,7 @@ construction and cannot detect a change that survives codegen unchanged but beha
 
 ## Correctness — PASS
 
-`extra/qk/prefill/prefill_flash_e2e_parity.py`, real weights, next-token argmax, fused route vs SDPA baseline.
+`extra/llm_research/prefill/prefill_flash_e2e_parity.py`, real weights, next-token argmax, fused route vs SDPA baseline.
 
 | model | SDPA | fused | verdict |
 |---|---|---|---|
@@ -23,7 +23,7 @@ earlier phantom "14B prefill faults". The default path completed cleanly.
 
 ## Prefill throughput — no regression
 
-`extra/qk/prefill/prefill_whole_synced.py`, 8B, K=8 warmups=4 rounds=3, `GRAPH_GEMM=True`.
+`extra/llm_research/prefill/prefill_whole_synced.py`, 8B, K=8 warmups=4 rounds=3, `GRAPH_GEMM=True`.
 
 | start_pos | master | branch | delta |
 |---|---|---|---|
@@ -40,7 +40,7 @@ inside run-to-run variance, and a consistent sign at that magnitude is not evide
 
 ## Decode throughput — no regression, established by re-running
 
-`extra/qk/bench.py --decode`, 8B. The first branch run came in below master at all four contexts, which on one
+`extra/llm_research/bench.py --decode`, 8B. The first branch run came in below master at all four contexts, which on one
 A/B pair is indistinguishable from a small real regression. It was re-run rather than argued about.
 
 | ctx | master | branch #1 | branch #2 | delta #1 | delta #2 |

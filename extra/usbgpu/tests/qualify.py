@@ -365,7 +365,7 @@ def main(argv=None) -> int:
     status_cmd = [str(DEFAULT_APP), "keepalive", "status"]
     hello_cmd = [str(DEFAULT_APP), "keepalive", "handshake"]
     minimal = [sys.executable, str(ROOT / "extra/usbgpu/tests/minimal_amd_compute.py")]
-    bench = [sys.executable, str(ROOT / "extra/qk/bench.py")]
+    bench = [sys.executable, str(ROOT / "extra/llm_research/bench.py")]
     evidence = run_gate(args.gate, status_reader=lambda:status_command(status_cmd), handshake_reader=lambda:handshake_command(hello_cmd),
                         installed_executable=DEFAULT_APP, model=args.model, minimal_command=minimal, bench_command=bench,
                         endpoint_reader=default_endpoint_reader, process_reader=default_process_reader, terminator=lambda pid:os.kill(pid, signal.SIGTERM),

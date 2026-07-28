@@ -65,7 +65,7 @@ this order, **stop on the first confirmed failure class per model**:
 
 1. **Numerics probe** — print pre-BoltBeam prefill checksum + max-error diff vs known-good
    reference. (Unblocked: reuse the harness's independent NumPy reference, `_numeric` in
-   `extra/qk/generate_shared_attention_captures.py`.)
+   `extra/llm_research/generate_shared_attention_captures.py`.)
 2. **Schema probe** — dump the serialized BoltBeam payload/metadata bytes; JSON-schema-diff vs
    the expected KA schema for each model. (Needs the export-path serialization point — being
    mapped.)
@@ -101,7 +101,7 @@ layer, not shape support or numerics.** Evidence (all verified in code, not infe
   `prefill_tc_attn` is always False and the kernel is **dead code on every real load** — hence no
   whole-prefill run and no artifact.
 - **Root cause 2 — the admission gate's VGPR cap forbids the working kernel.**
-  `extra/qk/shared_attention_promotion.py:53` requires `1 <= vgpr <= 192` (plus 0 spills/scratch).
+  `extra/llm_research/shared_attention_promotion.py:53` requires `1 <= vgpr <= 192` (plus 0 spills/scratch).
   Production is **254 VGPR** — so even a fully-assembled proof would be rejected on VGPR. This ≤192 cap
   is the target the retired rotating-PV probe was chasing; it is unjustified per the residency ledger
   (occupancy needs ≤128) and the compact-lease negative (cutting VGPR regressed perf). The device

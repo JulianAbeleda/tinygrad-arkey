@@ -428,7 +428,7 @@ Work is audited and made coherent on `exp` first. `dev` is then produced by remo
 `master` is produced last by removing debug-only assets. This avoids using the most-pruned branch as the source of a
 richer branch and makes every subtraction reviewable.
 
-This applies to every current fork-added or fork-modified asset, not only `extra/qk`. Unchanged upstream files are not
+This applies to every current fork-added or fork-modified asset, not only `extra/llm_research`. Unchanged upstream files are not
 automatically deletion candidates; an upstream boundary is changed only when the Arkey production path depends on it
 or the file has an explicit fork-owned disposition.
 
@@ -459,8 +459,8 @@ Fork comparison base: upstream common ancestor `6e1b61f16` (2026-06-10). Current
 Current files modified from that base include 116 under `tinygrad/`, 19 under `extra/`, 2 under `test/`, and 3 under
 `docs/`. Deleted upstream files are tracked separately as sync history and are not counted as current assets.
 
-The baseline organization audit covered only `extra/qk`: 95 authored files and 13,516 token-bearing LOC. It had 94
-explicit records and one hard drift, `extra/qk/decode/capture_prefill_compile.py`. The audit conservatively reported 55
+The baseline organization audit covered only `extra/llm_research`: 95 authored files and 13,516 token-bearing LOC. It had 94
+explicit records and one hard drift, `extra/llm_research/decode/capture_prefill_compile.py`. The audit conservatively reported 55
 files reachable through `tinygrad` boundary wrappers, but wrapper reachability is not proof of default-path execution.
 R2 must resolve actual consumers before promotion or removal.
 
@@ -508,7 +508,7 @@ evidence exists; partial exploration does not count as completion.
 - `docs/task_workflow/output/production-reorganization-inventory-20260728.json`
 - `docs/task_workflow/output/production-reorganization-report-20260728.md`
 - `docs/task_workflow/output/production-reorganization-cleanup-ledger-20260728.json`
-- An expanded production-boundary manifest and audit covering all fork-owned surfaces, not only `extra/qk`.
+- An expanded production-boundary manifest and audit covering all fork-owned surfaces, not only `extra/llm_research`.
 - Before/after tracked-file, authored-LOC, test, document, and artifact counts per branch.
 - A recovery map from every deleted path to its last retaining commit or archive tag.
 
@@ -579,10 +579,10 @@ Required questions:
 - Which live production modules must move under `tinygrad`, and to what domain owner?
 - Which diagnostics and hardware tools belong on `dev`, and which unproven probes belong on `exp`?
 - Which assets are superseded or dead with a banked conclusion and recoverable commit?
-- What owns `extra/qk/decode/capture_prefill_compile.py`, the current audit coverage drift?
+- What owns `extra/llm_research/decode/capture_prefill_compile.py`, the current audit coverage drift?
 
 Explicit seams to resolve include `tinygrad/llm/route_ops.py`, `tinygrad/codegen/experimental.py`,
-`tinygrad/llm/__main__.py`, `extra/qk`, `extra/llm`, `extra/audit`, `extra/hardware`, `extra/remote`,
+`tinygrad/llm/__main__.py`, `extra/llm_research`, `extra/llm`, `extra/audit`, `extra/hardware`, `extra/remote`,
 `extra/gpu_fault_analysis`, `extra/tools`, and `extra/usbgpu`.
 
 #### Packet B: tests, benchmarks, and evidence
@@ -660,7 +660,7 @@ propagation after its commit is verified:
 
 | Source | Destination | Production consumers | Boundary change |
 |---|---|---|---|
-| `extra/qk/prefill/flash_prefill_attention_spec.py` | `tinygrad/schedule/wmma/flash_prefill.py` | `tinygrad/llm/fused_attention.py:162`; `tinygrad/codegen/opt/postrange.py:602` | Both callers import the core descriptor directly; the former `route_ops.py` and `codegen/experimental.py` lazy shims were removed |
+| `extra/llm_research/prefill/flash_prefill_attention_spec.py` | `tinygrad/schedule/wmma/flash_prefill.py` | `tinygrad/llm/fused_attention.py:162`; `tinygrad/codegen/opt/postrange.py:602` | Both callers import the core descriptor directly; the former `route_ops.py` and `codegen/experimental.py` lazy shims were removed |
 
 The descriptor contents were preserved as a rename, active path references and route-manifest authority metadata were
 updated, and the generated organization census plus pure-machine-search census were refreshed. CPU verification
@@ -680,7 +680,7 @@ verified:
 
 | Source | Destination | Production consumer | Boundary change |
 |---|---|---|---|
-| `extra/qk/codegen_recurrence_unroll.py` | `tinygrad/codegen/late/recurrence.py` | `tinygrad/codegen/__init__.py:89-91` when `SCHED_UNROLL>1` on AMD | The compiler imports and calls the core owner directly; the recurrence forwarding shim was removed from `codegen/experimental.py` |
+| `extra/llm_research/codegen_recurrence_unroll.py` | `tinygrad/codegen/late/recurrence.py` | `tinygrad/codegen/__init__.py:89-91` when `SCHED_UNROLL>1` on AMD | The compiler imports and calls the core owner directly; the recurrence forwarding shim was removed from `codegen/experimental.py` |
 
 The transform body was preserved as a byte-identical rename. The organization manifest and lowering findings were
 updated, and `SCHED_UNROLL_DEBUG` was explicitly classified as a non-cache-affecting diagnostic gate. The focused
@@ -697,7 +697,7 @@ The register-store devectorizer is now centralized without merging away its dist
 
 | Source | Destination | Production consumer | Boundary change |
 |---|---|---|---|
-| `extra/qk/reg_store_devec.py` | `tinygrad/codegen/late/reg_store.py` | `tinygrad/codegen/__init__.py:264` after `pm_distinct_reg_store_devec` on AMD/coalesced-load paths | The separate `pm_reg_store_devec` rule was ported into the core owner; the extra module and `codegen/experimental.py` forwarding shim were removed |
+| `extra/llm_research/reg_store_devec.py` | `tinygrad/codegen/late/reg_store.py` | `tinygrad/codegen/__init__.py:264` after `pm_distinct_reg_store_devec` on AMD/coalesced-load paths | The separate `pm_reg_store_devec` rule was ported into the core owner; the extra module and `codegen/experimental.py` forwarding shim were removed |
 
 The duplicate-pointer residual behavior is preserved as a separate matcher, and malformed targets/value-width
 mismatches fail closed. Seven focused tests and the existing reg-store/coalesced-load regression set pass. The
@@ -718,7 +718,7 @@ The narrow AMD `fdot2` primitive hook is now centralized:
 
 | Source | Destination | Production consumer | Boundary change |
 |---|---|---|---|
-| `extra/qk/fdot2_lowering.py` | `tinygrad/codegen/late/fdot2.py` | `tinygrad/codegen/__init__.py` at the two graph-rewrite hooks and the post-linearization hook; `tinygrad/codegen/opt/gemm_consumer.py` | Core imports are direct; all three `codegen/experimental.py` fdot2 forwarding shims and the old extra module were removed |
+| `extra/llm_research/fdot2_lowering.py` | `tinygrad/codegen/late/fdot2.py` | `tinygrad/codegen/__init__.py` at the two graph-rewrite hooks and the post-linearization hook; `tinygrad/codegen/opt/gemm_consumer.py` | Core imports are direct; all three `codegen/experimental.py` fdot2 forwarding shims and the old extra module were removed |
 
 The matcher remains default-off and AMD-only through `V_DOT2_LOWERING`. Its exact scalar-f32 output contract, optional
 accumulator ordering, fail-closed controls, and linearized dependency replacement are pinned by
@@ -732,7 +732,7 @@ The opt-in latency-aware list scheduler is now centralized:
 
 | Source | Destination | Production consumer | Boundary change |
 |---|---|---|---|
-| `extra/qk/codegen_list_scheduler.py` | `tinygrad/codegen/late/list_scheduler.py` | `tinygrad/codegen/late/linearizer.py` under `SCHED_LIST`, plus its structural-boundary probes | Core imports are direct; the `list_schedule` and `structural_ops` forwarding shims were removed from `codegen/experimental.py` |
+| `extra/llm_research/codegen_list_scheduler.py` | `tinygrad/codegen/late/list_scheduler.py` | `tinygrad/codegen/late/linearizer.py` under `SCHED_LIST`, plus its structural-boundary probes | Core imports are direct; the `list_schedule` and `structural_ops` forwarding shims were removed from `codegen/experimental.py` |
 
 The scheduler still only reorders within straight-line blocks, preserves topological dependencies and structural
 boundaries, and remains default-off. Four focused CPU tests cover latency-shadow ordering, structural boundaries,
@@ -744,7 +744,7 @@ The AMD warp primitive and auto-lowering pair is now consolidated in one core ow
 
 | Source | Destination | Production consumer | Boundary change |
 |---|---|---|---|
-| `extra/qk/amd_warp_reduce.py` and `extra/qk/warp_reduce_lowering.py` | `tinygrad/codegen/late/warp_reduce.py` | `tinygrad/codegen/__init__.py` under `WARP_REDUCE_LOWERING`, plus existing decode/GEMV/MMQ emitters | Core owns the hand-built shuffle/reduction API and matcher; the experimental `warp_reduce_pm` shim and both old extra modules were removed |
+| `extra/llm_research/amd_warp_reduce.py` and `extra/llm_research/warp_reduce_lowering.py` | `tinygrad/codegen/late/warp_reduce.py` | `tinygrad/codegen/__init__.py` under `WARP_REDUCE_LOWERING`, plus existing decode/GEMV/MMQ emitters | Core owns the hand-built shuffle/reduction API and matcher; the experimental `warp_reduce_pm` shim and both old extra modules were removed |
 
 The matcher still lowers only scalar float ADD/MAX reductions over power-of-two WARP/GROUP_REDUCE axes, and remains
 default-off. Four CPU structural/boundary tests pass. AMD execution, ISA output, and performance remain outside this
@@ -756,7 +756,7 @@ The duplicated Q4/Q6 option parser is now centralized without moving their kerne
 
 | Source | Destination | Production consumer | Boundary change |
 |---|---|---|---|
-| `extra/qk/quant/q4_k_gemv_primitive.py:parse_opt`, `extra/qk/quant/q6_k_gemv_primitive.py:parse_opt` | `tinygrad/codegen/opt.parse_opt` | `tinygrad/llm/prefill_routes.py`, `tinygrad/llm/qk_primitives.py` | `tinygrad/llm/route_ops.py` parse shims removed; quant kernel builders and mixed layout tooling remain in `extra` for later route-specific slices |
+| `extra/llm_research/quant/q4_k_gemv_primitive.py:parse_opt`, `extra/llm_research/quant/q6_k_gemv_primitive.py:parse_opt` | `tinygrad/codegen/opt.parse_opt` | `tinygrad/llm/prefill_routes.py`, `tinygrad/llm/qk_primitives.py` | `tinygrad/llm/route_ops.py` parse shims removed; quant kernel builders and mixed layout tooling remain in `extra` for later route-specific slices |
 
 Seven CPU parser/boundary tests pass. Full Q4/Q6 builder promotion is intentionally deferred because builder callers,
 Q6 coverage, and layout ownership are not yet closed.
@@ -769,10 +769,10 @@ were removed, including retired Q4/Q6 GEMM aliases, MMQ/DS4 helpers, lane-partit
 wrapper. The cleanup does not change route selection or the lazy import mechanism for the retained adapters.
 
 `route_ops.py` is now explicitly documented as a small, production-owned compatibility boundary. Its remaining
-`extra/qk` targets are migration debt, not evidence that the entire research workspace belongs on `master`. New
+`extra/llm_research` targets are migration debt, not evidence that the entire research workspace belongs on `master`. New
 production behavior must be promoted into a `tinygrad/**` domain owner; research, qualification, and evidence scripts
 remain on `dev` or `exp`.
 
 The focused route/boundary suite is the acceptance gate for this cleanup. A subsequent bounded slice must migrate each
 retained adapter with its caller, regression tests, and authority before deleting that adapter or renaming the mixed
-`extra/qk` workspace.
+`extra/llm_research` workspace.

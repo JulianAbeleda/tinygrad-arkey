@@ -2,8 +2,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from extra.qk.prefill import prefill_graph_gemm_route as route
-from extra.qk.route_manifest import canonical_candidate_set_identity
+from extra.llm_research.prefill import prefill_graph_gemm_route as route
+from extra.llm_research.route_manifest import canonical_candidate_set_identity
 from tinygrad import Tensor, dtypes
 from tinygrad.llm.memory_semantics import model_parameter
 

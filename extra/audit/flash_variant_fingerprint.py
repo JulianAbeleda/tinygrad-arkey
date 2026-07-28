@@ -63,7 +63,7 @@ import hashlib, json, sys
 sys.path.insert(0, {root!r})
 from tinygrad.uop.ops import UOp
 from tinygrad.dtype import dtypes
-from extra.qk.decode.flash_decode_attention_spec import describe_flash_decode_attention
+from extra.llm_research.decode.flash_decode_attention_spec import describe_flash_decode_attention
 out = {{}}
 for model, (Hq, Hkv, Hd) in {models!r}.items():
   for staging in {stagings!r}:

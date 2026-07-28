@@ -15,8 +15,8 @@ def test_parse_opt_rejects_malformed_or_unknown_specs(spec):
 
 
 def test_quant_modules_reuse_core_parser_and_route_shims_are_gone():
-  from extra.qk.quant.q4_k_gemv_primitive import parse_opt as q4_parse
-  from extra.qk.quant.q6_k_gemv_primitive import parse_opt as q6_parse
+  from extra.llm_research.quant.q4_k_gemv_primitive import parse_opt as q4_parse
+  from extra.llm_research.quant.q6_k_gemv_primitive import parse_opt as q6_parse
   import tinygrad.llm.route_ops as route_ops
   assert q4_parse is parse_opt
   assert q6_parse is parse_opt

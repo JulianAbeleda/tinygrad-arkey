@@ -12,7 +12,7 @@ from tinygrad.uop.ops import KernelInfo, Ops, UOp
 
 def test_reg_store_devec_is_core_owned():
   assert importlib.util.find_spec("tinygrad.codegen.late.reg_store") is not None
-  assert importlib.util.find_spec("extra.qk.reg_store_devec") is None
+  assert importlib.util.find_spec("extra.llm_research.reg_store_devec") is None
 
 
 def _target(reg, indices, *, load=True):

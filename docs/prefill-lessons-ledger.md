@@ -133,7 +133,7 @@ results.
   Ops.INS, no wmma.py), then delete the hand kernel, keeping `PURE_MACHINE_SEARCH_ONLY=1` green. PLRA/PLRAB prefetch
   is 2nd-order / deferred.
 - **Harness discipline:** phase-0 and route-bound measurement must reuse the existing whole-prefill authority harness
-  (`extra/qk/prefill/prefill_whole_synced.py`), not a new benchmark path. The route-bound correctness gate is NOT native-ISA
+  (`extra/llm_research/prefill/prefill_whole_synced.py`), not a new benchmark path. The route-bound correctness gate is NOT native-ISA
   evidence (its runner forces `DEV=AMD` → HIP/C renderer); a compile-only fail-closed LDS-allocation estimator
   (`--resource-search`) is what drives schedule choice before launch.
 
@@ -170,13 +170,13 @@ results.
     `DEV=AMD:ISA` renderer assembling decode/GEMV straight to RDNA3; never promoted to default, no external importers,
     bench dirs gone — recoverable only from git history. Established Q6_K direct half-warp route for `lm_head`, PINNED
     VGPR accumulators + LDS reclaim, consumer-only waitcnt, hardware `exp2→v_exp_f32` lowering.
-  - *AMD native-ISA support chain in `extra/qk/` (13 files/2,801 LOC, retired 2026-07-26):* the second half of the arc
-    above — the `extra/qk` side that fed `tinygrad/renderer/isa/` through the
+  - *AMD native-ISA support chain in `extra/llm_research/` (13 files/2,801 LOC, retired 2026-07-26):* the second half of the arc
+    above — the `extra/llm_research` side that fed `tinygrad/renderer/isa/` through the
     `codegen_extensions -> amd_isa_renderer_policy` seam. Reachable only under `DEV=AMD:ISA`, which
     `tinygrad/runtime/ops_amd.py:1015-1021` registers only when `DEV.target("AMD").renderer == "ISA"` ("Native ISA is
     research tooling, not part of ordinary AMD execution"); `DEV=AMD` never imported it. Retired for the same reason
     the 07-03 half was: never promoted, no default-path consumer, no open question. **The ISA renderer itself
-    (`tinygrad/renderer/isa/`) is NOT retired** — only its `extra/qk` extension providers. Its extension hook now
+    (`tinygrad/renderer/isa/`) is NOT retired** — only its `extra/llm_research` extension providers. Its extension hook now
     returns the empty default, which every call site in `amd_wmma_residency.py` already handled as `policy is None`.
     What it established, and what is lost with the code: `mmq_llama_oracle.py` was a translated *structure* oracle of
     llama.cpp's Q4_K MMQ cooperative tile ownership (tile/warp geometry, not a vendored kernel), with
@@ -217,4 +217,4 @@ results.
   it closes most but not all of the −4.4% gap. Not shippable as a per-call permute. Also refuted along the way: the
   P-repack LDS hypothesis (only 10 LDS instrs/tile; attention `lds_conflict` 5.1% vs the GEMMs' 12.5%) and any
   bandwidth framing (AI = **818 FLOP/byte**, 6× past the ridge, 0.98% of HBM peak, L2 hit rising 62.8%→85.5% with
-  context). Counter path + method: `extra/qk/prefill/prefill_boltbeam_trace.py --hw-trace` (restored in `654c9b2ce`).
+  context). Counter path + method: `extra/llm_research/prefill/prefill_boltbeam_trace.py --hw-trace` (restored in `654c9b2ce`).

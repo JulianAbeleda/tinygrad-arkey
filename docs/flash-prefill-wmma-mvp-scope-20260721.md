@@ -69,16 +69,16 @@ Attention today: materialized SDPA is pinned near `B_peak` (HBM-bound by score s
 
 | Need | Reuse this (file:symbol) | What to take | What to change |
 |---|---|---|---|
-| Online-softmax merge (running max/sum, correction, d-sharded PV), LDS K/V staging, WAR-barrier pattern | `extra/qk/flash_kernels.py:flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel` | The whole fused-loop skeleton + the two-pass split-score merge + the `mxu0→barrier→end` WAR-barrier fix (lines ~114–146) | **Replace the scalar-`fdot2` `_dot_reduce` (line 91–98) with a WMMA-tiled `QKᵀ`.** Generalize M=1 (one query row/workgroup) to an **M-query tile**. |
+| Online-softmax merge (running max/sum, correction, d-sharded PV), LDS K/V staging, WAR-barrier pattern | `extra/llm_research/flash_kernels.py:flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel` | The whole fused-loop skeleton + the two-pass split-score merge + the `mxu0→barrier→end` WAR-barrier fix (lines ~114–146) | **Replace the scalar-`fdot2` `_dot_reduce` (line 91–98) with a WMMA-tiled `QKᵀ`.** Generalize M=1 (one query row/workgroup) to an **M-query tile**. |
 | WMMA tile emission for fp16×fp16 | The **scheduler's existing WMMA lowering** — the same path materialized SDPA (`model.py:591`, `qg @ kg.transpose`) already uses to hit tensor cores | Emit the score/PV matmuls as fp16×fp16 ops the scheduler tensor-cores natively (TC opt). **Do not write a new WMMA emitter.** | Nothing — the point is scores are plain fp16 matmuls; the scheduler already knows WMMA. The novelty is *fusing* them, not lowering them. |
-| Candidate + geometry-table + gate + warmstart structure | `extra/qk/prefill/packed_wmma_prefill_candidates.py` (`PACKED_WMMA_GEOM`, `gate_combo`, `warmstart_entry`, `PackedWmmaPrefillCandidate`) | The *pattern*: a frozen geom table keyed by (config) → tile dims, a gate, a warmstart entry builder | New table `FLASH_PREFILL_GEOM` for MVP's single config only (one row). Mirror the shape; do not fork the file's logic. |
-| Candidate scoring / ranking (for the full-build sweep later, NOT the MVP) | `extra/qk/bubblebeam_futuresight.py:score_candidate/rank_candidates` | Note it exists; the full build's geometry search plugs in here | **MVP hardcodes one geometry.** Do not build search yet. |
+| Candidate + geometry-table + gate + warmstart structure | `extra/llm_research/prefill/packed_wmma_prefill_candidates.py` (`PACKED_WMMA_GEOM`, `gate_combo`, `warmstart_entry`, `PackedWmmaPrefillCandidate`) | The *pattern*: a frozen geom table keyed by (config) → tile dims, a gate, a warmstart entry builder | New table `FLASH_PREFILL_GEOM` for MVP's single config only (one row). Mirror the shape; do not fork the file's logic. |
+| Candidate scoring / ranking (for the full-build sweep later, NOT the MVP) | `extra/llm_research/bubblebeam_futuresight.py:score_candidate/rank_candidates` | Note it exists; the full build's geometry search plugs in here | **MVP hardcodes one geometry.** Do not build search yet. |
 | Correctness reference | `model.py:583–598` — the concrete TC-attn path (`scores = qg@kgᵀ·scale + mask; s = scores.softmax(-1); out = s@vg`) | Golden output to diff against (fp16 tolerance) | This IS the reference; the MVP must match it numerically. |
-| Measurement harness | `extra/qk/prefill/prefill_whole_synced.py` (canonical prefill harness) | DEBUG=2 `tm` GPU kernel time (never wall-clock), warmup to boost clocks (≥200 dispatch) | Add per-op time extraction for the attention kernel only. |
+| Measurement harness | `extra/llm_research/prefill/prefill_whole_synced.py` (canonical prefill harness) | DEBUG=2 `tm` GPU kernel time (never wall-clock), warmup to boost clocks (≥200 dispatch) | Add per-op time extraction for the attention kernel only. |
 
-**Files you will CREATE (all under `extra/qk/`, which sz.py leaves unbudgeted — do not add core budget) — both DISPOSABLE, `rm`'d at task end (§0):**
-- `extra/qk/prefill/flash_prefill_wmma_kernel.py` — the throwaway fused-WMMA proof kernel (hand-authored UOps, reused from `flash_kernels.py`). Exists to produce the gate number, then deleted.
-- `extra/qk/prefill/flash_prefill_wmma_mvp_gate.py` — throwaway correctness+roofline harness (imports the kernel, the reference, the two-ceiling measurement). Not wired into routing. Deleted at task end.
+**Files you will CREATE (all under `extra/llm_research/`, which sz.py leaves unbudgeted — do not add core budget) — both DISPOSABLE, `rm`'d at task end (§0):**
+- `extra/llm_research/prefill/flash_prefill_wmma_kernel.py` — the throwaway fused-WMMA proof kernel (hand-authored UOps, reused from `flash_kernels.py`). Exists to produce the gate number, then deleted.
+- `extra/llm_research/prefill/flash_prefill_wmma_mvp_gate.py` — throwaway correctness+roofline harness (imports the kernel, the reference, the two-ceiling measurement). Not wired into routing. Deleted at task end.
 
 **Files you will NOT touch in the MVP:** `model.py`, `prefill_routes.py`, `prefill_policy.py`, `postrange.py`, `kernel_lds.py`. No routing, no defaults, no warmstart tables. The MVP runs from its own gate script.
 
@@ -187,7 +187,7 @@ This is NOT upstream tinygrad. It is a **rangeify-based** scheduler. The real si
 
 ## B.2 — The rewrite design
 
-The online-softmax math is a **known result** (FlashAttention, Dao 2022) and is already implemented as a UOp recurrence in `extra/qk/flash_kernels.py` (the running `m`/`l`/`acc` + correction `corr = exp(m_old - m_new)`, lines ~114–146). **Reuse that math as the reference for the recurrence — do NOT reuse the coupled decode kernel body** (its split/combine/cache-indexing are what made extraction fail; see the pivot note). The rewrite emits the recurrence into the scheduler graph, not a hand kernel.
+The online-softmax math is a **known result** (FlashAttention, Dao 2022) and is already implemented as a UOp recurrence in `extra/llm_research/flash_kernels.py` (the running `m`/`l`/`acc` + correction `corr = exp(m_old - m_new)`, lines ~114–146). **Reuse that math as the reference for the recurrence — do NOT reuse the coupled decode kernel body** (its split/combine/cache-indexing are what made extraction fail; see the pivot note). The rewrite emits the recurrence into the scheduler graph, not a hand kernel.
 
 Transform, per query-tile × KV-block:
 1. `S_block = Q_tile @ Kᵀ_block · scale` — a matmul reduce over `Hd`, kept as a small `M×blockKV` tile (fits LDS/regs). TC opt → WMMA.
@@ -208,7 +208,7 @@ The key scheduler property to achieve: steps 1–4 for a given query-tile must l
 
 ## B.4 — After the core lands (breadth — separate milestones, do NOT block B-M4 on these)
 
-GQA head-sharding (`Hq=40,Hkv=8,G=5`); multi-KV-size coverage (512→4096); the `FLASH_PREFILL_GEOM` geometry sweep via BubbleBeam+FutureSight (`extra/qk/bubblebeam_futuresight.py:score_candidate/rank_candidates`); concrete-KV / quant-KV integration (the `prefill_concrete_kv` path); routing (`prefill_routes.py`/`prefill_policy.py` — new strategy alongside `BOUNDED_PACKED_TILES`); the **fp16-path (8B) validation** (the fusion is weight-format-independent — confirm the same win on the overlay path); the static→dynamic autotuner flip once end-to-end is proven.
+GQA head-sharding (`Hq=40,Hkv=8,G=5`); multi-KV-size coverage (512→4096); the `FLASH_PREFILL_GEOM` geometry sweep via BubbleBeam+FutureSight (`extra/llm_research/bubblebeam_futuresight.py:score_candidate/rank_candidates`); concrete-KV / quant-KV integration (the `prefill_concrete_kv` path); routing (`prefill_routes.py`/`prefill_policy.py` — new strategy alongside `BOUNDED_PACKED_TILES`); the **fp16-path (8B) validation** (the fusion is weight-format-independent — confirm the same win on the overlay path); the static→dynamic autotuner flip once end-to-end is proven.
 
 ## B.5 — Guardrails + anti-duplication (hard)
 
@@ -216,7 +216,7 @@ GQA head-sharding (`Hq=40,Hkv=8,G=5`); multi-KV-size coverage (512→4096); the 
 - **Single GPU lane.** `pkill` strays + confirm VRAM free (`rocm-smi`) before each run. Never background benches + report "waiting" (MMU faults / VRAM contention). Run, wait, read.
 - **`tm` not wall-clock**, warm ≥200 dispatches. `/home/ubuntu/tinygrad-arkey/.venv/bin/python`. Temp in `/home/ubuntu/.claude/jobs/6db6b205/tmp/`.
 - **No BEAM** (hangs gfx1100). **Commit on master, no branches**, the Co-Authored-By trailer, push origin/master.
-- **Core budget:** the rewrite lives in `tinygrad/` (it's real core), so watch `sz.py` (BUDGET_DIRS ≤35000, target 30000; currently ~30,294). Keep the fusion pass lean; geometry tables / search stay in `extra/qk/` (unbudgeted).
+- **Core budget:** the rewrite lives in `tinygrad/` (it's real core), so watch `sz.py` (BUDGET_DIRS ≤35000, target 30000; currently ~30,294). Keep the fusion pass lean; geometry tables / search stay in `extra/llm_research/` (unbudgeted).
 
 ## B.6 — Honest fallback
 

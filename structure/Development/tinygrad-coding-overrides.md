@@ -85,7 +85,7 @@ its name (or an adjacent one-line note) must encode the reason.
 - **Validation-probe re-derivations of shipped code** get a `probe_` prefix. A
   probe must not import the thing it validates (or it regresses silently with it),
   so it re-derives the kernel — that is a feature, not a copy. Example:
-  `extra/qk/decode_physical_tile.py` `probe_p1_crosslane_score_kernel` mirrors the
+  `extra/llm_research/decode_physical_tile.py` `probe_p1_crosslane_score_kernel` mirrors the
   shipped `flash_kernels.flash_p1_crosslane_score_whole_cache_kernel`; the `probe_`
   prefix marks the deliberate independence. (Keep the *emitted* kernel name stable
   when renaming the Python function, so gate artifacts don't shift.)
@@ -120,7 +120,7 @@ Fork rules (the tinygrad-specific form of "Prefer data over code" and
   signatures or an ad-hoc config object.
 - **Prefer adding a rewrite rule** to adding a class, phase, or file
   (composes with the anti-re-sprawl rule above).
-- **Watch the second-system threshold.** `extra/qk` is ~16k counted lines
+- **Watch the second-system threshold.** `extra/llm_research` is ~16k counted lines
   against a ~24k core. When qk machinery starts re-implementing something the
   engine already does (traversal, matching, scheduling, config), that is the
   "second hidden system" anti-pattern from coding-principles — collapse it

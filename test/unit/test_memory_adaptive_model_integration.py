@@ -5,8 +5,8 @@ import pytest
 
 import tinygrad.llm.model as model_module
 from tinygrad.llm.device_facts import DeviceCapabilities, DeviceFacts, ProbeRecord
-from extra.qk.memory_adaptive_allocation_observer import make_memory_facts
-from extra.qk.memory_adaptive_runtime_collector import install_model_adapters
+from extra.llm_research.memory_adaptive_allocation_observer import make_memory_facts
+from extra.llm_research.memory_adaptive_runtime_collector import install_model_adapters
 from tinygrad.llm.model import (Transformer, TransformerConfig, _graph_gemm_binding, _memory_adaptive_measurement_authority,
   derive_selected_gguf_prefill_inventory, select_memory_adaptive_runtime_policy)
 
@@ -110,7 +110,7 @@ def test_selected_model_source_invokes_internal_authority_then_exact_runtime_col
   kv, meta = metadata()
   source = {"completed": "controller-envelope"}
   monkeypatch.setattr(model_module, "resolve_memory_adaptive_policy", lambda selected: source if selected == "/chosen.gguf" else None)
-  import extra.qk.memory_adaptive_runtime_collector as runtime_collector
+  import extra.llm_research.memory_adaptive_runtime_collector as runtime_collector
   def collect(request, observed):
     assert observed is source
     return {"decision": "SELECTED", "validation": "exact_cache", "validated_request": request,

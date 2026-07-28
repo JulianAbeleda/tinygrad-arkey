@@ -4,7 +4,7 @@ Status: completed and landed on 2026-07-26. Phase 1 is recorded in
 `docs/task_workflow/output/codebase-organization-audit-report.md`; the reviewed A1-A11 follow-up actions also landed.
 
 Current maintenance note (2026-07-28): the checker reports one later drift,
-`extra/qk/decode/capture_prefill_compile.py`, which has no manifest record. Its ownership must be decided separately;
+`extra/llm_research/decode/capture_prefill_compile.py`, which has no manifest record. Its ownership must be decided separately;
 it was not classified merely to make this cleanup pass.
 
 ## Repository
@@ -25,7 +25,7 @@ Inspect the current tree before designing anything. Treat dated documents and ge
 
 ## Objective
 
-Create a deterministic, machine-enforced organizational and workflow census for the tinygrad repository. The first complete audit scope is `extra/qk`; later phases may extend the proven audit model to the rest of the repository. The audit must find opportunities to decouple responsibilities, centralize duplicated authority, modularize reusable execution, prune obsolete LOC, and promote durable production-worthy capabilities from research areas into the main `tinygrad/` package.
+Create a deterministic, machine-enforced organizational and workflow census for the tinygrad repository. The first complete audit scope is `extra/llm_research`; later phases may extend the proven audit model to the rest of the repository. The audit must find opportunities to decouple responsibilities, centralize duplicated authority, modularize reusable execution, prune obsolete LOC, and promote durable production-worthy capabilities from research areas into the main `tinygrad/` package.
 
 The audit must answer:
 
@@ -65,12 +65,12 @@ The audit must distinguish moving LOC from reducing LOC. Moving a file into `tin
 
 ## Execution scope
 
-This task must complete a deep audit of `extra/qk`, not a shallow classification of the entire repository.
+This task must complete a deep audit of `extra/llm_research`, not a shallow classification of the entire repository.
 
 Phase 1 coverage:
 
-- Fully classify authored files under `extra/qk`.
-- Trace every shipped/default-path workflow that enters or depends on `extra/qk`.
+- Fully classify authored files under `extra/llm_research`.
+- Trace every shipped/default-path workflow that enters or depends on `extra/llm_research`.
 - Include external `tinygrad/`, `bench/`, `test/`, and documentation files only when needed to establish a consumer, owner, boundary, authority artifact, or replacement.
 - Report cross-boundary dependencies without requiring full semantic classification of every external file.
 
@@ -418,7 +418,7 @@ Exclude:
 - Build outputs
 - Untracked local files
 
-Generated files should be counted and reported separately, not entered into the authored-purpose manifest. Phase 1 requires complete manifest coverage only for `extra/qk`; external files are dependency evidence unless explicitly promoted into the audit scope.
+Generated files should be counted and reported separately, not entered into the authored-purpose manifest. Phase 1 requires complete manifest coverage only for `extra/llm_research`; external files are dependency evidence unless explicitly promoted into the audit scope.
 
 Use `sz.py` token-bearing LOC rather than physical newline counts.
 
@@ -433,7 +433,7 @@ Use `sz.py` token-bearing LOC rather than physical newline counts.
 - Multiple files claim the same exclusive authority key.
 - A declared dependency-domain rule is violated.
 - A generated file is incorrectly counted as authored.
-- An authored `extra/qk` file is covered by neither an explicit record nor a group rule.
+- An authored `extra/llm_research` file is covered by neither an explicit record nor a group rule.
 - An explicit record and group rule ambiguously cover the same file.
 - A production, default-path, authority, or action-candidate file is hidden inside a group rule.
 - A `ready` promotion candidate depends on research-only or evidence modules.
@@ -492,7 +492,7 @@ Support:
 ```bash
 python3 extra/audit/codebase_organization_audit.py
 python3 extra/audit/codebase_organization_audit.py --check
-python3 extra/audit/codebase_organization_audit.py --scope extra/qk
+python3 extra/audit/codebase_organization_audit.py --scope extra/llm_research
 python3 extra/audit/codebase_organization_audit.py --scope tinygrad/llm
 python3 extra/audit/codebase_organization_audit.py --top 30
 ```
@@ -536,9 +536,9 @@ Do not describe a file as dead merely because it has no imports. Entry points, s
 
 ## Bootstrap strategy
 
-Fully classify `extra/qk` because it currently contains roughly 17.7K authored LOC across 123 files while only a small subset is directly named by the default-route census. Identify complete workflows within it before labeling individual files as reusable, promotable, or removable.
+Fully classify `extra/llm_research` because it currently contains roughly 17.7K authored LOC across 123 files while only a small subset is directly named by the default-route census. Identify complete workflows within it before labeling individual files as reusable, promotable, or removable.
 
-Do not expand into a full audit of `tinygrad/llm`, scheduler/codegen, AMD renderer/runtime, `bench/`, or `test/` during this task. Record those areas as later phases with the concrete boundary information learned from `extra/qk`.
+Do not expand into a full audit of `tinygrad/llm`, scheduler/codegen, AMD renderer/runtime, `bench/`, or `test/` during this task. Record those areas as later phases with the concrete boundary information learned from `extra/llm_research`.
 
 Use the current route manifest and route census as evidence, but do not trust their attribution blindly. The current default-path census has reported an attribution-blocked state. Surface inconsistencies instead of copying them into the new manifest.
 
@@ -562,13 +562,13 @@ Each proposed campaign step must be independently testable and must not mix NFC 
 
 The task is complete when:
 
-- Every tracked authored `extra/qk` file is covered explicitly or by one unambiguous group rule.
-- Every default-path entry into `extra/qk` is traced to its callers and durable authority.
+- Every tracked authored `extra/llm_research` file is covered explicitly or by one unambiguous group rule.
+- Every default-path entry into `extra/llm_research` is traced to its callers and durable authority.
 - Machine-derived facts and human semantic findings are clearly separated.
 - Up to ten high-confidence actions have concrete evidence, ownership, tests, and net LOC effects; no minimum action quota is imposed.
 - Promotion recommendations identify the minimal durable primitive rather than merely a file destination.
 - Prune recommendations preserve required verdicts and unresolved reproducers.
-- Every test-like `extra/qk` file is classified as active, unresolved, operational, retained reference, historical, superseded, or unknown.
+- Every test-like `extra/llm_research` file is classified as active, unresolved, operational, retained reference, historical, superseded, or unknown.
 - Every `delete_ready` candidate includes enough repository identity and replacement context to recover or understand it later.
 - Unknowns are labeled honestly rather than forced into action categories.
 - The audit implementation remains a small deterministic checker rather than a new static-analysis framework.

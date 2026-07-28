@@ -58,8 +58,8 @@ def _should_use_custom_kernel_prefill_attn(n_heads:int, n_kv_heads:int, backend:
   shared_attention_proven_eligible proof (that proof is unrelated evidence for the OFF-critical-path
   class-2-risk `shared_prefill_attention` route -- see fused_attention.py's module docstring; P5b,
   docs/flash-prefill-pure-search-lift-scope-20260724.md). True only for the PROVEN admitted 8B/14B
-  shapes on AMD/gfx1100 (extra/qk/prefill/prefill_hd_sweep_numerics.py Hd=64/128 lower+numerically correct,
-  extra/qk/prefill/prefill_flash_e2e_parity.py real-model 8B/14B token parity); every other shape/backend/arch
+  shapes on AMD/gfx1100 (extra/llm_research/prefill/prefill_hd_sweep_numerics.py Hd=64/128 lower+numerically correct,
+  extra/llm_research/prefill/prefill_flash_e2e_parity.py real-model 8B/14B token parity); every other shape/backend/arch
   safely falls back to SDPA (the existing default for all of them today)."""
   from tinygrad.llm.fused_attention import ADMITTED_GRIDS
   return (n_heads, n_kv_heads, 512) in ADMITTED_GRIDS and backend == "AMD" and arch == "gfx1100"
@@ -944,7 +944,7 @@ class Transformer:
   def _build_packed_wmma_warmstart(self) -> tuple[dict, dict]:
     # Only called when prefill_routes.packed_wmma_prefill_enabled() is set (see __init__). Runs the
     # one-time-per-(quant,role,shape) correctness gate for every covered Q4_K/Q6_K linear whose
-    # (quant, role) has a frozen packed-wmma geometry (extra/qk/prefill/packed_wmma_prefill_candidates.
+    # (quant, role) has a frozen packed-wmma geometry (extra/llm_research/prefill/packed_wmma_prefill_candidates.
     # PACKED_WMMA_GEOM); an ungated/failing combo is simply omitted here, so it plays no part in this
     # table and route_packed_wmma_prefill's own per-call gate check (same cache) declines it too --
     # never dispatched ungated. NOT set into the global here -- installed only around the prefill-v2

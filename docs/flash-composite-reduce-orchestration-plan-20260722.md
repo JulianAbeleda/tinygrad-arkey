@@ -23,7 +23,7 @@ Repo: `/home/ubuntu/tinygrad-arkey` · Python: `.venv/bin/python` · Env: `DEV=A
 
 ## Phase B — Scheduler emits the composite reduce for attention (the core, multi-step)
 **Goal:** a rangeify graph-rewrite recognizes `softmax(q@kᵀ·scale + mask) @ v` and restructures it into ONE composite REDUCE over KV carrying `(m, l, acc)` — QKᵀ and PV as inner ADD+MUL contractions, softmax correction as the combine — so the `T×KV` score never materializes.
-- Anchor: `tinygrad/schedule/rangeify.py` (the graph-rewrite machinery + where the score bufferize is inserted, `remove_bufferize`). The online-softmax combine math (NOT the kernel) ← `extra/qk/flash_kernels.py` for reference.
+- Anchor: `tinygrad/schedule/rangeify.py` (the graph-rewrite machinery + where the score bufferize is inserted, `remove_bufferize`). The online-softmax combine math (NOT the kernel) ← `extra/llm_research/flash_kernels.py` for reference.
 - Sub-steps (each an agent + Claude gate): (B1) pattern-match the attention subgraph and emit the composite REDUCE structure, correctness first with NO WMMA; (B2) prove the score buffer is gone (per-kernel buffer list) and `max_rel_err ≤ 1e-2` vs fp32.
 **Fallback:** if rangeify cannot emit the composite structure without REDUCE→LOOP (kills WMMA) or a hand kernel → stop, report the precise rangeify blocker.
 

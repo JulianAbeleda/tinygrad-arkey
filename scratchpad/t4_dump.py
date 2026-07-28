@@ -13,8 +13,8 @@ from tinygrad.helpers import Target
 from tinygrad.renderer.cstyle import HIPRenderer
 from tinygrad.uop.ops import Ops
 from tinygrad.llm.fused_attention import custom_kernel_attention
-from extra.qk.attention_harness_common import candidate_context
-from extra.qk.mmq_compile_evidence import disassemble_amdgpu, parse_amdgpu_metadata
+from extra.llm_research.attention_harness_common import candidate_context
+from extra.llm_research.mmq_compile_evidence import disassemble_amdgpu, parse_amdgpu_metadata
 from kv_tile_amortization_probe import parse_disasm, find_kv_loop
 
 OUT = Path(__file__).resolve().parent

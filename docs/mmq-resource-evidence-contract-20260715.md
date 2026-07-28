@@ -1,6 +1,6 @@
 # MMQ resource evidence contract
 
-`extra/qk/mmq_resource_checks.py` is the resource-evidence boundary. It
+`extra/llm_research/mmq_resource_checks.py` is the resource-evidence boundary. It
 consumes final code-object metadata and emitted-ISA facts; it does not emit
 code or choose a route.
 
