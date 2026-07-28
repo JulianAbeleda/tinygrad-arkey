@@ -64,6 +64,7 @@ def test_immediate_interactive_approval_precedes_only_replacement_path():
 def test_rollback_deactivates_new_extension_and_restores_prior_state():
   source = SCRIPT.read_text()
   rollback = source[source.index("rollback_replacement()") : source.index("finish()")]
+  assert '[[ "$previous_extension_active" != 1 ]] && extension_active' in rollback
   assert '"$INSTALL_APP/Contents/MacOS/TinyGPU" uninstall' in rollback
   assert "wait_extension_state inactive" in rollback
   assert 'mv "$backup_app" "$INSTALL_APP"' in rollback

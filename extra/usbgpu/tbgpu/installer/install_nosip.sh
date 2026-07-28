@@ -203,7 +203,9 @@ validate_developer_mode() {
 rollback_replacement() {
   local rollback_failed=0
   if [[ "$replacement_moved" == 1 && -d "$INSTALL_APP" ]]; then
-    if extension_active; then
+    # If the prior registration was active, it may still be the live provider
+    # after a failed replacement. Never deactivate it while rolling back.
+    if [[ "$previous_extension_active" != 1 ]] && extension_active; then
       "$INSTALL_APP/Contents/MacOS/TinyGPU" uninstall || rollback_failed=1
       wait_extension_state inactive || rollback_failed=1
     fi
