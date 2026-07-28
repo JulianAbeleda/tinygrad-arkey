@@ -2,6 +2,7 @@
   "schema": "production-reorganization-cleanup-ledger-20260728",
   "status": "R7_BLOCKED",
   "audited_commit": "c4c0579f3",
+  "audit_snapshot_role": "baseline audit snapshot; completed raw prunes and boundary cleanup are reconciled below",
   "authorized": [
     {"path": "docs/CLAUDE_EXECUTION_PROMPT_fused_attention_20260723.md", "action": "delete", "state": "completed", "recovery_commit": "e3778fcfb", "applied_commits": {"exp": "ab162a931", "dev": "d54a64ab0", "master": "ab154b422"}},
     {"path": "docs/CLAUDE_FLASHATTN_EXECUTION_PROMPT_20260723.md", "action": "delete", "state": "completed", "recovery_commit": "0fe7902f4", "applied_commits": {"exp": "ab162a931", "dev": "d54a64ab0", "master": "ab154b422"}}
@@ -10,12 +11,16 @@
     {"paths": ["scratch_attn_bench.py", "scratch_attn_bench2.py", "scratchpad/**", "docs/scratchpad/**"], "action": "delete", "state": "unauthorized", "recovery": "Git history; compact conclusions still require final link/index check", "reason": "Packet C high-confidence historical/scratch group"},
     {"paths": ["extra/qk/decode/capture_prefill_compile.py"], "action": "retain_on_dev_then_delete", "state": "blocked", "recovery": "5266ca605 or audited retaining commit", "reason": "no banked compile-failure conclusion and current audit hard drift"},
     {"paths": ["extra/qk/quant/mmq_ds4_probe_contract.py", "test/unit/test_mmq_ds4_logical_emitter.py"], "action": "consolidate_then_delete", "state": "blocked", "recovery": "last retaining commit", "reason": "production packed-WMMA import chain still reaches refuted DS4 module"},
-    {"paths": ["docs/*.json top-level", "bench/**", "docs/artifacts/**"], "action": "retain_until_reconciled", "state": "blocked", "recovery": "current audited commit", "reason": "consumer, authority, and compact replacement not settled"}
+    {"paths": ["docs/*.json top-level", "bench/**", "docs/artifacts/** excluding completed raw batches"], "action": "retain_until_reconciled", "state": "blocked", "recovery": "current audited commit", "reason": "consumer, authority, and compact replacement not settled for remaining evidence"}
+  ],
+  "completed_prunes": [
+    {"paths": "docs/artifacts/shared-attention-benchmark-20260723/raw/**", "count": 16, "action": "delete", "state": "completed", "replacement": "STATUS.md and summary.json", "recovery_commit": "8e829a1d3", "verification": "exact deletion count; remaining JSON parses; replay-admission test passes; no external raw-path consumers"},
+    {"paths": ["docs/artifacts/shared-attention-benchmark-replay-20260723/raw/**", "docs/artifacts/shared-attention-g2-lds-replay-20260723/raw/**", "docs/artifacts/shared-attention-wave-fence-replay-20260723/raw/**"], "count": 22, "action": "delete", "state": "completed", "replacement": "corresponding summary.json/README.md compact replay conclusions", "recovery_commits": ["9d7b985e8", "f3327febe", "1299e4531"], "verification": "exact deletion count; remaining JSON parses; replay-admission test passes; no external raw-path consumers"}
   ],
   "rules": [
     "No unresolved path may be removed or moved between tiers.",
     "Cleaner-tier deletion commits must not propagate backward into richer tiers.",
     "Every future deletion requires a compact replacement, owner, retention criterion, and recovery commit.",
-    "The two completed prompt deletions are the only removals authorized by this checkpoint."
+    "The two completed prompt deletions and the exact 16-path and 22-path raw-artifact batches are authorized and complete; no other removals are authorized by this checkpoint."
   ]
 }
