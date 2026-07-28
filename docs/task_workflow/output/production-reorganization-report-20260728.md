@@ -2,6 +2,9 @@
 
 Date: 2026-07-28
 
+Audit snapshot commit: `234dbdb46` (`exp`), with matching clean-commit snapshots regenerated independently on `dev`
+(`9c605e8e6`) and `master` (`821b543e7`).
+
 Status: first closure checkpoint complete. The durable branch topology, exhaustive low-agent census, and first
 selective production promotion are established. R7 reconciliation and broader tier pruning remain open.
 
