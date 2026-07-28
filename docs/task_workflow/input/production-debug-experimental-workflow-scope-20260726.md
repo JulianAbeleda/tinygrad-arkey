@@ -708,3 +708,7 @@ organization manifest now records the core owner. The complete matrix and accept
 The lowering baseline authority still requires `llvm-readelf`, which is unavailable in this environment, and the
 checked-in lowering fingerprint differs from the current snapshot. Those authority checks remain a verification gap;
 they do not indicate a matcher failure.
+
+The open authority work is tracked as the input task
+`docs/task_workflow/input/reg-store-devec-amd-authority-verification-scope-20260728.md`. It remains an input until the
+clean-commit baseline and fingerprint checks are rerun with the required LLVM tooling.
