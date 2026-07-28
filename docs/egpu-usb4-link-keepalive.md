@@ -126,6 +126,15 @@ DriverKit format, so do not change it to a generic `.system`/`SYSX` extension. R
 Mac mini before retrying; if the duplicate remains, remove only this empty-team
 registration with administrator authorization, then reinstall.
 
+If a reboot does not clear it, run this locally on the Mac mini (not over SSH):
+
+```sh
+sudo systemextensionsctl uninstall - org.tinygrad.arkey.tinygpu.driver2
+```
+
+The `-` targets this development registration’s empty team ID. Do not use
+`systemextensionsctl reset`, which would affect unrelated system extensions.
+
 **Next commands after reboot:**
 
 ```sh
