@@ -134,6 +134,13 @@ matcher failures.
 The required matrix and acceptance gates are now recorded in
 `docs/task_workflow/output/reg-store-devec-test-scope-20260728.md`.
 
+The fourth slice centralized the opt-in AMD `fdot2` matcher in `tinygrad/codegen/late/fdot2.py`, updated the two graph
+rewrite hooks, the post-linearization hook, and the typed GEMM consumer to direct core imports, and removed the three
+experimental forwarding shims plus the old `extra/qk` module. Fifteen focused CPU fdot2/GEMM tests pass, including
+accumulator ordering, fail-closed controls, list dependency replacement, and the old-boundary absence check. The
+`V_DOT2_LOWERING` gate remains default-off and AMD-only; no hardware execution or speed claim is made. Lowering
+baseline/fingerprint authority remains an open verification task.
+
 At the current `exp` tip, `python3 sz.py` passes with 34,947 budgeted authored lines against the 40,000-line cap.
 
 ## Documentation closure completed

@@ -2513,7 +2513,7 @@
   {
     "backend_assumptions": [
       "WMMAConsumerAdapter is RDNA3-specific by identity string ('amd.rdna3.wmma.fp16.v1') and fragment_dtype=half.vec(16)/accumulator_dtype=float.vec(8)",
-      "Dot2ConsumerAdapter is also AMD RDNA3-specific ('amd.rdna3.dot2.fp16.v1') and its .lower() calls extra.qk-adjacent tinygrad.codegen.experimental.lower_fdot2_add"
+      "Dot2ConsumerAdapter is also AMD RDNA3-specific ('amd.rdna3.dot2.fp16.v1') and its .lower() calls tinygrad.codegen.late.fdot2.lower_fdot2_add"
     ],
     "callers": [
       "tinygrad/codegen/opt/compiler_policies.py (imports prove_wait_dependency_coverage back, circular-ish helper use), test/unit/test_gemm_consumer_adapters.py"

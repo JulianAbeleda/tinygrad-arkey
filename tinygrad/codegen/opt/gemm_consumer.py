@@ -12,6 +12,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from tinygrad.dtype import DType, dtypes
 from tinygrad.uop.ops import Ops, UOp
+from tinygrad.codegen.late.fdot2 import lower_fdot2_add
 
 
 @runtime_checkable
@@ -164,7 +165,6 @@ class Dot2ConsumerAdapter:
     pair = UOp(Ops.ADD, dtypes.float, tuple(terms))
     if accumulator is not None:
       pair = UOp(Ops.ADD, dtypes.float, (accumulator, pair))
-    from tinygrad.codegen.experimental import lower_fdot2_add
     lowered = lower_fdot2_add(pair)
     if lowered is None:
       raise ValueError(f"{self.identity} canonical pair was not accepted by fdot2 lowering")

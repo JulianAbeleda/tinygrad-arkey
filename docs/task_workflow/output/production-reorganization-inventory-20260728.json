@@ -69,6 +69,18 @@
       "focused_test": "test/unit/test_reg_store_devec.py",
       "verification": "7 focused tests and 18 reg-store/coalesced-load regressions pass",
       "follow_up": "restore exact-clean-commit lowering baseline/fingerprint authorities"
+    },
+    {
+      "source": "extra/qk/fdot2_lowering.py",
+      "destination": "tinygrad/codegen/late/fdot2.py",
+      "live_callers": [
+        "tinygrad/codegen/__init__.py graph rewrite and post-linearization hooks",
+        "tinygrad/codegen/opt/gemm_consumer.py"
+      ],
+      "shim_removed": "tinygrad/codegen/experimental.py fdot2_pm, line_lower_fdot2, lower_fdot2_add",
+      "focused_test": "test/unit/test_fdot2_lowering.py",
+      "verification": "15 focused fdot2/GEMM CPU tests pass; gate remains V_DOT2_LOWERING plus AMD-only",
+      "follow_up": "restore exact-clean-commit lowering baseline/fingerprint authorities"
     }
   ],
   "blocking_conditions": [

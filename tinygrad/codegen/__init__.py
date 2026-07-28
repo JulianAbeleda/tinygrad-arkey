@@ -24,6 +24,7 @@ from tinygrad.codegen.late.reduce_lowering import pm_reduce, ReduceContext
 from tinygrad.codegen.late.reg_store import pm_reduce_acc_upcast_fix, pm_distinct_reg_store_devec, pm_reg_store_devec, pm_group_wmma_reg_store
 from tinygrad.codegen.late.coalesced_load import coalesce_loads
 from tinygrad.codegen.late.recurrence import unroll_recurrence
+from tinygrad.codegen.late.fdot2 import pm_fdot2, line_lower_fdot2
 from tinygrad.codegen.plan import PLAN_GATES, observed_gate_values  # noqa: F401  (PLAN_GATES re-exported for callers)
 from tinygrad.codegen.opt.postrange import apply_opts
 from tinygrad.codegen import experimental as cg_extras
@@ -263,7 +264,7 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   if (getenv("COALESCED_LOAD_LOWERING") or kernel_coalesced_loads) and ren.target.device == "AMD":
     sink = graph_rewrite(sink, pm_reg_store_devec, name="reg store devec")
   if getenv("V_DOT2_LOWERING") and ren.target.device == "AMD":
-    sink = graph_rewrite(sink, cg_extras.fdot2_pm(), name="fdot2 lowering")
+    sink = graph_rewrite(sink, pm_fdot2, name="fdot2 lowering")
 
   # lower the index dtype to a concrete int
   sink = graph_rewrite(sink, pm_lower_index_dtype+load_store_indexing+(PatternMatcher([]) if has_register_pipe else gep_pushing), name="lower all index dtypes")
@@ -290,7 +291,7 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   pm_final_rewrite = pm_decomp+pm_render+extra_matcher+pm_split_ends
   sink = graph_rewrite(sink, pm_final_rewrite, ctx=ren, name="final rewrite")
   if getenv("V_DOT2_LOWERING") and ren.target.device == "AMD":
-    sink = graph_rewrite(sink, cg_extras.fdot2_pm(), name="fdot2 final lowering")
+    sink = graph_rewrite(sink, pm_fdot2, name="fdot2 final lowering")
 
   if ren.new_style:
     sink = graph_rewrite(sink, pm_index_is_shrink, name="index is shrink")
@@ -359,7 +360,7 @@ def do_linearize(ctx:Renderer, prg:UOp, sink:UOp) -> UOp:
   lst = linearize(sink)
   expected_roles = prg.arg.wmma_role_expectation if isinstance(prg.arg, ProgramInfo) else ()
   if getenv("V_DOT2_LOWERING") and ctx.target.device == "AMD":
-    lst = cg_extras.line_lower_fdot2(lst)
+    lst = line_lower_fdot2(lst)
   lst = line_rewrite(lst, pm_linearize_cleanups)
   # isa renderers need to allocate registers
   selection_proof = sink.tag if isinstance(sink.tag, CompilerCaptureProof) else None
