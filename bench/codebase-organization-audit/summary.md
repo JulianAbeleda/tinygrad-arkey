@@ -1,8 +1,8 @@
 # Codebase organization audit
 
-Audited commit: `mac-first-boot-20260610-3491-gbc4cfe6cd-dirty` (dirty: True)
+Audited commit: `mac-first-boot-20260610-3493-g58a866107-dirty` (dirty: True)
 Scope: `extra/qk` | manifest coverage required for: extra/qk/
-Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 67 warnings)
+Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 67 warnings)
 
 > Machine-derived facts (discovery, LOC, imports, references, coverage, boundary checks) are produced by this
 > script. Every purpose, role, status, disposition, action, and promotion/prune judgment below is human-authored
@@ -10,9 +10,9 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 67 warnings)
 
 ## Coverage
 
-- Authored: 467 files / 71956 token-bearing LOC (sz.py rules)
+- Authored: 468 files / 71990 token-bearing LOC (sz.py rules)
 - Generated (reported, never manifested): 1 files / 57 LOC
-- Manifest scope: 94 files / 13446 LOC (93 explicit records, 0 covered by group rule, 1 uncovered)
+- Manifest scope: 94 files / 13446 LOC (94 explicit records, 0 covered by group rule, 0 uncovered)
 
 ## LOC by domain
 
@@ -22,12 +22,11 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 67 warnings)
 | attention_decode | 10 | 809 |
 | attention_prefill | 3 | 504 |
 | codegen_lowering | 8 | 510 |
-| evidence | 10 | 1608 |
+| evidence | 11 | 1671 |
 | measurement | 17 | 2147 |
 | quant_mmq | 18 | 2930 |
 | route_authority | 16 | 3447 |
 | search_promotion | 8 | 1007 |
-| unclassified | 1 | 63 |
 
 ## LOC by role
 
@@ -36,26 +35,24 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 67 warnings)
 | adapter | 11 | 1143 |
 | authority | 48 | 7741 |
 | benchmark | 2 | 99 |
-| diagnostic | 11 | 1235 |
+| diagnostic | 12 | 1298 |
 | evidence | 5 | 438 |
 | execution | 9 | 1802 |
 | integration | 2 | 402 |
 | research | 4 | 387 |
 | test | 1 | 136 |
-| unclassified | 1 | 63 |
 
 ## LOC by status
 
 | status | files | loc |
 |---|---|---|
-| active_research | 13 | 2285 |
+| active_research | 14 | 2348 |
 | fallback | 4 | 232 |
 | historical_one_off | 1 | 43 |
 | production | 66 | 9719 |
 | promoted_default | 5 | 609 |
 | refuted | 1 | 21 |
 | retained_reference | 1 | 114 |
-| unclassified | 1 | 63 |
 | unresolved_reproducer | 2 | 360 |
 
 ## LOC by disposition
@@ -65,7 +62,7 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 67 warnings)
 | consolidate | 2 | 864 |
 | investigate | 2 | 256 |
 | keep | 89 | 12263 |
-| unclassified | 1 | 63 |
+| move | 1 | 63 |
 
 ## Default-path source footprint
 
@@ -166,7 +163,7 @@ for human classification, not a death sentence.
 |---|---|---|
 | active_regression | 9 | `extra/qk/clock_pin.py`, `extra/qk/decode/decode_codegen_identity_check.py`, `extra/qk/live_split_geometry.py`, `extra/qk/packed_wmma_compile_gate.py`, `extra/qk/prefill/pure_register_compile_capture.py`, `extra/qk/prefill/pure_register_evaluation_gate.py`, `extra/qk/prefill/q4k_prefill_route_spec.py`, `extra/qk/prefill/q4k_q8_mmq_prefill_spec.py`, `extra/qk/timing_harness.py` |
 | active_validation | 25 | `extra/qk/amd_isa_proof.py`, `extra/qk/amd_resource_artifact.py`, `extra/qk/bench.py`, `extra/qk/benchmark_shared_attention.py`, `extra/qk/decode/decode_runtime_overhead.py`, `extra/qk/generated_candidates.py`, `extra/qk/memory_adaptive_allocation_observer.py`, `extra/qk/memory_adaptive_policy.py`, `extra/qk/memory_adaptive_runtime_collector.py`, `extra/qk/mmq_atom_boundary.py`, `extra/qk/mmq_ds4_logical_emitter.py`, `extra/qk/mmq_epoch_manifest_export.py`, `extra/qk/mmq_lifecycle.py`, `extra/qk/mmq_logical_vocabulary.py`, `extra/qk/mmq_q4k_q8_atom.py`, `extra/qk/mmq_q4k_q8_reference.py`, `extra/qk/prefill/packed_wmma_correctness_canary.py`, `extra/qk/prefill/prefill_graph_gemm_route.py`, `extra/qk/prefill/prefill_harness.py`, `extra/qk/prefill/prefill_primitive_spec.py`, `extra/qk/prefill/prefill_whole_synced.py`, `extra/qk/pure_search_guard.py`, `extra/qk/shared_attention_capture.py`, `extra/qk/shared_attention_evidence.py`, `extra/qk/shared_attention_promotion.py` |
-| operational_tool | 14 | `extra/qk/decode/current_decode_execution_adapter.py`, `extra/qk/decode/decode_harness.py`, `extra/qk/decode/decode_tile_timing.py`, `extra/qk/generate_shared_attention_captures.py`, `extra/qk/mmq_compile_evidence.py`, `extra/qk/packed_wmma_canary_evidence.py`, `extra/qk/phase_abi_v1_resource_probe.py`, `extra/qk/prefill/host_safety_canary.py`, `extra/qk/prefill/packed_wmma_prefill_promotion_gate.py`, `extra/qk/prefill/prefill_boltbeam_trace.py`, `extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py`, `extra/qk/prefill/prefill_flash_e2e_parity.py`, `extra/qk/prefill/prefill_flash_perf.py`, `extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py` |
+| operational_tool | 15 | `extra/qk/decode/capture_prefill_compile.py`, `extra/qk/decode/current_decode_execution_adapter.py`, `extra/qk/decode/decode_harness.py`, `extra/qk/decode/decode_tile_timing.py`, `extra/qk/generate_shared_attention_captures.py`, `extra/qk/mmq_compile_evidence.py`, `extra/qk/packed_wmma_canary_evidence.py`, `extra/qk/phase_abi_v1_resource_probe.py`, `extra/qk/prefill/host_safety_canary.py`, `extra/qk/prefill/packed_wmma_prefill_promotion_gate.py`, `extra/qk/prefill/prefill_boltbeam_trace.py`, `extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py`, `extra/qk/prefill/prefill_flash_e2e_parity.py`, `extra/qk/prefill/prefill_flash_perf.py`, `extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py` |
 | orphan_unknown | 1 | `extra/qk/bubblebeam_futuresight.py` |
 | retained_reference | 2 | `extra/qk/mmq_ds4_probe_contract.py`, `extra/qk/q4k_tile_loader.py` |
 | unresolved_reproducer | 4 | `extra/qk/benchmark_split_shared_attention.py`, `extra/qk/decode/decode_hd_sweep_numerics.py`, `extra/qk/prefill/prefill_hd_sweep_numerics.py`, `extra/qk/prefill/prefill_long_context_numerics.py` |
@@ -213,9 +210,9 @@ None.
 
 | path | class | former purpose | last campaign | replacement | commit | recovery | loc |
 |---|---|---|---|---|---|---|---|
-| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `bc4cfe6cdf1a` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
-| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `bc4cfe6cdf1a` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
-| `extra/qk/q4k_wmma_tile_lowering.py` | delete_after_verdict_capture | Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles. | q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14) | docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md | `bc4cfe6cdf1a` | git show 05b67146a -- <path> | 1138 |
+| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `58a866107fae` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
+| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `58a866107fae` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
+| `extra/qk/q4k_wmma_tile_lowering.py` | delete_after_verdict_capture | Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles. | q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14) | docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md | `58a866107fae` | git show 05b67146a -- <path> | 1138 |
 
 ## Workflow inventory
 
@@ -294,7 +291,7 @@ costs zero.
 
 ## Hard errors
 
-- **unmanifested_file**: authored file extra/qk/decode/capture_prefill_compile.py has no explicit record and no group rule
+None.
 
 ## Warnings
 
