@@ -5,6 +5,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, Callable, Iterator, Mapping
 from tinygrad import Tensor, dtypes
+from tinygrad.codegen.opt import parse_opt
 from tinygrad.llm import route_ops as qk_ops
 from tinygrad.llm.memory_semantics import (prefill_activation as _prefill_activation,
   prefill_output as _prefill_output, prefill_scratch as _prefill_scratch)
@@ -110,7 +111,7 @@ def _direct_packed_parts(lin, spec:"PrefillLinearRouteSpec") -> int:
 
 def _direct_packed_opts(lin, spec:"PrefillLinearRouteSpec"):
   if spec.quant == "q4k":
-    parse = qk_ops.q4k_parse_opt
+    parse = parse_opt
     # The promoted Q4 baseline owns this measured tile4x4 schedule. Ambient
     # tuning variables cannot relabel its candidate descriptor at runtime.
     # The full-vocabulary LM head is the one output shape whose four-way
@@ -125,7 +126,7 @@ def _direct_packed_opts(lin, spec:"PrefillLinearRouteSpec"):
       return tuple(parse(x) for x in ("LOCAL:0:16", "LOCAL:1:16"))
     return tuple(parse(x) for x in ("LOCAL:0:16", "LOCAL:1:16", "UPCAST:0:4", "UPCAST:1:4"))
   else:
-    parse = qk_ops.q6k_parse_opt
+    parse = parse_opt
   return tuple(getattr(lin, "opts", ())) + (parse(f"UPCAST:1:{_direct_packed_b_upcast(spec.m)}"),)
 
 

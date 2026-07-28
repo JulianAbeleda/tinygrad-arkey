@@ -112,7 +112,26 @@
     "extra/hardware/sqtt/roc.py has a tinygrad -> extra -> test dependency",
     "TinyGPU/USB GPU supported-product status is unresolved",
     "72 tests, 102 artifacts, and 62 top-level JSON records lack final retention owners",
-    "scoped audit has 67 warnings; expanded ownership and lowering authority follow-ups remain"
+    "scoped audit has 65 warnings; expanded ownership and lowering authority follow-ups remain"
   ],
-  "removal_authorization": "two stale prompt deletions plus bounded production ownership moves recorded in the scope"
+  "completed_prunes": [
+    {
+      "paths": "docs/artifacts/shared-attention-benchmark-20260723/raw/**",
+      "count": 16,
+      "replacement": "docs/artifacts/shared-attention-benchmark-20260723/{STATUS.md,summary.json}",
+      "recovery_commit": "8e829a1d3",
+      "verification": "exact 16-path deletion; remaining artifact JSON parses; replay-admission test passes; no external raw-path consumers"
+    }
+  ],
+  "completed_boundary_closures": [
+    {
+      "source": ["extra/qk/quant/q4_k_gemv_primitive.py", "extra/qk/quant/q6_k_gemv_primitive.py"],
+      "destination": "tinygrad/codegen/opt.parse_opt",
+      "live_callers": ["tinygrad/llm/prefill_routes.py", "tinygrad/llm/qk_primitives.py"],
+      "shim_removed": "tinygrad/llm/route_ops.py q4k_parse_opt and q6k_parse_opt",
+      "focused_test": "test/unit/test_codegen_opt_parser.py",
+      "verification": "7 CPU parser/boundary tests pass; Q4/Q6 kernel builders remain in extra for later route slices"
+    }
+  ],
+  "removal_authorization": "two stale prompt deletions, one compact raw-artifact prune, plus bounded production ownership moves recorded in the scope"
 }

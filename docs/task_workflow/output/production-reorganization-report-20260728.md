@@ -156,7 +156,18 @@ The sixth slice consolidated the hand-built AMD warp primitives and the opt-in w
 experimental matcher shim and both old modules are gone, and four CPU structural/boundary tests pass. The
 `WARP_REDUCE_LOWERING` gate remains opt-in; no AMD execution or performance claim is made.
 
-At the current `exp` tip, `python3 sz.py` passes with 34,947 budgeted authored lines against the 40,000-line cap.
+At the current `exp` tip, `python3 sz.py` passes with 35,232 budgeted authored lines against the 40,000-line cap.
+
+## Bounded raw-artifact prune
+
+The invalid shared-attention timing raw directory was deleted as an exact 16-path batch. `STATUS.md` and
+`summary.json` retain the campaign conclusion and compact numeric evidence; recovery is pinned to `8e829a1d3`.
+Remaining artifact JSON parses, the replay-admission test passes, and no external consumer references the deleted raw
+files. Other raw-artifact groups remain governed by their own ledger entries.
+
+The seventh slice centralized only the duplicated Q4/Q6 option parser in `tinygrad/codegen/opt.parse_opt`. The two
+route shims were removed and seven CPU parser/boundary tests pass. Quantized kernel builders and mixed layout tooling
+remain in `extra` until their route-specific ownership and Q6 coverage are established.
 
 ## Documentation closure completed
 
@@ -175,15 +186,15 @@ The refreshed `extra/qk` codebase-organization audit now passes its hard-error g
 
 ```text
 ORG_R1_PASS_CENSUS_PINNED
-0 hard errors, 67 warnings
+0 hard errors, 65 warnings
 ```
 
-The audit sees 94 manifest-scope `extra/qk` files with 94 explicit records and no group-rule coverage. The previously
+The audit sees 87 manifest-scope `extra/qk` files with 87 explicit records and no group-rule coverage. The previously
 unmanifested `extra/qk/decode/capture_prefill_compile.py` now has an evidence-based diagnostic record assigning it to
 `dev` until its compile-failure conclusion is banked; it remains blocked for deletion, but no longer creates an audit
 hard error.
 
-The 67 warnings are not deletion authorization. They primarily expose live `extra` code on the default production
+The 65 warnings are not deletion authorization. They primarily expose live `extra` code on the default production
 path without a finalized promotion or retention decision. They remain inputs to the production-closure sequence.
 
 The audit also records open investigation drift, including the stale pure-machine-search census overlay for renamed
@@ -197,14 +208,14 @@ R7 and broader pruning remain blocked by the following evidence gaps:
 1. Packet A still has mixed or unresolved runtime/tooling groups, including the `extra/qk` default-path closure,
    `extra/hardware/sqtt/roc.py`, TinyGPU/USB GPU support, experimental MMQ lineage, and safety ownership for
    `gpu_wait_clear.sh`.
-2. Packet B retains 72 tests and 102 staged/frozen artifacts whose final disposition depends on Packet A. Five
+2. Packet B retains 72 tests and 86 staged/frozen artifacts whose final disposition depends on Packet A. Five
    mixed-owner tests and TinyGPU-dependent tests are explicitly unresolved.
 3. The 62 top-level JSON documents require Packet B consumer and compact-replacement decisions. Raw evidence cannot
    be deleted merely because it sits outside `docs/artifacts/**`.
-4. `docs/README.md` leaves exactly 157 current top-level docs/JSON files unlisted while claiming unlisted files were
-   pruned. Rebuild the map after owner reconciliation instead of indexing the sprawl.
-5. Five broken local Markdown links remain: two from `docs/quickstart.md`, one from `docs/env_vars.md`, one absolute
-   decode-timing JSON path, and one absent absolute flash-prefill probe path.
+4. `docs/README.md` leaves 155 current top-level docs/JSON files unlisted. The index now labels these records
+   non-authoritative pending R7; rebuild the map after owner reconciliation instead of indexing the sprawl.
+5. The five Packet C link defects are mechanically closed; the maintained local-link scan is clean. Historical or
+   missing-record references reported by broader provenance scans remain outside this closure.
 6. `.githooks` is production enforcement but is ineffective until a maintained operator document activates and
    verifies `core.hooksPath`.
 7. Completed handoffs, workflow outputs, scratch records, and research probes require named conclusion banking and
@@ -216,7 +227,7 @@ R7 and broader pruning remain blocked by the following evidence gaps:
 
 This report authorizes no additional pruning.
 
-The two stale prompt deletions listed above are complete. All other proposed deletion, move, consolidation, or tier
+The two stale prompt deletions and the 16-path compact raw-artifact prune listed above are complete. All other proposed deletion, move, consolidation, or tier
 pruning remains advisory until the canonical R7 inventory resolves cross-packet ownership and records the compact
 replacement and recovery path. In particular, this checkpoint does not authorize deletion of:
 

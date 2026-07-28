@@ -2,6 +2,7 @@ from __future__ import annotations
 import collections, pathlib
 from dataclasses import dataclass
 from tinygrad import Tensor, UOp, dtypes
+from tinygrad.codegen.opt import parse_opt
 from tinygrad.helpers import prod
 from tinygrad.llm.gguf import MODEL_PARAMETER_ALLOCATION_OWNER
 from tinygrad.llm.memory_semantics import MODEL_PARAMETER, memory_semantic_owner, model_parameter
@@ -264,9 +265,9 @@ def _q4_detail(x): return f"{x.name}:mode={x.kernel_mode}:parts={x.parts}:opts={
 def _q6_detail(x): return f"{x.name}:parts={x.parts}:opts={[str(o) for o in x.opts]}"
 
 _Q4_INSTALL_SPEC = _QKInstallSpec(12, "Q4_K", "not_q4_k", dtypes.uint32, 144, _q4_generated_choice, _q4_route_choice,
-  qk_ops.q4k_parse_opt, _make_q4, _q4_detail, ("sidecar", "q4_ondemand", "shared"))
+  parse_opt, _make_q4, _q4_detail, ("sidecar", "q4_ondemand", "shared"))
 _Q6_INSTALL_SPEC = _QKInstallSpec(14, "Q6_K", "not_q6_k", dtypes.uint16, 210, _q6_generated_choice, _q6_route_choice,
-  qk_ops.q6k_parse_opt, _make_q6, _q6_detail, ("sidecar", "shared"))
+  parse_opt, _make_q6, _q6_detail, ("sidecar", "shared"))
 
 def _install_qk_primitives(model, gguf:pathlib.Path, meta:dict, spec:_QKInstallSpec, generated_policy:dict|None, budget:QKPrimitiveBudget|None,
                            storage_mode:str, route_plan:ModelRoutePlan|None, device_facts:object|None, debug:bool):

@@ -36,5 +36,5 @@ Use `Purpose/` for role alignment.
 - `roadmap.md`, `release-strategy.md` — direction + release thinking.
 
 For the engineering work itself (decode/prefill/MMVQ), the source of truth is `../../docs/README.md` plus the route
-manifest under `../../bench/qk-search-spaces/default_route_manifest.json`. Historical handoffs and audits were removed
-from the active tree; use git history for archaeology.
+manifest under `../../bench/qk-search-spaces/default_route_manifest.json`. Unlisted handoffs and audits are
+non-authoritative pending R7 reconciliation; removed records are recoverable from Git history.
