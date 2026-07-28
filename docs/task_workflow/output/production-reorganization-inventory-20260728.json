@@ -2,7 +2,7 @@
   "schema": "production-reorganization-inventory-20260728",
   "status": "R7_BLOCKED",
   "audited_worktree": "/Users/julianabeleda/env/tinygrad-arkey-exp",
-  "audited_commit": "ab162a931",
+  "audited_commit": "234dbdb46",
   "comparison_base": "6e1b61f16",
   "tier_contract": {
     "exp": ["production", "debug", "experimental"],
