@@ -459,8 +459,8 @@ Fork comparison base: upstream common ancestor `6e1b61f16` (2026-06-10). Current
 Current files modified from that base include 116 under `tinygrad/`, 19 under `extra/`, 2 under `test/`, and 3 under
 `docs/`. Deleted upstream files are tracked separately as sync history and are not counted as current assets.
 
-The existing organization audit covers only `extra/qk`: 95 authored files and 13,516 token-bearing LOC. It has 94
-explicit records and one hard drift, `extra/qk/decode/capture_prefill_compile.py`. The audit conservatively reports 55
+The baseline organization audit covered only `extra/qk`: 95 authored files and 13,516 token-bearing LOC. It had 94
+explicit records and one hard drift, `extra/qk/decode/capture_prefill_compile.py`. The audit conservatively reported 55
 files reachable through `tinygrad` boundary wrappers, but wrapper reachability is not proof of default-path execution.
 R2 must resolve actual consumers before promotion or removal.
 
@@ -667,9 +667,8 @@ updated, and the generated organization census plus pure-machine-search census w
 completed for `test/unit/test_tinygrad_boundary.py`, descriptor validation/JSON, and Python compilation of the moved
 module and callers. A broader semantic/residency batch had 32 passes, 8 skips, and 12 CPU semantic/cycle or barrier
 assertion failures; it produced no missing-module or import failure attributable to this move. The scoped organization
-audit now reports `ORG_R1_PASS_CENSUS_PINNED` with 94 explicit records, zero hard errors, and 67 warnings after the
-compile reproducer received an evidence-based dev diagnostic record; its deletion remains blocked until its conclusion
-is banked.
+That baseline checkpoint reported `ORG_R1_PASS_CENSUS_PINNED` with 94 explicit records and 67 warnings after the
+compile reproducer received an evidence-based dev diagnostic record. The current reconciled audit is recorded below.
 
 This checkpoint does not authorize broader pruning. The remaining R1-R7 ledgers, generated evidence ownership, and
 cross-packet conflicts must be reconciled before deleting or tier-pruning additional assets.
@@ -761,3 +760,19 @@ The duplicated Q4/Q6 option parser is now centralized without moving their kerne
 
 Seven CPU parser/boundary tests pass. Full Q4/Q6 builder promotion is intentionally deferred because builder callers,
 Q6 coverage, and layout ownership are not yet closed.
+
+### 16.17 Route-boundary cleanup checkpoint
+
+The `tinygrad/llm/route_ops.py` boundary was audited against executable callers. It retains only the 15 adapters used
+by model setup, prefill, decode, or packed-WMMA selection. Twenty-one compatibility wrappers with no executable caller
+were removed, including retired Q4/Q6 GEMM aliases, MMQ/DS4 helpers, lane-partition helpers, and the unused purity
+wrapper. The cleanup does not change route selection or the lazy import mechanism for the retained adapters.
+
+`route_ops.py` is now explicitly documented as a small, production-owned compatibility boundary. Its remaining
+`extra/qk` targets are migration debt, not evidence that the entire research workspace belongs on `master`. New
+production behavior must be promoted into a `tinygrad/**` domain owner; research, qualification, and evidence scripts
+remain on `dev` or `exp`.
+
+The focused route/boundary suite is the acceptance gate for this cleanup. A subsequent bounded slice must migrate each
+retained adapter with its caller, regression tests, and authority before deleting that adapter or renaming the mixed
+`extra/qk` workspace.

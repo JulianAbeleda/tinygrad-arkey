@@ -318,8 +318,8 @@
     }
   ],
   "audited_commit": {
-    "commit": "ba6a9ec7e6657c5c7dd63e87d872f77669ff5e57",
-    "described": "mac-first-boot-20260610-3511-gba6a9ec7e-dirty",
+    "commit": "af5395a4293fe66d4571eb07da54f644794faebe",
+    "described": "mac-first-boot-20260610-3518-gaf5395a42-dirty",
     "dirty": true
   },
   "authority_keys": {
@@ -851,13 +851,13 @@
   },
   "coverage": {
     "authored_files": 471,
-    "authored_loc": 72172,
-    "explicit_records": 87,
+    "authored_loc": 72245,
+    "explicit_records": 88,
     "generated_files": 1,
     "generated_loc": 57,
     "group_covered": 0,
-    "manifest_scope_files": 87,
-    "manifest_scope_loc": 13033,
+    "manifest_scope_files": 88,
+    "manifest_scope_loc": 13136,
     "uncovered": []
   },
   "coverage_limitations": [
@@ -911,31 +911,25 @@
       "tinygrad/codegen/late/warp_reduce.py",
       "tinygrad/schedule/wmma/flash_prefill.py"
     ],
-    "loc": 6138,
+    "loc": 6241,
     "production_reachable_from_tinygrad": [
       "extra/qk/amd_isa_proof.py",
       "extra/qk/amd_resource_artifact.py",
-      "extra/qk/bubblebeam_futuresight.py",
       "extra/qk/decode/flash_decode_attention_executor.py",
       "extra/qk/decode/flash_decode_attention_spec.py",
+      "extra/qk/flash_common.py",
       "extra/qk/flash_kernels.py",
       "extra/qk/gemv_g2_lanemap.py",
       "extra/qk/gemv_g3_codegen_lowering.py",
       "extra/qk/kernel_vocabulary.py",
+      "extra/qk/kv_load.py",
       "extra/qk/lane_partition_reduce.py",
       "extra/qk/layout.py",
       "extra/qk/live_split_geometry.py",
       "extra/qk/memory_adaptive_allocation_observer.py",
       "extra/qk/memory_adaptive_policy.py",
       "extra/qk/memory_adaptive_runtime_collector.py",
-      "extra/qk/mmq_atom_boundary.py",
-      "extra/qk/mmq_ds4_logical_emitter.py",
-      "extra/qk/mmq_ds4_probe_contract.py",
       "extra/qk/mmq_epoch_manifest_export.py",
-      "extra/qk/mmq_lifecycle.py",
-      "extra/qk/mmq_logical_vocabulary.py",
-      "extra/qk/mmq_q4k_q8_atom.py",
-      "extra/qk/mmq_q4k_q8_reference.py",
       "extra/qk/prefill/current_prefill_execution_adapter.py",
       "extra/qk/prefill/executable_artifact_preparation.py",
       "extra/qk/prefill/execution_bridge_contracts.py",
@@ -945,17 +939,12 @@
       "extra/qk/prefill/operand_path_execution_worker.py",
       "extra/qk/prefill/packed_wmma_prefill_candidates.py",
       "extra/qk/prefill/prefill_graph_gemm_route.py",
-      "extra/qk/prefill/prefill_primitive_spec.py",
       "extra/qk/prefill/pure_register_compile_capture.py",
       "extra/qk/prefill/q4k_prefill_route_spec.py",
-      "extra/qk/prefill/q4k_q8_mmq_prefill_spec.py",
       "extra/qk/prefill/q6k_prefill_route_spec.py",
-      "extra/qk/pure_search_guard.py",
-      "extra/qk/q4k_tile_loader.py",
       "extra/qk/q6k_route_spec.py",
       "extra/qk/quant/q4_k_gemv_primitive.py",
       "extra/qk/quant/q6_k_gemv_primitive.py",
-      "extra/qk/quantize.py",
       "extra/qk/route_manifest.py",
       "extra/qk/runtime_specs.py"
     ]
@@ -997,6 +986,10 @@
       "extra/qk/decode/decode_tile_timing.py": [
         "extra/qk/decode/flash_decode_attention_executor.py",
         "tinygrad/__init__.py"
+      ],
+      "extra/qk/flash_kernels.py": [
+        "extra/qk/cooperative_stage_lanemap.py",
+        "tinygrad/codegen/late/warp_reduce.py"
       ],
       "extra/qk/live_split_geometry.py": [
         "extra/qk/flash_common.py"
@@ -1092,31 +1085,15 @@
       ]
     },
     "dynamic_seam_edges": {
-      "test/unit/test_codegen_list_scheduler.py": [
-        "tinygrad/codegen/experimental.py"
-      ],
-      "test/unit/test_fdot2_lowering.py": [
-        "tinygrad/codegen/experimental.py"
-      ],
-      "test/unit/test_warp_reduce_lowering.py": [
-        "tinygrad/codegen/experimental.py"
-      ],
       "tinygrad/llm/route_ops.py": [
-        "extra/qk/bubblebeam_futuresight.py",
         "extra/qk/decode/flash_decode_attention_executor.py",
         "extra/qk/gemv_g3_codegen_lowering.py",
-        "extra/qk/layout.py",
         "extra/qk/memory_adaptive_runtime_collector.py",
-        "extra/qk/mmq_ds4_logical_emitter.py",
         "extra/qk/prefill/packed_wmma_prefill_candidates.py",
         "extra/qk/prefill/prefill_graph_gemm_route.py",
         "extra/qk/prefill/q4k_prefill_route_spec.py",
         "extra/qk/prefill/q6k_prefill_route_spec.py",
-        "extra/qk/pure_search_guard.py",
         "extra/qk/q6k_route_spec.py",
-        "extra/qk/quant/q4_k_gemv_primitive.py",
-        "extra/qk/quant/q6_k_gemv_primitive.py",
-        "extra/qk/quantize.py",
         "extra/qk/route_manifest.py"
       ]
     },
@@ -1194,6 +1171,10 @@
         "tinygrad/__init__.py",
         "tinygrad/helpers.py",
         "tinygrad/uop/ops.py"
+      ],
+      "extra/qk/flash_kernels.py": [
+        "extra/qk/flash_common.py",
+        "extra/qk/kv_load.py"
       ],
       "extra/qk/gemv_g2_lanemap.py": [
         "extra/qk/layout.py",
@@ -1482,7 +1463,7 @@
       "extra/qk/bench.py": 4,
       "extra/qk/benchmark_shared_attention.py": 1,
       "extra/qk/benchmark_split_shared_attention.py": 0,
-      "extra/qk/bubblebeam_futuresight.py": 1,
+      "extra/qk/bubblebeam_futuresight.py": 0,
       "extra/qk/clock_pin.py": 1,
       "extra/qk/cooperative_stage_lanemap.py": 0,
       "extra/qk/decode/capture_prefill_compile.py": 0,
@@ -1495,22 +1476,23 @@
       "extra/qk/decode/decode_tile_timing.py": 0,
       "extra/qk/decode/flash_decode_attention_executor.py": 2,
       "extra/qk/decode/flash_decode_attention_spec.py": 3,
-      "extra/qk/flash_common.py": 0,
+      "extra/qk/flash_common.py": 1,
+      "extra/qk/flash_kernels.py": 1,
       "extra/qk/gemv_g2_lanemap.py": 2,
       "extra/qk/gemv_g3_codegen_lowering.py": 2,
       "extra/qk/generate_shared_attention_captures.py": 0,
       "extra/qk/generated_candidates.py": 2,
       "extra/qk/kernel_vocabulary.py": 11,
-      "extra/qk/kv_load.py": 0,
+      "extra/qk/kv_load.py": 1,
       "extra/qk/lane_partition_reduce.py": 2,
-      "extra/qk/layout.py": 18,
+      "extra/qk/layout.py": 17,
       "extra/qk/live_split_geometry.py": 1,
       "extra/qk/memory_adaptive_allocation_observer.py": 4,
       "extra/qk/memory_adaptive_policy.py": 3,
       "extra/qk/memory_adaptive_runtime_collector.py": 3,
       "extra/qk/mmq_atom_boundary.py": 2,
       "extra/qk/mmq_compile_evidence.py": 3,
-      "extra/qk/mmq_ds4_logical_emitter.py": 2,
+      "extra/qk/mmq_ds4_logical_emitter.py": 1,
       "extra/qk/mmq_ds4_probe_contract.py": 2,
       "extra/qk/mmq_epoch_manifest_export.py": 3,
       "extra/qk/mmq_lifecycle.py": 3,
@@ -1550,13 +1532,13 @@
       "extra/qk/prefill/q4k_prefill_route_spec.py": 1,
       "extra/qk/prefill/q4k_q8_mmq_prefill_spec.py": 3,
       "extra/qk/prefill/q6k_prefill_route_spec.py": 1,
-      "extra/qk/pure_search_guard.py": 4,
+      "extra/qk/pure_search_guard.py": 3,
       "extra/qk/q4k_fused_mmq_contract.py": 0,
       "extra/qk/q4k_tile_loader.py": 2,
       "extra/qk/q6k_route_spec.py": 1,
-      "extra/qk/quant/q4_k_gemv_primitive.py": 5,
-      "extra/qk/quant/q6_k_gemv_primitive.py": 3,
-      "extra/qk/quantize.py": 1,
+      "extra/qk/quant/q4_k_gemv_primitive.py": 4,
+      "extra/qk/quant/q6_k_gemv_primitive.py": 2,
+      "extra/qk/quantize.py": 0,
       "extra/qk/route_manifest.py": 20,
       "extra/qk/runtime_specs.py": 8,
       "extra/qk/shared_attention_capture.py": 4,
@@ -1566,15 +1548,14 @@
     },
     "no_inbound_import": [
       "extra/qk/benchmark_split_shared_attention.py",
+      "extra/qk/bubblebeam_futuresight.py",
       "extra/qk/cooperative_stage_lanemap.py",
       "extra/qk/decode/capture_prefill_compile.py",
       "extra/qk/decode/decode_codegen_identity_check.py",
       "extra/qk/decode/decode_hd_sweep_numerics.py",
       "extra/qk/decode/decode_runtime_overhead.py",
       "extra/qk/decode/decode_tile_timing.py",
-      "extra/qk/flash_common.py",
       "extra/qk/generate_shared_attention_captures.py",
-      "extra/qk/kv_load.py",
       "extra/qk/packed_wmma_canary_evidence.py",
       "extra/qk/phase_abi_v1_resource_probe.py",
       "extra/qk/prefill/packed_wmma_prefill_promotion_gate.py",
@@ -1585,9 +1566,12 @@
       "extra/qk/prefill/prefill_hd_sweep_numerics.py",
       "extra/qk/prefill/prefill_long_context_numerics.py",
       "extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py",
-      "extra/qk/q4k_fused_mmq_contract.py"
+      "extra/qk/q4k_fused_mmq_contract.py",
+      "extra/qk/quantize.py"
     ],
-    "no_reference_at_all": [],
+    "no_reference_at_all": [
+      "extra/qk/quantize.py"
+    ],
     "outbound_counts": {
       "extra/qk/amd_isa_proof.py": 2,
       "extra/qk/amd_resource_artifact.py": 1,
@@ -1609,6 +1593,7 @@
       "extra/qk/decode/flash_decode_attention_executor.py": 2,
       "extra/qk/decode/flash_decode_attention_spec.py": 3,
       "extra/qk/flash_common.py": 3,
+      "extra/qk/flash_kernels.py": 2,
       "extra/qk/gemv_g2_lanemap.py": 2,
       "extra/qk/gemv_g3_codegen_lowering.py": 6,
       "extra/qk/generate_shared_attention_captures.py": 10,
@@ -2807,8 +2792,8 @@
         "loc": 256
       },
       "keep": {
-        "files": 83,
-        "loc": 11882
+        "files": 84,
+        "loc": 11985
       },
       "move": {
         "files": 1,
@@ -2821,8 +2806,8 @@
         "loc": 421
       },
       "attention_decode": {
-        "files": 9,
-        "loc": 705
+        "files": 10,
+        "loc": 808
       },
       "attention_prefill": {
         "files": 3,
@@ -2875,8 +2860,8 @@
         "loc": 438
       },
       "execution": {
-        "files": 8,
-        "loc": 1698
+        "files": 9,
+        "loc": 1801
       },
       "integration": {
         "files": 2,
@@ -2901,8 +2886,8 @@
         "loc": 43
       },
       "production": {
-        "files": 63,
-        "loc": 9538
+        "files": 64,
+        "loc": 9641
       },
       "promoted_default": {
         "files": 5,
@@ -3016,8 +3001,7 @@
       "docs/moe-fast-build-spec-deepseek-20260722.md",
       "docs/moe-fast-design-scope-20260722.md",
       "docs/shared-flash-attention-codex-completion-scope-20260722.md",
-      "docs/shared-flash-scoped-reduce-completion-scope-20260722.md",
-      "tinygrad/llm/route_ops.py"
+      "docs/shared-flash-scoped-reduce-completion-scope-20260722.md"
     ],
     "extra/qk/clock_pin.py": [
       "docs/harness-consolidation.md",
@@ -3119,6 +3103,25 @@
       "test/unit/test_gate_inventory.py",
       "tinygrad/codegen/plan.py"
     ],
+    "extra/qk/flash_kernels.py": [
+      "docs/14b-decode-g5-steady-state-recovery-scope-20260726.md",
+      "docs/HANDOFF_14b_decode_depth_decay_20260726.md",
+      "docs/flash-composite-reduce-orchestration-plan-20260722.md",
+      "docs/flash-prefill-B-task-deepseek-20260721.md",
+      "docs/flash-prefill-route-a-task-deepseek-20260721.md",
+      "docs/flash-prefill-scope-20260721.md",
+      "docs/flash-prefill-wmma-mvp-scope-20260721.md",
+      "docs/flash-scheduler-extension-scope-deepseek-20260722.md",
+      "docs/prefill-softmax-reduce-fuse-evidence-20260724.json",
+      "docs/prefill-softmax-reduce-fuse-promotion-readiness-20260724.md",
+      "docs/shared-flash-attention-codex-completion-scope-20260722.md",
+      "docs/task_workflow/output/lowering-architecture-refactor-scope-20260726.md",
+      "extra/qk/decode/decode_codegen_identity_check.py",
+      "extra/qk/decode/decode_hd_sweep_numerics.py",
+      "extra/qk/decode/flash_decode_attention_spec.py",
+      "test/unit/test_flash_buffer_roles.py",
+      "test/unit/test_flash_variant_fingerprint.py"
+    ],
     "extra/qk/gemv_g2_lanemap.py": [
       "bench/pure-machine-search-default-path-census/default_route_table.json",
       "bench/pure-machine-search-default-path-census/latest.json",
@@ -3200,8 +3203,7 @@
       "test/unit/test_mmq_q4k_q8_reference.py",
       "test/unit/test_packed_weight.py",
       "test/unit/test_q4k_prefill_route_spec.py",
-      "test/unit/test_q4k_w_f16_decode.py",
-      "tinygrad/llm/route_ops.py"
+      "test/unit/test_q4k_w_f16_decode.py"
     ],
     "extra/qk/live_split_geometry.py": [
       "bench/qk-search-spaces/default_route_manifest.json",
@@ -3248,8 +3250,7 @@
     "extra/qk/mmq_ds4_logical_emitter.py": [
       "bench/lowering-refactor-baseline/pass_inventory.json",
       "scratchpad/audit_bfs.py",
-      "test/unit/test_mmq_ds4_logical_emitter.py",
-      "tinygrad/llm/route_ops.py"
+      "test/unit/test_mmq_ds4_logical_emitter.py"
     ],
     "extra/qk/mmq_ds4_probe_contract.py": [
       "docs/task_workflow/output/codebase-organization-audit-report.md",
@@ -3600,8 +3601,7 @@
       "docs/packed-wmma-14b-machine-search-claim-scope-20260725.md",
       "docs/prefill-causal-tile-skip-promotion-readiness-20260724.md",
       "docs/prefill-softmax-reduce-fuse-evidence-20260724.json",
-      "extra/qk/prefill/prefill_whole_synced.py",
-      "tinygrad/llm/route_ops.py"
+      "extra/qk/prefill/prefill_whole_synced.py"
     ],
     "extra/qk/q4k_fused_mmq_contract.py": [
       "docs/lowering-refactor-cut-list-20260726.md"
@@ -3632,8 +3632,7 @@
       "extra/qk/mmq_q4k_q8_atom.py",
       "extra/qk/prefill/q4k_prefill_route_spec.py",
       "test/unit/test_codegen_opt_parser.py",
-      "test/unit/test_q4k_w_f16_decode.py",
-      "tinygrad/llm/route_ops.py"
+      "test/unit/test_q4k_w_f16_decode.py"
     ],
     "extra/qk/quant/q6_k_gemv_primitive.py": [
       "bench/qk-search-spaces/quant_semantics.json",
@@ -3643,11 +3642,7 @@
       "extra/qk/prefill/q6k_prefill_route_spec.py",
       "extra/qk/q6k_route_spec.py",
       "scratchpad/audit_bfs.py",
-      "test/unit/test_codegen_opt_parser.py",
-      "tinygrad/llm/route_ops.py"
-    ],
-    "extra/qk/quantize.py": [
-      "tinygrad/llm/route_ops.py"
+      "test/unit/test_codegen_opt_parser.py"
     ],
     "extra/qk/route_manifest.py": [
       ".claude/loop.md",
@@ -3739,16 +3734,16 @@
     ]
   },
   "promotion_budget": {
-    "budgeted_after_pending_promotions": 35019,
-    "budgeted_loc": 35019,
+    "budgeted_after_pending_promotions": 34991,
+    "budgeted_loc": 34991,
     "cap": 40000,
     "data_file_convertible_loc": 0,
-    "headroom": 4981,
+    "headroom": 5009,
     "intended_cap": 30000,
     "intended_cap_note": "sz.py:13 records 35000 as temporary headroom; the standing target is 30000",
-    "over_intended_cap": 5019,
+    "over_intended_cap": 4991,
     "pending_promotion_net_cost": 0,
-    "unbudgeted_default_path_loc": 6012
+    "unbudgeted_default_path_loc": 6115
   },
   "repeated_workflow_phases": {
     "build-spec": [
@@ -4158,8 +4153,8 @@
       "warning": "extra_on_default_path"
     },
     {
-      "count": 18,
-      "message": "extra/qk/layout.py is imported by 18 modules",
+      "count": 17,
+      "message": "extra/qk/layout.py is imported by 17 modules",
       "path": "extra/qk/layout.py",
       "principle": "a widely-imported module is a de-facto authority",
       "warning": "high_fan_in"
@@ -4277,13 +4272,6 @@
       "path": "extra/qk/shared_attention_evidence.py",
       "principle": "centralize authoritative knowledge under one owner",
       "warning": "multiple_authority_keys"
-    },
-    {
-      "from": "tinygrad/llm/route_ops.py",
-      "message": "lazy seam tinygrad/llm/route_ops.py declares a wrapper onto extra/qk/mmq_ds4_logical_emitter.py (role=research); the wrapper is not evidence that the default path calls it",
-      "principle": "production must not depend on research surfaces",
-      "to": "extra/qk/mmq_ds4_logical_emitter.py",
-      "warning": "production_seam_to_research"
     },
     {
       "message": "phase 'build-spec' is re-implemented by 3 workflows: ['decode-route-selection', 'prefill-route-selection', 'quant-kernel-lowering']",

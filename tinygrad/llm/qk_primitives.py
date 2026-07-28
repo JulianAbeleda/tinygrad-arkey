@@ -7,7 +7,6 @@ from tinygrad.helpers import prod
 from tinygrad.llm.gguf import MODEL_PARAMETER_ALLOCATION_OWNER
 from tinygrad.llm.memory_semantics import MODEL_PARAMETER, memory_semantic_owner, model_parameter
 from tinygrad.llm.physical_memory_ledger import allocation_owner, bind_allocation_owner
-from tinygrad.llm import route_ops as qk_ops
 from tinygrad.llm.decode_routes import q4k_primitive_linear_call, q6k_primitive_linear_call
 from tinygrad.llm.route_policy import _qk_generated_policy_entry
 from tinygrad.llm.model_route_plan import ModelRoutePlan, build_model_route_plan

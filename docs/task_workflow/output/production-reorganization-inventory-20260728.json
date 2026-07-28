@@ -51,7 +51,7 @@
     "consumers": ["tinygrad/llm/fused_attention.py:162", "tinygrad/codegen/opt/postrange.py:602"],
     "commits": {"exp": "ab162a931", "dev": "d54a64ab0", "master": "ab154b422"},
     "focused_test": "test/unit/test_flash_prefill_spec.py",
-    "audit_state": "ORG_R1_PASS_CENSUS_PINNED; 0 hard errors and 65 warnings after adding the evidence-based dev record for capture_prefill_compile.py"
+    "audit_state": "ORG_R1_PASS_CENSUS_PINNED; 0 hard errors and 64 warnings after the route-boundary adapter cleanup"
   },
   "completed_additional_slices": [
     {
@@ -115,7 +115,7 @@
     "extra/hardware/sqtt/roc.py has a tinygrad -> extra -> test dependency",
     "TinyGPU/USB GPU supported-product status is unresolved",
     "14 master tests, 25 dev-only tests, and 26 exp-only tests are partitioned; mixed-owner tests remain unresolved; 102 staged/frozen artifacts and 62 top-level JSON records lack final retention owners",
-    "scoped audit has 65 warnings; expanded ownership and lowering authority follow-ups remain"
+    "scoped audit has 64 warnings; expanded ownership and lowering authority follow-ups remain"
   ],
   "completed_prunes": [
     {
@@ -152,6 +152,15 @@
     "action": "delete unused compatibility shell and core import",
     "focused_tests": "test_codegen_list_scheduler.py, test_fdot2_lowering.py, test_warp_reduce_lowering.py",
     "verification": "21 focused tests pass"
+  },
+  "route_boundary_cleanup": {
+    "path": "tinygrad/llm/route_ops.py",
+    "removed_adapters": 21,
+    "retained_adapters": 15,
+    "retained_callers": ["tinygrad/llm/model.py", "tinygrad/llm/prefill_routes.py", "tinygrad/llm/decode_routes.py"],
+    "focused_test": "test/unit/test_tinygrad_boundary.py::test_route_ops_exposes_only_live_route_adapters",
+    "verification": "43 route, boundary, parser, and purity tests pass; route selection semantics unchanged",
+    "next_step": "migrate retained extra/qk targets into tinygrad domain owners before deleting remaining adapters"
   },
   "removal_authorization": "two stale prompt deletions, exact 16-path and 22-path compact raw-artifact prunes, and bounded production ownership moves recorded in the scope; no other pruning is authorized"
 }
