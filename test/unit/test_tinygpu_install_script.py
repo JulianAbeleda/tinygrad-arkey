@@ -15,7 +15,7 @@ def test_install_helper_has_valid_bash_syntax_and_non_operational_help():
   assert subprocess.run(["bash", "-n", str(SCRIPT)], check=False).returncode == 0
   result = run_script("--help")
   assert result.returncode == 0 and "--install " + TOKEN in result.stdout
-  assert "clean linked feature/egpu-usb4-keeper worktree" in result.stdout
+  assert "clean linked exp worktree" in result.stdout
 
 
 def test_install_rejects_bad_modes_and_approval_before_build():
@@ -33,7 +33,7 @@ def test_install_rejects_bad_modes_and_approval_before_build():
 
 def test_install_requires_clean_linked_feature_source_and_inherited_lock():
   source = SCRIPT.read_text()
-  for token in ("--absolute-git-dir", "--git-common-dir", "feature/egpu-usb4-keeper", "status --porcelain=v1 --untracked-files=all",
+  for token in ("--absolute-git-dir", "--git-common-dir", 'FEATURE_BRANCH="exp"', "status --porcelain=v1 --untracked-files=all",
                 "ls-files --error-unmatch", "TINYGRAD_GPU_LOCK_FD", "/tmp/gpu-bench.lock", "GPU lock nonce mismatch"):
     assert token in source
   assert source.index("validate_gpu_lock") < source.index("xcodebuild -project")

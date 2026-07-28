@@ -80,7 +80,9 @@ shared memory are released at lease disconnect and are not retained by the keepe
 
 ## Measured implementation status (2026-07-28)
 
-- Feature branch: `feature/egpu-usb4-keeper`, source commit `f23c05c57468ccdd7035789fbf38320d2c2c0d68`.
+- Original implementation branch: `feature/egpu-usb4-keeper`, source commit `f23c05c57468ccdd7035789fbf38320d2c2c0d68`.
+  The maintained installation owner is now the clean `exp` worktree; the installer enforces that branch so
+  production `master` cannot be used for development DEXT replacement.
 - The audited development installer replaced `/Applications/TinyGPU.app`; the app and
   DriverKit extension are ad-hoc signed, and DEXT
   `org.tinygrad.arkey.tinygpu.driver2` reached `[activated enabled]` at version `1.0.0/4`.
