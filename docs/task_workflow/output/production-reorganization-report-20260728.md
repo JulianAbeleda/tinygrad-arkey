@@ -2,8 +2,9 @@
 
 Date: 2026-07-28
 
-Audit snapshot commit: `c4c0579f3` (`exp`), with matching clean-commit snapshots regenerated independently on `dev`
-(`9e78d3732`) and `master` (`42e9a47b3`).
+Baseline audit snapshot: `c4c0579f3` (`exp`), with matching clean-commit snapshots regenerated independently on `dev`
+(`9e78d3732`) and `master` (`42e9a47b3`). Later reconciliation commits below supersede those snapshots for counts and
+completed-prune records.
 
 Status: first closure checkpoint complete. The durable branch topology, exhaustive low-agent census, and first
 selective production promotion are established. R7 reconciliation and broader tier pruning remain open.
@@ -173,16 +174,28 @@ The seventh slice centralized only the duplicated Q4/Q6 option parser in `tinygr
 route shims were removed and seven CPU parser/boundary tests pass. Quantized kernel builders and mixed layout tooling
 remain in `extra` until their route-specific ownership and Q6 coverage are established.
 
+The eighth cleanup removed the now-empty `tinygrad/codegen/experimental.py` compatibility shell and its unused core
+import. Three boundary tests now assert that the retired module is absent; the focused list-scheduler, fdot2, warp, and
+parser suite passes 21 tests.
+
 ## Documentation closure completed
 
-The same bounded branch patch deleted only these two stale execution prompts:
+The same bounded branch patch deleted these two stale execution prompts:
 
 - `docs/CLAUDE_EXECUTION_PROMPT_fused_attention_20260723.md`
 - `docs/CLAUDE_FLASHATTN_EXECUTION_PROMPT_20260723.md`
 
 The surviving results record now points to historical commit `0fe7902f4` instead of a live prompt path. The first
-prompt is recoverable from `e3778fcfb`; the second is recoverable from `0fe7902f4`. These are the only pruning actions
-authorized by this checkpoint.
+prompt is recoverable from `e3778fcfb`; the second is recoverable from `0fe7902f4`. Alongside those prompts, the exact
+16-path timing raw batch and exact 22-path replay raw batch are complete with compact replacements and recovery
+commits recorded above. No other pruning actions are authorized by this checkpoint.
+
+## Test ownership partition
+
+The current conservative ownership record is in
+`docs/task_workflow/output/test-ownership-partition-20260728.md`: 14 production tests remain on `master`, 25
+debug/qualification tests remain dev-only, and 26 research tests remain exp-only. Mixed-owner, TinyGPU-dependent, and
+GPU-lock tests are intentionally unresolved rather than assigned by subtraction.
 
 ## Current audit state
 
@@ -193,7 +206,7 @@ ORG_R1_PASS_CENSUS_PINNED
 0 hard errors, 65 warnings
 ```
 
-The audit sees 87 manifest-scope `extra/qk` files with 87 explicit records and no group-rule coverage. The previously
+The audit sees 88 manifest-scope `extra/qk` files with 88 explicit records and no group-rule coverage. The previously
 unmanifested `extra/qk/decode/capture_prefill_compile.py` now has an evidence-based diagnostic record assigning it to
 `dev` until its compile-failure conclusion is banked; it remains blocked for deletion, but no longer creates an audit
 hard error.
@@ -212,8 +225,9 @@ R7 and broader pruning remain blocked by the following evidence gaps:
 1. Packet A still has mixed or unresolved runtime/tooling groups, including the `extra/qk` default-path closure,
    `extra/hardware/sqtt/roc.py`, TinyGPU/USB GPU support, experimental MMQ lineage, and safety ownership for
    `gpu_wait_clear.sh`.
-2. Packet B retains 72 tests and 64 staged/frozen artifacts whose final disposition depends on Packet A. Five
-   mixed-owner tests and TinyGPU-dependent tests are explicitly unresolved.
+2. Packet B retains a conservative branch partition of 14 master tests, 25 dev-only tests, and 26 exp-only tests.
+   Mixed-owner, TinyGPU-dependent, and GPU-lock tests remain unresolved. The unresolved staged/frozen artifact groups
+   total 102 files; the full tracked `docs/artifacts/**` set is now 135 after the two completed raw batches.
 3. The 62 top-level JSON documents require Packet B consumer and compact-replacement decisions. Raw evidence cannot
    be deleted merely because it sits outside `docs/artifacts/**`.
 4. `docs/README.md` leaves 155 current top-level docs/JSON files unlisted. The index now labels these records
@@ -231,7 +245,7 @@ R7 and broader pruning remain blocked by the following evidence gaps:
 
 This report authorizes no additional pruning.
 
-The two stale prompt deletions and the 16-path compact raw-artifact prune listed above are complete. All other proposed deletion, move, consolidation, or tier
+The two stale prompt deletions and the exact 16-path and 22-path compact raw-artifact prunes listed above are complete. All other proposed deletion, move, consolidation, or tier
 pruning remains advisory until the canonical R7 inventory resolves cross-packet ownership and records the compact
 replacement and recovery path. In particular, this checkpoint does not authorize deletion of:
 

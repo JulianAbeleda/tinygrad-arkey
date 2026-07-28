@@ -32,8 +32,7 @@ def test_warp_reduce_fails_closed_for_non_lane_axes_and_non_power_of_two_widths(
 
 
 def test_warp_reduce_core_owns_old_extra_boundary():
-  import importlib
-  experimental = importlib.import_module("tinygrad.codegen.experimental")
-  assert not hasattr(experimental, "warp_reduce_pm")
+  import importlib.util
+  assert importlib.util.find_spec("tinygrad.codegen.experimental") is None
   assert importlib.util.find_spec("extra.qk.amd_warp_reduce") is None
   assert importlib.util.find_spec("extra.qk.warp_reduce_lowering") is None
