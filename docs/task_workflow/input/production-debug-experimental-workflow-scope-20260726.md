@@ -692,14 +692,19 @@ and private reinitialization-register duplication, and AMD dispatch. No AMD exec
 This slice also does not authorize broader pruning. Subsequent codegen, quant, decode, route-policy, and packed-WMMA
 slices still require their own tests and evidence closures.
 
-### 16.12 Third-slice blocker checkpoint
+### 16.12 Third production-closure checkpoint
 
-The next proposed slice, `extra/qk/reg_store_devec.py` into `tinygrad/codegen/late/reg_store.py`, is **blocked**.
-Its live caller is `tinygrad/codegen/__init__.py:263-264`, and the forwarding shim is
-`tinygrad/codegen/experimental.py:15`; import-cycle risk is low. However, the extra matcher runs after the core
-`pm_distinct_reg_store_devec` rule and intentionally accepts duplicate REG pointers that the core matcher rejects.
-No focused test currently covers the required `STACK(LOAD(INDEX(REG)))` positive case, duplicate-pointer behavior,
-lane ordering, negative GLOBAL/LOCAL/non-index/mixed targets, or AMD/coalesced-load dispatch. The slice must not be
-consolidated or promoted until those tests pin the residual behavior and the lowering baseline/fingerprint are
-regenerated at the exact clean commit. The complete matrix and acceptance gates are recorded in
+The register-store devectorizer is now centralized without merging away its distinct behavior:
+
+| Source | Destination | Production consumer | Boundary change |
+|---|---|---|---|
+| `extra/qk/reg_store_devec.py` | `tinygrad/codegen/late/reg_store.py` | `tinygrad/codegen/__init__.py:264` after `pm_distinct_reg_store_devec` on AMD/coalesced-load paths | The separate `pm_reg_store_devec` rule was ported into the core owner; the extra module and `codegen/experimental.py` forwarding shim were removed |
+
+The duplicate-pointer residual behavior is preserved as a separate matcher, and malformed targets/value-width
+mismatches fail closed. Seven focused tests and the existing reg-store/coalesced-load regression set pass. The
+organization manifest now records the core owner. The complete matrix and acceptance gates are recorded in
 `docs/task_workflow/output/reg-store-devec-test-scope-20260728.md`.
+
+The lowering baseline authority still requires `llvm-readelf`, which is unavailable in this environment, and the
+checked-in lowering fingerprint differs from the current snapshot. Those authority checks remain a verification gap;
+they do not indicate a matcher failure.

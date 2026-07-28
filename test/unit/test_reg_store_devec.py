@@ -1,13 +1,18 @@
 import os
+import importlib.util
 
 from tinygrad import dtypes
 from tinygrad.codegen import full_rewrite_to_sink
-from tinygrad.codegen.late.reg_store import _devec_distinct_reg_store
+from tinygrad.codegen.late.reg_store import _devec_distinct_reg_store, _devec_reg_store
 from tinygrad.dtype import AddrSpace
 from tinygrad.helpers import Target, getenv
 from tinygrad.renderer.isa.amd import AMDISARenderer
 from tinygrad.uop.ops import KernelInfo, Ops, UOp
-from extra.qk.reg_store_devec import _devec_reg_store
+
+
+def test_reg_store_devec_is_core_owned():
+  assert importlib.util.find_spec("tinygrad.codegen.late.reg_store") is not None
+  assert importlib.util.find_spec("extra.qk.reg_store_devec") is None
 
 
 def _target(reg, indices, *, load=True):
@@ -81,16 +86,19 @@ def _sum4_ast():
 def _run_pipeline(device, gate, monkeypatch):
   calls = []
   import tinygrad.codegen as codegen
-  original = codegen.cg_extras.reg_store_devec_pm
-  monkeypatch.setattr(codegen.cg_extras, "reg_store_devec_pm", lambda: calls.append(True) or codegen.PatternMatcher([]))
+  original_graph_rewrite = codegen.graph_rewrite
+  def spy(ast, matcher, *args, **kwargs):
+    if kwargs.get("name") == "reg store devec": calls.append(matcher)
+    return original_graph_rewrite(ast, matcher, *args, **kwargs)
   previous = os.environ.get("COALESCED_LOAD_LOWERING")
   if gate is None: os.environ.pop("COALESCED_LOAD_LOWERING", None)
   else: os.environ["COALESCED_LOAD_LOWERING"] = gate
   getenv.cache_clear()
   try:
-    full_rewrite_to_sink(_sum4_ast(), AMDISARenderer(Target.parse(device)), optimize=True)
+    with monkeypatch.context() as patch:
+      patch.setattr(codegen, "graph_rewrite", spy)
+      full_rewrite_to_sink(_sum4_ast(), AMDISARenderer(Target.parse(device)), optimize=True)
   finally:
-    codegen.cg_extras.reg_store_devec_pm = original
     if previous is None: os.environ.pop("COALESCED_LOAD_LOWERING", None)
     else: os.environ["COALESCED_LOAD_LOWERING"] = previous
     getenv.cache_clear()
@@ -98,6 +106,6 @@ def _run_pipeline(device, gate, monkeypatch):
 
 
 def test_pipeline_dispatch_is_amd_and_gate_scoped(monkeypatch):
-  assert _run_pipeline("AMD:ISA:gfx1100", "1", monkeypatch) == [True]
+  assert len(_run_pipeline("AMD:ISA:gfx1100", "1", monkeypatch)) == 1
   assert _run_pipeline("AMD:ISA:gfx1100", None, monkeypatch) == []
   assert _run_pipeline("CPU", "1", monkeypatch) == []

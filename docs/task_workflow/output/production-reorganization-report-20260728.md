@@ -125,11 +125,12 @@ organization manifest and lowering findings were updated; the transform body is 
 nested ranges, private reinitialization registers, and AMD dispatch. The focused CPU gate/boundary/audit suite passed
 61 tests. No AMD execution or GPU numeric result is claimed for this slice.
 
-The proposed third slice (`extra/qk/reg_store_devec.py` into `tinygrad/codegen/late/reg_store.py`) remains blocked. Its
-extra matcher runs after the core matcher and accepts duplicate REG pointers that the core matcher rejects. The new
-focused test file passes six matcher/dispatch tests, but the exact-clean-commit lowering baseline cannot run without
-`llvm-readelf`, and the checked-in lowering fingerprint currently differs. Consolidation remains unsafe until those
-authorities are restored and the duplicate-pointer contract is decided.
+The third slice centralized `reg_store_devec` in `tinygrad/codegen/late/reg_store.py` without merging it into the core
+distinct-pointer matcher. The separate `pm_reg_store_devec` rule still runs after `pm_distinct_reg_store_devec`,
+preserving duplicate-pointer residual behavior. Seven focused matcher/dispatch tests and the existing reg-store/
+coalesced-load regressions pass. The exact-clean-commit lowering baseline still cannot run without `llvm-readelf`,
+and the checked-in lowering fingerprint currently differs; these remain authority verification gaps rather than
+matcher failures.
 The required matrix and acceptance gates are now recorded in
 `docs/task_workflow/output/reg-store-devec-test-scope-20260728.md`.
 

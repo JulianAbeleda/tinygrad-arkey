@@ -21,7 +21,7 @@ from tinygrad.codegen.late.expander import expander, pm_pre_expander, pm_group_f
 from tinygrad.codegen.late.devectorizer import load_store_folding, load_store_indexing, devectorize_buf_and_index, devectorize_alu, \
   correct_load_store, pm_render, pm_add_loads, pm_make_images
 from tinygrad.codegen.late.reduce_lowering import pm_reduce, ReduceContext
-from tinygrad.codegen.late.reg_store import pm_reduce_acc_upcast_fix, pm_distinct_reg_store_devec, pm_group_wmma_reg_store
+from tinygrad.codegen.late.reg_store import pm_reduce_acc_upcast_fix, pm_distinct_reg_store_devec, pm_reg_store_devec, pm_group_wmma_reg_store
 from tinygrad.codegen.late.coalesced_load import coalesce_loads
 from tinygrad.codegen.late.recurrence import unroll_recurrence
 from tinygrad.codegen.plan import PLAN_GATES, observed_gate_values  # noqa: F401  (PLAN_GATES re-exported for callers)
@@ -261,7 +261,7 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   if ren.target.device == "AMD":
     sink = graph_rewrite(sink, pm_distinct_reg_store_devec, name="distinct reg store devec")
   if (getenv("COALESCED_LOAD_LOWERING") or kernel_coalesced_loads) and ren.target.device == "AMD":
-    sink = graph_rewrite(sink, cg_extras.reg_store_devec_pm(), name="reg store devec")
+    sink = graph_rewrite(sink, pm_reg_store_devec, name="reg store devec")
   if getenv("V_DOT2_LOWERING") and ren.target.device == "AMD":
     sink = graph_rewrite(sink, cg_extras.fdot2_pm(), name="fdot2 lowering")
 

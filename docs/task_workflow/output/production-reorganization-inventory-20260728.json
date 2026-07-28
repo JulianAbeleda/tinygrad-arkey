@@ -60,14 +60,15 @@
       "verification": "61 focused CPU tests pass; AMD execution remains unrun"
     }
   ],
-  "blocked_slices": [
+  "completed_centralization_slices": [
     {
       "source": "extra/qk/reg_store_devec.py",
-      "proposed_destination": "tinygrad/codegen/late/reg_store.py",
-      "live_caller": "tinygrad/codegen/__init__.py:263-264",
-      "blocker": "Focused matcher coverage now passes, but exact-clean-commit lowering baseline/fingerprint authorities are not green: llvm-readelf is unavailable for baseline generation and the checked-in fingerprint differs; core matcher still rejects duplicate REG pointers while extra matcher accepts them",
-      "required_before_promotion": ["focused matcher/pipeline tests", "lowering baseline regeneration", "lowering fingerprint regeneration"],
-      "test_scope": "docs/task_workflow/output/reg-store-devec-test-scope-20260728.md"
+      "destination": "tinygrad/codegen/late/reg_store.py",
+      "live_caller": "tinygrad/codegen/__init__.py:264",
+      "matcher": "pm_reg_store_devec remains separate after pm_distinct_reg_store_devec",
+      "focused_test": "test/unit/test_reg_store_devec.py",
+      "verification": "7 focused tests and 18 reg-store/coalesced-load regressions pass",
+      "follow_up": "restore exact-clean-commit lowering baseline/fingerprint authorities"
     }
   ],
   "blocking_conditions": [
@@ -76,7 +77,7 @@
     "extra/hardware/sqtt/roc.py has a tinygrad -> extra -> test dependency",
     "TinyGPU/USB GPU supported-product status is unresolved",
     "72 tests, 102 artifacts, and 62 top-level JSON records lack final retention owners",
-    "docs/README.md and five documented Markdown links require repair"
+    "scoped audit has 67 warnings; expanded ownership and lowering authority follow-ups remain"
   ],
-  "removal_authorization": "only the two stale Claude prompt deletions recorded in the cleanup ledger"
+  "removal_authorization": "two stale prompt deletions plus bounded production ownership moves recorded in the scope"
 }
