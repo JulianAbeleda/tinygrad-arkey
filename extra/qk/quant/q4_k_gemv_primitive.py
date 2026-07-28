@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 from tinygrad import dtypes
-from tinygrad.codegen.opt import Opt, OptOps
+from tinygrad.codegen.opt import Opt, OptOps, parse_opt
 from tinygrad.helpers import cdiv
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
 
-from extra.qk.layout import Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS
+from tinygrad.llm.qk_layout import Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS
 
 def _f16_word(word:UOp, high:bool) -> UOp:
   bits = (word.rshift(16) if high else word).bitwise_and(0xffff)
@@ -68,15 +68,6 @@ def _q4k_block_dot_packed_load(words:UOp, x:UOp, base:UOp, x_block:UOp, lane4:UO
   for grp in range(8):
     contrib = contrib + _q4k_group_dot_packed_load(words, x, base, x_block, grp, lane4)
   return contrib
-
-def parse_opt(spec:str) -> Opt:
-  parts = spec.split(":")
-  if len(parts) == 1:
-    return Opt(OptOps[parts[0].upper()])
-  if len(parts) != 3:
-    raise ValueError(f"opt must be OP or OP:AXIS:ARG, got {spec!r}")
-  op, axis, arg = parts
-  return Opt(OptOps[op.upper()], int(axis), int(arg))
 
 def _kernel_info(name:str, schedule:str, opts:tuple[Opt, ...]) -> KernelInfo:
   if opts: return KernelInfo(name=name, opts_to_apply=opts)

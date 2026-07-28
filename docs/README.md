@@ -1,8 +1,8 @@
 # docs/ - Current Map
 
 Closed campaign scopes and superseded probe logs live in git history, not the current tree. Every doc listed below is
-either a current authority or a retained refutation/lesson. If a doc is not listed here, it has been pruned — recover
-it from git history.
+either a current authority or a retained refutation/lesson. This is the maintained production map; current documents
+not listed here remain non-authoritative pending R7 reconciliation.
 
 **Single-number rule:** for any performance figure, the authority doc named below owns it. A number quoted in a
 non-authority doc without a pointer here is presumed stale. (The `4413`/`2549` 8B baselines were exactly this failure;

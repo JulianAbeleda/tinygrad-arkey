@@ -2,20 +2,11 @@
 from __future__ import annotations
 
 from tinygrad import dtypes
-from tinygrad.codegen.opt import Opt, OptOps
+from tinygrad.codegen.opt import Opt, OptOps, parse_opt
 from tinygrad.helpers import cdiv
 from tinygrad.uop.ops import AxisType, KernelInfo, UOp
 
-from extra.qk.layout import Q6K_HALFWORDS_PER_BLOCK, Q6_K_BLOCK_ELEMS
-
-def parse_opt(spec:str) -> Opt:
-  parts = spec.split(":")
-  if len(parts) == 1:
-    return Opt(OptOps[parts[0].upper()])
-  if len(parts) != 3:
-    raise ValueError(f"opt must be OP or OP:AXIS:ARG, got {spec!r}")
-  op, axis, arg = parts
-  return Opt(OptOps[op.upper()], int(axis), int(arg))
+from tinygrad.llm.qk_layout import Q6K_HALFWORDS_PER_BLOCK, Q6_K_BLOCK_ELEMS
 
 def _f16_half(half:UOp) -> UOp:
   return half.cast(dtypes.uint16).bitcast(dtypes.float16).cast(dtypes.float32)

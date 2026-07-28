@@ -4352,7 +4352,7 @@
       "domain": "quant_mmq",
       "duplication_group": null,
       "evidence": [
-        "tinygrad/llm/route_ops.py:19-25 wires 5 functions from this module as the production Q4_K GEMM adapter surface",
+        "tinygrad/llm/route_ops.py wires the remaining Q4_K GEMM builders from this module; parse_opt is now owned by tinygrad.codegen.opt",
         "extra/qk/gemv_g3_codegen_lowering.py:13 imports _q4k_block_dot_packed_load directly, coupling the shipped decode route to this file's internals",
         "extra/qk/mmq_q4k_q8_atom.py:35 imports the private-underscore bitfield helpers directly (not the GEMM builders), evidencing the two responsibilities are consumed independently"
       ],
@@ -4406,7 +4406,8 @@
       "domain": "quant_mmq",
       "duplication_group": null,
       "evidence": [
-        "tinygrad/llm/route_ops.py:53-57 wires 4 functions from this module directly",
+        "tinygrad/llm/route_ops.py wires the remaining Q6_K GEMM builders from this module; parse_opt is now owned by tinygrad.codegen.opt",
+        "test/unit/test_codegen_opt_parser.py pins the shared parser and removes both route shims",
         "no test/unit/*.py file imports this module directly (checked via grep) -- production usage is exercised only through route_ops.py and downstream route-spec modules"
       ],
       "path": "extra/qk/quant/q6_k_gemv_primitive.py",

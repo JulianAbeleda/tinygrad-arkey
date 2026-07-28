@@ -318,8 +318,8 @@
     }
   ],
   "audited_commit": {
-    "commit": "981459f18a8187a0fe7f3cc842632ecc62f5cc65",
-    "described": "mac-first-boot-20260610-3508-g981459f18-dirty",
+    "commit": "276269a240474054859b056890d9acc945517343",
+    "described": "mac-first-boot-20260610-3509-g276269a24-dirty",
     "dirty": true
   },
   "authority_keys": {
@@ -850,14 +850,14 @@
     ]
   },
   "coverage": {
-    "authored_files": 469,
-    "authored_loc": 72137,
+    "authored_files": 470,
+    "authored_loc": 72155,
     "explicit_records": 87,
     "generated_files": 1,
     "generated_loc": 57,
     "group_covered": 0,
     "manifest_scope_files": 87,
-    "manifest_scope_loc": 13049,
+    "manifest_scope_loc": 13033,
     "uncovered": []
   },
   "coverage_limitations": [
@@ -911,7 +911,7 @@
       "tinygrad/codegen/late/warp_reduce.py",
       "tinygrad/schedule/wmma/flash_prefill.py"
     ],
-    "loc": 6154,
+    "loc": 6138,
     "production_reachable_from_tinygrad": [
       "extra/qk/amd_isa_proof.py",
       "extra/qk/amd_resource_artifact.py",
@@ -1096,6 +1096,9 @@
         "tinygrad/codegen/experimental.py"
       ],
       "test/unit/test_fdot2_lowering.py": [
+        "tinygrad/codegen/experimental.py"
+      ],
+      "test/unit/test_warp_reduce_lowering.py": [
         "tinygrad/codegen/experimental.py"
       ],
       "tinygrad/llm/route_ops.py": [
@@ -1446,17 +1449,17 @@
         "tinygrad/uop/ops.py"
       ],
       "extra/qk/quant/q4_k_gemv_primitive.py": [
-        "extra/qk/layout.py",
         "tinygrad/__init__.py",
         "tinygrad/codegen/opt/__init__.py",
         "tinygrad/helpers.py",
+        "tinygrad/llm/qk_layout.py",
         "tinygrad/uop/ops.py"
       ],
       "extra/qk/quant/q6_k_gemv_primitive.py": [
-        "extra/qk/layout.py",
         "tinygrad/__init__.py",
         "tinygrad/codegen/opt/__init__.py",
         "tinygrad/helpers.py",
+        "tinygrad/llm/qk_layout.py",
         "tinygrad/uop/ops.py"
       ],
       "extra/qk/runtime_specs.py": [
@@ -1500,7 +1503,7 @@
       "extra/qk/kernel_vocabulary.py": 11,
       "extra/qk/kv_load.py": 0,
       "extra/qk/lane_partition_reduce.py": 2,
-      "extra/qk/layout.py": 20,
+      "extra/qk/layout.py": 18,
       "extra/qk/live_split_geometry.py": 1,
       "extra/qk/memory_adaptive_allocation_observer.py": 4,
       "extra/qk/memory_adaptive_policy.py": 3,
@@ -2129,6 +2132,10 @@
       },
       {
         "from": "extra/qk/quant/q4_k_gemv_primitive.py",
+        "to": "tinygrad/llm/qk_layout.py"
+      },
+      {
+        "from": "extra/qk/quant/q4_k_gemv_primitive.py",
         "to": "tinygrad/uop/ops.py"
       },
       {
@@ -2142,6 +2149,10 @@
       {
         "from": "extra/qk/quant/q6_k_gemv_primitive.py",
         "to": "tinygrad/helpers.py"
+      },
+      {
+        "from": "extra/qk/quant/q6_k_gemv_primitive.py",
+        "to": "tinygrad/llm/qk_layout.py"
       },
       {
         "from": "extra/qk/quant/q6_k_gemv_primitive.py",
@@ -2797,7 +2808,7 @@
       },
       "keep": {
         "files": 83,
-        "loc": 11898
+        "loc": 11882
       },
       "move": {
         "files": 1,
@@ -2831,7 +2842,7 @@
       },
       "quant_mmq": {
         "files": 18,
-        "loc": 2929
+        "loc": 2913
       },
       "route_authority": {
         "files": 16,
@@ -2849,7 +2860,7 @@
       },
       "authority": {
         "files": 42,
-        "loc": 7448
+        "loc": 7432
       },
       "benchmark": {
         "files": 2,
@@ -2891,7 +2902,7 @@
       },
       "production": {
         "files": 63,
-        "loc": 9554
+        "loc": 9538
       },
       "promoted_default": {
         "files": 5,
@@ -3181,8 +3192,6 @@
       "extra/qk/q4k_fused_mmq_contract.py",
       "extra/qk/q4k_tile_loader.py",
       "extra/qk/q6k_route_spec.py",
-      "extra/qk/quant/q4_k_gemv_primitive.py",
-      "extra/qk/quant/q6_k_gemv_primitive.py",
       "extra/qk/runtime_specs.py",
       "test/unit/test_codebase_organization_audit.py",
       "test/unit/test_current_decode_execution_adapter.py",
@@ -3616,6 +3625,8 @@
     ],
     "extra/qk/quant/q4_k_gemv_primitive.py": [
       "bench/qk-search-spaces/quant_semantics.json",
+      "docs/task_workflow/input/production-debug-experimental-workflow-scope-20260726.md",
+      "docs/task_workflow/output/production-reorganization-inventory-20260728.json",
       "extra/audit/lowering_baseline.py",
       "extra/qk/gemv_g3_codegen_lowering.py",
       "extra/qk/mmq_q4k_q8_atom.py",
@@ -3625,6 +3636,8 @@
     ],
     "extra/qk/quant/q6_k_gemv_primitive.py": [
       "bench/qk-search-spaces/quant_semantics.json",
+      "docs/task_workflow/input/production-debug-experimental-workflow-scope-20260726.md",
+      "docs/task_workflow/output/production-reorganization-inventory-20260728.json",
       "extra/audit/lowering_baseline.py",
       "extra/qk/prefill/q6k_prefill_route_spec.py",
       "extra/qk/q6k_route_spec.py",
@@ -3724,16 +3737,16 @@
     ]
   },
   "promotion_budget": {
-    "budgeted_after_pending_promotions": 35011,
-    "budgeted_loc": 35011,
+    "budgeted_after_pending_promotions": 35019,
+    "budgeted_loc": 35019,
     "cap": 40000,
     "data_file_convertible_loc": 0,
-    "headroom": 4989,
+    "headroom": 4981,
     "intended_cap": 30000,
     "intended_cap_note": "sz.py:13 records 35000 as temporary headroom; the standing target is 30000",
-    "over_intended_cap": 5011,
+    "over_intended_cap": 5019,
     "pending_promotion_net_cost": 0,
-    "unbudgeted_default_path_loc": 6028
+    "unbudgeted_default_path_loc": 6012
   },
   "repeated_workflow_phases": {
     "build-spec": [
@@ -4143,8 +4156,8 @@
       "warning": "extra_on_default_path"
     },
     {
-      "count": 20,
-      "message": "extra/qk/layout.py is imported by 20 modules",
+      "count": 18,
+      "message": "extra/qk/layout.py is imported by 18 modules",
       "path": "extra/qk/layout.py",
       "principle": "a widely-imported module is a de-facto authority",
       "warning": "high_fan_in"

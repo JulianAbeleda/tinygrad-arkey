@@ -750,3 +750,14 @@ The AMD warp primitive and auto-lowering pair is now consolidated in one core ow
 The matcher still lowers only scalar float ADD/MAX reductions over power-of-two WARP/GROUP_REDUCE axes, and remains
 default-off. Four CPU structural/boundary tests pass. AMD execution, ISA output, and performance remain outside this
 slice's claim.
+
+### 16.16 Seventh production-closure checkpoint
+
+The duplicated Q4/Q6 option parser is now centralized without moving their kernel builders:
+
+| Source | Destination | Production consumer | Boundary change |
+|---|---|---|---|
+| `extra/qk/quant/q4_k_gemv_primitive.py:parse_opt`, `extra/qk/quant/q6_k_gemv_primitive.py:parse_opt` | `tinygrad/codegen/opt.parse_opt` | `tinygrad/llm/prefill_routes.py`, `tinygrad/llm/qk_primitives.py` | `tinygrad/llm/route_ops.py` parse shims removed; quant kernel builders and mixed layout tooling remain in `extra` for later route-specific slices |
+
+Seven CPU parser/boundary tests pass. Full Q4/Q6 builder promotion is intentionally deferred because builder callers,
+Q6 coverage, and layout ownership are not yet closed.
