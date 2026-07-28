@@ -13,6 +13,8 @@ enum TinyGPURPC
 	KeepaliveStatus = 5,
 	LeaseAcquire = 6,
 	LeaseRelease = 7,
+	MMIORead = 8,
+	MMIOWrite = 9,
 };
 
 class TinyGPUDriverUserClient : public IOUserClient

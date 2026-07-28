@@ -335,7 +335,7 @@ _TINYGPU_MAX_PAYLOAD = 65536
 _TINYGPU_ERROR_MAX_PAYLOAD = 1024
 _TINYGPU_STATUS_MAX_PAYLOAD = 4096
 _TINYGPU_STATUS_STATES = {"unsupported", "inactive", "active_healthy", "active_degraded", "quiescing", "stopped"}
-_TINYGPU_ERROR_CODES = {2: "unsupported_version", 3: "unsupported_capability", 4: "malformed_request", 5: "invalid_state", 6: "busy", 7: "internal_error"}
+_TINYGPU_ERROR_CODES = {2: "unsupported_version", 3: "unsupported_capability", 4: "malformed_request", 5: "invalid_state", 6: "busy", 7: "internal_error", 8: "provider_unavailable", 9: "device_lost", 10: "native_error"}
 
 
 def _tinygpu_exact_recv(sock:socket.socket, size:int) -> bytes:

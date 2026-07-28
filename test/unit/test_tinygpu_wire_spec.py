@@ -61,7 +61,7 @@ class TestTinyGPUWireSpec(unittest.TestCase):
   def test_response_statuses_and_typed_error_payloads(self):
     fixture = load("error-v1.json")
     statuses = fixture["response_status"]
-    self.assertEqual(list(statuses.values()), list(range(8)))
+    self.assertEqual(list(statuses.values()), list(range(11)))
     self.assertEqual(struct.pack("<BQQ", fixture["legacy_error"]["status"], 0, 0).hex(), fixture["legacy_error"]["response_hex"])
     for item in fixture["typed_errors"]:
       payload = json.dumps(item["payload"], separators=(",", ":")).encode()

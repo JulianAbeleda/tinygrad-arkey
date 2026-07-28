@@ -26,7 +26,8 @@ C struct layout as the wire definition.
 
 Response status codes are fixed: `OK=0`, `LEGACY_ERROR=1`,
 `UNSUPPORTED_VERSION=2`, `UNSUPPORTED_CAPABILITY=3`,
-`MALFORMED_REQUEST=4`, `INVALID_STATE=5`, `BUSY=6`, and `INTERNAL_ERROR=7`.
+`MALFORMED_REQUEST=4`, `INVALID_STATE=5`, `BUSY=6`, `INTERNAL_ERROR=7`,
+`PROVIDER_UNAVAILABLE=8`, `DEVICE_LOST=9`, and `NATIVE_ERROR=10`.
 Codes 2..7 carry the typed JSON error payload below; code 1 preserves opaque
 legacy error bytes or an empty payload.
 

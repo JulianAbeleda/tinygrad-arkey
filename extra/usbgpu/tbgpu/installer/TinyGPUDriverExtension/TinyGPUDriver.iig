@@ -35,6 +35,8 @@ public:
 
 	kern_return_t CfgRead(uint32_t off, uint32_t size, uint32_t* val) LOCALONLY;
 	kern_return_t CfgWrite(uint32_t off, uint32_t size, uint32_t val) LOCALONLY;
+	kern_return_t MMIORead(uint64_t leaseID, uint32_t bar, uint64_t off, uint32_t size, uint32_t* val) LOCALONLY;
+	kern_return_t MMIOWrite(uint64_t leaseID, uint32_t bar, uint64_t off, uint32_t size, uint32_t val) LOCALONLY;
 	kern_return_t ResetDevice() LOCALONLY;
 
 	// These methods are the only provider boundary used by the user client.

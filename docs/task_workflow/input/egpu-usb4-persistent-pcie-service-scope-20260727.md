@@ -2,8 +2,9 @@
 
 Date: 2026-07-27
 
-Status: open at hardware qualification. P0-P5 implementation/install work landed; A0-A11 remain gated on enumeration
-of the `1002:744c` PCI endpoint.
+Status: open at runtime qualification. P0-P5 implementation/install work landed;
+the v5 DEXT is activated, and A0-A11 remain gated by the runtime blocker recorded
+in `egpu-usb4-tinygpu-runtime-initialization-scope-20260728.md`.
 
 Repository and native-source owner: `tinygrad-arkey`, under `extra/usbgpu/`
 
@@ -29,7 +30,25 @@ Keep the USB4-attached AMD GPU enumerated and usable while the Mac is awake, inc
 
 The native TinyGPU DriverKit provider owns link liveness for its bound device. TinyGPU.app remains transport and workload-lifetime management. Python is a client, never the production keeper. The admitted policy performs a harmless, periodic PCI configuration read; it does not keep the GPU busy, change PCIe power policy, or reset hardware.
 
-Completion requires tracked native source, a versioned and independently implemented native/Python wire contract, an audited development-installed build with recorded provenance, awake-idle evidence beyond the historical failure window, and post-idle tinygrad compute including the canonical Qwen3 8B smoke workload.
+Completion requires tracked native source, a versioned and independently implemented native/Python wire contract, an audited development-installed build with recorded provenance, awake-idle evidence beyond the historical failure window, and post-idle tinygrad compute including the canonical Qwen3 8B smoke workload. The v5 runtime initialization/RPC blocker is a required precondition for A2 and all later compute claims.
+
+## Current runtime blocker (2026-07-28)
+
+Activation and enumeration have now been observed for v5: the target DEXT is
+`[activated enabled]`, the legacy DEXT is disabled, macOS reports PCI identity
+`1002:744c` with link up, and tinygrad's macOS scan returns the target. The exact
+locked minimal probe nevertheless fails during `AMDev.is_smu_alive()` when the
+PCIIface path performs an MMIO write: the TinyGPU Unix RPC receives EOF, and
+cleanup later sees a broken pipe while releasing the lease. The app-level
+keepalive status is unavailable after that provider/service failure.
+
+This is not evidence against the DriverKit keepalive policy and is not a sudo,
+approval, or endpoint-discovery blocker. It is a separate native runtime
+initialization/lifecycle blocker. The implementation and acceptance order for
+that blocker is authoritative in
+`docs/task_workflow/input/egpu-usb4-tinygpu-runtime-initialization-scope-20260728.md`.
+Do not claim A2, awake-idle, load, or Qwen3 success until the blocker scope's
+M0-M7 and repeat A0/A1 gates pass.
 
 ## 2. Evidence and problem boundary
 

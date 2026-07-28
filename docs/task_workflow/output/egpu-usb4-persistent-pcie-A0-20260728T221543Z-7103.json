@@ -1,0 +1,17 @@
+{
+  "command_results": [],
+  "commands": [],
+  "context": null,
+  "created_unix_ns": 1785276943465840000,
+  "endpoint_checks": [],
+  "environment": null,
+  "first_failure": {
+    "message": "valid inherited GPU lock metadata is required",
+    "type": "QualificationError"
+  },
+  "gate": "A0",
+  "install_provenance": null,
+  "lock": null,
+  "samples": [],
+  "status": "failed"
+}

@@ -32,6 +32,7 @@ enum {
   CMD_HANDSHAKE = 15, CMD_LEASE_ACQUIRE = 16, CMD_LEASE_RELEASE = 17, CMD_KEEPALIVE_STATUS = 18,
   RESP_OK = 0, RESP_ERR = 1, RESP_UNSUPPORTED_VERSION = 2, RESP_UNSUPPORTED_CAPABILITY = 3,
   RESP_MALFORMED_REQUEST = 4, RESP_INVALID_STATE = 5, RESP_BUSY = 6, RESP_INTERNAL_ERROR = 7,
+  RESP_PROVIDER_UNAVAILABLE = 8, RESP_DEVICE_LOST = 9, RESP_NATIVE_ERROR = 10,
 };
 
 typedef struct { uint8_t cmd; uint32_t dev_id, bar; uint64_t arg0, arg1, arg2; } request_t;
@@ -53,22 +54,21 @@ typedef struct {
   int sysmem_count;
 } client_session_t;
 static volatile int g_client_active;
+static volatile int g_provider_terminated;
+static IONotificationPortRef g_notification_port;
+static io_object_t g_service_notification;
 
 // Utilities
 
 static uint32_t get_le32(const uint8_t *p) { return (uint32_t)p[0] | (uint32_t)p[1]<<8 | (uint32_t)p[2]<<16 | (uint32_t)p[3]<<24; }
+static uint16_t get_le16(const uint8_t *p) { return (uint16_t)p[0] | (uint16_t)p[1]<<8; }
 static uint64_t get_le64(const uint8_t *p) { uint64_t v=0; for (unsigned i=0;i<8;i++) v |= (uint64_t)p[i] << (8*i); return v; }
+static void put_le16(uint8_t *p, uint16_t v) { p[0]=(uint8_t)v; p[1]=(uint8_t)(v>>8); }
+static void put_le32(uint8_t *p, uint32_t v) { for (unsigned i=0;i<4;i++) p[i]=(uint8_t)(v>>(8*i)); }
 static void put_le64(uint8_t *p, uint64_t v) { for (unsigned i=0;i<8;i++) p[i]=(uint8_t)(v>>(8*i)); }
 static int recvall(int fd, void *buf, size_t len) { for (size_t off=0; off<len;) { ssize_t r=recv(fd,(uint8_t*)buf+off,len-off,0); if (r<0 && errno==EINTR) continue; if (r<=0) return -1; off+=(size_t)r; } return 0; }
 static int sendall(int fd, const void *buf, size_t len) { for (size_t off=0; off<len;) { ssize_t n=send(fd,(const uint8_t*)buf+off,len-off,MSG_NOSIGNAL); if(n<0&&errno==EINTR)continue; if(n<=0)return -1; off+=(size_t)n; } return 0; }
 static int read_request(int fd, request_t *req) { uint8_t b[33]; if (recvall(fd,b,sizeof(b))) return -1; req->cmd=b[0]; req->dev_id=get_le32(b+1); req->bar=get_le32(b+5); req->arg0=get_le64(b+9); req->arg1=get_le64(b+17); req->arg2=get_le64(b+25); return 0; }
-
-// MMIO requires 32-bit aligned volatile accesses
-static void mmio_copy(void *dst, void *src, size_t len) {
-  volatile uint32_t *d = dst, *s = src;
-  for (size_t i = 0; i < len / 4; i++) d[i] = s[i];
-  for (size_t i = len & ~3; i < len; i++) ((volatile uint8_t*)dst)[i] = ((volatile uint8_t*)src)[i];
-}
 
 static int send_response(int fd, response_t *resp, int send_fd) {
   uint8_t wire[17] = {resp->status};
@@ -103,6 +103,25 @@ static int send_typed_error(int fd, uint8_t status, const char *code, const char
   return send_response(fd,&resp,-1) || sendall(fd,payload,(size_t)n);
 }
 
+static int send_kern_error(int fd, kern_return_t kr, const char *operation) {
+  uint8_t status = RESP_NATIVE_ERROR;
+  const char *code = "native_error";
+  if (kr == kIOReturnNotAttached || kr == kIOReturnNotReady || kr == kIOReturnNotOpen || kr == kIOReturnNotFound) {
+    status = RESP_PROVIDER_UNAVAILABLE; code = "provider_unavailable";
+  } else if (kr == kIOReturnNoDevice || kr == kIOReturnOffline) {
+    status = RESP_DEVICE_LOST; code = "device_lost";
+  } else if (kr == kIOReturnBadArgument) {
+    status = RESP_MALFORMED_REQUEST; code = "malformed_request";
+  } else if (kr == kIOReturnBusy || kr == kIOReturnExclusiveAccess) {
+    status = RESP_BUSY; code = "busy";
+  } else if (kr == kIOReturnNotPermitted) {
+    status = RESP_INVALID_STATE; code = "invalid_state";
+  }
+  char message[160];
+  snprintf(message, sizeof(message), "%s failed (kern_return=0x%08x)", operation, (unsigned int)kr);
+  return send_typed_error(fd, status, code, message);
+}
+
 static int request_valid(const request_t *r) {
   if(r->cmd==CMD_HANDSHAKE) return r->dev_id==0 && r->bar==0 && r->arg1<=UINT16_MAX;
   if(r->cmd==CMD_LEASE_ACQUIRE || r->cmd==CMD_KEEPALIVE_STATUS || r->cmd==CMD_RESET)
@@ -125,87 +144,166 @@ static int request_valid(const request_t *r) {
 // Driver interface
 
 static void on_disconnect(void *refcon, io_service_t svc, uint32_t msg, void *arg) {
-  if (msg == kIOMessageServiceIsTerminated) _exit(0);
+  (void)refcon; (void)svc; (void)arg;
+  if (msg == kIOMessageServiceIsTerminated) g_provider_terminated = 1;
 }
 
-static io_connect_t open_tinygpu(void) {
-  static io_object_t notif;
+static io_connect_t open_tinygpu(kern_return_t *out_error) {
+  if (out_error) *out_error = kIOReturnNotFound;
+  if (g_provider_terminated && g_service_notification) {
+    IOObjectRelease(g_service_notification);
+    g_service_notification = IO_OBJECT_NULL;
+  }
   io_service_t svc = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceNameMatching("tinygpu"));
   if (!svc) return IO_OBJECT_NULL;
 
-  if (!notif) {
-    IONotificationPortRef port = IONotificationPortCreate(kIOMainPortDefault);
-    IONotificationPortSetDispatchQueue(port, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0));
-    IOServiceAddInterestNotification(port, svc, kIOGeneralInterest, on_disconnect, NULL, &notif);
+  if (!g_notification_port) {
+    g_notification_port = IONotificationPortCreate(kIOMainPortDefault);
+    if (!g_notification_port) { IOObjectRelease(svc); if (out_error) *out_error = kIOReturnNoResources; return IO_OBJECT_NULL; }
+    IONotificationPortSetDispatchQueue(g_notification_port, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0));
+  }
+  if (!g_service_notification) {
+    kern_return_t notify_error = IOServiceAddInterestNotification(g_notification_port, svc, kIOGeneralInterest,
+                                                                   on_disconnect, NULL, &g_service_notification);
+    if (notify_error != KERN_SUCCESS) { IOObjectRelease(svc); if (out_error) *out_error = notify_error; return IO_OBJECT_NULL; }
   }
 
   io_connect_t conn;
   kern_return_t kr = IOServiceOpen(svc, mach_task_self(), 0, &conn);
   IOObjectRelease(svc);
+  if (out_error) *out_error = kr;
+  if (kr == KERN_SUCCESS) g_provider_terminated = 0;
   return kr == KERN_SUCCESS ? conn : IO_OBJECT_NULL;
 }
 
-static int dext_rpc(client_session_t *s, uint32_t sel, uint64_t *in, uint32_t in_cnt, uint64_t *out_val) {
+static kern_return_t dext_rpc(client_session_t *s, uint32_t sel, uint64_t *in, uint32_t in_cnt, uint64_t *out_val) {
+  if (g_provider_terminated || s->conn == IO_OBJECT_NULL) return kIOReturnNotAttached;
   uint64_t out[2];
   uint32_t out_cnt = 2;
-  if (IOConnectCallMethod(s->conn, sel, in, in_cnt, NULL, 0, out, &out_cnt, NULL, NULL) != KERN_SUCCESS) return -1;
+  kern_return_t kr = IOConnectCallMethod(s->conn, sel, in, in_cnt, NULL, 0, out, &out_cnt, NULL, NULL);
+  if (kr != KERN_SUCCESS) return kr;
+  if (g_provider_terminated) return kIOReturnNotAttached;
   if (out_val) *out_val = out[0];
-  return 0;
+  return kIOReturnSuccess;
 }
 
-static int ensure_connection(client_session_t *s) {
-  if (s->conn != IO_OBJECT_NULL) return 0;
-  s->conn = open_tinygpu();
-  if (s->conn == IO_OBJECT_NULL) return -1;
+static kern_return_t dext_mmio_read(client_session_t *s, uint32_t bar, uint64_t off, uint32_t width, uint32_t *value) {
+  uint64_t in[3] = {bar, off, width}, out = 0;
+  kern_return_t err = dext_rpc(s, 8, in, 3, &out);
+  if (!err && value) *value = (uint32_t)out;
+  return err;
+}
+
+static kern_return_t dext_mmio_write(client_session_t *s, uint32_t bar, uint64_t off, uint32_t width, uint32_t value) {
+  uint64_t in[4] = {bar, off, width, value};
+  return dext_rpc(s, 9, in, 4, NULL);
+}
+
+static uint32_t mmio_access_width(uint64_t off, uint64_t remaining) {
+  if (!(off & 3) && remaining >= 4) return 4;
+  if (!(off & 1) && remaining >= 2) return 2;
+  return 1;
+}
+
+static kern_return_t mediated_mmio_read(client_session_t *s, uint32_t bar, uint64_t off, uint8_t *out, uint64_t size) {
+  for (uint64_t done = 0; done < size;) {
+    const uint32_t width = mmio_access_width(off + done, size - done);
+    uint32_t value = 0;
+    kern_return_t err = dext_mmio_read(s, bar, off + done, width, &value);
+    if (err) return err;
+    if (width == 4) put_le32(out + done, value);
+    else if (width == 2) put_le16(out + done, (uint16_t)value);
+    else out[done] = (uint8_t)value;
+    done += width;
+  }
+  return kIOReturnSuccess;
+}
+
+static kern_return_t mediated_mmio_write(client_session_t *s, uint32_t bar, uint64_t off, const uint8_t *in, uint64_t size) {
+  const int fence_each_store = bar == 0 && size > 4;
+  for (uint64_t done = 0; done < size;) {
+    const uint32_t width = mmio_access_width(off + done, size - done);
+    const uint32_t value = width == 4 ? get_le32(in + done) : width == 2 ? get_le16(in + done) : in[done];
+    kern_return_t err = dext_mmio_write(s, bar, off + done, width, value);
+    if (err) return err;
+    // v3/v4 serialized bulk BAR0 stores by reading the same location back.
+    // Preserve that ordering primitive without inventing readbacks for exact
+    // single-register writes on BAR5.
+    if (fence_each_store) {
+      uint32_t ignored = 0;
+      if ((err = dext_mmio_read(s, bar, off + done, width, &ignored))) return err;
+    }
+    done += width;
+  }
+  return kIOReturnSuccess;
+}
+
+static kern_return_t ensure_connection(client_session_t *s) {
+  if (s->conn != IO_OBJECT_NULL && !g_provider_terminated) return kIOReturnSuccess;
+  if (s->conn != IO_OBJECT_NULL) { IOServiceClose(s->conn); s->conn = IO_OBJECT_NULL; }
+  kern_return_t err = kIOReturnNotFound;
+  s->conn = open_tinygpu(&err);
+  if (s->conn == IO_OBJECT_NULL) return err;
   uint64_t in[3] = {1, 0, 0}, out[2] = {0, 0};
   uint32_t out_count = 2;
-  if (IOConnectCallMethod(s->conn, 4, in, 3, NULL, 0, out, &out_count, NULL, NULL) != KERN_SUCCESS ||
+  err = IOConnectCallMethod(s->conn, 4, in, 3, NULL, 0, out, &out_count, NULL, NULL);
+  if (err != KERN_SUCCESS ||
       out_count != 2 || out[0] != 1 || out[1] != 3) {
     IOServiceClose(s->conn);
     s->conn = IO_OBJECT_NULL;
-    return -1;
+    return err != KERN_SUCCESS ? err : kIOReturnUnsupported;
   }
-  return 0;
+  return kIOReturnSuccess;
 }
 
-static int handshake_rpc(client_session_t *s, char *out, size_t *size) {
-  if (!out || !size || !*size || ensure_connection(s)) return -1;
+static kern_return_t handshake_rpc(client_session_t *s, char *out, size_t *size) {
+  if (!out || !size || !*size) return kIOReturnBadArgument;
+  kern_return_t err = ensure_connection(s);
+  if (err) return err;
   const char *json = "{\"schema\":\"tinygpu.handshake.v1\",\"protocol_major\":1,\"protocol_minor\":0,\"capabilities\":3,\"server_build_id\":\"tinygrad-arkey-native\"}";
   size_t length = strlen(json);
-  if (length >= *size) return -1;
+  if (length >= *size) return kIOReturnNoSpace;
   memcpy(out, json, length + 1);
   *size = length;
-  return 0;
+  return kIOReturnSuccess;
 }
 
-static int status_rpc(client_session_t *s, char *out, size_t *size) {
+static kern_return_t status_rpc(client_session_t *s, char *out, size_t *size) {
   const size_t capacity = *size;
-  if (!capacity || capacity > 4096) return -1;
+  if (!capacity || capacity > 4096) return kIOReturnBadArgument;
   memset(out, 0, capacity);
   size_t driver_size = capacity;
-  if (ensure_connection(s) || IOConnectCallStructMethod(s->conn, 5, NULL, 0, out, &driver_size) != KERN_SUCCESS) return -1;
+  kern_return_t err = ensure_connection(s);
+  if (err) return err;
+  err = IOConnectCallStructMethod(s->conn, 5, NULL, 0, out, &driver_size);
+  if (err != KERN_SUCCESS) return err;
   // DriverKit's descriptor path may report the caller's fixed capacity rather
   // than the JSON length. The provider always writes one NUL-terminated object.
   const size_t actual = strnlen(out, capacity);
-  if (!actual || actual == capacity) return -1;
+  if (!actual || actual == capacity) return kIOReturnBadMedia;
   *size = actual;
-  return 0;
+  return kIOReturnSuccess;
 }
 
-static int map_bar(client_session_t *s, uint32_t bar, response_t *resp) {
-  if (bar >= MAX_BARS) return -1;
-  if (!s->bars[bar].addr && IOConnectMapMemory64(s->conn, bar, mach_task_self(), &s->bars[bar].addr, &s->bars[bar].size, kIOMapAnywhere)) return -1;
+static kern_return_t map_bar(client_session_t *s, uint32_t bar, response_t *resp) {
+  if (bar >= MAX_BARS) return kIOReturnBadArgument;
+  if (!s->bars[bar].addr) {
+    kern_return_t err = IOConnectMapMemory64(s->conn, bar, mach_task_self(), &s->bars[bar].addr, &s->bars[bar].size, kIOMapAnywhere);
+    if (err) return err;
+  }
   resp->resp0 = s->bars[bar].addr;
   resp->resp1 = s->bars[bar].size;
-  return 0;
+  return kIOReturnSuccess;
 }
 
-static int map_sysmem_fd(client_session_t *s, uint64_t size, int contiguous, response_t *resp, int *out_fd) {
-  if (s->sysmem_count >= MAX_SYSMEM) return -1;
+static kern_return_t map_sysmem_fd(client_session_t *s, uint64_t size, int contiguous, response_t *resp, int *out_fd) {
+  (void)contiguous;
+  if (s->sysmem_count >= MAX_SYSMEM) return kIOReturnNoResources;
   int idx = s->sysmem_count;
   int fd = -1;
   void *ptr = MAP_FAILED;
   char shm_name[32];
+  kern_return_t error = kIOReturnNoMemory;
 
   // page-align, min 16KB for IOMemoryDescriptor
   size_t alloc_sz = (size + 0xfff) & ~0xfff;
@@ -221,7 +319,8 @@ static int map_sysmem_fd(client_session_t *s, uint64_t size, int contiguous, res
   // PrepareDMA writes physical addresses to output buffer, copy to shared mem
   uint8_t paddr_buf[8192] = {0};
   size_t out_sz = sizeof(paddr_buf);
-  if (IOConnectCallStructMethod(s->conn, 3, ptr, alloc_sz, paddr_buf, &out_sz) != KERN_SUCCESS) goto fail;
+  error = IOConnectCallStructMethod(s->conn, 3, ptr, alloc_sz, paddr_buf, &out_sz);
+  if (error != KERN_SUCCESS) goto fail;
   memcpy(ptr, paddr_buf, out_sz);
 
   s->sysmem[idx] = (typeof(s->sysmem[idx])){.addr = (mach_vm_address_t)ptr, .size = alloc_sz, .shm_fd = fd};
@@ -230,13 +329,13 @@ static int map_sysmem_fd(client_session_t *s, uint64_t size, int contiguous, res
 
   *resp = (response_t){.resp0 = alloc_sz, .resp1 = idx};
   *out_fd = fd;
-  return 0;
+  return kIOReturnSuccess;
 
 fail:
   if (ptr != MAP_FAILED) munmap(ptr, alloc_sz);
   if (fd >= 0) close(fd);
   shm_unlink(shm_name);
-  return -1;
+  return error;
 }
 
 static int validate_bar(client_session_t *s, uint8_t bar, uint64_t off, uint64_t sz) {
@@ -245,7 +344,12 @@ static int validate_bar(client_session_t *s, uint8_t bar, uint64_t off, uint64_t
 
 static void cleanup_workload(client_session_t *s) {
   for (int i = 0; i < MAX_BARS; i++)
-    if (s->bars[i].addr) { IOConnectUnmapMemory64(s->conn, i, mach_task_self(), s->bars[i].addr); s->bars[i].addr = 0; }
+    if (s->bars[i].addr) {
+      if (!g_provider_terminated && s->conn != IO_OBJECT_NULL)
+        (void)IOConnectUnmapMemory64(s->conn, i, mach_task_self(), s->bars[i].addr);
+      s->bars[i].addr = 0;
+      s->bars[i].size = 0;
+    }
 
   for (int i = 0; i < s->sysmem_count; i++) {
     munmap((void*)s->sysmem[i].addr, s->sysmem[i].size);
@@ -260,10 +364,10 @@ static void cleanup(client_session_t *s) {
   if (s->cleaned) return;
   s->cleaned = 1;
   cleanup_workload(s);
-  if (s->lease && s->conn != IO_OBJECT_NULL) {
+  if (s->lease && s->conn != IO_OBJECT_NULL && !g_provider_terminated) {
     (void)dext_rpc(s, 7, &s->lease, 1, NULL);
-    s->lease = 0;
   }
+  s->lease = 0;
   if (s->conn != IO_OBJECT_NULL) { IOServiceClose(s->conn); s->conn = IO_OBJECT_NULL; }
   free(s->bulk);
   s->bulk = NULL;
@@ -334,8 +438,10 @@ static void handle_client(int fd) {
     }
     if (req.cmd == CMD_KEEPALIVE_STATUS) {
       char status[4096]; size_t size = sizeof(status);
-      if (status_rpc(&session,status,&size)) {
-        if (send_typed_error(fd,RESP_INTERNAL_ERROR,"internal_error","provider status unavailable")) break;
+      kern_return_t status_error = status_rpc(&session,status,&size);
+      if (status_error) {
+        (void)send_kern_error(fd,status_error,"keepalive status");
+        break;
       } else {
         resp.resp0 = size;
         if (send_response(fd,&resp,-1) || sendall(fd,status,size)) break;
@@ -345,10 +451,15 @@ static void handle_client(int fd) {
     if (req.cmd == CMD_LEASE_ACQUIRE) {
       if(session.lease) {
         if (send_typed_error(fd,RESP_BUSY,"busy","a workload lease is active")) break;
-      } else if(ensure_connection(&session)||dext_rpc(&session,6,NULL,0,&session.lease)||!session.lease) {
-        session.lease = 0;
-        if (send_typed_error(fd,RESP_INTERNAL_ERROR,"internal_error","workload lease unavailable")) break;
       } else {
+        kern_return_t lease_error = ensure_connection(&session);
+        if (!lease_error) lease_error = dext_rpc(&session,6,NULL,0,&session.lease);
+        if (lease_error || !session.lease) {
+          session.lease = 0;
+          if (lease_error) (void)send_kern_error(fd,lease_error,"workload lease acquire");
+          else (void)send_typed_error(fd,RESP_INTERNAL_ERROR,"internal_error","provider returned an empty workload lease");
+          break;
+        }
         resp.resp1=session.lease;
         if (send_response(fd,&resp,-1)) break;
       }
@@ -359,8 +470,10 @@ static void handle_client(int fd) {
         if (send_typed_error(fd,RESP_INVALID_STATE,"invalid_state","workload lease is not active")) break;
       } else {
         cleanup_workload(&session);
-        if(dext_rpc(&session,7,&session.lease,1,NULL)) {
-          if (send_typed_error(fd,RESP_INTERNAL_ERROR,"internal_error","workload lease release failed")) break;
+        kern_return_t release_error = dext_rpc(&session,7,&session.lease,1,NULL);
+        if(release_error) {
+          (void)send_kern_error(fd,release_error,"workload lease release");
+          break;
         } else {
           session.lease=0;
           if (send_response(fd,&resp,-1)) break;
@@ -374,49 +487,66 @@ static void handle_client(int fd) {
     }
 
     switch (req.cmd) {
-    case CMD_MAP_BAR:
-      resp.status = map_bar(&session, req.bar, &resp) ? 1 : 0;
+    case CMD_MAP_BAR: {
+      kern_return_t err = map_bar(&session, req.bar, &resp);
+      if (err) { (void)send_kern_error(fd,err,"BAR map"); goto disconnected; }
       break;
+    }
 
     case CMD_MAP_SYSMEM_FD: {
       int shm_fd = -1;
-      resp.status = map_sysmem_fd(&session, req.arg0, (int)req.arg1, &resp, &shm_fd) ? 1 : 0;
+      kern_return_t err = map_sysmem_fd(&session, req.arg0, (int)req.arg1, &resp, &shm_fd);
+      if (err) { (void)send_kern_error(fd,err,"DMA map"); goto disconnected; }
       if (send_response(fd, &resp, shm_fd)) goto disconnected;
       continue;
     }
 
     case CMD_CFG_READ: {
       uint64_t in[2] = {req.arg0, req.arg1};
-      resp.status = dext_rpc(&session,0,in,2,&resp.resp0) ? 1 : 0;
+      kern_return_t err = dext_rpc(&session,0,in,2,&resp.resp0);
+      if (err) { (void)send_kern_error(fd,err,"configuration read"); goto disconnected; }
       break;
     }
 
     case CMD_CFG_WRITE: {
       uint64_t in[3] = {req.arg0, req.arg1, req.arg2};
-      resp.status = dext_rpc(&session,1,in,3,NULL) ? 1 : 0;
+      kern_return_t err = dext_rpc(&session,1,in,3,NULL);
+      if (err) { (void)send_kern_error(fd,err,"configuration write"); goto disconnected; }
       break;
     }
 
     case CMD_RESIZE_BAR:
       break;
 
-    case CMD_RESET:
-      if(ensure_connection(&session)) resp.status=1; else resp.status=dext_rpc(&session,2,NULL,0,NULL)?1:0;
+    case CMD_RESET: {
+      kern_return_t err = ensure_connection(&session);
+      if (!err) err = dext_rpc(&session,2,NULL,0,NULL);
+      if (err) { (void)send_kern_error(fd,err,"device reset"); goto disconnected; }
       break;
+    }
 
-    case CMD_MMIO_READ:
-      if (validate_bar(&session,req.bar,req.arg0,req.arg1)) { resp.status = 1; break; }
-      mmio_copy(session.bulk, (void*)(session.bars[req.bar].addr + req.arg0), req.arg1);
+    case CMD_MMIO_READ: {
+      if (validate_bar(&session,req.bar,req.arg0,req.arg1)) {
+        (void)send_typed_error(fd,RESP_MALFORMED_REQUEST,"malformed_request","MMIO range is outside the mapped BAR");
+        goto disconnected;
+      }
+      kern_return_t err = mediated_mmio_read(&session,req.bar,req.arg0,session.bulk,req.arg1);
+      if (err) { (void)send_kern_error(fd,err,"MMIO read"); goto disconnected; }
       resp.resp0 = req.arg1;
       if (send_response(fd, &resp, -1) || sendall(fd,session.bulk,req.arg1)) goto disconnected;
       continue;
+    }
 
-    case CMD_MMIO_WRITE:
-      if(req.arg1>BULK_BUF_SIZE||recvall(fd,session.bulk,req.arg1)){resp.status=1;break;}
-      if (validate_bar(&session,req.bar,req.arg0,req.arg1)) { resp.status = 1; break; }
-      // Writes must send an RPC response like reads/config writes; otherwise callers time out after a successful store.
-      mmio_copy((void*)(session.bars[req.bar].addr + req.arg0),session.bulk,req.arg1);
+    case CMD_MMIO_WRITE: {
+      if(req.arg1>BULK_BUF_SIZE||recvall(fd,session.bulk,req.arg1)) goto disconnected;
+      if (validate_bar(&session,req.bar,req.arg0,req.arg1)) {
+        (void)send_typed_error(fd,RESP_MALFORMED_REQUEST,"malformed_request","MMIO range is outside the mapped BAR");
+        goto disconnected;
+      }
+      kern_return_t err = mediated_mmio_write(&session,req.bar,req.arg0,session.bulk,req.arg1);
+      if (err) { (void)send_kern_error(fd,err,"MMIO write"); goto disconnected; }
       break;
+    }
 
     default:
       resp.status = 1;

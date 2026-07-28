@@ -31,6 +31,6 @@ def test_typed_errors_and_fd_short_send_are_bounded():
   assert "break;" in invalid and "continue;" not in invalid
 
 def test_shared_memory_name_is_unlinked_immediately_after_mapping():
-  mapping = SERVER[SERVER.index("static int map_sysmem_fd"):SERVER.index("static int validate_bar")]
+  mapping = SERVER[SERVER.index("static kern_return_t map_sysmem_fd"):SERVER.index("static int validate_bar")]
   mmap_at = mapping.index("mmap(")
   assert mmap_at < mapping.index("shm_unlink(shm_name)", mmap_at) < mapping.index("IOConnectCallStructMethod")

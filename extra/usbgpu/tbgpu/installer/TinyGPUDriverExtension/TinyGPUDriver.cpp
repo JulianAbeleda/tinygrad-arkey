@@ -48,6 +48,9 @@ struct TinyGPUDriver_IVars {
 	uint32_t activeLeases = 0;
 	uint32_t activeBars = 0;
 	uint32_t activeDMA = 0;
+	IOMemoryDescriptor* mmioMemory[6] = {};
+	IOMemoryMap* mmioMap[6] = {};
+	uint64_t mmioSize[6] = {};
 	int32_t timerError = 0;
 };
 
@@ -71,6 +74,40 @@ static void SaturatingIncrement(uint64_t* value, bool* saturated) {
 static bool ValidConfig(uint32_t offset, uint32_t width) {
 	return (width == 1 || width == 2 || width == 4) && offset < 4096 &&
 		(offset % width) == 0 && offset <= 4096 - width;
+}
+
+static bool ValidMMIOWidth(uint64_t offset, uint32_t width) {
+	return (width == 1 || width == 2 || width == 4) && (offset % width) == 0;
+}
+
+static void ReleaseMMIOMappings(TinyGPUDriver_IVars* state) {
+	if (!state) return;
+	for (uint32_t bar = 0; bar < 6; ++bar) {
+		if (state->mmioMap[bar]) { state->mmioMap[bar]->release(); state->mmioMap[bar] = nullptr; }
+		if (state->mmioMemory[bar]) { state->mmioMemory[bar]->release(); state->mmioMemory[bar] = nullptr; }
+		state->mmioSize[bar] = 0;
+	}
+}
+
+// Called only from the provider gate. Keeping this mapping provider-owned is
+// what makes every BAR access participate in the same ordering domain as the
+// keepalive timer and provider lifecycle.
+static kern_return_t EnsureMMIOMapping(TinyGPUDriver* owner, TinyGPUDriver_IVars* state, uint32_t bar) {
+	if (state->mmioMap[bar]) return kIOReturnSuccess;
+	uint8_t index = 0, type = 0;
+	uint64_t bytes = 0;
+	kern_return_t err = state->pci->GetBARInfo(bar, &index, &bytes, &type);
+	if (err) return err;
+	IOMemoryDescriptor* memory = nullptr;
+	err = state->pci->_CopyDeviceMemoryWithIndex(index, &memory, owner);
+	if (err || !memory) return err ?: kIOReturnError;
+	IOMemoryMap* map = nullptr;
+	err = memory->CreateMapping(0, 0, 0, 0, 0, &map);
+	if (err || !map) { memory->release(); return err ?: kIOReturnError; }
+	state->mmioMemory[bar] = memory;
+	state->mmioMap[bar] = map;
+	state->mmioSize[bar] = bytes;
+	return kIOReturnSuccess;
 }
 
 static const char* StateName(ProviderState state) {
@@ -107,6 +144,7 @@ bool TinyGPUDriver::init() {
 
 void TinyGPUDriver::free() {
 	if (ivars) {
+		ReleaseMMIOMappings(ivars);
 		if (ivars->timer) ivars->timer->release();
 		if (ivars->timerAction) ivars->timerAction->release();
 		if (ivars->gate) ivars->gate->release();
@@ -280,6 +318,38 @@ kern_return_t TinyGPUDriver::CfgWrite(uint32_t offset, uint32_t width, uint32_t 
 	});
 }
 
+kern_return_t TinyGPUDriver::MMIORead(uint64_t leaseID, uint32_t bar, uint64_t offset, uint32_t width, uint32_t* out) {
+	if (!leaseID || !out || bar >= 6 || !ValidMMIOWidth(offset, width) || !ivars->gate) return kIOReturnBadArgument;
+	return ivars->gate->RunAction(^{
+		if (!ivars->pci || ivars->activeLeases != 1 || leaseID != ivars->leaseID || ivars->state != kActiveHealthy)
+			return kIOReturnNotReady;
+		kern_return_t err = EnsureMMIOMapping(this, ivars, bar);
+		if (err) return err;
+		if (offset > ivars->mmioSize[bar] || width > ivars->mmioSize[bar] - offset) return kIOReturnBadArgument;
+		volatile uint8_t* address = (volatile uint8_t*)(uintptr_t)ivars->mmioMap[bar]->GetAddress() + offset;
+		if (width == 1) *out = *(volatile uint8_t*)address;
+		else if (width == 2) *out = *(volatile uint16_t*)address;
+		else *out = *(volatile uint32_t*)address;
+		return kIOReturnSuccess;
+	});
+}
+
+kern_return_t TinyGPUDriver::MMIOWrite(uint64_t leaseID, uint32_t bar, uint64_t offset, uint32_t width, uint32_t value) {
+	if (!leaseID || bar >= 6 || !ValidMMIOWidth(offset, width) || !ivars->gate) return kIOReturnBadArgument;
+	return ivars->gate->RunAction(^{
+		if (!ivars->pci || ivars->activeLeases != 1 || leaseID != ivars->leaseID || ivars->state != kActiveHealthy)
+			return kIOReturnNotReady;
+		kern_return_t err = EnsureMMIOMapping(this, ivars, bar);
+		if (err) return err;
+		if (offset > ivars->mmioSize[bar] || width > ivars->mmioSize[bar] - offset) return kIOReturnBadArgument;
+		volatile uint8_t* address = (volatile uint8_t*)(uintptr_t)ivars->mmioMap[bar]->GetAddress() + offset;
+		if (width == 1) *(volatile uint8_t*)address = (uint8_t)value;
+		else if (width == 2) *(volatile uint16_t*)address = (uint16_t)value;
+		else *(volatile uint32_t*)address = value;
+		return kIOReturnSuccess;
+	});
+}
+
 kern_return_t TinyGPUDriver::ResetDevice() {
 	if (!ivars->gate || !ivars->timer) return kIOReturnNotReady;
 	__block kern_return_t err = kIOReturnSuccess;
@@ -415,6 +485,7 @@ kern_return_t TinyGPUDriver::ReleaseWorkloadLease(uint64_t id) {
 	return ivars->gate->RunAction(^{
 		if (!ivars->activeLeases || id != ivars->leaseID) return kIOReturnNotFound;
 		if (ivars->activeBars || ivars->activeDMA) return kIOReturnBusy;
+		ReleaseMMIOMappings(ivars);
 		--ivars->activeLeases;
 		return kIOReturnSuccess;
 	});

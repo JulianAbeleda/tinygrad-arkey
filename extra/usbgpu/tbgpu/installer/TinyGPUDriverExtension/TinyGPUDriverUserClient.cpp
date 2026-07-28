@@ -172,6 +172,21 @@ kern_return_t TinyGPUDriverUserClient::ExternalMethod(uint64_t selector, IOUserC
 
 		os_log(OS_LOG_DEFAULT, "tinygpu: wr cfg off:%x sz:%d, val:%x", off, size, val);
 		return ivars->provider->CfgWrite(off, size, val);
+	} else if (selector == TinyGPURPC::MMIORead) {
+		if (!ivars->leaseID) return kIOReturnNotPermitted;
+		if (args->scalarInputCount != 3 || args->scalarOutputCount < 1) return kIOReturnBadArgument;
+		const uint32_t bar = uint32_t(args->scalarInput[0]);
+		const uint64_t off = args->scalarInput[1];
+		const uint32_t size = uint32_t(args->scalarInput[2]);
+		uint32_t value = 0;
+		err = ivars->provider->MMIORead(ivars->leaseID, bar, off, size, &value);
+		if (!err) { args->scalarOutput[0] = value; args->scalarOutputCount = 1; }
+		return err;
+	} else if (selector == TinyGPURPC::MMIOWrite) {
+		if (!ivars->leaseID) return kIOReturnNotPermitted;
+		if (args->scalarInputCount != 4) return kIOReturnBadArgument;
+		return ivars->provider->MMIOWrite(ivars->leaseID, uint32_t(args->scalarInput[0]), args->scalarInput[1],
+		                                  uint32_t(args->scalarInput[2]), uint32_t(args->scalarInput[3]));
 	} else if (selector == TinyGPURPC::Reset) {
 		if (ivars->leaseID) return kIOReturnNotPermitted;
 		if (args->scalarInputCount || args->scalarOutputCount) return kIOReturnBadArgument;

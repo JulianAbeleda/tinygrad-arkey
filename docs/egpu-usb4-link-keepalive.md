@@ -85,79 +85,57 @@ shared memory are released at lease disconnect and are not retained by the keepe
   production `master` cannot be used for development DEXT replacement.
 - The audited development installer replaced `/Applications/TinyGPU.app`; the app and
   DriverKit extension are ad-hoc signed, and DEXT
-  `org.tinygrad.arkey.tinygpu.driver2` reached `[activated enabled]` at version `1.0.0/4`.
+  `org.tinygrad.arkey.tinygpu.driver2` reached `[activated enabled]` at version `1.0.0/5`.
 - A later reinstall attempt was correctly refused by macOS because this host has
   DriverKit development mode off and retains the prior ad-hoc registration. The CLI had
   also mislabeled `OSSystemExtensionErrorDomain` code 4 as a missing-entitlement error;
   code 4 means the extension was not found, while code 2 is the entitlement error. The
   installer now requires development mode explicitly and the next DEXT version is `5` so
   macOS can distinguish an upgrade from the already-active v4 registration.
-- A0 stopped before any workload qualification. The UT4G bridge is connected at 40 Gb/s,
-  but `system_profiler` reports no `1002:744c` PCI endpoint. The native diagnostic handshake
-  therefore cannot open the provider. This is a signal/enumeration precondition, not evidence
-  that the keeper passed or failed.
+- The endpoint subsequently re-enumerated: `system_profiler` reported `1002:744c`, link up
+  at 16.0 GT/s, and tinygrad's macOS PCI scan returned `1002:744c`.
+- The locked minimal AMD probe still failed during `AMDev.is_smu_alive()` on the PCIIface
+  path. The TinyGPU Unix RPC received EOF while servicing an MMIO write, and lease cleanup
+  later saw a broken pipe. The app-level keepalive status then reported unavailable even
+  though v5 remained enabled.
 - No reset, power-cycle, sleep, replug, workload benchmark, or idle-duration claim was made.
 - The complete machine-readable A0 artifact is
   `docs/task_workflow/output/egpu-usb4-persistent-pcie-A0-20260728T105840Z-89079.json`.
   The ignored installation transcript remains at
   `docs/task_workflow/output/tinygpu-development-install-provenance.txt` for local audit.
 
-Qualification remains gated on endpoint enumeration. Once the endpoint is present, rerun A0
-and then the acceptance matrix in the authoritative scope under the GPU lock. Do not infer
-awake-idle, load-power, or sleep/wake behavior from this installation result.
+Qualification is now gated on the runtime initialization/RPC blocker documented in
+`docs/task_workflow/input/egpu-usb4-tinygpu-runtime-initialization-scope-20260728.md`.
+Do not infer compute, awake-idle, load-power, or sleep/wake behavior from activation,
+enumeration, or the provider's installed/ready message.
 
 ## Current handoff (2026-07-28)
 
-**Owner:** continue from the clean `exp` worktree at commit `530d77183` (the same change is
-`b16356d95` on `dev` and `04f41ecfd` on `master`). The installer is development-only and
-must run from `exp`; do not install from `master`.
+**Owner:** continue from the clean `exp` worktree at the current task commit. The installer
+is development-only and must run from `exp`; do not install from `master`.
 
-**Host state:** macOS 26.5 (25F71), Apple M4 Mac mini, SIP disabled, and DriverKit
-development mode now on. The ADTLink UT4G bridge is visible at USB4 40 Gb/s, but the last
-check still showed no AMD `1002:744c` PCI endpoint. The installed app remains the prior
-ad-hoc DEXT v4; v5 has not been activated and there is no valid v5 provenance transcript.
+**Host state:** macOS 26.5 (25F71), Apple M4 Mac mini, SIP disabled, DriverKit development
+mode on, and the ADTLink UT4G bridge visible at USB4 40 Gb/s. The v5 DEXT is enabled and
+the legacy v3 DEXT is disabled. The endpoint can enumerate as `1002:744c` at 16.0 GT/s.
+The first observed failure is a TinyGPU RPC/provider disconnect while issuing a BAR5
+register write during AMD initialization. Earlier BAR0 initialization writes occur and
+have not yet been ruled out as the causal boundary.
 
-**Activation blocker:** `sysextd` reports two hidden registrations for
-`org.tinygrad.arkey.tinygpu.driver2`: one `activated_enabled` and one
-`terminating_for_upgrade_via_delegate`. This duplicate state produces
-`OSSystemExtensionErrorDomain` code 4 during v5 activation. The log also prints
-`package type not SYSX`; the DriverKit bundle is intentionally `.dext`/`DEXT` per Apple’s
-DriverKit format, so do not change it to a generic `.system`/`SYSX` extension. Reboot the
-Mac mini before retrying; if the duplicate remains, remove only this empty-team
-registration with administrator authorization, then reinstall.
+**Current blocker:** this is no longer an activation or enumeration task. The provider's
+service termination callback, native IOKit error propagation, direct BAR/MMIO access
+contract, and Python runtime-error classification are scoped in
+`docs/task_workflow/input/egpu-usb4-tinygpu-runtime-initialization-scope-20260728.md`.
+Do not reinstall or remove the v5 extension as a response to this runtime failure.
 
-If a reboot does not clear it, run this locally on the Mac mini (not over SSH):
-
-```sh
-sudo systemextensionsctl uninstall - org.tinygrad.arkey.tinygpu.driver2
-```
-
-The `-` targets this development registration’s empty team ID. Do not use
-`systemextensionsctl reset`, which would affect unrelated system extensions.
-
-**Next commands after reboot:**
-
-```sh
-systemextensionsctl developer
-systemextensionsctl list | rg -i -C2 'tinygpu|arkey'
-cd /Users/julianabeleda/env/tinygrad-arkey-exp
-/Users/julianabeleda/env/tinygrad-arkey/.venv/bin/python extra/usbgpu/tools/with_gpu_lock.py -- \
-  bash extra/usbgpu/tbgpu/installer/install_nosip.sh \
-  --install APPROVE_TINYGPU_DEVELOPMENT_INSTALL \
-  --provenance-out /Users/julianabeleda/env/tinygrad-arkey-exp/docs/task_workflow/output/tinygpu-development-install-provenance.txt
-```
-
-Approve the prompt only after the build and staged bundle checks pass. Then verify v5 is
-`[activated enabled]`, run `TinyGPU keepalive handshake` and `TinyGPU keepalive status`,
-confirm the PCI endpoint is present, and run qualification gates A0, A1, and A2 under the
-GPU lock. A4/A8 remain deferred until those gates pass; no local GGUF model is currently
-available for the A8 Qwen3 8B smoke gate. The installer rollback now preserves an already
-active extension instead of trying to deactivate it on a failed replacement.
+After the blocker scope's CPU/native checks pass, rerun the locked M0-M7 microprobes,
+then fresh A0, A1, and A2. A4/A8 remain deferred until those gates pass; no local GGUF
+model is currently available for the A8 Qwen3 8B smoke gate.
 
 **Evidence boundary:** the tracked A0 artifact is
 `docs/task_workflow/output/egpu-usb4-persistent-pcie-A0-20260728T105840Z-89079.json`.
 The later failed A0 attempts (`...152615Z-18390.json` and `...152626Z-18408.json`) are
-local diagnostic artifacts only; neither is acceptance evidence.
+local diagnostic artifacts only; neither is acceptance evidence. The runtime blocker
+scope is the current task authority for the post-activation failure.
 
 **Secondary defense:** `pmset disablesleep 1` and a launchd KeepAlive daemon are separate
 sleep investigations, not substitutes for the native provider keeper.
