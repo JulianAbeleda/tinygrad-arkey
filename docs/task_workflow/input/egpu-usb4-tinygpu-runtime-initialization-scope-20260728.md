@@ -46,6 +46,46 @@ Device["AMD"]
   -> Python reports an aggregate "No interface for AMD:0" error
 ```
 
+## 13. Handoff state — 2026-07-28
+
+Implementation is committed on `exp`:
+
+- `dda9ad2b4`: provider-gated MMIO, typed native/provider errors, Python error
+  preservation, protocol updates, and runtime scope.
+- `f4eb0b281`: prefer the active extension registration when stale terminating
+  entries precede it.
+- `289e9015f`: bump the DriverKit bundle version from 5 to 6.
+
+CPU/source/protocol tests pass: `24 passed`. The v5 build and signed install
+completed successfully under `extra/usbgpu/tools/with_gpu_lock.py`; the active
+system entry is currently `org.tinygrad.arkey.tinygpu.driver2` version 5.
+
+The v6 replacement was rejected by macOS with `OSSystemExtensionErrorDomain
+error 4` because the old v5 registration remains active while another stale
+registration is terminating. The installer rolled back to the known v5 app.
+No GPU reset, unplug, or power-cycle was performed.
+
+Preferred next action is a reboot to let macOS complete stale registration
+cleanup, followed by these checks under the GPU lock:
+
+```sh
+systemextensionsctl list | grep -E 'tinygpu|TinyGPU'
+/Applications/TinyGPU.app/Contents/MacOS/TinyGPU status
+/Applications/TinyGPU.app/Contents/MacOS/TinyGPU keepalive status
+/Applications/TinyGPU.app/Contents/MacOS/TinyGPU keepalive handshake
+```
+
+If the v5 entry is gone, rerun the audited installer with the approval token
+and provenance output, then run A0/A1 before any AMD initialization or M0-M7
+qualification. If macOS still reports a stale registration, manually run:
+
+```sh
+sudo /Applications/TinyGPU.app/Contents/MacOS/TinyGPU uninstall
+```
+
+and then reinstall v6; this is a registration cleanup, not an AMD firmware or
+PSP/GART operation.
+
 The last locked minimal probe failed with `TinyGPU disconnect` while
 `AMDev.is_smu_alive()` was issuing the first write in the standard SMU
 `GetSmuVersion` mailbox transaction: a 32-bit zero to response register
