@@ -7,7 +7,7 @@ compile-only bisect on `source_sha256` to localize the transition. This is that 
 
 ## Method
 Compile-only, zero GPU risk throughout. Used the committed probe
-(`extra/llm_research/prefill/canary_codegen_identity_probe.py`), extended with a local (uncommitted)
+(`extra/qk/prefill/canary_codegen_identity_probe.py`), extended with a local (uncommitted)
 `source_sha256` field for the predicate, run inside disposable `git worktree add --detach`
 checkouts (never in the main tree), one per candidate commit, removed immediately after. Predicate:
 `Q4_K/ffn_down` `source_sha256 == c411513c65d79fcd...` (good) vs anything else (bad). Binary search
@@ -104,5 +104,5 @@ execution, at any point.
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 
-> **Probe removed 2026-07-25.** `extra/llm_research/prefill/canary_codegen_identity_probe.py` is deleted. Its verdict --
+> **Probe removed 2026-07-25.** `extra/qk/prefill/canary_codegen_identity_probe.py` is deleted. Its verdict --
 > all six 14B canary code objects byte-identical to the 6/6-gated state -- is recorded above.

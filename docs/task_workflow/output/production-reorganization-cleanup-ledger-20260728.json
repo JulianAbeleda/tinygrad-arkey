@@ -10,7 +10,7 @@
   "advisory_candidates": [
     {"paths": ["scratch_attn_bench.py", "scratch_attn_bench2.py", "scratchpad/**", "docs/scratchpad/**"], "action": "delete", "state": "unauthorized", "recovery": "Git history; compact conclusions still require final link/index check", "reason": "Packet C high-confidence historical/scratch group"},
     {"paths": ["extra/llm_research/decode/capture_prefill_compile.py"], "action": "retain_on_dev_then_delete", "state": "blocked", "recovery": "5266ca605 or audited retaining commit", "reason": "no banked compile-failure conclusion and current audit hard drift"},
-    {"paths": ["extra/llm_research/quant/mmq_ds4_probe_contract.py", "test/unit/test_mmq_ds4_logical_emitter.py"], "action": "consolidate_then_delete", "state": "blocked", "recovery": "last retaining commit", "reason": "production packed-WMMA import chain still reaches refuted DS4 module"},
+    {"paths": ["extra/qk/quant/mmq_ds4_probe_contract.py", "test/unit/test_mmq_ds4_logical_emitter.py"], "action": "consolidate_then_delete", "state": "blocked", "recovery": "last retaining commit", "reason": "production packed-WMMA import chain still reaches refuted DS4 module"},
     {"paths": ["docs/*.json top-level", "bench/**", "docs/artifacts/** excluding completed raw batches"], "action": "retain_until_reconciled", "state": "blocked", "recovery": "current audited commit", "reason": "consumer, authority, and compact replacement not settled for remaining evidence"}
   ],
   "completed_prunes": [

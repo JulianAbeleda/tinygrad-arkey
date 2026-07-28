@@ -175,21 +175,21 @@ machine-generated descriptor is lowered and evaluated.
 - `extra/llm_research/mmq_q4k_q8_reference.py`
   - canonical Q4_K/Q8_1 numerical reference;
   - layout and edge-case tests.
-- `extra/llm_research/mmq_llama_oracle.py`
+- `extra/qk/mmq_llama_oracle.py`
   - translated llama structural oracle;
   - owner and fragment mapping reference;
   - not a production backend.
-- `extra/llm_research/mmq_owner_coverage.py`
+- `extra/qk/mmq_owner_coverage.py`
   - owner-map and duplicate/missing-store validation.
-- `extra/llm_research/mmq_coop_tile_harness.py`
+- `extra/qk/mmq_coop_tile_harness.py`
   - isolated execution, guard, timeout, GPU-health, and provenance checks.
-- `extra/llm_research/mmq_machine_search.py`
+- `extra/qk/mmq_machine_search.py`
   - candidate/evidence search surface and fail-closed promotion checks.
 - `extra/llm_research/prefill/q4k_prefill_route_spec.py`
   - existing descriptor-driven Q4 prefill pattern.
 - `extra/llm_research/prefill/q6k_prefill_route_spec.py`
   - existing descriptor-driven Q6 prefill pattern.
-- `extra/llm_research/generated_route_registry.py`
+- `extra/qk/generated_route_registry.py`
   - descriptor and emitter registry.
 - `extra/llm_research/route_manifest.py`
   - centralized route identity, status, provenance, selector, and rollback.
@@ -207,7 +207,7 @@ machine-generated descriptor is lowered and evaluated.
 - `extra/llm_research/mmq_atom_boundary.py`
   - fail-closed boundary stub;
   - must not become the long-term MMQ route contract.
-- `extra/llm_research/mmq_role_adapter.py`
+- `extra/qk/mmq_role_adapter.py`
   - temporary `ffn_gate_up` admission adapter;
   - must be generalized or replaced by the shared candidate contract.
 
@@ -694,15 +694,15 @@ Missing evidence must produce `BLOCKED_FAIL_CLOSED`.
 
 ### Search and evidence
 
-- `extra/llm_research/mmq_machine_search.py`
-- `extra/llm_research/mmq_coop_tile_harness.py`
-- `extra/llm_research/mmq_owner_coverage.py`
+- `extra/qk/mmq_machine_search.py`
+- `extra/qk/mmq_coop_tile_harness.py`
+- `extra/qk/mmq_owner_coverage.py`
 - candidate artifacts under `bench/`.
 
 ### Route policy
 
 - `extra/llm_research/route_manifest.py`
-- `extra/llm_research/generated_route_registry.py`
+- `extra/qk/generated_route_registry.py`
 - `tinygrad/llm/model_route_plan.py`
 - `tinygrad/llm/qk_primitives.py`
 

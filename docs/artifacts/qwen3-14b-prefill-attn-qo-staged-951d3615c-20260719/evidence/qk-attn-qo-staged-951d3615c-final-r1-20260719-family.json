@@ -127,7 +127,7 @@
     "search": {
       "candidate_identity": "771e33f40453c6903ed69ab6b5e8f7b894c5c1d40d3405db8742b546a67b4e58",
       "configuration_identity": "243654b6d8b8ea07ec64d2d1441c88920267eba27b4b9163638a8c876d18cba9",
-      "generator": "extra.llm_research.mmq_target_epoch_orchestrator.compile_target_kernel+extra.llm_research.mmq_frozen_target_artifact.produce_frozen_target_artifact",
+      "generator": "extra.qk.mmq_target_epoch_orchestrator.compile_target_kernel+extra.qk.mmq_frozen_target_artifact.produce_frozen_target_artifact",
       "sink_identity": "bd77ed89317319ced878964575afdbc59487f23d50240ad7d397d5bd2f9cbe44"
     },
     "toolchain": {

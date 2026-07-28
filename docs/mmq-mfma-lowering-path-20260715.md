@@ -10,7 +10,7 @@ are `float.vec(4)` per lane.  The resulting instruction must be
 `llvm.amdgcn.mfma.f32.16x16x16.f16` (or disassembly
 `v_mfma_f32_16x16x16_f16`).
 
-`extra/llm_research/mmq_mfma_lowering.py` is an evidence adapter only. It does not claim
+`extra/qk/mmq_mfma_lowering.py` is an evidence adapter only. It does not claim
 that a cooperative tile has been lowered from geometry, and it does not touch
 Q4/Q6 emitters or route selectors. Missing target, operand, lowering, or final
 instruction evidence fails closed. A cooperative-dot-specific compiler rewrite,

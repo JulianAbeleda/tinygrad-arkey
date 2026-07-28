@@ -93,7 +93,7 @@ PYTHONPATH=. python3 -m pytest test/unit/test_codebase_organization_audit.py -q
 1. `allowed_dependency_domains` is **pinned to the dependency domains observed at this commit** — a drift detector,
    not an independently designed layering.
 2. The hard error above is left **failing** rather than reclassified. Fixing it is A11's job, not the manifest's.
-3. `extra/llm_research/shared_attention_evidence_gate.py` was reclassified from `unresolved_reproducer` to `deletion_candidate`:
+3. `extra/qk/shared_attention_evidence_gate.py` was reclassified from `unresolved_reproducer` to `deletion_candidate`:
    it reproduces nothing, it validates a bundle schema no code in the repository produces. If it is in fact the
    reproducer for something open, A3 must be withdrawn.
 4. No behavior, placement, or default changed in this task; nothing was moved or deleted.

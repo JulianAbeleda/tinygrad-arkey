@@ -13,7 +13,7 @@
     "note": "The route was LIVE for this run (TINYGRAD_PREFILL_PACKED_WMMA was NOT set to 0). This is the ordinary shipped default, exercising route_packed_wmma_prefill end to end on the real 14B model."
   },
   "canary": {
-    "source": "extra/llm_research/prefill/packed_wmma_prefill_candidates.gate_result(quant, role, shape) after gate_combo(...); process-local _GATE_CACHE",
+    "source": "extra/qk/prefill/packed_wmma_prefill_candidates.gate_result(quant, role, shape) after gate_combo(...); process-local _GATE_CACHE",
     "cmd": "flock /tmp/gpu-bench.lock -c 'PYTHONPATH=. DEV=AMD timeout 600 python3 extra/llm_research/packed_wmma_canary_evidence.py'",
     "combos": [
       {

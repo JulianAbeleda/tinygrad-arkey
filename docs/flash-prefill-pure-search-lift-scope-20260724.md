@@ -108,7 +108,7 @@ GATE: isolated captures 254/0 byte-identical (all 4 routes); unit set unchanged;
   extents from spec fields, Hd pinned-but-derived like AMDAttentionGridSpec, reused across 8B/14B; NOT a fixed
   one-off), `purity_status` via derive_purity_status, `selector`, `route_attribution` through the Spec chain
   (mirror the decode row's attribution style, route_manifest.py:142-143), `authority_gate`=the new gate.
-- New authority gate (model on extra/llm_research/prefilled_route_parity.py / benchmark_shared_attention): proves the route
+- New authority gate (model on extra/qk/prefilled_route_parity.py / benchmark_shared_attention): proves the route
   is route-bound (no hidden SDPA fallback), token-parity vs SDPA on REAL 8B/14B (reuse the e2e A/B + a4_numerics
   against attention_harness_common.reference_attention), and correct+fast. Cite the numeric artifact.
 GATE: `assert_pure_machine_search({'PURE_MACHINE_SEARCH_ONLY':'1'})` still PASS with the new row present, AND the

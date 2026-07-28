@@ -53,7 +53,7 @@ Adding UPCAST/UNROLL crashes `devectorize_symbolic` — the expand's GEP indices
 
 ## The real ceiling
 
-The hand kernel `build_gemm_lds2_q4k` (`extra/llm_research/prefill/wmma.py:501-654`) does Q4_K dequant in registers with hand-tuned tile geometry and hits ~3400 tok/s on 8B. Scaled to 14B: ~1940 tok/s. Current packed-WMMA: 1829 tok/s. Gap: ~6%.
+The hand kernel `build_gemm_lds2_q4k` (`extra/qk/prefill/wmma.py:501-654`) does Q4_K dequant in registers with hand-tuned tile geometry and hits ~3400 tok/s on 8B. Scaled to 14B: ~1940 tok/s. Current packed-WMMA: 1829 tok/s. Gap: ~6%.
 
 The packed-WMMA route uses the scheduler's generic WMMA lowering for the view-chain matmul. The hand kernel picks optimal geometry directly. Closing the gap means either:
 
@@ -66,7 +66,7 @@ The packed-WMMA route uses the scheduler's generic WMMA lowering for the view-ch
 - `tinygrad/llm/prefill_routes.py` — route dispatch, `packed_wmma_prefill_enabled()` (now defaults True)
 - `tinygrad/codegen/opt/kernel_lds.py:175-215` — `PackedPrecontractOperandTemplate` validation
 - `tinygrad/codegen/opt/postrange.py:530-595` — warmstart key computation, `apply_opts`
-- `extra/llm_research/prefill/wmma.py:501-654` — hand kernel `build_gemm_lds2_q4k` (reference for optimal geometry)
+- `extra/qk/prefill/wmma.py:501-654` — hand kernel `build_gemm_lds2_q4k` (reference for optimal geometry)
 - `tinygrad/llm/model.py:264-276` — `_prefill_v2_opts` (the richer warmstart the 8B path uses)
 
 ## The packed-WMMA default change

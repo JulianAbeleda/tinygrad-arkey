@@ -67,9 +67,9 @@ Important custom-path files include:
 - `tinygrad/llm/flash_prefill_attention.py`
 - `tinygrad/llm/decode_routes.py`
 - `extra/llm_research/flash_kernels.py`
-- `extra/llm_research/coalesced_load_lowering.py`
-- `extra/llm_research/warp_reduce_lowering.py`
-- `extra/llm_research/kernel_pipeline.py`
+- `extra/qk/coalesced_load_lowering.py`
+- `extra/qk/warp_reduce_lowering.py`
+- `extra/qk/kernel_pipeline.py`
 - `extra/llm_research/route_manifest.py`
 - `extra/llm_research/decode/*`
 - `extra/llm_research/prefill/*`
@@ -372,9 +372,9 @@ Acceptance for Phase 4:
 
 Evaluate and, if generic, move or re-export these from core codegen:
 
-- `extra/llm_research/coalesced_load_lowering.py`
-- `extra/llm_research/warp_reduce_lowering.py`
-- reusable parts of `extra/llm_research/kernel_pipeline.py`
+- `extra/qk/coalesced_load_lowering.py`
+- `extra/qk/warp_reduce_lowering.py`
+- reusable parts of `extra/qk/kernel_pipeline.py`
 - target capability checks used by those passes
 
 Model-specific geometry must remain in `extra/llm_research`.
@@ -449,13 +449,13 @@ Keep custom kernels opaque to ordinary fusion where required, but require the sa
 Target modules:
 
 ```text
-extra/llm_research/decode/geometry.py
-extra/llm_research/decode/kv_loader.py
-extra/llm_research/decode/staging.py
-extra/llm_research/decode/score.py
-extra/llm_research/decode/softmax.py
-extra/llm_research/decode/pv_update.py
-extra/llm_research/decode/output.py
+extra/qk/decode/geometry.py
+extra/qk/decode/kv_loader.py
+extra/qk/decode/staging.py
+extra/qk/decode/score.py
+extra/qk/decode/softmax.py
+extra/qk/decode/pv_update.py
+extra/qk/decode/output.py
 ```
 
 The top-level builder should compose these stages from a `DecodeKernelPlan`. Do not change arithmetic or axis ownership during this phase.

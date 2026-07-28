@@ -72,7 +72,7 @@ and should be fixed regardless. But it is NOT the cause here: the geometries wer
 
 ## Next step: bisect on the source sha (zero GPU risk)
 495 commits separate `c35b5ff53` from HEAD; ~20 touch this path (`git log c35b5ff53..HEAD -- extra/qk/
-prefill/ extra/llm_research/runtime_specs.py tinygrad/llm/model.py extra/llm_research/kernel_lds.py tinygrad/codegen/opt/
+prefill/ extra/llm_research/runtime_specs.py tinygrad/llm/model.py extra/qk/kernel_lds.py tinygrad/codegen/opt/
 kernel_lds.py`). Because the kernel compiles at every commit, the transition points of `source_sha256`
 enumerate a small candidate set **without ever executing the faulting kernel**. Each transition is then a
 judgment call on whether the change could produce an out-of-bounds access.

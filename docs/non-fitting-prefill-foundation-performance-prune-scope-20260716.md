@@ -71,12 +71,12 @@ evidence still needed to diagnose the route, or optimizing on top of transitiona
 - Full-kernel candidate payloads, semantic candidate identity, target capability, schedule admission, and packed operand
   transforms exist in `extra/llm_research/runtime_specs.py`.
 - Exact production packed-source inventory exists in `tinygrad/llm/model.py`.
-- Workload projection and candidate inventory infrastructure exists in `extra/llm_research/prefill/workload_inventory.py`.
+- Workload projection and candidate inventory infrastructure exists in `extra/qk/prefill/workload_inventory.py`.
 - Execution, correctness, guard, timing, artifact, and dispatch contracts exist under `extra/llm_research/prefill/`.
 - Isolated guarded execution, GPU health checking, final-binary identity, ISA/resource evidence, owner coverage, and
   staging evidence exist.
 - Whole-model memory-adaptive candidate and policy composition exists in
-  `extra/llm_research/memory_adaptive_candidate_catalog.py` and its controller.
+  `extra/qk/memory_adaptive_candidate_catalog.py` and its controller.
 - The Q4_K/Q8_1 numeric oracle, logical MMQ vocabulary, llama ownership oracle, and bounded cooperative proof kernels
   exist.
 - Independent Q6_K vocabulary and a direct-packed fallback exist.

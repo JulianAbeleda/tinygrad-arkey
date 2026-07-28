@@ -430,9 +430,9 @@
     "input_forms": [],
     "metadata_read": [],
     "metadata_written": [],
-    "order_constraints": "The scope doc (\u00a72 custom-path file list, LR-021, LR-050) names extra/llm_research/kernel_pipeline.py as an existing file to extend. Only a stale __pycache__/kernel_pipeline.cpython-312.pyc exists; verified absent with `ls extra/llm_research/kernel_pipeline.py`. The real file with that name is tinygrad/codegen/opt/kernel_pipeline.py, a different module.",
+    "order_constraints": "The scope doc (\u00a72 custom-path file list, LR-021, LR-050) names extra/qk/kernel_pipeline.py as an existing file to extend. Only a stale __pycache__/kernel_pipeline.cpython-312.pyc exists; verified absent with `ls extra/qk/kernel_pipeline.py`. The real file with that name is tinygrad/codegen/opt/kernel_pipeline.py, a different module.",
     "output_forms": [],
-    "owner_file": "extra/llm_research/kernel_pipeline.py",
+    "owner_file": "extra/qk/kernel_pipeline.py",
     "owner_symbol": "N/A \u2014 file does not exist",
     "pass_id": "custom_kernel.qk_kernel_pipeline_ABSENT",
     "stage": "custom_kernel",
@@ -477,14 +477,14 @@
     ],
     "callers": [
       "tinygrad/llm/model.py (q4k_primitive_linear_call / q6k_primitive_linear_call / flash_decode_attention_route)",
-      "extra/llm_research/decode/flash_decode_attention_executor.py (flash_decode_live_split_block_tile)"
+      "extra/qk/decode/flash_decode_attention_executor.py (flash_decode_live_split_block_tile)"
     ],
     "confidence": "high",
     "context_fields": [
       "_LinearDecodeBinding (candidate_id, route_id, quant, target, B, T, K, N, parts, row_tile, use_coop)"
     ],
     "env_flags": [
-      "none in this file (grep confirms no getenv); BUBBLEBEAM_FUTURESIGHT (default 1) gates an UPSTREAM caller in extra/llm_research/bubblebeam_futuresight.py, not this file"
+      "none in this file (grep confirms no getenv); BUBBLEBEAM_FUTURESIGHT (default 1) gates an UPSTREAM caller in extra/qk/bubblebeam_futuresight.py, not this file"
     ],
     "input_forms": [
       "decode-shape (B,T,K) Tensors for quantized linear (Q4_K/Q6_K), or (q, assigned_kv) for flash decode attention"
@@ -555,12 +555,12 @@
     "callers": [
       "test/unit/test_memory_adaptive_route_manifest.py",
       "test/unit/test_qk_route_purity.py",
-      "extra/llm_research/route_manifest.json (generated companion)"
+      "extra/qk/route_manifest.json (generated companion)"
     ],
     "confidence": "medium",
     "context_fields": [],
     "env_flags": [
-      "BUBBLEBEAM_FUTURESIGHT (default 1 per file comment; actually read in extra/llm_research/bubblebeam_futuresight.py)"
+      "BUBBLEBEAM_FUTURESIGHT (default 1 per file comment; actually read in extra/qk/bubblebeam_futuresight.py)"
     ],
     "input_forms": [
       "none (declarative census, not a transform)"
@@ -571,7 +571,7 @@
     "output_forms": [
       "route metadata: status (promoted_default/default_shipped/rollback_reference/...), provenance, env-to-force, rollback env"
     ],
-    "owner_file": "extra/llm_research/route_manifest.py",
+    "owner_file": "extra/qk/route_manifest.py",
     "owner_symbol": "module-level ROUTE_PROVENANCE / FINAL_DEFAULT_PROVENANCE / per-route dataclass rows, derive_purity_status, validate_manifest",
     "pass_id": "custom_kernel.route_manifest",
     "stage": "custom_kernel",
@@ -588,7 +588,7 @@
       "fixed WMMA_16_16_16_half_float shape"
     ],
     "callers": [
-      "extra/llm_research/prefill/flash_prefill_attention_spec.py:79-106 (FlashPrefillAttentionSpec.emit)",
+      "extra/qk/prefill/flash_prefill_attention_spec.py:79-106 (FlashPrefillAttentionSpec.emit)",
       "tinygrad/llm/fused_attention.py:203 (fxn = emitter(spec))"
     ],
     "confidence": "high",
@@ -630,8 +630,8 @@
       "tinygrad/llm/decode_routes.py:52,91,94",
       "tinygrad/llm/model.py",
       "tinygrad/nn/__init__.py",
-      "extra/llm_research/mmq_q4k_q8_atom.py",
-      "extra/llm_research/mmq_ds4_logical_emitter.py"
+      "extra/qk/mmq_q4k_q8_atom.py",
+      "extra/qk/mmq_ds4_logical_emitter.py"
     ],
     "confidence": "high",
     "context_fields": [],
@@ -692,7 +692,7 @@
     "pass_id": "schedule.create_linear_with_vars",
     "stage": "dependencies",
     "tests": [
-      "indirect via Tensor.schedule_linear() in ~30 test files (test/unit/test_attention_semantic.py, test_nested_composite_reduce.py, test_amd_isa_wmma.py, test_wmma_value_semantics.py, test_rangeify_multireduce.py, test_recompute_hostile_cost_gate.py, test/backend/test_softmax_fusion.py, test_attention_residency_contract.py, test_stage1_wmma_compile_evidence.py, test_attn_qo_register_compile.py) and extra/llm_research/prefill/*.py"
+      "indirect via Tensor.schedule_linear() in ~30 test files (test/unit/test_attention_semantic.py, test_nested_composite_reduce.py, test_amd_isa_wmma.py, test_wmma_value_semantics.py, test_rangeify_multireduce.py, test_recompute_hostile_cost_gate.py, test/backend/test_softmax_fusion.py, test_attention_residency_contract.py, test_stage1_wmma_compile_evidence.py, test_attn_qo_register_compile.py) and extra/qk/prefill/*.py"
     ],
     "traversal": "graph_rewrite(big_sink, pm_schedule, name=\"schedule to linear\", enter_calls=True) -> graph_rewrite(linear_call, pm_resolve_linear_call, name=\"resolve linear call\") -> plain Python var collection -> capturing[0].add_linear early return -> memory_plan_rewrite(linear, held_bufs)"
   },
@@ -2283,7 +2283,7 @@
     "metadata_written": [
       "none"
     ],
-    "order_constraints": "n/a (dead path per current evidence) | CONFIDENCE NOTE: low -- pm_reduce_simplify looks unused; could not confirm intended caller; flag for LR-081 dead-code classification, do not delete without further search (e.g. extra/llm_research)",
+    "order_constraints": "n/a (dead path per current evidence) | CONFIDENCE NOTE: low -- pm_reduce_simplify looks unused; could not confirm intended caller; flag for LR-081 dead-code classification, do not delete without further search (e.g. extra/qk)",
     "output_forms": [
       "REDUCE eliminated in favor of closed-form (arange-style) count/sum expression",
       "used as a nested sub-PatternMatcher invoked from inside reduce_collapse's own graph_rewrite, not from full_rewrite_to_sink directly"
@@ -2348,7 +2348,7 @@
       "DSP gets a relaxed UPCAST amt<=16 check bypass (`self.ren.target.device == 'DSP'`)"
     ],
     "callers": [
-      "apply_opts, hand_coded_optimizations (heuristic.py), _apply_generic_tensor_core_opt (recursive PADTO retry), extra/llm_research/prefill/*.py via warmstart opts replay"
+      "apply_opts, hand_coded_optimizations (heuristic.py), _apply_generic_tensor_core_opt (recursive PADTO retry), extra/qk/prefill/*.py via warmstart opts replay"
     ],
     "confidence": "high",
     "context_fields": [
@@ -2477,7 +2477,7 @@
       "ResourcePlan/PipelinePolicy/StoragePolicy/WaitPolicy are explicitly documented 'core-neutral' (module docstring) and back both LDS and register-resident routes generically"
     ],
     "callers": [
-      "tinygrad/renderer/isa/amd_attention_abi.py, tinygrad/renderer/llvmir.py, tinygrad/renderer/cstyle.py, tinygrad/renderer/isa/amd.py, tinygrad/uop/spec.py, tinygrad/codegen/opt/gemm_consumer.py, tinygrad/codegen/opt/kernel_pipeline.py, extra/llm_research/runtime_specs.py, extra/llm_research/prefill/pure_register_evaluation_gate.py"
+      "tinygrad/renderer/isa/amd_attention_abi.py, tinygrad/renderer/llvmir.py, tinygrad/renderer/cstyle.py, tinygrad/renderer/isa/amd.py, tinygrad/uop/spec.py, tinygrad/codegen/opt/gemm_consumer.py, tinygrad/codegen/opt/kernel_pipeline.py, extra/qk/runtime_specs.py, extra/qk/prefill/pure_register_evaluation_gate.py"
     ],
     "confidence": "high",
     "context_fields": [
@@ -2714,7 +2714,7 @@
       "wave_size restricted to {32,64} (implicitly AMD wave32/wave64, but generic enum)"
     ],
     "callers": [
-      "tinygrad/renderer/isa/amd_attention_abi.py, tinygrad/renderer/isa/amd_register_allocator.py, tinygrad/renderer/isa/amd_wmma_residency.py, tinygrad/renderer/isa/amd_register_contracts.py, tinygrad/renderer/isa/amd.py, extra/llm_research/amd_resource_artifact.py -- notably this contract's actual consumers are all in tinygrad/renderer/isa (the late/regalloc stage), NOT in tinygrad/codegen/opt itself"
+      "tinygrad/renderer/isa/amd_attention_abi.py, tinygrad/renderer/isa/amd_register_allocator.py, tinygrad/renderer/isa/amd_wmma_residency.py, tinygrad/renderer/isa/amd_register_contracts.py, tinygrad/renderer/isa/amd.py, extra/qk/amd_resource_artifact.py -- notably this contract's actual consumers are all in tinygrad/renderer/isa (the late/regalloc stage), NOT in tinygrad/codegen/opt itself"
     ],
     "confidence": "medium",
     "context_fields": [
@@ -2786,10 +2786,10 @@
   },
   {
     "backend_assumptions": [
-      "none intrinsically, but consumers (extra/llm_research/prefill/*.py, tinygrad/llm/model.py) install AMD/gfx1100-specific packed-WMMA warmstart tables"
+      "none intrinsically, but consumers (extra/qk/prefill/*.py, tinygrad/llm/model.py) install AMD/gfx1100-specific packed-WMMA warmstart tables"
     ],
     "callers": [
-      "tinygrad/llm/model.py:1055 (with prefill_route_scope + warmstart_candidate_state), extra/llm_research/prefill/current_prefill_execution_adapter.py:79, extra/llm_research/prefill/prefill_whole_synced.py:351-356 (raw global mutation, bypassing the contextmanager!), extra/llm_research/prefill/packed_wmma_prefill_candidates.py:210/293"
+      "tinygrad/llm/model.py:1055 (with prefill_route_scope + warmstart_candidate_state), extra/qk/prefill/current_prefill_execution_adapter.py:79, extra/qk/prefill/prefill_whole_synced.py:351-356 (raw global mutation, bypassing the contextmanager!), extra/qk/prefill/packed_wmma_prefill_candidates.py:210/293"
     ],
     "confidence": "high",
     "context_fields": [
@@ -2797,7 +2797,7 @@
     ],
     "env_flags": [
       "none directly (no getenv)",
-      "state installed programmatically by callers (llm/model.py, extra/llm_research/prefill/*.py)"
+      "state installed programmatically by callers (llm/model.py, extra/qk/prefill/*.py)"
     ],
     "input_forms": [
       "Scheduler k (for key derivation from k.full_shape/k.axis_types/PARAM packed dtypes)"
@@ -3430,7 +3430,7 @@
     ],
     "callers": [
       "tinygrad/engine/realize.py (pm_compile -> to_program)",
-      "extra/llm_research/generate_shared_attention_captures.py:40-41"
+      "extra/qk/generate_shared_attention_captures.py:40-41"
     ],
     "confidence": "high",
     "context_fields": [
@@ -3474,9 +3474,9 @@
     ],
     "callers": [
       "tinygrad/runtime/ops_amd.py:12,1018 (registered before ISA renderer in the list [HIPRenderer, AMDLLVMRenderer, HIPCCRenderer]; AMDISARenderer appended when target.renderer=='ISA')",
-      "extra/llm_research/phase_abi_v1_resource_probe.py:54",
-      "extra/llm_research/generate_shared_attention_captures.py:40",
-      "extra/llm_research/decode/current_decode_execution_adapter.py:84"
+      "extra/qk/phase_abi_v1_resource_probe.py:54",
+      "extra/qk/generate_shared_attention_captures.py:40",
+      "extra/qk/decode/current_decode_execution_adapter.py:84"
     ],
     "confidence": "high",
     "context_fields": [],

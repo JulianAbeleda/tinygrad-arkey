@@ -13,7 +13,7 @@ Spiked the make-or-break (reuse the decode flash kernel's LDS-staging + online-s
 
 Repo `/home/ubuntu/tinygrad-arkey`, `master @ be68175ba`. Models: Qwen3-8B (Hq=32,Hkv=8,G=4,Hd=128) and
 14B (Hq=40,Hkv=8,G=5,Hd=128), gfx1100 (RX 7900 GRE). Read+plan only; no kernel edits here — a separate
-worktree (`.claude/worktrees/agent-afe31d62421beb2b0`, untracked `extra/llm_research/flash_prefill_gate.py` +
+worktree (`.claude/worktrees/agent-afe31d62421beb2b0`, untracked `extra/qk/flash_prefill_gate.py` +
 `flash_prefill_tile_kernel.py`) is running a minimal-kernel feasibility spike in parallel; its result feeds
 Part 3 below and this doc does not duplicate it.
 
@@ -351,7 +351,7 @@ Enumerated changes needed, each with what it reuses from 1.1/1.2 and its risk:
    against actual RDNA3 WMMA instruction shapes, not assumed). **Risk**: this is genuinely new kernel-authoring
    work (fragment load/store layout, `v_wmma` intrinsic emission via `Ops.CUSTOMI` or the AMD ISA renderer
    path from 1.5) with no working reference in-repo to copy from for *attention* WMMA specifically (the
-   existing WMMA references — `extra/gemm/rdna3_wmma_matmul.py`, `extra/llm_research/prefill/wmma.py:501-654`
+   existing WMMA references — `extra/gemm/rdna3_wmma_matmul.py`, `extra/qk/prefill/wmma.py:501-654`
    `build_gemm_lds2_q4k` — are GEMM-shaped, not flash-attention-shaped; adapting them is real work, not a
    drop-in).
 
