@@ -13,7 +13,7 @@ from tinygrad import Tensor, dtypes
 from tinygrad.uop.ops import KernelInfo, UOp
 
 from extra.qk.layout import q8_1_quantize
-from extra.qk.amd_warp_reduce import _staged_shfl, warp_reduce_max
+from tinygrad.codegen.late.warp_reduce import _staged_shfl, warp_reduce_max
 from extra.qk.mmq_ds4_probe_contract import cooperative_128_reuse_evidence
 from extra.qk.mmq_logical_vocabulary import DotOp, MMQCandidate, packed_ds4_geometry
 from extra.qk.mmq_q4k_q8_atom import _q4k_q8_1_bounded_ds4_dot4x4_kernel

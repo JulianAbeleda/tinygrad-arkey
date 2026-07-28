@@ -29,8 +29,7 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
   R = Hd // LANES; RP = Hd // 64; STAGES = _ceildiv(TK * Hd, THREADS); NB = _ceildiv(L, TK)
   scale = 1.0 / (Hd ** 0.5)
   def kernel(pout:UOp, q:UOp, cache:UOp, *extra) -> UOp:
-    from extra.qk.warp_reduce_lowering import _warp_reduce_sum_staged
-    from extra.qk.amd_warp_reduce import warp_reduce_sum
+      from tinygrad.codegen.late.warp_reduce import _warp_reduce_sum_staged, warp_reduce_sum
     # Optional extra input buffers, bound in this fixed order by the wrapper: [kvscale] if quant, [freqs] if rope.
     _ex = list(extra)
     # LR-062: pop defensively. `_ex.pop(0) if quant` raised IndexError when the buffer was simply missing, which

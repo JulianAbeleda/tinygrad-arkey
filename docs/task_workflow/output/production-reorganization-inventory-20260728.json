@@ -92,6 +92,18 @@
       "focused_test": "test/unit/test_codegen_list_scheduler.py",
       "verification": "4 focused CPU scheduler/boundary tests pass; SCHED_LIST remains default-off",
       "follow_up": "restore exact-clean-commit lowering baseline/fingerprint authorities"
+    },
+    {
+      "source": ["extra/qk/amd_warp_reduce.py", "extra/qk/warp_reduce_lowering.py"],
+      "destination": "tinygrad/codegen/late/warp_reduce.py",
+      "live_callers": [
+        "tinygrad/codegen/__init__.py WARP_REDUCE_LOWERING matcher",
+        "extra/qk lane-partition, GEMV, MMQ, and flash emitters now import the core owner"
+      ],
+      "shim_removed": "tinygrad/codegen/experimental.py warp_reduce_pm",
+      "focused_test": "test/unit/test_warp_reduce_lowering.py",
+      "verification": "4 focused CPU structural/boundary tests pass; WARP_REDUCE_LOWERING remains opt-in",
+      "follow_up": "restore exact-clean-commit lowering baseline/fingerprint authorities"
     }
   ],
   "blocking_conditions": [

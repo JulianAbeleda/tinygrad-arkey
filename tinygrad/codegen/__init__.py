@@ -25,6 +25,7 @@ from tinygrad.codegen.late.reg_store import pm_reduce_acc_upcast_fix, pm_distinc
 from tinygrad.codegen.late.coalesced_load import coalesce_loads
 from tinygrad.codegen.late.recurrence import unroll_recurrence
 from tinygrad.codegen.late.fdot2 import pm_fdot2, line_lower_fdot2
+from tinygrad.codegen.late.warp_reduce import pm_warp_reduce
 from tinygrad.codegen.plan import PLAN_GATES, observed_gate_values  # noqa: F401  (PLAN_GATES re-exported for callers)
 from tinygrad.codegen.opt.postrange import apply_opts
 from tinygrad.codegen import experimental as cg_extras
@@ -154,10 +155,10 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   # opt-in (WARP_REDUCE_LOWERING): auto-lower a full-warp REDUCE to the AMD ds_bpermute cross-lane ladder BEFORE
   # pm_group_for_reduce claims it for the LDS tree. Milestone 5 of the generic-low-level-search goal -- makes the
   # cross-lane reduce primitive scheduler-emittable (today only the hand kernels emit it). See
-  # extra/qk/warp_reduce_lowering.py + bench/qk-search-spaces/decode_ffn_gemv_gfx1100_v1.json.
+  # tinygrad/codegen/late/warp_reduce.py + bench/qk-search-spaces/decode_ffn_gemv_gfx1100_v1.json.
   _expander_pm = sym+pm_pre_expander+pm_group_for_reduce+expander
   if getenv("WARP_REDUCE_LOWERING") and ren.target.device == "AMD":
-    _expander_pm = sym+pm_pre_expander+cg_extras.warp_reduce_pm()+pm_group_for_reduce+expander
+    _expander_pm = sym+pm_pre_expander+pm_warp_reduce+pm_group_for_reduce+expander
   sink = graph_rewrite(sink, _expander_pm, name="expander")
 
   # add locals

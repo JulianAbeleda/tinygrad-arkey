@@ -318,8 +318,8 @@
     }
   ],
   "audited_commit": {
-    "commit": "f7231bbcf1634fcc9353b1fe6543c83459c5a88a",
-    "described": "mac-first-boot-20260610-3507-gf7231bbcf-dirty",
+    "commit": "981459f18a8187a0fe7f3cc842632ecc62f5cc65",
+    "described": "mac-first-boot-20260610-3508-g981459f18-dirty",
     "dirty": true
   },
   "authority_keys": {
@@ -521,9 +521,6 @@
     "_q6k_weight.ggml_q6k_bitfield_layout": [
       "extra/qk/quant/q6_k_gemv_primitive.py"
     ],
-    "_warp_reduce_sum_staged.single_slot_reuse_rule": [
-      "extra/qk/warp_reduce_lowering.py"
-    ],
     "abi_dataflow_v1": [
       "extra/qk/operand_attribution.py"
     ],
@@ -531,7 +528,7 @@
       "extra/qk/amd_isa_proof.py"
     ],
     "amd_warp_reduce.WARP=32": [
-      "extra/qk/amd_warp_reduce.py"
+      "tinygrad/codegen/late/warp_reduce.py"
     ],
     "boltbeam.hw_trace.v1": [
       "extra/qk/prefill/prefill_boltbeam_trace.py"
@@ -682,9 +679,6 @@
     ],
     "live_split_geometry.LiveSplitGeometry (per-split length/inner-block-count formula for live-context decode attention splits)": [
       "extra/qk/live_split_geometry.py"
-    ],
-    "lower_warp_reduce.auto_detect_rule": [
-      "extra/qk/warp_reduce_lowering.py"
     ],
     "make_kv_element_loader.dequant_rope_at_read_contract": [
       "extra/qk/kv_load.py"
@@ -852,18 +846,18 @@
       "extra/qk/quant/q4_k_gemv_primitive.py"
     ],
     "warp_shfl_xor.ds_bpermute_abi": [
-      "extra/qk/amd_warp_reduce.py"
+      "tinygrad/codegen/late/warp_reduce.py"
     ]
   },
   "coverage": {
-    "authored_files": 470,
-    "authored_loc": 72210,
-    "explicit_records": 90,
+    "authored_files": 469,
+    "authored_loc": 72137,
+    "explicit_records": 87,
     "generated_files": 1,
     "generated_loc": 57,
     "group_covered": 0,
-    "manifest_scope_files": 90,
-    "manifest_scope_loc": 13214,
+    "manifest_scope_files": 87,
+    "manifest_scope_loc": 13049,
     "uncovered": []
   },
   "coverage_limitations": [
@@ -877,7 +871,6 @@
     "files": [
       "extra/qk/amd_isa_proof.py",
       "extra/qk/amd_resource_artifact.py",
-      "extra/qk/amd_warp_reduce.py",
       "extra/qk/decode/current_decode_execution_adapter.py",
       "extra/qk/decode/flash_decode_attention_executor.py",
       "extra/qk/decode/flash_decode_attention_spec.py",
@@ -915,23 +908,20 @@
       "extra/qk/quant/q6_k_gemv_primitive.py",
       "extra/qk/route_manifest.py",
       "extra/qk/runtime_specs.py",
-      "extra/qk/warp_reduce_lowering.py",
+      "tinygrad/codegen/late/warp_reduce.py",
       "tinygrad/schedule/wmma/flash_prefill.py"
     ],
-    "loc": 6263,
+    "loc": 6154,
     "production_reachable_from_tinygrad": [
       "extra/qk/amd_isa_proof.py",
       "extra/qk/amd_resource_artifact.py",
-      "extra/qk/amd_warp_reduce.py",
       "extra/qk/bubblebeam_futuresight.py",
       "extra/qk/decode/flash_decode_attention_executor.py",
       "extra/qk/decode/flash_decode_attention_spec.py",
-      "extra/qk/flash_common.py",
       "extra/qk/flash_kernels.py",
       "extra/qk/gemv_g2_lanemap.py",
       "extra/qk/gemv_g3_codegen_lowering.py",
       "extra/qk/kernel_vocabulary.py",
-      "extra/qk/kv_load.py",
       "extra/qk/lane_partition_reduce.py",
       "extra/qk/layout.py",
       "extra/qk/live_split_geometry.py",
@@ -967,8 +957,7 @@
       "extra/qk/quant/q6_k_gemv_primitive.py",
       "extra/qk/quantize.py",
       "extra/qk/route_manifest.py",
-      "extra/qk/runtime_specs.py",
-      "extra/qk/warp_reduce_lowering.py"
+      "extra/qk/runtime_specs.py"
     ]
   },
   "graph": {
@@ -1008,11 +997,6 @@
       "extra/qk/decode/decode_tile_timing.py": [
         "extra/qk/decode/flash_decode_attention_executor.py",
         "tinygrad/__init__.py"
-      ],
-      "extra/qk/flash_kernels.py": [
-        "extra/qk/amd_warp_reduce.py",
-        "extra/qk/cooperative_stage_lanemap.py",
-        "extra/qk/warp_reduce_lowering.py"
       ],
       "extra/qk/live_split_geometry.py": [
         "extra/qk/flash_common.py"
@@ -1108,11 +1092,11 @@
       ]
     },
     "dynamic_seam_edges": {
-      "test/unit/test_fdot2_lowering.py": [
+      "test/unit/test_codegen_list_scheduler.py": [
         "tinygrad/codegen/experimental.py"
       ],
-      "tinygrad/codegen/experimental.py": [
-        "extra/qk/warp_reduce_lowering.py"
+      "test/unit/test_fdot2_lowering.py": [
+        "tinygrad/codegen/experimental.py"
       ],
       "tinygrad/llm/route_ops.py": [
         "extra/qk/bubblebeam_futuresight.py",
@@ -1141,10 +1125,6 @@
       "extra/qk/amd_resource_artifact.py": [
         "tinygrad/codegen/opt/register_contracts.py"
       ],
-      "extra/qk/amd_warp_reduce.py": [
-        "tinygrad/dtype.py",
-        "tinygrad/uop/ops.py"
-      ],
       "extra/qk/attention_harness_common.py": [
         "tinygrad/__init__.py"
       ],
@@ -1167,10 +1147,10 @@
         "tinygrad/uop/ops.py"
       ],
       "extra/qk/bubblebeam_futuresight.py": [
-        "extra/qk/amd_warp_reduce.py",
         "extra/qk/lane_partition_reduce.py",
         "extra/qk/route_manifest.py",
         "tinygrad/codegen/late/coalesced_load.py",
+        "tinygrad/codegen/late/warp_reduce.py",
         "tinygrad/dtype.py",
         "tinygrad/uop/ops.py"
       ],
@@ -1212,19 +1192,15 @@
         "tinygrad/helpers.py",
         "tinygrad/uop/ops.py"
       ],
-      "extra/qk/flash_kernels.py": [
-        "extra/qk/flash_common.py",
-        "extra/qk/kv_load.py"
-      ],
       "extra/qk/gemv_g2_lanemap.py": [
         "extra/qk/layout.py",
         "tinygrad/uop/ops.py"
       ],
       "extra/qk/gemv_g3_codegen_lowering.py": [
-        "extra/qk/amd_warp_reduce.py",
         "extra/qk/gemv_g2_lanemap.py",
         "extra/qk/lane_partition_reduce.py",
         "extra/qk/quant/q4_k_gemv_primitive.py",
+        "tinygrad/codegen/late/warp_reduce.py",
         "tinygrad/dtype.py",
         "tinygrad/uop/ops.py"
       ],
@@ -1253,8 +1229,7 @@
         "tinygrad/uop/ops.py"
       ],
       "extra/qk/lane_partition_reduce.py": [
-        "extra/qk/amd_warp_reduce.py",
-        "extra/qk/warp_reduce_lowering.py",
+        "tinygrad/codegen/late/warp_reduce.py",
         "tinygrad/dtype.py",
         "tinygrad/uop/ops.py"
       ],
@@ -1288,20 +1263,19 @@
         "tinygrad/uop/ops.py"
       ],
       "extra/qk/mmq_ds4_logical_emitter.py": [
-        "extra/qk/amd_warp_reduce.py",
         "extra/qk/layout.py",
         "extra/qk/mmq_ds4_probe_contract.py",
         "extra/qk/mmq_logical_vocabulary.py",
         "extra/qk/mmq_q4k_q8_atom.py",
         "extra/qk/prefill/q4k_q8_mmq_prefill_spec.py",
         "tinygrad/__init__.py",
+        "tinygrad/codegen/late/warp_reduce.py",
         "tinygrad/uop/ops.py"
       ],
       "extra/qk/mmq_epoch_manifest_export.py": [
         "extra/qk/amd_isa_proof.py"
       ],
       "extra/qk/mmq_q4k_q8_atom.py": [
-        "extra/qk/amd_warp_reduce.py",
         "extra/qk/layout.py",
         "extra/qk/mmq_atom_boundary.py",
         "extra/qk/mmq_ds4_probe_contract.py",
@@ -1310,6 +1284,7 @@
         "extra/qk/mmq_q4k_q8_reference.py",
         "extra/qk/quant/q4_k_gemv_primitive.py",
         "tinygrad/__init__.py",
+        "tinygrad/codegen/late/warp_reduce.py",
         "tinygrad/dtype.py",
         "tinygrad/uop/ops.py"
       ],
@@ -1495,17 +1470,11 @@
         "extra/qk/model_profiles.py",
         "extra/qk/prefill/prefill_harness.py",
         "extra/qk/shared_attention_capture.py"
-      ],
-      "extra/qk/warp_reduce_lowering.py": [
-        "extra/qk/amd_warp_reduce.py",
-        "tinygrad/dtype.py",
-        "tinygrad/uop/ops.py"
       ]
     },
     "inbound_counts": {
       "extra/qk/amd_isa_proof.py": 2,
       "extra/qk/amd_resource_artifact.py": 6,
-      "extra/qk/amd_warp_reduce.py": 6,
       "extra/qk/attention_harness_common.py": 8,
       "extra/qk/bench.py": 4,
       "extra/qk/benchmark_shared_attention.py": 1,
@@ -1523,14 +1492,13 @@
       "extra/qk/decode/decode_tile_timing.py": 0,
       "extra/qk/decode/flash_decode_attention_executor.py": 2,
       "extra/qk/decode/flash_decode_attention_spec.py": 3,
-      "extra/qk/flash_common.py": 1,
-      "extra/qk/flash_kernels.py": 1,
+      "extra/qk/flash_common.py": 0,
       "extra/qk/gemv_g2_lanemap.py": 2,
       "extra/qk/gemv_g3_codegen_lowering.py": 2,
       "extra/qk/generate_shared_attention_captures.py": 0,
       "extra/qk/generated_candidates.py": 2,
       "extra/qk/kernel_vocabulary.py": 11,
-      "extra/qk/kv_load.py": 1,
+      "extra/qk/kv_load.py": 0,
       "extra/qk/lane_partition_reduce.py": 2,
       "extra/qk/layout.py": 20,
       "extra/qk/live_split_geometry.py": 1,
@@ -1591,8 +1559,7 @@
       "extra/qk/shared_attention_capture.py": 4,
       "extra/qk/shared_attention_evidence.py": 4,
       "extra/qk/shared_attention_promotion.py": 2,
-      "extra/qk/timing_harness.py": 3,
-      "extra/qk/warp_reduce_lowering.py": 2
+      "extra/qk/timing_harness.py": 3
     },
     "no_inbound_import": [
       "extra/qk/benchmark_split_shared_attention.py",
@@ -1602,7 +1569,9 @@
       "extra/qk/decode/decode_hd_sweep_numerics.py",
       "extra/qk/decode/decode_runtime_overhead.py",
       "extra/qk/decode/decode_tile_timing.py",
+      "extra/qk/flash_common.py",
       "extra/qk/generate_shared_attention_captures.py",
+      "extra/qk/kv_load.py",
       "extra/qk/packed_wmma_canary_evidence.py",
       "extra/qk/phase_abi_v1_resource_probe.py",
       "extra/qk/prefill/packed_wmma_prefill_promotion_gate.py",
@@ -1619,7 +1588,6 @@
     "outbound_counts": {
       "extra/qk/amd_isa_proof.py": 2,
       "extra/qk/amd_resource_artifact.py": 1,
-      "extra/qk/amd_warp_reduce.py": 2,
       "extra/qk/attention_harness_common.py": 1,
       "extra/qk/bench.py": 3,
       "extra/qk/benchmark_shared_attention.py": 5,
@@ -1638,14 +1606,13 @@
       "extra/qk/decode/flash_decode_attention_executor.py": 2,
       "extra/qk/decode/flash_decode_attention_spec.py": 3,
       "extra/qk/flash_common.py": 3,
-      "extra/qk/flash_kernels.py": 2,
       "extra/qk/gemv_g2_lanemap.py": 2,
       "extra/qk/gemv_g3_codegen_lowering.py": 6,
       "extra/qk/generate_shared_attention_captures.py": 10,
       "extra/qk/generated_candidates.py": 2,
       "extra/qk/kernel_vocabulary.py": 2,
       "extra/qk/kv_load.py": 2,
-      "extra/qk/lane_partition_reduce.py": 4,
+      "extra/qk/lane_partition_reduce.py": 3,
       "extra/qk/layout.py": 4,
       "extra/qk/live_split_geometry.py": 2,
       "extra/qk/memory_adaptive_allocation_observer.py": 1,
@@ -1705,8 +1672,7 @@
       "extra/qk/shared_attention_capture.py": 2,
       "extra/qk/shared_attention_evidence.py": 3,
       "extra/qk/shared_attention_promotion.py": 0,
-      "extra/qk/timing_harness.py": 0,
-      "extra/qk/warp_reduce_lowering.py": 3
+      "extra/qk/timing_harness.py": 0
     },
     "scope_crossing_edges": [
       {
@@ -1736,14 +1702,6 @@
       {
         "from": "extra/qk/amd_resource_artifact.py",
         "to": "tinygrad/codegen/opt/register_contracts.py"
-      },
-      {
-        "from": "extra/qk/amd_warp_reduce.py",
-        "to": "tinygrad/dtype.py"
-      },
-      {
-        "from": "extra/qk/amd_warp_reduce.py",
-        "to": "tinygrad/uop/ops.py"
       },
       {
         "from": "extra/qk/attention_harness_common.py",
@@ -1776,6 +1734,10 @@
       {
         "from": "extra/qk/bubblebeam_futuresight.py",
         "to": "tinygrad/codegen/late/coalesced_load.py"
+      },
+      {
+        "from": "extra/qk/bubblebeam_futuresight.py",
+        "to": "tinygrad/codegen/late/warp_reduce.py"
       },
       {
         "from": "extra/qk/bubblebeam_futuresight.py",
@@ -1835,6 +1797,10 @@
       },
       {
         "from": "extra/qk/gemv_g3_codegen_lowering.py",
+        "to": "tinygrad/codegen/late/warp_reduce.py"
+      },
+      {
+        "from": "extra/qk/gemv_g3_codegen_lowering.py",
         "to": "tinygrad/dtype.py"
       },
       {
@@ -1884,6 +1850,10 @@
       {
         "from": "extra/qk/kv_load.py",
         "to": "tinygrad/uop/ops.py"
+      },
+      {
+        "from": "extra/qk/lane_partition_reduce.py",
+        "to": "tinygrad/codegen/late/warp_reduce.py"
       },
       {
         "from": "extra/qk/lane_partition_reduce.py",
@@ -1951,11 +1921,19 @@
       },
       {
         "from": "extra/qk/mmq_ds4_logical_emitter.py",
+        "to": "tinygrad/codegen/late/warp_reduce.py"
+      },
+      {
+        "from": "extra/qk/mmq_ds4_logical_emitter.py",
         "to": "tinygrad/uop/ops.py"
       },
       {
         "from": "extra/qk/mmq_q4k_q8_atom.py",
         "to": "tinygrad/__init__.py"
+      },
+      {
+        "from": "extra/qk/mmq_q4k_q8_atom.py",
+        "to": "tinygrad/codegen/late/warp_reduce.py"
       },
       {
         "from": "extra/qk/mmq_q4k_q8_atom.py",
@@ -2171,14 +2149,6 @@
       },
       {
         "from": "extra/qk/shared_attention_capture.py",
-        "to": "tinygrad/uop/ops.py"
-      },
-      {
-        "from": "extra/qk/warp_reduce_lowering.py",
-        "to": "tinygrad/dtype.py"
-      },
-      {
-        "from": "extra/qk/warp_reduce_lowering.py",
         "to": "tinygrad/uop/ops.py"
       },
       {
@@ -2818,16 +2788,16 @@
   "loc_by": {
     "disposition": {
       "consolidate": {
-        "files": 2,
-        "loc": 864
+        "files": 1,
+        "loc": 832
       },
       "investigate": {
         "files": 2,
         "loc": 256
       },
       "keep": {
-        "files": 85,
-        "loc": 12031
+        "files": 83,
+        "loc": 11898
       },
       "move": {
         "files": 1,
@@ -2840,16 +2810,16 @@
         "loc": 421
       },
       "attention_decode": {
-        "files": 10,
-        "loc": 809
+        "files": 9,
+        "loc": 705
       },
       "attention_prefill": {
         "files": 3,
         "loc": 504
       },
       "codegen_lowering": {
-        "files": 4,
-        "loc": 278
+        "files": 2,
+        "loc": 218
       },
       "evidence": {
         "files": 11,
@@ -2861,7 +2831,7 @@
       },
       "quant_mmq": {
         "files": 18,
-        "loc": 2930
+        "loc": 2929
       },
       "route_authority": {
         "files": 16,
@@ -2878,8 +2848,8 @@
         "loc": 1143
       },
       "authority": {
-        "files": 44,
-        "loc": 7509
+        "files": 42,
+        "loc": 7448
       },
       "benchmark": {
         "files": 2,
@@ -2894,8 +2864,8 @@
         "loc": 438
       },
       "execution": {
-        "files": 9,
-        "loc": 1802
+        "files": 8,
+        "loc": 1698
       },
       "integration": {
         "files": 2,
@@ -2920,8 +2890,8 @@
         "loc": 43
       },
       "production": {
-        "files": 66,
-        "loc": 9719
+        "files": 63,
+        "loc": 9554
       },
       "promoted_default": {
         "files": 5,
@@ -2984,15 +2954,6 @@
       "test/unit/test_amd_resource_artifact_intervals_20260712.py",
       "test/unit/test_pure_register_compile_capture.py",
       "test/unit/test_pure_register_final_program_adapter_20260712.py"
-    ],
-    "extra/qk/amd_warp_reduce.py": [
-      "extra/qk/bubblebeam_futuresight.py",
-      "extra/qk/flash_kernels.py",
-      "extra/qk/gemv_g3_codegen_lowering.py",
-      "extra/qk/lane_partition_reduce.py",
-      "extra/qk/mmq_ds4_logical_emitter.py",
-      "extra/qk/mmq_q4k_q8_atom.py",
-      "extra/qk/warp_reduce_lowering.py"
     ],
     "extra/qk/attention_harness_common.py": [
       "docs/attention-harness-centralization-scope-20260724.md",
@@ -3146,25 +3107,6 @@
       "extra/qk/live_split_geometry.py",
       "test/unit/test_gate_inventory.py",
       "tinygrad/codegen/plan.py"
-    ],
-    "extra/qk/flash_kernels.py": [
-      "docs/14b-decode-g5-steady-state-recovery-scope-20260726.md",
-      "docs/HANDOFF_14b_decode_depth_decay_20260726.md",
-      "docs/flash-composite-reduce-orchestration-plan-20260722.md",
-      "docs/flash-prefill-B-task-deepseek-20260721.md",
-      "docs/flash-prefill-route-a-task-deepseek-20260721.md",
-      "docs/flash-prefill-scope-20260721.md",
-      "docs/flash-prefill-wmma-mvp-scope-20260721.md",
-      "docs/flash-scheduler-extension-scope-deepseek-20260722.md",
-      "docs/prefill-softmax-reduce-fuse-evidence-20260724.json",
-      "docs/prefill-softmax-reduce-fuse-promotion-readiness-20260724.md",
-      "docs/shared-flash-attention-codex-completion-scope-20260722.md",
-      "docs/task_workflow/output/lowering-architecture-refactor-scope-20260726.md",
-      "extra/qk/decode/decode_codegen_identity_check.py",
-      "extra/qk/decode/decode_hd_sweep_numerics.py",
-      "extra/qk/decode/flash_decode_attention_spec.py",
-      "test/unit/test_flash_buffer_roles.py",
-      "test/unit/test_flash_variant_fingerprint.py"
     ],
     "extra/qk/gemv_g2_lanemap.py": [
       "bench/pure-machine-search-default-path-census/default_route_table.json",
@@ -3779,27 +3721,19 @@
       "extra/qk/README.md",
       "extra/qk/bench.py",
       "extra/qk/prefill/prefill_whole_synced.py"
-    ],
-    "extra/qk/warp_reduce_lowering.py": [
-      "docs/task_workflow/output/lowering-architecture-refactor-scope-20260726.md",
-      "extra/qk/flash_kernels.py",
-      "extra/qk/lane_partition_reduce.py",
-      "scratchpad/audit_bfs.py",
-      "tinygrad/codegen/__init__.py",
-      "tinygrad/codegen/experimental.py"
     ]
   },
   "promotion_budget": {
-    "budgeted_after_pending_promotions": 34955,
-    "budgeted_loc": 34955,
+    "budgeted_after_pending_promotions": 35011,
+    "budgeted_loc": 35011,
     "cap": 40000,
     "data_file_convertible_loc": 0,
-    "headroom": 5045,
+    "headroom": 4989,
     "intended_cap": 30000,
     "intended_cap_note": "sz.py:13 records 35000 as temporary headroom; the standing target is 30000",
-    "over_intended_cap": 4955,
+    "over_intended_cap": 5011,
     "pending_promotion_net_cost": 0,
-    "unbudgeted_default_path_loc": 6193
+    "unbudgeted_default_path_loc": 6028
   },
   "repeated_workflow_phases": {
     "build-spec": [
@@ -3983,12 +3917,6 @@
     {
       "message": "extra/qk/amd_resource_artifact.py is on the default production path from extra/ with no promotion or retention decision",
       "path": "extra/qk/amd_resource_artifact.py",
-      "principle": "production behavior should live with its domain owner",
-      "warning": "extra_on_default_path"
-    },
-    {
-      "message": "extra/qk/amd_warp_reduce.py is on the default production path from extra/ with no promotion or retention decision",
-      "path": "extra/qk/amd_warp_reduce.py",
       "principle": "production behavior should live with its domain owner",
       "warning": "extra_on_default_path"
     },
@@ -4211,12 +4139,6 @@
     {
       "message": "extra/qk/runtime_specs.py is on the default production path from extra/ with no promotion or retention decision",
       "path": "extra/qk/runtime_specs.py",
-      "principle": "production behavior should live with its domain owner",
-      "warning": "extra_on_default_path"
-    },
-    {
-      "message": "extra/qk/warp_reduce_lowering.py is on the default production path from extra/ with no promotion or retention decision",
-      "path": "extra/qk/warp_reduce_lowering.py",
       "principle": "production behavior should live with its domain owner",
       "warning": "extra_on_default_path"
     },
