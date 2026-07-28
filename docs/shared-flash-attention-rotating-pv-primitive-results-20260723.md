@@ -11,7 +11,7 @@
 
 # Rotating-PV Sequence Primitive — Results (2026-07-23)
 
-Execution of `docs/CLAUDE_FLASHATTN_EXECUTION_PROMPT_20260723.md` (primitive-first).
+Execution of the primitive-first prompt preserved at commit `0fe7902f4`.
 
 ## What was implemented
 

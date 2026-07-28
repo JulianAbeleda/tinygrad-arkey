@@ -37,7 +37,7 @@ is a deliberate, documented scope decision, not an oversight.
 Covered default-path kernel builders (see COVERAGE below for the exact call sites):
   - extra/qk/prefill/q4k_prefill_route_spec.py   (direct-packed Q4_K prefill)
   - extra/qk/prefill/q6k_prefill_route_spec.py   (direct-packed Q6_K prefill)
-  - extra/qk/prefill/flash_prefill_attention_spec.py  (shipped fused prefill attention)
+  - tinygrad/schedule/wmma/flash_prefill.py  (shipped fused prefill attention)
   - extra/qk/decode/flash_decode_attention_spec.py    (shipped live-split decode attention: tile + combine)
   - extra/qk/quant/q4_k_gemv_primitive.py        (Q4_K GEMV/GEMM primitive, direct_out b=1)
   - extra/qk/quant/q6_k_gemv_primitive.py        (Q6_K GEMV/GEMM primitive, direct_out b=1)
@@ -211,7 +211,7 @@ def _q6k_prefill_cases() -> list[KernelCase]:
 
 
 def _flash_prefill_cases() -> list[KernelCase]:
-  from extra.qk.prefill.flash_prefill_attention_spec import describe_flash_prefill_attention
+  from tinygrad.schedule.wmma.flash_prefill import describe_flash_prefill_attention
   cases = []
   for model, dims in ATTN_SHAPES.items():
     Hq, Hkv, Hd = dims["Hq"], dims["Hkv"], dims["Hd"]

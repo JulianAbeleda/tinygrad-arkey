@@ -100,7 +100,7 @@ def shared_attention_attribution(model) -> dict[str, Any]:
       "boundary": "custom_kernel_fused_attention",
       "semantic_candidate": None,
       # This is the emitted kernel name from FlashPrefillAttentionSpec.emitted_kernel_names
-      # (extra/qk/prefill/flash_prefill_attention_spec.py); hardcoded here rather than imported to
+      # (tinygrad/schedule/wmma/flash_prefill.py); hardcoded here rather than imported to
       # avoid pulling extra/qk/ into this attribution helper's import path unconditionally --
       # it is the sole entry in that tuple today (see fused_attention.py:ADMITTED_GRIDS/emit()).
       "selected_lowering": "amd_gfx1100_q16_grid_hd128_loop_attention",

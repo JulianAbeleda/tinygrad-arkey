@@ -63,7 +63,7 @@ head_dim comes from the existing `grid.head_dim`/`AMDAttentionGridSpec`. NO beha
 captures stay byte-identical. This is what makes the kernel honestly parametrized-in-form.
 GATE: isolated captures 254/0 byte-identical (all 4 routes); unit tests 6/93; a4/varkv numerics 6.1e-5.
 
-### P2 — FlashPrefillAttentionSpec (new: extra/qk/prefill/flash_prefill_attention_spec.py)
+### P2 — FlashPrefillAttentionSpec (promoted: tinygrad/schedule/wmma/flash_prefill.py)
 A frozen dataclass mirroring FlashDecodeTileSpec (flash_decode_attention_spec.py:44-85):
 - Fields: `Hq, Hkv, Hd(=128 validated), q_tokens, kv_tokens, causal, valid_kv, query_start, acc_blocks,
   output_block_base, state_strategy(register|lds, = phase_abi_v1), scale, target="amd_gfx1100"`.
