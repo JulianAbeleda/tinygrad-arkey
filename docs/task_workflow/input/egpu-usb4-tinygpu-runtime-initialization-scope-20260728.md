@@ -2,8 +2,8 @@
 
 Date: 2026-07-28
 
-Status: open; implementation and hardware qualification are blocked at the first
-AMD runtime probe. This scope is a follow-on to
+Status: open; the v7 status-marshalling fix is installed, but A0/A1 are blocked
+until a reboot removes the stale v6 DriverKit personality. This scope is a follow-on to
 `egpu-usb4-persistent-pcie-service-scope-20260727.md`. It does not replace the
 DriverKit-owned keepalive architecture or its A0-A11 acceptance matrix.
 
@@ -16,22 +16,26 @@ sleep test is authorized by this scope.
 
 ## 1. Executive alignment
 
-The v5 installation problem is resolved sufficiently to proceed to runtime
-diagnosis:
+The installation and endpoint state at the latest handoff is:
 
-- `org.tinygrad.arkey.tinygpu.driver2` version `1.0.0/5` is
+- `org.tinygrad.arkey.tinygpu.driver2` version `1.0.0/7` is
   `[activated enabled]`.
+- Version `1.0.0/6` is `[terminating for upgrade via delegate]` and its stale
+  DriverKit personality still wins PCI matching until reboot.
 - The legacy `org.tinygrad.tinygpu.driver2` version `1.0.0/3` is
   `[activated disabled]`.
-- The audited app reports the extension as ready.
+- The audited v7 app and activated provenance are bound to commit `114d9c6d6`.
 - macOS has observed the AMD endpoint `1002:744c` with the PCI link up at
-  16.0 GT/s, and tinygrad has observed `['1002:744c']` in its macOS PCI scan.
+  16.0 GT/s after the most recent bounded eGPU reset.
+- No `tinygpu` IOUserService is currently published because kernelmanagerd
+  retries the non-executable v6 DEXT instead of launching v7.
 
 Those observations establish installation, activation, and enumeration only.
 They do not establish that the provider can safely service AMD runtime MMIO,
 DMA, or queue initialization.
 
-The current blocker is:
+The original AMD runtime blocker, which has not been re-exercised after the v7
+status fix, is:
 
 ```text
 Device["AMD"]
@@ -136,11 +140,68 @@ The next action is the audited v7 install followed by A0 and A1. Do not reset
 the GPU again before those gates: the endpoint and v6 provider are both present,
 and the remaining observed failure is selector-5 reply marshalling.
 
+### v7 reboot handoff
+
+This subsection supersedes the earlier Section 13 next actions.
+
+Implementation commit `114d9c6d6` adds inline `OSData` handling for selector 5,
+retains the descriptor path, bumps the DEXT version to 7, records the three v6
+A0 failures, and passes `61` targeted tests plus a clean Debug DriverKit build.
+The audited v7 install completed successfully and
+`org.tinygrad.arkey.tinygpu.driver2` version 7 reached `[activated enabled]`.
+The installed v7 DEXT CDHash is
+`7b9d17f219d094d904d4758880b9bf1d3770e057`.
+
+The first v7 A0 artifact is
+`docs/task_workflow/output/egpu-usb4-persistent-pcie-A0-20260728T231606Z-6242.json`.
+It failed at keepalive status because the still-bound provider was v6 (CDHash
+`72240ba968978570b90e38ab47a21b331b1ec026`), not the newly registered v7.
+No AMD initialization ran.
+
+A second user-authorized bounded eGPU reset detached that v6 IOUserService. The
+endpoint then returned successfully: UT4G is connected at 40 Gb/s, `1002:744c`
+and its three companion functions are present, and every PCI function reports
+x16 at 16.0 GT/s with the link up. The reset did not solve the DEXT handoff:
+there is currently no `tinygpu` IOUserService, while the old v6 process remains
+at PID 4492 and keepalive status is unavailable.
+
+DriverKit logs establish the reason. During the v7 upgrade, sysextd delegated
+v6 termination and explicitly scheduled its uninstallation for the next reboot.
+When the endpoint returned, kernelmanagerd selected the v6 unique ID
+`c2d486c17e62dc24af9469f97bcbb95896678b3f96a5b0826b7baf032f66279b`
+instead of v7, then launchd rejected the v6 executable with `EACCES` because
+sysextd had cleared its executable bit. v7 is registered as loaded under unique
+ID `bdb12e12f1643474be8a566f3c6822ab570083e85e5b46b8f7f23f2848ffe6a3`,
+but cannot bind while the stale v6 personality wins matching.
+
+The required next action is a Mac reboot. Do not reset the GPU again and do not
+run AMD initialization. After reboot, run these observations under the GPU
+lock:
+
+```sh
+systemextensionsctl list | grep -E 'tinygpu|TinyGPU'
+system_profiler SPThunderboltDataType SPPCIDataType
+ioreg -r -n tinygpu -l
+ps -ww -axo pid=,ppid=,command= | grep -Ei 'tinygpu|org.tinygrad.arkey'
+/Applications/TinyGPU.app/Contents/MacOS/TinyGPU status
+/Applications/TinyGPU.app/Contents/MacOS/TinyGPU keepalive handshake
+/Applications/TinyGPU.app/Contents/MacOS/TinyGPU keepalive status
+```
+
+Proceed only if v6 is gone, v7 remains `[activated enabled]`, the endpoint is
+present, the `tinygpu` IOUserService CDHash is the installed v7 CDHash above,
+and the status payload validates as healthy. Because this handoff commit advances
+`HEAD` beyond the installed provenance's `114d9c6d6` source commit, refresh the
+audited install provenance from the clean handoff commit before running A0 and
+A1. A0/A1 remain the only authorized gates; M0-M7 and AMD initialization stay
+blocked until both pass.
+
 ## 2. Evidence boundary: facts versus hypotheses
 
 ### Established facts
 
-1. The v5 DEXT is enabled and the legacy DEXT is disabled.
+1. The v7 DEXT is enabled, v6 is terminating for upgrade via delegate, and the
+   legacy signed DEXT is disabled.
 2. The USB4 bridge can be present while the PCI endpoint is absent, and the PCI
    endpoint can later re-enumerate without reinstalling the DEXT.
 3. When the endpoint is present, the macOS PCI scan returns `1002:744c` and the
