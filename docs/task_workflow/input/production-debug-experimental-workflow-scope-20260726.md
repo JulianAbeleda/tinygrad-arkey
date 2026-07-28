@@ -712,3 +712,17 @@ they do not indicate a matcher failure.
 The open authority work is tracked as the input task
 `docs/task_workflow/input/reg-store-devec-amd-authority-verification-scope-20260728.md`. It remains an input until the
 clean-commit baseline and fingerprint checks are rerun with the required LLVM tooling.
+
+### 16.13 Fourth production-closure checkpoint
+
+The narrow AMD `fdot2` primitive hook is now centralized:
+
+| Source | Destination | Production consumer | Boundary change |
+|---|---|---|---|
+| `extra/qk/fdot2_lowering.py` | `tinygrad/codegen/late/fdot2.py` | `tinygrad/codegen/__init__.py` at the two graph-rewrite hooks and the post-linearization hook; `tinygrad/codegen/opt/gemm_consumer.py` | Core imports are direct; all three `codegen/experimental.py` fdot2 forwarding shims and the old extra module were removed |
+
+The matcher remains default-off and AMD-only through `V_DOT2_LOWERING`. Its exact scalar-f32 output contract, optional
+accumulator ordering, fail-closed controls, and linearized dependency replacement are pinned by
+`test/unit/test_fdot2_lowering.py`; the focused fdot2/GEMM suite passes 15 tests. This is primitive exposure only and
+does not claim AMD execution, ISA availability, or a speedup. The lowering baseline/fingerprint authority follow-up
+remains open under `docs/task_workflow/input/reg-store-devec-amd-authority-verification-scope-20260728.md`.

@@ -318,9 +318,9 @@
     }
   ],
   "audited_commit": {
-    "commit": "86f21b332b80840ac071e9adbe9ec6516a62f021",
-    "described": "mac-first-boot-20260610-3503-g86f21b332",
-    "dirty": false
+    "commit": "9b84ebe86f12f69cf0e870e505fdc2e7aea8eb9f",
+    "described": "mac-first-boot-20260610-3505-g9b84ebe86-dirty",
+    "dirty": true
   },
   "authority_keys": {
     "AMD_BACKEND_ATOM_ID": [
@@ -705,7 +705,7 @@
       "extra/qk/prefill/packed_wmma_prefill_promotion_gate.py"
     ],
     "pm_fdot2.dot2_idiom_rule": [
-      "extra/qk/fdot2_lowering.py"
+      "tinygrad/codegen/late/fdot2.py"
     ],
     "pm_reg_store_devec.rewrite_rule": [
       "tinygrad/codegen/late/reg_store.py"
@@ -857,13 +857,13 @@
   },
   "coverage": {
     "authored_files": 469,
-    "authored_loc": 72153,
-    "explicit_records": 92,
+    "authored_loc": 72151,
+    "explicit_records": 91,
     "generated_files": 1,
     "generated_loc": 57,
     "group_covered": 0,
-    "manifest_scope_files": 92,
-    "manifest_scope_loc": 13326,
+    "manifest_scope_files": 91,
+    "manifest_scope_loc": 13273,
     "uncovered": []
   },
   "coverage_limitations": [
@@ -927,7 +927,6 @@
       "extra/qk/codegen_list_scheduler.py",
       "extra/qk/decode/flash_decode_attention_executor.py",
       "extra/qk/decode/flash_decode_attention_spec.py",
-      "extra/qk/fdot2_lowering.py",
       "extra/qk/flash_common.py",
       "extra/qk/flash_kernels.py",
       "extra/qk/gemv_g2_lanemap.py",
@@ -1112,7 +1111,6 @@
     "dynamic_seam_edges": {
       "tinygrad/codegen/experimental.py": [
         "extra/qk/codegen_list_scheduler.py",
-        "extra/qk/fdot2_lowering.py",
         "extra/qk/warp_reduce_lowering.py"
       ],
       "tinygrad/llm/route_ops.py": [
@@ -1210,10 +1208,6 @@
       "extra/qk/decode/flash_decode_attention_spec.py": [
         "extra/qk/flash_kernels.py",
         "extra/qk/live_split_geometry.py",
-        "tinygrad/uop/ops.py"
-      ],
-      "extra/qk/fdot2_lowering.py": [
-        "tinygrad/dtype.py",
         "tinygrad/uop/ops.py"
       ],
       "extra/qk/flash_common.py": [
@@ -1533,7 +1527,6 @@
       "extra/qk/decode/decode_tile_timing.py": 0,
       "extra/qk/decode/flash_decode_attention_executor.py": 2,
       "extra/qk/decode/flash_decode_attention_spec.py": 3,
-      "extra/qk/fdot2_lowering.py": 1,
       "extra/qk/flash_common.py": 1,
       "extra/qk/flash_kernels.py": 1,
       "extra/qk/gemv_g2_lanemap.py": 2,
@@ -1649,7 +1642,6 @@
       "extra/qk/decode/decode_tile_timing.py": 0,
       "extra/qk/decode/flash_decode_attention_executor.py": 2,
       "extra/qk/decode/flash_decode_attention_spec.py": 3,
-      "extra/qk/fdot2_lowering.py": 2,
       "extra/qk/flash_common.py": 3,
       "extra/qk/flash_kernels.py": 2,
       "extra/qk/gemv_g2_lanemap.py": 2,
@@ -1836,14 +1828,6 @@
       },
       {
         "from": "extra/qk/decode/flash_decode_attention_spec.py",
-        "to": "tinygrad/uop/ops.py"
-      },
-      {
-        "from": "extra/qk/fdot2_lowering.py",
-        "to": "tinygrad/dtype.py"
-      },
-      {
-        "from": "extra/qk/fdot2_lowering.py",
         "to": "tinygrad/uop/ops.py"
       },
       {
@@ -2855,8 +2839,8 @@
         "loc": 256
       },
       "keep": {
-        "files": 87,
-        "loc": 12143
+        "files": 86,
+        "loc": 12090
       },
       "move": {
         "files": 1,
@@ -2877,8 +2861,8 @@
         "loc": 504
       },
       "codegen_lowering": {
-        "files": 6,
-        "loc": 390
+        "files": 5,
+        "loc": 337
       },
       "evidence": {
         "files": 11,
@@ -2907,8 +2891,8 @@
         "loc": 1143
       },
       "authority": {
-        "files": 46,
-        "loc": 7621
+        "files": 45,
+        "loc": 7568
       },
       "benchmark": {
         "files": 2,
@@ -2945,8 +2929,8 @@
         "loc": 2348
       },
       "fallback": {
-        "files": 2,
-        "loc": 112
+        "files": 1,
+        "loc": 59
       },
       "historical_one_off": {
         "files": 1,
@@ -3177,10 +3161,6 @@
       "test/unit/test_flash_buffer_roles.py",
       "test/unit/test_flash_decode_attention_spec.py",
       "tinygrad/schedule/wmma/flash_prefill.py"
-    ],
-    "extra/qk/fdot2_lowering.py": [
-      "scratchpad/audit_bfs.py",
-      "tinygrad/codegen/experimental.py"
     ],
     "extra/qk/flash_common.py": [
       "extra/qk/flash_kernels.py",
@@ -3831,14 +3811,14 @@
     ]
   },
   "promotion_budget": {
-    "budgeted_after_pending_promotions": 34845,
-    "budgeted_loc": 34845,
+    "budgeted_after_pending_promotions": 34896,
+    "budgeted_loc": 34896,
     "cap": 40000,
     "data_file_convertible_loc": 0,
-    "headroom": 5155,
+    "headroom": 5104,
     "intended_cap": 30000,
     "intended_cap_note": "sz.py:13 records 35000 as temporary headroom; the standing target is 30000",
-    "over_intended_cap": 4845,
+    "over_intended_cap": 4896,
     "pending_promotion_net_cost": 0,
     "unbudgeted_default_path_loc": 6193
   },
