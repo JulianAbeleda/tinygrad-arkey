@@ -2933,13 +2933,13 @@
       "domain": "attention_prefill",
       "duplication_group": null,
       "evidence": [
-        "tinygrad/llm/fused_attention.py:162 'from tinygrad.llm.route_ops import flash_prefill_attention_spec as FlashPrefillAttentionSpec'",
-        "tinygrad/llm/route_ops.py:75-76 lazy _attr('extra.qk.prefill.flash_prefill_attention_spec','FlashPrefillAttentionSpec')",
-        "extra/audit/pure_machine_search_default_path_census.py:90 names the exact call chain fused_attention.py -> flash_prefill_attention_spec.py -> kernels.py",
+        "tinygrad/llm/fused_attention.py:162 'from tinygrad.schedule.wmma.flash_prefill import FlashPrefillAttentionSpec'",
+        "tinygrad/codegen/opt/postrange.py:602 'from tinygrad.schedule.wmma.flash_prefill import FlashPrefillAttentionSpec'",
+        "extra/audit/pure_machine_search_default_path_census.py:90 names the exact call chain fused_attention.py -> tinygrad/schedule/wmma/flash_prefill.py -> kernels.py",
         "docstring: 'P4a (this file) closes the last gap: Hd is now THREADED into the builder call'"
       ],
-      "path": "extra/qk/prefill/flash_prefill_attention_spec.py",
-      "promotion_target": "tinygrad/llm/fused_attention.py or tinygrad/schedule/wmma (already indirectly imported via tinygrad.llm.route_ops/tinygrad.codegen.experimental lazy shims; a real promotion would need those shim layers reconciled first)",
+      "path": "tinygrad/schedule/wmma/flash_prefill.py",
+      "promotion_target": "tinygrad/schedule/wmma/flash_prefill.py (promoted from extra/qk/prefill/flash_prefill_attention_spec.py in the first bounded closure slice)",
       "public_surface": [
         "FlashPrefillAttentionSpec",
         "describe_flash_prefill_attention",
@@ -4482,7 +4482,7 @@
       "duplication_group": null,
       "evidence": [
         "route_manifest.py:1-22 module docstring self-describes as 'the single declarative source of truth for which decode/prefill routes exist'",
-        "tinygrad/llm/route_ops.py:11-12 automatic_promoted_prefill_graph_policy(*args,**kwargs) -> _attr('extra.qk.route_manifest', 'automatic_promoted_prefill_graph_policy') -- this is the ONLY route_manifest symbol route_ops.py imports/re-exports; route_ops.py otherwise fans out to many other extra.qk.* modules (quant.q4_k_gemv_primitive, prefill.q4k_prefill_route_spec, bubblebeam_futuresight, gemv_g3_codegen_lowering, q6k_route_spec, decode.flash_decode_attention_executor, pure_search_guard, prefill.flash_prefill_attention_spec, prefill.packed_wmma_prefill_candidates, mmq_ds4_logical_emitter, layout, quantize) -- route_manifest is not the sole thing route_ops depends on, but is the sole route_manifest entry point production touches through that boundary file",
+        "tinygrad/llm/route_ops.py:11-12 automatic_promoted_prefill_graph_policy(*args,**kwargs) -> _attr('extra.qk.route_manifest', 'automatic_promoted_prefill_graph_policy') -- this is the ONLY route_manifest symbol route_ops.py imports/re-exports; route_ops.py otherwise fans out to many other extra.qk.* modules (quant.q4_k_gemv_primitive, prefill.q4k_prefill_route_spec, bubblebeam_futuresight, gemv_g3_codegen_lowering, q6k_route_spec, decode.flash_decode_attention_executor, pure_search_guard, prefill.packed_wmma_prefill_candidates, mmq_ds4_logical_emitter, layout, quantize) -- route_manifest is not the sole thing route_ops depends on, but is the sole route_manifest entry point production touches through that boundary file",
         "grep: route_manifest imported by 15 test/unit files and extra/audit/pure_machine_search_default_path_census.py",
         "extra/audit/pure_machine_search_default_path_census.py:31 'This census used to re-declare all of that as a second parallel copy; it now DERIVES ... extra/qk/route_manifest.ROUTES'"
       ],
@@ -5138,7 +5138,7 @@
       "authority_files": [
         "extra/qk/prefill/q4k_prefill_route_spec.py",
         "extra/qk/prefill/q6k_prefill_route_spec.py",
-        "extra/qk/prefill/flash_prefill_attention_spec.py",
+        "tinygrad/schedule/wmma/flash_prefill.py",
         "extra/qk/route_manifest.py"
       ],
       "authority_rules": [

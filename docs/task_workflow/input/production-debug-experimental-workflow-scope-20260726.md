@@ -652,3 +652,22 @@ occurred inside a packet.
 The packet sets cover 1,049 assigned paths. Root-owned repository metadata, path-set reconciliation, and all cross-packet
 dependencies still require R1/R7 work. High-confidence raw evidence and scratch deletion candidates were identified,
 but **zero removals are authorized** until the canonical inventory records their compact replacement and recovery path.
+
+### 16.10 First production-closure checkpoint
+
+Checkpoint date: 2026-07-28. The first bounded runtime slice is complete on `exp` and is eligible for selective
+propagation after its commit is verified:
+
+| Source | Destination | Production consumers | Boundary change |
+|---|---|---|---|
+| `extra/qk/prefill/flash_prefill_attention_spec.py` | `tinygrad/schedule/wmma/flash_prefill.py` | `tinygrad/llm/fused_attention.py:162`; `tinygrad/codegen/opt/postrange.py:602` | Both callers import the core descriptor directly; the former `route_ops.py` and `codegen/experimental.py` lazy shims were removed |
+
+The descriptor contents were preserved as a rename, active path references and route-manifest authority metadata were
+updated, and the generated organization census plus pure-machine-search census were refreshed. CPU verification
+completed for `test/unit/test_tinygrad_boundary.py`, descriptor validation/JSON, and Python compilation of the moved
+module and callers. A broader semantic/residency batch had 32 passes, 8 skips, and 12 CPU semantic/cycle or barrier
+assertion failures; it produced no missing-module or import failure attributable to this move. The audit remains
+blocked only by the pre-existing unmanifested `extra/qk/decode/capture_prefill_compile.py` record.
+
+This checkpoint does not authorize broader pruning. The remaining R1-R7 ledgers, generated evidence ownership, and
+cross-packet conflicts must be reconciled before deleting or tier-pruning additional assets.

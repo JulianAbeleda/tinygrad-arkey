@@ -36,7 +36,7 @@ required and is documented+applied below):
     `acc_blocks=ctx.acc_blocks` UNCONDITIONALLY (ctx.acc_blocks defaults to 8, the Hd=128 full-accumulator
     value) into FlashPrefillAttentionSpec. Because ctx.acc_blocks is always a concrete int (never None),
     FlashPrefillAttentionSpec.__post_init__'s Hd-generic default (`acc_blocks = Hd // 16` when None,
-    flash_prefill_attention_spec.py:54-56) never fires -- ctx's int always wins. At Hd=64, hd_blocks=4,
+    flash_prefill.py:54-56) never fires -- ctx's int always wins. At Hd=64, hd_blocks=4,
     so the emitter itself (tinygrad/schedule/wmma/kernels.py:261) rejects (output_block_base,acc_blocks)
     =(0,8) since (0,8) != (0,hd_blocks=4) and 8 not in {1,2,4}: "grid loop requires a full or aligned
     accumulator slice" ValueError. So even if PIN 1 were bypassed by hand-constructing a ctx object with
