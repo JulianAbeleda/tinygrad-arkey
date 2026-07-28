@@ -57,16 +57,35 @@ Implementation is committed on `exp`:
 - `289e9015f`: bump the DriverKit bundle version from 5 to 6.
 
 CPU/source/protocol tests pass: `24 passed`. The v5 build and signed install
-completed successfully under `extra/usbgpu/tools/with_gpu_lock.py`; the active
-system entry is currently `org.tinygrad.arkey.tinygpu.driver2` version 5.
+completed successfully under `extra/usbgpu/tools/with_gpu_lock.py`.
 
 The v6 replacement was rejected by macOS with `OSSystemExtensionErrorDomain
 error 4` because the old v5 registration remains active while another stale
 registration is terminating. The installer rolled back to the known v5 app.
 No GPU reset, unplug, or power-cycle was performed.
 
-Preferred next action is a reboot to let macOS complete stale registration
-cleanup, followed by these checks under the GPU lock:
+After the first reboot, the extra stale arkey registration was gone but
+`org.tinygrad.arkey.tinygpu.driver2` version 5 remained `[activated enabled]`.
+The installed app reported ready, the v1 handshake succeeded with capabilities
+`3`, and keeper status remained unavailable. Headless app and
+`systemextensionsctl` deactivation attempts were rejected because macOS could
+not obtain interactive authorization.
+
+The same app deactivation request was then run from the logged-in Terminal while
+the GPU lock was held:
+
+```sh
+sudo /Applications/TinyGPU.app/Contents/MacOS/TinyGPU uninstall
+```
+
+It completed successfully with `Will complete after reboot.` The current system
+entry is now version 5 in `[terminating for uninstall but still running]`; the
+legacy `org.tinygrad.tinygpu.driver2` version 3 entry remains
+`[activated disabled]`. No AMD initialization, reset, unplug, or power-cycle was
+performed during this registration cleanup.
+
+The required next action is another reboot so macOS can finish removing v5,
+followed by these checks under the GPU lock:
 
 ```sh
 systemextensionsctl list | grep -E 'tinygpu|TinyGPU'
@@ -77,14 +96,9 @@ systemextensionsctl list | grep -E 'tinygpu|TinyGPU'
 
 If the v5 entry is gone, rerun the audited installer with the approval token
 and provenance output, then run A0/A1 before any AMD initialization or M0-M7
-qualification. If macOS still reports a stale registration, manually run:
-
-```sh
-sudo /Applications/TinyGPU.app/Contents/MacOS/TinyGPU uninstall
-```
-
-and then reinstall v6; this is a registration cleanup, not an AMD firmware or
-PSP/GART operation.
+qualification. If v5 is still terminating, do not retry v6 activation; retain
+the exact system-extension state and continue registration diagnosis. This is a
+registration cleanup, not an AMD firmware or PSP/GART operation.
 
 The last locked minimal probe failed with `TinyGPU disconnect` while
 `AMDev.is_smu_alive()` was issuing the first write in the standard SMU
