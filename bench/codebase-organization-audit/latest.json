@@ -318,8 +318,8 @@
     }
   ],
   "audited_commit": {
-    "commit": "9b84ebe86f12f69cf0e870e505fdc2e7aea8eb9f",
-    "described": "mac-first-boot-20260610-3505-g9b84ebe86-dirty",
+    "commit": "f7231bbcf1634fcc9353b1fe6543c83459c5a88a",
+    "described": "mac-first-boot-20260610-3507-gf7231bbcf-dirty",
     "dirty": true
   },
   "authority_keys": {
@@ -510,7 +510,7 @@
       "extra/qk/mmq_compile_evidence.py"
     ],
     "_STRUCTURAL": [
-      "extra/qk/codegen_list_scheduler.py"
+      "tinygrad/codegen/late/list_scheduler.py"
     ],
     "_q4k_group_params.ggml_bitfield_layout": [
       "extra/qk/quant/q4_k_gemv_primitive.py"
@@ -678,7 +678,7 @@
       "extra/qk/lane_partition_reduce.py"
     ],
     "list_schedule.latency_model": [
-      "extra/qk/codegen_list_scheduler.py"
+      "tinygrad/codegen/late/list_scheduler.py"
     ],
     "live_split_geometry.LiveSplitGeometry (per-split length/inner-block-count formula for live-context decode attention splits)": [
       "extra/qk/live_split_geometry.py"
@@ -856,14 +856,14 @@
     ]
   },
   "coverage": {
-    "authored_files": 469,
-    "authored_loc": 72151,
-    "explicit_records": 91,
+    "authored_files": 470,
+    "authored_loc": 72210,
+    "explicit_records": 90,
     "generated_files": 1,
     "generated_loc": 57,
     "group_covered": 0,
-    "manifest_scope_files": 91,
-    "manifest_scope_loc": 13273,
+    "manifest_scope_files": 90,
+    "manifest_scope_loc": 13214,
     "uncovered": []
   },
   "coverage_limitations": [
@@ -924,7 +924,6 @@
       "extra/qk/amd_resource_artifact.py",
       "extra/qk/amd_warp_reduce.py",
       "extra/qk/bubblebeam_futuresight.py",
-      "extra/qk/codegen_list_scheduler.py",
       "extra/qk/decode/flash_decode_attention_executor.py",
       "extra/qk/decode/flash_decode_attention_spec.py",
       "extra/qk/flash_common.py",
@@ -1109,8 +1108,10 @@
       ]
     },
     "dynamic_seam_edges": {
+      "test/unit/test_fdot2_lowering.py": [
+        "tinygrad/codegen/experimental.py"
+      ],
       "tinygrad/codegen/experimental.py": [
-        "extra/qk/codegen_list_scheduler.py",
         "extra/qk/warp_reduce_lowering.py"
       ],
       "tinygrad/llm/route_ops.py": [
@@ -1171,10 +1172,6 @@
         "extra/qk/route_manifest.py",
         "tinygrad/codegen/late/coalesced_load.py",
         "tinygrad/dtype.py",
-        "tinygrad/uop/ops.py"
-      ],
-      "extra/qk/codegen_list_scheduler.py": [
-        "tinygrad/helpers.py",
         "tinygrad/uop/ops.py"
       ],
       "extra/qk/cooperative_stage_lanemap.py": [
@@ -1515,7 +1512,6 @@
       "extra/qk/benchmark_split_shared_attention.py": 0,
       "extra/qk/bubblebeam_futuresight.py": 1,
       "extra/qk/clock_pin.py": 1,
-      "extra/qk/codegen_list_scheduler.py": 1,
       "extra/qk/cooperative_stage_lanemap.py": 0,
       "extra/qk/decode/capture_prefill_compile.py": 0,
       "extra/qk/decode/current_decode_execution_adapter.py": 1,
@@ -1630,7 +1626,6 @@
       "extra/qk/benchmark_split_shared_attention.py": 4,
       "extra/qk/bubblebeam_futuresight.py": 6,
       "extra/qk/clock_pin.py": 0,
-      "extra/qk/codegen_list_scheduler.py": 2,
       "extra/qk/cooperative_stage_lanemap.py": 1,
       "extra/qk/decode/capture_prefill_compile.py": 0,
       "extra/qk/decode/current_decode_execution_adapter.py": 8,
@@ -1788,14 +1783,6 @@
       },
       {
         "from": "extra/qk/bubblebeam_futuresight.py",
-        "to": "tinygrad/uop/ops.py"
-      },
-      {
-        "from": "extra/qk/codegen_list_scheduler.py",
-        "to": "tinygrad/helpers.py"
-      },
-      {
-        "from": "extra/qk/codegen_list_scheduler.py",
         "to": "tinygrad/uop/ops.py"
       },
       {
@@ -2839,8 +2826,8 @@
         "loc": 256
       },
       "keep": {
-        "files": 86,
-        "loc": 12090
+        "files": 85,
+        "loc": 12031
       },
       "move": {
         "files": 1,
@@ -2861,8 +2848,8 @@
         "loc": 504
       },
       "codegen_lowering": {
-        "files": 5,
-        "loc": 337
+        "files": 4,
+        "loc": 278
       },
       "evidence": {
         "files": 11,
@@ -2891,8 +2878,8 @@
         "loc": 1143
       },
       "authority": {
-        "files": 45,
-        "loc": 7568
+        "files": 44,
+        "loc": 7509
       },
       "benchmark": {
         "files": 2,
@@ -2927,10 +2914,6 @@
       "active_research": {
         "files": 14,
         "loc": 2348
-      },
-      "fallback": {
-        "files": 1,
-        "loc": 59
       },
       "historical_one_off": {
         "files": 1,
@@ -3068,10 +3051,6 @@
       "docs/harness-consolidation.md",
       "extra/qk/README.md",
       "extra/qk/timing_harness.py"
-    ],
-    "extra/qk/codegen_list_scheduler.py": [
-      "scratchpad/audit_bfs.py",
-      "tinygrad/codegen/experimental.py"
     ],
     "extra/qk/cooperative_stage_lanemap.py": [
       "extra/qk/flash_kernels.py"
@@ -3811,14 +3790,14 @@
     ]
   },
   "promotion_budget": {
-    "budgeted_after_pending_promotions": 34896,
-    "budgeted_loc": 34896,
+    "budgeted_after_pending_promotions": 34955,
+    "budgeted_loc": 34955,
     "cap": 40000,
     "data_file_convertible_loc": 0,
-    "headroom": 5104,
+    "headroom": 5045,
     "intended_cap": 30000,
     "intended_cap_note": "sz.py:13 records 35000 as temporary headroom; the standing target is 30000",
-    "over_intended_cap": 4896,
+    "over_intended_cap": 4955,
     "pending_promotion_net_cost": 0,
     "unbudgeted_default_path_loc": 6193
   },

@@ -15,7 +15,6 @@ software pipelining to create cross-iteration ILP is the next capability compone
 
 Hook (mirrors V_DOT2_LOWERING): in tinygrad/codegen/late/linearizer.py `linearize`, after `newlst` is built:
     if getenv("SCHED_LIST"):
-      from extra.qk.codegen_list_scheduler import list_schedule
       newlst = list_schedule(newlst)
 """
 from __future__ import annotations
@@ -33,6 +32,9 @@ _LAT_ALU = 1
 _STRUCTURAL = tuple(getattr(Ops, _n) for _n in
                     ("RANGE", "END", "SINK", "BARRIER", "IF", "ENDIF", "DEFINE_REG", "DEFINE_LOCAL",
                      "DEFINE_VAR", "PARAM", "DEFINE_GLOBAL", "GROUP", "AFTER") if hasattr(Ops, _n))
+
+def structural_ops() -> tuple[Ops, ...]:
+  return _STRUCTURAL
 
 
 def _latency(u: UOp) -> int:

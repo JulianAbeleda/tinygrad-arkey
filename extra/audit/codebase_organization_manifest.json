@@ -789,13 +789,15 @@
       "domain": "codegen_lowering",
       "duplication_group": null,
       "evidence": [
-        "tinygrad/codegen/late/linearizer.py:70 if getenv(\"SCHED_LIST\"): ... list_schedule(newlst)"
+        "tinygrad/codegen/late/linearizer.py:70 directly imports and calls list_schedule(newlst) under getenv(\"SCHED_LIST\")",
+        "test/unit/test_codegen_list_scheduler.py covers latency-shadow ordering, structural boundaries, and old-boundary absence"
       ],
-      "path": "extra/qk/codegen_list_scheduler.py",
-      "promotion_target": null,
+      "path": "tinygrad/codegen/late/list_scheduler.py",
+      "promotion_target": "tinygrad/codegen/late/list_scheduler.py (promoted from extra/qk/codegen_list_scheduler.py in production reorganization slice 5)",
       "public_surface": [
         "list_schedule",
-        "_STRUCTURAL"
+        "_STRUCTURAL",
+        "structural_ops"
       ],
       "purpose": "Latency-aware, correctness-preserving reordering of the linearized UOp list within basic blocks (delimited by structural ops) to fill instruction-latency shadows, gated by SCHED_LIST.",
       "responsibilities": [
