@@ -1,0 +1,117 @@
+# `extra/` Organization Scope
+
+Status: design and classification only. This document authorizes no path moves or renames.
+
+## Goal
+
+Organize the current `extra/` surface by purpose and lifecycle so a reader can tell whether a file is a production
+authority, optional runtime support, debug tooling, research code, or an experiment. The existing names are historical
+and must not be treated as ownership decisions.
+
+The branch contract remains subtractive:
+
+```text
+exp    = production + debug + research/experimental
+dev    = production + debug/qualification
+master = production authorities + supported runtime surfaces
+```
+
+## Current top-level inventory
+
+The current tree contains 197 tracked files:
+
+| Current path | Count | Current role | Target organization | Branch default |
+|---|---:|---|---|---|
+| `extra/audit/**` | 8 | organization, lowering, fingerprint, compatibility, and boundary authorities | `extra/audit/**` | `master` |
+| `extra/tools/**` | 2 | repository integrity and ISA-generation tools | `extra/tools/**` | `master` |
+| `extra/llm/**` | 11 | mixed CLI, generation, evaluation, and benchmark tooling | `extra/llm/cli.py` plus `extra/llm/bench/**` | split: `master` CLI, `dev` benchmarks |
+| `extra/qk/**` | 97 | mixed LLM runtime dependencies, codegen, scheduling, research, gates, and evidence | `extra/llm_research/**` after runtime split | `exp`, with explicit migration exceptions |
+| `extra/gpu_fault_analysis/**` | 2 | GPU fault and allocator reproducers | `extra/debug/gpu_fault_analysis/**` | `dev` |
+| `extra/hardware/**` | 23 | PCI, PSP/GART, recovery, profiling, and trace tooling | `extra/debug/hardware/**` plus `extra/profiling/sqtt/**` | `dev`; SQTT boundary unresolved |
+| `extra/remote/**` | 3 | remote power-cycle, repro, and transport qualification | `extra/debug/remote/**` | `dev` |
+| `extra/nv_gpu_driver/**` | 11 | optional NV IOCTL backend and headers | `extra/drivers/nv/**` | unresolved: `master` only if supported |
+| `extra/usbgpu/**` | 30 | TinyGPU protocol, installer, driver, qualification, and GPU lock | `extra/drivers/usbgpu/**` | `exp` unless formally supported |
+| `extra/mesa/**` | 1 | optional Mesa setup/extraction helper | `extra/setup/mesa/**` | `master` while backend is supported |
+| root `extra/setup_*.sh` | 8 | optional backend/toolchain setup scripts | `extra/setup/**` | `master` for supported backends; TinyGPU unresolved |
+| root `extra/runtime_models.example.json` | 1 | CLI operating fixture | `extra/llm/runtime_models.example.json` | `master` with CLI |
+
+The count includes headers, fixtures, scripts, and source files; it is not a count of executable hot-path modules.
+
+## Target domains
+
+### `extra/audit`
+
+Canonical production evidence producers and repository audits. These are not runtime kernels, but their outputs and
+tests are repository authorities. They remain on `master` and must not depend on research-only modules without an
+explicit fixture boundary.
+
+### `extra/tools`
+
+Small repository-wide integrity and source-generation tools. They remain separate from audits because they operate on
+the repository rather than asserting model or lowering behavior.
+
+### `extra/llm`
+
+The shipped LLM CLI belongs here. Benchmark, evaluation, scoring, and smoke-training scripts are qualification tools;
+they should be grouped under `extra/llm/bench` and retained on `dev`, not mixed with the CLI entrypoint.
+
+### `extra/llm_research`
+
+This is the descriptive replacement for the current `extra/qk` research surface, but it is not a blanket production
+classification. Its intended subdomains are:
+
+```text
+extra/llm_research/
+  codegen/       kernel emitters, lowering probes, and compiler experiments
+  scheduling/    lane maps, list/latency policies, and scheduling experiments
+  hyperbeam/     BubbleBeam/HyperBeam candidate and route policy work
+  futuresight/   Futuresight route prediction and candidate selection
+  vocabulary/    kernel vocabulary, MMQ vocabulary, and route-shape metadata
+  quantization/  Q4/Q6 packing, dequantization, and quantized route experiments
+  harness/       benchmark, capture, timing, guarded execution, and worker harnesses
+  evidence/      promotion gates, resource captures, manifests, and compact evidence producers
+  vendor/        retained third-party research sources such as llama.cpp MMQ material
+```
+
+Before this rename, every `extra/qk` file must be assigned to one of these domains or marked unresolved. Files still
+reached by `tinygrad/llm/route_ops.py` are migration debt: they must move into their `tinygrad/**` owner before the
+research surface can be removed from `master`.
+
+### `extra/debug`
+
+Machine diagnostics, fault reproducers, PCI recovery, remote operations, and other tools that are useful for debugging
+but are not part of normal model execution. This area belongs on `dev` and must use the GPU lock for hardware commands.
+
+### `extra/profiling`
+
+SQTT/rocprof trace decoding and example generation. The current `tinygrad/viz/profile.py -> extra/hardware/sqtt/roc.py
+-> test.amd.disasm` dependency is an explicit boundary decision: either promote a minimal decoder into `tinygrad/viz`
+or keep profiling strictly on `dev`.
+
+### `extra/drivers`
+
+Optional driver implementations and driver contracts. NV IOCTL and TinyGPU are separate products and must not share a
+generic hardware bucket. TinyGPU remains `exp` until its supported-product status is decided.
+
+### `extra/setup`
+
+Installer and toolchain setup scripts. Setup scripts are not runtime code, but their supported backend contract must be
+documented before they remain on `master`.
+
+## Organization rules
+
+1. A directory name does not establish production ownership.
+2. Production code must live under its `tinygrad/**` domain owner; `extra/llm_research` is not a permanent runtime API.
+3. Research and qualification code may import production code, but production code must not import research helpers
+   directly except through an explicitly tracked migration adapter.
+4. Every retained `dev` or `exp` group needs a purpose, owner, and validation command.
+5. Every removal needs a compact conclusion, consumer/link check, and recovery commit.
+6. Whole-directory renames happen only after import, test, benchmark, artifact, and documentation references are
+   inventoried.
+
+## Required next classification pass
+
+The next task is a file-level ledger for all 97 current `extra/qk` files and all mixed files under `extra/llm` and
+`extra/hardware`. The ledger must record the target domain above, default-path reachability, branch owner, direct
+callers, tests, artifacts, and the migration or retention criterion. No rename is authorized until that ledger is
+complete and reviewed.
