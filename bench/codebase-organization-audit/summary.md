@@ -1,8 +1,8 @@
 # Codebase organization audit
 
-Audited commit: `mac-first-boot-20260610-3511-gba6a9ec7e-dirty` (dirty: True)
+Audited commit: `mac-first-boot-20260610-3518-gaf5395a42-dirty` (dirty: True)
 Scope: `extra/qk` | manifest coverage required for: extra/qk/
-Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 65 warnings)
+Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 64 warnings)
 
 > Machine-derived facts (discovery, LOC, imports, references, coverage, boundary checks) are produced by this
 > script. Every purpose, role, status, disposition, action, and promotion/prune judgment below is human-authored
@@ -10,16 +10,16 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 65 warnings)
 
 ## Coverage
 
-- Authored: 471 files / 72172 token-bearing LOC (sz.py rules)
+- Authored: 471 files / 72245 token-bearing LOC (sz.py rules)
 - Generated (reported, never manifested): 1 files / 57 LOC
-- Manifest scope: 87 files / 13033 LOC (87 explicit records, 0 covered by group rule, 0 uncovered)
+- Manifest scope: 88 files / 13136 LOC (88 explicit records, 0 covered by group rule, 0 uncovered)
 
 ## LOC by domain
 
 | domain | files | loc |
 |---|---|---|
 | amd_runtime | 3 | 421 |
-| attention_decode | 9 | 705 |
+| attention_decode | 10 | 808 |
 | attention_prefill | 3 | 504 |
 | codegen_lowering | 2 | 218 |
 | evidence | 11 | 1671 |
@@ -37,7 +37,7 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 65 warnings)
 | benchmark | 2 | 99 |
 | diagnostic | 12 | 1298 |
 | evidence | 5 | 438 |
-| execution | 8 | 1698 |
+| execution | 9 | 1801 |
 | integration | 2 | 402 |
 | research | 4 | 387 |
 | test | 1 | 136 |
@@ -48,7 +48,7 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 65 warnings)
 |---|---|---|
 | active_research | 14 | 2348 |
 | historical_one_off | 1 | 43 |
-| production | 63 | 9538 |
+| production | 64 | 9641 |
 | promoted_default | 5 | 609 |
 | refuted | 1 | 21 |
 | retained_reference | 1 | 114 |
@@ -60,12 +60,12 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 65 warnings)
 |---|---|---|
 | consolidate | 1 | 832 |
 | investigate | 2 | 256 |
-| keep | 83 | 11882 |
+| keep | 84 | 11985 |
 | move | 1 | 63 |
 
 ## Default-path source footprint
 
-41 declared default-path files / 6138 LOC.
+41 declared default-path files / 6241 LOC.
 
 - `extra/qk/amd_isa_proof.py`
 - `extra/qk/amd_resource_artifact.py`
@@ -154,6 +154,7 @@ None.
 An entry point, gate, probe, or operator tool may legitimately have no inbound import; this list is evidence
 for human classification, not a death sentence.
 
+- `extra/qk/quantize.py`
 
 ## Test and one-off script inventory
 
@@ -208,9 +209,9 @@ None.
 
 | path | class | former purpose | last campaign | replacement | commit | recovery | loc |
 |---|---|---|---|---|---|---|---|
-| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `ba6a9ec7e665` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
-| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `ba6a9ec7e665` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
-| `extra/qk/q4k_wmma_tile_lowering.py` | delete_after_verdict_capture | Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles. | q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14) | docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md | `ba6a9ec7e665` | git show 05b67146a -- <path> | 1138 |
+| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `af5395a4293f` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
+| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `af5395a4293f` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
+| `extra/qk/q4k_wmma_tile_lowering.py` | delete_after_verdict_capture | Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles. | q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14) | docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md | `af5395a4293f` | git show 05b67146a -- <path> | 1138 |
 
 ## Workflow inventory
 
@@ -243,9 +244,9 @@ None.
 
 ## Promotion budget
 
-- Budgeted (`tinygrad`, `bench`, `structure`): **35019 / 40000** -- headroom 4981
-- Against the standing 30000 target: **5019 over**. sz.py:13 records 35000 as temporary headroom; the standing target is 30000
-- Default-path LOC currently sitting unbudgeted in `extra/`: **6012**
+- Budgeted (`tinygrad`, `bench`, `structure`): **34991 / 40000** -- headroom 5009
+- Against the standing 30000 target: **4991 over**. sz.py:13 records 35000 as temporary headroom; the standing target is 30000
+- Default-path LOC currently sitting unbudgeted in `extra/`: **6115**
 - Net budget cost of pending promotions (moved minus deleted): 0
 - Declarative LOC a data-file conversion would remove from the budget entirely: 0
 
@@ -332,7 +333,7 @@ None.
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/quant/q6_k_gemv_primitive.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/route_manifest.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/runtime_specs.py is on the default production path from extra/ with no promotion or retention decision
-- **high_fan_in** (a widely-imported module is a de-facto authority): extra/qk/layout.py is imported by 18 modules
+- **high_fan_in** (a widely-imported module is a de-facto authority): extra/qk/layout.py is imported by 17 modules
 - **high_fan_in** (a widely-imported module is a de-facto authority): extra/qk/route_manifest.py is imported by 20 modules
 - **large_file** (minimize what a reader must hold in their head): extra/qk/mmq_q4k_q8_atom.py is 832 LOC (threshold 400); responsibilities declared: 4
 - **large_file** (minimize what a reader must hold in their head): extra/qk/prefill/prefill_whole_synced.py is 423 LOC (threshold 400); responsibilities declared: 5
@@ -351,7 +352,6 @@ None.
 - **multiple_authority_keys** (centralize authoritative knowledge under one owner): extra/qk/runtime_specs.py declares 5 authority keys: ['extra.qk.runtime_specs.FULL_KERNEL_CANDIDATE_SCHEMA', 'extra.qk.runtime_specs.FULL_KERNEL_CANDIDATE_SET_SCHEMA', 'extra.qk.runtime_specs.GFX1100_SINGLE_BUFFER_CAPABILITY (+ sibling *_CAPABILITY constants)', 'extra.qk.runtime_specs.PROVENANCE (candidate-level provenance vocabulary)', 'extra.qk.runtime_specs._validate_full_kernel_payload']
 - **multiple_authority_keys** (centralize authoritative knowledge under one owner): extra/qk/shared_attention_capture.py declares 5 authority keys: ['tinygrad.shared_attention_compiler_capture.v2', 'tinygrad.shared_attention_compiler_capture.acc_slice_v3', 'tinygrad.shared_attention_compiler_capture.phase_v4', 'tinygrad.shared_attention_phase_plan.v1', 'tinygrad.shared_attention_acc_slice_pass.v1']
 - **multiple_authority_keys** (centralize authoritative knowledge under one owner): extra/qk/shared_attention_evidence.py declares 4 authority keys: ['tinygrad.shared_attention_proof.v2', 'tinygrad.shared_attention_proof.acc_slice_v3', 'tinygrad.shared_attention_proof.phase_v4', 'tinygrad.shared_attention_evidence.v1']
-- **production_seam_to_research** (production must not depend on research surfaces): lazy seam tinygrad/llm/route_ops.py declares a wrapper onto extra/qk/mmq_ds4_logical_emitter.py (role=research); the wrapper is not evidence that the default path calls it
 - **repeated_workflow_phase** (modularize execution without scattering authority): phase 'build-spec' is re-implemented by 3 workflows: ['decode-route-selection', 'prefill-route-selection', 'quant-kernel-lowering']
 - **repeated_workflow_phase** (modularize execution without scattering authority): phase 'check-shape-guards' is re-implemented by 3 workflows: ['packed-wmma-prefill-promotion', 'prefill-causal-tile-skip-promotion', 'prefill-softmax-fuse-promotion']
 - **repeated_workflow_phase** (modularize execution without scattering authority): phase 'emit-record' is re-implemented by 3 workflows: ['packed-wmma-prefill-promotion', 'prefill-causal-tile-skip-promotion', 'prefill-softmax-fuse-promotion']

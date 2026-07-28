@@ -157,7 +157,7 @@ The sixth slice consolidated the hand-built AMD warp primitives and the opt-in w
 experimental matcher shim and both old modules are gone, and four CPU structural/boundary tests pass. The
 `WARP_REDUCE_LOWERING` gate remains opt-in; no AMD execution or performance claim is made.
 
-At the current `exp` tip, `python3 sz.py` passes with 35,233 budgeted authored lines against the 40,000-line cap.
+At the current `exp` tip, `python3 sz.py` passes with 35,212 budgeted authored lines against the 40,000-line cap.
 
 ## Bounded raw-artifact prune
 
@@ -177,6 +177,11 @@ remain in `extra` until their route-specific ownership and Q6 coverage are estab
 The eighth cleanup removed the now-empty `tinygrad/codegen/experimental.py` compatibility shell and its unused core
 import. Three boundary tests now assert that the retired module is absent; the focused list-scheduler, fdot2, warp, and
 parser suite passes 21 tests.
+
+The route-boundary cleanup then removed 21 `route_ops.py` adapters with no executable caller. Fifteen live adapters
+remain for model setup, selected prefill/decode routes, and packed-WMMA selection. The adapter surface is now pinned by
+`test_route_ops_exposes_only_live_route_adapters`; the retained `extra/qk` targets remain migration debt rather than a
+blanket production classification.
 
 ## Documentation closure completed
 
@@ -203,7 +208,7 @@ The refreshed `extra/qk` codebase-organization audit now passes its hard-error g
 
 ```text
 ORG_R1_PASS_CENSUS_PINNED
-0 hard errors, 65 warnings
+0 hard errors, 64 warnings
 ```
 
 The audit sees 88 manifest-scope `extra/qk` files with 88 explicit records and no group-rule coverage. The previously
@@ -211,7 +216,7 @@ unmanifested `extra/qk/decode/capture_prefill_compile.py` now has an evidence-ba
 `dev` until its compile-failure conclusion is banked; it remains blocked for deletion, but no longer creates an audit
 hard error.
 
-The 65 warnings are not deletion authorization. They primarily expose live `extra` code on the default production
+The 64 warnings are not deletion authorization. They primarily expose live `extra` code on the default production
 path without a finalized promotion or retention decision. They remain inputs to the production-closure sequence.
 
 The audit also records open investigation drift, including the stale pure-machine-search census overlay for renamed

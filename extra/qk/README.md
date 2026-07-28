@@ -1,21 +1,36 @@
-# QK Research Surface
+# QK Transitional Research Surface
 
-`extra/qk` is the research and generated-route workspace. It is intentionally separate from `tinygrad/llm`, which owns the shipped runtime surface.
+`extra/qk` is the research, search, qualification, and generated-route workspace. It is also temporary home to a
+bounded set of legacy modules still reached through `tinygrad/llm/route_ops.py`. Those dependencies are migration debt,
+not a permanent production API. Shipped runtime ownership belongs under `tinygrad/**`.
 
 Use these roles when adding or reading files:
 
-- `promoted`: files used by the runtime path or route manifests.
+- `production_dependency`: files temporarily reached by a production adapter; retain until promoted with tests and
+  authority, then remove the adapter.
 - `active`: current gates, audits, and microgates that decide whether a route can be promoted.
-- `support`: reusable helpers, layouts, caches, lowering utilities, and harness contracts.
-- `refuted`: historical probes that explain a closed path and should not be copied into runtime code.
-- `scratch`: one-off experiments that should either be deleted or moved into BoltBeam once resolved.
+- `support`: reusable research helpers, layouts, caches, lowering utilities, and harness contracts; not production merely
+  because another `extra/qk` module imports them.
+- `refuted`: closed work retained only when it owns a named compact conclusion; otherwise recover it from Git history.
+- `scratch`: one-off experimental work that must be promoted, consolidated, or deleted when its bounded task closes.
 
 Rules:
 
-- New runtime-visible routes must enter through `tinygrad/llm/route_ops.py` or `tinygrad/llm/decode_routes.py`.
+- Do not add new production-visible routes through `route_ops.py`. New shipped implementations go directly to the
+  appropriate `tinygrad/**` owner.
+- Do not delete an existing `route_ops.py` target until its production callers have moved and focused boundary and
+  regression tests pass.
+- A lazy adapter is reachability evidence, not proof that every function or sibling in its target module belongs on
+  `master`.
 - New probes must have a clear role in `surface_audit.py`; unclassified files fail the audit.
 - Refuted or scratch files are evidence, not defaults. Do not route to them from `tinygrad/llm`.
 - Prefer adding reusable helpers to support files rather than copy-pasting kernels into new probes.
+
+## Ownership boundary
+
+`route_ops.py` is intentionally small and production-owned. `extra/qk` remains mixed and transitional: production
+dependencies move inward to `tinygrad`, reusable qualification tools stay on `dev`, experiments stay on `exp`, and dead
+work stays only in Git history. Whole-directory promotion or whole-branch merging is forbidden.
 
 ## The one rule for gates/audits/probes
 
