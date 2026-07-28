@@ -110,7 +110,7 @@ ACTIVE_* -> QUIESCING -> ACTIVE_*           explicit reset after drained lease
 Implementation shape:
 
 - Create one serial provider operation gate used by timer callback, config reads/writes, reset, start-finalization, and stop.
-- A new DriverKit user-client connection begins diagnostic-only. Status is allowed in that role. An explicit, serialized workload-lease acquisition is required before BAR mapping, DMA preparation, config mutation, reset, or other workload selectors; release/disconnect decrements every provider-tracked resource count exactly once.
+- A new DriverKit user-client connection begins diagnostic-only. Status is allowed in that role. An explicit, serialized workload-lease acquisition is required before BAR mapping, DMA preparation, config mutation, or other workload selectors; release/disconnect decrements every provider-tracked resource count exactly once. Reset is a separate explicit operator/diagnostic action and is rejected while any workload lease exists.
 - Use a re-armed one-shot `IOTimerDispatchSource`; stop/reset disables it with a completion callback, drains the operation gate, then releases it before closing `IOPCIDevice`.
 - Timer tick reads config offset `0`, width `4`, under the gate, validates the full identity DWORD, updates state/counters, and rearms only while active.
 - Reset requires an explicit operator request, no active workload lease, timer drain, one reset only, identity revalidation, and fresh timer arm. Keeper failure never calls reset.
@@ -212,7 +212,7 @@ Gate: clean checkout builds the restored project; the named wire specification a
 ### P2: provider operation gate and safe lifecycle
 
 - Introduce `ProviderState`, `ProviderOperationGate`, `WorkloadLease`, and `TransportState` boundaries without a second framework.
-- Make diagnostic-only the default user-client role; add explicit workload-lease acquire/release, require that lease for workload selectors, and maintain provider-visible active lease/BAR/DMA counts.
+- Make diagnostic-only the default user-client role; add explicit workload-lease acquire/release, require that lease for workload selectors, authorize reset only from a diagnostic client while the provider has zero workload leases, and maintain provider-visible active lease/BAR/DMA counts.
 - Route every PCI access, including existing config RPC and reset, through the provider gate.
 - Implement timer disable-with-completion and callback drain before release/close.
 - Fail provider start closed on identity read, unsupported identity, timer creation, enable, first deadline, or first successful tick failure.
@@ -236,6 +236,7 @@ Gate: with no TinyGPU Unix-socket server or workload client running, two one-sho
 - Extend the canonical `extra/qk/bench.py` harness with positive `--decode-duration-s` and `--decode-cycle-timeout-s` options; the timeout defaults to 900 seconds. Duration mode requires explicit `--decode` and rejects prefill/both mode. A cycle runs all selected checkpoint contexts and `--decode-reps` through the existing decode authority. Start at least one cycle, start no new cycle after the duration is reached, and terminate/kill a cycle that exceeds its timeout with a five-second grace. Total wall time is bounded by requested duration plus cycle timeout plus grace. On child failure, timeout, SIGINT, or SIGTERM, stop immediately, forward termination, atomically write a non-passing aggregate artifact, and return nonzero.
 - Duration mode writes `tinygrad.qk.decode.duration.v1` at `bench/qk-decode-duration/run-<time>-<pid>.json` or an explicit `--decode-duration-out`. It rejects simultaneous `--decode-out`. The aggregate records resolved argv/environment controls, model path/hash/size, requested/actual duration, timeout/grace, start/end monotonic and wall times, final status, and an ordered cycle list with start/end, exit status, parsed throughput, relative child-artifact path, and child SHA-256. Child artifacts remain the existing decode-authority schema. Add CPU-only argument, loop-bound, failure, signal, and artifact-schema tests; do not create a second benchmark wrapper or alter benchmark hot paths.
 - Add a CPU-tested `extra/usbgpu/tests/qualify.py` orchestrator for A0-A11. Every eGPU subprocess and periodic sampler is its descendant, it requires lock-runner metadata, emits `docs/task_workflow/output/egpu-usb4-persistent-pcie-<gate>-<UTC>-<pid>.json` atomically, preserves the first failure, and never automates unplug, power, extension replacement, or sleep. Published filenames contain resolved values.
+- Keep test dependency injection inside the Python API. The production qualification CLI must not expose endpoint/status command substitution or duration, churn-count, idle, socket, output-directory, or installed-app overrides that could weaken an acceptance row.
 - For A1, match only the installed executable's `server` argv, send `TERM`, wait at most ten seconds, and fail if it remains. Record process census and configured socket reachability before the first direct status query and after the second. Both status samples must show zero active workload leases/BAR mappings/DMA allocations. Unit tests prove the CLI `keepalive status` dispatch cannot call `run_server`.
 
 Gate: malformed-input and client-churn tests leave a fresh baseline and an uninterrupted provider keeper.
@@ -244,6 +245,7 @@ Gate: malformed-input and client-churn tests leave a fresh baseline and an unint
 
 - Build from the recorded feature commit; verify source membership, hashes, bundle IDs, entitlements, and signing state.
 - Install only through the audited development path defined in section 7, with immediate operator approval and before/after provenance. Disable automatic app download/replacement during qualification.
+- Publish the install transcript at `docs/task_workflow/output/tinygpu-development-install-provenance.txt`; every A0-A11 invocation validates its source commit, activated state, ad-hoc identities, and live app/dext executable hashes before running.
 - Do not begin hardware qualification without installed provenance and native counter proof.
 
 Gate: installed app/dext are traceable to the exact source commit and expose the expected handshake/status.
@@ -313,6 +315,8 @@ Host/native tests:
 ## 11. Single acceptance matrix
 
 Every row requires provenance/status artifacts, endpoint visibility, source commit, worktree, lock owner, and first failure if any. A required-gate failure stops later keeper claims until resolved. Classification rows record a result without a required pass; they invalidate keeper conclusions only when evidence attributes the failure to keeper lifecycle behavior.
+
+Every qualification command below runs with the exact prefix `env -u REMOTE_KEEPALIVE_S -u AM_REMOTE_SMALL_BAR_DISCOVERY DEV=AMD JIT=1 PYTHONPATH=. AM_REMOTE_DISCOVERY_PROFILE=gfx1100_744c AM_REMOTE_SKIP_RESIZE_BAR=1`. The harness rejects a missing/different required value or an enabled legacy/small-BAR control before collecting acceptance evidence.
 
 | Gate | Role | Exact lock-held procedure | Required result |
 |---|---|---|---|

@@ -1,6 +1,6 @@
 from __future__ import annotations
-import os, mmap, array, functools, ctypes, select, contextlib, dataclasses, sys, itertools, struct, socket, subprocess, time, enum, atexit, collections
-from tinygrad.helpers import round_up, getenv, OSX, temp, ceildiv, unwrap, fetch, system, _ensure_downloads_dir, DEBUG, flatten, pluralize
+import os, mmap, array, functools, ctypes, select, contextlib, dataclasses, sys, itertools, struct, socket, subprocess, time, enum, atexit, collections, json, re
+from tinygrad.helpers import round_up, getenv, OSX, temp, ceildiv, unwrap, system, DEBUG, flatten, pluralize
 from tinygrad.runtime.autogen import libc, pci, vfio, iokit, corefoundation
 from tinygrad.runtime.support.hcq import FileIOInterface, MMIOInterface, HCQBuffer, hcq_filter_visible_devices
 from tinygrad.runtime.support.memory import VirtMapping, AddrSpace, BumpAllocator
@@ -319,6 +319,72 @@ class PCIIfaceBase:
 
 class RemoteCmd(enum.IntEnum):
   PROBE,MAP_BAR,MAP_SYSMEM_FD,CFG_READ,CFG_WRITE,RESET,MMIO_READ,MMIO_WRITE,MAP_SYSMEM,SYSMEM_READ,SYSMEM_WRITE,RESIZE_BAR,PING,HEALTH,SYSMEM_SYNC = range(15)
+  HANDSHAKE,LEASE_ACQUIRE,LEASE_RELEASE,KEEPALIVE_STATUS,KEEPALIVE_SET_POLICY = range(15, 20)
+
+
+class TinyGPUWireError(RuntimeError):
+  """Endpoint-local wire error; `kind` is the protocol's stable classification."""
+  def __init__(self, kind:str, message:str=""):
+    self.kind = kind
+    super().__init__(f"TinyGPU {kind}{': ' + message if message else ''}")
+
+
+_TINYGPU_REQUEST = struct.Struct("<BIIQQQ")
+_TINYGPU_RESPONSE = struct.Struct("<BQQ")
+_TINYGPU_MAX_PAYLOAD = 65536
+_TINYGPU_ERROR_MAX_PAYLOAD = 1024
+_TINYGPU_STATUS_MAX_PAYLOAD = 4096
+_TINYGPU_STATUS_STATES = {"unsupported", "inactive", "active_healthy", "active_degraded", "quiescing", "stopped"}
+_TINYGPU_ERROR_CODES = {2: "unsupported_version", 3: "unsupported_capability", 4: "malformed_request", 5: "invalid_state", 6: "busy", 7: "internal_error"}
+
+
+def _tinygpu_exact_recv(sock:socket.socket, size:int) -> bytes:
+  data = bytearray()
+  while len(data) < size:
+    try: chunk = sock.recv(size - len(data))
+    except socket.timeout as exc: raise TinyGPUWireError("timeout") from exc
+    if not chunk: raise TinyGPUWireError("disconnect" if not data else "partial_read")
+    data.extend(chunk)
+  return bytes(data)
+
+
+def _tinygpu_json(payload:bytes, *, max_size:int, malformed_kind:str="malformed_payload") -> dict:
+  if len(payload) > max_size: raise TinyGPUWireError("payload_too_large")
+  try:
+    def no_dupes(pairs):
+      out = {}
+      for key, value in pairs:
+        if key in out: raise ValueError("duplicate JSON key")
+        out[key] = value
+      return out
+    value = json.loads(payload.decode("utf-8"), object_pairs_hook=no_dupes)
+  except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+    raise TinyGPUWireError(malformed_kind, str(exc)) from exc
+  if type(value) is not dict: raise TinyGPUWireError(malformed_kind, "JSON object required")
+  return value
+
+
+def _tinygpu_validate_status(payload:bytes) -> dict:
+  value = _tinygpu_json(payload, max_size=_TINYGPU_STATUS_MAX_PAYLOAD)
+  required = {"schema", "provider_generation", "state", "enabled", "policy_id", "interval_ms", "maximum_timer_leeway_ms",
+              "expected_identity", "last_identity_dword", "attempts", "successes", "failures", "consecutive_failures",
+              "last_attempt_monotonic_ns", "last_success_monotonic_ns", "success_gap_over_leeway_count", "max_success_gap_ms",
+              "timer_error", "counter_saturated", "active_workload_leases", "active_bar_mappings", "active_dma_allocations"}
+  if set(value) != required: raise TinyGPUWireError("malformed_payload", "unexpected status fields")
+  u64 = ("provider_generation", "attempts", "successes", "failures", "consecutive_failures", "last_attempt_monotonic_ns",
+         "last_success_monotonic_ns", "success_gap_over_leeway_count", "max_success_gap_ms")
+  u32 = ("interval_ms", "maximum_timer_leeway_ms", "active_workload_leases", "active_bar_mappings", "active_dma_allocations")
+  if any(type(value[k]) is not int or not 0 <= value[k] < 1<<64 for k in u64): raise TinyGPUWireError("invalid_range")
+  if any(type(value[k]) is not int or not 0 <= value[k] < 1<<32 for k in u32): raise TinyGPUWireError("invalid_range")
+  if type(value["timer_error"]) is not int or not -(1<<31) <= value["timer_error"] < 1<<31: raise TinyGPUWireError("invalid_range")
+  if type(value["enabled"]) is not bool or type(value["counter_saturated"]) is not bool: raise TinyGPUWireError("malformed_payload")
+  if value["schema"] != "tinygpu.keepalive.v1" or value["state"] not in _TINYGPU_STATUS_STATES: raise TinyGPUWireError("invalid_enum")
+  if value["policy_id"] != "usb4_amd_744c_v1" or value["expected_identity"] != "1002:744c" or \
+     not isinstance(value["last_identity_dword"], str) or re.fullmatch(r"0x[0-9a-f]{8}", value["last_identity_dword"]) is None:
+    raise TinyGPUWireError("malformed_payload")
+  if value["interval_ms"] != 1000 or value["maximum_timer_leeway_ms"] != 100: raise TinyGPUWireError("invalid_range")
+  if value["attempts"] != value["successes"] + value["failures"]: raise TinyGPUWireError("invalid_range")
+  return value
 
 class RemoteMMIOInterface(MMIOInterface):
   def __init__(self, dev:RemotePCIDevice, residx:int, nbytes:int, fmt='B', off=0, rd_cmd=RemoteCmd.MMIO_READ, wr_cmd=RemoteCmd.MMIO_WRITE):
@@ -411,10 +477,7 @@ class RemotePCIDevice(PCIDevice):
 
   @staticmethod
   def _recvall(sock:socket.socket, n:int) -> bytes:
-    data = b''
-    while len(data) < n and (chunk:=sock.recv(n - len(data))): data += chunk
-    if len(data) < n: raise RuntimeError("Connection closed")
-    return data
+    return _tinygpu_exact_recv(sock, n)
 
   @staticmethod
   def _rpc(sock:socket.socket, dev_id:int, cmd:int, *args:int, bar:int=0, readout_size:int=0, payload:bytes=b'', has_fd=False):
@@ -422,20 +485,44 @@ class RemotePCIDevice(PCIDevice):
     if rpc_timeout > 0: sock.settimeout(rpc_timeout)
     hdr = struct.pack('<BIIQQQ', cmd, dev_id, bar, *(*args, 0, 0, 0)[:3])
     st, sent, recv, failed = time.perf_counter(), len(hdr) + len(payload), 0, False
+    fd, received_fds = None, []
     try:
       sock.sendall(hdr + payload)
       if has_fd:
-        msg, anc, _, _ = sock.recvmsg(17, socket.CMSG_LEN(4))
+        try: msg, anc, flags, _ = sock.recvmsg(17, socket.CMSG_SPACE(struct.calcsize("i")))
+        except socket.timeout as exc: raise TinyGPUWireError("timeout") from exc
+        if not msg: raise TinyGPUWireError("disconnect")
+        if flags & socket.MSG_CTRUNC: raise TinyGPUWireError("malformed_payload", "truncated ancillary data")
+        for level, typ, data in anc:
+          if level == socket.SOL_SOCKET and typ == socket.SCM_RIGHTS:
+            if len(data) % struct.calcsize("i"): raise TinyGPUWireError("malformed_payload", "invalid SCM_RIGHTS data")
+            received_fds.extend(struct.unpack(f"{len(data) // struct.calcsize('i')}i", data))
+        if len(msg) < 17: msg += RemotePCIDevice._recvall(sock, 17-len(msg))
+        if len(msg) != 17: raise TinyGPUWireError("malformed_header")
         recv += len(msg)
-        fd = struct.unpack('<i', anc[0][2][:4])[0]
       else:
         msg, fd = RemotePCIDevice._recvall(sock, 17), None
         recv += 17
       if (resp:=struct.unpack('<BQQ', msg))[0] != 0:
+        for received_fd in received_fds: os.close(received_fd)
+        received_fds.clear()
+        limit = _TINYGPU_ERROR_MAX_PAYLOAD if resp[0] in _TINYGPU_ERROR_CODES else _TINYGPU_MAX_PAYLOAD
+        if resp[1] > limit: raise TinyGPUWireError("payload_too_large")
         err = RemotePCIDevice._recvall(sock, resp[1]) if resp[1] > 0 else b"unknown error"
         recv += len(err)
         failed = True
-        raise RuntimeError(f"RPC failed: {err.decode('utf-8')}")
+        if resp[0] == 1: raise RuntimeError(f"RPC failed: {err.decode('utf-8', 'replace')}")
+        expected = _TINYGPU_ERROR_CODES.get(resp[0])
+        if expected is None: raise TinyGPUWireError("invalid_enum", f"response status {resp[0]}")
+        if resp[2] != 0: raise TinyGPUWireError("malformed_payload", "typed error reserved field")
+        error = _tinygpu_json(err, max_size=_TINYGPU_ERROR_MAX_PAYLOAD)
+        if set(error) != {"schema", "code", "message"} or error.get("schema") != "tinygpu.error.v1" or error.get("code") != expected or \
+           type(error.get("message")) is not str or not 1 <= len(error["message"].encode("utf-8")) <= 512:
+          raise TinyGPUWireError("malformed_payload", "invalid typed error")
+        raise TinyGPUWireError(expected, error["message"])
+      if has_fd:
+        if len(received_fds) != 1: raise TinyGPUWireError("malformed_payload", "exactly one SCM_RIGHTS fd required")
+        fd = received_fds.pop()
       RemotePCIDevice._rpc_count += 1
       to_read = resp[1] if readout_size < 0 else readout_size
       readout = RemotePCIDevice._recvall(sock, to_read) if to_read > 0 else None
@@ -443,6 +530,10 @@ class RemotePCIDevice(PCIDevice):
       return (resp[1], resp[2]) + (readout,) + (fd,)
     except Exception:
       failed = True
+      if fd is not None:
+        with contextlib.suppress(OSError): os.close(fd)
+      for received_fd in received_fds:
+        with contextlib.suppress(OSError): os.close(received_fd)
       raise
     finally:
       RemotePCIDevice._record_cmd(cmd, time.perf_counter() - st, sent=sent, recv=recv, failed=failed)
@@ -501,32 +592,124 @@ class RemotePCIDevice(PCIDevice):
 class APLRemotePCIDevice(RemotePCIDevice):
   APP_PATH = "/Applications/TinyGPU.app/Contents/MacOS/TinyGPU"
 
+  def _tinygpu_rpc(self, cmd:RemoteCmd, *, arg0:int=0, arg1:int=0, arg2:int=0) -> tuple[int, bytes]:
+    """Independent Python implementation of the v1 extension envelope."""
+    try: self.sock.sendall(_TINYGPU_REQUEST.pack(int(cmd), 0, 0, arg0, arg1, arg2))
+    except socket.timeout as exc: raise TinyGPUWireError("timeout") from exc
+    except OSError as exc: raise TinyGPUWireError("partial_write", str(exc)) from exc
+    status, length, resp1 = _TINYGPU_RESPONSE.unpack(_tinygpu_exact_recv(self.sock, _TINYGPU_RESPONSE.size))
+    if length > (_TINYGPU_ERROR_MAX_PAYLOAD if status in _TINYGPU_ERROR_CODES else _TINYGPU_MAX_PAYLOAD):
+      raise TinyGPUWireError("payload_too_large")
+    payload = _tinygpu_exact_recv(self.sock, length) if length else b""
+    if status == 0: return resp1, payload
+    if status == 1:
+      if length == 0 and resp1 == 0: raise TinyGPUWireError("legacy_generic_error")
+      raise TinyGPUWireError("legacy_error", payload.decode("utf-8", "replace"))
+    expected = _TINYGPU_ERROR_CODES.get(status)
+    if expected is None: raise TinyGPUWireError("invalid_enum", f"response status {status}")
+    if resp1 != 0 or len(payload) > _TINYGPU_ERROR_MAX_PAYLOAD: raise TinyGPUWireError("malformed_payload")
+    error = _tinygpu_json(payload, max_size=_TINYGPU_ERROR_MAX_PAYLOAD)
+    if set(error) != {"schema", "code", "message"} or error.get("schema") != "tinygpu.error.v1" or error.get("code") != expected or \
+       type(error.get("message")) is not str or not 1 <= len(error["message"].encode("utf-8")) <= 512:
+      raise TinyGPUWireError("malformed_payload", "invalid typed error")
+    raise TinyGPUWireError(expected, error["message"])
+
+  def _negotiate_tinygpu(self) -> None:
+    old_timeout = self.sock.gettimeout()
+    self.sock.settimeout(3.0)
+    try:
+      # arg2=0 is the frozen bounded legacy probe; required v1 capabilities are checked locally after negotiation.
+      try: resp1, payload = self._tinygpu_rpc(RemoteCmd.HANDSHAKE, arg0=1, arg1=0, arg2=0)
+      except TinyGPUWireError as exc:
+        # The recovered server only maps its exact empty legacy generic error or clean EOF to unsupported.
+        if exc.kind == "legacy_generic_error":
+          self.sock.close()
+          raise TinyGPUWireError("unsupported_protocol") from exc
+        if exc.kind == "disconnect":
+          self.sock.close()
+          raise TinyGPUWireError("unsupported_protocol") from exc
+        raise
+    finally:
+      with contextlib.suppress(OSError): self.sock.settimeout(old_timeout)
+    handshake = _tinygpu_json(payload, max_size=_TINYGPU_MAX_PAYLOAD)
+    if set(handshake) != {"schema", "protocol_major", "protocol_minor", "capabilities", "server_build_id"} or \
+       handshake.get("schema") != "tinygpu.handshake.v1" or handshake.get("protocol_major") != 1 or resp1 != 1 or \
+       type(handshake.get("protocol_minor")) is not int or not 0 <= handshake["protocol_minor"] < 1<<16 or \
+       type(handshake.get("capabilities")) is not int or not 0 <= handshake["capabilities"] < 1<<64 or \
+       type(handshake.get("server_build_id")) is not str or re.fullmatch(r"[A-Za-z0-9._+-]{1,128}", handshake["server_build_id"]) is None:
+      raise TinyGPUWireError("malformed_payload", "invalid handshake")
+    if handshake["capabilities"] & 3 != 3: raise TinyGPUWireError("unsupported_capability")
+    self.tinygpu_handshake, self.tinygpu_capabilities = handshake, handshake["capabilities"]
+
+  def keepalive_status(self) -> dict:
+    if not getattr(self, "tinygpu_handshake", None): raise TinyGPUWireError("invalid_state", "handshake required")
+    if not self.tinygpu_capabilities & 1: raise TinyGPUWireError("unsupported_capability")
+    resp1, payload = self._tinygpu_rpc(RemoteCmd.KEEPALIVE_STATUS)
+    if resp1 != 0: raise TinyGPUWireError("invalid_reserved_field")
+    return _tinygpu_validate_status(payload)
+
+  def _release_workload_lease(self) -> None:
+    lease = getattr(self, "tinygpu_lease", None)
+    if lease is None: return
+    resp1, payload = self._tinygpu_rpc(RemoteCmd.LEASE_RELEASE, arg0=lease)
+    if resp1 != 0 or payload: raise TinyGPUWireError("malformed_payload")
+    self.tinygpu_lease = None
+
   @classmethod
   def ensure_app(cls):
-    # Never replace a locally-built arkey app (ad-hoc signed, carries local TinyGPU fixes) with the pinned
-    # upstream release: the pinned app paired with the arkey dext is a version-mismatched stack.
-    if os.path.exists(cls.APP_PATH):
-      ident = subprocess.run(["codesign", "-dv", "/Applications/TinyGPU.app"], capture_output=True, text=True).stderr
-      if "org.tinygrad.arkey" in ident: return
-    commit = "c0d024f9ff0e1dc8fdf217f255da7101d91e8323"
-    app_name = f"TinyGPU_{commit}.zip"
-    if (_ensure_downloads_dir() / app_name).is_file() and os.path.exists(cls.APP_PATH): return
-    print("Downloading TinyGPU.app...")
-    with contextlib.suppress(RuntimeError): system("pkill -f TinyGPU")
-    system(f"ditto -xk {fetch(f'https://github.com/tinygrad/tinygpu_releases/raw/{commit}/TinyGPU.zip', name=app_name)} /Applications")
-    print(system(f"{cls.APP_PATH} install"))
+    # Qualification may use only the audited locally-built app. Installation and extension replacement
+    # require the explicit development-install approval path; a runtime client must never perform them.
+    if not os.path.isfile(cls.APP_PATH):
+      raise RuntimeError("Audited TinyGPU app is not installed; use extra/usbgpu/tbgpu/installer/install_nosip.sh with explicit approval")
+    identity = subprocess.run(["codesign", "-dv", cls.APP_PATH], capture_output=True, text=True, check=False)
+    if identity.returncode != 0 or "Identifier=org.tinygrad.arkey.tinygpu.installer" not in identity.stderr:
+      raise RuntimeError("Installed TinyGPU app is not the audited org.tinygrad.arkey development build")
 
   def __init__(self, devpref:str, pcibus:str):
+    if os.environ.get("REMOTE_KEEPALIVE_S"):
+      raise RuntimeError("REMOTE_KEEPALIVE_S is unsupported: the DriverKit negotiated policy owns keepalive cadence")
     self.ensure_app()
+    self.tinygpu_lease, self.lock_fd = None, None
     sock_path, sock = getenv("APL_REMOTE_SOCK", temp("tinygpu.sock")), socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    for i in range(100):
-      with contextlib.suppress(ConnectionRefusedError, FileNotFoundError):
-        sock.connect(sock_path)
-        break
-      if i == 0: subprocess.Popen([self.APP_PATH, "server", sock_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-      time.sleep(0.05)
-    else: raise RuntimeError(f"Failed to connect to TinyGPU server at {sock_path}.")
-    super().__init__(devpref, "usb4", sock=sock)
+    self.sock = sock
+    try:
+      for i in range(100):
+        with contextlib.suppress(ConnectionRefusedError, FileNotFoundError):
+          sock.connect(sock_path)
+          break
+        if i == 0: subprocess.Popen([self.APP_PATH, "server", sock_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(0.05)
+      else: raise RuntimeError(f"Failed to connect to TinyGPU server at {sock_path}.")
+      super().__init__(devpref, "usb4", sock=sock)
+      self._negotiate_tinygpu()
+      lease, payload = self._tinygpu_rpc(RemoteCmd.LEASE_ACQUIRE)
+      if lease: self.tinygpu_lease = lease
+      if payload or lease == 0: raise TinyGPUWireError("malformed_payload", "invalid lease response")
+      atexit.register(self.close)
+    except BaseException:
+      with contextlib.suppress(Exception): self._release_workload_lease()
+      with contextlib.suppress(OSError): sock.close()
+      if self.lock_fd is not None:
+        with contextlib.suppress(OSError): os.close(self.lock_fd)
+        self.lock_fd = None
+      raise
+
+  def close(self) -> None:
+    release_error = None
+    try:
+      self._release_workload_lease()
+    except Exception as exc:
+      release_error = exc
+    finally:
+      self.tinygpu_lease = None
+      with contextlib.suppress(OSError): self.sock.close()
+      if self.lock_fd is not None:
+        with contextlib.suppress(OSError): os.close(self.lock_fd)
+        self.lock_fd = None
+    if release_error is not None: raise release_error
+
+  def __del__(self):
+    with contextlib.suppress(Exception): self.close()
 
   def alloc_sysmem(self, size:int, vaddr:int=0, contiguous:bool=False) -> tuple[MMIOInterface, list[int]]:
     mapped_size, _, _, fd = self._rpc(self.sock, self.dev_id, RemoteCmd.MAP_SYSMEM_FD, size, int(contiguous), has_fd=True)

@@ -1,0 +1,23 @@
+{
+  "schema": "tinygpu.error.v1.fixture",
+  "maximum_payload_bytes": 1024,
+  "response_status": {
+    "OK": 0,
+    "LEGACY_ERROR": 1,
+    "UNSUPPORTED_VERSION": 2,
+    "UNSUPPORTED_CAPABILITY": 3,
+    "MALFORMED_REQUEST": 4,
+    "INVALID_STATE": 5,
+    "BUSY": 6,
+    "INTERNAL_ERROR": 7
+  },
+  "typed_errors": [
+    {"status": 2, "payload": {"schema": "tinygpu.error.v1", "code": "unsupported_version", "message": "protocol major 2 is unsupported"}, "payload_hex": "7b22736368656d61223a2274696e796770752e6572726f722e7631222c22636f6465223a22756e737570706f727465645f76657273696f6e222c226d657373616765223a2270726f746f636f6c206d616a6f72203220697320756e737570706f72746564227d", "response_hex": "0266000000000000000000000000000000"},
+    {"status": 3, "payload": {"schema": "tinygpu.error.v1", "code": "unsupported_capability", "message": "keepalive status is unavailable"}, "payload_hex": "7b22736368656d61223a2274696e796770752e6572726f722e7631222c22636f6465223a22756e737570706f727465645f6361706162696c697479222c226d657373616765223a226b656570616c6976652073746174757320697320756e617661696c61626c65227d", "response_hex": "0369000000000000000000000000000000"},
+    {"status": 4, "payload": {"schema": "tinygpu.error.v1", "code": "malformed_request", "message": "reserved request field is nonzero"}, "payload_hex": "7b22736368656d61223a2274696e796770752e6572726f722e7631222c22636f6465223a226d616c666f726d65645f72657175657374222c226d657373616765223a2272657365727665642072657175657374206669656c64206973206e6f6e7a65726f227d", "response_hex": "0466000000000000000000000000000000"},
+    {"status": 5, "payload": {"schema": "tinygpu.error.v1", "code": "invalid_state", "message": "handshake already completed"}, "payload_hex": "7b22736368656d61223a2274696e796770752e6572726f722e7631222c22636f6465223a22696e76616c69645f7374617465222c226d657373616765223a2268616e647368616b6520616c726561647920636f6d706c65746564227d", "response_hex": "055c000000000000000000000000000000"},
+    {"status": 6, "payload": {"schema": "tinygpu.error.v1", "code": "busy", "message": "a workload lease is active"}, "payload_hex": "7b22736368656d61223a2274696e796770752e6572726f722e7631222c22636f6465223a2262757379222c226d657373616765223a226120776f726b6c6f6164206c6561736520697320616374697665227d", "response_hex": "0652000000000000000000000000000000"},
+    {"status": 7, "payload": {"schema": "tinygpu.error.v1", "code": "internal_error", "message": "provider status unavailable"}, "payload_hex": "7b22736368656d61223a2274696e796770752e6572726f722e7631222c22636f6465223a22696e7465726e616c5f6572726f72222c226d657373616765223a2270726f76696465722073746174757320756e617661696c61626c65227d", "response_hex": "075d000000000000000000000000000000"}
+  ],
+  "legacy_error": {"status": 1, "payload_hex": "", "response_hex": "0100000000000000000000000000000000"}
+}

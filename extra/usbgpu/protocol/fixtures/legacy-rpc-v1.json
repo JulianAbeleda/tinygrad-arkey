@@ -1,0 +1,31 @@
+{
+  "schema": "tinygpu.legacy-rpc.v1",
+  "request_format": "<BIIQQQ",
+  "request_bytes": 33,
+  "response_format": "<BQQ",
+  "response_bytes": 17,
+  "common_commands": {
+    "PROBE": 0,
+    "MAP_BAR": 1,
+    "MAP_SYSMEM_FD": 2,
+    "CFG_READ": 3,
+    "CFG_WRITE": 4,
+    "RESET": 5,
+    "MMIO_READ": 6,
+    "MMIO_WRITE": 7,
+    "MAP_SYSMEM": 8,
+    "SYSMEM_READ": 9,
+    "SYSMEM_WRITE": 10,
+    "RESIZE_BAR": 11
+  },
+  "python_reserved_commands": {
+    "PING": 12,
+    "HEALTH": 13,
+    "SYSMEM_SYNC": 14
+  },
+  "examples": [
+    {"name": "cfg_read_vendor_dword", "fields": [3, 0, 0, 0, 4, 0], "hex": "030000000000000000000000000000000004000000000000000000000000000000"},
+    {"name": "success_value", "fields": [0, 1951141890, 0], "hex": "0002104c74000000000000000000000000"},
+    {"name": "legacy_generic_error", "fields": [1, 0, 0], "hex": "0100000000000000000000000000000000"}
+  ]
+}

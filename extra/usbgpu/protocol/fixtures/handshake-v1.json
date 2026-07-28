@@ -1,0 +1,12 @@
+{
+  "schema": "tinygpu.handshake.v1.fixture",
+  "protocol_major": 1,
+  "protocol_minor": 0,
+  "maximum_payload_bytes": 65536,
+  "legacy_probe_timeout_ms": 3000,
+  "commands": {"HANDSHAKE": 15, "LEASE_ACQUIRE": 16, "LEASE_RELEASE": 17, "KEEPALIVE_STATUS": 18, "KEEPALIVE_SET_POLICY": 19},
+  "capabilities": {"KEEPALIVE_STATUS": 1, "WORKLOAD_LEASE": 2, "KEEPALIVE_SET_POLICY": 4},
+  "legacy_probe": {"fields": [15, 0, 0, 1, 0, 0], "hex": "0f0000000000000000010000000000000000000000000000000000000000000000"},
+  "success_payload": {"schema": "tinygpu.handshake.v1", "protocol_major": 1, "protocol_minor": 0, "capabilities": 3, "server_build_id": "test-build-1"},
+  "legacy_outcomes": {"generic_error_response_hex": "0100000000000000000000000000000000", "clean_eof_response_bytes": 0, "maps_to": "unsupported_protocol"}
+}
