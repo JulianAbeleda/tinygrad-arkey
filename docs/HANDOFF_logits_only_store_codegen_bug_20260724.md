@@ -117,7 +117,7 @@ is a broadcast/expand of registers should have been **materialized into addressa
 
 ## Where to fix (ranked pointers)
 
-1. **`extra/qk/reg_store_devec.py` → `pm_reg_store_devec`** (repo-custom register-store devectorizer,
+1. **`tinygrad/codegen/late/reg_store.py` → `pm_reg_store_devec`** (centralized repo-custom register-store devectorizer,
    wired in via `tinygrad/codegen/experimental.py:15`). This pass exists specifically to lower
    register-vector stores into distinct/scalar stores. It is the prime suspect: it does not handle
    the **broadcast/doubled-lane (stride-0 EXPAND) destination** case, leaving a VECTORIZE as the
@@ -174,7 +174,8 @@ Confirmed by diffing the failing-path files against `upstream/master` (github.co
 - `tinygrad/codegen/late/devectorizer.py` — `+1022 / -0` vs upstream (fork-owned at this path).
 - `tinygrad/renderer/cstyle.py` — heavily forked (236 ins / 254 del).
 - `tinygrad/codegen/experimental.py` (loader for `extra.qk.*` passes) and
-  `extra/qk/reg_store_devec.py` — entirely BoltBeam.
+  `pm_reg_store_devec` is now centralized in `tinygrad/codegen/late/reg_store.py`; the former extra module was the
+  BoltBeam-originated implementation.
 
 So the pipeline that mints the unassignable store is BoltBeam-authored fork code, and the fix belongs
 here — nothing to push upstream or wait on.
