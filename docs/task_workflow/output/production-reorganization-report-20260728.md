@@ -125,6 +125,11 @@ organization manifest and lowering findings were updated; the transform body is 
 nested ranges, private reinitialization registers, and AMD dispatch. The focused CPU gate/boundary/audit suite passed
 61 tests. No AMD execution or GPU numeric result is claimed for this slice.
 
+The proposed third slice (`extra/qk/reg_store_devec.py` into `tinygrad/codegen/late/reg_store.py`) is blocked. Its
+extra matcher runs after the core matcher and accepts duplicate REG pointers that the core matcher rejects. No
+focused test currently pins the `STACK(LOAD(INDEX(REG)))` residual, negative targets, lane ordering, or
+AMD/coalesced-load dispatch, so consolidation would risk changing compiler behavior.
+
 At the current `exp` tip, `python3 sz.py` passes with 34,947 budgeted authored lines against the 40,000-line cap.
 
 ## Documentation closure completed
