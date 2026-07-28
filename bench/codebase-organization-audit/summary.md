@@ -1,6 +1,6 @@
 # Codebase organization audit
 
-Audited commit: `mac-first-boot-20260610-3496-g4c0fb1d4e` (dirty: False)
+Audited commit: `mac-first-boot-20260610-3501-g21edaac0a` (dirty: False)
 Scope: `extra/qk` | manifest coverage required for: extra/qk/
 Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 67 warnings)
 
@@ -10,9 +10,9 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 67 warnings)
 
 ## Coverage
 
-- Authored: 469 files / 72068 token-bearing LOC (sz.py rules)
+- Authored: 470 files / 72150 token-bearing LOC (sz.py rules)
 - Generated (reported, never manifested): 1 files / 57 LOC
-- Manifest scope: 93 files / 13338 LOC (93 explicit records, 0 covered by group rule, 0 uncovered)
+- Manifest scope: 93 files / 13340 LOC (93 explicit records, 0 covered by group rule, 0 uncovered)
 
 ## LOC by domain
 
@@ -21,7 +21,7 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 67 warnings)
 | amd_runtime | 3 | 421 |
 | attention_decode | 10 | 809 |
 | attention_prefill | 3 | 504 |
-| codegen_lowering | 7 | 402 |
+| codegen_lowering | 7 | 404 |
 | evidence | 11 | 1671 |
 | measurement | 17 | 2147 |
 | quant_mmq | 18 | 2930 |
@@ -33,7 +33,7 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 67 warnings)
 | role | files | loc |
 |---|---|---|
 | adapter | 11 | 1143 |
-| authority | 47 | 7633 |
+| authority | 47 | 7635 |
 | benchmark | 2 | 99 |
 | diagnostic | 12 | 1298 |
 | evidence | 5 | 438 |
@@ -47,7 +47,7 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 67 warnings)
 | status | files | loc |
 |---|---|---|
 | active_research | 14 | 2348 |
-| fallback | 3 | 124 |
+| fallback | 3 | 126 |
 | historical_one_off | 1 | 43 |
 | production | 66 | 9719 |
 | promoted_default | 5 | 609 |
@@ -61,7 +61,7 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 67 warnings)
 |---|---|---|
 | consolidate | 2 | 864 |
 | investigate | 2 | 256 |
-| keep | 88 | 12155 |
+| keep | 88 | 12157 |
 | move | 1 | 63 |
 
 ## Default-path source footprint
@@ -210,9 +210,9 @@ None.
 
 | path | class | former purpose | last campaign | replacement | commit | recovery | loc |
 |---|---|---|---|---|---|---|---|
-| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `4c0fb1d4e8cc` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
-| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `4c0fb1d4e8cc` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
-| `extra/qk/q4k_wmma_tile_lowering.py` | delete_after_verdict_capture | Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles. | q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14) | docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md | `4c0fb1d4e8cc` | git show 05b67146a -- <path> | 1138 |
+| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `21edaac0a78d` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
+| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `21edaac0a78d` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
+| `extra/qk/q4k_wmma_tile_lowering.py` | delete_after_verdict_capture | Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles. | q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14) | docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md | `21edaac0a78d` | git show 05b67146a -- <path> | 1138 |
 
 ## Workflow inventory
 
