@@ -127,9 +127,9 @@ Recorded rather than guessed. Each gates any move that touches it:
 - `tinygrad/schedule/flash_fusion.py` and `tinygrad/codegen/late/flash_attn.py`'s top-level `flash_attention` — **no
   callers found.** Likely dead; flagged for LR-081 verification, not asserted dead here.
 - `codegen/simplify.py`'s `reduce_simplify_family` — zero external callers found.
-- `extra/qk/coalesced_load_lowering.py`, `warp_reduce_lowering.py`, `fdot2_lowering.py`,
-  `codegen_recurrence_unroll.py`, `codegen_list_scheduler.py` — only their `codegen/experimental.py` forwarding shims
-  were read; internal contracts unverified.
+- `extra/qk/coalesced_load_lowering.py`, `warp_reduce_lowering.py`, `fdot2_lowering.py`, and
+  `codegen_list_scheduler.py` — only their `codegen/experimental.py` forwarding shims were read; internal contracts
+  unverified. Recurrence unroll was later promoted to `tinygrad/codegen/late/recurrence.py` with a direct core import.
 - `tinygrad/schedule/wmma/{composite,fragments,kernels,softmax,loop_state}.py` internals — only the re-export surface.
 - `renderer.isa.X86Renderer` — implements the full ISARenderer hook set but has no confirmed `Device` wiring.
 

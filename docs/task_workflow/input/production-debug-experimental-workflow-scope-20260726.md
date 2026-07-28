@@ -673,3 +673,21 @@ is banked.
 
 This checkpoint does not authorize broader pruning. The remaining R1-R7 ledgers, generated evidence ownership, and
 cross-packet conflicts must be reconciled before deleting or tier-pruning additional assets.
+
+### 16.11 Second production-closure checkpoint
+
+The second bounded runtime slice is complete on `exp` and is eligible for selective propagation after its commit is
+verified:
+
+| Source | Destination | Production consumer | Boundary change |
+|---|---|---|---|
+| `extra/qk/codegen_recurrence_unroll.py` | `tinygrad/codegen/late/recurrence.py` | `tinygrad/codegen/__init__.py:89-91` when `SCHED_UNROLL>1` on AMD | The compiler imports and calls the core owner directly; the recurrence forwarding shim was removed from `codegen/experimental.py` |
+
+The transform body was preserved as a byte-identical rename. The organization manifest and lowering findings were
+updated, and `SCHED_UNROLL_DEBUG` was explicitly classified as a non-cache-affecting diagnostic gate. The focused
+CPU suite (`test/unit/test_codegen_recurrence_unroll.py`, flash-prefill/boundary/gate/cache/audit tests) passed 61
+tests. Coverage includes identity and fail-closed cases, canonical AFTER-chain carry reconstruction, nested range
+and private reinitialization-register duplication, and AMD dispatch. No AMD execution or GPU numeric result is claimed.
+
+This slice also does not authorize broader pruning. Subsequent codegen, quant, decode, route-policy, and packed-WMMA
+slices still require their own tests and evidence closures.

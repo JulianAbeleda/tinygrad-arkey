@@ -828,10 +828,10 @@
       "domain": "codegen_lowering",
       "duplication_group": null,
       "evidence": [
-        "tinygrad/codegen/__init__.py:77 if (_u:=getenv(\"SCHED_UNROLL\")) > 1 and ren.target.device == \"AMD\""
+        "tinygrad/codegen/__init__.py direct-imports tinygrad.codegen.late.recurrence.unroll_recurrence and calls it when SCHED_UNROLL>1 on AMD"
       ],
-      "path": "extra/qk/codegen_recurrence_unroll.py",
-      "promotion_target": null,
+      "path": "tinygrad/codegen/late/recurrence.py",
+      "promotion_target": "tinygrad/codegen/late/recurrence.py (promoted from extra/qk/codegen_recurrence_unroll.py in production reorganization slice 2)",
       "public_surface": [
         "unroll_recurrence"
       ],

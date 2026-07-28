@@ -9,7 +9,6 @@ def _attr(module:str, name:str):
   return getattr(importlib.import_module(module), name)
 
 
-def unroll_recurrence(*args, **kwargs): return _attr("extra.qk.codegen_recurrence_unroll", "unroll_recurrence")(*args, **kwargs)
 # NOTE: coalesce_loads was promoted to core codegen (LR-050) -- tinygrad/codegen/__init__.py now imports
 # tinygrad.codegen.late.coalesced_load directly instead of going through this lazy extra.qk adapter.
 def warp_reduce_pm(): return _attr("extra.qk.warp_reduce_lowering", "pm_warp_reduce")

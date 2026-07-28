@@ -23,6 +23,7 @@ from tinygrad.codegen.late.devectorizer import load_store_folding, load_store_in
 from tinygrad.codegen.late.reduce_lowering import pm_reduce, ReduceContext
 from tinygrad.codegen.late.reg_store import pm_reduce_acc_upcast_fix, pm_distinct_reg_store_devec, pm_group_wmma_reg_store
 from tinygrad.codegen.late.coalesced_load import coalesce_loads
+from tinygrad.codegen.late.recurrence import unroll_recurrence
 from tinygrad.codegen.plan import PLAN_GATES, observed_gate_values  # noqa: F401  (PLAN_GATES re-exported for callers)
 from tinygrad.codegen.opt.postrange import apply_opts
 from tinygrad.codegen import experimental as cg_extras
@@ -88,7 +89,7 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   if DEBUG >= 5: print(pyrender(ast))
   if (_u:=getenv("SCHED_UNROLL")) > 1 and ren.target.device == "AMD":
     # recurrence-aware loop-unroll primitive (default-off codegen scheduling capability)
-    ast = cg_extras.unroll_recurrence(ast, _u)
+    ast = unroll_recurrence(ast, _u)
   # Preserve the exact native QK C fragment for its nonlinear consumer before
   # bottom-up movement lowering can install the ordinary logical wrapper.
   ast = graph_rewrite(ast, pm_native_row_softmax_repack, ctx=itertools.count(900),
