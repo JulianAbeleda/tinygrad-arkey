@@ -35,7 +35,36 @@ The current tree contains 197 tracked files:
 | root `extra/setup_*.sh` | 8 | optional backend/toolchain setup scripts | `extra/setup/**` | `master` for supported backends; TinyGPU unresolved |
 | root `extra/runtime_models.example.json` | 1 | CLI operating fixture | `extra/llm/runtime_models.example.json` | `master` with CLI |
 
-The count includes headers, fixtures, scripts, and source files; it is not a count of executable hot-path modules.
+The count includes headers, fixtures, scripts, source files, protocol documents, and installer assets; it is not a count
+of executable hot-path modules.
+
+## Exhaustive file-level ledger
+
+The organization map is not complete until every tracked path below `extra/` has one ledger row. The ledger must include
+non-script assets because headers, fixtures, protocol documents, and installer sources can define runtime contracts even
+when they are never imported by Python.
+
+Each row must record:
+
+- exact current path and file type;
+- target path or target domain, without assuming that the current directory is authoritative;
+- purpose in one sentence;
+- branch owner: `master`, `dev`, `exp`, or `delete`;
+- hot-path status: `default`, `conditional`, `operator-only`, `test/evidence-only`, or `none`;
+- direct consumers in `tinygrad`, `extra`, `test`, `bench`, and docs;
+- dependencies that must move with it;
+- validation command and required hardware/toolchain;
+- retention criterion, compact replacement, or deletion recovery commit;
+- unresolved flag and the specific decision needed.
+
+The initial ledger census must assert:
+
+```sh
+test "$(git ls-files 'extra/**' | wc -l | tr -d ' ')" = 197
+```
+
+No rename, directory move, or branch pruning is authorized until the ledger has 197 unique paths, its consumer/link
+scan is clean, and every unresolved row names the human or follow-up task that will decide it.
 
 ## Target domains
 
@@ -111,7 +140,7 @@ documented before they remain on `master`.
 
 ## Required next classification pass
 
-The next task is a file-level ledger for all 97 current `extra/qk` files and all mixed files under `extra/llm` and
-`extra/hardware`. The ledger must record the target domain above, default-path reachability, branch owner, direct
-callers, tests, artifacts, and the migration or retention criterion. No rename is authorized until that ledger is
-complete and reviewed.
+The next task is a file-level ledger for all 197 current `extra/**` files, starting with the 97 current `extra/qk`
+files and the mixed files under `extra/llm`, `extra/hardware`, `extra/nv_gpu_driver`, and `extra/usbgpu`. The ledger
+must record the target domain above, default-path reachability, branch owner, direct callers, tests, artifacts, and the
+migration or retention criterion. No rename is authorized until that ledger is complete and reviewed.
