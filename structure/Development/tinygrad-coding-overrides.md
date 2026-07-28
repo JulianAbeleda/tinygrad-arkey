@@ -5,11 +5,13 @@ The principles file is the reusable, project-neutral scaffold; everything that i
 specific to *this* fork (commit prefixes, portability rules, the AMD env
 invariant, the anti-re-sprawl rule) lives here so the scaffold stays copyable.
 
-## Temporary Authored LOC Budget
+## Authored LOC Budget
 
-The authored-source cap is temporarily 35,000 lines while the 14B autoscan route is implemented and proven end to end. After that proof,
-run another consolidation/pruning pass and restore the 30,000-line cap. This is implementation headroom, not permission to retain dead probes,
-duplicate route authority, or superseded compatibility paths.
+The authored-source cap is 40,000 lines. The additional headroom admits maintained cross-vendor runtime surfaces and the integration contracts
+needed to qualify them without forcing unrelated production code out of the repository. Generated bindings remain derived and unbudgeted only
+when they carry a generated marker and are reproducible; the larger cap is not permission to retain dead probes, duplicate route authority, or
+superseded compatibility paths. A 30,000-line core remains the long-term consolidation target, but lowering the enforced cap is a separate,
+explicit policy decision after the retained production surface is measured.
 
 ## Commit Prefixes
 
