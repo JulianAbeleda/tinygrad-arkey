@@ -87,12 +87,18 @@ recover the doc by name if a specific number is needed again.
 - tinygrad owns runtime execution, compiler/backend lowering, and hardware gates.
 - The durable-principles knowledge base is `/home/ubuntu/knowledge_base`; project docs apply its principles.
 - `tinygrad/llm/route_policy.py` consumes `boltbeam.route_policy.v1`.
-- `tinygrad/llm/route_ops.py` is the runtime adapter for QK route implementations.
+- `tinygrad/llm/route_ops.py` is the small production-owned compatibility boundary for the remaining QK dependencies. It contains lazy adapters, not route implementations or ownership authority. Each production-used target must move to its `tinygrad/**` domain owner in a bounded slice; adding new adapters is not the promotion path.
 - `bench/qk-search-spaces/default_route_manifest.json` is the local route-state manifest.
 - `extra/audit/pure_machine_search_default_path_census.py` is the local generated-default census.
 
 ## Boundary Rule
 
-tinygrad hot paths must not import `extra.qk.*`, `extra.qk.quant.*`, or `extra.audit.*` directly. Use
-`tinygrad/llm/route_ops.py` for LLM routes and `tinygrad/codegen/experimental.py` for default-off codegen probes.
-`test/unit/test_tinygrad_boundary.py` enforces this.
+Production `tinygrad/**` modules must not import `extra.qk.*`, `extra.qk.quant.*`, or `extra.audit.*` directly. The
+existing `tinygrad/llm/route_ops.py` adapters are a temporary, production-owned compatibility boundary for
+dependencies that have not yet been promoted. Their presence records migration debt; it does not classify the target
+module as production or authorize new runtime dependencies on `extra/qk`.
+
+New production behavior belongs under its `tinygrad/**` domain owner. Promote an existing route with its focused
+regression and authority, then remove the corresponding adapter. Research, search, qualification, and one-off gates
+remain under `extra/qk` and must not become default runtime dependencies. `test/unit/test_tinygrad_boundary.py` enforces
+the direct-import boundary.

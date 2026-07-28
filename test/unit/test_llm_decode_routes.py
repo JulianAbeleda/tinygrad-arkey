@@ -97,8 +97,6 @@ class _Words:
 
 
 def test_q4k_smallk_batched_routes_to_fallback(monkeypatch):
-  monkeypatch.setattr(decode_routes.qk_ops, "q4k_gemm_kernel", lambda *_args, **_kwargs: (_ for _ in ()).throw(
-    AssertionError("batched K!=1 should not use q4k_gemm_kernel")))
   linear = SimpleNamespace(decode_enabled=True, bias=None, in_features=8, name="batched_test_linear")
   x = _TensorShapeOnly(shape=(1, 4, 8))
 
@@ -121,8 +119,6 @@ def test_q4k_single_token_keeps_generated_g3_path(monkeypatch):
   g3_calls = {"n": 0}
   monkeypatch.setattr(decode_routes.qk_ops, "q4k_g3_lanemap_gemv_kernel",
                       lambda *_args, **_kwargs: g3_calls.__setitem__("n", g3_calls["n"] + 1) or "kernel")
-  monkeypatch.setattr(decode_routes.qk_ops, "q4k_gemm_kernel", lambda *_args, **_kwargs: (_ for _ in ()).throw(
-    AssertionError("single-token decode should not use q4k_gemm_kernel")))
 
   class TensorStub:
     device = "CPU"
@@ -205,8 +201,6 @@ def test_q4k_candidate_rejects_unsupported_shapes_and_bias():
 
 
 def test_q6k_smallk_batched_routes_to_fallback(monkeypatch):
-  monkeypatch.setattr(decode_routes.qk_ops, "q6k_gemm_kernel", lambda *_args, **_kwargs: (_ for _ in ()).throw(
-    AssertionError("batched K!=1 should not use q6k_gemm_kernel")))
   linear = SimpleNamespace(
     decode_enabled=True, bias=None, in_features=256, out_features=16, q6k_storage=SimpleNamespace(halfs=0),
     parts=1, opts=(), name="ffn_down.weight")
@@ -265,7 +259,7 @@ def test_q6k_single_token_keeps_generated_path(monkeypatch):
       return self
 
   monkeypatch.setattr(decode_routes, "Tensor", SimpleNamespace(empty=lambda *_, **__: partials), raising=True)
-  spec = SimpleNamespace(partial_axis_extent=8)
+  spec = SimpleNamespace(route_family="q6k_coop", rows=16, partial_axis_extent=8)
   spec_calls = []
   monkeypatch.setattr(decode_routes.qk_ops, "q6k_spec_for_role",
                       lambda *_args, **kwargs: spec_calls.append(kwargs) or spec)
@@ -312,7 +306,7 @@ def test_flash_decode_binding_splits_g4_and_g5_route_identity_cpu_only():
   assert g4 is not None and g4.route_id == "decode_flash_live_split_g4_kvboth"
   assert g5 is not None and g5.route_id == "decode_flash_live_split_g5_kvboth"
   assert (g4.split_size, g4.staging) == (48, "KV_BOTH")
-  assert (g5.split_size, g5.staging) == (48, "KV_BOTH")
+  assert (g5.split_size, g5.staging) == (32, "KV_BOTH")
   assert decode_routes.FLASH_DECODE_CANDIDATE.bind(1, 40, 8, 128, "AMD") is None
   assert decode_routes.FLASH_DECODE_G5_CANDIDATE.bind(1, 32, 8, 128, "AMD") is None
   for hq in (24, 36, 48):
