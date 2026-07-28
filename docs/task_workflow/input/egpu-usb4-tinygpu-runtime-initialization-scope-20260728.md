@@ -196,6 +196,48 @@ audited install provenance from the clean handoff commit before running A0 and
 A1. A0/A1 remain the only authorized gates; M0-M7 and AMD initialization stay
 blocked until both pass.
 
+### Single-reboot discipline and same-version v7 follow-up
+
+Avoid repeated reboot requests. Before any future DEXT install, version bump,
+deactivation, or reboot, perform one thorough read-only audit under the GPU lock
+and record all of the following together:
+
+- every current and historical registration for both TinyGPU bundle IDs,
+  including version, state, SystemExtensions path, unique ID, executable mode,
+  CDHash, and which registration kernelmanagerd selects for PCI matching;
+- the installed, built, registered, and live-provider app/DEXT hashes and bundle
+  versions, plus the install provenance source commit;
+- USB4 and PCI enumeration, the `tinygpu` IOUserService properties, DEXT process
+  census, selector-4 handshake, selector-5 status, and the relevant sysextd,
+  kernelmanagerd, launchd, and DriverKit log interval;
+- every pending source or activation-contract change that could require another
+  DEXT version. Batch those changes into a single final candidate before asking
+  the operator to reboot.
+
+Do not re-register an identical DEXT at the same bundle version merely to refresh
+provenance. Refreshing the v7 install from clean commit `c380ab4d0` created a
+second version-7 registration: the original v7 became `[terminating for upgrade
+via delegate]`, sysextd cleared its executable bit, and the replacement v7 became
+`[activated enabled]`. After one operator reset returned `1002:744c` at x16 and
+16.0 GT/s, kernelmanagerd still selected the terminating original v7 unique ID
+`bdb12e12f1643474be8a566f3c6822ab570083e85e5b46b8f7f23f2848ffe6a3` rather
+than replacement unique ID
+`4e0fa54f6b09bc1e6274b7dc836eb373616790401964cf3334ebb63876099237`.
+launchd then rejected the original executable with `EACCES`. The endpoint is
+present, but no `tinygpu` IOUserService is published and A0 has not run.
+
+The next action is one Mac reboot to complete this delegated v7-to-v7 upgrade.
+Do not reset the GPU again before that reboot. After reboot, run the complete
+read-only audit above and proceed directly to A0/A1 only if there is exactly one
+active arkey v7 registration, the endpoint and expected live-provider CDHash are
+present, and selector 4/5 are healthy. Do not run the installer again solely
+because this documentation is later committed; the audited provenance already
+binds the installed feature binaries to clean source commit `c380ab4d0`. If this
+note is committed and pushed before reboot, park the qualification worktree at
+detached commit `c380ab4d0` for A0/A1, then return to `exp` after preserving the
+gate artifacts. That keeps the gate runner's strict current-commit provenance
+check valid without another DEXT registration.
+
 ## 2. Evidence boundary: facts versus hypotheses
 
 ### Established facts
