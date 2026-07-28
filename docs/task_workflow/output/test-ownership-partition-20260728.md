@@ -3,7 +3,7 @@
 This is the conservative branch-tier partition produced by the R7 evidence audit. Mixed-owner, TinyGPU, and GPU-lock
 tests remain unresolved and are intentionally omitted.
 
-## Master Retain
+## Master Retain (14)
 
 Production implementation regressions:
 
@@ -13,6 +13,7 @@ Production implementation regressions:
 - `test/unit/test_fdot2_lowering.py`
 - `test/unit/test_codegen_list_scheduler.py`
 - `test/unit/test_warp_reduce_lowering.py`
+- `test/unit/test_codegen_opt_parser.py`
 
 Production policy and audit authority:
 

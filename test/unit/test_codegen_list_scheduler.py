@@ -40,8 +40,6 @@ def test_structural_inventory_contains_control_and_definition_ops():
 
 
 def test_list_scheduler_core_owns_boundary():
-  import importlib
-  experimental = importlib.import_module("tinygrad.codegen.experimental")
-  assert not hasattr(experimental, "list_schedule")
-  assert not hasattr(experimental, "structural_ops")
+  import importlib.util
+  assert importlib.util.find_spec("tinygrad.codegen.experimental") is None
   assert importlib.util.find_spec("extra.qk.codegen_list_scheduler") is None
