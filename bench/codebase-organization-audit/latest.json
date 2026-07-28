@@ -318,9 +318,9 @@
     }
   ],
   "audited_commit": {
-    "commit": "bc4cfe6cdf1a4c03ecedaf0936b89ffaa83a92be",
-    "described": "mac-first-boot-20260610-3491-gbc4cfe6cd-dirty",
-    "dirty": true
+    "commit": "8589d1a2c528113d5bfe5f2d0d94cbb2605348c8",
+    "described": "mac-first-boot-20260610-3493-g8589d1a2c",
+    "dirty": false
   },
   "authority_keys": {
     "AMD_BACKEND_ATOM_ID": [
@@ -856,17 +856,15 @@
     ]
   },
   "coverage": {
-    "authored_files": 467,
-    "authored_loc": 71956,
-    "explicit_records": 93,
+    "authored_files": 468,
+    "authored_loc": 71990,
+    "explicit_records": 94,
     "generated_files": 1,
     "generated_loc": 57,
     "group_covered": 0,
     "manifest_scope_files": 94,
     "manifest_scope_loc": 13446,
-    "uncovered": [
-      "extra/qk/decode/capture_prefill_compile.py"
-    ]
+    "uncovered": []
   },
   "coverage_limitations": [
     "Phase 1 covers extra/qk only: 123 authored files, 17675 token-bearing LOC. Files outside extra/qk appear as dependency, consumer, or reference evidence and are deliberately not classified.",
@@ -2715,13 +2713,7 @@
       ]
     ]
   },
-  "hard_errors": [
-    {
-      "error": "unmanifested_file",
-      "message": "authored file extra/qk/decode/capture_prefill_compile.py has no explicit record and no group rule",
-      "path": "extra/qk/decode/capture_prefill_compile.py"
-    }
-  ],
+  "hard_errors": [],
   "human_findings": {
     "not_reproposed": [
       "attention harness centralization (settled 2026-07-24; attention_harness_common.py is the owner and the character-identical migration rule stands)",
@@ -2893,7 +2885,7 @@
         "files": 89,
         "loc": 12263
       },
-      "unclassified": {
+      "move": {
         "files": 1,
         "loc": 63
       }
@@ -2916,8 +2908,8 @@
         "loc": 510
       },
       "evidence": {
-        "files": 10,
-        "loc": 1608
+        "files": 11,
+        "loc": 1671
       },
       "measurement": {
         "files": 17,
@@ -2934,10 +2926,6 @@
       "search_promotion": {
         "files": 8,
         "loc": 1007
-      },
-      "unclassified": {
-        "files": 1,
-        "loc": 63
       }
     },
     "role": {
@@ -2954,8 +2942,8 @@
         "loc": 99
       },
       "diagnostic": {
-        "files": 11,
-        "loc": 1235
+        "files": 12,
+        "loc": 1298
       },
       "evidence": {
         "files": 5,
@@ -2976,16 +2964,12 @@
       "test": {
         "files": 1,
         "loc": 136
-      },
-      "unclassified": {
-        "files": 1,
-        "loc": 63
       }
     },
     "status": {
       "active_research": {
-        "files": 13,
-        "loc": 2285
+        "files": 14,
+        "loc": 2348
       },
       "fallback": {
         "files": 4,
@@ -3010,10 +2994,6 @@
       "retained_reference": {
         "files": 1,
         "loc": 114
-      },
-      "unclassified": {
-        "files": 1,
-        "loc": 63
       },
       "unresolved_reproducer": {
         "files": 2,
@@ -3146,7 +3126,10 @@
     "extra/qk/decode/capture_prefill_compile.py": [
       "docs/task_workflow/input/production-debug-experimental-workflow-scope-20260726.md",
       "docs/task_workflow/output/codebase-organization-audit-task.md",
-      "docs/task_workflow/output/production-reorg-packet-a-runtime-20260728.md"
+      "docs/task_workflow/output/production-reorg-packet-a-runtime-20260728.md",
+      "docs/task_workflow/output/production-reorganization-cleanup-ledger-20260728.json",
+      "docs/task_workflow/output/production-reorganization-inventory-20260728.json",
+      "docs/task_workflow/output/production-reorganization-report-20260728.md"
     ],
     "extra/qk/decode/current_decode_execution_adapter.py": [
       "bench/lowering-refactor-baseline/pass_inventory.json",
@@ -4036,6 +4019,7 @@
       "extra/qk/shared_attention_promotion.py"
     ],
     "operational_tool": [
+      "extra/qk/decode/capture_prefill_compile.py",
       "extra/qk/decode/current_decode_execution_adapter.py",
       "extra/qk/decode/decode_harness.py",
       "extra/qk/decode/decode_tile_timing.py",
@@ -4065,7 +4049,7 @@
       "extra/qk/prefill/prefill_long_context_numerics.py"
     ]
   },
-  "verdict": "ORG_R1_BLOCKED_ORGANIZATION_DRIFT",
+  "verdict": "ORG_R1_PASS_CENSUS_PINNED",
   "warnings": [
     {
       "message": "extra/qk/amd_isa_proof.py is on the default production path from extra/ with no promotion or retention decision",
