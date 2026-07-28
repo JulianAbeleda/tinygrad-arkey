@@ -46,7 +46,7 @@
     {"paths": "scratchpad/**; docs/scratchpad/**; root scratch_attn_bench*.py", "owner": "delete", "category": "historical/scratch", "disposition": "delete_candidate", "confidence": "high", "unresolved_reason": "deletion requires this ledger plus final link/index check"}
   ],
   "completed_closure": {
-    "source": "extra/llm_research/prefill/flash_prefill_attention_spec.py",
+    "source": "extra/qk/prefill/flash_prefill_attention_spec.py",
     "destination": "tinygrad/schedule/wmma/flash_prefill.py",
     "consumers": ["tinygrad/llm/fused_attention.py:162", "tinygrad/codegen/opt/postrange.py:602"],
     "commits": {"exp": "ab162a931", "dev": "d54a64ab0", "master": "ab154b422"},
@@ -55,7 +55,7 @@
   },
   "completed_additional_slices": [
     {
-      "source": "extra/llm_research/codegen_recurrence_unroll.py",
+      "source": "extra/qk/codegen_recurrence_unroll.py",
       "destination": "tinygrad/codegen/late/recurrence.py",
       "consumer": "tinygrad/codegen/__init__.py:89-91 when SCHED_UNROLL>1 on AMD",
       "shim_removed": "tinygrad/codegen/experimental.py:unroll_recurrence",
@@ -65,7 +65,7 @@
   ],
   "completed_centralization_slices": [
     {
-      "source": "extra/llm_research/reg_store_devec.py",
+      "source": "extra/qk/reg_store_devec.py",
       "destination": "tinygrad/codegen/late/reg_store.py",
       "live_caller": "tinygrad/codegen/__init__.py:264",
       "matcher": "pm_reg_store_devec remains separate after pm_distinct_reg_store_devec",
@@ -74,7 +74,7 @@
       "follow_up": "restore exact-clean-commit lowering baseline/fingerprint authorities"
     },
     {
-      "source": "extra/llm_research/fdot2_lowering.py",
+      "source": "extra/qk/fdot2_lowering.py",
       "destination": "tinygrad/codegen/late/fdot2.py",
       "live_callers": [
         "tinygrad/codegen/__init__.py graph rewrite and post-linearization hooks",
@@ -86,7 +86,7 @@
       "follow_up": "restore exact-clean-commit lowering baseline/fingerprint authorities"
     },
     {
-      "source": "extra/llm_research/codegen_list_scheduler.py",
+      "source": "extra/qk/codegen_list_scheduler.py",
       "destination": "tinygrad/codegen/late/list_scheduler.py",
       "live_callers": [
         "tinygrad/codegen/late/linearizer.py SCHED_LIST hook and structural-boundary probes"
@@ -97,7 +97,7 @@
       "follow_up": "restore exact-clean-commit lowering baseline/fingerprint authorities"
     },
     {
-      "source": ["extra/llm_research/amd_warp_reduce.py", "extra/llm_research/warp_reduce_lowering.py"],
+      "source": ["extra/qk/amd_warp_reduce.py", "extra/qk/warp_reduce_lowering.py"],
       "destination": "tinygrad/codegen/late/warp_reduce.py",
       "live_callers": [
         "tinygrad/codegen/__init__.py WARP_REDUCE_LOWERING matcher",

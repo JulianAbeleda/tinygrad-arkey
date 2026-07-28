@@ -1,6 +1,6 @@
 # Codebase organization audit
 
-Audited commit: `mac-first-boot-20260610-3518-gaf5395a42-dirty` (dirty: True)
+Audited commit: `mac-first-boot-20260610-3523-ga6b395fb7-dirty` (dirty: True)
 Scope: `extra/llm_research` | manifest coverage required for: extra/llm_research/
 Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 64 warnings)
 
@@ -187,9 +187,9 @@ None proposed at this evidence level.
 
 ## Prune candidates
 
-- **`extra/llm_research/p2_probe_1.py`** -- Six one-shot fusion-bisection probes whose conclusion is recorded in a doc and in production comments. (gross -44, +0, net -44) | evidence: zero inbound references of any kind; durable verdict in docs/flash-prefill-piece2-probe-20260721.md; conclusion echoed in tinygrad/schedule/flash_fusion.py, tinygrad/schedule/rangeify.py, tinygrad/codegen/opt/heuristic.py | tests:
-- **`extra/llm_research/shared_attention_evidence_gate.py`** -- A validator for a bundle schema that no code in the repository ever produces. (gross -131, +0, net -131) | evidence: the schema string 'tinygrad.shared_attention_evidence_bundle.v1' appears exactly once repo-wide -- its own definition at extra/llm_research/shared_attention_evidence_gate.py:12; imported only by test/unit/test_shared_attention_evidence_gate.py; contrast: extra/llm_research/shared_attention_promotion.py gates COMPOSITE_ADMISSION_SCHEMA, which is produced and consumed live | tests: delete test/unit/test_shared_attention_evidence_gate.py with it
-- **`extra/llm_research/q4k_wmma_tile_lowering.py`** -- The q4k int8 WMMA-tiled campaign is closed: correct on all four Qwen3-14B role shapes, speed-refuted at 140 tok/s against a 364.5 tok/s direct-packed baseline, dispatch already removed in 45cfc399c. (gross -1138, +0, net -1138) | evidence: verdict recorded in route_manifest.py's note for prefill_q4k_int8_wmma_tiled_research; 45cfc399c (2026-07-21) removed the dispatch: 'superseded by the shipped scheduler-native packed-WMMA route'; last substantive change 05b67146a (2026-07-14); 383c71c72 (2026-07-25) was a path move only; its gate scanned prefill_routes.py for a q8_mode == 'wmma_tiled' branch that no longer exists, so it could never pass again; the strict-xfail wording 'WIP research; not yet PASS' was stale; 31 failures under -k 'wmma or q4k or mmq or prefill' before and after, byte-identical, all pre-existing | tests:
+- **`extra/qk/p2_probe_1.py`** -- Six one-shot fusion-bisection probes whose conclusion is recorded in a doc and in production comments. (gross -44, +0, net -44) | evidence: zero inbound references of any kind; durable verdict in docs/flash-prefill-piece2-probe-20260721.md; conclusion echoed in tinygrad/schedule/flash_fusion.py, tinygrad/schedule/rangeify.py, tinygrad/codegen/opt/heuristic.py | tests:
+- **`extra/qk/shared_attention_evidence_gate.py`** -- A validator for a bundle schema that no code in the repository ever produces. (gross -131, +0, net -131) | evidence: the schema string 'tinygrad.shared_attention_evidence_bundle.v1' appears exactly once repo-wide -- its own definition at extra/qk/shared_attention_evidence_gate.py:12; imported only by test/unit/test_shared_attention_evidence_gate.py; contrast: extra/llm_research/shared_attention_promotion.py gates COMPOSITE_ADMISSION_SCHEMA, which is produced and consumed live | tests: delete test/unit/test_shared_attention_evidence_gate.py with it
+- **`extra/qk/q4k_wmma_tile_lowering.py`** -- The q4k int8 WMMA-tiled campaign is closed: correct on all four Qwen3-14B role shapes, speed-refuted at 140 tok/s against a 364.5 tok/s direct-packed baseline, dispatch already removed in 45cfc399c. (gross -1138, +0, net -1138) | evidence: verdict recorded in route_manifest.py's note for prefill_q4k_int8_wmma_tiled_research; 45cfc399c (2026-07-21) removed the dispatch: 'superseded by the shipped scheduler-native packed-WMMA route'; last substantive change 05b67146a (2026-07-14); 383c71c72 (2026-07-25) was a path move only; its gate scanned prefill_routes.py for a q8_mode == 'wmma_tiled' branch that no longer exists, so it could never pass again; the strict-xfail wording 'WIP research; not yet PASS' was stale; 31 failures under -k 'wmma or q4k or mmq or prefill' before and after, byte-identical, all pre-existing | tests:
 
 ## Promotion candidates
 
@@ -203,15 +203,15 @@ None.
 
 ### not justified
 
-- `extra/llm_research/kernel_lds.py` -> `tinygrad/codegen/opt/kernel_lds.py`: There is no duplicated knowledge to delete. extra/llm_research/kernel_lds.py imports 20+ primitives from the core module and only adds new types on top; the sole literal duplicate is a 3-line private _window helper. | invariant: cooperative LDS ownership math (already owned by tinygrad/codegen/opt/kernel_lds.py) | moved 0, deleted 0 | missing evidence: none; the answer is negative
+- `extra/qk/kernel_lds.py` -> `tinygrad/codegen/opt/kernel_lds.py`: There is no duplicated knowledge to delete. extra/qk/kernel_lds.py imports 20+ primitives from the core module and only adds new types on top; the sole literal duplicate is a 3-line private _window helper. | invariant: cooperative LDS ownership math (already owned by tinygrad/codegen/opt/kernel_lds.py) | moved 0, deleted 0 | missing evidence: none; the answer is negative
 
 ## Deletion candidates with recovery information
 
 | path | class | former purpose | last campaign | replacement | commit | recovery | loc |
 |---|---|---|---|---|---|---|---|
-| `extra/llm_research/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `af5395a4293f` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
-| `extra/llm_research/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/llm_research/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `af5395a4293f` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
-| `extra/llm_research/q4k_wmma_tile_lowering.py` | delete_after_verdict_capture | Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles. | q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14) | docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md | `af5395a4293f` | git show 05b67146a -- <path> | 1138 |
+| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `a6b395fb7115` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
+| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/llm_research/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `a6b395fb7115` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
+| `extra/qk/q4k_wmma_tile_lowering.py` | delete_after_verdict_capture | Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles. | q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14) | docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md | `a6b395fb7115` | git show 05b67146a -- <path> | 1138 |
 
 ## Workflow inventory
 
@@ -273,10 +273,10 @@ costs zero.
 ## Files requiring human classification
 
 - extra/llm_research/mmq_q4k_q8_atom.py -- which kernel stages still teach something
-- extra/llm_research/kernel_lds.py clusters C and E -- open question or superseded
+- extra/qk/kernel_lds.py clusters C and E -- open question or superseded
 - the DEV=AMD:ISA surface -- live research or completed experiment
 - the q4k int8 WMMA-tiled gate family -- revive or retire
-- extra/llm_research/quant_specs.py -- unwired API or superseded
+- extra/qk/quant_specs.py -- unwired API or superseded
 
 ## Investigation backlog
 

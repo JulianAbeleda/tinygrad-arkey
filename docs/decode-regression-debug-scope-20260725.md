@@ -71,7 +71,7 @@ Depends entirely on Phase 3. Do not pre-commit to an approach.
 
 ## Why this went unnoticed for 9 days
 
-`extra/llm_research/bench.py --decode` invoked `extra/llm_research/decode_runtime_overhead.py`, which `45cfc399c` deleted while
+`extra/llm_research/bench.py --decode` invoked `extra/qk/decode_runtime_overhead.py`, which `45cfc399c` deleted while
 leaving the caller intact, so the canonical decode benchmark failed with file-not-found from 07-21 until it
 was restored on 07-25. `test/unit/test_measurement_authority.py` now fails if any path `bench.py` dispatches
 to does not exist.

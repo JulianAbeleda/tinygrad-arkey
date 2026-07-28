@@ -1,5 +1,5 @@
 {
-  "_schema": "TG3 quant semantics library (extra/llm_research/quant_semantics.py)",
+  "_schema": "TG3 quant semantics library (extra/qk/quant_semantics.py)",
   "scope": "quant FORMATS as DATA for the topology search (block layout, payload vs metadata bytes, scale/min layout, dequant ops, accum/dot dtypes, quality class, known good/refuted route families).",
   "audit_only": "no GPU kernel, no default change, no live-route repoint.",
   "formats": {
@@ -304,7 +304,7 @@
       ],
       "known_refuted_route_families": [],
       "quality_constraints": "none (no quantization).",
-      "impl_citation": "extra/llm_research/prefill/prefill_graph_gemm_route.py (prefill GEMM); extra/llm_research/live_split_geometry.py + extra/llm_research/flash_decode.py (attention)",
+      "impl_citation": "extra/llm_research/prefill/prefill_graph_gemm_route.py (prefill GEMM); extra/llm_research/live_split_geometry.py + extra/qk/flash_decode.py (attention)",
       "notes": "not a packed-quant format; no unpack. Used by prefill GEMM + decode attention.",
       "derived": {
         "metadata_bytes": 0,

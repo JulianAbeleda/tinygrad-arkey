@@ -136,7 +136,7 @@ No unresolved path is authorized for removal.
 
 ## Recommended first bounded slice
 
-Promote only `extra/llm_research/prefill/flash_prefill_attention_spec.py` to
+Promote only `extra/qk/prefill/flash_prefill_attention_spec.py` to
 `tinygrad/schedule/wmma/flash_prefill.py`. Directly import `FlashPrefillAttentionSpec` from that owner in
 `tinygrad/llm/fused_attention.py` and `tinygrad/codegen/opt/postrange.py`, then remove only the two corresponding lazy
 shim functions from `route_ops.py` and `codegen/experimental.py`.

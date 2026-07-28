@@ -77,8 +77,8 @@ Attention today: materialized SDPA is pinned near `B_peak` (HBM-bound by score s
 | Measurement harness | `extra/llm_research/prefill/prefill_whole_synced.py` (canonical prefill harness) | DEBUG=2 `tm` GPU kernel time (never wall-clock), warmup to boost clocks (≥200 dispatch) | Add per-op time extraction for the attention kernel only. |
 
 **Files you will CREATE (all under `extra/llm_research/`, which sz.py leaves unbudgeted — do not add core budget) — both DISPOSABLE, `rm`'d at task end (§0):**
-- `extra/llm_research/prefill/flash_prefill_wmma_kernel.py` — the throwaway fused-WMMA proof kernel (hand-authored UOps, reused from `flash_kernels.py`). Exists to produce the gate number, then deleted.
-- `extra/llm_research/prefill/flash_prefill_wmma_mvp_gate.py` — throwaway correctness+roofline harness (imports the kernel, the reference, the two-ceiling measurement). Not wired into routing. Deleted at task end.
+- `extra/qk/prefill/flash_prefill_wmma_kernel.py` — the throwaway fused-WMMA proof kernel (hand-authored UOps, reused from `flash_kernels.py`). Exists to produce the gate number, then deleted.
+- `extra/qk/prefill/flash_prefill_wmma_mvp_gate.py` — throwaway correctness+roofline harness (imports the kernel, the reference, the two-ceiling measurement). Not wired into routing. Deleted at task end.
 
 **Files you will NOT touch in the MVP:** `model.py`, `prefill_routes.py`, `prefill_policy.py`, `postrange.py`, `kernel_lds.py`. No routing, no defaults, no warmstart tables. The MVP runs from its own gate script.
 

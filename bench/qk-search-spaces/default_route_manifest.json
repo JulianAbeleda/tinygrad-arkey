@@ -117,7 +117,7 @@
         "q6k_coop_partial_* (on the default path)",
         "q6k_gemv_partial_* (on the default path)"
       ],
-      "authority_gate": "extra/llm_research/q6k_generated_coop_gate.py",
+      "authority_gate": "extra/qk/q6k_generated_coop_gate.py",
       "promotion_artifacts": [
         "bench/tg-p3-q6k-generated-coop/latest.json",
         "bench/tg-p3-q6k-generated-coop/summary.md"
@@ -126,7 +126,7 @@
       "provenance": "machine_authored_generated",
       "selector": "BoltBeam_route_policy_or_env_default",
       "route_attribution": "tinygrad/llm/decode_routes.py q6k_primitive_linear_call generated branch (getenv('DECODE_Q6K_GENERATED', 1) or QK_ROUTE_POLICY decode_q6k_coop_generated); writer extra/llm_research/q6k_route_spec.py emit_q6k_gemv_kernel (spec-driven lowering of Q6KGEMVRouteSpec)",
-      "note": "spec-driven generated Q6_K decode GEMV: emit_q6k_gemv_kernel lowers a Q6KGEMVRouteSpec (data) to the coop/partial UOp kernel. Byte-identical to the shipped hand templates (extra/llm_research/q6k_generated_coop_gate.py TG_P3_PASS: all_identical, worst gen/shipped time 1.011). Provenance conversion of the Q6_K default; shipped kernels retained as rollback/oracle (DECODE_Q6K_GENERATED=0)."
+      "note": "spec-driven generated Q6_K decode GEMV: emit_q6k_gemv_kernel lowers a Q6KGEMVRouteSpec (data) to the coop/partial UOp kernel. Byte-identical to the shipped hand templates (extra/qk/q6k_generated_coop_gate.py TG_P3_PASS: all_identical, worst gen/shipped time 1.011). Provenance conversion of the Q6_K default; shipped kernels retained as rollback/oracle (DECODE_Q6K_GENERATED=0)."
     },
     "decode_flash_live_split_g4_kvboth": {
       "workload": "decode",
@@ -165,7 +165,7 @@
         "owned_flash_combine",
         "fallback_graph"
       ],
-      "authority_gate": "extra/llm_research/prefilled_route_parity.py",
+      "authority_gate": "extra/qk/prefilled_route_parity.py",
       "promotion_artifacts": [
         "bench/tg-p14-amd-recovery-and-pure-attention-landing/phase1_kvboth_result.json",
         "bench/tg-p14-amd-recovery-and-pure-attention-landing/phase2_final_result.json",
@@ -424,7 +424,7 @@
       "strict_fallback": true,
       "expected_kernels": [],
       "forbidden_kernels": [
-        "extra/llm_research/prefill/wmma.py instruction-list emitter",
+        "extra/qk/prefill/wmma.py instruction-list emitter",
         "Ops.INS",
         "prefill_gen_sched_gemm_* raw schedule substrate"
       ],
@@ -658,14 +658,14 @@
         "new handwritten HIP/CUDA/source-string kernel",
         "prefill_q4k_direct_packed_load_direct_out_gemm_* (on selected roles)"
       ],
-      "authority_gate": "retired 2026-07-26 with the int8 WMMA implementation; both named gates (extra/llm_research/prefill/prefill_mmq_parity_gate.py, extra/llm_research/int8_wmma_codegen_gate.py) no longer exist",
+      "authority_gate": "retired 2026-07-26 with the int8 WMMA implementation; both named gates (extra/qk/prefill/prefill_mmq_parity_gate.py, extra/qk/int8_wmma_codegen_gate.py) no longer exist",
       "promotion_artifacts": [
         "docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md"
       ],
       "purity_status": "research",
       "provenance": "machine_authored_generated",
       "selector": "env_guard",
-      "route_attribution": "RETIRED 2026-07-26; no dispatch and no implementation remain. Historically: tinygrad/llm/prefill_routes.py PREFILL_Q4K_Q8=wmma -> extra/llm_research/prefill/prefill_int8_wmma_spec.py Q4KInt8WMMAPrefillSpec + emit_q4k_int8_wmma_prefill_tensor; core RAW dot is ordinary Tensor.matmul(..., dtype=dtypes.int), relying on tinygrad/codegen/opt/tc.py and tinygrad/renderer/cstyle.py for iu8 WMMA.",
+      "route_attribution": "RETIRED 2026-07-26; no dispatch and no implementation remain. Historically: tinygrad/llm/prefill_routes.py PREFILL_Q4K_Q8=wmma -> extra/qk/prefill/prefill_int8_wmma_spec.py Q4KInt8WMMAPrefillSpec + emit_q4k_int8_wmma_prefill_tensor; core RAW dot is ordinary Tensor.matmul(..., dtype=dtypes.int), relying on tinygrad/codegen/opt/tc.py and tinygrad/renderer/cstyle.py for iu8 WMMA.",
       "note": "Default-off first generated substrate for 14B Q4_K int8 MMQ. It reuses q8_1_quantize and Q4_K metadata helpers, validates algebra in the existing MMQ parity gate, and deliberately does not introduce a new handwritten kernel. Promotion required an AMD gate proving wmma_i32_16x16x16_iu8 in generated code/ISA and 14B authority beating the direct-packed baseline; that gate never ran. Unlike its tiled sibling this route has NO measured head-to-head result -- it was superseded by the shipped packed-WMMA prefill route and its dispatch was removed with prefill_research_routes.py in 45cfc399c (2026-07-21), then its shared implementation was deleted 2026-07-26. Retired unmeasured, not refuted."
     },
     "prefill_q4k_int8_wmma_tiled_research": {
@@ -714,7 +714,7 @@
       "purity_status": "refuted",
       "provenance": "machine_authored_generated",
       "selector": "env_guard",
-      "route_attribution": "RETIRED 2026-07-26; no dispatch remains. Historically: tinygrad/llm/prefill_routes.py PREFILL_Q4K_Q8=wmma_tiled -> extra/llm_research/prefill/prefill_int8_wmma_spec.py Q4KInt8WMMATiledPrefillSpec; one tile used emit_q4k_int8_wmma_tiled_prefill_tensor and larger shapes emit_q4k_int8_wmma_tiled_scheduler_tensor. Typed ScheduleHints centralized partial-contiguous ownership and TC selection; the correction reduction was a bounded prerequisite while the full [groups,M,N] RAW tensor was never materialized. The dispatch branch went with prefill_research_routes.py in 45cfc399c (2026-07-21); the implementation was deleted 2026-07-26.",
+      "route_attribution": "RETIRED 2026-07-26; no dispatch remains. Historically: tinygrad/llm/prefill_routes.py PREFILL_Q4K_Q8=wmma_tiled -> extra/qk/prefill/prefill_int8_wmma_spec.py Q4KInt8WMMATiledPrefillSpec; one tile used emit_q4k_int8_wmma_tiled_prefill_tensor and larger shapes emit_q4k_int8_wmma_tiled_scheduler_tensor. Typed ScheduleHints centralized partial-contiguous ownership and TC selection; the correction reduction was a bounded prerequisite while the full [groups,M,N] RAW tensor was never materialized. The dispatch branch went with prefill_research_routes.py in 45cfc399c (2026-07-21); the implementation was deleted 2026-07-26.",
       "note": "Generated scheduler-owned tiled WMMA compiles all four exact Qwen3-14B role shapes to iu8 WMMA and passes bounded full-K numeric probes; full attn_kv (512,1024,5120) also passed sampled real-GPU correctness. Packed-Q4 decode is fused so the 14B model runs without persistent expanded-weight buffers. A route-bound replay measured 140 tok/s versus the recorded direct-packed authority baseline of 364.5 tok/s, so this schedule remains research-only and must not become the default."
     },
     "prefill_q4k_packed_ds4_research": {
@@ -937,7 +937,7 @@
       "backend_strategy": "q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0",
       "rollback_route": "direct_packed",
       "research_only": true,
-      "route_attribution": "extra/llm_research/mmq_machine_search.py candidate inventory; no tinygrad/llm/prefill_routes.py binding",
+      "route_attribution": "extra/qk/mmq_machine_search.py candidate inventory; no tinygrad/llm/prefill_routes.py binding",
       "note": "Descriptor-only machine-generated MMQ candidate. Promotion is blocked until correctness, resource, and timing evidence are all present; direct_packed remains the rollback/default route."
     }
   },

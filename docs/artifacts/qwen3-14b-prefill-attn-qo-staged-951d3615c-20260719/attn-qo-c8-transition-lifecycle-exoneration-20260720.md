@@ -12,7 +12,7 @@ route runs.
 ## Experiment
 
 Ran the existing C8 transition harness (`run_guarded_persistent_c8_route_sequence` /
-`run_persistent_c8_route_sequence_worker` in `extra/llm_research/mmq_frozen_staged_c8_sessions.py`) with the retained
+`run_persistent_c8_route_sequence_worker` in `extra/qk/mmq_frozen_staged_c8_sessions.py`) with the retained
 `attn_qo` staged family + composition (this artifact directory), reusing only existing wiring
 (`attn_qo_c8_runner_factory`, `build_attn_qo_direct_packed_objects`). No repo files were edited. To satisfy the
 `validate_live_software` commit pin (`f0d7a09ce`), the driver ran from a detached worktree at that exact commit

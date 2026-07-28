@@ -85,7 +85,7 @@ lowering, or a trace taken on one machine will not explain a result from another
 The scope was written 2026-07-26 13:15. The `DEV=AMD:ISA` retirement landed ~14:00 the same day, so two of its
 references are stale:
 
-1. **`extra/llm_research/kernel_pipeline.py` no longer exists.** The scope lists it in §2 as a current file to preserve, and
+1. **`extra/qk/kernel_pipeline.py` no longer exists.** The scope lists it in §2 as a current file to preserve, and
    LR-050 proposes promoting "reusable parts" of it into core. It was retired with the ISA support chain because it
    was reachable only under `DEV=AMD:ISA`. It held `DotUpdateRecurrencePlan/Graph/Proof`,
    `HierarchicalKernelPipelinePlan`, `hierarchical_lifecycle_events`, `SchedulerOutputTileLoop`, and
@@ -127,7 +127,7 @@ Recorded rather than guessed. Each gates any move that touches it:
 - `tinygrad/schedule/flash_fusion.py` and `tinygrad/codegen/late/flash_attn.py`'s top-level `flash_attention` — **no
   callers found.** Likely dead; flagged for LR-081 verification, not asserted dead here.
 - `codegen/simplify.py`'s `reduce_simplify_family` — zero external callers found.
-- `extra/llm_research/coalesced_load_lowering.py`, `warp_reduce_lowering.py`, `fdot2_lowering.py`, and
+- `extra/qk/coalesced_load_lowering.py`, `warp_reduce_lowering.py`, `fdot2_lowering.py`, and
   `codegen_list_scheduler.py` — only their `codegen/experimental.py` forwarding shims were read; internal contracts
   unverified. Recurrence unroll was later promoted to `tinygrad/codegen/late/recurrence.py` with a direct core import.
 - `tinygrad/schedule/wmma/{composite,fragments,kernels,softmax,loop_state}.py` internals — only the re-export surface.

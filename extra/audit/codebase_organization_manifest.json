@@ -4,7 +4,7 @@
       "action": "centralize",
       "confidence": "high",
       "evidence": [
-        "extra/llm_research/amdgpu_metadata.py:11-33 and extra/llm_research/mmq_compile_evidence.py:80-96 parse the same .vgpr_count/.sgpr_count/.spill/.group_segment_fixed_size/.wavefront_size/amdhsa.target fields",
+        "extra/qk/amdgpu_metadata.py:11-33 and extra/llm_research/mmq_compile_evidence.py:80-96 parse the same .vgpr_count/.sgpr_count/.spill/.group_segment_fixed_size/.wavefront_size/amdhsa.target fields",
         "production consumers import the mmq_compile_evidence version: prefill/current_prefill_execution_adapter.py, decode/current_decode_execution_adapter.py, shared_attention_capture.py",
         "amdgpu_metadata.py is imported only by test/unit/test_q4k_q8_mmq_uop.py, test/unit/test_online_softmax_tile.py, and extra/llm_research/phase_abi_v1_resource_probe.py"
       ],
@@ -13,7 +13,7 @@
       "loc_added": 0,
       "loc_moved": 0,
       "loc_removed": 30,
-      "path": "extra/llm_research/amdgpu_metadata.py",
+      "path": "extra/qk/amdgpu_metadata.py",
       "status": "completed",
       "target": "extra/llm_research/mmq_compile_evidence.py",
       "tests_required": [
@@ -37,7 +37,7 @@
       "loc_added": 0,
       "loc_moved": 0,
       "loc_removed": 44,
-      "path": "extra/llm_research/p2_probe_1.py",
+      "path": "extra/qk/p2_probe_1.py",
       "recovery": "git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py",
       "replacement": "docs/flash-prefill-piece2-probe-20260721.md",
       "status": "completed",
@@ -48,7 +48,7 @@
       "confidence": "high",
       "deletion_confidence": "delete_after_verdict_capture",
       "evidence": [
-        "the schema string 'tinygrad.shared_attention_evidence_bundle.v1' appears exactly once repo-wide -- its own definition at extra/llm_research/shared_attention_evidence_gate.py:12",
+        "the schema string 'tinygrad.shared_attention_evidence_bundle.v1' appears exactly once repo-wide -- its own definition at extra/qk/shared_attention_evidence_gate.py:12",
         "imported only by test/unit/test_shared_attention_evidence_gate.py",
         "contrast: extra/llm_research/shared_attention_promotion.py gates COMPOSITE_ADMISSION_SCHEMA, which is produced and consumed live"
       ],
@@ -59,7 +59,7 @@
       "loc_added": 0,
       "loc_moved": 0,
       "loc_removed": 131,
-      "path": "extra/llm_research/shared_attention_evidence_gate.py",
+      "path": "extra/qk/shared_attention_evidence_gate.py",
       "realized_note": "93 in the gate plus 38 in test/unit/test_shared_attention_evidence_gate.py; verdict captured in docs/shared-attention-evidence-bundle-gate-retirement-20260726.md",
       "recovery": "git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py",
       "replacement": "extra/llm_research/shared_attention_promotion.py (the gate that acts on a schema with a real producer)",
@@ -128,7 +128,7 @@
       "loc_added": 0,
       "loc_moved": 0,
       "loc_removed": 0,
-      "path": "extra/llm_research/kernel_lds.py",
+      "path": "extra/qk/kernel_lds.py",
       "question": "Do the packed-component and hierarchical-stage clusters still have an open question, or did the record-stage design supersede them? Answer decides prune (~550 LOC + 2 test files) versus retain.",
       "status": "completed",
       "tests_required": []
@@ -137,19 +137,19 @@
       "action": "promote",
       "confidence": "high",
       "evidence": [
-        "extra/llm_research/kernel_lds.py:9-16 imports PackedPrecontractOperandTemplate, build_precontract_lds_stage, cooperative_store_row, validate_rdna3_wmma_descriptor and others from the core module",
+        "extra/qk/kernel_lds.py:9-16 imports PackedPrecontractOperandTemplate, build_precontract_lds_stage, cooperative_store_row, validate_rdna3_wmma_descriptor and others from the core module",
         "only name collision across the two symbol tables: _window (core :409-411 vs extra :65-67), byte-identical",
-        "no file outside extra/llm_research and test/unit imports extra/llm_research/kernel_lds.py"
+        "no file outside extra/llm_research and test/unit imports extra/qk/kernel_lds.py"
       ],
       "evidence_missing": "none; the answer is negative",
-      "finding": "There is no duplicated knowledge to delete. extra/llm_research/kernel_lds.py imports 20+ primitives from the core module and only adds new types on top; the sole literal duplicate is a 3-line private _window helper.",
+      "finding": "There is no duplicated knowledge to delete. extra/qk/kernel_lds.py imports 20+ primitives from the core module and only adds new types on top; the sole literal duplicate is a 3-line private _window helper.",
       "id": "A7",
       "invariant": "cooperative LDS ownership math (already owned by tinygrad/codegen/opt/kernel_lds.py)",
       "loc_added": 0,
       "loc_moved": 0,
       "loc_removed": 3,
       "note": "recorded so the next reader does not re-propose the move: a split here relocates ~1178 LOC and deletes 3",
-      "path": "extra/llm_research/kernel_lds.py",
+      "path": "extra/qk/kernel_lds.py",
       "promotion_readiness": "not justified",
       "promotion_target": "tinygrad/codegen/opt/kernel_lds.py",
       "status": "completed",
@@ -168,7 +168,7 @@
       "loc_added": 0,
       "loc_moved": 0,
       "loc_removed": 0,
-      "path": "extra/llm_research/codegen_extensions.py",
+      "path": "extra/qk/codegen_extensions.py",
       "question": "Does DEV=AMD:ISA remain a live research surface with an open question, or has it produced its verdict? The answer sets a retention criterion for ~3.2K LOC; nothing should be moved or deleted before it.",
       "status": "completed",
       "tests_required": []
@@ -188,7 +188,7 @@
       "loc_added": 0,
       "loc_moved": 0,
       "loc_removed": 0,
-      "path": "extra/llm_research/q4k_wmma_tiled_no_hand_kernel_gate.py",
+      "path": "extra/qk/q4k_wmma_tiled_no_hand_kernel_gate.py",
       "question": "Is the WMMA-tiled route being revived (keep the gates and fix the branch) or is it closed (retire ~1.1K LOC of gates plus the stale bench artifacts)? The measured verdict already argues for closed.",
       "resolution": "Answered 2026-07-26: retire. The route was speed-refuted (140 vs 364.5 tok/s) and its dispatch was already gone; executed as A15.",
       "status": "completed",
@@ -265,7 +265,7 @@
       "loc_added": 0,
       "loc_moved": 0,
       "loc_removed": 1138,
-      "path": "extra/llm_research/q4k_wmma_tile_lowering.py",
+      "path": "extra/qk/q4k_wmma_tile_lowering.py",
       "realized_note": "8 sources + prefill_mmq_parity_gate + 3 test files + 10 bench artifact dirs. Two test files were trimmed rather than deleted. The sibling route prefill_q4k_int8_wmma_generated_research shared the implementation and is retired too, but UNMEASURED -- left as status research, not claimed refuted.",
       "recovery": "git show 05b67146a -- <path>",
       "replacement": "docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md",
@@ -304,14 +304,14 @@
       "evidence": [
         "only reference repo-wide is test/unit/test_runtime_specs.py",
         "no _attr('extra.llm_research.quant_specs', ...) entry exists in tinygrad/llm/route_ops.py",
-        "contrast: extra/llm_research/generated_candidates.py LOOKED equally orphaned but is named by extra/llm_research/q4k_wmma_tiled_no_hand_kernel_gate.py:15 as a path-string entry, so it is NOT an orphan"
+        "contrast: extra/llm_research/generated_candidates.py LOOKED equally orphaned but is named by extra/qk/q4k_wmma_tiled_no_hand_kernel_gate.py:15 as a path-string entry, so it is NOT an orphan"
       ],
       "finding": "A quant-format spec module with no consumer except its own unit test, including no dynamic seam entry.",
       "id": "A10",
       "loc_added": 0,
       "loc_moved": 0,
       "loc_removed": 0,
-      "path": "extra/llm_research/quant_specs.py",
+      "path": "extra/qk/quant_specs.py",
       "question": "Is quant_specs.py a not-yet-wired intended API or superseded by runtime_specs.py? Prune only if superseded.",
       "status": "completed",
       "tests_required": []
@@ -1657,7 +1657,7 @@
       "domain": "codegen_lowering",
       "duplication_group": null,
       "evidence": [
-        "extra/llm_research/kernel_lds.py:20 imports KernelLDSArenaRegion, KernelLDSComponentWindow, KernelLDSWindow, KernelTileGeometry from this module",
+        "extra/qk/kernel_lds.py:20 imports KernelLDSArenaRegion, KernelLDSComponentWindow, KernelLDSWindow, KernelTileGeometry from this module",
         "runtime_specs.py:404,430,830 import KernelCandidateContext/KernelLDSWindow/KernelTileGeometry"
       ],
       "path": "extra/llm_research/kernel_vocabulary.py",
@@ -2538,7 +2538,7 @@
       "duplication_group": null,
       "evidence": [
         "extra/llm_research/model_profiles.py:75-93 QWEN3_8B/14B ModelProfile definitions",
-        "grep hits: extra/llm_research/shared_attention_evidence.py, extra/llm_research/q4k_wmma_tile_lowering.py, extra/llm_research/prefill/prefill_harness.py, extra/llm_research/prefill/packed_wmma_correctness_canary.py all import extra.llm_research.model_profiles",
+        "grep hits: extra/llm_research/shared_attention_evidence.py, extra/qk/q4k_wmma_tile_lowering.py, extra/llm_research/prefill/prefill_harness.py, extra/llm_research/prefill/packed_wmma_correctness_canary.py all import extra.llm_research.model_profiles",
         "no hit for extra.llm_research.model_profiles in tinygrad/ or route_manifest.py or runtime_specs.py -- confirmed via grep"
       ],
       "path": "extra/llm_research/model_profiles.py",
@@ -4894,10 +4894,10 @@
     ],
     "requires_human_classification": [
       "extra/llm_research/mmq_q4k_q8_atom.py -- which kernel stages still teach something",
-      "extra/llm_research/kernel_lds.py clusters C and E -- open question or superseded",
+      "extra/qk/kernel_lds.py clusters C and E -- open question or superseded",
       "the DEV=AMD:ISA surface -- live research or completed experiment",
       "the q4k int8 WMMA-tiled gate family -- revive or retire",
-      "extra/llm_research/quant_specs.py -- unwired API or superseded"
+      "extra/qk/quant_specs.py -- unwired API or superseded"
     ],
     "separation_of_concerns": "Everything in files/groups/workflows/actions is a human judgment recorded by hand. The audit script contributes only discovery, LOC, coverage, the import and seam graph, reference scanning, and boundary arithmetic."
   },
@@ -4955,7 +4955,7 @@
       "asset": "AMD kernel resource metadata parsing",
       "call_sites": 3,
       "existing_implementations": [
-        "extra/llm_research/amdgpu_metadata.py",
+        "extra/qk/amdgpu_metadata.py",
         "extra/llm_research/mmq_compile_evidence.py"
       ],
       "knowledge_duplicated": "the llvm-readelf note field names and their mapping to a resource dict",

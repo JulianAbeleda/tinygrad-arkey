@@ -248,7 +248,7 @@ exactly five broken local-link occurrences:
    `/home/ubuntu/tinygrad-arkey/docs/14b-decode-g5-authority-timing-20260726.json`: absolute and absent in this
    worktree. If both records survive on dev, use the relative JSON filename; otherwise remove the link with the scope.
 5. `docs/flash-prefill-fusion-probe-20260721.md` ->
-   `/home/ubuntu/tinygrad-arkey/extra/llm_research/prefill/flash_prefill_blocked_tensor.py`: absolute and absent. Preserve the
+   `/home/ubuntu/tinygrad-arkey/extra/qk/prefill/flash_prefill_blocked_tensor.py`: absolute and absent. Preserve the
    reference only as a historical commit/path if the investigation survives on dev; otherwise prune the document.
 
 Additional exact repairs not expressed as Markdown links:

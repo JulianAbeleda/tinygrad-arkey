@@ -10,7 +10,7 @@ Generate a lean, AMD-supportable Q4_K prefill kernel to replace the crashing int
 
 ## Target spec (the hand kernel to hit)
 
-`build_gemm_lds2_q4k`, `/home/ubuntu/tinygrad-arkey-hand-asm-bisect/extra/llm_research/prefill/wmma.py:501-654`:
+`build_gemm_lds2_q4k`, `/home/ubuntu/tinygrad-arkey-hand-asm-bisect/extra/qk/prefill/wmma.py:501-654`:
 - `BK=32`, `KT=BK//16=2`, `SA=SB=64 B/row`, two fp16 LDS regions only (no `ids`, no int8 `q8`), `BUFSZ≈16,384 B`.
 - Per Q4_K superblock (256 elems), 8 sub-groups Python-unrolled: `decode_group` (:575-592) is the core — expand fp16 d/dmin via integer bit-twiddle (`expand_f16`, scalar fp16 arith is unreliable on this ISA), compute `d*sc` / `dmin*mn` in **f32**, per nibble `d*sc*code − dmin*mn` → `v_cvt_f16_f32` → 32 fp16 regs → `ds_store_b128` into the B LDS region. A (activations) is **plain fp16**, cooperatively loaded, never quantized.
 - `compute0` (:600-614): `ds_load` fp16 A/B fragments, `waitcnt_lgkm(0)`, `v_wmma_f32_16x16x16_f16` per subtile into **fp32 accumulators**; double `s_barrier` around LDS reuse. Epilogue identical to the plain fp16 GEMM — **corrections folded into the decode, no post-WMMA correction**.

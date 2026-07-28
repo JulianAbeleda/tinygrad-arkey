@@ -154,7 +154,7 @@ Full kernel still `emitted=False`. Real target (the "SGPR/PARAM(0)" label was co
 1. **Finish phase 2b (spill-free):** fix the 8 `test_amd_isa_wmma.py` regressions (fragment-load fix must cover int8 AND fp16; the BITCAST unwrap must be a strict no-op when no bitcast); fix the SGPR PARAM(0) blocker → `emitted=True`, 0 spills. Then commit.
 2. **CORRECTNESS FAIL-FAST (pulled forward):** the moment it emits, before building the family, do a small-shape numeric parity of the dequant vs the authority. The `.bitcast(half)` reinterprets raw bytes as half — if byte order/layout is off it compiles but outputs garbage. MUST verify before trusting.
 3. **Phase 3 — correctness authority + CPU parity:** author `ffn_gate_up_fp16_dequant_reference` on the GGML `d*sc*code−dmin*mn` math (`tinygrad/llm/gguf.py:76-84` / `extra/llm_research/layout.py:157` `q4_k_reference`; existing analogue `mmq_ffn_gate_up_guarded_correctness.py:357-375` `ffn_gate_up_direct_dense_reference`). Feed into the same `_validate_numeric_comparison`/`_validate_full_comparison` (`:223-299`). NOT the int8 authority (`mmq_q4k_q8_reference.py`) — different rounding path (§2.5, needs new authority + C0A sign-off). Accept: `rtol=atol=3e-3`, zero mismatch, finite.
-4. **Phase 4 — new frozen family + GPU:** new 2-3-buffer ABI family (checklist = plan PART III; canonical ABI constants `extra/llm_research/prefill/frozen_exact_role_runtime.py:37-39`); C4 no-target canary; then guarded reduced-grid ladder `(1,1,1)…(8,4,1)` zero-mismatch, then the FULL 544-wg dispatch that MUST now pass (16 KB LDS) where int8 wedged at 64.
+4. **Phase 4 — new frozen family + GPU:** new 2-3-buffer ABI family (checklist = plan PART III; canonical ABI constants `extra/qk/prefill/frozen_exact_role_runtime.py:37-39`); C4 no-target canary; then guarded reduced-grid ladder `(1,1,1)…(8,4,1)` zero-mismatch, then the FULL 544-wg dispatch that MUST now pass (16 KB LDS) where int8 wedged at 64.
 5. **C6-C8** (full correctness / memory / timing → CERTIFIED_WIN or FALLBACK).
 
 ## Follow-ons (separate tasks)
@@ -162,11 +162,11 @@ Full kernel still `emitted=False`. Real target (the "SGPR/PARAM(0)" label was co
 - #15: recover int8 generator as renamed NVIDIA-only, NOT-selectable modules (source is at pre-conversion git history / was HEAD `51cce914c`).
 
 ## Key files
-- `extra/llm_research/mmq_llama_candidate_plan.py` (`_geometry` two fp16 16KB regions, `_rdna3_f16_tc`).
-- `extra/llm_research/mmq_llama_oracle_recurrence.py` (`_fragment_at` bytes+bitcast; fp32-accumulate recurrence).
-- `extra/llm_research/mmq_llama_group_chain.py` (chained accumulator across 8 K32 groups; seed src[2] via O(1) DAG re-point).
-- `extra/llm_research/mmq_llama_record_producers.py` (`q4_k_fp16_decode_group_callback` — the decode).
-- `extra/llm_research/mmq_llama_five_buffer_graph.py` / `_full_kernel.py` (3-buffer ABI, per-K32 epoch loop 8× per K256).
+- `extra/qk/mmq_llama_candidate_plan.py` (`_geometry` two fp16 16KB regions, `_rdna3_f16_tc`).
+- `extra/qk/mmq_llama_oracle_recurrence.py` (`_fragment_at` bytes+bitcast; fp32-accumulate recurrence).
+- `extra/qk/mmq_llama_group_chain.py` (chained accumulator across 8 K32 groups; seed src[2] via O(1) DAG re-point).
+- `extra/qk/mmq_llama_record_producers.py` (`q4_k_fp16_decode_group_callback` — the decode).
+- `extra/qk/mmq_llama_five_buffer_graph.py` / `_full_kernel.py` (3-buffer ABI, per-K32 epoch loop 8× per K256).
 - `tinygrad/renderer/isa/amd.py` (`_frag_b128_loads` stride, `_wmma_half_addr` bitcast unwrap).
 
 ## Non-negotiables (don't regress)

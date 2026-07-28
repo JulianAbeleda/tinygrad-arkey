@@ -660,7 +660,7 @@ propagation after its commit is verified:
 
 | Source | Destination | Production consumers | Boundary change |
 |---|---|---|---|
-| `extra/llm_research/prefill/flash_prefill_attention_spec.py` | `tinygrad/schedule/wmma/flash_prefill.py` | `tinygrad/llm/fused_attention.py:162`; `tinygrad/codegen/opt/postrange.py:602` | Both callers import the core descriptor directly; the former `route_ops.py` and `codegen/experimental.py` lazy shims were removed |
+| `extra/qk/prefill/flash_prefill_attention_spec.py` | `tinygrad/schedule/wmma/flash_prefill.py` | `tinygrad/llm/fused_attention.py:162`; `tinygrad/codegen/opt/postrange.py:602` | Both callers import the core descriptor directly; the former `route_ops.py` and `codegen/experimental.py` lazy shims were removed |
 
 The descriptor contents were preserved as a rename, active path references and route-manifest authority metadata were
 updated, and the generated organization census plus pure-machine-search census were refreshed. CPU verification
@@ -680,7 +680,7 @@ verified:
 
 | Source | Destination | Production consumer | Boundary change |
 |---|---|---|---|
-| `extra/llm_research/codegen_recurrence_unroll.py` | `tinygrad/codegen/late/recurrence.py` | `tinygrad/codegen/__init__.py:89-91` when `SCHED_UNROLL>1` on AMD | The compiler imports and calls the core owner directly; the recurrence forwarding shim was removed from `codegen/experimental.py` |
+| `extra/qk/codegen_recurrence_unroll.py` | `tinygrad/codegen/late/recurrence.py` | `tinygrad/codegen/__init__.py:89-91` when `SCHED_UNROLL>1` on AMD | The compiler imports and calls the core owner directly; the recurrence forwarding shim was removed from `codegen/experimental.py` |
 
 The transform body was preserved as a byte-identical rename. The organization manifest and lowering findings were
 updated, and `SCHED_UNROLL_DEBUG` was explicitly classified as a non-cache-affecting diagnostic gate. The focused
@@ -697,7 +697,7 @@ The register-store devectorizer is now centralized without merging away its dist
 
 | Source | Destination | Production consumer | Boundary change |
 |---|---|---|---|
-| `extra/llm_research/reg_store_devec.py` | `tinygrad/codegen/late/reg_store.py` | `tinygrad/codegen/__init__.py:264` after `pm_distinct_reg_store_devec` on AMD/coalesced-load paths | The separate `pm_reg_store_devec` rule was ported into the core owner; the extra module and `codegen/experimental.py` forwarding shim were removed |
+| `extra/qk/reg_store_devec.py` | `tinygrad/codegen/late/reg_store.py` | `tinygrad/codegen/__init__.py:264` after `pm_distinct_reg_store_devec` on AMD/coalesced-load paths | The separate `pm_reg_store_devec` rule was ported into the core owner; the extra module and `codegen/experimental.py` forwarding shim were removed |
 
 The duplicate-pointer residual behavior is preserved as a separate matcher, and malformed targets/value-width
 mismatches fail closed. Seven focused tests and the existing reg-store/coalesced-load regression set pass. The
@@ -718,7 +718,7 @@ The narrow AMD `fdot2` primitive hook is now centralized:
 
 | Source | Destination | Production consumer | Boundary change |
 |---|---|---|---|
-| `extra/llm_research/fdot2_lowering.py` | `tinygrad/codegen/late/fdot2.py` | `tinygrad/codegen/__init__.py` at the two graph-rewrite hooks and the post-linearization hook; `tinygrad/codegen/opt/gemm_consumer.py` | Core imports are direct; all three `codegen/experimental.py` fdot2 forwarding shims and the old extra module were removed |
+| `extra/qk/fdot2_lowering.py` | `tinygrad/codegen/late/fdot2.py` | `tinygrad/codegen/__init__.py` at the two graph-rewrite hooks and the post-linearization hook; `tinygrad/codegen/opt/gemm_consumer.py` | Core imports are direct; all three `codegen/experimental.py` fdot2 forwarding shims and the old extra module were removed |
 
 The matcher remains default-off and AMD-only through `V_DOT2_LOWERING`. Its exact scalar-f32 output contract, optional
 accumulator ordering, fail-closed controls, and linearized dependency replacement are pinned by
@@ -732,7 +732,7 @@ The opt-in latency-aware list scheduler is now centralized:
 
 | Source | Destination | Production consumer | Boundary change |
 |---|---|---|---|
-| `extra/llm_research/codegen_list_scheduler.py` | `tinygrad/codegen/late/list_scheduler.py` | `tinygrad/codegen/late/linearizer.py` under `SCHED_LIST`, plus its structural-boundary probes | Core imports are direct; the `list_schedule` and `structural_ops` forwarding shims were removed from `codegen/experimental.py` |
+| `extra/qk/codegen_list_scheduler.py` | `tinygrad/codegen/late/list_scheduler.py` | `tinygrad/codegen/late/linearizer.py` under `SCHED_LIST`, plus its structural-boundary probes | Core imports are direct; the `list_schedule` and `structural_ops` forwarding shims were removed from `codegen/experimental.py` |
 
 The scheduler still only reorders within straight-line blocks, preserves topological dependencies and structural
 boundaries, and remains default-off. Four focused CPU tests cover latency-shadow ordering, structural boundaries,
@@ -744,7 +744,7 @@ The AMD warp primitive and auto-lowering pair is now consolidated in one core ow
 
 | Source | Destination | Production consumer | Boundary change |
 |---|---|---|---|
-| `extra/llm_research/amd_warp_reduce.py` and `extra/llm_research/warp_reduce_lowering.py` | `tinygrad/codegen/late/warp_reduce.py` | `tinygrad/codegen/__init__.py` under `WARP_REDUCE_LOWERING`, plus existing decode/GEMV/MMQ emitters | Core owns the hand-built shuffle/reduction API and matcher; the experimental `warp_reduce_pm` shim and both old extra modules were removed |
+| `extra/qk/amd_warp_reduce.py` and `extra/qk/warp_reduce_lowering.py` | `tinygrad/codegen/late/warp_reduce.py` | `tinygrad/codegen/__init__.py` under `WARP_REDUCE_LOWERING`, plus existing decode/GEMV/MMQ emitters | Core owns the hand-built shuffle/reduction API and matcher; the experimental `warp_reduce_pm` shim and both old extra modules were removed |
 
 The matcher still lowers only scalar float ADD/MAX reductions over power-of-two WARP/GROUP_REDUCE axes, and remains
 default-off. Four CPU structural/boundary tests pass. AMD execution, ISA output, and performance remain outside this
