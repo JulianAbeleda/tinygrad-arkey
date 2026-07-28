@@ -39,6 +39,16 @@ rerun for inference.
 
 In short: **machine-searched offline, statically promoted, compiled by tinygrad, deterministic at runtime.**
 
+## Repository checks
+
+Activate the repository's production hooks and verify the authored-line budget before publishing changes:
+
+```sh
+git config core.hooksPath .githooks
+test "$(git config --get core.hooksPath)" = .githooks
+python3 sz.py
+```
+
 ## How it differs from upstream tinygrad
 
 * **Hardware:** AMD only, currently gfx1100 / RX 7900 XTX.

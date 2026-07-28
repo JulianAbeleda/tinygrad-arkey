@@ -19,3 +19,12 @@ class Opt:
 class KernelOptError(Exception): pass
 def check(cond:bool, msg:str=""):
   if not cond: raise KernelOptError(msg)
+
+def parse_opt(spec:str) -> Opt:
+  parts = spec.split(":")
+  if len(parts) == 1:
+    return Opt(OptOps[parts[0].upper()])
+  if len(parts) != 3:
+    raise ValueError(f"opt must be OP or OP:AXIS:ARG, got {spec!r}")
+  op, axis, arg = parts
+  return Opt(OptOps[op.upper()], int(axis), int(arg))

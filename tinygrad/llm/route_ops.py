@@ -18,7 +18,6 @@ def install_memory_adaptive_model_adapters():
 
 def route_pf16_graph_gemm(*args, **kwargs): return _attr("extra.qk.prefill.prefill_graph_gemm_route", "route_pf16_graph_gemm")(*args, **kwargs)
 
-def q4k_parse_opt(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "parse_opt")(*args, **kwargs)
 def q4k_gemm_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_gemm_kernel")(*args, **kwargs)
 def q4k_gemm_packed_load_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_gemm_packed_load_kernel")(*args, **kwargs)
 def q4k_gemm_packed_load_direct_out_kernel(*args, **kwargs):
@@ -45,7 +44,6 @@ def q4k_g3_lanemap_gemv_splitk_kernel(*args, **kwargs):
 def q4k_g3_lanemap_gemv_inkernel_combine_kernel(*args, **kwargs):
   return _attr("extra.qk.gemv_g3_codegen_lowering", "q4k_g3_lanemap_gemv_inkernel_combine_kernel")(*args, **kwargs)
 
-def q6k_parse_opt(*args, **kwargs): return _attr("extra.qk.quant.q6_k_gemv_primitive", "parse_opt")(*args, **kwargs)
 def q6k_gemm_kernel(*args, **kwargs): return _attr("extra.qk.quant.q6_k_gemv_primitive", "q6k_gemm_kernel")(*args, **kwargs)
 def q6k_gemm_packed_load_kernel(*args, **kwargs): return _attr("extra.qk.quant.q6_k_gemv_primitive", "q6k_gemm_packed_load_kernel")(*args, **kwargs)
 def q6k_gemm_packed_load_direct_out_kernel(*args, **kwargs):
