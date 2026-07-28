@@ -106,6 +106,50 @@ Qualification remains gated on endpoint enumeration. Once the endpoint is presen
 and then the acceptance matrix in the authoritative scope under the GPU lock. Do not infer
 awake-idle, load-power, or sleep/wake behavior from this installation result.
 
+## Current handoff (2026-07-28)
+
+**Owner:** continue from the clean `exp` worktree at commit `530d77183` (the same change is
+`b16356d95` on `dev` and `04f41ecfd` on `master`). The installer is development-only and
+must run from `exp`; do not install from `master`.
+
+**Host state:** macOS 26.5 (25F71), Apple M4 Mac mini, SIP disabled, and DriverKit
+development mode now on. The ADTLink UT4G bridge is visible at USB4 40 Gb/s, but the last
+check still showed no AMD `1002:744c` PCI endpoint. The installed app remains the prior
+ad-hoc DEXT v4; v5 has not been activated and there is no valid v5 provenance transcript.
+
+**Activation blocker:** `sysextd` reports two hidden registrations for
+`org.tinygrad.arkey.tinygpu.driver2`: one `activated_enabled` and one
+`terminating_for_upgrade_via_delegate`. This duplicate state produces
+`OSSystemExtensionErrorDomain` code 4 during v5 activation. The log also prints
+`package type not SYSX`; the DriverKit bundle is intentionally `.dext`/`DEXT` per Apple’s
+DriverKit format, so do not change it to a generic `.system`/`SYSX` extension. Reboot the
+Mac mini before retrying; if the duplicate remains, remove only this empty-team
+registration with administrator authorization, then reinstall.
+
+**Next commands after reboot:**
+
+```sh
+systemextensionsctl developer
+systemextensionsctl list | rg -i -C2 'tinygpu|arkey'
+cd /Users/julianabeleda/env/tinygrad-arkey-exp
+/Users/julianabeleda/env/tinygrad-arkey/.venv/bin/python extra/usbgpu/tools/with_gpu_lock.py -- \
+  bash extra/usbgpu/tbgpu/installer/install_nosip.sh \
+  --install APPROVE_TINYGPU_DEVELOPMENT_INSTALL \
+  --provenance-out /Users/julianabeleda/env/tinygrad-arkey-exp/docs/task_workflow/output/tinygpu-development-install-provenance.txt
+```
+
+Approve the prompt only after the build and staged bundle checks pass. Then verify v5 is
+`[activated enabled]`, run `TinyGPU keepalive handshake` and `TinyGPU keepalive status`,
+confirm the PCI endpoint is present, and run qualification gates A0, A1, and A2 under the
+GPU lock. A4/A8 remain deferred until those gates pass; no local GGUF model is currently
+available for the A8 Qwen3 8B smoke gate. The installer rollback now preserves an already
+active extension instead of trying to deactivate it on a failed replacement.
+
+**Evidence boundary:** the tracked A0 artifact is
+`docs/task_workflow/output/egpu-usb4-persistent-pcie-A0-20260728T105840Z-89079.json`.
+The later failed A0 attempts (`...152615Z-18390.json` and `...152626Z-18408.json`) are
+local diagnostic artifacts only; neither is acceptance evidence.
+
 **Secondary defense:** `pmset disablesleep 1` and a launchd KeepAlive daemon are separate
 sleep investigations, not substitutes for the native provider keeper.
 
