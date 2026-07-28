@@ -165,6 +165,10 @@ The invalid shared-attention timing raw directory was deleted as an exact 16-pat
 Remaining artifact JSON parses, the replay-admission test passes, and no external consumer references the deleted raw
 files. Other raw-artifact groups remain governed by their own ledger entries.
 
+The corresponding 22 replay raw outputs for the benchmark, G2 LDS, and wave-fence campaigns were also removed. Their
+compact summaries/READMEs remain, with recovery commits recorded in the R7 inventory; no external raw-path consumers
+were found and the replay-admission test still passes.
+
 The seventh slice centralized only the duplicated Q4/Q6 option parser in `tinygrad/codegen/opt.parse_opt`. The two
 route shims were removed and seven CPU parser/boundary tests pass. Quantized kernel builders and mixed layout tooling
 remain in `extra` until their route-specific ownership and Q6 coverage are established.
@@ -208,7 +212,7 @@ R7 and broader pruning remain blocked by the following evidence gaps:
 1. Packet A still has mixed or unresolved runtime/tooling groups, including the `extra/qk` default-path closure,
    `extra/hardware/sqtt/roc.py`, TinyGPU/USB GPU support, experimental MMQ lineage, and safety ownership for
    `gpu_wait_clear.sh`.
-2. Packet B retains 72 tests and 86 staged/frozen artifacts whose final disposition depends on Packet A. Five
+2. Packet B retains 72 tests and 64 staged/frozen artifacts whose final disposition depends on Packet A. Five
    mixed-owner tests and TinyGPU-dependent tests are explicitly unresolved.
 3. The 62 top-level JSON documents require Packet B consumer and compact-replacement decisions. Raw evidence cannot
    be deleted merely because it sits outside `docs/artifacts/**`.

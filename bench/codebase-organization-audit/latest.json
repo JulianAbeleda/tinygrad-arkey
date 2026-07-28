@@ -318,8 +318,8 @@
     }
   ],
   "audited_commit": {
-    "commit": "276269a240474054859b056890d9acc945517343",
-    "described": "mac-first-boot-20260610-3509-g276269a24-dirty",
+    "commit": "ba6a9ec7e6657c5c7dd63e87d872f77669ff5e57",
+    "described": "mac-first-boot-20260610-3511-gba6a9ec7e-dirty",
     "dirty": true
   },
   "authority_keys": {
@@ -850,8 +850,8 @@
     ]
   },
   "coverage": {
-    "authored_files": 470,
-    "authored_loc": 72155,
+    "authored_files": 471,
+    "authored_loc": 72172,
     "explicit_records": 87,
     "generated_files": 1,
     "generated_loc": 57,
@@ -3631,6 +3631,7 @@
       "extra/qk/gemv_g3_codegen_lowering.py",
       "extra/qk/mmq_q4k_q8_atom.py",
       "extra/qk/prefill/q4k_prefill_route_spec.py",
+      "test/unit/test_codegen_opt_parser.py",
       "test/unit/test_q4k_w_f16_decode.py",
       "tinygrad/llm/route_ops.py"
     ],
@@ -3642,6 +3643,7 @@
       "extra/qk/prefill/q6k_prefill_route_spec.py",
       "extra/qk/q6k_route_spec.py",
       "scratchpad/audit_bfs.py",
+      "test/unit/test_codegen_opt_parser.py",
       "tinygrad/llm/route_ops.py"
     ],
     "extra/qk/quantize.py": [
