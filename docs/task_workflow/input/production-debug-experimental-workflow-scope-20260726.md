@@ -701,4 +701,5 @@ Its live caller is `tinygrad/codegen/__init__.py:263-264`, and the forwarding sh
 No focused test currently covers the required `STACK(LOAD(INDEX(REG)))` positive case, duplicate-pointer behavior,
 lane ordering, negative GLOBAL/LOCAL/non-index/mixed targets, or AMD/coalesced-load dispatch. The slice must not be
 consolidated or promoted until those tests pin the residual behavior and the lowering baseline/fingerprint are
-regenerated at the exact clean commit.
+regenerated at the exact clean commit. The complete matrix and acceptance gates are recorded in
+`docs/task_workflow/output/reg-store-devec-test-scope-20260728.md`.
