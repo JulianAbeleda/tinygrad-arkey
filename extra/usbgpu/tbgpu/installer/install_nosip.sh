@@ -195,6 +195,11 @@ validate_gpu_lock() {
   [[ "$(plutil -extract pid raw -o - "$path")" == "$PPID" ]] || die "GPU lock was not inherited from the lock runner"
 }
 
+validate_developer_mode() {
+  [[ "$(systemextensionsctl developer 2>&1)" == *"Developer mode is on"* ]] || \
+    die "DriverKit development mode is off; run 'systemextensionsctl developer on' in an administrator Terminal and retry"
+}
+
 rollback_replacement() {
   local rollback_failed=0
   if [[ "$replacement_moved" == 1 && -d "$INSTALL_APP" ]]; then
@@ -260,6 +265,7 @@ else
   validate_gpu_lock
   validate_feature_source
   [[ "$(csrutil status 2>&1)" == *"disabled"* ]] || die "SIP must be disabled for this audited development install"
+  validate_developer_mode
   mkdir -p "$(dirname "$provenance_out")"
   provenance_tmp="$(mktemp "/tmp/.${APP_NAME}.provenance.XXXXXX")"
   trap finish EXIT

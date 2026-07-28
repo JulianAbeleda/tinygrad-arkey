@@ -86,6 +86,12 @@ shared memory are released at lease disconnect and are not retained by the keepe
 - The audited development installer replaced `/Applications/TinyGPU.app`; the app and
   DriverKit extension are ad-hoc signed, and DEXT
   `org.tinygrad.arkey.tinygpu.driver2` reached `[activated enabled]` at version `1.0.0/4`.
+- A later reinstall attempt was correctly refused by macOS because this host has
+  DriverKit development mode off and retains the prior ad-hoc registration. The CLI had
+  also mislabeled `OSSystemExtensionErrorDomain` code 4 as a missing-entitlement error;
+  code 4 means the extension was not found, while code 2 is the entitlement error. The
+  installer now requires development mode explicitly and the next DEXT version is `5` so
+  macOS can distinguish an upgrade from the already-active v4 registration.
 - A0 stopped before any workload qualification. The UT4G bridge is connected at 40 Gb/s,
   but `system_profiler` reports no `1002:744c` PCI endpoint. The native diagnostic handshake
   therefore cannot open the provider. This is a signal/enumeration precondition, not evidence
