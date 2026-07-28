@@ -21,10 +21,11 @@ final class TinyGPUCLIRunner: NSObject, OSSystemExtensionRequestDelegate {
     guard (try? process.run()) != nil else { return .unloaded }
     process.waitUntilExit()
 
-    guard let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8),
-          let line = output.split(separator: "\n").first(where: { $0.contains(bundleID) }) else { return .unloaded }
-    if line.contains("[activated enabled]") { return .activated }
-    if line.contains("[activated waiting for user]") { return .needsApproval }
+    guard let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) else { return .unloaded }
+    let lines = output.split(separator: "\n").filter { $0.contains(bundleID) }
+    if lines.contains(where: { $0.contains("[activated enabled]") }) { return .activated }
+    if lines.contains(where: { $0.contains("[activated waiting for user]") }) { return .needsApproval }
+    guard let line = lines.first else { return .unloaded }
     return line.contains("terminated waiting to uninstall") ? .unloaded : .activating
   }
 

@@ -7,7 +7,7 @@ APP_ID="org.tinygrad.arkey.tinygpu.installer"
 DEXT_ID="org.tinygrad.arkey.tinygpu.driver2"
 # Increment this whenever the DriverKit binary or its activation contract changes;
 # macOS will not replace an already-active extension at the same bundle version.
-DEXT_VERSION="5"
+DEXT_VERSION="6"
 FEATURE_BRANCH="exp"
 APPROVAL_TOKEN="APPROVE_TINYGPU_DEVELOPMENT_INSTALL"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
