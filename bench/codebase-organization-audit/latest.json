@@ -318,9 +318,9 @@
     }
   ],
   "audited_commit": {
-    "commit": "58a866107fae86479c263049d70f456b872cb055",
-    "described": "mac-first-boot-20260610-3493-g58a866107-dirty",
-    "dirty": true
+    "commit": "dacbdac5337b370b74b7acaac3ac02ed03087d72",
+    "described": "mac-first-boot-20260610-3496-gdacbdac53",
+    "dirty": false
   },
   "authority_keys": {
     "AMD_BACKEND_ATOM_ID": [
@@ -846,7 +846,7 @@
       "extra/qk/shared_attention_evidence.py"
     ],
     "unroll_recurrence.afterchain_reconstruction_rule": [
-      "extra/qk/codegen_recurrence_unroll.py"
+      "tinygrad/codegen/late/recurrence.py"
     ],
     "w_f16.14b_decode_adapter": [
       "extra/qk/quant/q4_k_gemv_primitive.py"
@@ -856,14 +856,14 @@
     ]
   },
   "coverage": {
-    "authored_files": 468,
-    "authored_loc": 71990,
-    "explicit_records": 94,
+    "authored_files": 469,
+    "authored_loc": 72068,
+    "explicit_records": 93,
     "generated_files": 1,
     "generated_loc": 57,
     "group_covered": 0,
-    "manifest_scope_files": 94,
-    "manifest_scope_loc": 13446,
+    "manifest_scope_files": 93,
+    "manifest_scope_loc": 13338,
     "uncovered": []
   },
   "coverage_limitations": [
@@ -925,7 +925,6 @@
       "extra/qk/amd_warp_reduce.py",
       "extra/qk/bubblebeam_futuresight.py",
       "extra/qk/codegen_list_scheduler.py",
-      "extra/qk/codegen_recurrence_unroll.py",
       "extra/qk/decode/flash_decode_attention_executor.py",
       "extra/qk/decode/flash_decode_attention_spec.py",
       "extra/qk/fdot2_lowering.py",
@@ -1114,7 +1113,6 @@
     "dynamic_seam_edges": {
       "tinygrad/codegen/experimental.py": [
         "extra/qk/codegen_list_scheduler.py",
-        "extra/qk/codegen_recurrence_unroll.py",
         "extra/qk/fdot2_lowering.py",
         "extra/qk/reg_store_devec.py",
         "extra/qk/warp_reduce_lowering.py"
@@ -1180,10 +1178,6 @@
         "tinygrad/uop/ops.py"
       ],
       "extra/qk/codegen_list_scheduler.py": [
-        "tinygrad/helpers.py",
-        "tinygrad/uop/ops.py"
-      ],
-      "extra/qk/codegen_recurrence_unroll.py": [
         "tinygrad/helpers.py",
         "tinygrad/uop/ops.py"
       ],
@@ -1533,7 +1527,6 @@
       "extra/qk/bubblebeam_futuresight.py": 1,
       "extra/qk/clock_pin.py": 1,
       "extra/qk/codegen_list_scheduler.py": 1,
-      "extra/qk/codegen_recurrence_unroll.py": 1,
       "extra/qk/cooperative_stage_lanemap.py": 0,
       "extra/qk/decode/capture_prefill_compile.py": 0,
       "extra/qk/decode/current_decode_execution_adapter.py": 1,
@@ -1651,7 +1644,6 @@
       "extra/qk/bubblebeam_futuresight.py": 6,
       "extra/qk/clock_pin.py": 0,
       "extra/qk/codegen_list_scheduler.py": 2,
-      "extra/qk/codegen_recurrence_unroll.py": 2,
       "extra/qk/cooperative_stage_lanemap.py": 1,
       "extra/qk/decode/capture_prefill_compile.py": 0,
       "extra/qk/decode/current_decode_execution_adapter.py": 8,
@@ -1819,14 +1811,6 @@
       },
       {
         "from": "extra/qk/codegen_list_scheduler.py",
-        "to": "tinygrad/uop/ops.py"
-      },
-      {
-        "from": "extra/qk/codegen_recurrence_unroll.py",
-        "to": "tinygrad/helpers.py"
-      },
-      {
-        "from": "extra/qk/codegen_recurrence_unroll.py",
         "to": "tinygrad/uop/ops.py"
       },
       {
@@ -2882,8 +2866,8 @@
         "loc": 256
       },
       "keep": {
-        "files": 89,
-        "loc": 12263
+        "files": 88,
+        "loc": 12155
       },
       "move": {
         "files": 1,
@@ -2904,8 +2888,8 @@
         "loc": 504
       },
       "codegen_lowering": {
-        "files": 8,
-        "loc": 510
+        "files": 7,
+        "loc": 402
       },
       "evidence": {
         "files": 11,
@@ -2934,8 +2918,8 @@
         "loc": 1143
       },
       "authority": {
-        "files": 48,
-        "loc": 7741
+        "files": 47,
+        "loc": 7633
       },
       "benchmark": {
         "files": 2,
@@ -2972,8 +2956,8 @@
         "loc": 2348
       },
       "fallback": {
-        "files": 4,
-        "loc": 232
+        "files": 3,
+        "loc": 124
       },
       "historical_one_off": {
         "files": 1,
@@ -3113,10 +3097,6 @@
       "extra/qk/timing_harness.py"
     ],
     "extra/qk/codegen_list_scheduler.py": [
-      "scratchpad/audit_bfs.py",
-      "tinygrad/codegen/experimental.py"
-    ],
-    "extra/qk/codegen_recurrence_unroll.py": [
       "scratchpad/audit_bfs.py",
       "tinygrad/codegen/experimental.py"
     ],
@@ -3867,14 +3847,14 @@
     ]
   },
   "promotion_budget": {
-    "budgeted_after_pending_promotions": 34726,
-    "budgeted_loc": 34726,
+    "budgeted_after_pending_promotions": 34834,
+    "budgeted_loc": 34834,
     "cap": 40000,
     "data_file_convertible_loc": 0,
-    "headroom": 5274,
+    "headroom": 5166,
     "intended_cap": 30000,
     "intended_cap_note": "sz.py:13 records 35000 as temporary headroom; the standing target is 30000",
-    "over_intended_cap": 4726,
+    "over_intended_cap": 4834,
     "pending_promotion_net_cost": 0,
     "unbudgeted_default_path_loc": 6193
   },
