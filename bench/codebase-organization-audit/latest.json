@@ -318,8 +318,8 @@
     }
   ],
   "audited_commit": {
-    "commit": "21edaac0a78d72b241fdd2dcfd533e7211eb9b42",
-    "described": "mac-first-boot-20260610-3501-g21edaac0a",
+    "commit": "86f21b332b80840ac071e9adbe9ec6516a62f021",
+    "described": "mac-first-boot-20260610-3503-g86f21b332",
     "dirty": false
   },
   "authority_keys": {
@@ -708,7 +708,7 @@
       "extra/qk/fdot2_lowering.py"
     ],
     "pm_reg_store_devec.rewrite_rule": [
-      "extra/qk/reg_store_devec.py"
+      "tinygrad/codegen/late/reg_store.py"
     ],
     "post_regalloc physical-register-interval ownership uniqueness invariant": [
       "extra/qk/amd_resource_artifact.py"
@@ -856,14 +856,14 @@
     ]
   },
   "coverage": {
-    "authored_files": 470,
-    "authored_loc": 72150,
-    "explicit_records": 93,
+    "authored_files": 469,
+    "authored_loc": 72153,
+    "explicit_records": 92,
     "generated_files": 1,
     "generated_loc": 57,
     "group_covered": 0,
-    "manifest_scope_files": 93,
-    "manifest_scope_loc": 13340,
+    "manifest_scope_files": 92,
+    "manifest_scope_loc": 13326,
     "uncovered": []
   },
   "coverage_limitations": [
@@ -968,7 +968,6 @@
       "extra/qk/quant/q4_k_gemv_primitive.py",
       "extra/qk/quant/q6_k_gemv_primitive.py",
       "extra/qk/quantize.py",
-      "extra/qk/reg_store_devec.py",
       "extra/qk/route_manifest.py",
       "extra/qk/runtime_specs.py",
       "extra/qk/warp_reduce_lowering.py"
@@ -1114,7 +1113,6 @@
       "tinygrad/codegen/experimental.py": [
         "extra/qk/codegen_list_scheduler.py",
         "extra/qk/fdot2_lowering.py",
-        "extra/qk/reg_store_devec.py",
         "extra/qk/warp_reduce_lowering.py"
       ],
       "tinygrad/llm/route_ops.py": [
@@ -1495,9 +1493,6 @@
         "tinygrad/helpers.py",
         "tinygrad/uop/ops.py"
       ],
-      "extra/qk/reg_store_devec.py": [
-        "tinygrad/uop/ops.py"
-      ],
       "extra/qk/runtime_specs.py": [
         "extra/qk/kernel_vocabulary.py"
       ],
@@ -1602,7 +1597,6 @@
       "extra/qk/quant/q4_k_gemv_primitive.py": 5,
       "extra/qk/quant/q6_k_gemv_primitive.py": 3,
       "extra/qk/quantize.py": 1,
-      "extra/qk/reg_store_devec.py": 2,
       "extra/qk/route_manifest.py": 20,
       "extra/qk/runtime_specs.py": 8,
       "extra/qk/shared_attention_capture.py": 4,
@@ -1719,7 +1713,6 @@
       "extra/qk/quant/q4_k_gemv_primitive.py": 5,
       "extra/qk/quant/q6_k_gemv_primitive.py": 5,
       "extra/qk/quantize.py": 0,
-      "extra/qk/reg_store_devec.py": 1,
       "extra/qk/route_manifest.py": 0,
       "extra/qk/runtime_specs.py": 1,
       "extra/qk/shared_attention_capture.py": 2,
@@ -2206,10 +2199,6 @@
         "to": "tinygrad/uop/ops.py"
       },
       {
-        "from": "extra/qk/reg_store_devec.py",
-        "to": "tinygrad/uop/ops.py"
-      },
-      {
         "from": "extra/qk/shared_attention_capture.py",
         "to": "tinygrad/uop/ops.py"
       },
@@ -2586,10 +2575,6 @@
         "to": "extra/qk/route_manifest.py"
       },
       {
-        "from": "test/unit/test_reg_store_devec.py",
-        "to": "extra/qk/reg_store_devec.py"
-      },
-      {
         "from": "test/unit/test_route_admission_consistency.py",
         "to": "extra/qk/route_manifest.py"
       },
@@ -2870,8 +2855,8 @@
         "loc": 256
       },
       "keep": {
-        "files": 88,
-        "loc": 12157
+        "files": 87,
+        "loc": 12143
       },
       "move": {
         "files": 1,
@@ -2892,8 +2877,8 @@
         "loc": 504
       },
       "codegen_lowering": {
-        "files": 7,
-        "loc": 404
+        "files": 6,
+        "loc": 390
       },
       "evidence": {
         "files": 11,
@@ -2922,8 +2907,8 @@
         "loc": 1143
       },
       "authority": {
-        "files": 47,
-        "loc": 7635
+        "files": 46,
+        "loc": 7621
       },
       "benchmark": {
         "files": 2,
@@ -2960,8 +2945,8 @@
         "loc": 2348
       },
       "fallback": {
-        "files": 3,
-        "loc": 126
+        "files": 2,
+        "loc": 112
       },
       "historical_one_off": {
         "files": 1,
@@ -3748,16 +3733,6 @@
     "extra/qk/quantize.py": [
       "tinygrad/llm/route_ops.py"
     ],
-    "extra/qk/reg_store_devec.py": [
-      "docs/HANDOFF_logits_only_store_codegen_bug_20260724.md",
-      "docs/task_workflow/input/production-debug-experimental-workflow-scope-20260726.md",
-      "docs/task_workflow/output/production-reorganization-inventory-20260728.json",
-      "docs/task_workflow/output/production-reorganization-report-20260728.md",
-      "docs/task_workflow/output/reg-store-devec-test-scope-20260728.md",
-      "scratchpad/audit_bfs.py",
-      "test/unit/test_reg_store_devec.py",
-      "tinygrad/codegen/experimental.py"
-    ],
     "extra/qk/route_manifest.py": [
       ".claude/loop.md",
       "README.md",
@@ -3856,14 +3831,14 @@
     ]
   },
   "promotion_budget": {
-    "budgeted_after_pending_promotions": 34834,
-    "budgeted_loc": 34834,
+    "budgeted_after_pending_promotions": 34845,
+    "budgeted_loc": 34845,
     "cap": 40000,
     "data_file_convertible_loc": 0,
-    "headroom": 5166,
+    "headroom": 5155,
     "intended_cap": 30000,
     "intended_cap_note": "sz.py:13 records 35000 as temporary headroom; the standing target is 30000",
-    "over_intended_cap": 4834,
+    "over_intended_cap": 4845,
     "pending_promotion_net_cost": 0,
     "unbudgeted_default_path_loc": 6193
   },
