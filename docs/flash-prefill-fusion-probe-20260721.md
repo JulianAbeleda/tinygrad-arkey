@@ -20,7 +20,9 @@ The probe code (`flash_prefill_blocked_tensor.py`) called `acc.realize(); m.real
 
 ## 1. Correct Blocked Online-Softmax Code
 
-File: [extra/qk/prefill/flash_prefill_blocked_tensor.py](/home/ubuntu/tinygrad-arkey/extra/qk/prefill/flash_prefill_blocked_tensor.py)
+Historical file: `extra/qk/prefill/flash_prefill_blocked_tensor.py`, last present before its deletion in commit
+`dfbaddbdf7bff9f71137cbaf0baa32e2700723ac` (recover with
+`git show dfbaddbdf7bff9f71137cbaf0baa32e2700723ac^:extra/qk/prefill/flash_prefill_blocked_tensor.py`).
 
 Core loop (pure Tensor ops, no hand kernel):
 

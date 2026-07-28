@@ -114,6 +114,17 @@ JSON behavior, and Python compilation of the moved module and callers. A broader
 32 passes, eight skips, and 12 pre-existing CPU semantic, cycle, or barrier assertion failures. It produced no
 missing-module or import failure attributable to the move. No GPU result is claimed for this census or promotion.
 
+## Second bounded promotion
+
+The recurrence-unroll compiler primitive was similarly promoted from
+`extra/qk/codegen_recurrence_unroll.py` to `tinygrad/codegen/late/recurrence.py`. The AMD/SCHED_UNROLL call site now
+imports the core owner directly, and only the matching `codegen/experimental.py` forwarding shim was removed. The
+organization manifest and lowering findings were updated; the transform body is a byte-identical rename.
+
+`test/unit/test_codegen_recurrence_unroll.py` covers identity and fail-closed behavior, AFTER-chain carry rewiring,
+nested ranges, private reinitialization registers, and AMD dispatch. The focused CPU gate/boundary/audit suite passed
+61 tests. No AMD execution or GPU numeric result is claimed for this slice.
+
 At the current `exp` tip, `python3 sz.py` passes with 34,947 budgeted authored lines against the 40,000-line cap.
 
 ## Documentation closure completed
