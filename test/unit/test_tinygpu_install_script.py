@@ -44,7 +44,7 @@ def test_build_output_signing_and_provenance_are_explicit():
   source = SCRIPT.read_text()
   for token in ("-derivedDataPath \"$DERIVED_DATA\"", "--timestamp=none", "Signature=adhoc", "Identifier=$APP_ID", "Identifier=$DEXT_ID",
                 "source_manifest", "source_nosip_entitlements_hash", "source_app_entitlements_hash", "record_tree", "systemextensionsctl list",
-                "tinygpu-development-install-provenance.txt", "DEXT_VERSION=\"4\"", "CFBundleVersion"):
+                "tinygpu-development-install-provenance.txt", "DEXT_VERSION=\"5\"", "CFBundleVersion"):
     assert token in source
   assert "curl " not in source and "download" not in source.lower() and "rm -rf" not in source
   assert "provisionprofile" not in source.lower()
