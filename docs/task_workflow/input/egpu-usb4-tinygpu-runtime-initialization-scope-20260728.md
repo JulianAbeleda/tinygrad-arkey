@@ -110,6 +110,32 @@ provider/service-lifecycle failure, not a sudo or approval failure. It is the
 first *observed failing* register write, not proof that it was the first runtime
 write or the root cause.
 
+### v7 inline status follow-up
+
+The second reboot removed the v5 registration. The v6 activation initially
+required System Settings approval, then completed as `[activated enabled]`; a
+second audited installer pass aligned `/Applications/TinyGPU.app`, the live
+v6 registration, and activated provenance at commit `b9b5fe06d`.
+
+One bounded eGPU reset was required after the UT4G bridge returned without the
+PCI endpoint. The reset restored `1002:744c`, all four PCI functions, and a
+16.0 GT/s x16 link. The v6 DEXT then launched, published an active `tinygpu`
+IOUserService, and successfully handled selector 4 handshakes. A0 nevertheless
+failed consistently at selector 5 because keepalive status remained
+unavailable; no AMD initialization ran.
+
+The failure is an output-marshalling defect rather than another GPU-reset
+boundary. `IOConnectCallStructMethod` supplies the protocol's 4096-byte status
+buffer as inline DriverKit `OSData`, while the v6 user client accepts only
+`structureOutputDescriptor`. The v7 candidate supports both inline `OSData` and
+large descriptor outputs, retains the 4096-byte protocol cap, and bumps the
+DEXT bundle version so macOS will replace v6. The six targeted CPU/source suites
+pass (`61 passed`), and a clean Debug DriverKit build succeeds.
+
+The next action is the audited v7 install followed by A0 and A1. Do not reset
+the GPU again before those gates: the endpoint and v6 provider are both present,
+and the remaining observed failure is selector-5 reply marshalling.
+
 ## 2. Evidence boundary: facts versus hypotheses
 
 ### Established facts

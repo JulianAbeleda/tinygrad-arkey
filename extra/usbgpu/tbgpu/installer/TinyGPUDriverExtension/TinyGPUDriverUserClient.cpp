@@ -247,13 +247,28 @@ kern_return_t TinyGPUDriverUserClient::ExternalMethod(uint64_t selector, IOUserC
 		return kIOReturnSuccess;
 	} else if (selector == TinyGPURPC::KeepaliveStatus) {
 		if (args->scalarInputCount || args->scalarOutputCount) return kIOReturnBadArgument;
-		if (!args->structureOutputDescriptor) return kIOReturnBadArgument;
-		uint64_t available = 0; args->structureOutputDescriptor->GetLength(&available);
+		if (args->structureOutputDescriptor) {
+			uint64_t available = 0; args->structureOutputDescriptor->GetLength(&available);
+			if (!available || available > 4096) return kIOReturnNoSpace;
+			IOMemoryMap* map = nullptr; err = args->structureOutputDescriptor->CreateMapping(0, 0, 0, 0, 0, &map);
+			if (err || !map) return err ?: kIOReturnError;
+			size_t length = (size_t)available;
+			err = ivars->provider->GetKeepaliveStatus((char*)map->GetAddress(), &length);
+			map->release();
+			return err;
+		}
+
+		// IOConnectCallStructMethod carries outputs up to 4096 bytes inline as
+		// OSData. Larger outputs arrive as descriptors, but the status contract
+		// deliberately caps its JSON at 4096 bytes.
+		const uint64_t available = args->structureOutputMaximumSize;
 		if (!available || available > 4096) return kIOReturnNoSpace;
-		IOMemoryMap* map = nullptr; err = args->structureOutputDescriptor->CreateMapping(0, 0, 0, 0, 0, &map);
-		if (err || !map) return err ?: kIOReturnError;
-		size_t length = (size_t)available; err = ivars->provider->GetKeepaliveStatus((char*)map->GetAddress(), &length); map->release();
-		return err;
+		char output[4096] = {};
+		size_t length = (size_t)available;
+		err = ivars->provider->GetKeepaliveStatus(output, &length);
+		if (err) return err;
+		args->structureOutput = OSData::withBytes(output, length);
+		return args->structureOutput ? kIOReturnSuccess : kIOReturnNoMemory;
 	} else if (selector == TinyGPURPC::LeaseAcquire) {
 		if (args->scalarInputCount || args->scalarOutputCount < 1 || ivars->leaseID) return kIOReturnBadArgument;
 		err = ivars->provider->AcquireWorkloadLease(&ivars->leaseID);

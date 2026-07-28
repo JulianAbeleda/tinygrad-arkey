@@ -57,6 +57,14 @@ def test_user_client_serializes_handshake_lease_dma_and_teardown():
   assert release.index("CompleteDMA") < release.index("ReleaseDMAAllocation")
 
 
+def test_keepalive_status_supports_inline_and_descriptor_outputs():
+  status = body(CLIENT, "selector == TinyGPURPC::KeepaliveStatus", "selector == TinyGPURPC::LeaseAcquire")
+  assert "structureOutputDescriptor" in status and "CreateMapping" in status
+  assert "structureOutputMaximumSize" in status
+  assert "OSData::withBytes(output, length)" in status
+  assert "available > 4096" in status
+
+
 def test_new_user_client_transfer_is_explicit_and_state_admission_is_gated():
   create = body(DRIVER, "TinyGPUDriver::NewUserClient_Impl", "TinyGPUDriver::CfgRead")
   assert "ivars->gate->DispatchSync" in create and "service.attach()" in create
