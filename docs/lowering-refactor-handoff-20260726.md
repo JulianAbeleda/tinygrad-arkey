@@ -3,7 +3,7 @@
 **The work is NOT on master.** It is on branch `refactor/lowering-architecture`, pushed to
 `origin/refactor/lowering-architecture`, and developed in a **separate git worktree** at `/home/ubuntu/lowering-refactor`.
 
-Implements `docs/task_workflow/input/lowering-architecture-refactor-scope-20260726.md`, which is also carried on the
+Implements `docs/task_workflow/output/lowering-architecture-refactor-scope-20260726.md`, which is also carried on the
 branch so it travels with its implementation.
 
 ## Read this first: work in the worktree, not here
@@ -113,7 +113,7 @@ The asymmetry the scope predicted survives the contamination: the rollback arm f
 But note the default arm faults too, so "the rollback path is broken and the default is fine" is too strong — both
 paths fault, at different rates. Also note the rollback arm takes ~248s per run against ~100s for default, so it has
 ~2.5x the exposure window; some of the ratio may be exposure rather than path. See
-`docs/task_workflow/input/14b-prefill-fault-and-current-numbers-scope-20260726.md` for what to do next.
+`docs/task_workflow/output/14b-prefill-fault-and-current-numbers-scope-20260726.md` for the campaign record.
 
 ---
 
@@ -170,4 +170,5 @@ Three of the scope's premises did not survive contact and were re-aimed rather t
 docstrings previously implied it was "the ONE place environment is read"; they now say what is actually
 load-bearing (`PLAN_GATES` + `observed_gate_values`, via the cache key) and what is not. Threading it into
 lowering needs a verification harness that does not exist yet; the design decision and the honest oracle for it are
-in `docs/task_workflow/input/lr-019-gate-mechanism-divergence-scope-20260726.md` on the branch.
+in `docs/task_workflow/output/lr-019-gate-mechanism-divergence-scope-20260726.md`; the final refactor closed it by
+removing the inert plan and retaining the gate-inventory and cache-key approach.

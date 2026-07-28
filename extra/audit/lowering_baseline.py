@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """LR-000: compile-only lowering fingerprint baseline for the lowering-architecture refactor.
 
-Scope: docs/task_workflow/input/lowering-architecture-refactor-scope-20260726.md section 6, Phase 0 (LR-000).
+Scope: docs/task_workflow/output/lowering-architecture-refactor-scope-20260726.md section 6, Phase 0 (LR-000).
 
 Purpose: freeze a byte-comparable fingerprint of the default-path kernel builders (source hash + resource
 facts + shape + launch geometry) *before* any refactor-only lowering change, so a later refactor-only run can

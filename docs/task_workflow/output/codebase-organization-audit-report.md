@@ -1,7 +1,7 @@
 # Codebase organization audit — Phase 1 (`extra/qk`) final report
 
 Audited commit: `003f3b22e` (`mac-first-boot-20260610-3411-g003f3b22e`). Task input:
-`docs/task_workflow/input/codebase-organization-audit-task.md`.
+`docs/task_workflow/output/codebase-organization-audit-task.md`.
 
 ## Files created
 

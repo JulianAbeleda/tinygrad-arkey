@@ -1,7 +1,7 @@
 # Lowering refactor — Phase 0 findings
 
 Branch `refactor/lowering-architecture`, baseline `18d2fab52`. Implements LR-000 and LR-001 of
-`docs/task_workflow/input/lowering-architecture-refactor-scope-20260726.md`.
+`docs/task_workflow/output/lowering-architecture-refactor-scope-20260726.md`.
 
 Phase 0's rule governs everything after it: **no pass moves until its input/output contract is recorded.**
 

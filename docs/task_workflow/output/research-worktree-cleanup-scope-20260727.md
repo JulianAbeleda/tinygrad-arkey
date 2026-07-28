@@ -134,7 +134,7 @@ obsolete pre-width4 negative result superseded by
 
 - `/home/ubuntu/tinygrad-arkey` and `master`.
 - `archive/research-worktrees-20260727`, locally and on GitHub.
-- `docs/task_workflow/input/14b-decode-hardware-counter-integration-scope-20260726.md`, now tracked as a valid open task.
+- `docs/task_workflow/output/14b-decode-hardware-counter-integration-scope-20260726.md`, subsequently closed after the AMD campaign beat the Llama comparison baseline.
 - `/home/ubuntu/worktrees/llama-fattn64-ablation` (1.2 GB): separate llama.cpp repository, not owned by this scope.
 - BoltBeam worktrees: separate repository, not owned by this scope.
 

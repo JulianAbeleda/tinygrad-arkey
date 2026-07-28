@@ -16,7 +16,7 @@ The default arm was covered by the AMD gate. This gate is what covered the other
 What it does: builds the kernel's UOp sink under each arm, in a SEPARATE PROCESS per arm, and hashes it.
 Separate processes are required, not stylistic -- `getenv` is `@functools.cache`d, so a variable flipped after
 the first read inside one process never reaches the builder (see
-docs/task_workflow/input/lr-019-gate-mechanism-divergence-scope-20260726.md).
+docs/task_workflow/output/lr-019-gate-mechanism-divergence-scope-20260726.md).
 
 GPU-free and compile-free: it hashes the constructed UOp graph (`sink.key`), never rendering or running a
 kernel, so it needs no AMD device and is safe to run anywhere.

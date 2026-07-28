@@ -2,7 +2,8 @@
 
 Date: 2026-07-27
 
-Status: blocked on the P1 wire-specification deliverable and compatible native implementation
+Status: resolved by the frozen wire contract and native keeper implementation in `f23c05c57`; retained as the
+historical blocker that defined the fail-closed compatibility requirements
 
 Scope: Python-side status integration for `APLRemotePCIDevice` in
 `tinygrad/runtime/support/system.py`.

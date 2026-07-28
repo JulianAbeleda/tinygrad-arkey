@@ -1,10 +1,14 @@
 # Lowering Architecture Refactor Scope
 
-**Status:** Intake scope; implementation not started  
+**Status:** Completed and merged to `master` on 2026-07-26 (`8ce6d978e`)
 **Date:** 2026-07-26  
 **Repository:** `/home/ubuntu/tinygrad-arkey`  
 **Proposed branch:** `refactor/lowering-architecture`  
 **Risk:** High if attempted as a rewrite; manageable as a sequence of behavior-preserving slices
+
+The completion record is `docs/lowering-refactor-handoff-20260726.md`. The proposed load-bearing `OptimizationPlan`
+was deliberately replaced by the final gate-inventory and cache-key approach; the closed design record is
+`docs/task_workflow/output/lr-019-gate-mechanism-divergence-scope-20260726.md`.
 
 ## 1. Objective
 
@@ -660,4 +664,3 @@ This scope is complete only when:
 This is a **high-difficulty but tractable** refactor. The difficult part is not moving files; it is preserving hidden graph-rewrite invariants, metadata ownership, generated-kernel identity, and backend resource behavior.
 
 The safe strategy is to add contracts and traces first, then extract one boundary at a time. A full rewrite of `rangeify` or the scheduler would be unnecessarily risky. The highest-value first slice is LR-010 plus LR-031: an explicit lowering trace and serializable optimization plan. Those two pieces make every later structural move measurable and reversible.
-

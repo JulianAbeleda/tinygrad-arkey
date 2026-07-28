@@ -52,7 +52,7 @@ Tally in the suspect window (runs 9-13): default 3 success / 1 fault / 1 other; 
   `/home/ubuntu/tinygrad-arkey` again while your run is live.
 - I restored that tree to `master` and reverted every edit of mine: the `ops.py` hook, `tinygrad/uop/trace.py`,
   `test/unit/test_lowering_trace.py`, and `extra/qk/amd_resource_artifact.py`. The only modified file I left is
-  `docs/task_workflow/input/14b-prefill-fault-and-current-numbers-scope-20260726.md`, which is your edit, not mine.
+  `docs/task_workflow/output/14b-prefill-fault-and-current-numbers-scope-20260726.md`, which is your edit, not mine.
 - From run ~14 onward your subprocesses import the same `tinygrad/` that run 1 did.
 
 ## What I suggest

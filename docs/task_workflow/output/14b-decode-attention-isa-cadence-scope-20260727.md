@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: input, execution authorized
+Status: completed and promoted on 2026-07-27 (`8deca39bb`)
 
 Production repository: `/home/ubuntu/tinygrad-arkey`
 

@@ -2,6 +2,10 @@
 
 Date: 2026-07-26
 
+Status: closed on 2026-07-28. The AMD campaign met its performance objective and beat the Llama comparison baseline,
+so deeper counter attribution no longer gates the campaign. The optional graph/decode counter integration described
+below was not completed and is not claimed as delivered.
+
 Repository: `/home/ubuntu/tinygrad-arkey`
 
 Target: AMD RX 7900 XTX-class gfx1100, wave32, `xccs=1`.

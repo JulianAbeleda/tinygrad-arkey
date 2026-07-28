@@ -1,8 +1,8 @@
 # LR-019 — three mechanisms for one flag, and a fourth reader
 
-**Status:** blocker. Recorded before `OptimizationPlan` is threaded into lowering.
+**Status:** Closed on 2026-07-28 as part of the completed lowering refactor. The shipped cache-key divergence was fixed, and the inert `OptimizationPlan` was removed rather than made load-bearing without a valid migration oracle.
 **Branch:** `refactor/lowering-architecture` (worktree `/home/ubuntu/lowering-refactor`), at `a47889d50`.
-**Asking for:** a decision on which of the four options below to take, or a better one.
+**Disposition:** Retained as the design record behind the final gate-inventory and cache-key approach.
 
 ---
 

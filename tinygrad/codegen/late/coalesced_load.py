@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Coalesced vector-load lowering -- the bandwidth PRIMITIVE for generated kernels.
 
-Promoted to core codegen under LR-050 (docs/task_workflow/input/lowering-architecture-refactor-scope-20260726.md
+Promoted to core codegen under LR-050 (docs/task_workflow/output/lowering-architecture-refactor-scope-20260726.md
 Phase 5): this pass and the static coalescing predicate it steers on are pure UOp/AxisType transforms with no
 backend-specific assumptions (no wave width, no ISA intrinsic, no device string baked into the algorithm itself).
 Originally authored as `extra/qk/coalesced_load_lowering.py` + `extra/qk/layout_coalesce_check.py`; those modules

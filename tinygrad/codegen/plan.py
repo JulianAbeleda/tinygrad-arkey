@@ -20,7 +20,7 @@ Design notes:
     This module is the gate INVENTORY. It is not, and does not claim to be, the single reader: the call sites
     listed in GATE_READERS read these variables directly, and for NOOPT the authority is a ContextVar that no env
     read tracks. An OptimizationPlan type once lived here that nothing outside its own tests constructed; it was
-    removed in the post-refactor cut. See docs/task_workflow/input/lr-019-gate-mechanism-divergence-scope-20260726.md.
+    removed in the post-refactor cut. See docs/task_workflow/output/lr-019-gate-mechanism-divergence-scope-20260726.md.
   * Applying a plan is recorded on the plan, not on the graph, so double application is detectable rather than
     silently doubling an upcast.
 """

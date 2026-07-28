@@ -2,13 +2,16 @@
 
 Date: 2026-07-27
 
-Status: authoritative input
+Status: open at hardware qualification. P0-P5 implementation/install work landed; A0-A11 remain gated on enumeration
+of the `1002:744c` PCI endpoint.
 
 Repository and native-source owner: `tinygrad-arkey`, under `extra/usbgpu/`
 
 Task owner: assigned implementation owner; no implementation begins without one named in the phase-0 artifact.
 
-Branch and worktree: one dedicated `feature/egpu-usb4-keeper` branch and worktree. Do not implement, build, install, or qualify from the production worktree.
+Branch and worktree: the implementation branch was retired after landing on `master`. Resume hardware qualification
+from `exp` or a dedicated `experiment/*` worktree after the three-tier topology is established. Do not build, install,
+or qualify from the production worktree.
 
 GPU exclusion: every command that can open, initialize, exercise, install against, or inspect the eGPU while it is active must hold `/tmp/gpu-bench.lock`. Record lock owner and worktree in every artifact.
 

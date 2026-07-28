@@ -1,6 +1,6 @@
 # 14B: the rollback path faults, the default path is healthy
 
-**Status:** Intake scope; investigation not started
+**Status:** Closed on 2026-07-28; the healthy default AMD path met the campaign objective and beat the Llama comparison baseline. The historical rollback-path fault remains documented below and is not claimed as fixed.
 **Date:** 2026-07-26
 **Repository:** `/home/ubuntu/tinygrad-arkey`
 **Hardware:** single gfx1100 (RX 7900 XTX, 24 GB), ROCm/KFD, `xccs == 1`
@@ -223,7 +223,7 @@ agent's. Until then, treat the address as unreliable evidence and do not build a
 
 - The G5 decode depth-decay campaign (§8.1).
 - The multi-checkpoint decode `CompileError` (§8.2) — record, do not chase.
-- The lowering-architecture refactor (`docs/task_workflow/input/lowering-architecture-refactor-scope-20260726.md`).
+- The lowering-architecture refactor (`docs/task_workflow/output/lowering-architecture-refactor-scope-20260726.md`).
 - Any change to default routes, promotion state, or the route manifest.
 - Rewriting the allocator or the scheduler.
 ## Execution revision: targeted discriminator replaces the full rate campaign

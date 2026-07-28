@@ -1,5 +1,12 @@
 # Codebase Organization Audit Task
 
+Status: completed and landed on 2026-07-26. Phase 1 is recorded in
+`docs/task_workflow/output/codebase-organization-audit-report.md`; the reviewed A1-A11 follow-up actions also landed.
+
+Current maintenance note (2026-07-28): the checker reports one later drift,
+`extra/qk/decode/capture_prefill_compile.py`, which has no manifest record. Its ownership must be decided separately;
+it was not classified merely to make this cleanup pass.
+
 ## Repository
 
 `/home/ubuntu/tinygrad-arkey`
