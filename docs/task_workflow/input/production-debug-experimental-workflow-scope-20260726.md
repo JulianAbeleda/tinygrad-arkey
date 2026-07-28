@@ -486,7 +486,7 @@ File names and directory location are discovery signals, never final classificat
 | ID | Status | Work item | Completion evidence |
 |---|---|---|---|
 | R0 | completed | Establish and push the three clean worktrees | `master`, `dev`, and `exp` all at `5b2439eac` before divergence |
-| R1 | pending | Census every current fork-added and fork-modified file from `exp` | Inventory counts reconcile with Git and `sz.py`; no unclassified path |
+| R1 | in progress | Census every current fork-added and fork-modified file from `exp` | Inventory counts reconcile with Git and `sz.py`; no unclassified path |
 | R2 | pending | Resolve the production import/dispatch closure | Actual call sites distinguish live runtime dependencies from optional wrappers and test-only seams |
 | R3 | pending | Classify all tests | Production regressions stay; debug tests move to `dev`; experimental and obsolete tests move to `exp` or delete |
 | R4 | pending | Classify all docs | Master keeps current operating/contract records; detailed investigations move to `dev`; scratch and stale prompts leave master |
@@ -634,3 +634,21 @@ ledger. It must verify:
 - No removal begins while any cross-packet dependency or unresolved owner remains.
 
 Agent handoffs are evidence inputs, not authority. Only the reconciled, committed R7 ledgers authorize R8-R11 edits.
+
+### 16.9 Agent census checkpoint
+
+Checkpoint date: 2026-07-28. Worker commit: `b57362ca6` on `exp`.
+
+Luna was not exposed by the active runtime, so all packets used the documented available low-effort worker fallback.
+Every worker remained read-only and reported a clean worktree; no GPU, generated-output, branch, commit, or push action
+occurred inside a packet.
+
+| Packet | Status | Paths covered | Principal result |
+|---|---|---:|---|
+| A: runtime/tooling | completed | 393 | 213 `tinygrad` and 180 `extra` paths; resolved live calls behind the three production seams and classified the missing QK audit file |
+| B: tests/evidence | completed | 380 | 164 tests, 43 bench files, and 173 artifact files; 72 tests and 102 staged/frozen artifacts remain dependent on Packet A dispositions |
+| C: docs/surface | completed | 276 | Document and repository-surface groups classified; maintained-index drift and broken retained links identified |
+
+The packet sets cover 1,049 assigned paths. Root-owned repository metadata, path-set reconciliation, and all cross-packet
+dependencies still require R1/R7 work. High-confidence raw evidence and scratch deletion candidates were identified,
+but **zero removals are authorized** until the canonical inventory records their compact replacement and recovery path.
