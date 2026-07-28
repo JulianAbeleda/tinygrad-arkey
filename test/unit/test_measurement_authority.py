@@ -2,7 +2,7 @@
 
 Two failures this guards against, both of which actually happened:
 
-1. `extra/qk/bench.py` is declared the single sanctioned entry for reported throughput, but it dispatches to
+1. `extra/llm_research/bench.py` is declared the single sanctioned entry for reported throughput, but it dispatches to
    its measurement cores BY FILE PATH via argv builders. Twice a cleanup commit deleted a core while bench.py
    kept calling it: `decode_runtime_overhead.py` (45cfc399c) and `prefill_boltbeam_trace.py` (0e02a1976).
    `bench.py --decode` therefore failed with file-not-found, which is why decode was never re-measured after
@@ -41,7 +41,7 @@ class TestBenchDispatchTargetsExist(unittest.TestCase):
   def _argv_paths(self) -> list[str]:
     # The argv builders hardcode the core's path as the first element.
     out = []
-    for mod in ("extra/qk/decode/decode_harness.py", "extra/qk/prefill/prefill_harness.py"):
+    for mod in ("extra/llm_research/decode/decode_harness.py", "extra/llm_research/prefill/prefill_harness.py"):
       for m in re.finditer(r'return \["(extra/[^"]+\.py)"', (ROOT/mod).read_text()): out.append(m.group(1))
     return out
 
@@ -53,13 +53,13 @@ class TestBenchDispatchTargetsExist(unittest.TestCase):
 
   def test_bench_entry_itself_imports(self):
     import importlib
-    importlib.import_module("extra.qk.bench")
+    importlib.import_module("extra.llm_research.bench")
 
 
 class TestSingleDecodeAuthority(unittest.TestCase):
   """One decode measurement definition is canonical; others must not masquerade as ctx-varying."""
 
-  CANONICAL = ROOT/"extra/qk/decode/decode_runtime_overhead.py"
+  CANONICAL = ROOT/"extra/llm_research/decode/decode_runtime_overhead.py"
 
   def test_canonical_decode_core_prefills_to_depth(self):
     src = self.CANONICAL.read_text()
@@ -89,7 +89,7 @@ class TestBenchEntryPointHardening(unittest.TestCase):
   """
 
   def setUp(self):
-    import extra.qk.bench as bench
+    import extra.llm_research.bench as bench
     self.bench = bench
     self._tmp_paths: list[pathlib.Path] = []
     self.addCleanup(self._cleanup)
@@ -107,7 +107,7 @@ class TestBenchEntryPointHardening(unittest.TestCase):
     return os.path.relpath(path, ROOT)
 
   def test_missing_dispatch_target_fails_loudly_before_running(self):
-    missing_argv = ["extra/qk/decode/decode_runtime_overhead_DOES_NOT_EXIST.py", "--model", "x"]
+    missing_argv = ["extra/llm_research/decode/decode_runtime_overhead_DOES_NOT_EXIST.py", "--model", "x"]
     with self.assertRaises(self.bench.DispatchTargetMissing) as ctx:
       self.bench._run("DECODE W==D", missing_argv, {})
     # The error must name the exact missing path -- that is the whole point of this check.
@@ -117,7 +117,7 @@ class TestBenchEntryPointHardening(unittest.TestCase):
     # A real historical case: the argv builder still hardcodes a path that was deleted.
     argv = self.bench.decode_authority_argv("fake-model.gguf",
                                             self.bench.decode_run_profile(), out_path="/tmp/x.json")
-    argv[0] = "extra/qk/decode/decode_runtime_overhead_WAS_DELETED.py"
+    argv[0] = "extra/llm_research/decode/decode_runtime_overhead_WAS_DELETED.py"
     with self.assertRaises(self.bench.DispatchTargetMissing):
       self.bench._run("DECODE W==D", argv, {})
 

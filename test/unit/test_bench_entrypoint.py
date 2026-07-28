@@ -1,4 +1,4 @@
-"""Contract for extra/qk/bench.py's throughput scan.
+"""Contract for extra/llm_research/bench.py's throughput scan.
 
 The entry-point hardening treats "no parsable throughput number" as a failure even when the child exits 0. That is
 right, but it only works if the scan looks where the measurement authorities actually print. decode_runtime_overhead.py
@@ -9,7 +9,7 @@ and a genuinely empty run must still fail loudly.
 import re
 import pytest
 
-from extra.qk.bench import _decode_ckpts, _run, BelowPerfFloor, NoThroughputProduced
+from extra.llm_research.bench import _decode_ckpts, _run, BelowPerfFloor, NoThroughputProduced
 
 DECODE_RE = re.compile(r"ctx\s*\d+:\s*W\s*[\d.]+ms\s*\(([\d.]+)\s*tok/s\)")
 ROW = "ctx   512: W   8.82ms (113.35 tok/s) | D   9.08ms (110.19 tok/s)"

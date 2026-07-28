@@ -44,7 +44,7 @@ free because prefill wraps **zero** times.
 
 **Discipline note:** the first *cold* rep shows 0 violations even with the guard off, because compilation
 serializes dispatches. Only warm reps are valid evidence; the warmup is discarded in
-`extra/qk/` A/B harness. Anyone re-running this must do the same or they will "disprove" the hazard.
+`extra/llm_research/` A/B harness. Anyone re-running this must do the same or they will "disprove" the hazard.
 
 ## What is NOT done -- the work to scope out
 

@@ -2,7 +2,7 @@
 
 **Flag:** `PREFILL_SOFTMAX_REDUCE_FUSE` (commit `23b8e05fc`)
 **Route:** `prefill_flash_attention_generated` (already promoted; this is a default-value change inside it)
-**Gate:** `extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py`
+**Gate:** `extra/llm_research/prefill/prefill_softmax_reduce_fuse_promotion_gate.py`
 **Evidence:** `docs/prefill-softmax-reduce-fuse-evidence-20260724.json`
 **Verdict:** **PASS — default flipped to ON.** Rollback is `PREFILL_SOFTMAX_REDUCE_FUSE=0`.
 
@@ -26,16 +26,16 @@ Effect on the emitted HIP for the prefill attention kernel: textual `ds_bpermute
 ### 1. Decode non-regression — RESOLVED, byte-identical
 
 This mattered because the predicate fires on *any* float `Ops.CUSTOMI` with two or more consumers, and
-decode builds float `CUSTOMI` of exactly that family: `extra/qk/flash_kernels.py:98`
+decode builds float `CUSTOMI` of exactly that family: `extra/llm_research/flash_kernels.py:98`
 (`__builtin_amdgcn_fdot2`) and `tinygrad/schedule/wmma/softmax.py:104`
 (`amd_gfx1100_broadcast_row_state`'s `"bpermute"`). `tinygrad/llm/prefill_policy.py:14`
 `_SHARED_ATTENTION_PROOF_FIELDS` names `decode_nonregression_8b` and `decode_nonregression_14b` as
 mandatory for exactly this reason.
 
-New harness: **`extra/qk/decode/decode_codegen_identity_check.py`**. It wraps
+New harness: **`extra/llm_research/decode/decode_codegen_identity_check.py`**. It wraps
 `tinygrad.device.Compiler.compile_cached` and records `sha256(src)` and `sha256(lib)` for every kernel
 compiled while the **real** decode graph is realized through
-`extra/qk/decode/flash_decode_attention_executor.py:flash_decode_live_split_block_tile`
+`extra/llm_research/decode/flash_decode_attention_executor.py:flash_decode_live_split_block_tile`
 (`staging="KV_BOTH"`, `fused_combine=True`) — the exact path `tinygrad/llm/decode_routes.py` drives.
 Both decode-admitted geometries, 8B `Hq=32` and 14B `Hq=40` (`Hkv=8`, `Hd=128`, `MAXC=512`, `Tc=400`, `S=4`).
 
@@ -62,7 +62,7 @@ if anyone reintroduces it.
 ### 2. 14B evidence — OBTAINABLE, and now collected
 
 The standing claim was that 14B could not be measured. That was wrong, and it was wrong for a mundane
-reason: `extra/qk/prefill/prefill_flash_e2e_parity.py` loops over **both** models in **one** process and nothing
+reason: `extra/llm_research/prefill/prefill_flash_e2e_parity.py` loops over **both** models in **one** process and nothing
 drops the 8B buffers, so the 14B arm hit `fp16 KV admits 0 ... free 5.2GB, weights 9.0GB`. That is
 in-process VRAM exhaustion, not a 14B route or hardware problem.
 
@@ -70,7 +70,7 @@ Fix: a `--only <8B|14B>` argument, one model per process — `free 25.5GB, weigh
 then passes. Every 14B run also carries `TINYGRAD_PREFILL_PACKED_WMMA=0`, the known mitigation for the
 separate packed-WMMA hardware fault (`docs/BOLTBEAM_GPU_HANG_DIAGNOSIS_HANDOFF_20260724.md`).
 
-`extra/qk/prefill/prefill_long_context_numerics.py` was also hardcoded to `HQ = 32`; it now takes `QK_HQ`, so the
+`extra/llm_research/prefill/prefill_long_context_numerics.py` was also hardcoded to `HQ = 32`; it now takes `QK_HQ`, so the
 14B grid (`Hq=40`) can be driven through the same real path.
 
 ---
@@ -148,7 +148,7 @@ in this pass.
 
 ## How the gate deliberately differs from its sibling
 
-`extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py` requires **both** pp512 and pp4096 to clear 2× the
+`extra/llm_research/prefill/prefill_causal_tile_skip_promotion_gate.py` requires **both** pp512 and pp4096 to clear 2× the
 noise floor, because tile-skipping removes trip count at every depth. This flag removes ~292 instructions
 from the KV-loop **body**, so its whole-model effect is (KV-loop share of chunk time) × (kernel speedup):
 intrinsically smallest at pp512 and largest at pp4096. Requiring equal signal-to-noise at pp512 would
@@ -179,7 +179,7 @@ produce `FAIL`.
 
 ## 8B evidence
 
-Numerics, `extra/qk/prefill/prefill_long_context_numerics.py` (`QK_HQ=32`), both arms interleaved: **output sha256
+Numerics, `extra/llm_research/prefill/prefill_long_context_numerics.py` (`QK_HQ=32`), both arms interleaved: **output sha256
 identical at every kv** — `ed9220e82a6c82c4` (Hd=64), `1e6011a5b6a9c4d6` / `0df8a5b388881905` /
 `5469ca884a47a647` / `c010038feaeb52fd` at kv=512/1024/2048/4096. `max_abs_err` 3.905e-05 / 6.558e-05 /
 2.655e-06 / 1.865e-06 / 1.053e-06, all finite, all PASS. `prefill_hd_sweep_numerics.py` 6.104e-05 PASS at
@@ -267,7 +267,7 @@ state).
 
 ## Corrections to the framing this pass inherited
 
-1. **`extra/qk/process_isolated.py` does not exist.** The 14B isolation was done by adding `--only` to
+1. **`extra/llm_research/process_isolated.py` does not exist.** The 14B isolation was done by adding `--only` to
    `prefill_flash_e2e_parity.py` instead.
 2. **14B was never blocked.** The `fp16 KV admits 0` failure was one-process VRAM exhaustion, exactly as
    suspected. Full 14B evidence — numerics, token parity, attention-local throughput and whole-model
@@ -293,5 +293,5 @@ state).
 * 8B evidence complete and strong on all four whole-prefill lengths, monotone in context;
 * whole unit suite failure-set **equal** off / on / at the new default;
 * purity guard, manifest validation and provenance unchanged;
-* `extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py` → `AUTHORITY_GATE: PASS`, and fails closed on
+* `extra/llm_research/prefill/prefill_softmax_reduce_fuse_promotion_gate.py` → `AUTHORITY_GATE: PASS`, and fails closed on
   each of 21 tested mutations of its evidence.

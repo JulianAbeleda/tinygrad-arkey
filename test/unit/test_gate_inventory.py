@@ -43,9 +43,9 @@ def test_gate_readers_match_the_real_call_sites():
   """
   import pathlib, re
   from tinygrad.codegen.plan import GATE_READERS
-  # Scans extra/qk as well as tinygrad/: those builders construct ASTs that feed to_program, so a gate read there
+  # Scans extra/llm_research as well as tinygrad/: those builders construct ASTs that feed to_program, so a gate read there
   # is as load-bearing as one read in codegen. An earlier version scanned tinygrad/ only, which let
-  # DECODE_FAST_EXP2 be recorded as having no reader while extra/qk/flash_common.py:15 read it.
+  # DECODE_FAST_EXP2 be recorded as having no reader while extra/llm_research/flash_common.py:15 read it.
   roots = [pathlib.Path(ROOT) / "tinygrad", pathlib.Path(ROOT) / "extra" / "qk"]
   for name, reader in GATE_READERS.items():
     getenv_defaults, ctxvar = set(), False

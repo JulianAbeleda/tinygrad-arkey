@@ -5,9 +5,9 @@ maintenance and audit loop, not owned-kernel reconstruction.
 
 Authorities:
 - Route census: `extra/audit/pure_machine_search_default_path_census.py --check --strict-final-default`
-- Runtime manifest: `extra/qk/route_manifest.py`
-- Decode authority: `extra/qk/decode/decode_runtime_overhead.py`
-- Correctness authority for attention changes: `extra/qk/prefilled_route_parity.py`
+- Runtime manifest: `extra/llm_research/route_manifest.py`
+- Decode authority: `extra/llm_research/decode/decode_runtime_overhead.py`
+- Correctness authority for attention changes: `extra/llm_research/prefilled_route_parity.py`
 - Candidate policy/search ownership: BoltBeam `QK_ROUTE_POLICY`
 
 Hard rules:

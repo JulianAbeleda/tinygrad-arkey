@@ -37,7 +37,7 @@ the linearized list — only its four constituent ops (plus the `AFTER` wrappers
 
 ## Correctness gate — PASS
 
-- `extra/qk/rotating_pv_abi.py::rotating_pv_kernel_probe()` → `STATUS CONSTRUCTED`
+- `extra/llm_research/rotating_pv_abi.py::rotating_pv_kernel_probe()` → `STATUS CONSTRUCTED`
   (`type_verify(sink, spec_full)` passes with the primitive integrated across all 8 blocks).
 - Unit sweep (`test_rotating_pv_scheduler`, `test_rotating_pv_state`,
   `test_shared_attention_compiler_capture`, `_synchronization_capture`, `_promotion`):
@@ -52,7 +52,7 @@ the linearized list — only its four constituent ops (plus the `AFTER` wrappers
 
 The `VGPR ≤ 192 (measured)` gate cannot be evaluated for the rotating-PV route from this tree:
 
-1. **The rotating-PV route has no backend lowering.** `extra/qk/rotating_pv_abi.py` states
+1. **The rotating-PV route has no backend lowering.** `extra/llm_research/rotating_pv_abi.py` states
    plainly: "the backend has no verified lowering for the accumulator StateHandle yet."
    `rotating_pv_kernel_probe` only *constructs + type_verifies*; it never compiles to ISA.
    The typed LDS-accumulator ops (`rotating_pv_state_write_v1`, `rotating_pv_loop_read_v1`,

@@ -18,9 +18,9 @@
 - **The ONE slow spot is `ExpertWeights` (model.py:299–305):**
   - `self.weight = Tensor.zeros(num_experts, out, in)` — **dense, not packed-Q4, no `prefill_packed_weight()`**.
   - `__call__` does `self.weight[sel]` — a **data-dependent gather of weights to tokens** → `(B,T,k,out,in)` materialization (prefill VRAM blowup) and a **dynamic-weight matmul** the substrate can't touch.
-- **The substrate is shape-agnostic and reusable AS-IS** — `PackedWmmaPrefillCandidate.run()` (`extra/qk/prefill/packed_wmma_prefill_candidates.py:167`): given a **static** packed weight + `x_batch`, builds the fp16-overlay view-chain (`bitcast/reshape/pad/expand/reshape/bitcast`) and does `x_batch @ b.T` on WMMA. It never asks *which* weight it is.
+- **The substrate is shape-agnostic and reusable AS-IS** — `PackedWmmaPrefillCandidate.run()` (`extra/llm_research/prefill/packed_wmma_prefill_candidates.py:167`): given a **static** packed weight + `x_batch`, builds the fp16-overlay view-chain (`bitcast/reshape/pad/expand/reshape/bitcast`) and does `x_batch @ b.T` on WMMA. It never asks *which* weight it is.
 - **Packed bytes come from `lin.prefill_packed_weight()`** (candidate:181) — retained for `nn.Linear`, NOT for `ExpertWeights`.
-- **Geometry is a frozen searched table** — `PACKED_WMMA_GEOM` (candidate:36), 6 `(quant, role)` combos for the *dense* model's shapes at pp512; `gate_combo` (105) declines anything else. Search tool = **BubbleBeam+FutureSight** (`extra/qk/bubblebeam_futuresight.py`).
+- **Geometry is a frozen searched table** — `PACKED_WMMA_GEOM` (candidate:36), 6 `(quant, role)` combos for the *dense* model's shapes at pp512; `gate_combo` (105) declines anything else. Search tool = **BubbleBeam+FutureSight** (`extra/llm_research/bubblebeam_futuresight.py`).
 - **Route coverage is nn.Linear-only** — `_prefill_v2_covered` (model.py ~828).
 
 ## 2. The design (target shape)

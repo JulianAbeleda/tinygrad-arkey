@@ -1,7 +1,7 @@
 import pytest
 
-from extra.qk.amd_resource_artifact import AMDPhysicalInterval, AMDResourceFacts
-from extra.qk.prefill.pure_register_compile_capture import capture_final_program_compile_only
+from extra.llm_research.amd_resource_artifact import AMDPhysicalInterval, AMDResourceFacts
+from extra.llm_research.prefill.pure_register_compile_capture import capture_final_program_compile_only
 
 
 IDENTITY = "c" * 64

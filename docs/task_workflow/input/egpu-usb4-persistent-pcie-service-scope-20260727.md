@@ -236,7 +236,7 @@ Gate: with no TinyGPU Unix-socket server or workload client running, two one-sho
 - Replace one-shot socket `recv`/send paths with exact-length helpers and bounds validation.
 - Make all lease cleanup idempotent after partial initialization; release BAR, DMA, shared-memory, fd, and user-client state on every disconnect/error path.
 - Reject concurrent workload clients until designed otherwise.
-- Extend the canonical `extra/qk/bench.py` harness with positive `--decode-duration-s` and `--decode-cycle-timeout-s` options; the timeout defaults to 900 seconds. Duration mode requires explicit `--decode` and rejects prefill/both mode. A cycle runs all selected checkpoint contexts and `--decode-reps` through the existing decode authority. Start at least one cycle, start no new cycle after the duration is reached, and terminate/kill a cycle that exceeds its timeout with a five-second grace. Total wall time is bounded by requested duration plus cycle timeout plus grace. On child failure, timeout, SIGINT, or SIGTERM, stop immediately, forward termination, atomically write a non-passing aggregate artifact, and return nonzero.
+- Extend the canonical `extra/llm_research/bench.py` harness with positive `--decode-duration-s` and `--decode-cycle-timeout-s` options; the timeout defaults to 900 seconds. Duration mode requires explicit `--decode` and rejects prefill/both mode. A cycle runs all selected checkpoint contexts and `--decode-reps` through the existing decode authority. Start at least one cycle, start no new cycle after the duration is reached, and terminate/kill a cycle that exceeds its timeout with a five-second grace. Total wall time is bounded by requested duration plus cycle timeout plus grace. On child failure, timeout, SIGINT, or SIGTERM, stop immediately, forward termination, atomically write a non-passing aggregate artifact, and return nonzero.
 - Duration mode writes `tinygrad.qk.decode.duration.v1` at `bench/qk-decode-duration/run-<time>-<pid>.json` or an explicit `--decode-duration-out`. It rejects simultaneous `--decode-out`. The aggregate records resolved argv/environment controls, model path/hash/size, requested/actual duration, timeout/grace, start/end monotonic and wall times, final status, and an ordered cycle list with start/end, exit status, parsed throughput, relative child-artifact path, and child SHA-256. Child artifacts remain the existing decode-authority schema. Add CPU-only argument, loop-bound, failure, signal, and artifact-schema tests; do not create a second benchmark wrapper or alter benchmark hot paths.
 - Add a CPU-tested `extra/usbgpu/tests/qualify.py` orchestrator for A0-A11. Every eGPU subprocess and periodic sampler is its descendant, it requires lock-runner metadata, emits `docs/task_workflow/output/egpu-usb4-persistent-pcie-<gate>-<UTC>-<pid>.json` atomically, preserves the first failure, and never automates unplug, power, extension replacement, or sleep. Published filenames contain resolved values.
 - Keep test dependency injection inside the Python API. The production qualification CLI must not expose endpoint/status command substitution or duration, churn-count, idle, socket, output-directory, or installed-app overrides that could weaken an acceptance row.
@@ -269,7 +269,7 @@ Gate: installed app/dext are traceable to the exact source commit and expose the
 | `TinyGPUCLIRunner.swift` | Structured status command without starting a workload |
 | Xcode/build/install files | Reproducible provenance, non-secret build configuration, verification |
 | `extra/usbgpu/tools/with_gpu_lock.py` | Portable exclusive eGPU command runner and lock-owner metadata |
-| `extra/qk/bench.py` | Canonical duration-bounded decode orchestration and artifact data |
+| `extra/llm_research/bench.py` | Canonical duration-bounded decode orchestration and artifact data |
 | `extra/usbgpu/tests/qualify.py` | Lock-aware A0-A11 orchestration, sampling, first-failure capture, gate artifacts |
 | `tinygrad/runtime/support/system.py` | Independent protocol implementation, handshake/status use, explicit env handling |
 | focused tests | Wire fixtures, lifecycle, timer, framing, cleanup, integration evidence |
@@ -303,7 +303,7 @@ Sustained-load classification uses the canonical benchmark route, not a new benc
 
 ```sh
 .venv/bin/python extra/usbgpu/tools/with_gpu_lock.py -- \
-  .venv/bin/python extra/qk/bench.py --model "$MODEL_GGUF" --decode --decode-duration-s 1800
+  .venv/bin/python extra/llm_research/bench.py --model "$MODEL_GGUF" --decode --decode-duration-s 1800
 ```
 
 The duration flag is a required P4 deliverable and must pass its CPU-only tests before P6. Sustained load is a classification gate, not keeper acceptance.

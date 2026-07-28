@@ -1,7 +1,7 @@
 import copy
 import json
 
-from extra.qk.memory_adaptive_policy import (
+from extra.llm_research.memory_adaptive_policy import (
   build_production_eligibility, build_production_eligibility_requirement,
   cache_matches, canonical_search_key, make_cache_record, select_policy,
 )

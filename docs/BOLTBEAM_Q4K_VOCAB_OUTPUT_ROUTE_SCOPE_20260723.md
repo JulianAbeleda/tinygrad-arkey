@@ -27,7 +27,7 @@ The full model does not reach the Q4_K vocabulary emitter; it selects the Q6_K c
 
 ## Why the previous fixes were insufficient
 
-The named and untagged full-vocabulary guards were added to the known `extra/qk/prefill/q4k_prefill_route_spec.py` direct-output emitter. Its compile-only probe is clean, but the complete model forward still emits the old vector lvalue. The actual model route is the Q6_K cooperative emitter and its downstream reduction.
+The named and untagged full-vocabulary guards were added to the known `extra/llm_research/prefill/q4k_prefill_route_spec.py` direct-output emitter. Its compile-only probe is clean, but the complete model forward still emits the old vector lvalue. The actual model route is the Q6_K cooperative emitter and its downstream reduction.
 
 ## Required work
 

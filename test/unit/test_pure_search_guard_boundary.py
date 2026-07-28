@@ -21,8 +21,8 @@ from tinygrad import Tensor, UOp, dtypes, getenv
 import tinygrad.llm.decode_routes as dr
 from tinygrad.llm import route_ops
 import tinygrad.llm.model as model
-from extra.qk import pure_search_guard as guard
-from extra.qk.route_manifest import ROUTES, default_routes, promoted_prefill_candidate_policy
+from extra.llm_research import pure_search_guard as guard
+from extra.llm_research.route_manifest import ROUTES, default_routes, promoted_prefill_candidate_policy
 
 
 @contextlib.contextmanager

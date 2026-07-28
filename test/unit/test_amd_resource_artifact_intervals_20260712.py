@@ -1,6 +1,6 @@
 import pytest
 
-from extra.qk.amd_resource_artifact import extract_amd_physical_intervals
+from extra.llm_research.amd_resource_artifact import extract_amd_physical_intervals
 
 
 class Reg:

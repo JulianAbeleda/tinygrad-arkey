@@ -28,7 +28,7 @@ and `extra/**`. Upstream files deleted by the fork are sync history, not current
 | Renamed | 30 |
 | **Total** | **393** |
 
-The existing organization manifest describes 94 of 104 current `extra/qk` paths. Its ten uncovered paths are
+The existing organization manifest describes 94 of 104 current `extra/llm_research` paths. Its ten uncovered paths are
 `README.md`, `decode/capture_prefill_compile.py`, `gpu_wait_clear.sh`, the two `microbench` files, the tiled-WMMA
 validation note, the three `research/llama_mmq` files, and `route_manifest.json`. This report classifies them below.
 
@@ -59,7 +59,7 @@ mixed groups remain unresolved instead of inheriting intent from a directory or 
 | `extra/runtime_models.example.json` | master | operating fixture | retain | same path | runtime model/client configuration | canonical example configuration | medium | |
 | `extra/setup_tinygpu_osx.sh`, `extra/usbgpu/**` (23) | unresolved | experimental backend, installer, protocol fixtures | unresolved | exp unless promoted as a supported backend | active eGPU task and tests; runtime support has TinyGPU behavior | current commit provides recovery; active task forbids deletion | high | supported-product status is not decided |
 
-## Actual `extra/qk` production closure
+## Actual `extra/llm_research` production closure
 
 `route_ops.py` declares roughly thirty lazy wrappers, but declarations are not execution evidence. Confirmed production
 call sites use only Q4/Q6 parsing, PF16 graph GEMM, G3 GEMV, Q6 decode specification/emission, flash decode, packed-WMMA
@@ -73,7 +73,7 @@ features are environment-gated, but the supported compiler cannot retain a depen
 
 ### Promote or consolidate into `tinygrad`
 
-| Slice | Live `extra/qk` dependency | Exact destination | Confirmed production caller | Static Python closure | Required focused coverage |
+| Slice | Live `extra/llm_research` dependency | Exact destination | Confirmed production caller | Static Python closure | Required focused coverage |
 |---:|---|---|---|---:|---|
 | 1 | `prefill/flash_prefill_attention_spec.py` | `tinygrad/schedule/wmma/flash_prefill.py` | `llm/fused_attention.py:162`; `codegen/opt/postrange.py:602` | 1 | attention semantic/residency, shared-attention compiler capture, composite reduction; boundary assertion |
 | 2 | `codegen_recurrence_unroll.py` | `tinygrad/codegen/late/recurrence.py` | `codegen/__init__.py:91`, `SCHED_UNROLL>1` | 1 | recurrence/unroll unit cases plus compile boundary |
@@ -114,7 +114,7 @@ prefill harness, whole-model synchronized harness, flash performance harness, ho
 clock-pin helper to `dev` after extracting any implementation symbol used by production. In particular,
 `current_prefill_execution_adapter.py` cannot move intact until slice 14 owns its runtime subset.
 
-`extra/qk/decode/capture_prefill_compile.py` is a compile reproducer, not runtime. It has no inbound reference, patches
+`extra/llm_research/decode/capture_prefill_compile.py` is a compile reproducer, not runtime. It has no inbound reference, patches
 `HIPCompiler` and `HIPCCCompiler`, and invokes `extra.llm.generate`. It was added with the vector-stack-lvalue renderer
 fix in `5266ca605`. Its owner is `dev`; retain it only until the compile-failure conclusion is banked, then delete it
 with recovery from `5266ca605` or this audited commit. No banked result was found, so it is not delete-ready.
@@ -136,21 +136,21 @@ No unresolved path is authorized for removal.
 
 ## Recommended first bounded slice
 
-Promote only `extra/qk/prefill/flash_prefill_attention_spec.py` to
+Promote only `extra/llm_research/prefill/flash_prefill_attention_spec.py` to
 `tinygrad/schedule/wmma/flash_prefill.py`. Directly import `FlashPrefillAttentionSpec` from that owner in
 `tinygrad/llm/fused_attention.py` and `tinygrad/codegen/opt/postrange.py`, then remove only the two corresponding lazy
 shim functions from `route_ops.py` and `codegen/experimental.py`.
 
-This is the smallest safe first slice because it is a single 131-line module with no `extra/qk` imports, has two
+This is the smallest safe first slice because it is a single 131-line module with no `extra/llm_research` imports, has two
 confirmed production callers, describes an already promoted/default route, and removes a production `extra`
 dependency without changing model loading, route policy, or the packed-WMMA chain. The schedule owner avoids the
 `tinygrad.llm <-> tinygrad.codegen.opt` import-order coupling documented in the current shim.
 
 For a placement-only patch, preserve the implementation byte-for-byte apart from imports and stale path comments.
 Run compile/import checks and the focused CPU-capable attention tests named in slice 1. Add a boundary regression that
-the two production callers and both former shims no longer reference `extra.qk.prefill.flash_prefill_attention_spec`.
+the two production callers and both former shims no longer reference `extra.llm_research.prefill.flash_prefill_attention_spec`.
 Existing GPU parity and performance artifacts remain the promotion authority; this census did not run GPU work.
 
 Recommended later order is slices 2-5, shared warp slice 6, quant slice 7, decode slices 8-10, memory and route-policy
 extraction 11-12, graph-GEMM slice 13, and packed-WMMA decoupling/promotion 14. Each bounded slice removes only its
-corresponding shim and adds a boundary assertion; neither `extra/qk` nor a richer branch is merged wholesale.
+corresponding shim and adds a boundary assertion; neither `extra/llm_research` nor a richer branch is merged wholesale.

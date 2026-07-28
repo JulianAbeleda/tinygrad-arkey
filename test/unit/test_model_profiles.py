@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from extra.qk.model_profiles import (
+from extra.llm_research.model_profiles import (
   QWEN3_14B_Q4_K_M_GFX1100,
   QWEN3_8B_Q4_K_M_GFX1100,
   AttentionShape,

@@ -16,12 +16,12 @@ Purpose: immutable starting point for the foundation, prune, and llama-surpass p
 `python3 sz.py`:
 
 ```text
-extra/qk authored, unbudgeted: 29,311 lines in 219 files
+extra/llm_research authored, unbudgeted: 29,311 lines in 219 files
 tinygrad/llm:                   3,143 lines in 21 files
 AUTHORED budgeted:             29,983 / 30,000 lines
 ```
 
-A broad filename inventory of Python files under `extra/qk` containing `mmq`, `q4k`, `q6k`, `prefill`, or
+A broad filename inventory of Python files under `extra/llm_research` containing `mmq`, `q4k`, `q6k`, `prefill`, or
 `memory_adaptive` contains 149 files and 25,916 physical lines, including 53 CLI/main modules. These are navigation
 baselines, not deletion quotas.
 
@@ -45,7 +45,7 @@ Covered modules:
 Compileall:
 
 ```text
-python3 -m compileall -q tinygrad extra/qk
+python3 -m compileall -q tinygrad extra/llm_research
 PASS
 ```
 

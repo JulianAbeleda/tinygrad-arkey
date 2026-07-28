@@ -56,7 +56,7 @@ def warp_reduce_sum(val:UOp, lane:UOp, width:int = WARP) -> UOp:
 
 # Auto-lowering for optimizer-produced lane reductions. This must stage every shuffle into a REG because an inline
 # ds_bpermute can be pulled into a divergent single-lane writeback gate. The hand-built primitives above remain
-# available to kernel authors and to the existing extra/qk emitters through this core owner.
+# available to kernel authors and to the existing extra/llm_research emitters through this core owner.
 def _warp_reduce_sum_staged(val:UOp, lane:UOp, width:int = WARP, slot_base:int = _STAGE_SLOT) -> UOp:
   off = width >> 1
   while off >= 1:

@@ -1,7 +1,7 @@
 {
   "scope": "14B decode G5 steady-state throughput recovery",
   "date": "2026-07-26",
-  "harness": "extra/qk/decode/decode_tile_timing.py",
+  "harness": "extra/llm_research/decode/decode_tile_timing.py",
   "device": "AMD gfx1100 wave32",
   "lock": "/tmp/gpu-bench.lock",
   "power_control": "/sys/class/drm/card1/device/power_dpm_force_performance_level",

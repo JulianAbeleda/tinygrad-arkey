@@ -18,7 +18,7 @@ So three days ago all six canary gates passed on 14B shapes with zero error, and
 and it was once realized. **Something between `c35b5ff53` and HEAD broke it.**
 
 ## Corrections to the prior handoff
-- `process_isolated.py` is at **`tinygrad/runtime/`**, not `extra/qk/`. The stale path caused a later agent
+- `process_isolated.py` is at **`tinygrad/runtime/`**, not `extra/llm_research/`. The stale path caused a later agent
   to report the file missing.
 - It conflates two distinct failures: (a) the GEMM HW-fault, and (b) a spawn deadlock where the child
   re-execs, dies on `budget 0.0GB, KV admits 0` because the parent holds ~19GB, and never drains the pipe
@@ -57,7 +57,7 @@ Reproduce with `scratchpad/canary_binary_sha.py` / `canary_res.py` (compile-only
 carries only the two shas, not LDS/VGPR — worth extending).
 
 ## Geometry provenance — a real latent defect, but NOT this fault
-`PACKED_WMMA_GEOM` (`extra/qk/prefill/packed_wmma_prefill_candidates.py:38`) is keyed by
+`PACKED_WMMA_GEOM` (`extra/llm_research/prefill/packed_wmma_prefill_candidates.py:38`) is keyed by
 **`(quant, role)` only, not shape**, and the candidate set contains only 8B payloads, so every role goes
 through `rebind_full_kernel_workload`. That function's docstring delegates legality to admission
 ("Admission remains responsible for proving that the retained schedule is legal for the new shape"), but
@@ -72,7 +72,7 @@ and should be fixed regardless. But it is NOT the cause here: the geometries wer
 
 ## Next step: bisect on the source sha (zero GPU risk)
 495 commits separate `c35b5ff53` from HEAD; ~20 touch this path (`git log c35b5ff53..HEAD -- extra/qk/
-prefill/ extra/qk/runtime_specs.py tinygrad/llm/model.py extra/qk/kernel_lds.py tinygrad/codegen/opt/
+prefill/ extra/llm_research/runtime_specs.py tinygrad/llm/model.py extra/llm_research/kernel_lds.py tinygrad/codegen/opt/
 kernel_lds.py`). Because the kernel compiles at every commit, the transition points of `source_sha256`
 enumerate a small candidate set **without ever executing the faulting kernel**. Each transition is then a
 judgment call on whether the change could produce an out-of-bounds access.

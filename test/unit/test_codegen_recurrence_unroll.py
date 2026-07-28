@@ -11,7 +11,7 @@ from tinygrad.uop.ops import AxisType, Ops, UOp
 
 def test_recurrence_owner_is_core_not_extra():
   assert importlib.util.find_spec("tinygrad.codegen.late.recurrence") is not None
-  assert importlib.util.find_spec("extra.qk.codegen_recurrence_unroll") is None
+  assert importlib.util.find_spec("extra.llm_research.codegen_recurrence_unroll") is None
 
 
 def _recurrence(end=8, *, inner=False, reinit=False, multi_end=False):

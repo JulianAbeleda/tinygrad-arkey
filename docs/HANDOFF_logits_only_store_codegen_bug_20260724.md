@@ -24,7 +24,7 @@ pointers. No GPU needed to understand it; a GPU (gfx1100) is needed to repro + v
 
 ## TL;DR
 
-The prefill harness's `--logits-only` measurement path (`extra/qk/prefill/prefill_whole_synced.py`)
+The prefill harness's `--logits-only` measurement path (`extra/llm_research/prefill/prefill_whole_synced.py`)
 fails to compile. The HIP renderer emits a C++ statement whose **left-hand side is a
 `make_float32(...)` constructor call** — an rvalue — so gfx1100's compiler rejects it:
 
@@ -43,9 +43,9 @@ is blocked.
 
 ```bash
 cd /home/ubuntu/tinygrad-arkey
-bash extra/qk/gpu_wait_clear.sh 14 60 5          # wait for >=14GB free
+bash extra/llm_research/gpu_wait_clear.sh 14 60 5          # wait for >=14GB free
 timeout 240 env PYTHONPATH=. DEV=AMD DEBUG=5 \
-  .venv/bin/python extra/qk/prefill/prefill_whole_synced.py \
+  .venv/bin/python extra/llm_research/prefill/prefill_whole_synced.py \
   --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf \
   --mode smoke --logits-only --no-artifact
 # -> CompileError: compile failed  (the make_float32(...) = ... line is echoed by comgr)
@@ -144,7 +144,7 @@ invariant violation to assert on and to lower.
 2. Build a **tiny pure-python repro** (no model, fast, CPU-renderable): a matmul whose input is a
    broadcasted per-channel scale (`weight[j] * x_broadcast`) reduced over a large output dim, forced
    through the reg-store devectorizer, rendered to source. Assert the rendered source contains no
-   `make_floatN(...) =` LHS. Put it under `extra/qk/` next to `reg_store_devec.py` as the regression
+   `make_floatN(...) =` LHS. Put it under `extra/llm_research/` next to `reg_store_devec.py` as the regression
    test.
 3. Fix the devectorizer so the broadcast/doubled-lane destination is expanded to addressable stores;
    re-run the assertion repro, then the GPU repro above (must reach exit 0), then a real
@@ -173,7 +173,7 @@ Confirmed by diffing the failing-path files against `upstream/master` (github.co
   lanes to output addresses"*.
 - `tinygrad/codegen/late/devectorizer.py` — `+1022 / -0` vs upstream (fork-owned at this path).
 - `tinygrad/renderer/cstyle.py` — heavily forked (236 ins / 254 del).
-- `tinygrad/codegen/experimental.py` (loader for `extra.qk.*` passes) and
+- `tinygrad/codegen/experimental.py` (loader for `extra.llm_research.*` passes) and
   `pm_reg_store_devec` is now centralized in `tinygrad/codegen/late/reg_store.py`; the former extra module was the
   BoltBeam-originated implementation.
 

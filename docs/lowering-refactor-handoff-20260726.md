@@ -87,7 +87,7 @@ PYTHONPATH=. python3 extra/audit/codebase_organization_audit.py --check
 ## Open items
 
 1. **GPU-blocked**: run `lowering_baseline.py --check` against the branch. It is the only verification not yet done.
-2. **`extra/qk/kernel_pipeline.py`** was restored from `348dceeec` specifically so LR-021 could harvest it. The
+2. **`extra/llm_research/kernel_pipeline.py`** was restored from `348dceeec` specifically so LR-021 could harvest it. The
    harvest turned out to be one small schema change. Its manifest record says "restored to be harvested, not to be
    kept" — decide whether it now goes back to retirement.
 3. **Phase 4 is the first carving** (`realize`, `bufferize`, `scopes`, `dependencies` out of `rangeify.py` and
@@ -159,7 +159,7 @@ Three of the scope's premises did not survive contact and were re-aimed rather t
 
 ## Two things any promotion review should look at first
 
-1. **`extra/qk/kernel_pipeline.py` is gone** (point 2 above, resolved): it had been a pure re-export shim since
+1. **`extra/llm_research/kernel_pipeline.py` is gone** (point 2 above, resolved): it had been a pure re-export shim since
    LR-050, its own manifest record set the retirement condition, the four test callers were repointed.
 2. **Gate coverage is still partial and the gaps are declared, not hidden.** 218 of 981 collapsed pass steps (22%)
    are `<unnamed>` and invisible to reorder detection. `limit_bufs` executes in neither fingerprint gate. The

@@ -2,7 +2,7 @@
 """Authority decode benchmark + matched-context llama.cpp comparison for the per-model bench docs.
 
 Produces fixed-context authority artifacts alongside the older generate-window E2E artifacts:
-  - decode: extra/qk/decode/decode_runtime_overhead.py (clean W==D, TinyJit, synced, NMEAS=40, fixed context,
+  - decode: extra/llm_research/decode/decode_runtime_overhead.py (clean W==D, TinyJit, synced, NMEAS=40, fixed context,
     shipped FLASH_DECODE_THRESHOLD so the owned-attention route fires at ctx>=512). tok_s_W per ctx.
   - llama.cpp: llama-bench tg128 at MATCHED depth (-d <ctx>) so decode is compared at the same context, and
     pp512 for prefill reference.
@@ -31,7 +31,7 @@ def run_decode_authority(model:str, ckpts:str, reps:int, decode_tokens:int, arti
   os.close(fd); os.unlink(name)
   depths = [int(x) for x in ckpts.split(",")]
   max_context = max(depths) + decode_tokens + 1
-  cmd = [sys.executable, "extra/qk/decode/decode_runtime_overhead.py", "--model", model, "--ckpts", ckpts,
+  cmd = [sys.executable, "extra/llm_research/decode/decode_runtime_overhead.py", "--model", model, "--ckpts", ckpts,
          "--max-context", str(max_context), "--nmeas", str(decode_tokens), "--reps", str(reps), "--out", name]
   try:
     subprocess.run(cmd, cwd=str(ROOT), env=env, capture_output=True, text=True, timeout=1800, check=True)

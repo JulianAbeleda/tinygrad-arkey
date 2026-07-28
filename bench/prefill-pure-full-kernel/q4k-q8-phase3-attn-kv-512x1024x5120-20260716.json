@@ -1,7 +1,7 @@
 {
   "command": [
     "/usr/bin/python3",
-    "/home/ubuntu/tinygrad-arkey/extra/qk/prefill/q4k_q8_phase3_role_harness.py",
+    "/home/ubuntu/tinygrad-arkey/extra/llm_research/prefill/q4k_q8_phase3_role_harness.py",
     "--role",
     "attn_kv",
     "--m",

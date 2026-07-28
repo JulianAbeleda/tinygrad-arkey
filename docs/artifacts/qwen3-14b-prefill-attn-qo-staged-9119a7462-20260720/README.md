@@ -36,49 +36,49 @@ FAM=docs/artifacts/qwen3-14b-prefill-attn-qo-staged-951d3615c-20260719/evidence/
 OUT=<this artifact>/evidence
 
 # C4 runtime-preconstruction canary, both queues
-AMD_AQL=0 python -m extra.qk.mmq_frozen_staged_family_execution c4 --role attn_qo \
+AMD_AQL=0 python -m extra.llm_research.mmq_frozen_staged_family_execution c4 --role attn_qo \
   --frozen-bundle $BUNDLE --staged-family-manifest $FAM --queue-mode PM4 --output $OUT/c4-pm4.json
-AMD_AQL=1 python -m extra.qk.mmq_frozen_staged_family_execution c4 --role attn_qo \
+AMD_AQL=1 python -m extra.llm_research.mmq_frozen_staged_family_execution c4 --role attn_qo \
   --frozen-bundle $BUNDLE --staged-family-manifest $FAM --queue-mode AQL --output $OUT/c4-aql.json
 
 # C5 phase-isolated prefix 1 -> 3, C6 full 20, both queues
 for Q in PM4:0 AQL:1; do queue=${Q%%:*}; aql=${Q##*:}; for pe in 1 3 20; do
-  AMD_AQL=$aql python -m extra.qk.mmq_frozen_staged_family_execution prefix --role attn_qo \
+  AMD_AQL=$aql python -m extra.llm_research.mmq_frozen_staged_family_execution prefix --role attn_qo \
     --frozen-bundle $BUNDLE --staged-family-manifest $FAM --queue-mode $queue \
     --prefix-epochs $pe --runtime-canary $OUT/c4-${queue,,}.json \
     --output $OUT/<c5-${queue,,}-prefix$pe|c6-${queue,,}-full20>.json
 done; done
 
 # C7 authority snapshot (pins live commit/tree)
-python -m extra.qk.mmq_staged_c7_authority collect --selected-device AMD \
+python -m extra.llm_research.mmq_staged_c7_authority collect --selected-device AMD \
   --output $OUT/c7-authority-snapshot.json
 
 # C7 memory requirements + guarded capture + ledger build
-python -m extra.qk.mmq_frozen_staged_c7_census requirements --role attn_qo \
+python -m extra.llm_research.mmq_frozen_staged_c7_census requirements --role attn_qo \
   --frozen-bundle $BUNDLE --staged-family-manifest $FAM --output $OUT/c7-requirements.json
-AMD_AQL=0 python -m extra.qk.mmq_frozen_staged_c7_census capture --role attn_qo \
+AMD_AQL=0 python -m extra.llm_research.mmq_frozen_staged_c7_census capture --role attn_qo \
   --frozen-bundle $BUNDLE --staged-family-manifest $FAM --queue-mode PM4 \
   --runtime-canary-isolation $OUT/c4-pm4.json --authority-snapshot $OUT/c7-authority-snapshot.json \
   --output $OUT/c7-capture-pm4.json
-AMD_AQL=1 python -m extra.qk.mmq_frozen_staged_c7_census capture --role attn_qo \
+AMD_AQL=1 python -m extra.llm_research.mmq_frozen_staged_c7_census capture --role attn_qo \
   --frozen-bundle $BUNDLE --staged-family-manifest $FAM --queue-mode AQL \
   --runtime-canary-isolation $OUT/c4-aql.json --authority-snapshot $OUT/c7-authority-snapshot.json \
   --output $OUT/c7-capture-aql.json
-python -m extra.qk.mmq_frozen_staged_c7_census build --role attn_qo \
+python -m extra.llm_research.mmq_frozen_staged_c7_census build --role attn_qo \
   --frozen-bundle $BUNDLE --staged-family-manifest $FAM \
   --pm4-observation $OUT/c7-capture-pm4.json --aql-observation $OUT/c7-capture-aql.json \
   --authority-snapshot $OUT/c7-authority-snapshot.json --output $OUT/c7-ledger.json
 
-# C6 composition (no CLI in extra/qk/mmq_attn_qo_c6_binding.py; called via compose_c6.py, CPU-only,
+# C6 composition (no CLI in extra/llm_research/mmq_attn_qo_c6_binding.py; called via compose_c6.py, CPU-only,
 # no Device import) -> $OUT/c6-composition.json, PASS, evidence_identity
 # sha256:894b9c18d8b0194a545ae41ea67a50440e0a489616df3b055359610602b6bd65
 
 # Direct-packed queue qualifications (untimed), both queues
-AMD_AQL=0 python -m extra.qk.mmq_attn_qo_c8_runtime --role attn_qo \
+AMD_AQL=0 python -m extra.llm_research.mmq_attn_qo_c8_runtime --role attn_qo \
   --frozen-bundle $BUNDLE --staged-family-manifest $FAM --composition $OUT/c6-composition.json \
   --authority-snapshot $OUT/c7-authority-snapshot.json --queue-mode PM4 \
   --output $OUT/direct-packed-pm4-qualification.json
-AMD_AQL=1 python -m extra.qk.mmq_attn_qo_c8_runtime --role attn_qo \
+AMD_AQL=1 python -m extra.llm_research.mmq_attn_qo_c8_runtime --role attn_qo \
   --frozen-bundle $BUNDLE --staged-family-manifest $FAM --composition $OUT/c6-composition.json \
   --authority-snapshot $OUT/c7-authority-snapshot.json --queue-mode AQL \
   --output $OUT/direct-packed-aql-qualification.json

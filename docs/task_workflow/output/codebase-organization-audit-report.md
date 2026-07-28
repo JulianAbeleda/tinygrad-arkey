@@ -1,4 +1,4 @@
-# Codebase organization audit — Phase 1 (`extra/qk`) final report
+# Codebase organization audit — Phase 1 (`extra/llm_research`) final report
 
 Audited commit: `003f3b22e` (`mac-first-boot-20260610-3411-g003f3b22e`). Task input:
 `docs/task_workflow/output/codebase-organization-audit-task.md`.
@@ -14,9 +14,9 @@ Audited commit: `003f3b22e` (`mac-first-boot-20260610-3411-g003f3b22e`). Task in
 
 ## Coverage achieved
 
-123 authored files / 17,688 token-bearing LOC under `extra/qk` — 117 explicit records + 6 covered by one group rule,
-**0 uncovered**. Every default-path entry into `extra/qk` is traced to a `tinygrad/` call site. Repository-wide facts
-(478 authored files / 73,965 LOC) are reported for context; only `extra/qk` is classified.
+123 authored files / 17,688 token-bearing LOC under `extra/llm_research` — 117 explicit records + 6 covered by one group rule,
+**0 uncovered**. Every default-path entry into `extra/llm_research` is traced to a `tinygrad/` call site. Repository-wide facts
+(478 authored files / 73,965 LOC) are reported for context; only `extra/llm_research` is classified.
 
 ## Largest warning class: 54 × `extra_on_default_path`
 
@@ -27,15 +27,15 @@ removed. The warning firing 54 times is the Phase 1 finding, and it is the concr
 
 ## Hard errors found: 1 (a true positive)
 
-`extra/qk/mmq_ds4_probe_contract.py` is on the default execution path while its status is `refuted`. Chain:
+`extra/llm_research/mmq_ds4_probe_contract.py` is on the default execution path while its status is `refuted`. Chain:
 `prefill/current_prefill_execution_adapter.py` → `mmq_compile_evidence.py:21` → `mmq_q4k_q8_atom.py` (835 LOC of
 progressively elaborated search kernels) → `mmq_ds4_probe_contract.py`. The import exists to obtain one constant that
 `layout.py:12` already owns plus one kernel builder. See action **A11**.
 
 ## Structural findings the machine half had to be taught
 
-- The `tinygrad/`→`extra/qk` seam is **lazy `_attr("extra.qk.X", "f")` wrappers**, not imports. A plain AST graph
-  reports the whole of `extra/qk` as unreachable from production. The auditor now resolves constant-string
+- The `tinygrad/`→`extra/llm_research` seam is **lazy `_attr("extra.llm_research.X", "f")` wrappers**, not imports. A plain AST graph
+  reports the whole of `extra/llm_research` as unreachable from production. The auditor now resolves constant-string
   `import_module`/`_attr` arguments as `dynamic_seam_edges`. A declared wrapper is treated as a *warning*, never as
   proof the default path calls it — the seam declares ~30 wrappers that no production site calls.
 - **The `DEV=AMD:ISA` surface is not the default path.** `tinygrad/runtime/ops_amd.py:1015-1021` registers
@@ -63,7 +63,7 @@ blocks — 2,513 LOC (A8) and ~1.1K (A9) — are deliberately *not* counted; the
 
 ## Promotion candidates
 
-`ready`: none. `blocked`: none. `not justified`: A7. No `extra/qk` file currently earns promotion: the durable
+`ready`: none. `blocked`: none. `not justified`: A7. No `extra/llm_research` file currently earns promotion: the durable
 primitives it would contribute are already owned by `tinygrad/codegen/opt/`, and relocating research files would move
 LOC without deleting duplication or simplifying an ownership boundary.
 
@@ -84,7 +84,7 @@ specific question that would resolve each.
 ```bash
 PYTHONPATH=. python3 extra/audit/codebase_organization_audit.py
 PYTHONPATH=. python3 extra/audit/codebase_organization_audit.py --check      # exit 1 on hard errors, writes nothing
-PYTHONPATH=. python3 extra/audit/codebase_organization_audit.py --scope extra/qk
+PYTHONPATH=. python3 extra/audit/codebase_organization_audit.py --scope extra/llm_research
 PYTHONPATH=. python3 -m pytest test/unit/test_codebase_organization_audit.py -q
 ```
 
@@ -93,7 +93,7 @@ PYTHONPATH=. python3 -m pytest test/unit/test_codebase_organization_audit.py -q
 1. `allowed_dependency_domains` is **pinned to the dependency domains observed at this commit** — a drift detector,
    not an independently designed layering.
 2. The hard error above is left **failing** rather than reclassified. Fixing it is A11's job, not the manifest's.
-3. `extra/qk/shared_attention_evidence_gate.py` was reclassified from `unresolved_reproducer` to `deletion_candidate`:
+3. `extra/llm_research/shared_attention_evidence_gate.py` was reclassified from `unresolved_reproducer` to `deletion_candidate`:
    it reproduces nothing, it validates a bundle schema no code in the repository produces. If it is in fact the
    reproducer for something open, A3 must be withdrawn.
 4. No behavior, placement, or default changed in this task; nothing was moved or deleted.
@@ -106,8 +106,8 @@ PYTHONPATH=. python3 -m pytest test/unit/test_codebase_organization_audit.py -q
   positive control.
 - The reproducer-protection gate read only `test_role`, so a record could be pruned by declaring the reproducer in
   `status` instead. It now reads both fields; one manifest record that contradicted itself was corrected.
-- The reference scanner matched by substring, so `extra.qk.layout_coalesce_check` counted as a reference to
-  `extra.qk.layout` (three such colliding pairs exist in scope). Matching is now name-boundary safe.
+- The reference scanner matched by substring, so `extra.llm_research.layout_coalesce_check` counted as a reference to
+  `extra.llm_research.layout` (three such colliding pairs exist in scope). Matching is now name-boundary safe.
 
 Two limits remain open by design and are stated above: `forbidden_dependency` is pinned to observed edges, so it is
 exercised only by unit tests at this commit, and `--check` currently exits 1 on the one real hard error.

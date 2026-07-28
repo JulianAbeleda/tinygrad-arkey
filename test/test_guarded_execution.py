@@ -1,6 +1,6 @@
 import numpy as np
 
-from extra.qk.prefill.guarded_execution import (GuardedBuffer, GuardedExecutionHooks, make_tinygrad_executable_hooks,
+from extra.llm_research.prefill.guarded_execution import (GuardedBuffer, GuardedExecutionHooks, make_tinygrad_executable_hooks,
                                                 make_tinygrad_guarded_hooks, run_guarded_execution)
 
 

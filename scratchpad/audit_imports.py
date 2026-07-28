@@ -88,7 +88,7 @@ for f in files:
                             edges[f].add(mod2file[cand])
                             matched = True
                             break
-                    # also handle "from extra.qk import X" where X is submodule extra.qk.X
+                    # also handle "from extra.llm_research import X" where X is submodule extra.llm_research.X
                     if node.module in mod2file or True:
                         for alias in node.names:
                             subcand = node.module + "." + alias.name
@@ -104,4 +104,4 @@ with open("/tmp/audit_graph.pkl", "wb") as fh:
     pickle.dump({"edges": dict(edges), "mod2file": mod2file, "file2mod": file2mod, "unresolved": dict(unresolved)}, fh)
 
 print("files scanned:", len(files))
-print("edges from extra/qk files:", sum(1 for f in edges if "/extra/qk/" in f))
+print("edges from extra/llm_research files:", sum(1 for f in edges if "/extra/llm_research/" in f))

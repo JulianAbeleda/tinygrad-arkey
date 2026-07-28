@@ -3,11 +3,11 @@ import json, pickle
 import hashlib
 from dataclasses import dataclass
 
-from extra.qk.generated_candidates import GeneratedCandidateRegistry, builtin_registry, select_generated_candidate
-from extra.qk import route_manifest
-from extra.qk import pure_search_guard
-from extra.qk.prefill import prefill_graph_gemm_route
-from extra.qk.runtime_specs import (
+from extra.llm_research.generated_candidates import GeneratedCandidateRegistry, builtin_registry, select_generated_candidate
+from extra.llm_research import route_manifest
+from extra.llm_research import pure_search_guard
+from extra.llm_research.prefill import prefill_graph_gemm_route
+from extra.llm_research.runtime_specs import (
   ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH, FULL_KERNEL_CANDIDATE_SCHEMA, PACKED_SCALAR_DECODER_VERSION, ActivationQuantSpec, GeneratedCandidate,
   CandidateAdmissionFacts, QuantizedTensorSpec, RuntimeOpSpec, FullKernelCandidateSet, FullKernelCandidateSetEntry,
   GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY, GFX1100_TWO_BUFFER_STAGE1_CAPABILITY, Q4KQ8FiveBufferEmitterPlan,
@@ -18,7 +18,7 @@ from extra.qk.runtime_specs import (
 )
 
 
-# Inlined from the retired quant-spec helper module in extra/qk (retired 2026-07-26, see
+# Inlined from the retired quant-spec helper module in extra/llm_research (retired 2026-07-26, see
 # docs/prefill-lessons-ledger.md) -- these fixtures build RuntimeOpSpec/GeneratedCandidate test data
 # for runtime_specs.py, which is live production code.
 @dataclass(frozen=True)

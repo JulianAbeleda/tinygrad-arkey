@@ -180,7 +180,7 @@ packed dot4x4 uses the tile-load spec instead of ad hoc offsets
 machine-search report lists Q4_K tile loader as converted_searchable
 ```
 
-Status: done. The bounded tile-loader spec lives in `extra.qk.q4k_tile_loader`, covers the 256-wide Q4_K block,
+Status: done. The bounded tile-loader spec lives in `extra.llm_research.q4k_tile_loader`, covers the 256-wide Q4_K block,
 proves q nibble and scale/min layout against the existing Q4_K reference, and provides the loader source hash in
 machine-search run artifacts. The packed dot4x4 atom now consumes the shared packed-lane loader helper rather than
 embedding its qword/nibble expression locally.
@@ -271,7 +271,7 @@ the 16x16 R4 owner map lowers as eight spill-free 32-store fragments with no mis
 structural evidence only. It does not prove full Q4_K x Q8_1 cooperative numeric compute, does not emit a bounded
 numeric PASS for the coop atom, and does not change production routing.
 
-Oracle status: available. `extra.qk.mmq_llama_oracle.run_llama_mmq_coop_tile_oracle` is a translated structure oracle
+Oracle status: available. `extra.llm_research.mmq_llama_oracle.run_llama_mmq_coop_tile_oracle` is a translated structure oracle
 for llama's cooperative writeback ownership. It points to the local llama clone anchors instead of vendoring CUDA,
 computes values through the existing DS4 numeric reference, and records the 8-wave/16x16-fragment owner map for future
 machine-search candidates to match. It is not a production backend and is not promotion-eligible.

@@ -1,6 +1,6 @@
 import pytest
 
-from extra.qk.decode import current_decode_execution_adapter as adapter
+from extra.llm_research.decode import current_decode_execution_adapter as adapter
 from tinygrad.dtype import dtypes
 from tinygrad.uop.ops import Ops
 
@@ -63,7 +63,7 @@ def test_adapter_refuses_to_fabricate_prepared_execution(monkeypatch):
 def _build_immutable_artifact(tmp_path, rows=32, k=1024, seed=99):
   import numpy as np
   from tinygrad import Tensor, dtypes
-  from extra.qk.layout import Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, q4_k_reference
+  from extra.llm_research.layout import Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, q4_k_reference
   rng = np.random.default_rng(seed)
   nblocks = (rows * k) // Q4_K_BLOCK_ELEMS
   raw = rng.integers(0, 256, size=nblocks * Q4_K_BLOCK_BYTES, dtype=np.uint8).reshape(nblocks, Q4_K_BLOCK_BYTES)

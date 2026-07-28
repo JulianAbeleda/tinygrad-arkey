@@ -1,7 +1,7 @@
 # BUILD PROGRESS / CONTINUATION: generated fp16-dequant Q4_K primitive (AMD)
 
 ## ⭐ AUTHORITATIVE OUTCOME (2026-07-21) — read this first; supersedes all per-stage numbers below
-**The win (verified on the ONE canonical harness `extra/qk/prefill/prefill_whole_synced.py`, clean sequential A/B, no GPU contention):**
+**The win (verified on the ONE canonical harness `extra/llm_research/prefill/prefill_whole_synced.py`, clean sequential A/B, no GPU contention):**
 
 | context | default (direct-packed) | packed-WMMA | llama | vs default | vs llama |
 |---|---|---|---|---|---|
@@ -12,7 +12,7 @@
 
 - **BANKED WIN: packed-WMMA prefill is a real ~5× over tinygrad's default, holding 4-5× at every context.** Scheduler-native (no bespoke kernel, no int8), correctness-gated (max_abs 0.0), landed as an opt-in production route.
 - **It does NOT beat llama** (geo-mean ~89%): ~parity at pp512 (within llama's ±100 run noise), trailing to 77% by pp4096. **The residual gap is the ATTENTION path scaling (per-chunk 277→511ms vs llama's flatter flash-attn), NOT the packed-WMMA GEMMs** — those are done+correct. Beyond-parity goal (≥105% geo-mean, ≥2000) NOT met; the next lever is a flash-attention-quality prefill continuation path, an attention problem orthogonal to everything here.
-- **Reproduce:** `TINYGRAD_PREFILL_PACKED_WMMA=1 DEV=AMD python -m extra.qk.prefill.prefill_whole_synced --whole-lengths 512,1024,2048,4096` (default off = fail-closed direct-packed baseline). Commits: `da28e5efd` (codegen geometry unlock), `b10f640be` (quant-aware warmstart key), `c35b5ff53` (production Q4K/Q6K PackedWMMA candidates).
+- **Reproduce:** `TINYGRAD_PREFILL_PACKED_WMMA=1 DEV=AMD python -m extra.llm_research.prefill.prefill_whole_synced --whole-lengths 512,1024,2048,4096` (default off = fail-closed direct-packed baseline). Commits: `da28e5efd` (codegen geometry unlock), `b10f640be` (quant-aware warmstart key), `c35b5ff53` (production Q4K/Q6K PackedWMMA candidates).
 - **⚠️ Everything below this block is per-stage working history. Numbers like "1911 estimate", "1826 = parity", "1854 past llama" are SUPERSEDED scratch-bench overclaims — trust ONLY the canonical A/B above.** Do NOT re-explore: bespoke int8 mmq_llama stack (superseded), int8 on RDNA3 (no tensor-core rate edge), or scratch benches (use the canonical harness).
 
 ## PRIMITIVE-SUBSTRATE PIVOT (2026-07-20) — read this first
@@ -25,7 +25,7 @@ The bespoke hand-authored `mmq_llama_*` UOp stack (below) is stuck on a multi-wa
 **The lever for Gap 1 already exists in-tree:** `build_precontract_lds_stage` (`tinygrad/codegen/opt/kernel_lds.py:394-470`), staged dequant panel in LDS + M-reuse via WMMA, activated by `candidate_context`/geometry at `postrange.py:372-408`. The plain Tensor expr never attaches it → falls into the naive branch. **Plan: keep the primitive as substrate, wire it through the existing LDS-staging machinery** (no hand-authored ISA; reuses the good scheduler part, drops the buggy hand-written writeback). Repro scripts: `scratchpad/qk_wmma_prefill_bench.py`, `scratchpad/exp1_dense_fp16.py`, `scratchpad/exp2_min.py`.
 
 ### HEAD-TO-HEAD RESULT (2026-07-20) — packed-WMMA (fork B) IS THE ROUTE; matches/beats llama per-kernel
-The `candidate_context`/`PackedWeightTransform`/`build_precontract_lds_stage` machinery is ALREADY wired via `extra/qk/prefill/current_prefill_execution_adapter.py` (scheduler-native "fork B" = fp16-dequant-in-register + LDS-staged WMMA), exercised by `extra/qk/prefill/packed_wmma_correctness_canary.py`. Correct (canary max_abs_error 0.0), fused (50MB packed B, never 178MB dense). **Steady-state (min-of-30 after 200-dispatch warmup — the earlier "~33 TFLOP/s wash" was a COLD-CLOCK artifact: packed-WMMA's first ~7 dispatches sit at 2.76ms then drop to 1.33ms):**
+The `candidate_context`/`PackedWeightTransform`/`build_precontract_lds_stage` machinery is ALREADY wired via `extra/llm_research/prefill/current_prefill_execution_adapter.py` (scheduler-native "fork B" = fp16-dequant-in-register + LDS-staged WMMA), exercised by `extra/llm_research/prefill/packed_wmma_correctness_canary.py`. Correct (canary max_abs_error 0.0), fused (50MB packed B, never 178MB dense). **Steady-state (min-of-30 after 200-dispatch warmup — the earlier "~33 TFLOP/s wash" was a COLD-CLOCK artifact: packed-WMMA's first ~7 dispatches sit at 2.76ms then drop to 1.33ms):**
 
 | role | direct-packed | dense-fp16 | **packed-WMMA** | llama isolated |
 |---|---:|---:|---:|---:|
@@ -49,7 +49,7 @@ Bottom-up steady-state (200 warmup, min-of-30, host-dispatch removed), all linea
 
 **Lever:** if attn roles hit FFN-like efficiency, attn GEMM ~92ms→~31ms → body ~250ms → **~2050 tok/s (past llama 1837 AND project ≥2000 target).** Fix = make small-N attention GEMMs fill the machine: smaller tiles→more workgroups (grid-limited attn_kv), shrink LDS→2 wg/CU (occupancy attn_qo), possibly split-K.
 
-**Tier-2 (real end-to-end) BLOCKED — glue needed (packed-WMMA isolated under `extra/qk/prefill/`, zero refs in `tinygrad/llm/*`):** (1) `Q4KPackedWMMAPrefillCandidate` matching `PrefillLinearRouteSpec` in `tinygrad/llm/prefill_routes.py:151`; (2) real GGUF Q4_K→`PackedWeightTransform` materializer (today only fed `Tensor.empty` synthetic); (3) route registration in `model_route_plan.py`/`prefill_policy.py`; (4) lm_head role (no `model_profiles.py` entry). NEXT: close attn_qo/attn_kv occupancy+grid (the crux to beat llama), then wire Tier-2. Bench: `scratchpad/bench_variant2.py`, `bench_overhead.py`, `bench_lmhead.py`.
+**Tier-2 (real end-to-end) BLOCKED — glue needed (packed-WMMA isolated under `extra/llm_research/prefill/`, zero refs in `tinygrad/llm/*`):** (1) `Q4KPackedWMMAPrefillCandidate` matching `PrefillLinearRouteSpec` in `tinygrad/llm/prefill_routes.py:151`; (2) real GGUF Q4_K→`PackedWeightTransform` materializer (today only fed `Tensor.empty` synthetic); (3) route registration in `model_route_plan.py`/`prefill_policy.py`; (4) lm_head role (no `model_profiles.py` entry). NEXT: close attn_qo/attn_kv occupancy+grid (the crux to beat llama), then wire Tier-2. Bench: `scratchpad/bench_variant2.py`, `bench_overhead.py`, `bench_lmhead.py`.
 
 ---
 
@@ -79,10 +79,10 @@ Applied correctness-gated FFN geometries (bench `scratchpad/e2e_packed_wmma_benc
 
 ## PRODUCTIONIZATION — LANDED (2026-07-20/21)
 - **Step 1 (`b10f640be`): quant-aware `_warmstart_key`** — packed-PARAM dtype (uint32 Q4 / uint16 Q6) in the key so same-shape Q4/Q6 don't collide. Replaced the N-pad hack; clean path measures **1851 tok/s** (past llama 1837). 2 pre-existing unit fails only.
-- **Step 2 (`c35b5ff53`): production candidate classes** — `extra/qk/prefill/packed_wmma_prefill_candidates.py` (`Q4K`/`Q6KPackedWmmaPrefillCandidate`, frozen 6-combo geom table, gate-once cache, warmstart-table builder). Selectable via `route_packed_wmma_prefill` (env `TINYGRAD_PREFILL_PACKED_WMMA`, default OFF, fail-closed) inside the direct_packed branch. Verified via NORMAL dispatcher (no override): opted-in **1854-1858 tok/s** (past llama), 100% coverage, 6/6 gates max_abs 0.0; opted-out byte-identical 354. 15 pre-existing unit fails unchanged (A/B verified).
+- **Step 2 (`c35b5ff53`): production candidate classes** — `extra/llm_research/prefill/packed_wmma_prefill_candidates.py` (`Q4K`/`Q6KPackedWmmaPrefillCandidate`, frozen 6-combo geom table, gate-once cache, warmstart-table builder). Selectable via `route_packed_wmma_prefill` (env `TINYGRAD_PREFILL_PACKED_WMMA`, default OFF, fail-closed) inside the direct_packed branch. Verified via NORMAL dispatcher (no override): opted-in **1854-1858 tok/s** (past llama), 100% coverage, 6/6 gates max_abs 0.0; opted-out byte-identical 354. 15 pre-existing unit fails unchanged (A/B verified).
 
 ## VERIFIED CANONICAL A/B (2026-07-21) — corrects earlier scratch-bench overclaims
-Ran the CANONICAL authority `extra/qk/prefill/prefill_whole_synced.py` (warms TinyJit at concrete start_pos per 512-chunk, min-of-burst, sums per-chunk — the one true harness) as a clean sequential A/B, default vs packed-WMMA (`TINYGRAD_PREFILL_PACKED_WMMA=1`), no GPU contention:
+Ran the CANONICAL authority `extra/llm_research/prefill/prefill_whole_synced.py` (warms TinyJit at concrete start_pos per 512-chunk, min-of-burst, sums per-chunk — the one true harness) as a clean sequential A/B, default vs packed-WMMA (`TINYGRAD_PREFILL_PACKED_WMMA=1`), no GPU contention:
 
 | context | default (direct-packed) | packed-WMMA | llama | vs default | vs llama |
 |---|---|---|---|---|---|
@@ -153,8 +153,8 @@ Full kernel still `emitted=False`. Real target (the "SGPR/PARAM(0)" label was co
 ## What's left (ordered)
 1. **Finish phase 2b (spill-free):** fix the 8 `test_amd_isa_wmma.py` regressions (fragment-load fix must cover int8 AND fp16; the BITCAST unwrap must be a strict no-op when no bitcast); fix the SGPR PARAM(0) blocker → `emitted=True`, 0 spills. Then commit.
 2. **CORRECTNESS FAIL-FAST (pulled forward):** the moment it emits, before building the family, do a small-shape numeric parity of the dequant vs the authority. The `.bitcast(half)` reinterprets raw bytes as half — if byte order/layout is off it compiles but outputs garbage. MUST verify before trusting.
-3. **Phase 3 — correctness authority + CPU parity:** author `ffn_gate_up_fp16_dequant_reference` on the GGML `d*sc*code−dmin*mn` math (`tinygrad/llm/gguf.py:76-84` / `extra/qk/layout.py:157` `q4_k_reference`; existing analogue `mmq_ffn_gate_up_guarded_correctness.py:357-375` `ffn_gate_up_direct_dense_reference`). Feed into the same `_validate_numeric_comparison`/`_validate_full_comparison` (`:223-299`). NOT the int8 authority (`mmq_q4k_q8_reference.py`) — different rounding path (§2.5, needs new authority + C0A sign-off). Accept: `rtol=atol=3e-3`, zero mismatch, finite.
-4. **Phase 4 — new frozen family + GPU:** new 2-3-buffer ABI family (checklist = plan PART III; canonical ABI constants `extra/qk/prefill/frozen_exact_role_runtime.py:37-39`); C4 no-target canary; then guarded reduced-grid ladder `(1,1,1)…(8,4,1)` zero-mismatch, then the FULL 544-wg dispatch that MUST now pass (16 KB LDS) where int8 wedged at 64.
+3. **Phase 3 — correctness authority + CPU parity:** author `ffn_gate_up_fp16_dequant_reference` on the GGML `d*sc*code−dmin*mn` math (`tinygrad/llm/gguf.py:76-84` / `extra/llm_research/layout.py:157` `q4_k_reference`; existing analogue `mmq_ffn_gate_up_guarded_correctness.py:357-375` `ffn_gate_up_direct_dense_reference`). Feed into the same `_validate_numeric_comparison`/`_validate_full_comparison` (`:223-299`). NOT the int8 authority (`mmq_q4k_q8_reference.py`) — different rounding path (§2.5, needs new authority + C0A sign-off). Accept: `rtol=atol=3e-3`, zero mismatch, finite.
+4. **Phase 4 — new frozen family + GPU:** new 2-3-buffer ABI family (checklist = plan PART III; canonical ABI constants `extra/llm_research/prefill/frozen_exact_role_runtime.py:37-39`); C4 no-target canary; then guarded reduced-grid ladder `(1,1,1)…(8,4,1)` zero-mismatch, then the FULL 544-wg dispatch that MUST now pass (16 KB LDS) where int8 wedged at 64.
 5. **C6-C8** (full correctness / memory / timing → CERTIFIED_WIN or FALLBACK).
 
 ## Follow-ons (separate tasks)
@@ -162,11 +162,11 @@ Full kernel still `emitted=False`. Real target (the "SGPR/PARAM(0)" label was co
 - #15: recover int8 generator as renamed NVIDIA-only, NOT-selectable modules (source is at pre-conversion git history / was HEAD `51cce914c`).
 
 ## Key files
-- `extra/qk/mmq_llama_candidate_plan.py` (`_geometry` two fp16 16KB regions, `_rdna3_f16_tc`).
-- `extra/qk/mmq_llama_oracle_recurrence.py` (`_fragment_at` bytes+bitcast; fp32-accumulate recurrence).
-- `extra/qk/mmq_llama_group_chain.py` (chained accumulator across 8 K32 groups; seed src[2] via O(1) DAG re-point).
-- `extra/qk/mmq_llama_record_producers.py` (`q4_k_fp16_decode_group_callback` — the decode).
-- `extra/qk/mmq_llama_five_buffer_graph.py` / `_full_kernel.py` (3-buffer ABI, per-K32 epoch loop 8× per K256).
+- `extra/llm_research/mmq_llama_candidate_plan.py` (`_geometry` two fp16 16KB regions, `_rdna3_f16_tc`).
+- `extra/llm_research/mmq_llama_oracle_recurrence.py` (`_fragment_at` bytes+bitcast; fp32-accumulate recurrence).
+- `extra/llm_research/mmq_llama_group_chain.py` (chained accumulator across 8 K32 groups; seed src[2] via O(1) DAG re-point).
+- `extra/llm_research/mmq_llama_record_producers.py` (`q4_k_fp16_decode_group_callback` — the decode).
+- `extra/llm_research/mmq_llama_five_buffer_graph.py` / `_full_kernel.py` (3-buffer ABI, per-K32 epoch loop 8× per K256).
 - `tinygrad/renderer/isa/amd.py` (`_frag_b128_loads` stride, `_wmma_half_addr` bitcast unwrap).
 
 ## Non-negotiables (don't regress)

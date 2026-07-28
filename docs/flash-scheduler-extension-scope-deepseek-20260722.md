@@ -20,7 +20,7 @@ Repo: `/home/ubuntu/tinygrad-arkey` · Python: `.venv/bin/python` · Env: `DEV=A
 - `tinygrad/codegen/late/devectorizer.py:369 reduce_to_acc` — lowers REDUCE → `DEFINE_ACC` (single reg), init to `identity_element(red.arg[0], dtype)`, update, `end`. **This is where a composite accumulator must be supported** (multiple DEFINE_ACCs / a struct acc, a custom combine, a custom identity).
 - `tinygrad/uop/ops.py` — `identity_element`, `RegisterResidentAccumulator`, the REDUCE UOp and its `arg=(op, axes)` (op is currently a single ADD/MAX/MUL). The composite combine needs a representation here.
 - `tinygrad/codegen/opt/postrange.py:305-501` — the TC opt, incl. the **already-present "epilogue reduction around the dot-product" hook** (305-307): it can WMMA an inner dot inside an outer reduce. This is the scaffolding that must WMMA the QKᵀ/PV contractions inside the composite reduce. `get_single_element(... tag=="TC")` at 391 assumes ONE TC reduce — will need to handle QKᵀ and PV.
-- Online-softmax combine (the monoid) for reference (math only, NOT the kernel): `extra/qk/flash_kernels.py` running m/l/acc + correction. Reuse the MATH, never the kernel body.
+- Online-softmax combine (the monoid) for reference (math only, NOT the kernel): `extra/llm_research/flash_kernels.py` running m/l/acc + correction. Reuse the MATH, never the kernel body.
 
 ## §3 Phases (each commits artifacts; §Fallback if blocked; see §Process for review cadence)
 

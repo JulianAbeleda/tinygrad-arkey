@@ -24,9 +24,9 @@ import time
 
 import numpy as np
 
-from extra.qk.prefill.guarded_execution import GuardedBuffer, GuardedExecutionHooks, GuardPolicy
-from extra.qk.prefill import isolated_guarded_executor as ige
-from extra.qk.prefill.isolated_guarded_executor import (BundleSpec, ExecutableBundle, ExecutionRequest,
+from extra.llm_research.prefill.guarded_execution import GuardedBuffer, GuardedExecutionHooks, GuardPolicy
+from extra.llm_research.prefill import isolated_guarded_executor as ige
+from extra.llm_research.prefill.isolated_guarded_executor import (BundleSpec, ExecutableBundle, ExecutionRequest,
                                                         make_tinygrad_bundle_builder,
                                                         run_isolated_guarded_execution)
 from tinygrad.runtime.bridge import ExecutableHandle

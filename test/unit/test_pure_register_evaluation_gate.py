@@ -1,6 +1,6 @@
 import pytest
 
-from extra.qk.prefill.pure_register_evaluation_gate import (COMPILE_SCHEMA, REGISTER_STORAGE, compile_only,
+from extra.llm_research.prefill.pure_register_evaluation_gate import (COMPILE_SCHEMA, REGISTER_STORAGE, compile_only,
   evaluate, final_resources, machine_search, runtime_compile_resource_eligibility, validate_role_attribution)
 
 

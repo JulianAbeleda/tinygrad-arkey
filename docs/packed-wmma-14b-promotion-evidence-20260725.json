@@ -5,7 +5,7 @@
   "generated_2026-07-25": true,
   "e2e_token_parity_14b": {
     "status": "PASS",
-    "cmd": "flock /tmp/gpu-bench.lock -c 'cd /home/ubuntu/tinygrad-arkey && PYTHONPATH=. DEV=AMD timeout 1800 python3 extra/qk/prefill/prefill_flash_e2e_parity.py --only 14B'",
+    "cmd": "flock /tmp/gpu-bench.lock -c 'cd /home/ubuntu/tinygrad-arkey && PYTHONPATH=. DEV=AMD timeout 1800 python3 extra/llm_research/prefill/prefill_flash_e2e_parity.py --only 14B'",
     "route_live": true,
     "sdpa": 90310,
     "fused": 90310,
@@ -13,8 +13,8 @@
     "note": "The route was LIVE for this run (TINYGRAD_PREFILL_PACKED_WMMA was NOT set to 0). This is the ordinary shipped default, exercising route_packed_wmma_prefill end to end on the real 14B model."
   },
   "canary": {
-    "source": "extra/qk/prefill/packed_wmma_prefill_candidates.gate_result(quant, role, shape) after gate_combo(...); process-local _GATE_CACHE",
-    "cmd": "flock /tmp/gpu-bench.lock -c 'PYTHONPATH=. DEV=AMD timeout 600 python3 extra/qk/packed_wmma_canary_evidence.py'",
+    "source": "extra/llm_research/prefill/packed_wmma_prefill_candidates.gate_result(quant, role, shape) after gate_combo(...); process-local _GATE_CACHE",
+    "cmd": "flock /tmp/gpu-bench.lock -c 'PYTHONPATH=. DEV=AMD timeout 600 python3 extra/llm_research/packed_wmma_canary_evidence.py'",
     "combos": [
       {
         "quant": "Q4_K",

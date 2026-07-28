@@ -25,7 +25,7 @@ The current tree contains 198 tracked files:
 | `extra/audit/**` | 8 | organization, lowering, fingerprint, compatibility, and boundary authorities | `extra/audit/**` | `master` |
 | `extra/tools/**` | 2 | repository integrity and ISA-generation tools | `extra/tools/**` | `master` |
 | `extra/llm/**` | 11 | mixed CLI, generation, evaluation, and benchmark tooling | `extra/llm/cli.py` plus `extra/llm/bench/**` | split: `master` CLI, `dev` benchmarks |
-| `extra/qk/**` | 97 | mixed LLM runtime dependencies, codegen, scheduling, research, gates, and evidence | `extra/llm_research/**` after runtime split | `exp`, with explicit migration exceptions |
+| `extra/llm_research/**` | 97 | mixed LLM runtime dependencies, codegen, scheduling, research, gates, and evidence | subdomains under `extra/llm_research/**` after runtime split | `exp`, with explicit migration exceptions |
 | `extra/gpu_fault_analysis/**` | 2 | GPU fault and allocator reproducers | `extra/debug/gpu_fault_analysis/**` | `dev` |
 | `extra/hardware/**` | 23 | PCI, PSP/GART, recovery, profiling, and trace tooling | `extra/debug/hardware/**` plus `extra/profiling/sqtt/**` | `dev`; SQTT boundary unresolved |
 | `extra/remote/**` | 3 | remote power-cycle, repro, and transport qualification | `extra/debug/remote/**` | `dev` |
@@ -87,7 +87,7 @@ they should be grouped under `extra/llm/bench` and retained on `dev`, not mixed 
 
 ### `extra/llm_research`
 
-This is the descriptive replacement for the current `extra/qk` research surface, but it is not a blanket production
+This is the descriptive research surface formerly named `extra/qk`, but it is not a blanket production
 classification. Its intended subdomains are:
 
 ```text
@@ -103,7 +103,7 @@ extra/llm_research/
   vendor/        retained third-party research sources such as llama.cpp MMQ material
 ```
 
-Before this rename, every `extra/qk` file must be assigned to one of these domains or marked unresolved. Files still
+Before any subdomain split, every `extra/llm_research` file must be assigned to one of these domains or marked unresolved. Files still
 reached by `tinygrad/llm/route_ops.py` are migration debt: they must move into their `tinygrad/**` owner before the
 research surface can be removed from `master`.
 
@@ -147,7 +147,7 @@ dependencies on it are forbidden.
 
 ## Required next classification pass
 
-The next task is a file-level ledger for all 198 current `extra/**` files, starting with the 97 current `extra/qk`
+The next task is a file-level ledger for all 198 current `extra/**` files, starting with the 97 current `extra/llm_research`
 files and the mixed files under `extra/llm`, `extra/hardware`, `extra/nv_gpu_driver`, and `extra/usbgpu`. The ledger
 must record the target domain above, default-path reachability, branch owner, direct callers, tests, artifacts, and the
 migration or retention criterion. No rename is authorized until that ledger is complete and reviewed.

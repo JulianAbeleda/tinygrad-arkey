@@ -1,9 +1,9 @@
 import json, sys, argparse
 sys.path.insert(0, "/home/ubuntu/tinygrad-arkey")
-from extra.qk.mmq_frozen_staged_c8_sessions import run_guarded_persistent_c8_route_sequence
-from extra.qk.mmq_attn_qo_c8_runtime import attn_qo_c8_runner_factory
-from extra.qk.mmq_frozen_staged_family import load_frozen_staged_family_manifest
-from extra.qk.mmq_exact_role_spec import exact_role_spec
+from extra.llm_research.mmq_frozen_staged_c8_sessions import run_guarded_persistent_c8_route_sequence
+from extra.llm_research.mmq_attn_qo_c8_runtime import attn_qo_c8_runner_factory
+from extra.llm_research.mmq_frozen_staged_family import load_frozen_staged_family_manifest
+from extra.llm_research.mmq_exact_role_spec import exact_role_spec
 
 OUT = "/tmp/qk-attn-qo-9119a7462-20260720"
 BUNDLE = "/home/ubuntu/tinygrad-arkey/docs/artifacts/qwen3-14b-prefill-attn-qo-staged-951d3615c-20260719/bundle"

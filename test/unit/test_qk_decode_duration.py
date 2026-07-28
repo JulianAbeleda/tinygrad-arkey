@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-from extra.qk import bench
+from extra.llm_research import bench
 
 
 def _authority(tmp_path: pathlib.Path, body: str) -> pathlib.Path:
@@ -126,7 +126,7 @@ while True: time.sleep(1)
   driver = tmp_path / "driver.py"
   driver.write_text("""
 import pathlib, sys
-from extra.qk import bench
+from extra.llm_research import bench
 model, out, authority, ready = sys.argv[1:]
 bench.decode_authority_argv = lambda _model, _profile, *, out_path, reps: [authority, str(out_path), ready]
 raise SystemExit(bench._run_decode_duration(model=model, profile=object(), reps=1, timeout_s=30,

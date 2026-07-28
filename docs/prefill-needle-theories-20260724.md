@@ -1,8 +1,8 @@
 # 8B prefill: where the needle actually is (measured 2026-07-24)
 
-Derived entirely from hardware counters (`extra/qk/prefill/prefill_boltbeam_trace.py --hw-trace`, restored in
+Derived entirely from hardware counters (`extra/llm_research/prefill/prefill_boltbeam_trace.py --hw-trace`, restored in
 `654c9b2ce`) on 8B/gfx1100 under `TINYGRAD_PREFILL_PACKED_WMMA=0`, plus the whole-model authority
-(`extra/qk/prefill/prefill_whole_synced.py --mode authority`). Numbers here are measurements, not estimates.
+(`extra/llm_research/prefill/prefill_whole_synced.py --mode authority`). Numbers here are measurements, not estimates.
 
 ## The frame
 
@@ -148,7 +148,7 @@ swizzle-caused conflict looks like, not a measurement artifact. **Verdict: the 1
 *The fix attempt.* Tried the one bounded change specified: padded the LDS row stride from 80 to 96 bytes
 (padding 16→32; unpadded row is 64 bytes = tile-k=32 × fp16). Edited `candidate-set.json`
 (`strides.a/b`, `windows.a/b`), recomputed `canonical_identity` via
-`extra.qk.runtime_specs._canonical_full_kernel_identity` so admission still validates (confirmed via
+`extra.llm_research.runtime_specs._canonical_full_kernel_identity` so admission still validates (confirmed via
 `admit_full_kernel_candidate_set` before spending GPU time). Result was the opposite of the hypothesis:
 
 | | lds_conflict_pct (ctx512, top GEMM) | pp512 | pp1024 | pp2048 | pp4096 |
@@ -168,7 +168,7 @@ was WRONG for this stride/tile geometry — 80 bytes (20 dwords, gcd(20,32)=4, p
 bank cycle already conflicts at a real but modest 1/8, and pushing to 96 bytes (24 dwords, gcd(24,32)=8,
 period 4) made it a 1/4-periodic, 4-way-heavier pattern — moved to the WORSE side of the modulus, not the
 better side. The naive "+1 element" pad trick is not safe here because the WMMA fragment-load addressing
-(`rdna3_wmma_output_coord` / `wmma_fragment_loads` in `extra/qk/kernel_lds.py`) is a 2D lane→row/col
+(`rdna3_wmma_output_coord` / `wmma_fragment_loads` in `extra/llm_research/kernel_lds.py`) is a 2D lane→row/col
 mapping, not a simple linear row scan, so the actual conflict-minimizing stride has to be derived from
 that lane mapping (or swept empirically over the 16-byte-aligned choices under `max_lds_bytes=65536`), not
 guessed. **PADDING IS EXHAUSTED — that suggested stride sweep is void.** `kernel_lds.py:238` requires "K row must
@@ -230,7 +230,7 @@ lane-quads 0..7 take rows 0,4,1,5,2,6,3,7) pairs rows four apart inside every oc
 lane-quad on one contiguous 64 B source row — so the wave issues the *same* global-memory segments, the
 LDS layout is byte-identical, LDS bytes are unchanged, and the term is loop-invariant so it hoists out of
 the K loop. `cooperative_store_row{,_rotation}` in `tinygrad/codegen/opt/kernel_lds.py`; the pure-Python
-model in `extra/qk/kernel_lds.py` follows it. `candidate-set.json` is untouched (identities unchanged).
+model in `extra/llm_research/kernel_lds.py` follows it. `candidate-set.json` is untouched (identities unchanged).
 
 *Measured, paired same-session, ctx512 PMC (attention row as an unchanged-path control):*
 

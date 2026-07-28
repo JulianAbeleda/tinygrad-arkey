@@ -43,7 +43,7 @@ Write to `docs/flash-prefill-piece2-probe-<date>.md`:
 2. The exact expression index where REDUCE-preserving fusion breaks, and the added op that caused it.
 3. The DEBUG=3 kernel signatures at that break point.
 4. NO conclusions about "how to fix" or "how long" — just the measured breakpoint.
-Commit the probe doc + any probe scripts (in `extra/qk/` or tmp). **Then STOP.** Do NOT implement a fusion, do NOT modify rangeify/postrange, do NOT touch PCONTIG. Claude decides the fusion approach from your breakpoint data.
+Commit the probe doc + any probe scripts (in `extra/llm_research/` or tmp). **Then STOP.** Do NOT implement a fusion, do NOT modify rangeify/postrange, do NOT touch PCONTIG. Claude decides the fusion approach from your breakpoint data.
 
 ## §4 Guardrails
 - Single GPU lane; `pkill` strays + `rocm-smi` before runs; never background a bench and report "waiting." Run, wait, read.

@@ -93,12 +93,12 @@ recover the doc by name if a specific number is needed again.
 
 ## Boundary Rule
 
-Production `tinygrad/**` modules must not import `extra.qk.*`, `extra.qk.quant.*`, or `extra.audit.*` directly. The
+Production `tinygrad/**` modules must not import `extra.llm_research.*`, `extra.llm_research.quant.*`, or `extra.audit.*` directly. The
 existing `tinygrad/llm/route_ops.py` adapters are a temporary, production-owned compatibility boundary for
 dependencies that have not yet been promoted. Their presence records migration debt; it does not classify the target
-module as production or authorize new runtime dependencies on `extra/qk`.
+module as production or authorize new runtime dependencies on `extra/llm_research`.
 
 New production behavior belongs under its `tinygrad/**` domain owner. Promote an existing route with its focused
 regression and authority, then remove the corresponding adapter. Research, search, qualification, and one-off gates
-remain under `extra/qk` and must not become default runtime dependencies. `test/unit/test_tinygrad_boundary.py` enforces
+remain under `extra/llm_research` and must not become default runtime dependencies. `test/unit/test_tinygrad_boundary.py` enforces
 the direct-import boundary.

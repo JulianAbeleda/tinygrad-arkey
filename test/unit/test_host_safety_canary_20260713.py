@@ -19,10 +19,10 @@ import types
 
 import numpy as np
 
-from extra.qk.prefill.guarded_execution import GuardedBuffer, GuardedExecutionHooks, GuardPolicy
-from extra.qk.prefill import host_safety_canary as hsc
-from extra.qk.prefill.host_safety_canary import HostSafetyRecord, run_host_safety_canary
-from extra.qk.prefill.isolated_guarded_executor import BundleSpec, ExecutableBundle, make_tinygrad_bundle_builder
+from extra.llm_research.prefill.guarded_execution import GuardedBuffer, GuardedExecutionHooks, GuardPolicy
+from extra.llm_research.prefill import host_safety_canary as hsc
+from extra.llm_research.prefill.host_safety_canary import HostSafetyRecord, run_host_safety_canary
+from extra.llm_research.prefill.isolated_guarded_executor import BundleSpec, ExecutableBundle, make_tinygrad_bundle_builder
 
 
 # --- the C3 fake runtime, reused at the child-only builder seam ---------------

@@ -2,10 +2,10 @@ import json
 import numpy as np
 import pytest
 
-from extra.qk.prefill.isolated_guarded_executor import IsolatedExecutionResult
-from extra.qk.prefill import operand_path_execution_worker as worker
-from extra.qk.prefill.operand_path_execution_worker import AdapterRegistry, PreparedExecution, execute, execute_session, process
-from extra.qk.prefill.execution_bridge_contracts import (CounterGroupRequest, CorrectnessProtocol, ExecutionRequest,
+from extra.llm_research.prefill.isolated_guarded_executor import IsolatedExecutionResult
+from extra.llm_research.prefill import operand_path_execution_worker as worker
+from extra.llm_research.prefill.operand_path_execution_worker import AdapterRegistry, PreparedExecution, execute, execute_session, process
+from extra.llm_research.prefill.execution_bridge_contracts import (CounterGroupRequest, CorrectnessProtocol, ExecutionRequest,
   GuardProtocol, TimingProtocol, TransportPlan)
 
 

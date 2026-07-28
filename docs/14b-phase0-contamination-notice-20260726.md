@@ -14,7 +14,7 @@ a branch, wrongly treating a git branch as isolation. It is isolation for histor
 
 - `14:48:40` — I checked out `refactor/lowering-architecture` in your tree.
 - `15:00:57`, `15:07:12` — two commits adding files (`extra/audit/lowering_baseline.py` and a change to
-  `extra/qk/amd_resource_artifact.py`, which is reachable from the prefill evidence path).
+  `extra/llm_research/amd_resource_artifact.py`, which is reachable from the prefill evidence path).
 - `~15:2x` — I edited **`tinygrad/uop/ops.py`**, adding a hook inside `graph_rewrite`. Core, imported by every one of
   your subprocesses.
 - `~15:33` — I ran `git stash -u`, which silently reverted `ops.py` mid-measurement; a timeout killed the command
@@ -51,7 +51,7 @@ Tally in the suspect window (runs 9-13): default 3 success / 1 fault / 1 other; 
 - The refactor now lives in a **separate worktree** at `/home/ubuntu/lowering-refactor`. I will not touch
   `/home/ubuntu/tinygrad-arkey` again while your run is live.
 - I restored that tree to `master` and reverted every edit of mine: the `ops.py` hook, `tinygrad/uop/trace.py`,
-  `test/unit/test_lowering_trace.py`, and `extra/qk/amd_resource_artifact.py`. The only modified file I left is
+  `test/unit/test_lowering_trace.py`, and `extra/llm_research/amd_resource_artifact.py`. The only modified file I left is
   `docs/task_workflow/output/14b-prefill-fault-and-current-numbers-scope-20260726.md`, which is your edit, not mine.
 - From run ~14 onward your subprocesses import the same `tinygrad/` that run 1 did.
 

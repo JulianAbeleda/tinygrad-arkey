@@ -4,7 +4,7 @@
 
 The compiler policy boundary is now `tinygrad.codegen.opt.compiler_policies`.
 It owns the immutable storage, wait, resource, and composed pipeline contracts.
-`extra.qk.compiler_policies` remains a compatibility re-export only; core
+`extra.llm_research.compiler_policies` remains a compatibility re-export only; core
 modules no longer import the research-plane namespace.
 
 `PipelinePolicy` is the interchangeable composition:
@@ -26,7 +26,7 @@ single route-name adapter for legacy schedule metadata.
 ## Reuse points
 
 - `KernelStage1PipelinePlan` maps to the core `StoragePolicy` without importing
-  `extra.qk`.
+  `extra.llm_research`.
 - `RegisterPipePlan.policy` exposes the register contract through the same
   `PipelinePolicy` type used by LDS.
 - `WMMAPipeSpec.pipeline_policy` and `WMMAPipeIR.pipeline_policy` use the core

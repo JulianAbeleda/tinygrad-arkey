@@ -23,9 +23,9 @@ from the repository root (about six CPU minutes on the generating host):
 .venv/bin/python - <<'PY'
 import json
 from pathlib import Path
-from extra.qk.mmq_exact_role_spec import exact_role_spec
-from extra.qk.mmq_frozen_staged_family import load_frozen_staged_family_manifest
-from extra.qk.mmq_frozen_staged_memory_certificate import certify_frozen_staged_full_memory
+from extra.llm_research.mmq_exact_role_spec import exact_role_spec
+from extra.llm_research.mmq_frozen_staged_family import load_frozen_staged_family_manifest
+from extra.llm_research.mmq_frozen_staged_memory_certificate import certify_frozen_staged_full_memory
 
 root = Path("docs/artifacts/qwen3-14b-prefill-ffn-gate-up-staged-3fa4cd619-20260719")
 family = load_frozen_staged_family_manifest(
