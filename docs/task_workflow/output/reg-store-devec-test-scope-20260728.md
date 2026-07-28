@@ -99,3 +99,17 @@ Promotion/consolidation is allowed only when:
 
 Until these gates pass, retain `extra/qk/reg_store_devec.py` and its forwarding shim; do not move, delete, or alias it to
 `pm_distinct_reg_store_devec`.
+
+## Execution checkpoint
+
+The first implementation of this scope is present in `test/unit/test_reg_store_devec.py`:
+
+- 6 focused tests pass, covering U1-U5 plus AMD/gate dispatch.
+- The matcher now fails closed for empty targets, malformed `LOAD`s, non-`INDEX` targets, and value-width mismatch.
+- The duplicate-pointer contract is captured as current extra-pass behavior while ownership remains unresolved.
+- The combined regression run passed 89 tests. Three lowering-baseline tests cannot run because `llvm-readelf` is
+  unavailable in this environment, and the lowering-fingerprint authority currently differs from its checked-in
+  snapshot; neither failure is caused by this matcher test or guard.
+
+Promotion remains blocked until the exact-clean-commit lowering baseline/fingerprint authorities are restored and the
+full U6/U7 malformed/width matrix is expanded if the ownership decision requires it.

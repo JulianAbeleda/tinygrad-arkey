@@ -65,7 +65,7 @@
       "source": "extra/qk/reg_store_devec.py",
       "proposed_destination": "tinygrad/codegen/late/reg_store.py",
       "live_caller": "tinygrad/codegen/__init__.py:263-264",
-      "blocker": "No focused CPU coverage for STACK(LOAD(INDEX(REG))), duplicate-pointer residual behavior, negative targets, lane ordering, or AMD/coalesced-load dispatch; core matcher rejects duplicate REG pointers while extra matcher accepts them",
+      "blocker": "Focused matcher coverage now passes, but exact-clean-commit lowering baseline/fingerprint authorities are not green: llvm-readelf is unavailable for baseline generation and the checked-in fingerprint differs; core matcher still rejects duplicate REG pointers while extra matcher accepts them",
       "required_before_promotion": ["focused matcher/pipeline tests", "lowering baseline regeneration", "lowering fingerprint regeneration"],
       "test_scope": "docs/task_workflow/output/reg-store-devec-test-scope-20260728.md"
     }
