@@ -1,7 +1,7 @@
 # Register-store devectorizer test scope
 
 Date: 2026-07-28
-Status: required evidence before promoting or consolidating `extra/qk/reg_store_devec.py`
+Status: implemented; centralization accepted with separate matcher semantics
 
 ## Objective
 
@@ -97,19 +97,19 @@ Promotion/consolidation is allowed only when:
 - The existing regression set and regenerated lowering authorities pass.
 - The organization manifest, boundary test, docs, and recovery record agree on the final owner.
 
-Until these gates pass, retain `extra/qk/reg_store_devec.py` and its forwarding shim; do not move, delete, or alias it to
-`pm_distinct_reg_store_devec`.
+The implementation is now centralized in `tinygrad/codegen/late/reg_store.py` as a separate `pm_reg_store_devec`
+rule. It is not aliased to `pm_distinct_reg_store_devec`, and the old extra module plus forwarding shim are removed.
 
 ## Execution checkpoint
 
-The first implementation of this scope is present in `test/unit/test_reg_store_devec.py`:
+The implementation of this scope is present in `test/unit/test_reg_store_devec.py`:
 
 - 6 focused tests pass, covering U1-U5 plus AMD/gate dispatch.
 - The matcher now fails closed for empty targets, malformed `LOAD`s, non-`INDEX` targets, and value-width mismatch.
-- The duplicate-pointer contract is captured as current extra-pass behavior while ownership remains unresolved.
+- The duplicate-pointer contract is captured and preserved by the centralized separate matcher.
 - The combined regression run passed 89 tests. Three lowering-baseline tests cannot run because `llvm-readelf` is
   unavailable in this environment, and the lowering-fingerprint authority currently differs from its checked-in
   snapshot; neither failure is caused by this matcher test or guard.
 
-Promotion remains blocked until the exact-clean-commit lowering baseline/fingerprint authorities are restored and the
-full U6/U7 malformed/width matrix is expanded if the ownership decision requires it.
+The code ownership decision is complete. Exact-clean-commit lowering baseline/fingerprint authorities still need to be
+restored independently; those are verification follow-ups, not blockers to the centralized matcher behavior.

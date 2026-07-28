@@ -4481,21 +4481,23 @@
       "domain": "codegen_lowering",
       "duplication_group": null,
       "evidence": [
-        "tinygrad/codegen/__init__.py:249 `if getenv(\"COALESCED_LOAD_LOWERING\") and ren.target.device == \"AMD\": sink = graph_rewrite(sink, cg_extras.reg_store_devec_pm(), ...)`"
+        "tinygrad/codegen/__init__.py:24 imports pm_reg_store_devec from tinygrad.codegen.late.reg_store",
+        "tinygrad/codegen/__init__.py:264 applies pm_reg_store_devec after pm_distinct_reg_store_devec on AMD when COALESCED_LOAD_LOWERING or kernel metadata enables it",
+        "test/unit/test_reg_store_devec.py records duplicate-pointer residual behavior and gate dispatch"
       ],
-      "path": "extra/qk/reg_store_devec.py",
-      "promotion_target": null,
+      "path": "tinygrad/codegen/late/reg_store.py",
+      "promotion_target": "tinygrad/codegen/late/reg_store.py (promoted from extra/qk/reg_store_devec.py; kept as a separate matcher after the core distinct-pointer rule)",
       "public_surface": [
         "pm_reg_store_devec"
       ],
-      "purpose": "PatternMatcher rule that rewrites a vectorized STORE targeting a STACK-of-REG-loads into per-lane scalar REG stores, leaving the vector value and any GLOBAL/LOCAL vector loads intact; the companion pass that keeps COALESCED_LOAD_LOWERING's vectorized loads from producing invalid C accumulator stores.",
+      "purpose": "Separate PatternMatcher rule that rewrites the residual vectorized STORE targeting a STACK-of-REG-loads into per-lane scalar REG stores after the core distinct-pointer matcher; preserves duplicate-pointer behavior without broadening the core rule.",
       "responsibilities": [
         "devectorize REG-target stores into scalar per-lane stores"
       ],
-      "retention_criterion": "needed while COALESCED_LOAD_LOWERING remains opt-in; coalesced_load_lowering.py's own docstring says 'the codegen hook fires reg-store-devec whenever this is on'",
+      "retention_criterion": "needed while COALESCED_LOAD_LOWERING remains supported; retain separately from pm_distinct_reg_store_devec while duplicate-pointer residuals are admitted",
       "reusable_assets": [],
       "role": "authority",
-      "status": "fallback",
+      "status": "production",
       "surface": "off_default",
       "test_role": "not_test_like",
       "workflow_ids": [

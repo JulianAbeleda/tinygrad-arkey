@@ -193,6 +193,22 @@ def _distinct_reg_store_indexes(tgt:UOp) -> list[UOp]|None:
   if not all(p.op is Ops.INDEX and isinstance(p.src[0].dtype, PtrDType) and p.src[0].dtype.addrspace == AddrSpace.REG for p in ptrs): return None
   return ptrs if len(set(ptrs)) == len(ptrs) else None
 
+def _devec_reg_store(tgt: UOp, val: UOp) -> UOp | None:
+  """Lower the residual STACK(LOAD(INDEX(REG)), ...) store left by coalesced-load lowering.
+
+  This is intentionally separate from `_devec_distinct_reg_store`: the residual form may contain duplicate REG
+  pointers after vectorized loads, while the core matcher rejects duplicates. Keeping the rule separate preserves that
+  behavior and makes the output contract independently testable.
+  """
+  if tgt.op is not Ops.STACK or not tgt.src or val.dtype.count != len(tgt.src): return None
+  ptrs: list[UOp] = []
+  for s in tgt.src:
+    if s.op is Ops.LOAD and not s.src: return None
+    idx = s.src[0] if s.op is Ops.LOAD else s
+    if idx.op is not Ops.INDEX or not idx.src or idx.src[0].addrspace != AddrSpace.REG: return None
+    ptrs.append(idx)
+  return UOp.group(*[p.store(val.gep(i)) for i,p in enumerate(ptrs)])
+
 def _group_wmma_reg_store(tgt:UOp, val:UOp) -> UOp|None:
   """Recover WMMA output-contract groups from an expanded distinct REG store."""
   wmma = val if val.op is Ops.WMMA else val.src[0] if val.op is Ops.GEP and val.src[0].op is Ops.WMMA else None
@@ -288,6 +304,9 @@ pm_distinct_reg_store_devec = PatternMatcher([
   (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"))), _devec_distinct_reg_store),
   (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"), UPat.var("gate"))), _devec_stack_store),
   (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"))), _devec_stack_store),
+])
+pm_reg_store_devec = PatternMatcher([
+  (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"))), _devec_reg_store),
 ])
 pm_group_wmma_reg_store = PatternMatcher([
   (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"))), _group_wmma_reg_store),
