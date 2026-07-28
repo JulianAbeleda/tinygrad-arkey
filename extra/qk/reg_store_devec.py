@@ -13,10 +13,12 @@ from tinygrad.uop.ops import AddrSpace, Ops, PatternMatcher, UPat, UOp
 
 
 def _devec_reg_store(tgt: UOp, val: UOp) -> UOp | None:
+  if tgt.op is not Ops.STACK or not tgt.src or val.dtype.count != len(tgt.src): return None
   ptrs: list[UOp] = []
   for s in tgt.src:
+    if s.op is Ops.LOAD and not s.src: return None
     idx = s.src[0] if s.op is Ops.LOAD else s
-    if idx.op is not Ops.INDEX or idx.src[0].addrspace != AddrSpace.REG: return None
+    if idx.op is not Ops.INDEX or not idx.src or idx.src[0].addrspace != AddrSpace.REG: return None
     ptrs.append(idx)
   return UOp.group(*[p.store(val.gep(i)) for i, p in enumerate(ptrs)])
 
