@@ -129,6 +129,8 @@ The proposed third slice (`extra/qk/reg_store_devec.py` into `tinygrad/codegen/l
 extra matcher runs after the core matcher and accepts duplicate REG pointers that the core matcher rejects. No
 focused test currently pins the `STACK(LOAD(INDEX(REG)))` residual, negative targets, lane ordering, or
 AMD/coalesced-load dispatch, so consolidation would risk changing compiler behavior.
+The required matrix and acceptance gates are now recorded in
+`docs/task_workflow/output/reg-store-devec-test-scope-20260728.md`.
 
 At the current `exp` tip, `python3 sz.py` passes with 34,947 budgeted authored lines against the 40,000-line cap.
 
