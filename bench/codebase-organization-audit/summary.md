@@ -1,6 +1,6 @@
 # Codebase organization audit
 
-Audited commit: `mac-first-boot-20260610-3509-g276269a24-dirty` (dirty: True)
+Audited commit: `mac-first-boot-20260610-3511-gba6a9ec7e-dirty` (dirty: True)
 Scope: `extra/qk` | manifest coverage required for: extra/qk/
 Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 65 warnings)
 
@@ -10,7 +10,7 @@ Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 65 warnings)
 
 ## Coverage
 
-- Authored: 470 files / 72155 token-bearing LOC (sz.py rules)
+- Authored: 471 files / 72172 token-bearing LOC (sz.py rules)
 - Generated (reported, never manifested): 1 files / 57 LOC
 - Manifest scope: 87 files / 13033 LOC (87 explicit records, 0 covered by group rule, 0 uncovered)
 
@@ -208,9 +208,9 @@ None.
 
 | path | class | former purpose | last campaign | replacement | commit | recovery | loc |
 |---|---|---|---|---|---|---|---|
-| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `276269a24047` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
-| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `276269a24047` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
-| `extra/qk/q4k_wmma_tile_lowering.py` | delete_after_verdict_capture | Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles. | q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14) | docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md | `276269a24047` | git show 05b67146a -- <path> | 1138 |
+| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `ba6a9ec7e665` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
+| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `ba6a9ec7e665` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
+| `extra/qk/q4k_wmma_tile_lowering.py` | delete_after_verdict_capture | Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles. | q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14) | docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md | `ba6a9ec7e665` | git show 05b67146a -- <path> | 1138 |
 
 ## Workflow inventory
 
