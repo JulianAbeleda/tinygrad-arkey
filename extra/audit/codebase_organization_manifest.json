@@ -1343,10 +1343,11 @@
       "domain": "codegen_lowering",
       "duplication_group": null,
       "evidence": [
-        "tinygrad/codegen/__init__.py:249,276,345 all gate on getenv(\"V_DOT2_LOWERING\") and device==\"AMD\""
+        "tinygrad/codegen/__init__.py direct-imports tinygrad.codegen.late.fdot2 and gates all three hooks on getenv(\"V_DOT2_LOWERING\") and device==\"AMD\"",
+        "test/unit/test_fdot2_lowering.py covers pair, accumulator, fail-closed controls, and linear-list dependency replacement"
       ],
-      "path": "extra/qk/fdot2_lowering.py",
-      "promotion_target": null,
+      "path": "tinygrad/codegen/late/fdot2.py",
+      "promotion_target": "tinygrad/codegen/late/fdot2.py (promoted from extra/qk/fdot2_lowering.py in production reorganization slice 4)",
       "public_surface": [
         "pm_fdot2",
         "line_lower_fdot2",
