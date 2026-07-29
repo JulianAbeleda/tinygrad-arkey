@@ -1,4 +1,5 @@
 #!/bin/sh
+# Backend setup helper.
 install_loc="$HOME/.local/bin"
 docker build -t qemu-hexagon-static:latest - <<'EOF'
 FROM ubuntu:24.04

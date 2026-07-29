@@ -1,4 +1,5 @@
 #!/bin/sh
+# Backend setup helper.
 install_loc="$HOME/.local/bin"
 docker pull --platform=linux/amd64 rocm/dev-ubuntu-22.04:7.1.1
 docker tag rocm/dev-ubuntu-22.04:7.1.1 rocm-hipcc:7.1.1

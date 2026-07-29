@@ -270,6 +270,10 @@ the CLI/generate/adapter closure, remote scripts, NV support, and the mixed `llm
 The standalone Mesa/LVP setup helper was also moved to `extra/setup/mesa/`; it had no tracked consumers or old-path
 references and passed shell syntax validation. This remains a bounded setup-domain move, not a production promotion.
 
+The six non-TinyGPU backend setup scripts and `cl_android.sh` were then moved into `extra/setup/`. Their only old-path
+mention was `cl_android.sh`'s self-documentation; all seven shell scripts pass syntax checks and executable modes were
+preserved. The TinyGPU installer remains separate and unresolved.
+
 ## Unresolved blockers
 
 R7 is complete for its stated gate (zero unresolved removals). Broader tier pruning and promotion remain blocked by

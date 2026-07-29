@@ -1,4 +1,5 @@
 #!/bin/bash -e
+# Backend setup helper.
 cd /tmp
 brew install cmake ninja llvm@15 zlib glew flex bison boost zstd ncurses
 if [ ! -d "gpuocelot" ]; then

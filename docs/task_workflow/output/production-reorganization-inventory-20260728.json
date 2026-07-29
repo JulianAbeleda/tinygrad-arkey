@@ -151,6 +151,15 @@
       "focused_tests": "shell syntax check; Mesa setup smoke",
       "verification": "no tracked consumers or old-path references; shell syntax passes",
       "recovery_commit": "06525b96a"
+    },
+    {
+      "source": ["extra/setup_hipcc_osx.sh", "extra/setup_hipcomgr_osx.sh", "extra/setup_mock_amd_osx.sh", "extra/setup_mock_dsp_osx.sh", "extra/setup_mock_nv_osx.sh", "extra/setup_nvcc_osx.sh", "extra/cl_android.sh"],
+      "destination": "extra/setup/",
+      "owner": "master",
+      "consumer_rewrites": ["extra/cl_android.sh self-documentation path"],
+      "focused_tests": "sh -n on all moved shell scripts",
+      "verification": "no external tracked consumers; shell syntax passes; executable modes preserved",
+      "recovery_commit": "1d7601d61"
     }
   ],
   "completed_prunes": [

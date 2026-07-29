@@ -46,6 +46,14 @@
       "state": "completed",
       "recovery_commit": "06525b96a",
       "verification": "no tracked consumers or old-path references; shell syntax check passes"
+    },
+    {
+      "source": ["extra/setup_hipcc_osx.sh", "extra/setup_hipcomgr_osx.sh", "extra/setup_mock_amd_osx.sh", "extra/setup_mock_dsp_osx.sh", "extra/setup_mock_nv_osx.sh", "extra/setup_nvcc_osx.sh", "extra/cl_android.sh"],
+      "destination": "extra/setup/",
+      "action": "move",
+      "state": "completed",
+      "recovery_commit": "1d7601d61",
+      "verification": "no external tracked consumers; shell syntax passes; executable modes preserved"
     }
   ],
   "rules": [
