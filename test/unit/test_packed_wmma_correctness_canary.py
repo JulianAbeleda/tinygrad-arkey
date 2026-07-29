@@ -38,3 +38,14 @@ def test_canary_candidate_resolution_reuses_role_template_for_14b():
   workload = full_kernel_workload(candidate_payload("qwen3_14b_q4k_m_gfx1100", "ffn_down"))
   assert workload.profile == "qwen3_14b_q4k_m_gfx1100"
   assert workload.role == "ffn_down" and workload.shape == (512,5120,17408)
+
+
+def test_production_canary_adapter_rebinds_exact_production_geometry():
+  from extra.llm_research.prefill.packed_wmma_production_canary import _payload_for_production_row
+  from tinygrad.llm.packed_wmma_prefill import PACKED_WMMA_ROUTES
+  row = next(r for r in PACKED_WMMA_ROUTES if (r.quant, r.role) == ("Q4_K", "ffn_down"))
+  payload = _payload_for_production_row(row)
+  assert tuple(payload["workload"]["shape"][k] for k in ("m", "n", "k")) == row.shape
+  assert payload["schedule"]["tile"] == {"m": 256, "n": 128, "k": 32}
+  assert payload["schedule"]["waves"] == {"m": 8, "n": 2}
+  assert payload["schedule"]["pipeline"]["buffer_count"] == 2

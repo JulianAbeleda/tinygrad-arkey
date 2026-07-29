@@ -13,7 +13,7 @@ TWO THINGS THIS GATE IS SPECIFICALLY GUARDING AGAINST, because both were live ri
   1. Overclaiming provenance. The kernel genuinely is tinygrad-scheduler-generated (an ordinary
      `(a @ b.transpose()).schedule_linear()` compiled under Opt(OptOps.TC, 0, (-1,2,1)),
      extra/llm_research/prefill/current_prefill_execution_adapter.py:76-87) -- but PACKED_WMMA_GEOM
-     (extra/llm_research/prefill/packed_wmma_prefill_candidates.py:38) is a FROZEN dict keyed (quant, role) with no
+     (tinygrad/llm/packed_wmma_prefill.py) is a FROZEN table keyed by exact (quant, role, shape) rows whose geometry
      shape term, and its cited source file has never existed in this repo. `machine_authored_generated`
      would assert an emitter derives extents from descriptor fields; this table does not. This gate FAILS
      if the manifest row's provenance is ever anything other than exactly "tinygrad_scheduler_generated" --

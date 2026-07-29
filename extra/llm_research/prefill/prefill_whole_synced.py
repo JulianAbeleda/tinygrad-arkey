@@ -376,7 +376,7 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     return {"min_ms": min(ts), "samples_ms": ts, "clock_pin": pin_prov,
             "profile": profile_range_summary(profile_events)}
 
-  from extra.llm_research.prefill.prefill_graph_gemm_route import candidate_route_census, finalize_candidate_route_census
+  from tinygrad.llm.prefill_graph_gemm import candidate_route_census, finalize_candidate_route_census
   from tinygrad.llm.fused_attention import reset_custom_kernel_attention_trace, custom_kernel_attention_trace_snapshot
   candidate_registry=getattr(model, "_prefill_graph_gemm_registry", None); candidate_census=None
   reset_custom_kernel_attention_trace()

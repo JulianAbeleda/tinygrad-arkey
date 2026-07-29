@@ -1,72 +1,17 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
-from contextvars import ContextVar
 import json, pathlib
 from collections.abc import Mapping
 from typing import Any
 
 from tinygrad import Tensor, dtypes
+from tinygrad.llm.prefill_graph_gemm import _candidate_route_row, _record_candidate_route, _structural_route_key
 from tinygrad.uop.ops import Ops
 
 _FULL_KERNEL_CANDIDATE_JSON_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON"
 _FULL_KERNEL_CANDIDATE_HASH_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH"
 _FULL_KERNEL_CANDIDATE_SET_JSON_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON"
 _FULL_KERNEL_CANDIDATE_SET_PATH_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH"
-_CANDIDATE_ROUTE_CENSUS:ContextVar[dict[str,Any]|None]=ContextVar("candidate_route_census",default=None)
-
-@contextmanager
-def candidate_route_census():
-  collector={"selected":{},"model_forward":{}}
-  token=_CANDIDATE_ROUTE_CENSUS.set(collector)
-  try: yield collector
-  finally: _CANDIDATE_ROUTE_CENSUS.reset(token)
-
-def _candidate_route_row(admission) -> dict[str,Any]:
-  workload=admission.normalized_payload["workload"]; shape=workload["shape"]; target=workload["target"]
-  return {"profile":workload["profile"],"role":workload["role"],"shape":{"m":shape["m"],"n":shape["n"],"k":shape["k"]},
-          "target":{"backend":target["backend"],"arch":target["arch"],"wave_size":target["wave_size"]},
-          "canonical_identity":admission.canonical_identity}
-
-def _structural_route_key(row:dict[str,Any]) -> tuple[Any,...]:
-  shape,target=row["shape"],row["target"]
-  return (row["role"],shape["m"],shape["n"],shape["k"],target["backend"],target["arch"],target["wave_size"])
-
-def _record_candidate_route(admission) -> None:
-  collector=_CANDIDATE_ROUTE_CENSUS.get()
-  if collector is None: return
-  row=_candidate_route_row(admission); key=_structural_route_key(row)
-  prior=collector["selected"].get(key)
-  if prior is not None and prior["canonical_identity"] != row["canonical_identity"]:
-    raise RuntimeError(f"candidate route census identity drift for {key!r}")
-  collector["selected"][key]={**row,"bindings":1 if prior is None else prior["bindings"]+1}
-
-def record_model_forward_candidate(*, role:str, shape:tuple[int,int,int], canonical_identity:str, one_buffer:bool) -> None:
-  """Record a separately admitted forward binding without relaxing registry census identity checks."""
-  collector=_CANDIDATE_ROUTE_CENSUS.get()
-  if collector is None or not one_buffer: return
-  if not isinstance(canonical_identity,str) or not canonical_identity or not all(isinstance(x,int) for x in shape): return
-  key=(role,*shape,canonical_identity)
-  prior=collector["model_forward"].get(key)
-  collector["model_forward"][key]={"role":role,"shape":{"m":shape[0],"n":shape[1],"k":shape[2]},
-                                    "canonical_identity":canonical_identity,"one_buffer":True,
-                                    "bindings":1 if prior is None else prior["bindings"]+1}
-
-def finalize_candidate_route_census(collector:dict[str,Any],registry) -> dict[str,Any]:
-  enabled_roles = {admission.normalized_payload["workload"]["role"] for admission in registry.admissions}
-  expected={_structural_route_key(_candidate_route_row(admission)):{**_candidate_route_row(admission),"bindings":0}
-            for entry,admission in zip(registry.candidate_set.entries,registry.admissions)
-            if admission.normalized_payload["workload"]["role"] in enabled_roles}
-  selected=dict(collector["selected"]); missing=[expected[k] for k in sorted(expected.keys()-selected.keys())]
-  unexpected=[selected[k] for k in sorted(selected.keys()-expected.keys())]
-  mismatched=[selected[k] for k in sorted(expected.keys()&selected.keys())
-              if selected[k]["canonical_identity"] != expected[k]["canonical_identity"]]
-  return {"schema":"prefill-candidate-set-route-census.v1","passed":not (missing or unexpected or mismatched),
-          "policy_roles": sorted(enabled_roles),
-          "expected_entry_count":len(expected),"selected_entry_count":len(selected),
-          "model_forward": [collector["model_forward"][k] for k in sorted(collector["model_forward"])],
-          "selected":[selected[k] for k in sorted(selected)],"missing":missing,"unexpected":unexpected,"identity_mismatches":mismatched}
-
 def _candidate_registry_from_env(env:dict[str,Any]):
   """Load an offline candidate registry from an explicit tool configuration.
 

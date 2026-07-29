@@ -1,9 +1,8 @@
 """Shared access to the promoted prefill candidate-set payloads.
 
-Both the packed-WMMA production candidates (packed_wmma_prefill_candidates.py) and the
-correctness canary (packed_wmma_correctness_canary.py) need to read the promoted
-candidate-set artifact and pick the per-role schedule template out of it. That load +
-role lookup lived, byte-identical, in both places; this module is the single home for it.
+The generic correctness oracle and the EXP-only production-canary adapter need to read
+the promoted candidate-set artifact and pick the per-role schedule template out of it.
+That load + role lookup lives here; it is not a production route implementation.
 """
 from __future__ import annotations
 

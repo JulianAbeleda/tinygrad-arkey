@@ -77,7 +77,7 @@ _PREFILL_EMITTERS = {"amd_gfx1100": lambda spec, **kw: spec.emit(**kw)}
 
 # RUNTIME DISPATCH TRACE (BoltBeam observability seam)
 # --------------------------------------------------
-# extra/llm_research/prefill/prefill_graph_gemm_route.py already has a "candidate route census"
+# tinygrad/llm/prefill_graph_gemm.py owns the candidate route census.
 # mechanism (record_model_forward_candidate), but it is purpose-built for the
 # dense-GEMM packed-WMMA roles: (a) it is a no-op unless one_buffer=True, a flag
 # that specifically means "this candidate shares one canonical weight-buffer

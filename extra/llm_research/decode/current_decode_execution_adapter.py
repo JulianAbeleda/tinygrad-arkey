@@ -13,7 +13,7 @@ from math import prod
 from typing import Any, Mapping
 
 from extra.llm_research.gemv_g2_lanemap import Q4KGateUpLaneMap
-from extra.llm_research.gemv_g3_codegen_lowering import q4k_g3_lanemap_gemv_kernel
+from tinygrad.llm.decode_kernels import q4k_g3_lanemap_gemv_kernel
 from extra.llm_research.mmq_epoch_manifest_export import (DEFAULT_MAX_ROWS, build_amd_isa_proof_manifest_bundle,
                                                 summarize_amd_isa_proof_rows)
 from extra.llm_research.route_manifest import PROFILE_DECODE, ROUTES
@@ -187,7 +187,7 @@ def verify_decode_full_output(request: CurrentDecodeCompileRequest, artifact: Ma
   non-finite or mismatched element fails closed."""
   import numpy as np
   from tinygrad import Tensor, dtypes
-  from extra.llm_research.gemv_g3_codegen_lowering import q4k_g3_lanemap_gemv_kernel
+  from tinygrad.llm.decode_kernels import q4k_g3_lanemap_gemv_kernel
   words = Tensor(artifact["words"].copy()).realize()
   x = Tensor(artifact["activation"].copy()).realize()
   before = hashlib.sha256(artifact["words"].tobytes()).hexdigest()

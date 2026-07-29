@@ -231,7 +231,7 @@ def _flash_prefill_cases() -> list[KernelCase]:
 
 
 def _flash_decode_cases() -> list[KernelCase]:
-  from extra.llm_research.decode.flash_decode_attention_spec import describe_flash_decode_attention
+  from tinygrad.llm.flash_decode_attention import describe_flash_decode_attention
   configs = [
     ("8B", "KV_BOTH", "decode_flash_live_split_g4_kvboth"),
     ("14B", "KV_BOTH", "decode_flash_live_split_g5_kvboth"),
@@ -304,7 +304,7 @@ def _q6k_gemv_primitive_cases() -> list[KernelCase]:
 
 
 def _gemv_g3_lanemap_cases() -> list[KernelCase]:
-  from extra.llm_research.gemv_g3_codegen_lowering import q4k_g3_lanemap_gemv_kernel
+  from tinygrad.llm.decode_kernels import q4k_g3_lanemap_gemv_kernel
   cases = []
   for model, roles in ROLE_SHAPES.items():
     for role, dims in roles.items():

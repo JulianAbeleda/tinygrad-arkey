@@ -5,6 +5,7 @@ import pytest
 from extra.llm_research.prefill import prefill_graph_gemm_route as route
 from extra.llm_research.route_manifest import canonical_candidate_set_identity
 from tinygrad import Tensor, dtypes
+from tinygrad.llm import prefill_graph_gemm as production_route
 from tinygrad.llm.memory_semantics import model_parameter
 
 
@@ -115,7 +116,7 @@ def _registry(admissions):
   return SimpleNamespace(candidate_set=candidate_set,admissions=tuple(admissions))
 
 def _binding(registry,admission):
-  row=route._candidate_route_row(admission); set_identity=canonical_candidate_set_identity(registry.candidate_set.to_json())
+  row=production_route._candidate_route_row(admission); set_identity=canonical_candidate_set_identity(registry.candidate_set.to_json())
   return {"candidate_registry":registry,"inventory_identity":"inventory:sha256:"+"a"*64,
     "candidate_set_identity":set_identity,"scanned_target_facts":{"target":row["target"]},
     "selected_policy":{"role":row["role"],"shape":row["shape"],"target":row["target"],
@@ -128,22 +129,22 @@ def test_candidate_route_census_requires_exact_bindings_and_counts_reuse():
     ("ffn_gate_up",12288,4096),("ffn_down",4096,12288),("attn_qo",4096,4096),("attn_kv",1024,4096)),1))
   entries=tuple(SimpleNamespace() for a in admissions)
   registry=SimpleNamespace(candidate_set=SimpleNamespace(entries=entries),admissions=admissions)
-  with route.candidate_route_census() as collector:
-    for admission in admissions: route._record_candidate_route(admission)
-    route._record_candidate_route(admissions[2])
-  report=route.finalize_candidate_route_census(collector,registry)
+  with production_route.candidate_route_census() as collector:
+    for admission in admissions: production_route._record_candidate_route(admission)
+    production_route._record_candidate_route(admissions[2])
+  report=production_route.finalize_candidate_route_census(collector,registry)
   assert report["passed"] and report["selected_entry_count"] == report["expected_entry_count"] == 4
   assert next(x for x in report["selected"] if x["role"] == "attn_qo")["bindings"] == 2
-  with route.candidate_route_census() as incomplete: route._record_candidate_route(admissions[0])
-  assert len(route.finalize_candidate_route_census(incomplete,registry)["missing"]) == 3
+  with production_route.candidate_route_census() as incomplete: production_route._record_candidate_route(admissions[0])
+  assert len(production_route.finalize_candidate_route_census(incomplete,registry)["missing"]) == 3
 
 
 def test_model_forward_one_buffer_binding_is_censused_without_relaxing_registry_identity():
   admission=_admission("attn_qo",4096,4096,"1"*64); registry=_registry((admission,))
-  with route.candidate_route_census() as collector:
-    route._record_candidate_route(admission)
-    route.record_model_forward_candidate(role="attn_qo",shape=(512,4096,4096),canonical_identity="2"*64,one_buffer=True)
-  report=route.finalize_candidate_route_census(collector,registry)
+  with production_route.candidate_route_census() as collector:
+    production_route._record_candidate_route(admission)
+    production_route.record_model_forward_candidate(role="attn_qo",shape=(512,4096,4096),canonical_identity="2"*64,one_buffer=True)
+  report=production_route.finalize_candidate_route_census(collector,registry)
   assert report["passed"] is True
   assert report["model_forward"] == [{"role":"attn_qo","shape":{"m":512,"n":4096,"k":4096},
                                        "canonical_identity":"2"*64,"one_buffer":True,"bindings":1}]
