@@ -6,19 +6,19 @@ Promotion direction: implement and validate on `exp`, promote the production-onl
 
 ## Problem
 
-`Tensor.custom_kernel` is a low-level graph-construction mechanism. Its name does not describe who authored a program, how a configuration was selected, or whether the call is production, oracle, or research-only. The current promoted LLM routes call it directly, which can make a machine-generated/search-selected program look like a hand-tuned kernel.
+`Tensor.uop_program` is a low-level graph-construction mechanism. Its name does not describe who authored a program, how a configuration was selected, or whether the call is production, oracle, or research-only. The current promoted LLM routes call it directly, which can make a machine-generated/search-selected program look like a hand-tuned kernel.
 
-The method itself is not wrong and remains a generic tinygrad API. The architectural error is exposing that transport primitive at every route call site without typed lifecycle/provenance context.
+The method itself is not wrong and remains a generic tinygrad API. The architectural error is exposing that transport primitive at every route call site without typed lifecycle/provenance context. `Tensor.custom_kernel` is retained silently as the upstream-compatibility spelling.
 
 ## Outcome
 
-Production code reads `execute_promoted_program(...)`. EXP fallback/oracle code reads `execute_oracle_program(...)`. Unpromoted experiments read `execute_research_program(...)`. All three use `Tensor.custom_kernel` only inside one small boundary module.
+Production code reads `execute_promoted_program(...)`. EXP fallback/oracle code reads `execute_oracle_program(...)`. Unpromoted experiments read `execute_research_program(...)`. All three use `Tensor.uop_program` only inside one small boundary module.
 
 This refactor changes no emitter, UOp graph, selected route, tensor shape, ABI, scheduling option, fallback, environment gate, or performance claim.
 
 ## Non-goals
 
-- Do not rename or change `Tensor.custom_kernel` globally.
+- Do not rename or change the `UOp.custom_kernel` substrate globally.
 - Do not modify kernel bodies or machine-search artifacts.
 - Do not reclassify route provenance based on naming alone.
 - Do not promote an EXP oracle or experiment into master.
@@ -57,7 +57,7 @@ Contract:
 - `execute_promoted_program` accepts only `MACHINE_SEARCH_GENERATED` or `TINYGRAD_SCHEDULER_GENERATED`.
 - `execute_oracle_program` accepts only `HAND_AUTHORED_ORACLE`.
 - `execute_research_program` accepts only `RESEARCH_ONLY`.
-- Each function delegates exactly once to `output.custom_kernel(*inputs, fxn=program.emitter)` and returns element zero, preserving the present output contract.
+- Each function delegates exactly once to `output.uop_program(*inputs, fxn=program.emitter)` and returns element zero, preserving the present output contract.
 - `to_dict()` excludes the callable and emits stable route/program/provenance trace facts.
 - The boundary does not inspect names to infer provenance.
 
@@ -70,7 +70,7 @@ Master may contain the vocabulary and boundary, but master production call sites
 Owner: orchestrator.
 
 - Record branch heads and clean status.
-- Record every direct `.custom_kernel(` call under `tinygrad/llm` and `extra/llm_research`.
+- Record every direct `.uop_program(` and legacy `.custom_kernel(` call under `tinygrad/llm` and `extra/llm_research`.
 - Preserve existing UOp/frozen identity tests as the behavioral baseline.
 
 Acceptance: scope committed on EXP before implementation.
@@ -117,11 +117,11 @@ Flash constraint:
 - Production flash execution must resolve an admitted `FlashDecodeRouteConfig` for the actual Hq/Hkv/Hd/device geometry.
 - Unsupported exploratory geometry must not be mislabeled as a promoted route. EXP HD sweeps move to KP3 research execution.
 
-Documentation in `fused_attention.py` must call this a promoted program boundary. It may explain that `Tensor.custom_kernel` is the internal transport once, but must not present “custom kernel” as provenance.
+Documentation in `fused_attention.py` must call this a promoted program boundary. It may explain that `Tensor.uop_program` is the internal transport once, but must not present transport as provenance.
 
 Acceptance:
 
-- `rg '\.custom_kernel\(' tinygrad/llm` returns only `kernel_program.py`.
+- `rg '\.custom_kernel\(' tinygrad/llm` returns no callers; `rg '\.uop_program\(' tinygrad/llm` returns only `kernel_program.py`.
 - Existing decode/flash/fused UOp identity tests pass unchanged.
 - Route IDs, program names, shapes, and fallback behavior remain unchanged.
 
@@ -144,11 +144,11 @@ Known direct sources to migrate:
 - `mmq_q4k_q8_atom.py`
 - `phase_abi_v1_resource_probe.py`
 
-Any additional `extra/llm_research` hit discovered by static search is classified explicitly. Tests that directly exercise the generic Tensor mechanism may retain `.custom_kernel`; runtime, benchmark, qualification, and campaign source may not.
+Any additional `extra/llm_research` hit discovered by static search is classified explicitly. Tests that directly exercise the generic Tensor mechanism use the canonical `.uop_program`; runtime, benchmark, qualification, and campaign source may not use the legacy spelling.
 
 Acceptance:
 
-- No direct `.custom_kernel(` remains under `extra/llm_research`.
+- No direct legacy `.custom_kernel(` remains under `extra/llm_research`.
 - No qualification path labels unsupported geometry promoted.
 - Current production qualification still imports production emitters.
 - CPU-focused EXP tests and syntax checks pass.
@@ -157,9 +157,9 @@ Acceptance:
 
 Add tests that prove:
 
-- Production LLM files do not call `.custom_kernel` directly.
+- Production LLM files do not call `.custom_kernel` directly and use `.uop_program` only in the typed boundary.
 - Master production files do not call oracle/research execution functions.
-- EXP research sources have no direct `.custom_kernel` calls.
+- EXP research sources have no direct legacy `.custom_kernel` calls.
 - Every explicit program object has a non-empty route/program identity.
 - Existing production emitter UOp keys/frozen digests remain identical.
 
@@ -206,7 +206,7 @@ EXP:
 Dev:
 
 - Boundary, route, identity, and fallback-focused tests green.
-- No production direct `.custom_kernel` call.
+- No production direct legacy `.custom_kernel` call.
 
 Master:
 
@@ -219,4 +219,4 @@ Push EXP, dev, and master only after their gates pass and verify local HEAD equa
 
 ## Completion definition
 
-The refactor is complete when a new reader sees explicit promoted/oracle/research execution at every LLM program call site; `Tensor.custom_kernel` is confined to one transport boundary in production and absent from EXP campaign source; all production identities and behavior are unchanged; validated commits have been promoted EXP → dev → master; branches are clean and pushed; and AMD recertification is documented as evidence refresh rather than unfinished code.
+The refactor is complete when a new reader sees explicit promoted/oracle/research execution at every LLM program call site; `Tensor.uop_program` is confined to one transport boundary in production and the legacy Tensor spelling is absent from EXP campaign source; all production identities and behavior are unchanged; validated commits have been promoted EXP → dev → master; branches are clean and pushed; and AMD recertification is documented as evidence refresh rather than unfinished code.

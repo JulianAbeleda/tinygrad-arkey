@@ -6,7 +6,7 @@ Status: complete on `exp`, validated through `dev`, and production-only changes 
 
 ## Result
 
-Explicit LLM program execution now carries declared lifecycle provenance instead of exposing `Tensor.custom_kernel` at each route call site:
+Explicit LLM program execution now carries declared lifecycle provenance instead of exposing `Tensor.uop_program` at each route call site:
 
 - promoted production programs use `execute_promoted_program` and accept only machine-search- or tinygrad-scheduler-generated provenance;
 - EXP/dev research programs use `execute_research_program`;
@@ -31,11 +31,13 @@ No emitter body, UOp graph, route choice, ABI, tensor shape, scheduling option, 
 
 AST-based tests enforce that:
 
-- the only direct `.custom_kernel(...)` call under `tinygrad/llm` is the transport in `tinygrad/llm/kernel_program.py`;
+- no direct `.custom_kernel(...)` compatibility call remains under `tinygrad/llm`;
+- the only direct `.uop_program(...)` call under `tinygrad/llm` is the transport in `tinygrad/llm/kernel_program.py`;
 - production LLM source cannot import or call oracle/research executors;
 - EXP/dev runtime, benchmark, qualification, and campaign source cannot call `.custom_kernel(...)` directly.
 
-Tests that directly exercise the generic Tensor mechanism remain allowed.
+Tests that directly exercise the generic Tensor mechanism remain allowed. `Tensor.custom_kernel` remains a silent
+upstream-compatibility spelling; it does not assign provenance to a caller.
 
 ## Commit map
 

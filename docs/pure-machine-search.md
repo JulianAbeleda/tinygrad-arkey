@@ -17,7 +17,7 @@ cannot claim pure machine-search provenance.
 |---|---:|---|
 | `machine_authored_generated` | yes | A search/profile/spec descriptor owns the kernel topology and lowering parameters; code is emitted from that descriptor or grammar. |
 | `tinygrad_scheduler_generated` | yes | Ordinary tinygrad graph lowering/scheduler output, with no route-local custom kernel or instruction emitter. |
-| `hand_authored_uop_template` | no | A human wrote a Python `Tensor.custom_kernel` / UOp kernel body. It may be temporary runtime debt, but it is not pure. |
+| `hand_authored_uop_template` | no | A human wrote a Python `Tensor.uop_program` / UOp kernel body. It may be temporary runtime debt, but it is not pure. |
 | `external_handwritten_kernel` | no | HIP/CUDA/C/C++/ASM/source-string/precompiled binary/raw-instruction emitter. Never a pure final default. |
 | `rollback_oracle` | no | A handwritten, owned, or specialized route retained only for rollback/reference comparison. |
 
@@ -30,7 +30,7 @@ Classify the implementation that actually executes on the selected route, not th
 
 1. If the route injects raw instructions, source strings, inline asm, precompiled binaries, or hand-emitted native ISA, it
    is `external_handwritten_kernel`.
-2. Else if the route body is a human-authored `Tensor.custom_kernel` / UOp template, it is `hand_authored_uop_template`.
+2. Else if the route body is a human-authored `Tensor.uop_program` / UOp template, it is `hand_authored_uop_template`.
 3. Else if the route is emitted from a structured search/spec descriptor whose degrees of freedom are data and whose
    emitter is shared infrastructure, it is `machine_authored_generated`.
 4. Else if it is normal tinygrad graph lowering with no route-local custom kernel body, it is
@@ -94,7 +94,7 @@ These markers force `external_handwritten_kernel` unless the code is only a non-
 
 These markers usually force `hand_authored_uop_template`:
 
-- route-local `Tensor.custom_kernel(..., fxn=some_python_kernel)`
+- route-local `Tensor.uop_program(..., fxn=some_python_kernel)`
 - Python functions named like `*_kernel(...)` that manually construct UOp loops, reductions, loads, stores, or custom
   expressions
 - `Ops.CUSTOM` or `Ops.CUSTOMI` used inside a route-local kernel template

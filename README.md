@@ -37,6 +37,9 @@ route surfaces currently live under `extra/llm_research` so their provenance and
 production route adapters may import them while constructing the kernel, but the offline search itself is not
 rerun for inference.
 
+`Tensor.uop_program` is the lazy UOp-program transport, not a provenance label. `Tensor.custom_kernel` remains a
+silent upstream-compatibility spelling with the same behavior.
+
 In short: **machine-searched offline, statically promoted, compiled by tinygrad, deterministic at runtime.**
 
 ## Repository checks
