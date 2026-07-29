@@ -1,8 +1,8 @@
 {
-  "schema": "tinygpu.power-residency.v2.fixture",
+  "schema": "tinygpu.power-residency.v3.fixture",
   "maximum_payload_bytes": 4096,
   "valid": {
-    "schema": "tinygpu.power-residency.v2",
+    "schema": "tinygpu.power-residency.v3",
     "provider_generation": 1,
     "policy_id": "driverkit_full_power_v1",
     "full_power_requested": true,
@@ -25,6 +25,13 @@
     "stop_busy_leases": 0,
     "stop_busy_bars": 0,
     "stop_busy_dma": 0,
+    "bar_residency_policy_id": "driverkit_bar5_mapping_v1",
+    "bar_residency_requested": true,
+    "bar_residency_active": true,
+    "bar_residency_bar": 5,
+    "bar_residency_type": 0,
+    "bar_residency_bytes": 524288,
+    "bar_residency_error": 0,
     "publishable": true
   },
   "invalid": [
@@ -38,6 +45,11 @@
     {"name": "transition_predates_request", "patch": {"last_transition_monotonic_ns": 900000000}},
     {"name": "canary_predates_request", "patch": {"last_canary_success_monotonic_ns": 1000000000}},
     {"name": "stop_resource_leak", "patch": {"stop_busy_dma": 1}},
+    {"name": "bar_not_requested", "patch": {"bar_residency_requested": false}},
+    {"name": "bar_not_active", "patch": {"bar_residency_active": false}},
+    {"name": "wrong_bar", "patch": {"bar_residency_bar": 0}},
+    {"name": "empty_bar", "patch": {"bar_residency_bytes": 0}},
+    {"name": "bar_error", "patch": {"bar_residency_error": -536870212}},
     {"name": "not_publishable", "patch": {"publishable": false}}
   ]
 }

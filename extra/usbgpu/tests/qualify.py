@@ -16,7 +16,8 @@ POWER_FIELDS = {"schema", "provider_generation", "policy_id", "full_power_reques
                 "override_probe_prejoin_error", "override_probe_postjoin_error", "power_request_error", "power_release_error",
                 "transition_count", "unexpected_downgrade_count", "last_transition_monotonic_ns",
                 "last_canary_identity_dword", "last_canary_success_monotonic_ns", "stop_busy_leases", "stop_busy_bars",
-                "stop_busy_dma", "publishable"}
+                "stop_busy_dma", "bar_residency_policy_id", "bar_residency_requested", "bar_residency_active",
+                "bar_residency_bar", "bar_residency_type", "bar_residency_bytes", "bar_residency_error", "publishable"}
 MONOTONIC_FIELDS = ("attempts", "successes", "failures", "consecutive_failures", "last_attempt_monotonic_ns",
                     "last_success_monotonic_ns", "success_gap_over_leeway_count", "max_success_gap_ms")
 REQUIRED_ENV = {"DEV":"AMD", "JIT":"1", "PYTHONPATH":".", "AM_REMOTE_DISCOVERY_PROFILE":"gfx1100_744c",
@@ -152,21 +153,29 @@ def validate_continuity(first:dict, second:dict, *, require_advance:bool=False) 
 
 
 def validate_power_status(value:dict) -> None:
-  if set(value) != POWER_FIELDS or value.get("schema") != "tinygpu.power-residency.v2": raise QualificationError("malformed power-residency status")
+  if set(value) != POWER_FIELDS or value.get("schema") != "tinygpu.power-residency.v3": raise QualificationError("malformed power-residency status")
   u64 = ("provider_generation", "power_request_attempts", "last_power_request_monotonic_ns", "transition_count",
-         "unexpected_downgrade_count", "last_transition_monotonic_ns", "last_canary_success_monotonic_ns")
-  u32 = ("desired_power_flags", "last_observed_power_flags", "stop_busy_leases", "stop_busy_bars", "stop_busy_dma")
-  i32 = ("override_probe_prejoin_error", "override_probe_postjoin_error", "power_request_error", "power_release_error")
-  boolean = ("full_power_requested", "power_request_accepted", "power_request_confirmed", "power_release_attempted", "publishable")
+         "unexpected_downgrade_count", "last_transition_monotonic_ns", "last_canary_success_monotonic_ns", "bar_residency_bytes")
+  u32 = ("desired_power_flags", "last_observed_power_flags", "stop_busy_leases", "stop_busy_bars", "stop_busy_dma",
+         "bar_residency_bar", "bar_residency_type")
+  i32 = ("override_probe_prejoin_error", "override_probe_postjoin_error", "power_request_error", "power_release_error",
+         "bar_residency_error")
+  boolean = ("full_power_requested", "power_request_accepted", "power_request_confirmed", "power_release_attempted",
+             "bar_residency_requested", "bar_residency_active", "publishable")
   if any(type(value[k]) is not int or not 0 <= value[k] < 1<<64 for k in u64): raise QualificationError("invalid power-residency counter")
   if any(type(value[k]) is not int or not 0 <= value[k] < 1<<32 for k in u32): raise QualificationError("invalid power-residency flags")
   if any(type(value[k]) is not int or not -(1<<31) <= value[k] < 1<<31 for k in i32): raise QualificationError("invalid power-residency error")
   if any(type(value[k]) is not bool for k in boolean): raise QualificationError("invalid power-residency boolean")
   if value["policy_id"] != "driverkit_full_power_v1" or value["desired_power_flags"] != 2 or value["last_observed_power_flags"] != 2:
     raise QualificationError("power-residency policy or observed state mismatch")
+  if value["bar_residency_policy_id"] != "driverkit_bar5_mapping_v1" or value["bar_residency_bar"] != 5 or \
+     value["bar_residency_bytes"] == 0 or value["bar_residency_error"]:
+    raise QualificationError("BAR-residency policy or mapping is invalid")
   if not all(value[k] for k in ("full_power_requested", "power_request_accepted", "power_request_confirmed", "publishable")) or \
      value["power_release_attempted"]:
     raise QualificationError("provider power residency is not active")
+  if not value["bar_residency_requested"] or not value["bar_residency_active"]:
+    raise QualificationError("provider BAR residency is not active")
   if value["override_probe_prejoin_error"] != -536870212 or any(value[k] for k in ("override_probe_postjoin_error", "power_request_error", "power_release_error")) or \
      value["unexpected_downgrade_count"]: raise QualificationError("power-residency request or transition failed")
   if value["power_request_attempts"] == 0 or value["last_power_request_monotonic_ns"] == 0 or value["transition_count"] == 0 or \

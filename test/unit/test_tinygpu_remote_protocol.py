@@ -14,7 +14,7 @@ from tinygrad.runtime.support.system import APLRemotePCIDevice, RemoteCmd, Remot
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 STATUS = json.loads((ROOT / "extra/usbgpu/protocol/fixtures/keepalive-status-v1.json").read_text())["valid"]
-POWER_STATUS = json.loads((ROOT / "extra/usbgpu/protocol/fixtures/power-residency-status-v2.json").read_text())["valid"]
+POWER_STATUS = json.loads((ROOT / "extra/usbgpu/protocol/fixtures/power-residency-status-v3.json").read_text())["valid"]
 
 
 def _device(sock):

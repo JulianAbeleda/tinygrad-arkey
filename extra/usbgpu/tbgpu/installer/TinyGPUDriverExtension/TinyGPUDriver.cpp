@@ -16,6 +16,8 @@ struct TinyGPUPolicy {
 
 static constexpr TinyGPUPolicy kUSB4AMD744C = {"usb4_amd_744c_v1", 0x744c1002, 1000, 100};
 static constexpr const char* kPowerResidencyPolicy = "driverkit_full_power_v1";
+static constexpr const char* kBARResidencyPolicy = "driverkit_bar5_mapping_v1";
+static constexpr uint32_t kKeeperBAR = 5;
 static constexpr uint32_t kFullPowerFlags = kIOServicePowerCapabilityOn;
 static constexpr uint32_t kReleasedPowerFlags = kIOServicePowerCapabilityOff;
 static constexpr uint64_t kMaxPowerRequestAttempts = 3;
@@ -43,6 +45,8 @@ struct TinyGPUDriver_IVars {
 	bool powerRequestAccepted = false;
 	bool powerRequestConfirmed = false;
 	bool powerReleaseAttempted = false;
+	bool barResidencyRequested = false;
+	bool barResidencyActive = false;
 	uint64_t generation = 0;
 	uint64_t attempts = 0;
 	uint64_t successes = 0;
@@ -67,6 +71,10 @@ struct TinyGPUDriver_IVars {
 	uint32_t stopBusyLeases = 0;
 	uint32_t stopBusyBars = 0;
 	uint32_t stopBusyDMA = 0;
+	uint32_t barResidencyType = 0;
+	uint64_t barResidencyBytes = 0;
+	IOMemoryDescriptor* barResidencyMemory = nullptr;
+	IOMemoryMap* barResidencyMap = nullptr;
 	IOMemoryDescriptor* mmioMemory[6] = {};
 	IOMemoryMap* mmioMap[6] = {};
 	uint64_t mmioSize[6] = {};
@@ -75,6 +83,7 @@ struct TinyGPUDriver_IVars {
 	int32_t overrideProbePostJoinError = 0;
 	int32_t powerRequestError = 0;
 	int32_t powerReleaseError = 0;
+	int32_t barResidencyError = 0;
 };
 
 static uint64_t UptimeNS() {
@@ -110,6 +119,48 @@ static void ReleaseMMIOMappings(TinyGPUDriver_IVars* state) {
 		if (state->mmioMemory[bar]) { state->mmioMemory[bar]->release(); state->mmioMemory[bar] = nullptr; }
 		state->mmioSize[bar] = 0;
 	}
+}
+
+static void ReleaseBARResidency(TinyGPUDriver_IVars* state) {
+	if (!state) return;
+	if (state->barResidencyMap) { state->barResidencyMap->release(); state->barResidencyMap = nullptr; }
+	if (state->barResidencyMemory) { state->barResidencyMemory->release(); state->barResidencyMemory = nullptr; }
+	state->barResidencyActive = false;
+	state->barResidencyBytes = 0;
+	state->barResidencyType = 0;
+}
+
+// The historical Python bridge retained its BAR mappings for the lifetime of
+// the opened device. Reproduce only the first and smallest part of that state:
+// AMD initialization maps BAR5 first, and Apple IOPCIFamily's device-memory
+// path establishes the separate tunneled-PCIe L1 veto before returning the
+// descriptor. This provider-owned mapping is not a workload BAR resource.
+static kern_return_t AcquireBARResidency(TinyGPUDriver* owner, TinyGPUDriver_IVars* state) {
+	if (state->barResidencyActive) return kIOReturnSuccess;
+	state->barResidencyRequested = true;
+	state->barResidencyError = 0;
+	uint8_t index = 0, type = 0;
+	uint64_t bytes = 0;
+	kern_return_t err = state->pci->GetBARInfo(kKeeperBAR, &index, &bytes, &type);
+	if (!err && !bytes) err = kIOReturnBadMedia;
+	IOMemoryDescriptor* memory = nullptr;
+	IOMemoryMap* map = nullptr;
+	if (!err) err = state->pci->_CopyDeviceMemoryWithIndex(index, &memory, owner);
+	if (!err && !memory) err = kIOReturnError;
+	if (!err) err = memory->CreateMapping(0, 0, 0, 0, 0, &map);
+	if (!err && !map) err = kIOReturnError;
+	if (err) {
+		if (map) map->release();
+		if (memory) memory->release();
+		state->barResidencyError = (int32_t)err;
+		return err;
+	}
+	state->barResidencyMemory = memory;
+	state->barResidencyMap = map;
+	state->barResidencyBytes = bytes;
+	state->barResidencyType = type;
+	state->barResidencyActive = true;
+	return kIOReturnSuccess;
 }
 
 // Called only from the provider gate. Keeping this mapping provider-owned is
@@ -155,9 +206,14 @@ static bool PowerResidencyReady(const TinyGPUDriver_IVars* state) {
 		state->lastSuccess > state->lastPowerRequestTick;
 }
 
+static bool ProviderResidencyReady(const TinyGPUDriver_IVars* state) {
+	return PowerResidencyReady(state) && state->barResidencyRequested && state->barResidencyActive &&
+		!state->barResidencyError && state->barResidencyBytes;
+}
+
 static void RefreshProviderHealth(TinyGPUDriver_IVars* state) {
 	if (state->state == kQuiescing || state->state == kStopped) return;
-	state->state = state->canaryHealthy && !state->counterSaturated && !state->timerError && PowerResidencyReady(state)
+	state->state = state->canaryHealthy && !state->counterSaturated && !state->timerError && ProviderResidencyReady(state)
 		? kActiveHealthy : kActiveDegraded;
 }
 
@@ -221,6 +277,7 @@ bool TinyGPUDriver::init() {
 void TinyGPUDriver::free() {
 	if (ivars) {
 		ReleaseMMIOMappings(ivars);
+		ReleaseBARResidency(ivars);
 		if (ivars->timer) ivars->timer->release();
 		if (ivars->timerAction) ivars->timerAction->release();
 		if (ivars->gate) ivars->gate->release();
@@ -249,6 +306,8 @@ kern_return_t TinyGPUDriver::Start_Impl(IOService* provider) {
 	ivars->gate->DispatchSync(^{ ivars->pci->ConfigurationRead32(kIOPCIConfigurationOffsetVendorID, &identity); });
 	ivars->lastIdentity = identity;
 	if (identity != kUSB4AMD744C.identity) { err = kIOReturnUnsupported; goto fail; }
+	err = ivars->gate->RunAction(^{ return AcquireBARResidency(this, ivars); });
+	if (err) goto fail;
 
 	err = IOTimerDispatchSource::Create(ivars->gate, &ivars->timer);
 	if (err) goto fail;
@@ -282,6 +341,7 @@ fail:
 	}
 	if (ivars->gate) ivars->gate->DispatchSync(^{
 		(void)ReleasePowerResidency(this, ivars);
+		ReleaseBARResidency(ivars);
 		if (ivars->pci) { ivars->pci->Close(this, 0); ivars->pci = nullptr; }
 	});
 	return err;
@@ -310,12 +370,14 @@ kern_return_t TinyGPUDriver::Stop_Impl(IOService* provider) {
 		}
 		if (ivars->gate) ivars->gate->DispatchSync(^{
 			ReleaseMMIOMappings(ivars);
+			ReleaseBARResidency(ivars);
 			releaseError = ReleasePowerResidency(this, ivars);
 			if (ivars->pci) { ivars->pci->Close(this, 0); ivars->pci = nullptr; }
 			ivars->state = kStopped;
 		});
 		else {
 			ReleaseMMIOMappings(ivars);
+			ReleaseBARResidency(ivars);
 			releaseError = ReleasePowerResidency(this, ivars);
 			if (ivars->pci) { ivars->pci->Close(this, 0); ivars->pci = nullptr; }
 			ivars->state = kStopped;
@@ -470,7 +532,7 @@ kern_return_t TinyGPUDriver::ResetDevice() {
 	if (!ivars->gate || !ivars->timer) return kIOReturnNotReady;
 	__block kern_return_t err = kIOReturnSuccess;
 	ivars->gate->DispatchSync(^{
-		if (!ivars->pci || !PowerResidencyReady(ivars)) err = kIOReturnNotReady;
+		if (!ivars->pci || !ProviderResidencyReady(ivars)) err = kIOReturnNotReady;
 		else if (ivars->state == kQuiescing || ivars->state == kStopped ||
 			ivars->activeLeases || ivars->activeBars || ivars->activeDMA) err = kIOReturnBusy;
 		else { ivars->state = kQuiescing; ivars->timerEnabled = false; }
@@ -483,12 +545,15 @@ kern_return_t TinyGPUDriver::ResetDevice() {
 		return err;
 	}
 	ivars->gate->DispatchSync(^{
+		ReleaseMMIOMappings(ivars);
+		ReleaseBARResidency(ivars);
 		err = ivars->pci->Reset(kIOPCIDeviceResetTypeFunctionReset);
 		if (!err) {
 			uint32_t identity = 0;
 			ivars->pci->ConfigurationRead32(kIOPCIConfigurationOffsetVendorID, &identity);
 			ivars->lastIdentity = identity;
 			if (identity != kUSB4AMD744C.identity) err = kIOReturnNoDevice;
+			else err = AcquireBARResidency(this, ivars);
 		}
 	});
 	if (err) { ivars->gate->DispatchSync(^{ ivars->state = kActiveDegraded; }); return err; }
@@ -587,7 +652,7 @@ kern_return_t TinyGPUDriver::AcquireWorkloadLease(uint64_t* out) {
 	if (!out || !ivars->gate) return kIOReturnBadArgument;
 	return ivars->gate->RunAction(^{
 		if (ivars->activeLeases) return kIOReturnBusy;
-		if (ivars->state != kActiveHealthy || ivars->counterSaturated || !PowerResidencyReady(ivars)) return kIOReturnNotReady;
+		if (ivars->state != kActiveHealthy || ivars->counterSaturated || !ProviderResidencyReady(ivars)) return kIOReturnNotReady;
 		if (ivars->leaseID == UINT64_MAX) { ivars->counterSaturated = true; ivars->state = kActiveDegraded; return kIOReturnNoResources; }
 		++ivars->leaseID;
 		++ivars->activeLeases;
@@ -670,10 +735,12 @@ kern_return_t TinyGPUDriver::GetKeepaliveStatus(char* out, size_t* length) {
 kern_return_t TinyGPUDriver::GetPowerResidencyStatus(char* out, size_t* length) {
 	if (!out || !length || !*length) return kIOReturnBadArgument;
 	struct Snapshot {
-		bool fullPowerRequested, requestAccepted, requestConfirmed, releaseAttempted, publishable;
+		bool fullPowerRequested, requestAccepted, requestConfirmed, releaseAttempted;
+		bool barRequested, barActive, publishable;
 		uint64_t generation, requestAttempts, lastRequest, transitions, unexpectedDowngrades, lastTransition, lastCanarySuccess;
-		uint32_t desiredFlags, observedFlags, lastIdentity, stopBusyLeases, stopBusyBars, stopBusyDMA;
-		int32_t overrideProbePreJoinError, overrideProbePostJoinError, requestError, releaseError;
+		uint64_t barBytes;
+		uint32_t desiredFlags, observedFlags, lastIdentity, stopBusyLeases, stopBusyBars, stopBusyDMA, barType;
+		int32_t overrideProbePreJoinError, overrideProbePostJoinError, requestError, releaseError, barError;
 	};
 	__block Snapshot snapshot{};
 	auto capture = ^{
@@ -681,7 +748,9 @@ kern_return_t TinyGPUDriver::GetPowerResidencyStatus(char* out, size_t* length) 
 		snapshot.requestAccepted = ivars->powerRequestAccepted;
 		snapshot.requestConfirmed = ivars->powerRequestConfirmed;
 		snapshot.releaseAttempted = ivars->powerReleaseAttempted;
-		snapshot.publishable = ivars->state == kActiveHealthy && PowerResidencyReady(ivars);
+		snapshot.barRequested = ivars->barResidencyRequested;
+		snapshot.barActive = ivars->barResidencyActive;
+		snapshot.publishable = ivars->state == kActiveHealthy && ProviderResidencyReady(ivars);
 		snapshot.generation = ivars->generation;
 		snapshot.requestAttempts = ivars->powerRequestAttempts;
 		snapshot.lastRequest = ivars->lastPowerRequestTick;
@@ -695,16 +764,19 @@ kern_return_t TinyGPUDriver::GetPowerResidencyStatus(char* out, size_t* length) 
 		snapshot.stopBusyLeases = ivars->stopBusyLeases;
 		snapshot.stopBusyBars = ivars->stopBusyBars;
 		snapshot.stopBusyDMA = ivars->stopBusyDMA;
+		snapshot.barBytes = ivars->barResidencyBytes;
+		snapshot.barType = ivars->barResidencyType;
 		snapshot.overrideProbePreJoinError = ivars->overrideProbePreJoinError;
 		snapshot.overrideProbePostJoinError = ivars->overrideProbePostJoinError;
 		snapshot.requestError = ivars->powerRequestError;
 		snapshot.releaseError = ivars->powerReleaseError;
+		snapshot.barError = ivars->barResidencyError;
 	};
 	if (ivars->gate && !ivars->gate->OnQueue()) ivars->gate->DispatchSync(capture);
 	else capture();
 
 	int written = snprintf(out, *length,
-		"{\"schema\":\"tinygpu.power-residency.v2\",\"provider_generation\":%llu,"
+		"{\"schema\":\"tinygpu.power-residency.v3\",\"provider_generation\":%llu,"
 		"\"policy_id\":\"%s\",\"full_power_requested\":%s,\"power_request_accepted\":%s,"
 		"\"power_request_confirmed\":%s,\"power_request_attempts\":%llu,"
 		"\"last_power_request_monotonic_ns\":%llu,"
@@ -714,7 +786,9 @@ kern_return_t TinyGPUDriver::GetPowerResidencyStatus(char* out, size_t* length) 
 		"\"unexpected_downgrade_count\":%llu,"
 		"\"last_transition_monotonic_ns\":%llu,\"last_canary_identity_dword\":\"0x%08x\","
 		"\"last_canary_success_monotonic_ns\":%llu,\"stop_busy_leases\":%u,\"stop_busy_bars\":%u,"
-		"\"stop_busy_dma\":%u,\"publishable\":%s}",
+		"\"stop_busy_dma\":%u,\"bar_residency_policy_id\":\"%s\",\"bar_residency_requested\":%s,"
+		"\"bar_residency_active\":%s,\"bar_residency_bar\":%u,\"bar_residency_type\":%u,"
+		"\"bar_residency_bytes\":%llu,\"bar_residency_error\":%d,\"publishable\":%s}",
 		(unsigned long long)snapshot.generation, kPowerResidencyPolicy,
 		snapshot.fullPowerRequested ? "true" : "false", snapshot.requestAccepted ? "true" : "false",
 		snapshot.requestConfirmed ? "true" : "false", (unsigned long long)snapshot.requestAttempts,
@@ -724,7 +798,10 @@ kern_return_t TinyGPUDriver::GetPowerResidencyStatus(char* out, size_t* length) 
 		(unsigned long long)snapshot.transitions,
 		(unsigned long long)snapshot.unexpectedDowngrades, (unsigned long long)snapshot.lastTransition,
 		snapshot.lastIdentity, (unsigned long long)snapshot.lastCanarySuccess, snapshot.stopBusyLeases,
-		snapshot.stopBusyBars, snapshot.stopBusyDMA, snapshot.publishable ? "true" : "false");
+		snapshot.stopBusyBars, snapshot.stopBusyDMA, kBARResidencyPolicy,
+		snapshot.barRequested ? "true" : "false", snapshot.barActive ? "true" : "false", kKeeperBAR,
+		snapshot.barType, (unsigned long long)snapshot.barBytes, snapshot.barError,
+		snapshot.publishable ? "true" : "false");
 	if (written < 0 || (size_t)written >= *length) return kIOReturnNoSpace;
 	*length = (size_t)written;
 	return kIOReturnSuccess;

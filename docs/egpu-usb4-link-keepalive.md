@@ -62,7 +62,9 @@ def keepalive_tick():
 #     if not readable: keepalive_tick(); continue
 ```
 
-The keepalive must run **in the process that holds the device** (does the config-space read).
+The keepalive must run **in the process that holds the initialized device state**, not merely
+in an unrelated process capable of issuing a config-space read. The historical server also
+retained its device handle, BAR mappings, and system-memory allocations across client sessions.
 
 ## Where the fix lives (architecture migration)
 
@@ -71,12 +73,31 @@ That bridge was deleted at `4c5e67cff` during migration to a native macOS app. T
 feature branch restores bounded TinyGPU source under `extra/usbgpu/tbgpu/installer/` and
 places the keeper in the DriverKit provider, not in Python or the workload server. Python
 negotiates the protocol and acquires workload leases, while the provider owns the timer,
-PCI read, lifecycle gate, and read-only status counters.
+PCI read, lifecycle gate, read-only status counters, and—starting with the v12 candidate—a
+provider-lifetime BAR5 descriptor and mapping. BAR5 is the first mapping requested by the
+historical AMD initialization path and is the smallest native experiment that restores its
+persistent device-memory state.
 
 The wire contract is frozen in
 `extra/usbgpu/protocol/tinygpu-wire-v1.md`. The provider rejects unknown identities and
 never resets or power-cycles hardware after a failed tick. Workload DMA, BAR mappings, and
-shared memory are released at lease disconnect and are not retained by the keeper.
+shared memory are released at lease disconnect. The provider BAR5 mapping is separately
+owned, separately reported by `tinygpu.power-residency.v3`, excluded from workload resource
+counts, and released only during provider stop/failure or explicitly around a function reset.
+
+## v12 BAR-residency recovery candidate (2026-07-29)
+
+Git history establishes that the RX 7900 XTX completed full Qwen inference before the native
+migration. The old bridge at `554800bef` retained `opened_devices`, `mapped_bars`, and
+`sysmem_allocs`; `4c5e67cff` removed that bridge; later commits `29be4c9fa` and `5bff0135c`
+recorded working inference. This demotes the cable hypothesis and makes persistent initialized
+device state the first recovery target.
+
+The v12 candidate requests and maps BAR5 immediately after PCI open and identity validation,
+before creating the one-Hz timer. It performs no MMIO read/write, AMD initialization, DMA,
+allocation, reset, or model load. Provider health and workload admission require the BAR5
+mapping to remain active with zero error. Full model residency remains a known-good control if
+this minimal state is insufficient; it is not part of v12.
 
 ## Measured implementation status (2026-07-28)
 

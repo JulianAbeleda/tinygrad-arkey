@@ -94,16 +94,32 @@ def test_power_residency_request_notification_and_release_are_distinct():
   assert "SetPowerState(powerFlags, SUPERDISPATCH)" in notification
   assert stop.count("\n\treturn ") == 1 and "Stop(provider, SUPERDISPATCH)" in stop
   assert "stopBusyLeases" in stop and "DrainTimer" in stop and "ReleaseMMIOMappings" in stop
-  assert "PowerResidencyReady(ivars)" in DRIVER
+  assert "ProviderResidencyReady(ivars)" in DRIVER
+
+
+def test_provider_lifetime_bar5_residency_is_separate_from_workload_resources():
+  acquire = body(DRIVER, "static kern_return_t AcquireBARResidency", "// Called only from the provider gate")
+  start = body(DRIVER, "kern_return_t TinyGPUDriver::Start_Impl", "kern_return_t TinyGPUDriver::Stop_Impl")
+  stop = body(DRIVER, "kern_return_t TinyGPUDriver::Stop_Impl", "kern_return_t TinyGPUDriver::SetPowerState_Impl")
+  reset = body(DRIVER, "TinyGPUDriver::ResetDevice", "TinyGPUDriver::MapBar")
+  lease_release = body(DRIVER, "TinyGPUDriver::ReleaseWorkloadLease", "void TinyGPUDriver::ReleaseBarMapping")
+  assert "kKeeperBAR = 5" in DRIVER and "GetBARInfo(kKeeperBAR" in acquire
+  assert "_CopyDeviceMemoryWithIndex" in acquire and "CreateMapping" in acquire
+  assert "barResidencyMemory" in acquire and "barResidencyMap" in acquire
+  assert start.index("AcquireBARResidency") < start.index("IOTimerDispatchSource::Create")
+  assert stop.index("DrainTimer") < stop.index("ReleaseBARResidency") < stop.index("ivars->pci->Close")
+  assert reset.index("ReleaseBARResidency") < reset.index("->Reset(") < reset.index("AcquireBARResidency")
+  assert "ReleaseBARResidency" not in lease_release
+  assert "++ivars->activeBars" not in acquire and "++ivars->activeDMA" not in acquire
 
 
 def test_power_residency_status_is_separate_from_frozen_keepalive_status():
   keepalive = body(DRIVER, "TinyGPUDriver::GetKeepaliveStatus", "TinyGPUDriver::GetPowerResidencyStatus")
   power = DRIVER[DRIVER.index("TinyGPUDriver::GetPowerResidencyStatus"):]
-  assert "tinygpu.keepalive.v1" in keepalive and "tinygpu.power-residency.v2" not in keepalive
-  assert "tinygpu.power-residency.v2" in power and "override_probe_prejoin_error" in power
+  assert "tinygpu.keepalive.v1" in keepalive and "tinygpu.power-residency.v3" not in keepalive
+  assert "tinygpu.power-residency.v3" in power and "override_probe_prejoin_error" in power
   assert "power_request_attempts" in power and "last_power_request_monotonic_ns" in power
-  assert "unexpected_downgrade_count" in power and "publishable" in power
+  assert "unexpected_downgrade_count" in power and "bar_residency_policy_id" in power and "publishable" in power
   assert "PowerResidencyStatus = 10" in CLIENT_IIG
 
 

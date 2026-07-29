@@ -5,7 +5,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("qualify", ROOT / "extra/usbgpu/tests/qualify.py")
 qualify = importlib.util.module_from_spec(SPEC); SPEC.loader.exec_module(qualify)
 STATUS = json.loads((ROOT / "extra/usbgpu/protocol/fixtures/keepalive-status-v1.json").read_text())["valid"]
-POWER_STATUS = json.loads((ROOT / "extra/usbgpu/protocol/fixtures/power-residency-status-v2.json").read_text())["valid"]
+POWER_STATUS = json.loads((ROOT / "extra/usbgpu/protocol/fixtures/power-residency-status-v3.json").read_text())["valid"]
 
 
 def status(ticks=0, *, generation=1, **patch):
