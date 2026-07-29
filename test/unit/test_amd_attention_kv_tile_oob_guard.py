@@ -205,7 +205,7 @@ def test_numeric_parity_unaligned_kv_tokens_against_reference_softmax_attention(
 
   tq, tk, tv = (Tensor(x.reshape(-1), device="AMD") for x in (q, k, v))
   out = Tensor.empty(sizes[3], dtype=dtypes.half, device="AMD")
-  got = out.custom_kernel(tq, tk, tv, fxn=kernel)[0].realize().numpy().reshape(q.shape).astype(np.float32)
+  got = out.uop_program(tq, tk, tv, fxn=kernel)[0].realize().numpy().reshape(q.shape).astype(np.float32)
   ref = np.zeros_like(got)
   for head in range(hq):
     score = q[head].astype(np.float32) @ k[head // (hq // hkv)].astype(np.float32).T * scale

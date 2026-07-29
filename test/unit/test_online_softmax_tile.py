@@ -511,7 +511,7 @@ def test_online_softmax_block_transition_dominant_second_tile_runtime():
                     o.index(UOp.const(dtypes.weakint, 1)).store(state.new_l),
                     o.index(UOp.const(dtypes.weakint, 2)).store(state.new_acc),
                     arg=KernelInfo(name="state_merge"))
-  got = out.custom_kernel(old, block, fxn=kernel)[0].numpy()
+  got = out.uop_program(old, block, fxn=kernel)[0].numpy()
   alpha = np.exp(-12.0)
   np.testing.assert_allclose(got[0], 12.0, rtol=0, atol=0)
   np.testing.assert_allclose(got[1], 1.0+alpha, rtol=1e-6, atol=1e-6)
@@ -546,7 +546,7 @@ def test_gfx1100_pv_c_lane_lowers_after_tensor_spec_to_legal_scalar_program():
     vec = vals[0].vectorize(*vals[1:])
     return UOp.sink(*[o.index(UOp.const(dtypes.weakint, i)).store(amd_gfx1100_pv_c_lane(vec, i)) for i in range(8)],
                     arg=KernelInfo(name="pv_c_lanes"))
-  np.testing.assert_array_equal(out.custom_kernel(src, fxn=kernel)[0].numpy(), np.arange(8,dtype=np.float32))
+  np.testing.assert_array_equal(out.uop_program(src, fxn=kernel)[0].numpy(), np.arange(8,dtype=np.float32))
 
 def test_gfx1100_row_state_broadcast_has_canonical_halfwave_owner_address():
   from tinygrad.schedule.wmma import amd_gfx1100_broadcast_row_state
@@ -696,8 +696,8 @@ def test_gfx1100_acc_slice_v2_two_launch_causal_diagnostic():
   # Rebuild through the direct descriptor for each invocation; no automatic model rewrite is involved.
   def low_kernel(o,qi,ki,vi): return amd_gfx1100_q16_grid_hd128_loop_attention(qi,ki,vi,o,q_tokens=q_tokens,q_heads=hq,kv_heads=hkv,kv_tokens=kv_tokens,scale=scale,causal=True,kernel_info=KernelInfo(name="acc_slice_low_run"),output_block_base=0,acc_blocks=4)
   def high_kernel(o,qi,ki,vi): return amd_gfx1100_q16_grid_hd128_loop_attention(qi,ki,vi,o,q_tokens=q_tokens,q_heads=hq,kv_heads=hkv,kv_tokens=kv_tokens,scale=scale,causal=True,kernel_info=KernelInfo(name="acc_slice_high_run"),output_block_base=4,acc_blocks=4)
-  low_out=out.custom_kernel(tq,tk,tv,fxn=low_kernel)[0].realize()
-  got=low_out.custom_kernel(tq,tk,tv,fxn=high_kernel)[0].numpy().reshape(q.shape).astype(np.float32)
+  low_out=out.uop_program(tq,tk,tv,fxn=low_kernel)[0].realize()
+  got=low_out.uop_program(tq,tk,tv,fxn=high_kernel)[0].numpy().reshape(q.shape).astype(np.float32)
   ref=np.zeros_like(got)
   for head in range(hq):
     score=q[head].astype(np.float32)@k[head//4].astype(np.float32).T*scale
@@ -710,7 +710,7 @@ def test_gfx1100_acc_slice_v2_two_launch_causal_diagnostic():
     return lambda o,qi,ki,vi: amd_gfx1100_q16_grid_hd128_loop_attention(qi,ki,vi,o,q_tokens=q_tokens,q_heads=hq,kv_heads=hkv,
       kv_tokens=kv_tokens,scale=scale,causal=True,kernel_info=KernelInfo(name=f"acc_slice_two_{base}"),output_block_base=base,acc_blocks=2)
   assembled=Tensor.empty(q.size,dtype=dtypes.half,device="AMD")
-  for base in range(0,8,2): assembled=assembled.custom_kernel(tq,tk,tv,fxn=two_kernel(base))[0].realize()
+  for base in range(0,8,2): assembled=assembled.uop_program(tq,tk,tv,fxn=two_kernel(base))[0].realize()
   np.testing.assert_allclose(assembled.numpy().reshape(q.shape).astype(np.float32),ref,rtol=.02,atol=4e-3)
 
 def test_gfx1100_split_score_state_pv_slice_direct_diagnostic():
@@ -736,8 +736,8 @@ def test_gfx1100_split_score_state_pv_slice_direct_diagnostic():
     return {x:row[x] for x in ("vgpr","sgpr","lds_bytes","scratch_bytes","vgpr_spills","sgpr_spills","max_referenced_vgpr")}
   resources={"stage_a":metadata(stage_a,(statsn,qn,kn),{0}), **{f"stage_b_{base}":metadata(stage_b(base),(outn,qn,kn,kn-base*16,statsn),{4}) for base in range(0,8,2)}}
   assert all(all(row[x] == 0 for x in ("scratch_bytes","vgpr_spills","sgpr_spills")) for name,row in resources.items() if name.startswith("stage_b_"))
-  tq,tk,tv=(Tensor(x.reshape(-1),device="AMD") for x in (q,k,v)); stats=Tensor.empty(statsn,dtype=dtypes.float,device="AMD").custom_kernel(tq,tk,fxn=stage_a)[0].realize(); out=Tensor.empty(outn,dtype=dtypes.half,device="AMD")
-  for base in range(0,8,2): out=out.custom_kernel(tq,tk,tv[base*16:],stats,fxn=stage_b(base))[0].realize()
+  tq,tk,tv=(Tensor(x.reshape(-1),device="AMD") for x in (q,k,v)); stats=Tensor.empty(statsn,dtype=dtypes.float,device="AMD").uop_program(tq,tk,fxn=stage_a)[0].realize(); out=Tensor.empty(outn,dtype=dtypes.half,device="AMD")
+  for base in range(0,8,2): out=out.uop_program(tq,tk,tv[base*16:],stats,fxn=stage_b(base))[0].realize()
   got=out.numpy().reshape(q.shape).astype(np.float32); ref=np.zeros_like(got)
   for h in range(hq):
     score=q[h].astype(np.float32)@k[h//4].astype(np.float32).T*scale
@@ -810,7 +810,7 @@ def test_gfx1100_q16_kv32_hd128_numeric():
   k=rng.normal(0,.2,(32,128)).astype(np.float16); v=rng.normal(0,.4,(32,128)).astype(np.float16)
   tq,tk,tv=(Tensor(x.reshape(-1),device="AMD") for x in (q,k,v)); out=Tensor.empty(2048,dtype=dtypes.half,device="AMD")
   def kernel(o,qi,ki,vi): return amd_gfx1100_q16_kv32_hd128_attention(qi,ki,vi,o,scale=.25,kernel_info=KernelInfo(name="hd128_num"))
-  got=out.custom_kernel(tq,tk,tv,fxn=kernel)[0].numpy().reshape(16,128).astype(np.float32)
+  got=out.uop_program(tq,tk,tv,fxn=kernel)[0].numpy().reshape(16,128).astype(np.float32)
   scores=(q.astype(np.float32)@k.astype(np.float32).T)*.25
   valid=np.arange(32)[None,:] <= (16+np.arange(16))[:,None]; scores=np.where(valid,scores,-np.inf)
   probs=np.exp(scores-scores.max(axis=1,keepdims=True)); probs/=probs.sum(axis=1,keepdims=True)
@@ -866,7 +866,7 @@ def test_gfx1100_q16_kv64_hd128_loop_numeric():
   tq,tk,tv=(Tensor(x.reshape(-1),device="AMD") for x in (q,k,v)); out=Tensor.empty(2048,dtype=dtypes.half,device="AMD")
   def kernel(o,qi,ki,vi):
     return amd_gfx1100_q16_kv64_hd128_loop_attention(qi,ki,vi,o,scale=.25,kernel_info=KernelInfo(name="kv64_loop_num"))
-  got=out.custom_kernel(tq,tk,tv,fxn=kernel)[0].numpy().reshape(16,128).astype(np.float32)
+  got=out.uop_program(tq,tk,tv,fxn=kernel)[0].numpy().reshape(16,128).astype(np.float32)
   scores=(q.astype(np.float32)@k.astype(np.float32).T)*.25
   probs=np.exp(scores-scores.max(axis=1,keepdims=True)); probs/=probs.sum(axis=1,keepdims=True)
   np.testing.assert_allclose(got,probs@v.astype(np.float32),rtol=.02,atol=4e-3)
@@ -883,7 +883,7 @@ def test_gfx1100_q16_kv64_hd128_loop_causal_tail_numeric(valid_kv,query_start):
   def kernel(o,qi,ki,vi):
     return amd_gfx1100_q16_kv64_hd128_loop_attention(qi,ki,vi,o,scale=.25,causal=True,valid_kv=valid_kv,query_start=query_start,
       kernel_info=KernelInfo(name=f"kv64_loop_causal_{valid_kv}_{query_start}"))
-  got=out.custom_kernel(tq,tk,tv,fxn=kernel)[0].numpy().reshape(16,128).astype(np.float32)
+  got=out.uop_program(tq,tk,tv,fxn=kernel)[0].numpy().reshape(16,128).astype(np.float32)
   qstart=valid_kv-16 if query_start is None else query_start
   scores=(q.astype(np.float32)@k.astype(np.float32).T)*.25
   valid=(np.arange(64)[None,:] < valid_kv) & (np.arange(64)[None,:] <= (qstart+np.arange(16))[:,None])
@@ -914,7 +914,7 @@ def test_gfx1100_q32_hq4_hkv2_kv64_hd128_grid_loop_numeric():
   k=rng.normal(0,.2,(2,64,128)).astype(np.float16); v=rng.normal(0,.4,(2,64,128)).astype(np.float16)
   tq,tk,tv=(Tensor(x.reshape(-1),device="AMD") for x in (q,k,v)); out=Tensor.empty(16384,dtype=dtypes.half,device="AMD")
   def kernel(o,qi,ki,vi): return amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention(qi,ki,vi,o,scale=.25,kernel_info=KernelInfo(name="grid_loop_num"))
-  got=out.custom_kernel(tq,tk,tv,fxn=kernel)[0].numpy().reshape(4,32,128).astype(np.float32); ref=np.empty_like(got)
+  got=out.uop_program(tq,tk,tv,fxn=kernel)[0].numpy().reshape(4,32,128).astype(np.float32); ref=np.empty_like(got)
   for h in range(4):
     scores=(q[h].astype(np.float32)@k[h//2].astype(np.float32).T)*.25; probs=np.exp(scores-scores.max(axis=1,keepdims=True)); probs/=probs.sum(axis=1,keepdims=True)
     ref[h]=probs@v[h//2].astype(np.float32)
@@ -987,7 +987,7 @@ def test_gfx1100_q16_kv32_numeric_two_tile_transition():
   out=Tensor.empty(256,dtype=dtypes.half,device="AMD")
   def kernel(o,qi,ki,vi):
     return amd_gfx1100_q16_kv32_attention(qi,ki,vi,o,scale=1.0,kernel_info=KernelInfo(name="q16_kv32_numeric"))
-  got=out.custom_kernel(tq,tk,tv,fxn=kernel)[0].numpy().reshape(16,16).astype(np.float32)
+  got=out.uop_program(tq,tk,tv,fxn=kernel)[0].numpy().reshape(16,16).astype(np.float32)
   scores=q.astype(np.float32)@k.astype(np.float32).T
   probs=np.exp(scores-scores.max(axis=-1,keepdims=True)); probs/=probs.sum(axis=-1,keepdims=True)
   ref=probs@v.astype(np.float32)
@@ -1008,7 +1008,7 @@ def test_gfx1100_q16_causal_tail_numeric(valid_kv,query_start):
   def kernel(o,qi,ki,vi):
     return amd_gfx1100_q16_attention(qi,ki,vi,o,scale=.75,causal=True,valid_kv=valid_kv,query_start=query_start,
       kernel_info=KernelInfo(name=f"q16_causal_kv{valid_kv}_q{query_start}"))
-  got=out.custom_kernel(tq,tk,tv,fxn=kernel)[0].numpy().reshape(16,16).astype(np.float32)
+  got=out.uop_program(tq,tk,tv,fxn=kernel)[0].numpy().reshape(16,16).astype(np.float32)
   scores=(q.astype(np.float32)@k.astype(np.float32).T)*.75
   valid=(np.arange(16)[None,:] < valid_kv) & \
     (np.arange(16)[None,:] <= (query_start+np.arange(16))[:,None])
@@ -1133,7 +1133,7 @@ def test_gfx1100_grid_fused_causal_mask_numeric_tail_and_fully_masked(valid_kv,q
   tq,tk,tv=(Tensor(x.reshape(-1),device="AMD") for x in (q,k,v)); out=Tensor.empty(q.size,dtype=dtypes.half,device="AMD")
   def kernel(o,qi,ki,vi): return amd_gfx1100_q16_grid_hd128_loop_attention(qi,ki,vi,o,q_tokens=qt,q_heads=hq,kv_heads=hkv,
     kv_tokens=kv,scale=.25,causal=True,valid_kv=valid_kv,query_start=query_start,kernel_info=KernelInfo(name=f"grid_mask_{valid_kv}"))
-  got=out.custom_kernel(tq,tk,tv,fxn=kernel)[0].numpy().reshape(q.shape).astype(np.float32); ref=np.zeros_like(got)
+  got=out.uop_program(tq,tk,tv,fxn=kernel)[0].numpy().reshape(q.shape).astype(np.float32); ref=np.zeros_like(got)
   for head in range(hq):
     scores=q[head].astype(np.float32)@k[head//4].astype(np.float32).T*.25
     for row in range(qt):
@@ -1154,7 +1154,7 @@ def test_gfx1100_model_grid_causal_mask_uses_runtime_q_tile(hq,hkv):
   tq,tk,tv=(Tensor(x.reshape(-1),device="AMD") for x in (q,k,v)); out=Tensor.empty(q.size,dtype=dtypes.half,device="AMD")
   def kernel(o,qi,ki,vi): return amd_gfx1100_q16_grid_hd128_loop_attention(qi,ki,vi,o,q_tokens=32,q_heads=hq,
     kv_heads=hkv,kv_tokens=64,scale=.25,causal=True,kernel_info=KernelInfo(name=f"grid_causal_g{hq//hkv}"))
-  got=out.custom_kernel(tq,tk,tv,fxn=kernel)[0].numpy().reshape(hq,32,128).astype(np.float32); ref=np.empty_like(got)
+  got=out.uop_program(tq,tk,tv,fxn=kernel)[0].numpy().reshape(hq,32,128).astype(np.float32); ref=np.empty_like(got)
   for head in range(hq):
     score=q[head].astype(np.float32)@k[head//(hq//hkv)].astype(np.float32).T*.25
     valid=np.arange(64)[None,:] <= (32+np.arange(32))[:,None]; score=np.where(valid,score,-np.inf)
@@ -1174,7 +1174,7 @@ def test_gfx1100_model_profile_grid_numeric_first_and_prefix(hq,hkv,kv,query_sta
   tq,tk,tv=(Tensor(x.reshape(-1),device="AMD") for x in (q,k,v)); out=Tensor.empty(q.size,dtype=dtypes.half,device="AMD")
   def kernel(o,qi,ki,vi): return amd_gfx1100_q16_grid_hd128_loop_attention(qi,ki,vi,o,q_tokens=q_tokens,q_heads=hq,
     kv_heads=hkv,kv_tokens=kv,scale=.25,causal=True,kernel_info=KernelInfo(name=f"model_grid_{hq}_{kv}"))
-  got=out.custom_kernel(tq,tk,tv,fxn=kernel)[0].numpy().reshape(q.shape).astype(np.float32)
+  got=out.uop_program(tq,tk,tv,fxn=kernel)[0].numpy().reshape(q.shape).astype(np.float32)
   for head,row in ((0,0),(0,q_tokens-1),(hq-1,0),(hq-1,q_tokens-1)):
     score=q[head,row].astype(np.float32)@k[head//(hq//hkv)].astype(np.float32).T*.25
     score[np.arange(kv)>query_start+row]=-np.inf; prob=np.exp(score-score.max()); prob/=prob.sum()

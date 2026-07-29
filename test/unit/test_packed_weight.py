@@ -31,7 +31,7 @@ def test_scalar_fp16_producer_matches_reference(fmt:str, rows:int, k:int, device
   def kernel(out:UOp, source:UOp) -> UOp:
     stores = tuple(out[r, kk].store(desc.dequant(source, r, kk)) for r in range(rows) for kk in range(k))
     return UOp.sink(*stores, arg=KernelInfo(name=f"packed_weight_{fmt.lower()}"))
-  got = Tensor.empty(rows, k, dtype=dtypes.float16, device=device).custom_kernel(storage, fxn=kernel)[0].numpy()
+  got = Tensor.empty(rows, k, dtype=dtypes.float16, device=device).uop_program(storage, fxn=kernel)[0].numpy()
   reference = (q4_k_reference if fmt == "Q4_K" else q6_k_reference)(packed.bitcast(dtypes.uint8), rows*k)
   np.testing.assert_array_equal(got, reference.reshape(rows, k).cast(dtypes.float16).numpy())
 
@@ -47,7 +47,7 @@ def test_tile_fp16_producer_matches_scalar_across_group_and_block_boundaries(fmt
     assert isinstance(tile, PackedWeightTile) and tile.value.dtype == dtypes.half.vec(width)
     return UOp.sink(out.index(UOp.const(dtypes.weakint, 0), dtype=dtypes.half.vec(width)).store(tile.value),
                     arg=KernelInfo(name=f"packed_tile_{fmt.lower()}"))
-  got = Tensor.empty(width, dtype=dtypes.float16, device="PYTHON").custom_kernel(storage, fxn=kernel)[0].numpy()
+  got = Tensor.empty(width, dtype=dtypes.float16, device="PYTHON").uop_program(storage, fxn=kernel)[0].numpy()
   reference = (q4_k_reference if fmt == "Q4_K" else q6_k_reference)(packed.bitcast(dtypes.uint8), 512)
   np.testing.assert_array_equal(got, reference.reshape(512)[start:start+width].cast(dtypes.float16).numpy())
 

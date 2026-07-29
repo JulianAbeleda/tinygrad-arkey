@@ -151,7 +151,7 @@ class TestAttentionSemantic(unittest.TestCase):
     def kernel(o, qq, kk, value):
       return amd_gfx1100_q16_attention(qq, kk, value, o, scale=0.25,
                                        kernel_info=KernelInfo(name="q16_native_numeric"))
-    got = out.custom_kernel(q,k,v,fxn=kernel)[0].reshape(16,16).numpy()
+    got = out.uop_program(q,k,v,fxn=kernel)[0].reshape(16,16).numpy()
     scores = qv.astype(np.float32) @ kv.astype(np.float32).T * 0.25
     probs = np.exp(scores-scores.max(axis=1,keepdims=True)); probs /= probs.sum(axis=1,keepdims=True)
     ref = probs @ vv.astype(np.float32)
