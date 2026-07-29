@@ -44,9 +44,9 @@ MAP OF THE SCATTERED CODE THIS CENTRALIZES / REPLACES
   (emits .hip.cpp/.amdisa.s + JSON; ABI = out[slot0], Q[slot1], K[slot2], V[slot3], scale/causal baked CONST)
 - Loud class-2 diagnostic (safety net): uop/ops.py DISALLOW_BROADCAST site (ScopedValueSpec vs rank-0)
 
-custom_kernel CONTRACT (verified, tensor.py:194 / uop/ops.py:1256)
-------------------------------------------------------------------
-  out_buf.custom_kernel(q, k, v, fxn=emit)[0]
+PROMOTED PROGRAM BOUNDARY (verified, tensor.py:194 / uop/ops.py:1256)
+-----------------------------------------------------------------
+  execute_promoted_program(out_buf, q, k, v, program=program)
   - each src is .contiguous()'d -> realized to a real buffer (opaque to the kernel)
   - placeholders (one param slot per src) are handed to fxn(*placeholders)
   - fxn(*placeholders).call(*srcs) binds the real buffers and yields the CALL
@@ -57,6 +57,7 @@ from contextvars import ContextVar
 from typing import Any
 from tinygrad import Tensor, dtypes
 from tinygrad.uop.ops import AMDAttentionGridSpec, SharedAttentionCandidateContext
+from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, execute_promoted_program
 
 # ADMITTED GEOMETRIES (Hq, Hkv, q_tokens) for which a captured kernel exists / is
 # generatable. Extend as the capture matrix grows (see B7 in the scope doc). This stays
@@ -212,13 +213,15 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
   v_flat = (v.cast(dtypes.half).permute(0, 1, 3, 2).reshape(Hkv * Hd * KV) if _getenv("PREFILL_V_TRANSPOSED")
             else v.cast(dtypes.half).reshape(Hkv * KV * Hd))
   out_flat = Tensor.empty(Hq * T * Hd, dtype=dtypes.half, device=q.device)
-  result = out_flat.custom_kernel(q_flat, k_flat, v_flat, fxn=fxn)[0]
+  identity = (f"amd_gfx1100_q16_grid_hd128_loop_attention:role=attention_tile,"
+              f"Hq={Hq},Hkv={Hkv},q_tokens={T},kv_tokens={KV},Hd={Hd}")
+  program = KernelProgram("prefill_flash_attention_generated", f"prefill_flash_attention.{identity}",
+    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, fxn)
+  result = execute_promoted_program(out_flat, q_flat, k_flat, v_flat, program=program)
   # Record the dispatch AFTER every geometry/spec gate above has passed (i.e. only
   # once we know this call is committed to the fused custom-kernel route, not a
   # NotImplementedError fallback). role="attention_tile" matches the manifest row's
   # role naming convention used elsewhere for prefill roles.
-  identity = (f"amd_gfx1100_q16_grid_hd128_loop_attention:role=attention_tile,"
-              f"Hq={Hq},Hkv={Hkv},q_tokens={T},kv_tokens={KV},Hd={Hd}")
   _record_custom_kernel_attention_dispatch(identity)
   return result.reshape(1, Hq, T, Hd)
 
