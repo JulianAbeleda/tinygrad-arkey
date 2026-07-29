@@ -38,5 +38,5 @@ def loop_state_read(reg, init, rng, *, role, owner, block=0, final=False, lanes=
     for i in range(lanes)))
 
 def packed_fragment_load(owner_uop, *, role, head_block, grid, lane, col, rng, group):
-  return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD, dtypes.half.vec(16), (owner_uop, lane, col, rng, group),
+  return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD, dtypes.half, (owner_uop, lane, col, rng, group),
              arg=AMDPackedFragmentLoopSpec(role=role, head_block=head_block, grid=grid))

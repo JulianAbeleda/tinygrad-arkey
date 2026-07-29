@@ -18,7 +18,7 @@ def _expanded(local_size: int, validity_mode: str = "tail_v1") -> UOp:
   spec = AMDRowSoftmaxRepackSpec(mode="loop_state_v1", validity_mode=validity_mode, kv_start=-1, valid_kv=64,
                                  dynamic_kv_v1=True, grid=grid)
   return expand_native_row_softmax_repack(itertools.count(),
-    UOp(Ops.AMD_ROW_SOFTMAX_REPACK, dtypes.half.vec(16), (score, state, state, rng, UOp.const(dtypes.int, 0)), arg=spec))
+    UOp(Ops.AMD_ROW_SOFTMAX_REPACK, dtypes.half, (score, state, state, rng, UOp.const(dtypes.int, 0)), arg=spec))
 
 
 def test_wave_lds_fence_is_exact_lgkm_wait():
@@ -58,7 +58,7 @@ def test_multiwave_repack_proves_disjoint_probability_slices():
   state, rng, group = UOp.const(dtypes.float.vec(8), 0), UOp.range(4, 0, 4), UOp.special(grid.grid_size, "gidx0")
   spec = AMDRowSoftmaxRepackSpec(mode="loop_state_v1", validity_mode="tail_v1", kv_start=-1, valid_kv=64,
                                  dynamic_kv_v1=True, grid=grid)
-  topo = expand_native_row_softmax_repack(itertools.count(), UOp(Ops.AMD_ROW_SOFTMAX_REPACK, dtypes.half.vec(16),
+  topo = expand_native_row_softmax_repack(itertools.count(), UOp(Ops.AMD_ROW_SOFTMAX_REPACK, dtypes.half,
     (score, state, state, rng, group), arg=spec)).toposort()
   barriers = [x for x in topo if x.op is Ops.BARRIER]
   assert len(barriers) == 1 and barriers[0].arg == WaveLDSFence(workgroup_size=64, wave_slices=((0, 512), (512, 512)))

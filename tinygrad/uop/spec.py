@@ -70,8 +70,8 @@ def type_verify(ast:UOp|list[UOp], check_spec:PatternMatcher):
 
 def validate_scalar_gep(gep:UOp, src:UOp):
   """Validate the canonical scalar lane extraction from a vector value."""
-  return gep.dtype == src.dtype.scalar() and src.dtype.vcount > 1 and isinstance(gep.arg, tuple) and len(gep.arg) == 1 and \
-    type(gep.arg[0]) is int and 0 <= gep.arg[0] < src.dtype.vcount
+  return gep.dtype == src.dtype.scalar() and src.max_numel() > 1 and isinstance(gep.arg, tuple) and len(gep.arg) == 1 and \
+    type(gep.arg[0]) is int and 0 <= gep.arg[0] < src.max_numel()
 
 def validate_amd_attention_output_drain(x:UOp):
   """One source-count-aware contract for both legacy and grid native drains."""
@@ -332,25 +332,25 @@ spec_tensor = PatternMatcher([
   # until AMD instruction selection explicitly implements the declared ABI.
   (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, src=(UPat(), UPat(), UPat()), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_online_softmax_qk_pv_v1"
-   and x.dtype == dtypes.half.vec(16) and x.src[0].dtype == dtypes.float32.vec(8)
+   and x.dtype == dtypes.half and x.shape == (x.arg.pv_a_lanes,) and x.src[0].dtype == dtypes.float32.vec(8)
    and ((x.arg.mode == "legacy_normalized" and x.src[1].dtype == x.src[2].dtype == dtypes.float32)
         or (x.arg.mode in {"stateful_unnormalized_v1", "loop_state_v1"}
             and x.src[1].dtype == x.src[2].dtype == dtypes.float32.vec(8)))),
   (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, src=(UPat(), UPat(), UPat(), UPat(Ops.RANGE)), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_online_softmax_qk_pv_v1"
-   and x.arg.mode == "loop_state_v1" and x.arg.dynamic_kv_v1 and x.dtype == dtypes.half.vec(16)
+   and x.arg.mode == "loop_state_v1" and x.arg.dynamic_kv_v1 and x.dtype == dtypes.half and x.shape == (x.arg.pv_a_lanes,)
    and x.src[0].dtype == x.src[1].dtype == x.src[2].dtype == dtypes.float32.vec(8)),
   (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, src=(UPat(), UPat(), UPat(), UPat(Ops.RANGE), UPat()), name="x"),
    lambda x: hasattr(x.arg,'native_abi') and x.arg.native_abi=="amd_gfx1100_online_softmax_qk_pv_v1" and x.arg.grid is not None
-   and x.arg.dynamic_kv_v1 and x.dtype==dtypes.half.vec(16) and x.src[0].dtype==x.src[1].dtype==x.src[2].dtype==dtypes.float32.vec(8)),
+   and x.arg.dynamic_kv_v1 and x.dtype==dtypes.half and x.shape==(x.arg.pv_a_lanes,) and x.src[0].dtype==x.src[1].dtype==x.src[2].dtype==dtypes.float32.vec(8)),
   (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, src=(UPat(),), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_online_softmax_qk_pv_v1"
-   and x.arg.mode == "initial_state_v1" and x.dtype == dtypes.half.vec(16) and x.src[0].dtype == dtypes.float32.vec(8)),
+   and x.arg.mode == "initial_state_v1" and x.dtype == dtypes.half and x.shape == (x.arg.pv_a_lanes,) and x.src[0].dtype == dtypes.float32.vec(8)),
   (UPat(Ops.AMD_ROW_SOFTMAX_SLOT, src=(UPat(Ops.AMD_ROW_SOFTMAX_REPACK),), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_online_softmax_qk_pv_v1"
-   and x.dtype in {dtypes.half.vec(16), dtypes.float.vec(8)}),
+   and x.dtype == x.arg.scalar_dtype and x.shape == (x.arg.lanes,)),
   (UPat(Ops.GEP, src=(UPat(Ops.AMD_ROW_SOFTMAX_SLOT, name="slot"),), name="x"),
-   lambda x,slot: slot.dtype == dtypes.float.vec(8) and x.dtype == dtypes.float and len(x.arg) == 1 and 0 <= x.arg[0] < 8),
+   lambda x,slot: slot.dtype == dtypes.float and slot.shape == (8,) and x.dtype == dtypes.float and len(x.arg) == 1 and 0 <= x.arg[0] < 8),
   (UPat(Ops.AMD_PV_C_LANE, src=(UPat(),), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_pv_c_lane_v1"
    and x.src[0].dtype == dtypes.float.vec(8) and x.dtype == dtypes.float),
@@ -360,14 +360,14 @@ spec_tensor = PatternMatcher([
    lambda x,state: state.dtype == dtypes.float.vec(8) and x.dtype == dtypes.float and len(x.arg) == 1 and 0 <= x.arg[0] < 8),
   (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD, src=(UPat(), UPat(), UPat(), UPat(Ops.RANGE)), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_packed_fragment_hd128_loop_v1"
-   and x.dtype == dtypes.half.vec(16)),
+   and x.dtype == dtypes.half and x.shape == (x.arg.fragment_lanes,)),
   (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD, src=(UPat(), UPat(), UPat(), UPat(Ops.RANGE), UPat(Ops.SPECIAL)), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_packed_fragment_hd128_loop_v1" and getattr(x.arg,"grid",None) is not None
-   and str(x.src[4].arg)=="gidx0" and x.dtype == dtypes.half.vec(16)),
+   and str(x.src[4].arg)=="gidx0" and x.dtype == dtypes.half and x.shape == (x.arg.fragment_lanes,)),
   (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD, src=(UPat(), UPat(), UPat(), UPat(), UPat(Ops.RANGE), UPat(Ops.SPECIAL)), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_packed_fragment_hd128_loop_v1" and
    getattr(getattr(x.arg,"grid",None),"native_abi",None) == "amd_gfx1100_attention_multiwave_g2_v1" and
-   str(x.src[5].arg)=="gidx0" and x.dtype == dtypes.half.vec(16)),
+   str(x.src[5].arg)=="gidx0" and x.dtype == dtypes.half and x.shape == (x.arg.fragment_lanes,)),
   (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, name="x"), validate_amd_attention_output_drain),
   (UPat(Ops.AMD_ATTENTION_STATS_DRAIN, name="x"), validate_amd_attention_stats_drain),
 
@@ -418,14 +418,14 @@ spec_program = PatternMatcher([
   (UPat(Ops.AFTER, dtypes.uint, src=(UPat(Ops.CONST, dtypes.uint), UPat(Ops.STORE))), lambda: True),
   (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,src=(UPat(),UPat(),UPat(),UPat()),name="x"),
    lambda x: hasattr(x.arg,'native_abi') and x.arg.native_abi=="amd_gfx1100_packed_fragment_hd128_loop_v1" and
-   x.dtype==dtypes.half.vec(16) and all(s.dtype.scalar() in {dtypes.int,dtypes.weakint} for s in x.src[1:])),
+   x.dtype==dtypes.half and x.shape==(x.arg.fragment_lanes,) and all(s.dtype.scalar() in {dtypes.int,dtypes.weakint} for s in x.src[1:])),
   (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"),
    lambda x: hasattr(x.arg,'native_abi') and x.arg.native_abi=="amd_gfx1100_packed_fragment_hd128_loop_v1" and getattr(x.arg,"grid",None) is not None and
-   len(x.src)==5 and x.dtype==dtypes.half.vec(16) and all(s.dtype.scalar() in {dtypes.int,dtypes.weakint} for s in x.src[1:])),
+   len(x.src)==5 and x.dtype==dtypes.half and x.shape==(x.arg.fragment_lanes,) and all(s.dtype.scalar() in {dtypes.int,dtypes.weakint} for s in x.src[1:])),
   (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"),
    lambda x: hasattr(x.arg,'native_abi') and x.arg.native_abi=="amd_gfx1100_packed_fragment_hd128_loop_v1" and
    getattr(getattr(x.arg,"grid",None),"native_abi",None)=="amd_gfx1100_attention_multiwave_g2_v1" and len(x.src)==6 and
-   x.dtype==dtypes.half.vec(16) and all(s.dtype.scalar() in {dtypes.int,dtypes.weakint} for s in x.src[1:])),
+   x.dtype==dtypes.half and x.shape==(x.arg.fragment_lanes,) and all(s.dtype.scalar() in {dtypes.int,dtypes.weakint} for s in x.src[1:])),
   (UPat(Ops.CAST,dtype=dtypes.weakint,src=(UPat(Ops.RANGE,dtype=dtypes.int),)), lambda: True),
   (UPat(Ops.CAST,dtype=dtypes.weakint,src=(UPat(Ops.SPECIAL,dtype=dtypes.int,name="s"),)), lambda s: str(s.arg) in {"lidx0","gidx0"}),
   (UPat(Ops.CAST,dtype=dtypes.weakint,src=(UPat(Ops.AND,dtype=dtypes.int,name="a"),)),

@@ -50,7 +50,7 @@ def _fragment_loads(role, grid, block=0):
   rng = UOp.range(full_kv_tiles, 9600, AxisType.REDUCE)
   group = UOp.special(grid.q_heads * grid.q_tiles, "gidx0")
   spec = AMDPackedFragmentLoopSpec(role=role, head_block=block, grid=grid)
-  x = UOp(Ops.AMD_PACKED_FRAGMENT_LOAD, dtypes.half.vec(16), (owner, lane, col, rng, group), arg=spec)
+  x = UOp(Ops.AMD_PACKED_FRAGMENT_LOAD, dtypes.half, (owner, lane, col, rng, group), arg=spec)
   stack = graph_rewrite(expand_loop_fragment(x), sym)
   assert stack.op is Ops.STACK and len(stack.src) == 16
   return list(stack.src)

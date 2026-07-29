@@ -182,7 +182,7 @@ def amd_gfx1100_q16_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, s
   def state_read(reg, init, role, block=0, offset=0, final=False):
     return loop_state_read(reg, init, rng, role=role, owner=state_owner, block=block, final=final)
   def fragment(owner, role, block):
-    return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col,rng),arg=AMDPackedFragmentLoopSpec(role=role,head_block=block))
+    return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half,(owner,lane,col,rng),arg=AMDPackedFragmentLoopSpec(role=role,head_block=block))
   old_m,old_l=state_read(mreg,m_init,"m"),state_read(lreg,l_init,"l")
   qk=zero
   for block in range(hd//16): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fragment(q,"Q",block),fragment(k,"K",block),qk),warg)

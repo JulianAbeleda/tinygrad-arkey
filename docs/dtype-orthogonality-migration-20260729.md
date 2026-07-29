@@ -89,14 +89,21 @@ expansion, devectorization, and reduction lowering. Preserve explicit native-ins
 
 Gate: CPU and backend codegen suites produce equivalent programs; no AMD fragment code changes yet.
 
-### Stage 3 — explicit AMD fragment/layout contracts
+### Stage 3 — explicit AMD fragment/layout contracts (custom bridge complete; physical gate pending)
 
 Move packed WMMA and attention carrier widths from vector `DType` identity into fragment/layout metadata.
 The scalar accumulator/input dtype and the hardware lane/register layout must remain separately
 inspectable by machine search and final ISA validation.
 
+The custom AMD attention bridge now follows that model: `AMD_PACKED_FRAGMENT_LOAD`,
+`AMD_ROW_SOFTMAX_REPACK`, and `AMD_ROW_SOFTMAX_SLOT` carry scalar dtypes, while their descriptors own
+the 16-lane or 8-lane shape. SPEC=3 verifies these scalar-plus-shape contracts. The final generic WMMA
+carrier still uses the fork's legacy vector dtype until the physical AMD gate can compare generated ISA.
+
 Gate: gfx1100 compile evidence, instruction counts, VGPR/spill contracts, and known numerical fixtures are
 unchanged on an AMD validation host.
+
+The exact pending checklist is [AMD dtype-orthogonality validation](dtype-orthogonality-amd-validation-20260729.md).
 
 ### Stage 4 — pointer and image ownership
 

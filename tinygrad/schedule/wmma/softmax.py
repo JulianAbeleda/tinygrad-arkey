@@ -32,7 +32,7 @@ def amd_gfx1100_row_softmax_repack(score: UOp, m: UOp, l: UOp, *,
   """
   spec = AMDRowSoftmaxRepackSpec() if spec is None else spec
   spec.validate()
-  if score.dtype != dtypes.float32.vec(8) or score.shape != (8,):
+  if score.dtype != dtypes.float32.vec(8) or score.shape != (spec.qk_c_lanes,):
     raise ValueError("gfx1100 row-softmax repack requires native QK-C float.vec(8)")
   state_dt = dtypes.float32 if spec.mode == "legacy_normalized" else dtypes.float32.vec(8)
   state_shape = () if spec.mode == "legacy_normalized" else (8,)
@@ -41,8 +41,8 @@ def amd_gfx1100_row_softmax_repack(score: UOp, m: UOp, l: UOp, *,
   if (kv_tile is not None) != spec.dynamic_kv_v1 or (kv_tile is not None and kv_tile.op is not Ops.RANGE):
     raise ValueError("dynamic row-softmax repack requires its exact RANGE tile source")
   if (grid_id is not None) != (spec.grid is not None): raise ValueError("grid repack requires its exact group source")
-  owner = UOp(Ops.AMD_ROW_SOFTMAX_REPACK, dtypes.half.vec(16), (score, m, l)+(() if kv_tile is None else (kv_tile,))+(() if grid_id is None else (grid_id,)), arg=spec)
-  return UOp(Ops.AMD_ROW_SOFTMAX_SLOT, dtypes.half.vec(16), (owner,), arg=AMDRowSoftmaxSlotSpec(slot=0))
+  owner = UOp(Ops.AMD_ROW_SOFTMAX_REPACK, dtypes.half, (score, m, l)+(() if kv_tile is None else (kv_tile,))+(() if grid_id is None else (grid_id,)), arg=spec)
+  return UOp(Ops.AMD_ROW_SOFTMAX_SLOT, dtypes.half, (owner,), arg=AMDRowSoftmaxSlotSpec(slot=0))
 
 def amd_gfx1100_row_softmax_state(score:UOp, m:UOp, l:UOp, *, spec:AMDRowSoftmaxRepackSpec|None=None,
                                   kv_tile:UOp|None=None, grid_id:UOp|None=None) -> tuple[UOp, UOp, UOp, UOp]:
@@ -51,14 +51,14 @@ def amd_gfx1100_row_softmax_state(score:UOp, m:UOp, l:UOp, *, spec:AMDRowSoftmax
   if spec.mode not in {"stateful_unnormalized_v1", "loop_state_v1"}: raise ValueError("native state projections require a stateful native mode")
   p = amd_gfx1100_row_softmax_repack(score, m, l, spec=spec, kv_tile=kv_tile, grid_id=grid_id)
   owner = p.src[0]
-  return (p, *(UOp(Ops.AMD_ROW_SOFTMAX_SLOT, dtypes.float.vec(8), (owner,), arg=AMDRowSoftmaxSlotSpec(slot=i)) for i in range(1, 4)))
+  return (p, *(UOp(Ops.AMD_ROW_SOFTMAX_SLOT, dtypes.float, (owner,), arg=AMDRowSoftmaxSlotSpec(slot=i)) for i in range(1, 4)))
 
 def amd_gfx1100_row_softmax_initial(score:UOp, *, spec:AMDRowSoftmaxRepackSpec) -> tuple[UOp, UOp, UOp, UOp]:
   spec.validate()
   if spec.mode != "initial_state_v1" or score.dtype != dtypes.float.vec(8): raise ValueError("invalid native initial-state repack")
-  owner=UOp(Ops.AMD_ROW_SOFTMAX_REPACK,dtypes.half.vec(16),(score,),arg=spec)
-  return (UOp(Ops.AMD_ROW_SOFTMAX_SLOT,dtypes.half.vec(16),(owner,),arg=AMDRowSoftmaxSlotSpec(slot=0)),
-    *(UOp(Ops.AMD_ROW_SOFTMAX_SLOT,dtypes.float.vec(8),(owner,),arg=AMDRowSoftmaxSlotSpec(slot=i)) for i in range(1,4)))
+  owner=UOp(Ops.AMD_ROW_SOFTMAX_REPACK,dtypes.half,(score,),arg=spec)
+  return (UOp(Ops.AMD_ROW_SOFTMAX_SLOT,dtypes.half,(owner,),arg=AMDRowSoftmaxSlotSpec(slot=0)),
+    *(UOp(Ops.AMD_ROW_SOFTMAX_SLOT,dtypes.float,(owner,),arg=AMDRowSoftmaxSlotSpec(slot=i)) for i in range(1,4)))
 
 class OnlineSoftmaxBlockTransition(NamedTuple):
   """Typed online-softmax state at one completed KV tile boundary."""

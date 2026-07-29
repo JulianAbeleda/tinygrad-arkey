@@ -298,11 +298,11 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
         # before program construction.
         return self.arg.fragment_shape
       case Ops.AMD_ROW_SOFTMAX_REPACK:
-        # Physical wave32 QK-C -> PV-A bridge. Its vec16 dtype is the native
-        # per-lane PV-A fragment, not a logical tensor dimension.
-        return (self.dtype.count,)
-      case Ops.AMD_ROW_SOFTMAX_SLOT: return (self.dtype.count,)
-      case Ops.AMD_PACKED_FRAGMENT_LOAD: return (self.dtype.count,)
+        # Physical wave32 QK-C -> PV-A bridge. The descriptor, not DType,
+        # owns the native per-lane PV-A fragment width.
+        return (self.arg.pv_a_lanes,)
+      case Ops.AMD_ROW_SOFTMAX_SLOT: return (self.arg.lanes,)
+      case Ops.AMD_PACKED_FRAGMENT_LOAD: return (self.arg.fragment_lanes,)
       case Ops.AMD_ATTENTION_LOOP_STATE: return (self.dtype.count,) if self.dtype != dtypes.void and self.dtype.count != 1 else ()
       case Ops.AMD_ATTENTION_OUTPUT_DRAIN | Ops.AMD_ATTENTION_STATS_DRAIN: return self.src[0]._shape
       case Ops.AMD_PV_C_LANE: return ()
@@ -1668,7 +1668,7 @@ class AMDRowSoftmaxRepackSpec(NamedTuple):
     if (self.native_abi, self.target, self.wave_size) != ("amd_gfx1100_online_softmax_qk_pv_v1", "gfx1100", 32):
       raise ValueError("row-softmax native repack requires exact AMD gfx1100 wave32 v1 ABI")
     if (self.qk_c_lanes, self.pv_a_lanes) != (8, 16):
-      raise ValueError("row-softmax native repack requires float.vec(8) QK-C and half.vec(16) PV-A")
+      raise ValueError("row-softmax native repack requires 8-lane float QK-C and 16-lane half PV-A")
     if (self.row_expr, self.col_expr) != ("2*e+(lane>>4)", "lane&15") or self.xor_masks != (1, 2, 4, 8):
       raise ValueError("row-softmax native repack has an unsupported lane reduction layout")
     if (self.lds_dtype, self.lds_elements, self.lds_address) != ("half", 256, "row*16+col"):
@@ -1715,11 +1715,18 @@ class AMDPVCLaneSpec(NamedTuple):
 class AMDRowSoftmaxSlotSpec(NamedTuple):
   native_abi: str = "amd_gfx1100_online_softmax_qk_pv_v1"
   slot: int = 0
-  dtypes: tuple[str, ...] = ("half.vec16", "float.vec8", "float.vec8", "float.vec8")
+  scalar_dtypes: tuple[str, ...] = ("half", "float", "float", "float")
+  lane_counts: tuple[int, ...] = (16, 8, 8, 8)
+
+  @property
+  def lanes(self) -> int: return self.lane_counts[self.slot]
+
+  @property
+  def scalar_dtype(self) -> DType: return getattr(dtypes, self.scalar_dtypes[self.slot])
 
   def validate(self):
-    if self.native_abi != "amd_gfx1100_online_softmax_qk_pv_v1" or self.dtypes != \
-       ("half.vec16", "float.vec8", "float.vec8", "float.vec8"):
+    if self.native_abi != "amd_gfx1100_online_softmax_qk_pv_v1" or self.scalar_dtypes != \
+       ("half", "float", "float", "float") or self.lane_counts != (16, 8, 8, 8):
       raise ValueError("native row-softmax slot requires exact gfx1100 repack ABI")
     if not isinstance(self.slot, int) or not 0 <= self.slot < 4:
       raise ValueError("native row-softmax slot must be in [0,4)")
@@ -1920,9 +1927,10 @@ class AMDPackedFragmentLoopSpec(NamedTuple):
   head_block: int = 0
   grid: AMDAttentionGridSpec|AMDMultiWaveAttentionGridSpec|None = None
   output_block_base: int = 0
+  fragment_lanes: int = 16
 
   def validate(self):
-    if self.native_abi != "amd_gfx1100_packed_fragment_hd128_loop_v1" or self.role not in {"Q", "K", "V"}:
+    if self.native_abi != "amd_gfx1100_packed_fragment_hd128_loop_v1" or self.role not in {"Q", "K", "V"} or self.fragment_lanes != 16:
       raise ValueError("AMD loop fragment has an unsupported ABI or role")
     # `head_block` is a HEAD-BLOCK COUNT -> derives from the bound grid's head_dim (128//16==8,
     # byte-identical). When grid is None, keep the legacy literal 8 default for back-compat.
