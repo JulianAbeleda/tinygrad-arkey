@@ -196,7 +196,7 @@
       "unresolved_decision": "none"
     },
     {
-      "current_path": "extra/gpu_fault_analysis/analyze_faults.py",
+      "current_path": "extra/debug/gpu_fault_analysis/analyze_faults.py",
       "file_type": "python",
       "target_domain": "gpu-debug",
       "purpose": "fault/allocator reproducer",
@@ -208,13 +208,13 @@
       "co_move_dependencies": [],
       "validation": "GPU-lock reproducer",
       "disposition": "move",
-      "destination": "extra/debug/gpu_fault_analysis/",
+      "destination": "extra/debug/gpu_fault_analysis/analyze_faults.py",
       "retention_or_recovery": "retain diagnosis contract",
       "unresolved": false,
       "unresolved_decision": null
     },
     {
-      "current_path": "extra/gpu_fault_analysis/bench_alloc_trace.py",
+      "current_path": "extra/debug/gpu_fault_analysis/bench_alloc_trace.py",
       "file_type": "python",
       "target_domain": "gpu-debug",
       "purpose": "fault/allocator reproducer",
@@ -226,7 +226,7 @@
       "co_move_dependencies": [],
       "validation": "GPU-lock reproducer",
       "disposition": "move",
-      "destination": "extra/debug/gpu_fault_analysis/",
+      "destination": "extra/debug/gpu_fault_analysis/bench_alloc_trace.py",
       "retention_or_recovery": "retain diagnosis contract",
       "unresolved": false,
       "unresolved_decision": null

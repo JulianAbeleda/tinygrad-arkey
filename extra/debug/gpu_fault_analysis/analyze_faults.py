@@ -19,8 +19,8 @@ attributable to *something* tinygrad allocated or dispatched, if ALLOC_TRACE was
 USAGE
 -----
   # fault addresses from a file (one hex address per line, `0x...` optional), or given directly:
-  python3 analyze_faults.py --dump alloc_trace.json --faults faults.txt
-  python3 analyze_faults.py --dump alloc_trace.json 0x7c7a20b4a000 0x7c7a20b7a000
+  python3 extra/debug/gpu_fault_analysis/analyze_faults.py --dump alloc_trace.json --faults faults.txt
+  python3 extra/debug/gpu_fault_analysis/analyze_faults.py --dump alloc_trace.json 0x7c7a20b4a000 0x7c7a20b7a000
 
   # against a real kernel log for the PREVIOUS boot (this machine rebooted 2026-07-26 07:03, so `-b -1`
   # is that boot). `-o short-unix` is IMPORTANT: it is what lets this script align kernel-log wall-clock
@@ -32,7 +32,7 @@ USAGE
 
   # log only, no ALLOC_TRACE dump yet (e.g. to see what's in the log before a run) -- still parses and
   # reports PASID/VMID/client/RW/status per fault, just skips the allocation/dispatch correlation:
-  python3 analyze_faults.py --kernel-log faultlog.txt
+  python3 extra/debug/gpu_fault_analysis/analyze_faults.py --kernel-log faultlog.txt
 
 If both --kernel-log and --faults/positional addresses are given, the log is parsed for metadata and the
 explicit address list is what gets analyzed (addresses not seen in the log get no PASID/VMID/etc context).

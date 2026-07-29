@@ -6,7 +6,7 @@ KFDIface.alloc's anon_mmap(0, ...) places tinygrad's own buffers (tinygrad/runti
 tinygrad never chooses the GPU VA, the host mmap does, and the KFD ioctl echoes it back). ALLOC_TRACE
 records every allocation's VA range and lifetime, and every dispatch's kernel identity/grid/kernarg
 pointers, into a fixed-size preallocated ring -- no I/O and no synchronize() in the hot path -- so a fault
-address can be attributed after the fact via extra/gpu_fault_analysis/analyze_faults.py.
+address can be attributed after the fact via extra/debug/gpu_fault_analysis/analyze_faults.py.
 
 Unlike DISPATCH_TRACE (which deliberately serializes every dispatch and is far too expensive to leave on),
 ALLOC_TRACE never blocks the device; it only touches disk at dump time (process exit or an explicit call).

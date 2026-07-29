@@ -256,6 +256,17 @@ consumers, validation, retention/recovery, and unresolved decision owners. The o
 88 authored `extra/llm_research` source records, so R8 filesystem moves remain gated until the full-ledger consumer and
 reference review is accepted.
 
+## R8 bounded filesystem slice
+
+The first R8 move is complete on `exp`: the two dev-only GPU fault-analysis tools now live under
+`extra/debug/gpu_fault_analysis/`. The move included the standalone repository-root fix in
+`bench_alloc_trace.py` and the two test/documentation path rewrites. The focused analysis/allocation-trace suite
+passes 26 tests, and the CPU-only benchmark and CLI smoke checks pass. Recovery is the pre-move ledger commit
+`078fc6c35`.
+
+No other `extra/` group was moved. The remaining unresolved rows stay migration-gated, especially the SQTT boundary,
+the CLI/generate/adapter closure, remote scripts, NV support, and the mixed `llm_research` surface.
+
 ## Unresolved blockers
 
 R7 is complete for its stated gate (zero unresolved removals). Broader tier pruning and promotion remain blocked by

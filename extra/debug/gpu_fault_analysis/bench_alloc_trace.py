@@ -4,13 +4,13 @@ path -- NO GPU workload, NO device opened. Run this to get real numbers for a gi
 numbers quoted in the handoff doc were measured on the dev box and will vary by CPU/Python build.
 
 Usage:
-    python3 extra/gpu_fault_analysis/bench_alloc_trace.py [--n 200000]
+    python3 extra/debug/gpu_fault_analysis/bench_alloc_trace.py [--n 200000]
 """
 import argparse, sys, types, pathlib, time
 
 def _import_device_standalone():
   if 'tinygrad.device' in sys.modules: return sys.modules['tinygrad.device']
-  root = pathlib.Path(__file__).resolve().parents[2] / "tinygrad"
+  root = pathlib.Path(__file__).resolve().parents[3] / "tinygrad"
   if 'tinygrad' not in sys.modules:
     pkg = types.ModuleType('tinygrad')
     pkg.__path__ = [str(root)]

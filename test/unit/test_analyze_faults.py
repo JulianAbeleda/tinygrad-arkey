@@ -1,4 +1,4 @@
-"""Self-test for extra/gpu_fault_analysis/analyze_faults.py, run against SYNTHETIC data with known answers.
+"""Self-test for extra/debug/gpu_fault_analysis/analyze_faults.py, run against SYNTHETIC data with known answers.
 
 Required by the ALLOC_TRACE handoff: "a silent instrument is our most common failure mode" -- this proves
 the analysis script's core claims (live-interval-at-fault-time, nearest-boundary distance, dispatch/pointer
@@ -10,7 +10,7 @@ exposed to unrelated breakage elsewhere in the tree.
 """
 import sys, pathlib, unittest, importlib.util
 
-_MOD_PATH = pathlib.Path(__file__).resolve().parents[2] / "extra" / "gpu_fault_analysis" / "analyze_faults.py"
+_MOD_PATH = pathlib.Path(__file__).resolve().parents[2] / "extra" / "debug" / "gpu_fault_analysis" / "analyze_faults.py"
 _spec = importlib.util.spec_from_file_location("analyze_faults", _MOD_PATH)
 AF = importlib.util.module_from_spec(_spec)
 sys.modules["analyze_faults"] = AF

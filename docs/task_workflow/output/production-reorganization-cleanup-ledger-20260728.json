@@ -30,6 +30,16 @@
       "remaining evidence families require named compact conclusions"
     ]
   },
+  "completed_r8_slices": [
+    {
+      "source": ["extra/gpu_fault_analysis/analyze_faults.py", "extra/gpu_fault_analysis/bench_alloc_trace.py"],
+      "destination": "extra/debug/gpu_fault_analysis/",
+      "action": "move",
+      "state": "completed",
+      "recovery_commit": "078fc6c35",
+      "verification": "26 focused tests pass; standalone CLI and CPU-only benchmark pass; old-path reference scan clean"
+    }
+  ],
   "rules": [
     "No unresolved path may be removed or moved between tiers.",
     "Cleaner-tier deletion commits must not propagate backward into richer tiers.",

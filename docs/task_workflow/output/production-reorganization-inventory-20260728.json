@@ -133,6 +133,17 @@
     "14 master tests, 25 dev-only tests, and 26 exp-only tests are partitioned; mixed-owner tests remain unresolved; 102 staged/frozen artifacts and 62 top-level JSON records lack final retention owners",
     "scoped audit has 64 warnings; expanded ownership and lowering authority follow-ups remain"
   ],
+  "completed_r8_slices": [
+    {
+      "source": ["extra/gpu_fault_analysis/analyze_faults.py", "extra/gpu_fault_analysis/bench_alloc_trace.py"],
+      "destination": "extra/debug/gpu_fault_analysis/",
+      "owner": "dev",
+      "consumer_rewrites": ["test/unit/test_analyze_faults.py", "test/unit/test_alloc_trace.py"],
+      "focused_tests": "test/unit/test_analyze_faults.py test/unit/test_alloc_trace.py",
+      "verification": "26 focused tests pass; standalone bench root discovery and analyze-faults CLI pass; no live old-path references",
+      "recovery_commit": "078fc6c35"
+    }
+  ],
   "completed_prunes": [
     {
       "paths": "docs/artifacts/shared-attention-benchmark-20260723/raw/**",
