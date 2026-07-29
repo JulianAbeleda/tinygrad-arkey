@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
 """Coalesced vector-load lowering -- the bandwidth PRIMITIVE for generated kernels.
 
-Promoted to core codegen under LR-050 (docs/task_workflow/output/lowering-architecture-refactor-scope-20260726.md
-Phase 5): this pass and the static coalescing predicate it steers on are pure UOp/AxisType transforms with no
+Promoted to core codegen under LR-050: this pass and the static coalescing predicate it steers on are pure UOp/AxisType transforms with no
 backend-specific assumptions (no wave width, no ISA intrinsic, no device string baked into the algorithm itself).
-Originally authored as `extra/llm_research/coalesced_load_lowering.py` + `extra/llm_research/layout_coalesce_check.py`; those modules
-now re-export this implementation rather than forking it.
 
-The codegen realization of the layout IR's `OptOps.COALESCE` (docs/layout-mapping-ir-design-20260625.md,
-docs/decode-coalesced-load-primitive-scope-20260626.md). Custom/generated kernels author with
+The codegen realization of the layout IR's `OptOps.COALESCE`. Custom/generated kernels author with
 `opts_to_apply=()`, so the heuristic never tags any axis `UPCAST` and every load stays scalar
 (`global_load_d16=0`). This pass makes "which contiguous load axis to widen" a first-class, PREDICATE-DRIVEN
 decision: it finds a small loop/reduce RANGE that is **unit-stride in a GLOBAL/LOCAL load index** (via the

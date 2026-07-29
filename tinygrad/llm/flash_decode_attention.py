@@ -2,7 +2,7 @@
 
 This module owns the selected G4/G5 descriptors, their generated UOp builders,
 and the Tensor executor. Search campaigns and qualification harnesses live under
-``extra/llm_research``; production inference does not depend on them.
+the development branches; production inference does not depend on them.
 """
 from __future__ import annotations
 

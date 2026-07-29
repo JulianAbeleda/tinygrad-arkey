@@ -119,8 +119,7 @@ def _hip_native_bpermute_max(x:UOp) -> UOp|None:
   measured 952 -> 1558 instrs and 26 VGPR spills on its own, because the exec-masked region was the only
   thing forcing the ladder into a register. The two are one change and share one flag deliberately.
 
-  Promoted to default-ON 2026-07-24: docs/prefill-softmax-reduce-fuse-promotion-readiness-20260724.md,
-  gate extra/llm_research/prefill/prefill_softmax_reduce_fuse_promotion_gate.py (AUTHORITY_GATE PASS).
+  Promoted after the softmax-reduce correctness and performance gate passed.
   """
   if x.dtype != dtypes.float or len(x.src) != 2: return None
   fuse = getenv("PREFILL_SOFTMAX_REDUCE_FUSE", 1)
@@ -381,10 +380,8 @@ class CStyleLanguage(Renderer):
       # This is the SHARED renderer, so the predicate is reachable from every AMD kernel, not just prefill
       # attention -- decode builds float CUSTOMI too (flash_kernels.py's __builtin_amdgcn_fdot2 and
       # schedule/wmma/softmax.py's "bpermute" row-state broadcast). Decode is unaffected because its
-      # cross-lane reduce is a LINEAR ladder (one consumer per rung) rather than a butterfly, and that is
-      # verified rather than assumed: extra/llm_research/decode/decode_codegen_identity_check.py compiles the real decode
-      # graph both ways and compares code-object sha256 for both decode-admitted geometries (8B Hq=32 and
-      # 14B Hq=40) -- byte-identical. Re-run it if you touch this predicate.
+      # cross-lane reduce is a LINEAR ladder (one consumer per rung) rather than a butterfly. Promotion compared
+      # code-object hashes for both decode-admitted geometries (8B Hq=32 and 14B Hq=40) and found them byte-identical.
       customi_inline = u.op is not Ops.CUSTOMI or not (getenv("PREFILL_SOFTMAX_REDUCE_FUSE", 1) and
                                                       u.dtype is dtypes.float and child_count[u] > 1)
       if (u.op is not Ops.CAST or u.dtype.vcount == 1) and ((u.op in {Ops.CONST, Ops.GEP, Ops.INDEX, Ops.SHRINK, Ops.CUSTOMI} and customi_inline) or \

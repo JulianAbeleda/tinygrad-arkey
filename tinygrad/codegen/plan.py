@@ -20,7 +20,7 @@ Design notes:
     This module is the gate INVENTORY. It is not, and does not claim to be, the single reader: the call sites
     listed in GATE_READERS read these variables directly, and for NOOPT the authority is a ContextVar that no env
     read tracks. An OptimizationPlan type once lived here that nothing outside its own tests constructed; it was
-    removed in the post-refactor cut. See docs/task_workflow/output/lr-019-gate-mechanism-divergence-scope-20260726.md.
+    removed in the post-refactor cut.
   * Applying a plan is recorded on the plan, not on the graph, so double application is detectable rather than
     silently doubling an upcast.
 """
@@ -75,10 +75,8 @@ GATE_READERS: dict[str, tuple] = {
   "COALESCED_LOAD_LOWERING": ("getenv",),
   "WARP_REDUCE_LOWERING": ("getenv",),
   "V_DOT2_LOWERING": ("getenv",),
-  # Read in extra/llm_research/flash_common.py:15 as getenv("DECODE_FAST_EXP2", 0), not in tinygrad/. An earlier revision
-  # recorded this as ("none",) -- "nothing reads it" -- which was true of tinygrad/ only and therefore misleading,
-  # since extra/llm_research builders feed to_program. It emits a different Ops.CUSTOMI at kernel-build time, so the
-  # difference is already captured by ast.key; carrying it here is honest rather than load-bearing.
+  # Qualification builders can emit a different Ops.CUSTOMI when this is enabled. The difference is already
+  # captured by ast.key; carrying the gate here is honest rather than load-bearing.
   "DECODE_FAST_EXP2": ("getenv", 0),
   "PREFILL_SOFTMAX_REDUCE_FUSE": ("getenv", 1),
   "PREFILL_V_TRANSPOSED": ("getenv",),

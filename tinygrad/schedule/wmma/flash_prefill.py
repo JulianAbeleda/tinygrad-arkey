@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Descriptor scaffolding for the machine-searched fixed-16-WMMA prefill route.
 
-Mirrors extra/llm_research/decode/flash_decode_attention_spec.py (FlashDecodeTileSpec): the topology
-that today lives as inline `emit(...)` glue in tinygrad/llm/fused_attention.py's
+The topology that today lives as inline `emit(...)` glue in tinygrad/llm/fused_attention.py's
 custom_kernel_attention is here owned as DATA by a frozen dataclass, so a route can
 compose it (machine_authored_generated) instead of importing the hand builder by
-name (hand_authored_uop_template). See docs/flash-prefill-pure-search-lift-scope-20260724.md.
+name (hand_authored_uop_template).
 
 P-B1..P-B3 de-literalized the substrate validators, the emitter's index math, and the HIP backend's
 drain address math to all derive from head_dim. P4a (this file) closes the last gap: Hd is now THREADED

@@ -1,7 +1,7 @@
 """Reusable WMMA authoring helpers for scheduler-owned generated kernels.
 
 This package is a concern-split of the former ``tinygrad/schedule/wmma.py``
-monolith (see docs/wmma-modularization-scope-20260724.md). Every name that
+monolith. Every name that
 was public on the old module is re-exported here unchanged so
 ``from tinygrad.schedule.wmma import X`` keeps working for all external
 importers.

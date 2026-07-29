@@ -143,7 +143,7 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   # opt-in (COALESCED_LOAD_LOWERING): predicate-driven promotion of unit-stride load axes to UPCAST so the
   # existing expander+devectorizer vectorize the load (codegen realization of the layout-IR OptOps.COALESCE).
   # The shared register-store lowering keeps accumulator stores scalar. Pass promoted to core codegen (LR-050);
-  # see tinygrad/codegen/late/coalesced_load.py + docs/decode-coalesced-load-primitive-scope-20260626.md. The
+  # see tinygrad/codegen/late/coalesced_load.py. The
   # AMD-only restriction is a validation-scope gate (only this backend's path is proven), not a property of the
   # pass itself.
   kernel_coalesced_loads = bool(getattr(sink.arg, "coalesced_loads", False))
@@ -153,8 +153,7 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   # expand
   # opt-in (WARP_REDUCE_LOWERING): auto-lower a full-warp REDUCE to the AMD ds_bpermute cross-lane ladder BEFORE
   # pm_group_for_reduce claims it for the LDS tree. Milestone 5 of the generic-low-level-search goal -- makes the
-  # cross-lane reduce primitive scheduler-emittable (today only the hand kernels emit it). See
-  # tinygrad/codegen/late/warp_reduce.py + bench/qk-search-spaces/decode_ffn_gemv_gfx1100_v1.json.
+  # cross-lane reduce primitive scheduler-emittable (today only explicitly selected kernels emit it).
   _expander_pm = sym+pm_pre_expander+pm_group_for_reduce+expander
   if getenv("WARP_REDUCE_LOWERING") and ren.target.device == "AMD":
     _expander_pm = sym+pm_pre_expander+pm_warp_reduce+pm_group_for_reduce+expander
@@ -229,7 +228,7 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   # AMD baseline: give manual END/AFTER scalar-REG accumulators the same widen+horizontal-reduce treatment Ops.REDUCE
   # gets, so an UPCAST/UNROLL'd reduce body no longer broadcasts the scalar slot into an unassignable
   # make_floatN(acc,...) store. Exact + fail-closed; runs before add_loads to match reduce_to_acc's form.
-  # See tinygrad/codegen/late/reg_store.py reduce_acc_upcast_fix + docs/tg-p12-*.
+  # See tinygrad/codegen/late/reg_store.py reduce_acc_upcast_fix.
   if ren.target.device == "AMD":
     sink = graph_rewrite(sink, pm_reduce_acc_upcast_fix, name="reduce acc upcast fix")
 

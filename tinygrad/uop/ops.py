@@ -450,8 +450,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
               f"{self.op} with a collapsed rank-0 sibling {input_shapes} — a K/V/weight "
               f"lost its contraction axis because K/V carried unrealized projection or "
               f"KV-cache `.after(store)` provenance into the composite reduce. K/V must "
-              f"arrive as materialized buffers (see docs/shared-attention-fused-"
-              f"enablement-scope-A-20260723.md, class-2).")
+              f"arrive as materialized buffers before the composite reduce.")
         raise RuntimeError(f"shape mismatch at {self.op}: {input_shapes} {[x.op for x in self.src]}")
       # broadcasting lives in _shape property now
       return _broadcast_shape(*input_shapes)

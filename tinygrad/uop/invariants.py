@@ -6,8 +6,7 @@ the pass that introduced the invalid state, which is the difference between a fi
 
 Enabled with LOWER_CHECK=1. Off by default and never invoked from the normal path, so it cannot alter generated code.
 
-Every check here is backed by an observed hazard from the LR-001 inventory (see
-docs/lowering-refactor-phase0-findings-20260726.md). Speculative invariants are deliberately absent: a check nobody
+Every check here is backed by an observed lowering hazard. Speculative invariants are deliberately absent: a check nobody
 can justify becomes noise, and noise gets disabled.
 
 Withdrawn during development, recorded so it is not re-proposed: "two live RANGE nodes must not share an index".

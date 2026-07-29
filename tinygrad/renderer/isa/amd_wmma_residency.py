@@ -64,7 +64,7 @@ def _wmma_half_addr(e:UOp):
     lane = e.arg[0]; e = e.src[0]
   # A fragment lane whose native LDS storage is byte-addressed (e.g. a half fragment loaded from a uint8
   # arena) loads its own itemsize in raw bytes and reinterprets the VALUE via one wrapping BITCAST, rather
-  # than lying about the dtype at the INDEX (see extra/llm_research/mmq_llama_oracle_recurrence.py _fragment_at).
+  # than lying about the dtype at the INDEX.
   # Unwrap that value-level cast the same way the GEP lane split above is unwrapped.
   if e.op is Ops.BITCAST and e.src:
     e = e.src[0]
@@ -151,8 +151,7 @@ def _wmma_chain_nodes(root:UOp) -> list[UOp]:
   chain = [root]
   while True:
     c = chain[-1].src[2]
-    # A WAR-guard/scheduling-only Ops.AFTER may wrap the chain link (see extra/llm_research/mmq_llama_group_chain.py
-    # _instantiate_group_wmma_vectors's cross-element guard): unwrap it before checking Ops.WMMA so the
+    # A WAR-guard/scheduling-only Ops.AFTER may wrap the chain link. Unwrap it before checking Ops.WMMA so the
     # backward chain-walk still recognizes the wrapped node as a genuine chain continuation.
     if c.op is Ops.AFTER and c.src: c = c.src[0]
     if c.op is Ops.WMMA: chain.append(c)

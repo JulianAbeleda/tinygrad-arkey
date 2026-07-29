@@ -6,8 +6,7 @@ closures that used to be re-implemented, near verbatim, in each of the five
 loop-kernels in ``wmma/kernels.py`` -- differing only by owner id
 (9404/9504/9604/9704/9804), rng binding, grid, and a couple of fixed args.
 Each kernel now binds a thin local wrapper (or partial) to these emitters so
-that every call site still produces the EXACT same UOp graph as before
-(see docs/wmma-modularization-scope-20260724.md, Step 2).
+that every call site still produces the EXACT same UOp graph as before.
 
 Two call sites could not be centralized without changing UOp arity and were
 deliberately left local:

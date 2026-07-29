@@ -55,7 +55,7 @@ class AMDAttentionLoopStateMap(NamedTuple):
     register numbers from this map rather than restating them.
 
   RECORDED COST OF HAVING BEEN UNDOCUMENTED
-    docs/shared-attention-phase-lds-negative-result-20260724.md. The phase-ABI
+    the promoted shared-attention phase experiment. The phase-ABI
     LDS experiment tried to move this state to a typed StateHandle region and
     measured a negative result (+2048 B LDS, 197 VGPRs, zero registers freed):
     publication created a *mirror* of these registers instead of transferring

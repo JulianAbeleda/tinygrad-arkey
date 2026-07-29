@@ -348,13 +348,11 @@ def validate_stage1_uop_graph(graph:KernelStage1UOpGraph) -> tuple[str, ...]:
   return tuple(errors)
 
 # ---------------------------------------------------------------------------
-# LR-050: harvested from extra/llm_research/kernel_pipeline.py (docs/task_workflow/input/
-# lowering-architecture-refactor-scope-20260726.md Phase 5). These are generic typed
+# LR-050 generic typed
 # plan/proof contracts for staged pipelines -- dot/update recurrence graphs, a two-level
 # produce/publish/consume/release lifecycle, and a scheduler-owned output tile loop -- built
 # only on core UOp/AxisType/Ops concepts, with no backend-specific (wave width, ISA intrinsic,
-# device string) assumptions anywhere in them. `extra/llm_research/kernel_pipeline.py` now re-exports
-# these rather than forking them.
+# device string) assumptions anywhere in them.
 # ---------------------------------------------------------------------------
 
 HierarchicalLifetime = Literal["outer_epoch", "inner_phase"]

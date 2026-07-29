@@ -122,7 +122,7 @@ models = {
 
 # *** tinygrad runtime / client separation server ***
 #
-# Two HTTP surfaces on one process (see docs/tinygrad-runtime-client-separation-roadmap-20260630.md):
+# Two HTTP surfaces on one process:
 #   /v1/*       OpenAI-compatible inference surface for clients (OpenCode, AI-SDK, llama.cpp-style tooling)
 #   /runtime/*  lifecycle + introspection controls for the proprietary app / local operator tooling
 # The runtime owns model load, tokenizer, KV cache, prefill/decode, sampling, GPU memory. It does NOT own

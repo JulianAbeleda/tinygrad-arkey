@@ -4,7 +4,7 @@ scheduling primitive. Scalar-unrolls a REDUCE loop by U, re-threading the Ops.AF
 across the U copies, so the copies' independent prologues coexist in one basic block where the layer-1 list
 scheduler (SCHED_LIST) interleaves them. Default-off behind SCHED_UNROLL=<U>. Pure transform, no materialize.
 
-Recurrence representation (recon, docs/decode-codegen-recurrence-unroll-primitive-scope.md):
+Recurrence representation:
   carry read in-loop = AFTER(X, r)   ; per-iteration result = END(store_chain, r).src[0] ; post = AFTER(X, END)
 Unroll: r2 = range(N/U); for u in 0..U-1 substitute r -> r2*U+u in indices, and rewire AFTER(X,r) to the
 previous copy's state (copy0 -> AFTER(X, r2)); END now closes r2 over copy U-1's state.

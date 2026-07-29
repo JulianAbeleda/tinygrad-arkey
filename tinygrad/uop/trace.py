@@ -1,8 +1,8 @@
 """LR-010: the lowering trace contract.
 
 Pass order in this codebase is not declared anywhere -- it is the literal statement order of `_get_kernel_graph`,
-`schedule/__init__`, and `full_rewrite_to_sink`, and at least six real order dependencies exist only as emergent
-behaviour (see docs/lowering-refactor-phase0-findings-20260726.md). This module makes that order observable so a
+`schedule/__init__`, and `full_rewrite_to_sink`, and several real order dependencies exist only as emergent
+behaviour. This module makes that order observable so a
 structural move can be shown to preserve it.
 
 One hook, not ninety-three: every pass already names itself when it calls `graph_rewrite(..., name=...)`, so the

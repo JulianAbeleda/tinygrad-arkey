@@ -65,10 +65,8 @@ def _should_use_custom_kernel_prefill_attn(n_heads:int, n_kv_heads:int, backend:
   (tinygrad/llm/fused_attention.py:custom_kernel_attention -> tinygrad/schedule/wmma/flash_prefill.py
   FlashPrefillAttentionSpec), decoupled from the legacy composite-reduce path's prefill_tc_attn /
   shared_attention_proven_eligible proof (that proof is unrelated evidence for the OFF-critical-path
-  class-2-risk `shared_prefill_attention` route -- see fused_attention.py's module docstring; P5b,
-  docs/flash-prefill-pure-search-lift-scope-20260724.md). True only for the PROVEN admitted 8B/14B
-  shapes on AMD/gfx1100 (extra/llm_research/prefill/prefill_hd_sweep_numerics.py Hd=64/128 lower+numerically correct,
-  extra/llm_research/prefill/prefill_flash_e2e_parity.py real-model 8B/14B token parity); every other shape/backend/arch
+  class-2-risk `shared_prefill_attention` route -- see fused_attention.py's module docstring). True only for the
+  correctness-gated 8B/14B shapes on AMD/gfx1100; every other shape/backend/arch
   safely falls back to SDPA (the existing default for all of them today)."""
   from tinygrad.llm.fused_attention import ADMITTED_GRIDS
   return (n_heads, n_kv_heads, 512) in ADMITTED_GRIDS and backend == "AMD" and arch == "gfx1100"
@@ -308,7 +306,7 @@ def _prefill_v2_without_parked_4x4(opts:tuple) -> tuple:
 def _prefill_v2_opts(out_f:int, in_f:int) -> tuple:
   # UNROLL(reduce,8): unrolling the K loop makes each thread's global->LDS copy loads contiguous, so they fold
   # from per-element global_load_d16 (+ ~8 v_mov register-init/WMMA) to wide global_load_b128 (~2 v_mov/WMMA).
-  # +3.7% pp512, no VGPR spill (UNROLL,4 spills 362), dNLL -0.00013. See docs/prefill-cgw3-copy-unroll-result-20260619.md.
+  # Promotion result: +3.7% pp512, no VGPR spill (UNROLL,4 spills 362), dNLL -0.00013.
   u0 = 4 if in_f > out_f else 2
   u1 = 4
   return _prefill_v2_without_parked_4x4((Opt(OptOps.TC, 0, (-1, 2, 1)), Opt(OptOps.UPCAST, 0, u0), Opt(OptOps.UPCAST, 1, u1),
@@ -1322,9 +1320,8 @@ class Transformer:
     # (~19GB for 14B), so running the canary after it leaves the child with almost no VRAM: the child dies
     # on its own admission ("budget 0.0GB, KV admits 0") and, in flat entry scripts, dies before draining
     # the spawn pipe so the parent blocks in Process.start() ahead of run_isolated's timeout loop. That is
-    # the "packed-WMMA HW fault / >240s hang" in docs/BOLTBEAM_GPU_HANG_DIAGNOSIS_HANDOFF_20260724.md.
-    # The kernel itself is NOT implicated: its code objects are byte-identical to the 6/6-gated state at
-    # c35b5ff53 (bisected compile-only, docs/packed-wmma-14b-codegen-transition-bisect-20260724.md), and
+    # a previously observed packed-WMMA timeout. The kernel itself is NOT implicated: its code objects are
+    # byte-identical to the 6/6-gated state at c35b5ff53, and
     # this path only began executing on default loads when 6ca798568 flipped
     # TINYGRAD_PREFILL_PACKED_WMMA 0 -> 1 -- the gates that justified that promotion were captured in the
     # opt-in configuration, which never realized the overlay first.

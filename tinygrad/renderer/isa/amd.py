@@ -3,7 +3,7 @@
 UOp -> Ops.INS (real rdna3 Inst) -> assemble_linear, bypassing LLVM. Templated on tinygrad/renderer/isa/x86.py +
 the shared ISARenderer framework; emits rdna3 instructions via tinygrad/renderer/amd/dsl.py + .../rdna3/ins.py;
 assembled by tinygrad/renderer/amd/elf.py:assemble_linear.
-LLVM AMDGPU model used as the map: bench/amd-llvm-backend-model/latest.json.
+The implementation is structurally aligned with the LLVM AMDGPU ABI.
 
 Inc 0 scope: a trivial elementwise kernel (out[i]=a[i]+b[i]) compiles + runs numerically correct on gfx1100.
 ABI (from LLVM model): s[0:1]=kernarg ptr at entry; v0=workitem id; buffer ptrs s_load'd from kernarg[i*8];
@@ -679,8 +679,7 @@ def isel_gep(x:UOp):
 
 # ---- B0.L7: tensor-core emit. After no_vectorized_wmma (devectorizer) a per-group Ops.WMMA arrives with dtype
 # float.vec(8) and three STACK/NOOP lane-carriers: src[0]=A (16 half), src[1]=B (16 half), src[2]=C accumulator (8
-# float, the CONST-0.0 init the TC matcher builds, postrange.py:319). This mirrors the reference hand kernel
-# extra/llm_research/prefill/wmma.py (SPEC-ONLY, never imported): A/B each occupy 8 contiguous VGPRs (16 fp16 packed 2/reg),
+# float, the CONST-0.0 init the TC matcher builds, postrange.py:319). A/B each occupy 8 contiguous VGPRs (16 fp16 packed 2/reg),
 # C/D occupy 8 VGPRs (8 fp32); v_wmma computes D = A*B + C writing D IN PLACE over the C fragment.
 # ELEMENT ORDER (the known risk): the vec(16) element order is ALREADY the RDNA3 fragment order -- _apply_tc_opt
 # permuted the tensor by tc.permutes_for_shape_str(...) using the amd_rdna3 swizzle (tc.py:142-143) BEFORE building the
@@ -915,8 +914,7 @@ def _frag_b128_loads(ctx:IselContext, E:tuple[UOp, ...], base:int, dep:tuple[UOp
   # was written for: a genuinely `half`-typed pointer feeding `half`-typed loads, or a byte pointer feeding
   # byte loads), that unit is exactly 1 lane and the old hardcoded stride-1 check is correct. When they don't
   # match -- a byte-addressed LDS arena (uint8*) whose fragment lanes are wider than one byte, e.g. a `half`
-  # fragment reinterpreted via a value-level BITCAST over raw byte loads (see
-  # extra/llm_research/mmq_llama_oracle_recurrence.py _fragment_at) -- consecutive lanes are `itemsize / ptr_itemsize`
+  # fragment reinterpreted via a value-level BITCAST over raw byte loads -- consecutive lanes are `itemsize / ptr_itemsize`
   # pointer-units apart. Deriving the stride from that ratio (instead of assuming it's always 1, which
   # silently misdetected fp16 LDS fragments and fell through to a scalar-load + V_PACK fallback -- an
   # 8x-16x DS_LOAD instruction blowup, REGALLOC_DEBUG: ~1950 live DS_LOAD virtuals at peak on
@@ -1406,8 +1404,7 @@ def isel_wmma(ctx:IselContext, x:UOp):
     cin = [_fixed_alias(cbase, i, x.dtype.scalar(), after) for i in range(8)]
     return memo.setdefault(x, _build_wmma_tile(ctx, x.src[0], x.src[1], cin, abase, bbase, cbase, (), zero_init=x.src[2].op is Ops.CONST))
   chain = [x]                                   # outermost .. head
-  # extra_dep[consumer] holds a WAR-guard's extra ordering operand (e.g. the cross-element guard in
-  # extra/llm_research/mmq_llama_group_chain.py _instantiate_group_wmma_vectors), keyed by the chain entry whose
+  # extra_dep[consumer] holds a WAR-guard's extra ordering operand, keyed by the chain entry whose
   # src[2] carried the Ops.AFTER wrapper -- i.e. the entry that actually needs to wait on it once tiled below.
   extra_dep: dict[UOp, tuple[UOp, ...]] = {}
   while True:
@@ -2590,8 +2587,8 @@ class AMDISARenderer(ISARenderer):
     except (AttributeError, KeyError, TypeError, ValueError, RuntimeError, IndexError):
       return None
 
-  # ---- B1.L6: pack an s_waitcnt simm16 field. Bit layout (SPEC ONLY, from extra/llm_research/prefill/wmma.py L19-28, never
-  # imported): expcnt=bits[2:0], lgkmcnt=bits[9:4], vmcnt=bits[15:10]. A MAXED field (vm=63/lgkm=63/exp=7, the defaults)
+  # ---- B1.L6: pack an s_waitcnt simm16 field. Bit layout: expcnt=bits[2:0], lgkmcnt=bits[9:4],
+  # vmcnt=bits[15:10]. A MAXED field (vm=63/lgkm=63/exp=7, the defaults)
   # means "don't wait on that class"; a field of 0 waits until that class is fully drained. _waitcnt_simm16(0,0,0)==0 is
   # the full-drain used by _insert_waitcnt. ----
   @staticmethod

@@ -263,7 +263,7 @@ def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_toke
   if query_start is None: query_start=valid_kv-q_tokens
   lane=UOp.special(32,"lidx0"); group=UOp.special(q_heads*grid.q_tiles,"gidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); zero=UOp.const(dtypes.float.vec(8),(0.0,)*8); axes=((),(),tuple((-120-i,2) for i in range(3))); warg=("WMMA_16_16_16_half_float",(16,16,16),dtypes.half,dtypes.float,"AMD:gfx1100",32,axes,())
   full_kv_tiles=(kv_tokens+15)//16
-  # THEORY 3 (docs/prefill-needle-theories-20260724.md): causal_v1 masks every KV tile fully past
+  # causal_v1 masks every KV tile fully past
   # this wave's last query row, but the loop always ran the full extent. Since a fully-masked tile
   # is a mathematical no-op (weight==0 everywhere -> zero PV contribution, old_m==new_m -> alpha==1,
   # see amd_attention_abi.expand_native_row_softmax_repack), a wave can stop the moment its own last

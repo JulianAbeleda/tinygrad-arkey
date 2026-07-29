@@ -40,8 +40,7 @@ MAP OF THE SCATTERED CODE THIS CENTRALIZES / REPLACES
 - (legacy) combine + V-lane packing: codegen/late/composite_combines.py (online_softmax_state, _pack_online_softmax_v_lanes)
 - (legacy) devectorize V load: codegen/late/reduce_lowering.py (_vectorize_live_v_index, _load_v_at_reduce_pos)
 - (legacy) native swap to the hand kernel: codegen/opt/postrange.py:328-361 -> schedule/wmma.py:545
-- The proven kernel source + ABI (the "base"): produced by extra/llm_research/generate_shared_attention_captures
-  (emits .hip.cpp/.amdisa.s + JSON; ABI = out[slot0], Q[slot1], K[slot2], V[slot3], scale/causal baked CONST)
+- The promoted kernel ABI: out[slot0], Q[slot1], K[slot2], V[slot3], scale/causal baked CONST
 - Loud class-2 diagnostic (safety net): uop/ops.py DISALLOW_BROADCAST site (ScopedValueSpec vs rank-0)
 
 custom_kernel CONTRACT (verified, tensor.py:194 / uop/ops.py:1256)
@@ -77,8 +76,7 @@ _PREFILL_EMITTERS = {"amd_gfx1100": lambda spec, **kw: spec.emit(**kw)}
 
 # RUNTIME DISPATCH TRACE (BoltBeam observability seam)
 # --------------------------------------------------
-# extra/llm_research/prefill/prefill_graph_gemm_route.py already has a "candidate route census"
-# mechanism (record_model_forward_candidate), but it is purpose-built for the
+# The graph-prefill candidate census is purpose-built for the
 # dense-GEMM packed-WMMA roles: (a) it is a no-op unless one_buffer=True, a flag
 # that specifically means "this candidate shares one canonical weight-buffer
 # identity across the whole-model forward" -- a packed-WMMA weight concept that
@@ -88,9 +86,8 @@ _PREFILL_EMITTERS = {"amd_gfx1100": lambda spec, **kw: spec.emit(**kw)}
 # that seam for attention would either require lying about one_buffer (to avoid
 # the no-op) or would record nothing at all (one_buffer=False, per the no-op
 # gate). Rather than overload that seam's semantics, this is a small,
-# attention-specific trace: a dispatch counter + last-geometry identity, so
-# extra/llm_research/prefill/prefill_whole_synced.py can read (not import extra/llm_research/ eagerly from
-# here -- see custom_kernel_attention below) whether/how many times the fused
+# attention-specific trace: a dispatch counter + last-geometry identity, so qualification tooling can read
+# whether/how many times the fused
 # custom-kernel route actually fired during a census window.
 _CUSTOM_KERNEL_ATTENTION_DISPATCH_COUNT: ContextVar[int] = ContextVar(
   "custom_kernel_attention_dispatch_count", default=0)

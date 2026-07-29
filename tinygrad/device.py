@@ -293,7 +293,7 @@ atexit.register(_dump_kernargs_audit)
 
 DISPATCH_TRACE = ContextVar("DISPATCH_TRACE", 0)  # 1 = serialize every dispatch and record it; dump on device error.
 
-# FAULT-TO-DISPATCH CORRELATION PROBE (docs/gpu-fault-fix-scope-20260725.md). dmesg names the faulting VA and
+# FAULT-TO-DISPATCH CORRELATION PROBE. dmesg names the faulting VA and
 # the faulting pid, but never the kernel that was running -- every probe that tried to infer it indirectly came
 # back ambiguous. This is "the one probe that cannot come back ambiguous": force at most one dispatch to ever
 # be in flight (synchronize after every single dispatch instead of only when wait=True), record its name+pid
@@ -340,8 +340,7 @@ def _dispatch_trace_dump(dev, exc:BaseException) -> None:
 
 ALLOC_TRACE = ContextVar("ALLOC_TRACE", 0)  # 1 = record every allocation and dispatch to a fixed ring; dump at exit or via alloc_trace_dump().
 
-# FAULT-TO-ALLOCATION ATTRIBUTION RING (docs/gpu-page-fault-population-analysis-20260725.md, the TCP /
-# real-VA fault population -- BUG 2 in docs/gpu-fault-fix-scope-20260725.md). Those faults land in
+# FAULT-TO-ALLOCATION ATTRIBUTION RING. Observed real-VA faults land in
 # 0x00007xxx_xxxxx000, which is exactly where KFDIface.alloc's anon_mmap(0, ...) puts tinygrad's own buffers
 # (ops_amd.py:795-823: tinygrad never chooses the GPU VA, the host mmap does, and the KFD ioctl echoes it
 # back -- `assert addr == buf == mem.va_addr`, ops_amd.py:819). DISPATCH_TRACE (above) answers "what kernel

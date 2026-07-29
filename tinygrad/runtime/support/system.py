@@ -161,7 +161,7 @@ class PCIDevice:
     self.pcibus, self.irq_poller = pcibus, None
 
     try: FileIOInterface(f"/sys/bus/pci/devices/{self.pcibus}/enable", os.O_RDWR)
-    except PermissionError: raise PermissionError(f"Cannot access PCI device {pcibus}: run `extra/hardware/amdpci/setup_python_cap.sh` or use sudo")
+    except PermissionError: raise PermissionError(f"Cannot access PCI device {pcibus}: grant the Python process PCI access or use sudo")
 
     if FileIOInterface.exists(f"/sys/bus/pci/devices/{self.pcibus}/driver"):
       FileIOInterface(f"/sys/bus/pci/devices/{self.pcibus}/driver/unbind", os.O_WRONLY).write(self.pcibus)
@@ -660,7 +660,7 @@ class APLRemotePCIDevice(RemotePCIDevice):
     # Qualification may use only the audited locally-built app. Installation and extension replacement
     # require the explicit development-install approval path; a runtime client must never perform them.
     if not os.path.isfile(cls.APP_PATH):
-      raise RuntimeError("Audited TinyGPU app is not installed; use extra/usbgpu/tbgpu/installer/install_nosip.sh with explicit approval")
+      raise RuntimeError("TinyGPU provider is not installed; install and activate a compatible provider with explicit approval before connecting")
     identity = subprocess.run(["codesign", "-dv", cls.APP_PATH], capture_output=True, text=True, check=False)
     if identity.returncode != 0 or "Identifier=org.tinygrad.arkey.tinygpu.installer" not in identity.stderr:
       raise RuntimeError("Installed TinyGPU app is not the audited org.tinygrad.arkey development build")
