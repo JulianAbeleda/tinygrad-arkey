@@ -1,13 +1,14 @@
 # TinyGPU v11 synchronous power-confirmation candidate and handoff
 
-Collected: 2026-07-29T02:26:01Z through 2026-07-29T02:43:27Z
+Collected: 2026-07-29T02:26:01Z through 2026-07-29T02:55:19Z
 
 Status: v10 runtime diagnosis, v11 implementation, clean-commit focused tests,
 clean analyzer, signed build verification, and the single audited v11
-installation are complete. v11 is registered but did not bind during the
-same-boot replacement, so one reboot is pending. Do not run the installer
-again. No reset, replug, AMD initialization, TinyGPU socket server, A1, or
-workload ran.
+installation are complete. Two post-install boots occurred. v11 started and
+published on both, but the current boot lost the ACIO/PCIe link 78.447 seconds
+after publication. R6.1 later stopped at the unavailable handshake. Do not run
+the installer again. No reset, replug, AMD initialization, TinyGPU socket
+server, A1, or workload ran.
 
 Scope:
 `docs/task_workflow/input/egpu-usb4-v11-sync-power-confirmation-scope-20260729.md`.
@@ -226,3 +227,28 @@ than a later documentation HEAD. It must only read registration and installed
 bundles; it must not rebuild, reinstall, activate, reset/replug, or initialize
 the GPU. A1 remains unauthorized until both R6.1 and provenance admission are
 green.
+
+## Post-reboot R6.1 result
+
+The exact audit is recorded in
+`docs/task_workflow/output/egpu-usb4-v11-post-reboot-R6.1-20260729T025229Z.md`.
+Boot history showed two post-install boots. The first launched and published
+v11 and retained the DEXT until that boot was shut down 205.055 seconds later;
+no R6.1 payload from it is admitted. On the second boot, installed v11 unique ID
+`0459ffba1fd9685605db1efbfa432ae2efa18e9bd84a87b55b8edb55092750a5`
+started and published at `2026-07-29T02:48:59.369Z`.
+
+At `02:50:17.816Z`, repeated ACIO Gen2/3 errors on both lanes preceded a
+zero-link PCI rescan, removal of the ASM2464 and all four AMD functions,
+force-close of `tinygpu`, and `stopUsingTunnel`. The locked R6.1 audit began
+after that loss. Boot, v11 registration, and native registration gates passed;
+`keepalive handshake` returned `unavailable` with exit 3. The audit stopped
+without querying selectors 5 or 10, `ioreg`, or the endpoint, and without
+running provenance finalization or A1.
+
+The v11 confirmation predicate therefore lacks a pre-loss runtime payload, and
+R6.1 is failed. The observed upstream loss also shows that the running child
+service did not keep the ACIO/PCIe path present on this boot. Do not retry or
+recover under this handoff. Any next hardware transition needs a new explicit
+scope; source-only follow-up should move to the ACIO/Thunderbolt tunnel-policy
+and physical-link boundary.
