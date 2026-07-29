@@ -1,7 +1,7 @@
 """Typed execution boundary for explicit LLM kernel programs.
 
 The boundary carries declared provenance; it never infers provenance from a
-route, program, or emitter name.  ``Tensor.custom_kernel`` remains the single
+route, program, or emitter name.  ``Tensor.uop_program`` remains the single
 low-level transport used by these explicit program paths.
 """
 from __future__ import annotations
@@ -44,7 +44,7 @@ def _execute_outputs(output: Tensor, inputs: tuple[Tensor, ...], program: Kernel
   if program.provenance not in allowed:
     allowed_values = ", ".join(sorted(provenance.value for provenance in allowed))
     raise ValueError(f"{boundary} does not accept {program.provenance.value}; expected one of: {allowed_values}")
-  return output.custom_kernel(*inputs, fxn=program.emitter)
+  return output.uop_program(*inputs, fxn=program.emitter)
 
 
 def _execute(output: Tensor, inputs: tuple[Tensor, ...], program: KernelProgram,
