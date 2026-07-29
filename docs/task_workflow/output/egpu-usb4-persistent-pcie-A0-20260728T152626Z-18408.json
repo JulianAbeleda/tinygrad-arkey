@@ -1,0 +1,21 @@
+{
+  "command_results": [],
+  "commands": [],
+  "context": null,
+  "environment": {"AM_REMOTE_DISCOVERY_PROFILE": "gfx1100_744c", "AM_REMOTE_SKIP_RESIZE_BAR": "1", "DEV": "AMD", "JIT": "1", "PYTHONPATH": "."},
+  "first_failure": {"message": "audited install provenance and live binaries are required", "type": "QualificationError"},
+  "gate": "A0",
+  "install_provenance": null,
+  "lock": {
+    "argv": ["/Users/julianabeleda/env/tinygrad-arkey/.venv/bin/python", "extra/usbgpu/tests/qualify.py", "--gate", "A0"],
+    "cwd": "/Users/julianabeleda/env/tinygrad-arkey",
+    "git_head": "93403d7b5fbb2424da4e7db64d39b2ead3d9f8e0",
+    "nonce": "a41e154dfbe946d5b9aa66a482070269",
+    "pid": 18400,
+    "schema": "tinygrad.gpu.lock.v1",
+    "started_monotonic_ns": 3448364965004583,
+    "started_unix_ns": 1785252386669782000
+  },
+  "samples": [],
+  "status": "failed"
+}
