@@ -2,7 +2,10 @@
 
 Date: 2026-07-29
 
-Status: approved scope; implementation not started
+Status: approved scope; implementation in progress in local, uncommitted working trees. M0-M4 contracts are
+implemented and focused-tested, M5-M6 have bounded Metal smoke evidence only, and M9 has static/raw roofline analysis
+plus a non-authoritative streaming proxy. No finite exact-workload search, route binding, or paired whole-model M9
+evaluation has run.
 
 Branch boundary: design and provider work begin on tinygrad `exp`. This scope does not authorize AMD/eGPU work,
 promotion to `dev`/`master`, or a hand-authored Metal kernel.
@@ -12,9 +15,10 @@ promotion to `dev`/`master`, or a hand-authored Metal kernel.
 Make Apple Metal a real, fail-closed target in the existing machine-search system:
 
 ```text
-BubbleBeam                     enumerate legal compiler-owned candidates
-  -> FutureSight               reject/prioritize candidates using static facts
-  -> BoltBeam                  own the finite request, measured ranking, evidence, ledger, and promotion decision
+BubbleBeam                     propose legal compiler-owned dimension values
+  -> BoltBeam                  instantiate/hash the declared finite candidate population
+  -> FutureSight               reject/prioritize canonical candidates using static facts
+  -> BoltBeam                  own measured ranking, evidence, ledger, and promotion decision
   -> tinygrad EXP provider     admit, compile, execute, check, and time candidates on Metal
   -> ordinary tinygrad Metal   render MSL, compile MTLB, and execute the selected schedule
 ```
@@ -23,9 +27,10 @@ The first proof workload is Qwen3-8B Q4_K_M decode on the local Apple M4. Compat
 replayable search can finish and report a correct measured population, even if every candidate loses and the generic
 Metal control remains selected. Performance promotion is a later outcome and requires a measured whole-model win.
 
-This is machine search under the repository's practical definition: people define the semantic workload, legal
-dimensions, compiler primitives, and gates; software enumerates candidates, the hardware measures them, and the
-measured policy selects or rejects the result. No hand-written MSL or route-local UOp kernel is introduced.
+This is machine search under the repository's practical definition: people define the semantic workload, candidate
+axes, compiler primitives, and gates; BubbleBeam proposes legal values, BoltBeam performs the authoritative finite
+expansion and hashing, the hardware measures candidates, and measured policy selects or rejects the result. No
+hand-written MSL or route-local UOp kernel is introduced.
 
 ## 2. Current truth
 
@@ -39,31 +44,31 @@ measured policy selects or rejects the result. No hand-written MSL or route-loca
 | Metal target facts | Device family, name, working-set budget, allocation size, thread limits, and threadgroup memory are available through Metal | Expose through one provider fact adapter |
 | generic quant path | Unsupported AMD routes fall back to the ordinary GGUF dequant + tinygrad graph | Reuse as correctness and performance control |
 | tinygrad scheduler vocabulary | `Opt`/`OptOps` already represent local, group, upcast, unroll, coalesce, tensor-core, and related choices | Reuse as candidate plan vocabulary |
-| BoltBeam bounded search | Validates a finite population, isolates workers, records blocked/incorrect/measured rows, ranks by an objective, and fails closed on partial measurement | Reuse unchanged except for a target-neutral candidate contract |
+| BoltBeam bounded search | Validates a finite population, isolates workers, records blocked/incorrect/measured rows, ranks by an objective, and fails closed on partial measurement | Reused through candidate v2, resolved-target, and explicit execution-regime contracts |
 | BoltBeam policy/evidence | Already separates execution from evaluation and requires correctness, route binding, speed, memory fit, and rollback | Reuse as the only promotion authority |
-| BubbleBeam/FutureSight | Already demonstrates deterministic candidate enumeration/static ranking for Q4 packed access | Generalize its engine; do not copy it into a Metal fork |
+| BubbleBeam/FutureSight | Proposes legal values from supplied workload/target/compiler facts and statically assesses BoltBeam-hashed candidates | Reuse the shared engine and historical wrapper; do not copy it into a Metal fork |
 
 The current local diagnostic baseline is 11.05 tok/s mean for tinygrad EXP and 20.51 tok/s for local llama.cpp Metal on
 the same Qwen3-8B Q4_K_M file. Those numbers identify the opportunity; they do not authorize a route or establish the
-cause. The tinygrad command and context are recorded in `docs/dtype-orthogonality-migration-20260729.md`; the llama.cpp
-observation must be recaptured by M9 under the final paired protocol before it becomes a durable authority.
+cause. The recorded tinygrad command sets `--max_context 128` but does not use `--benchmark-context`, so its three
+samples start from a one-token seed and are not fixed-depth context-128 authority. The llama.cpp `tg128` observation
+also omitted `-d 128`. Both must be recaptured by M9 under the final matched-depth protocol.
 
-### 2.2 What is only nominally compatible
+### 2.2 What remains incomplete
 
-| Surface | Declared state | Actual blocker |
+| Surface | Implemented state | Remaining blocker |
 | --- | --- | --- |
-| `apple_metal` target | Registered in BoltBeam | `backend_status=descriptor_only`; reachability rejects every candidate |
-| tinygrad runner plan | Knows AMD and NVIDIA device mappings | Metal resolves to no `DEV=METAL` environment |
-| autoscan | Can select recent NVIDIA targets | No Darwin/Metal discovery or exact Apple target resolution |
-| `tinygrad-profile-events` | Claims `apple_metal` support | Importer discards non-AMD events, assumes a 960 GB/s AMD peak, and decodes resources only from AMD ELF |
-| provider commands | Emit tinygrad trace/operand commands | Commands point to `extra/qk/bench.py` and workers removed by the EXP cleanup |
-| full-kernel candidate schema | Called target-bound | Its required `lds`, `wmma`, `waitcnt`, RDNA lane ownership, and VGPR fields encode an AMD prefill design |
-| tinygrad admission adapter | Exists in BoltBeam | Hardcodes one gfx1100 Qwen3-8B prefill workload and points to a removed worker |
-| full-kernel emit descriptor | Data driven | Contains one exact AMD prefill row only; no quantized Metal decode workload |
-| Metal graph profile | Emits a graph event | Per-kernel times are evenly divided across the command buffer and are not measurement authority |
+| target resolution | `apple_m4_10c` exact descriptor, Darwin autoscan, stable resolved-target hash, and live provider facts are implemented | Backend remains descriptor-only until the measured compatibility loop closes; unknown Apple variants still fail closed |
+| candidate/search contract | v1 compatibility plus strict target-neutral v2, finite population, generic heuristic control, and explicit execution regime are implemented | No complete exact-role population has run on hardware |
+| BubbleBeam/FutureSight | Input-derived dimension proposals and static assessments keyed by BoltBeam candidate hashes are implemented | Static results remain non-performance evidence, as required |
+| provider | One JSON-lines `describe/admit/compile/check/measure` worker and BoltBeam subprocess adapter are implemented | Dirty-tree/pinned replay and a complete exact-workload run remain unproven |
+| Metal compile/check | Explicit and heuristic schedules compile; bounded Q4_K/Q6_K nonzero oracle checks pass and MSL/MTLB hashes are emitted | The executed program was the bounded `m=1,n=256,k=256` fixture, not the exact largest role |
+| Metal timing | Eager `wait=True` timing and raw-sample output exist | Exact-role candidate/control timing has not run; no candidate timing row is promotion evidence yet |
+| Metal graph profile | Aggregate graph events remain available | Evenly divided entry durations remain estimates and cannot rank candidates |
+| M9 | Exact GGUF packed-weight/FLOP inventory and raw-bandwidth placement are implemented; one aggregate stream proxy was smoked | No fixed-depth paired whole-model A/B, exact workload traffic attribution, durable streaming artifact, refreshed llama control, or policy verdict exists |
 
-The compatibility job is therefore not flipping `backend_status`. It is closing the discovery, candidate, provider,
-measurement, and promotion loop without reintroducing the deleted AMD research stack.
+The compatibility job is therefore not flipping `backend_status`. It is completing the exact-workload measurement and
+promotion loop without reintroducing the deleted AMD research stack.
 
 ## 3. Architectural principles and hard gates
 
@@ -72,8 +77,9 @@ Every implementation packet must pass these gates.
 1. **Reuse before addition.** Extend the current target registry, bounded-search controller, evidence types, compiler
    plan vocabulary, and runtime. A new Metal-only controller, ranker, ledger, benchmark schema, or route policy is a
    design failure.
-2. **One authority per decision.** BubbleBeam enumerates, FutureSight statically orders/prunes, BoltBeam ranks measured
-   results and promotes, tinygrad admits/executes. Static FutureSight score may never become promotion evidence.
+2. **One authority per decision.** BubbleBeam proposes legal dimension values, BoltBeam instantiates the finite
+   canonical population, FutureSight statically orders/prunes it, BoltBeam ranks measured results and promotes, and
+   tinygrad admits/executes. Static FutureSight score may never become promotion evidence.
 3. **Central target resolution.** Registry descriptors plus measured scan facts resolve into one target profile. No
    backend module may maintain a second table for wave width, memory, compiler arch, or collector support.
 4. **One provider protocol.** Replace the stale admission-only and measurement-only worker seams with one versioned
@@ -110,14 +116,15 @@ Every implementation packet must pass these gates.
 
 ### 4.2 BubbleBeam/FutureSight owns
 
-- legal candidate-dimension generation from the workload, target facts, and tinygrad option vocabulary;
-- deterministic candidate identity before execution;
-- static legality/feasibility rejection and search-order priority;
+- legal dimension-value proposals from supplied workload facts, live target/compiler facts, and caller-declared axes;
+- static legality/feasibility rejection and search-order priority over BoltBeam-expanded canonical candidates;
+- deterministic assessment/rejection reports keyed by the candidate hash supplied by BoltBeam;
 - no runtime dispatch, final performance rank, policy, or promotion decision.
 
-The current `extra/llm_research/bubblebeam_futuresight.py` must be split into reusable candidate/scoring primitives and
-an AMD historical compatibility wrapper. Metal uses the shared primitives plus target data, not copied Q4 lane-map
-logic or imported AMD route manifests.
+BoltBeam remains the sole owner of candidate schema, hash, and finite Cartesian expansion. The current
+`extra/llm_research/bubblebeam_futuresight.py` must expose reusable dimension-proposal and static-assessment primitives
+plus an AMD historical compatibility wrapper. Metal uses those shared primitives plus supplied facts, not copied Q4
+lane-map logic or imported AMD route manifests.
 
 ### 4.3 tinygrad owns
 
@@ -222,6 +229,11 @@ either repository can evolve independently under explicit schema versions.
 
 ### 8.1 Candidate timing
 
+- The promotion/search regime is an explicit request field:
+  `{"shape_mode":"exact_workload","warmups":W,"samples":N}`. In this mode the provider executes the candidate's
+  exact `m/n/k`; it may not silently clamp or substitute a fixture.
+- `bounded_fixture` is a separate compile/correctness development regime with an explicit `fixture_shape`. Its timing
+  cannot produce a `MEASURED` exact-workload row, rank a search candidate, or support promotion.
 - Compile once outside the measurement samples.
 - Use an isolated eager kernel/program execution with `wait=True` and Metal command-buffer GPU timestamps.
 - Record warmup count, every raw GPU duration, median, dispersion, launch geometry, and synchronization mode.
@@ -232,6 +244,10 @@ either repository can evolve independently under explicit schema versions.
 
 Metal graph events may support aggregate tracing, but their current evenly divided entry durations are explicitly
 `estimated` and cannot rank candidates.
+
+Current hardware evidence is bounded-fixture smoke: `m=1,n=256,k=256` Q4_K/Q6_K correctness passed. A candidate whose
+metadata named a larger role still executed that bounded fixture unless the worker supplied the exact shape. No exact
+role candidate/control timing has run.
 
 ### 8.2 Correctness
 
@@ -254,9 +270,10 @@ shared evidence schema records unsupported fields with reason and provider capab
 
 ### 8.4 Whole-model authority
 
-Candidate microtiming answers whether a schedule improves its kernel. Promotion requires the normal Qwen3-8B CLI path
-at context 128 with a same-session generic Metal A/B and route trace. llama.cpp is an external control and gap tracker,
-not the promotion baseline for a tinygrad candidate.
+Candidate microtiming answers whether a schedule improves its kernel. Promotion requires the normal Qwen3-8B path at
+a fixed decode depth of 128 tokens with a same-session generic Metal A/B and route trace. `--max_context 128` alone
+does not establish that depth; the harness must prefill to the declared depth and leave capacity for measured decode
+samples. llama.cpp is an external control and gap tracker, not the promotion baseline for a tinygrad candidate.
 
 The existing 11.05/20.51 tok/s diagnostics must be refreshed under the final protocol. Compatibility does not require
 matching llama.cpp. A performance claim requires at least:
@@ -268,6 +285,48 @@ matching llama.cpp. A performance claim requires at least:
   threshold exists);
 - no memory, compile, or correctness regression;
 - a one-switch rollback to the ordinary generic Metal route.
+
+### 8.5 Decode roofline deliverable
+
+Reuse BoltBeam's existing constant-free roofline math and evidence/report surfaces. Do not add a Metal roofline engine.
+The Metal provider supplies target/model measurements; BoltBeam owns the derived placement and report.
+
+The report must keep three differently scoped quantities separately labeled:
+
+1. **Raw advertised bandwidth roof:** the target's advertised bandwidth and any independently sourced/observed compute
+   peak. Apple documents the base 10-core M4 Mac mini at 120 GB/s memory bandwidth. This is a raw weight-read ceiling,
+   not a measured sustained result. An absent compute peak remains `unknown` until an independent measurement exists.
+2. **Aggregate read+write streaming proxy:** the provider's current ordinary Tensor probe performs one device read and
+   one device write and reports `(read_bytes + write_bytes) / GPU_time`. It must publish source bytes, aggregate traffic,
+   raw samples, storage mode, and missing cache/thermal facts. It is not a weight-read-only workload roof and cannot be
+   relabeled `practical_streaming` or used as a promotion denominator until cache exclusion and traffic comparability
+   are proven.
+3. **Exact workload placement:** exact-role and whole-model measurements joined to GGUF-derived packed weight bytes,
+   semantic FLOPs, and measured activation/KV/intermediate traffic where available. Weight-equivalent GB/s must remain
+   distinct from observed physical traffic. Percentages may be reported only against a scope-compatible roof/proxy.
+
+The current diagnostic, derived directly from the selected GGUF tensor table, is useful for sizing but is not the final
+M9 authority:
+
+| Quantity | Diagnostic value |
+| --- | ---: |
+| active packed weight lower bound per decoded token | 4,671,768,832 bytes |
+| dense matrix work lower bound per token | 15,136,194,560 FLOPs |
+| lower-bound arithmetic intensity | 3.240 FLOP/byte |
+| raw M4 bandwidth | 120 GB/s |
+| raw bandwidth floor / ceiling | 38.93 ms/token / 25.69 tok/s |
+| tinygrad EXP at 11.05 tok/s | 51.62 GB/s weight-equivalent, 43.0% of raw advertised roof, 0.167 semantic TFLOP/s |
+| llama.cpp at 20.51 tok/s | 95.82 GB/s weight-equivalent, 79.8% of raw advertised roof, 0.310 semantic TFLOP/s |
+
+The byte lower bound streams every matrix tensor once, reads only one row from `token_embd.weight`, and excludes
+unmeasured reload, activation, KV-cache, allocator, and cache effects. The FLOP lower bound counts two operations per
+matrix MAC and excludes attention/nonlinear work. Therefore percentages are diagnostic placement, not proof of
+physical DRAM traffic. The final report must never infer that a 43% placement proves bandwidth is the root cause.
+
+The current aggregate proxy is one direct, non-durable 256 MiB-source/256 MiB-destination smoke: one warmup, three
+samples at 6.096/6.178/6.424 ms, median 86.89 aggregate GB/s. Cache capacity/residency and thermal state were not
+proven. This result is useful for validating the provider measurement path only; a scope-compatible measured
+weight-read roof remains unknown, and no exact-role or paired whole-model workload placement has run.
 
 ## 9. First search workload
 
@@ -282,13 +341,26 @@ Start with decode, not prefill:
 
 ### 9.2 Workload derivation
 
-Profile the real selected GGUF and derive role/shape/quant rows from its tensor inventory. Do not hand-copy a single
-`ffn_gate_up` shape. Begin with the largest measured decode role share, then cover the remaining Q4_K roles and Q6_K
-`lm_head` only if attribution shows it is material.
+Profile the real selected GGUF and derive role/shape/quant rows from its tensor inventory; do not hand-copy a role
+shape. The current exact inventory identifies `ffn_gate_up` (gate plus up, 72 tensors) as the largest packed-weight
+role contribution: 2,038,431,744 bytes/token (43.63% of the packed-weight lower bound) and 47.88% of the counted dense
+matrix FLOPs. Cover the remaining Q4_K roles and Q6_K `lm_head` only after this first role family.
+
+The first exact execution row in that largest decode role family is:
+
+```text
+m=1, n=12288, k=4096
+A[1,4096] @ W[12288,4096]^T -> C[1,12288]
+```
+
+Here `m=1` is batch-one decode, `n=12288` is the output-row dimension, and `k=4096` is the reduction/input dimension.
+Its request must use `shape_mode=exact_workload`; `m=1,n=256,k=256` remains only a bounded provider smoke fixture.
+Candidate metadata carrying the exact role does not count unless compile, correctness, and timing evidence record the
+same executed shape.
 
 ### 9.3 Initial bounded axes
 
-BubbleBeam should enumerate legal combinations from target/compiler facts, initially including:
+BubbleBeam should propose legal values from target/compiler facts for BoltBeam to expand, initially including:
 
 - group/reduction width;
 - local threads/block size;
@@ -298,14 +370,31 @@ BubbleBeam should enumerate legal combinations from target/compiler facts, initi
 - reduction placement and subgroup strategy;
 - generic control/heuristic schedule as an explicit population member.
 
-FutureSight may reject non-divisible, over-threaded, over-memory, unsupported-transform, or statically dominated rows
-and determine measurement order. BoltBeam must retain the declared finite population and the reason for every
-unmeasured rejection. Search dimensions must be data, not nested `if target == Metal` policy.
+BoltBeam performs the sole finite Cartesian expansion. FutureSight may reject non-divisible, over-threaded,
+over-memory, unsupported-transform, or statically dominated rows and determine measurement order. BoltBeam must
+retain the declared finite population and the reason for every unmeasured rejection. Search dimensions must be data,
+not nested `if target == Metal` policy.
 
 Prefill and `simdgroup_matrix` become a second workload after the decode loop is proven. They must reuse the same
 candidate/provider/evidence contracts with different legal dimensions.
 
 ## 10. Implementation packets
+
+Current status refers to the local uncommitted working trees, not a landed compatibility claim:
+
+| Packet | Current status |
+| --- | --- |
+| M0 | Implemented/focused-tested: versioned contracts, compatibility manifest, and drift/fail-closed tests exist |
+| M1 | Implemented/focused-tested: exact M4 registry/autoscan/resolved-target plus live provider facts; target remains descriptor-only pending the measured loop |
+| M2 | Implemented/focused-tested: strict v2, unchanged v1 identity, finite expansion/control, and execution-regime validation |
+| M3 | Implemented/focused-tested: modular input-driven proposals and static assessment; BoltBeam remains schema/hash/expansion authority |
+| M4 | Implemented/focused-tested: one JSON-lines worker and one BoltBeam subprocess adapter cover all five actions |
+| M5 | Partial hardware smoke: bounded generated Metal programs compile for explicit/heuristic schedules and emit source/MTLB/plan hashes; exact `1x12288x4096` compilation is unrun |
+| M6 | Partial hardware smoke: bounded `1x256x256` Q4_K/Q6_K oracle checks pass; exact-role candidate/control correctness and timing are unrun |
+| M7 | Not run: no finite exact-workload population result |
+| M8 | Not run: no selected plan is bound; generic fallback remains the only runtime behavior |
+| M9 | Partial analysis only: exact GGUF inventory/raw advertised roof and a non-authoritative aggregate read+write proxy exist; no paired whole-model or policy verdict |
+| M10 | Pending after durable artifacts and landed implementation |
 
 ### M0 — freeze contracts and drift tests
 
@@ -348,13 +437,16 @@ plan, and two semantically identical canonical candidates hash identically.
 
 Owner: tinygrad EXP research.
 
-- Extract target-neutral candidate, dimension, static-score, and rejection types from the current Q4 script.
+- Extract target-neutral dimension-proposal, static-assessment, and rejection types from the current Q4 script.
 - Keep the historical Q4 lane-map wrapper behavior stable.
-- Add a tinygrad schedule vocabulary adapter and Metal fact consumer.
-- Emit candidate v2 JSON and a deterministic ordering/rejection report.
+- Add a tinygrad schedule vocabulary adapter and live target-fact consumer that filters caller-declared paths/values
+  without expanding their Cartesian product.
+- Pass legal dimension mappings to BoltBeam's canonical candidate instantiator, then emit a deterministic static
+  ordering/rejection report keyed only by BoltBeam-supplied candidate hashes.
 
-Gate: no imports from route manifests in the shared engine; AMD historical tests remain stable; Metal candidates are
-derived entirely from inputs; static ranking cannot emit a promotion verdict.
+Gate: no imports from route manifests in the shared engine; AMD historical tests remain stable; proposals are derived
+entirely from inputs; BoltBeam remains the only candidate schema/hash/finite-expansion authority; static ranking cannot
+emit a promotion verdict.
 
 ### M4 — one tinygrad provider worker
 
@@ -385,7 +477,8 @@ fail admission before execution; no handwritten MSL/UOp hot kernel is introduced
 Owner: tinygrad provider plus BoltBeam evidence validator; local Metal required.
 
 - Implement Q4_K then Q6_K semantic fixtures.
-- Execute real role shapes with resident identical buffers.
+- Execute the first exact role at `m=1,n=12288,k=4096` with resident identical buffers; bounded fixtures remain
+  compile/correctness smoke only.
 - Measure exact eager command-buffer GPU time with raw samples.
 - Mark MetalGraph entry timing non-authoritative in capability/evidence output.
 - Generalize `tinygrad_profile_events` device filtering and resource extraction into backend adapters.
@@ -425,6 +518,10 @@ Owner: BoltBeam evaluation; local Metal required.
 
 - Run paired generic/candidate Qwen3-8B decode with final warmup/sample protocol.
 - Record memory, compile-cache, correctness, route-binding, and stability evidence.
+- Retain the 120 GB/s advertised raw roof, capture the aggregate read+write stream probe under its own proxy label,
+  and derive exact-workload placement with existing BoltBeam math only when the traffic scopes are comparable.
+- Report per-role work/bytes and gap attribution without inventing unsupported hardware counters; leave practical
+  weight-read bandwidth unknown until a scope-compatible measurement exists.
 - Refresh the local llama.cpp Metal control separately.
 - Promote only through centralized policy; otherwise retain a measured refutation/reopen condition.
 
@@ -471,7 +568,7 @@ lane. M8 is conditional: a complete no-win search skips runtime binding and proc
 | Autoscan | Darwin fixture, multiple/absent devices, explicit target preservation, registered/unregistered result |
 | Runner plan | `DEV=METAL`, no AMD `ARCH`, canonical worker command, portable paths |
 | Candidate schema | v1 AMD compatibility, v2 canonicalization, orthogonal dtype/quant/layout, target vocabulary rejection |
-| Generator | deterministic population/order, budget bound, static rejection reasons, no promotion output |
+| Generation | deterministic BubbleBeam value proposals/static assessments, BoltBeam-owned population/hash/budget, no static promotion output |
 | Provider protocol | every action, malformed/stale/hash mismatch, dirty tree, timeout, no hardware, unsupported plan |
 | Metal compile | distinct plans, source/MTLB hashes, launch limits, compile-cache isolation |
 | Correctness | Q4_K blocks, Q6_K blocks, ragged/guarded shape, real role output, repeated finite results |
@@ -479,7 +576,7 @@ lane. M8 is conditional: a complete no-win search skips runtime binding and proc
 | Evidence | target/compiler binding, unsupported resources explicit, no AMD defaults, content hashes |
 | Search | complete/partial/incorrect/blocked populations, deterministic tie break, control candidate present |
 | Runtime | exact bind, all mismatch fallbacks, route trace, rollback, no research import |
-| Model | Qwen3-8B load/decode, context 128, memory admission, output stability, generic/candidate A/B |
+| Model | Qwen3-8B load/decode at fixed depth 128 with sufficient capacity, memory admission, output stability, generic/candidate A/B |
 | Policy | no promotion without correctness/speed/memory/route/rollback; refutation carries reopen condition |
 | Documentation | commands resolve, files exist, commits/hashes pinned, figures have one authority |
 
