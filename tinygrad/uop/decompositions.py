@@ -283,6 +283,9 @@ def magicgu(vmax:int, d:int) -> tuple[int,int]:
   assert False
 
 def fast_idiv(ren: Renderer, x: UOp, d: int, dont_cast=False) -> UOp|None:
+  from tinygrad.renderer.cstyle import MetalRenderer
+  # Metal's optimized compiler has historically miscompiled the reciprocal-multiply division transform.
+  if isinstance(ren, MetalRenderer): return None
   # If d is a power of two this is not valid for signed ints!
   is_unsigned = x.vmin>=0 or x.dtype in dtypes.uints
   assert d>0, "Sign should have been taken out of divisor"
