@@ -706,11 +706,11 @@ class AMDAllocator(HCQInterfaceAllocator['AMDDevice']):
                      supports_copy_from_disk=dev.has_sdma_queue, supports_transfer=dev.has_sdma_queue and not dev.is_usb())
 
   @property
-  def allocation_granularity(self) -> int|None:
-    # PCIIfaceBase.alloc rounds device-memory allocations >=8 MiB to 2 MiB. Publish that exact large-allocation
-    # policy so path-based GGUF admission can account for its backing buffer on direct/remote PCI hosts where
-    # rocminfo is unavailable. KFD continues to use its live rocminfo fallback rather than an inferred value.
-    return 2 << 20 if self.dev.is_am() else None
+  def allocation_granularity(self) -> int:
+    # KFD VRAM is page-granular. The AM PCI/USB path deliberately promotes default-VRAM allocations of at least
+    # 8 MiB to 2 MiB pages (PCIIfaceBase.alloc); selected GGUF backing allocations are always in that large tier.
+    # Device-facts consumers use this value for the one whole-file backing allocation and a conservative live reserve.
+    return (2 << 20) if self.dev.is_am() else (4 << 10)
 
   def memory_stats(self) -> tuple[int, int]|None:
     """Return the live allocatable VRAM heap total/free bytes for direct AMD interfaces."""
@@ -718,7 +718,6 @@ class AMDAllocator(HCQInterfaceAllocator['AMDDevice']):
     heap = self.dev.iface.dev_impl.mm.pa_allocator
     free = sum(size for size, _, _, is_free in heap.blocks.values() if is_free)
     return heap.size, free
-
   def _alloc(self, size:int, options:BufferSpec) -> HCQBuffer:
     return self.dev.iface.alloc(size, host=options.host, uncached=options.uncached, cpu_access=options.cpu_access or not self.dev.has_sdma_queue)
 
