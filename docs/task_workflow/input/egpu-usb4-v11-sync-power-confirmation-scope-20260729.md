@@ -2,10 +2,11 @@
 
 Date: 2026-07-29
 
-Status: implementation and initial host-side verification complete. The
-candidate is not installed. The currently active v10 DEXT remains fail-closed
-in `active_degraded`; no reset, replug, AMD initialization, socket server, A1,
-or workload is authorized by this source scope.
+Status: implementation commit `544bde177` and clean-commit host-side
+verification are complete. The candidate is not installed. The currently
+active v10 DEXT remains fail-closed in `active_degraded`; no reset, replug, AMD
+initialization, socket server, A1, or workload is authorized by this source
+scope.
 
 Repository/worktree: `/Users/julianabeleda/env/tinygrad-arkey-exp`, branch
 `exp`, starting HEAD `eaeff7ee89092e906d109e6d2bdeb2442fd83e7e`.
@@ -115,3 +116,6 @@ and downgrade-zero predicates remain unchanged.
 Only after R6.1 is entirely green may the host-only provenance-finalization
 checkpoint and A1 be considered. Reset/replug, AMD initialization, the socket
 server, and workloads remain outside this first diagnostic boot.
+
+The clean verification and exact operational handoff are recorded in
+`docs/task_workflow/output/egpu-usb4-v11-sync-power-confirmation-candidate-20260729T024038Z.md`.
