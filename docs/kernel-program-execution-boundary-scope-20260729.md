@@ -8,7 +8,7 @@ Promotion direction: implement and validate on `exp`, promote the production-onl
 
 `Tensor.uop_program` is a low-level graph-construction mechanism. Its name does not describe who authored a program, how a configuration was selected, or whether the call is production, oracle, or research-only. The current promoted LLM routes call it directly, which can make a machine-generated/search-selected program look like a hand-tuned kernel.
 
-The method itself is not wrong and remains a generic tinygrad API. The architectural error is exposing that transport primitive at every route call site without typed lifecycle/provenance context. `Tensor.custom_kernel` is retained silently as the upstream-compatibility spelling.
+The method itself is not wrong and remains a generic tinygrad API. The architectural error is exposing that transport primitive at every route call site without typed lifecycle/provenance context. The former `Tensor.custom_kernel` spelling was subsequently removed from this fork.
 
 ## Outcome
 

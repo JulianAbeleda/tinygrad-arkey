@@ -36,8 +36,7 @@ AST-based tests enforce that:
 - production LLM source cannot import or call oracle/research executors;
 - EXP/dev runtime, benchmark, qualification, and campaign source cannot call `.custom_kernel(...)` directly.
 
-Tests that directly exercise the generic Tensor mechanism remain allowed. `Tensor.custom_kernel` remains a silent
-upstream-compatibility spelling; it does not assign provenance to a caller.
+Tests that directly exercise the generic Tensor mechanism use `Tensor.uop_program`; the former Tensor compatibility spelling was subsequently removed.
 
 ## Commit map
 

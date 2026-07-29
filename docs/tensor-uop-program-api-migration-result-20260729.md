@@ -4,6 +4,8 @@ Date: 2026-07-29
 
 Status: complete on EXP, validated through dev, and validated on master. No AMD device or eGPU action was used.
 
+Superseded compatibility decision: the temporary `Tensor.custom_kernel` wrapper described below was removed later on 2026-07-29 at the user's direction. `Tensor.uop_program` is now the only Tensor-level API; the internal `UOp.custom_kernel` substrate remains.
+
 ## Result
 
 `Tensor.uop_program(...)` is now the canonical descriptive API for building a lazy opaque UOp program over writable Tensor buffers.
