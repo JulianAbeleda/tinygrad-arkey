@@ -1,9 +1,14 @@
 import unittest
-from tinygrad.device import CompileError, Device, BufferSpec
+from tinygrad.device import ALL_DEVICES, CompileError, Device, BufferSpec
 from tinygrad.dtype import dtypes
 from tinygrad.helpers import Target
 if Device.DEFAULT=="METAL":
   from tinygrad.runtime.ops_metal import MetalDevice, MetalCompiler, MetalProgram
+
+class TestMetalRegistration(unittest.TestCase):
+  def test_metal_is_a_discoverable_device(self):
+    self.assertIn("METAL", ALL_DEVICES)
+
 @unittest.skipIf(Device.DEFAULT!="METAL", "Metal support required")
 class TestMetal(unittest.TestCase):
   def test_alloc_oom(self):

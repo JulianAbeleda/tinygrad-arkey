@@ -79,6 +79,36 @@ each line must be changed.
 
 The token rates are diagnostic evidence for path continuity, not a published performance benchmark.
 
+### Metal 8B reactivation checkpoint
+
+Restoring the backend files was not sufficient to make Metal active: `ALL_DEVICES` still listed only
+AMD and CPU, so an unconfigured macOS process selected CPU. EXP now registers Metal ahead of AMD and
+CPU, matching upstream's discovery order for the backends retained by this fork. A platform-independent
+registration test prevents the backend from becoming present-but-unreachable again.
+
+On the local 16 GB Apple M4 / macOS 26.5 host, the registered backend passed the focused Metal compiler,
+allocator, graph, Objective-C bridge, and dtype tests (12/12), plus the ordinary tiny tensor suite
+(15 passed, one expected CL-image skip). Float32/float16/int32 elementwise reductions and a 64x64 fp16
+matmul also matched their CPU references.
+
+The downloaded Qwen3-8B Q4_K_M model then completed a real Metal load and decode at explicit context 128:
+
+```bash
+DEV=METAL PYTHONPATH=. python3 -m tinygrad.llm.cli \
+  --model /Users/julianabeleda/models/Qwen3-8B-Q4_K_M.gguf \
+  --max_context 128 --stream off --warmup --benchmark 3
+```
+
+The 5,027,783,488-byte model admitted successfully and produced 10.07, 11.68, and 11.39 tok/s after JIT
+warmup (mean 11.05 tok/s). A same-machine, same-model, same-context upstream-control run at
+`6ea7d366f` produced 5.01, 4.86, and 4.83 tok/s (mean 4.90 tok/s). This short diagnostic establishes
+correct Metal execution and a useful EXP baseline; it is not a statistically sufficient release
+benchmark or evidence that the AMD-only generated candidates apply to Metal.
+
+The next Metal work is therefore profiling and machine-searching the generic generated graph. It must
+not enable the gfx1100-only packed-WMMA or flash-attention candidates on Apple hardware, and it must not
+introduce a hand-authored Metal hot-path kernel.
+
 ## Remaining stages
 
 ### Stage 2 — generic value-lane API
