@@ -51,6 +51,17 @@ def test_decode_candidates_own_separate_g4_and_g5_split_geometry():
   assert decode_routes.FLASH_DECODE_G5_CANDIDATE.stage_width == 4
 
 
+def test_decode_flash_selector_only_binds_promoted_g4_g5_shapes():
+  """Characterize the production selector itself, rather than a parallel route table."""
+  g4 = decode_routes.FLASH_DECODE_CANDIDATE.bind(1, 32, 8, 128, "AMD:0")
+  g5 = decode_routes.FLASH_DECODE_G5_CANDIDATE.bind(1, 40, 8, 128, "AMD:0")
+  assert g4 is not None and g4.route_id == "decode_flash_live_split_g4_kvboth"
+  assert g5 is not None and g5.route_id == "decode_flash_live_split_g5_kvboth"
+  assert decode_routes.FLASH_DECODE_CANDIDATE.bind(1, 40, 8, 128, "AMD:0") is None
+  assert decode_routes.FLASH_DECODE_G5_CANDIDATE.bind(1, 32, 8, 128, "AMD:0") is None
+  assert decode_routes.FLASH_DECODE_CANDIDATE.bind(1, 32, 8, 128, "CPU") is None
+
+
 def test_invalid_route_modes_fail_loudly():
   with pytest.raises(ValueError): prefill_route_mode(_env({"TINYGRAD_PREFILL_ROUTE": "mystery"}))
   with pytest.raises(ValueError): decode_route_mode(_env({"TINYGRAD_DECODE_ROUTE": "mystery"}))
