@@ -8,8 +8,7 @@ import pytest
 from tinygrad.llm import prefill_graph_gemm
 from tinygrad.llm.prefill_candidate_runtime import (ARTIFACT, canonical_candidate_set_identity,
   decode_prefill_graph_candidate_set, promoted_candidate_registry, promoted_candidate_set,
-  automatic_promoted_prefill_graph_policy as runtime_automatic_promoted_prefill_graph_policy)
-from tinygrad.llm.promoted_prefill_policy import automatic_promoted_prefill_graph_policy
+  automatic_promoted_prefill_graph_policy)
 
 
 ROOT = Path(__file__).parents[2]
@@ -61,7 +60,6 @@ def test_automatic_policy_preserves_exact_promoted_authority_shape():
   candidate_set = promoted_candidate_set().to_json()
   inventory = _inventory(candidate_set)
   policy = automatic_promoted_prefill_graph_policy(inventory, FACTS)
-  assert runtime_automatic_promoted_prefill_graph_policy(inventory, FACTS) == policy
   assert policy["strategy"] == "FULL_RESIDENT_OVERLAY"
   assert policy["candidate_id"] == "prefill_wmma_lds_dbuf_generated"
   assert policy["routes"] == {**{f"candidate-{index}":"prefill_wmma_lds_dbuf_generated" for index in range(4)},
@@ -104,7 +102,7 @@ def test_promoted_registry_is_sufficient_for_graph_gemm_exact_attachment(monkeyp
 
 
 def test_new_production_policy_runtime_has_no_research_imports():
-  for relative in ("tinygrad/llm/prefill_candidate_runtime.py", "tinygrad/llm/promoted_prefill_policy.py"):
+  for relative in ("tinygrad/llm/prefill_candidate_runtime.py",):
     tree = ast.parse((ROOT / relative).read_text())
     imports = [node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module]
     imports += [alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names]

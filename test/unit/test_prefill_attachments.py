@@ -5,8 +5,6 @@ import pytest
 
 from tinygrad.llm.prefill_attachments import (PrefillDirectPackedBinding, PrefillRouteAttachment,
   attach_selected_prefill_inventory)
-from tinygrad.llm.prefill_route_observer import (PrefillDirectPackedBinding as ObserverBinding,
-  PrefillRouteAttachment as ObserverAttachment)
 from tinygrad.llm.route_selection import RouteCandidatePolicy, RouteLifecycle
 
 
@@ -26,11 +24,6 @@ def _policy():
   return {"routes": {"q": "route-q", "k": "route-k"},
           "bounded_packed_projection_proof": {"allocation_owner_identity": "owner"}}
 def _direct(): return RouteCandidatePolicy("direct", RouteLifecycle.FALLBACK, "baseline")
-
-
-def test_observer_reexports_exact_attachment_types():
-  assert ObserverAttachment is PrefillRouteAttachment
-  assert ObserverBinding is PrefillDirectPackedBinding
 
 
 def test_selected_inventory_attaches_exact_fields_and_policy_identity():

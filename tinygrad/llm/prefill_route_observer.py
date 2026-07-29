@@ -5,7 +5,6 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Callable, Iterator
-from tinygrad.llm.prefill_attachments import PrefillDirectPackedBinding, PrefillRouteAttachment
 
 @dataclass(frozen=True)
 class PrefillRouteExecution:
@@ -53,6 +52,6 @@ def notify_prefill_route_execution(linear: object, execution: PrefillRouteExecut
 
 def prefill_route_scope_active() -> bool: return _ACTIVE.get()
 
-__all__ = ["PrefillRouteAttachment", "PrefillDirectPackedBinding", "PrefillRouteExecution", "notify_prefill_route",
-           "notify_prefill_route_execution", "observe_prefill_routes", "observe_prefill_route_executions",
+__all__ = ["PrefillRouteExecution", "notify_prefill_route", "notify_prefill_route_execution", "observe_prefill_routes",
+           "observe_prefill_route_executions",
            "prefill_route_scope", "prefill_route_scope_active"]

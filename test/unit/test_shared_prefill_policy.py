@@ -1,9 +1,9 @@
 from types import SimpleNamespace
 import pytest
 
-from tinygrad.llm.prefill_policy import select_prefill_runtime_policy, bounded_packed_projection_proven_eligible
+from tinygrad.llm.admission import select_prefill_runtime_policy, bounded_packed_projection_proven_eligible
 from extra.llm_research.shared_attention_evidence import shared_attention_proof_artifact
-from tinygrad.llm.prefill_route_observer import PrefillRouteAttachment
+from tinygrad.llm.prefill_attachments import PrefillRouteAttachment
 from tinygrad.llm.prefill_routes import _attached_production_route
 from tinygrad import Tensor
 

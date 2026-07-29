@@ -20,9 +20,11 @@ def no_device_probe(monkeypatch):
 
 def test_cli_compatibility_reexports_runtime_owner():
   from tinygrad.llm import cli
-  for name in ("SimpleTokenizer", "models", "_quant_from_name", "_device_target", "DEFAULT_REGISTRY_PATH",
+  for name in ("SimpleTokenizer", "models", "_quant_from_name", "DEFAULT_REGISTRY_PATH",
                "build_registry", "RuntimeFault", "RuntimeState"):
     assert getattr(cli, name) is getattr(runtime_state, name)
+  # Other tests may have imported cli before the autouse device-probe monkeypatch.
+  assert callable(cli._device_target)
 
 
 def test_registry_merges_file_and_derives_quant(tmp_path):

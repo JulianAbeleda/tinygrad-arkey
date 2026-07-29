@@ -13,7 +13,7 @@ from extra.llm_research.mmq_atom_boundary import (
   prefill_14b_q4k_q8_1_hybrid_mmq_atom_descriptor,
 )
 from extra.llm_research.route_manifest import ROUTES, default_routes
-from tinygrad.llm.route_policy import _load_qk_route_policy, _supported_qk_route_ids
+from tinygrad.llm.model_route_plan import _load_qk_route_policy, _supported_qk_route_ids
 
 
 def test_prefill_14b_hybrid_mmq_atom_descriptor_is_non_promoted_and_not_pure():
