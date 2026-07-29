@@ -5,6 +5,8 @@ ROOT = pathlib.Path(__file__).parents[2]
 SCRIPT = ROOT / "extra/usbgpu/tbgpu/installer/install_nosip.sh"
 APP = ROOT / "extra/usbgpu/tbgpu/installer/Shared/TinyGPUApp.swift"
 CLI = ROOT / "extra/usbgpu/tbgpu/installer/Shared/TinyGPUCLIRunner.swift"
+SERVER = ROOT / "extra/usbgpu/tbgpu/installer/Shared/server.c"
+PROJECT = ROOT / "extra/usbgpu/tbgpu/installer/TinyGPUDriverExtension.xcodeproj/project.pbxproj"
 CLASSIFIER = ROOT / "extra/usbgpu/tbgpu/installer/classify_system_extension_state.sh"
 STATE_FIXTURES = json.loads((ROOT / "test/unit/fixtures/tinygpu_system_extension_states.json").read_text())
 TOKEN = "APPROVE_TINYGPU_DEVELOPMENT_INSTALL"
@@ -49,10 +51,18 @@ def test_build_output_signing_and_provenance_are_explicit():
   source = SCRIPT.read_text()
   for token in ("-derivedDataPath \"$DERIVED_DATA\"", "--timestamp=none", "Signature=adhoc", "Identifier=$APP_ID", "Identifier=$DEXT_ID",
                 "source_manifest", "source_nosip_entitlements_hash", "source_app_entitlements_hash", "record_tree", "systemextensionsctl list",
-                    "tinygpu-development-install-provenance.txt", "DEXT_VERSION=\"10\"", "CFBundleVersion"):
+                    "tinygpu-development-install-provenance.txt", "DEXT_VERSION=\"11\"", "CFBundleVersion"):
     assert token in source
   assert "curl " not in source and "download" not in source.lower() and "rm -rf" not in source
   assert "provisionprofile" not in source.lower()
+
+
+def test_v11_identity_is_atomic_across_installer_dext_and_native_servers():
+  assert 'DEXT_VERSION="11"' in SCRIPT.read_text()
+  assert PROJECT.read_text().count("CURRENT_PROJECT_VERSION = 11;") == 2
+  server = SERVER.read_text()
+  assert "tinygrad-arkey-native-v11" in server and "tinygrad-arkey-v11" in server
+  assert "tinygrad-arkey-native-v10" not in server and "tinygrad-arkey-v10" not in server
 
 
 def test_immediate_interactive_approval_precedes_only_replacement_path():
@@ -81,7 +91,7 @@ def test_registration_classifier_rejects_reproduced_upgrade_state():
     "needs_approval":"needs_approval", "legacy_conflict":"pending_reboot", "inactive":"inactive",
   }
   for name, output in STATE_FIXTURES.items():
-    result = subprocess.run(["bash", str(CLASSIFIER), "org.tinygrad.arkey.tinygpu.driver2", "org.tinygrad.tinygpu.driver2", "10"],
+    result = subprocess.run(["bash", str(CLASSIFIER), "org.tinygrad.arkey.tinygpu.driver2", "org.tinygrad.tinygpu.driver2", "11"],
                             input=output, text=True, capture_output=True, check=False)
     assert result.returncode == 0 and result.stdout.strip() == expected[name], (name, result.stdout, result.stderr)
 

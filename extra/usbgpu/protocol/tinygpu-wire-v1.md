@@ -95,7 +95,7 @@ ASCII bytes matching `[A-Za-z0-9._+-]+`. Capability bit 0 is
 `KEEPALIVE_STATUS`, bit 1 is `WORKLOAD_LEASE`, and bit 2 is
 `KEEPALIVE_SET_POLICY`. Bit 3 is `POWER_RESIDENCY_STATUS`. Unknown capability
 bits are ignored unless required by the client; bits required by `arg2` must
-all be present. v10 workload clients require bits 0, 1, and 3; bit 2 remains
+all be present. v11 workload clients require bits 0, 1, and 3; bit 2 remains
 reserved and unset.
 
 ## Legacy handshake probe
@@ -208,7 +208,7 @@ bytes and has the exact schema `tinygpu.power-residency.v2` with these fields:
 | `override_probe_prejoin_error`, `override_probe_postjoin_error`, `power_request_error`, `power_release_error` | signed 32-bit JSON integer |
 | `full_power_requested`, `power_request_accepted`, `power_request_confirmed`, `power_release_attempted`, `publishable` | boolean |
 
-The v10 policy is exactly `driverkit_full_power_v1`. Its desired and healthy
+The v11 policy is exactly `driverkit_full_power_v1`. Its desired and healthy
 observed flags are `kIOServicePowerCapabilityOn` (`2`). A healthy active payload
 has the expected failing pre-join probe and successful post-join probe, at least
 one accepted full-power request, an On notification after that request, a later

@@ -143,10 +143,16 @@ static const char* StateName(ProviderState state) {
 	}
 }
 
+static bool FullPowerTransitionConfirmsRequest(const TinyGPUDriver_IVars* state) {
+	return state->fullPowerRequested && state->powerRequestAccepted && !state->powerRequestError &&
+		!state->powerReleaseAttempted && state->powerTransitions &&
+		state->lastObservedPowerFlags == kFullPowerFlags && state->lastPowerRequestTick &&
+		state->lastPowerTransition > state->lastPowerRequestTick;
+}
+
 static bool PowerResidencyReady(const TinyGPUDriver_IVars* state) {
-	return state->fullPowerRequested && state->powerRequestAccepted && state->powerRequestConfirmed &&
-		!state->powerReleaseAttempted && state->lastObservedPowerFlags == kFullPowerFlags &&
-		!state->powerRequestError && state->lastPowerRequestTick && state->lastSuccess > state->lastPowerRequestTick;
+	return state->powerRequestConfirmed && FullPowerTransitionConfirmsRequest(state) &&
+		state->lastSuccess > state->lastPowerRequestTick;
 }
 
 static void RefreshProviderHealth(TinyGPUDriver_IVars* state) {
@@ -162,11 +168,16 @@ static kern_return_t RequestPowerResidency(TinyGPUDriver* owner, TinyGPUDriver_I
 	SaturatingIncrement(&state->powerRequestAttempts, &state->counterSaturated);
 	state->lastPowerRequestTick = UptimeNS();
 	state->fullPowerRequested = true;
+	state->powerRequestAccepted = false;
 	state->powerRequestConfirmed = false;
+	state->desiredPowerFlags = kFullPowerFlags;
 	kern_return_t requestError = owner->ChangePowerState(kFullPowerFlags);
 	state->powerRequestError = (int32_t)requestError;
 	state->powerRequestAccepted = requestError == kIOReturnSuccess;
-	state->desiredPowerFlags = kFullPowerFlags;
+	// ChangePowerState may synchronously deliver SetPowerState before the return
+	// value can be recorded. Reconcile that callback after recording acceptance;
+	// asynchronous callbacks use the same ordered transition predicate below.
+	state->powerRequestConfirmed = FullPowerTransitionConfirmsRequest(state);
 	if (state->powerRequestAttempts == 1)
 		state->overrideProbePostJoinError = (int32_t)owner->SetPowerOverride(false);
 	return requestError;
@@ -326,8 +337,7 @@ kern_return_t TinyGPUDriver::SetPowerState_Impl(uint32_t powerFlags) {
 			if (unexpected) SaturatingIncrement(&ivars->unexpectedPowerDowngrades, &ivars->counterSaturated);
 			ivars->lastObservedPowerFlags = powerFlags;
 			ivars->lastPowerTransition = UptimeNS();
-			ivars->powerRequestConfirmed = ivars->powerRequestAccepted && powerFlags == kFullPowerFlags &&
-				!ivars->powerReleaseAttempted;
+			ivars->powerRequestConfirmed = FullPowerTransitionConfirmsRequest(ivars);
 			RefreshProviderHealth(ivars);
 		};
 		if (ivars->gate && !ivars->gate->OnQueue()) ivars->gate->DispatchSync(observe);

@@ -92,6 +92,38 @@ The narrow log did not contain a TinyGPU startup failure or crash. The source
 does not log individual power-request or power-transition fields, so the boot
 log cannot safely distinguish which `PowerResidencyReady` term failed.
 
+## Authorized selector-10 follow-up
+
+After the stop was recorded and committed, the operator separately authorized
+the one read-only selector-10 query. It ran under `/tmp/gpu-bench.lock` with no
+other eGPU command:
+
+```json
+{"schema":"tinygpu.power-residency.v2","provider_generation":1,"policy_id":"driverkit_full_power_v1","full_power_requested":true,"power_request_accepted":true,"power_request_confirmed":false,"power_request_attempts":3,"last_power_request_monotonic_ns":687485345833,"power_release_attempted":false,"desired_power_flags":2,"last_observed_power_flags":2,"override_probe_prejoin_error":-536870212,"override_probe_postjoin_error":0,"power_request_error":0,"power_release_error":0,"transition_count":1,"unexpected_downgrade_count":0,"last_transition_monotonic_ns":684269405208,"last_canary_identity_dword":"0x744c1002","last_canary_success_monotonic_ns":717402579833,"stop_busy_leases":0,"stop_busy_bars":0,"stop_busy_dma":0,"publishable":false}
+```
+
+DriverKit accepted the request, the post-join lifecycle probe succeeded, one On
+transition was observed with flags `2`, and a later canary succeeded. The sole
+failed readiness field was `power_request_confirmed=false`. Three requests had
+been exhausted, and the one transition preceded the retained timestamp of the
+last retry.
+
+The source provides the causal boundary. `RequestPowerResidency` cleared
+confirmation, called `ChangePowerState(On)`, and recorded
+`powerRequestAccepted` only after that call returned. A synchronous
+`SetPowerState(On)` callback therefore observed acceptance as false. The call
+then returned success, but v10 did not reconcile the already-recorded On
+transition. Later retries cleared confirmation and advanced the request
+timestamp without receiving another transition because the service was already
+On. This is a v10 bookkeeping defect, not an API rejection or failed PCI
+canary.
+
+The bounded source disposition is v11: reconcile an ordered On transition
+after recording API acceptance, use the same predicate in the asynchronous
+callback, reject transitions at or before the current request timestamp, and
+advance every install/native identity atomically. The separate v11 scope is
+`docs/task_workflow/input/egpu-usb4-v11-sync-power-confirmation-scope-20260729.md`.
+
 ## Disposition and stop boundary
 
 The v10 lifecycle change fixed the earlier v8 pre-publication failure: the DEXT
@@ -99,7 +131,6 @@ starts, publishes diagnostics, and maintains a successful PCI identity canary.
 It did not satisfy the first post-reboot health gate, so R6.1 is not admitted
 and A1 must not run from this boot under the current audit procedure.
 
-No recovery action was attempted. A separately reviewed next step is required
-before collecting any additional eGPU state or altering the gate; this audit
-does not authorize selector-10 power status, reset/replug, another install or
-reboot, AMD initialization, the socket server, or a workload.
+No recovery action was attempted. The later selector-10 exception authorized
+only the read-only query recorded above. It did not run A1 or authorize
+reset/replug, AMD initialization, the socket server, or a workload.

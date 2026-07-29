@@ -68,6 +68,7 @@ def test_keepalive_status_supports_inline_and_descriptor_outputs():
 
 
 def test_power_residency_request_notification_and_release_are_distinct():
+  confirmation = body(DRIVER, "static bool FullPowerTransitionConfirmsRequest", "static bool PowerResidencyReady")
   request = body(DRIVER, "static kern_return_t RequestPowerResidency", "static kern_return_t ReleasePowerResidency")
   release = body(DRIVER, "static kern_return_t ReleasePowerResidency", "static kern_return_t DrainTimer")
   start = body(DRIVER, "kern_return_t TinyGPUDriver::Start_Impl", "kern_return_t TinyGPUDriver::Stop_Impl")
@@ -76,13 +77,21 @@ def test_power_residency_request_notification_and_release_are_distinct():
   keepalive = body(DRIVER, "void IMPL(TinyGPUDriver, KeepaliveTimer)", "kern_return_t TinyGPUDriver::NewUserClient_Impl")
   assert "SetPowerOverride(true)" not in DRIVER
   assert "ChangePowerState(kFullPowerFlags)" in request and "SetPowerOverride(false)" in request
+  assert request.index("powerRequestAccepted = false") < request.index("ChangePowerState(kFullPowerFlags)")
   assert request.index("powerRequestConfirmed = false") < request.index("ChangePowerState(kFullPowerFlags)")
+  assert request.index("powerRequestAccepted = requestError == kIOReturnSuccess") < \
+    request.index("powerRequestConfirmed = FullPowerTransitionConfirmsRequest(state)")
+  for token in ("powerRequestAccepted", "!state->powerRequestError", "powerTransitions",
+                "lastObservedPowerFlags == kFullPowerFlags", "lastPowerTransition > state->lastPowerRequestTick"):
+    assert token in confirmation
   assert "ChangePowerState(kReleasedPowerFlags)" in release and "SetPowerOverride" not in release
   assert "kReleasedPowerFlags = kIOServicePowerCapabilityOff" in DRIVER and "powerReleaseAttempted" in release
   assert "SetPowerOverride(false)" in start and "RequestPowerResidency" not in start and "ChangePowerState" not in start
   assert "action &&" in keepalive and "RequestPowerResidency(this, ivars)" in keepalive
   assert "lastSuccess > state->lastPowerRequestTick" in DRIVER
-  assert "lastObservedPowerFlags = powerFlags" in notification and "SetPowerState(powerFlags, SUPERDISPATCH)" in notification
+  assert "lastObservedPowerFlags = powerFlags" in notification
+  assert "powerRequestConfirmed = FullPowerTransitionConfirmsRequest(ivars)" in notification
+  assert "SetPowerState(powerFlags, SUPERDISPATCH)" in notification
   assert stop.count("\n\treturn ") == 1 and "Stop(provider, SUPERDISPATCH)" in stop
   assert "stopBusyLeases" in stop and "DrainTimer" in stop and "ReleaseMMIOMappings" in stop
   assert "PowerResidencyReady(ivars)" in DRIVER
