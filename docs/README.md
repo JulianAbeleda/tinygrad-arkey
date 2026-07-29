@@ -57,6 +57,8 @@ they are refuted — see `prefill-current-state.md`.)
 
 ## Runtime Boundary
 
+- `llm-route-runtime-module-consolidation-scope-20260729.md` - current EXP-first execution scope for clarifying static
+  planning, admission, attachment, dispatch, observation, and CLI runtime-state ownership without changing behavior.
 - `tinygrad-runtime-operational-policy-r10.md` - runtime operating policy.
 - `tinygrad-runtime-client-separation-roadmap-20260630.md` - client/runtime separation plan.
 - `tinygrad-runtime-client-separation-implementation-status-20260630.md` - implementation status.
