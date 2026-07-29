@@ -3,11 +3,27 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Any
 
-from tinygrad import Tensor, UOp, dtypes
+from tinygrad import Tensor, UOp, dtypes, getenv
 from tinygrad.llm.decode_kernels import (emit_q6k_gemv_kernel, emit_q6k_vocab_scalar_reduce_kernel,
   q4k_g3_lanemap_gemv_kernel, q6k_spec_for_role, q6k_vocab_scalar_reduce_eligible)
 from tinygrad.llm.flash_decode_attention import FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeRouteConfig, flash_decode_live_split_block_tile
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, execute_promoted_program
+from tinygrad.llm.route_selection import parse_route_mode
+
+def decode_route_mode(getenv_fn=getenv) -> str:
+  canonical = str(getenv_fn("TINYGRAD_DECODE_ROUTE", "")).strip()
+  if canonical:
+    return parse_route_mode("TINYGRAD_DECODE_ROUTE", allowed=("auto", "flash", "fp16"), aliases={"sdpa": "fp16", "fallback": "fp16"}, getenv_fn=getenv_fn)
+  return parse_route_mode("FLASH_DECODE", allowed=("auto", "flash", "fp16"), aliases={"on": "flash", "1": "flash", "true": "flash", "off": "fp16", "0": "fp16", "false": "fp16"}, getenv_fn=getenv_fn)
+
+def should_use_flash_decode(start_pos, T, use_flash:bool=False, getenv_fn=getenv) -> bool:
+  if not (isinstance(start_pos, UOp) and isinstance(T, int) and T == 1): return False
+  mode = decode_route_mode(getenv_fn)
+  if mode == "fp16": return False
+  if use_flash or mode == "flash": return True
+  try: ctx = start_pos.unbind()[1] + T
+  except Exception: return False
+  return ctx >= getenv_fn("FLASH_DECODE_THRESHOLD", 512)
 
 def _decode_shape(x:Tensor) -> tuple[Any, Any, Any]:
   shape = tuple(getattr(x, "shape", ()))
