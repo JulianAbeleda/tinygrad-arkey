@@ -15,7 +15,7 @@ ROUTING (the one decision point)
 The model calls exactly one entry: `route_prefill_attention(q, k, v, ...)`. It
 chooses, in order:
   1. CUSTOM-KERNEL INJECTION (this module, `custom_kernel_attention`) -- inject the
-     already-proven captured kernel via Tensor.custom_kernel. Attention becomes an
+     already-proven captured program via Tensor.uop_program. Attention becomes an
      opaque fp16 buffer-in/buffer-out CALL. The compiler realizes Q/K/V as ordinary
      buffers (the working path); NO composite reduce, so NONE of the class-2
      reach-through / store-forwarding / cycle failures can occur.
@@ -143,13 +143,13 @@ def prefill_grid_spec(q:Tensor, k:Tensor) -> AMDAttentionGridSpec | None:
 
 def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, causal:bool,
                             ctx:SharedAttentionCandidateContext) -> Tensor:
-  """Inject the proven fused-attention kernel via Tensor.custom_kernel.
+  """Inject the proven fused-attention program via Tensor.uop_program.
 
   Q/K/V arrive fp16 (1, H, T, 128); returns fp16 (1, Hq, T, 128). custom_kernel
   .contiguous()'s each input into a real buffer that the kernel consumes opaquely
   -> no composite reduce -> none of the class-2 reach-through/forwarding/cycle.
 
-  Mechanism (verified against postrange.py:328 + Tensor.custom_kernel):
+  Mechanism (verified against postrange.py:328 + Tensor.uop_program):
   - A FlashPrefillAttentionSpec (tinygrad/schedule/wmma/flash_prefill.py) owns the
     topology as DATA and composes the proven UOp builder
     `amd_gfx1100_q16_grid_hd128_loop_attention(q,k,v,out,...)` via `spec.emit()`,
@@ -157,7 +157,7 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
     PARAM owners with slots (Q,K,V,out)=(1,2,3,0), so we pass FLAT 1-D buffers
     (placeholder_like keeps 1-D tensors as bare PARAM; multi-dim would become
     RESHAPE(PARAM) and fail).
-  - custom_kernel(out_flat; q_flat,k_flat,v_flat) assigns slots 0,1,2,3 -> exactly
+  - uop_program(out_flat; q_flat,k_flat,v_flat) assigns slots 0,1,2,3 -> exactly
     out=0, Q=1, K=2, V=3.
   """
   from tinygrad.schedule.wmma.flash_prefill import FlashPrefillAttentionSpec
@@ -205,7 +205,7 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
 
   q_flat = q.cast(dtypes.half).reshape(Hq * T * Hd)
   k_flat = k.cast(dtypes.half).reshape(Hkv * KV * Hd)
-  # V VECTORIZATION (PREFILL_V_TRANSPOSED): custom_kernel already .contiguous()'s each input into a
+  # V VECTORIZATION (PREFILL_V_TRANSPOSED): uop_program already .contiguous()'s each input into a
   # fresh buffer, so materializing V as [Hkv][Hd][KV] instead of [Hkv][KV][Hd] costs one transposed
   # copy in place of a free reshape -- and turns the emitter's 128 2-byte V gathers per KV tile into
   # 16 b128 loads (see amd_attention_abi.expand_loop_fragment). Element count is identical.
