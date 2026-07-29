@@ -2,10 +2,9 @@
 
 Date: 2026-07-29
 
-Status: approved scope; implementation in progress in local, uncommitted working trees. M0-M4 contracts are
-implemented and focused-tested, M5-M6 have bounded Metal smoke evidence only, and M9 has static/raw roofline analysis
-plus a non-authoritative streaming proxy. No finite exact-workload search, route binding, or paired whole-model M9
-evaluation has run.
+Status: compatibility complete on tinygrad EXP. M0-M7 completed, M8 was deliberately not installed after the
+selected isolated-role plan lost the matched whole-model A/B, and M9 closed as a measured refutation. M10 records the
+replay bundle and test closure. Nothing in this scope was promoted to `dev` or `master`.
 
 Branch boundary: design and provider work begin on tinygrad `exp`. This scope does not authorize AMD/eGPU work,
 promotion to `dev`/`master`, or a hand-authored Metal kernel.
@@ -48,27 +47,26 @@ hand-written MSL or route-local UOp kernel is introduced.
 | BoltBeam policy/evidence | Already separates execution from evaluation and requires correctness, route binding, speed, memory fit, and rollback | Reuse as the only promotion authority |
 | BubbleBeam/FutureSight | Proposes legal values from supplied workload/target/compiler facts and statically assesses BoltBeam-hashed candidates | Reuse the shared engine and historical wrapper; do not copy it into a Metal fork |
 
-The current local diagnostic baseline is 11.05 tok/s mean for tinygrad EXP and 20.51 tok/s for local llama.cpp Metal on
-the same Qwen3-8B Q4_K_M file. Those numbers identify the opportunity; they do not authorize a route or establish the
-cause. The recorded tinygrad command sets `--max_context 128` but does not use `--benchmark-context`, so its three
-samples start from a one-token seed and are not fixed-depth context-128 authority. The llama.cpp `tg128` observation
-also omitted `-d 128`. Both must be recaptured by M9 under the final matched-depth protocol.
+The final matched-depth controls use the same Qwen3-8B Q4_K_M file at decode depth 128. tinygrad EXP generic measured
+11.2767 tok/s, upstream tinygrad measured 4.7979 tok/s, and llama.cpp measured 20.3421 tok/s. These are roofline and
+external-control placements; none is attributed to the isolated candidate. The selected `LOCAL(128)` diagnostic
+measured 10.6452 tok/s in the EXP whole-model path, a 5.60% regression from generic EXP.
 
-### 2.2 What remains incomplete
+### 2.2 Closed compatibility state
 
-| Surface | Implemented state | Remaining blocker |
+| Surface | Final state | Boundary |
 | --- | --- | --- |
-| target resolution | `apple_m4_10c` exact descriptor, Darwin autoscan, stable resolved-target hash, and live provider facts are implemented | Backend remains descriptor-only until the measured compatibility loop closes; unknown Apple variants still fail closed |
-| candidate/search contract | v1 compatibility plus strict target-neutral v2, finite population, generic heuristic control, and explicit execution regime are implemented | No complete exact-role population has run on hardware |
+| target resolution | `apple_m4_10c` exact descriptor, Darwin autoscan, stable resolved-target hash, and live provider facts are implemented | Registry remains `descriptor_only`; compatibility evidence is not a general Apple backend evaluator |
+| candidate/search contract | v1 compatibility plus strict target-neutral v2, coupled finite rows, generic heuristic control, and explicit execution regime are implemented | Population identity is pinned to the recorded clean revisions |
 | BubbleBeam/FutureSight | Input-derived dimension proposals and static assessments keyed by BoltBeam candidate hashes are implemented | Static results remain non-performance evidence, as required |
-| provider | One JSON-lines `describe/admit/compile/check/measure` worker and BoltBeam subprocess adapter are implemented | Dirty-tree/pinned replay and a complete exact-workload run remain unproven |
-| Metal compile/check | Explicit and heuristic schedules compile; bounded Q4_K/Q6_K nonzero oracle checks pass and MSL/MTLB hashes are emitted | The executed program was the bounded `m=1,n=256,k=256` fixture, not the exact largest role |
-| Metal timing | Eager `wait=True` timing and raw-sample output exist | Exact-role candidate/control timing has not run; no candidate timing row is promotion evidence yet |
+| provider | One JSON-lines `describe/admit/compile/check/measure` worker and BoltBeam subprocess adapter are implemented | Dirty or revision-mismatched checkouts fail closed |
+| Metal compile/check | Twelve exact-shape schedules compiled and passed the deterministic packed-reference check; source/MTLB hashes are recorded | The check uses deterministic packed fixtures through the ordinary graph, not bytes loaded from the named GGUF tensor |
+| Metal timing | Exact `m=1,n=12288,k=4096` eager command-buffer timing completed for the finite population | Isolated-role timing is diagnostic until whole-model A/B |
 | Metal graph profile | Aggregate graph events remain available | Evenly divided entry durations remain estimates and cannot rank candidates |
-| M9 | Exact GGUF packed-weight/FLOP inventory and raw-bandwidth placement are implemented; one aggregate stream proxy was smoked | No fixed-depth paired whole-model A/B, exact workload traffic attribution, durable streaming artifact, refreshed llama control, or policy verdict exists |
+| M9 | Exact GGUF inventory, raw roof, non-comparable stream proxy, matched-depth controls, and selected-plan A/B are durable | Physical traffic and a workload-comparable sustained bandwidth roof remain unknown |
 
-The compatibility job is therefore not flipping `backend_status`. It is completing the exact-workload measurement and
-promotion loop without reintroducing the deleted AMD research stack.
+Compatibility is complete without flipping `backend_status` or installing a losing route. The measured refutation
+preserves the generic Metal path and names the evidence required to reopen performance work.
 
 ## 3. Architectural principles and hard gates
 
@@ -245,9 +243,10 @@ either repository can evolve independently under explicit schema versions.
 Metal graph events may support aggregate tracing, but their current evenly divided entry durations are explicitly
 `estimated` and cannot rank candidates.
 
-Current hardware evidence is bounded-fixture smoke: `m=1,n=256,k=256` Q4_K/Q6_K correctness passed. A candidate whose
-metadata named a larger role still executed that bounded fixture unless the worker supplied the exact shape. No exact
-role candidate/control timing has run.
+The final M7 request uses `shape_mode=exact_workload` at `m=1,n=12288,k=4096`. Twelve explicit schedules compiled,
+passed the deterministic packed-reference check, and produced exact-shape timing. The generic heuristic row was
+retained as `REJECTED_UNSUPPORTED` because the current compiler emitted illegal `float48` MSL for its selected
+UPCAST/UNROLL/LOCAL combination. It was not silently dropped or converted into a partial winner.
 
 ### 8.2 Correctness
 
@@ -305,8 +304,7 @@ The report must keep three differently scoped quantities separately labeled:
    semantic FLOPs, and measured activation/KV/intermediate traffic where available. Weight-equivalent GB/s must remain
    distinct from observed physical traffic. Percentages may be reported only against a scope-compatible roof/proxy.
 
-The current diagnostic, derived directly from the selected GGUF tensor table, is useful for sizing but is not the final
-M9 authority:
+The final M9 placement, derived directly from the selected GGUF tensor table, is:
 
 | Quantity | Diagnostic value |
 | --- | ---: |
@@ -315,18 +313,20 @@ M9 authority:
 | lower-bound arithmetic intensity | 3.240 FLOP/byte |
 | raw M4 bandwidth | 120 GB/s |
 | raw bandwidth floor / ceiling | 38.93 ms/token / 25.69 tok/s |
-| tinygrad EXP at 11.05 tok/s | 51.62 GB/s weight-equivalent, 43.0% of raw advertised roof, 0.167 semantic TFLOP/s |
-| llama.cpp at 20.51 tok/s | 95.82 GB/s weight-equivalent, 79.8% of raw advertised roof, 0.310 semantic TFLOP/s |
+| tinygrad EXP generic at 11.2767 tok/s | 52.68 GB/s weight-equivalent, 43.90% of raw advertised roof, 0.171 semantic TFLOP/s |
+| selected-plan diagnostic at 10.6452 tok/s | 49.73 GB/s weight-equivalent, 41.44% of raw advertised roof, 0.161 semantic TFLOP/s |
+| upstream tinygrad at 4.7979 tok/s | 22.41 GB/s weight-equivalent, 18.68% of raw advertised roof, 0.073 semantic TFLOP/s |
+| llama.cpp at 20.3421 tok/s | 95.03 GB/s weight-equivalent, 79.19% of raw advertised roof, 0.308 semantic TFLOP/s |
 
 The byte lower bound streams every matrix tensor once, reads only one row from `token_embd.weight`, and excludes
 unmeasured reload, activation, KV-cache, allocator, and cache effects. The FLOP lower bound counts two operations per
 matrix MAC and excludes attention/nonlinear work. Therefore percentages are diagnostic placement, not proof of
 physical DRAM traffic. The final report must never infer that a 43% placement proves bandwidth is the root cause.
 
-The current aggregate proxy is one direct, non-durable 256 MiB-source/256 MiB-destination smoke: one warmup, three
+The aggregate proxy is one durable 256 MiB-source/256 MiB-destination measurement: one warmup, three
 samples at 6.096/6.178/6.424 ms, median 86.89 aggregate GB/s. Cache capacity/residency and thermal state were not
-proven. This result is useful for validating the provider measurement path only; a scope-compatible measured
-weight-read roof remains unknown, and no exact-role or paired whole-model workload placement has run.
+proven. It validates the provider measurement path only and is marked `workload_comparable=false`; a scope-compatible
+measured weight-read roof remains unknown.
 
 ## 9. First search workload
 
@@ -380,7 +380,7 @@ candidate/provider/evidence contracts with different legal dimensions.
 
 ## 10. Implementation packets
 
-Current status refers to the local uncommitted working trees, not a landed compatibility claim:
+Current status refers to the committed implementation plus the BoltBeam replay bundle:
 
 | Packet | Current status |
 | --- | --- |
@@ -389,12 +389,12 @@ Current status refers to the local uncommitted working trees, not a landed compa
 | M2 | Implemented/focused-tested: strict v2, unchanged v1 identity, finite expansion/control, and execution-regime validation |
 | M3 | Implemented/focused-tested: modular input-driven proposals and static assessment; BoltBeam remains schema/hash/expansion authority |
 | M4 | Implemented/focused-tested: one JSON-lines worker and one BoltBeam subprocess adapter cover all five actions |
-| M5 | Partial hardware smoke: bounded generated Metal programs compile for explicit/heuristic schedules and emit source/MTLB/plan hashes; exact `1x12288x4096` compilation is unrun |
-| M6 | Partial hardware smoke: bounded `1x256x256` Q4_K/Q6_K oracle checks pass; exact-role candidate/control correctness and timing are unrun |
-| M7 | Not run: no finite exact-workload population result |
-| M8 | Not run: no selected plan is bound; generic fallback remains the only runtime behavior |
-| M9 | Partial analysis only: exact GGUF inventory/raw advertised roof and a non-authoritative aggregate read+write proxy exist; no paired whole-model or policy verdict |
-| M10 | Pending after durable artifacts and landed implementation |
+| M5 | Complete: explicit exact-shape Metal plans compile through ordinary tinygrad and emit source/MTLB/plan hashes |
+| M6 | Complete for compatibility: exact-shape execution, packed Q4_K/Q6_K oracle fixtures, raw synchronized samples, and structured terminal failures |
+| M7 | Complete: 13-row population, 12 correct/measured, one unsupported, zero blocked, deterministic result |
+| M8 | Skipped by gate: selected `LOCAL(128)` plan regressed whole-model decode by 5.60%; no runtime binding/catalog was installed |
+| M9 | Complete as refutation: matched-depth EXP generic/selected-plan/upstream/llama controls and honest raw/proxy roofline placement |
+| M10 | Complete: replayable request/result/roofline/refutation bundle, focused/full tests, and no duplicate Metal policy/runtime seam |
 
 ### M0 — freeze contracts and drift tests
 
@@ -552,13 +552,14 @@ M0
      └── M5 Metal compile (needs M1 + M2 + M4)
           -> M6 correctness/timing
              -> M7 finite search
-                -> M8 binding, only if a winner exists
-                   -> M9 whole-model policy
+                -> M8 diagnostic binding, only if the isolated result warrants it
+                   -> M9 whole-model refutation (binding is not retained)
                       -> M10 prune/close
 ```
 
-M1, M2, and the protocol-only portion of M4 can run in parallel. All local Metal execution is one serialized hardware
-lane. M8 is conditional: a complete no-win search skips runtime binding and proceeds to a refutation in M9.
+M1, M2, and the protocol-only portion of M4 ran independently. All local Metal execution used one serialized hardware
+lane. M8 remained conditional: the temporary diagnostic was slower, so production binding was skipped and M9 closed
+with a refutation.
 
 ## 12. Test matrix
 
@@ -608,6 +609,32 @@ lane. M8 is conditional: a complete no-win search skips runtime binding and proc
 All compatibility conditions plus a selected candidate passes exact route binding, paired whole-model improvement,
 memory/correctness/stability gates, and BoltBeam promotion. If no candidate wins, compatibility is still complete and
 the output is a measured refutation with a precise reopen condition.
+
+This run produced the latter outcome. Reopen only with actual model-graph role identity, stable finalists under
+randomized/interleaved measurement, matched correctness and route tracing, and a whole-model win over generic EXP.
+
+## 15. Closure artifacts
+
+The pinned search uses BoltBeam `428b62512673fefbda8a200d1867feb6d5dee66e` and tinygrad EXP provider
+`6bbacae46dcb1c5348dd8b2e58ac4dd921c2405b`. The durable bundle is
+`BoltBeam/bench/metal-qwen3-8b-20260729/`:
+
+- `ffn-gate-up-search-request.json` — exact finite population and revision pins;
+- `ffn-gate-up-search-result.json` — complete classifications, raw samples, hashes, and selected diagnostic;
+- `whole-model-ab-refutation.json` — route-off/diagnostic samples, evidence boundaries, and reopen conditions;
+- `decode-roofline-input.json` and `decode-roofline.json` — exact GGUF inventory request and centralized placement;
+- `README.md` — replay commands and outcome.
+
+The official result selected candidate
+`b5fe0ed6d02fd63f9e29cc695d3217c00d2f5d045d0571e8f699066a27208fc3`,
+`LOCAL axis=0 arg=128`, with an 885,749 ns isolated median. A prior scratch run selected a different LOCAL finalist,
+so no stability claim is made. The whole-model regression is the authoritative reason no route was installed.
+
+BoltBeam no longer embeds a developer-specific tinygrad checkout in collectors, analysis output, runner plans, or
+tests. One resolver owns the precedence `--tinygrad-root`, then `TINYGRAD_ROOT`, then a recognized sibling checkout;
+missing or invalid execution configuration fails with an actionable error. The final BoltBeam suite passed with
+1,090 tests and five optional skips without tinygrad on the import path, and 1,092 tests with four optional skips
+against the EXP checkout.
 
 ### Promotion beyond EXP
 
