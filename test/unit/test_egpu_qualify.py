@@ -5,12 +5,18 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("qualify", ROOT / "extra/usbgpu/tests/qualify.py")
 qualify = importlib.util.module_from_spec(SPEC); SPEC.loader.exec_module(qualify)
 STATUS = json.loads((ROOT / "extra/usbgpu/protocol/fixtures/keepalive-status-v1.json").read_text())["valid"]
+POWER_STATUS = json.loads((ROOT / "extra/usbgpu/protocol/fixtures/power-residency-status-v1.json").read_text())["valid"]
 
 
 def status(ticks=0, *, generation=1, **patch):
   return copy.deepcopy(STATUS) | {"provider_generation":generation, "attempts":3600+ticks, "successes":3600+ticks,
                                   "last_attempt_monotonic_ns":3600000000000+ticks*1000000000,
                                   "last_success_monotonic_ns":3600000000000+ticks*1000000000} | patch
+
+
+def power(ticks=0, *, generation=1, **patch):
+  return copy.deepcopy(POWER_STATUS) | {"provider_generation":generation, "last_transition_monotonic_ns":1000000000,
+                                       "last_canary_success_monotonic_ns":3600000000000+ticks*1000000000} | patch
 
 
 def test_lock_metadata_requires_matching_inherited_descriptor_and_parent(tmp_path):
@@ -39,10 +45,11 @@ def test_environment_is_exact_not_implicit():
 def test_a1_terms_only_exact_server_and_proves_socket_absence(tmp_path):
   app = tmp_path / "TinyGPU"; app.touch()
   samples = iter([status(), status(120)])
+  power_samples = iter([power(), power(120)])
   killed = []
   state = [(1, [str(app), "server", "sock"]), (2, [str(app), "serverish"])]
   def processes(): return [row for row in state if row[0] not in killed]
-  result = qualify.run_gate("A1", status_reader=samples.__next__, endpoint_reader=lambda:True, process_reader=processes,
+  result = qualify.run_gate("A1", status_reader=samples.__next__, power_status_reader=power_samples.__next__, endpoint_reader=lambda:True, process_reader=processes,
                             terminator=killed.append, sleeper=lambda _:None, installed_executable=app, socket_reader=lambda:False)
   assert result["status"] == "passed" and killed == [1] and len(result["samples"]) == 2
 
@@ -115,11 +122,23 @@ def test_a0_requires_direct_handshake_and_validates_it(tmp_path):
   app=tmp_path/"TinyGPU"; app.touch()
   missing=qualify.run_gate("A0", status_reader=lambda:status(), endpoint_reader=lambda:True, installed_executable=app)
   assert missing["status"] == "failed"
-  hello={"schema":"tinygpu.handshake.v1", "protocol_major":1, "protocol_minor":0, "capabilities":3, "server_build_id":"test"}
+  hello={"schema":"tinygpu.handshake.v1", "protocol_major":1, "protocol_minor":0, "capabilities":11, "server_build_id":"test"}
   provenance={"schema":"tinygpu.development-install.provenance.v1", "source_commit":"abc"}
-  result=qualify.run_gate("A0", status_reader=lambda:status(), endpoint_reader=lambda:True,
+  result=qualify.run_gate("A0", status_reader=lambda:status(), power_status_reader=lambda:power(), endpoint_reader=lambda:True,
                           installed_executable=app, handshake_reader=lambda:hello, install_provenance=provenance)
   assert result["status"] == "passed" and result["provenance"]["handshake"] == hello
+
+
+@pytest.mark.parametrize("patch", [
+  {"override_active":False}, {"power_request_confirmed":False}, {"last_observed_power_flags":65536},
+  {"unexpected_downgrade_count":1}, {"publishable":False},
+])
+def test_a0_rejects_unhealthy_power_residency(patch, tmp_path):
+  app=tmp_path/"TinyGPU"; app.touch()
+  hello={"schema":"tinygpu.handshake.v1", "protocol_major":1, "protocol_minor":0, "capabilities":11, "server_build_id":"test"}
+  result=qualify.run_gate("A0", status_reader=lambda:status(), power_status_reader=lambda:power(**patch), endpoint_reader=lambda:True,
+                          installed_executable=app, handshake_reader=lambda:hello, install_provenance={"schema":"test"})
+  assert result["status"] == "failed" and "power" in result["first_failure"]["message"]
 
 
 def test_install_provenance_binds_live_binary_hashes_and_commit(tmp_path):

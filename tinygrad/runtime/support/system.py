@@ -320,6 +320,7 @@ class PCIIfaceBase:
 class RemoteCmd(enum.IntEnum):
   PROBE,MAP_BAR,MAP_SYSMEM_FD,CFG_READ,CFG_WRITE,RESET,MMIO_READ,MMIO_WRITE,MAP_SYSMEM,SYSMEM_READ,SYSMEM_WRITE,RESIZE_BAR,PING,HEALTH,SYSMEM_SYNC = range(15)
   HANDSHAKE,LEASE_ACQUIRE,LEASE_RELEASE,KEEPALIVE_STATUS,KEEPALIVE_SET_POLICY = range(15, 20)
+  POWER_RESIDENCY_STATUS = 20
 
 
 class TinyGPUWireError(RuntimeError):
@@ -384,6 +385,32 @@ def _tinygpu_validate_status(payload:bytes) -> dict:
     raise TinyGPUWireError("malformed_payload")
   if value["interval_ms"] != 1000 or value["maximum_timer_leeway_ms"] != 100: raise TinyGPUWireError("invalid_range")
   if value["attempts"] != value["successes"] + value["failures"]: raise TinyGPUWireError("invalid_range")
+  return value
+
+
+def _tinygpu_validate_power_status(payload:bytes) -> dict:
+  value = _tinygpu_json(payload, max_size=_TINYGPU_STATUS_MAX_PAYLOAD)
+  required = {"schema", "provider_generation", "policy_id", "override_requested", "override_active", "full_power_requested",
+              "power_request_accepted", "power_request_confirmed", "power_release_attempted", "desired_power_flags",
+              "last_observed_power_flags", "override_request_error", "power_request_error", "power_release_error",
+              "override_release_error", "transition_count", "unexpected_downgrade_count", "last_transition_monotonic_ns",
+              "last_canary_identity_dword", "last_canary_success_monotonic_ns", "publishable"}
+  if set(value) != required: raise TinyGPUWireError("malformed_payload", "unexpected power-residency fields")
+  u64 = ("provider_generation", "transition_count", "unexpected_downgrade_count", "last_transition_monotonic_ns",
+         "last_canary_success_monotonic_ns")
+  u32 = ("desired_power_flags", "last_observed_power_flags")
+  i32 = ("override_request_error", "power_request_error", "power_release_error", "override_release_error")
+  boolean = ("override_requested", "override_active", "full_power_requested", "power_request_accepted", "power_request_confirmed",
+             "power_release_attempted", "publishable")
+  if any(type(value[k]) is not int or not 0 <= value[k] < 1<<64 for k in u64): raise TinyGPUWireError("invalid_range")
+  if any(type(value[k]) is not int or not 0 <= value[k] < 1<<32 for k in u32): raise TinyGPUWireError("invalid_range")
+  if any(type(value[k]) is not int or not -(1<<31) <= value[k] < 1<<31 for k in i32): raise TinyGPUWireError("invalid_range")
+  if any(type(value[k]) is not bool for k in boolean): raise TinyGPUWireError("malformed_payload")
+  if value["schema"] != "tinygpu.power-residency.v1" or value["policy_id"] != "driverkit_full_power_v1":
+    raise TinyGPUWireError("invalid_enum")
+  if value["desired_power_flags"] != 2 or not isinstance(value["last_canary_identity_dword"], str) or \
+     re.fullmatch(r"0x[0-9a-f]{8}", value["last_canary_identity_dword"]) is None:
+    raise TinyGPUWireError("malformed_payload")
   return value
 
 class RemoteMMIOInterface(MMIOInterface):
@@ -638,7 +665,7 @@ class APLRemotePCIDevice(RemotePCIDevice):
        type(handshake.get("capabilities")) is not int or not 0 <= handshake["capabilities"] < 1<<64 or \
        type(handshake.get("server_build_id")) is not str or re.fullmatch(r"[A-Za-z0-9._+-]{1,128}", handshake["server_build_id"]) is None:
       raise TinyGPUWireError("malformed_payload", "invalid handshake")
-    if handshake["capabilities"] & 3 != 3: raise TinyGPUWireError("unsupported_capability")
+    if handshake["capabilities"] & 11 != 11: raise TinyGPUWireError("unsupported_capability")
     self.tinygpu_handshake, self.tinygpu_capabilities = handshake, handshake["capabilities"]
 
   def keepalive_status(self) -> dict:
@@ -647,6 +674,13 @@ class APLRemotePCIDevice(RemotePCIDevice):
     resp1, payload = self._tinygpu_rpc(RemoteCmd.KEEPALIVE_STATUS)
     if resp1 != 0: raise TinyGPUWireError("invalid_reserved_field")
     return _tinygpu_validate_status(payload)
+
+  def power_residency_status(self) -> dict:
+    if not getattr(self, "tinygpu_handshake", None): raise TinyGPUWireError("invalid_state", "handshake required")
+    if not self.tinygpu_capabilities & 8: raise TinyGPUWireError("unsupported_capability")
+    resp1, payload = self._tinygpu_rpc(RemoteCmd.POWER_RESIDENCY_STATUS)
+    if resp1 != 0: raise TinyGPUWireError("invalid_reserved_field")
+    return _tinygpu_validate_power_status(payload)
 
   def _release_workload_lease(self) -> None:
     lease = getattr(self, "tinygpu_lease", None)
@@ -682,6 +716,11 @@ class APLRemotePCIDevice(RemotePCIDevice):
       else: raise RuntimeError(f"Failed to connect to TinyGPU server at {sock_path}.")
       super().__init__(devpref, "usb4", sock=sock)
       self._negotiate_tinygpu()
+      power = self.power_residency_status()
+      if not power["publishable"] or not power["power_request_confirmed"] or power["last_observed_power_flags"] != 2 or \
+         power["unexpected_downgrade_count"] or any(power[k] for k in ("override_request_error", "power_request_error")):
+        raise TinyGPUWireError("invalid_state", "provider power residency is not confirmed")
+      self.tinygpu_power_residency = power
       lease, payload = self._tinygpu_rpc(RemoteCmd.LEASE_ACQUIRE)
       if lease: self.tinygpu_lease = lease
       if payload or lease == 0: raise TinyGPUWireError("malformed_payload", "invalid lease response")

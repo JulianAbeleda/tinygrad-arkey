@@ -10,6 +10,11 @@ STATUS_FIELDS = {"schema", "provider_generation", "state", "enabled", "policy_id
                  "expected_identity", "last_identity_dword", "attempts", "successes", "failures", "consecutive_failures",
                  "last_attempt_monotonic_ns", "last_success_monotonic_ns", "success_gap_over_leeway_count", "max_success_gap_ms",
                  "timer_error", "counter_saturated", "active_workload_leases", "active_bar_mappings", "active_dma_allocations"}
+POWER_FIELDS = {"schema", "provider_generation", "policy_id", "override_requested", "override_active", "full_power_requested",
+                "power_request_accepted", "power_request_confirmed", "power_release_attempted", "desired_power_flags",
+                "last_observed_power_flags", "override_request_error", "power_request_error", "power_release_error",
+                "override_release_error", "transition_count", "unexpected_downgrade_count", "last_transition_monotonic_ns",
+                "last_canary_identity_dword", "last_canary_success_monotonic_ns", "publishable"}
 MONOTONIC_FIELDS = ("attempts", "successes", "failures", "consecutive_failures", "last_attempt_monotonic_ns",
                     "last_success_monotonic_ns", "success_gap_over_leeway_count", "max_success_gap_ms")
 REQUIRED_ENV = {"DEV":"AMD", "JIT":"1", "PYTHONPATH":".", "AM_REMOTE_DISCOVERY_PROFILE":"gfx1100_744c",
@@ -144,6 +149,38 @@ def validate_continuity(first:dict, second:dict, *, require_advance:bool=False) 
   if require_advance and second["successes"] <= first["successes"]: raise QualificationError("keeper did not advance")
 
 
+def validate_power_status(value:dict) -> None:
+  if set(value) != POWER_FIELDS or value.get("schema") != "tinygpu.power-residency.v1": raise QualificationError("malformed power-residency status")
+  u64 = ("provider_generation", "transition_count", "unexpected_downgrade_count", "last_transition_monotonic_ns",
+         "last_canary_success_monotonic_ns")
+  u32 = ("desired_power_flags", "last_observed_power_flags")
+  i32 = ("override_request_error", "power_request_error", "power_release_error", "override_release_error")
+  boolean = ("override_requested", "override_active", "full_power_requested", "power_request_accepted", "power_request_confirmed",
+             "power_release_attempted", "publishable")
+  if any(type(value[k]) is not int or not 0 <= value[k] < 1<<64 for k in u64): raise QualificationError("invalid power-residency counter")
+  if any(type(value[k]) is not int or not 0 <= value[k] < 1<<32 for k in u32): raise QualificationError("invalid power-residency flags")
+  if any(type(value[k]) is not int or not -(1<<31) <= value[k] < 1<<31 for k in i32): raise QualificationError("invalid power-residency error")
+  if any(type(value[k]) is not bool for k in boolean): raise QualificationError("invalid power-residency boolean")
+  if value["policy_id"] != "driverkit_full_power_v1" or value["desired_power_flags"] != 2 or value["last_observed_power_flags"] != 2:
+    raise QualificationError("power-residency policy or observed state mismatch")
+  if not all(value[k] for k in ("override_requested", "override_active", "full_power_requested", "power_request_accepted",
+                                "power_request_confirmed", "publishable")) or value["power_release_attempted"]:
+    raise QualificationError("provider power residency is not active")
+  if any(value[k] for k in i32) or value["unexpected_downgrade_count"]: raise QualificationError("power-residency request or transition failed")
+  if value["transition_count"] == 0 or value["last_transition_monotonic_ns"] == 0 or value["last_canary_success_monotonic_ns"] == 0:
+    raise QualificationError("power-residency evidence is incomplete")
+  if value["last_canary_identity_dword"] != "0x744c1002": raise QualificationError("power-residency canary identity mismatch")
+
+
+def validate_power_continuity(first:dict, second:dict, *, require_canary_advance:bool=False) -> None:
+  validate_power_status(first); validate_power_status(second)
+  if first["provider_generation"] != second["provider_generation"]: raise QualificationError("power-residency provider generation changed")
+  for key in ("transition_count", "unexpected_downgrade_count", "last_transition_monotonic_ns", "last_canary_success_monotonic_ns"):
+    if second[key] < first[key]: raise QualificationError("power-residency counter regressed")
+  if require_canary_advance and second["last_canary_success_monotonic_ns"] <= first["last_canary_success_monotonic_ns"]:
+    raise QualificationError("power-residency canary did not advance")
+
+
 def validate_cadence(first:dict, second:dict) -> None:
   validate_continuity(first, second, require_advance=True)
   observed = second["successes"] - first["successes"]
@@ -163,7 +200,7 @@ def handshake_command(command:list[str]) -> dict:
   value = decode_json(result.stdout.strip(), max_bytes=65536)
   if set(value) != {"schema", "protocol_major", "protocol_minor", "capabilities", "server_build_id"} or \
      value.get("schema") != "tinygpu.handshake.v1" or value.get("protocol_major") != 1 or value.get("protocol_minor") != 0 or \
-     type(value.get("capabilities")) is not int or value["capabilities"] & 3 != 3 or \
+     type(value.get("capabilities")) is not int or value["capabilities"] & 11 != 11 or \
      type(value.get("server_build_id")) is not str or re.fullmatch(r"[A-Za-z0-9._+-]{1,128}", value["server_build_id"]) is None:
     raise QualificationError("invalid diagnostic handshake")
   return value
@@ -236,8 +273,9 @@ def run_gate(gate:str, *, status_reader, endpoint_reader, process_reader=lambda:
              installed_executable:pathlib.Path|None=None, model:pathlib.Path|None=None, manual_prompt=lambda _:None,
              runner=lambda command: subprocess.run(command, check=False, capture_output=True), minimal_command=None, bench_command=None,
              handshake_reader=None, duration_s=None, sample_interval_s=60, churn_count=25, churn_idle_s=5,
-             idle_s=None, include_post_idle=False, clock=time.monotonic, socket_reader=lambda:False, install_provenance=None) -> dict:
-  evidence, first_failure = {"gate":gate, "samples":[], "endpoint_checks":[], "commands":[], "command_results":[]}, None
+             idle_s=None, include_post_idle=False, clock=time.monotonic, socket_reader=lambda:False, install_provenance=None,
+             power_status_reader=None) -> dict:
+  evidence, first_failure = {"gate":gate, "samples":[], "power_samples":[], "endpoint_checks":[], "commands":[], "command_results":[]}, None
   try:
     if endpoint_reader is None: raise QualificationError("endpoint reader is required")
     if model is not None:
@@ -246,7 +284,15 @@ def run_gate(gate:str, *, status_reader, endpoint_reader, process_reader=lambda:
     def checked_status(label):
       visible = bool(endpoint_reader()); evidence["endpoint_checks"].append({"label":label, "visible":visible, "unix_ns":time.time_ns()})
       if not visible: raise QualificationError(f"endpoint disappeared at {label}")
-      value = status_reader(); validate_status(value); evidence["samples"].append(value); return value
+      value = status_reader(); validate_status(value); evidence["samples"].append(value)
+      if power_status_reader is not None:
+        power = power_status_reader(); validate_power_status(power); evidence["power_samples"].append(power)
+        if power["provider_generation"] != value["provider_generation"]: raise QualificationError("status payload provider generations differ")
+        if power["last_canary_identity_dword"] != value["last_identity_dword"] or \
+           power["last_canary_success_monotonic_ns"] < value["last_success_monotonic_ns"]:
+          raise QualificationError("power-residency canary does not cover keepalive sample")
+      elif gate in {"A0", "A1"}: raise QualificationError(f"{gate} requires power-residency status")
+      return value
     def command(argv, label, *, classify=False):
       if not argv: raise QualificationError(f"{gate} requires {label} command")
       resolved = [str(item) for item in argv]; evidence["commands"].append(resolved)
@@ -272,9 +318,10 @@ def run_gate(gate:str, *, status_reader, endpoint_reader, process_reader=lambda:
     if gate == "A0":
       if handshake_reader is None: raise QualificationError("A0 requires diagnostic handshake")
       if install_provenance is None: raise QualificationError("A0 requires audited install provenance")
-      handshake = handshake_reader(); status = checked_status("A0")
+      handshake = handshake_reader(); status = checked_status("A0"); power = evidence["power_samples"][-1]
       evidence["provenance"] = {"installed_executable":str(installed_executable.resolve()) if installed_executable else None,
-                                "install":install_provenance, "handshake":handshake, "status":status, "endpoint_visible":True}
+                                "install":install_provenance, "handshake":handshake, "status":status,
+                                "power_residency":power, "endpoint_visible":True}
     elif gate == "A1":
       if installed_executable is None: raise QualificationError("A1 requires --installed-executable")
       evidence["process_census_initial"] = process_reader(); evidence["socket_reachable_initial"] = socket_reader()
@@ -285,7 +332,9 @@ def run_gate(gate:str, *, status_reader, endpoint_reader, process_reader=lambda:
       evidence["socket_reachable_before_first_status"] = socket_reader()
       if exact_server_pids(installed_executable, evidence["process_census_before_first_status"]): raise QualificationError("server remained after TERM")
       if evidence["socket_reachable_before_first_status"]: raise QualificationError("TinyGPU socket remained reachable")
-      first = checked_status("A1:first"); sleeper(120); second = checked_status("A1:second"); validate_cadence(first, second)
+      first = checked_status("A1:first"); first_power = evidence["power_samples"][-1]
+      sleeper(120); second = checked_status("A1:second"); second_power = evidence["power_samples"][-1]
+      validate_cadence(first, second); validate_power_continuity(first_power, second_power, require_canary_advance=True)
       evidence["process_census_after_second_status"] = process_reader(); evidence["socket_reachable_after_second_status"] = socket_reader()
       if exact_server_pids(installed_executable, evidence["process_census_after_second_status"]): raise QualificationError("server restarted during A1")
       if evidence["socket_reachable_after_second_status"]: raise QualificationError("TinyGPU socket became reachable during A1")
@@ -363,17 +412,19 @@ def main(argv=None) -> int:
     for sig in (signal.SIGINT, signal.SIGTERM):
       previous_handlers[sig] = signal.signal(sig, lambda signum, _frame: (_ for _ in ()).throw(QualificationInterrupted(f"signal {signum}")))
     status_cmd = [str(DEFAULT_APP), "keepalive", "status"]
+    power_cmd = [str(DEFAULT_APP), "power", "status"]
     hello_cmd = [str(DEFAULT_APP), "keepalive", "handshake"]
     minimal = [sys.executable, str(ROOT / "extra/usbgpu/tests/minimal_amd_compute.py")]
     bench = [sys.executable, str(ROOT / "extra/llm_research/bench.py")]
-    evidence = run_gate(args.gate, status_reader=lambda:status_command(status_cmd), handshake_reader=lambda:handshake_command(hello_cmd),
+    evidence = run_gate(args.gate, status_reader=lambda:status_command(status_cmd), power_status_reader=lambda:status_command(power_cmd),
+                        handshake_reader=lambda:handshake_command(hello_cmd),
                         installed_executable=DEFAULT_APP, model=args.model, minimal_command=minimal, bench_command=bench,
                         endpoint_reader=default_endpoint_reader, process_reader=default_process_reader, terminator=lambda pid:os.kill(pid, signal.SIGTERM),
                         socket_reader=lambda:socket_reachable(DEFAULT_SOCKET), include_post_idle=args.include_post_idle, install_provenance=provenance,
                         manual_prompt=lambda action:input(f"Operator action required: {action}. Press Enter after completion: "))
     context = common_context(DEFAULT_APP)
   except BaseException as exc:
-    evidence = {"gate":args.gate, "status":"recorded" if args.gate in CLASSIFICATION_GATES else "failed", "samples":[], "endpoint_checks":[],
+    evidence = {"gate":args.gate, "status":"recorded" if args.gate in CLASSIFICATION_GATES else "failed", "samples":[], "power_samples":[], "endpoint_checks":[],
                 "commands":[], "command_results":[], "first_failure":{"type":type(exc).__name__, "message":str(exc)}}
   finally:
     for sig, handler in previous_handlers.items(): signal.signal(sig, handler)

@@ -15,6 +15,9 @@ struct TinyGPUPolicy {
 };
 
 static constexpr TinyGPUPolicy kUSB4AMD744C = {"usb4_amd_744c_v1", 0x744c1002, 1000, 100};
+static constexpr const char* kPowerResidencyPolicy = "driverkit_full_power_v1";
+static constexpr uint32_t kFullPowerFlags = kIOServicePowerCapabilityOn;
+static constexpr uint32_t kReleasedPowerFlags = kIOServicePowerCapabilityLow;
 static uint64_t gProviderGeneration = 0;
 
 enum ProviderState : uint32_t {
@@ -33,7 +36,14 @@ struct TinyGPUDriver_IVars {
 	OSAction* timerAction = nullptr;
 	ProviderState state = kDetached;
 	bool timerEnabled = false;
+	bool canaryHealthy = false;
 	bool counterSaturated = false;
+	bool powerOverrideRequested = false;
+	bool powerOverrideActive = false;
+	bool fullPowerRequested = false;
+	bool powerRequestAccepted = false;
+	bool powerRequestConfirmed = false;
+	bool powerReleaseAttempted = false;
 	uint64_t generation = 0;
 	uint64_t attempts = 0;
 	uint64_t successes = 0;
@@ -43,8 +53,13 @@ struct TinyGPUDriver_IVars {
 	uint64_t lastSuccess = 0;
 	uint64_t overLeeway = 0;
 	uint64_t maxGapMS = 0;
+	uint64_t powerTransitions = 0;
+	uint64_t unexpectedPowerDowngrades = 0;
+	uint64_t lastPowerTransition = 0;
 	uint64_t leaseID = 0;
 	uint32_t lastIdentity = 0;
+	uint32_t desiredPowerFlags = kFullPowerFlags;
+	uint32_t lastObservedPowerFlags = kIOServicePowerCapabilityOff;
 	uint32_t activeLeases = 0;
 	uint32_t activeBars = 0;
 	uint32_t activeDMA = 0;
@@ -52,6 +67,10 @@ struct TinyGPUDriver_IVars {
 	IOMemoryMap* mmioMap[6] = {};
 	uint64_t mmioSize[6] = {};
 	int32_t timerError = 0;
+	int32_t powerOverrideRequestError = 0;
+	int32_t powerRequestError = 0;
+	int32_t powerReleaseError = 0;
+	int32_t powerOverrideReleaseError = 0;
 };
 
 static uint64_t UptimeNS() {
@@ -120,6 +139,57 @@ static const char* StateName(ProviderState state) {
 	}
 }
 
+static bool PowerResidencyReady(const TinyGPUDriver_IVars* state) {
+	return state->powerOverrideRequested && state->powerOverrideActive && state->fullPowerRequested &&
+		state->powerRequestAccepted && state->powerRequestConfirmed && !state->powerReleaseAttempted &&
+		state->lastObservedPowerFlags == kFullPowerFlags && !state->powerOverrideRequestError && !state->powerRequestError;
+}
+
+static void RefreshProviderHealth(TinyGPUDriver_IVars* state) {
+	if (state->state == kQuiescing || state->state == kStopped) return;
+	state->state = state->canaryHealthy && !state->counterSaturated && !state->timerError && PowerResidencyReady(state)
+		? kActiveHealthy : kActiveDegraded;
+}
+
+// These are IOService power-management requests on the TinyGPU service. They
+// express and later release this driver's desire to keep its provider fully
+// powered; API success alone is not evidence that the parent USB4 tunnel held.
+static kern_return_t RequestPowerResidency(TinyGPUDriver* owner, TinyGPUDriver_IVars* state) {
+	state->powerOverrideRequested = true;
+	kern_return_t overrideError = owner->SetPowerOverride(true);
+	state->powerOverrideRequestError = (int32_t)overrideError;
+	if (overrideError) return overrideError;
+	state->powerOverrideActive = true;
+
+	state->fullPowerRequested = true;
+	kern_return_t requestError = owner->ChangePowerState(kFullPowerFlags);
+	state->powerRequestError = (int32_t)requestError;
+	state->powerRequestAccepted = requestError == kIOReturnSuccess;
+	if (requestError) return requestError;
+	if (state->powerTransitions && state->lastObservedPowerFlags == kFullPowerFlags)
+		state->powerRequestConfirmed = true;
+	return kIOReturnSuccess;
+}
+
+static kern_return_t ReleasePowerResidency(TinyGPUDriver* owner, TinyGPUDriver_IVars* state) {
+	if (state->powerReleaseAttempted) return kIOReturnSuccess;
+	state->powerReleaseAttempted = true;
+	kern_return_t firstError = kIOReturnSuccess;
+	if (state->powerRequestAccepted) {
+		kern_return_t err = owner->ChangePowerState(kReleasedPowerFlags);
+		state->powerReleaseError = (int32_t)err;
+		if (err && !firstError) firstError = err;
+	}
+	state->powerRequestConfirmed = false;
+	if (state->powerOverrideActive) {
+		kern_return_t err = owner->SetPowerOverride(false);
+		state->powerOverrideReleaseError = (int32_t)err;
+		if (!err) state->powerOverrideActive = false;
+		if (err && !firstError) firstError = err;
+	}
+	return firstError;
+}
+
 static kern_return_t DrainTimer(IODispatchQueue* gate, IOTimerDispatchSource* timer, bool cancel) {
 	if (!gate || !timer) return kIOReturnSuccess;
 	uint8_t disableToken = 0, cancelToken = 0;
@@ -167,6 +237,8 @@ kern_return_t TinyGPUDriver::Start_Impl(IOService* provider) {
 	ivars->generation = NextGeneration();
 	if (ivars->generation == UINT64_MAX) ivars->counterSaturated = true;
 	__block uint32_t identity = 0;
+	err = ivars->gate->RunAction(^{ return RequestPowerResidency(this, ivars); });
+	if (err) goto fail;
 	ivars->gate->DispatchSync(^{ ivars->pci->ConfigurationRead32(kIOPCIConfigurationOffsetVendorID, &identity); });
 	ivars->lastIdentity = identity;
 	if (identity != kUSB4AMD744C.identity) { err = kIOReturnUnsupported; goto fail; }
@@ -181,7 +253,7 @@ kern_return_t TinyGPUDriver::Start_Impl(IOService* provider) {
 	if (err) goto fail;
 	ivars->timerEnabled = true;
 	ivars->gate->DispatchSync(^{ KeepaliveTimer_Impl(nullptr, UptimeNS()); });
-	if (ivars->state != kActiveHealthy) { err = kIOReturnNoDevice; goto fail; }
+	if (!ivars->canaryHealthy) { err = kIOReturnNoDevice; goto fail; }
 
 	IOServiceName name;
 	memcpy(name, "tinygpu", 8);
@@ -202,6 +274,7 @@ fail:
 		ivars->timerAction = nullptr;
 	}
 	if (ivars->gate) ivars->gate->DispatchSync(^{
+		(void)ReleasePowerResidency(this, ivars);
 		if (ivars->pci) { ivars->pci->Close(this, 0); ivars->pci = nullptr; }
 	});
 	return err;
@@ -209,10 +282,13 @@ fail:
 
 kern_return_t TinyGPUDriver::Stop_Impl(IOService* provider) {
 	if (!ivars) return kIOReturnSuccess;
+	__block kern_return_t admissionError = kIOReturnSuccess;
 	if (ivars->gate) ivars->gate->DispatchSync(^{
+		if (ivars->activeLeases || ivars->activeBars || ivars->activeDMA) { admissionError = kIOReturnBusy; return; }
 		ivars->state = kQuiescing;
 		ivars->timerEnabled = false;
 	});
+	if (admissionError) return admissionError;
 	const kern_return_t drainError = DrainTimer(ivars->gate, ivars->timer, true);
 	if (drainError) {
 		if (ivars->gate) ivars->gate->DispatchSync(^{ ivars->timerError = (int32_t)drainError; });
@@ -225,14 +301,33 @@ kern_return_t TinyGPUDriver::Stop_Impl(IOService* provider) {
 		ivars->timerAction->release();
 		ivars->timerAction = nullptr;
 	}
-	__block kern_return_t closeError = kIOReturnSuccess;
+	__block kern_return_t releaseError = kIOReturnSuccess;
 	if (ivars->gate) ivars->gate->DispatchSync(^{
-		if (ivars->activeLeases || ivars->activeBars || ivars->activeDMA) { closeError = kIOReturnBusy; return; }
+		releaseError = ReleasePowerResidency(this, ivars);
 		if (ivars->pci) { ivars->pci->Close(this, 0); ivars->pci = nullptr; }
 		ivars->state = kStopped;
 	});
-	if (closeError) return closeError;
-	return Stop(provider, SUPERDISPATCH);
+	kern_return_t stopError = Stop(provider, SUPERDISPATCH);
+	return releaseError ? releaseError : stopError;
+}
+
+kern_return_t TinyGPUDriver::SetPowerState_Impl(uint32_t powerFlags) {
+	if (ivars) {
+		auto observe = ^{
+			const bool unexpected = ivars->fullPowerRequested && ivars->powerRequestAccepted &&
+				!ivars->powerReleaseAttempted && powerFlags != kFullPowerFlags;
+			SaturatingIncrement(&ivars->powerTransitions, &ivars->counterSaturated);
+			if (unexpected) SaturatingIncrement(&ivars->unexpectedPowerDowngrades, &ivars->counterSaturated);
+			ivars->lastObservedPowerFlags = powerFlags;
+			ivars->lastPowerTransition = UptimeNS();
+			ivars->powerRequestConfirmed = ivars->powerRequestAccepted && powerFlags == kFullPowerFlags &&
+				!ivars->powerReleaseAttempted;
+			RefreshProviderHealth(ivars);
+		};
+		if (ivars->gate && !ivars->gate->OnQueue()) ivars->gate->DispatchSync(observe);
+		else observe();
+	}
+	return SetPowerState(powerFlags, SUPERDISPATCH);
 }
 
 void IMPL(TinyGPUDriver, KeepaliveTimer) {
@@ -257,22 +352,22 @@ void IMPL(TinyGPUDriver, KeepaliveTimer) {
 		if (canCount) ++ivars->successes;
 		ivars->lastSuccess = now;
 		ivars->consecutiveFailures = 0;
-		ivars->state = ivars->counterSaturated ? kActiveDegraded : kActiveHealthy;
+		ivars->canaryHealthy = !ivars->counterSaturated;
 	} else {
 		if (canCount) ++ivars->failures;
 		SaturatingIncrement(&ivars->consecutiveFailures, &ivars->counterSaturated);
-		ivars->state = kActiveDegraded;
+		ivars->canaryHealthy = false;
 	}
 	if (ivars->successes != ivars->attempts - ivars->failures) {
 		ivars->counterSaturated = true;
-		ivars->state = kActiveDegraded;
+		ivars->canaryHealthy = false;
 	}
 
-	if (!ivars->timerEnabled || !ivars->timer) return;
+	if (!ivars->timerEnabled || !ivars->timer) { RefreshProviderHealth(ivars); return; }
 	ivars->timerError = (int32_t)ivars->timer->WakeAtTime(
 		kIOTimerClockUptimeRaw, now + uint64_t(kUSB4AMD744C.intervalMS) * 1000000ull,
 		uint64_t(kUSB4AMD744C.leewayMS) * 1000000ull);
-	if (ivars->timerError) ivars->state = kActiveDegraded;
+	RefreshProviderHealth(ivars);
 }
 
 kern_return_t TinyGPUDriver::NewUserClient_Impl(uint32_t type, IOUserClient** out) {
@@ -354,7 +449,7 @@ kern_return_t TinyGPUDriver::ResetDevice() {
 	if (!ivars->gate || !ivars->timer) return kIOReturnNotReady;
 	__block kern_return_t err = kIOReturnSuccess;
 	ivars->gate->DispatchSync(^{
-		if (!ivars->pci) err = kIOReturnNotReady;
+		if (!ivars->pci || !PowerResidencyReady(ivars)) err = kIOReturnNotReady;
 		else if (ivars->state == kQuiescing || ivars->state == kStopped ||
 			ivars->activeLeases || ivars->activeBars || ivars->activeDMA) err = kIOReturnBusy;
 		else { ivars->state = kQuiescing; ivars->timerEnabled = false; }
@@ -471,7 +566,7 @@ kern_return_t TinyGPUDriver::AcquireWorkloadLease(uint64_t* out) {
 	if (!out || !ivars->gate) return kIOReturnBadArgument;
 	return ivars->gate->RunAction(^{
 		if (ivars->activeLeases) return kIOReturnBusy;
-		if (ivars->state != kActiveHealthy || ivars->counterSaturated) return kIOReturnNotReady;
+		if (ivars->state != kActiveHealthy || ivars->counterSaturated || !PowerResidencyReady(ivars)) return kIOReturnNotReady;
 		if (ivars->leaseID == UINT64_MAX) { ivars->counterSaturated = true; ivars->state = kActiveDegraded; return kIOReturnNoResources; }
 		++ivars->leaseID;
 		++ivars->activeLeases;
@@ -546,6 +641,61 @@ kern_return_t TinyGPUDriver::GetKeepaliveStatus(char* out, size_t* length) {
 		(unsigned long long)snapshot.lastAttempt, (unsigned long long)snapshot.lastSuccess,
 		(unsigned long long)snapshot.overLeeway, (unsigned long long)snapshot.maxGapMS, snapshot.timerError,
 		snapshot.saturated ? "true" : "false", snapshot.leases, snapshot.bars, snapshot.dma);
+	if (written < 0 || (size_t)written >= *length) return kIOReturnNoSpace;
+	*length = (size_t)written;
+	return kIOReturnSuccess;
+}
+
+kern_return_t TinyGPUDriver::GetPowerResidencyStatus(char* out, size_t* length) {
+	if (!out || !length || !*length) return kIOReturnBadArgument;
+	struct Snapshot {
+		bool overrideRequested, overrideActive, fullPowerRequested, requestAccepted, requestConfirmed, releaseAttempted, publishable;
+		uint64_t generation, transitions, unexpectedDowngrades, lastTransition, lastCanarySuccess;
+		uint32_t desiredFlags, observedFlags, lastIdentity;
+		int32_t overrideRequestError, requestError, releaseError, overrideReleaseError;
+	};
+	__block Snapshot snapshot{};
+	auto capture = ^{
+		snapshot.overrideRequested = ivars->powerOverrideRequested;
+		snapshot.overrideActive = ivars->powerOverrideActive;
+		snapshot.fullPowerRequested = ivars->fullPowerRequested;
+		snapshot.requestAccepted = ivars->powerRequestAccepted;
+		snapshot.requestConfirmed = ivars->powerRequestConfirmed;
+		snapshot.releaseAttempted = ivars->powerReleaseAttempted;
+		snapshot.publishable = ivars->state == kActiveHealthy && PowerResidencyReady(ivars);
+		snapshot.generation = ivars->generation;
+		snapshot.transitions = ivars->powerTransitions;
+		snapshot.unexpectedDowngrades = ivars->unexpectedPowerDowngrades;
+		snapshot.lastTransition = ivars->lastPowerTransition;
+		snapshot.lastCanarySuccess = ivars->lastSuccess;
+		snapshot.desiredFlags = ivars->desiredPowerFlags;
+		snapshot.observedFlags = ivars->lastObservedPowerFlags;
+		snapshot.lastIdentity = ivars->lastIdentity;
+		snapshot.overrideRequestError = ivars->powerOverrideRequestError;
+		snapshot.requestError = ivars->powerRequestError;
+		snapshot.releaseError = ivars->powerReleaseError;
+		snapshot.overrideReleaseError = ivars->powerOverrideReleaseError;
+	};
+	if (ivars->gate && !ivars->gate->OnQueue()) ivars->gate->DispatchSync(capture);
+	else capture();
+
+	int written = snprintf(out, *length,
+		"{\"schema\":\"tinygpu.power-residency.v1\",\"provider_generation\":%llu,"
+		"\"policy_id\":\"%s\",\"override_requested\":%s,\"override_active\":%s,"
+		"\"full_power_requested\":%s,\"power_request_accepted\":%s,\"power_request_confirmed\":%s,"
+		"\"power_release_attempted\":%s,\"desired_power_flags\":%u,\"last_observed_power_flags\":%u,"
+		"\"override_request_error\":%d,\"power_request_error\":%d,\"power_release_error\":%d,"
+		"\"override_release_error\":%d,\"transition_count\":%llu,\"unexpected_downgrade_count\":%llu,"
+		"\"last_transition_monotonic_ns\":%llu,\"last_canary_identity_dword\":\"0x%08x\","
+		"\"last_canary_success_monotonic_ns\":%llu,\"publishable\":%s}",
+		(unsigned long long)snapshot.generation, kPowerResidencyPolicy,
+		snapshot.overrideRequested ? "true" : "false", snapshot.overrideActive ? "true" : "false",
+		snapshot.fullPowerRequested ? "true" : "false", snapshot.requestAccepted ? "true" : "false",
+		snapshot.requestConfirmed ? "true" : "false", snapshot.releaseAttempted ? "true" : "false",
+		snapshot.desiredFlags, snapshot.observedFlags, snapshot.overrideRequestError, snapshot.requestError,
+		snapshot.releaseError, snapshot.overrideReleaseError, (unsigned long long)snapshot.transitions,
+		(unsigned long long)snapshot.unexpectedDowngrades, (unsigned long long)snapshot.lastTransition,
+		snapshot.lastIdentity, (unsigned long long)snapshot.lastCanarySuccess, snapshot.publishable ? "true" : "false");
 	if (written < 0 || (size_t)written >= *length) return kIOReturnNoSpace;
 	*length = (size_t)written;
 	return kIOReturnSuccess;

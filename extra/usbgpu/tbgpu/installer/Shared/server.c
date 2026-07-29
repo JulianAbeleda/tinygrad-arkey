@@ -30,6 +30,7 @@ enum {
   CMD_SYSMEM_WRITE = 10,  // bulk write to system memory
   CMD_RESIZE_BAR = 11,    // resize bar (noop)
   CMD_HANDSHAKE = 15, CMD_LEASE_ACQUIRE = 16, CMD_LEASE_RELEASE = 17, CMD_KEEPALIVE_STATUS = 18,
+  CMD_POWER_RESIDENCY_STATUS = 20,
   RESP_OK = 0, RESP_ERR = 1, RESP_UNSUPPORTED_VERSION = 2, RESP_UNSUPPORTED_CAPABILITY = 3,
   RESP_MALFORMED_REQUEST = 4, RESP_INVALID_STATE = 5, RESP_BUSY = 6, RESP_INTERNAL_ERROR = 7,
   RESP_PROVIDER_UNAVAILABLE = 8, RESP_DEVICE_LOST = 9, RESP_NATIVE_ERROR = 10,
@@ -124,10 +125,10 @@ static int send_kern_error(int fd, kern_return_t kr, const char *operation) {
 
 static int request_valid(const request_t *r) {
   if(r->cmd==CMD_HANDSHAKE) return r->dev_id==0 && r->bar==0 && r->arg1<=UINT16_MAX;
-  if(r->cmd==CMD_LEASE_ACQUIRE || r->cmd==CMD_KEEPALIVE_STATUS || r->cmd==CMD_RESET)
+  if(r->cmd==CMD_LEASE_ACQUIRE || r->cmd==CMD_KEEPALIVE_STATUS || r->cmd==CMD_POWER_RESIDENCY_STATUS || r->cmd==CMD_RESET)
     return r->dev_id==0 && r->bar==0 && r->arg0==0 && r->arg1==0 && r->arg2==0;
   if(r->cmd==CMD_LEASE_RELEASE) return r->dev_id==0 && r->bar==0 && r->arg0!=0 && r->arg1==0 && r->arg2==0;
-  if(r->cmd>CMD_RESIZE_BAR) return r->cmd >= 12 && r->cmd <= 19;
+  if(r->cmd>CMD_RESIZE_BAR) return r->cmd >= 12 && r->cmd <= CMD_POWER_RESIDENCY_STATUS;
   if(r->dev_id!=0) return 0;
   if((r->cmd==CMD_CFG_READ || r->cmd==CMD_CFG_WRITE) &&
      !((r->arg1==1 || r->arg1==2 || r->arg1==4) && r->arg0%r->arg1==0 && r->arg0+r->arg1<=4096)) return 0;
@@ -248,7 +249,7 @@ static kern_return_t ensure_connection(client_session_t *s) {
   uint32_t out_count = 2;
   err = IOConnectCallMethod(s->conn, 4, in, 3, NULL, 0, out, &out_count, NULL, NULL);
   if (err != KERN_SUCCESS ||
-      out_count != 2 || out[0] != 1 || out[1] != 3) {
+      out_count != 2 || out[0] != 1 || out[1] != 11) {
     IOServiceClose(s->conn);
     s->conn = IO_OBJECT_NULL;
     return err != KERN_SUCCESS ? err : kIOReturnUnsupported;
@@ -260,7 +261,7 @@ static kern_return_t handshake_rpc(client_session_t *s, char *out, size_t *size)
   if (!out || !size || !*size) return kIOReturnBadArgument;
   kern_return_t err = ensure_connection(s);
   if (err) return err;
-  const char *json = "{\"schema\":\"tinygpu.handshake.v1\",\"protocol_major\":1,\"protocol_minor\":0,\"capabilities\":3,\"server_build_id\":\"tinygrad-arkey-native\"}";
+  const char *json = "{\"schema\":\"tinygpu.handshake.v1\",\"protocol_major\":1,\"protocol_minor\":0,\"capabilities\":11,\"server_build_id\":\"tinygrad-arkey-native-v8\"}";
   size_t length = strlen(json);
   if (length >= *size) return kIOReturnNoSpace;
   memcpy(out, json, length + 1);
@@ -279,6 +280,21 @@ static kern_return_t status_rpc(client_session_t *s, char *out, size_t *size) {
   if (err != KERN_SUCCESS) return err;
   // DriverKit's descriptor path may report the caller's fixed capacity rather
   // than the JSON length. The provider always writes one NUL-terminated object.
+  const size_t actual = strnlen(out, capacity);
+  if (!actual || actual == capacity) return kIOReturnBadMedia;
+  *size = actual;
+  return kIOReturnSuccess;
+}
+
+static kern_return_t power_status_rpc(client_session_t *s, char *out, size_t *size) {
+  const size_t capacity = *size;
+  if (!capacity || capacity > 4096) return kIOReturnBadArgument;
+  memset(out, 0, capacity);
+  size_t driver_size = capacity;
+  kern_return_t err = ensure_connection(s);
+  if (err) return err;
+  err = IOConnectCallStructMethod(s->conn, 10, NULL, 0, out, &driver_size);
+  if (err != KERN_SUCCESS) return err;
   const size_t actual = strnlen(out, capacity);
   if (!actual || actual == capacity) return kIOReturnBadMedia;
   *size = actual;
@@ -395,6 +411,17 @@ int tinygpu_keepalive_handshake(char *out, unsigned long out_cap, unsigned long 
   return 0;
 }
 
+int tinygpu_power_residency_status(char *out, unsigned long out_cap, unsigned long *out_len) {
+  if (!out || !out_len || out_cap == 0 || out_cap > 4096) return -1;
+  client_session_t session = {.fd=-1, .handshaken=1, .conn=IO_OBJECT_NULL};
+  size_t size = (size_t)out_cap;
+  int result = power_status_rpc(&session, out, &size);
+  cleanup(&session);
+  if (result || size > out_cap) return -1;
+  *out_len = (unsigned long)size;
+  return 0;
+}
+
 static void handle_client(int fd) {
   client_session_t session = {.fd=fd, .conn=IO_OBJECT_NULL};
   session.bulk = malloc(BULK_BUF_SIZE);
@@ -420,9 +447,9 @@ static void handle_client(int fd) {
       if(session.handshaken) { if (send_typed_error(fd,RESP_INVALID_STATE,"invalid_state","handshake already completed")) break; continue; }
       if(req.arg0!=1) { if (send_typed_error(fd,RESP_UNSUPPORTED_VERSION,"unsupported_version","protocol major is unsupported")) break; continue; }
       if(req.arg1>0) { if (send_typed_error(fd,RESP_UNSUPPORTED_VERSION,"unsupported_version","protocol minor is unsupported")) break; continue; }
-      if(req.arg2 & ~UINT64_C(3)) { if (send_typed_error(fd,RESP_UNSUPPORTED_CAPABILITY,"unsupported_capability","required capability is unavailable")) break; continue; }
+      if(req.arg2 & ~UINT64_C(11)) { if (send_typed_error(fd,RESP_UNSUPPORTED_CAPABILITY,"unsupported_capability","required capability is unavailable")) break; continue; }
       session.handshaken = 1;
-      const char *hello = "{\"schema\":\"tinygpu.handshake.v1\",\"protocol_major\":1,\"protocol_minor\":0,\"capabilities\":3,\"server_build_id\":\"tinygrad-arkey\"}";
+      const char *hello = "{\"schema\":\"tinygpu.handshake.v1\",\"protocol_major\":1,\"protocol_minor\":0,\"capabilities\":11,\"server_build_id\":\"tinygrad-arkey-v8\"}";
       resp.resp0 = strlen(hello); resp.resp1 = 1;
       if (send_response(fd, &resp, -1) || sendall(fd, hello, resp.resp0)) break;
       continue;
@@ -441,6 +468,18 @@ static void handle_client(int fd) {
       kern_return_t status_error = status_rpc(&session,status,&size);
       if (status_error) {
         (void)send_kern_error(fd,status_error,"keepalive status");
+        break;
+      } else {
+        resp.resp0 = size;
+        if (send_response(fd,&resp,-1) || sendall(fd,status,size)) break;
+      }
+      continue;
+    }
+    if (req.cmd == CMD_POWER_RESIDENCY_STATUS) {
+      char status[4096]; size_t size = sizeof(status);
+      kern_return_t status_error = power_status_rpc(&session,status,&size);
+      if (status_error) {
+        (void)send_kern_error(fd,status_error,"power-residency status");
         break;
       } else {
         resp.resp0 = size;

@@ -25,6 +25,8 @@ public:
 
 	virtual kern_return_t Stop(IOService * provider) override;
 
+	virtual kern_return_t SetPowerState(uint32_t powerFlags) override;
+
 	virtual kern_return_t NewUserClient(uint32_t in_type, IOUserClient** out_user_client) override;
 
 	kern_return_t MapBar(uint64_t leaseID, uint32_t bar, IOMemoryDescriptor** memory) LOCALONLY;
@@ -44,6 +46,7 @@ public:
 	kern_return_t AcquireWorkloadLease(uint64_t* leaseID) LOCALONLY;
 	kern_return_t ReleaseWorkloadLease(uint64_t leaseID) LOCALONLY;
 	kern_return_t GetKeepaliveStatus(char* out, size_t* inOutLength) LOCALONLY;
+	kern_return_t GetPowerResidencyStatus(char* out, size_t* inOutLength) LOCALONLY;
 	void ReleaseBarMapping() LOCALONLY;
 	void ReleaseDMAAllocation() LOCALONLY;
 

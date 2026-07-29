@@ -1,10 +1,12 @@
-# TinyGPU v5 runtime initialization and RPC-disconnect scope
+# TinyGPU provider residency, runtime initialization, and RPC-disconnect scope
 
 Date: 2026-07-28
 
 Status: open; post-reboot A0 passed on v7, but A1 stopped when the tunneled PCIe
-tree disappeared during awake idle. No reset or AMD initialization followed.
-This scope is a follow-on to
+tree disappeared during awake idle. The next authorized implementation is one
+v8 DriverKit full-power-residency candidate with independently observable power
+and transaction evidence. No reset or AMD initialization followed. This scope
+is a follow-on to
 `egpu-usb4-persistent-pcie-service-scope-20260727.md`. It does not replace the
 DriverKit-owned keepalive architecture or its A0-A11 acceptance matrix.
 
@@ -38,6 +40,12 @@ Those observations establish installation, activation, selector-5 marshalling,
 and the single A0 snapshot only. They do not establish no-client continuity or
 that the provider can safely service AMD runtime MMIO, DMA, or queue
 initialization.
+
+The immediate objective is now to keep the PCI provider and its parent tunneled
+path fully powered for the provider lifetime, then prove that request against
+real endpoint continuity before resuming GPU-state inspection or control. A
+successful child-provider power request is necessary evidence, not proof by
+itself that the ASM2464/USB4 tunnel remained physically awake.
 
 The original AMD runtime blocker, which has not been re-exercised after the v7
 status fix, is:
@@ -295,16 +303,28 @@ The result reopens the keeper design boundary. It proves that the current
 DriverKit config-read implementation can report a healthy one-Hz history until
 immediately before the known ACIO/CLx-style failure, but it does not establish
 whether later timer callbacks stalled or whether
-`IOPCIDevice::ConfigurationRead32` failed to generate the same tunneled traffic
-as the historical user-space config read. The current scope explicitly limits
-the keeper to that config read and forbids changing ASPM/CLx or power policy, so
-do not guess at a power override or broaden the keeper action in place.
+`IOPCIDevice::ConfigurationRead32` generated the same tunneled traffic as the
+historical user-space config read.
+
+The operator now authorizes one bounded v8 design candidate that explicitly
+requests full-power residency from the DriverKit PCI provider for the provider
+lifetime. The existing one-Hz identity read remains a serialized health canary,
+not the sole power-residency mechanism. v8 must expose the power request,
+observed provider power notifications, request errors, and canary progress over
+a separately versioned diagnostic wire payload; the frozen v1 keepalive payload
+must not gain undeclared fields.
+
+This authorization does not include global ASPM/L1/L1SS/CLx mutation, `pmset`
+workarounds, bridge-firmware changes, a dummy GPU workload, GPU-core power or
+clock manipulation, automatic recovery, or a guessed BAR read. A future
+non-cached BAR canary requires an independently justified side-effect-free
+register and a separate evidence decision.
 
 Stop hardware qualification here. Do not retry A1, run M0-M7, reset/replug the
-GPU, reinstall v7, or request another reboot. Before another DEXT version or
-operator action, define and CPU/build-test one bounded diagnostic/design
-candidate that can discriminate timer progress from a shadowed/non-tunneling
-config read, and batch all required lifecycle changes into that single version.
+GPU, reinstall v7, or request another reboot. First implement and CPU/build-test
+the complete v8 source, protocol, lifecycle, status, and qualification changes.
+Batch them into one final DEXT version before requesting the single audited
+install and operator recovery needed for the next hardware attempt.
 
 ## 2. Evidence boundary: facts versus hypotheses
 
@@ -382,6 +402,15 @@ config read, and batch all required lifecycle changes into that single version.
 - A stale/rebound DEXT/provider instance is involved after repeated activation or
   failed probes; this must be ruled out with provider generation, IORegistry, and
   process identity evidence rather than inferred from process count.
+- The provider timer continues to run, but DriverKit config reads are serviced
+  from shadowed state or otherwise fail to generate traffic across the physical
+  USB4 PCIe tunnel.
+- The PCI provider has no persistent full-power desire, allowing the parent
+  tunneled controller to enter the low-power transition that exposes the known
+  ACIO retraining failure.
+- The power transition is the trigger, while bridge firmware, cabling, or signal
+  margin is the underlying reason retraining fails; a residency fix may prevent
+  the trigger without proving which physical component is defective.
 
 The implementation must not choose among these hypotheses by adding an AMD
 reset, unsafe small-BAR discovery, `AM_REMOTE_UNSAFE_INDIRECT_VRAM_WRITE`, or a
@@ -389,7 +418,8 @@ power-cycle workaround.
 
 ## 3. Objective and invariants
 
-Make the v5 TinyGPU path fail diagnostically and safely at runtime, then make the
+Make the v8 TinyGPU provider keep its PCI path fully powered and prove endpoint
+continuity, then make runtime failures diagnostic and safe and finally make the
 minimal AMD computation pass without weakening the DriverKit keeper contract.
 
 Required invariants:
@@ -403,30 +433,41 @@ Required invariants:
    idempotent and cannot produce a second unsafe RPC on a dead connection.
 4. Keepalive state is independent of workload lease state. A failed workload
    operation cannot silently claim that the keeper is healthy.
-5. Provider timer reads, config operations, reset, BAR/DMA admission, stop, and
+5. v8 requests full-power residency from the PCI provider during start, fails
+   closed if that request or its required confirmation fails, and releases the
+   request exactly once during stop after timer drain and before provider close.
+6. A separately versioned diagnostic payload reports power-request state,
+   native errors, observed provider power notifications, and canary progress.
+   It does not claim the parent USB4 tunnel is awake merely because the child
+   provider accepted a request.
+7. The one-Hz identity read remains a health canary serialized with power-state
+   transitions. It never resets the device or substitutes for the explicit
+   residency request.
+8. Provider timer reads, power-state transitions, config operations, reset,
+   BAR/DMA admission, stop, and
    provider close have a documented serialization boundary. Direct mapped BAR
    access may not be called “gate-serialized” without an implementation and test
    proving that property.
-6. No workload BAR, DMA, shared-memory, or AMD runtime state survives a failed
+9. No workload BAR, DMA, shared-memory, or AMD runtime state survives a failed
    client or provider termination.
-7. Python preserves the first meaningful runtime failure. It must not reduce a
+10. Python preserves the first meaningful runtime failure. It must not reduce a
    reachable endpoint plus a failed runtime operation to a discovery-only
    `No interface` diagnosis.
-8. The minimal probe remains the exact correctness test:
+11. The minimal probe remains the exact correctness test:
    `[1, 2, 3, 4] -> x*x + 1 -> [2.0, 5.0, 10.0, 17.0]`.
-9. A passing status/handshake, PCI enumeration, or app liveness check is not a
+12. A passing status/handshake, PCI enumeration, or app liveness check is not a
    compute pass.
-10. No root-cause claim may name C2PMSG90, PSP, GART, the keeper timer, or BAR0
+13. No root-cause claim may name C2PMSG90, PSP, GART, the keeper timer, or BAR0
     bulk ordering until R0 records every operation from lease acquisition to
     termination and the discriminating microgates isolate the first causal
     boundary.
-11. Runtime qualification explicitly rejects inherited behavior-changing AMD
+14. Runtime qualification explicitly rejects inherited behavior-changing AMD
     experiment variables. In particular, `AM_PSP_SYSMSG1_GART`, all PSP/GART
     setup/audit controls, `AM_PSP_GMC_INIT_TRACE`,
     `AM_PRE_PSP_MODE1_RESET`, `AM_RESET`, unsafe indirect VRAM, and unsafe
     small-BAR discovery must be unset. The harness records and enforces the
     effective allowlist rather than trusting the caller's shell.
-12. No PSP/GART setup experiment is part of this task. Reopening one requires a
+15. No PSP/GART setup experiment is part of this task. Reopening one requires a
     new evidence-backed scope after M7, not an ad hoc response to this transport
     failure.
 
@@ -438,7 +479,8 @@ one attempt end-to-end:
 - repository commit, dirty state, worktree, lock owner, macOS/Xcode/SDK;
 - installed app/DEXT bundle IDs, versions, hashes, signing/provenance;
 - `systemextensionsctl list`, PCI identity/link, IORegistry provider identity,
-  provider generation, and keepalive status before the attempt;
+  provider generation, power-residency status, and keepalive status before the
+  attempt;
 - exact effective environment, enforcing the five admitted runtime settings
   (`DEV`, `JIT`, `PYTHONPATH`, `AM_REMOTE_DISCOVERY_PROFILE`, and
   `AM_REMOTE_SKIP_RESIZE_BAR`) and rejecting inherited `AM_PSP_*`, `AM_RESET`,
@@ -508,6 +550,59 @@ semaphore. The historical `psp-clean-gate` label "DIRTY" for sOS-alive applied t
 fresh KDB/GART experiments; it must not be reused as a universal runtime-state
 classifier. This gate performs no SMU command, reset, mailbox clear, semaphore
 release, firmware load, or GART programming.
+
+### R0.3 v8 full-power-residency contract
+
+The v8 candidate changes the provider-lifetime contract, not GPU firmware or
+compute policy. The installed DriverKit 25.5 SDK audit establishes that
+`IOService::SetPowerOverride` requests override enable/disable,
+`IOService::ChangePowerState` asynchronously changes the service's power
+desire, and `IOService::SetPowerState` is the provider-state notification. The
+implementation must preserve those distinctions and their native errors. Do
+not infer that a child-provider request controls the parent tunnel without
+hardware evidence.
+
+The intended start sequence is:
+
+1. start the superclass, bind and open the admitted `IOPCIDevice`, and create the
+   single provider operation gate;
+2. request the provider power override and full-power desire using only public
+   DriverKit APIs supported by the installed SDK;
+3. record the request results and any observed power notification under the same
+   lifecycle/gate contract;
+4. perform and validate the existing `0x744c1002` identity transaction;
+5. start the serialized one-shot timer; and
+6. publish `tinygpu` after the requests, identity, and first canary succeed so a
+   diagnostic client can observe the asynchronous notification. Until an On
+   notification confirms residency, reject workload leases, reset, BAR, DMA,
+   configuration, and MMIO operations as not ready.
+
+Every partial-start failure unwinds in reverse order. Stop first rejects new
+work, drains and cancels the timer, clears the power desire exactly once with
+the SDK-defined `ChangePowerState(kIOServicePowerCapabilityLow)` allowance,
+disables the override exactly once, closes the PCI provider exactly once, and
+only then calls the superclass. This release is not a direct PCI D-state,
+ASPM, L1SS, or CLx mutation.
+
+Keep `tinygpu.keepalive.v1` frozen. Allocate a new negotiated diagnostic
+capability and selector in `tinygpu-wire-v1.md` before implementation, with an
+independent native/Python fixture and a payload such as
+`tinygpu.power-residency.v1`. At minimum it records:
+
+- policy and schema identity;
+- override/requested/confirmed booleans;
+- desired and last-observed DriverKit power flags;
+- native result codes for override, power request, and release;
+- transition and unexpected-downgrade counters;
+- the last successful identity canary value and monotonic timestamp; and
+- whether the provider is publishable under the residency contract.
+
+The payload is diagnostic evidence only. Physical success still requires the
+endpoint and live-provider identity to remain present through A1 and the longer
+awake-idle gates without ACIO errors, provider rebinding, or a generation
+change. No BAR canary is authorized in v8 unless source analysis first names a
+specific side-effect-free register and explains why the access cannot mutate
+GPU state.
 
 ## 5. Workstream R1: native server/provider lifecycle errors
 
@@ -629,9 +724,14 @@ is authorized before M6.
 
 Audit `TinyGPUDriver.cpp` and `TinyGPUDriverUserClient.cpp` for the following:
 
-- provider start validates identity before publishing `tinygpu`;
+- provider start confirms the v8 power-residency contract and validates identity
+  before publishing `tinygpu`;
 - all provider-owned PCI calls use the provider gate;
+- power requests, observed power notifications, timer callbacks, and stop share
+  one documented ordering contract;
 - timer disable and callback drain complete before timer/action/PCI release;
+- every partial start and normal stop releases the power desire/override exactly
+  once before the single PCI close;
 - provider stop cannot return busy while a client cleanup path still holds a
   lease, BAR, or DMA reference;
 - user-client gate recursion cannot deadlock with provider gate calls;
@@ -641,8 +741,10 @@ Audit `TinyGPUDriver.cpp` and `TinyGPUDriverUserClient.cpp` for the following:
 - status reports `active_workload_leases`, `active_bar_mappings`, and
   `active_dma_allocations` consistently before and after every microprobe.
 
-Do not broaden the keeper policy. The one-Hz config read remains the only
-keepalive action; workload bootstrap must not be folded into the keeper timer.
+The authorized v8 residency request is the primary link-power mechanism. The
+one-Hz config read remains the only periodic canary action; workload bootstrap,
+BAR traffic, DMA, and dummy compute must not be folded into the keeper timer.
+Do not claim a parent-tunnel power hold from API success alone.
 
 ## 8. Workstream R4: Python error and lifecycle handling
 
@@ -669,7 +771,13 @@ diagnosis.
 CPU-only tests must cover:
 
 - the effective-environment allowlist and rejection of every behavior-changing
-  PSP/GART/reset/unsafe override named in invariant 11;
+  PSP/GART/reset/unsafe override named in invariant 14;
+- power-residency payload schema, capability negotiation, exact native error
+  preservation, and rejection of a v8 provider that is not publishable;
+- every partial-start power failure and reverse-order unwind, including exactly
+  one override release and one PCI close;
+- observed full-power, unexpected downgrade, provider termination, and normal
+  stop transitions without a timer callback after release;
 - pure R0.2 classification for `preboot_ready`, `existing_sos`, `inaccessible`,
   and `ambiguous`, with no write-capable helper call;
 - split/partial headers and payloads;
@@ -687,6 +795,9 @@ CPU-only tests must cover:
 Native tests or reviewable harness assertions must cover:
 
 - operation-gate serialization;
+- power-request/notification/timer/stop ordering;
+- no publish before confirmed residency, identity, and first successful canary;
+- exactly one power-release path for partial start, stop, and provider loss;
 - exact 32-bit versus multi-dword MMIO dispatch;
 - per-dword BAR0 write/readback ordering and stop-on-first-error behavior;
 - timer callback versus MMIO/config/stop;
@@ -698,24 +809,40 @@ Native tests or reviewable harness assertions must cover:
 Protocol fixtures remain independently declared in C and Python and are checked
 against `extra/usbgpu/protocol/tinygpu-wire-v1.md`.
 
+Update A0 and A1 so v8 acceptance requires both the frozen healthy keepalive
+payload and the new valid power-residency payload. A1 must fail on a power-state
+downgrade, provider generation change, canary stall, endpoint disappearance, or
+ACIO link error even if either status endpoint still responds.
+
 ## 10. Workstream R6: locked hardware gates
 
-Hardware work resumes only after R0-R5 CPU/build checks pass and a fresh audited
-v5 install provenance check succeeds.
+Hardware work resumes only after R0-R5 CPU/build checks pass, the complete v8
+candidate has a clean DriverKit build, and a fresh audited v8 install provenance
+check succeeds. Building v8 does not authorize installation or endpoint
+recovery; obtain separate operator approval after presenting the final source,
+tests, hashes, version, and required action sequence.
 
 Required order:
 
-1. R6.0: v5 enabled, legacy disabled, endpoint/link up, provider IORegistry
-   identity present, keepalive handshake/status valid.
-2. R6.1: M0-M3 pass with no resource growth.
-3. R6.2: M4, M5a, and conditionally applicable M5b produce classified results
+1. R6.0: perform at most the separately authorized endpoint recovery and single
+   audited v8 install/activation sequence; do not reinstall the same version to
+   refresh provenance.
+2. R6.1: exactly one v8 arkey registration is active, the legacy registration is
+   disabled, the endpoint/link and expected live-provider CDHash are present,
+   and handshake, keepalive, and power-residency payloads validate.
+3. R6.2: A0 passes, followed immediately by A1's 120-second no-client interval.
+   Both require one provider generation, continuous identity-canary progress,
+   confirmed power residency, zero resource growth, and no ACIO errors.
+4. R6.3: M0-M3 pass with no resource growth.
+5. R6.4: M4, M5a, and conditionally applicable M5b produce classified results
    without provider disappearance, stale-handle use, standalone mailbox clears,
    or resource growth.
-4. R6.3: M6 reaches AMD initialization or returns a precise supported runtime
+6. R6.5: M6 reaches AMD initialization or returns a precise supported runtime
    error; it may not report discovery failure.
-5. R6.4: M7 returns `[2.0, 5.0, 10.0, 17.0]` and status/counters remain valid.
-6. Repeat the existing A0 and A1 evidence gates.
-7. Only then rerun A2 and proceed to A3-A9. A4/A8 idle claims remain gated on
+7. R6.6: M7 returns `[2.0, 5.0, 10.0, 17.0]` and both power/status contracts
+   remain valid.
+8. Repeat A0 and A1 after M7 to prove the runtime path did not weaken residency.
+9. Only then rerun A2 and proceed to A3-A9. A4/A8 idle claims remain gated on
    the authoritative keeper matrix; A10/A11 remain separate classifications.
 
 Every failed hardware gate stops immediately and records endpoint, provider,
@@ -726,22 +853,33 @@ reset, hotplug, power cycle, or sleep transition is part of R6.
 
 | Area | Primary files | Responsibility |
 |---|---|---|
-| DriverKit lifecycle/gate | `extra/usbgpu/tbgpu/installer/TinyGPUDriverExtension/TinyGPUDriver.cpp` and headers | provider state, termination, timer, serialized PCI operations |
+| DriverKit lifecycle/gate | `extra/usbgpu/tbgpu/installer/TinyGPUDriverExtension/TinyGPUDriver.cpp` and headers | provider power residency, observed power transitions, termination, timer, serialized PCI operations |
 | User client | `TinyGPUDriverUserClient.cpp` and IIG | validated RPC selectors, leases, maps, DMA, typed IOKit results |
 | Unix RPC | `extra/usbgpu/tbgpu/installer/Shared/server.c` | framing, error preservation, provider-dead transition, cleanup, diagnostics |
 | Python client | `tinygrad/runtime/support/system.py` | protocol decoding, operation context, interface error classification, cleanup |
 | AMD boundary | `tinygrad/runtime/support/am/amdev.py`, `tinygrad/runtime/support/am/ip/smu.py` | diagnostic context only unless a separate runtime defect is proven |
 | Qualification | `extra/usbgpu/tests/qualify.py`, `minimal_amd_compute.py` | microprobes, stop conditions, evidence artifacts |
-| Wire contract | `extra/usbgpu/protocol/tinygpu-wire-v1.md` and fixtures | IDs, framing, errors, bounds |
+| Wire contract | `extra/usbgpu/protocol/tinygpu-wire-v1.md` and fixtures | IDs, framing, errors, bounds, keepalive and power-residency capability negotiation |
 | Workflow evidence | `docs/task_workflow/output/` | locked diagnostic and gate artifacts |
 
-Do not modify AMD algorithms, queue scheduling, model code, power policy, or
-keepalive cadence under this task unless R0 proves the failure occurs there.
+Do not modify AMD algorithms, queue scheduling, model code, global/platform
+power policy, or keepalive cadence under this task. The only authorized power
+change is the bounded DriverKit provider-residency contract in R0.3. It does not
+authorize global ASPM/L1/L1SS/CLx changes, GPU-core power or clock control, or a
+synthetic workload.
 
 ## 12. Definition of done
 
 This blocker is resolved only when all of the following are true:
 
+- the v8 provider requests full-power residency for its admitted lifetime,
+  confirms and reports the observable DriverKit state, and releases the request
+  exactly once during every partial-start, provider-loss, and normal-stop path;
+- the frozen keepalive v1 payload and the separately negotiated power-residency
+  payload are independently versioned, tested, and valid;
+- A0 and the immediate 120-second A1 pass on one provider generation with
+  continuous identity-canary progress, confirmed provider residency, no
+  endpoint disappearance, and no ACIO link errors;
 - a locked diagnostic artifact identifies the original failing operation and its
   native result;
 - native server/provider errors are typed, observable, and lifecycle-safe;
@@ -754,10 +892,15 @@ This blocker is resolved only when all of the following are true:
   keeper/MMIO serialization differences are resolved;
 - a truly read-only preflight classifies firmware state without running the
   semaphore-writing PSP setup gate;
-- M0-M6 pass under the GPU lock without endpoint/provider disappearance; and
+- M0-M6 pass under the GPU lock without endpoint/provider disappearance or a
+  power-residency downgrade; and
 - M7 passes with the exact four-value result, followed by fresh A0/A1 and A2
   acceptance evidence.
 
-Until then, the correct project status is: **v5 installed and activated;
-runtime compute qualification blocked by a native TinyGPU provider/RPC
-disconnect during AMD initialization**.
+Until then, the correct project status is: **v7 installed and activated; A0
+passed, but A1 captured awake-idle ACIO link loss and removal of the tunneled
+PCIe tree. The v8 DriverKit full-power-residency candidate is implemented in
+source, independently exposes requested and observed power state, passes its
+CPU/protocol tests, and has a clean signed development build. It is not yet
+installed or hardware-qualified. GPU-state inspection and runtime compute
+qualification remain blocked behind v8 A0/A1 continuity.**

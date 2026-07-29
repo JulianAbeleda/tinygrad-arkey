@@ -8,11 +8,13 @@ import threading
 
 import pytest
 
-from tinygrad.runtime.support.system import APLRemotePCIDevice, RemoteCmd, RemotePCIDevice, TinyGPUWireError, _tinygpu_validate_status
+from tinygrad.runtime.support.system import APLRemotePCIDevice, RemoteCmd, RemotePCIDevice, TinyGPUWireError, \
+  _tinygpu_validate_status, _tinygpu_validate_power_status
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 STATUS = json.loads((ROOT / "extra/usbgpu/protocol/fixtures/keepalive-status-v1.json").read_text())["valid"]
+POWER_STATUS = json.loads((ROOT / "extra/usbgpu/protocol/fixtures/power-residency-status-v1.json").read_text())["valid"]
 
 
 def _device(sock):
@@ -38,7 +40,7 @@ def test_handshake_and_status_use_frozen_extension_ids():
   dev = _device(client)
   seen = []
   handshake = {"schema": "tinygpu.handshake.v1", "protocol_major": 1, "protocol_minor": 0,
-               "capabilities": 3, "server_build_id": "test-build-1"}
+               "capabilities": 11, "server_build_id": "test-build-1"}
   def serve(sock, first):
     seen.append(struct.unpack("<BIIQQQ", first))
     payload = json.dumps(handshake, separators=(",", ":")).encode()
@@ -53,6 +55,19 @@ def test_handshake_and_status_use_frozen_extension_ids():
   thread.join(timeout=2)
   assert seen == [(15, 0, 0, 1, 0, 0), (18, 0, 0, 0, 0, 0)]
   client.close()
+
+
+def test_power_residency_status_uses_separate_command_and_schema():
+  client, server = socket.socketpair(); dev = _device(client)
+  dev.tinygpu_handshake, dev.tinygpu_capabilities = {"schema":"tinygpu.handshake.v1"}, 11
+  seen=[]
+  def serve(sock, request):
+    seen.append(struct.unpack("<BIIQQQ", request))
+    sock.sendall(_response(payload=json.dumps(POWER_STATUS, separators=(",", ":")).encode()))
+  thread = _serve(server, serve)
+  assert dev.power_residency_status() == POWER_STATUS
+  assert seen == [(20, 0, 0, 0, 0, 0)]
+  thread.join(timeout=2); client.close()
 
 
 def test_exact_legacy_generic_error_maps_to_unsupported_protocol_only():
@@ -118,18 +133,25 @@ def test_duplicate_status_json_and_bad_handshake_build_id_are_rejected():
   with pytest.raises(TinyGPUWireError) as exc: _tinygpu_validate_status(duplicate)
   assert exc.value.kind == "malformed_payload"
   client, server = socket.socketpair(); dev = _device(client)
-  bad = {"schema":"tinygpu.handshake.v1", "protocol_major":1, "protocol_minor":0, "capabilities":3, "server_build_id":"bad id"}
+  bad = {"schema":"tinygpu.handshake.v1", "protocol_major":1, "protocol_minor":0, "capabilities":11, "server_build_id":"bad id"}
   thread = _serve(server, lambda sock, request: sock.sendall(_response(payload=json.dumps(bad).encode(), resp1=1)))
   with pytest.raises(TinyGPUWireError) as exc: dev._negotiate_tinygpu()
   assert exc.value.kind == "malformed_payload"; thread.join(timeout=2); client.close()
 
 
-def test_handshake_requires_keepalive_and_lease_capabilities_locally():
+def test_handshake_requires_keepalive_lease_and_power_capabilities_locally():
   client, server = socket.socketpair(); dev = _device(client)
-  weak = {"schema":"tinygpu.handshake.v1", "protocol_major":1, "protocol_minor":0, "capabilities":1, "server_build_id":"test"}
+  weak = {"schema":"tinygpu.handshake.v1", "protocol_major":1, "protocol_minor":0, "capabilities":3, "server_build_id":"test"}
   thread = _serve(server, lambda sock, request: sock.sendall(_response(payload=json.dumps(weak).encode(), resp1=1)))
   with pytest.raises(TinyGPUWireError) as exc: dev._negotiate_tinygpu()
   assert exc.value.kind == "unsupported_capability"; thread.join(timeout=2); client.close()
+
+
+def test_power_status_validation_rejects_unconfirmed_or_downgraded_state():
+  for patch in ({"power_request_confirmed":False}, {"last_observed_power_flags":65536}, {"unexpected_downgrade_count":1}):
+    value = POWER_STATUS | patch
+    decoded = _tinygpu_validate_power_status(json.dumps(value).encode())
+    assert decoded == value
 
 
 def test_fd_response_requires_exactly_one_rights_ancillary_fd():

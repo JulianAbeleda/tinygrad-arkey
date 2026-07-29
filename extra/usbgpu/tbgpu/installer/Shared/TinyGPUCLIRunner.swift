@@ -61,6 +61,18 @@ final class TinyGPUCLIRunner: NSObject, OSSystemExtensionRequestDelegate {
     return value
   }
 
+  private static func powerResidencyJSON() -> String? {
+    var bytes = [CChar](repeating: 0, count: 4096)
+    var length: UInt = 0
+    guard tinygpu_power_residency_status(&bytes, UInt(bytes.count), &length) == 0, length <= bytes.count,
+          let value = String(bytes: bytes.prefix(Int(length)).map({ UInt8(bitPattern: $0) }), encoding: .utf8),
+          let data = value.data(using: .utf8),
+          let object = try? JSONSerialization.jsonObject(with: data),
+          let dictionary = object as? [String: Any], dictionary["schema"] as? String == "tinygpu.power-residency.v1"
+    else { return nil }
+    return value
+  }
+
   func run(args: [String], done: @escaping (TinyGPUCLIExit) -> Void) {
     self.done = done
     guard args.count > 1 else { return usage() }
@@ -70,6 +82,14 @@ final class TinyGPUCLIRunner: NSObject, OSSystemExtensionRequestDelegate {
       guard args.count == 3, args[2] == "status" || args[2] == "handshake" else { return usage() }
       guard let value = Self.keepaliveJSON(status: args[2] == "status") else {
         print("keepalive \(args[2]) unavailable")
+        return done(.failed)
+      }
+      print(value)
+      done(.ok)
+    case "power":
+      guard args.count == 3, args[2] == "status" else { return usage() }
+      guard let value = Self.powerResidencyJSON() else {
+        print("power status unavailable")
         return done(.failed)
       }
       print(value)
@@ -113,6 +133,7 @@ final class TinyGPUCLIRunner: NSObject, OSSystemExtensionRequestDelegate {
         status          Show extension status
         keepalive status  Show DriverKit keeper status as JSON
         keepalive handshake  Show diagnostic protocol capabilities as JSON
+        power status     Show DriverKit power-residency status as JSON
         install         Install the driver extension
         uninstall       Remove the driver extension
         server <path>   Start server on Unix socket

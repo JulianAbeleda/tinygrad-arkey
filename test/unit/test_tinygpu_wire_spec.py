@@ -24,6 +24,29 @@ def validate_status(status):
   if type(status["enabled"]) is not bool or type(status["counter_saturated"]) is not bool: return False
   return status["attempts"] == status["successes"] + status["failures"]
 
+def validate_power_status(status):
+  required = {"schema", "provider_generation", "policy_id", "override_requested", "override_active", "full_power_requested",
+              "power_request_accepted", "power_request_confirmed", "power_release_attempted", "desired_power_flags",
+              "last_observed_power_flags", "override_request_error", "power_request_error", "power_release_error",
+              "override_release_error", "transition_count", "unexpected_downgrade_count", "last_transition_monotonic_ns",
+              "last_canary_identity_dword", "last_canary_success_monotonic_ns", "publishable"}
+  if set(status) != required or status["schema"] != "tinygpu.power-residency.v1" or status["policy_id"] != "driverkit_full_power_v1": return False
+  u64 = ("provider_generation", "transition_count", "unexpected_downgrade_count", "last_transition_monotonic_ns", "last_canary_success_monotonic_ns")
+  u32 = ("desired_power_flags", "last_observed_power_flags")
+  i32 = ("override_request_error", "power_request_error", "power_release_error", "override_release_error")
+  boolean = ("override_requested", "override_active", "full_power_requested", "power_request_accepted", "power_request_confirmed",
+             "power_release_attempted", "publishable")
+  if any(type(status[k]) is not int or not 0 <= status[k] < 1 << 64 for k in u64): return False
+  if any(type(status[k]) is not int or not 0 <= status[k] < 1 << 32 for k in u32): return False
+  if any(type(status[k]) is not int or not -(1 << 31) <= status[k] < 1 << 31 for k in i32): return False
+  if any(type(status[k]) is not bool for k in boolean): return False
+  return status["desired_power_flags"] == status["last_observed_power_flags"] == 2 and \
+    all(status[k] for k in ("override_requested", "override_active", "full_power_requested", "power_request_accepted",
+                            "power_request_confirmed", "publishable")) and not status["power_release_attempted"] and \
+    not any(status[k] for k in i32) and status["unexpected_downgrade_count"] == 0 and status["transition_count"] > 0 and \
+    status["last_transition_monotonic_ns"] > 0 and status["last_canary_success_monotonic_ns"] > 0 and \
+    status["last_canary_identity_dword"] == "0x744c1002"
+
 def validate_error(value, expected_code):
   return set(value) == {"schema", "code", "message"} and value["schema"] == "tinygpu.error.v1" and value["code"] == expected_code and \
     type(value["message"]) is str and 1 <= len(value["message"].encode()) <= 512
@@ -31,7 +54,7 @@ def validate_error(value, expected_code):
 class TestTinyGPUWireSpec(unittest.TestCase):
   def test_authority_mentions_all_fixture_contracts(self):
     text = (PROTOCOL / "tinygpu-wire-v1.md").read_text()
-    for name in ("legacy-rpc-v1.json", "handshake-v1.json", "error-v1.json", "keepalive-status-v1.json"):
+    for name in ("legacy-rpc-v1.json", "handshake-v1.json", "error-v1.json", "keepalive-status-v1.json", "power-residency-status-v1.json"):
       self.assertIn(name, text)
     self.assertIn("independent codec", text)
     self.assertIn("33 bytes", text)
@@ -50,13 +73,13 @@ class TestTinyGPUWireSpec(unittest.TestCase):
 
   def test_negotiation_is_above_reserved_ids_and_probe_is_exact(self):
     fixture = load("handshake-v1.json")
-    self.assertEqual(list(fixture["commands"].values()), [15, 16, 17, 18, 19])
+    self.assertEqual(list(fixture["commands"].values()), [15, 16, 17, 18, 19, 20])
     self.assertEqual(struct.pack("<BIIQQQ", *fixture["legacy_probe"]["fields"]).hex(), fixture["legacy_probe"]["hex"])
     self.assertEqual(len(bytes.fromhex(fixture["legacy_probe"]["hex"])), 33)
     self.assertEqual(fixture["legacy_outcomes"]["maps_to"], "unsupported_protocol")
     self.assertEqual(len(bytes.fromhex(fixture["legacy_outcomes"]["generic_error_response_hex"])), 17)
     self.assertEqual(fixture["success_payload"]["schema"], "tinygpu.handshake.v1")
-    self.assertEqual(fixture["success_payload"]["capabilities"], 3)
+    self.assertEqual(fixture["success_payload"]["capabilities"], 11)
 
   def test_response_statuses_and_typed_error_payloads(self):
     fixture = load("error-v1.json")
@@ -80,5 +103,15 @@ class TestTinyGPUWireSpec(unittest.TestCase):
       value = copy.deepcopy(valid)
       value.update(case["patch"])
       self.assertFalse(validate_status(value), case["name"])
+
+  def test_power_residency_fixture_and_negative_cases(self):
+    fixture = load("power-residency-status-v1.json")
+    valid = fixture["valid"]
+    self.assertTrue(validate_power_status(valid))
+    self.assertLessEqual(len(json.dumps(valid, separators=(",", ":")).encode()), fixture["maximum_payload_bytes"])
+    for case in fixture["invalid"]:
+      value = copy.deepcopy(valid)
+      value.update(case["patch"])
+      self.assertFalse(validate_power_status(value), case["name"])
 
 if __name__ == "__main__": unittest.main()

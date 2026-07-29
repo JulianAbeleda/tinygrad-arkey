@@ -15,8 +15,10 @@ def test_handshake_precedes_driver_open_and_status_cli_is_direct():
   assert "open_tinygpu" not in handshake and "dext_rpc" not in handshake
   assert "CMD_KEEPALIVE_STATUS" in SERVER and "status_rpc(&session" in SERVER
   assert "int tinygpu_keepalive_status" in SERVER and "int tinygpu_keepalive_handshake" in SERVER
+  assert "int tinygpu_power_residency_status" in SERVER and "power_status_rpc(&session" in SERVER
   assert "case \"keepalive\":" in CLI and "tinygpu_keepalive_status" in CLI and "tinygpu_keepalive_handshake" in CLI
   assert "run_server(args[2])" not in CLI[CLI.index('case "keepalive"'):CLI.index('case "status"')]
+  assert 'case "power":' in CLI and "tinygpu_power_residency_status" in CLI
 
 def test_leases_gate_hardware_and_cleanup_is_idempotent():
   assert "req.cmd <= CMD_RESIZE_BAR && req.cmd != CMD_RESET && !session.lease" in SERVER

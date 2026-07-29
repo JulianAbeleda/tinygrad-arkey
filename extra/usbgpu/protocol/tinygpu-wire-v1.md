@@ -10,7 +10,8 @@ shared runtime declaration, keep those implementations conformant.
 
 The fixtures are `fixtures/legacy-rpc-v1.json`,
 `fixtures/handshake-v1.json`, `fixtures/error-v1.json`, and
-`fixtures/keepalive-status-v1.json`.
+`fixtures/keepalive-status-v1.json`, and
+`fixtures/power-residency-status-v1.json`.
 
 ## Scope and byte order
 
@@ -67,6 +68,7 @@ protocol error; it must not dispatch the request to hardware.
 | 17 | `LEASE_RELEASE` | `device_id=bar=arg1=arg2=0`, `arg0=lease_id` | no payload |
 | 18 | `KEEPALIVE_STATUS` | `device_id=bar=arg0=arg1=arg2=0` | UTF-8 `tinygpu.keepalive.v1` JSON |
 | 19 | `KEEPALIVE_SET_POLICY` | reserved unless negotiated capability is present | defined only by a future compatible extension |
+| 20 | `POWER_RESIDENCY_STATUS` | `device_id=bar=arg0=arg1=arg2=0` | UTF-8 `tinygpu.power-residency.v1` JSON |
 
 Clients send exactly one `HANDSHAKE` per connection before any new command.
 A server accepts a new command only after that successful handshake; a second
@@ -84,15 +86,17 @@ failure.
 The handshake JSON object has these exact keys and types:
 
 ```json
-{"schema":"tinygpu.handshake.v1","protocol_major":1,"protocol_minor":0,"capabilities":3,"server_build_id":"ascii-build-id"}
+{"schema":"tinygpu.handshake.v1","protocol_major":1,"protocol_minor":0,"capabilities":11,"server_build_id":"ascii-build-id"}
 ```
 
 `schema` is exactly `tinygpu.handshake.v1`; major/minor are unsigned 16-bit;
 `capabilities` is an unsigned 64-bit bitset; and `server_build_id` is 1..128
 ASCII bytes matching `[A-Za-z0-9._+-]+`. Capability bit 0 is
 `KEEPALIVE_STATUS`, bit 1 is `WORKLOAD_LEASE`, and bit 2 is
-`KEEPALIVE_SET_POLICY`. Unknown capability bits are ignored unless required by
-the client; bits required by `arg2` must all be present.
+`KEEPALIVE_SET_POLICY`. Bit 3 is `POWER_RESIDENCY_STATUS`. Unknown capability
+bits are ignored unless required by the client; bits required by `arg2` must
+all be present. v8 workload clients require bits 0, 1, and 3; bit 2 remains
+reserved and unset.
 
 ## Legacy handshake probe
 
@@ -149,9 +153,12 @@ otherwise. Selectors 0..3 preserve the existing ABI:
 | 5 | `KEEPALIVE_STATUS` | none | fixed status JSON bytes | diagnostic |
 | 6 | `LEASE_ACQUIRE` | none | lease_id:u64 | diagnostic to workload |
 | 7 | `LEASE_RELEASE` | lease_id:u64 | none | workload |
+| 8 | `MMIO_READ` | bar:u32, offset:u64, width:u32 | value:u32 | workload lease |
+| 9 | `MMIO_WRITE` | bar:u32, offset:u64, width:u32, value:u32 | none | workload lease |
+| 10 | `POWER_RESIDENCY_STATUS` | none | fixed power-residency JSON bytes | diagnostic |
 
 BAR mapping and `CopyClientMemoryForType` require an active lease. Diagnostic
-connections may call selectors 4 and 5; selector 2 is additionally admitted
+connections may call selectors 4, 5, and 10; selector 2 is additionally admitted
 only as an explicit operator action while the provider has zero workload
 leases. Width is one of 1, 2, or 4;
 configuration offsets must be aligned to width and within PCI configuration
@@ -159,8 +166,9 @@ space. A provider serializes every selector that can touch PCI with the timer
 and provider lifecycle gate.
 
 The app's diagnostic `keepalive handshake` command converts selector 4's two
-scalars into the wire handshake JSON. It does not open the Unix socket server,
-acquire a lease, map a BAR, or allocate DMA/shared memory.
+scalars into the wire handshake JSON. `keepalive status` and `power status`
+return selectors 5 and 10 respectively. These commands do not open the Unix
+socket server, acquire a lease, map a BAR, or allocate DMA/shared memory.
 
 ## Keepalive status
 
@@ -185,3 +193,27 @@ maximum timer leeway 100 ms. Counters saturate instead of wrapping, and
 `attempts == successes + failures`. `timer_error=0` means no timer error.
 
 The canonical valid examples are in `fixtures/keepalive-status-v1.json`.
+
+## Power-residency status
+
+`POWER_RESIDENCY_STATUS` is a separately negotiated diagnostic payload; it does
+not extend or reinterpret `tinygpu.keepalive.v1`. The encoded payload is <=4096
+bytes and has the exact schema `tinygpu.power-residency.v1` with these fields:
+
+| Key | Type/range |
+|---|---|
+| `schema`, `policy_id`, `last_canary_identity_dword` | string |
+| `provider_generation`, `transition_count`, `unexpected_downgrade_count`, `last_transition_monotonic_ns`, `last_canary_success_monotonic_ns` | unsigned 64-bit JSON integer |
+| `desired_power_flags`, `last_observed_power_flags` | unsigned 32-bit JSON integer |
+| `override_request_error`, `power_request_error`, `power_release_error`, `override_release_error` | signed 32-bit JSON integer |
+| `override_requested`, `override_active`, `full_power_requested`, `power_request_accepted`, `power_request_confirmed`, `power_release_attempted`, `publishable` | boolean |
+
+The v8 policy is exactly `driverkit_full_power_v1`. Its desired and healthy
+observed flags are `kIOServicePowerCapabilityOn` (`2`). A healthy active payload
+has accepted override and full-power requests, an observed On notification,
+zero native errors, zero unexpected downgrades, a successful identity canary,
+and `publishable=true`. The payload proves only DriverKit request and callback
+state; physical tunnel continuity remains an A0/A1 hardware requirement.
+
+The canonical valid and invalid examples are in
+`fixtures/power-residency-status-v1.json`.
