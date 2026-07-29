@@ -1,0 +1,196 @@
+{
+  "catalog_entry": false,
+  "default": false,
+  "kind": "blocked_search_readiness",
+  "missing": {
+    "execution_inputs": [
+      "AMD gfx1100 through Linux KFD or macOS PCI+AMD, plus target fingerprint and isolated timing protocol."
+    ],
+    "fixtures": [
+      "Per exact shape key: GGUF packed bytes, activation batch, reference output, and overlay-layout metadata."
+    ],
+    "grammar": [
+      "No independent, shape-keyed packed-WMMA topology grammar defines domains and cross-field legality.",
+      "The frozen incumbent geometry table is excluded: it has no reproducible candidate population provenance."
+    ],
+    "primitive_lowerers": [
+      "generic packed Q4_K/Q6_K overlay dequant lowerer",
+      "generic AMD WMMA fragment/tile lowerer",
+      "generic LDS/cooperative-load/barrier/pipeline lowerer"
+    ],
+    "ranker": [
+      "No complete-plan ranker consumes an independent packed-WMMA topology grammar."
+    ],
+    "runner": [
+      "The current adapter and correctness canary bind the incumbent geometry; no runner accepts an arbitrary exact topology plan."
+    ]
+  },
+  "request": {
+    "candidate_space_reason": "No independently justified finite domains; frozen incumbent geometry is excluded.",
+    "candidate_space_status": "MISSING",
+    "catalog_entry": false,
+    "default": false,
+    "kind": "search_request",
+    "objective": {
+      "direction": "minimize",
+      "name": "route_bound_latency_ms",
+      "ranking": "median_of_3",
+      "tie_break": "canonical_exact_plan_hash"
+    },
+    "public": true,
+    "request_id": "m2b-packed-wmma-prefill-qwen3-14b-gfx1100-v1",
+    "request_sha256": "6d2688b6c8de4d009b4cb2a445b1ec743ea50191438f76ede5927166534ea75b",
+    "required_topology_schema": {
+      "absence": [
+        "no value domains",
+        "no legality grammar",
+        "no enumerator",
+        "no generic lowerer"
+      ],
+      "fields": {
+        "dequant_overlay": [
+          "quant_format",
+          "packed_storage",
+          "block_decode",
+          "overlay_layout",
+          "metadata_semantics",
+          "accumulator_dtype"
+        ],
+        "global_local_axes": [
+          "global_axes",
+          "local_axes",
+          "reduce_axes",
+          "axis_order"
+        ],
+        "lds": [
+          "a_window",
+          "b_window",
+          "strides",
+          "padding",
+          "cooperative_loads",
+          "barriers"
+        ],
+        "memory": [
+          "weight_addressing",
+          "activation_addressing",
+          "output_layout",
+          "resource_limits"
+        ],
+        "pipeline": [
+          "buffer_count",
+          "stage_count",
+          "dependency_waits",
+          "tail_protocol"
+        ],
+        "tile": [
+          "m",
+          "n",
+          "k",
+          "wave_m",
+          "wave_n",
+          "threads"
+        ],
+        "wmma": [
+          "instruction",
+          "fragment_layout",
+          "mma_k",
+          "accumulator_layout",
+          "epilogue"
+        ]
+      },
+      "kind": "required_topology_schema",
+      "not_a_grammar": true,
+      "schema": "tinygrad.prefill.packed-wmma-m2b-search.v1",
+      "status": "UNPROVEN"
+    },
+    "route_id": "packed_wmma_prefill_generated",
+    "schema": "tinygrad.prefill.packed-wmma-m2b-search.v1",
+    "search_system": {
+      "name": "BoltBeam",
+      "revision": "f6ee2763f47316112fbba40b91b859e0e7068a6d"
+    },
+    "target": {
+      "architecture": "gfx1100",
+      "backend": "AMD",
+      "wave_size": 32
+    },
+    "workloads": [
+      {
+        "profile": "qwen3_14b_q4k_m_gfx1100",
+        "quant": "Q4_K",
+        "role": "attn_qo",
+        "route_applicability": "COVERED",
+        "shape": {
+          "K": 5120,
+          "M": 512,
+          "N": 5120
+        },
+        "shape_key": "qwen3_14b_q4k_m_gfx1100:Q4_K:attn_qo:m512-n5120-k5120"
+      },
+      {
+        "profile": "qwen3_14b_q4k_m_gfx1100",
+        "quant": "Q4_K",
+        "role": "attn_kv",
+        "route_applicability": "COVERED",
+        "shape": {
+          "K": 5120,
+          "M": 512,
+          "N": 1024
+        },
+        "shape_key": "qwen3_14b_q4k_m_gfx1100:Q4_K:attn_kv:m512-n1024-k5120"
+      },
+      {
+        "profile": "qwen3_14b_q4k_m_gfx1100",
+        "quant": "Q4_K",
+        "role": "ffn_gate_up",
+        "route_applicability": "COVERED",
+        "shape": {
+          "K": 5120,
+          "M": 512,
+          "N": 17408
+        },
+        "shape_key": "qwen3_14b_q4k_m_gfx1100:Q4_K:ffn_gate_up:m512-n17408-k5120"
+      },
+      {
+        "profile": "qwen3_14b_q4k_m_gfx1100",
+        "quant": "Q4_K",
+        "role": "ffn_down",
+        "route_applicability": "COVERED",
+        "shape": {
+          "K": 17408,
+          "M": 512,
+          "N": 5120
+        },
+        "shape_key": "qwen3_14b_q4k_m_gfx1100:Q4_K:ffn_down:m512-n5120-k17408"
+      },
+      {
+        "profile": "qwen3_14b_q4k_m_gfx1100",
+        "quant": "Q6_K",
+        "role": "attn_kv",
+        "route_applicability": "COVERED",
+        "shape": {
+          "K": 5120,
+          "M": 512,
+          "N": 1024
+        },
+        "shape_key": "qwen3_14b_q4k_m_gfx1100:Q6_K:attn_kv:m512-n1024-k5120"
+      },
+      {
+        "profile": "qwen3_14b_q4k_m_gfx1100",
+        "quant": "Q6_K",
+        "role": "ffn_down",
+        "route_applicability": "COVERED",
+        "shape": {
+          "K": 17408,
+          "M": 512,
+          "N": 5120
+        },
+        "shape_key": "qwen3_14b_q4k_m_gfx1100:Q6_K:ffn_down:m512-n5120-k17408"
+      }
+    ]
+  },
+  "route_id": "packed_wmma_prefill_generated",
+  "schema": "tinygrad.prefill.packed-wmma-m2b-search.v1",
+  "status": "BLOCKED",
+  "verdict": "UNPROVEN"
+}
