@@ -81,7 +81,20 @@ def _load_routes() -> dict:
   it out of sz.py's .py/.js LOC budget. PROFILE_DECODE/PROFILE_DECODE_LARGE/PROFILE_PREFILL are written into
   the JSON as their plain string VALUES (the JSON loader has no access to these Python names).
   """
-  return json.loads((pathlib.Path(__file__).parent / "route_manifest.json").read_text())
+  routes = json.loads((pathlib.Path(__file__).parent / "route_manifest.json").read_text())
+  # Runtime applicability belongs to the production descriptors. EXP stores
+  # evidence and provenance, then derives these exact guards so the manifest
+  # cannot become a second selected-configuration authority.
+  from tinygrad.llm.flash_decode_attention import FLASH_DECODE_G4, FLASH_DECODE_G5
+  from tinygrad.llm.packed_wmma_prefill import PACKED_WMMA_ROUTES
+  for route_id, config in ((FLASH_DECODE_G4.route_id, FLASH_DECODE_G4), (FLASH_DECODE_G5.route_id, FLASH_DECODE_G5)):
+    guard = {"B":1, "Hq":config.query_heads, "Hkv":config.kv_heads, "Hd":config.head_dim, "ctx":">=512"}
+    if config.query_group_size is None: guard["G"] = config.query_heads // config.kv_heads
+    routes[route_id]["shape_guards"] = [guard]
+  routes["packed_wmma_prefill_generated"]["shape_guards"] = [
+    {"role":row.role, "M":row.shape[0], "N":row.shape[1], "K":row.shape[2], "quant":row.quant}
+    for row in PACKED_WMMA_ROUTES]
+  return routes
 
 ROUTES = _load_routes()
 

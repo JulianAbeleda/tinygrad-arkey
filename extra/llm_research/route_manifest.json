@@ -125,16 +125,6 @@
     "quant": [
       "fp16"
     ],
-    "shape_guards": [
-      {
-        "B": 1,
-        "Hq": 32,
-        "Hkv": 8,
-        "Hd": 128,
-        "G": 4,
-        "ctx": ">=512"
-      }
-    ],
     "env": {},
     "rollback": {
       "DECODE_LIVE_SPLIT": "0"
@@ -174,15 +164,6 @@
     "excluded_roles": [],
     "quant": [
       "fp16"
-    ],
-    "shape_guards": [
-      {
-        "B": 1,
-        "Hq": 40,
-        "Hkv": 8,
-        "Hd": 128,
-        "ctx": ">=512"
-      }
     ],
     "env": {},
     "rollback": {
@@ -533,50 +514,6 @@
     "quant": [
       "Q4_K",
       "Q6_K"
-    ],
-    "shape_guards": [
-      {
-        "role": "attn_qo",
-        "M": 512,
-        "N": 5120,
-        "K": 5120,
-        "quant": "Q4_K"
-      },
-      {
-        "role": "attn_kv",
-        "M": 512,
-        "N": 1024,
-        "K": 5120,
-        "quant": "Q4_K"
-      },
-      {
-        "role": "ffn_gate_up",
-        "M": 512,
-        "N": 17408,
-        "K": 5120,
-        "quant": "Q4_K"
-      },
-      {
-        "role": "ffn_down",
-        "M": 512,
-        "N": 5120,
-        "K": 17408,
-        "quant": "Q4_K"
-      },
-      {
-        "role": "attn_kv",
-        "M": 512,
-        "N": 1024,
-        "K": 5120,
-        "quant": "Q6_K"
-      },
-      {
-        "role": "ffn_down",
-        "M": 512,
-        "N": 5120,
-        "K": 17408,
-        "quant": "Q6_K"
-      }
     ],
     "env": {
       "TINYGRAD_PREFILL_PACKED_WMMA": "1 (default)"
