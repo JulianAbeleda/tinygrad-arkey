@@ -11,7 +11,7 @@ shared runtime declaration, keep those implementations conformant.
 The fixtures are `fixtures/legacy-rpc-v1.json`,
 `fixtures/handshake-v1.json`, `fixtures/error-v1.json`, and
 `fixtures/keepalive-status-v1.json`, and
-`fixtures/power-residency-status-v3.json`.
+`fixtures/power-residency-status-v4.json`.
 
 ## Scope and byte order
 
@@ -68,7 +68,7 @@ protocol error; it must not dispatch the request to hardware.
 | 17 | `LEASE_RELEASE` | `device_id=bar=arg1=arg2=0`, `arg0=lease_id` | no payload |
 | 18 | `KEEPALIVE_STATUS` | `device_id=bar=arg0=arg1=arg2=0` | UTF-8 `tinygpu.keepalive.v1` JSON |
 | 19 | `KEEPALIVE_SET_POLICY` | reserved unless negotiated capability is present | defined only by a future compatible extension |
-| 20 | `POWER_RESIDENCY_STATUS` | `device_id=bar=arg0=arg1=arg2=0` | UTF-8 `tinygpu.power-residency.v3` JSON |
+| 20 | `POWER_RESIDENCY_STATUS` | `device_id=bar=arg0=arg1=arg2=0` | UTF-8 `tinygpu.power-residency.v4` JSON |
 
 Clients send exactly one `HANDSHAKE` per connection before any new command.
 A server accepts a new command only after that successful handshake; a second
@@ -95,7 +95,7 @@ ASCII bytes matching `[A-Za-z0-9._+-]+`. Capability bit 0 is
 `KEEPALIVE_STATUS`, bit 1 is `WORKLOAD_LEASE`, and bit 2 is
 `KEEPALIVE_SET_POLICY`. Bit 3 is `POWER_RESIDENCY_STATUS`. Unknown capability
 bits are ignored unless required by the client; bits required by `arg2` must
-all be present. v12 workload clients require bits 0, 1, and 3; bit 2 remains
+all be present. v13 workload clients require bits 0, 1, and 3; bit 2 remains
 reserved and unset.
 
 ## Legacy handshake probe
@@ -198,28 +198,34 @@ The canonical valid examples are in `fixtures/keepalive-status-v1.json`.
 
 `POWER_RESIDENCY_STATUS` is a separately negotiated diagnostic payload; it does
 not extend or reinterpret `tinygpu.keepalive.v1`. The encoded payload is <=4096
-bytes and has the exact schema `tinygpu.power-residency.v3` with these fields:
+bytes and has the exact schema `tinygpu.power-residency.v4` with these fields:
 
 | Key | Type/range |
 |---|---|
-| `schema`, `policy_id`, `last_canary_identity_dword`, `bar_residency_policy_id` | string |
-| `provider_generation`, `power_request_attempts`, `last_power_request_monotonic_ns`, `transition_count`, `unexpected_downgrade_count`, `last_transition_monotonic_ns`, `last_canary_success_monotonic_ns`, `bar_residency_bytes` | unsigned 64-bit JSON integer |
-| `desired_power_flags`, `last_observed_power_flags`, `stop_busy_leases`, `stop_busy_bars`, `stop_busy_dma`, `bar_residency_bar`, `bar_residency_type` | unsigned 32-bit JSON integer |
-| `override_probe_prejoin_error`, `override_probe_postjoin_error`, `power_request_error`, `power_release_error`, `bar_residency_error` | signed 32-bit JSON integer |
-| `full_power_requested`, `power_request_accepted`, `power_request_confirmed`, `power_release_attempted`, `bar_residency_requested`, `bar_residency_active`, `publishable` | boolean |
+| `schema`, `policy_id`, `last_canary_identity_dword`, `bar_residency_policy_id`, `pci_command_policy_id` | string |
+| `provider_generation`, `power_request_attempts`, `last_power_request_monotonic_ns`, `transition_count`, `unexpected_downgrade_count`, `last_transition_monotonic_ns`, `last_canary_success_monotonic_ns`, `bar_residency_bytes`, `last_pci_command_monotonic_ns` | unsigned 64-bit JSON integer |
+| `desired_power_flags`, `last_observed_power_flags`, `stop_busy_leases`, `stop_busy_bars`, `stop_busy_dma`, `bar_residency_bar`, `bar_residency_type`, `pci_command_required_mask`, `pci_command_before`, `pci_command_after` | unsigned 32-bit JSON integer |
+| `override_probe_prejoin_error`, `override_probe_postjoin_error`, `power_request_error`, `power_release_error`, `bar_residency_error`, `pci_command_error` | signed 32-bit JSON integer |
+| `full_power_requested`, `power_request_accepted`, `power_request_confirmed`, `power_release_attempted`, `bar_residency_requested`, `bar_residency_active`, `pci_command_requested`, `pci_command_confirmed`, `publishable` | boolean |
 
-The v12 power policy is exactly `driverkit_full_power_v1`. Its desired and healthy
+The v13 power policy retains `driverkit_full_power_v1`. Its desired and healthy
 observed flags are `kIOServicePowerCapabilityOn` (`2`). A healthy active payload
 has the expected failing pre-join probe and successful post-join probe, at least
-one accepted full-power request, an On notification after that request, a later
+one accepted full-power request, an observed On notification, a later
 successful identity canary, zero request/release errors, zero unexpected
 downgrades, zero recorded Stop resource counts, and `publishable=true`. It also
 requires `driverkit_bar5_mapping_v1`: BAR5 was requested before the timer was
 created, its non-empty descriptor and mapping remain provider-owned, and the
 BAR-residency error is zero. This BAR is not included in workload BAR counts.
+It additionally requires `pci_command_enable_v1`: the provider requested and
+read back command mask `0x0007` (I/O space, memory space, and bus master) before
+BAR5, the readback remains confirmed without error, and the successful identity
+canary is later than both the PCI command operation and the full-power request.
 `power_request_accepted` records only that the API accepted the argument; it is
-not confirmation. The payload proves only DriverKit request and callback state;
+not confirmation. An already-On service need not emit a redundant callback after
+the request; PCI command readback plus the later canary provide the fresh evidence.
+The payload proves only DriverKit and PCI-provider state;
 physical tunnel continuity remains an A0/A1 hardware requirement.
 
 The canonical valid and invalid examples are in
-`fixtures/power-residency-status-v3.json`.
+`fixtures/power-residency-status-v4.json`.

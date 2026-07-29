@@ -31,15 +31,15 @@ def validate_handshake(value: dict) -> None:
      type(value.get("capabilities")) is not int or value["capabilities"] & 11 != 11 or \
      type(value.get("server_build_id")) is not str or \
      re.fullmatch(r"[A-Za-z0-9._+-]{1,128}", value["server_build_id"]) is None or \
-     value["server_build_id"] != "tinygrad-arkey-native-v12":
+     value["server_build_id"] != "tinygrad-arkey-native-v13":
     raise QualificationError("invalid diagnostic handshake")
 
 
-def validate_v12_registration(text: str) -> None:
+def validate_v13_registration(text: str) -> None:
   rows = [line.split() for line in text.splitlines() if "org.tinygrad.arkey.tinygpu.driver2" in line]
-  if len(rows) != 1 or rows[0][:5] != ["*", "*", "-", "org.tinygrad.arkey.tinygpu.driver2", "(1.0.0/12)"] or \
+  if len(rows) != 1 or rows[0][:5] != ["*", "*", "-", "org.tinygrad.arkey.tinygpu.driver2", "(1.0.0/13)"] or \
      rows[0][-2:] != ["[activated", "enabled]"]:
-    raise QualificationError("exactly one active and enabled arkey v12 registration is required")
+    raise QualificationError("exactly one active and enabled arkey v13 registration is required")
 
 
 def capture_idle(*, handshake_reader, status_reader, power_reader, registry_reader=lambda: {},
@@ -146,7 +146,7 @@ def main(argv=None) -> int:
         QualificationInterrupted(f"signal {signum}")))
 
     registration = required_text_command(["/usr/bin/systemextensionsctl", "list"], records, "system extensions")
-    validate_v12_registration(registration)
+    validate_v13_registration(registration)
     envelope["preflight"] = {
       "system_extensions":registration,
       "boot_time":required_text_command(["/usr/sbin/sysctl", "-n", "kern.boottime"], records, "boot time").strip(),

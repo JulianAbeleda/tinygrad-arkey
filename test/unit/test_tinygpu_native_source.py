@@ -68,7 +68,7 @@ def test_keepalive_status_supports_inline_and_descriptor_outputs():
 
 
 def test_power_residency_request_notification_and_release_are_distinct():
-  confirmation = body(DRIVER, "static bool FullPowerTransitionConfirmsRequest", "static bool PowerResidencyReady")
+  confirmation = body(DRIVER, "static bool FullPowerStateConfirmsRequest", "static bool PowerResidencyReady")
   request = body(DRIVER, "static kern_return_t RequestPowerResidency", "static kern_return_t ReleasePowerResidency")
   release = body(DRIVER, "static kern_return_t ReleasePowerResidency", "static kern_return_t DrainTimer")
   start = body(DRIVER, "kern_return_t TinyGPUDriver::Start_Impl", "kern_return_t TinyGPUDriver::Stop_Impl")
@@ -80,9 +80,9 @@ def test_power_residency_request_notification_and_release_are_distinct():
   assert request.index("powerRequestAccepted = false") < request.index("ChangePowerState(kFullPowerFlags)")
   assert request.index("powerRequestConfirmed = false") < request.index("ChangePowerState(kFullPowerFlags)")
   assert request.index("powerRequestAccepted = requestError == kIOReturnSuccess") < \
-    request.index("powerRequestConfirmed = FullPowerTransitionConfirmsRequest(state)")
+    request.index("powerRequestConfirmed = FullPowerStateConfirmsRequest(state)")
   for token in ("powerRequestAccepted", "!state->powerRequestError", "powerTransitions",
-                "lastObservedPowerFlags == kFullPowerFlags", "lastPowerTransition > state->lastPowerRequestTick"):
+                "lastObservedPowerFlags == kFullPowerFlags", "lastPowerRequestTick"):
     assert token in confirmation
   assert "ChangePowerState(kReleasedPowerFlags)" in release and "SetPowerOverride" not in release
   assert "kReleasedPowerFlags = kIOServicePowerCapabilityOff" in DRIVER and "powerReleaseAttempted" in release
@@ -90,7 +90,7 @@ def test_power_residency_request_notification_and_release_are_distinct():
   assert "action &&" in keepalive and "RequestPowerResidency(this, ivars)" in keepalive
   assert "lastSuccess > state->lastPowerRequestTick" in DRIVER
   assert "lastObservedPowerFlags = powerFlags" in notification
-  assert "powerRequestConfirmed = FullPowerTransitionConfirmsRequest(ivars)" in notification
+  assert "powerRequestConfirmed = FullPowerStateConfirmsRequest(ivars)" in notification
   assert "SetPowerState(powerFlags, SUPERDISPATCH)" in notification
   assert stop.count("\n\treturn ") == 1 and "Stop(provider, SUPERDISPATCH)" in stop
   assert "stopBusyLeases" in stop and "DrainTimer" in stop and "ReleaseMMIOMappings" in stop
@@ -113,13 +113,31 @@ def test_provider_lifetime_bar5_residency_is_separate_from_workload_resources():
   assert "++ivars->activeBars" not in acquire and "++ivars->activeDMA" not in acquire
 
 
+def test_historical_pci_command_enables_are_restored_and_fail_closed():
+  enable = body(DRIVER, "static kern_return_t EnablePCICommand", "static void ObservePCICommand")
+  observe = body(DRIVER, "static void ObservePCICommand", "static bool PCICommandReady")
+  ready = body(DRIVER, "static bool PCICommandReady", "static void ReleaseMMIOMappings")
+  start = body(DRIVER, "kern_return_t TinyGPUDriver::Start_Impl", "kern_return_t TinyGPUDriver::Stop_Impl")
+  tick = body(DRIVER, "void IMPL(TinyGPUDriver, KeepaliveTimer)", "kern_return_t TinyGPUDriver::NewUserClient_Impl")
+  reset = body(DRIVER, "TinyGPUDriver::ResetDevice", "TinyGPUDriver::MapBar")
+  assert "kIOPCICommandIOSpace | kIOPCICommandMemorySpace | kIOPCICommandBusMaster" in DRIVER
+  assert enable.index("ConfigurationRead16") < enable.index("ConfigurationWrite16") < enable.rindex("ConfigurationRead16")
+  assert "pciCommandAfter & kRequiredPCICommand" in enable and "kIOReturnNotReady" in enable
+  assert "ConfigurationRead16(kIOPCIConfigurationOffsetCommand" in observe
+  assert "pciCommandRequested" in ready and "pciCommandConfirmed" in ready and "pciCommandError" in ready
+  assert start.index("EnablePCICommand") < start.index("AcquireBARResidency") < start.index("IOTimerDispatchSource::Create")
+  assert "ObservePCICommand(ivars)" in tick
+  assert reset.index("->Reset(") < reset.index("EnablePCICommand") < reset.index("AcquireBARResidency")
+
+
 def test_power_residency_status_is_separate_from_frozen_keepalive_status():
   keepalive = body(DRIVER, "TinyGPUDriver::GetKeepaliveStatus", "TinyGPUDriver::GetPowerResidencyStatus")
   power = DRIVER[DRIVER.index("TinyGPUDriver::GetPowerResidencyStatus"):]
-  assert "tinygpu.keepalive.v1" in keepalive and "tinygpu.power-residency.v3" not in keepalive
-  assert "tinygpu.power-residency.v3" in power and "override_probe_prejoin_error" in power
+  assert "tinygpu.keepalive.v1" in keepalive and "tinygpu.power-residency.v4" not in keepalive
+  assert "tinygpu.power-residency.v4" in power and "override_probe_prejoin_error" in power
   assert "power_request_attempts" in power and "last_power_request_monotonic_ns" in power
   assert "unexpected_downgrade_count" in power and "bar_residency_policy_id" in power and "publishable" in power
+  assert "pci_command_policy_id" in power and "pci_command_required_mask" in power and "pci_command_after" in power
   assert "PowerResidencyStatus = 10" in CLIENT_IIG
 
 

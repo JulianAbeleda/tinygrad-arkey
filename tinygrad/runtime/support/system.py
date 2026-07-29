@@ -397,22 +397,25 @@ def _tinygpu_validate_power_status(payload:bytes) -> dict:
               "transition_count", "unexpected_downgrade_count", "last_transition_monotonic_ns",
               "last_canary_identity_dword", "last_canary_success_monotonic_ns", "stop_busy_leases", "stop_busy_bars",
               "stop_busy_dma", "bar_residency_policy_id", "bar_residency_requested", "bar_residency_active",
-              "bar_residency_bar", "bar_residency_type", "bar_residency_bytes", "bar_residency_error", "publishable"}
+              "bar_residency_bar", "bar_residency_type", "bar_residency_bytes", "bar_residency_error",
+              "pci_command_policy_id", "pci_command_requested", "pci_command_confirmed", "pci_command_required_mask",
+              "pci_command_before", "pci_command_after", "last_pci_command_monotonic_ns", "pci_command_error", "publishable"}
   if set(value) != required: raise TinyGPUWireError("malformed_payload", "unexpected power-residency fields")
   u64 = ("provider_generation", "power_request_attempts", "last_power_request_monotonic_ns", "transition_count",
-         "unexpected_downgrade_count", "last_transition_monotonic_ns", "last_canary_success_monotonic_ns", "bar_residency_bytes")
+         "unexpected_downgrade_count", "last_transition_monotonic_ns", "last_canary_success_monotonic_ns", "bar_residency_bytes",
+         "last_pci_command_monotonic_ns")
   u32 = ("desired_power_flags", "last_observed_power_flags", "stop_busy_leases", "stop_busy_bars", "stop_busy_dma",
-         "bar_residency_bar", "bar_residency_type")
+         "bar_residency_bar", "bar_residency_type", "pci_command_required_mask", "pci_command_before", "pci_command_after")
   i32 = ("override_probe_prejoin_error", "override_probe_postjoin_error", "power_request_error", "power_release_error",
-         "bar_residency_error")
+         "bar_residency_error", "pci_command_error")
   boolean = ("full_power_requested", "power_request_accepted", "power_request_confirmed", "power_release_attempted",
-             "bar_residency_requested", "bar_residency_active", "publishable")
+             "bar_residency_requested", "bar_residency_active", "pci_command_requested", "pci_command_confirmed", "publishable")
   if any(type(value[k]) is not int or not 0 <= value[k] < 1<<64 for k in u64): raise TinyGPUWireError("invalid_range")
   if any(type(value[k]) is not int or not 0 <= value[k] < 1<<32 for k in u32): raise TinyGPUWireError("invalid_range")
   if any(type(value[k]) is not int or not -(1<<31) <= value[k] < 1<<31 for k in i32): raise TinyGPUWireError("invalid_range")
   if any(type(value[k]) is not bool for k in boolean): raise TinyGPUWireError("malformed_payload")
-  if value["schema"] != "tinygpu.power-residency.v3" or value["policy_id"] != "driverkit_full_power_v1" or \
-     value["bar_residency_policy_id"] != "driverkit_bar5_mapping_v1":
+  if value["schema"] != "tinygpu.power-residency.v4" or value["policy_id"] != "driverkit_full_power_v1" or \
+     value["bar_residency_policy_id"] != "driverkit_bar5_mapping_v1" or value["pci_command_policy_id"] != "pci_command_enable_v1":
     raise TinyGPUWireError("invalid_enum")
   if not isinstance(value["last_canary_identity_dword"], str) or re.fullmatch(r"0x[0-9a-f]{8}", value["last_canary_identity_dword"]) is None:
     raise TinyGPUWireError("malformed_payload")
@@ -725,10 +728,13 @@ class APLRemotePCIDevice(RemotePCIDevice):
       if not all(power[k] for k in ("full_power_requested", "power_request_accepted", "power_request_confirmed", "publishable")) or \
          power["power_release_attempted"] or power["desired_power_flags"] != 2 or power["last_observed_power_flags"] != 2 or \
          power["power_request_attempts"] == 0 or power["last_power_request_monotonic_ns"] == 0 or \
-         power["last_transition_monotonic_ns"] <= power["last_power_request_monotonic_ns"] or \
          power["last_canary_success_monotonic_ns"] <= power["last_power_request_monotonic_ns"] or \
+         power["last_canary_success_monotonic_ns"] <= power["last_pci_command_monotonic_ns"] or \
          power["override_probe_prejoin_error"] != -536870212 or power["override_probe_postjoin_error"] or \
          power["power_request_error"] or power["power_release_error"] or power["unexpected_downgrade_count"] or \
+         not power["pci_command_requested"] or not power["pci_command_confirmed"] or power["pci_command_required_mask"] != 7 or \
+         power["pci_command_after"] & power["pci_command_required_mask"] != power["pci_command_required_mask"] or \
+         power["last_pci_command_monotonic_ns"] == 0 or power["pci_command_error"] or \
          any(power[k] for k in ("stop_busy_leases", "stop_busy_bars", "stop_busy_dma")):
         raise TinyGPUWireError("invalid_state", "provider power residency is not confirmed")
       self.tinygpu_power_residency = power

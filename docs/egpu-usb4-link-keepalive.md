@@ -82,7 +82,7 @@ The wire contract is frozen in
 `extra/usbgpu/protocol/tinygpu-wire-v1.md`. The provider rejects unknown identities and
 never resets or power-cycles hardware after a failed tick. Workload DMA, BAR mappings, and
 shared memory are released at lease disconnect. The provider BAR5 mapping is separately
-owned, separately reported by `tinygpu.power-residency.v3`, excluded from workload resource
+owned, separately reported by `tinygpu.power-residency.v4`, excluded from workload resource
 counts, and released only during provider stop/failure or explicitly around a function reset.
 
 ## v12 BAR-residency recovery candidate (2026-07-29)
@@ -98,6 +98,24 @@ before creating the one-Hz timer. It performs no MMIO read/write, AMD initializa
 allocation, reset, or model load. Provider health and workload admission require the BAR5
 mapping to remain active with zero error. Full model residency remains a known-good control if
 this minimal state is insufficient; it is not part of v12.
+
+## v13 historical PCI-command restoration candidate (2026-07-29)
+
+The last old-provider revision before the USBGPU prune, `a0250a41d`, explicitly enabled PCI
+command bits `0x0007` (I/O space, memory space, and bus master) before publishing `tinygpu`.
+The restored native provider at `f23c05c57` omitted that operation, and versions 7-12 never
+restored it. The abstract DriverKit On request added later is not a substitute for enabling
+the PCI function's concrete decode and bus-master bits.
+
+v13 restores the old read/OR/write sequence after identity validation, adds a serializing
+readback, and fails provider start if the required bits do not latch. The same operation runs
+after a function reset, while each keepalive tick only observes the mask and degrades on loss.
+Workload admission requires the confirmed mask, BAR5 residency, an accepted DriverKit On
+request, an observed On state, and an identity canary later than both the PCI command operation
+and the power request. This deliberately permits the On notification to predate a request made
+against an already-On service; requesting the same state is not expected to force a redundant
+callback. The source-only boundary and evidence are recorded in
+`docs/task_workflow/input/egpu-usb4-v13-pci-command-residency-scope-20260729.md`.
 
 ## Measured implementation status (2026-07-28)
 

@@ -17,9 +17,12 @@ struct TinyGPUPolicy {
 static constexpr TinyGPUPolicy kUSB4AMD744C = {"usb4_amd_744c_v1", 0x744c1002, 1000, 100};
 static constexpr const char* kPowerResidencyPolicy = "driverkit_full_power_v1";
 static constexpr const char* kBARResidencyPolicy = "driverkit_bar5_mapping_v1";
+static constexpr const char* kPCICommandPolicy = "pci_command_enable_v1";
 static constexpr uint32_t kKeeperBAR = 5;
 static constexpr uint32_t kFullPowerFlags = kIOServicePowerCapabilityOn;
 static constexpr uint32_t kReleasedPowerFlags = kIOServicePowerCapabilityOff;
+static constexpr uint16_t kRequiredPCICommand =
+	kIOPCICommandIOSpace | kIOPCICommandMemorySpace | kIOPCICommandBusMaster;
 static constexpr uint64_t kMaxPowerRequestAttempts = 3;
 static uint64_t gProviderGeneration = 0;
 
@@ -47,6 +50,8 @@ struct TinyGPUDriver_IVars {
 	bool powerReleaseAttempted = false;
 	bool barResidencyRequested = false;
 	bool barResidencyActive = false;
+	bool pciCommandRequested = false;
+	bool pciCommandConfirmed = false;
 	uint64_t generation = 0;
 	uint64_t attempts = 0;
 	uint64_t successes = 0;
@@ -61,6 +66,7 @@ struct TinyGPUDriver_IVars {
 	uint64_t lastPowerTransition = 0;
 	uint64_t powerRequestAttempts = 0;
 	uint64_t lastPowerRequestTick = 0;
+	uint64_t lastPCICommandTick = 0;
 	uint64_t leaseID = 0;
 	uint32_t lastIdentity = 0;
 	uint32_t desiredPowerFlags = kReleasedPowerFlags;
@@ -72,6 +78,8 @@ struct TinyGPUDriver_IVars {
 	uint32_t stopBusyBars = 0;
 	uint32_t stopBusyDMA = 0;
 	uint32_t barResidencyType = 0;
+	uint16_t pciCommandBefore = 0;
+	uint16_t pciCommandAfter = 0;
 	uint64_t barResidencyBytes = 0;
 	IOMemoryDescriptor* barResidencyMemory = nullptr;
 	IOMemoryMap* barResidencyMap = nullptr;
@@ -84,6 +92,7 @@ struct TinyGPUDriver_IVars {
 	int32_t powerRequestError = 0;
 	int32_t powerReleaseError = 0;
 	int32_t barResidencyError = 0;
+	int32_t pciCommandError = 0;
 };
 
 static uint64_t UptimeNS() {
@@ -110,6 +119,37 @@ static bool ValidConfig(uint32_t offset, uint32_t width) {
 
 static bool ValidMMIOWidth(uint64_t offset, uint32_t width) {
 	return (width == 1 || width == 2 || width == 4) && (offset % width) == 0;
+}
+
+// The provider used by every confirmed pre-prune TinyGPU run enabled PCI I/O,
+// memory decoding, and bus mastering before publishing the service. Keep the
+// operation on the provider gate and require readback instead of assuming the
+// config write took effect across the USB4 tunnel.
+static kern_return_t EnablePCICommand(TinyGPUDriver_IVars* state) {
+	state->pciCommandRequested = true;
+	state->pciCommandConfirmed = false;
+	state->pciCommandError = 0;
+	state->lastPCICommandTick = UptimeNS();
+	state->pci->ConfigurationRead16(kIOPCIConfigurationOffsetCommand, &state->pciCommandBefore);
+	const uint16_t enabled = state->pciCommandBefore | kRequiredPCICommand;
+	if (enabled != state->pciCommandBefore)
+		state->pci->ConfigurationWrite16(kIOPCIConfigurationOffsetCommand, enabled);
+	state->pci->ConfigurationRead16(kIOPCIConfigurationOffsetCommand, &state->pciCommandAfter);
+	state->pciCommandConfirmed = (state->pciCommandAfter & kRequiredPCICommand) == kRequiredPCICommand;
+	if (!state->pciCommandConfirmed) state->pciCommandError = (int32_t)kIOReturnNotReady;
+	return (kern_return_t)state->pciCommandError;
+}
+
+static void ObservePCICommand(TinyGPUDriver_IVars* state) {
+	state->pci->ConfigurationRead16(kIOPCIConfigurationOffsetCommand, &state->pciCommandAfter);
+	state->pciCommandConfirmed = state->pciCommandRequested &&
+		(state->pciCommandAfter & kRequiredPCICommand) == kRequiredPCICommand;
+	state->pciCommandError = state->pciCommandConfirmed ? 0 : (int32_t)kIOReturnNotReady;
+}
+
+static bool PCICommandReady(const TinyGPUDriver_IVars* state) {
+	return state->pciCommandRequested && state->pciCommandConfirmed && !state->pciCommandError &&
+		(state->pciCommandAfter & kRequiredPCICommand) == kRequiredPCICommand && state->lastPCICommandTick;
 }
 
 static void ReleaseMMIOMappings(TinyGPUDriver_IVars* state) {
@@ -194,16 +234,15 @@ static const char* StateName(ProviderState state) {
 	}
 }
 
-static bool FullPowerTransitionConfirmsRequest(const TinyGPUDriver_IVars* state) {
+static bool FullPowerStateConfirmsRequest(const TinyGPUDriver_IVars* state) {
 	return state->fullPowerRequested && state->powerRequestAccepted && !state->powerRequestError &&
 		!state->powerReleaseAttempted && state->powerTransitions &&
-		state->lastObservedPowerFlags == kFullPowerFlags && state->lastPowerRequestTick &&
-		state->lastPowerTransition > state->lastPowerRequestTick;
+		state->lastObservedPowerFlags == kFullPowerFlags && state->lastPowerRequestTick;
 }
 
 static bool PowerResidencyReady(const TinyGPUDriver_IVars* state) {
-	return state->powerRequestConfirmed && FullPowerTransitionConfirmsRequest(state) &&
-		state->lastSuccess > state->lastPowerRequestTick;
+	return state->powerRequestConfirmed && FullPowerStateConfirmsRequest(state) && PCICommandReady(state) &&
+		state->lastSuccess > state->lastPowerRequestTick && state->lastSuccess > state->lastPCICommandTick;
 }
 
 static bool ProviderResidencyReady(const TinyGPUDriver_IVars* state) {
@@ -232,8 +271,8 @@ static kern_return_t RequestPowerResidency(TinyGPUDriver* owner, TinyGPUDriver_I
 	state->powerRequestAccepted = requestError == kIOReturnSuccess;
 	// ChangePowerState may synchronously deliver SetPowerState before the return
 	// value can be recorded. Reconcile that callback after recording acceptance;
-	// asynchronous callbacks use the same ordered transition predicate below.
-	state->powerRequestConfirmed = FullPowerTransitionConfirmsRequest(state);
+	// asynchronous callbacks use the same state predicate below.
+	state->powerRequestConfirmed = FullPowerStateConfirmsRequest(state);
 	if (state->powerRequestAttempts == 1)
 		state->overrideProbePostJoinError = (int32_t)owner->SetPowerOverride(false);
 	return requestError;
@@ -306,6 +345,8 @@ kern_return_t TinyGPUDriver::Start_Impl(IOService* provider) {
 	ivars->gate->DispatchSync(^{ ivars->pci->ConfigurationRead32(kIOPCIConfigurationOffsetVendorID, &identity); });
 	ivars->lastIdentity = identity;
 	if (identity != kUSB4AMD744C.identity) { err = kIOReturnUnsupported; goto fail; }
+	err = ivars->gate->RunAction(^{ return EnablePCICommand(ivars); });
+	if (err) goto fail;
 	err = ivars->gate->RunAction(^{ return AcquireBARResidency(this, ivars); });
 	if (err) goto fail;
 
@@ -399,7 +440,7 @@ kern_return_t TinyGPUDriver::SetPowerState_Impl(uint32_t powerFlags) {
 			if (unexpected) SaturatingIncrement(&ivars->unexpectedPowerDowngrades, &ivars->counterSaturated);
 			ivars->lastObservedPowerFlags = powerFlags;
 			ivars->lastPowerTransition = UptimeNS();
-			ivars->powerRequestConfirmed = FullPowerTransitionConfirmsRequest(ivars);
+			ivars->powerRequestConfirmed = FullPowerStateConfirmsRequest(ivars);
 			RefreshProviderHealth(ivars);
 		};
 		if (ivars->gate && !ivars->gate->OnQueue()) ivars->gate->DispatchSync(observe);
@@ -418,6 +459,7 @@ void IMPL(TinyGPUDriver, KeepaliveTimer) {
 
 	uint32_t identity = 0;
 	ivars->pci->ConfigurationRead32(kIOPCIConfigurationOffsetVendorID, &identity);
+	ObservePCICommand(ivars);
 	ivars->lastIdentity = identity;
 	if (identity == kUSB4AMD744C.identity) {
 		if (ivars->lastSuccess) {
@@ -553,7 +595,7 @@ kern_return_t TinyGPUDriver::ResetDevice() {
 			ivars->pci->ConfigurationRead32(kIOPCIConfigurationOffsetVendorID, &identity);
 			ivars->lastIdentity = identity;
 			if (identity != kUSB4AMD744C.identity) err = kIOReturnNoDevice;
-			else err = AcquireBARResidency(this, ivars);
+			else if (!(err = EnablePCICommand(ivars))) err = AcquireBARResidency(this, ivars);
 		}
 	});
 	if (err) { ivars->gate->DispatchSync(^{ ivars->state = kActiveDegraded; }); return err; }
@@ -736,11 +778,12 @@ kern_return_t TinyGPUDriver::GetPowerResidencyStatus(char* out, size_t* length) 
 	if (!out || !length || !*length) return kIOReturnBadArgument;
 	struct Snapshot {
 		bool fullPowerRequested, requestAccepted, requestConfirmed, releaseAttempted;
-		bool barRequested, barActive, publishable;
+		bool barRequested, barActive, pciCommandRequested, pciCommandConfirmed, publishable;
 		uint64_t generation, requestAttempts, lastRequest, transitions, unexpectedDowngrades, lastTransition, lastCanarySuccess;
-		uint64_t barBytes;
+		uint64_t barBytes, lastPCICommand;
 		uint32_t desiredFlags, observedFlags, lastIdentity, stopBusyLeases, stopBusyBars, stopBusyDMA, barType;
-		int32_t overrideProbePreJoinError, overrideProbePostJoinError, requestError, releaseError, barError;
+		uint32_t pciCommandRequired, pciCommandBefore, pciCommandAfter;
+		int32_t overrideProbePreJoinError, overrideProbePostJoinError, requestError, releaseError, barError, pciCommandError;
 	};
 	__block Snapshot snapshot{};
 	auto capture = ^{
@@ -750,6 +793,8 @@ kern_return_t TinyGPUDriver::GetPowerResidencyStatus(char* out, size_t* length) 
 		snapshot.releaseAttempted = ivars->powerReleaseAttempted;
 		snapshot.barRequested = ivars->barResidencyRequested;
 		snapshot.barActive = ivars->barResidencyActive;
+		snapshot.pciCommandRequested = ivars->pciCommandRequested;
+		snapshot.pciCommandConfirmed = ivars->pciCommandConfirmed;
 		snapshot.publishable = ivars->state == kActiveHealthy && ProviderResidencyReady(ivars);
 		snapshot.generation = ivars->generation;
 		snapshot.requestAttempts = ivars->powerRequestAttempts;
@@ -766,17 +811,22 @@ kern_return_t TinyGPUDriver::GetPowerResidencyStatus(char* out, size_t* length) 
 		snapshot.stopBusyDMA = ivars->stopBusyDMA;
 		snapshot.barBytes = ivars->barResidencyBytes;
 		snapshot.barType = ivars->barResidencyType;
+		snapshot.lastPCICommand = ivars->lastPCICommandTick;
+		snapshot.pciCommandRequired = kRequiredPCICommand;
+		snapshot.pciCommandBefore = ivars->pciCommandBefore;
+		snapshot.pciCommandAfter = ivars->pciCommandAfter;
 		snapshot.overrideProbePreJoinError = ivars->overrideProbePreJoinError;
 		snapshot.overrideProbePostJoinError = ivars->overrideProbePostJoinError;
 		snapshot.requestError = ivars->powerRequestError;
 		snapshot.releaseError = ivars->powerReleaseError;
 		snapshot.barError = ivars->barResidencyError;
+		snapshot.pciCommandError = ivars->pciCommandError;
 	};
 	if (ivars->gate && !ivars->gate->OnQueue()) ivars->gate->DispatchSync(capture);
 	else capture();
 
 	int written = snprintf(out, *length,
-		"{\"schema\":\"tinygpu.power-residency.v3\",\"provider_generation\":%llu,"
+		"{\"schema\":\"tinygpu.power-residency.v4\",\"provider_generation\":%llu,"
 		"\"policy_id\":\"%s\",\"full_power_requested\":%s,\"power_request_accepted\":%s,"
 		"\"power_request_confirmed\":%s,\"power_request_attempts\":%llu,"
 		"\"last_power_request_monotonic_ns\":%llu,"
@@ -788,7 +838,10 @@ kern_return_t TinyGPUDriver::GetPowerResidencyStatus(char* out, size_t* length) 
 		"\"last_canary_success_monotonic_ns\":%llu,\"stop_busy_leases\":%u,\"stop_busy_bars\":%u,"
 		"\"stop_busy_dma\":%u,\"bar_residency_policy_id\":\"%s\",\"bar_residency_requested\":%s,"
 		"\"bar_residency_active\":%s,\"bar_residency_bar\":%u,\"bar_residency_type\":%u,"
-		"\"bar_residency_bytes\":%llu,\"bar_residency_error\":%d,\"publishable\":%s}",
+		"\"bar_residency_bytes\":%llu,\"bar_residency_error\":%d,"
+		"\"pci_command_policy_id\":\"%s\",\"pci_command_requested\":%s,\"pci_command_confirmed\":%s,"
+		"\"pci_command_required_mask\":%u,\"pci_command_before\":%u,\"pci_command_after\":%u,"
+		"\"last_pci_command_monotonic_ns\":%llu,\"pci_command_error\":%d,\"publishable\":%s}",
 		(unsigned long long)snapshot.generation, kPowerResidencyPolicy,
 		snapshot.fullPowerRequested ? "true" : "false", snapshot.requestAccepted ? "true" : "false",
 		snapshot.requestConfirmed ? "true" : "false", (unsigned long long)snapshot.requestAttempts,
@@ -800,7 +853,10 @@ kern_return_t TinyGPUDriver::GetPowerResidencyStatus(char* out, size_t* length) 
 		snapshot.lastIdentity, (unsigned long long)snapshot.lastCanarySuccess, snapshot.stopBusyLeases,
 		snapshot.stopBusyBars, snapshot.stopBusyDMA, kBARResidencyPolicy,
 		snapshot.barRequested ? "true" : "false", snapshot.barActive ? "true" : "false", kKeeperBAR,
-		snapshot.barType, (unsigned long long)snapshot.barBytes, snapshot.barError,
+		snapshot.barType, (unsigned long long)snapshot.barBytes, snapshot.barError, kPCICommandPolicy,
+		snapshot.pciCommandRequested ? "true" : "false", snapshot.pciCommandConfirmed ? "true" : "false",
+		snapshot.pciCommandRequired, snapshot.pciCommandBefore, snapshot.pciCommandAfter,
+		(unsigned long long)snapshot.lastPCICommand, snapshot.pciCommandError,
 		snapshot.publishable ? "true" : "false");
 	if (written < 0 || (size_t)written >= *length) return kIOReturnNoSpace;
 	*length = (size_t)written;

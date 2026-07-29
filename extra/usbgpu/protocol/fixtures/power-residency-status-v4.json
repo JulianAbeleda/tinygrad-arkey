@@ -1,8 +1,8 @@
 {
-  "schema": "tinygpu.power-residency.v3.fixture",
+  "schema": "tinygpu.power-residency.v4.fixture",
   "maximum_payload_bytes": 4096,
   "valid": {
-    "schema": "tinygpu.power-residency.v3",
+    "schema": "tinygpu.power-residency.v4",
     "provider_generation": 1,
     "policy_id": "driverkit_full_power_v1",
     "full_power_requested": true,
@@ -19,7 +19,7 @@
     "power_release_error": 0,
     "transition_count": 1,
     "unexpected_downgrade_count": 0,
-    "last_transition_monotonic_ns": 1100000000,
+    "last_transition_monotonic_ns": 900000000,
     "last_canary_identity_dword": "0x744c1002",
     "last_canary_success_monotonic_ns": 2000000000,
     "stop_busy_leases": 0,
@@ -32,6 +32,14 @@
     "bar_residency_type": 0,
     "bar_residency_bytes": 524288,
     "bar_residency_error": 0,
+    "pci_command_policy_id": "pci_command_enable_v1",
+    "pci_command_requested": true,
+    "pci_command_confirmed": true,
+    "pci_command_required_mask": 7,
+    "pci_command_before": 3,
+    "pci_command_after": 7,
+    "last_pci_command_monotonic_ns": 950000000,
+    "pci_command_error": 0,
     "publishable": true
   },
   "invalid": [
@@ -42,7 +50,7 @@
     {"name": "request_error", "patch": {"power_request_error": -536870201}},
     {"name": "unexpected_downgrade", "patch": {"unexpected_downgrade_count": 1}},
     {"name": "request_not_recorded", "patch": {"last_power_request_monotonic_ns": 0}},
-    {"name": "transition_predates_request", "patch": {"last_transition_monotonic_ns": 900000000}},
+    {"name": "transition_missing", "patch": {"transition_count": 0}},
     {"name": "canary_predates_request", "patch": {"last_canary_success_monotonic_ns": 1000000000}},
     {"name": "stop_resource_leak", "patch": {"stop_busy_dma": 1}},
     {"name": "bar_not_requested", "patch": {"bar_residency_requested": false}},
@@ -50,6 +58,11 @@
     {"name": "wrong_bar", "patch": {"bar_residency_bar": 0}},
     {"name": "empty_bar", "patch": {"bar_residency_bytes": 0}},
     {"name": "bar_error", "patch": {"bar_residency_error": -536870212}},
+    {"name": "pci_command_not_requested", "patch": {"pci_command_requested": false}},
+    {"name": "pci_command_not_confirmed", "patch": {"pci_command_confirmed": false}},
+    {"name": "pci_command_mask_missing_bus_master", "patch": {"pci_command_after": 3}},
+    {"name": "pci_command_not_recorded", "patch": {"last_pci_command_monotonic_ns": 0}},
+    {"name": "pci_command_error", "patch": {"pci_command_error": -536870184}},
     {"name": "not_publishable", "patch": {"publishable": false}}
   ]
 }

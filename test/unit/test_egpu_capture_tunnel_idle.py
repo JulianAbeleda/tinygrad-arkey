@@ -9,7 +9,7 @@ SPEC.loader.exec_module(capture)
 
 def fixtures():
   keepalive = json.loads((FIXTURES / "keepalive-status-v1.json").read_text())["valid"]
-  power = json.loads((FIXTURES / "power-residency-status-v3.json").read_text())["valid"]
+  power = json.loads((FIXTURES / "power-residency-status-v4.json").read_text())["valid"]
   keepalive["attempts"] = keepalive["successes"] = 1
   keepalive["last_attempt_monotonic_ns"] = keepalive["last_success_monotonic_ns"] = 2_000_000_000
   power["last_canary_success_monotonic_ns"] = 2_000_000_000
@@ -18,7 +18,7 @@ def fixtures():
 
 def handshake():
   return {"schema":"tinygpu.handshake.v1", "protocol_major":1, "protocol_minor":0,
-          "capabilities":11, "server_build_id":"tinygrad-arkey-native-v12"}
+          "capabilities":11, "server_build_id":"tinygrad-arkey-native-v13"}
 
 
 def test_capture_idle_preserves_paired_early_samples_and_registry():
@@ -65,14 +65,14 @@ def test_validate_handshake_rejects_wrong_native_identity_shape():
   else: raise AssertionError("invalid handshake was accepted")
 
 
-def test_v12_registration_is_exact_and_active():
-  capture.validate_v12_registration("* * - org.tinygrad.arkey.tinygpu.driver2 (1.0.0/12) org.tinygrad.arkey.tinygpu.driver2 [activated enabled]\n")
+def test_v13_registration_is_exact_and_active():
+  capture.validate_v13_registration("* * - org.tinygrad.arkey.tinygpu.driver2 (1.0.0/13) org.tinygrad.arkey.tinygpu.driver2 [activated enabled]\n")
   for invalid in (
     "* * - org.tinygrad.arkey.tinygpu.driver2 (1.0.0/11) org.tinygrad.arkey.tinygpu.driver2 [activated enabled]\n",
-    "  * - org.tinygrad.arkey.tinygpu.driver2 (1.0.0/12) org.tinygrad.arkey.tinygpu.driver2 [activated enabled]\n",
-    "* * - org.tinygrad.arkey.tinygpu.driver2 (1.0.0/12) org.tinygrad.arkey.tinygpu.driver2 [activated enabled]\n"
-    "* * - org.tinygrad.arkey.tinygpu.driver2 (1.0.0/12) org.tinygrad.arkey.tinygpu.driver2 [activated enabled]\n",
+    "  * - org.tinygrad.arkey.tinygpu.driver2 (1.0.0/13) org.tinygrad.arkey.tinygpu.driver2 [activated enabled]\n",
+    "* * - org.tinygrad.arkey.tinygpu.driver2 (1.0.0/13) org.tinygrad.arkey.tinygpu.driver2 [activated enabled]\n"
+    "* * - org.tinygrad.arkey.tinygpu.driver2 (1.0.0/13) org.tinygrad.arkey.tinygpu.driver2 [activated enabled]\n",
   ):
-    try: capture.validate_v12_registration(invalid)
+    try: capture.validate_v13_registration(invalid)
     except capture.QualificationError: pass
     else: raise AssertionError("invalid registration was accepted")
