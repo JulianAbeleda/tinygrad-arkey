@@ -203,7 +203,7 @@ def plan_selected_model_memory(inp:AdmissionInputs, facts:DeviceFacts, *, direct
                                overlay_requested:bool|None=None) -> tuple[AdmissionPlan, PrefillMemoryPlan, Strategy]:
   scanned_budget = scanned_device_memory_budget(facts)
   reserve = scanned_budget.reserve_bytes
-  device = DeviceMemoryFacts(facts.total_vram_bytes, facts.free_vram_bytes,
+  device = DeviceMemoryFacts(facts.total_vram_bytes, scanned_budget,
     ByteTerm("runtime_safety_reserve", reserve, facts.memory_probe.source,
              "align_up(total_vram_bytes - free_vram_bytes, scanned_allocator_granularity)",
              ByteLifetime.SAFETY_RESERVE), facts.memory_probe.source)

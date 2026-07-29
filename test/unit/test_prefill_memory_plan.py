@@ -4,6 +4,7 @@ import pytest
 
 from tinygrad.llm.prefill_memory_plan import (ByteLifetime, ByteTerm, CandidateMemoryCoverage, DeviceMemoryFacts,
                                                Strategy, plan_prefill_memory)
+from tinygrad.llm.memory_ledger import AllocationProvenance, ScannedMemoryBudget
 
 
 def term(name, size, lifetime=ByteLifetime.PERSISTENT):
@@ -11,7 +12,8 @@ def term(name, size, lifetime=ByteLifetime.PERSISTENT):
 
 
 def device(free, reserve=10, total=1000):
-  return DeviceMemoryFacts(total, free, ByteTerm("reserve", reserve, "runtime policy", "configured reserve",
+  budget = ScannedMemoryBudget(free, reserve, AllocationProvenance("GPU allocator probe", "test scanned budget"))
+  return DeviceMemoryFacts(total, budget, ByteTerm("reserve", reserve, "runtime policy", "configured reserve",
                                                  ByteLifetime.SAFETY_RESERVE), "GPU allocator probe")
 
 
@@ -54,11 +56,28 @@ def test_unknown_memory_fails_closed_with_explicit_reason():
 
 
 def test_unknown_gpu_or_reserve_fails_closed():
-  unknown_device = DeviceMemoryFacts(200, None, term("reserve", 10, ByteLifetime.SAFETY_RESERVE), "probe unavailable")
+  unknown = ScannedMemoryBudget(None, 10, AllocationProvenance("probe unavailable", "free memory unavailable"))
+  unknown_device = DeviceMemoryFacts(200, unknown, term("reserve", 10, ByteLifetime.SAFETY_RESERVE), "probe unavailable")
   plan = plan_prefill_memory(device=unknown_device, base_terms=(term("packed", 40),),
                              candidates=(candidate(Strategy.DIRECT_PACKED_FALLBACK, 5),))
   assert plan.decision is Strategy.REFUSE
   assert "admitted VRAM budget is unknown" in plan.candidate_decisions[0].reasons
+
+
+def test_planner_uses_scanned_budget_not_reported_total_capacity():
+  low_total = plan_prefill_memory(device=device(100, total=1), base_terms=(term("packed", 40),),
+                                  candidates=(candidate(Strategy.DIRECT_PACKED_FALLBACK, 5),))
+  high_total = plan_prefill_memory(device=device(100, total=10_000), base_terms=(term("packed", 40),),
+                                   candidates=(candidate(Strategy.DIRECT_PACKED_FALLBACK, 5),))
+  assert low_total.admitted_budget_bytes == high_total.admitted_budget_bytes == 90
+  assert low_total.decision is high_total.decision is Strategy.DIRECT_PACKED_FALLBACK
+  assert low_total.to_dict()["device"]["scanned_budget"]["admitted_bytes"] == 90
+
+
+def test_reporting_reserve_cannot_diverge_from_scanned_budget():
+  budget = ScannedMemoryBudget(100, 10, AllocationProvenance("test", "authoritative budget"))
+  with pytest.raises(ValueError, match="authoritative scanned budget reserve"):
+    DeviceMemoryFacts(1000, budget, term("reserve", 9, ByteLifetime.SAFETY_RESERVE), "test")
 
 
 def test_incomplete_coverage_and_capability_are_explicit():
