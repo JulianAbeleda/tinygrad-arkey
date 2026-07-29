@@ -159,8 +159,9 @@ enumeration, or the provider's installed/ready message.
 
 ## Current handoff (2026-07-29)
 
-**Owner:** continue from the clean `exp` worktree at `bca228387`. The installer is
-development-only and must run from `exp`; do not install from `master`.
+**Owner:** continue from the clean `exp` worktree containing the v13 recovery and this
+handoff. The installer is development-only and must run from `exp`; do not install from
+`master`.
 
 **Installed/runtime state:** the audited v13 provider source is `8f7afc45f`. v13 restores
 the old provider's PCI command mask `0x0007` (I/O space, memory decoding, and bus master),
@@ -184,10 +185,26 @@ Qwen3-1.7B Q4_K_M
 prefill 256 tok/s; decode 33 tok/s
 ```
 
-This is the precise historical observation that inference worked but was too slow. The
-subsequent Linux work was chosen because hardware resets were easier while improving the
-kernels; the Linux results culminating in `29be4c9fa` and `5bff0135c` must not be cited as
-eGPU transport evidence.
+This is the last committed Mac/eGPU model artifact, not the full boundary of what ran. The
+operator reports that the Mac eGPU was serving larger models in this period, including 8B
+and 14B, although their exact Mac run logs are not preserved in Git. Keep that distinction
+explicit: 1.7B is repository-proven; the larger Mac runs are operator-attested.
+
+Two independent problems then overlapped:
+
+1. The Mac eGPU intermittently went away and recovery commonly required a reboot. That
+   slowed the test loop even when inference itself was working. Moving the GPU to native
+   Linux made resets and repeated kernel experiments much easier; it was an operational
+   choice, not a conclusion that the Mac/Thunderbolt path could not serve a model.
+2. Model throughput was low. Native Linux reproduced that performance problem without the
+   Thunderbolt path, and the June sequence isolated tinygrad's kernel selection: `f4876230c`
+   enabled `Q4K_PRIMITIVE`, `1c247520d` recorded the 8B improvement, and `171aba1f0` recorded
+   the still-slow 14B result. Later route and primitive work improved those results further.
+
+The Linux results culminating in `29be4c9fa` and `5bff0135c` are therefore evidence about
+kernel performance, not eGPU transport. The historical conclusion was that low token rate
+came from tinygrad falling onto the wrong or generic kernels; eGPU disappearance/recovery
+was a separate reliability problem.
 
 The May 22 through June 10 PSP/GART arc was also not evidence of a bad cable. The enabled
 `AM_REMOTE_DISCOVERY_PROFILE=gfx1100_744c` workaround contained wrong MP0/MP1/NBIO versions;
