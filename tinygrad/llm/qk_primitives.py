@@ -8,8 +8,12 @@ from tinygrad.llm.gguf import MODEL_PARAMETER_ALLOCATION_OWNER
 from tinygrad.llm.memory_semantics import MODEL_PARAMETER, memory_semantic_owner, model_parameter
 from tinygrad.llm.physical_memory_ledger import allocation_owner, bind_allocation_owner
 from tinygrad.llm.decode_routes import q4k_primitive_linear_call, q6k_primitive_linear_call
-from tinygrad.llm.route_policy import _qk_generated_policy_entry
 from tinygrad.llm.model_route_plan import ModelRoutePlan, build_model_route_plan
+
+def _qk_generated_policy_entry(policy:dict|None, typ:int, rows:int, cols:int, name:str|None=None) -> dict|None:
+  if policy is None: return None
+  if name is not None and (entry:=policy.get("by_tensor", {}).get((name, typ, rows, cols))) is not None: return entry
+  return policy.get("by_shape", {}).get((typ, rows, cols))
 
 @dataclass(frozen=True)
 class QKPrimitiveEligibility:
