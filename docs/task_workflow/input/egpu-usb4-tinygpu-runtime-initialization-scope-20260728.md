@@ -2,8 +2,9 @@
 
 Date: 2026-07-28
 
-Status: open; the v7 status-marshalling fix is installed, but A0/A1 are blocked
-until a reboot removes the stale v6 DriverKit personality. This scope is a follow-on to
+Status: open; post-reboot A0 passed on v7, but A1 stopped when the tunneled PCIe
+tree disappeared during awake idle. No reset or AMD initialization followed.
+This scope is a follow-on to
 `egpu-usb4-persistent-pcie-service-scope-20260727.md`. It does not replace the
 DriverKit-owned keepalive architecture or its A0-A11 acceptance matrix.
 
@@ -19,20 +20,24 @@ sleep test is authorized by this scope.
 The installation and endpoint state at the latest handoff is:
 
 - `org.tinygrad.arkey.tinygpu.driver2` version `1.0.0/7` is
-  `[activated enabled]`.
-- Version `1.0.0/6` is `[terminating for upgrade via delegate]` and its stale
-  DriverKit personality still wins PCI matching until reboot.
+  `[activated enabled]`, and it is the only arkey registration.
 - The legacy `org.tinygrad.tinygpu.driver2` version `1.0.0/3` is
   `[activated disabled]`.
-- The audited v7 app and activated provenance are bound to commit `114d9c6d6`.
-- macOS has observed the AMD endpoint `1002:744c` with the PCI link up at
-  16.0 GT/s after the most recent bounded eGPU reset.
-- No `tinygpu` IOUserService is currently published because kernelmanagerd
-  retries the non-executable v6 DEXT instead of launching v7.
+- The audited v7 app and activated provenance are bound to clean commit
+  `c380ab4d0`.
+- After the reboot, kernelmanagerd selected replacement unique ID
+  `4e0fa54f6b09bc1e6274b7dc836eb373616790401964cf3334ebb63876099237`,
+  and the live provider CDHash matched the installed v7 CDHash.
+- A0 passed while `1002:744c` and its three companion functions were present at
+  x16 and 16.0 GT/s and selector 5 reported a healthy keeper.
+- Fifteen seconds after the A0 status sample, ACIO link errors preceded removal
+  of the entire tunneled PCIe tree. The USB4 UT4G bridge remains connected, but
+  there is now no `tinygpu` IOUserService and keepalive status is unavailable.
 
-Those observations establish installation, activation, and enumeration only.
-They do not establish that the provider can safely service AMD runtime MMIO,
-DMA, or queue initialization.
+Those observations establish installation, activation, selector-5 marshalling,
+and the single A0 snapshot only. They do not establish no-client continuity or
+that the provider can safely service AMD runtime MMIO, DMA, or queue
+initialization.
 
 The original AMD runtime blocker, which has not been re-exercised after the v7
 status fix, is:
@@ -238,16 +243,79 @@ detached commit `c380ab4d0` for A0/A1, then return to `exp` after preserving the
 gate artifacts. That keeps the gate runner's strict current-commit provenance
 check valid without another DEXT registration.
 
+### Post-reboot A0 pass and A1 awake-idle failure
+
+This subsection supersedes all earlier next actions.
+
+The Mac rebooted at `2026-07-29T00:10:16Z`. The complete locked audit found one
+active arkey v7 registration at
+`/Library/SystemExtensions/443F48B3-355D-448A-9413-99CB8DBDE7AC/`, with no
+historical arkey registration remaining. Kernelmanagerd explicitly selected
+unique ID
+`4e0fa54f6b09bc1e6274b7dc836eb373616790401964cf3334ebb63876099237`.
+The registered executable was mode `0755`, its SHA-256 was
+`2737afd33a8cbbe1c178602cd94e46b64f7349424f5e1ff4328f89a90dd563f6`,
+and its CDHash was `7b9d17f219d094d904d4758880b9bf1d3770e057`. Those values matched the
+installed and built v7 DEXT. The installed and built app executable SHA-256 was
+`7b4fedf967a92ba57dc34e8f637438561ca5ada4e46b3e94050d4e6d6543ba07`,
+and the install provenance named clean commit `c380ab4d0`.
+
+The UT4G bridge was connected at 40 Gb/s, all four AMD PCI functions were
+present at x16 and 16.0 GT/s, and the `tinygpu` IOUserService published the
+expected unique ID and CDHash. Selector 4 returned protocol v1 capabilities
+`3`. Selector 5 returned `active_healthy`, initially with `33/33` successful
+ticks and then with `51/51` in the formal A0 sample; both had zero failures,
+zero active workload resources, zero gaps over leeway, and a 1100 ms maximum
+success gap.
+
+Formal A0 passed in
+`docs/task_workflow/output/egpu-usb4-persistent-pcie-A0-20260729T001505Z-1319.json`.
+Formal A1 then stopped before its first status sample because its endpoint check
+returned false. The preserved failure artifact is
+`docs/task_workflow/output/egpu-usb4-persistent-pcie-A1-20260729T001521Z-1374.json`.
+No 120-second continuity interval ran.
+
+This was an actual link loss, not a transient `system_profiler` result. At
+`2026-07-29T00:15:17.123Z`, the kernel recorded repeated ACIO Gen2/3 errors on
+both lanes with codes `83`, `84`, `87`, and `88`. At `00:15:17.149Z`,
+`AppleT8132PCIeC` disabled `pcic0-bridge`, found the ASM2464 child dead, and
+marked `1002:744c`, `1002:ab30`, `1002:7446`, and `1002:7444` dead. It then
+force-closed `tinygpu`, removed all four functions, and stopped using the
+Thunderbolt tunnel. The last healthy A0 status transaction completed at
+`00:15:02.960Z`, less than fifteen seconds earlier.
+
+After the failure, the USB4 bridge remained visible but `SPPCIDataType` was
+empty, `ioreg -r -n tinygpu -l` returned no service, and native keepalive status
+was unavailable. Two v7 DriverKit processes from the two short-lived provider
+instances remained at PIDs 308 and 1263 at capture time. No TinyGPU Unix-socket
+server was running and no workload lease, BAR mapping, DMA allocation, AMD
+initialization, reset, replug, power cycle, or sleep transition occurred.
+
+The result reopens the keeper design boundary. It proves that the current
+DriverKit config-read implementation can report a healthy one-Hz history until
+immediately before the known ACIO/CLx-style failure, but it does not establish
+whether later timer callbacks stalled or whether
+`IOPCIDevice::ConfigurationRead32` failed to generate the same tunneled traffic
+as the historical user-space config read. The current scope explicitly limits
+the keeper to that config read and forbids changing ASPM/CLx or power policy, so
+do not guess at a power override or broaden the keeper action in place.
+
+Stop hardware qualification here. Do not retry A1, run M0-M7, reset/replug the
+GPU, reinstall v7, or request another reboot. Before another DEXT version or
+operator action, define and CPU/build-test one bounded diagnostic/design
+candidate that can discriminate timer progress from a shadowed/non-tunneling
+config read, and batch all required lifecycle changes into that single version.
+
 ## 2. Evidence boundary: facts versus hypotheses
 
 ### Established facts
 
-1. The v7 DEXT is enabled, v6 is terminating for upgrade via delegate, and the
-   legacy signed DEXT is disabled.
-2. The USB4 bridge can be present while the PCI endpoint is absent, and the PCI
-   endpoint can later re-enumerate without reinstalling the DEXT.
-3. When the endpoint is present, the macOS PCI scan returns `1002:744c` and the
-   AMD runtime device table admits `0x744c`.
+1. Exactly one arkey v7 DEXT registration is enabled after reboot; the legacy
+   signed v3 DEXT remains disabled.
+2. A0 passed with matched v7 provenance, a healthy selector-5 payload, and the
+   admitted `1002:744c` endpoint present at x16 and 16.0 GT/s.
+3. A1 stopped at its first endpoint check after ACIO link errors caused macOS to
+   remove the tunneled PCIe tree; the USB4 bridge remained present.
 4. The AMD interface selector tries KFD first, then the macOS PCI interface.
 5. The failing PCIIface path reaches `tinygrad/runtime/support/am/amdev.py` and
    fails in `SMU.is_smu_alive()` rather than at device discovery, handshake, or
