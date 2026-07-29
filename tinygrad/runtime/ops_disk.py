@@ -119,6 +119,7 @@ class DiskAllocator(Allocator):
     if not hasattr(DiskDevice, 'io_uring') or not use_ioring:
       local_buf = memoryview(bytearray(seg_len))
       for off in range(0, total_copy_size, seg_len):
+        if copied_in >= size: break
         while (copy_batch := get_free_buf()) is None: pass
         read_size = min(seg_len, total_copy_size - off, src.device.size - fd_offset - off)
         self._copyout(local_buf[:read_size], DiskBuffer(src.device, read_size, fd_offset + off))

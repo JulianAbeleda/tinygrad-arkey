@@ -66,7 +66,7 @@ def _should_use_custom_kernel_prefill_attn(n_heads:int, n_kv_heads:int, backend:
   FlashPrefillAttentionSpec), decoupled from the legacy composite-reduce path's prefill_tc_attn /
   shared_attention_proven_eligible proof (that proof is unrelated evidence for the OFF-critical-path
   class-2-risk `shared_prefill_attention` route -- see fused_attention.py's module docstring). True only for the
-  correctness-gated 8B/14B shapes on AMD/gfx1100; every other shape/backend/arch
+  correctness-gated geometries on AMD/gfx1100; every other shape/backend/arch
   safely falls back to SDPA (the existing default for all of them today)."""
   from tinygrad.llm.fused_attention import ADMITTED_GRIDS
   return (n_heads, n_kv_heads, 512) in ADMITTED_GRIDS and backend == "AMD" and arch == "gfx1100"
@@ -624,8 +624,8 @@ class TransformerBlock(FFNBlock):
       # shared_attention_proven_eligible proof -- unrelated evidence for a different, class-2-risk
       # path). Self-sufficient: builds its own ctx unconditionally (see below) so it cannot silently
       # fall through to SDPA the way a copy-pasted strategy-gate once did (root-caused via
-      # p5_default_binding.py -- see the ctx comment). Admission is bounded to the proven 8B/14B
-      # shapes by _should_use_custom_kernel_prefill_attn, so this branch cannot regress anything else.
+      # p5_default_binding.py -- see the ctx comment). Admission is bounded to promoted geometries by
+      # _should_use_custom_kernel_prefill_attn, so this branch cannot regress anything else.
       from tinygrad.llm.fused_attention import route_prefill_attention
       from tinygrad.uop.ops import SharedAttentionCandidateContext
       # Self-sufficient ctx: custom_kernel_attention/route_prefill_attention never read ctx.profile or
@@ -637,9 +637,8 @@ class TransformerBlock(FFNBlock):
       # a DEFAULT model load resolves prefill_policy_strategy=='DIRECT_PACKED_FALLBACK', which made this
       # branch build ctx=None and silently fall through to SDPA even though prefill_custom_kernel_attn
       # was correctly True -- a token match hid a non-firing route). Build ctx unconditionally here;
-      # _profile is always non-empty when this branch is reached because
-      # _should_use_custom_kernel_prefill_attn already restricted admission to n_heads in {32,40}.
-      _profile = "qwen3_8b_q4k_m_gfx1100" if self.config.n_heads == 32 else "qwen3_14b_q4k_m_gfx1100" if self.config.n_heads == 40 else "custom_kernel_prefill_attn"
+      # The profile is a structural trace identity, not a model-name dispatch key.
+      _profile = f"gfx1100_hq{self.config.n_heads}_hkv{self.config.n_kv_heads}_hd{self.config.head_dim}"
       _ctx = SharedAttentionCandidateContext(_profile, prefill_policy_strategy(self.config.prefill_policy), T, start_pos+T,
         start_pos, self.config.n_heads, self.config.n_kv_heads, self.config.head_dim, True)
       with role_metadata("shared_prefill_attention"):
@@ -652,9 +651,11 @@ class TransformerBlock(FFNBlock):
       # rangeify either lowers the semantic operation or preserves its exact
       # SDPA fallback.  Do not decompose scores here.
       from tinygrad.llm.flash_prefill_attention import shared_prefill_attention
+      from tinygrad.llm.fused_attention import ADMITTED_GRIDS
       from tinygrad.uop.ops import SharedAttentionCandidateContext
       _strategy = prefill_policy_strategy(self.config.prefill_policy)
-      _profile = "qwen3_8b_q4k_m_gfx1100" if self.config.n_heads == 32 else "qwen3_14b_q4k_m_gfx1100" if self.config.n_heads == 40 else ""
+      _profile = f"gfx1100_hq{self.config.n_heads}_hkv{self.config.n_kv_heads}_hd{self.config.head_dim}" \
+        if (self.config.n_heads, self.config.n_kv_heads, 512) in ADMITTED_GRIDS else ""
       _ctx = SharedAttentionCandidateContext(_profile, _strategy, T, start_pos+T, start_pos, self.config.n_heads,
         self.config.n_kv_heads, self.config.head_dim, True) if _profile and _strategy in ("FULL_RESIDENT_OVERLAY", "BOUNDED_PACKED_TILES") else None
       with role_metadata("shared_prefill_attention"):
