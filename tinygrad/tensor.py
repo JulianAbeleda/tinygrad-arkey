@@ -201,10 +201,6 @@ class Tensor(RandMixin):
     """
     return [Tensor(u) for u in UOp.custom_kernel(*[t.uop for t in (self,)+lst], fxn=fxn, grad_fxn=grad_fxn)]
 
-  def custom_kernel(self, *lst:Tensor, fxn:Callable, grad_fxn:Callable|None=None) -> list[Tensor]:
-    """Compatibility spelling for :meth:`uop_program`."""
-    return self.uop_program(*lst, fxn=fxn, grad_fxn=grad_fxn)
-
   def callify(self, *lst:Tensor) -> Tensor:
     big_sink = UOp.sink(*[x.uop for x in (self,)+lst])
     big_sink, buffer_map = transform_to_call(big_sink)
