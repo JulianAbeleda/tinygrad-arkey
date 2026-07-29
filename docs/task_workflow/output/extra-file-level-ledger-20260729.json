@@ -1,7 +1,8 @@
 {
   "schema": "extra-file-level-ledger-20260729",
   "audited_worktree": "/Users/julianabeleda/env/tinygrad-arkey-exp",
-  "audited_commit": "496b2c317",
+  "audited_commit": "34c044ef3",
+  "audit_snapshot_role": "final R12 pre-publication exp tip; generated boundary marker and retained A0 failures included",
   "status": "CLASSIFICATION_COMPLETE_FREEZE_GATED",
   "scope_baseline_count": 198,
   "current_tracked_count": 200,

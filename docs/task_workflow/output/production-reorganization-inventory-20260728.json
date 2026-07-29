@@ -1,9 +1,9 @@
 {
   "schema": "production-reorganization-inventory-20260728",
-  "status": "R7_PASS",
+  "status": "R12_PASS_WITH_EXPLICIT_FREEZE; R13_PENDING_PUBLICATION",
   "audited_worktree": "/Users/julianabeleda/env/tinygrad-arkey-exp",
-  "audited_commit": "8505f4c5a5b1e31862ace0613672b515f5b60405",
-  "audit_snapshot_role": "current-tip R7 reconciliation; non-removal migration and evidence blockers remain explicitly recorded",
+  "audited_commit": "34c044ef3",
+  "audit_snapshot_role": "final R12 pre-publication exp reconciliation; non-removal blockers explicitly frozen",
   "comparison_base": "6e1b61f16",
   "tier_contract": {
     "exp": ["production", "debug", "experimental"],
@@ -29,12 +29,12 @@
     "docs/task_workflow/output/extra-file-level-ledger-20260729.json"
   ],
   "current_tip_reconciliation": {
-    "commit": "8505f4c5a5b1e31862ace0613672b515f5b60405",
+    "commit": "34c044ef3",
     "worktree": "/Users/julianabeleda/env/tinygrad-arkey-exp",
     "agent_packets": ["r7_route_closure", "r7_egpu_closure", "r7_evidence_closure"],
     "tracked_counts": {"extra": 200, "tests": 184, "bench": 43, "docs_artifacts": 135, "docs_top_level_json": 189, "scratch_after_slice": 3},
     "extra_file_level_ledger": {"path": "docs/task_workflow/output/extra-file-level-ledger-20260729.json", "rows": 200, "unique": 200, "tree_match": true, "scope_baseline": 198, "drift": 2, "drift_owner": "extra/usbgpu"},
-    "tier_derivation_gate": {"freezeable_rows": 115, "tier_blocker_rows": 57, "master_blocker_rows": 21, "dev_and_master_blocker_rows": 36, "no_dev_master_cut_until_blockers_exit": true},
+    "tier_derivation_gate": {"freezeable_rows": 115, "tier_blocker_rows": 57, "master_blocker_rows": 21, "dev_and_master_blocker_rows": 36, "no_dev_master_cut_until_blockers_exit": true, "final_policy": "derived branches retain explicit blocker exceptions; no frozen row was moved or deleted"},
     "retained_failed_a0_outputs": ["docs/task_workflow/output/egpu-usb4-persistent-pcie-A0-20260728T152615Z-18390.json", "docs/task_workflow/output/egpu-usb4-persistent-pcie-A0-20260728T152626Z-18408.json"],
     "drift_reconciled": [
       {"group": "tinygrad/llm/route_ops.py retained adapters", "owner_branch": "master", "disposition": "consolidate/promote", "consumer_or_reference": "tinygrad/llm/model.py; tinygrad/llm/prefill_routes.py; tinygrad/llm/decode_routes.py", "retention_or_recovery": "retain until the eight-step route migration completes; no adapter deletion in R7", "unresolved_reason": "target modules must be promoted atomically before adapters can be removed"},

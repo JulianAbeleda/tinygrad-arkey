@@ -1,8 +1,8 @@
 {
   "schema": "production-reorganization-cleanup-ledger-20260728",
   "status": "R7_PASS",
-  "audited_commit": "8505f4c5a5b1e31862ace0613672b515f5b60405",
-  "audit_snapshot_role": "current-tip R7 reconciliation; zero unresolved removals",
+  "audited_commit": "34c044ef3",
+  "audit_snapshot_role": "final R12 pre-publication reconciliation; zero unresolved removals; frozen blockers retained",
   "authorized": [
     {"path": "docs/CLAUDE_EXECUTION_PROMPT_fused_attention_20260723.md", "action": "delete", "state": "completed", "recovery_commit": "e3778fcfb", "applied_commits": {"exp": "ab162a931", "dev": "d54a64ab0", "master": "ab154b422"}},
     {"path": "docs/CLAUDE_FLASHATTN_EXECUTION_PROMPT_20260723.md", "action": "delete", "state": "completed", "recovery_commit": "0fe7902f4", "applied_commits": {"exp": "ab162a931", "dev": "d54a64ab0", "master": "ab154b422"}},
@@ -19,9 +19,9 @@
     {"paths": ["docs/artifacts/shared-attention-benchmark-replay-20260723/raw/**", "docs/artifacts/shared-attention-g2-lds-replay-20260723/raw/**", "docs/artifacts/shared-attention-wave-fence-replay-20260723/raw/**"], "count": 22, "action": "delete", "state": "completed", "replacement": "corresponding summary.json/README.md compact replay conclusions", "recovery_commits": ["9d7b985e8", "f3327febe", "1299e4531"], "verification": "exact deletion count; remaining JSON parses; replay-admission test passes; no external raw-path consumers"}
   ],
   "current_tip_reconciliation": {
-    "commit": "8505f4c5a5b1e31862ace0613672b515f5b60405",
+    "commit": "34c044ef3",
     "extra_file_level_ledger": "docs/task_workflow/output/extra-file-level-ledger-20260729.json",
-    "extra_file_level_rows": 203,
+    "extra_file_level_rows": 200,
     "gate": "R7_PASS: every removal is completed or explicitly blocked; no unresolved path is being removed",
     "non_removal_blockers": [
       "retained route adapters require the eight-step promotion sequence",

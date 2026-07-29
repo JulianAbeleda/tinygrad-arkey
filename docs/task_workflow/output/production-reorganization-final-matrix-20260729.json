@@ -1,0 +1,66 @@
+{
+  "schema": "production-reorganization-final-matrix-20260729",
+  "status": "R12_PASS_WITH_EXPLICIT_FREEZE",
+  "publication": "R13_PENDING_PUBLICATION",
+  "scope": "production-debug-experimental filesystem cleanup migration",
+  "audited_at": "2026-07-29",
+  "branch_contract": {
+    "exp": "production + debug + experimental",
+    "dev": "production + debug",
+    "master": "production"
+  },
+  "branches": {
+    "exp": {
+      "worktree": "/Users/julianabeleda/env/tinygrad-arkey-exp",
+      "tip_before_final_record": "34c044ef3",
+      "tracked_counts": {"all": 1190, "tinygrad": 295, "extra": 200, "test": 184, "docs": 422, "bench": 43, "structure": 27},
+      "sz_budgeted_authored_lines": 36178,
+      "sz_budget": 40000,
+      "organization_audit": "ORG_R1_PASS_CENSUS_PINNED; hard_errors=0; warnings=64",
+      "runtime_boundary_audit": "R0_PASS_BOUNDARY_PINNED; surface_checks=20/20; leakage=none",
+      "doc_links": "PASS; 74 pre-existing archived targets accepted by extra/tools/doc_link_baseline.txt",
+      "focused_tests": "44 passed, 1 skipped; 3 pre-existing pytest-configuration warnings"
+    },
+    "dev": {
+      "worktree": "/Users/julianabeleda/env/tinygrad-arkey-dev",
+      "tip_before_final_record": "68e630d8c",
+      "tracked_counts": {"all": 1118, "tinygrad": 292, "extra": 198, "test": 153, "docs": 379, "bench": 43, "structure": 27},
+      "sz_budgeted_authored_lines": 35921,
+      "sz_budget": 40000,
+      "organization_audit": "ORG_R1_PASS_CENSUS_PINNED; hard_errors=0; warnings=64",
+      "runtime_boundary_audit": "R0_PASS_BOUNDARY_PINNED; surface_checks=20/20; leakage=none",
+      "doc_links": "PASS; 74 pre-existing archived targets accepted by extra/tools/doc_link_baseline.txt",
+      "focused_tests": "44 passed, 1 skipped; 3 pre-existing pytest-configuration warnings"
+    },
+    "master": {
+      "worktree": "/Users/julianabeleda/env/tinygrad-arkey",
+      "tip_before_final_record": "455ed52c0",
+      "tracked_counts": {"all": 1082, "tinygrad": 292, "extra": 188, "test": 127, "docs": 379, "bench": 43, "structure": 27},
+      "sz_budgeted_authored_lines": 35921,
+      "sz_budget": 40000,
+      "organization_audit": "ORG_R1_PASS_CENSUS_PINNED; hard_errors=0; warnings=65",
+      "runtime_boundary_audit": "R0_PASS_BOUNDARY_PINNED; surface_checks=20/20; leakage=none",
+      "doc_links": "PASS; 74 pre-existing archived targets accepted by extra/tools/doc_link_baseline.txt",
+      "focused_tests": "44 passed, 1 skipped; 3 pre-existing pytest-configuration warnings"
+    }
+  },
+  "freeze_policy": {
+    "version": "20260729-v1",
+    "invariant": "Every unresolved row is frozen: no move, delete, or prune until its named follow-up task and exit criteria are complete.",
+    "rows": {"freezeable": 115, "tier_blockers": 57, "master_blockers": 21, "dev_and_master_blockers": 36},
+    "groups": {
+      "tinygpu-product": {"rows": 36, "blocks": ["dev", "master"], "task": "TINYGPU-UPSTREAM-V3-VS-ARKEY-V13-AB"},
+      "llm-route-live": {"rows": 9, "blocks": ["master"], "task": "LLM-ROUTE-PROMOTION"},
+      "sqtt-boundary": {"rows": 5, "blocks": ["master"], "task": "SQTT-DECODER-BOUNDARY"},
+      "nv-ioctl": {"rows": 11, "blocks": ["master"], "task": "NV-IOCTL-SUPPORT-DECISION"},
+      "retained_non_tier": {"rows": 111, "blocks": [], "task": "named follow-up in extra-file-level-ledger-20260729.json"}
+    },
+    "derivation_exception": "dev and master were derived with destination-based patches and retain explicit blocker exceptions; no frozen row was moved or deleted."
+  },
+  "recovery_map": "docs/task_workflow/output/production-reorganization-cleanup-ledger-20260728.json",
+  "ledger": "docs/task_workflow/output/extra-file-level-ledger-20260729.json",
+  "retained_failed_hardware_evidence": [
+    "docs/task_workflow/output/egpu-usb4-persistent-pcie-A0-20260728T152615Z-18390.json",
+    "docs/task_workflow/output/egpu-usb4-persistent-pcie-A0-20260728T152626Z-18408.json"
+  ]
+}

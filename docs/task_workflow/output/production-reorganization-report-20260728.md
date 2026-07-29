@@ -335,3 +335,15 @@ replacement and recovery path. In particular, this checkpoint does not authorize
 The next safe action is the route-promotion sequence or the matched TinyGPU A/B, each on its own explicitly scoped
 follow-up. A subsequent bounded cleanup slice may proceed only when its implementation, tests, evidence, documents,
 references, and recovery record agree on one final owner.
+
+## R12/R13 final reconciliation (2026-07-29)
+
+The final matrix is recorded in `production-reorganization-final-matrix-20260729.json`. All three branch tips passed
+the organization audit (zero hard errors), runtime-boundary audit (20/20 surfaces, no leakage), `sz.py` authored-line
+budget, focused migration tests (44 passed, 1 skipped), and the documentation-link gate after installing the
+checker’s documented 74-target pre-existing archive baseline. The branches are pushed and clean before the final
+publication record.
+
+The 57 tier blockers are explicit retained exceptions, not silent omissions: 36 TinyGPU rows remain outside `dev` and
+`master` pending the upstream-v3 versus Arkey-v13 A/B; 21 master rows remain frozen for LLM route, SQTT, and NV IOCTL
+ownership decisions. No frozen row was moved or deleted. Recovery and deletion authority remains the cleanup ledger.
