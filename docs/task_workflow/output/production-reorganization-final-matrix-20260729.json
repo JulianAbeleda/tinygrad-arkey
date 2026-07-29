@@ -1,12 +1,12 @@
 {
   "schema": "production-reorganization-final-matrix-20260729",
   "status": "R12_PASS_WITH_EXPLICIT_FREEZE",
-  "publication": "R13_PENDING_PUBLICATION",
+  "publication": "R13_PUBLISHED",
   "canonical_record": "exp:docs/task_workflow/output/production-reorganization-final-matrix-20260729.json",
   "branch": "dev",
   "tip_before_final_record": "68e630d8c",
   "contract": "production + debug",
-  "tracked_counts": {"all": 1118, "tinygrad": 292, "extra": 198, "test": 153, "docs": 379, "bench": 43, "structure": 27},
+  "tracked_counts": {"all": 1120, "tinygrad": 292, "extra": 199, "test": 153, "docs": 380, "bench": 43, "structure": 27},
   "gates": {
     "sz": "35921/40000 authored budgeted lines",
     "organization": "ORG_R1_PASS_CENSUS_PINNED; hard_errors=0; warnings=64",
