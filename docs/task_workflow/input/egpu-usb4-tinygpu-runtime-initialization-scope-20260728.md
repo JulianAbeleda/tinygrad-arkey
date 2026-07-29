@@ -2,10 +2,14 @@
 
 Date: 2026-07-28
 
-Status: open; v8 is installed from audited source commit `4e821c5d4`, but its
-registration handoff is pending one reboot because v7 remains terminating and
-is still selected on endpoint attach. v8 A0/A1 have not passed, and no AMD
-initialization is authorized. This scope is a follow-on to
+Status: superseded for source implementation by
+`egpu-usb4-v10-post-start-power-residency-scope-20260729.md`. The post-reboot v8
+registration handoff is clean and the PCIe endpoint is present, but DriverKit
+reports that v8 failed `Start(display)` before publishing `tinygpu`. R6.1
+therefore failed and A0/A1 did not run. The source-only v9 diagnostic candidate
+was audited and must never be installed; the replacement v10 candidate is
+host-verified but remains uncommitted and uninstalled. No endpoint recovery,
+installation, reboot, or AMD initialization is authorized. This scope is a follow-on to
 `egpu-usb4-persistent-pcie-service-scope-20260727.md`. It does not replace the
 DriverKit-owned keepalive architecture or its A0-A11 acceptance matrix.
 
@@ -39,6 +43,51 @@ Those observations establish installation, activation, selector-5 marshalling,
 and the single A0 snapshot only. They do not establish no-client continuity or
 that the provider can safely service AMD runtime MMIO, DMA, or queue
 initialization.
+
+### Post-reboot v8 R6.1 start failure
+
+This subsection supersedes all earlier next actions. The Mac rebooted at
+`2026-07-29T01:09:24Z`. The locked post-reboot audit found exactly one active
+arkey registration, v8 at
+`/Library/SystemExtensions/8078E517-B18A-4ED5-9528-12679932709E/`, with the
+legacy v3 registration activated but disabled and no terminating arkey row.
+kernelmanagerd selected v8 unique ID
+`38e827a984d9416d1ec10fce547693e7a3ba0af9a45adb2413bd16850ec63c48`.
+The registered and installed DEXT both have SHA-256
+`e8b967357030773cc49eee05bd5653e3e5fbcd6f64d9eb868ae8f5b79abafbb3`
+and CDHash `384a80d6144b2c10b6c9466123ae0730f8df6b5f`; the executable is mode
+`0755`. The install provenance remains bound to clean source commit
+`4e821c5d4a151024537a5cba5814e7ac7f35e528`.
+
+The UT4G is connected at 40 Gb/s, and all four AMD PCI functions are present at
+x16 and 16.0 GT/s. kernelmanagerd selected and launched v8 at
+`2026-07-29T01:09:30Z`, but the kernel immediately recorded
+`TinyGPUDriver::start(display) fail`. The DEXT remains alive without a crash,
+but it has no child under the `1002:744c` provider, `ioreg -r -n tinygpu -l` is
+empty, and handshake, keepalive status, and power-residency status are all
+unavailable. R6.1 therefore failed before A0; A0/A1 were not invoked, and no
+reset, replug, install, AMD initialization, or workload followed.
+
+The v8 source returns from `Start` on the first native power-request error, so
+the diagnostic service needed to report those errors is never published. The
+next bounded source candidate is v9: attempt and record both native power
+requests, retain exact errors, continue only through the read-only identity and
+first-canary checks, and publish a degraded diagnostic service when power
+residency is not confirmed. All workload/reset/BAR/DMA/configuration admission
+must remain blocked by `PowerResidencyReady`. Build and CPU-test v9, then stop
+for separate install/activation authorization; do not reinstall v8 or disturb
+the currently enumerated endpoint.
+
+The source-only v9 candidate now passes `74` focused tests. A clean Debug build
+and separate full analyzer pass succeed with zero DriverKit analyzer
+diagnostics. The ad-hoc signed build reports DEXT version 9, app SHA-256
+`a5d4ac76ba67bce50fc29d5057fd5499d0ba151438b0b0780adb3d2ba9a63742`,
+DEXT SHA-256
+`ab269b17d9895e47aa91ab4a46f736449d5bcc8a0ef457c8d55e129d4628fee5`,
+and DEXT CDHash `c7d37c19a7dcd37d52b09d14e2a9a99b63e6da81`. The build is
+not installed, the source remains uncommitted for review, and the installed v8
+and live hardware state were not changed. Detailed source/build evidence is in
+`docs/task_workflow/output/egpu-usb4-v9-diagnostic-start-candidate-20260729T012600Z.md`.
 
 The immediate objective is now to keep the PCI provider and its parent tunneled
 path fully powered for the provider lifetime, then prove that request against
@@ -902,18 +951,15 @@ This blocker is resolved only when all of the following are true:
   acceptance evidence.
 
 Until then, the correct project status is: **v7 A0 passed, but v7 A1 captured
-awake-idle ACIO link loss and removal of the tunneled PCIe tree. The v8
-DriverKit full-power-residency candidate is implemented in
-source, independently exposes requested and observed power state, passes its
-CPU/protocol tests, has a clean signed development build, and was installed from
-source commit `4e821c5d4a151024537a5cba5814e7ac7f35e528`. macOS now reports v8
-`[activated enabled]` while v7 remains `[terminating for upgrade via delegate]`.
-After endpoint recovery, `1002:744c` returned at x16 and 16.0 GT/s, but
-kernelmanagerd selected the terminating v7 registration and launchd rejected its
-cleared executable with `EACCES`; no `tinygpu` service was published. One reboot
-is required to complete the delegated upgrade. The installer/CLI readiness
-classifier is being hardened in source only and must not be installed again at
-version 8. After reboot, run v8 A0/A1 from detached installed source commit
-`4e821c5d4` so the strict install-provenance binding remains valid. GPU-state
-inspection and runtime compute qualification remain blocked behind v8 A0/A1
-continuity.**
+awake-idle ACIO link loss and removal of the tunneled PCIe tree. v8 was installed
+from clean source commit `4e821c5d4a151024537a5cba5814e7ac7f35e528` and
+its post-reboot registration handoff completed cleanly. The endpoint and all
+four PCI functions are present, and the registered v8 bytes match the installed
+audited bytes. v8 nevertheless failed `TinyGPUDriver::start(display)` before
+publishing `tinygpu`, so R6.1 failed and A0/A1 did not run. The source-only v9
+candidate makes native power-request failures observable while preserving
+fail-closed workload admission; `74` focused tests, the Debug build, signature
+verification, and full/shallow analyzer checks pass. It is not committed or
+installed. No v9 installation, endpoint recovery, AMD initialization, or
+runtime compute qualification is authorized until its source, hashes, and one
+bounded action sequence are reviewed.**

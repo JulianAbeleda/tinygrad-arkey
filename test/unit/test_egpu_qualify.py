@@ -5,7 +5,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("qualify", ROOT / "extra/usbgpu/tests/qualify.py")
 qualify = importlib.util.module_from_spec(SPEC); SPEC.loader.exec_module(qualify)
 STATUS = json.loads((ROOT / "extra/usbgpu/protocol/fixtures/keepalive-status-v1.json").read_text())["valid"]
-POWER_STATUS = json.loads((ROOT / "extra/usbgpu/protocol/fixtures/power-residency-status-v1.json").read_text())["valid"]
+POWER_STATUS = json.loads((ROOT / "extra/usbgpu/protocol/fixtures/power-residency-status-v2.json").read_text())["valid"]
 
 
 def status(ticks=0, *, generation=1, **patch):
@@ -15,7 +15,7 @@ def status(ticks=0, *, generation=1, **patch):
 
 
 def power(ticks=0, *, generation=1, **patch):
-  return copy.deepcopy(POWER_STATUS) | {"provider_generation":generation, "last_transition_monotonic_ns":1000000000,
+  return copy.deepcopy(POWER_STATUS) | {"provider_generation":generation, "last_transition_monotonic_ns":1100000000,
                                        "last_canary_success_monotonic_ns":3600000000000+ticks*1000000000} | patch
 
 
@@ -130,7 +130,8 @@ def test_a0_requires_direct_handshake_and_validates_it(tmp_path):
 
 
 @pytest.mark.parametrize("patch", [
-  {"override_active":False}, {"power_request_confirmed":False}, {"last_observed_power_flags":65536},
+  {"override_probe_prejoin_error":0}, {"override_probe_postjoin_error":-536870212}, {"power_request_confirmed":False},
+  {"last_observed_power_flags":65536}, {"last_canary_success_monotonic_ns":1000000000},
   {"unexpected_downgrade_count":1}, {"publishable":False},
 ])
 def test_a0_rejects_unhealthy_power_residency(patch, tmp_path):

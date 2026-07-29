@@ -270,26 +270,26 @@ kern_return_t TinyGPUDriverUserClient::ExternalMethod(uint64_t selector, IOUserC
 		args->structureOutput = OSData::withBytes(output, length);
 		return args->structureOutput ? kIOReturnSuccess : kIOReturnNoMemory;
 	} else if (selector == TinyGPURPC::PowerResidencyStatus) {
-			if (args->scalarInputCount || args->scalarOutputCount) return kIOReturnBadArgument;
-			if (args->structureOutputDescriptor) {
-				uint64_t available = 0; args->structureOutputDescriptor->GetLength(&available);
-				if (!available || available > 4096) return kIOReturnNoSpace;
-				IOMemoryMap* map = nullptr; err = args->structureOutputDescriptor->CreateMapping(0, 0, 0, 0, 0, &map);
-				if (err || !map) return err ?: kIOReturnError;
-				size_t length = (size_t)available;
-				err = ivars->provider->GetPowerResidencyStatus((char*)map->GetAddress(), &length);
-				map->release();
-				return err;
-			}
-			const uint64_t available = args->structureOutputMaximumSize;
+		if (args->scalarInputCount || args->scalarOutputCount) return kIOReturnBadArgument;
+		if (args->structureOutputDescriptor) {
+			uint64_t available = 0; args->structureOutputDescriptor->GetLength(&available);
 			if (!available || available > 4096) return kIOReturnNoSpace;
-			char output[4096] = {};
+			IOMemoryMap* map = nullptr; err = args->structureOutputDescriptor->CreateMapping(0, 0, 0, 0, 0, &map);
+			if (err || !map) return err ?: kIOReturnError;
 			size_t length = (size_t)available;
-			err = ivars->provider->GetPowerResidencyStatus(output, &length);
-			if (err) return err;
-			args->structureOutput = OSData::withBytes(output, length);
-			return args->structureOutput ? kIOReturnSuccess : kIOReturnNoMemory;
-		} else if (selector == TinyGPURPC::LeaseAcquire) {
+			err = ivars->provider->GetPowerResidencyStatus((char*)map->GetAddress(), &length);
+			map->release();
+			return err;
+		}
+		const uint64_t available = args->structureOutputMaximumSize;
+		if (!available || available > 4096) return kIOReturnNoSpace;
+		char output[4096] = {};
+		size_t length = (size_t)available;
+		err = ivars->provider->GetPowerResidencyStatus(output, &length);
+		if (err) return err;
+		args->structureOutput = OSData::withBytes(output, length);
+		return args->structureOutput ? kIOReturnSuccess : kIOReturnNoMemory;
+	} else if (selector == TinyGPURPC::LeaseAcquire) {
 		if (args->scalarInputCount || args->scalarOutputCount < 1 || ivars->leaseID) return kIOReturnBadArgument;
 		err = ivars->provider->AcquireWorkloadLease(&ivars->leaseID);
 		if (!err) { args->scalarOutput[0] = ivars->leaseID; args->scalarOutputCount = 1; }

@@ -1,0 +1,43 @@
+{
+  "schema": "tinygpu.power-residency.v2.fixture",
+  "maximum_payload_bytes": 4096,
+  "valid": {
+    "schema": "tinygpu.power-residency.v2",
+    "provider_generation": 1,
+    "policy_id": "driverkit_full_power_v1",
+    "full_power_requested": true,
+    "power_request_accepted": true,
+    "power_request_confirmed": true,
+    "power_request_attempts": 1,
+    "last_power_request_monotonic_ns": 1000000000,
+    "power_release_attempted": false,
+    "desired_power_flags": 2,
+    "last_observed_power_flags": 2,
+    "override_probe_prejoin_error": -536870212,
+    "override_probe_postjoin_error": 0,
+    "power_request_error": 0,
+    "power_release_error": 0,
+    "transition_count": 1,
+    "unexpected_downgrade_count": 0,
+    "last_transition_monotonic_ns": 1100000000,
+    "last_canary_identity_dword": "0x744c1002",
+    "last_canary_success_monotonic_ns": 2000000000,
+    "stop_busy_leases": 0,
+    "stop_busy_bars": 0,
+    "stop_busy_dma": 0,
+    "publishable": true
+  },
+  "invalid": [
+    {"name": "request_unconfirmed", "patch": {"power_request_confirmed": false}},
+    {"name": "observed_low_power", "patch": {"last_observed_power_flags": 65536}},
+    {"name": "prejoin_probe_unexpected", "patch": {"override_probe_prejoin_error": 0}},
+    {"name": "postjoin_probe_failed", "patch": {"override_probe_postjoin_error": -536870212}},
+    {"name": "request_error", "patch": {"power_request_error": -536870201}},
+    {"name": "unexpected_downgrade", "patch": {"unexpected_downgrade_count": 1}},
+    {"name": "request_not_recorded", "patch": {"last_power_request_monotonic_ns": 0}},
+    {"name": "transition_predates_request", "patch": {"last_transition_monotonic_ns": 900000000}},
+    {"name": "canary_predates_request", "patch": {"last_canary_success_monotonic_ns": 1000000000}},
+    {"name": "stop_resource_leak", "patch": {"stop_busy_dma": 1}},
+    {"name": "not_publishable", "patch": {"publishable": false}}
+  ]
+}

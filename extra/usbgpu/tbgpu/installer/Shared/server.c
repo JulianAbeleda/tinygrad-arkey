@@ -261,7 +261,7 @@ static kern_return_t handshake_rpc(client_session_t *s, char *out, size_t *size)
   if (!out || !size || !*size) return kIOReturnBadArgument;
   kern_return_t err = ensure_connection(s);
   if (err) return err;
-  const char *json = "{\"schema\":\"tinygpu.handshake.v1\",\"protocol_major\":1,\"protocol_minor\":0,\"capabilities\":11,\"server_build_id\":\"tinygrad-arkey-native-v8\"}";
+  const char *json = "{\"schema\":\"tinygpu.handshake.v1\",\"protocol_major\":1,\"protocol_minor\":0,\"capabilities\":11,\"server_build_id\":\"tinygrad-arkey-native-v10\"}";
   size_t length = strlen(json);
   if (length >= *size) return kIOReturnNoSpace;
   memcpy(out, json, length + 1);
@@ -449,7 +449,7 @@ static void handle_client(int fd) {
       if(req.arg1>0) { if (send_typed_error(fd,RESP_UNSUPPORTED_VERSION,"unsupported_version","protocol minor is unsupported")) break; continue; }
       if(req.arg2 & ~UINT64_C(11)) { if (send_typed_error(fd,RESP_UNSUPPORTED_CAPABILITY,"unsupported_capability","required capability is unavailable")) break; continue; }
       session.handshaken = 1;
-      const char *hello = "{\"schema\":\"tinygpu.handshake.v1\",\"protocol_major\":1,\"protocol_minor\":0,\"capabilities\":11,\"server_build_id\":\"tinygrad-arkey-v8\"}";
+      const char *hello = "{\"schema\":\"tinygpu.handshake.v1\",\"protocol_major\":1,\"protocol_minor\":0,\"capabilities\":11,\"server_build_id\":\"tinygrad-arkey-v10\"}";
       resp.resp0 = strlen(hello); resp.resp1 = 1;
       if (send_response(fd, &resp, -1) || sendall(fd, hello, resp.resp0)) break;
       continue;

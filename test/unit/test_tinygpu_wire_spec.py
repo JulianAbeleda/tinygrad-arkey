@@ -25,26 +25,32 @@ def validate_status(status):
   return status["attempts"] == status["successes"] + status["failures"]
 
 def validate_power_status(status):
-  required = {"schema", "provider_generation", "policy_id", "override_requested", "override_active", "full_power_requested",
-              "power_request_accepted", "power_request_confirmed", "power_release_attempted", "desired_power_flags",
-              "last_observed_power_flags", "override_request_error", "power_request_error", "power_release_error",
-              "override_release_error", "transition_count", "unexpected_downgrade_count", "last_transition_monotonic_ns",
-              "last_canary_identity_dword", "last_canary_success_monotonic_ns", "publishable"}
-  if set(status) != required or status["schema"] != "tinygpu.power-residency.v1" or status["policy_id"] != "driverkit_full_power_v1": return False
-  u64 = ("provider_generation", "transition_count", "unexpected_downgrade_count", "last_transition_monotonic_ns", "last_canary_success_monotonic_ns")
-  u32 = ("desired_power_flags", "last_observed_power_flags")
-  i32 = ("override_request_error", "power_request_error", "power_release_error", "override_release_error")
-  boolean = ("override_requested", "override_active", "full_power_requested", "power_request_accepted", "power_request_confirmed",
-             "power_release_attempted", "publishable")
+  required = {"schema", "provider_generation", "policy_id", "full_power_requested", "power_request_accepted",
+              "power_request_confirmed", "power_request_attempts", "last_power_request_monotonic_ns",
+              "power_release_attempted", "desired_power_flags", "last_observed_power_flags",
+              "override_probe_prejoin_error", "override_probe_postjoin_error", "power_request_error", "power_release_error",
+              "transition_count", "unexpected_downgrade_count", "last_transition_monotonic_ns",
+              "last_canary_identity_dword", "last_canary_success_monotonic_ns", "stop_busy_leases", "stop_busy_bars",
+              "stop_busy_dma", "publishable"}
+  if set(status) != required or status["schema"] != "tinygpu.power-residency.v2" or status["policy_id"] != "driverkit_full_power_v1": return False
+  u64 = ("provider_generation", "power_request_attempts", "last_power_request_monotonic_ns", "transition_count",
+         "unexpected_downgrade_count", "last_transition_monotonic_ns", "last_canary_success_monotonic_ns")
+  u32 = ("desired_power_flags", "last_observed_power_flags", "stop_busy_leases", "stop_busy_bars", "stop_busy_dma")
+  i32 = ("override_probe_prejoin_error", "override_probe_postjoin_error", "power_request_error", "power_release_error")
+  boolean = ("full_power_requested", "power_request_accepted", "power_request_confirmed", "power_release_attempted", "publishable")
   if any(type(status[k]) is not int or not 0 <= status[k] < 1 << 64 for k in u64): return False
   if any(type(status[k]) is not int or not 0 <= status[k] < 1 << 32 for k in u32): return False
   if any(type(status[k]) is not int or not -(1 << 31) <= status[k] < 1 << 31 for k in i32): return False
   if any(type(status[k]) is not bool for k in boolean): return False
   return status["desired_power_flags"] == status["last_observed_power_flags"] == 2 and \
-    all(status[k] for k in ("override_requested", "override_active", "full_power_requested", "power_request_accepted",
-                            "power_request_confirmed", "publishable")) and not status["power_release_attempted"] and \
-    not any(status[k] for k in i32) and status["unexpected_downgrade_count"] == 0 and status["transition_count"] > 0 and \
-    status["last_transition_monotonic_ns"] > 0 and status["last_canary_success_monotonic_ns"] > 0 and \
+    all(status[k] for k in ("full_power_requested", "power_request_accepted", "power_request_confirmed", "publishable")) and \
+    not status["power_release_attempted"] and status["override_probe_prejoin_error"] == -536870212 and \
+    not any(status[k] for k in ("override_probe_postjoin_error", "power_request_error", "power_release_error")) and \
+    status["power_request_attempts"] > 0 and status["last_power_request_monotonic_ns"] > 0 and \
+    status["unexpected_downgrade_count"] == 0 and status["transition_count"] > 0 and \
+    status["last_transition_monotonic_ns"] > status["last_power_request_monotonic_ns"] and \
+    status["last_canary_success_monotonic_ns"] > status["last_power_request_monotonic_ns"] and \
+    not any(status[k] for k in ("stop_busy_leases", "stop_busy_bars", "stop_busy_dma")) and \
     status["last_canary_identity_dword"] == "0x744c1002"
 
 def validate_error(value, expected_code):
@@ -54,7 +60,7 @@ def validate_error(value, expected_code):
 class TestTinyGPUWireSpec(unittest.TestCase):
   def test_authority_mentions_all_fixture_contracts(self):
     text = (PROTOCOL / "tinygpu-wire-v1.md").read_text()
-    for name in ("legacy-rpc-v1.json", "handshake-v1.json", "error-v1.json", "keepalive-status-v1.json", "power-residency-status-v1.json"):
+    for name in ("legacy-rpc-v1.json", "handshake-v1.json", "error-v1.json", "keepalive-status-v1.json", "power-residency-status-v2.json"):
       self.assertIn(name, text)
     self.assertIn("independent codec", text)
     self.assertIn("33 bytes", text)
@@ -105,7 +111,7 @@ class TestTinyGPUWireSpec(unittest.TestCase):
       self.assertFalse(validate_status(value), case["name"])
 
   def test_power_residency_fixture_and_negative_cases(self):
-    fixture = load("power-residency-status-v1.json")
+    fixture = load("power-residency-status-v2.json")
     valid = fixture["valid"]
     self.assertTrue(validate_power_status(valid))
     self.assertLessEqual(len(json.dumps(valid, separators=(",", ":")).encode()), fixture["maximum_payload_bytes"])

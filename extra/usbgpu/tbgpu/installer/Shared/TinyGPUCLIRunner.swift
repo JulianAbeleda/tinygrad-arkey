@@ -85,7 +85,7 @@ final class TinyGPUCLIRunner: NSObject, OSSystemExtensionRequestDelegate {
           let value = String(bytes: bytes.prefix(Int(length)).map({ UInt8(bitPattern: $0) }), encoding: .utf8),
           let data = value.data(using: .utf8),
           let object = try? JSONSerialization.jsonObject(with: data),
-          let dictionary = object as? [String: Any], dictionary["schema"] as? String == "tinygpu.power-residency.v1"
+          let dictionary = object as? [String: Any], dictionary["schema"] as? String == "tinygpu.power-residency.v2"
     else { return nil }
     return value
   }

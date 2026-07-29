@@ -390,26 +390,26 @@ def _tinygpu_validate_status(payload:bytes) -> dict:
 
 def _tinygpu_validate_power_status(payload:bytes) -> dict:
   value = _tinygpu_json(payload, max_size=_TINYGPU_STATUS_MAX_PAYLOAD)
-  required = {"schema", "provider_generation", "policy_id", "override_requested", "override_active", "full_power_requested",
-              "power_request_accepted", "power_request_confirmed", "power_release_attempted", "desired_power_flags",
-              "last_observed_power_flags", "override_request_error", "power_request_error", "power_release_error",
-              "override_release_error", "transition_count", "unexpected_downgrade_count", "last_transition_monotonic_ns",
-              "last_canary_identity_dword", "last_canary_success_monotonic_ns", "publishable"}
+  required = {"schema", "provider_generation", "policy_id", "full_power_requested", "power_request_accepted",
+              "power_request_confirmed", "power_request_attempts", "last_power_request_monotonic_ns",
+              "power_release_attempted", "desired_power_flags", "last_observed_power_flags",
+              "override_probe_prejoin_error", "override_probe_postjoin_error", "power_request_error", "power_release_error",
+              "transition_count", "unexpected_downgrade_count", "last_transition_monotonic_ns",
+              "last_canary_identity_dword", "last_canary_success_monotonic_ns", "stop_busy_leases", "stop_busy_bars",
+              "stop_busy_dma", "publishable"}
   if set(value) != required: raise TinyGPUWireError("malformed_payload", "unexpected power-residency fields")
-  u64 = ("provider_generation", "transition_count", "unexpected_downgrade_count", "last_transition_monotonic_ns",
-         "last_canary_success_monotonic_ns")
-  u32 = ("desired_power_flags", "last_observed_power_flags")
-  i32 = ("override_request_error", "power_request_error", "power_release_error", "override_release_error")
-  boolean = ("override_requested", "override_active", "full_power_requested", "power_request_accepted", "power_request_confirmed",
-             "power_release_attempted", "publishable")
+  u64 = ("provider_generation", "power_request_attempts", "last_power_request_monotonic_ns", "transition_count",
+         "unexpected_downgrade_count", "last_transition_monotonic_ns", "last_canary_success_monotonic_ns")
+  u32 = ("desired_power_flags", "last_observed_power_flags", "stop_busy_leases", "stop_busy_bars", "stop_busy_dma")
+  i32 = ("override_probe_prejoin_error", "override_probe_postjoin_error", "power_request_error", "power_release_error")
+  boolean = ("full_power_requested", "power_request_accepted", "power_request_confirmed", "power_release_attempted", "publishable")
   if any(type(value[k]) is not int or not 0 <= value[k] < 1<<64 for k in u64): raise TinyGPUWireError("invalid_range")
   if any(type(value[k]) is not int or not 0 <= value[k] < 1<<32 for k in u32): raise TinyGPUWireError("invalid_range")
   if any(type(value[k]) is not int or not -(1<<31) <= value[k] < 1<<31 for k in i32): raise TinyGPUWireError("invalid_range")
   if any(type(value[k]) is not bool for k in boolean): raise TinyGPUWireError("malformed_payload")
-  if value["schema"] != "tinygpu.power-residency.v1" or value["policy_id"] != "driverkit_full_power_v1":
+  if value["schema"] != "tinygpu.power-residency.v2" or value["policy_id"] != "driverkit_full_power_v1":
     raise TinyGPUWireError("invalid_enum")
-  if value["desired_power_flags"] != 2 or not isinstance(value["last_canary_identity_dword"], str) or \
-     re.fullmatch(r"0x[0-9a-f]{8}", value["last_canary_identity_dword"]) is None:
+  if not isinstance(value["last_canary_identity_dword"], str) or re.fullmatch(r"0x[0-9a-f]{8}", value["last_canary_identity_dword"]) is None:
     raise TinyGPUWireError("malformed_payload")
   return value
 
@@ -717,8 +717,14 @@ class APLRemotePCIDevice(RemotePCIDevice):
       super().__init__(devpref, "usb4", sock=sock)
       self._negotiate_tinygpu()
       power = self.power_residency_status()
-      if not power["publishable"] or not power["power_request_confirmed"] or power["last_observed_power_flags"] != 2 or \
-         power["unexpected_downgrade_count"] or any(power[k] for k in ("override_request_error", "power_request_error")):
+      if not all(power[k] for k in ("full_power_requested", "power_request_accepted", "power_request_confirmed", "publishable")) or \
+         power["power_release_attempted"] or power["desired_power_flags"] != 2 or power["last_observed_power_flags"] != 2 or \
+         power["power_request_attempts"] == 0 or power["last_power_request_monotonic_ns"] == 0 or \
+         power["last_transition_monotonic_ns"] <= power["last_power_request_monotonic_ns"] or \
+         power["last_canary_success_monotonic_ns"] <= power["last_power_request_monotonic_ns"] or \
+         power["override_probe_prejoin_error"] != -536870212 or power["override_probe_postjoin_error"] or \
+         power["power_request_error"] or power["power_release_error"] or power["unexpected_downgrade_count"] or \
+         any(power[k] for k in ("stop_busy_leases", "stop_busy_bars", "stop_busy_dma")):
         raise TinyGPUWireError("invalid_state", "provider power residency is not confirmed")
       self.tinygpu_power_residency = power
       lease, payload = self._tinygpu_rpc(RemoteCmd.LEASE_ACQUIRE)

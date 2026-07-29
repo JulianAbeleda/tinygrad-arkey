@@ -14,7 +14,7 @@ from tinygrad.runtime.support.system import APLRemotePCIDevice, RemoteCmd, Remot
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 STATUS = json.loads((ROOT / "extra/usbgpu/protocol/fixtures/keepalive-status-v1.json").read_text())["valid"]
-POWER_STATUS = json.loads((ROOT / "extra/usbgpu/protocol/fixtures/power-residency-status-v1.json").read_text())["valid"]
+POWER_STATUS = json.loads((ROOT / "extra/usbgpu/protocol/fixtures/power-residency-status-v2.json").read_text())["valid"]
 
 
 def _device(sock):
@@ -147,7 +147,7 @@ def test_handshake_requires_keepalive_lease_and_power_capabilities_locally():
   assert exc.value.kind == "unsupported_capability"; thread.join(timeout=2); client.close()
 
 
-def test_power_status_validation_rejects_unconfirmed_or_downgraded_state():
+def test_power_status_validation_preserves_unhealthy_diagnostic_state():
   for patch in ({"power_request_confirmed":False}, {"last_observed_power_flags":65536}, {"unexpected_downgrade_count":1}):
     value = POWER_STATUS | patch
     decoded = _tinygpu_validate_power_status(json.dumps(value).encode())
