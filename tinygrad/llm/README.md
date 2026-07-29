@@ -29,12 +29,40 @@ Consumers must keep `authority.throughput_authoritative == false`. M8 remains
 unproven until a separately verified run supplies correctness, timing, and
 artifact bindings.
 
+## AMD searched-hot-path benchmark
+
+The public runtime can exercise the shipped searched path without importing `extra/`.
+Use a local Qwen3 GGUF and the same context checkpoints as the published runs:
+
+```bash
+DEV=AMD JIT=1 PYTHONPATH=. python -m tinygrad.llm \
+  --model /absolute/path/to/Qwen3-8B-Q4_K_M.gguf --max_context 8192 \
+  --warmup --benchmark-context 512 --benchmark 20
+
+DEV=AMD JIT=1 PYTHONPATH=. python -m tinygrad.llm \
+  --model /absolute/path/to/Qwen3-8B-Q4_K_M.gguf --max_context 8192 \
+  --warmup --benchmark-context 4096 --benchmark 20
+```
+
+On the macOS eGPU service, use the already-qualified environment prefix for that host
+(including its `AM_REMOTE_DISCOVERY_PROFILE` and `AM_REMOTE_SKIP_RESIZE_BAR` values).
+The command prints the full-prompt prefill rate, selected candidate identities, and one
+steady decode rate per generated token. A missing searched match is visible as an empty
+identity list and must not be reported as a searched-path benchmark.
+
+The retained pre-migration reference points are 8B decode 114.19 tok/s at ctx512 and
+103.07 tok/s at ctx4096; prefill was 3694 and 3236 tok/s at pp512/pp4096. The 14B
+reference points are 69.70/62.45 decode and 1945/1785 prefill. These are comparison
+points, not claims about a new checkout: report new numbers only with the exact commit,
+model hash, target, selected identities, warmups, and sample count.
+
 ## Runtime files
 
 - `model.py`: transformer blocks, model construction, cache allocation, and generation. It may call policy helpers, but should not grow new standalone admission or registry logic.
-- `decode_routes.py`: runtime decode route selection. Route-specific generated kernels live under `extra/llm_research` and are imported through `route_ops.py`.
+- `decode_routes.py`: runtime decode selection using `decode_kernels.py` and `flash_decode_attention.py`.
 - `route_policy.py`: policy-file parsing and validation for generated/QK routes.
-- `route_ops.py`: import boundary for generated/search-produced primitives.
+- `prefill_graph_gemm.py` and `packed_wmma_prefill.py`: searched prefill executors and frozen selected configurations.
+- `prefill_candidate_runtime.py`: compact candidate-set admission for the graph-WMMA route.
 - `qk_primitives.py`: Q4_K/Q6_K primitive wrappers, install-time storage policy, and GGUF-backed primitive installation.
 
 ## Control-plane files

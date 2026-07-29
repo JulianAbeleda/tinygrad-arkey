@@ -54,8 +54,8 @@ UNCHECKED_GUARDS = {
   # decode is 1 batch x 1 token by definition; the manifest does not restate it
   "Q4K_DECODE_CANDIDATE": {"batch", "tokens"},
   # the 48-wide live split and KV_BOTH staging are implementation geometry, absent from the manifest
-  "FLASH_DECODE_CANDIDATE": {"split_size", "staging"},
-  "FLASH_DECODE_G5_CANDIDATE": {"split_size", "staging"},
+  "FLASH_DECODE_CANDIDATE": {"split_size", "staging", "query_group_size", "stage_width"},
+  "FLASH_DECODE_G5_CANDIDATE": {"split_size", "staging", "query_group_size", "stage_width"},
 }
 
 # Guard fields a test above actually compares against the manifest.

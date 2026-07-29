@@ -595,6 +595,8 @@ def main():
   parser.add_argument("--no-preload", action="store_true", help="Start the server without loading a model (load later via /runtime/load)")
   parser.add_argument("--warmup", action="store_true", help="warmup the JIT")
   parser.add_argument("--benchmark", nargs='?', type=int, const=20, metavar="COUNT", help="Benchmark tok/s (optional count, default 20)")
+  parser.add_argument("--benchmark-context", type=int, metavar="TOKENS",
+                      help="Prefill exactly TOKENS synthetic tokens before --benchmark decode samples")
   parser.add_argument("--remote-metrics", action="store_true", help="Print remote roundtrip and byte metrics for benchmark/server generations")
   args = parser.parse_args()
 
@@ -632,7 +634,24 @@ def main():
 
   # do benchmark
   if args.benchmark is not None:
-    gen = model.generate(toks:=[tok.bos_id or 0])
+    if args.benchmark <= 0: parser.error("--benchmark COUNT must be positive")
+    if args.benchmark_context is not None and not 1 <= args.benchmark_context < model.max_context:
+      parser.error(f"--benchmark-context must be in 1..{model.max_context-1}")
+    prompt_tokens = args.benchmark_context or 1
+    if prompt_tokens + args.benchmark > model.max_context and not model.config.ring:
+      parser.error("benchmark context plus decode samples exceeds the admitted max context")
+    gen = model.generate(toks:=[tok.bos_id or 0] * prompt_tokens)
+    if args.benchmark_context is not None:
+      GlobalCounters.reset()
+      started = time.perf_counter_ns()
+      first = next(gen)
+      elapsed = time.perf_counter_ns() - started
+      identities = sorted({str(getattr(lin, "_prefill_full_kernel_candidate_identity"))
+                           for lin in model._q4k_linears.linears
+                           if getattr(lin, "_prefill_full_kernel_candidate_identity", None)})
+      print(f"prefill@{prompt_tokens}: {prompt_tokens * 1e9 / elapsed:.2f} tok/s, "
+            f"elapsed={elapsed/1e6:.2f}ms, selected_candidate_identities={identities}")
+      toks = [first]
     for i in range(args.benchmark):
       profile_marker(f"decode @ {i}")
       GlobalCounters.reset()
