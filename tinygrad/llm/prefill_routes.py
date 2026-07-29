@@ -10,7 +10,8 @@ from tinygrad.llm.model_facts import packed_linear_quant, route_role_for_linear
 from tinygrad.llm.prefill_graph_gemm import route_pf16_graph_gemm
 from tinygrad.llm.memory_semantics import (prefill_activation as _prefill_activation,
   prefill_output as _prefill_output, prefill_scratch as _prefill_scratch)
-from tinygrad.llm.prefill_route_observer import PrefillDirectPackedBinding, PrefillRouteAttachment, _ACTIVE, notify_prefill_route
+from tinygrad.llm.prefill_route_observer import (PrefillDirectPackedBinding, PrefillRouteAttachment, notify_prefill_route,
+                                                 prefill_route_scope_active)
 from tinygrad.llm.route_selection import RouteCandidatePolicy, RouteLifecycle, parse_route_mode
 from tinygrad.uop.ops import UOp
 
@@ -119,7 +120,7 @@ def _attached_packed_wmma_spec(lin, x:Tensor) -> PrefillLinearRouteSpec | None:
   if _attached_production_route(lin, x) != "packed_wmma": return None
   binding = getattr(lin, "_prefill_direct_packed_binding", None)
   if not isinstance(binding, PrefillDirectPackedBinding) or binding.phase != "prefill": return None
-  if not _ACTIVE.get(): return None
+  if not prefill_route_scope_active(): return None
   if getattr(lin, "bias", None) is not None or len(x.shape) != 3 or x.shape[0] != 1: return None
   m, k = x.shape[-2], x.shape[-1]
   n, in_f = getattr(lin, "out_features", None), getattr(lin, "in_features", None)
