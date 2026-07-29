@@ -2,11 +2,46 @@
 
 Date: 2026-07-29
 
-Status: scoped; implementation not started
+Status: superseded for implementation by `master-search-selected-runtime-cleanup-scope-20260729.md`; retained as the
+record of the rejected no-human/full-program-synthesis interpretation
 
 Authority: this document supersedes the repository-organization completion record wherever that record permits a
 hand-authored custom kernel or an unproven search claim on `master`. It does not supersede hardware recovery, TinyGPU,
 or unrelated compiler work.
+
+Correction: the user-approved practical definition permits human-authored search spaces, descriptors, lowerers,
+compiler primitives, and promotion decisions. Machine search means the performance-sensitive configuration was
+explored/ranked/measured by the combined workflow. Do not execute this document's replacement-search packages or use
+its `0/9` proof result as a historical authorship verdict. The corrected scope preserves search-selected production
+routes and moves only specialized handwritten fallback/oracle implementations out of master.
+
+## Implementation checkpoint (2026-07-29)
+
+This migration was realigned after a history audit. The project generator was not BoltBeam alone: the historical
+pipeline combined BoltBeam policy/evaluation, BubbleBeam/FutureSight candidate generation and ranking, and tinygrad
+lowering/runtime. A missing current-tree export is therefore not evidence that the route was never generated.
+
+- M0 and M1 remain useful and are implemented on `exp`: the nine-route provenance audit, route migration ledger,
+  strict purity gate, generated-artifact catalog/loader, hash validation, runtime trace, and fail-closed generated-plan
+  dispatch seam are committed.
+- The audit result `0/9` is only the count of routes that satisfy the **new current-checkout end-to-end proof contract**.
+  It must not be read as a historical authorship verdict.
+- Q4_K decode G3 has a real, reachable combined-system lineage: a declared workload/search space, two BubbleBeam
+  lane-layout candidates, deterministic FutureSight ranking, selected lane-map descriptor, G3 lowering, correctness
+  and performance gates, default promotion, and later BoltBeam route-policy binding. The first action for G3 is to
+  recover and replay that chain, not design a replacement search.
+- Scheduler prefill has a recovered four-role candidate set plus separate correctness and timing records. It needs a
+  recovered or replayed top-level request/run/ranking/export binding, not a new kernel implementation.
+- Q6 decode, direct-packed Q4/Q6 prefill, packed-WMMA policy, G4/G5 decode attention, and prefill flash attention do not
+  yet have equivalent route-bound search exports in the examined history. Their current labels remain claims to audit;
+  no new search is authorized until their histories have been exhausted.
+- BoltBeam `f6ee2763f47316112fbba40b91b859e0e7068a6d` and the uncommitted M2/M3/M4 prototypes are quarantined additive
+  infrastructure. They are not the migration plan and must not be promoted merely because they satisfy the new schema.
+- `dev` and `master` remain at their prior published commits. Runtime defaults, GPU state, and hardware recovery are out
+  of scope during this recovery/package phase.
+
+The machine-readable route-by-route historical result is
+`docs/task_workflow/output/combined-generator-lineage-recovery-20260729.json`.
 
 ## 1. Outcome
 
@@ -43,7 +78,8 @@ These definitions are fixed for this migration.
    complete model/shape-specific kernel lifecycle, not the presence of WMMA, LDS, waitcnt, or assembly.
 7. **Generic fallback is allowed.** Unsupported shapes may use ordinary tinygrad graph/scheduler lowering or fail
    loudly. A specialized hand-authored custom fallback is not allowed on `master`.
-8. **Private search is compatible with a public runtime.** BoltBeam/FutureSight may remain the search system, but its
+8. **Private search is compatible with a public runtime.** BoltBeam plus BubbleBeam/FutureSight may remain the search
+   system, but its
    exported candidate must carry sufficient immutable provenance for this repository to prove that no manual post-edit
    became the shipped implementation. Users do not need the private search system to run the selected artifact.
 9. **Numbers follow the exact artifact.** README throughput belongs to a route id, artifact digest, Git commit, target,
@@ -74,21 +110,22 @@ provenance strings and a hand-maintained overlay. It does not prove:
 - that every authority gate and cited artifact still exists on `master`;
 - that the README command runs the same route/artifact represented by the table.
 
-The current strict audit therefore fails under this scope: **0 of the 9 named default routes is presently proven by the
-required end-to-end chain**. This is a provenance verdict, not an assertion that every candidate was actually chosen by
-a person. The supporting machine-readable audit is
+The current strict audit therefore fails under this scope: **0 of the 9 named default routes is presently packaged with
+the complete proof chain required for final `master`**. This is a current-checkout packaging/provenance verdict, not a
+historical authorship verdict and not evidence that the combined generator never ran. The supporting machine-readable
+strict audit is
 `docs/task_workflow/output/master-hot-path-provenance-audit-20260729.json`.
 
 ## 4. Current default-route audit
 
 | Route | Current claim | Actual executing owner or selection source | Strict result | Required disposition |
 |---|---|---|---|---|
-| `decode_q4k_g3_generated` | machine-authored/generated | `gemv_g3_codegen_lowering.py` manually constructs lane map, loop, loads, accumulation, reduction, and store | unproven/hand template | Export a search-owned plan or deterministically generated module; move the current Python builder to `dev`/`exp`. |
+| `decode_q4k_g3_generated` | machine-authored/generated | Recoverable BubbleBeam/FutureSight lane-map selection, G3 lowering, promotion gates, and BoltBeam policy binding | historical combined lineage recovered; final package incomplete | Replay/export the historical selected descriptor and deterministic lowering with immutable hashes; move any non-generated bridge/oracle to `dev`/`exp`. |
 | `decode_q6k_coop_generated` | machine-authored/generated | `q6k_route_spec.py` wraps a hand-written lowering and dequant grammar | unproven/hand template | Replace with generated plan/module plus generic quant primitives; retain the old emitter only as a dev oracle. |
 | `decode_flash_live_split_g4_kvboth` | machine-authored/generated | `flash_kernels.py` manually owns the full tile, LDS, softmax, PV, and store lifecycle | hand-authored UOp kernel | Generate the topology; remove the route-local builder from master. |
 | `decode_flash_live_split_g5_kvboth` | machine-authored/generated | Same hand-authored flash closure with separate G5 geometry | hand-authored UOp kernel | Generate separately identified G5 plan and evidence; no reuse of a hand builder hidden behind the spec. |
 | `prefill_flash_attention_generated` | machine-authored/generated | `tinygrad/schedule/wmma/kernels.py` explicitly declares fixed-geometry hand kernels | hand-authored UOp kernel | Replace the full attention builder with search output composed from generic primitives; split the current implementation to dev/exp. |
-| `prefill_wmma_lds_dbuf_generated` | tinygrad scheduler-generated | Ordinary tinygrad matmul with selected candidate context | compiler-generated, search provenance incomplete | Preserve the compiler path; add the missing search request/run/candidate/binding hash chain. |
+| `prefill_wmma_lds_dbuf_generated` | tinygrad scheduler-generated | Ordinary tinygrad matmul plus recovered four-role selected candidate set, timing, and correctness records | compiler-generated; historical export partially recovered | Preserve the compiler path and recovered bundle; recover or replay only the missing request/run/ranking/export binding. |
 | `prefill_q4k_direct_tile4x4_default` | machine-authored/generated | Hand-written route spec/lowering and fixed options | unproven/hand template | Search/export the plan; current lowering becomes dev oracle. |
 | `prefill_q6k_direct_generated` | machine-authored/generated | Hand-written route spec/lowering using hand dequant helpers | unproven/hand template | Search/export the plan; current lowering becomes dev oracle. |
 | `packed_wmma_prefill_generated` | tinygrad scheduler-generated | Ordinary tinygrad matmul, but `PACKED_WMMA_GEOM` is a frozen manually copied table | hand-tuned schedule table | Rerun a real search and bind the resulting shape-keyed plan; the current table stays only on dev/exp. |
@@ -151,7 +188,7 @@ Final `master` may contain:
 ## 6. Target architecture
 
 ```text
-BoltBeam/FutureSight search (outside runtime)
+BoltBeam policy/evaluation + BubbleBeam/FutureSight candidate generation/ranking (outside runtime)
   -> public search request + search-space digest
   -> selected candidate export + rank/objective/result digest
   -> deterministic artifact generator
@@ -258,6 +295,10 @@ as unsupported-shape fallback, but it does not establish the project's machine-s
 
 ## 9. Route migration work packages
 
+The packages are recovery-first. A replacement grammar, runner, or kernel is permitted only after the relevant package
+has a written history result showing that the combined generator path cannot be recovered or replayed. Missing fields
+in the new strict schema do not, by themselves, authorize replacement engineering.
+
 ### M0: freeze claims and install the strict gate
 
 - Record the current nine-route audit.
@@ -278,11 +319,27 @@ renaming a hand kernel or adding a dataclass.
 
 Gate: a synthetic generated candidate loads, binds, traces, and fails closed on any hash/shape/target mismatch.
 
-### M2: scheduler-generated prefill candidates
+### M2: recover and replay historical generator outputs
+
+- Restore the Q4_K G3 search space, BubbleBeam candidates, FutureSight ranking, selected LaneMap descriptor, lowering,
+  promotion evidence, and BoltBeam route policy from reachable commits into an isolated replay surface.
+- Re-run the static selector and deterministic lowering without GPU access and compare the selected payload/source
+  identity with the historical route.
+- Preserve the archived four-role scheduler-prefill candidate set, correctness record, and timing record by content
+  hash; recover the missing request/run/ranking/export header where history permits.
+- Produce one lineage map per route distinguishing recovered source facts, reproducible replay, missing proof, and
+  genuinely absent search stages.
+- Do not bind or change production defaults in this package.
+
+Gate: the recovery result is independently replayable from reachable repository objects, and every unrecovered field is
+named without converting absence into a claim of human authorship.
+
+### M2b: scheduler-generated prefill candidates
 
 Migrate `prefill_wmma_lds_dbuf_generated` first because the kernel already lowers through ordinary tinygrad. Export its
-real selected candidate plan and search provenance. Then rerun search for `packed_wmma_prefill_generated`; the current
-`PACKED_WMMA_GEOM` table cannot be promoted because its source is missing and its keys omit shape.
+recovered selected candidate plan and complete its search provenance. Rerun search for
+`packed_wmma_prefill_generated` only if M2 proves that its source cannot be recovered; the current `PACKED_WMMA_GEOM`
+table cannot be promoted merely because it is labeled generated and its keys omit shape.
 
 Requirements:
 
@@ -294,7 +351,8 @@ Requirements:
 
 ### M3: Q4_K/Q6_K decode GEMV
 
-- Export or regenerate Q4_K lane-map and Q6_K coop/partial plans from actual search runs.
+- Recover/replay and export the historical Q4_K lane-map route before attempting any new Q4 search. Export or regenerate
+  Q6_K coop/partial plans only after its combined-system history is exhausted.
 - Move concrete loop/lane/load/reduce/store decisions out of master hand-written Python.
 - Retain only quant-format semantics and reusable packed-load/dequant compiler primitives on master.
 - Move old builders to dev/exp as oracles with explicit debug-only flags.
@@ -405,15 +463,17 @@ For promotion:
 
 ## 13. Branch execution and commit topology
 
-1. Implement M0-M6 on `exp` with both generated and hand paths available.
-2. Promote qualified generated runtime/catalog code and hand-oracle debug support to `dev` with destination-based
+1. Complete M2 historical recovery on `exp`; freeze or discard replacement-search prototypes that duplicate recovered
+   combined-system functionality.
+2. Implement only the remaining M2b-M6 gaps on `exp` with both generated and hand paths available.
+3. Promote qualified generated runtime/catalog code and hand-oracle debug support to `dev` with destination-based
    patches.
-3. Run generated-vs-hand A/B and all qualification gates on the exact dev commit.
-4. Derive `master` from the qualified dev result using destination-based patches that omit every hand implementation,
+4. Run generated-vs-hand A/B and all qualification gates on the exact dev commit.
+5. Derive `master` from the qualified dev result using destination-based patches that omit every hand implementation,
    debug flag, research generator, raw artifact, and dev-only test.
-5. Run master gates from a clean clone before updating README numbers.
-6. Commit final evidence and update the generated catalog hashes.
-7. Push `exp`, `dev`, and `master`; record exact tips, counts, recovery commits, and branch cleanliness.
+6. Run master gates from a clean clone before updating README numbers.
+7. Commit final evidence and update the generated catalog hashes.
+8. Push `exp`, `dev`, and `master`; record exact tips, counts, recovery commits, and branch cleanliness.
 
 Never merge a richer tier wholesale into a cleaner tier. Never delete the dev/exp oracle before the generated master
 route has independent correctness and performance evidence.

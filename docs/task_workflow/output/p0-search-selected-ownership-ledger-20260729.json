@@ -1,0 +1,35 @@
+{
+  "schema": "tinygrad.p0_search_selected_ownership_ledger.v1",
+  "status": "P0_DOCUMENTATION_ONLY",
+  "authority": "docs/task_workflow/input/master-search-selected-runtime-cleanup-scope-20260729.md",
+  "superseded_historical_record": "docs/task_workflow/input/master-pure-machine-search-decoupling-scope-20260729.md",
+  "practical_definition": "Human-authored spaces/lowerers are compatible with machine search when the combined workflow explored, ranked/scored/measured, selected, and tinygrad executed the performance-sensitive configuration.",
+  "route_ownership": [
+    {"route_id":"decode_q4k_g3_generated","execution":"Tensor.custom_kernel/UOp lowering","selection":"search_selected","runtime_role":"primary_production","evidence":"historically_recoverable","disposition":"KEEP_MASTER_SEARCH_SELECTED","benchmark_protected":true,"recovery_commits":["9b760f7ba","9f03f7ee6","81370ae38","5de75f792","08bcd1d9b"]},
+    {"route_id":"decode_q6k_coop_generated","execution":"Tensor.custom_kernel/spec lowering","selection":"unresolved_historical_selection","runtime_role":"conditional_production","evidence":"incomplete","disposition":"UNRESOLVED","benchmark_protected":false},
+    {"route_id":"decode_flash_live_split_g4_kvboth","execution":"descriptor/Tensor.custom_kernel","selection":"search_or_tuning_selected","runtime_role":"primary_production","evidence":"current_complete","disposition":"KEEP_MASTER_SEARCH_SELECTED","benchmark_protected":true},
+    {"route_id":"decode_flash_live_split_g5_kvboth","execution":"descriptor/Tensor.custom_kernel","selection":"search_or_tuning_selected","runtime_role":"primary_production","evidence":"current_complete","disposition":"KEEP_MASTER_SEARCH_SELECTED","benchmark_protected":true,"recovery_commits":["8deca39bb"]},
+    {"route_id":"prefill_wmma_lds_dbuf_generated","execution":"scheduler/codegen","selection":"search_selected","runtime_role":"primary_production","evidence":"historically_recoverable","disposition":"KEEP_MASTER_SEARCH_SELECTED","benchmark_protected":true},
+    {"route_id":"packed_wmma_prefill_generated","execution":"scheduler/codegen warmstart","selection":"selected_configuration_incomplete_origin","runtime_role":"primary_production","evidence":"current_complete","disposition":"KEEP_MASTER_SEARCH_SELECTED","benchmark_protected":true},
+    {"route_id":"prefill_flash_attention_generated","execution":"descriptor/Tensor.custom_kernel","selection":"promoted_tuned_configuration","runtime_role":"primary_production","evidence":"current_complete","disposition":"KEEP_MASTER_SEARCH_SELECTED","benchmark_protected":true},
+    {"route_id":"prefill_q4k_direct_tile4x4_default","execution":"specialized custom kernel","selection":"manually_fixed","runtime_role":"specialized_rollback_oracle","evidence":"not_headline","disposition":"MOVE_DEV_HAND_FALLBACK_ORACLE","removal_prerequisite":"ordinary tinygrad fallback is route-traced and correct"},
+    {"route_id":"prefill_q6k_direct_generated","execution":"specialized custom kernel","selection":"unresolved","runtime_role":"specialized_rollback_oracle","evidence":"not_headline","disposition":"MOVE_DEV_HAND_FALLBACK_ORACLE","removal_prerequisite":"ordinary exact-Q6 fallback is route-traced and correct"}
+  ],
+  "dirty_superseded_inventory": [
+    {"path":"extra/llm_research/boltbeam_prefill_search_contract.py","package":"M2a","action":"QUARANTINE_REWRITE","reason":"retain a fail-closed request/readiness contract; do not infer not-search from human-authored lowerers"},
+    {"path":"tinygrad/llm/generated/requests/prefill_wmma_lds_dbuf_generated.json","package":"M2a","action":"KEEP","reason":"historical request/evidence binding remains MISSING until an independent finite grammar exists"},
+    {"path":"tinygrad/llm/generated/provenance/prefill_wmma_lds_dbuf_generated.blocked.json","package":"M2a","action":"QUARANTINE_REWRITE","reason":"keep blocker/hashes but classify absent modern grammar as incomplete evidence"},
+    {"path":"extra/qk/prefill/full_kernel_candidate_worker.py","package":"M2a","action":"DELETE","reason":"prototype lacks complete arbitrary-candidate fixture/measurement evidence and is not benchmark-dependent"},
+    {"path":"test/unit/test_full_kernel_candidate_worker.py","package":"M2a","action":"DELETE","reason":"tests discarded protocol prototype"},
+    {"path":"extra/llm_research/prefill/m2a_coupled_candidate_grammar.py","package":"M2a","action":"QUARANTINE_REWRITE","reason":"retain only explicit grammar gap, never a verdict against historical selection"},
+    {"path":"test/unit/test_m2a_coupled_candidate_grammar.py","package":"M2a","action":"QUARANTINE_REWRITE","reason":"test fail-closed grammar absence without false classification"},
+    {"path":"extra/llm_research/decode/m3_machine_search/export_search.py","package":"M3","action":"QUARANTINE_REWRITE","reason":"recover/replay historical G3 ranking and LaneMap instead of replacing it"},
+    {"path":"extra/llm_research/decode/m3_machine_search/check_export.py","package":"M3","action":"QUARANTINE_REWRITE","reason":"check historical commit/blob lineage plus canonical replay"},
+    {"path":"extra/llm_research/decode/m3_machine_search/m3_search_export.json","package":"M3","action":"QUARANTINE_REWRITE","reason":"must not displace historical G3 selected-plan evidence"},
+    {"path":"extra/llm_research/decode/m3_machine_search/generic_topology_executor.py","package":"M3","action":"DELETE","reason":"unrelated to published G3 benchmark route"},
+    {"path":"test/unit/test_m3_decode_machine_search.py","package":"M3","action":"QUARANTINE_REWRITE","reason":"test recovered G3 replay"},
+    {"path":"test/unit/test_m3_generic_topology_executor.py","package":"M3","action":"DELETE","reason":"tests discarded unrelated executor"},
+    {"path":"M4 currently dirty paths","package":"M4","action":"NONE","reason":"no M4-labelled dirty prototype is present in this worktree snapshot; direct-packed M4 remains exp-only when encountered"}
+  ],
+  "documentation_invariants": ["Tensor.custom_kernel does not imply fallback or manual selection.","Missing modern provenance does not imply not_machine_search.","All benchmark-protected routes retain KEEP_MASTER_SEARCH_SELECTED.","Every specialized rollback/oracle names a generic-fallback removal prerequisite."]
+}

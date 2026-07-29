@@ -1,12 +1,11 @@
 """Canonical, deliberately fail-closed benchmark record surface for tinygrad.llm.
 
-This module records the provenance needed to compare a future measured run.  It
-does not turn metadata collection into a performance claim: execution is not
-enabled until a verified generated-route/artifact authority is supplied.
+This module provides a small public control execution path and its provenance
+record. It does not turn execution into a performance claim.
 """
 from __future__ import annotations
 
-import argparse, hashlib, json, os, pathlib, platform, subprocess, sys
+import argparse, contextlib, hashlib, json, os, pathlib, platform, subprocess, sys
 from datetime import datetime, timezone
 from typing import Any, Sequence
 
@@ -39,19 +38,9 @@ def git_state(cwd: str | os.PathLike[str] = REPO_ROOT) -> dict[str, Any]:
 
 
 def device_facts() -> dict[str, Any]:
-  """Collect portable facts first; tinygrad probe failures remain visible."""
-  facts: dict[str, Any] = {"platform": platform.platform(), "python": platform.python_version(),
-                           "backend": os.environ.get("TINYGRAD_DEVICE"), "driver": None,
-                           "state": "unknown"}
-  try:
-    # This is a core tinygrad helper, intentionally not a generated-route import.
-    from tinygrad.llm.device_facts import scan_device_facts
-    scanned = scan_device_facts()
-    facts["tinygrad"] = scanned.to_json()
-    facts["backend"] = scanned.backend or facts["backend"]
-    facts["state"] = scanned.state
-  except Exception as exc: facts["probe_error"] = f"{type(exc).__name__}: {exc}"
-  return facts
+  """CPU-control facts only: never open, enumerate, or probe an accelerator."""
+  return {"platform": platform.platform(), "python": platform.python_version(), "backend": "CPU",
+          "driver": None, "state": "cpu_control", "probe": "disabled_no_accelerator_probe"}
 
 
 def route_trace(route_ids: Sequence[str]) -> list[dict[str, Any]]:
@@ -68,27 +57,83 @@ def build_record(args: argparse.Namespace, argv: Sequence[str] | None = None) ->
     "schema_version": SCHEMA_VERSION, "record_type": RECORD_TYPE,
     "recorded_at": datetime.now(timezone.utc).isoformat(), "git": git_state(),
     "model": {"path": None if model_path is None else str(model_path), "sha256": model_hash, "status": model_status},
-    "device": device_facts(),
+    "target": {"requested": args.target, "effective": "CPU", "kind": "cpu_smoke"}, "device": device_facts(),
     "command": {"argv": list(sys.argv if argv is None else argv),
-                "config": {"warmups": args.warmups, "samples": args.samples, "route_ids": args.route_id}},
+                "config": {"warmups": args.warmups, "samples": args.samples, "route_ids": args.route_id,
+                           "phase": args.phase, "context": args.context, "control": "generic_fp16", "target": "CPU"}},
     "routes": route_trace(args.route_id),
+    "execution": {"status": "not_run", "control": "generic_fp16", "trace": []},
     "correctness": {"status": "not_run", "detail": "metadata-only record; no model execution occurred"},
     "measurement": {"status": "not_measured", "warmups": args.warmups, "samples": args.samples,
                     "throughput_tokens_per_s": None},
     "authority": {"status": "unverified", "throughput_authoritative": False,
                   "reason": "exact generated route plans and artifacts are not verified by this surface"},
-  }
+}
+
+
+@contextlib.contextmanager
+def _generic_fp16_control():
+  """Force public prefill/decode selectors away from optimized routes."""
+  keys = ("TINYGRAD_PREFILL_ROUTE", "TINYGRAD_DECODE_ROUTE")
+  old = {key:os.environ.get(key) for key in keys}
+  for key in keys: os.environ[key] = "fp16"
+  try: yield
+  finally:
+    for key, value in old.items():
+      if value is None: os.environ.pop(key, None)
+      else: os.environ[key] = value
+
+
+@contextlib.contextmanager
+def _cpu_generic_control():
+  """Pin model load and its one control inference to CPU without changing defaults."""
+  from tinygrad.helpers import Context
+  with _generic_fp16_control(), Context(DEV="CPU"):
+    yield
+
+
+def run_control(args: argparse.Namespace, record: dict[str, Any], *, loader=None, tensor_factory=None) -> dict[str, Any]:
+  """Load a supplied GGUF and execute one ordinary tinygrad control dispatch.
+
+  ``loader`` and ``tensor_factory`` make this boundary unit-testable without a
+  model or accelerator. No elapsed time or throughput is reported.
+  """
+  if not args.model: raise ValueError("--model is required for --execute")
+  if record["model"]["status"] != "present": raise ValueError("--model must name an ordinary local file")
+  if args.phase == "decode" and args.context != 1: raise ValueError("--phase decode requires --context 1")
+  if loader is None:
+    from tinygrad.llm.model import Transformer
+    loader = lambda path: Transformer.from_gguf(path, max_context=max(args.context, 1))
+  if tensor_factory is None:
+    from tinygrad import Tensor
+    tensor_factory = lambda tokens: (Tensor([tokens], device="CPU"), Tensor([0.0], device="CPU"))
+  trace = [{"event": "control_selected", "control": "generic_fp16"}]
+  from tinygrad.llm.model import generic_llm_control
+  with _cpu_generic_control(), generic_llm_control():
+    model, _kv = loader(str(pathlib.Path(args.model).expanduser()))
+    trace.append({"event": "model_loaded", "status": "completed"})
+    tokens, temperature = tensor_factory([0] * args.context)
+    output = model(tokens, 0, temperature)
+    if hasattr(output, "realize"): output.realize()
+    trace.append({"event": "dispatch_completed", "phase": args.phase, "context": args.context})
+  record["execution"] = {"status": "completed", "control": "generic_fp16", "trace": trace}
+  record["routes"] = [{"route_id":"generic_fp16", "status":"generic", "plan_hash":None, "artifact_hash":None}]
+  record["correctness"] = {"status": "not_checked", "detail": "control dispatch completed; no reference comparison was supplied"}
+  record["measurement"]["status"] = "not_measured"
+  return record
 
 
 def validate_record(record: dict[str, Any]) -> dict[str, Any]:
   """Small stable schema gate for consumers; never accepts an unsupported claim."""
-  required = {"schema_version", "record_type", "git", "model", "device", "command", "routes",
-              "correctness", "measurement", "authority"}
+  required = {"schema_version", "record_type", "git", "model", "target", "device", "command", "routes",
+              "correctness", "measurement", "authority", "execution"}
   missing = required - record.keys()
   if missing: raise ValueError(f"benchmark record missing keys: {sorted(missing)}")
   if record["schema_version"] != SCHEMA_VERSION or record["record_type"] != RECORD_TYPE: raise ValueError("unsupported benchmark record")
+  if record["target"] != {"requested":"CPU", "effective":"CPU", "kind":"cpu_smoke"}: raise ValueError("public control target must be CPU")
   if record["authority"].get("throughput_authoritative") is not False: raise ValueError("unverified benchmark surface cannot authorize throughput")
   if record["measurement"].get("throughput_tokens_per_s") is not None: raise ValueError("unverified benchmark surface cannot report throughput")
+  if record["execution"].get("status") not in ("not_run", "completed"): raise ValueError("invalid control execution status")
   for route in record["routes"]:
     if not route.get("route_id") or route.get("status") not in ("unproven", "generic"): raise ValueError("invalid route trace")
   return record
@@ -96,20 +141,29 @@ def validate_record(record: dict[str, Any]) -> dict[str, Any]:
 
 def parser() -> argparse.ArgumentParser:
   result = argparse.ArgumentParser(description="Emit a versioned, fail-closed tinygrad LLM benchmark record.")
-  result.add_argument("--model", help="Local GGUF/model path to identify and SHA-256; it is never loaded.")
+  result.add_argument("--model", help="Local GGUF path. Required with --execute; never fetched or downloaded.")
+  result.add_argument("--target", choices=("CPU",), default="CPU", help="Public control target; CPU only.")
+  result.add_argument("--phase", choices=("prefill", "decode"), default="prefill", help="Control dispatch phase (default: prefill).")
+  result.add_argument("--context", type=int, default=1, help="Token count for prefill; decode requires exactly 1.")
   result.add_argument("--warmups", type=int, default=0, help="Requested warmup count recorded in metadata (default: 0).")
   result.add_argument("--samples", type=int, default=0, help="Requested sample count recorded in metadata (default: 0).")
   result.add_argument("--route-id", action="append", default=[], help="Route identifier to trace; repeatable.")
-  result.add_argument("--metadata-only", "--dry-run", action="store_true", help="Explicit no-execution mode (currently the only mode).")
+  result.add_argument("--metadata-only", "--dry-run", action="store_true", help="Emit provenance only; do not load the model.")
+  result.add_argument("--execute", action="store_true", help="Run one forced generic-fp16 control dispatch; no performance result is reported.")
   result.add_argument("--output", help="Write JSON record to this path instead of stdout.")
   return result
 
 
 def main(argv: Sequence[str] | None = None) -> int:
   args = parser().parse_args(argv)
-  if args.warmups < 0 or args.samples < 0: parser().error("--warmups and --samples must be non-negative")
-  if not args.metadata_only: parser().error("--metadata-only is required until verified generated-route execution lands")
-  record = validate_record(build_record(args, argv))
+  if args.warmups < 0 or args.samples < 0 or args.context <= 0: parser().error("--warmups, --samples, and --context must be valid")
+  if args.metadata_only and args.execute: parser().error("choose only one of --metadata-only or --execute")
+  if not args.metadata_only and not args.execute: parser().error("choose --metadata-only or --execute")
+  record = build_record(args, argv)
+  if args.execute:
+    try: record = run_control(args, record)
+    except ValueError as exc: parser().error(str(exc))
+  record = validate_record(record)
   encoded = json.dumps(record, sort_keys=True, indent=2) + "\n"
   if args.output: pathlib.Path(args.output).write_text(encoded)
   else: sys.stdout.write(encoded)

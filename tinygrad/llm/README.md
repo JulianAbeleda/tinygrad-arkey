@@ -2,30 +2,32 @@
 
 This package keeps model execution separate from load-time policy.
 
-## Benchmark record scaffold
+## Public generic control path
 
-From a fresh clone, create the normal development environment, then emit a
-metadata-only benchmark record (this does **not** load a model or claim a
-throughput result):
+From a fresh clone, use a local GGUF with the ordinary tinygrad control path:
 
 ```bash
 git clone <your-tinygrad-remote> tinygrad
 cd tinygrad
 python -m tinygrad.llm.bench --help
-python -m tinygrad.llm.bench --metadata-only --model /absolute/path/to/model.gguf --route-id decode > bench-record.json
+python -m tinygrad.llm.bench --execute --model /absolute/path/to/model.gguf --phase prefill --context 32 > control-record.json
 ```
 
-`bench-record.json` is versioned and includes the Git commit/dirty state,
-model path and SHA-256, device/driver probe facts, exact command/config,
-route traces, correctness status, requested warmups/samples, and throughput.
-At present its route traces are deliberately `unproven`, correctness is
-`not_run`, and throughput is `null`: current performance numbers remain
-unverified until the exact generated plans and artifacts land. Consumers must
-check `authority.throughput_authoritative`; this scaffold always sets it to
-`false` rather than silently presenting metadata as a benchmark. M8 is not
-complete until this command executes the verified generated route, checks
-correctness, collects samples, and binds a non-null result to its artifact
-digests.
+This pins model load and one public fp16 linear-fallback dispatch to **CPU** and writes a
+structured JSON trace. The command imports only `tinygrad.llm` runtime modules;
+it does not import a research route or accept a custom schedule. It neither
+compares an output to a reference nor reports timing/throughput, so its result
+is a runnable control observation—not a performance benchmark or M8 evidence.
+
+For a no-load provenance record instead:
+
+```bash
+python -m tinygrad.llm.bench --metadata-only --model /absolute/path/to/model.gguf > control-record.json
+```
+
+Consumers must keep `authority.throughput_authoritative == false`. M8 remains
+unproven until a separately verified run supplies correctness, timing, and
+artifact bindings.
 
 ## Runtime files
 

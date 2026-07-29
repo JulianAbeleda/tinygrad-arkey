@@ -43,10 +43,18 @@ from tinygrad.llm.physical_memory_ledger import AllocationOwner, bind_allocation
 from tinygrad.uop.ops import Ops, resolve
 
 _MEMORY_ADAPTIVE_MEASUREMENT_AUTHORITY = contextvars.ContextVar("_memory_adaptive_measurement_authority", default=None)
+_GENERIC_LLM_CONTROL = contextvars.ContextVar("_generic_llm_control", default=False)
 
 _GGUF_TENSOR_OWNER = MODEL_PARAMETER_ALLOCATION_OWNER
 _KV_CACHE_OWNER = AllocationOwner("kv_cache", "model")
 _RUNTIME_PERSISTENT_OWNER = AllocationOwner("runtime_persistent", "model")
+
+@contextlib.contextmanager
+def generic_llm_control():
+  """Force ordinary Tensor lowering for one model call, without mutating model policy."""
+  token = _GENERIC_LLM_CONTROL.set(True)
+  try: yield
+  finally: _GENERIC_LLM_CONTROL.reset(token)
 
 def _should_use_flash_attention(ring_freqs:Tensor|None, start_pos:int|UOp, T:int|UOp, use_flash:bool) -> bool:
   return ring_freqs is not None or _route_should_use_flash_decode(start_pos, T, use_flash)
@@ -1021,11 +1029,12 @@ class Transformer:
   def __call__(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, use_flash:bool=False,
                ring_freqs:Tensor|None=None, ring_full:bool=False) -> Tensor:
     is_prefill = resolve(tokens.shape[1] != 1)
+    generic_control = _GENERIC_LLM_CONTROL.get()
     # prefill v2: only when opt-in AND this is a CONCRETE-batch prefill chunk. Normal prefill passes a symbolic
     # v_toks (tokens.shape[1] is a UOp -> not int), so the two paths never collide; decode is T==1.
-    is_prefill_v2 = self.config.prefill_v2 and is_prefill and isinstance(tokens.shape[1], int)
+    is_prefill_v2 = self.config.prefill_v2 and is_prefill and isinstance(tokens.shape[1], int) and not generic_control
     for q4k_linear in self._q4k_linears.linears:
-      q4k_linear.decode_enabled = not is_prefill
+      q4k_linear.decode_enabled = not is_prefill and not generic_control
     # context-aware flash: each block reads _use_flash at trace time; rollout_jit (SDPA) and
     # rollout_jit_flash bake distinct attention -- each is only ever called with its own use_flash, so
     # capture is consistent. The decode-only T==1 guard in _attention ignores it during prefill.
