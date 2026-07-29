@@ -136,6 +136,23 @@ smart-plug action, or enclosure power action is authorized or required by this
 checkpoint. `APPROVE_ONE_EGPU_RECOVERY` remains unspent unless a separately
 identified recovery action is actually performed.
 
+### First A12 admission attempt and allocator-fact correction
+
+The first A12 invocation at `2026-07-29T04:35:14Z` stopped before model load or
+the loaded interval. The parent admission sample passed in provider generation
+1, but `Transformer.from_gguf` failed closed because TinyGPU's AMD allocator did
+not publish `global_allocation_granularity` and this macOS host has no
+`rocminfo` fallback. The child recorded zero tokens and no loaded samples; the
+provider remained healthy in generation 1 and cleanup returned lease/BAR/DMA
+counts to zero.
+
+For direct/remote AMD interfaces, `PCIIfaceBase.alloc` already rounds device
+allocations at least 8 MiB to 2 MiB. The bounded correction is to expose that
+existing allocator fact as `AMDAllocator.allocation_granularity`; KFD keeps its
+live `rocminfo` path. This does not override memory admission or guess free
+VRAM. Rerun A12 from the committed correction without another endpoint reset
+when the same provider remains healthy.
+
 ## 2. Evidence and problem boundary
 
 - Replacing the old PCIe riser changed the GPU from non-enumerating to enumerating. The former riser was a signal-path blocker.
