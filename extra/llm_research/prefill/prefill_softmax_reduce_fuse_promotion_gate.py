@@ -18,7 +18,7 @@ WHERE THIS GATE IS STRICTER THAN ITS SIBLING, and why:
   the renderer EVERY AMD kernel goes through. Its predicate fires for any Ops.CUSTOMI with dtype float and
   child_count > 1, and the decode route builds float CUSTOMI of exactly that family (flash_kernels.py's
   __builtin_amdgcn_fdot2; schedule/wmma/softmax.py's "bpermute" row-state broadcast). So this gate ALSO
-  requires cross-route decode protection, which tinygrad/llm/prefill_policy.py:14
+  requires cross-route decode protection, which tinygrad/llm/admission.py
   _SHARED_ATTENTION_PROOF_FIELDS already demands by name (decode_nonregression_8b AND
   decode_nonregression_14b): "Enabling one shared compiler path changes both supported model routes. A
   synthetic or one-model proof is therefore not enough." Byte-identical decode code objects satisfy that
@@ -97,12 +97,12 @@ def _check_shared_renderer(ev: dict) -> list[str]:
       if not ident.get(field):
         fails.append(f"decode_codegen_identity.{field} missing -- an identity claim with no proof that both "
                      f"arms actually compiled, and that the flag actually changed something somewhere, is not evidence")
-  # prefill_policy.py:_SHARED_ATTENTION_PROOF_FIELDS names these two by name.
+  # admission.py:_SHARED_ATTENTION_PROOF_FIELDS names these two by name.
   for shape in DECODE_SHAPES:
     key = f"decode_nonregression_{shape.lower()}"
     if sr.get(key) is not True:
       fails.append(f"shared_renderer_risk.{key} is not True ({sr.get(key)!r}); "
-                   f"tinygrad/llm/prefill_policy.py:_SHARED_ATTENTION_PROOF_FIELDS requires both model routes")
+                   f"tinygrad/llm/admission.py:_SHARED_ATTENTION_PROOF_FIELDS requires both model routes")
   if not sr.get("decode_nonregression_basis"):
     fails.append("shared_renderer_risk.decode_nonregression_basis missing -- say WHAT proves non-regression")
   return fails

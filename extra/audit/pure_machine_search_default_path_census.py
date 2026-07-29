@@ -43,7 +43,7 @@ CENSUS_OVERLAY = [
     "shape_guard": "QK_ROUTE_POLICY decode_q4k_g3_generated per tensor OR g3_bubblebeam_shape OR DECODE_Q4K_G3_ANYSHAPE structural guard ((in//256)%4==0 and out%32==0)",
     "writer": "generated",
     "selector": "env_guard",
-    "route_guard": "tinygrad/llm/decode_routes.py q4k_primitive_linear_call getenv('BUBBLEBEAM_FUTURESIGHT', 1)==1 (default-on) + _qk_route_policy_selects_q4k_g3 (BoltBeam QK_ROUTE_POLICY) + DECODE_Q4K_G3_ANYSHAPE default-on -> q4k_g3_lanemap_gemv_kernel fires FIRST for eligible shapes, short-circuiting the owned-warp guards; strict policy fails loud on hidden fallback",
+    "route_guard": "tinygrad/llm/decode_routes.py q4k_primitive_linear_call binds the promoted candidate before executing q4k_g3_lanemap_gemv_kernel; static plan and generated-policy lookup live in model_route_plan.py/qk_primitives.py",
     "kernel_source": "extra/llm_research/gemv_g3_codegen_lowering.py q4k_g3_lanemap_gemv_kernel (UOp program from extra/llm_research/gemv_g2_lanemap.py Q4KGateUpLaneMap)",
     "authority_artifact": "bench/amd-isa-backend-g3-weight-promotion/latest.json (AMD_ISA_G3_PROMOTION_PASS_SPEED_EQUIVALENT)",
     "rollback_flag": "BUBBLEBEAM_FUTURESIGHT=0 -> ordinary tinygrad graph; no manifest hand-kernel rollback remains",

@@ -12,7 +12,7 @@ tinygrad/renderer/cstyle.py, the HIP renderer that EVERY AMD kernel goes through
 The DECODE route builds float CUSTOMI of exactly those kinds:
   * extra/llm_research/flash_kernels.py -- `__builtin_amdgcn_fdot2(...)` (dtype float)
   * tinygrad/schedule/wmma/softmax.py:amd_gfx1100_broadcast_row_state -- the float "bpermute" CUSTOMI
-so "prefill-only flag" is an assumption, not a fact. tinygrad/llm/prefill_policy.py's
+so "prefill-only flag" is an assumption, not a fact. tinygrad/llm/admission.py's
 _SHARED_ATTENTION_PROOF_FIELDS makes this explicit: promotion requires decode_nonregression_8b AND
 decode_nonregression_14b, because "enabling one shared compiler path changes both supported model routes".
 
