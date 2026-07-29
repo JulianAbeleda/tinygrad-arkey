@@ -22,7 +22,7 @@ def test_packed_wmma_materialized_input_is_prefill_activation(monkeypatch):
   monkeypatch.setattr(prefill_routes, "packed_wmma_prefill_enabled", lambda: True)
   monkeypatch.setattr(prefill_routes, "_attached_packed_wmma_spec",
                       lambda *_: prefill_routes.PrefillLinearRouteSpec("packed_wmma", "q4k", "attn_qo", 2, 3, 4))
-  monkeypatch.setattr("tinygrad.llm.route_ops.select_packed_wmma_prefill_candidate", lambda *_: Candidate())
+  monkeypatch.setattr(prefill_routes, "select_packed_wmma_prefill_candidate", lambda *_: Candidate())
   out = prefill_routes.route_packed_wmma_prefill(Lin(), Tensor.zeros(1, 2, 4, device="CPU"))
   assert out is not None and observed["owner"] == PREFILL_ACTIVATION
 
