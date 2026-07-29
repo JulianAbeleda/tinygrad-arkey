@@ -83,7 +83,7 @@ class _MockPartials:
     self.result = result
     self.kernel_calls = []
 
-  def custom_kernel(self, *args, **kwargs):
+  def uop_program(self, *args, **kwargs):
     self.kernel_calls.append((args, kwargs))
     return (self.result,)
 
@@ -127,7 +127,7 @@ def test_q4k_single_token_keeps_generated_g3_path(monkeypatch):
     def empty(cls, *_args, **_kwargs):
       return cls()
 
-    def custom_kernel(self, *_args, **_kwargs):
+    def uop_program(self, *_args, **_kwargs):
       return (self.__class__(),)
 
     def __getitem__(self, _idx):
