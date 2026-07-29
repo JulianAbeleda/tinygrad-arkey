@@ -6,7 +6,7 @@ from typing import Callable, Any
 from tinygrad import Tensor, UOp, dtypes
 from tinygrad.llm.decode_kernels import (emit_q6k_gemv_kernel, emit_q6k_vocab_scalar_reduce_kernel,
   q4k_g3_lanemap_gemv_kernel, q6k_spec_for_role, q6k_vocab_scalar_reduce_eligible)
-from tinygrad.llm.flash_decode_attention import flash_decode_live_split_block_tile
+from tinygrad.llm.flash_decode_attention import FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeRouteConfig, flash_decode_live_split_block_tile
 
 def _decode_shape(x:Tensor) -> tuple[Any, Any, Any]:
   shape = tuple(getattr(x, "shape", ()))
@@ -122,30 +122,34 @@ class _FlashDecodeBinding:
 
 @dataclass(frozen=True)
 class _FlashDecodeCandidate:
-  candidate_id: str = "attention_decode.flash_live_split"
-  route_id: str = "decode_flash_live_split_g4_kvboth"
+  """Compatibility selection facade over the executor-owned route definition."""
+  route: FlashDecodeRouteConfig
   target: str = "AMD"
-  query_heads: int = 32
-  split_size: int = 48
-  query_group_size: int | None = None
-  staging: str = "KV_BOTH"
-  stage_width: int = 1
+
+  @property
+  def candidate_id(self): return self.route.candidate_id
+  @property
+  def route_id(self): return self.route.route_id
+  @property
+  def query_heads(self): return self.route.query_heads
+  @property
+  def split_size(self): return self.route.split_size
+  @property
+  def query_group_size(self): return self.route.query_group_size
+  @property
+  def staging(self): return self.route.staging
+  @property
+  def stage_width(self): return self.route.stage_width
 
   def bind(self, B:int, Hq:int, Hkv:int, Hd:int, device:str) -> _FlashDecodeBinding | None:
-    if not (device == self.target or device.startswith(self.target+":")): return None
-    if B != 1 or Hq != self.query_heads or Hd != 128 or Hkv != 8: return None
+    if not self.route.supports(B, Hq, Hkv, Hd, device): return None
     return _FlashDecodeBinding(self.candidate_id, self.route_id, self.target, B, Hq, Hkv, Hd,
                                self.split_size, self.query_group_size, self.staging, self.stage_width)
 
-FLASH_DECODE_CANDIDATE = _FlashDecodeCandidate()
-FLASH_DECODE_G5_CANDIDATE = _FlashDecodeCandidate(
-  candidate_id="attention_decode.flash_live_split_g5",
-  route_id="decode_flash_live_split_g5_kvboth",
-  query_heads=40,
-  split_size=32,
-  query_group_size=2,
-  stage_width=4,
-)
+# Public compatibility aliases. Their sole route authority is owned beside the
+# flash executor, so selection cannot drift from execution configuration.
+FLASH_DECODE_CANDIDATE = _FlashDecodeCandidate(FLASH_DECODE_G4)
+FLASH_DECODE_G5_CANDIDATE = _FlashDecodeCandidate(FLASH_DECODE_G5)
 
 def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp, T:int|UOp, B:int,
                                  Hq:int, Hkv:int, Hd:int, max_context:int, kv_scale:Tensor|None=None,
