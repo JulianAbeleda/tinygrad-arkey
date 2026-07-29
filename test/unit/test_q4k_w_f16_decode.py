@@ -32,7 +32,7 @@ def _decode_all(words:Tensor, rows:int, k:int) -> Tensor:
     stores = tuple(out[nn, kk].store(w_f16(w, nn, kk, k_blocks)) for nn in range(rows) for kk in range(k))
     return UOp.sink(*stores, arg=KernelInfo(name=f"q4k_w_f16_decode_{rows}_{k}"))
 
-  return Tensor.empty(rows, k, dtype=dtypes.float16, device=words.device).custom_kernel(words, fxn=kernel)[0]
+  return Tensor.empty(rows, k, dtype=dtypes.float16, device=words.device).uop_program(words, fxn=kernel)[0]
 
 
 def test_w_f16_bit_exact_vs_q4k_reference():
