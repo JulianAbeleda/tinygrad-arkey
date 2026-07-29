@@ -5,26 +5,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Callable, Iterator
-from tinygrad.llm.route_selection import RouteLifecycle
-
-@dataclass(frozen=True)
-class PrefillRouteAttachment:
-  invocation_id: str
-  route_id: str
-  tensor_identity: str
-  selected_policy: object
-  scanned_target_facts: object
-  allocation_owner_identity: str | None = None
-
-@dataclass(frozen=True)
-class PrefillDirectPackedBinding:
-  """Exact selected-inventory ownership for the direct-packed prefill helper."""
-  invocation_id: str
-  phase: str
-  role: str
-  shape: tuple[int, int, int]
-  lifecycle: RouteLifecycle = RouteLifecycle.PROMOTED
-  quarantine_reason: str | None = None
+from tinygrad.llm.prefill_attachments import PrefillDirectPackedBinding, PrefillRouteAttachment
 
 @dataclass(frozen=True)
 class PrefillRouteExecution:
