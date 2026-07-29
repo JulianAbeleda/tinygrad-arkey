@@ -2,11 +2,10 @@
 
 Date: 2026-07-28
 
-Status: open; post-reboot A0 passed on v7, but A1 stopped when the tunneled PCIe
-tree disappeared during awake idle. The next authorized implementation is one
-v8 DriverKit full-power-residency candidate with independently observable power
-and transaction evidence. No reset or AMD initialization followed. This scope
-is a follow-on to
+Status: open; v8 is installed from audited source commit `4e821c5d4`, but its
+registration handoff is pending one reboot because v7 remains terminating and
+is still selected on endpoint attach. v8 A0/A1 have not passed, and no AMD
+initialization is authorized. This scope is a follow-on to
 `egpu-usb4-persistent-pcie-service-scope-20260727.md`. It does not replace the
 DriverKit-owned keepalive architecture or its A0-A11 acceptance matrix.
 
@@ -19,7 +18,7 @@ sleep test is authorized by this scope.
 
 ## 1. Executive alignment
 
-The installation and endpoint state at the latest handoff is:
+The v7 baseline that led to the v8 candidate was:
 
 - `org.tinygrad.arkey.tinygpu.driver2` version `1.0.0/7` is
   `[activated enabled]`, and it is the only arkey registration.
@@ -826,7 +825,12 @@ Required order:
 
 1. R6.0: perform at most the separately authorized endpoint recovery and single
    audited v8 install/activation sequence; do not reinstall the same version to
-   refresh provenance.
+   refresh provenance. Installation must classify the complete
+   `systemextensionsctl` registration set, not merely find one
+   `[activated enabled]` row. Exactly one current-version arkey row with no
+   terminating/replacement row is a clean activation; a current row alongside
+   any old terminating row is `pending_reboot` and must never be reported as
+   installed-ready or trigger an automatic rollback/reinstall.
 2. R6.1: exactly one v8 arkey registration is active, the legacy registration is
    disabled, the endpoint/link and expected live-provider CDHash are present,
    and handshake, keepalive, and power-residency payloads validate.
@@ -897,10 +901,19 @@ This blocker is resolved only when all of the following are true:
 - M7 passes with the exact four-value result, followed by fresh A0/A1 and A2
   acceptance evidence.
 
-Until then, the correct project status is: **v7 installed and activated; A0
-passed, but A1 captured awake-idle ACIO link loss and removal of the tunneled
-PCIe tree. The v8 DriverKit full-power-residency candidate is implemented in
+Until then, the correct project status is: **v7 A0 passed, but v7 A1 captured
+awake-idle ACIO link loss and removal of the tunneled PCIe tree. The v8
+DriverKit full-power-residency candidate is implemented in
 source, independently exposes requested and observed power state, passes its
-CPU/protocol tests, and has a clean signed development build. It is not yet
-installed or hardware-qualified. GPU-state inspection and runtime compute
-qualification remain blocked behind v8 A0/A1 continuity.**
+CPU/protocol tests, has a clean signed development build, and was installed from
+source commit `4e821c5d4a151024537a5cba5814e7ac7f35e528`. macOS now reports v8
+`[activated enabled]` while v7 remains `[terminating for upgrade via delegate]`.
+After endpoint recovery, `1002:744c` returned at x16 and 16.0 GT/s, but
+kernelmanagerd selected the terminating v7 registration and launchd rejected its
+cleared executable with `EACCES`; no `tinygpu` service was published. One reboot
+is required to complete the delegated upgrade. The installer/CLI readiness
+classifier is being hardened in source only and must not be installed again at
+version 8. After reboot, run v8 A0/A1 from detached installed source commit
+`4e821c5d4` so the strict install-provenance binding remains valid. GPU-state
+inspection and runtime compute qualification remain blocked behind v8 A0/A1
+continuity.**

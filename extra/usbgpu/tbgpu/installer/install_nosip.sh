@@ -5,6 +5,7 @@ set -euo pipefail
 APP_NAME="TinyGPU.app"
 APP_ID="org.tinygrad.arkey.tinygpu.installer"
 DEXT_ID="org.tinygrad.arkey.tinygpu.driver2"
+LEGACY_DEXT_ID="org.tinygrad.tinygpu.driver2"
 # Increment this whenever the DriverKit binary or its activation contract changes;
 # macOS will not replace an already-active extension at the same bundle version.
 DEXT_VERSION="8"
@@ -19,6 +20,9 @@ BUILD_DEXT="$BUILD_APP/Contents/Library/SystemExtensions/$DEXT_ID.dext"
 APPLICATIONS_DIR="/Applications"
 INSTALL_APP="$APPLICATIONS_DIR/$APP_NAME"
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+REBOOT_REQUIRED_EXIT=10
+
+source "$SCRIPT_DIR/classify_system_extension_state.sh"
 
 mode="build"
 build_seen=0
@@ -152,15 +156,26 @@ verify_bundle() {
   codesign -dvvv "$dext" 2>&1 | grep -F 'Signature=adhoc' >/dev/null
 }
 
+extension_state() {
+  local output
+  if ! output="$(systemextensionsctl list 2>/dev/null)"; then printf '%s\n' unavailable; return 0; fi
+  tinygpu_classify_extension_rows "$DEXT_ID" "$LEGACY_DEXT_ID" "$DEXT_VERSION" <<< "$output"
+}
+
 extension_active() {
-  systemextensionsctl list 2>/dev/null | grep -F "$DEXT_ID" | grep -Fq '[activated enabled]'
+  [[ "$(extension_state)" == active_current ]]
+}
+
+extension_any_active() {
+  systemextensionsctl list 2>/dev/null | grep -F "$DEXT_ID (" | grep -Fq '[activated enabled]'
 }
 
 wait_extension_state() {
   local expected="$1" deadline=$((SECONDS + 30))
   while (( SECONDS < deadline )); do
     if [[ "$expected" == active ]] && extension_active; then return 0; fi
-    if [[ "$expected" == inactive ]] && ! extension_active; then return 0; fi
+    if [[ "$expected" == any_active ]] && extension_any_active; then return 0; fi
+    if [[ "$expected" == inactive ]] && ! extension_any_active; then return 0; fi
     sleep 1
   done
   return 1
@@ -205,7 +220,7 @@ rollback_replacement() {
   if [[ "$replacement_moved" == 1 && -d "$INSTALL_APP" ]]; then
     # If the prior registration was active, it may still be the live provider
     # after a failed replacement. Never deactivate it while rolling back.
-    if [[ "$previous_extension_active" != 1 ]] && extension_active; then
+    if [[ "$previous_extension_active" != 1 ]] && extension_any_active; then
       "$INSTALL_APP/Contents/MacOS/TinyGPU" uninstall || rollback_failed=1
       wait_extension_state inactive || rollback_failed=1
     fi
@@ -216,7 +231,7 @@ rollback_replacement() {
     verify_bundle "$INSTALL_APP" || rollback_failed=1
     if [[ "$previous_extension_active" == 1 ]]; then
       "$INSTALL_APP/Contents/MacOS/TinyGPU" install || rollback_failed=1
-      wait_extension_state active || rollback_failed=1
+      wait_extension_state any_active || rollback_failed=1
     fi
   fi
   replacement_moved=0
@@ -268,6 +283,13 @@ else
   validate_feature_source
   [[ "$(csrutil status 2>&1)" == *"disabled"* ]] || die "SIP must be disabled for this audited development install"
   validate_developer_mode
+  preinstall_state="$(extension_state)"
+  case "$preinstall_state" in
+    inactive|active_other_version) ;;
+    active_current) die "DEXT version $DEXT_VERSION is already active; same-version reinstall is forbidden" ;;
+    pending_reboot) die "system extension registrations are pending reboot; restart before another install" ;;
+    *) die "system extension registration is incomplete ($preinstall_state); resolve it before another install" ;;
+  esac
   mkdir -p "$(dirname "$provenance_out")"
   provenance_tmp="$(mktemp "/tmp/.${APP_NAME}.provenance.XXXXXX")"
   trap finish EXIT
@@ -294,7 +316,7 @@ stage_dir="$(mktemp -d "$APPLICATIONS_DIR/.TinyGPU.stage.$RUN_ID.XXXXXX")"
 [[ "$(stat -f %d "$stage_dir")" == "$(stat -f %d "$APPLICATIONS_DIR")" ]] || die "staging directory is not on the /Applications volume"
 ditto "$BUILD_APP" "$stage_dir/$APP_NAME"
 verify_bundle "$stage_dir/$APP_NAME" || die "staged build verification failed"
-if extension_active; then previous_extension_active=1; fi
+if extension_any_active; then previous_extension_active=1; fi
 
 record_provenance ready_for_approval
 printf 'Type %s to replace %s: ' "$APPROVAL_TOKEN" "$INSTALL_APP" >&2
@@ -312,7 +334,18 @@ verify_bundle "$INSTALL_APP" || die "installed bundle verification failed"
 record_provenance replaced
 
 "$INSTALL_APP/Contents/MacOS/TinyGPU" install
-wait_extension_state active || die "system extension did not reach [activated enabled]"
+if ! wait_extension_state active; then
+  postinstall_state="$(extension_state)"
+  if [[ "$postinstall_state" == pending_reboot ]]; then
+    record_provenance pending_reboot
+    publish_provenance
+    trap - EXIT
+    echo "Installed audited development build, but the DEXT upgrade is pending reboot: $INSTALL_APP"
+    [[ -n "$backup_app" ]] && echo "Previous app retained for rollback: $backup_app"
+    exit "$REBOOT_REQUIRED_EXIT"
+  fi
+  die "system extension did not reach one clean version-$DEXT_VERSION [activated enabled] registration (state=$postinstall_state)"
+fi
 verify_bundle "$INSTALL_APP" || die "post-activation bundle verification failed"
 record_provenance activated
 publish_provenance

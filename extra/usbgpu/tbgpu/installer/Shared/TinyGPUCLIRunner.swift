@@ -2,7 +2,7 @@ import Foundation
 import SystemExtensions
 
 enum TinyGPUCLIExit: Int32 { case ok = 0, usage = 2, failed = 3, needsApproval = 4 }
-enum DextState { case unloaded, activating, needsApproval, activated }
+enum DextState { case unloaded, activating, needsApproval, rebootRequired, activated }
 
 final class TinyGPUCLIRunner: NSObject, OSSystemExtensionRequestDelegate {
   private let dextID: String
@@ -10,6 +10,25 @@ final class TinyGPUCLIRunner: NSObject, OSSystemExtensionRequestDelegate {
   private var isInstall = true
 
   init(_ dextID: String) { self.dextID = dextID }
+
+  static func bundledDextVersion(_ bundleID: String) -> String? {
+    let url = Bundle.main.bundleURL.appendingPathComponent("Contents/Library/SystemExtensions/\(bundleID).dext")
+    return Bundle(url: url)?.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+  }
+
+  static func classifyDextState(_ output: String, bundleID: String, expectedVersion: String) -> DextState {
+    let legacyBundleID = "org.tinygrad.tinygpu.driver2"
+    let allLines = output.split(separator: "\n")
+    let lines = allLines.filter { $0.contains("\(bundleID) (") }
+    let legacyActive = allLines.contains { $0.contains("\(legacyBundleID) (") && $0.contains("[activated enabled]") }
+    guard !lines.isEmpty else { return legacyActive ? .rebootRequired : .unloaded }
+    let currentActive = lines.filter { $0.contains("/\(expectedVersion))") && $0.contains("[activated enabled]") }
+    let transitional = lines.contains { $0.contains("terminating") || $0.contains("waiting to uninstall") || $0.contains("being replaced") }
+    if currentActive.count == 1 && lines.count == 1 && !transitional && !legacyActive { return .activated }
+    if lines.count > 1 || transitional || legacyActive { return .rebootRequired }
+    if lines.contains(where: { $0.contains("[activated waiting for user]") }) { return .needsApproval }
+    return .activating
+  }
 
   static func queryDextState(_ bundleID: String) -> DextState {
     let process = Process()
@@ -21,12 +40,9 @@ final class TinyGPUCLIRunner: NSObject, OSSystemExtensionRequestDelegate {
     guard (try? process.run()) != nil else { return .unloaded }
     process.waitUntilExit()
 
-    guard let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) else { return .unloaded }
-    let lines = output.split(separator: "\n").filter { $0.contains(bundleID) }
-    if lines.contains(where: { $0.contains("[activated enabled]") }) { return .activated }
-    if lines.contains(where: { $0.contains("[activated waiting for user]") }) { return .needsApproval }
-    guard let line = lines.first else { return .unloaded }
-    return line.contains("terminated waiting to uninstall") ? .unloaded : .activating
+    guard let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8),
+          let expectedVersion = bundledDextVersion(bundleID) else { return .unloaded }
+    return classifyDextState(output, bundleID: bundleID, expectedVersion: expectedVersion)
   }
 
   private static let approvalHelp = """
@@ -41,7 +57,8 @@ final class TinyGPUCLIRunner: NSObject, OSSystemExtensionRequestDelegate {
     case .unloaded: return "Driver extension not installed.\n\n"
     case .activating: return "Extension is activating...\n\n"
     case .needsApproval: return "Extension awaiting approval.\n\n" + approvalHelp
-    case .activated: return "Extension is ready! Run tinygrad-arkey to use your eGPU.\n\n"
+    case .rebootRequired: return "Extension upgrade is pending. Restart macOS before using TinyGPU.\n\n"
+    case .activated: return "Extension registration is clean and active. Verify keepalive and power status before using the GPU.\n\n"
     }
   }
 
@@ -160,7 +177,7 @@ final class TinyGPUCLIRunner: NSObject, OSSystemExtensionRequestDelegate {
 
   func request(_ request: OSSystemExtensionRequest, didFinishWithResult result: OSSystemExtensionRequest.Result) {
     switch result {
-    case .completed: print("Driver extension \(isInstall ? "installed" : "uninstalled") successfully!\n")
+    case .completed: print("Driver extension registration request completed; verify the complete registration set before use.\n")
     case .willCompleteAfterReboot: print("Will complete after reboot.\n")
     @unknown default: print("Completed: \(result)\n")
     }
