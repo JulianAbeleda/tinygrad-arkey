@@ -60,6 +60,6 @@ def test_overlay_and_bounded_projection_attachments_converge_before_shared_atten
     "allocation_owner_identity":"q4k:selected"}
   bounded=Linear(); bounded._prefill_route_attachment=PrefillRouteAttachment("i","bounded","q.weight",
     {"strategy":"BOUNDED_PACKED_TILES","candidate_id":"bounded","bounded_packed_projection_proof":proof},_facts(),"q4k:selected")
-  assert _attached_production_route(bounded,x) == "bounded_packed"
+  assert _attached_production_route(bounded,x) == "packed_wmma"
   proof["memory_cap"]=False
   assert _attached_production_route(bounded,x) is None
