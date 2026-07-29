@@ -88,7 +88,7 @@ recover the doc by name if a specific number is needed again.
 - BoltBeam owns route policy, candidate/search schema, evaluation policy, roofline reports, and ledgers.
 - tinygrad owns runtime execution, compiler/backend lowering, and hardware gates.
 - The durable-principles knowledge base is `/home/ubuntu/knowledge_base`; project docs apply its principles.
-- `tinygrad/llm/route_policy.py` consumes `boltbeam.route_policy.v1`.
+- BoltBeam owns search and promotion policy; `tinygrad/llm/model_route_plan.py` owns the production compatibility parser for serialized generated/QK route artifacts.
 - `tinygrad/llm/route_ops.py` is the small production-owned compatibility boundary for the remaining QK dependencies. It contains lazy adapters, not route implementations or ownership authority. Each production-used target must move to its `tinygrad/**` domain owner in a bounded slice; adding new adapters is not the promotion path.
 - `bench/qk-search-spaces/default_route_manifest.json` is the local route-state manifest.
 - `extra/audit/pure_machine_search_default_path_census.py` is the local generated-default census.
