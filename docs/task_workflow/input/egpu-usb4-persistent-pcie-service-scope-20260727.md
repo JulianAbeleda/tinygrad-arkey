@@ -2,10 +2,10 @@
 
 Date: 2026-07-27
 
-Status: open at loaded-residency qualification. The v13 DEXT is activated and
-the historical full AM boot plus minimal GPU computation passed twice. The
-next bounded run is the 2026-07-29 single-process loaded-residency checkpoint
-defined below.
+Status: loaded-residency checkpoint failed during model transfer. The v13 DEXT
+and historical minimal GPU computation remain proven, but Qwen loading reached
+4.68 GB before a both-lane ACIO burst collapsed the PCIe tunnel. The bounded
+result is recorded below.
 
 Repository and native-source owner: `tinygrad-arkey`, under `extra/usbgpu/`
 
@@ -133,8 +133,9 @@ failures.
 
 No install, reset RPC, provider termination, replug, reboot, sleep transition,
 smart-plug action, or enclosure power action is authorized or required by this
-checkpoint. `APPROVE_ONE_EGPU_RECOVERY` remains unspent unless a separately
-identified recovery action is actually performed.
+checkpoint. At checkpoint authoring `APPROVE_ONE_EGPU_RECOVERY` was unspent;
+the operator later reported performing the one reset before A12 admission. The
+agent performed no reset or power action.
 
 ### First A12 admission attempt and allocator-fact correction
 
@@ -162,6 +163,39 @@ let the default device-facts memory probe fall back to that live measurement
 only when `rocm-smi` is unavailable. Do not inject a card-size constant. The
 second attempt also produced zero tokens, cleaned every workload resource, and
 left provider generation 1 healthy; rerun from the committed measurement fix.
+
+### A12 result: fatal ACIO tunnel loss during model transfer
+
+The committed measurement fix `bef584e28` admitted the third attempt at
+`2026-07-29T04:40:13Z`: explicit context 1024, 25.6 GB measured free, 25.5 GB
+budget, 5.0 GB selected-GGUF backing, and no admission override. TinyGPU then
+accepted repeated 2 MiB DMA preparations while the model remained in its first
+load/realization path.
+
+At `00:40:20.503-0400`, before any token or loaded status sample, both ACIO
+lanes emitted a burst of errors `83/84/87/88`. At `00:40:20.529`, IOPCIFamily
+reported link status zero and marked the ASM2464 chain plus all four AMD
+functions dead. macOS force-closed the old TinyGPU service `0x100001f9b`,
+removed the tunneled PCIe transport, and powered the tunnel down. The Python
+surface reported `Allocation of 128 B failed on AMD. Used: 4.68 GB`, but the
+finalizer's underlying `BrokenPipeError` and the kernel sequence prove that
+this was provider/tunnel loss, not a 128-byte VRAM-capacity failure.
+
+macOS retrained the tunnel and published a fresh v13 TinyGPU service
+`0x1000020c6` at `00:40:24.939`. Its public generation restarted at 1, while
+keeper counters reset from the old service's `301/301` to `7/7` and power
+timestamps were new. A numeric generation value alone therefore cannot identify
+a service across a rebind; counter/timestamp continuity and the IORegistry
+service identity remain required.
+
+A12 failed with zero tokens and no loaded interval. The required post-residency
+A2 was not run after the hard stop. Do not retry this arm without a newly scoped
+physical-path change. The next discriminating experiment is a known-good
+USB4/Thunderbolt cable and/or alternate host port A/B; the result does not yet
+separate cable, connector/port, ASM2464/UT4G bridge, or aggregate signal margin.
+It does show that full power, BAR5 retention, PCI command mask 7, keeper canaries,
+and the onset of a large DMA population did not prevent the historical fatal
+both-lane error signature.
 
 ## 2. Evidence and problem boundary
 

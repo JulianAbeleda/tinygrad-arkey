@@ -1,0 +1,39 @@
+{
+  "decode_interval_s": 2.0,
+  "ended_unix_ns": 1785299728005042000,
+  "environment": {
+    "AM_REMOTE_DISCOVERY_PROFILE": "gfx1100_744c",
+    "AM_REMOTE_SKIP_RESIZE_BAR": "1",
+    "DEV": "AMD",
+    "JIT": "1",
+    "PYTHONPATH": "."
+  },
+  "first_failure": {
+    "message": "qwen3: selected-GGUF backing allocation is unknown from the selected path and scanned allocation granularity",
+    "type": "RuntimeError"
+  },
+  "loaded_elapsed_s": null,
+  "loaded_ended_monotonic_ns": 6399.502725541,
+  "loaded_started_monotonic_ns": null,
+  "lock": {
+    "TINYGRAD_GPU_LOCK_NONCE": "df9349b32f4d42e0a1ff0407ae4e900f",
+    "TINYGRAD_GPU_LOCK_PATH": "/private/tmp/gpu-bench.lock"
+  },
+  "max_context": 1024,
+  "model": {
+    "path": "/Users/julianabeleda/Models/Qwen3-8B-Q4_K_M.gguf",
+    "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+    "size_bytes": 5027783488
+  },
+  "process_elapsed_s": 9.906505,
+  "prompt_tokens": null,
+  "requested_duration_s": 600.0,
+  "samples": [],
+  "schema": "tinygrad.egpu.persistent-model-residency.v1",
+  "started_unix_ns": 1785299718098546000,
+  "status": "failed",
+  "status_interval_s": 30.0,
+  "token_count": 0,
+  "token_ids": [],
+  "token_ids_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+}
