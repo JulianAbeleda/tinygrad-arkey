@@ -155,10 +155,32 @@ def test_install_provenance_binds_live_binary_hashes_and_commit(tmp_path):
     "Signature=adhoc", "[activated enabled]", f"{qualify.sha256(app)}  {app.resolve()}", f"{qualify.sha256(dext)}  {dext.resolve()}",
   )))
   got=qualify.validate_install_provenance(transcript, app, source_commit="abc")
-  assert got["source_commit"] == "abc" and got["app_sha256"] == qualify.sha256(app)
+  assert got["source_commit"] == "abc" and got["installed_source_commit"] == "abc"
+  assert got["installed_inputs_equivalent"] and got["app_sha256"] == qualify.sha256(app)
   app.write_bytes(b"replaced")
   with pytest.raises(qualify.QualificationError, match="does not match"):
     qualify.validate_install_provenance(transcript, app, source_commit="abc")
+
+
+def test_install_provenance_allows_only_build_equivalent_descendant(tmp_path, monkeypatch):
+  installed, current = "a"*40, "b"*40
+  app_root=tmp_path/"TinyGPU.app"; app=app_root/"Contents/MacOS/TinyGPU"
+  dext=app_root/"Contents/Library/SystemExtensions/org.tinygrad.arkey.tinygpu.driver2.dext/org.tinygrad.arkey.tinygpu.driver2"
+  app.parent.mkdir(parents=True); dext.parent.mkdir(parents=True); app.write_bytes(b"app"); dext.write_bytes(b"dext")
+  transcript=tmp_path/"install.txt"
+  transcript.write_text("\n".join((
+    "schema=tinygpu.development-install.provenance.v1", f"source_commit={installed}", "=== activated ===",
+    "Identifier=org.tinygrad.arkey.tinygpu.installer", "Identifier=org.tinygrad.arkey.tinygpu.driver2",
+    "Signature=adhoc", "[activated enabled]", f"{qualify.sha256(app)}  {app.resolve()}", f"{qualify.sha256(dext)}  {dext.resolve()}",
+  )))
+  calls=[]
+  def git(command, **kwargs):
+    calls.append(command)
+    return subprocess.CompletedProcess(command, 0, stdout=current+"\n" if "rev-parse" in command else "")
+  monkeypatch.setattr(qualify.subprocess, "run", git)
+  got=qualify.validate_install_provenance(transcript, app)
+  assert got["installed_source_commit"] == installed and got["qualification_source_commit"] == current
+  assert got["installed_inputs_equivalent"] and any("merge-base" in command for command in calls)
 
 
 def test_acceptance_cli_has_no_test_shortcuts_or_endpoint_override():
@@ -181,3 +203,19 @@ def test_minimal_subprocess_output_must_be_exact():
   result=qualify.run_gate("A2", status_reader=samples.__next__, endpoint_reader=lambda:True,
                           minimal_command=["minimal"], runner=lambda _:bad)
   assert result["status"] == "failed" and "exact four-value" in result["first_failure"]["message"]
+
+
+def test_a12_runs_one_resident_process_then_immediate_minimal(tmp_path):
+  model=tmp_path/"model.gguf"; model.write_bytes(b"model")
+  artifact=tmp_path/"resident.json"
+  identity={"path":str(model.resolve()), "size_bytes":model.stat().st_size, "sha256":qualify.sha256(model)}
+  artifact.write_text(json.dumps({"schema":"tinygrad.egpu.persistent-model-residency.v1", "status":"passed", "first_failure":None,
+                                  "model":identity, "loaded_elapsed_s":1.0, "token_count":100,
+                                  "samples":[{"keepalive":{"provider_generation":1}}, {"keepalive":{"provider_generation":1}}]}))
+  samples=iter([status(), status(600), status(601)]); commands=[]
+  result=qualify.run_gate("A12", status_reader=samples.__next__, endpoint_reader=lambda:True, model=model, duration_s=1,
+                          residency_command=["resident", "--out", str(artifact)], residency_artifact=artifact,
+                          minimal_command=["minimal"], runner=lambda command:commands.append(command) or 0)
+  assert result["status"] == "passed" and len(commands) == 2
+  assert commands[0][:3] == ["resident", "--out", str(artifact)] and commands[1] == ["minimal"]
+  assert result["residency"]["token_count"] == 100 and len(result["endpoint_checks"]) == 3

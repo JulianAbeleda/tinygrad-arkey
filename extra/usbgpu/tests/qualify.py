@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse, fcntl, hashlib, json, os, pathlib, platform, re, signal, socket, stat, subprocess, sys, tempfile, time
 
-GATES = tuple(f"A{i}" for i in range(12))
+GATES = tuple(f"A{i}" for i in range(13))
 CLASSIFICATION_GATES = {"A10", "A11"}
 STATUS_FIELDS = {"schema", "provider_generation", "state", "enabled", "policy_id", "interval_ms", "maximum_timer_leeway_ms",
                  "expected_identity", "last_identity_dword", "attempts", "successes", "failures", "consecutive_failures",
@@ -30,6 +30,7 @@ DEFAULT_APP = pathlib.Path("/Applications/TinyGPU.app/Contents/MacOS/TinyGPU")
 DEFAULT_SOCKET = pathlib.Path(os.environ.get("APL_REMOTE_SOCK", "/tmp/tinygpu.sock"))
 DEFAULT_LOCK = pathlib.Path("/tmp/gpu-bench.lock")
 DEFAULT_INSTALL_PROVENANCE = ROOT / "docs/task_workflow/output/tinygpu-development-install-provenance.txt"
+INSTALL_BUILD_INPUTS = ("extra/usbgpu/tbgpu/installer", "extra/usbgpu/protocol")
 
 
 class QualificationError(RuntimeError): pass
@@ -107,20 +108,48 @@ def validate_install_provenance(path:pathlib.Path, installed_executable:pathlib.
     raw = path.read_bytes()
     if not raw or len(raw) > 8 << 20: raise QualificationError("install provenance size is invalid")
     text = raw.decode("utf-8")
-    if source_commit is None:
-      source_commit = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
+    transcript_commits = set(re.findall(r"(?m)^source_commit=([^\s]+)$", text))
+    if len(transcript_commits) != 1: raise QualificationError("install provenance must contain one unambiguous source commit")
+    installed_source_commit = transcript_commits.pop()
+    qualification_source_commit = source_commit
+    inputs_equivalent = installed_source_commit == qualification_source_commit
+    if qualification_source_commit is None:
+      if re.fullmatch(r"[0-9a-f]{40}", installed_source_commit) is None:
+        raise QualificationError("install provenance source commit is not a full git object ID")
+      qualification_source_commit = subprocess.run(
+        ["git", "-C", str(ROOT), "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
+      if installed_source_commit == qualification_source_commit:
+        inputs_equivalent = True
+      else:
+        ancestor = subprocess.run(
+          ["git", "-C", str(ROOT), "merge-base", "--is-ancestor", installed_source_commit, qualification_source_commit],
+          check=False, capture_output=True).returncode == 0
+        committed_inputs_unchanged = subprocess.run(
+          ["git", "-C", str(ROOT), "diff", "--quiet", f"{installed_source_commit}..{qualification_source_commit}", "--", *INSTALL_BUILD_INPUTS],
+          check=False).returncode == 0
+        unstaged_inputs_clean = subprocess.run(
+          ["git", "-C", str(ROOT), "diff", "--quiet", "--", *INSTALL_BUILD_INPUTS], check=False).returncode == 0
+        staged_inputs_clean = subprocess.run(
+          ["git", "-C", str(ROOT), "diff", "--cached", "--quiet", "--", *INSTALL_BUILD_INPUTS], check=False).returncode == 0
+        inputs_equivalent = ancestor and committed_inputs_unchanged and unstaged_inputs_clean and staged_inputs_clean
+        if not inputs_equivalent:
+          raise QualificationError("current qualification commit is not an installer/protocol-equivalent descendant of the installed build")
+    elif installed_source_commit != qualification_source_commit:
+      raise QualificationError("install provenance does not match the requested source commit")
     app_hash, dext_hash = sha256(app), sha256(dext)
   except (OSError, UnicodeDecodeError, subprocess.CalledProcessError) as exc:
     raise QualificationError("audited install provenance and live binaries are required") from exc
   required = (
-    "schema=tinygpu.development-install.provenance.v1", f"source_commit={source_commit}", "=== activated ===",
+    "schema=tinygpu.development-install.provenance.v1", f"source_commit={installed_source_commit}", "=== activated ===",
     f"Identifier=org.tinygrad.arkey.tinygpu.installer", f"Identifier=org.tinygrad.arkey.tinygpu.driver2",
     "Signature=adhoc", "[activated enabled]", f"{app_hash}  {app}", f"{dext_hash}  {dext}",
   )
   missing = [item for item in required if item not in text]
   if missing: raise QualificationError(f"install provenance does not match the live feature build: {missing}")
   return {"schema":"tinygpu.development-install.provenance.v1", "path":str(path.resolve()), "sha256":hashlib.sha256(raw).hexdigest(),
-          "source_commit":source_commit, "app_sha256":app_hash, "dext_sha256":dext_hash}
+          "source_commit":qualification_source_commit, "installed_source_commit":installed_source_commit,
+          "qualification_source_commit":qualification_source_commit, "installed_inputs_equivalent":inputs_equivalent,
+          "protected_build_inputs":list(INSTALL_BUILD_INPUTS), "app_sha256":app_hash, "dext_sha256":dext_hash}
 
 
 def validate_status(value:dict) -> None:
@@ -212,6 +241,24 @@ def validate_cadence(first:dict, second:dict) -> None:
   if over / observed > .01: raise QualificationError("keeper cadence exceeded leeway")
 
 
+def validate_residency_artifact(path:pathlib.Path, model_identity:dict, *, minimum_duration_s:float) -> dict:
+  try: raw = path.read_bytes()
+  except OSError as exc: raise QualificationError("persistent residency artifact is required") from exc
+  value = decode_json(raw, max_bytes=8<<20)
+  if value.get("schema") != "tinygrad.egpu.persistent-model-residency.v1" or value.get("status") != "passed" or value.get("first_failure") is not None:
+    raise QualificationError("persistent residency artifact did not pass")
+  if value.get("model") != model_identity: raise QualificationError("persistent residency artifact model identity mismatch")
+  if type(value.get("loaded_elapsed_s")) not in (int, float) or value["loaded_elapsed_s"] < minimum_duration_s:
+    raise QualificationError("persistent residency artifact ended early")
+  if type(value.get("token_count")) is not int or value["token_count"] < 100:
+    raise QualificationError("persistent residency artifact has too few tokens")
+  if type(value.get("samples")) is not list or len(value["samples"]) < 2:
+    raise QualificationError("persistent residency artifact has insufficient status samples")
+  return {"path":str(path.resolve()), "sha256":hashlib.sha256(raw).hexdigest(), "status":value["status"],
+          "loaded_elapsed_s":value["loaded_elapsed_s"], "token_count":value["token_count"], "sample_count":len(value["samples"]),
+          "provider_generation":value["samples"][0].get("keepalive", {}).get("provider_generation")}
+
+
 def status_command(command:list[str]) -> dict:
   result = subprocess.run(command, check=False, capture_output=True)
   if result.returncode: raise QualificationError(f"status command failed: {result.returncode}: {result.stderr.decode('utf-8', 'replace')[:4096]}")
@@ -296,6 +343,7 @@ def common_context(app:pathlib.Path) -> dict:
 def run_gate(gate:str, *, status_reader, endpoint_reader, process_reader=lambda:[], terminator=lambda pid:None, sleeper=time.sleep,
              installed_executable:pathlib.Path|None=None, model:pathlib.Path|None=None, manual_prompt=lambda _:None,
              runner=lambda command: subprocess.run(command, check=False, capture_output=True), minimal_command=None, bench_command=None,
+             residency_command=None, residency_artifact:pathlib.Path|None=None,
              handshake_reader=None, duration_s=None, sample_interval_s=60, churn_count=25, churn_idle_s=5,
              idle_s=None, include_post_idle=False, clock=time.monotonic, socket_reader=lambda:False, install_provenance=None,
              power_status_reader=None) -> dict:
@@ -411,6 +459,17 @@ def run_gate(gate:str, *, status_reader, endpoint_reader, process_reader=lambda:
       before = checked_status("A11:before"); manual_prompt("manual sleep/wake"); after = checked_status("A11:after")
       evidence["classification"] = {"generation_before":before["provider_generation"], "generation_after":after["provider_generation"],
                                     "endpoint_visible_after":True}; evidence["manual_action_required"] = True
+    elif gate == "A12":
+      if model is None: raise QualificationError("A12 requires --model")
+      if residency_artifact is None: raise QualificationError("A12 requires a unique persistent residency artifact")
+      loaded_s = 600 if duration_s is None else duration_s
+      before = checked_status("A12:before")
+      command([*residency_command, "--model", str(model), "--duration-s", str(loaded_s),
+               "--decode-interval-s", "2", "--status-interval-s", "30"], "persistent model residency")
+      evidence["residency"] = validate_residency_artifact(residency_artifact, evidence["model"], minimum_duration_s=loaded_s)
+      after = checked_status("A12:after-residency"); validate_continuity(before, after, require_advance=True)
+      command(minimal_command, "A12 post-residency minimal")
+      final = checked_status("A12:after-minimal"); validate_continuity(after, final)
     else: raise QualificationError("unknown gate")
   except BaseException as exc:
     first_failure = {"type":type(exc).__name__, "message":str(exc)}
@@ -440,9 +499,13 @@ def main(argv=None) -> int:
     hello_cmd = [str(DEFAULT_APP), "keepalive", "handshake"]
     minimal = [sys.executable, str(ROOT / "extra/usbgpu/tests/minimal_amd_compute.py")]
     bench = [sys.executable, str(ROOT / "extra/llm_research/bench.py")]
+    residency_artifact = ROOT / "docs/task_workflow/output" / \
+      f"egpu-usb4-persistent-model-residency-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{os.getpid()}.json"
+    residency = [sys.executable, str(ROOT / "extra/usbgpu/tests/persistent_model_residency.py"), "--out", str(residency_artifact)]
     evidence = run_gate(args.gate, status_reader=lambda:status_command(status_cmd), power_status_reader=lambda:status_command(power_cmd),
                         handshake_reader=lambda:handshake_command(hello_cmd),
                         installed_executable=DEFAULT_APP, model=args.model, minimal_command=minimal, bench_command=bench,
+                        residency_command=residency, residency_artifact=residency_artifact,
                         endpoint_reader=default_endpoint_reader, process_reader=default_process_reader, terminator=lambda pid:os.kill(pid, signal.SIGTERM),
                         socket_reader=lambda:socket_reachable(DEFAULT_SOCKET), include_post_idle=args.include_post_idle, install_provenance=provenance,
                         manual_prompt=lambda action:input(f"Operator action required: {action}. Press Enter after completion: "))

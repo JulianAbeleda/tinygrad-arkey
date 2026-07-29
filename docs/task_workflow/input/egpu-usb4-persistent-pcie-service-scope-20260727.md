@@ -2,9 +2,10 @@
 
 Date: 2026-07-27
 
-Status: open at runtime qualification. P0-P5 implementation/install work landed;
-the v5 DEXT is activated, and A0-A11 remain gated by the runtime blocker recorded
-in `egpu-usb4-tinygpu-runtime-initialization-scope-20260728.md`.
+Status: open at loaded-residency qualification. The v13 DEXT is activated and
+the historical full AM boot plus minimal GPU computation passed twice. The
+next bounded run is the 2026-07-29 single-process loaded-residency checkpoint
+defined below.
 
 Repository and native-source owner: `tinygrad-arkey`, under `extra/usbgpu/`
 
@@ -32,7 +33,7 @@ The native TinyGPU DriverKit provider owns link liveness for its bound device. T
 
 Completion requires tracked native source, a versioned and independently implemented native/Python wire contract, an audited development-installed build with recorded provenance, awake-idle evidence beyond the historical failure window, and post-idle tinygrad compute including the canonical Qwen3 8B smoke workload. The v5 runtime initialization/RPC blocker is a required precondition for A2 and all later compute claims.
 
-## Current runtime blocker (2026-07-28)
+## Resolved runtime blocker (2026-07-28 through 2026-07-29)
 
 Activation and enumeration have now been observed for v5: the target DEXT is
 `[activated enabled]`, the legacy DEXT is disabled, macOS reports PCI identity
@@ -49,6 +50,91 @@ that blocker is authoritative in
 `docs/task_workflow/input/egpu-usb4-tinygpu-runtime-initialization-scope-20260728.md`.
 Do not claim A2, awake-idle, load, or Qwen3 success until the blocker scope's
 M0-M7 and repeat A0/A1 gates pass.
+
+The later v13 result supersedes that final sentence. Commit `8f7afc45f`
+restored the historical PCI command enables and commit `d448df508` repaired
+the AMD/TinyGPU finalization order. A0 and two consecutive A2 runs then passed;
+the preserved result is
+`docs/task_workflow/output/egpu-usb4-v13-historical-run-recreation-20260729T041747Z.md`.
+
+## 2026-07-29 v13 single-process loaded-residency checkpoint
+
+This checkpoint supersedes A7 for the next hardware run only. The old A7
+procedure starts five independent decode processes and interleaves idle
+periods; that is useful churn evidence but cannot test the operator's specific
+hypothesis that keeping one model and its VRAM allocations alive prevents the
+USB4 tunnel from dropping.
+
+### Question
+
+Can one long-lived TinyGPU workload lease, a resident Qwen3-8B model, and
+periodic light decode keep the endpoint usable for 600 seconds despite the
+continuing ACIO `83/87` population?
+
+This is a loaded-arm classification experiment. It does not by itself prove
+that load is causal; a later duration-matched idle arm is required for that
+claim.
+
+### Frozen inputs
+
+- Installed DEXT: v13 built from
+  `8f7afc45f274f8c2a4ffbeee286684a2a1013c42`.
+- Runtime baseline: `d448df508` plus only the tracked scope/runner changes for
+  this checkpoint.
+- Model: `/Users/julianabeleda/Models/Qwen3-8B-Q4_K_M.gguf`, size
+  `5027783488`, SHA-256
+  `d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785`.
+- Environment: `DEV=AMD`, `JIT=1`, `PYTHONPATH=.`,
+  `AM_REMOTE_DISCOVERY_PROFILE=gfx1100_744c`, and
+  `AM_REMOTE_SKIP_RESIZE_BAR=1`; `REMOTE_KEEPALIVE_S` and
+  `AM_REMOTE_SMALL_BAR_DISCOVERY` remain unset.
+- Duration: 600 seconds after the first successful model token.
+- Activity: at most one synchronous decode token every two seconds in the
+  same Python process. The model, AMD device, lease, BAR mappings, and DMA
+  allocations remain alive between tokens.
+- Observation: direct keepalive and power-residency samples every 30 seconds,
+  with one endpoint check before and after the loaded interval. ACIO logs are
+  captured over the exact wall-clock interval after the process exits.
+
+### Procedure and acceptance
+
+1. Hold `/tmp/gpu-bench.lock` for the complete admission, model residency,
+   cleanup, and post-run compute check.
+2. Require A0-equivalent installed-byte provenance. A later runtime-only
+   descendant commit may qualify against the installed v13 build only when git
+   proves the installer and wire-protocol inputs are unchanged from the
+   installed source commit and the live app/DEXT hashes still match the install
+   transcript.
+3. Require a visible `1002:744c` endpoint, healthy keeper, confirmed PCI
+   command mask `7`, retained BAR5, confirmed full power, and
+   `publishable=true` before loading.
+4. Load Qwen3-8B once, realize it through the first generated token, and keep
+   the same process/device/model alive for 600 seconds while issuing the light
+   decode cadence.
+5. Each in-load sample must retain the same provider generation, a healthy
+   keeper with advancing successful canaries, confirmed command mask `7`, and
+   exactly one active workload lease. Workload BAR/DMA counts may be nonzero
+   only while that lease is active.
+6. Exit through normal AMD finalization, require all workload resource counts
+   to return to zero, and immediately pass the canonical A2 minimal compute in
+   the same lock ownership interval.
+
+The loaded arm passes when the full 600 seconds completes, at least 100 decode
+tokens complete, every status sample is valid in one provider generation, the
+endpoint remains visible afterward, cleanup returns lease/BAR/DMA counts to
+zero, and the post-run A2 result is exactly `[2.0, 5.0, 10.0, 17.0]`.
+
+Stop immediately on endpoint loss, provider-generation change, status/RPC
+failure, keepalive failure, command mask other than `7`, power-residency
+downgrade, unexpected lease count, page fault, device error, decode failure,
+or cleanup failure. Preserve partial evidence. ACIO errors alone are counted
+and reported but are not an early stop unless they cause one of those admitted
+failures.
+
+No install, reset RPC, provider termination, replug, reboot, sleep transition,
+smart-plug action, or enclosure power action is authorized or required by this
+checkpoint. `APPROVE_ONE_EGPU_RECOVERY` remains unspent unless a separately
+identified recovery action is actually performed.
 
 ## 2. Evidence and problem boundary
 
@@ -311,7 +397,7 @@ export AM_REMOTE_DISCOVERY_PROFILE=gfx1100_744c
 export AM_REMOTE_SKIP_RESIZE_BAR=1
 ```
 
-Minimal compute harness is a tracked test script added by P4 at `extra/usbgpu/tests/minimal_amd_compute.py`. It must allocate `[1, 2, 3, 4]`, evaluate `x*x + 1` on `Device["AMD"]`, transfer the four float results to host, require exact `[2.0, 5.0, 10.0, 17.0]`, and exit nonzero on device, transfer, or value failure. The exact command is:
+Minimal compute harness is a tracked test script added by P4 at `extra/usbgpu/tests/minimal_amd_compute.py`. It must allocate `[1, 2, 3, 4]`, evaluate `x*x + 1` with canonical device string `"AMD"`, transfer the four float results to host, require exact `[2.0, 5.0, 10.0, 17.0]`, and exit nonzero on device, transfer, or value failure. The exact command is:
 
 ```sh
 .venv/bin/python extra/usbgpu/tools/with_gpu_lock.py -- \
