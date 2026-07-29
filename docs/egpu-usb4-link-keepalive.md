@@ -269,6 +269,50 @@ The desired end state is the historically working Mac transport/runtime behavior
 the now-optimized kernels. Do not roll the performance work back merely to make the old
 control pass.
 
+### Matched current-upstream control
+
+The host now retains two distinct TinyGPU stacks instead of treating the non-Arkey
+registration as stale state:
+
+- `/Applications/TinyGPU.app` remains the locally built Arkey v13 app and contains
+  `org.tinygrad.arkey.tinygpu.driver2`.
+- `/Applications/TinyGPU-Upstream.app` is the unmodified tinygrad-signed release pinned by
+  current upstream. Its `org.tinygrad.tinygpu.driver2` executable has SHA-256
+  `236035427b9b182ad5f9eb3c16d4a3e5804f84bb864a933d6c7aa8e9c6f3f198`, exactly matching
+  the copy registered in `/Library/SystemExtensions`.
+- `/Users/julianabeleda/env/tinygrad-upstream-control` is a detached, clean worktree at
+  upstream commit `6ea7d366fa92842c0bc8b7b080e26e83a7406252`. Current upstream pins TinyGPU release
+  `c0d024f9ff0e1dc8fdf217f255da7101d91e8323`.
+
+This must be a matched-stack A/B. The upstream v3 app/DEXT uses the original RPC protocol;
+the Arkey runtime requires its v13 handshake, power status, and workload lease protocol.
+Running one side with the other would be an intentional protocol failure, not a transport
+control.
+
+`extra/usbgpu/tools/run_upstream_control.py` validates the app, registered DEXT, cached
+release archive, exact clean upstream runtime commit, and registration state. It never
+changes system-extension activation. Before a control run, use System Settings > General >
+Login Items & Extensions > Driver Extensions to disable Arkey TinyGPU and enable upstream
+TinyGPU. A reboot may be required for macOS to move both rows into unambiguous states. Check
+without touching the GPU:
+
+```text
+python3 extra/usbgpu/tools/run_upstream_control.py --check
+```
+
+The runner refuses mixed activation, holds `/tmp/gpu-bench.lock`, starts the upstream server
+on a unique Unix socket, and forces imports and working directory to the pinned upstream
+tree. The first control should remain the smallest compute before the 1.7B model:
+
+```text
+python3 extra/usbgpu/tools/run_upstream_control.py -- \
+  python3 -c 'from tinygrad import Tensor; print((Tensor([1,2,3], device="AMD")+1).numpy())'
+```
+
+After the upstream control, reverse the two Driver Extensions toggles before running Arkey.
+Do not compare an upstream run and an Arkey run unless `--check` captured the exact active
+row before each run.
+
 **Fallback (kept):** `extra/remote/amd_power_cycle.py` physically power-cycles via a Shelly
 smart plug when the link is already dead. Prevention lowers frequency; it does not make the
 power-cycle recovery obsolete.
