@@ -21,7 +21,7 @@ import os, sys, traceback
 os.environ.setdefault("DEV", "AMD")
 from tinygrad.llm.generate import load_model_and_tokenizer
 from tinygrad import Tensor
-from tinygrad.llm.prefill_policy import immutable_prefill_policy
+from tinygrad.llm.admission import immutable_prefill_policy
 
 MODELS = [("8B", "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf"),
           ("14B", "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf")]

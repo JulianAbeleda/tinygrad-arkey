@@ -88,7 +88,7 @@ def _prefill(model, prompt:list[int], chunk_size:int):
 
 
 def _route(model, start_pos, token_extent:int) -> bool:
-  from tinygrad.llm.route_policy import should_use_flash_decode
+  from tinygrad.llm.decode_routes import should_use_flash_decode
   return bool(model.config.flash_decode and should_use_flash_decode(start_pos, token_extent))
 
 
