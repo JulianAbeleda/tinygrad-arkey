@@ -712,6 +712,13 @@ class AMDAllocator(HCQInterfaceAllocator['AMDDevice']):
     # rocminfo is unavailable. KFD continues to use its live rocminfo fallback rather than an inferred value.
     return 2 << 20 if self.dev.is_am() else None
 
+  def memory_stats(self) -> tuple[int, int]|None:
+    """Return the live allocatable VRAM heap total/free bytes for direct AMD interfaces."""
+    if not self.dev.is_am(): return None
+    heap = self.dev.iface.dev_impl.mm.pa_allocator
+    free = sum(size for size, _, _, is_free in heap.blocks.values() if is_free)
+    return heap.size, free
+
   def _alloc(self, size:int, options:BufferSpec) -> HCQBuffer:
     return self.dev.iface.alloc(size, host=options.host, uncached=options.uncached, cpu_access=options.cpu_access or not self.dev.has_sdma_queue)
 

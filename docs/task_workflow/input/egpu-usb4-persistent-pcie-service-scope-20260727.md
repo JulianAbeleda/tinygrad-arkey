@@ -153,6 +153,16 @@ live `rocminfo` path. This does not override memory admission or guess free
 VRAM. Rerun A12 from the committed correction without another endpoint reset
 when the same provider remains healthy.
 
+The second admission invocation at `2026-07-29T04:38:03Z` confirmed the 2 MiB
+granularity correction and stopped at the next fail-closed input: this host has
+no `rocm-smi`, so total/free VRAM were unknown. Direct AMD already owns a live
+TLSF physical-memory heap after device initialization. Publish that heap's
+total bytes and the sum of its current free ranges through the allocator, and
+let the default device-facts memory probe fall back to that live measurement
+only when `rocm-smi` is unavailable. Do not inject a card-size constant. The
+second attempt also produced zero tokens, cleaned every workload resource, and
+left provider generation 1 healthy; rerun from the committed measurement fix.
+
 ## 2. Evidence and problem boundary
 
 - Replacing the old PCIe riser changed the GPU from non-enumerating to enumerating. The former riser was a signal-path blocker.

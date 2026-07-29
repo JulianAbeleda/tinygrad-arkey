@@ -153,7 +153,7 @@ def scan_device_facts(selected_device: str | None = None, *, target_probe: Probe
   device = selected_device or _selected_device()
   now = (clock or (lambda: datetime.now(timezone.utc)))().astimezone(timezone.utc).isoformat()
   target, target_record = _run_probe(target_probe or _tinygrad_target_probe, device, "tinygrad-device", now)
-  memory, memory_record = _run_probe(memory_probe or _rocm_smi_memory_probe, device, "rocm-smi", now)
+  memory, memory_record = _run_probe(memory_probe or _default_memory_probe, device, "device-memory", now)
   errors: list[str] = []
   try: total, free = _optional_int(memory.get("total_vram_bytes")), _optional_int(memory.get("free_vram_bytes"))
   except (TypeError, ValueError, OverflowError) as exc:
@@ -266,6 +266,22 @@ def _rocm_smi_memory_probe(device: str) -> Mapping[str, Any]:
       else: total = int(match.group(2))
   return {"total_vram_bytes": total, "free_vram_bytes": None if total is None or used is None else total-used,
           "provenance": "rocm-smi --showmeminfo vram"}
+
+
+def _allocator_memory_probe(device: str) -> Mapping[str, Any]:
+  from tinygrad.device import Device
+  opened = Device[device]
+  reader = getattr(opened.allocator, "memory_stats", None)
+  if not callable(reader) or (stats:=reader()) is None: raise RuntimeError("selected allocator does not publish memory stats")
+  total, free = stats
+  if type(total) is not int or type(free) is not int or total <= 0 or not 0 <= free <= total:
+    raise RuntimeError("selected allocator published invalid memory stats")
+  return {"total_vram_bytes":total, "free_vram_bytes":free, "provenance":"tinygrad-device allocator live heap"}
+
+
+def _default_memory_probe(device: str) -> Mapping[str, Any]:
+  try: return _rocm_smi_memory_probe(device)
+  except (OSError, subprocess.SubprocessError, ValueError): return _allocator_memory_probe(device)
 
 
 # Explicit alias for callers that prefer the autoscan terminology used by the planner documentation.
