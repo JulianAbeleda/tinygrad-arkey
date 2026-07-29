@@ -896,11 +896,9 @@ class Transformer:
   _PREFILL_V2_LINEARS = ("ffn_gate", "ffn_up", "ffn_down", "ffn_gate_shexp", "ffn_up_shexp", "ffn_down_shexp",
                          "attn_q", "attn_k", "attn_v", "attn_output")
   def _prefill_v2_role_for_name(self, name:str) -> str:
-    if name in ("ffn_gate", "ffn_up", "ffn_gate_shexp", "ffn_up_shexp"): return "ffn_gate_up"
-    if name in ("ffn_down", "ffn_down_shexp"): return "ffn_down"
-    if name in ("attn_q", "attn_output"): return "attn_qo"
-    if name in ("attn_k", "attn_v"): return "attn_kv"
-    return ""
+    from tinygrad.llm.model_facts import QK_ROUTE_ROLES, normalize_route_role
+    role = normalize_route_role(name)
+    return role if role in QK_ROUTE_ROLES else ""
 
   def _prefill_v2_dims(self, lin):
     out_f = getattr(lin, "out_features", None) or lin.weight.shape[0]

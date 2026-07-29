@@ -5,10 +5,43 @@ from typing import Any
 
 
 QK_ROUTE_ROLES = ("ffn_gate_up", "ffn_down", "attn_qo", "attn_kv", "lm_head")
+_ROUTE_ROLE_ALIASES = {
+  "ffn_gate": "ffn_gate_up", "ffn_up": "ffn_gate_up", "ffn_gate_up": "ffn_gate_up",
+  "ffn_gate_shexp": "ffn_gate_up", "ffn_up_shexp": "ffn_gate_up",
+  "ffn_down": "ffn_down", "ffn_down_shexp": "ffn_down",
+  "attn_q": "attn_qo", "attn_output": "attn_qo", "attn_qo": "attn_qo",
+  "attn_k": "attn_kv", "attn_v": "attn_kv", "attn_kv": "attn_kv",
+  "output": "lm_head", "lm_head": "lm_head",
+}
 GGML_QUANT_LABELS = {
   12: "Q4_K",
   14: "Q6_K",
 }
+
+
+def normalize_route_role(role_or_name: str) -> str:
+  """Normalize a route role or tensor/module name to the production role vocabulary."""
+  value = str(role_or_name or "")
+  leaf = value[:-len(".weight")] if value.endswith(".weight") else value
+  leaf = leaf.rsplit(".", 1)[-1]
+  return _ROUTE_ROLE_ALIASES.get(leaf, value)
+
+
+def packed_linear_quant(linear: Any) -> str:
+  """Return the packed quant family carried by a runtime linear, if any."""
+  if not hasattr(linear, "prefill_packed_weight"): return ""
+  if hasattr(linear, "q4k_storage"): return "Q4_K"
+  if hasattr(linear, "q6k_storage"): return "Q6_K"
+  return ""
+
+
+def route_role_for_linear(linear: Any) -> str:
+  """Resolve a runtime linear's attached role with name fallback for compatibility."""
+  for attr in ("_prefill_graph_role", "route_role", "role"):
+    value = str(getattr(linear, attr, "") or "")
+    if value: return normalize_route_role(value)
+  role = normalize_route_role(str(getattr(linear, "name", "") or ""))
+  return role if role in QK_ROUTE_ROLES else ""
 
 
 @dataclass(frozen=True)

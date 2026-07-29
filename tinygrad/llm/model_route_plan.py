@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable
+from tinygrad.llm.model_facts import normalize_route_role
 
 @dataclass(frozen=True)
 class PrimitiveRouteEntry:
@@ -14,13 +15,7 @@ class ModelRoutePlan:
   def __iter__(self): return iter(self._entries.values())
 
 def _module_path(name:str) -> str: return name[:-len(".weight")] if name.endswith(".weight") else name
-def _role_family(role:str) -> str:
-  if role in ("ffn_gate", "ffn_up", "ffn_gate_up"): return "ffn_gate_up"
-  if role == "ffn_down": return role
-  if role in ("attn_q", "attn_output", "attn_qo"): return "attn_qo"
-  if role in ("attn_k", "attn_v", "attn_kv"): return "attn_kv"
-  if role in ("output", "lm_head"): return "lm_head"
-  return role
+def _role_family(role:str) -> str: return normalize_route_role(role)
 
 def _default(name:str, quant:str, role:str, rows:int, cols:int) -> tuple[int, tuple[str, ...]]|None:
   if rows <= 0 or cols <= 0 or cols % 256: return None
