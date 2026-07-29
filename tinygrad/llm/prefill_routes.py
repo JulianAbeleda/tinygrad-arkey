@@ -3,9 +3,8 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any, Callable, Iterator, Mapping
+from typing import Callable, Iterator, Mapping
 from tinygrad import Tensor, dtypes
-from tinygrad.codegen.opt import parse_opt
 from tinygrad.llm import route_ops as qk_ops
 from tinygrad.llm.memory_semantics import (prefill_activation as _prefill_activation,
   prefill_output as _prefill_output, prefill_scratch as _prefill_scratch)
@@ -66,16 +65,19 @@ def _attached_production_route(lin, x: Tensor) -> str | None:
   if not isinstance(x.shape[-2], int) or not isinstance(x.shape[-1], int) or x.shape[-1] != k: return None
   # These are the stable production candidate ids.  Research/MMQ ids are not
   # guessed or promoted merely because an environment knob names them.
+  # Legacy attachments named the packed-storage strategy after its old
+  # handwritten fallback. They now authorize only the exact searched
+  # packed-WMMA rows; a selector decline falls through to ordinary tinygrad.
   baseline_ids = {"direct_packed", "direct-packed-baseline", f"prefill_{quant.lower()}_direct_packed",
                   f"prefill_{quant.lower()}_direct_packed_load_direct_out"}
   if attachment.route_id in baseline_ids:
-    return "direct_packed"
+    return "packed_wmma"
   if policy.get("strategy") == "BOUNDED_PACKED_TILES":
     from tinygrad.llm.prefill_policy import bounded_packed_projection_proven_eligible
     proof = policy.get("bounded_packed_projection_proof", {})
     if (bounded_packed_projection_proven_eligible(policy, facts) and attachment.allocation_owner_identity ==
         proof.get("allocation_owner_identity")):
-      return "bounded_packed"
+      return "packed_wmma"
   if policy.get("strategy") == "FULL_RESIDENT_OVERLAY" and getattr(lin, "_pf16_w", None) is not None:
     return "fp16"
   return None
@@ -84,50 +86,6 @@ def _attached_production_route(lin, x: Tensor) -> str | None:
 def _is_q4k_linear(lin) -> bool: return hasattr(lin, "q4k_storage") and hasattr(lin, "prefill_packed_weight")
 def _is_q6k_linear(lin) -> bool: return hasattr(lin, "q6k_storage") and hasattr(lin, "prefill_packed_weight")
 def is_direct_packed_prefill_linear(lin) -> bool: return _is_q4k_linear(lin) or _is_q6k_linear(lin)
-
-
-def _direct_packed_enabled_for(lin, quant:str) -> bool:
-  return quant.upper() in ("Q4_K", "Q6_K") and is_direct_packed_prefill_linear(lin)
-
-
-def _direct_packed_b_upcast(m:int) -> int:
-  # 14B pp512 direct-packed: 4 beats the former 16-token unroll; lower values lose occupancy/reuse.
-  return min(m, 16, 4)
-
-
-def _direct_packed_role(lin, spec:"PrefillLinearRouteSpec") -> str:
-  return spec.role or _direct_packed_module_role(lin)
-
-
-def _direct_packed_parts(lin, spec:"PrefillLinearRouteSpec") -> int:
-  base = int(getattr(lin, "parts", 1))
-  role = _direct_packed_role(lin, spec)
-  if role == "ffn_down" and spec.quant == "q4k":
-    return 1
-  if spec.quant == "q6k":
-    return 1
-  return max(1, base)
-
-
-def _direct_packed_opts(lin, spec:"PrefillLinearRouteSpec"):
-  if spec.quant == "q4k":
-    parse = parse_opt
-    # The promoted Q4 baseline owns this measured tile4x4 schedule. Ambient
-    # tuning variables cannot relabel its candidate descriptor at runtime.
-    # The full-vocabulary LM head is the one output shape whose four-way
-    # upcast joins non-contiguous vocabulary rows into a constructed float32
-    # value on HIP. Keep its established local tile but leave the output
-    # scalar-addressable; normal prefill roles retain the measured 4x4 path.
-    # Some model-forward attachments name this projection `output` rather
-    # than `lm_head`; the full-vocabulary width is the structural ownership
-    # fact at the primitive boundary. No admitted dense prefill role reaches
-    # this extent.
-    if spec.role == "lm_head" or spec.n >= 131072:
-      return tuple(parse(x) for x in ("LOCAL:0:16", "LOCAL:1:16"))
-    return tuple(parse(x) for x in ("LOCAL:0:16", "LOCAL:1:16", "UPCAST:0:4", "UPCAST:1:4"))
-  else:
-    parse = parse_opt
-  return tuple(getattr(lin, "opts", ())) + (parse(f"UPCAST:1:{_direct_packed_b_upcast(spec.m)}"),)
 
 
 @dataclass(frozen=True)
@@ -142,78 +100,6 @@ class PrefillLinearRouteSpec:
   @property
   def kernel_prefix(self) -> str:
     return f"prefill_{self.quant.lower()}_{self.route}_gemm"
-
-  @property
-  def q4k_kernel_prefix(self) -> str:
-    return f"prefill_{self.quant.lower()}_direct_packed_load_gemm"
-
-  @property
-  def q6k_kernel_prefix(self) -> str:
-    return f"prefill_{self.quant.lower()}_direct_packed_load_gemm"
-
-@dataclass(frozen=True)
-class DirectPackedPrefillFormat:
-  quant: str
-  describe_op: str
-  emit_op: str
-
-  def describe(self, lin, spec:PrefillLinearRouteSpec, *, parts:int, output_layout:str, opts):
-    return getattr(qk_ops, self.describe_op)(spec.n, spec.k, spec.m, role=_direct_packed_role(lin, spec),
-      parts=parts, output_layout=output_layout, opts=opts)
-
-  def emit(self, route_spec):
-    return getattr(qk_ops, self.emit_op)(route_spec)
-
-
-@dataclass(frozen=True)
-class DirectPackedPrefillCandidate:
-  format: DirectPackedPrefillFormat
-
-  @property
-  def quant(self) -> str: return self.format.quant
-
-  def matches(self, lin, spec:PrefillLinearRouteSpec) -> bool:
-    return spec.quant == self.quant
-
-  def run(self, lin, x:Tensor, x_batch:Tensor, spec:PrefillLinearRouteSpec) -> Tensor | None:
-    return _execute_direct_packed_prefill(self.format, lin, x, x_batch, spec)
-
-class Q4KDirectPackedPrefillCandidate(DirectPackedPrefillCandidate):
-  def __init__(self): super().__init__(DirectPackedPrefillFormat(
-    "q4k", "describe_q4k_packed_prefill_generated", "emit_q4k_packed_prefill_kernel"))
-
-class Q6KDirectPackedPrefillCandidate(DirectPackedPrefillCandidate):
-  def __init__(self): super().__init__(DirectPackedPrefillFormat(
-    "q6k", "describe_q6k_packed_prefill", "emit_q6k_packed_prefill_kernel"))
-
-
-def _execute_direct_packed_prefill(format:DirectPackedPrefillFormat, lin, x:Tensor, x_batch:Tensor,
-                                    spec:PrefillLinearRouteSpec) -> Tensor:
-  packed_weight = lin.prefill_packed_weight().to(x.device)
-  parts = _direct_packed_parts(lin, spec)
-  output_layout = "direct_out" if parts == 1 else "partials"
-  route_spec = format.describe(lin, spec, parts=parts, output_layout=output_layout, opts=_direct_packed_opts(lin, spec))
-  kernel = format.emit(route_spec)
-  activation = x_batch.reshape(spec.m * spec.k)
-  if output_layout == "direct_out":
-    out = prefill_output(Tensor.empty(spec.m, spec.n, dtype=dtypes.float32, device=x.device).custom_kernel(
-      packed_weight, activation, fxn=kernel)[0])
-    return prefill_output(out.reshape(1, spec.m, spec.n))
-  partials = prefill_scratch(Tensor.empty(spec.n, spec.m, parts, dtype=dtypes.float32, device=x.device))
-  out = prefill_scratch(partials.custom_kernel(packed_weight, activation, fxn=kernel)[0])
-  return prefill_output(out.sum(axis=2).transpose(0, 1).reshape(1, spec.m, spec.n))
-
-
-DIRECT_PACKED_PREFILL_CANDIDATES: tuple[DirectPackedPrefillCandidate, ...] = (
-  Q4KDirectPackedPrefillCandidate(), Q6KDirectPackedPrefillCandidate(),
-)
-
-
-def select_direct_packed_prefill_candidate(lin, spec:PrefillLinearRouteSpec) -> DirectPackedPrefillCandidate | None:
-  for candidate in DIRECT_PACKED_PREFILL_CANDIDATES:
-    if candidate.matches(lin, spec): return candidate
-  return None
-
 
 def _direct_packed_quant(lin) -> str:
   if _is_q4k_linear(lin): return "Q4_K"
@@ -236,14 +122,17 @@ def _direct_packed_module_role(lin) -> str:
   return ""
 
 
-def _attached_direct_packed_spec(lin, x:Tensor) -> PrefillLinearRouteSpec | None:
-  """Build the production baseline spec from attachment and structural facts only."""
-  if _attached_production_route(lin, x) not in ("direct_packed", "bounded_packed"): return None
+def _attached_packed_wmma_spec(lin, x:Tensor) -> PrefillLinearRouteSpec | None:
+  """Build a spec for the exact searched packed-WMMA selector.
+
+  Packed storage and a legacy attachment are necessary but not sufficient: the
+  selector still has to match one of its six promoted rows. All other shapes use
+  the normal tinygrad graph.
+  """
+  if _attached_production_route(lin, x) != "packed_wmma": return None
   binding = getattr(lin, "_prefill_direct_packed_binding", None)
   if not isinstance(binding, PrefillDirectPackedBinding) or binding.phase != "prefill": return None
-  # `Transformer.logits` invokes the explicit full-sequence LM-head route outside the census context.  Admit only
-  # the immutable 8B vocab attachment there; every ordinary direct-packed route still requires `_ACTIVE`.
-  if not _ACTIVE.get() and not _exact_q6k_vocab_direct_prefill(lin, x): return None
+  if not _ACTIVE.get(): return None
   if getattr(lin, "bias", None) is not None or len(x.shape) != 3 or x.shape[0] != 1: return None
   m, k = x.shape[-2], x.shape[-1]
   n, in_f = getattr(lin, "out_features", None), getattr(lin, "in_features", None)
@@ -253,50 +142,18 @@ def _attached_direct_packed_spec(lin, x:Tensor) -> PrefillLinearRouteSpec | None
   if not isinstance(attachment, PrefillRouteAttachment) or attachment.invocation_id != binding.invocation_id: return None
   quant = "q4k" if _is_q4k_linear(lin) else "q6k" if _is_q6k_linear(lin) else ""
   if quant == "": return None
-  route = "bounded_packed" if _attached_production_route(lin, x) == "bounded_packed" else "direct_packed"
-  return PrefillLinearRouteSpec(route, quant, _direct_packed_module_role(lin), m, n, k)
-
-
-def _exact_q6k_vocab_direct_prefill(lin, x:Tensor) -> bool:
-  """The only vocab projection admitted to bypass the packed-WMMA half-output route."""
-  binding = getattr(lin, "_prefill_direct_packed_binding", None)
-  attachment = getattr(lin, "_prefill_route_attachment", None)
-  return (_is_q6k_linear(lin) and isinstance(binding, PrefillDirectPackedBinding) and
-          isinstance(attachment, PrefillRouteAttachment) and attachment.tensor_identity == "output.weight" and
-          binding.phase == "prefill" and binding.role == "lm_head" and binding.shape == (512, 151936, 4096) and
-          tuple(x.shape) == (1, 512, 4096) and
-          getattr(lin, "out_features", None) == 151936 and getattr(lin, "in_features", None) == 4096)
-
-
-def _run_direct_packed_baseline(lin, x:Tensor, spec:PrefillLinearRouteSpec) -> Tensor | None:
-  x_batch = prefill_activation(x[0].cast(dtypes.float16).contiguous())
-  candidate = select_direct_packed_prefill_candidate(lin, spec)
-  if candidate is None: return None
-  out = candidate.run(lin, x, x_batch, spec)
-  notify_prefill_route(lin)
-  return out
-
-
-def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
-  """Production direct-packed baseline; attachment is the sole selector."""
-  binding = getattr(lin, "_prefill_direct_packed_binding", None)
-  if isinstance(binding, PrefillDirectPackedBinding) and binding.lifecycle is RouteLifecycle.QUARANTINED: return None
-  spec = _attached_direct_packed_spec(lin, x)
-  return None if spec is None else _run_direct_packed_baseline(lin, x, spec)
+  return PrefillLinearRouteSpec("packed_wmma", quant, _direct_packed_module_role(lin), m, n, k)
 
 
 PREFILL_PACKED_WMMA_POLICY = RouteCandidatePolicy("packed-wmma-prefill", RouteLifecycle.PROMOTED)
 PREFILL_FP16_POLICY = RouteCandidatePolicy("fp16-prefill", RouteLifecycle.FALLBACK)
-_DIRECT_PACKED_PREFILL_POLICY = RouteCandidatePolicy("direct-packed-prefill", RouteLifecycle.PROMOTED)
-_DIRECT_PACKED_PREFILL_QUARANTINE = {
-  (40, 8): "direct-packed prefill produced repeatable GPU MMU faults for Hq=40/Hkv=8",
-}
+_GENERIC_PREFILL_POLICY = RouteCandidatePolicy("generic-tinygrad-prefill", RouteLifecycle.FALLBACK)
 
 
 def direct_packed_prefill_policy(n_heads:int, n_kv_heads:int) -> RouteCandidatePolicy:
-  reason = _DIRECT_PACKED_PREFILL_QUARANTINE.get((n_heads, n_kv_heads))
-  return _DIRECT_PACKED_PREFILL_POLICY if reason is None else RouteCandidatePolicy(
-    _DIRECT_PACKED_PREFILL_POLICY.candidate_id, RouteLifecycle.QUARANTINED, reason)
+  """Compatibility API: the former direct-packed fallback is now generic tinygrad."""
+  del n_heads, n_kv_heads
+  return _GENERIC_PREFILL_POLICY
 
 
 def prefill_route_mode(getenv_fn=None) -> str:
@@ -306,28 +163,30 @@ def prefill_route_mode(getenv_fn=None) -> str:
     getenv_fn = getenv
   canonical = str(getenv_fn("TINYGRAD_PREFILL_ROUTE", "")).strip()
   if canonical:
-    return parse_route_mode("TINYGRAD_PREFILL_ROUTE", allowed=("auto", "packed_wmma", "direct_packed", "fp16"),
-                            aliases={"packed-wmma": "packed_wmma", "direct-packed": "direct_packed"}, getenv_fn=getenv_fn)
-  return parse_route_mode("TINYGRAD_PREFILL_PACKED_WMMA", allowed=("auto", "direct_packed"), default="1",
+    selected = parse_route_mode("TINYGRAD_PREFILL_ROUTE", allowed=("auto", "packed_wmma", "direct_packed", "fp16"),
+                                aliases={"packed-wmma": "packed_wmma", "direct-packed": "direct_packed"}, getenv_fn=getenv_fn)
+    return "fp16" if selected == "direct_packed" else selected
+  selected = parse_route_mode("TINYGRAD_PREFILL_PACKED_WMMA", allowed=("auto", "direct_packed"), default="1",
                           aliases={"1": "auto", "true": "auto", "on": "auto", "yes": "auto",
                                    "0": "direct_packed", "false": "direct_packed", "off": "direct_packed", "no": "direct_packed"},
                           getenv_fn=getenv_fn)
+  return "fp16" if selected == "direct_packed" else selected
 
 
 def packed_wmma_prefill_enabled() -> bool:
   """Gate for the packed-WMMA prefill candidates (Q4KPackedWmmaPrefillCandidate /
-  Q6KPackedWmmaPrefillCandidate, extra/llm_research/prefill/packed_wmma_prefill_candidates.py).
+  Q6KPackedWmmaPrefillCandidate, tinygrad/llm/packed_wmma_prefill.py).
 
   Default is ON: the packed-WMMA route is correctness-gated (6/6 combos, max_abs 0.0)
   and fails closed for anything ungated or unknown-shaped. Set TINYGRAD_PREFILL_PACKED_WMMA=0
-  to revert to the direct-packed baseline only. The known-unsafe 14B Hq=40/Hkv=8 rollback
-  geometry is rejected by validate_packed_wmma_prefill_mode before model construction.
+  to use the ordinary tinygrad graph fallback.
   """
   return prefill_route_mode() in ("auto", "packed_wmma")
 
 
 def validate_prefill_route_mode(n_heads:int, n_kv_heads:int) -> None:
-  if prefill_route_mode() == "direct_packed": direct_packed_prefill_policy(n_heads, n_kv_heads).require_usable()
+  del n_heads, n_kv_heads
+  prefill_route_mode()  # parse once so invalid explicit modes still fail loudly
 
 
 def validate_packed_wmma_prefill_mode(n_heads:int, n_kv_heads:int) -> None:
@@ -338,12 +197,12 @@ def validate_packed_wmma_prefill_mode(n_heads:int, n_kv_heads:int) -> None:
 def route_packed_wmma_prefill(lin, x:Tensor) -> Tensor | None:
   """Production packed-WMMA route: an accelerated implementation of the direct-packed
   strategy for Q4_K/Q6_K prefill linears whose (quant, role) has a gated, frozen packed-WMMA
-  geometry (see PACKED_WMMA_GEOM). Only reachable when packed_wmma_prefill_enabled(); declines
-  (returns None) for anything ungated, unknown-shaped, or outside the frozen geometry table --
-  the caller falls through to route_direct_packed_prefill.
+  geometry. Only reachable when packed_wmma_prefill_enabled(); declines (returns None)
+  for anything ungated, unknown-shaped, or outside the frozen geometry table --
+  the caller falls through to the ordinary tinygrad graph.
   """
   if not packed_wmma_prefill_enabled(): return None
-  spec = _attached_direct_packed_spec(lin, x)
+  spec = _attached_packed_wmma_spec(lin, x)
   if spec is None: return None
   from tinygrad.llm.route_ops import select_packed_wmma_prefill_candidate
   candidate = select_packed_wmma_prefill_candidate(lin, spec)
@@ -363,13 +222,9 @@ def route_prefill_linear(lin, x:Tensor) -> Tensor:
   w = getattr(lin, "_pf16_w", None)
   mode = prefill_route_mode()
 
-  if route in ("direct_packed", "bounded_packed") and mode != "fp16":
-    if mode in ("auto", "packed_wmma") and not _exact_q6k_vocab_direct_prefill(lin, x):
-      routed = route_packed_wmma_prefill(lin, x)
-      if routed is not None: return routed
-    if mode in ("auto", "direct_packed"):
-      routed = route_direct_packed_prefill(lin, x)
-      if routed is not None: return routed
+  if route == "packed_wmma" and mode in ("auto", "packed_wmma"):
+    routed = route_packed_wmma_prefill(lin, x)
+    if routed is not None: return routed
 
   # Exact binding presence is the only Graph-GEMM execution authority.
   if route == "fp16" and getattr(lin, "_prefill_graph_gemm_binding", None) is not None and w is not None:
