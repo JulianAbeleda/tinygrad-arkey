@@ -87,11 +87,20 @@ counts, and released only during provider stop/failure or explicitly around a fu
 
 ## v12 BAR-residency recovery candidate (2026-07-29)
 
-Git history establishes that the RX 7900 XTX completed full Qwen inference before the native
-migration. The old bridge at `554800bef` retained `opened_devices`, `mapped_bars`, and
-`sysmem_allocs`; `4c5e67cff` removed that bridge; later commits `29be4c9fa` and `5bff0135c`
-recorded working inference. This demotes the cable hypothesis and makes persistent initialized
-device state the first recovery target.
+Git history establishes that the RX 7900 XTX completed Qwen inference over the Mac/TinyGPU
+eGPU path before the native migration. Commit `778d029c2` records the May 21 live
+Qwen3-1.7B control through `REMOTE=127.0.0.1:6667 DEV=PCI+AMD`: 256 tok/s prefill and
+33 tok/s decode. The exact source state used by that recorded run is its parent,
+`2d317b877`. The old bridge later present at `554800bef` retained `opened_devices`,
+`mapped_bars`, and `sysmem_allocs`; `4c5e67cff` removed that bridge.
+
+Earlier versions of this document incorrectly cited `29be4c9fa` and `5bff0135c` as eGPU
+proof. Those commits record later RX 7900 XTX performance work on the Linux optimization
+host; they prove the optimized kernels, not the Thunderbolt transport. The May 21 run is
+the relevant Mac/eGPU control. It proves this physical setup has carried real inference and
+therefore demotes an intrinsically defective cable from the lead hypothesis. It does not
+exclude an intermittent signal-margin fault or a failure that appears only under the larger
+8B transfer load.
 
 The v12 candidate requests and maps BAR5 immediately after PCI open and identity validation,
 before creating the one-Hz timer. It performs no MMIO read/write, AMD initialization, DMA,
@@ -148,36 +157,91 @@ Qualification is now gated on the runtime initialization/RPC blocker documented 
 Do not infer compute, awake-idle, load-power, or sleep/wake behavior from activation,
 enumeration, or the provider's installed/ready message.
 
-## Current handoff (2026-07-28)
+## Current handoff (2026-07-29)
 
-**Owner:** continue from the clean `exp` worktree at the current task commit. The installer
-is development-only and must run from `exp`; do not install from `master`.
+**Owner:** continue from the clean `exp` worktree at `bca228387`. The installer is
+development-only and must run from `exp`; do not install from `master`.
 
-**Host state:** macOS 26.5 (25F71), Apple M4 Mac mini, SIP disabled, DriverKit development
-mode on, and the ADTLink UT4G bridge visible at USB4 40 Gb/s. The v5 DEXT is enabled and
-the legacy v3 DEXT is disabled. The endpoint can enumerate as `1002:744c` at 16.0 GT/s.
-The first observed failure is a TinyGPU RPC/provider disconnect while issuing a BAR5
-register write during AMD initialization. Earlier BAR0 initialization writes occur and
-have not yet been ruled out as the causal boundary.
+**Installed/runtime state:** the audited v13 provider source is `8f7afc45f`. v13 restores
+the old provider's PCI command mask `0x0007` (I/O space, memory decoding, and bus master),
+retains BAR5, requests full power, runs the native one-Hz keeper, and requires a later
+identity canary before workload admission. Two consecutive minimal AMD computations passed
+after the lifecycle-ordering repair in `d448df508`; see
+`docs/task_workflow/output/egpu-usb4-v13-historical-run-recreation-20260729T041747Z.md`.
 
-**Current blocker:** this is no longer an activation or enumeration task. The provider's
-service termination callback, native IOKit error propagation, direct BAR/MMIO access
-contract, and Python runtime-error classification are scoped in
-`docs/task_workflow/input/egpu-usb4-tinygpu-runtime-initialization-scope-20260728.md`.
-Do not reinstall or remove the v5 extension as a response to this runtime failure.
+The operator reports completing a GPU reset after the latest A12 attempt. No post-reset
+admission or workload result has yet been recorded in this handoff.
 
-After the blocker scope's CPU/native checks pass, rerun the locked M0-M7 microprobes,
-then fresh A0, A1, and A2. A4/A8 remain deferred until those gates pass; no local GGUF
-model is currently available for the A8 Qwen3 8B smoke gate.
+### Historical control and corrected interpretation
 
-**Evidence boundary:** the tracked A0 artifact is
-`docs/task_workflow/output/egpu-usb4-persistent-pcie-A0-20260728T105840Z-89079.json`.
-The later failed A0 attempts (`...152615Z-18390.json` and `...152626Z-18408.json`) are
-local diagnostic artifacts only; neither is acceptance evidence. The runtime blocker
-scope is the current task authority for the post-activation failure.
+The last committed Mac/eGPU model control is the May 21 Qwen3-1.7B run recorded by
+`778d029c2`, using source state `2d317b877`:
 
-**Secondary defense:** `pmset disablesleep 1` and a launchd KeepAlive daemon are separate
-sleep investigations, not substitutes for the native provider keeper.
+```text
+Mac mini -> Thunderbolt/USB4 -> UT4G/TinyGPU -> RX 7900 XTX
+REMOTE=127.0.0.1:6667 DEV=PCI+AMD
+Qwen3-1.7B Q4_K_M
+prefill 256 tok/s; decode 33 tok/s
+```
+
+This is the precise historical observation that inference worked but was too slow. The
+subsequent Linux work was chosen because hardware resets were easier while improving the
+kernels; the Linux results culminating in `29be4c9fa` and `5bff0135c` must not be cited as
+eGPU transport evidence.
+
+The May 22 through June 10 PSP/GART arc was also not evidence of a bad cable. The enabled
+`AM_REMOTE_DISCOVERY_PROFILE=gfx1100_744c` workaround contained wrong MP0/MP1/NBIO versions;
+`ca3a0d816` corrected the profile and `b033d47a7` restored the NBIF alias. Commit
+`9eb0b042b` separately stopped `ensure_app` from replacing the matched arkey TinyGPU app
+with an incompatible upstream build. The historical Mac environment required:
+
+```text
+AM_REMOTE_DISCOVERY_PROFILE=gfx1100_744c
+AM_REMOTE_SKIP_RESIZE_BAR=1
+```
+
+Do not conflate those fixes with v13's restoration of the separately omitted PCI command
+mask. Both classes of software/configuration regression have existed.
+
+### Latest 8B result
+
+The v13 A12 attempt admitted the local 5.0 GB Qwen3-8B model and populated approximately
+4.68 GB before both ACIO lanes emitted a Gen2/3 error burst. macOS then reported link status
+zero, marked the AMD functions dead, force-closed TinyGPU, and powered down the tunneled
+PCIe path. No token was produced and the loaded observation interval never began. Full
+details are in
+`docs/task_workflow/output/egpu-usb4-v13-loaded-residency-a12-20260729T044024Z.md`.
+
+That timeline identifies the transport-collapse boundary, not its root cause. In particular,
+it does not overturn the May 21 same-path inference control. The historical success used a
+1.7B model, while the failed attempt was transferring the 5.0 GB 8B model. The current lead
+question is therefore whether the native migration regressed the formerly working workload
+or whether failure probability rises with allocation volume/DMA cadence. Cable, connector,
+host port, UT4G signal margin, and power integrity remain possible intermittent contributors,
+but a cable replacement is not the first discriminating experiment.
+
+### Next controlled sequence
+
+Do not swap the cable or port before collecting the software control:
+
+1. After the operator-reported reset, run fresh R6.1/A0 and require the same v13 service,
+   advancing keeper, BAR5 residency, full-power confirmation, PCI command mask 7, later
+   canary, and zero leaked workload resources.
+2. On current v13, recreate the committed Qwen3-1.7B control first, in one process with the
+   model kept resident, using the two historical AMD environment settings above. Require a
+   token, clean unload/finalization, and preserved endpoint/provider identity.
+3. If 1.7B passes, increase model/weight size in one controlled intermediate step before the
+   5.0 GB Qwen3-8B run. This distinguishes a general native-runtime regression from a
+   transfer-volume or allocation-cadence threshold.
+4. If current v13 fails at 1.7B, recreate source state `2d317b877` with its matched historical
+   Python bridge/app contract in an isolated worktree. Do not install an old app/DEXT or
+   replace the active provider without a separate audited install gate.
+5. Only after the software controls are classified should a known-good cable or alternate
+   host port be introduced as a one-variable physical A/B.
+
+The desired end state is the historically working Mac transport/runtime behavior carrying
+the now-optimized kernels. Do not roll the performance work back merely to make the old
+control pass.
 
 **Fallback (kept):** `extra/remote/amd_power_cycle.py` physically power-cycles via a Shelly
 smart plug when the link is already dead. Prevention lowers frequency; it does not make the
