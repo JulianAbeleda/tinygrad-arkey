@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse, hashlib, json
 from pathlib import Path
 from typing import Any, Mapping
+from tinygrad.llm.packed_wmma_prefill import PACKED_WMMA_ROUTES
 
 
 SCHEMA = "tinygrad.prefill.packed-wmma-m2b-search.v1"
@@ -20,11 +21,7 @@ EXPORT_DIR = Path(__file__).with_name("packed_wmma_m2b_search_exports")
 
 # The route manifest's only exact packed-WMMA guards: six 14B mixed-quant rows.
 # This is coverage inventory, not a candidate-space seed.
-COVERED_SHAPES = (
-  ("Q4_K", "attn_qo", 512, 5120, 5120), ("Q4_K", "attn_kv", 512, 1024, 5120),
-  ("Q4_K", "ffn_gate_up", 512, 17408, 5120), ("Q4_K", "ffn_down", 512, 5120, 17408),
-  ("Q6_K", "attn_kv", 512, 1024, 5120), ("Q6_K", "ffn_down", 512, 5120, 17408),
-)
+COVERED_SHAPES = tuple((row.quant, row.role, *row.shape) for row in PACKED_WMMA_ROUTES)
 TOPOLOGY_SCHEMA = {
   "dequant_overlay": ("quant_format", "packed_storage", "block_decode", "overlay_layout", "metadata_semantics", "accumulator_dtype"),
   "wmma": ("instruction", "fragment_layout", "mma_k", "accumulator_layout", "epilogue"),
