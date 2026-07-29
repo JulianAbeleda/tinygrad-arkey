@@ -279,11 +279,11 @@ def _fixed_fp32_accumulators(ctx:IselContext) -> dict[UOp, int]:
 # NOTE (B0.M multi-output-tile): the v>=238 garbage is a RAW-INS-only artifact; the ISA renderer's ELF descriptor auto-
 # sizes VGPR to the highest reg used, so through THIS renderer the real ceiling is OCCUPANCY, not v238. So we keep A/B in
 # the high [200,238) window (only 16 VGPRs needed, single reused pair) but place the C ACCUMULATORS LOW (see below).
-# B0.M: multi-output-tile C accumulators. A hand_coded M/N>16 upcasts the output into a WM x WN grid of 16x16 subtiles per
-# warp -> ONE reduce DEFINE_REG of vec width WM*WN*8, split by no_vectorized_wmma into WM*WN distinct Ops.WMMA each reading
+# B0.M: multi-output-tile C accumulators. M/N upcasts form a WM x WN grid of 16x16 subtiles per warp -> ONE reduce
+# DEFINE_REG of vec width WM*WN*8, split by no_vectorized_wmma into WM*WN distinct Ops.WMMA each reading
 # an 8-lane accumulator slice. Each subtile needs its OWN fixed, contiguous, 8-aligned, loop-carried 8-VGPR run (v_wmma
-# reads+writes src2==vdst in place across the K RANGE loop). WM*WN*8 accumulators (16*8 = 128 for a 64x64 tile) do NOT fit
-# the 38-VGPR high fragment window, so the accumulators are placed LOW (8-aligned, from v8) -- mirrors _accum_pin's low
+# reads+writes src2==vdst in place across the K RANGE loop). Multi-output accumulators do not fit the 38-VGPR high
+# fragment window, so they are placed LOW (8-aligned, from v8) -- mirrors _accum_pin's low
 # rationale (RA4): the descriptor sizes to the highest reg, so LOW pins don't inflate VGPR count the way v240+ would. v0
 # holds packed workitem ids and v1..v7 are the alignment pad (WMMA_ACC_BASE is the first 8-aligned index above v0).
 def _has_wmma(ctx:IselContext) -> bool:
@@ -332,6 +332,8 @@ def _hd128_wmma_lease(x:UOp) -> tuple[str,int]|None:
 def _has_hd128_attention(ctx:IselContext) -> bool:
   return any(u.op is Ops.WMMA and any(_hd128_fragment_meta(s) is not None for s in u.src[:2]) for u in ctx.uses)
 
+_MAX_MULTI_OUTPUT_C_RUNS = 8
+
 # ---- B0.M: count the TOTAL number of 8-VGPR C accumulator runs the kernel needs (one per 16x16 output subtile). A ROLLED
 # accumulator DEFINE_REG of vec width W contributes W//8 runs (one per subtile); an UNROLLED chain head / single tile
 # contributes ONE run (its whole K-reduction accumulates in place); an accumulate tile (src[2] is a prior WMMA) shares the
@@ -361,6 +363,8 @@ def _n_c_runs(ctx:IselContext) -> int:
     # A valid recurrence assignment is serialized after selection at each
     # completed FP32 drain, so all chains share one physical C lease safely.
     if _progressive_c_assignment(ctx) is not None: n = 1
+    if n > _MAX_MULTI_OUTPUT_C_RUNS:
+      raise NotImplementedError(f"AMD:ISA multi-output WMMA supports at most {_MAX_MULTI_OUTPUT_C_RUNS} output subtiles")
     ctx._ncruns = n
   return n
 
@@ -462,7 +466,7 @@ def _acc_top(ctx:IselContext) -> int:
 # col key -- no swizzle reverse-engineering. We pack each of the WM A- and WN B-fragments ONCE (resident) and share it
 # across its row/col, instead of re-packing A and B per subtile into a single reused 16-VGPR pair (which forced WM*WN
 # re-packs -> overlapping pack lifetimes -> spill). The resident fragments live in a LOW window ABOVE the accumulators
-# [_acc_top, _ab_top); with the C accumulators (WM*WN*8) that is WM*WN*8 + (WM+WN)*8 physical VGPRs (192 for a 4x4 tile).
+# [_acc_top, _ab_top); with the C accumulators that is WM*WN*8 + (WM+WN)*8 physical VGPRs.
 def _ab_reserved_regs(ctx:IselContext) -> int:
   # distinct A-row carriers + distinct B-col carriers across the ROLLED multi-tile WMMAs (== WM + WN). Computed UPFRONT
   # from ctx.uses so _vpool can reserve the whole resident A/B window before any fragment is lazily allocated.
