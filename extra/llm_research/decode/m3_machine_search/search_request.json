@@ -1,0 +1,16 @@
+{
+  "schema": "tinygrad.decode_machine_search_request.v1",
+  "search_id": "m3_decode_q4k_q6k_generic_plan_cpu_20260729",
+  "target": {"backend": "AMD", "arch": "gfx1100", "wave_size": 32},
+  "measurement_authority": "GPU execution and timing are required for promotion; this request only authorizes CPU structural ranking.",
+  "routes": {
+    "decode_q4k_g3_generated": {
+      "quant": "Q4_K", "shape_domain": {"batch": [1], "tokens": [1], "k_multiple": 1024, "rows_multiple": 32},
+      "finite_space": {"waves_per_output": [1, 2, 4], "reduce": ["wave_tree"], "output": ["direct_f32"]}
+    },
+    "decode_q6k_coop_generated": {
+      "quant": "Q6_K", "shape_domain": {"batch": [1], "tokens": [1], "k_multiple": 256},
+      "finite_space": {"family": ["coop", "partial"], "coop_row_tile": [1, 2, 4, 8], "partial_parts": [1, 2, 4], "reduce": ["external_sum"]}
+    }
+  }
+}
