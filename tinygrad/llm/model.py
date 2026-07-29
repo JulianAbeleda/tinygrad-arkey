@@ -45,6 +45,7 @@ from tinygrad.uop.ops import Ops, resolve
 
 _MEMORY_ADAPTIVE_MEASUREMENT_AUTHORITY = contextvars.ContextVar("_memory_adaptive_measurement_authority", default=None)
 _GENERIC_LLM_CONTROL = contextvars.ContextVar("_generic_llm_control", default=False)
+_PREFILL_ATTENTION_PROFILE_BY_HEADS = {32: "qwen3_8b_q4k_m_gfx1100", 40: "qwen3_14b_q4k_m_gfx1100"}
 
 _GGUF_TENSOR_OWNER = MODEL_PARAMETER_ALLOCATION_OWNER
 _KV_CACHE_OWNER = AllocationOwner("kv_cache", "model")
@@ -626,7 +627,7 @@ class TransformerBlock(FFNBlock):
       # shared_attention_proven_eligible proof -- unrelated evidence for a different, class-2-risk
       # path). Self-sufficient: builds its own ctx unconditionally (see below) so it cannot silently
       # fall through to SDPA the way a copy-pasted strategy-gate once did (root-caused via
-      # p5_default_binding.py -- see the ctx comment). Admission is bounded to the proven 8B/14B
+      # p5_default_binding.py -- see the ctx comment). Admission is bounded to the proven model
       # shapes by _should_use_custom_kernel_prefill_attn, so this branch cannot regress anything else.
       from tinygrad.llm.fused_attention import route_prefill_attention
       from tinygrad.uop.ops import SharedAttentionCandidateContext
@@ -641,7 +642,7 @@ class TransformerBlock(FFNBlock):
       # was correctly True -- a token match hid a non-firing route). Build ctx unconditionally here;
       # _profile is always non-empty when this branch is reached because
       # _should_use_custom_kernel_prefill_attn already restricted admission to n_heads in {32,40}.
-      _profile = "qwen3_8b_q4k_m_gfx1100" if self.config.n_heads == 32 else "qwen3_14b_q4k_m_gfx1100" if self.config.n_heads == 40 else "custom_kernel_prefill_attn"
+      _profile = _PREFILL_ATTENTION_PROFILE_BY_HEADS.get(self.config.n_heads, "custom_kernel_prefill_attn")
       _ctx = SharedAttentionCandidateContext(_profile, prefill_policy_strategy(self.config.prefill_policy), T, start_pos+T,
         start_pos, self.config.n_heads, self.config.n_kv_heads, self.config.head_dim, True)
       with role_metadata("shared_prefill_attention"):
@@ -656,7 +657,7 @@ class TransformerBlock(FFNBlock):
       from tinygrad.llm.flash_prefill_attention import shared_prefill_attention
       from tinygrad.uop.ops import SharedAttentionCandidateContext
       _strategy = prefill_policy_strategy(self.config.prefill_policy)
-      _profile = "qwen3_8b_q4k_m_gfx1100" if self.config.n_heads == 32 else "qwen3_14b_q4k_m_gfx1100" if self.config.n_heads == 40 else ""
+      _profile = _PREFILL_ATTENTION_PROFILE_BY_HEADS.get(self.config.n_heads, "")
       _ctx = SharedAttentionCandidateContext(_profile, _strategy, T, start_pos+T, start_pos, self.config.n_heads,
         self.config.n_kv_heads, self.config.head_dim, True) if _profile and _strategy in ("FULL_RESIDENT_OVERLAY", "BOUNDED_PACKED_TILES") else None
       with role_metadata("shared_prefill_attention"):
@@ -962,7 +963,7 @@ class Transformer:
   def realize_prefill_v2_weights(self) -> int:
     # Realize a clean fp16 weight per covered linear (cached as `_pf16_w`, read by _pf16). The primitives' lazy
     # Q4_K/Q6_K->fp16 dequant graph, used raw, fuses into the matmul -> ~3% peak (no TC win); a realized fp16
-    # buffer makes the prefill-v2 matmul a real TC GEMM (~13x prefill on 8B). COST: ~fp16-model-size extra VRAM
+    # buffer makes the prefill-v2 matmul a real TC GEMM (~13x on the measured smaller profile). COST: ~fp16-model-size extra VRAM
     # (it coexists with the Q4_K decode storage). Called only for the selected full-overlay representation.
     # Environment limits are diagnostics only. The immutable load plan is the safety authority and cannot be bypassed.
     policy = getattr(self.config, "prefill_policy", None)
@@ -1317,7 +1318,7 @@ class Transformer:
     # ORDER IS LOAD-BEARING: this MUST run BEFORE realize_prefill_v2_weights(). The warmstart runs the
     # correctness canary, which SPAWNS a child process (packed_wmma_correctness_canary.run_canary ->
     # run_isolated_guarded_execution). realize_prefill_v2_weights() materializes a full fp16 overlay
-    # (~19GB for 14B), so running the canary after it leaves the child with almost no VRAM: the child dies
+    # (roughly 19GB for the measured larger profile), so running the canary after it leaves the child with almost no VRAM: the child dies
     # on its own admission ("budget 0.0GB, KV admits 0") and, in flat entry scripts, dies before draining
     # the spawn pipe so the parent blocks in Process.start() ahead of run_isolated's timeout loop. That is
     # the "packed-WMMA HW fault / >240s hang" in docs/BOLTBEAM_GPU_HANG_DIAGNOSIS_HANDOFF_20260724.md.
