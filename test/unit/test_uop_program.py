@@ -1,6 +1,4 @@
 import ast
-import inspect
-import warnings
 from pathlib import Path
 
 import numpy as np
@@ -26,8 +24,8 @@ def _call(method:str, *, grad_fxn=None) -> list[Tensor]:
   return getattr(output, method)(source, fxn=_increment, grad_fxn=grad_fxn)
 
 
-def test_uop_program_and_compatibility_signatures_match():
-  assert inspect.signature(Tensor.uop_program) == inspect.signature(Tensor.custom_kernel)
+def test_legacy_tensor_custom_kernel_api_is_removed():
+  assert not hasattr(Tensor, "custom_kernel")
 
 
 def test_uop_program_is_lazy_multi_output_and_forwards_gradient_callback():
@@ -42,18 +40,6 @@ def test_uop_program_is_lazy_multi_output_and_forwards_gradient_callback():
   np.testing.assert_array_equal(outputs[0].numpy(), np.array([2, 3, 4, 5], dtype=np.float32))
 
 
-def test_custom_kernel_is_a_silent_equivalent_compatibility_wrapper():
-  with warnings.catch_warnings(record=True) as caught:
-    warnings.simplefilter("always")
-    legacy = _call("custom_kernel")
-  canonical = _call("uop_program")
-  assert caught == []
-  assert isinstance(legacy, list) and len(legacy) == len(canonical) == 2
-  assert [x.uop.op for x in legacy] == [x.uop.op for x in canonical] == [Ops.AFTER, Ops.AFTER]
-  assert legacy[0].uop.src[1].op is canonical[0].uop.src[1].op is Ops.CALL
-  np.testing.assert_array_equal(legacy[0].numpy(), canonical[0].numpy())
-
-
 def test_active_source_has_no_legacy_tensor_callers():
   root, callers = _repo_root(), []
   for source_root in ("tinygrad", "test", "extra"):
@@ -64,4 +50,4 @@ def test_active_source_has_no_legacy_tensor_callers():
              node.func.attr == "custom_kernel" for node in ast.walk(tree)):
         callers.append(str(path.relative_to(root)))
   assert sorted(callers) == ["tinygrad/nn/__init__.py", "tinygrad/tensor.py"], (
-    "the legacy spelling is reserved for the Tensor compatibility wrapper and direct internal UOp substrate callers")
+    "custom_kernel call syntax is reserved for direct internal UOp substrate callers")

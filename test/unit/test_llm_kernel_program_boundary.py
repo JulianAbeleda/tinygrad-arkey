@@ -55,7 +55,7 @@ def test_llm_uses_no_legacy_custom_kernel_transport():
   root = _repo_root()
   llm_sources = _python_sources(root / "tinygrad" / "llm")
   callers = _attribute_callers(llm_sources, "custom_kernel")
-  assert not callers, "production LLM source must not call the legacy .custom_kernel compatibility spelling"
+  assert not callers, "production LLM source must not call the removed Tensor .custom_kernel API"
 
 
 def test_llm_uop_program_transport_is_confined_to_kernel_program_boundary():
