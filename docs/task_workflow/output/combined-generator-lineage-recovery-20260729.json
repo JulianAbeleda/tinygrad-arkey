@@ -1,0 +1,132 @@
+{
+  "schema": "tinygrad.combined_generator_lineage_recovery.v1",
+  "date": "2026-07-29",
+  "purpose": "Separate historical generator lineage from final-master proof completeness. A route can have a real historical BoltBeam + BubbleBeam/FutureSight + tinygrad lifecycle while still lacking the immutable package required by the stricter final-master contract.",
+  "system_roles": {
+    "bubblebeam_futuresight": "Candidate representation, bounded candidate enumeration, and static COALESCE/layout ranking where present.",
+    "boltbeam": "Workload/search policy, route-policy authority, evaluation and evidence linkage where present; later policy migration does not imply BoltBeam originally invented the kernel.",
+    "tinygrad": "Runtime guards and binding, graph or descriptor lowering, compiler/codegen, execution, and route observation."
+  },
+  "verdict_axes": {
+    "historical_lineage": [
+      "RECOVERABLE_COMBINED_GENERATOR",
+      "PARTIALLY_RECOVERED_GENERATOR",
+      "GENERATED_BODY_WITH_UNPROVEN_SELECTION",
+      "HAND_SPEC_OR_TEMPLATE",
+      "UNRESOLVED"
+    ],
+    "final_master_proof": [
+      "COMPLETE",
+      "INCOMPLETE"
+    ]
+  },
+  "routes": [
+    {
+      "route_id": "decode_q4k_g3_generated",
+      "historical_lineage": "RECOVERABLE_COMBINED_GENERATOR",
+      "final_master_proof": "INCOMPLETE",
+      "history": {
+        "workload_and_space": ["5085617d2"],
+        "candidate_generation_and_ranking": ["9b760f7ba", "9f03f7ee6"],
+        "lowering_and_default_promotion": ["c7adca708", "81370ae38"],
+        "boltbeam_policy_binding": ["5de75f792", "08bcd1d9b"],
+        "final_purity_summary": ["1215367d5"]
+      },
+      "facts": [
+        "BubbleBeam/FutureSight enumerated lane_partition_q4k and row_serial_q4k and ranked them deterministically.",
+        "lane_partition_q4k won the static stride/vector-width ranking.",
+        "The selected LaneMap was lowered into the named G3 UOp route, validated, promoted, and later bound through BoltBeam route policy."
+      ],
+      "missing_for_final_master": [
+        "One current-tree immutable export joining request, ranked population, selected LaneMap, deterministic lowering identity, source or plan hash, route binding, and hash-linked evidence.",
+        "A drift check proving the shipped artifact is the deterministic replay output rather than a manually edited bridge."
+      ],
+      "next_action": "Recover and replay the historical selector/lowering chain; do not invent a replacement Q4 search."
+    },
+    {
+      "route_id": "decode_q6k_coop_generated",
+      "historical_lineage": "HAND_SPEC_OR_TEMPLATE",
+      "final_master_proof": "INCOMPLETE",
+      "history": {"promotion_measurement": ["06b1608e8"]},
+      "facts": ["The recovered promotion record proves route binding, token parity, and lossless emission, not candidate search or ranking."],
+      "missing_for_final_master": ["Route-bound combined-system candidate population, selection, and export chain."],
+      "next_action": "Exhaust history; only then replay an existing search or define a new one."
+    },
+    {
+      "route_id": "decode_flash_live_split_g4_kvboth",
+      "historical_lineage": "HAND_SPEC_OR_TEMPLATE",
+      "final_master_proof": "INCOMPLETE",
+      "history": {"promotion_measurement": ["4b406bdbc"]},
+      "facts": ["The executing FlashDecodeAttentionSpec delegates to a hand-authored full tile/combine UOp closure."],
+      "missing_for_final_master": ["G4 candidate generation, ranked population, selected topology export, and deterministic generated artifact."],
+      "next_action": "Keep as dev oracle unless deeper history recovers a generator-owned topology."
+    },
+    {
+      "route_id": "decode_flash_live_split_g5_kvboth",
+      "historical_lineage": "HAND_SPEC_OR_TEMPLATE",
+      "final_master_proof": "INCOMPLETE",
+      "history": {"promotion_and_binding": ["bafca9424", "8deca39bb"]},
+      "facts": ["G5 has a separate guard and geometry but shares the hand-authored G4/G5 tile/combine closure."],
+      "missing_for_final_master": ["Independent G5 generator-owned topology and search/export evidence."],
+      "next_action": "Keep as dev oracle unless deeper history recovers a generator-owned topology."
+    },
+    {
+      "route_id": "prefill_flash_attention_generated",
+      "historical_lineage": "HAND_SPEC_OR_TEMPLATE",
+      "final_master_proof": "INCOMPLETE",
+      "history": {"descriptor_and_promotion": ["d2989a45e", "697529c3b", "aeeb65e9a", "411410710", "955111113"]},
+      "facts": ["The descriptor delegates to a fixed-geometry hand-authored complete attention kernel builder."],
+      "missing_for_final_master": ["Search-owned primitive composition/topology and deterministic generated artifact for the admitted 8B and 14B shapes."],
+      "next_action": "Keep as dev oracle unless deeper history recovers a generator-owned topology."
+    },
+    {
+      "route_id": "prefill_wmma_lds_dbuf_generated",
+      "historical_lineage": "PARTIALLY_RECOVERED_GENERATOR",
+      "final_master_proof": "INCOMPLETE",
+      "history": {
+        "candidate_set_sha256": "61b22f8797ece839a2c8a624dad2811437e6760c6e6ab2867b79c8aede8574e0",
+        "timing_sha256": "967707e8ce5df964b26b32eda00c95a24deecde2e0b0203a6422db6cc6eb10e6",
+        "correctness_sha256": "f68561e9b19a44ee439fbe075f78cd6fda959b9402bb659240570ee8ccb2ad0a"
+      },
+      "facts": ["Four complete selected scheduler plan payloads and separate whole-prefill timing/correctness records survive in the archived worktree."],
+      "missing_for_final_master": ["Top-level request, search-space digest, run/ranking identity, exporter revision, and current-runtime drift binding."],
+      "next_action": "Preserve the recovered bundle and recover or replay only its missing header/binding chain."
+    },
+    {
+      "route_id": "prefill_q4k_direct_tile4x4_default",
+      "historical_lineage": "HAND_SPEC_OR_TEMPLATE",
+      "final_master_proof": "INCOMPLETE",
+      "history": {"route_addition": ["45b22b453"]},
+      "facts": ["The route spec manually encodes layout, parts, loops, packed loads, reduction, store, and fixed options."],
+      "missing_for_final_master": ["Candidate population, ranking, selected-plan export, and route-bound generated artifact."],
+      "next_action": "Keep as dev oracle unless deeper history recovers a generator-owned topology."
+    },
+    {
+      "route_id": "prefill_q6k_direct_generated",
+      "historical_lineage": "HAND_SPEC_OR_TEMPLATE",
+      "final_master_proof": "INCOMPLETE",
+      "history": {"route_addition": ["c5257f673"]},
+      "facts": ["The route spec delegates to a hand-authored direct-packed lowering and reuses a hand-authored Q6 packed-dot/dequant primitive."],
+      "missing_for_final_master": ["Candidate population, ranking, selected-plan export, and route-bound generated artifact."],
+      "next_action": "Keep as dev oracle unless deeper history recovers a generator-owned topology."
+    },
+    {
+      "route_id": "packed_wmma_prefill_generated",
+      "historical_lineage": "GENERATED_BODY_WITH_UNPROVEN_SELECTION",
+      "final_master_proof": "INCOMPLETE",
+      "history": {"candidate_and_default": ["c35b5ff53", "6ca798568"], "promotion_evidence": ["a73c4306c"]},
+      "facts": ["Ordinary tinygrad emits the kernel body, but the surviving PACKED_WMMA_GEOM selection table is a manually copied fixed table with no recovered search record."],
+      "missing_for_final_master": ["Shape-keyed request, candidate population/ranking, selected table rows, and hashes tying those rows to compiled/evidence identities."],
+      "next_action": "Exhaust history; rerun schedule search only if the original selection source cannot be recovered."
+    }
+  ],
+  "summary": {
+    "routes": 9,
+    "recoverable_combined_generator": 1,
+    "partially_recovered_generator": 1,
+    "generated_body_with_unproven_selection": 1,
+    "hand_spec_or_template": 6,
+    "final_master_complete": 0,
+    "operational_decision": "Recovery and deterministic replay precede replacement search. No runtime or GPU work occurs in this phase."
+  }
+}

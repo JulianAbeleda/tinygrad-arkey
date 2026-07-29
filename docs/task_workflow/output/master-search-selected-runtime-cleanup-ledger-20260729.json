@@ -1,0 +1,156 @@
+{
+  "schema": "tinygrad.master_search_selected_runtime_cleanup.v1",
+  "date": "2026-07-29",
+  "scope": "docs/task_workflow/input/master-search-selected-runtime-cleanup-scope-20260729.md",
+  "status": "SCOPED_NOT_IMPLEMENTED",
+  "classification_rule": "Human-authored spaces, descriptors, lowerers, compiler primitives, and promotion decisions are compatible with machine search. Classify execution mechanism, selection, runtime role, and evidence independently.",
+  "benchmark_authority": {
+    "readme_commit": "8b98e803bfc68a5b595a3ab3d93665a755bc9ab5",
+    "decode_promotion_commit": "8deca39bb8c263ec9365a3590831421e966f2fb7",
+    "prefill_table_commit": "f4d08fa903cd80d872a17a5c783f53653dc9d7d5",
+    "decode": {
+      "8b": {"ctx512": 114.19, "ctx4096": 103.07, "routes": ["decode_q4k_g3_generated", "decode_flash_live_split_g4_kvboth"]},
+      "14b": {"ctx512": 69.70, "ctx4096": 62.45, "routes": ["decode_q4k_g3_generated", "decode_flash_live_split_g5_kvboth"]}
+    },
+    "prefill": {
+      "8b": {"pp512": 3694, "pp1024": 3624, "pp2048": 3485, "pp4096": 3236, "routes": ["prefill_wmma_lds_dbuf_generated", "prefill_flash_attention_generated"]},
+      "14b": {"pp512": 1945, "pp1024": 1920, "pp2048": 1875, "pp4096": 1785, "later_pp512": 2026, "later_pp4096": 1880, "routes": ["packed_wmma_prefill_generated", "prefill_flash_attention_generated"]}
+    }
+  },
+  "routes": [
+    {
+      "route_id": "decode_q4k_g3_generated",
+      "execution": "Tensor.custom_kernel with tinygrad UOp lowering",
+      "selection": "search_selected",
+      "runtime_role": "primary_production_decode",
+      "evidence": "historically_recoverable",
+      "master_disposition": "KEEP_AND_PROMOTE_RUNTIME_OWNER",
+      "current_implementation": ["extra/llm_research/gemv_g3_codegen_lowering.py", "extra/llm_research/gemv_g2_lanemap.py"],
+      "target_owner": "tinygrad/llm/decode_kernels.py",
+      "packet": "P6",
+      "benchmark_protected": true
+    },
+    {
+      "route_id": "decode_q6k_coop_generated",
+      "execution": "Tensor.custom_kernel with spec-driven UOp lowering",
+      "selection": "unresolved_historical_selection",
+      "runtime_role": "conditional_production_decode",
+      "evidence": "incomplete",
+      "master_disposition": "KEEP_WORKING_ROUTE_AND_PROMOTE_RUNTIME_OWNER",
+      "current_implementation": ["extra/llm_research/q6k_route_spec.py", "extra/llm_research/quant/q6_k_gemv_primitive.py"],
+      "target_owner": "tinygrad/llm/decode_kernels.py plus generic quant owner",
+      "packet": "P6",
+      "benchmark_protected": false
+    },
+    {
+      "route_id": "decode_flash_live_split_g4_kvboth",
+      "execution": "descriptor-driven Tensor.custom_kernel",
+      "selection": "search_or_tuning_selected",
+      "runtime_role": "primary_production_decode_attention_8b",
+      "evidence": "current_promotion_and_benchmark",
+      "master_disposition": "KEEP_AND_PROMOTE_RUNTIME_OWNER",
+      "current_implementation": ["extra/llm_research/decode/flash_decode_attention_executor.py", "extra/llm_research/decode/flash_decode_attention_spec.py", "extra/llm_research/flash_kernels.py", "extra/llm_research/live_split_geometry.py"],
+      "target_owner": "tinygrad/llm/flash_decode_attention.py plus generic compiler owners",
+      "packet": "P7",
+      "benchmark_protected": true
+    },
+    {
+      "route_id": "decode_flash_live_split_g5_kvboth",
+      "execution": "descriptor-driven Tensor.custom_kernel",
+      "selection": "search_or_tuning_selected",
+      "runtime_role": "primary_production_decode_attention_14b",
+      "evidence": "current_promotion_and_benchmark",
+      "master_disposition": "KEEP_AND_PROMOTE_RUNTIME_OWNER",
+      "selected_configuration": {"query_heads": 40, "split_size": 32, "query_group_size": 2, "stage_width": 4},
+      "current_implementation": ["extra/llm_research/decode/flash_decode_attention_executor.py", "extra/llm_research/decode/flash_decode_attention_spec.py", "extra/llm_research/flash_kernels.py", "extra/llm_research/live_split_geometry.py"],
+      "target_owner": "tinygrad/llm/flash_decode_attention.py plus generic compiler owners",
+      "packet": "P7",
+      "benchmark_protected": true
+    },
+    {
+      "route_id": "prefill_wmma_lds_dbuf_generated",
+      "execution": "ordinary tinygrad graph and scheduler lowering",
+      "selection": "search_selected",
+      "runtime_role": "primary_production_prefill_linears_8b",
+      "evidence": "historically_recoverable_candidate_set",
+      "master_disposition": "KEEP_AND_PROMOTE_RUNTIME_OWNER",
+      "current_implementation": ["extra/llm_research/prefill/prefill_graph_gemm_route.py"],
+      "target_owner": "tinygrad/llm/prefill_graph_gemm.py",
+      "packet": "P3",
+      "benchmark_protected": true
+    },
+    {
+      "route_id": "packed_wmma_prefill_generated",
+      "execution": "ordinary tinygrad matmul and scheduler under selected warmstart geometry",
+      "selection": "selected_configuration_with_incomplete_origin_record",
+      "runtime_role": "primary_production_prefill_linears_14b",
+      "evidence": "current_correctness_and_benchmark",
+      "master_disposition": "KEEP_AND_EXTRACT_SHIPPED_RUNTIME_SUBSET",
+      "current_implementation": ["extra/llm_research/prefill/packed_wmma_prefill_candidates.py", "extra/llm_research/prefill/current_prefill_execution_adapter.py"],
+      "target_owner": "tinygrad/llm/packed_wmma_prefill.py",
+      "packet": "P4",
+      "benchmark_protected": true
+    },
+    {
+      "route_id": "prefill_flash_attention_generated",
+      "execution": "descriptor-driven Tensor.custom_kernel and tinygrad AMD lowering",
+      "selection": "promoted_tuned_configuration",
+      "runtime_role": "primary_production_prefill_attention_8b_14b",
+      "evidence": "current_promotion_and_benchmark",
+      "master_disposition": "KEEP_AND_AUDIT_OWNERSHIP",
+      "current_implementation": ["tinygrad/llm/fused_attention.py", "tinygrad/schedule/wmma/flash_prefill.py", "tinygrad/schedule/wmma/kernels.py"],
+      "target_owner": "existing tinygrad production modules",
+      "packet": "P8",
+      "benchmark_protected": true
+    },
+    {
+      "route_id": "prefill_q4k_direct_tile4x4_default",
+      "execution": "specialized Tensor.custom_kernel fallback",
+      "selection": "manually_fixed_oracle",
+      "runtime_role": "conditional_specialized_rollback_not_headline",
+      "evidence": "not_used_by_headline_benchmark",
+      "master_disposition": "REPLACE_WITH_GENERIC_THEN_MOVE_DEV",
+      "current_implementation": ["extra/llm_research/prefill/q4k_prefill_route_spec.py", "extra/llm_research/quant/q4_k_gemv_primitive.py"],
+      "target_owner": "dev oracle namespace",
+      "packet": "P5",
+      "benchmark_protected": false,
+      "removal_prerequisite": "packed-WMMA decline and forced-direct mode use ordinary tinygrad fallback"
+    },
+    {
+      "route_id": "prefill_q6k_direct_generated",
+      "execution": "specialized Tensor.custom_kernel fallback",
+      "selection": "manually_fixed_oracle_or_unresolved",
+      "runtime_role": "conditional_specialized_rollback_not_headline",
+      "evidence": "not_used_by_headline_benchmark",
+      "master_disposition": "REPLACE_WITH_GENERIC_THEN_MOVE_DEV",
+      "current_implementation": ["extra/llm_research/prefill/q6k_prefill_route_spec.py", "extra/llm_research/quant/q6_k_gemv_primitive.py"],
+      "target_owner": "dev oracle namespace",
+      "packet": "P5",
+      "benchmark_protected": false,
+      "removal_prerequisite": "generic exact-Q6-vocab and general-decline semantics pass"
+    }
+  ],
+  "packets": [
+    {"id": "P0", "depends_on": [], "gpu": false, "purpose": "definitions, ledger, superseded-work inventory"},
+    {"id": "P1", "depends_on": [], "gpu": false, "purpose": "canonical tinygrad/llm README and benchmark boundary"},
+    {"id": "P2", "depends_on": ["P0"], "gpu": false, "purpose": "production policy and route interface"},
+    {"id": "P3", "depends_on": ["P2"], "gpu": "promotion_only", "purpose": "WMMA-LDS graph-prefill production owner"},
+    {"id": "P4", "depends_on": ["P2"], "gpu": "promotion_only", "purpose": "packed-WMMA production extraction"},
+    {"id": "P5", "depends_on": ["P3", "P4"], "gpu": "promotion_only", "purpose": "generic fallback replaces direct-packed on master"},
+    {"id": "P6", "depends_on": ["P2"], "gpu": "promotion_only", "purpose": "Q4 G3 and Q6 decode production owners"},
+    {"id": "P7", "depends_on": ["P2"], "gpu": "promotion_only", "purpose": "G4/G5 decode-attention production owners"},
+    {"id": "P8", "depends_on": ["P2"], "gpu": "only_if_executable_change", "purpose": "fused prefill-attention ownership audit"},
+    {"id": "P9", "depends_on": ["P3", "P4", "P5", "P6", "P7", "P8"], "gpu": false, "purpose": "remove route_ops and production extra seam"},
+    {"id": "P10", "depends_on": ["P1", "P9"], "gpu": false, "purpose": "tier placement and branch derivation"},
+    {"id": "P11", "depends_on": ["P10"], "gpu": true, "purpose": "AMD recertification and README publication"}
+  ],
+  "completion": [
+    "benchmark-producing selected routes retained",
+    "ordinary tinygrad fallback replaces specialized master rollback",
+    "direct-packed Q4/Q6 implementations retained on dev only",
+    "master production imports no extra/llm_research",
+    "tinygrad/llm README and benchmark path work from a clean clone",
+    "final master route identities and performance recertified",
+    "master dev exp clean pushed and recorded"
+  ]
+}
