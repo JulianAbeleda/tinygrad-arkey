@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from tinygrad.llm import prefill_graph_gemm as route
+from tinygrad.llm.prefill_candidate_runtime import canonical_candidate_set_identity
 
 
 class CandidateTensor:
@@ -30,7 +31,7 @@ def _registry(admissions):
 
 def _binding(registry, admission):
   row = route._candidate_route_row(admission)
-  set_identity = route._canonical_candidate_set_identity(registry.candidate_set.to_json())
+  set_identity = canonical_candidate_set_identity(registry.candidate_set.to_json())
   inventory_identity = "inventory:sha256:" + "a" * 64
   return {"candidate_registry":registry, "inventory_identity":inventory_identity,
     "candidate_set_identity":set_identity, "scanned_target_facts":{"target":row["target"]},

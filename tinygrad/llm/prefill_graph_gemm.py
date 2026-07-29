@@ -9,44 +9,15 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from contextvars import ContextVar
-import hashlib, json
 from collections.abc import Mapping
 from typing import Any
 
 from tinygrad import Tensor, dtypes
+from tinygrad.llm.prefill_candidate_runtime import canonical_candidate_set_identity
 from tinygrad.uop.ops import Ops
 
 
 _CANDIDATE_ROUTE_CENSUS: ContextVar[dict[str, Any] | None] = ContextVar("candidate_route_census", default=None)
-_PROVENANCE_KEYS = frozenset(("profile", "profile_id", "profiles", "model", "model_id", "model_name",
-                              "model_path", "filename", "size_label", "model_size"))
-
-
-def _semantic_json(value: Any) -> str:
-  def clean(item: Any) -> Any:
-    if isinstance(item, Mapping):
-      return {str(key):clean(child) for key,child in sorted(item.items(), key=lambda pair: str(pair[0]))
-              if str(key).lower().replace("-", "_") not in _PROVENANCE_KEYS}
-    if isinstance(item, (list, tuple)): return [clean(child) for child in item]
-    if item is None or isinstance(item, (str, bool, int, float)): return item
-    raise TypeError(f"semantic identity requires JSON values, got {type(item).__name__}")
-  return json.dumps(clean(value), sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
-
-
-def _canonical_candidate_set_identity(candidate_set: Mapping[str, Any]) -> str:
-  entries = candidate_set.get("entries")
-  fallbacks = candidate_set.get("fallbacks", [])
-  if not isinstance(entries, list) or not isinstance(fallbacks, list) or not entries and not fallbacks:
-    raise ValueError("candidate set requires candidate entries or declared fallbacks")
-  canonical = []
-  for entry in entries:
-    if not isinstance(entry, Mapping) or not isinstance(entry.get("payload"), Mapping):
-      raise ValueError("malformed candidate entry")
-    canonical.append({"canonical_identity":entry.get("canonical_identity"), "payload":entry["payload"]})
-  # Production graph-GEMM registries contain admitted entries, not research fallback declarations.
-  if fallbacks: raise ValueError("production graph-GEMM candidate set cannot contain fallback declarations")
-  digest = hashlib.sha256(_semantic_json(sorted(canonical, key=_semantic_json)).encode("ascii")).hexdigest()
-  return f"candidate_set:sha256:{digest}"
 
 
 @contextmanager
@@ -156,7 +127,7 @@ def _attached_candidate_admission(lin, role: str, shape: tuple[int, int, int]):
   identity = policy.get("candidate_identity")
   if not isinstance(identity, str) or not identity: return None
   try:
-    if _canonical_candidate_set_identity(registry.candidate_set.to_json()) != candidate_set_identity: return None
+    if canonical_candidate_set_identity(registry.candidate_set.to_json()) != candidate_set_identity: return None
   except (AttributeError, TypeError, ValueError): return None
   matches = []
   for admission in registry.admissions:
