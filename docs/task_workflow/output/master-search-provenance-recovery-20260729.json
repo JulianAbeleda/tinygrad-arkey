@@ -1,0 +1,85 @@
+{
+  "schema": "tinygrad.master_search_provenance_recovery.v1",
+  "date": "2026-07-29",
+  "scope": "Nine promoted routes enumerated by docs/task_workflow/output/master-hot-path-route-migration-ledger-20260729.json; read-only recovery from tinygrad-arkey-exp history, the archived tinygrad-v8-a0a1 worktree, and env/BoltBeam.",
+  "verdict_rule": "REPRODUCIBLE requires one immutable, route-bound record linking a public search request and search-space digest, search-system revision and run id/timestamp, objective/budget/candidate count, selected rank and complete candidate payload, deterministic exporter revision, source/binary hashes, and correctness plus performance evidence. ATTESTED requires an immutable externally attributable equivalent with all route-binding and evidence hashes. Anything less is UNPROVEN. Promotion prose, hand-expanded route tables, test fixtures, and schema/tool source are not search provenance.",
+  "search_locations_examined": [
+    {"repository": "tinygrad-arkey-exp", "git_ref": "29d3091e680eccad2a8b9f710ad8423b71ebf42a", "note": "current working ref; historical objects searched with git log --all"},
+    {"repository": "tinygrad-arkey-exp", "historical_commit": "dc90b54a6fe2e53c718975c3cf7e7abc25ad0b8b", "note": "deleted G3 promotion artifact retained as Git blob aba9aa656308246210567cb1ea467eb530478092"},
+    {"repository": "tinygrad-arkey-exp", "historical_commit": "06b1608e8fa99a329a9f3580e501e9ecc9ccd525", "note": "deleted Q6 generated-coop artifact retained as Git blob f6474e1216a35860ee3ac36a7f9ca4d2022a2ca2"},
+    {"repository": "tinygrad-arkey-exp", "historical_commit": "4b406bdbc8312c5e160dcbe1cf125ea23284dec7", "note": "deleted G4 phase-2 artifact retained as Git blob 6b04ed9815e533b285e06654427a91d921df662c"},
+    {"repository": "tinygrad-v8-a0a1 archived worktree", "path": "/Users/julianabeleda/worktrees/tinygrad-v8-a0a1/bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/candidate-set.json", "sha256": "61b22f8797ece839a2c8a624dad2811437e6760c6e6ab2867b79c8aede8574e0"},
+    {"repository": "BoltBeam", "git_ref": "1fed624e9bac83d7f58e853489b91d2a56fc90fb", "note": "repository contains schemas, tooling, fixtures, and blocked/analysis reports; no route-bound selected export for the nine promoted routes was located"}
+  ],
+  "required_fields": ["search_request", "search_space_digest", "search_system_revision", "run_id_or_timestamp", "objective_budget_candidate_count", "selected_rank_metrics", "complete_candidate_payload", "exporter_revision", "source_hash", "binary_hash", "correctness_evidence", "performance_evidence"],
+  "routes": [
+    {
+      "route_id": "decode_q4k_g3_generated",
+      "recovered": [{"kind": "historical_promotion_measurement", "commit": "dc90b54a6fe2e53c718975c3cf7e7abc25ad0b8b", "path": "bench/amd-isa-backend-g3-weight-promotion/latest.json", "blob": "aba9aa656308246210567cb1ea467eb530478092", "fields_observed": ["per_ctx", "promotion_contract", "verdict", "search_space_update"], "not_search_record": true}],
+      "missing_fields": ["search_request", "search_space_digest", "search_system_revision", "run_id_or_timestamp", "objective_budget_candidate_count", "selected_rank_metrics", "complete_candidate_payload", "exporter_revision", "source_hash", "binary_hash", "route-bound correctness hash", "route-bound performance hash"],
+      "strict_eligible_verdict": "UNPROVEN",
+      "exact_next_action": "Recover or rerun the G3 selector search and emit one signed route-bound export containing the selected LaneMap payload, ranked population, request/space digests, exporter commit, and hash-linked correctness/per-context timing."
+    },
+    {
+      "route_id": "decode_q6k_coop_generated",
+      "recovered": [{"kind": "historical_promotion_measurement", "commit": "06b1608e8fa99a329a9f3580e501e9ecc9ccd525", "path": "bench/tg-p3-q6k-generated-coop/latest.json", "blob": "f6474e1216a35860ee3ac36a7f9ca4d2022a2ca2", "fields_observed": ["selected_route", "lossless_emit", "worst_gen_over_shipped", "route_bound", "token_match_full_model"], "not_search_record": true}],
+      "missing_fields": ["search_request", "search_space_digest", "search_system_revision", "run_id_or_timestamp", "objective_budget_candidate_count", "selected_rank_metrics", "complete_candidate_payload", "exporter_revision", "source_hash", "binary_hash", "hash-addressed correctness evidence", "hash-addressed performance evidence"],
+      "strict_eligible_verdict": "UNPROVEN",
+      "exact_next_action": "Run/export the Q6 spec search with its complete Q6KGEMVRouteSpec candidate population and bind the selected spec to compiled source/binary and same-session correctness/performance artifacts."
+    },
+    {
+      "route_id": "decode_flash_live_split_g4_kvboth",
+      "recovered": [{"kind": "historical_promotion_measurement", "commit": "4b406bdbc8312c5e160dcbe1cf125ea23284dec7", "path": "bench/tg-p14-amd-recovery-and-pure-attention-landing/phase2_final_result.json", "blob": "6b04ed9815e533b285e06654427a91d921df662c", "fields_observed": ["candidate_env", "speed", "correctness", "primary_verdict", "boltbeam_strict_view"], "not_search_record": true}],
+      "missing_fields": ["search_request", "search_space_digest", "search_system_revision", "run_id_or_timestamp", "objective_budget_candidate_count", "selected_rank_metrics", "complete G4 tile/split/combine payload", "exporter_revision", "source_hash", "binary_hash", "hash-addressed evidence"],
+      "strict_eligible_verdict": "UNPROVEN",
+      "exact_next_action": "Produce an independent G4 search export rather than reuse the phase result: include its tile/split/combine payload, candidate ranking, exact binary/source identities, and matched ctx512/4096 evidence."
+    },
+    {
+      "route_id": "decode_flash_live_split_g5_kvboth",
+      "recovered": [],
+      "missing_fields": ["search_request", "search_space_digest", "search_system_revision", "run_id_or_timestamp", "objective_budget_candidate_count", "selected_rank_metrics", "complete G5 candidate payload", "exporter_revision", "source_hash", "binary_hash", "correctness_evidence", "performance_evidence"],
+      "strict_eligible_verdict": "UNPROVEN",
+      "exact_next_action": "Run the G5-specific search and retain a separate selected export and ctx512/4096 evidence bundle; do not inherit G4 evidence or the route-manifest assertion."
+    },
+    {
+      "route_id": "prefill_wmma_lds_dbuf_generated",
+      "recovered": [
+        {"kind": "candidate_set", "path": "/Users/julianabeleda/worktrees/tinygrad-v8-a0a1/bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/candidate-set.json", "sha256": "61b22f8797ece839a2c8a624dad2811437e6760c6e6ab2867b79c8aede8574e0", "schema": "boltbeam.full_kernel_candidate_set.v1", "fields_observed": ["four complete selected plan payloads with canonical identities", "exact workload shapes, target guards, and schedule topology"]},
+        {"kind": "whole_prefill_timing", "path": "/Users/julianabeleda/worktrees/tinygrad-v8-a0a1/bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/whole-prefill-pinned.json", "sha256": "967707e8ce5df964b26b32eda00c95a24deecde2e0b0203a6422db6cc6eb10e6", "schema": "prefill-whole-synced-authority.v1"},
+        {"kind": "whole_model_correctness", "path": "/Users/julianabeleda/worktrees/tinygrad-v8-a0a1/bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/whole-model-quality.json", "sha256": "f68561e9b19a44ee439fbe075f78cd6fda959b9402bb659240570ee8ccb2ad0a", "schema": "prefill-hybrid-whole-model-quality-gate.v1", "status": "PASS"}
+      ],
+      "missing_fields": ["public search request", "search-space digest", "search-system revision", "run id/timestamp", "objective/budget/candidate count", "selected rank", "deterministic exporter revision", "proof that archived candidate-set selection—not a hand-expanded table—selected every promoted role", "current-runtime drift check"],
+      "strict_eligible_verdict": "UNPROVEN",
+      "exact_next_action": "Preserve the recovered bundle as evidence input, then rerun/export its four-role search with a top-level request/space/run/ranking record and a deterministic artifact-to-current-runtime drift check."
+    },
+    {
+      "route_id": "prefill_q4k_direct_tile4x4_default",
+      "recovered": [],
+      "missing_fields": ["search_request", "search_space_digest", "search_system_revision", "run_id_or_timestamp", "objective_budget_candidate_count", "selected_rank_metrics", "complete Q4K route-spec payload", "exporter_revision", "source_hash", "binary_hash", "correctness_evidence", "performance_evidence"],
+      "strict_eligible_verdict": "UNPROVEN",
+      "exact_next_action": "Export a shape-keyed Q4K prefill search result that contains the selected LOCAL/UPCAST/parts/layout payload and attaches compiled identities plus route-bound evidence."
+    },
+    {
+      "route_id": "prefill_q6k_direct_generated",
+      "recovered": [],
+      "missing_fields": ["search_request", "search_space_digest", "search_system_revision", "run_id_or_timestamp", "objective_budget_candidate_count", "selected_rank_metrics", "complete Q6K route-spec payload", "exporter_revision", "source_hash", "binary_hash", "correctness_evidence", "performance_evidence"],
+      "strict_eligible_verdict": "UNPROVEN",
+      "exact_next_action": "Run/export a shape-keyed Q6K prefill search and bind the selected dequant/layout/parts schedule to exact compiled source/binary and performance/correctness records."
+    },
+    {
+      "route_id": "packed_wmma_prefill_generated",
+      "recovered": [{"kind": "historical_promotion_evidence", "commit": "a73c4306cb934bfcdd6cde82e19ad2d7bb107b70", "path": "docs/packed-wmma-14b-promotion-evidence-20260725.json", "blob": "b18a112f139d810b86c97ea8d9feddf6da388bb9", "fields_observed": ["route_id", "e2e_token_parity_14b", "canary", "throughput"], "not_search_record": true}],
+      "missing_fields": ["search_request", "search_space_digest", "search_system_revision", "run_id_or_timestamp", "objective_budget_candidate_count", "selected rank", "complete shape-keyed payload", "exporter_revision", "source/binary hashes tied to selected rows", "proof table was not manually expanded"],
+      "strict_eligible_verdict": "UNPROVEN",
+      "exact_next_action": "Replace/recover PACKED_WMMA_GEOM with an immutable search export keyed by (target, quant, role, m, n, k), retaining ranked candidates and per-row compiled/evidence hashes."
+    },
+    {
+      "route_id": "prefill_flash_attention_generated",
+      "recovered": [],
+      "missing_fields": ["search_request", "search_space_digest", "search_system_revision", "run_id_or_timestamp", "objective_budget_candidate_count", "selected_rank_metrics", "complete attention topology payload", "exporter_revision", "source_hash", "binary_hash", "hash-addressed correctness evidence", "hash-addressed performance evidence"],
+      "strict_eligible_verdict": "UNPROVEN",
+      "exact_next_action": "Create a fresh 8B-Hq32 and 14B-Hq40 prefill-attention search/export package with selected topology, candidate ranking, source/binary hashes, full-output correctness, and pp512/1024/2048/4096 timing."
+    }
+  ],
+  "summary": {"routes": 9, "REPRODUCIBLE": 0, "ATTESTED": 0, "UNPROVEN": 9, "important_recovery": "The archived WMMA candidate-set contains complete selected plan payloads and separate correctness/performance records, but no top-level machine-search provenance; it must not be promoted to a reproducible search claim without the missing run/export chain."}
+}
