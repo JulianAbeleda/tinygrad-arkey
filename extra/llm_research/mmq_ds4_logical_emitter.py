@@ -10,6 +10,8 @@ from __future__ import annotations
 from dataclasses import replace
 
 from tinygrad import Tensor, dtypes
+from tinygrad.llm.kernel_program import (KernelProgram, KernelProgramProvenance, execute_research_program,
+                                         execute_research_program_outputs)
 from tinygrad.uop.ops import KernelInfo, UOp
 
 from extra.llm_research.layout import q8_1_quantize
@@ -130,8 +132,9 @@ def pack_q8_1_mmq_fused(x: Tensor, candidate: MMQCandidate) -> tuple[Tensor, Ten
   expected_meta = (m * k) // q8.block_elements
   scales = Tensor.empty(expected_meta, dtype=dtypes.float32, device=x.device)
   sums = Tensor.empty(expected_meta, dtype=dtypes.float32, device=x.device)
-  outputs = values.custom_kernel(scales, sums, x.reshape(-1).contiguous(),
-    fxn=_fused_q8_row_major_kernel((m * k) // q8.block_elements, q8.block_elements, candidate.mapping.wave_size))
+  outputs = execute_research_program_outputs(values, scales, sums, x.reshape(-1).contiguous(), program=KernelProgram(
+    "exp.mmq_ds4_logical", f"q8_row_major.{m}x{k}", KernelProgramProvenance.RESEARCH_ONLY,
+    _fused_q8_row_major_kernel((m * k) // q8.block_elements, q8.block_elements, candidate.mapping.wave_size)))
   return outputs[0], outputs[1], outputs[2]
 
 
@@ -155,8 +158,9 @@ def emit_q4k_q8_mmq_ds4(words: Tensor, q8_values: Tensor, q8_scales: Tensor,
     raise ValueError("DS4 MMQ operands must be on the same device")
   role = str(candidate.descriptor.abi.get("role", "logical_ds4"))
   fxn = _q4k_q8_1_bounded_ds4_dot4x4_kernel(m, n, k, role, candidate.mapping, candidate.descriptor)
-  return Tensor.empty(m, n, dtype=dtypes.float32, device=words.device).custom_kernel(
-    words.contiguous(), q8_values.contiguous(), q8_scales.contiguous(), q8_sums.contiguous(), fxn=fxn)[0]
+  return execute_research_program(Tensor.empty(m, n, dtype=dtypes.float32, device=words.device),
+    words.contiguous(), q8_values.contiguous(), q8_scales.contiguous(), q8_sums.contiguous(),
+    program=KernelProgram("exp.mmq_ds4_logical", f"dot4x4.{role}.{m}x{n}x{k}", KernelProgramProvenance.RESEARCH_ONLY, fxn))
 
 
 def cooperative_128_reuse_probe(*, enabled: bool = False) -> dict:

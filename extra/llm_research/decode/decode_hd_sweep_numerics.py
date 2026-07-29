@@ -52,7 +52,8 @@ import numpy as np
 from tinygrad import Tensor, dtypes
 
 from extra.llm_research.attention_harness_common import causal_mask, reference_attention
-from extra.llm_research.decode.flash_decode_attention_executor import flash_decode_live_split_block_tile
+from tinygrad.llm.flash_decode_attention import describe_flash_decode_attention
+from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, execute_research_program
 
 HQ, HKV = 32, 8          # real 8B GQA shape (G=Hq/Hkv=4); Hkv/G are orthogonal to the Hd question here
 MAXC = 512               # synthetic ring/cache capacity
@@ -84,8 +85,16 @@ def run_hd(hd: int) -> str:
   # (executor itself does q.reshape(Hq*Hd) at flash_decode_attention_executor.py:14).
   q_dev = Tensor(qn, device="AMD")  # (1, Hq, 1, Hd)
 
-  out = flash_decode_live_split_block_tile(
-    q_dev, cache, TC, hd, HQ, HKV, MAXC, SPLIT_COUNT, staging="KV_BOTH", fused_combine=True)
+  # This sweep deliberately bypasses the admitted Hd=128 route. Build the same
+  # descriptor directly, but execute it as research so unsupported geometry
+  # cannot acquire promoted-route provenance.
+  spec = describe_flash_decode_attention(HQ, hd, HKV, MAXC, SPLIT_COUNT, staging="KV_BOTH", fused_combine=True)
+  partial = execute_research_program(Tensor.empty(HQ * SPLIT_COUNT * (hd + 2), dtype=dtypes.float32, device=q_dev.device),
+    q_dev.reshape(HQ * hd), cache, program=KernelProgram("exp.decode_hd_sweep", f"flash_tile.hd{hd}",
+    KernelProgramProvenance.RESEARCH_ONLY, spec.emit_tile(TC)))
+  out = execute_research_program(Tensor.empty(HQ * hd, dtype=dtypes.float32, device=q_dev.device), partial,
+    program=KernelProgram("exp.decode_hd_sweep", f"flash_combine.hd{hd}", KernelProgramProvenance.RESEARCH_ONLY,
+    spec.emit_combine())).reshape(HQ, hd)
   got = out.numpy().astype(np.float32)  # (Hq, Hd); forces compile + lowering + execution
 
   q_ref = Tensor(qn, device="AMD")

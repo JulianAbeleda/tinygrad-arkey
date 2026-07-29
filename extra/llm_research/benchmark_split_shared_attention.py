@@ -7,6 +7,7 @@ import numpy as np
 from tinygrad import Tensor, dtypes, Device, TinyJit
 from tinygrad.uop.ops import KernelInfo
 from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention, amd_gfx1100_q16_grid_qk_stats_stage, amd_gfx1100_q16_grid_pv_slice_stage
+from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, execute_research_program
 from extra.llm_research.attention_harness_common import amd_sync as sync
 
 # TODO(centralize): samples() differs from attention_harness_common.synced_time/timing_summary (different
@@ -26,12 +27,12 @@ def run(kv:int, output:Path):
   def stage_a(o,qi,ki): return amd_gfx1100_q16_grid_qk_stats_stage(qi,ki,o,q_tokens=q,q_heads=hq,kv_heads=hkv,kv_tokens=kv,scale=.08838834764831843,kernel_info=KernelInfo(name=f"split_a_{kv}"))
   def stage_b(base): return lambda o,qi,ki,vi,si: amd_gfx1100_q16_grid_pv_slice_stage(qi,ki,vi,si,o,q_tokens=q,q_heads=hq,kv_heads=hkv,kv_tokens=kv,scale=.08838834764831843,kernel_info=KernelInfo(name=f"split_b_{kv}_{base}"),output_block_base=base,v_input_block_base=base)
   def split():
-    s=stats.custom_kernel(tq,tk,fxn=stage_a)[0]
+    s=execute_research_program(stats, tq, tk, program=KernelProgram("exp.split_shared_attention", f"split_a.{kv}", KernelProgramProvenance.RESEARCH_ONLY, stage_a))
     z=out
-    for base in range(0,8,2): z=z.custom_kernel(tq,tk,tv[base*16:],s,fxn=stage_b(base))[0]
+    for base in range(0,8,2): z=execute_research_program(z, tq, tk, tv[base*16:], s, program=KernelProgram("exp.split_shared_attention", f"split_b.{kv}.{base}", KernelProgramProvenance.RESEARCH_ONLY, stage_b(base)))
     return z
   def full_kernel(o,qi,ki,vi): return amd_gfx1100_q16_grid_hd128_loop_attention(qi,ki,vi,o,q_tokens=q,q_heads=hq,kv_heads=hkv,kv_tokens=kv,scale=.08838834764831843,causal=True,kernel_info=KernelInfo(name=f"fused_{kv}"))
-  fused_out=Tensor.empty(hq*q*128,dtype=dtypes.half,device="AMD"); fused=lambda: fused_out.custom_kernel(tq,tk,tv,fxn=full_kernel)[0]
+  fused_out=Tensor.empty(hq*q*128,dtype=dtypes.half,device="AMD"); fused=lambda: execute_research_program(fused_out, tq, tk, tv, program=KernelProgram("exp.split_shared_attention", f"fused.{kv}", KernelProgramProvenance.RESEARCH_ONLY, full_kernel))
   sg,fg=split().numpy().reshape(hq,q,128).astype(np.float32),fused().numpy().reshape(hq,q,128).astype(np.float32)
   err=float(np.abs(sg-fg).max())
   if not np.allclose(sg,fg,rtol=.03,atol=.006): raise RuntimeError(f"numeric mismatch {err}")
