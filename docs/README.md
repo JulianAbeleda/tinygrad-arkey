@@ -57,6 +57,9 @@ they are refuted — see `prefill-current-state.md`.)
 
 ## Runtime Boundary
 
+- `task_workflow/input/boltbeam-metal-compatibility-scope-20260729.md` - exhaustive EXP-first scope for making
+  BoltBeam + BubbleBeam/FutureSight a real Apple Metal search/evidence path while reusing centralized contracts and
+  forbidding hand-authored Metal hot-path kernels.
 - `llm-route-runtime-module-consolidation-scope-20260729.md` - current EXP-first execution scope for clarifying static
   planning, admission, attachment, dispatch, observation, and CLI runtime-state ownership without changing behavior.
 - `tinygrad-runtime-operational-policy-r10.md` - runtime operating policy.

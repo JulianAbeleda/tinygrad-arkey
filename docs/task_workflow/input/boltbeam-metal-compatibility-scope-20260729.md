@@ -1,0 +1,518 @@
+# BoltBeam + BubbleBeam/FutureSight Metal compatibility scope
+
+Date: 2026-07-29
+
+Status: approved scope; implementation not started
+
+Branch boundary: design and provider work begin on tinygrad `exp`. This scope does not authorize AMD/eGPU work,
+promotion to `dev`/`master`, or a hand-authored Metal kernel.
+
+## 1. Outcome
+
+Make Apple Metal a real, fail-closed target in the existing machine-search system:
+
+```text
+BubbleBeam                     enumerate legal compiler-owned candidates
+  -> FutureSight               reject/prioritize candidates using static facts
+  -> BoltBeam                  own the finite request, measured ranking, evidence, ledger, and promotion decision
+  -> tinygrad EXP provider     admit, compile, execute, check, and time candidates on Metal
+  -> ordinary tinygrad Metal   render MSL, compile MTLB, and execute the selected schedule
+```
+
+The first proof workload is Qwen3-8B Q4_K_M decode on the local Apple M4. Compatibility is complete when a finite,
+replayable search can finish and report a correct measured population, even if every candidate loses and the generic
+Metal control remains selected. Performance promotion is a later outcome and requires a measured whole-model win.
+
+This is machine search under the repository's practical definition: people define the semantic workload, legal
+dimensions, compiler primitives, and gates; software enumerates candidates, the hardware measures them, and the
+measured policy selects or rejects the result. No hand-written MSL or route-local UOp kernel is introduced.
+
+## 2. Current truth
+
+### 2.1 What already works
+
+| Surface | Current state | Reuse decision |
+| --- | --- | --- |
+| tinygrad Metal runtime | Loads Qwen3-8B Q4_K_M and decodes correctly | Reuse as the sole executor/compiler |
+| Metal timing | Eager `MetalProgram(..., wait=True)` returns command-buffer GPU elapsed time | Reuse for isolated candidate timing |
+| Metal binaries | `MetalCompiler` emits MTLB bytes | Reuse for immutable binary hashes |
+| Metal target facts | Device family, name, working-set budget, allocation size, thread limits, and threadgroup memory are available through Metal | Expose through one provider fact adapter |
+| generic quant path | Unsupported AMD routes fall back to the ordinary GGUF dequant + tinygrad graph | Reuse as correctness and performance control |
+| tinygrad scheduler vocabulary | `Opt`/`OptOps` already represent local, group, upcast, unroll, coalesce, tensor-core, and related choices | Reuse as candidate plan vocabulary |
+| BoltBeam bounded search | Validates a finite population, isolates workers, records blocked/incorrect/measured rows, ranks by an objective, and fails closed on partial measurement | Reuse unchanged except for a target-neutral candidate contract |
+| BoltBeam policy/evidence | Already separates execution from evaluation and requires correctness, route binding, speed, memory fit, and rollback | Reuse as the only promotion authority |
+| BubbleBeam/FutureSight | Already demonstrates deterministic candidate enumeration/static ranking for Q4 packed access | Generalize its engine; do not copy it into a Metal fork |
+
+The current local diagnostic baseline is 11.05 tok/s mean for tinygrad EXP and 20.51 tok/s for local llama.cpp Metal on
+the same Qwen3-8B Q4_K_M file. Those numbers identify the opportunity; they do not authorize a route or establish the
+cause. The tinygrad command and context are recorded in `docs/dtype-orthogonality-migration-20260729.md`; the llama.cpp
+observation must be recaptured by M9 under the final paired protocol before it becomes a durable authority.
+
+### 2.2 What is only nominally compatible
+
+| Surface | Declared state | Actual blocker |
+| --- | --- | --- |
+| `apple_metal` target | Registered in BoltBeam | `backend_status=descriptor_only`; reachability rejects every candidate |
+| tinygrad runner plan | Knows AMD and NVIDIA device mappings | Metal resolves to no `DEV=METAL` environment |
+| autoscan | Can select recent NVIDIA targets | No Darwin/Metal discovery or exact Apple target resolution |
+| `tinygrad-profile-events` | Claims `apple_metal` support | Importer discards non-AMD events, assumes a 960 GB/s AMD peak, and decodes resources only from AMD ELF |
+| provider commands | Emit tinygrad trace/operand commands | Commands point to `extra/qk/bench.py` and workers removed by the EXP cleanup |
+| full-kernel candidate schema | Called target-bound | Its required `lds`, `wmma`, `waitcnt`, RDNA lane ownership, and VGPR fields encode an AMD prefill design |
+| tinygrad admission adapter | Exists in BoltBeam | Hardcodes one gfx1100 Qwen3-8B prefill workload and points to a removed worker |
+| full-kernel emit descriptor | Data driven | Contains one exact AMD prefill row only; no quantized Metal decode workload |
+| Metal graph profile | Emits a graph event | Per-kernel times are evenly divided across the command buffer and are not measurement authority |
+
+The compatibility job is therefore not flipping `backend_status`. It is closing the discovery, candidate, provider,
+measurement, and promotion loop without reintroducing the deleted AMD research stack.
+
+## 3. Architectural principles and hard gates
+
+Every implementation packet must pass these gates.
+
+1. **Reuse before addition.** Extend the current target registry, bounded-search controller, evidence types, compiler
+   plan vocabulary, and runtime. A new Metal-only controller, ranker, ledger, benchmark schema, or route policy is a
+   design failure.
+2. **One authority per decision.** BubbleBeam enumerates, FutureSight statically orders/prunes, BoltBeam ranks measured
+   results and promotes, tinygrad admits/executes. Static FutureSight score may never become promotion evidence.
+3. **Central target resolution.** Registry descriptors plus measured scan facts resolve into one target profile. No
+   backend module may maintain a second table for wave width, memory, compiler arch, or collector support.
+4. **One provider protocol.** Replace the stale admission-only and measurement-only worker seams with one versioned
+   target-neutral protocol. AMD, NVIDIA, and Metal use the same envelope and action model.
+5. **One candidate model.** Evolve the existing full-kernel candidate into a target-neutral versioned union. Do not add
+   `MetalCandidate`, a Metal search-space JSON dialect, or Metal-specific hashes.
+6. **Backend details stay behind adapters.** Generic plans express semantic transforms and tinygrad compiler options.
+   Metal owns MSL/MTLB facts; AMD owns ELF/VGPR facts; NVIDIA owns cubin/NCU facts. Missing facts remain explicitly
+   unavailable instead of being guessed into common fields.
+7. **Orthogonal axes remain separate.** Quant storage, scalar compute dtype, accumulator dtype, value lanes, address
+   space, layout, schedule, target identity, and measurement regime must be independent fields. `Q4_K` must not imply
+   fp16 accumulation, wave32, a lane map, or Metal.
+8. **Generated hot path only.** Search may select ordinary tinygrad graph/scheduler plans. It may not select hand-written
+   MSL, raw Metal binaries, or a new route-local Python UOp kernel.
+9. **No runtime dependency on research.** Search/provider code stays in `extra/llm_research` on EXP. A selected result
+   may enter `tinygrad/**` only as immutable generated plan data consumed by a generic loader.
+10. **Fail closed.** Unknown target, incomplete population, stale hash, dirty provider tree, missing correctness,
+    estimated graph timing, thermal invalidation, or unmatched route identity produces `BLOCKED`, not a partial winner.
+11. **Control remains ordinary tinygrad.** Rollback is the unmodified generic Metal graph. No specialized handwritten
+    fallback is added.
+12. **Prune as part of completion.** Compatibility is not complete while obsolete worker protocols, false capability
+    claims, duplicate target mappings, or dead commands remain.
+
+## 4. Canonical ownership and modules
+
+### 4.1 BoltBeam owns
+
+- target descriptor registry and the resolved-target contract;
+- model/workload profiles and the target-neutral candidate schema;
+- finite search request, budget, objective, result population, measured ranking, and selected-plan export;
+- normalized correctness/performance/source/hardware evidence validation;
+- evaluation, ledger, promotion/refutation, rollback requirement, and reports;
+- provider capability declarations derived from actual adapters, not optimistic static claims.
+
+### 4.2 BubbleBeam/FutureSight owns
+
+- legal candidate-dimension generation from the workload, target facts, and tinygrad option vocabulary;
+- deterministic candidate identity before execution;
+- static legality/feasibility rejection and search-order priority;
+- no runtime dispatch, final performance rank, policy, or promotion decision.
+
+The current `extra/llm_research/bubblebeam_futuresight.py` must be split into reusable candidate/scoring primitives and
+an AMD historical compatibility wrapper. Metal uses the shared primitives plus target data, not copied Q4 lane-map
+logic or imported AMD route manifests.
+
+### 4.3 tinygrad owns
+
+- device discovery facts that require Metal APIs;
+- semantic GGUF Q4_K/Q6_K decode graph construction;
+- candidate admission against the actual AST, renderer, compiler, and device limits;
+- deterministic MSL generation, MTLB compilation, buffer creation, execution, correctness oracle, and timing;
+- source/plan/binary hashes and exact route/candidate trace;
+- generic loading of an exported selected schedule if later promoted.
+
+### 4.4 Data flow
+
+Use one content-addressed identity chain:
+
+```text
+model hash + role/shape/quant + resolved target hash
+  -> search request hash
+  -> candidate plan hash
+  -> generated MSL hash
+  -> MTLB hash
+  -> correctness evidence hash + timing evidence hash
+  -> complete population hash
+  -> selected candidate hash or explicit no-promotion verdict
+```
+
+The model path, username, checkout path, and temporary profile path are metadata only and must not enter portable
+candidate identity.
+
+## 5. Target model
+
+Keep `apple_metal` as a non-promotable family descriptor. Add an exact target row only after autoscan can prove its
+identity; the expected local identity is an Apple M4 variant, but the final id (for example `apple_m4_10c`) must come
+from observed hardware, not this document.
+
+Static registry facts may include:
+
+- backend and tinygrad device (`Metal`, `METAL`);
+- Apple GPU family/architecture compatibility;
+- subgroup/SIMD width when observed or guaranteed for that family;
+- supported compiler primitives and collector kinds;
+- fields whose status is `hardware`, `measured`, `modeled`, or `unknown`.
+
+Dynamic scan evidence must include:
+
+- device name and registry id;
+- Apple/Mac GPU family reported by `supportsFamily`;
+- `maxThreadsPerThreadgroup` and `maxThreadgroupMemoryLength`;
+- `recommendedMaxWorkingSetSize` and `currentAllocatedSize` as runtime facts, never static VRAM;
+- OS version, Metal language version selected by tinygrad, tinygrad commit, and BoltBeam commit;
+- compiler/device identity sufficient to invalidate stale MTLB evidence.
+
+Do not encode unified memory as discrete VRAM. Do not publish the current 32 KiB descriptor value without a live or
+documented fact. Do not mark the generic family `complete`; only an exact evaluated target may become promotable.
+
+## 6. Canonical candidate contract
+
+Introduce `boltbeam.full_kernel_candidate.v2` as a validated variant of the existing candidate model, with a v1 reader
+for historical AMD artifacts. Both versions normalize into one in-memory type.
+
+Required v2 groups:
+
+- `workload`: model/profile hash, phase, role, logical M/N/K, quant storage, scalar input/output/accumulator dtypes, and
+  layouts;
+- `target`: exact target id, backend, architecture/family, subgroup width, and resolved-target hash;
+- `plan`: plan kind plus an ordered compiler transform list, layout transforms, reduction strategy, launch intent, and
+  optional primitive request;
+- `constraints`: correctness tolerance, maximum threads/threadgroup memory, spill policy when observable, and memory
+  budget status;
+- `applicability`: exact role/shape/quant/target guards;
+- `provenance`: generator and schema revisions; runtime source/binary hashes are returned as evidence, not predicted.
+
+For the first Metal slice, `plan.kind=tinygrad_schedule` and the transform list uses the existing `Opt`/`OptOps`
+vocabulary. Backend-specific values are accepted only through a registered capability vocabulary. Examples include a
+generic subgroup reduction or `simdgroup_matrix`; AMD `waitcnt` and Metal pipeline properties cannot appear as
+untyped top-level fields.
+
+Environment variables such as `MV_BLOCKSIZE`, `MV_THREADS_PER_ROW`, `MV_ROWS_PER_THREAD`, and `MV_UNROLL_MAX` may be
+accepted by a CLI compatibility parser, but canonical candidates must bind equivalent values directly to one AST/plan.
+Process-global environment state is not candidate identity and must not leak between measurements.
+
+## 7. Provider protocol
+
+Replace the two stale tinygrad worker protocols with one `tinygrad.search_provider.v1` JSON-lines subprocess boundary.
+The canonical actions are:
+
+- `describe`: return provider revision, clean/dirty state, resolved target facts, supported plan kinds, quant formats,
+  compiler transforms, timing modes, and evidence limitations;
+- `admit`: validate candidate identity, workload match, target match, compiler legality, launch/resource limits, and
+  model tensor availability without timing;
+- `compile`: emit the exact plan, generated MSL hash, MTLB hash, launch geometry, and observable pipeline facts;
+- `check`: execute deterministic small and real-shape correctness cases against the generic semantic oracle;
+- `measure`: run bounded warmups/samples and return raw observations plus summary, never a promotion decision.
+
+One `admit_and_measure` convenience action may compose these operations but cannot bypass any result group. BoltBeam's
+existing process isolation, timeout, complete-population rule, and hash checks remain the controller.
+
+The provider worker lives in EXP research space and imports only stable tinygrad compiler/runtime interfaces. It must
+not import an AMD route manifest, Metal-specific search policy, or BoltBeam Python internals. The boundary is JSON so
+either repository can evolve independently under explicit schema versions.
+
+## 8. Measurement and evidence rules
+
+### 8.1 Candidate timing
+
+- Compile once outside the measurement samples.
+- Use an isolated eager kernel/program execution with `wait=True` and Metal command-buffer GPU timestamps.
+- Record warmup count, every raw GPU duration, median, dispersion, launch geometry, and synchronization mode.
+- Randomize or deterministically interleave control/candidate order for paired A/B measurements.
+- Keep allocations resident and identical across the pair; record working-set facts before and after.
+- Reject first-compile time, evenly apportioned `MetalGraph` per-kernel timestamps, unsynchronized host enqueue time,
+  non-finite samples, and target/compiler identity drift.
+
+Metal graph events may support aggregate tracing, but their current evenly divided entry durations are explicitly
+`estimated` and cannot rank candidates.
+
+### 8.2 Correctness
+
+Each candidate must pass:
+
+1. deterministic small Q4_K/Q6_K block fixtures against a scalar semantic reference;
+2. representative real model role/shape output against the ordinary generic tinygrad graph under declared tolerances;
+3. repeated-run determinism/finite-output checks;
+4. whole-model smoke after binding, including expected route identity and no hidden AMD/custom route;
+5. token/logit stability appropriate to the repository's existing benchmark gate.
+
+Correctness and speed use separate artifacts and hashes. A faster incorrect row remains in the population as
+`REJECTED_INCORRECT` and can never be selected.
+
+### 8.3 Source and resource evidence
+
+Common evidence fields are source hash, plan hash, binary hash, global/local size, thread count, static threadgroup
+memory when observable, and compiler/device identities. Metal does not fabricate VGPR/SGPR or AMD ELF facts. The
+shared evidence schema records unsupported fields with reason and provider capability.
+
+### 8.4 Whole-model authority
+
+Candidate microtiming answers whether a schedule improves its kernel. Promotion requires the normal Qwen3-8B CLI path
+at context 128 with a same-session generic Metal A/B and route trace. llama.cpp is an external control and gap tracker,
+not the promotion baseline for a tinygrad candidate.
+
+The existing 11.05/20.51 tok/s diagnostics must be refreshed under the final protocol. Compatibility does not require
+matching llama.cpp. A performance claim requires at least:
+
+- a complete finite search population;
+- a correct selected candidate;
+- paired whole-model samples after warmup;
+- a material win outside the run's noise band (use the existing policy threshold, or 5% if no stricter centralized
+  threshold exists);
+- no memory, compile, or correctness regression;
+- a one-switch rollback to the ordinary generic Metal route.
+
+## 9. First search workload
+
+### 9.1 Scope order
+
+Start with decode, not prefill:
+
+- current tinygrad decode is 11.05 tok/s versus llama.cpp 20.51 tok/s;
+- Q4_K/Q6_K weight streaming and fused dequantized matvec are the likely dominant schedule surface;
+- decode permits isolated GEMV role measurement without first solving Metal tensor-core prefill;
+- the current BoltBeam full-kernel descriptor is an AMD fp16 prefill GEMM and is not reusable as a Metal decode row.
+
+### 9.2 Workload derivation
+
+Profile the real selected GGUF and derive role/shape/quant rows from its tensor inventory. Do not hand-copy a single
+`ffn_gate_up` shape. Begin with the largest measured decode role share, then cover the remaining Q4_K roles and Q6_K
+`lm_head` only if attribution shows it is material.
+
+### 9.3 Initial bounded axes
+
+BubbleBeam should enumerate legal combinations from target/compiler facts, initially including:
+
+- group/reduction width;
+- local threads/block size;
+- output rows per thread;
+- packed inner-period unroll;
+- legal vector/coalesced load width and alignment;
+- reduction placement and subgroup strategy;
+- generic control/heuristic schedule as an explicit population member.
+
+FutureSight may reject non-divisible, over-threaded, over-memory, unsupported-transform, or statically dominated rows
+and determine measurement order. BoltBeam must retain the declared finite population and the reason for every
+unmeasured rejection. Search dimensions must be data, not nested `if target == Metal` policy.
+
+Prefill and `simdgroup_matrix` become a second workload after the decode loop is proven. They must reuse the same
+candidate/provider/evidence contracts with different legal dimensions.
+
+## 10. Implementation packets
+
+### M0 — freeze contracts and drift tests
+
+Owner: both repositories, no GPU required.
+
+- Add fixture tests that expose the current false Metal capability, missing runtime mapping, AMD-only event filter,
+  AMD-specific v1 schema, and missing worker paths.
+- Define the resolved-target, candidate v2, provider, and evidence schema documents before implementation.
+- Add a cross-repository compatibility manifest containing required schema versions and minimum commits.
+
+Gate: tests fail for the identified gaps and pass only through public contracts; no implementation is duplicated in
+fixtures.
+
+### M1 — central target discovery and capabilities
+
+Owner: BoltBeam registry/autoscan plus one tinygrad Metal fact adapter; local Metal required for final fixture capture.
+
+- Add generic probe registration to autoscan and a Darwin/Metal probe.
+- Add `tinygrad_device=METAL` to the family descriptor.
+- Resolve an exact Apple target from observed facts; leave unknown Apple variants descriptor-only.
+- Replace hardcoded collector support arrays with capability resolution from registered adapters.
+- Separate static, dynamic, modeled, and unknown hardware facts.
+
+Gate: an autoscan fixture selects the exact registered M4 target, an explicit user target is preserved, unknown Apple
+hardware fails closed, and no Metal value is duplicated between registry and runner plan.
+
+### M2 — candidate v2 and v1 compatibility
+
+Owner: BoltBeam.
+
+- Add the target-neutral candidate variant and canonical hash.
+- Adapt historical v1 AMD rows into the common in-memory representation without changing their stored bytes/hash.
+- Move backend vocabulary validation behind target capability adapters.
+- Make finite Cartesian expansion and full-kernel search operate on the common interface.
+
+Gate: existing AMD full-kernel tests pass, Metal schedule candidates validate, AMD-only fields cannot enter a Metal
+plan, and two semantically identical canonical candidates hash identically.
+
+### M3 — modular BubbleBeam/FutureSight generation
+
+Owner: tinygrad EXP research.
+
+- Extract target-neutral candidate, dimension, static-score, and rejection types from the current Q4 script.
+- Keep the historical Q4 lane-map wrapper behavior stable.
+- Add a tinygrad schedule vocabulary adapter and Metal fact consumer.
+- Emit candidate v2 JSON and a deterministic ordering/rejection report.
+
+Gate: no imports from route manifests in the shared engine; AMD historical tests remain stable; Metal candidates are
+derived entirely from inputs; static ranking cannot emit a promotion verdict.
+
+### M4 — one tinygrad provider worker
+
+Owner: tinygrad EXP research plus BoltBeam subprocess adapter; no GPU required for protocol tests.
+
+- Implement the common actions and structured error taxonomy.
+- Replace `_ANCHOR_WORKLOAD` with the request workload.
+- Replace removed `extra/qk` command paths with the canonical worker/LLM entrypoint.
+- Remove or adapt the stale admission-only adapter after all callers migrate.
+- Ensure dirty-tree, revision, timeout, identity, unsupported-plan, and hardware-absent failures are explicit.
+
+Gate: CPU/mock tests exercise every action and failure; no target-specific worker executable exists.
+
+### M5 — Metal compilation and evidence adapter
+
+Owner: tinygrad Metal runtime/provider; local Metal required.
+
+- Bind a candidate plan to one captured semantic AST using compiler-owned `Opt` transforms and candidate cache context.
+- Emit generated MSL/MTLB hashes and exact launch/pipeline facts.
+- Add a backend-neutral program evidence event if needed; Metal must not be forced through the AMD ELF decoder.
+- Keep scalar dtype, lanes, storage quant, and schedule plan orthogonal per the dtype migration.
+
+Gate: control and at least two distinct legal plans compile; hashes are stable on repeated clean runs; invalid plans
+fail admission before execution; no handwritten MSL/UOp hot kernel is introduced.
+
+### M6 — Metal correctness and isolated timing
+
+Owner: tinygrad provider plus BoltBeam evidence validator; local Metal required.
+
+- Implement Q4_K then Q6_K semantic fixtures.
+- Execute real role shapes with resident identical buffers.
+- Measure exact eager command-buffer GPU time with raw samples.
+- Mark MetalGraph entry timing non-authoritative in capability/evidence output.
+- Generalize `tinygrad_profile_events` device filtering and resource extraction into backend adapters.
+
+Gate: correct rows become `MEASURED`, incorrect rows become `REJECTED_INCORRECT`, unsupported resource fields remain
+missing with reasons, and no AMD bandwidth/resource default appears in Metal evidence.
+
+### M7 — finite Qwen3-8B decode search
+
+Owner: all four components; local Metal required.
+
+- Derive exact model roles from the GGUF hash/inventory.
+- Freeze a bounded candidate population and include the generic control.
+- Run compile/check/measure for every row under isolation and deadline.
+- Preserve blocked/rejected rows and require population completeness.
+- Export the selected plan or an explicit no-win/refutation result.
+
+Gate: replaying the request at pinned commits reproduces candidate identities and classifications; result is
+`COMPLETE`, not merely partially measured.
+
+### M8 — generated route binding and rollback
+
+Owner: tinygrad generic route-plan loader; local Metal required.
+
+- If M7 finds a winner, export immutable selected plan/provenance through the existing route-plan architecture.
+- Bind only exact target/model/role/shape/quant matches.
+- Trace candidate/plan/binary identity at runtime.
+- Keep ordinary generic Metal as one-switch rollback and behavior for every unmatched case.
+- Do not reuse or relax gfx1100 route eligibility.
+
+Gate: exact match fires; every mismatched field falls back; rollback restores generic output; production modules do not
+import research code.
+
+### M9 — whole-model evaluation and BoltBeam policy
+
+Owner: BoltBeam evaluation; local Metal required.
+
+- Run paired generic/candidate Qwen3-8B decode with final warmup/sample protocol.
+- Record memory, compile-cache, correctness, route-binding, and stability evidence.
+- Refresh the local llama.cpp Metal control separately.
+- Promote only through centralized policy; otherwise retain a measured refutation/reopen condition.
+
+Gate: BoltBeam emits one of `promote`, `refute`, `defer`, or `inconclusive` with complete evidence and rollback. A
+microkernel win alone cannot promote.
+
+### M10 — documentation, pruning, and closure
+
+Owner: both repositories, no GPU required after artifacts exist.
+
+- Add the exact replay/search/evaluation commands and artifact map.
+- Correct capability docs so Metal support means the achieved compatibility level.
+- Remove dead worker paths, duplicate target maps, redundant schemas/adapters, and temporary probes.
+- Add contract tests preventing stale paths and optimistic capability declarations from returning.
+- Update this document with commits, evidence hashes, result, and remaining performance gap.
+
+Gate: clean tests, clean worktrees, no duplicate authority found by `rg` audit, and a new user can run the documented
+search/control flow from the two pinned checkouts.
+
+## 11. Dependency graph and safe parallelism
+
+```text
+M0
+├── M1 target facts
+├── M2 candidate v2
+└── M4 provider protocol shell
+     ├── M3 generator (needs M2 vocabulary)
+     └── M5 Metal compile (needs M1 + M2 + M4)
+          -> M6 correctness/timing
+             -> M7 finite search
+                -> M8 binding, only if a winner exists
+                   -> M9 whole-model policy
+                      -> M10 prune/close
+```
+
+M1, M2, and the protocol-only portion of M4 can run in parallel. All local Metal execution is one serialized hardware
+lane. M8 is conditional: a complete no-win search skips runtime binding and proceeds to a refutation in M9.
+
+## 12. Test matrix
+
+| Layer | Required coverage |
+| --- | --- |
+| Registry | family vs exact target, unknown Apple variant, fact provenance, no static unified-memory claim |
+| Autoscan | Darwin fixture, multiple/absent devices, explicit target preservation, registered/unregistered result |
+| Runner plan | `DEV=METAL`, no AMD `ARCH`, canonical worker command, portable paths |
+| Candidate schema | v1 AMD compatibility, v2 canonicalization, orthogonal dtype/quant/layout, target vocabulary rejection |
+| Generator | deterministic population/order, budget bound, static rejection reasons, no promotion output |
+| Provider protocol | every action, malformed/stale/hash mismatch, dirty tree, timeout, no hardware, unsupported plan |
+| Metal compile | distinct plans, source/MTLB hashes, launch limits, compile-cache isolation |
+| Correctness | Q4_K blocks, Q6_K blocks, ragged/guarded shape, real role output, repeated finite results |
+| Timing | eager GPU timestamps, warmup exclusion, raw samples, graph estimate rejection, paired ordering |
+| Evidence | target/compiler binding, unsupported resources explicit, no AMD defaults, content hashes |
+| Search | complete/partial/incorrect/blocked populations, deterministic tie break, control candidate present |
+| Runtime | exact bind, all mismatch fallbacks, route trace, rollback, no research import |
+| Model | Qwen3-8B load/decode, context 128, memory admission, output stability, generic/candidate A/B |
+| Policy | no promotion without correctness/speed/memory/route/rollback; refutation carries reopen condition |
+| Documentation | commands resolve, files exist, commits/hashes pinned, figures have one authority |
+
+## 13. Explicit non-goals
+
+- No AMD eGPU reset, PCI, Thunderbolt, Linux, KFD, or kernel recovery work.
+- No change to AMD route selection or promotion while proving Metal compatibility.
+- No handwritten Metal kernel, MSL source, precompiled MTLB, or copied llama.cpp Metal kernel.
+- No assertion that the current bottleneck is bandwidth, dequantization, launch count, or graph capture before evidence.
+- No MLX integration or MLX performance claim.
+- No prefill `simdgroup_matrix` search until the decode loop is complete.
+- No promotion to tinygrad `dev` or `master` in this scope.
+- No requirement that Metal beat llama.cpp for compatibility to be complete.
+
+## 14. Completion definitions
+
+### Compatibility complete
+
+- exact Apple target discovered and resolved;
+- one canonical provider protocol works on Metal;
+- target-neutral candidates are generated, admitted, compiled, checked, and timed;
+- a finite real Qwen3-8B decode population completes;
+- BoltBeam emits a replayable measured result and honest policy verdict;
+- ordinary Metal control and rollback remain available;
+- stale/duplicate seams are removed and documentation is runnable.
+
+### Performance route complete
+
+All compatibility conditions plus a selected candidate passes exact route binding, paired whole-model improvement,
+memory/correctness/stability gates, and BoltBeam promotion. If no candidate wins, compatibility is still complete and
+the output is a measured refutation with a precise reopen condition.
+
+### Promotion beyond EXP
+
+Not authorized by this scope. A later promotion packet must prove the generated-plan closure, public runtime boundary,
+branch-specific tests, and no regression to the AMD machine-search path after the pending physical AMD dtype gate.
