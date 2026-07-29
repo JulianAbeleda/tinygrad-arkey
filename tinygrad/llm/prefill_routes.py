@@ -5,7 +5,8 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Callable, Iterator, Mapping
 from tinygrad import Tensor, dtypes
-from tinygrad.llm import route_ops as qk_ops
+from tinygrad.llm.packed_wmma_prefill import select_packed_wmma_prefill_candidate
+from tinygrad.llm.prefill_graph_gemm import route_pf16_graph_gemm
 from tinygrad.llm.memory_semantics import (prefill_activation as _prefill_activation,
   prefill_output as _prefill_output, prefill_scratch as _prefill_scratch)
 from tinygrad.llm.prefill_route_observer import PrefillDirectPackedBinding, PrefillRouteAttachment, _ACTIVE, notify_prefill_route
@@ -204,7 +205,6 @@ def route_packed_wmma_prefill(lin, x:Tensor) -> Tensor | None:
   if not packed_wmma_prefill_enabled(): return None
   spec = _attached_packed_wmma_spec(lin, x)
   if spec is None: return None
-  from tinygrad.llm.route_ops import select_packed_wmma_prefill_candidate
   candidate = select_packed_wmma_prefill_candidate(lin, spec)
   if candidate is None: return None
   x_batch = prefill_activation(x[0].cast(dtypes.float16).contiguous())
@@ -228,7 +228,7 @@ def route_prefill_linear(lin, x:Tensor) -> Tensor:
 
   # Exact binding presence is the only Graph-GEMM execution authority.
   if route == "fp16" and getattr(lin, "_prefill_graph_gemm_binding", None) is not None and w is not None:
-    routed = qk_ops.route_pf16_graph_gemm(lin, x)
+    routed = route_pf16_graph_gemm(lin, x)
     if routed is not None: notify_prefill_route(lin); return routed
   if w is None: w = lin.weight.cast(dtypes.float16)
   b = getattr(lin, "bias", None)
