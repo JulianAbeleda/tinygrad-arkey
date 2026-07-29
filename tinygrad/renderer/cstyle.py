@@ -300,6 +300,17 @@ class CStyleLanguage(Renderer):
     suffix = f"[{shp[0]}]" if len(shp) else ""
     return f"{prefix}{self._render_dtype(x.dtype, sz=lanes)} {self[x]}{suffix};"
 
+  def render_scalar_dtype(self, dtype:DType) -> str:
+    """Render only the scalar element type. Vector width belongs to the UOp/render site."""
+    scalar = dtype.scalar()
+    return self.type_map.get(scalar, scalar.name)
+
+  def render_vector_dtype(self, dtype:DType, lanes:int) -> str:
+    """Render an explicit number of lanes without deriving it from DType.count."""
+    assert lanes >= 1, f"vector lane count must be positive, got {lanes}"
+    scalar = self.render_scalar_dtype(dtype)
+    return scalar.replace(" ", "_") + str(lanes) if lanes > 1 else scalar
+
   def _render_dtype(self, dtype:DType, sz:int=1, addrspace=AddrSpace.REG, mutable=True):
     if isinstance(dtype, ImageDType): return f"{'write_only' if mutable else 'read_only'} image2d_t"
     prefix, suffix = "", ""
@@ -307,9 +318,7 @@ class CStyleLanguage(Renderer):
       if addrspace == AddrSpace.LOCAL and self.smem_prefix_for_cast: prefix = self.smem_prefix
       if addrspace == AddrSpace.GLOBAL: prefix = self.buffer_prefix
       suffix = "*"
-    if sz > 1:
-      return prefix + self.type_map.get(scalar:=dtype.scalar(), scalar.name).replace(" ", "_") + str(sz) + suffix
-    return prefix + self.type_map.get(scalar:=dtype.scalar(), scalar.name) + suffix
+    return prefix + self.render_vector_dtype(dtype, sz) + suffix
 
   def render_type(self, u:UOp): return self._render_dtype(u.dtype, u.max_numel(), u.addrspace)
   def render_access(self, u:UOp):
@@ -319,9 +328,10 @@ class CStyleLanguage(Renderer):
     return self[u]
   def render_cast(self, u:UOp, val:str) -> str: return f"({self.render_type(u)})({val})"
 
-  # LEGACY
+  # DType owns scalar numeric semantics at the renderer boundary. Call render_type(UOp)
+  # or render_vector_dtype(dtype, lanes) when a value has multiple lanes.
   def render_dtype(self, dt:DType, mutable=True) -> str:
-    return self._render_dtype(dt, dt.count, dt.addrspace if isinstance(dt, PtrDType) else AddrSpace.REG)
+    return self._render_dtype(dt, 1, dt.addrspace if isinstance(dt, PtrDType) else AddrSpace.REG, mutable)
 
   def __getitem__(self, key): return self.r[key]  # hacky helper
   def _render(self, uops:list[UOp]) -> tuple[str, list[str], list[tuple[str,tuple[UOp,bool]]]]:
@@ -436,7 +446,8 @@ class ClangRenderer(CStyleLanguage):
   def render_vector_prefix(self, dt:DType) -> str:
     # round (down) to power of two (this is actually the default clang behavior)
     alignment = 2**int(math.log2(dt.itemsize)) if getenv("ALIGNED", 1) and not dtypes.is_bool(dt) else 1
-    return f"typedef {self.render_dtype(dt.scalar())} {self.render_dtype(dt)} __attribute__((aligned({alignment}),ext_vector_type({dt.count})));"
+    return f"typedef {self.render_dtype(dt)} {self.render_vector_dtype(dt, dt.count)} " + \
+           f"__attribute__((aligned({alignment}),ext_vector_type({dt.count})));"
 
   def _render_defines(self, uops) -> list[str]: return [self.render_vector_prefix(dt) for dt in uops_to_dtypes(uops) if dt.count > 1]
   def _render_body(self, function_name, kernel, bufs, uops, pref=None) -> str: return super().render_kernel(function_name, kernel, bufs, uops, pref)
@@ -471,7 +482,11 @@ class MetalRenderer(CStyleLanguage):
   float4 = "float4"
   code_for_workitem = {"g": lambda x: f"gid.{chr(120+int(x))}", "l": lambda x: f"lid.{chr(120+int(x))}"}
   extra_args = ['uint3 gid [[threadgroup_position_in_grid]]', 'uint3 lid [[thread_position_in_threadgroup]]']
-  type_map = {dtypes.bfloat16: "bfloat"}
+  # MSL uses OpenCL-style compact scalar names for native vector types
+  # (`uint2`, `ushort4`, ...), not tinygrad's descriptive `unsigned int` spelling.
+  type_map = {dtypes.bool: "bool", dtypes.int8: "char", dtypes.uint8: "uchar",
+              dtypes.int16: "short", dtypes.uint16: "ushort", dtypes.int32: "int", dtypes.uint32: "uint",
+              dtypes.int64: "long", dtypes.uint64: "ulong", dtypes.bfloat16: "bfloat"}
   code_for_op = {**CStyleLanguage.code_for_op, Ops.SIN: lambda x,dtype: f"precise::sin({x})"}
 
   extra_matcher = PatternMatcher([
@@ -481,13 +496,13 @@ class MetalRenderer(CStyleLanguage):
 
   string_rewrite = PatternMatcher([
     (UPat(Ops.BITCAST, name="x"),
-      lambda ctx,x: f"as_type<{ctx.render_dtype(x.dtype)}>(({ctx.render_dtype(x.src[0].dtype)})({ctx[x.src[0]]}))"),
+      lambda ctx,x: f"as_type<{ctx.render_type(x)}>(({ctx.render_type(x.src[0])})({ctx[x.src[0]]}))"),
   ]) + base_rewrite
 
   def render_kernel(self, function_name, kernel, bufs, uops, prefix=None):
     prefix = ["#include <metal_stdlib>", "using namespace metal;"]
     for name, _, dtype_in, dtype_out, _, _, _, _ in wmma_args(uops):
-      dstr_out, dstr_in = self.render_dtype(dtype_out.vec(2)), self.render_dtype(dtype_in.vec(2))
+      dstr_out, dstr_in = self.render_vector_dtype(dtype_out, 2), self.render_vector_dtype(dtype_in, 2)
       prefix.append(
 f"""{dstr_out} __{name}({dstr_in} a, {dstr_in} b, {dstr_out} c){{
   simdgroup_{self.render_dtype(dtype_in)}8x8 mat_a, mat_b; simdgroup_{self.render_dtype(dtype_out)}8x8 mat_c;
@@ -584,7 +599,7 @@ class HIPRenderer(CStyleLanguage):
     return assemble_linear(prg, lin, self.target.arch)
 
   def render_vector_prefix(self, dtype:DType) -> str:
-    vec, scal = self.render_dtype(dtype), self.render_dtype(dtype.scalar())
+    vec, scal = self.render_vector_dtype(dtype, dtype.count), self.render_dtype(dtype)
     names = _nms[:dtype.count] if dtype.count <= len(_nms) else [f"v{i}" for i in range(dtype.count)]
     return f"typedef {scal} {vec} __attribute__((ext_vector_type({dtype.count})));\nstatic inline __attribute__((device)) "+ \
            f"{vec} make_{vec}({', '.join([f'{scal} {x}' for x in names])}) {{ return {{ {', '.join(names)} }}; }}"
@@ -646,10 +661,11 @@ class HIPRenderer(CStyleLanguage):
         # -> bitcast. C/D = 8 int32. signed*signed: the 1st/3rd bool args are the per-operand SIGN flags where
         # true == SIGNED (AMD-VALIDATED bit-exact on gfx1100 -- passing false treats int8 as UNSIGNED, which
         # blows negatives up to 255 and gives garbage; cf. the sudot4 true=signed convention above).
-        # NOTE: use render_dtype for the vector type spellings -- char.vec(16) renders as "signed_char16"
+        # NOTE: use explicit lane rendering -- char + 16 lanes renders as "signed_char16"
         # (NOT "char16"), and int.vec(4) ("int4") is needed for the pack but is not a naturally-used dtype, so
         # emit its typedef here if the render_kernel prologue didn't already (avoids a duplicate typedef).
-        c16, i8, i4 = self.render_dtype(dtypes.char.vec(16)), self.render_dtype(dtypes.int.vec(8)), self.render_dtype(dtypes.int.vec(4))
+        c16 = self.render_vector_dtype(dtypes.char, 16)
+        i8, i4 = self.render_vector_dtype(dtypes.int, 8), self.render_vector_dtype(dtypes.int, 4)
         if dtypes.int.vec(4) not in used_dtypes: prefix.append(self.render_vector_prefix(dtypes.int.vec(4)))
         prefix.append(f"static inline __attribute__((device)) {i8} __{name}({c16} a, {c16} b, {i8} c) {{\n"
                       f"  return __builtin_amdgcn_wmma_i32_16x16x16_iu8_w32(true, *({i4}*)&a, true, *({i4}*)&b, c, false);\n}}")

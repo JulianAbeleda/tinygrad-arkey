@@ -1,5 +1,7 @@
 import unittest
 from tinygrad.device import CompileError, Device, BufferSpec
+from tinygrad.dtype import dtypes
+from tinygrad.helpers import Target
 if Device.DEFAULT=="METAL":
   from tinygrad.runtime.ops_metal import MetalDevice, MetalCompiler, MetalProgram
 @unittest.skipIf(Device.DEFAULT!="METAL", "Metal support required")
@@ -66,3 +68,13 @@ kernel void r_5(device int* data0, const device int* data1, uint3 gid [[threadgr
     self.assertGreaterEqual(free, 0)
     self.assertLessEqual(free, total)
     self.assertGreater(Device['METAL'].allocator.allocation_granularity, 0)
+
+  def test_renderer_uses_native_msl_vector_names(self):
+    from tinygrad.renderer.cstyle import MetalRenderer
+    renderer = MetalRenderer(Target("METAL", arch="Apple9"))
+    self.assertEqual(renderer.render_scalar_dtype(dtypes.uint32.vec(2)), "uint")
+    self.assertEqual(renderer.render_vector_dtype(dtypes.uint32, 2), "uint2")
+    self.assertEqual(renderer.render_vector_dtype(dtypes.uint16, 4), "ushort4")
+    # Like upstream, render_dtype is scalar-only even while legacy vector DTypes still exist internally.
+    self.assertEqual(renderer.render_dtype(dtypes.uint32.vec(2)), "uint")
+    self.assertEqual(renderer.render_dtype(dtypes.uint16.vec(4)), "ushort")
