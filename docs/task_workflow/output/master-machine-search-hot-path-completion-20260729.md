@@ -41,6 +41,10 @@ Master removed all 97 tracked files under `extra/llm_research` plus research-onl
   production imports from that namespace.
 - The public `python -m tinygrad.llm --help` and metadata-only benchmark surfaces run from master.
 
+Final allocator closure: master `60aff50d3f4bba47dbd8ac916b46461083f1237c` publishes the allocator fact consumed by
+the selected-GGUF admission scan (4 KiB KFD, 2 MiB AM large-allocation tier). The expanded master matrix is
+**141 passed**, and the exact memory-ledger matrix is **27 passed, 1 skipped**. Unknown backends still fail closed.
+
 The 8B AMD recertification command was attempted from clean master under `/tmp/gpu-bench.lock` with the qualified host
 environment. It did not reach model allocation or execute a kernel: the live probe returned
 `No interface for AMD:0 is available`. Therefore this completion does not claim a new throughput number. The retained
