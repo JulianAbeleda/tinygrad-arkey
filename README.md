@@ -160,7 +160,7 @@ are shared in `tinygrad/llm/route_selection.py`.
 
 | Phase | Canonical variable | Values | Default behavior |
 |---|---|---|---|
-| Prefill | `TINYGRAD_PREFILL_ROUTE` | `auto`, `packed_wmma`, `direct_packed`, `fp16` | `auto` selects the promoted route admitted by structural facts; forcing an unsafe quarantined route fails loudly. |
+| Prefill | `TINYGRAD_PREFILL_ROUTE` | `auto`, `packed_wmma`, `fp16` | `auto` selects an exact promoted row; every decline uses ordinary tinygrad graph lowering. The legacy `direct_packed` spelling maps to `fp16`. |
 | Decode | `TINYGRAD_DECODE_ROUTE` | `auto`, `flash`, `fp16` | `auto` uses SDPA for shallow context and the admitted flash candidate at the configured threshold. |
 
 The legacy `TINYGRAD_PREFILL_PACKED_WMMA` and `FLASH_DECODE` variables remain compatibility aliases. They do not promise that every model has a usable implementation for every forced mode. New automation should use the canonical variables above. Invalid or quarantined selections fail loudly.
@@ -170,10 +170,8 @@ Route ownership is structural rather than model-name based:
 - 8B's resident fp16 projections own dense tensor-core warmstarts only after `_pf16_w` overlays are realized.
 - 14B's packed-only projections do not receive dense warmstarts; this prevents shape-key collisions with
   unrelated reductions. Its promoted packed-WMMA route remains available.
-- The Hq=40/Hkv=8 direct-packed implementation is quarantined after repeatable GPU MMU faults. The quarantine
-  applies only to that implementation, not to the shared structural binding used by packed-WMMA.
-- `auto` never dispatches the quarantined direct implementation. Forcing it fails during model setup rather
-  than after GPU submission.
+- The old specialized direct-packed Q4/Q6 rollback kernels are not part of production. They remain dev/exp
+  qualification oracles; master falls through to ordinary tinygrad lowering.
 
 Validated on 2026-07-27 on RX 7900 XTX/gfx1100: actual ctx128 completed on SDPA for both models; promoted
 master decode measured 114.19 / 103.07 tok/s on 8B and 69.70 / 62.45 on 14B at ctx512 / ctx4096; 14B
@@ -181,7 +179,9 @@ prefill endpoint medians were 2026 at pp512 and 1880 at pp4096. The 8B warmed pp
 3768 tok/s. The single 8B prefill control remains a bounded route-regression check, not a replacement for
 the multi-run prefill authority table.
 
-**Measurement discipline:** report prefill/decode throughput only from the authority harnesses via `extra/llm_research/bench.py` (below). Never report throughput from a `model.generate` TTFT bench; it includes unrelated Python, sampling, and host overhead.
+**Measurement discipline:** the public command below is a self-contained hot-path reproduction and route check.
+Published authority numbers still require the exact commit/model/target, route identities, warmups, repeated samples,
+and a clean device-health record; a single TTFT observation is not a publication result.
 
 ## Running it
 
@@ -197,18 +197,21 @@ You need an AMD GPU, the AMD backend working, and a GGUF model file. Most curren
 An explicit `--max_context N` is admission-checked and may select a supported exact tier to honor the request, failing loudly if none fits. Decode route selection is based on live context and admitted structural facts rather than allocating work merely because `max_context` is large.
 
 ```sh
-# THE benchmark — the single canonical entry. Dispatches to the synced authority harnesses (prefill + decode),
-# each in an isolated subprocess with the correct env. This is the ONLY sanctioned way to report throughput.
-DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python extra/llm_research/bench.py --model /path/to/Qwen3-8B-Q4_K_M.gguf
-#   --prefill  : prefill authority only (extra/llm_research/prefill/prefill_whole_synced.py, synced graph-GEMM pp@L)
-#   --decode   : genuine fixed-depth decode (exact prompt prefill, production generate route, repeated medians)
+DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python -m tinygrad.llm \
+  --model /path/to/Qwen3-8B-Q4_K_M.gguf --max_context 8192 \
+  --warmup --benchmark-context 512 --benchmark 20
+
+DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python -m tinygrad.llm \
+  --model /path/to/Qwen3-8B-Q4_K_M.gguf --max_context 8192 \
+  --warmup --benchmark-context 4096 --benchmark 20
 ```
 
-**Do not roll your own throughput harness, and never report a `model.generate` TTFT number** — TTFT understates prefill by ~3× (it folds in generate's Python overhead + sampling + host jitter). If you need a route/purity check instead of a number, start with:
+These commands print full-prompt prefill throughput, selected candidate identities, and steady decode samples from
+the production runtime. See [`tinygrad/llm/README.md`](tinygrad/llm/README.md) for interpretation and reference points.
+For a CPU-only generic control record:
 
 ```sh
-PYTHONPATH=. .venv/bin/python extra/audit/pure_machine_search_default_path_census.py --check
-PYTHONPATH=. .venv/bin/python extra/audit/pure_machine_search_default_path_census.py --strict-final-default
+PYTHONPATH=. .venv/bin/python -m tinygrad.llm.bench --metadata-only --target CPU
 ```
 
 ## Main Files
@@ -216,13 +219,11 @@ PYTHONPATH=. .venv/bin/python extra/audit/pure_machine_search_default_path_censu
 Start with these files and the documentation map in [docs/README.md](docs/README.md):
 
 * `tinygrad/llm/` — the core runtime (command line, model, model-file loader).
-* `extra/llm_research/decode/decode_harness.py` — decode speed across context lengths.
-* `extra/llm_research/prefill/prefill_whole_synced.py` — prefill speed.
-* `extra/audit/pure_machine_search_default_path_census.py` — current generated/default-route census.
-* `extra/llm_research/route_manifest.py` — candidate registry and provenance input. Runtime policy validates selected manifest rows rather than treating the manifest global as semantic authority.
-* `extra/llm_research/decode/flash_decode_attention_spec.py`, `extra/llm_research/decode/flash_decode_attention_executor.py` — generated flash/decode attention routes.
-* `extra/llm_research/gemv_g3_codegen_lowering.py`, `extra/llm_research/q6k_route_spec.py`, `extra/llm_research/prefill/prefill_graph_gemm_route.py` — generated route/runtime surfaces.
-* `extra/llm_research/prefill/packed_wmma_prefill_candidates.py` — the packed-WMMA prefill candidates that are the 14B default (frozen per-(quant,role) geometry + load-time correctness gate).
+* `tinygrad/llm/decode_kernels.py` — searched Q4 G3 and Q6 decode lowerings.
+* `tinygrad/llm/flash_decode_attention.py` — promoted G4/G5 live-split decode attention.
+* `tinygrad/llm/prefill_graph_gemm.py` — searched 8B WMMA-LDS graph-prefill executor.
+* `tinygrad/llm/packed_wmma_prefill.py` — frozen six-row 14B packed-WMMA executor.
+* `tinygrad/llm/prefill_candidate_runtime.py` — compact exact candidate-set decoder/admission.
 * `extra/llm_research/microbench/wmma_peak.cpp` — measured achievable WMMA peak (~105 TFLOPS on gfx1100); use it as the denominator for any efficiency claim.
 
 A private tool owns search/audit adapters, interchange schemas, evaluation policy, ledgers, roofline attribution, and reports. tinygrad owns runtime model facts, route admission and execution, compiler/backend lowering, and hardware gates. Profiler adapters do not imply that decode hardware-counter attribution is complete.
