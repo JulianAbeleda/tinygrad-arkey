@@ -130,7 +130,7 @@ Fork rules (the tinygrad-specific form of "Prefer data over code" and
 
 - **Env ordering is sacred:** `DEV`/`JIT`/`QK_PRIMITIVE_STORAGE` and the
   Q4K/Q6K primitive flags must be set **before** `from tinygrad import ...`.
-  Shared generation code (`extra/llm/generate.py`) imports tinygrad lazily so the
+  Shared generation code (`tinygrad/llm/generate.py`) imports tinygrad lazily so the
   module can be imported without freezing the environment.
 - **Subprocess isolation for generation is intentional:** the eval harness spawns
   a child per policy mode for clean per-run AMD/JIT device state + a JSON summary

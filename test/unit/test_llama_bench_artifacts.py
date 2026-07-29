@@ -3,8 +3,8 @@ from unittest import mock
 
 import pytest
 
-from extra.llm.llama_bench import atomic_write_json, summarize_row
-from extra.llm.model_authority_bench import run_decode_authority, validate_matched
+from extra.llm.bench.llama_bench import atomic_write_json, summarize_row
+from extra.llm.bench.model_authority_bench import run_decode_authority, validate_matched
 
 
 def test_summarize_row_uses_median_and_retains_samples():
@@ -37,7 +37,7 @@ def test_decode_runner_reads_only_unique_invocation_output(tmp_path):
     out.write_text(json.dumps({"artifact_version": 2, "rows": []}))
     return mock.Mock(returncode=0)
 
-  with mock.patch("extra.llm.model_authority_bench.subprocess.run", side_effect=fake_run):
+  with mock.patch("extra.llm.bench.model_authority_bench.subprocess.run", side_effect=fake_run):
     got = run_decode_authority("model.gguf", "128", 3, 16, tmp_path)
   assert got["artifact_version"] == 2
   assert "--reps" in got["producer_command"] and "--out" in got["producer_command"]

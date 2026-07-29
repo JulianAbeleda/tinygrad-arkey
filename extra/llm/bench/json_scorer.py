@@ -1,4 +1,5 @@
 from __future__ import annotations
+# Qualification/evaluation helper; kept beside the benchmark harnesses.
 
 import json, math
 from typing import Any

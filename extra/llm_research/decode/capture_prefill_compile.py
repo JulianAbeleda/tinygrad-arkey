@@ -53,7 +53,7 @@ def main() -> int:
                   "chunk_size": args.chunk_size, "profile": 0, "pmc": 0, "pmc_graph": 0,
                   "sources": records}
   try:
-    from extra.llm.generate import load_model_and_tokenizer
+    from tinygrad.llm.generate import load_model_and_tokenizer
     model, tokenizer = load_model_and_tokenizer(args.model, args.max_context, seed=20260617)
     base = (tokenizer.prefix() if hasattr(tokenizer, "prefix") else []) + tokenizer.encode(
       "the quick brown fox jumps. " * 800)

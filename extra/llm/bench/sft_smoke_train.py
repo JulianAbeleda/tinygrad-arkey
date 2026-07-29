@@ -10,7 +10,7 @@ from typing import Any
 import numpy as np
 
 from tinygrad import Device, Tensor
-from extra.llm.eval_common import md_text, read_id_jsonl
+from extra.llm.bench.eval_common import md_text, read_id_jsonl
 
 
 def _load_jsonl(path: pathlib.Path) -> list[dict[str, Any]]:

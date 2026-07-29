@@ -155,7 +155,7 @@ def main(argv:list[str] | None=None) -> int:
                                max_context=args.max_context, nmeas=args.nmeas)
 
   from tinygrad import Device
-  from extra.llm.generate import load_model_and_tokenizer
+  from tinygrad.llm.generate import load_model_and_tokenizer
 
   dev = Device[Device.DEFAULT]
   model, tokenizer = load_model_and_tokenizer(args.model, profile.max_context, seed=20260617)

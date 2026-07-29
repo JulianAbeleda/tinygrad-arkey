@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from tinygrad import Tensor, nn
-from extra.llm.model_e2e_bench import qualify_decode_correctness
+from extra.llm.bench.model_e2e_bench import qualify_decode_correctness
 from tinygrad.helpers import Context
 from tinygrad.llm.model import Transformer, TransformerConfig
 import tinygrad.llm.model as model_module

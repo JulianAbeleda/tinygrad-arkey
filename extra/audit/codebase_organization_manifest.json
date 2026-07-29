@@ -1181,7 +1181,7 @@
       "duplication_group": null,
       "evidence": [
         "extra/llm_research/decode/decode_harness.py:59 decode_authority_argv builds this file's exact CLI",
-        "grep: extra/llm/model_authority_bench.py and model_e2e_bench.py both reference this harness",
+        "grep: extra/llm/bench/model_authority_bench.py and model_e2e_bench.py both reference this harness",
         "docs/HANDOFF_14b_decode_depth_decay_20260726.md names this as the tool used for the 14B decode-depth investigation"
       ],
       "path": "extra/llm_research/decode/decode_runtime_overhead.py",

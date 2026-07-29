@@ -1,4 +1,5 @@
 #!/bin/sh
+# Backend setup helper.
 install_loc="$HOME/.local/bin"
 docker build --platform=linux/arm64 -t cuda-nvcc:12.8 - <<'EOF'
 FROM ubuntu:22.04

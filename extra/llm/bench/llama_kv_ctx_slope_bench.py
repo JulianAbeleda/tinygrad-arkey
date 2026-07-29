@@ -16,7 +16,7 @@ from __future__ import annotations
 import argparse, json, math, pathlib, struct
 from typing import Any, Callable
 
-from extra.llm.llama_bench import LLAMA_BENCH_BIN as DEFAULT_LLAMA_BENCH, build_llama_bench_cmd, run_llama_bench_cmd, llama_tg_rows
+from extra.llm.bench.llama_bench import LLAMA_BENCH_BIN as DEFAULT_LLAMA_BENCH, build_llama_bench_cmd, run_llama_bench_cmd, llama_tg_rows
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 

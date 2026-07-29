@@ -1,9 +1,10 @@
 #!/bin/bash
+# Backend setup helper.
 INSTALL_PATH="${1:-/opt/homebrew/lib}"
 if [ ! -d "$INSTALL_PATH" ]; then
     USER=$(whoami)
     echo "No path $INSTALL_PATH. Will create. Might need your password..."
-    echo "You can stop now and provide any location as an argument where you want to save the library (note, that not default locations should be in LD_LIBRARY_PATH, so tinygrad can find it)."
+    echo "You can stop now and provide any location as an argument where you want to save the libs (note, that not default locations should be in LD_LIBRARY_PATH, so tinygrad can find the libs)."
     echo "Press any key or symbol to continue..."
     read -n 1 -s
 

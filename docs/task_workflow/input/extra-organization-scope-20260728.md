@@ -24,7 +24,7 @@ The current tree contains 198 tracked files:
 |---|---:|---|---|---|
 | `extra/audit/**` | 8 | organization, lowering, fingerprint, compatibility, and boundary authorities | `extra/audit/**` | `master` |
 | `extra/tools/**` | 2 | repository integrity and ISA-generation tools | `extra/tools/**` | `master` |
-| `extra/llm/**` | 11 | mixed CLI, generation, evaluation, and benchmark tooling | `extra/llm/cli.py` plus `extra/llm/bench/**` | split: `master` CLI, `dev` benchmarks |
+| `extra/llm/**` | 11 | mixed CLI, generation, evaluation, and benchmark tooling | `tinygrad/llm/{cli,generate,adapter}.py` plus `extra/llm/bench/**` | split: `master` CLI, `dev` benchmarks |
 | `extra/llm_research/**` | 97 | mixed LLM runtime dependencies, codegen, scheduling, research, gates, and evidence | subdomains under `extra/llm_research/**` after runtime split | `exp`, with explicit migration exceptions |
 | `extra/gpu_fault_analysis/**` | 2 | GPU fault and allocator reproducers | `extra/debug/gpu_fault_analysis/**` | `dev` |
 | `extra/hardware/**` | 23 | PCI, PSP/GART, recovery, profiling, and trace tooling | `extra/debug/hardware/**` plus `extra/profiling/sqtt/**` | `dev`; SQTT boundary unresolved |

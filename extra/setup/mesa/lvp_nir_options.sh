@@ -1,4 +1,5 @@
 #!/bin/sh
+# Repository setup helper for the Mesa/LVP backend.
 
 if [ "$#" -ne 1 ] || ! [ -d $1 ]; then
   echo "usage: $0 MESA_PREFIX"
