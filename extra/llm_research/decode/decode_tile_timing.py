@@ -32,7 +32,7 @@ def run(hq: int, tc: int, *, splits: int = DEFAULT_SPLITS, warmups: int = 3, sam
   cfg = normalize_config(hq, tc, splits)
   os.environ.setdefault("DEV", "AMD")
   from tinygrad import Device, Tensor, TinyJit
-  from extra.llm_research.decode.flash_decode_attention_executor import flash_decode_live_split_block_tile
+  from tinygrad.llm.flash_decode_attention import flash_decode_live_split_block_tile
   rng = np.random.default_rng(20260726 + cfg["Hq"] + cfg["Tc"])
   q = Tensor(rng.normal(0, .04, (1, cfg["Hq"], 1, H_D)).astype(np.float16), device="AMD")
   cache_np = np.zeros((2, 1, H_KV, MAX_CONTEXT, H_D), dtype=np.float16)

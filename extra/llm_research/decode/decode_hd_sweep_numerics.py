@@ -9,7 +9,7 @@ the emitter is believed Hd-generic (R=Hd//LANES, RP=Hd//64, W=Hd+2, scale=1/Hd**
 constraint Hd%64==0 -- see flash_kernels.py line ~25) but that has never been run end-to-end.
 
 REAL entry point driven (not reimplemented, not a toy):
-  extra/llm_research/decode/flash_decode_attention_executor.py:10 flash_decode_live_split_block_tile(...)
+  tinygrad/llm/flash_decode_attention.py flash_decode_live_split_block_tile(...)
 This is the EXACT function tinygrad/llm/decode_routes.py:157 (flash_decode_attention_route) calls
 for the production 8B/14B decode graph -- see tinygrad/llm/model.py:597. It wires
 Q/cache -> FlashDecodeAttentionSpec -> custom_kernel tile emit -> custom_kernel fused-combine emit,
@@ -52,7 +52,7 @@ import numpy as np
 from tinygrad import Tensor, dtypes
 
 from extra.llm_research.attention_harness_common import causal_mask, reference_attention
-from extra.llm_research.decode.flash_decode_attention_executor import flash_decode_live_split_block_tile
+from tinygrad.llm.flash_decode_attention import flash_decode_live_split_block_tile
 
 HQ, HKV = 32, 8          # real 8B GQA shape (G=Hq/Hkv=4); Hkv/G are orthogonal to the Hd question here
 MAXC = 512               # synthetic ring/cache capacity
@@ -81,7 +81,7 @@ def run_hd(hd: int) -> str:
   cache = Tensor(cache_np, device="AMD")
 
   # q flattened head-major to (Hq*Hd,), matching q.reshape(binding.Hq, binding.Hd) at decode_routes.py:157
-  # (executor itself does q.reshape(Hq*Hd) at flash_decode_attention_executor.py:14).
+  # (the production executor performs the corresponding query reshape).
   q_dev = Tensor(qn, device="AMD")  # (1, Hq, 1, Hd)
 
   out = flash_decode_live_split_block_tile(

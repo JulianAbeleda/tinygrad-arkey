@@ -17,7 +17,7 @@ _SHARED_ATTENTION_PROOF_FIELDS makes this explicit: promotion requires decode_no
 decode_nonregression_14b, because "enabling one shared compiler path changes both supported model routes".
 
 This script proves or refutes non-regression the cheap way: compile the REAL decode kernels (the exact
-emitters tinygrad/llm/decode_routes.py drives, via extra/llm_research/decode/flash_decode_attention_executor.py --
+emitters tinygrad/llm/decode_routes.py drives, via tinygrad/llm/flash_decode_attention.py --
 NOT flash_kernels' raw callables, which are factory functions with no .key and cannot be handed to
 to_program) and sha256 the resulting AMD code objects. Byte-identical code objects mean decode's machine
 code is untouched, which is a stronger statement than any throughput measurement.
@@ -67,7 +67,7 @@ def collect() -> dict:
   from tinygrad import Tensor, dtypes
   from tinygrad.device import Compiler
   from tinygrad.helpers import getenv
-  from extra.llm_research.decode.flash_decode_attention_executor import flash_decode_live_split_block_tile
+  from tinygrad.llm.flash_decode_attention import flash_decode_live_split_block_tile
 
   captured: list[dict] = []
   orig = Compiler.compile_cached
