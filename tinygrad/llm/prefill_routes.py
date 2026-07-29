@@ -10,8 +10,9 @@ from tinygrad.llm.model_facts import packed_linear_quant, route_role_for_linear
 from tinygrad.llm.prefill_graph_gemm import route_pf16_graph_gemm
 from tinygrad.llm.memory_semantics import (prefill_activation as _prefill_activation,
   prefill_output as _prefill_output, prefill_scratch as _prefill_scratch)
-from tinygrad.llm.prefill_route_observer import (PrefillDirectPackedBinding, PrefillRouteAttachment, notify_prefill_route,
-                                                 prefill_route_scope_active)
+from tinygrad.llm.admission import bounded_packed_projection_proven_eligible
+from tinygrad.llm.prefill_attachments import PrefillDirectPackedBinding, PrefillRouteAttachment
+from tinygrad.llm.prefill_route_observer import notify_prefill_route, prefill_route_scope_active
 from tinygrad.llm.route_selection import RouteCandidatePolicy, RouteLifecycle, parse_route_mode
 from tinygrad.uop.ops import UOp
 
@@ -76,7 +77,6 @@ def _attached_production_route(lin, x: Tensor) -> str | None:
   if attachment.route_id in baseline_ids:
     return "packed_wmma"
   if policy.get("strategy") == "BOUNDED_PACKED_TILES":
-    from tinygrad.llm.prefill_policy import bounded_packed_projection_proven_eligible
     proof = policy.get("bounded_packed_projection_proof", {})
     if (bounded_packed_projection_proven_eligible(policy, facts) and attachment.allocation_owner_identity ==
         proof.get("allocation_owner_identity")):
