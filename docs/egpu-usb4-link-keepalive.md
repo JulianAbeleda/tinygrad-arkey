@@ -192,9 +192,12 @@ explicit: 1.7B is repository-proven; the larger Mac runs are operator-attested.
 
 Two independent problems then overlapped:
 
-1. The Mac eGPU intermittently went away and recovery commonly required a reboot. That
-   slowed the test loop even when inference itself was working. Moving the GPU to native
-   Linux made resets and repeated kernel experiments much easier; it was an operational
+1. On the Mac/Thunderbolt path, an available but unserved GPU did not reliably remain at
+   idle: it could power off/disappear, and recovery commonly required a reboot. The
+   operator's working mitigation was to give it VRAM-backed model work promptly after it
+   appeared and keep the model resident. The same GPU attached through the Linux
+   motherboard's native PCIe path could remain present while idle. Moving to native Linux
+   therefore made resets and repeated kernel experiments much easier; it was an operational
    choice, not a conclusion that the Mac/Thunderbolt path could not serve a model.
 2. Model throughput was low. Native Linux reproduced that performance problem without the
    Thunderbolt path, and the June sequence isolated tinygrad's kernel selection: `f4876230c`
@@ -236,6 +239,12 @@ question is therefore whether the native migration regressed the formerly workin
 or whether failure probability rises with allocation volume/DMA cadence. Cable, connector,
 host port, UT4G signal margin, and power integrity remain possible intermittent contributors,
 but a cable replacement is not the first discriminating experiment.
+
+Do not collapse the historical idle-off symptom and this latest under-load failure into one
+assumed cause. Historically, prompt VRAM/model residency helped prevent disappearance; A12
+instead failed while filling VRAM. That difference may reflect a current software regression
+or a second failure mode and is exactly why the smaller historical workload must be restored
+before changing physical variables.
 
 ### Next controlled sequence
 
