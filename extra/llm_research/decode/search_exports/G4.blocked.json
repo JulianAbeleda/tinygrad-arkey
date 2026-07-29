@@ -1,0 +1,135 @@
+{
+  "kind": "blocked",
+  "missing": {
+    "gpu": [
+      "no admitted AMD:gfx1100 target is available through a supported execution path (Linux KFD or macOS PCI+AMD)"
+    ],
+    "grammar": [
+      "only a required-topology schema exists; no value domains or cross-field constraints define an enumerable grammar",
+      "flash_kernels.py exposes a surviving hand-authored UOp factory, not an enumerable topology grammar"
+    ],
+    "run": [
+      "no route-bound executor accepts an exact complete plan and emits parity/timing evidence for the declared workloads"
+    ],
+    "search": [
+      "no enumerator/lowerer converts the required schema into complete exact plans",
+      "no ranking implementation consumes the declared correctness and timing objective"
+    ]
+  },
+  "next_action": "implement grammar, plan lowerer, route-bound runner, and provide target GPU/workload inputs; then rerun this request",
+  "request": {
+    "budget": {
+      "max_generated_plans": 256,
+      "max_measured_candidates": 64,
+      "timing_repetitions": 3
+    },
+    "correctness_constraints": {
+      "causal": true,
+      "reference": "route_reference_attention",
+      "require_gqa_mapping": true,
+      "require_online_softmax_semantics": true,
+      "require_output_parity": true
+    },
+    "kind": "search_request",
+    "objective": {
+      "primary": "minimize_route_bound_latency",
+      "ranking": "median_of_3",
+      "tie_break": "lower_max_latency"
+    },
+    "provenance_rule": "do not manufacture candidates from existing hand builder constants",
+    "request_id": "attention-topology-decode-g4-amd-gfx1100-wave32-v1",
+    "require_exact_plan": true,
+    "required_topology_fields": [
+      "tile",
+      "split",
+      "staging",
+      "gqa_grouping",
+      "online_softmax",
+      "pv",
+      "combine",
+      "causal"
+    ],
+    "required_topology_schema": {
+      "absence": [
+        "no value domains",
+        "no cross-field constraints",
+        "no enumerator",
+        "no lowerer"
+      ],
+      "candidate_authorship": "executor-generated exact plans only; no builder-constant seeding",
+      "kind": "required_topology_schema",
+      "not_a_grammar": true,
+      "route": "decode",
+      "schema": "tinygrad.attention_topology_search.v1",
+      "status": "schema_only",
+      "topology_fields": {
+        "causal": [
+          "mask_mode",
+          "query_offset",
+          "tail_validity"
+        ],
+        "combine": [
+          "partial_state_layout",
+          "merge_topology",
+          "cross_workgroup_protocol"
+        ],
+        "gqa_grouping": [
+          "query_heads_per_kv_head",
+          "workgroup_grouping",
+          "tail_policy"
+        ],
+        "online_softmax": [
+          "score_scale",
+          "max_state",
+          "denominator_state",
+          "state_merge"
+        ],
+        "pv": [
+          "value_tile",
+          "accumulator_layout",
+          "normalization"
+        ],
+        "split": [
+          "split_count",
+          "split_axis",
+          "split_schedule"
+        ],
+        "staging": [
+          "k",
+          "v",
+          "q",
+          "none"
+        ],
+        "tile": [
+          "q_tile",
+          "kv_tile",
+          "head_dim_tile",
+          "wave_count"
+        ]
+      }
+    },
+    "route": "decode",
+    "schema": "tinygrad.attention_topology_search.v1",
+    "shape": {
+      "head_dim": 128,
+      "kv_heads": 8,
+      "q_heads": 32
+    },
+    "target": {
+      "architecture": "gfx1100",
+      "backend": "AMD",
+      "wave_size": 32
+    },
+    "variant_id": "G4",
+    "workloads": [
+      {
+        "context": 512
+      },
+      {
+        "context": 4096
+      }
+    ]
+  },
+  "schema": "tinygrad.attention_topology_search.v1",
+  "status": "BLOCKED"
+}
