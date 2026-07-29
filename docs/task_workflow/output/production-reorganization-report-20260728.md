@@ -341,7 +341,7 @@ references, and recovery record agree on one final owner.
 The final matrix is recorded in `production-reorganization-final-matrix-20260729.json`. All three branch tips passed
 the organization audit (zero hard errors), runtime-boundary audit (20/20 surfaces, no leakage), `sz.py` authored-line
 budget, focused migration tests (44 passed, 1 skipped), and the documentation-link gate after installing the
-checker’s documented 74-target pre-existing archive baseline. The branches are pushed and clean before the final
+checker’s documented 74-target pre-existing archive baseline. The branches are now pushed and clean with the final
 publication record.
 
 The 57 tier blockers are explicit retained exceptions, not silent omissions: 36 TinyGPU rows remain outside `dev` and

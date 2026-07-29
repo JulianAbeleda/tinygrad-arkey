@@ -1,7 +1,7 @@
 {
   "schema": "production-reorganization-final-matrix-20260729",
   "status": "R12_PASS_WITH_EXPLICIT_FREEZE",
-  "publication": "R13_PENDING_PUBLICATION",
+  "publication": "R13_PUBLISHED",
   "scope": "production-debug-experimental filesystem cleanup migration",
   "audited_at": "2026-07-29",
   "branch_contract": {
@@ -13,7 +13,7 @@
     "exp": {
       "worktree": "/Users/julianabeleda/env/tinygrad-arkey-exp",
       "tip_before_final_record": "34c044ef3",
-      "tracked_counts": {"all": 1190, "tinygrad": 295, "extra": 200, "test": 184, "docs": 422, "bench": 43, "structure": 27},
+      "tracked_counts": {"all": 1192, "tinygrad": 295, "extra": 201, "test": 184, "docs": 423, "bench": 43, "structure": 27},
       "sz_budgeted_authored_lines": 36178,
       "sz_budget": 40000,
       "organization_audit": "ORG_R1_PASS_CENSUS_PINNED; hard_errors=0; warnings=64",
@@ -24,7 +24,7 @@
     "dev": {
       "worktree": "/Users/julianabeleda/env/tinygrad-arkey-dev",
       "tip_before_final_record": "68e630d8c",
-      "tracked_counts": {"all": 1118, "tinygrad": 292, "extra": 198, "test": 153, "docs": 379, "bench": 43, "structure": 27},
+      "tracked_counts": {"all": 1120, "tinygrad": 292, "extra": 199, "test": 153, "docs": 380, "bench": 43, "structure": 27},
       "sz_budgeted_authored_lines": 35921,
       "sz_budget": 40000,
       "organization_audit": "ORG_R1_PASS_CENSUS_PINNED; hard_errors=0; warnings=64",
@@ -35,7 +35,7 @@
     "master": {
       "worktree": "/Users/julianabeleda/env/tinygrad-arkey",
       "tip_before_final_record": "455ed52c0",
-      "tracked_counts": {"all": 1082, "tinygrad": 292, "extra": 188, "test": 127, "docs": 379, "bench": 43, "structure": 27},
+      "tracked_counts": {"all": 1084, "tinygrad": 292, "extra": 189, "test": 127, "docs": 380, "bench": 43, "structure": 27},
       "sz_budgeted_authored_lines": 35921,
       "sz_budget": 40000,
       "organization_audit": "ORG_R1_PASS_CENSUS_PINNED; hard_errors=0; warnings=65",
