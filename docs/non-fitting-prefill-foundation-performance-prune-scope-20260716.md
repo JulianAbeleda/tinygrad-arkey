@@ -231,7 +231,7 @@ extra/llm_research/bench.py --prefill
   -> synchronized production model call
 ```
 
-The llama authority is the pinned local `llama-bench` wrapper in `extra/llm/llama_bench.py`, using the same GGUF and
+The llama authority is the pinned local `llama-bench` wrapper in `dev:extra/llm/bench/llama_bench.py`, using the same GGUF and
 GPU. The command must make `-ngl`, prompt length, batch size, microbatch size, repetitions, and output format explicit.
 If `-n 0` is not accepted as a stable prompt-row mode by the installed binary, retain `-n 128` and select only the
 independent prompt row; record that choice in the artifact.

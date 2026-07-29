@@ -6,8 +6,8 @@ Runtime code changed: no.
 
 ## Findings
 
-The retained llama wrapper is `extra/llm/llama_bench.py:16-18`; callers use
-`extra/llm/llama_cpp_bench.py:29` and `extra/llm/model_authority_bench.py:36`.
+The retained llama wrapper is `dev:extra/llm/bench/llama_bench.py:16-18`; callers use
+`dev:extra/llm/bench/llama_cpp_bench.py:29` and `dev:extra/llm/bench/model_authority_bench.py:36`.
 For the normal pp512 comparison the generated command is:
 
 ```text
@@ -24,7 +24,7 @@ The installed binary (`llama-bench --help`, inspected 2026-07-15) reports:
 
 Thus `n_prompt=512` is explicit, while `n_batch=2048` and `n_ubatch=512`
 are currently implicit defaults.  The parser correctly selects the prompt
-row with `n_prompt` set and `n_gen` absent (`extra/llm/llama_bench.py:28-31`).
+row with `n_prompt` set and `n_gen` absent (`dev:extra/llm/bench/llama_bench.py:28-31`).
 The `-n 128` value does not contaminate the selected pp row, but it causes a
 decode row to be run and should be made explicit in the record for reproducibility.
 

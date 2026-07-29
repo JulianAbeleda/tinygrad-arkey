@@ -82,7 +82,7 @@ one-line `# TODO(centralize): differs from attention_harness_common.<fn>` note. 
 1. Behavior must be byte-identical. These are proof-gated numeric benchmarks; a changed reference/mask/seed/sha
    silently invalidates artifacts. Extract VERBATIM; do not "improve".
 2. Do NOT touch: `extra/llm_research/prefill/prefill_harness.py` and `extra/llm_research/model_profiles.py` (config, already central);
-   `extra/llm/eval_common.py` (JSON/eval plumbing — out of scope here).
+   `dev:extra/llm/bench/eval_common.py` (JSON/eval plumbing — out of scope here).
 3. Do NOT change any harness's CLI, output schema, artifact contents, or numeric tolerances.
 4. `reference_attention` must remain the exact `scaled_dot_product_attention` + `repeat_interleave(hq//hkv)`
    form — this is the correctness golden; any deviation is a false-pass risk.

@@ -65,7 +65,7 @@ reported separately below. Comparisons use the same box and GGUFs.
 
 Decode is now measured by the **fixed-depth authority** (`extra/llm_research/decode/decode_runtime_overhead.py`,
 `tinygrad.decode.fixed_depth.v2`), which prefills to exactly the stated context before timing, so the ctx
-columns are real decode depth. The previous table came from `extra/llm/model_e2e_bench.py`, which decodes
+columns are real decode depth. The previous dev/exp benchmark table came from `extra/llm/bench/model_e2e_bench.py`, which decodes
 from a **one-token seed** over a growing window — its ctx labels described KV *allocation*, not depth, and
 its numbers are not comparable to these. The current llama depth authority is `llama-bench -p 512 -n 40
 -d 512,4096 -ngl 99 -r 3 -o json` (`-d` = fixed KV depth), auto clock.

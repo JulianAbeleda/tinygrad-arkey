@@ -91,7 +91,7 @@ Notes: hangs **even with `PARALLEL=0`** (so it is not solely the parallel-compil
 2. **Stuck compile / generation worker SUBPROCESSES.** The hung process spawns child
    pythons (`2952508`, `2952509`) + a thread pool. Even `PARALLEL=0` hangs, so suspect
    the **subprocess-isolation-for-generation** path (per structure/ overrides:
-   `extra/llm/generate.py` spawns a child per policy mode) and/or a compile worker that
+   `tinygrad/llm/generate.py` spawns a child per policy mode) and/or a compile worker that
    deadlocks on a leaked lock/semaphore. Check for leaked IPC: `ipcs -m`, `ipcs -s`,
    `ls /dev/shm`. A dozen SIGKILL'd runs this session likely leaked shm/semaphores that
    a fresh run then blocks on.

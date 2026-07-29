@@ -909,7 +909,7 @@
       "domain": "evidence",
       "duplication_group": null,
       "evidence": [
-        "extra/llm_research/decode/capture_prefill_compile.py has no runtime importer; it patches HIPCompiler/HIPCCCompiler and invokes extra.llm.generate as a compile reproducer",
+        "extra/llm_research/decode/capture_prefill_compile.py has no runtime importer; it patches HIPCompiler/HIPCCCompiler and invokes tinygrad.llm.generate as a compile reproducer",
         "Packet A runtime/tooling census assigns this file to dev until the vector-stack-lvalue compile conclusion is banked",
         "recovery commit 5266ca605 introduced the reproducer alongside the renderer fix"
       ],
@@ -1181,7 +1181,7 @@
       "duplication_group": null,
       "evidence": [
         "extra/llm_research/decode/decode_harness.py:59 decode_authority_argv builds this file's exact CLI",
-        "grep: extra/llm/model_authority_bench.py and model_e2e_bench.py both reference this harness",
+        "grep: dev:extra/llm/bench/model_authority_bench.py and model_e2e_bench.py both reference this harness",
         "docs/HANDOFF_14b_decode_depth_decay_20260726.md names this as the tool used for the 14B decode-depth investigation"
       ],
       "path": "extra/llm_research/decode/decode_runtime_overhead.py",

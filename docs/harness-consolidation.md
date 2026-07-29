@@ -42,7 +42,7 @@ shared `result.json`.
 | prefill process profile/env/argv | `extra/llm_research/prefill/prefill_harness.py` | DONE |
 | decode process profile/env/argv | `extra/llm_research/decode/decode_harness.py` | DONE |
 | per-kernel timing loop | local harness loop / future explicit owner | open |
-| eval/scoring (NLL + JSON) | `extra/llm/eval_common.py` + `json_scorer.py` | ok |
+| eval/scoring (NLL + JSON) | `dev:extra/llm/bench/eval_common.py` + `json_scorer.py` | ok |
 | provenance / repro-band | local to each live harness | ok (`extra/qk/harness_contract.py` removed) |
 | GPU clock pinning | `extra/llm_research/clock_pin.py` | ok (2 idioms, justified) |
 | model load + generate | `extra/llm/generate.load_model_and_tokenizer` | ok (loader); dead `generate_one` (item 3) |
@@ -74,7 +74,7 @@ shared `result.json`.
 3. **Delete dead `generate.generate_one` + `configure_process_env`** — zero importers; the callers
    its docstring names (`llm_rollout.py`, `llm_eval_harness.py`) no longer exist. **DEFERRED**
    (edits `generate.py`).
-4. ~~Unify the 3 `llama-bench` wrappers~~ **DONE.** `extra/llm/llama_bench.py` owns the shared
+4. ~~Unify the 3 `llama-bench` wrappers~~ **DONE.** `dev:extra/llm/bench/llama_bench.py` owns the shared
    binary path, argv construction, json parse, and pp/tg row classification used by
    `llama_cpp_bench.py` and `model_authority_bench.py`.
 5. ~~Merge the two `child_env` builders~~ **WITHDRAWN (2026-07-03, verified in-tree).** Same name, different
@@ -157,11 +157,11 @@ scaffolding from the removed rollout harnesses (same generation as `generate_one
   - Renamed the documented survivor `harness_contract.child_env` → **`qk_subprocess_env`** (declarative;
     no same-named twin remains). This is the "if it's the same name, rename it better" fix.
   - Side-fix: Step 3's deletion had removed a `build_prompt_ids` re-export that `prefilled_route_parity`
-    relied on; repointed that caller at its canonical home `extra.llm.eval_common`.
+    relied on; repointed that caller at its canonical home `dev:extra.llm.bench.eval_common`.
 
 ## Step 6 — ~~unify the 3 `llama-bench` wrappers~~ done
 
-`extra/llm/llama_bench.py` now owns this shared job for the retained callers in this slice.
+`dev:extra/llm/bench/llama_bench.py` now owns this shared job for the retained callers in this slice.
 
 ## Not to do
 
