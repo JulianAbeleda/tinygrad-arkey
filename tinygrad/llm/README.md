@@ -58,18 +58,20 @@ model hash, target, selected identities, warmups, and sample count.
 
 ## Runtime files
 
-- `model.py`: transformer blocks, model construction, cache allocation, and generation. It may call policy helpers, but should not grow new standalone admission or registry logic.
-- `decode_routes.py`: runtime decode selection using `decode_kernels.py` and `flash_decode_attention.py`.
-- `route_policy.py`: policy-file parsing and validation for generated/QK routes.
+- `model.py`: transformer blocks, model construction, cache allocation, generation, and composition of resolved route decisions. It should not grow standalone admission, attachment, or registry policy.
+- `model_route_plan.py`: static model-route planning plus the compatibility parser for serialized generated/QK route artifacts.
+- `decode_routes.py`: decode route-mode parsing and the decode context/shape gate, using `decode_kernels.py` and `flash_decode_attention.py` to execute an admitted route.
 - `prefill_graph_gemm.py` and `packed_wmma_prefill.py`: searched prefill executors and frozen selected configurations.
-- `prefill_candidate_runtime.py`: compact candidate-set admission for the graph-WMMA route.
+- `prefill_candidate_runtime.py`: promoted prefill candidate-set decoding and typed executor binding.
+- `prefill_attachments.py`: immutable prefill attachment values and the atomic load-time installer for a selected inventory.
 - `qk_primitives.py`: Q4_K/Q6_K primitive wrappers, install-time storage policy, and GGUF-backed primitive installation.
 
 ## Control-plane files
 
-- `admission.py`: VRAM probes and max-context/KV-tier admission arithmetic. Keep it pure and unit-testable.
-- `prefill_policy.py`: pure prefill policy decisions and validation helpers. Runtime flags stay in `model.py`.
+- `admission.py`: VRAM probes, max-context/KV-tier arithmetic, and pure prefill policy/proof admission. Keep it pure and unit-testable.
 - `gguf.py`: GGUF parsing/loading. Header-only metadata readers belong here, not in `model.py`.
-- `cli.py`: CLI/server wiring only. It should not own model policy arithmetic.
+- `runtime_state.py`: process-wide tokenizer, model registry, and service lifecycle state. It depends on the model domain, never on CLI presentation.
+- `cli.py`: command-line/server presentation and argument wiring only. It should not own service state or model policy arithmetic.
+- `prefill_route_observer.py`: context-local route telemetry only; it neither selects nor attaches routes.
 
-When adding a new feature, prefer placing the policy in a small module and threading the resolved result into `TransformerConfig`. `model.py` should consume resolved decisions, not become the source of every decision.
+When adding a new feature, give one domain module ownership of its decision and thread the resolved result into `TransformerConfig`. `model.py` should consume resolved decisions, not become the source of every decision.
