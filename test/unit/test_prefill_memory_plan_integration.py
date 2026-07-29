@@ -56,7 +56,12 @@ def test_explicit_safe_overlay_is_selected_and_serialized():
                                                            overlay_requested=True)
   assert plan.decision is Strategy.FULL_RESIDENT_OVERLAY
   assert effective is Strategy.FULL_RESIDENT_OVERLAY
-  assert json.loads(admission.prefill_memory_plan)["decision"] == Strategy.FULL_RESIDENT_OVERLAY.value
+  payload = json.loads(admission.prefill_memory_plan)
+  assert payload["decision"] == Strategy.FULL_RESIDENT_OVERLAY.value
+  # Legacy reporting fields stay available, while the nested scanned budget is
+  # the single allocation-admission authority used by the planner.
+  assert {"total_bytes", "free_bytes", "safety_reserve", "provenance"} <= set(payload["device"])
+  assert payload["device"]["scanned_budget"]["admitted_bytes"] == plan.admitted_budget_bytes
 
 
 def test_non_overlay_plan_never_walks_or_realizes_pf16_weights():

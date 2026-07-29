@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 import json
 from typing import Any, Iterable
+from tinygrad.llm.memory_ledger import ScannedMemoryBudget
 
 PREFILL_MEMORY_PLAN_SCHEMA = "tinygrad.prefill_memory_plan.v1"
 
@@ -46,16 +47,30 @@ class ByteTerm:
 
 @dataclass(frozen=True)
 class DeviceMemoryFacts:
-  total_bytes:int|None; free_bytes:int|None; safety_reserve:ByteTerm; provenance:str
+  """Strategy-planner reporting facts plus the authoritative scanned budget.
+
+  ``total_bytes`` and ``safety_reserve`` remain serialized for compatibility and
+  diagnostics.  The planner deliberately never derives its admitted capacity
+  from them: ``scanned_budget`` is the one-way allocation-admission authority.
+  """
+  total_bytes:int|None; scanned_budget:ScannedMemoryBudget; safety_reserve:ByteTerm; provenance:str
 
   def __post_init__(self) -> None:
-    for name in ("total_bytes", "free_bytes"): _optional_bytes(name, getattr(self, name))
+    _optional_bytes("total_bytes", self.total_bytes)
     if self.safety_reserve.lifetime is not ByteLifetime.SAFETY_RESERVE:
       raise ValueError("device safety_reserve must have SAFETY_RESERVE lifetime")
     if not self.provenance: raise ValueError("device memory facts require provenance")
+    if self.safety_reserve.bytes != self.scanned_budget.reserve_bytes:
+      raise ValueError("device safety_reserve must mirror the authoritative scanned budget reserve")
+
+  @property
+  def free_bytes(self) -> int|None:
+    """Compatibility/reporting view; not a separate planning input."""
+    return self.scanned_budget.free_bytes
 
   def to_dict(self) -> dict[str, Any]: return {"total_bytes": self.total_bytes, "free_bytes": self.free_bytes,
-    "safety_reserve": self.safety_reserve.to_dict(), "provenance": self.provenance}
+    "safety_reserve": self.safety_reserve.to_dict(), "provenance": self.provenance,
+    "scanned_budget": self.scanned_budget.to_dict()}
 
 
 @dataclass(frozen=True)
@@ -127,9 +142,9 @@ def plan_prefill_memory(*, device: DeviceMemoryFacts, base_terms: Iterable[ByteT
   allowed = None if override is None else tuple(sorted({override} if isinstance(override, Strategy) else set(override), key=lambda x: x.value))
   if allowed is not None and Strategy.REFUSE in allowed: raise ValueError("REFUSE cannot be used as a strategy override")
 
-  reserve = device.safety_reserve.bytes
-  available = None if device.total_bytes is None or device.free_bytes is None else min(device.total_bytes, device.free_bytes)
-  budget = None if available is None or reserve is None else max(0, available - reserve)
+  # `DeviceMemoryFacts` retains total/free/reserve for report compatibility,
+  # but only the allocation-admission scan establishes the usable budget.
+  budget = device.scanned_budget.admitted_bytes
   base_peak = _known_sum(bases)
   decisions: list[CandidateDecision] = []
   for cand in sorted(cands, key=lambda x: (x.strategy.value, x.candidate_id)):
