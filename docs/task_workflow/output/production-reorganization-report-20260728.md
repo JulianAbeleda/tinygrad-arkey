@@ -264,7 +264,7 @@ The first R8 move is complete on `exp`: the two dev-only GPU fault-analysis tool
 passes 26 tests, and the CPU-only benchmark and CLI smoke checks pass. Recovery is the pre-move ledger commit
 `078fc6c35`.
 
-No other `extra/` group was moved. The remaining unresolved rows stay migration-gated, especially the SQTT boundary,
+No other unresolved `extra/` group was moved. The remaining unresolved rows stay migration-gated, especially the SQTT boundary,
 the CLI/generate/adapter closure, remote scripts, NV support, and the mixed `llm_research` surface.
 
 The standalone Mesa/LVP setup helper was also moved to `extra/setup/mesa/`; it had no tracked consumers or old-path
@@ -273,6 +273,10 @@ references and passed shell syntax validation. This remains a bounded setup-doma
 The six non-TinyGPU backend setup scripts and `cl_android.sh` were then moved into `extra/setup/`. Their only old-path
 mention was `cl_android.sh`'s self-documentation; all seven shell scripts pass syntax checks and executable modes were
 preserved. The TinyGPU installer remains separate and unresolved.
+
+The eight dev-only LLM qualification/benchmark helpers were then moved into `extra/llm/bench/`. Internal imports,
+benchmark tests, README, harness, and measurement references were updated. Eighteen focused tests pass and every moved
+module compiles. The shipped CLI/generate/adapter closure remains separate and is not claimed complete by this slice.
 
 ## Unresolved blockers
 

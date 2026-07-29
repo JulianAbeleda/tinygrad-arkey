@@ -1,7 +1,7 @@
 {
   "schema": "extra-file-level-ledger-20260729",
   "audited_worktree": "/Users/julianabeleda/env/tinygrad-arkey-exp",
-  "audited_commit": "5f8ad29f1902a59f343a89e13916ff0000b33614",
+  "audited_commit": "77c68b006",
   "status": "CLASSIFICATION_COMPLETE_MIGRATION_GATED",
   "scope_baseline_count": 198,
   "current_tracked_count": 203,
@@ -207,7 +207,7 @@
       ],
       "co_move_dependencies": [],
       "validation": "GPU-lock reproducer",
-      "disposition": "move",
+      "disposition": "retain",
       "destination": "extra/debug/gpu_fault_analysis/analyze_faults.py",
       "retention_or_recovery": "retain diagnosis contract",
       "unresolved": false,
@@ -225,7 +225,7 @@
       ],
       "co_move_dependencies": [],
       "validation": "GPU-lock reproducer",
-      "disposition": "move",
+      "disposition": "retain",
       "destination": "extra/debug/gpu_fault_analysis/bench_alloc_trace.py",
       "retention_or_recovery": "retain diagnosis contract",
       "unresolved": false,
@@ -682,22 +682,20 @@
       "unresolved_decision": "promote atomically with extra/llm/generate.py closure"
     },
     {
-      "current_path": "extra/llm/eval_common.py",
+      "current_path": "extra/llm/bench/eval_common.py",
       "file_type": "python",
       "target_domain": "llm-qualification",
       "purpose": "qualification/benchmark",
       "branch_owner": "dev",
       "hot_path": "operator-only",
-      "direct_consumers": [
-        "benchmark CLIs, docs, measurement tests"
-      ],
+      "direct_consumers": ["extra/llm/bench/json_scorer.py", "extra/llm/bench/sft_smoke_train.py", "docs/harness-consolidation.md"],
       "co_move_dependencies": [],
-      "validation": "selected benchmark smoke",
-      "disposition": "move",
-      "destination": "extra/qualification/llm/",
+      "validation": "PYTHONPATH=. .venv/bin/python -m pytest test/unit/test_llama_bench_artifacts.py test/unit/test_measurement_authority.py",
+      "disposition": "retain",
+      "destination": "extra/llm/bench/eval_common.py",
       "retention_or_recovery": "retain canonical qualification authorities",
-      "unresolved": true,
-      "unresolved_decision": "choose canonical benchmark authorities"
+      "unresolved": false,
+      "unresolved_decision": null
     },
     {
       "current_path": "extra/llm/generate.py",
@@ -718,130 +716,116 @@
       "unresolved_decision": "confirm compatibility owner during R8"
     },
     {
-      "current_path": "extra/llm/json_scorer.py",
+      "current_path": "extra/llm/bench/json_scorer.py",
       "file_type": "python",
       "target_domain": "llm-qualification",
       "purpose": "qualification/benchmark",
       "branch_owner": "dev",
       "hot_path": "operator-only",
-      "direct_consumers": [
-        "benchmark CLIs, docs, measurement tests"
-      ],
+      "direct_consumers": ["extra/llm/bench/eval_common.py", "test/unit/test_llama_bench_artifacts.py"],
       "co_move_dependencies": [],
-      "validation": "selected benchmark smoke",
-      "disposition": "move",
-      "destination": "extra/qualification/llm/",
+      "validation": "PYTHONPATH=. .venv/bin/python -m pytest test/unit/test_llama_bench_artifacts.py",
+      "disposition": "retain",
+      "destination": "extra/llm/bench/json_scorer.py",
       "retention_or_recovery": "retain canonical qualification authorities",
-      "unresolved": true,
-      "unresolved_decision": "choose canonical benchmark authorities"
+      "unresolved": false,
+      "unresolved_decision": null
     },
     {
-      "current_path": "extra/llm/llama_bench.py",
+      "current_path": "extra/llm/bench/llama_bench.py",
       "file_type": "python",
       "target_domain": "llm-qualification",
       "purpose": "qualification/benchmark",
       "branch_owner": "dev",
       "hot_path": "operator-only",
-      "direct_consumers": [
-        "benchmark CLIs, docs, measurement tests"
-      ],
+      "direct_consumers": ["extra/llm/bench/llama_cpp_bench.py", "extra/llm/bench/llama_kv_ctx_slope_bench.py", "extra/llm/bench/model_authority_bench.py", "test/unit/test_llama_bench_artifacts.py"],
       "co_move_dependencies": [],
-      "validation": "selected benchmark smoke",
-      "disposition": "move",
-      "destination": "extra/qualification/llm/",
+      "validation": "PYTHONPATH=. .venv/bin/python -m pytest test/unit/test_llama_bench_artifacts.py test/unit/test_measurement_authority.py",
+      "disposition": "retain",
+      "destination": "extra/llm/bench/llama_bench.py",
       "retention_or_recovery": "retain canonical qualification authorities",
-      "unresolved": true,
-      "unresolved_decision": "choose canonical benchmark authorities"
+      "unresolved": false,
+      "unresolved_decision": null
     },
     {
-      "current_path": "extra/llm/llama_cpp_bench.py",
+      "current_path": "extra/llm/bench/llama_cpp_bench.py",
       "file_type": "python",
       "target_domain": "llm-qualification",
       "purpose": "qualification/benchmark",
       "branch_owner": "dev",
       "hot_path": "operator-only",
-      "direct_consumers": [
-        "benchmark CLIs, docs, measurement tests"
-      ],
+      "direct_consumers": ["docs/measurement-regime-audit-llama-prefill-20260715.md"],
       "co_move_dependencies": [],
-      "validation": "selected benchmark smoke",
-      "disposition": "move",
-      "destination": "extra/qualification/llm/",
+      "validation": "PYTHONPATH=. .venv/bin/python -m py_compile extra/llm/bench/llama_cpp_bench.py",
+      "disposition": "retain",
+      "destination": "extra/llm/bench/llama_cpp_bench.py",
       "retention_or_recovery": "retain canonical qualification authorities",
-      "unresolved": true,
-      "unresolved_decision": "choose canonical benchmark authorities"
+      "unresolved": false,
+      "unresolved_decision": null
     },
     {
-      "current_path": "extra/llm/llama_kv_ctx_slope_bench.py",
+      "current_path": "extra/llm/bench/llama_kv_ctx_slope_bench.py",
       "file_type": "python",
       "target_domain": "llm-qualification",
       "purpose": "qualification/benchmark",
       "branch_owner": "dev",
       "hot_path": "operator-only",
-      "direct_consumers": [
-        "benchmark CLIs, docs, measurement tests"
-      ],
+      "direct_consumers": ["docs/measurement-regime-audit-llama-prefill-20260715.md"],
       "co_move_dependencies": [],
-      "validation": "selected benchmark smoke",
-      "disposition": "move",
-      "destination": "extra/qualification/llm/",
+      "validation": "PYTHONPATH=. .venv/bin/python -m py_compile extra/llm/bench/llama_kv_ctx_slope_bench.py",
+      "disposition": "retain",
+      "destination": "extra/llm/bench/llama_kv_ctx_slope_bench.py",
       "retention_or_recovery": "retain canonical qualification authorities",
-      "unresolved": true,
-      "unresolved_decision": "choose canonical benchmark authorities"
+      "unresolved": false,
+      "unresolved_decision": null
     },
     {
-      "current_path": "extra/llm/model_authority_bench.py",
+      "current_path": "extra/llm/bench/model_authority_bench.py",
       "file_type": "python",
       "target_domain": "llm-qualification",
       "purpose": "qualification/benchmark",
       "branch_owner": "dev",
       "hot_path": "operator-only",
-      "direct_consumers": [
-        "benchmark CLIs, docs, measurement tests"
-      ],
+      "direct_consumers": ["test/unit/test_llama_bench_artifacts.py", "docs/measurement-regime-audit-llama-prefill-20260715.md"],
       "co_move_dependencies": [],
-      "validation": "selected benchmark smoke",
-      "disposition": "move",
-      "destination": "extra/qualification/llm/",
+      "validation": "PYTHONPATH=. .venv/bin/python -m pytest test/unit/test_llama_bench_artifacts.py",
+      "disposition": "retain",
+      "destination": "extra/llm/bench/model_authority_bench.py",
       "retention_or_recovery": "retain canonical qualification authorities",
-      "unresolved": true,
-      "unresolved_decision": "choose canonical benchmark authorities"
+      "unresolved": false,
+      "unresolved_decision": null
     },
     {
-      "current_path": "extra/llm/model_e2e_bench.py",
+      "current_path": "extra/llm/bench/model_e2e_bench.py",
       "file_type": "python",
       "target_domain": "llm-qualification",
       "purpose": "qualification/benchmark",
       "branch_owner": "dev",
       "hot_path": "operator-only",
-      "direct_consumers": [
-        "benchmark CLIs, docs, measurement tests"
-      ],
+      "direct_consumers": ["test/unit/test_llm_decode_correctness.py", "test/unit/test_measurement_authority.py", "README.md"],
       "co_move_dependencies": [],
-      "validation": "selected benchmark smoke",
-      "disposition": "move",
-      "destination": "extra/qualification/llm/",
+      "validation": "PYTHONPATH=. .venv/bin/python -m pytest test/unit/test_measurement_authority.py",
+      "disposition": "retain",
+      "destination": "extra/llm/bench/model_e2e_bench.py",
       "retention_or_recovery": "retain canonical qualification authorities",
-      "unresolved": true,
-      "unresolved_decision": "choose canonical benchmark authorities"
+      "unresolved": false,
+      "unresolved_decision": null
     },
     {
-      "current_path": "extra/llm/sft_smoke_train.py",
+      "current_path": "extra/llm/bench/sft_smoke_train.py",
       "file_type": "python",
       "target_domain": "llm-qualification",
       "purpose": "qualification/benchmark",
       "branch_owner": "dev",
       "hot_path": "operator-only",
-      "direct_consumers": [
-        "benchmark CLIs, docs, measurement tests"
-      ],
+      "direct_consumers": ["extra/llm/bench/eval_common.py"],
       "co_move_dependencies": [],
-      "validation": "selected benchmark smoke",
-      "disposition": "move",
-      "destination": "extra/qualification/llm/",
+      "validation": "PYTHONPATH=. .venv/bin/python -m py_compile extra/llm/bench/sft_smoke_train.py",
+      "disposition": "retain",
+      "destination": "extra/llm/bench/sft_smoke_train.py",
       "retention_or_recovery": "retain canonical qualification authorities",
-      "unresolved": true,
-      "unresolved_decision": "choose canonical benchmark authorities"
+      "unresolved": false,
+      "unresolved_decision": null
     },
     {
       "current_path": "extra/llm_research/README.md",
@@ -2601,7 +2585,7 @@
       ],
       "co_move_dependencies": [],
       "validation": "Mesa setup smoke",
-      "disposition": "move",
+      "disposition": "retain",
       "destination": "extra/setup/mesa/lvp_nir_options.sh",
       "retention_or_recovery": "retain while backend supported",
       "unresolved": false,

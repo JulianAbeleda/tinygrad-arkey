@@ -8,7 +8,7 @@ Decode tok/s is the headline (HBM-bound); prefill pp512 is secondary and measure
 active by default (reported in env).
 
 Usage:
-  python extra/llm/model_e2e_bench.py --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --id qwen3-8b \
+  python extra/llm/bench/model_e2e_bench.py --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --id qwen3-8b \
       --max_context 2048 --decode-tokens 96 --warmup-skip 16 --prefill 512 \
       --out bench/models/qwen/data/amd-gfx1100/qwen3-8b.json
 """

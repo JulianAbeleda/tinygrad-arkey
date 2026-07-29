@@ -13,13 +13,13 @@ methodology decision, not a mechanical replacement.
 Writes bench/models/qwen/data/amd-gfx1100/<id>.authority.json
 
 Usage:
-  python extra/llm/model_authority_bench.py --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --id qwen3-8b \
+  python extra/llm/bench/model_authority_bench.py --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --id qwen3-8b \
       --out bench/models/qwen/data/amd-gfx1100/qwen3-8b.authority.json
 """
 from __future__ import annotations
 import os, sys, json, argparse, subprocess, pathlib, tempfile
 
-from extra.llm.llama_bench import (ARTIFACT_VERSION, atomic_write_json, build_llama_bench_cmd, model_identity,
+from extra.llm.bench.llama_bench import (ARTIFACT_VERSION, atomic_write_json, build_llama_bench_cmd, model_identity,
   run_llama_bench_cmd, llama_pp_row, llama_tg_rows, summarize_row)
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]

@@ -6,13 +6,13 @@ This is the apples-to-apples reference: same GGUF file, same GPU. llama-bench re
 tinygrad-vs-llama.cpp and the decode ratio.
 
 Usage:
-  python extra/llm/llama_cpp_bench.py --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --id qwen3-8b \
+  python extra/llm/bench/llama_cpp_bench.py --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --id qwen3-8b \
       --artifact bench/models/qwen/data/amd-gfx1100/qwen3-8b.json
 """
 from __future__ import annotations
 import json, argparse, pathlib
 
-from extra.llm.llama_bench import (ARTIFACT_VERSION, LLAMA_BENCH_BIN as DEFAULT_BIN, atomic_write_json,
+from extra.llm.bench.llama_bench import (ARTIFACT_VERSION, LLAMA_BENCH_BIN as DEFAULT_BIN, atomic_write_json,
   build_llama_bench_cmd, model_identity, run_llama_bench_cmd, llama_pp_row, llama_tg_rows, summarize_row)
 
 def main():

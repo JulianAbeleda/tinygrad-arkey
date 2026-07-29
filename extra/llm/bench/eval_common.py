@@ -3,7 +3,7 @@ from __future__ import annotations
 import json, pathlib, re, statistics
 from typing import Any
 
-from extra.llm.json_scorer import score_expected_json, summarize_json_axes, wilson_interval
+from extra.llm.bench.json_scorer import score_expected_json, summarize_json_axes, wilson_interval
 
 def read_jsonl(path:pathlib.Path) -> list[dict[str, Any]]:
   rows = []

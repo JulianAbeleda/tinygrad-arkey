@@ -160,6 +160,15 @@
       "focused_tests": "sh -n on all moved shell scripts",
       "verification": "no external tracked consumers; shell syntax passes; executable modes preserved",
       "recovery_commit": "1d7601d61"
+    },
+    {
+      "source": ["extra/llm/eval_common.py", "extra/llm/json_scorer.py", "extra/llm/llama_bench.py", "extra/llm/llama_cpp_bench.py", "extra/llm/llama_kv_ctx_slope_bench.py", "extra/llm/model_authority_bench.py", "extra/llm/model_e2e_bench.py", "extra/llm/sft_smoke_train.py"],
+      "destination": "extra/llm/bench/",
+      "owner": "dev",
+      "consumer_rewrites": ["benchmark imports, README, harness and measurement docs, focused tests"],
+      "focused_tests": "test/unit/test_llama_bench_artifacts.py test/unit/test_measurement_authority.py",
+      "verification": "18 focused tests pass; all moved modules compile; CLI help remains runnable",
+      "recovery_commit": "77c68b006"
     }
   ],
   "completed_prunes": [

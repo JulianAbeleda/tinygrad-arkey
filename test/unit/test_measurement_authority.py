@@ -70,7 +70,7 @@ class TestSingleDecodeAuthority(unittest.TestCase):
     # model_e2e_bench decodes from a one-token seed. It may keep existing (it also covers VRAM/correctness),
     # but it must say in-file that its decode number is not a ctx-labelled authority, or the next person
     # will put it in the README again.
-    src = (ROOT/"extra/llm/model_e2e_bench.py").read_text()
+    src = (ROOT/"extra/llm/bench/model_e2e_bench.py").read_text()
     self.assertIn("generate([seed])", src, "model_e2e_bench changed shape; re-check this contract")
     self.assertIn("NOT A CTX-LABELLED DECODE AUTHORITY", src,
                   "model_e2e_bench.measure_decode decodes from a 1-token seed, so its ctx columns describe KV "
