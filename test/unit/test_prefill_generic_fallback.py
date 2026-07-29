@@ -69,7 +69,7 @@ def test_unsupported_packed_shape_declines_to_generic(monkeypatch):
   lin, x = _Linear(calls, shape=shape), _Activation((1, shape[0], shape[2]), calls)
   _legacy_attachment(lin, shape)
   monkeypatch.setattr(prefill_routes, "prefill_route_mode", lambda: "auto")
-  monkeypatch.setattr("tinygrad.llm.route_ops.select_packed_wmma_prefill_candidate", lambda *_: None)
+  monkeypatch.setattr(prefill_routes, "select_packed_wmma_prefill_candidate", lambda *_: None)
   from tinygrad.llm.prefill_route_observer import prefill_route_scope
   with prefill_route_scope(): result = prefill_routes.route_prefill_linear(lin, x)
   assert result == "generic-result"
@@ -82,7 +82,7 @@ def test_exact_q6_vocab_uses_generic_graph_when_packed_selector_declines(monkeyp
   _legacy_attachment(lin, shape, role="lm_head", tensor="output.weight")
   monkeypatch.setattr(prefill_routes, "prefill_route_mode", lambda: "auto")
   selected = []
-  monkeypatch.setattr("tinygrad.llm.route_ops.select_packed_wmma_prefill_candidate",
+  monkeypatch.setattr(prefill_routes, "select_packed_wmma_prefill_candidate",
                       lambda *_: selected.append(True))
   from tinygrad.llm.prefill_route_observer import prefill_route_scope
   with prefill_route_scope(): result = prefill_routes.route_prefill_linear(lin, x)
