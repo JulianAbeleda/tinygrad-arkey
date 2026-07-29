@@ -4,7 +4,9 @@ from dataclasses import dataclass
 from typing import Callable, Any
 
 from tinygrad import Tensor, UOp, dtypes
-from tinygrad.llm import route_ops as qk_ops
+from tinygrad.llm.decode_kernels import (emit_q6k_gemv_kernel, emit_q6k_vocab_scalar_reduce_kernel,
+  q4k_g3_lanemap_gemv_kernel, q6k_spec_for_role, q6k_vocab_scalar_reduce_eligible)
+from tinygrad.llm.flash_decode_attention import flash_decode_live_split_block_tile
 
 def _decode_shape(x:Tensor) -> tuple[Any, Any, Any]:
   shape = tuple(getattr(x, "shape", ()))
@@ -49,7 +51,7 @@ class _Q4KDecodeCandidate:
     _w = linear.q4k_storage.words.to(x.device).contiguous() if linear.q4k_storage.mode == "q4_ondemand" else linear.q4k_storage.words.to(x.device)
     _xv = x[:, 0, :].reshape(binding.K).cast(dtypes.float16).contiguous()
     _out = Tensor.empty(binding.N, dtype=dtypes.float32, device=x.device)
-    return _out.custom_kernel(_w, _xv, fxn=qk_ops.q4k_g3_lanemap_gemv_kernel(binding.N, binding.K))[0].reshape(1, 1, binding.N)
+    return _out.custom_kernel(_w, _xv, fxn=q4k_g3_lanemap_gemv_kernel(binding.N, binding.K))[0].reshape(1, 1, binding.N)
 
 # This is a statically promoted result of offline machine search, not an online
 # autotuner. See README.md#why-this-is-machine-search-even-though-the-runtime-is-static.
@@ -87,13 +89,13 @@ class _Q6KDecodeCandidate:
 
   def execute(self, linear:Any, x:Tensor, binding:_LinearDecodeBinding) -> Tensor:
     x_vec = x[:, 0, :].reshape(binding.K).cast(dtypes.float16).contiguous()
-    spec = qk_ops.q6k_spec_for_role(binding.N, binding.K, parts=binding.parts, row_tile=binding.row_tile,
-                                    use_coop=binding.use_coop, opts=linear.opts)
+    spec = q6k_spec_for_role(binding.N, binding.K, parts=binding.parts, row_tile=binding.row_tile,
+                            use_coop=binding.use_coop, opts=linear.opts)
     partials = Tensor.empty(binding.N, spec.partial_axis_extent, dtype=dtypes.float32, device=x.device)
-    partial = partials.custom_kernel(linear.q6k_storage.halfs.to(x.device), x_vec, fxn=qk_ops.emit_q6k_gemv_kernel(spec))[0]
-    if qk_ops.q6k_vocab_scalar_reduce_eligible(spec):
+    partial = partials.custom_kernel(linear.q6k_storage.halfs.to(x.device), x_vec, fxn=emit_q6k_gemv_kernel(spec))[0]
+    if q6k_vocab_scalar_reduce_eligible(spec):
       out = Tensor.empty(binding.N, dtype=dtypes.float32, device=x.device)
-      return out.custom_kernel(partial, fxn=qk_ops.emit_q6k_vocab_scalar_reduce_kernel(spec))[0].reshape(1, 1, binding.N)
+      return out.custom_kernel(partial, fxn=emit_q6k_vocab_scalar_reduce_kernel(spec))[0].reshape(1, 1, binding.N)
     return partial.sum(axis=1).reshape(1, 1, binding.N)
 
 Q6K_DECODE_CANDIDATE = _Q6KDecodeCandidate()
@@ -170,7 +172,7 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
     # (rather than silently emitting a deleted handwritten flash kernel); model.py gates flash vs SDPA upstream.
     raise RuntimeError(f"flash_decode_attention_route: shape B={B} Hd={Hd} Hkv={Hkv} Hq={Hq} is not served by "
                        "the generated live-split route, and all handwritten fallback flash routes were deleted.")
-  return qk_ops.flash_decode_live_split_block_tile(q.reshape(binding.Hq, binding.Hd), assigned_kv, _tc,
+  return flash_decode_live_split_block_tile(q.reshape(binding.Hq, binding.Hd), assigned_kv, _tc,
     binding.Hd, binding.Hq, binding.Hkv, MAXC, binding.split_size, staging=binding.staging,
     fused_combine=True, kv_scale=kv_scale, freqs=freqs, query_group_size=binding.query_group_size,
     stage_width=binding.stage_width)

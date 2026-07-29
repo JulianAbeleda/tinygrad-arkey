@@ -117,7 +117,7 @@ def test_q4k_single_token_keeps_generated_g3_path(monkeypatch):
   monkeypatch.setenv("DECODE_Q4K_INKERNEL_COMBINE_KV", "0")
   monkeypatch.setenv("DECODE_Q4K_SPLIT_K_KV", "0")
   g3_calls = {"n": 0}
-  monkeypatch.setattr(decode_routes.qk_ops, "q4k_g3_lanemap_gemv_kernel",
+  monkeypatch.setattr(decode_routes, "q4k_g3_lanemap_gemv_kernel",
                       lambda *_args, **_kwargs: g3_calls.__setitem__("n", g3_calls["n"] + 1) or "kernel")
 
   class TensorStub:
@@ -261,9 +261,9 @@ def test_q6k_single_token_keeps_generated_path(monkeypatch):
   monkeypatch.setattr(decode_routes, "Tensor", SimpleNamespace(empty=lambda *_, **__: partials), raising=True)
   spec = SimpleNamespace(route_family="q6k_coop", rows=16, partial_axis_extent=8)
   spec_calls = []
-  monkeypatch.setattr(decode_routes.qk_ops, "q6k_spec_for_role",
+  monkeypatch.setattr(decode_routes, "q6k_spec_for_role",
                       lambda *_args, **kwargs: spec_calls.append(kwargs) or spec)
-  monkeypatch.setattr(decode_routes.qk_ops, "emit_q6k_gemv_kernel", lambda *_args, **_kwargs: "kernel")
+  monkeypatch.setattr(decode_routes, "emit_q6k_gemv_kernel", lambda *_args, **_kwargs: "kernel")
 
   linear = SimpleNamespace(
     decode_enabled=True, bias=None, in_features=256, out_features=16, q6k_storage=SimpleNamespace(halfs=_HalfStorage()),
