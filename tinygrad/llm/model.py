@@ -666,7 +666,7 @@ class TransformerBlock(FFNBlock):
         import os as _os
         if self.config.prefill_custom_kernel_attn or _os.environ.get("FUSED_CUSTOM_KERNEL"):
           # Custom-kernel injection route: bypass the composite-reduce lowering
-          # (class-2) by injecting the proven kernel via Tensor.custom_kernel, which
+          # (class-2) by injecting the proven program via Tensor.uop_program, which
           # realizes Q/K/V as opaque buffers. See llm/fused_attention.py.
           from tinygrad.llm.fused_attention import route_prefill_attention
           attn = _prefill_semantic(_prefill, prefill_scratch,

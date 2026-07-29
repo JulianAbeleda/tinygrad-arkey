@@ -8,8 +8,8 @@ handwritten qualification oracles, hardware recovery tooling, and historical evi
 
 BoltBeam plus BubbleBeam/FutureSight explored, measured, ranked, and selected the performance-sensitive route
 configurations shipped here. Humans still define search spaces, compiler primitives, correctness gates, and promotion
-policy. `Tensor.custom_kernel` is the execution interface for a selected UOp graph; it does not by itself make a route
-handwritten.
+policy. `Tensor.uop_program` is the lazy transport for a selected UOp graph; it does not by itself make a route
+handwritten. `Tensor.custom_kernel` remains a silent upstream-compatibility spelling with the same behavior.
 
 The production boundary is simple:
 

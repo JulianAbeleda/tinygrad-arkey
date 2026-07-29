@@ -65,7 +65,7 @@ def replace_contig_with_store_after(u:UOp):
   # CONTIGUOUS directly materializes its input's logical allocation.  When
   # that input is structurally owned (not merely computed from owned data),
   # put the same owner on the exact written destination.  This covers the
-  # CONTIGUOUS(MEMORY_SEMANTIC(shared packed view)) inserted by custom_kernel.
+  # CONTIGUOUS(MEMORY_SEMANTIC(shared packed view)) inserted by Tensor.uop_program.
   owner = memory_semantic_owner(u.src[0])
   dest = UOp(Ops.MEMORY_SEMANTIC, buf.dtype, (buf,), owner) if owner is not None else buf
   return buf.after(dest.store(u.src[0], arg=store_arg)).rtag(u.tag)
