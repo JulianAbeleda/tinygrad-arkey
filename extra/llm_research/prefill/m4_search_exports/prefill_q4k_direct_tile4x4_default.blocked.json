@@ -1,0 +1,267 @@
+{
+  "catalog_entry": false,
+  "default": false,
+  "kind": "blocked_search_readiness",
+  "missing": {
+    "execution_inputs": [
+      "AMD gfx1100 execution through Linux KFD or macOS PCI+AMD.",
+      "A target/runtime fingerprint, warmup/timing protocol, and isolated route-bound dispatch inputs for every requested shape key."
+    ],
+    "fixtures": [
+      "Per shape-key fixture: packed GGUF bytes, fp16 activation tile, output reference, and tensor/layout metadata.",
+      "A correctness oracle covering direct output, partials, and any required reduction semantics."
+    ],
+    "grammar": [
+      "No complete cross-field topology grammar assigns legal value domains for tile, parts, output layout, axes, opts, and memory.",
+      "The incumbent direct-route descriptors and their selected options are implementations, not an independently justified candidate domain."
+    ],
+    "primitive_lowerers": [
+      "generic Q4_K packed-block dequant-and-dot lowerer",
+      "generic Q6_K packed-block dequant-and-dot lowerer",
+      "generic direct/partials output-layout and cross-part reduction lowerer",
+      "generic local-memory, barrier, and resource-legality lowerer"
+    ],
+    "ranker": [
+      "No deterministic complete-plan ranker consumes this topology schema; structural ordering would not be a performance result."
+    ],
+    "runner": [
+      "No route-bound generic-plan runner compiles, dispatches, checks parity, and times a supplied exact plan."
+    ]
+  },
+  "next_action": "Define an independent grammar and lowerers, then supply fixtures and an AMD:gfx1100 runner before ranking or promotion.",
+  "request": {
+    "candidate_space_reason": "No independently justified finite domains exist; selected incumbent route constants are excluded.",
+    "candidate_space_status": "MISSING",
+    "catalog_entry": false,
+    "default": false,
+    "kind": "search_request",
+    "objective": {
+      "direction": "minimize",
+      "name": "route_bound_latency_ms",
+      "ranking": "median_of_3",
+      "tie_break": "canonical_exact_plan_hash"
+    },
+    "public": true,
+    "request_id": "m4-prefill_q4k_direct_tile4x4_default-qwen3-8b-14b-gfx1100-v1",
+    "request_sha256": "0a9ad6114add1e32a134da185dc50ad9563bafb5e273affcc813bedcb395dce1",
+    "required_export": [
+      "complete_ranked_population",
+      "exact_complete_plans",
+      "per-shape correctness",
+      "per-shape timing",
+      "target/runtime fingerprint"
+    ],
+    "required_topology_schema": {
+      "absence": [
+        "no value domains",
+        "no cross-field legality rules",
+        "no enumerator",
+        "no lowerers"
+      ],
+      "fields": {
+        "axes": [
+          "global_axes",
+          "local_axes",
+          "reduce_axes",
+          "axis_order"
+        ],
+        "dequant": [
+          "quant_format",
+          "packed_storage",
+          "block_elements",
+          "metadata_decode",
+          "activation_load",
+          "accumulator_dtype"
+        ],
+        "memory": [
+          "weight_addressing",
+          "activation_addressing",
+          "local_memory",
+          "barriers",
+          "resource_limits"
+        ],
+        "opts": [
+          "transform_sequence",
+          "legality_constraints",
+          "application_order"
+        ],
+        "output_layout": [
+          "kind",
+          "logical_axes",
+          "physical_axes",
+          "writeback_dtype"
+        ],
+        "parts": [
+          "count",
+          "partition_axis",
+          "tail_policy",
+          "combine_protocol"
+        ],
+        "tile": [
+          "row_tile",
+          "token_tile",
+          "k_block_tile",
+          "wave_layout",
+          "threads"
+        ]
+      },
+      "kind": "required_topology_schema",
+      "not_a_grammar": true,
+      "schema": "tinygrad.prefill.direct-packed-m4-search.v1",
+      "status": "UNPROVEN"
+    },
+    "route_id": "prefill_q4k_direct_tile4x4_default",
+    "schema": "tinygrad.prefill.direct-packed-m4-search.v1",
+    "search_system": {
+      "name": "BoltBeam",
+      "revision": "f6ee2763f47316112fbba40b91b859e0e7068a6d"
+    },
+    "target": {
+      "architecture": "gfx1100",
+      "backend": "AMD",
+      "wave_size": 32
+    },
+    "workloads": [
+      {
+        "model_size": "8B",
+        "profile": "qwen3_8b_q4k_m_gfx1100",
+        "quant": "Q4_K",
+        "role": "attn_kv",
+        "shape": {
+          "K": 4096,
+          "M": 512,
+          "N": 1024
+        },
+        "shape_key": "qwen3_8b_q4k_m_gfx1100:attn_kv:m512-n1024-k4096",
+        "structural_route_support": "SUPPORTED",
+        "weight_applicability": {
+          "evidence": "no checked-in 8B GGUF role/quant inventory",
+          "status": "UNVERIFIED"
+        }
+      },
+      {
+        "model_size": "8B",
+        "profile": "qwen3_8b_q4k_m_gfx1100",
+        "quant": "Q4_K",
+        "role": "attn_qo",
+        "shape": {
+          "K": 4096,
+          "M": 512,
+          "N": 4096
+        },
+        "shape_key": "qwen3_8b_q4k_m_gfx1100:attn_qo:m512-n4096-k4096",
+        "structural_route_support": "SUPPORTED",
+        "weight_applicability": {
+          "evidence": "no checked-in 8B GGUF role/quant inventory",
+          "status": "UNVERIFIED"
+        }
+      },
+      {
+        "model_size": "8B",
+        "profile": "qwen3_8b_q4k_m_gfx1100",
+        "quant": "Q4_K",
+        "role": "ffn_down",
+        "shape": {
+          "K": 12288,
+          "M": 512,
+          "N": 4096
+        },
+        "shape_key": "qwen3_8b_q4k_m_gfx1100:ffn_down:m512-n4096-k12288",
+        "structural_route_support": "SUPPORTED",
+        "weight_applicability": {
+          "evidence": "no checked-in 8B GGUF role/quant inventory",
+          "status": "UNVERIFIED"
+        }
+      },
+      {
+        "model_size": "8B",
+        "profile": "qwen3_8b_q4k_m_gfx1100",
+        "quant": "Q4_K",
+        "role": "ffn_gate_up",
+        "shape": {
+          "K": 4096,
+          "M": 512,
+          "N": 12288
+        },
+        "shape_key": "qwen3_8b_q4k_m_gfx1100:ffn_gate_up:m512-n12288-k4096",
+        "structural_route_support": "SUPPORTED",
+        "weight_applicability": {
+          "evidence": "no checked-in 8B GGUF role/quant inventory",
+          "status": "UNVERIFIED"
+        }
+      },
+      {
+        "model_size": "14B",
+        "profile": "qwen3_14b_q4k_m_gfx1100",
+        "quant": "Q4_K",
+        "role": "attn_kv",
+        "shape": {
+          "K": 5120,
+          "M": 512,
+          "N": 1024
+        },
+        "shape_key": "qwen3_14b_q4k_m_gfx1100:attn_kv:m512-n1024-k5120",
+        "structural_route_support": "SUPPORTED",
+        "weight_applicability": {
+          "evidence": "docs/14b-role-facts-inventory-20260710.json",
+          "status": "PRESENT"
+        }
+      },
+      {
+        "model_size": "14B",
+        "profile": "qwen3_14b_q4k_m_gfx1100",
+        "quant": "Q4_K",
+        "role": "attn_qo",
+        "shape": {
+          "K": 5120,
+          "M": 512,
+          "N": 5120
+        },
+        "shape_key": "qwen3_14b_q4k_m_gfx1100:attn_qo:m512-n5120-k5120",
+        "structural_route_support": "SUPPORTED",
+        "weight_applicability": {
+          "evidence": "docs/14b-role-facts-inventory-20260710.json",
+          "status": "PRESENT"
+        }
+      },
+      {
+        "model_size": "14B",
+        "profile": "qwen3_14b_q4k_m_gfx1100",
+        "quant": "Q4_K",
+        "role": "ffn_down",
+        "shape": {
+          "K": 17408,
+          "M": 512,
+          "N": 5120
+        },
+        "shape_key": "qwen3_14b_q4k_m_gfx1100:ffn_down:m512-n5120-k17408",
+        "structural_route_support": "SUPPORTED",
+        "weight_applicability": {
+          "evidence": "docs/14b-role-facts-inventory-20260710.json",
+          "status": "PRESENT"
+        }
+      },
+      {
+        "model_size": "14B",
+        "profile": "qwen3_14b_q4k_m_gfx1100",
+        "quant": "Q4_K",
+        "role": "ffn_gate_up",
+        "shape": {
+          "K": 5120,
+          "M": 512,
+          "N": 17408
+        },
+        "shape_key": "qwen3_14b_q4k_m_gfx1100:ffn_gate_up:m512-n17408-k5120",
+        "structural_route_support": "SUPPORTED",
+        "weight_applicability": {
+          "evidence": "docs/14b-role-facts-inventory-20260710.json",
+          "status": "PRESENT"
+        }
+      }
+    ]
+  },
+  "route_id": "prefill_q4k_direct_tile4x4_default",
+  "schema": "tinygrad.prefill.direct-packed-m4-search.v1",
+  "status": "BLOCKED",
+  "verdict": "UNPROVEN"
+}
