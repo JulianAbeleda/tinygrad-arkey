@@ -12,7 +12,6 @@ from tinygrad.llm.admission import (
 from tinygrad.llm.device_facts import scan_device_facts
 from tinygrad.llm.gguf import MODEL_PARAMETER_ALLOCATION_OWNER, gguf_load, gguf_load_metadata, gguf_load_with_metadata
 from tinygrad.llm.gguf_memory_scan import RuntimeGeometry, selected_gguf_backing_bytes
-from tinygrad.llm import route_ops as qk_ops
 from tinygrad.llm.decode_routes import FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_CANDIDATE, flash_decode_attention_route
 from tinygrad.llm.prefill_policy import (
   immutable_prefill_policy, prefill_concrete_kv_auto_decision, prefill_policy_strategy,
@@ -28,7 +27,7 @@ from tinygrad.llm.qk_primitives import (
   qk_primitive_eligibility_from_device_facts,
 )
 from tinygrad.llm.model_facts import model_facts_from_gguf_metadata
-from tinygrad.llm.memory_adaptive_authority import (adapt_cached_memory_policy, decode_candidate_set,
+from tinygrad.llm.memory_adaptive_authority import (adapt_cached_memory_policy, memory_adaptive_adapters_active,
                                                      resolve_memory_adaptive_policy, validate_memory_evidence)
 from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OUTPUT, RUNTIME_INPUT, RUNTIME_OUTPUT,
                                            RUNTIME_PERSISTENT, bind_memory_semantic_owner, kv_cache, materialize_runtime_input,
@@ -38,6 +37,8 @@ from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OU
                                            runtime_input, runtime_output,
                                            runtime_persistent, runtime_scratch)
 from tinygrad.llm.model_route_plan import build_model_route_plan
+from tinygrad.llm.prefill_candidate_runtime import decode_prefill_graph_candidate_set
+from tinygrad.llm.promoted_prefill_policy import automatic_promoted_prefill_graph_policy
 from tinygrad.llm.route_policy import should_use_flash_decode as _route_should_use_flash_decode
 from tinygrad.llm.physical_memory_ledger import AllocationOwner, bind_allocation_owner
 from tinygrad.uop.ops import Ops, resolve
@@ -186,7 +187,7 @@ def select_memory_adaptive_runtime_policy(*, kv:dict, meta:dict, device_facts, u
     # this load accepts the result only after matching it back to this exact
     # opened inventory, workload, and immutable load-entry DeviceFacts scan.
     source = resolve_memory_adaptive_policy(selected_model_source)
-    if source is not None:
+    if source is not None and memory_adaptive_adapters_active():
       selected = adapt_cached_memory_policy(request, source)
   if selected is None:
     return immutable_prefill_policy({"strategy": "DIRECT_PACKED_FALLBACK", "candidate_id": "direct-packed-baseline",
@@ -267,7 +268,7 @@ def _graph_gemm_registry(policy):
   graph = policy.get("graph_gemm") if policy is not None else None
   candidate_set = graph.get("candidate_set") if isinstance(graph, dict) else None
   if not isinstance(candidate_set, dict): return None
-  try: return decode_candidate_set(candidate_set)
+  try: return decode_prefill_graph_candidate_set(candidate_set)
   except (KeyError, TypeError, ValueError): return None
 
 def _graph_gemm_binding(policy, registry, role:str, shape:tuple[int, int, int], device_facts):
@@ -952,12 +953,12 @@ class Transformer:
   def _build_packed_wmma_warmstart(self) -> tuple[dict, dict]:
     # Only called when prefill_routes.packed_wmma_prefill_enabled() is set (see __init__). Runs the
     # one-time-per-(quant,role,shape) correctness gate for every covered Q4_K/Q6_K linear whose
-    # (quant, role) has a frozen packed-wmma geometry (extra/llm_research/prefill/packed_wmma_prefill_candidates.
+    # (quant, role) has a frozen packed-wmma geometry (tinygrad/llm/packed_wmma_prefill.py.
     # PACKED_WMMA_GEOM); an ungated/failing combo is simply omitted here, so it plays no part in this
     # table and route_packed_wmma_prefill's own per-call gate check (same cache) declines it too --
     # never dispatched ungated. NOT set into the global here -- installed only around the prefill-v2
     # forward (__call__), merged with self._pf16_warmstart.
-    from tinygrad.llm.route_ops import build_packed_wmma_warmstart_tables
+    from tinygrad.llm.packed_wmma_prefill import build_packed_wmma_warmstart_tables
     return build_packed_wmma_warmstart_tables(self._prefill_v2_covered(), self.config.prefill_ubatch)
 
   def realize_prefill_v2_weights(self) -> int:
@@ -1101,15 +1102,12 @@ class Transformer:
     if not isinstance(gguf, Tensor):
       _admit_kv, _admit_meta = gguf_load_metadata(gguf)
       _runtime_inventory = derive_selected_gguf_prefill_inventory(_admit_kv, _admit_meta, _prefill_ubatch)
-      # Adapter activation is an explicit production-load action. Importing
-      # the collector module remains side-effect free.
-      qk_ops.install_memory_adaptive_model_adapters()
       _runtime_policy = select_memory_adaptive_runtime_policy(kv=_admit_kv, meta=_admit_meta,
                                                                device_facts=_device_facts, ubatch=_prefill_ubatch,
                                                                selected_model_source=str(pathlib.Path(gguf).expanduser().resolve()))
       _automatic_overlay_policy = None
       if prefill_policy_strategy(_runtime_policy) == "DIRECT_PACKED_FALLBACK" and _runtime_policy.get("measured") is False:
-        _automatic_overlay_policy = qk_ops.automatic_promoted_prefill_graph_policy(
+        _automatic_overlay_policy = automatic_promoted_prefill_graph_policy(
           _runtime_inventory, _device_facts.planning_snapshot())
       _overlay_request = prefill_policy_uses_overlay(_runtime_policy)
       _admit_arch = _admit_kv["general.architecture"]

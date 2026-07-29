@@ -1,0 +1,57 @@
+{
+  "schema": "tinygrad.prefill_wmma_lds_compact.v1",
+  "route_id": "prefill_wmma_lds_dbuf_generated",
+  "candidate_set_identity": "candidate_set:sha256:2783d3ebb084e465d733cc161aa31485ac3f8ec45ff5c3aa4c1790795e852847",
+  "profile": "qwen3_8b_q4k_m_gfx1100",
+  "target": {"backend": "AMD", "arch": "gfx1100", "wave_size": 32},
+  "template": {
+    "schema_version": "boltbeam.full_kernel_candidate.v1",
+    "dtypes": {"a": "fp16", "b": "fp16", "c": "fp16", "accumulator": "fp32"},
+    "layout": {"a": "row_major", "b": "transposed_row_major", "c": "row_major"},
+    "schedule": {
+      "tile": {"m": 128, "n": 128, "k": 32},
+      "waves": {"m": 4, "n": 2},
+      "threads": 256,
+      "lane_ownership": "rdna3_wmma_f32_16x16x16_f16_lds2_static",
+      "cooperative_load": {
+        "a": {"lane_mapping": "cooperative_row_stride_64_b128", "vector_width": 8, "alignment": 16},
+        "b": {"lane_mapping": "cooperative_row_stride_64_b128", "vector_width": 8, "alignment": 16}
+      },
+      "lds": {
+        "windows": {"a": [0, 10240], "b": [10240, 20480]},
+        "strides": {"a": 80, "b": 80},
+        "padding": 16,
+        "banks": 32,
+        "store_vector_width": 8,
+        "load_vector_width": 8
+      },
+      "pipeline": {
+        "buffer_count": 2,
+        "stage_count": 1,
+        "epoch_graph": [{
+          "epoch": "body", "slot": 0, "produce": ["a", "b"], "wait": ["global", "lds"],
+          "barrier": "before_fragment_load", "consume": ["a", "b"]
+        }]
+      },
+      "wmma": {
+        "instruction_family": "wmma_f32_16x16x16_f16",
+        "fragment_layout": "rdna3_wmma_f32_16x16x16_f16_lds2_static",
+        "accumulator_ownership": "wmma_accum_wm_x_wn_8_vgprs"
+      },
+      "dependency_policy": {
+        "waitcnt": {"vm": 0, "lgkm": 0},
+        "barriers": ["before_fragment_load", "after_wmma_before_slot_reuse"]
+      },
+      "residency": {"preload": ["a", "b"], "resident": ["accumulator"], "reuse": {"a": 4, "b": 2}},
+      "epilogue": {"lane_mapping": "wmma_accumulator_scalar_b16", "vector_width": 1},
+      "numerical_mode": "ieee_fp16_acc_fp32"
+    },
+    "static_constraints": {"max_lds_bytes": 65536, "max_vgpr_per_thread": 256, "allow_spill": false}
+  },
+  "entries": [
+    {"role": "attn_kv", "shape": {"m": 512, "n": 1024, "k": 4096}, "canonical_identity": "51b0562291285f98693f5320a5dce21673a32813c507377d0436afa53fe3b006", "legacy_identity": "5585ac260bd84f780aee4a390a1e2318952197e8ef1b9054febd0e9c9e16a27b"},
+    {"role": "attn_qo", "shape": {"m": 512, "n": 4096, "k": 4096}, "canonical_identity": "7508432bc2ab86532eb07bea71fb4f518e82dc259252a704f60131b2aa608d24", "legacy_identity": "7e6fe384eebaff4308ced23146eee5e74b6cbdf496135b168cbba4451f0ef043"},
+    {"role": "ffn_down", "shape": {"m": 512, "n": 4096, "k": 12288}, "canonical_identity": "fe0e765afd86cdda318f1950ad59b4374d95e862e0f1112d0e576d5c32231d9d", "legacy_identity": "1cc5e48ba3fa06473e89493e9d70247552e8092379845dccf04d790ab0924bb0"},
+    {"role": "ffn_gate_up", "shape": {"m": 512, "n": 12288, "k": 4096}, "canonical_identity": "8b6e3b2a9b25f7ad35e2e252d74129d96958b8367653024ad73e81fcac2aebb9", "legacy_identity": "7e37ad6e13dee573758b3264aa9ec71b0cd91f1ca08e012d279d67300360c2d9"}
+  ]
+}

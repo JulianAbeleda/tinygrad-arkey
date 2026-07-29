@@ -19,7 +19,6 @@ import pytest
 
 from tinygrad import Tensor, UOp, dtypes, getenv
 import tinygrad.llm.decode_routes as dr
-from tinygrad.llm import route_ops
 import tinygrad.llm.model as model
 from extra.llm_research import pure_search_guard as guard
 from extra.llm_research.route_manifest import ROUTES, default_routes, promoted_prefill_candidate_policy
@@ -81,7 +80,7 @@ def _drive_attention(monkeypatch, **overrides):
   def sentinel(*a, **k):
     called["live_split"] = True
     return Tensor.empty(32, 128, dtype=dtypes.float32, device="CPU")
-  monkeypatch.setattr(route_ops, "flash_decode_live_split_block_tile", sentinel)
+  monkeypatch.setattr(dr, "flash_decode_live_split_block_tile", sentinel)
   B, Hq, Hkv, Hd, MAXC = 1, 32, 8, 128, 4096  # 8B G=4 live-split shape
   q = SimpleNamespace(device="AMD", reshape=lambda *_shape: Tensor.empty(Hq, Hd, dtype=dtypes.float16, device="CPU"))
   kv = Tensor.empty(2, MAXC, Hkv, Hd, dtype=dtypes.float16, device="CPU")
