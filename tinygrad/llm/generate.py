@@ -19,12 +19,12 @@ def load_model_and_tokenizer(model:Any, max_context:int, *, seed:int, adapter:An
   must have configured the environment before calling this.
   """
   from tinygrad import Tensor
-  from extra.llm.cli import SimpleTokenizer
+  from tinygrad.llm.cli import SimpleTokenizer
   from tinygrad.llm.model import Transformer
 
   Tensor.manual_seed(seed)
   model_obj, kv = Transformer.from_gguf(pathlib.Path(model).expanduser(), max_context)
   if adapter is not None:
-    from extra.llm.adapter import load_adapter
+    from tinygrad.llm.adapter import load_adapter
     load_adapter(model_obj, pathlib.Path(adapter).expanduser())
   return model_obj, SimpleTokenizer.from_gguf_kv(kv)

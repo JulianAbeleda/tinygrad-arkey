@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
+# Production adapter loader for the tinygrad LLM runtime.
 
 import json, pathlib, re
 from typing import Any

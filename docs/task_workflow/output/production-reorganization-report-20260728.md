@@ -276,7 +276,12 @@ preserved. The TinyGPU installer remains separate and unresolved.
 
 The eight dev-only LLM qualification/benchmark helpers were then moved into `extra/llm/bench/`. Internal imports,
 benchmark tests, README, harness, and measurement references were updated. Eighteen focused tests pass and every moved
-module compiles. The shipped CLI/generate/adapter closure remains separate and is not claimed complete by this slice.
+module compiles.
+
+The shipped LLM runtime closure is now promoted atomically into `tinygrad/llm/`: `cli.py`, `generate.py`, and
+`adapter.py`. The `python -m tinygrad.llm` entrypoint, six research importers, the TinyGPU residency test, and the
+runtime-boundary audit now use the core owner. The new CLI-boundary test verifies help output and core ownership.
+This is a bounded production promotion; the remaining `extra/llm_research` route adapters are still migration debt.
 
 ## Unresolved blockers
 

@@ -20,7 +20,7 @@ import time
 from contextlib import contextmanager
 from typing import Any
 
-from extra.llm.generate import load_model_and_tokenizer
+from tinygrad.llm.generate import load_model_and_tokenizer
 from extra.llm_research.prefill.prefill_harness import (
   DEFAULT_MODEL, DEFAULT_MODEL_PROFILE, MODEL_HARNESS_ALIASES, MODEL_HARNESS_PROFILES, PREFILL_MODES, csv_ints,
   prefill_run_profile,

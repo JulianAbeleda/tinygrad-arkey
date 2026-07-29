@@ -1,4 +1,5 @@
 from __future__ import annotations
+# Production LLM CLI owner; kept beside the tinygrad runtime model domain.
 import os, sys, argparse, codecs, typing, re, unicodedata, json, uuid, time, pathlib, threading, gc, socketserver
 from tinygrad import nn, Device
 from tinygrad.uop.ops import UOp, Ops

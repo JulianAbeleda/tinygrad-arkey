@@ -32,8 +32,8 @@
     "commit": "8505f4c5a5b1e31862ace0613672b515f5b60405",
     "worktree": "/Users/julianabeleda/env/tinygrad-arkey-exp",
     "agent_packets": ["r7_route_closure", "r7_egpu_closure", "r7_evidence_closure"],
-    "tracked_counts": {"extra": 203, "tests": 183, "bench": 43, "docs_artifacts": 135, "docs_top_level_json": 189, "scratch_after_slice": 3},
-    "extra_file_level_ledger": {"path": "docs/task_workflow/output/extra-file-level-ledger-20260729.json", "rows": 203, "unique": 203, "tree_match": true, "scope_baseline": 198, "drift": 5, "drift_owner": "extra/usbgpu"},
+    "tracked_counts": {"extra": 200, "tests": 184, "bench": 43, "docs_artifacts": 135, "docs_top_level_json": 189, "scratch_after_slice": 3},
+    "extra_file_level_ledger": {"path": "docs/task_workflow/output/extra-file-level-ledger-20260729.json", "rows": 200, "unique": 200, "tree_match": true, "scope_baseline": 198, "drift": 2, "drift_owner": "extra/usbgpu"},
     "drift_reconciled": [
       {"group": "tinygrad/llm/route_ops.py retained adapters", "owner_branch": "master", "disposition": "consolidate/promote", "consumer_or_reference": "tinygrad/llm/model.py; tinygrad/llm/prefill_routes.py; tinygrad/llm/decode_routes.py", "retention_or_recovery": "retain until the eight-step route migration completes; no adapter deletion in R7", "unresolved_reason": "target modules must be promoted atomically before adapters can be removed"},
       {"group": "extra/usbgpu/** and TinyGPU runtime hooks", "owner_branch": "exp", "disposition": "retain", "consumer_or_reference": "extra/usbgpu tools, qualification tests, tinygrad/runtime/support/system.py, tinygrad/runtime/ops_amd.py", "retention_or_recovery": "retain as one matched experimental unit; run upstream-v3 versus Arkey-v13 A/B before any tier promotion", "unresolved_reason": "supported-product status requires the matched hardware control run"},
@@ -169,6 +169,17 @@
       "focused_tests": "test/unit/test_llama_bench_artifacts.py test/unit/test_measurement_authority.py",
       "verification": "18 focused tests pass; all moved modules compile; CLI help remains runnable",
       "recovery_commit": "77c68b006"
+    }
+  ],
+  "completed_r9_slices": [
+    {
+      "source": ["extra/llm/cli.py", "extra/llm/generate.py", "extra/llm/adapter.py"],
+      "destination": ["tinygrad/llm/cli.py", "tinygrad/llm/generate.py", "tinygrad/llm/adapter.py"],
+      "owner": "master",
+      "consumer_rewrites": ["tinygrad/llm/__main__.py", "six research importers", "TinyGPU residency test", "runtime-boundary audit"],
+      "focused_tests": "test/unit/test_tinygrad_llm_cli_boundary.py",
+      "verification": "CLI help and core-owner import tests pass; no extra.llm CLI/generate/adapter imports remain",
+      "recovery_commit": "e87a50e20"
     }
   ],
   "completed_prunes": [

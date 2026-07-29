@@ -19,7 +19,7 @@ and a driver reset costs the whole session.
 """
 import os, sys, traceback
 os.environ.setdefault("DEV", "AMD")
-from extra.llm.generate import load_model_and_tokenizer
+from tinygrad.llm.generate import load_model_and_tokenizer
 from tinygrad import Tensor
 from tinygrad.llm.prefill_policy import immutable_prefill_policy
 

@@ -22,7 +22,7 @@ from tinygrad import Tensor, Device
 from tinygrad.device import Compiled
 from tinygrad.helpers import ProfileRangeEvent, prod
 from tinygrad.llm.qk_primitives import Q4KPrimitiveLinear, Q6KPrimitiveLinear
-from extra.llm.generate import load_model_and_tokenizer
+from tinygrad.llm.generate import load_model_and_tokenizer
 from extra.llm_research.prefill.prefill_harness import DEFAULT_MODEL  # was extra.llm_research.harness_contract (deleted 0e02a1976)
 
 SCHEMA = "boltbeam.timing_trace.v1"

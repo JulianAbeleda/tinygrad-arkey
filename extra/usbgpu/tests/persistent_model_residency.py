@@ -74,7 +74,7 @@ def run(model_path:pathlib.Path, out_path:pathlib.Path, *, duration_s:float=600,
 
     # Import tinygrad only after the exact AMD environment has been admitted.
     from tinygrad import Device
-    from extra.llm.generate import load_model_and_tokenizer
+    from tinygrad.llm.generate import load_model_and_tokenizer
 
     device = Device[Device.DEFAULT]
     model, tokenizer = load_model_and_tokenizer(model_path, max_context, seed=20260617)

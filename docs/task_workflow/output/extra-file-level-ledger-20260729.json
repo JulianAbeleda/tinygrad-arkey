@@ -4,16 +4,17 @@
   "audited_commit": "77c68b006",
   "status": "CLASSIFICATION_COMPLETE_MIGRATION_GATED",
   "scope_baseline_count": 198,
-  "current_tracked_count": 203,
+  "current_tracked_count": 200,
   "count_drift": {
-    "delta": 5,
+    "delta": 2,
     "paths": [
       "extra/usbgpu/protocol/fixtures/power-residency-status-v4.json",
       "extra/usbgpu/tbgpu/installer/classify_system_extension_state.sh",
       "extra/usbgpu/tests/capture_tunnel_idle.py",
       "extra/usbgpu/tests/persistent_model_residency.py",
       "extra/usbgpu/tools/run_upstream_control.py"
-    ]
+    ],
+    "promoted_out_of_extra": ["extra/llm/cli.py", "extra/llm/generate.py", "extra/llm/adapter.py"]
   },
   "uniqueness_assertion": "git ls-tree -r --name-only HEAD -- extra == ledger.current_path",
   "required_fields": [
@@ -646,42 +647,6 @@
       "unresolved_decision": "promote minimal decoder or keep profiling strictly dev"
     },
     {
-      "current_path": "extra/llm/adapter.py",
-      "file_type": "python",
-      "target_domain": "llm-compat",
-      "purpose": "compatibility/debug tooling",
-      "branch_owner": "dev",
-      "hot_path": "conditional",
-      "direct_consumers": [
-        "legacy/repro scripts; extra.llm_research prefill worker"
-      ],
-      "co_move_dependencies": [],
-      "validation": "named reproduction and import tests",
-      "disposition": "move",
-      "destination": "extra/debug/llm/",
-      "retention_or_recovery": "retain while named users remain",
-      "unresolved": true,
-      "unresolved_decision": "confirm compatibility owner during R8"
-    },
-    {
-      "current_path": "extra/llm/cli.py",
-      "file_type": "python",
-      "target_domain": "llm-cli",
-      "purpose": "production CLI",
-      "branch_owner": "master",
-      "hot_path": "default",
-      "direct_consumers": [
-        "tinygrad/llm/__main__.py"
-      ],
-      "co_move_dependencies": [],
-      "validation": "CLI boundary/import test",
-      "disposition": "promote",
-      "destination": "tinygrad/llm/cli.py",
-      "retention_or_recovery": "retain shipped serve/generate entrypoint",
-      "unresolved": true,
-      "unresolved_decision": "promote atomically with extra/llm/generate.py closure"
-    },
-    {
       "current_path": "extra/llm/bench/eval_common.py",
       "file_type": "python",
       "target_domain": "llm-qualification",
@@ -696,24 +661,6 @@
       "retention_or_recovery": "retain canonical qualification authorities",
       "unresolved": false,
       "unresolved_decision": null
-    },
-    {
-      "current_path": "extra/llm/generate.py",
-      "file_type": "python",
-      "target_domain": "llm-compat",
-      "purpose": "compatibility/debug tooling",
-      "branch_owner": "dev",
-      "hot_path": "conditional",
-      "direct_consumers": [
-        "legacy/repro scripts; extra.llm_research prefill worker"
-      ],
-      "co_move_dependencies": [],
-      "validation": "named reproduction and import tests",
-      "disposition": "move",
-      "destination": "extra/debug/llm/",
-      "retention_or_recovery": "retain while named users remain",
-      "unresolved": true,
-      "unresolved_decision": "confirm compatibility owner during R8"
     },
     {
       "current_path": "extra/llm/bench/json_scorer.py",

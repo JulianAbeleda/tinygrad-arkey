@@ -909,7 +909,7 @@
       "domain": "evidence",
       "duplication_group": null,
       "evidence": [
-        "extra/llm_research/decode/capture_prefill_compile.py has no runtime importer; it patches HIPCompiler/HIPCCCompiler and invokes extra.llm.generate as a compile reproducer",
+        "extra/llm_research/decode/capture_prefill_compile.py has no runtime importer; it patches HIPCompiler/HIPCCCompiler and invokes tinygrad.llm.generate as a compile reproducer",
         "Packet A runtime/tooling census assigns this file to dev until the vector-stack-lvalue compile conclusion is banked",
         "recovery commit 5266ca605 introduced the reproducer alongside the renderer fix"
       ],
