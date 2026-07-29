@@ -2,6 +2,33 @@
 
 This package keeps model execution separate from load-time policy.
 
+## Public generic control path
+
+From a fresh clone, use a local GGUF with the ordinary tinygrad control path:
+
+```bash
+git clone <your-tinygrad-remote> tinygrad
+cd tinygrad
+python -m tinygrad.llm.bench --help
+python -m tinygrad.llm.bench --execute --model /absolute/path/to/model.gguf --phase prefill --context 32 > control-record.json
+```
+
+This pins model load and one public fp16 linear-fallback dispatch to **CPU** and writes a
+structured JSON trace. The command imports only `tinygrad.llm` runtime modules;
+it does not import a research route or accept a custom schedule. It neither
+compares an output to a reference nor reports timing/throughput, so its result
+is a runnable control observation—not a performance benchmark or M8 evidence.
+
+For a no-load provenance record instead:
+
+```bash
+python -m tinygrad.llm.bench --metadata-only --model /absolute/path/to/model.gguf > control-record.json
+```
+
+Consumers must keep `authority.throughput_authoritative == false`. M8 remains
+unproven until a separately verified run supplies correctness, timing, and
+artifact bindings.
+
 ## Runtime files
 
 - `model.py`: transformer blocks, model construction, cache allocation, and generation. It may call policy helpers, but should not grow new standalone admission or registry logic.
