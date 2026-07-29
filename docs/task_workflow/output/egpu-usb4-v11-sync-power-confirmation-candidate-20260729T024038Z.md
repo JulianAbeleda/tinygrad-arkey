@@ -10,6 +10,13 @@ after publication. R6.1 later stopped at the unavailable handshake. Do not run
 the installer again. No reset, replug, AMD initialization, TinyGPU socket
 server, A1, or workload ran.
 
+The subsequent source-only ACIO/tunnel audit and read-only early-idle recorder
+are recorded in
+`docs/task_workflow/output/egpu-usb4-acio-tunnel-boundary-audit-20260729T030650Z.md`
+and
+`docs/task_workflow/input/egpu-usb4-v11-early-tunnel-observation-scope-20260729.md`.
+They do not authorize or perform another hardware transition.
+
 Scope:
 `docs/task_workflow/input/egpu-usb4-v11-sync-power-confirmation-scope-20260729.md`.
 

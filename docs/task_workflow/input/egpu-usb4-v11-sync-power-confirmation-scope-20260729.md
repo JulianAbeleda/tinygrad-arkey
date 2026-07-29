@@ -19,6 +19,15 @@ Primary runtime evidence:
 Post-v11 runtime evidence:
 `docs/task_workflow/output/egpu-usb4-v11-post-reboot-R6.1-20260729T025229Z.md`.
 
+ACIO/tunnel follow-up:
+`docs/task_workflow/output/egpu-usb4-acio-tunnel-boundary-audit-20260729T030650Z.md`.
+The audit found no public DriverKit tunnel-L1 hold, rejected an unobserved v12
+policy mutation, and prepared the read-only early-idle recorder and separate
+R6.2 scope in
+`docs/task_workflow/input/egpu-usb4-v11-early-tunnel-observation-scope-20260729.md`.
+That scope still requires an explicit operator-coordinated clean reboot; no
+hardware transition has occurred.
+
 ## Post-reboot disposition
 
 This subsection supersedes the future activation gate below. Boot history
