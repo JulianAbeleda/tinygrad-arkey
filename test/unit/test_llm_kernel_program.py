@@ -8,7 +8,7 @@ from tinygrad.llm.kernel_program import (KernelProgram, KernelProgramProvenance,
 class Output:
   def __init__(self): self.calls = []
 
-  def custom_kernel(self, *inputs, fxn):
+  def uop_program(self, *inputs, fxn):
     self.calls.append((inputs, fxn))
     return ("output-zero", "output-one", "output-two")
 

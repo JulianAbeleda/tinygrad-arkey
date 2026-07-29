@@ -30,9 +30,9 @@ def _relative(root: Path, paths: list[Path]) -> list[str]:
   return [str(path.relative_to(root)) for path in paths]
 
 
-def _custom_kernel_callers(paths: list[Path]) -> list[Path]:
+def _attribute_callers(paths: list[Path], attribute: str) -> list[Path]:
   return [path for path in paths if any(isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and
-                                        node.func.attr == "custom_kernel" for node in ast.walk(_tree(path)))]
+                                        node.func.attr == attribute for node in ast.walk(_tree(path)))]
 
 
 def _restricted_executor_users(paths: list[Path]) -> list[Path]:
@@ -50,11 +50,18 @@ def _restricted_executor_users(paths: list[Path]) -> list[Path]:
   return users
 
 
-def test_llm_custom_kernel_transport_is_confined_to_kernel_program_boundary():
+def test_llm_uses_no_legacy_custom_kernel_transport():
   root = _repo_root()
   llm_sources = _python_sources(root / "tinygrad" / "llm")
-  callers = _custom_kernel_callers(llm_sources)
-  assert _relative(root, callers) == [str(_BOUNDARY)], "direct .custom_kernel calls must stay inside the kernel-program boundary"
+  callers = _attribute_callers(llm_sources, "custom_kernel")
+  assert not callers, "production LLM source must not call the legacy .custom_kernel compatibility spelling"
+
+
+def test_llm_uop_program_transport_is_confined_to_kernel_program_boundary():
+  root = _repo_root()
+  llm_sources = _python_sources(root / "tinygrad" / "llm")
+  callers = _attribute_callers(llm_sources, "uop_program")
+  assert _relative(root, callers) == [str(_BOUNDARY)], "direct .uop_program calls must stay inside the kernel-program boundary"
 
 
 def test_production_llm_does_not_import_or_call_oracle_or_research_execution():
