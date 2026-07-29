@@ -4,7 +4,8 @@ Date: 2026-07-29
 
 Status: source implementation and host-side verification complete. The v10
 candidate passes 76 focused tests, a clean full analyzer pass, and a signed
-build-only verification; it is uncommitted and uninstalled. This scope
+build-only verification. The implementation is committed as `016b3a106`; it
+remains uninstalled. This scope
 supersedes the uninstalled v9 diagnostic-start candidate. It does not authorize
 installing or activating a DEXT, rebooting macOS, changing NVRAM, resetting or
 replugging the eGPU, initializing AMD hardware, or running A0/A1.
@@ -105,7 +106,8 @@ Produce a source-only v10 candidate that:
   `extra/usbgpu/tools/with_gpu_lock.py`; none is authorized here.
 - Preserve unrelated worktree changes and the three existing v8/v9 evidence
   documents.
-- Do not commit the candidate or install it without separate user direction.
+- Installation still requires separate explicit user direction and the
+  installer's interactive approval flow.
 
 ## 6. Host-side acceptance
 

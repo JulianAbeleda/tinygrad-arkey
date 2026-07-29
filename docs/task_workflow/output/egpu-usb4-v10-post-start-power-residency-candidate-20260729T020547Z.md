@@ -2,8 +2,8 @@
 
 Collected: 2026-07-29T02:05:47Z
 
-Status: source implementation and host-side verification complete. The
-candidate is uncommitted and uninstalled. No system-extension activation,
+Status: source implementation and clean-commit host-side verification complete.
+The implementation is committed as `016b3a106`; it is uninstalled. No system-extension activation,
 reboot, NVRAM change, endpoint observation, reset/replug, AMD initialization,
 A0/A1 gate, or workload occurred.
 
@@ -14,6 +14,9 @@ Audit:
 `docs/task_workflow/output/egpu-usb4-v9-power-management-api-audit-20260729T014837Z.md`.
 
 Starting HEAD: `7f4974d3b7d1386828e63ccab44db3ab6c921c14` on `exp`.
+
+Implementation commit: `016b3a106` (`[runtime] defer DriverKit power request
+until post-start`).
 
 ## Implementation outcome
 
@@ -122,9 +125,9 @@ from a host-only build that a DriverKit child's On desire prevents macOS from
 removing the upstream USB4/ACIO tunnel. Only the future A1 idle-continuity gate
 can answer that.
 
-Before any activation, review and commit the complete v10 candidate so the
-installer's clean-source provenance gate can bind the binary to an exact
-commit, rerun the focused tests and signed build from that clean commit, and
+The focused tests, analyzer, and signed build above were rerun from the clean
+implementation commit. Before activation, retain a clean `exp` worktree so the
+installer's provenance gate can bind the binary to the exact branch HEAD, and
 obtain separate explicit installation/reboot approval. The first boot is
 diagnostic only: validate service publication, both lifecycle probes, request
 attempts, On callback, post-request canary, and `active_healthy` before A1. Do

@@ -8,7 +8,7 @@ registration handoff is clean and the PCIe endpoint is present, but DriverKit
 reports that v8 failed `Start(display)` before publishing `tinygpu`. R6.1
 therefore failed and A0/A1 did not run. The source-only v9 diagnostic candidate
 was audited and must never be installed; the replacement v10 candidate is
-host-verified but remains uncommitted and uninstalled. No endpoint recovery,
+host-verified and committed as `016b3a106` but remains uninstalled. No endpoint recovery,
 installation, reboot, or AMD initialization is authorized. This scope is a follow-on to
 `egpu-usb4-persistent-pcie-service-scope-20260727.md`. It does not replace the
 DriverKit-owned keepalive architecture or its A0-A11 acceptance matrix.
