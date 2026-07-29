@@ -38,6 +38,14 @@
       "state": "completed",
       "recovery_commit": "078fc6c35",
       "verification": "26 focused tests pass; standalone CLI and CPU-only benchmark pass; old-path reference scan clean"
+    },
+    {
+      "source": "extra/mesa/lvp_nir_options.sh",
+      "destination": "extra/setup/mesa/lvp_nir_options.sh",
+      "action": "move",
+      "state": "completed",
+      "recovery_commit": "06525b96a",
+      "verification": "no tracked consumers or old-path references; shell syntax check passes"
     }
   ],
   "rules": [

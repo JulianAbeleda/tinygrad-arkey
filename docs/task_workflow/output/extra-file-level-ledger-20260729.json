@@ -2590,7 +2590,7 @@
       "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
     },
     {
-      "current_path": "extra/mesa/lvp_nir_options.sh",
+      "current_path": "extra/setup/mesa/lvp_nir_options.sh",
       "file_type": "shell",
       "target_domain": "mesa-setup",
       "purpose": "supported Mesa setup",
@@ -2602,7 +2602,7 @@
       "co_move_dependencies": [],
       "validation": "Mesa setup smoke",
       "disposition": "move",
-      "destination": "extra/setup/mesa/",
+      "destination": "extra/setup/mesa/lvp_nir_options.sh",
       "retention_or_recovery": "retain while backend supported",
       "unresolved": false,
       "unresolved_decision": null

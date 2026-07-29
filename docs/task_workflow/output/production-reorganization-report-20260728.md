@@ -267,6 +267,9 @@ passes 26 tests, and the CPU-only benchmark and CLI smoke checks pass. Recovery 
 No other `extra/` group was moved. The remaining unresolved rows stay migration-gated, especially the SQTT boundary,
 the CLI/generate/adapter closure, remote scripts, NV support, and the mixed `llm_research` surface.
 
+The standalone Mesa/LVP setup helper was also moved to `extra/setup/mesa/`; it had no tracked consumers or old-path
+references and passed shell syntax validation. This remains a bounded setup-domain move, not a production promotion.
+
 ## Unresolved blockers
 
 R7 is complete for its stated gate (zero unresolved removals). Broader tier pruning and promotion remain blocked by

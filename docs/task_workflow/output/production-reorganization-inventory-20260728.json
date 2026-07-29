@@ -142,6 +142,15 @@
       "focused_tests": "test/unit/test_analyze_faults.py test/unit/test_alloc_trace.py",
       "verification": "26 focused tests pass; standalone bench root discovery and analyze-faults CLI pass; no live old-path references",
       "recovery_commit": "078fc6c35"
+    },
+    {
+      "source": "extra/mesa/lvp_nir_options.sh",
+      "destination": "extra/setup/mesa/lvp_nir_options.sh",
+      "owner": "master",
+      "consumer_rewrites": [],
+      "focused_tests": "shell syntax check; Mesa setup smoke",
+      "verification": "no tracked consumers or old-path references; shell syntax passes",
+      "recovery_commit": "06525b96a"
     }
   ],
   "completed_prunes": [
