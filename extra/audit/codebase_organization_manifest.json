@@ -1004,7 +1004,7 @@
       "domain": "attention_decode",
       "duplication_group": null,
       "evidence": [
-        "module docstring lines 15-16: 'tinygrad/llm/prefill_policy.py's _SHARED_ATTENTION_PROOF_FIELDS ... promotion requires decode_nonregression_8b AND decode_nonregression_14b'",
+        "tinygrad/llm/admission.py: _SHARED_ATTENTION_PROOF_FIELDS requires decode_nonregression_8b AND decode_nonregression_14b for shared-attention promotion",
         "docs/prefill-softmax-reduce-fuse-evidence-20260724.json is a recorded run of this exact gate",
         "grep confirms tinygrad/llm/decode_routes.py:157 is the real caller this script mirrors via flash_decode_attention_executor"
       ],
@@ -1474,7 +1474,7 @@
       "duplication_group": null,
       "evidence": [
         "extra/llm_research/gemv_g3_codegen_lowering.py:27 builds the shipped kernel from Q4KGateUpLaneMap",
-        "tinygrad/llm/route_policy.py:23 decode_q4k_g3_generated compat_params BUBBLEBEAM_FUTURESIGHT=1 (default-on)"
+        "tinygrad/llm/model_route_plan.py: decode_q4k_g3_generated compatibility params include BUBBLEBEAM_FUTURESIGHT=1 (default-on)"
       ],
       "path": "extra/llm_research/gemv_g2_lanemap.py",
       "promotion_target": null,
@@ -1520,7 +1520,7 @@
       "duplication_group": null,
       "evidence": [
         "docstring line 21-25: 'PROMOTED: this is now the default Q4_K decode GEMV route (BUBBLEBEAM_FUTURESIGHT defaults on)'",
-        "tinygrad/llm/route_policy.py:23 decode_q4k_g3_generated compat_params BUBBLEBEAM_FUTURESIGHT=1",
+        "tinygrad/llm/model_route_plan.py: decode_q4k_g3_generated compatibility params include BUBBLEBEAM_FUTURESIGHT=1",
         "extra/llm_research/route_manifest.py:81-82 'DEFAULT-ON ... the owned warp kernel is the rollback/reference one flag away'"
       ],
       "path": "extra/llm_research/gemv_g3_codegen_lowering.py",
@@ -1611,7 +1611,7 @@
       "duplication_group": null,
       "evidence": [
         "grep for select_generated_candidate|builtin_registry( across the repo (excluding extra/llm_research/generated_candidates.py itself) hits only test/unit/test_generated_quant_binding_audit.py and test/unit/test_runtime_specs.py",
-        "no hit in tinygrad/llm/route_ops.py, tinygrad/llm/decode_routes.py, or tinygrad/llm/route_policy.py"
+        "no hit in tinygrad/llm/route_ops.py, tinygrad/llm/decode_routes.py, or tinygrad/llm/model_route_plan.py"
       ],
       "path": "extra/llm_research/generated_candidates.py",
       "promotion_target": null,
