@@ -20,6 +20,8 @@
   ],
   "current_tip_reconciliation": {
     "commit": "8505f4c5a5b1e31862ace0613672b515f5b60405",
+    "extra_file_level_ledger": "docs/task_workflow/output/extra-file-level-ledger-20260729.json",
+    "extra_file_level_rows": 203,
     "gate": "R7_PASS: every removal is completed or explicitly blocked; no unresolved path is being removed",
     "non_removal_blockers": [
       "retained route adapters require the eight-step promotion sequence",

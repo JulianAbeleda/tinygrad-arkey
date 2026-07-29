@@ -243,6 +243,19 @@ scan. Recovery is the pre-slice commit `8505f4c5a5b1e31862ace0613672b515f5b60405
 probe scripts, and `docs/scratchpad/**` remain blocked because they still have manifest/document references or require
 conclusion banking. The machine-readable inventory and cleanup ledger both record this same authorization and result.
 
+## Extra filesystem ledger checkpoint
+
+The required file-level `extra/` ledger is now recorded in
+`extra-file-level-ledger-20260729.json`. It has one row for every current tracked path: 203 unique rows matching
+`git ls-tree -r --name-only HEAD -- extra`. The scope input's 198-path baseline is stale by five paths; all five are
+new USBGPU protocol, installer, qualification, or upstream-control files and are retained with the existing `exp`
+TinyGPU unit.
+
+This ledger is a classification gate, not move authority. It records target domains, branch owners, hot-path status,
+consumers, validation, retention/recovery, and unresolved decision owners. The organization audit still covers only the
+88 authored `extra/llm_research` source records, so R8 filesystem moves remain gated until the full-ledger consumer and
+reference review is accepted.
+
 ## Unresolved blockers
 
 R7 is complete for its stated gate (zero unresolved removals). Broader tier pruning and promotion remain blocked by

@@ -25,13 +25,15 @@
     "docs/task_workflow/output/production-reorg-packet-b-tests-evidence-20260728.md",
     "docs/task_workflow/output/production-reorg-packet-c-docs-surface-20260728.md",
     "docs/task_workflow/output/production-reorganization-report-20260728.md",
-    "docs/task_workflow/output/test-ownership-partition-20260728.md"
+    "docs/task_workflow/output/test-ownership-partition-20260728.md",
+    "docs/task_workflow/output/extra-file-level-ledger-20260729.json"
   ],
   "current_tip_reconciliation": {
     "commit": "8505f4c5a5b1e31862ace0613672b515f5b60405",
     "worktree": "/Users/julianabeleda/env/tinygrad-arkey-exp",
     "agent_packets": ["r7_route_closure", "r7_egpu_closure", "r7_evidence_closure"],
     "tracked_counts": {"extra": 203, "tests": 183, "bench": 43, "docs_artifacts": 135, "docs_top_level_json": 189, "scratch_after_slice": 3},
+    "extra_file_level_ledger": {"path": "docs/task_workflow/output/extra-file-level-ledger-20260729.json", "rows": 203, "unique": 203, "tree_match": true, "scope_baseline": 198, "drift": 5, "drift_owner": "extra/usbgpu"},
     "drift_reconciled": [
       {"group": "tinygrad/llm/route_ops.py retained adapters", "owner_branch": "master", "disposition": "consolidate/promote", "consumer_or_reference": "tinygrad/llm/model.py; tinygrad/llm/prefill_routes.py; tinygrad/llm/decode_routes.py", "retention_or_recovery": "retain until the eight-step route migration completes; no adapter deletion in R7", "unresolved_reason": "target modules must be promoted atomically before adapters can be removed"},
       {"group": "extra/usbgpu/** and TinyGPU runtime hooks", "owner_branch": "exp", "disposition": "retain", "consumer_or_reference": "extra/usbgpu tools, qualification tests, tinygrad/runtime/support/system.py, tinygrad/runtime/ops_amd.py", "retention_or_recovery": "retain as one matched experimental unit; run upstream-v3 versus Arkey-v13 A/B before any tier promotion", "unresolved_reason": "supported-product status requires the matched hardware control run"},

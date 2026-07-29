@@ -1,0 +1,3691 @@
+{
+  "schema": "extra-file-level-ledger-20260729",
+  "audited_worktree": "/Users/julianabeleda/env/tinygrad-arkey-exp",
+  "audited_commit": "5f8ad29f1902a59f343a89e13916ff0000b33614",
+  "status": "CLASSIFICATION_COMPLETE_MIGRATION_GATED",
+  "scope_baseline_count": 198,
+  "current_tracked_count": 203,
+  "count_drift": {
+    "delta": 5,
+    "paths": [
+      "extra/usbgpu/protocol/fixtures/power-residency-status-v4.json",
+      "extra/usbgpu/tbgpu/installer/classify_system_extension_state.sh",
+      "extra/usbgpu/tests/capture_tunnel_idle.py",
+      "extra/usbgpu/tests/persistent_model_residency.py",
+      "extra/usbgpu/tools/run_upstream_control.py"
+    ]
+  },
+  "uniqueness_assertion": "git ls-tree -r --name-only HEAD -- extra == ledger.current_path",
+  "required_fields": [
+    "current_path",
+    "file_type",
+    "target_domain",
+    "purpose",
+    "branch_owner",
+    "hot_path",
+    "direct_consumers",
+    "co_move_dependencies",
+    "validation",
+    "disposition",
+    "destination",
+    "retention_or_recovery",
+    "unresolved",
+    "unresolved_decision"
+  ],
+  "rows": [
+    {
+      "current_path": "extra/audit/codebase_organization_audit.py",
+      "file_type": "python",
+      "target_domain": "audit",
+      "purpose": "production authority",
+      "branch_owner": "master",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "audit scripts and organization gates"
+      ],
+      "co_move_dependencies": [],
+      "validation": "PYTHONPATH=. .venv/bin/python extra/audit/codebase_organization_audit.py --check",
+      "disposition": "retain",
+      "destination": "extra/audit/codebase_organization_audit.py",
+      "retention_or_recovery": "retain as canonical repository authority",
+      "unresolved": false,
+      "unresolved_decision": null
+    },
+    {
+      "current_path": "extra/audit/codebase_organization_manifest.json",
+      "file_type": "json",
+      "target_domain": "audit",
+      "purpose": "production authority",
+      "branch_owner": "master",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "audit scripts and organization gates"
+      ],
+      "co_move_dependencies": [],
+      "validation": "PYTHONPATH=. .venv/bin/python extra/audit/codebase_organization_audit.py --check",
+      "disposition": "retain",
+      "destination": "extra/audit/codebase_organization_manifest.json",
+      "retention_or_recovery": "retain as canonical repository authority",
+      "unresolved": false,
+      "unresolved_decision": null
+    },
+    {
+      "current_path": "extra/audit/flash_variant_fingerprint.py",
+      "file_type": "python",
+      "target_domain": "audit",
+      "purpose": "production authority",
+      "branch_owner": "master",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "audit scripts and organization gates"
+      ],
+      "co_move_dependencies": [],
+      "validation": "PYTHONPATH=. .venv/bin/python extra/audit/codebase_organization_audit.py --check",
+      "disposition": "retain",
+      "destination": "extra/audit/flash_variant_fingerprint.py",
+      "retention_or_recovery": "retain as canonical repository authority",
+      "unresolved": false,
+      "unresolved_decision": null
+    },
+    {
+      "current_path": "extra/audit/lowering_baseline.py",
+      "file_type": "python",
+      "target_domain": "audit",
+      "purpose": "production authority",
+      "branch_owner": "master",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "audit scripts and organization gates"
+      ],
+      "co_move_dependencies": [],
+      "validation": "PYTHONPATH=. .venv/bin/python extra/audit/codebase_organization_audit.py --check",
+      "disposition": "retain",
+      "destination": "extra/audit/lowering_baseline.py",
+      "retention_or_recovery": "retain as canonical repository authority",
+      "unresolved": false,
+      "unresolved_decision": null
+    },
+    {
+      "current_path": "extra/audit/lowering_fingerprint.py",
+      "file_type": "python",
+      "target_domain": "audit",
+      "purpose": "production authority",
+      "branch_owner": "master",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "audit scripts and organization gates"
+      ],
+      "co_move_dependencies": [],
+      "validation": "PYTHONPATH=. .venv/bin/python extra/audit/codebase_organization_audit.py --check",
+      "disposition": "retain",
+      "destination": "extra/audit/lowering_fingerprint.py",
+      "retention_or_recovery": "retain as canonical repository authority",
+      "unresolved": false,
+      "unresolved_decision": null
+    },
+    {
+      "current_path": "extra/audit/pure_machine_search_default_path_census.py",
+      "file_type": "python",
+      "target_domain": "audit",
+      "purpose": "production authority",
+      "branch_owner": "master",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "audit scripts and organization gates"
+      ],
+      "co_move_dependencies": [],
+      "validation": "PYTHONPATH=. .venv/bin/python extra/audit/codebase_organization_audit.py --check",
+      "disposition": "retain",
+      "destination": "extra/audit/pure_machine_search_default_path_census.py",
+      "retention_or_recovery": "retain as canonical repository authority",
+      "unresolved": false,
+      "unresolved_decision": null
+    },
+    {
+      "current_path": "extra/audit/tinygrad_provider_compat_gate.py",
+      "file_type": "python",
+      "target_domain": "audit",
+      "purpose": "production authority",
+      "branch_owner": "master",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "audit scripts and organization gates"
+      ],
+      "co_move_dependencies": [],
+      "validation": "PYTHONPATH=. .venv/bin/python extra/audit/codebase_organization_audit.py --check",
+      "disposition": "retain",
+      "destination": "extra/audit/tinygrad_provider_compat_gate.py",
+      "retention_or_recovery": "retain as canonical repository authority",
+      "unresolved": false,
+      "unresolved_decision": null
+    },
+    {
+      "current_path": "extra/audit/tinygrad_runtime_boundary_audit.py",
+      "file_type": "python",
+      "target_domain": "audit",
+      "purpose": "production authority",
+      "branch_owner": "master",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "audit scripts and organization gates"
+      ],
+      "co_move_dependencies": [],
+      "validation": "PYTHONPATH=. .venv/bin/python extra/audit/codebase_organization_audit.py --check",
+      "disposition": "retain",
+      "destination": "extra/audit/tinygrad_runtime_boundary_audit.py",
+      "retention_or_recovery": "retain as canonical repository authority",
+      "unresolved": false,
+      "unresolved_decision": null
+    },
+    {
+      "current_path": "extra/cl_android.sh",
+      "file_type": "shell",
+      "target_domain": "setup",
+      "purpose": "backend/toolchain setup",
+      "branch_owner": "master",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "backend/toolchain operators"
+      ],
+      "co_move_dependencies": [],
+      "validation": "per-backend setup smoke",
+      "disposition": "move",
+      "destination": "extra/setup/",
+      "retention_or_recovery": "retain supported setup contract",
+      "unresolved": false,
+      "unresolved_decision": "none"
+    },
+    {
+      "current_path": "extra/gpu_fault_analysis/analyze_faults.py",
+      "file_type": "python",
+      "target_domain": "gpu-debug",
+      "purpose": "fault/allocator reproducer",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "operator workflows and focused tests"
+      ],
+      "co_move_dependencies": [],
+      "validation": "GPU-lock reproducer",
+      "disposition": "move",
+      "destination": "extra/debug/gpu_fault_analysis/",
+      "retention_or_recovery": "retain diagnosis contract",
+      "unresolved": false,
+      "unresolved_decision": null
+    },
+    {
+      "current_path": "extra/gpu_fault_analysis/bench_alloc_trace.py",
+      "file_type": "python",
+      "target_domain": "gpu-debug",
+      "purpose": "fault/allocator reproducer",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "operator workflows and focused tests"
+      ],
+      "co_move_dependencies": [],
+      "validation": "GPU-lock reproducer",
+      "disposition": "move",
+      "destination": "extra/debug/gpu_fault_analysis/",
+      "retention_or_recovery": "retain diagnosis contract",
+      "unresolved": false,
+      "unresolved_decision": null
+    },
+    {
+      "current_path": "extra/hardware/amdpci/am_smi.py",
+      "file_type": "python",
+      "target_domain": "amd-hardware-debug",
+      "purpose": "AMD reset/PSP/power diagnostics",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "hardware scripts, remote repro workflows, operator docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "GPU-lock hardware workflow",
+      "disposition": "move",
+      "destination": "extra/debug/hardware/amdpci/",
+      "retention_or_recovery": "retain named diagnosis tooling",
+      "unresolved": true,
+      "unresolved_decision": "rewrite cross-links and validate recovery workflow"
+    },
+    {
+      "current_path": "extra/hardware/amdpci/capture_linux_psp_good_trace.sh",
+      "file_type": "shell",
+      "target_domain": "amd-hardware-debug",
+      "purpose": "AMD reset/PSP/power diagnostics",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "hardware scripts, remote repro workflows, operator docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "GPU-lock hardware workflow",
+      "disposition": "move",
+      "destination": "extra/debug/hardware/amdpci/",
+      "retention_or_recovery": "retain named diagnosis tooling",
+      "unresolved": true,
+      "unresolved_decision": "rewrite cross-links and validate recovery workflow"
+    },
+    {
+      "current_path": "extra/hardware/amdpci/generate_deep_psp_trace.py",
+      "file_type": "python",
+      "target_domain": "amd-hardware-debug",
+      "purpose": "AMD reset/PSP/power diagnostics",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "hardware scripts, remote repro workflows, operator docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "GPU-lock hardware workflow",
+      "disposition": "move",
+      "destination": "extra/debug/hardware/amdpci/",
+      "retention_or_recovery": "retain named diagnosis tooling",
+      "unresolved": true,
+      "unresolved_decision": "rewrite cross-links and validate recovery workflow"
+    },
+    {
+      "current_path": "extra/hardware/amdpci/hive_reset.py",
+      "file_type": "python",
+      "target_domain": "amd-hardware-debug",
+      "purpose": "AMD reset/PSP/power diagnostics",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "hardware scripts, remote repro workflows, operator docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "GPU-lock hardware workflow",
+      "disposition": "move",
+      "destination": "extra/debug/hardware/amdpci/",
+      "retention_or_recovery": "retain named diagnosis tooling",
+      "unresolved": true,
+      "unresolved_decision": "rewrite cross-links and validate recovery workflow"
+    },
+    {
+      "current_path": "extra/hardware/amdpci/linux_amd_blacklisted_preflight.sh",
+      "file_type": "shell",
+      "target_domain": "amd-hardware-debug",
+      "purpose": "AMD reset/PSP/power diagnostics",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "hardware scripts, remote repro workflows, operator docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "GPU-lock hardware workflow",
+      "disposition": "move",
+      "destination": "extra/debug/hardware/amdpci/",
+      "retention_or_recovery": "retain named diagnosis tooling",
+      "unresolved": true,
+      "unresolved_decision": "rewrite cross-links and validate recovery workflow"
+    },
+    {
+      "current_path": "extra/hardware/amdpci/linux_amd_poweroff_blacklist.sh",
+      "file_type": "shell",
+      "target_domain": "amd-hardware-debug",
+      "purpose": "AMD reset/PSP/power diagnostics",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "hardware scripts, remote repro workflows, operator docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "GPU-lock hardware workflow",
+      "disposition": "move",
+      "destination": "extra/debug/hardware/amdpci/",
+      "retention_or_recovery": "retain named diagnosis tooling",
+      "unresolved": true,
+      "unresolved_decision": "rewrite cross-links and validate recovery workflow"
+    },
+    {
+      "current_path": "extra/hardware/amdpci/linux_amd_poweroff_normal.sh",
+      "file_type": "shell",
+      "target_domain": "amd-hardware-debug",
+      "purpose": "AMD reset/PSP/power diagnostics",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "hardware scripts, remote repro workflows, operator docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "GPU-lock hardware workflow",
+      "disposition": "move",
+      "destination": "extra/debug/hardware/amdpci/",
+      "retention_or_recovery": "retain named diagnosis tooling",
+      "unresolved": true,
+      "unresolved_decision": "rewrite cross-links and validate recovery workflow"
+    },
+    {
+      "current_path": "extra/hardware/amdpci/linux_amd_run_kdb_once.sh",
+      "file_type": "shell",
+      "target_domain": "amd-hardware-debug",
+      "purpose": "AMD reset/PSP/power diagnostics",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "hardware scripts, remote repro workflows, operator docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "GPU-lock hardware workflow",
+      "disposition": "move",
+      "destination": "extra/debug/hardware/amdpci/",
+      "retention_or_recovery": "retain named diagnosis tooling",
+      "unresolved": true,
+      "unresolved_decision": "rewrite cross-links and validate recovery workflow"
+    },
+    {
+      "current_path": "extra/hardware/amdpci/linux_amd_state.sh",
+      "file_type": "shell",
+      "target_domain": "amd-hardware-debug",
+      "purpose": "AMD reset/PSP/power diagnostics",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "hardware scripts, remote repro workflows, operator docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "GPU-lock hardware workflow",
+      "disposition": "move",
+      "destination": "extra/debug/hardware/amdpci/",
+      "retention_or_recovery": "retain named diagnosis tooling",
+      "unresolved": true,
+      "unresolved_decision": "rewrite cross-links and validate recovery workflow"
+    },
+    {
+      "current_path": "extra/hardware/amdpci/linux_amdgpu_grub_switch.sh",
+      "file_type": "shell",
+      "target_domain": "amd-hardware-debug",
+      "purpose": "AMD reset/PSP/power diagnostics",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "hardware scripts, remote repro workflows, operator docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "GPU-lock hardware workflow",
+      "disposition": "move",
+      "destination": "extra/debug/hardware/amdpci/",
+      "retention_or_recovery": "retain named diagnosis tooling",
+      "unresolved": true,
+      "unresolved_decision": "rewrite cross-links and validate recovery workflow"
+    },
+    {
+      "current_path": "extra/hardware/amdpci/linux_mmhub_gart_snapshot.py",
+      "file_type": "python",
+      "target_domain": "amd-hardware-debug",
+      "purpose": "AMD reset/PSP/power diagnostics",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "hardware scripts, remote repro workflows, operator docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "GPU-lock hardware workflow",
+      "disposition": "move",
+      "destination": "extra/debug/hardware/amdpci/",
+      "retention_or_recovery": "retain named diagnosis tooling",
+      "unresolved": true,
+      "unresolved_decision": "rewrite cross-links and validate recovery workflow"
+    },
+    {
+      "current_path": "extra/hardware/amdpci/proclogs.py",
+      "file_type": "python",
+      "target_domain": "amd-hardware-debug",
+      "purpose": "AMD reset/PSP/power diagnostics",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "hardware scripts, remote repro workflows, operator docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "GPU-lock hardware workflow",
+      "disposition": "move",
+      "destination": "extra/debug/hardware/amdpci/",
+      "retention_or_recovery": "retain named diagnosis tooling",
+      "unresolved": true,
+      "unresolved_decision": "rewrite cross-links and validate recovery workflow"
+    },
+    {
+      "current_path": "extra/hardware/amdpci/psp_c2pmsg_regs.py",
+      "file_type": "python",
+      "target_domain": "amd-hardware-debug",
+      "purpose": "AMD reset/PSP/power diagnostics",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "hardware scripts, remote repro workflows, operator docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "GPU-lock hardware workflow",
+      "disposition": "move",
+      "destination": "extra/debug/hardware/amdpci/",
+      "retention_or_recovery": "retain named diagnosis tooling",
+      "unresolved": true,
+      "unresolved_decision": "rewrite cross-links and validate recovery workflow"
+    },
+    {
+      "current_path": "extra/hardware/amdpci/receive_capture_tar.py",
+      "file_type": "python",
+      "target_domain": "amd-hardware-debug",
+      "purpose": "AMD reset/PSP/power diagnostics",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "hardware scripts, remote repro workflows, operator docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "GPU-lock hardware workflow",
+      "disposition": "move",
+      "destination": "extra/debug/hardware/amdpci/",
+      "retention_or_recovery": "retain named diagnosis tooling",
+      "unresolved": true,
+      "unresolved_decision": "rewrite cross-links and validate recovery workflow"
+    },
+    {
+      "current_path": "extra/hardware/amdpci/run_remote_kdb_attempt.sh",
+      "file_type": "shell",
+      "target_domain": "amd-hardware-debug",
+      "purpose": "AMD reset/PSP/power diagnostics",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "hardware scripts, remote repro workflows, operator docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "GPU-lock hardware workflow",
+      "disposition": "move",
+      "destination": "extra/debug/hardware/amdpci/",
+      "retention_or_recovery": "retain named diagnosis tooling",
+      "unresolved": true,
+      "unresolved_decision": "rewrite cross-links and validate recovery workflow"
+    },
+    {
+      "current_path": "extra/hardware/amdpci/setup_python_cap.sh",
+      "file_type": "shell",
+      "target_domain": "amd-hardware-debug",
+      "purpose": "AMD reset/PSP/power diagnostics",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "hardware scripts, remote repro workflows, operator docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "GPU-lock hardware workflow",
+      "disposition": "move",
+      "destination": "extra/debug/hardware/amdpci/",
+      "retention_or_recovery": "retain named diagnosis tooling",
+      "unresolved": true,
+      "unresolved_decision": "rewrite cross-links and validate recovery workflow"
+    },
+    {
+      "current_path": "extra/hardware/amdpci/setup_vfio.sh",
+      "file_type": "shell",
+      "target_domain": "amd-hardware-debug",
+      "purpose": "AMD reset/PSP/power diagnostics",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "hardware scripts, remote repro workflows, operator docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "GPU-lock hardware workflow",
+      "disposition": "move",
+      "destination": "extra/debug/hardware/amdpci/",
+      "retention_or_recovery": "retain named diagnosis tooling",
+      "unresolved": true,
+      "unresolved_decision": "rewrite cross-links and validate recovery workflow"
+    },
+    {
+      "current_path": "extra/hardware/amdpci/trace_amdgpu_psp.bt",
+      "file_type": "asset",
+      "target_domain": "amd-hardware-debug",
+      "purpose": "AMD reset/PSP/power diagnostics",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "hardware scripts, remote repro workflows, operator docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "GPU-lock hardware workflow",
+      "disposition": "move",
+      "destination": "extra/debug/hardware/amdpci/",
+      "retention_or_recovery": "retain named diagnosis tooling",
+      "unresolved": true,
+      "unresolved_decision": "rewrite cross-links and validate recovery workflow"
+    },
+    {
+      "current_path": "extra/hardware/sqtt/README.md",
+      "file_type": "markdown",
+      "target_domain": "sqtt",
+      "purpose": "profiling tool",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "SQTT CLI/docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "SQTT/profile focused test",
+      "disposition": "move",
+      "destination": "extra/debug/hardware/sqtt/",
+      "retention_or_recovery": "retain until decoder dependency direction is repaired",
+      "unresolved": true,
+      "unresolved_decision": "promote minimal decoder or keep profiling strictly dev"
+    },
+    {
+      "current_path": "extra/hardware/sqtt/generate_examples.py",
+      "file_type": "python",
+      "target_domain": "sqtt",
+      "purpose": "profiling tool",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "SQTT CLI/docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "SQTT/profile focused test",
+      "disposition": "move",
+      "destination": "extra/debug/hardware/sqtt/",
+      "retention_or_recovery": "retain until decoder dependency direction is repaired",
+      "unresolved": true,
+      "unresolved_decision": "promote minimal decoder or keep profiling strictly dev"
+    },
+    {
+      "current_path": "extra/hardware/sqtt/install_rocprof_decoder.py",
+      "file_type": "python",
+      "target_domain": "sqtt",
+      "purpose": "profiling tool",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "SQTT CLI/docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "SQTT/profile focused test",
+      "disposition": "move",
+      "destination": "extra/debug/hardware/sqtt/",
+      "retention_or_recovery": "retain until decoder dependency direction is repaired",
+      "unresolved": true,
+      "unresolved_decision": "promote minimal decoder or keep profiling strictly dev"
+    },
+    {
+      "current_path": "extra/hardware/sqtt/rgptool.py",
+      "file_type": "python",
+      "target_domain": "sqtt",
+      "purpose": "profiling tool",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "SQTT CLI/docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "SQTT/profile focused test",
+      "disposition": "move",
+      "destination": "extra/debug/hardware/sqtt/",
+      "retention_or_recovery": "retain until decoder dependency direction is repaired",
+      "unresolved": true,
+      "unresolved_decision": "promote minimal decoder or keep profiling strictly dev"
+    },
+    {
+      "current_path": "extra/hardware/sqtt/roc.py",
+      "file_type": "python",
+      "target_domain": "sqtt",
+      "purpose": "runtime/debug boundary",
+      "branch_owner": "dev",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/viz/profile.py; test.amd.disasm"
+      ],
+      "co_move_dependencies": [],
+      "validation": "SQTT/profile focused test",
+      "disposition": "retain pending boundary decision",
+      "destination": "tinygrad/viz/amd_sqtt.py or dev",
+      "retention_or_recovery": "retain until decoder dependency direction is repaired",
+      "unresolved": true,
+      "unresolved_decision": "promote minimal decoder or keep profiling strictly dev"
+    },
+    {
+      "current_path": "extra/llm/adapter.py",
+      "file_type": "python",
+      "target_domain": "llm-compat",
+      "purpose": "compatibility/debug tooling",
+      "branch_owner": "dev",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "legacy/repro scripts; extra.llm_research prefill worker"
+      ],
+      "co_move_dependencies": [],
+      "validation": "named reproduction and import tests",
+      "disposition": "move",
+      "destination": "extra/debug/llm/",
+      "retention_or_recovery": "retain while named users remain",
+      "unresolved": true,
+      "unresolved_decision": "confirm compatibility owner during R8"
+    },
+    {
+      "current_path": "extra/llm/cli.py",
+      "file_type": "python",
+      "target_domain": "llm-cli",
+      "purpose": "production CLI",
+      "branch_owner": "master",
+      "hot_path": "default",
+      "direct_consumers": [
+        "tinygrad/llm/__main__.py"
+      ],
+      "co_move_dependencies": [],
+      "validation": "CLI boundary/import test",
+      "disposition": "promote",
+      "destination": "tinygrad/llm/cli.py",
+      "retention_or_recovery": "retain shipped serve/generate entrypoint",
+      "unresolved": true,
+      "unresolved_decision": "promote atomically with extra/llm/generate.py closure"
+    },
+    {
+      "current_path": "extra/llm/eval_common.py",
+      "file_type": "python",
+      "target_domain": "llm-qualification",
+      "purpose": "qualification/benchmark",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "benchmark CLIs, docs, measurement tests"
+      ],
+      "co_move_dependencies": [],
+      "validation": "selected benchmark smoke",
+      "disposition": "move",
+      "destination": "extra/qualification/llm/",
+      "retention_or_recovery": "retain canonical qualification authorities",
+      "unresolved": true,
+      "unresolved_decision": "choose canonical benchmark authorities"
+    },
+    {
+      "current_path": "extra/llm/generate.py",
+      "file_type": "python",
+      "target_domain": "llm-compat",
+      "purpose": "compatibility/debug tooling",
+      "branch_owner": "dev",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "legacy/repro scripts; extra.llm_research prefill worker"
+      ],
+      "co_move_dependencies": [],
+      "validation": "named reproduction and import tests",
+      "disposition": "move",
+      "destination": "extra/debug/llm/",
+      "retention_or_recovery": "retain while named users remain",
+      "unresolved": true,
+      "unresolved_decision": "confirm compatibility owner during R8"
+    },
+    {
+      "current_path": "extra/llm/json_scorer.py",
+      "file_type": "python",
+      "target_domain": "llm-qualification",
+      "purpose": "qualification/benchmark",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "benchmark CLIs, docs, measurement tests"
+      ],
+      "co_move_dependencies": [],
+      "validation": "selected benchmark smoke",
+      "disposition": "move",
+      "destination": "extra/qualification/llm/",
+      "retention_or_recovery": "retain canonical qualification authorities",
+      "unresolved": true,
+      "unresolved_decision": "choose canonical benchmark authorities"
+    },
+    {
+      "current_path": "extra/llm/llama_bench.py",
+      "file_type": "python",
+      "target_domain": "llm-qualification",
+      "purpose": "qualification/benchmark",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "benchmark CLIs, docs, measurement tests"
+      ],
+      "co_move_dependencies": [],
+      "validation": "selected benchmark smoke",
+      "disposition": "move",
+      "destination": "extra/qualification/llm/",
+      "retention_or_recovery": "retain canonical qualification authorities",
+      "unresolved": true,
+      "unresolved_decision": "choose canonical benchmark authorities"
+    },
+    {
+      "current_path": "extra/llm/llama_cpp_bench.py",
+      "file_type": "python",
+      "target_domain": "llm-qualification",
+      "purpose": "qualification/benchmark",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "benchmark CLIs, docs, measurement tests"
+      ],
+      "co_move_dependencies": [],
+      "validation": "selected benchmark smoke",
+      "disposition": "move",
+      "destination": "extra/qualification/llm/",
+      "retention_or_recovery": "retain canonical qualification authorities",
+      "unresolved": true,
+      "unresolved_decision": "choose canonical benchmark authorities"
+    },
+    {
+      "current_path": "extra/llm/llama_kv_ctx_slope_bench.py",
+      "file_type": "python",
+      "target_domain": "llm-qualification",
+      "purpose": "qualification/benchmark",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "benchmark CLIs, docs, measurement tests"
+      ],
+      "co_move_dependencies": [],
+      "validation": "selected benchmark smoke",
+      "disposition": "move",
+      "destination": "extra/qualification/llm/",
+      "retention_or_recovery": "retain canonical qualification authorities",
+      "unresolved": true,
+      "unresolved_decision": "choose canonical benchmark authorities"
+    },
+    {
+      "current_path": "extra/llm/model_authority_bench.py",
+      "file_type": "python",
+      "target_domain": "llm-qualification",
+      "purpose": "qualification/benchmark",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "benchmark CLIs, docs, measurement tests"
+      ],
+      "co_move_dependencies": [],
+      "validation": "selected benchmark smoke",
+      "disposition": "move",
+      "destination": "extra/qualification/llm/",
+      "retention_or_recovery": "retain canonical qualification authorities",
+      "unresolved": true,
+      "unresolved_decision": "choose canonical benchmark authorities"
+    },
+    {
+      "current_path": "extra/llm/model_e2e_bench.py",
+      "file_type": "python",
+      "target_domain": "llm-qualification",
+      "purpose": "qualification/benchmark",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "benchmark CLIs, docs, measurement tests"
+      ],
+      "co_move_dependencies": [],
+      "validation": "selected benchmark smoke",
+      "disposition": "move",
+      "destination": "extra/qualification/llm/",
+      "retention_or_recovery": "retain canonical qualification authorities",
+      "unresolved": true,
+      "unresolved_decision": "choose canonical benchmark authorities"
+    },
+    {
+      "current_path": "extra/llm/sft_smoke_train.py",
+      "file_type": "python",
+      "target_domain": "llm-qualification",
+      "purpose": "qualification/benchmark",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "benchmark CLIs, docs, measurement tests"
+      ],
+      "co_move_dependencies": [],
+      "validation": "selected benchmark smoke",
+      "disposition": "move",
+      "destination": "extra/qualification/llm/",
+      "retention_or_recovery": "retain canonical qualification authorities",
+      "unresolved": true,
+      "unresolved_decision": "choose canonical benchmark authorities"
+    },
+    {
+      "current_path": "extra/llm_research/README.md",
+      "file_type": "markdown",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/amd_isa_proof.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/amd_resource_artifact.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/attention_harness_common.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/bench.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/benchmark_shared_attention.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/benchmark_split_shared_attention.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/bubblebeam_futuresight.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/clock_pin.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/cooperative_stage_lanemap.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/decode/capture_prefill_compile.py",
+      "file_type": "python",
+      "target_domain": "llm-research-qualification",
+      "purpose": "qualification/research/evidence",
+      "branch_owner": "exp",
+      "hot_path": "test/evidence-only",
+      "direct_consumers": [
+        "research tests, promotion gates, campaign records"
+      ],
+      "co_move_dependencies": [],
+      "validation": "targeted CPU test or guarded hardware gate",
+      "disposition": "retain",
+      "destination": "extra/llm_research/decode/capture_prefill_compile.py",
+      "retention_or_recovery": "retain until named conclusion or compact replacement",
+      "unresolved": true,
+      "unresolved_decision": "research owner must bank conclusion before any move/delete"
+    },
+    {
+      "current_path": "extra/llm_research/decode/current_decode_execution_adapter.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/decode/decode_codegen_identity_check.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/decode/decode_harness.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/decode/decode_hd_sweep_numerics.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/decode/decode_resource_capture.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/decode/decode_runtime_overhead.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/decode/decode_tile_timing.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/decode/flash_decode_attention_executor.py",
+      "file_type": "python",
+      "target_domain": "llm-live-route",
+      "purpose": "production route migration debt",
+      "branch_owner": "master",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/llm/route_ops.py; model.py; prefill_routes.py; decode_routes.py"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused route/boundary suite plus route-specific tests",
+      "disposition": "promote",
+      "destination": "tinygrad/llm/ or tinygrad/schedule/ domain owner",
+      "retention_or_recovery": "retain until atomic caller/test/authority migration",
+      "unresolved": true,
+      "unresolved_decision": "route migration owner must promote target and then remove adapter"
+    },
+    {
+      "current_path": "extra/llm_research/decode/flash_decode_attention_spec.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/flash_common.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/flash_kernels.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/gemv_g2_lanemap.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/gemv_g3_codegen_lowering.py",
+      "file_type": "python",
+      "target_domain": "llm-live-route",
+      "purpose": "production route migration debt",
+      "branch_owner": "master",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/llm/route_ops.py; model.py; prefill_routes.py; decode_routes.py"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused route/boundary suite plus route-specific tests",
+      "disposition": "promote",
+      "destination": "tinygrad/llm/ or tinygrad/schedule/ domain owner",
+      "retention_or_recovery": "retain until atomic caller/test/authority migration",
+      "unresolved": true,
+      "unresolved_decision": "route migration owner must promote target and then remove adapter"
+    },
+    {
+      "current_path": "extra/llm_research/generate_shared_attention_captures.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/generated_candidates.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/gpu_wait_clear.sh",
+      "file_type": "shell",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/kernel_vocabulary.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/kv_load.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/lane_partition_reduce.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/layout.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/live_split_geometry.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/memory_adaptive_allocation_observer.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/memory_adaptive_policy.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/memory_adaptive_runtime_collector.py",
+      "file_type": "python",
+      "target_domain": "llm-live-route",
+      "purpose": "production route migration debt",
+      "branch_owner": "master",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/llm/route_ops.py; model.py; prefill_routes.py; decode_routes.py"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused route/boundary suite plus route-specific tests",
+      "disposition": "promote",
+      "destination": "tinygrad/llm/ or tinygrad/schedule/ domain owner",
+      "retention_or_recovery": "retain until atomic caller/test/authority migration",
+      "unresolved": true,
+      "unresolved_decision": "route migration owner must promote target and then remove adapter"
+    },
+    {
+      "current_path": "extra/llm_research/microbench/README.md",
+      "file_type": "markdown",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/microbench/wmma_peak.cpp",
+      "file_type": "native-source",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/mmq_atom_boundary.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/mmq_compile_evidence.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/mmq_ds4_logical_emitter.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/mmq_ds4_probe_contract.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/mmq_epoch_manifest_export.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/mmq_lifecycle.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/mmq_logical_vocabulary.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/mmq_q4k_q8_atom.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/mmq_q4k_q8_reference.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/model_profiles.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/operand_attribution.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/packed_wmma_canary_evidence.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/packed_wmma_compile_gate.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/phase_abi_v1_resource_probe.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/candidate_payloads.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/current_prefill_execution_adapter.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/executable_artifact_preparation.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/execution_bridge_contracts.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/guarded_execution.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/host_safety_canary.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/isolated_guarded_executor.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/operand_path_execution_worker.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/packed_wmma_correctness_canary.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/packed_wmma_prefill_candidates.py",
+      "file_type": "python",
+      "target_domain": "llm-live-route",
+      "purpose": "production route migration debt",
+      "branch_owner": "master",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/llm/route_ops.py; model.py; prefill_routes.py; decode_routes.py"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused route/boundary suite plus route-specific tests",
+      "disposition": "promote",
+      "destination": "tinygrad/llm/ or tinygrad/schedule/ domain owner",
+      "retention_or_recovery": "retain until atomic caller/test/authority migration",
+      "unresolved": true,
+      "unresolved_decision": "route migration owner must promote target and then remove adapter"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/packed_wmma_prefill_promotion_gate.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/prefill_boltbeam_trace.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/prefill_causal_tile_skip_promotion_gate.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/prefill_flash_e2e_parity.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/prefill_flash_perf.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/prefill_graph_gemm_route.py",
+      "file_type": "python",
+      "target_domain": "llm-live-route",
+      "purpose": "production route migration debt",
+      "branch_owner": "master",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/llm/route_ops.py; model.py; prefill_routes.py; decode_routes.py"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused route/boundary suite plus route-specific tests",
+      "disposition": "promote",
+      "destination": "tinygrad/llm/ or tinygrad/schedule/ domain owner",
+      "retention_or_recovery": "retain until atomic caller/test/authority migration",
+      "unresolved": true,
+      "unresolved_decision": "route migration owner must promote target and then remove adapter"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/prefill_harness.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/prefill_hd_sweep_numerics.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/prefill_long_context_numerics.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/prefill_primitive_spec.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/prefill_softmax_reduce_fuse_promotion_gate.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/prefill_whole_synced.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/promotion_gate_common.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/pure_register_compile_capture.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/pure_register_evaluation_gate.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/q4k_prefill_route_spec.py",
+      "file_type": "python",
+      "target_domain": "llm-live-route",
+      "purpose": "production route migration debt",
+      "branch_owner": "master",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/llm/route_ops.py; model.py; prefill_routes.py; decode_routes.py"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused route/boundary suite plus route-specific tests",
+      "disposition": "promote",
+      "destination": "tinygrad/llm/ or tinygrad/schedule/ domain owner",
+      "retention_or_recovery": "retain until atomic caller/test/authority migration",
+      "unresolved": true,
+      "unresolved_decision": "route migration owner must promote target and then remove adapter"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/q4k_q8_mmq_prefill_spec.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/prefill/q6k_prefill_route_spec.py",
+      "file_type": "python",
+      "target_domain": "llm-live-route",
+      "purpose": "production route migration debt",
+      "branch_owner": "master",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/llm/route_ops.py; model.py; prefill_routes.py; decode_routes.py"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused route/boundary suite plus route-specific tests",
+      "disposition": "promote",
+      "destination": "tinygrad/llm/ or tinygrad/schedule/ domain owner",
+      "retention_or_recovery": "retain until atomic caller/test/authority migration",
+      "unresolved": true,
+      "unresolved_decision": "route migration owner must promote target and then remove adapter"
+    },
+    {
+      "current_path": "extra/llm_research/pure_search_guard.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/q4k_fused_mmq_contract.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/q4k_tile_loader.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/q4k_wmma_tiled_multiwave_validation.md",
+      "file_type": "markdown",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/q6k_route_spec.py",
+      "file_type": "python",
+      "target_domain": "llm-live-route",
+      "purpose": "production route migration debt",
+      "branch_owner": "master",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/llm/route_ops.py; model.py; prefill_routes.py; decode_routes.py"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused route/boundary suite plus route-specific tests",
+      "disposition": "promote",
+      "destination": "tinygrad/llm/ or tinygrad/schedule/ domain owner",
+      "retention_or_recovery": "retain until atomic caller/test/authority migration",
+      "unresolved": true,
+      "unresolved_decision": "route migration owner must promote target and then remove adapter"
+    },
+    {
+      "current_path": "extra/llm_research/quant/q4_k_gemv_primitive.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/quant/q6_k_gemv_primitive.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/quantize.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/research/llama_mmq/LICENSE.llama.cpp",
+      "file_type": "native-source",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/research/llama_mmq/README.md",
+      "file_type": "markdown",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/research/llama_mmq/mmq.cuh",
+      "file_type": "asset",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/route_manifest.json",
+      "file_type": "json",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/route_manifest.py",
+      "file_type": "python",
+      "target_domain": "llm-live-route",
+      "purpose": "production route migration debt",
+      "branch_owner": "master",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/llm/route_ops.py; model.py; prefill_routes.py; decode_routes.py"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused route/boundary suite plus route-specific tests",
+      "disposition": "promote",
+      "destination": "tinygrad/llm/ or tinygrad/schedule/ domain owner",
+      "retention_or_recovery": "retain until atomic caller/test/authority migration",
+      "unresolved": true,
+      "unresolved_decision": "route migration owner must promote target and then remove adapter"
+    },
+    {
+      "current_path": "extra/llm_research/runtime_specs.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/shared_attention_capture.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/shared_attention_evidence.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/shared_attention_promotion.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/llm_research/timing_harness.py",
+      "file_type": "python",
+      "target_domain": "llm-research-mixed",
+      "purpose": "runtime migration debt/research",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "route adapters, research tests, manifests, docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "focused owner-specific tests and organization audit",
+      "disposition": "split/consolidate",
+      "destination": "tinygrad/{llm,codegen,schedule} or extra/{qualification,research}",
+      "retention_or_recovery": "retain until final owner and recovery criterion",
+      "unresolved": true,
+      "unresolved_decision": "root plus domain owner must resolve subdomain and branch"
+    },
+    {
+      "current_path": "extra/mesa/lvp_nir_options.sh",
+      "file_type": "shell",
+      "target_domain": "mesa-setup",
+      "purpose": "supported Mesa setup",
+      "branch_owner": "master",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "Mesa backend operators"
+      ],
+      "co_move_dependencies": [],
+      "validation": "Mesa setup smoke",
+      "disposition": "move",
+      "destination": "extra/setup/mesa/",
+      "retention_or_recovery": "retain while backend supported",
+      "unresolved": false,
+      "unresolved_decision": null
+    },
+    {
+      "current_path": "extra/nv_gpu_driver/clc6c0qmd.h",
+      "file_type": "header",
+      "target_domain": "nv-driver",
+      "purpose": "optional NV IOCTL driver",
+      "branch_owner": "dev",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/ops_nv.py and ops_cuda.py when IOCTL"
+      ],
+      "co_move_dependencies": [],
+      "validation": "NV backend compile/qualification",
+      "disposition": "retain pending support decision",
+      "destination": "extra/drivers/nv/",
+      "retention_or_recovery": "retain with supported-backend contract",
+      "unresolved": true,
+      "unresolved_decision": "product owner must decide supported NV IOCTL status"
+    },
+    {
+      "current_path": "extra/nv_gpu_driver/clc9b0.h",
+      "file_type": "header",
+      "target_domain": "nv-driver",
+      "purpose": "optional NV IOCTL driver",
+      "branch_owner": "dev",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/ops_nv.py and ops_cuda.py when IOCTL"
+      ],
+      "co_move_dependencies": [],
+      "validation": "NV backend compile/qualification",
+      "disposition": "retain pending support decision",
+      "destination": "extra/drivers/nv/",
+      "retention_or_recovery": "retain with supported-backend contract",
+      "unresolved": true,
+      "unresolved_decision": "product owner must decide supported NV IOCTL status"
+    },
+    {
+      "current_path": "extra/nv_gpu_driver/clcec0qmd.h",
+      "file_type": "header",
+      "target_domain": "nv-driver",
+      "purpose": "optional NV IOCTL driver",
+      "branch_owner": "dev",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/ops_nv.py and ops_cuda.py when IOCTL"
+      ],
+      "co_move_dependencies": [],
+      "validation": "NV backend compile/qualification",
+      "disposition": "retain pending support decision",
+      "destination": "extra/drivers/nv/",
+      "retention_or_recovery": "retain with supported-backend contract",
+      "unresolved": true,
+      "unresolved_decision": "product owner must decide supported NV IOCTL status"
+    },
+    {
+      "current_path": "extra/nv_gpu_driver/fw.h",
+      "file_type": "header",
+      "target_domain": "nv-driver",
+      "purpose": "optional NV IOCTL driver",
+      "branch_owner": "dev",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/ops_nv.py and ops_cuda.py when IOCTL"
+      ],
+      "co_move_dependencies": [],
+      "validation": "NV backend compile/qualification",
+      "disposition": "retain pending support decision",
+      "destination": "extra/drivers/nv/",
+      "retention_or_recovery": "retain with supported-backend contract",
+      "unresolved": true,
+      "unresolved_decision": "product owner must decide supported NV IOCTL status"
+    },
+    {
+      "current_path": "extra/nv_gpu_driver/g_rpc-message-header.h",
+      "file_type": "header",
+      "target_domain": "nv-driver",
+      "purpose": "optional NV IOCTL driver",
+      "branch_owner": "dev",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/ops_nv.py and ops_cuda.py when IOCTL"
+      ],
+      "co_move_dependencies": [],
+      "validation": "NV backend compile/qualification",
+      "disposition": "retain pending support decision",
+      "destination": "extra/drivers/nv/",
+      "retention_or_recovery": "retain with supported-backend contract",
+      "unresolved": true,
+      "unresolved_decision": "product owner must decide supported NV IOCTL status"
+    },
+    {
+      "current_path": "extra/nv_gpu_driver/gsp_static_config.h",
+      "file_type": "header",
+      "target_domain": "nv-driver",
+      "purpose": "optional NV IOCTL driver",
+      "branch_owner": "dev",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/ops_nv.py and ops_cuda.py when IOCTL"
+      ],
+      "co_move_dependencies": [],
+      "validation": "NV backend compile/qualification",
+      "disposition": "retain pending support decision",
+      "destination": "extra/drivers/nv/",
+      "retention_or_recovery": "retain with supported-backend contract",
+      "unresolved": true,
+      "unresolved_decision": "product owner must decide supported NV IOCTL status"
+    },
+    {
+      "current_path": "extra/nv_gpu_driver/hs.h",
+      "file_type": "header",
+      "target_domain": "nv-driver",
+      "purpose": "optional NV IOCTL driver",
+      "branch_owner": "dev",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/ops_nv.py and ops_cuda.py when IOCTL"
+      ],
+      "co_move_dependencies": [],
+      "validation": "NV backend compile/qualification",
+      "disposition": "retain pending support decision",
+      "destination": "extra/drivers/nv/",
+      "retention_or_recovery": "retain with supported-backend contract",
+      "unresolved": true,
+      "unresolved_decision": "product owner must decide supported NV IOCTL status"
+    },
+    {
+      "current_path": "extra/nv_gpu_driver/nv_ioctl.py",
+      "file_type": "python",
+      "target_domain": "nv-driver",
+      "purpose": "optional NV IOCTL driver",
+      "branch_owner": "dev",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/ops_nv.py and ops_cuda.py when IOCTL"
+      ],
+      "co_move_dependencies": [],
+      "validation": "NV backend compile/qualification",
+      "disposition": "retain pending support decision",
+      "destination": "extra/drivers/nv/",
+      "retention_or_recovery": "retain with supported-backend contract",
+      "unresolved": true,
+      "unresolved_decision": "product owner must decide supported NV IOCTL status"
+    },
+    {
+      "current_path": "extra/nv_gpu_driver/nvdec_drv.h",
+      "file_type": "header",
+      "target_domain": "nv-driver",
+      "purpose": "optional NV IOCTL driver",
+      "branch_owner": "dev",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/ops_nv.py and ops_cuda.py when IOCTL"
+      ],
+      "co_move_dependencies": [],
+      "validation": "NV backend compile/qualification",
+      "disposition": "retain pending support decision",
+      "destination": "extra/drivers/nv/",
+      "retention_or_recovery": "retain with supported-backend contract",
+      "unresolved": true,
+      "unresolved_decision": "product owner must decide supported NV IOCTL status"
+    },
+    {
+      "current_path": "extra/nv_gpu_driver/pci_exp_table.h",
+      "file_type": "header",
+      "target_domain": "nv-driver",
+      "purpose": "optional NV IOCTL driver",
+      "branch_owner": "dev",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/ops_nv.py and ops_cuda.py when IOCTL"
+      ],
+      "co_move_dependencies": [],
+      "validation": "NV backend compile/qualification",
+      "disposition": "retain pending support decision",
+      "destination": "extra/drivers/nv/",
+      "retention_or_recovery": "retain with supported-backend contract",
+      "unresolved": true,
+      "unresolved_decision": "product owner must decide supported NV IOCTL status"
+    },
+    {
+      "current_path": "extra/nv_gpu_driver/vbios.h",
+      "file_type": "header",
+      "target_domain": "nv-driver",
+      "purpose": "optional NV IOCTL driver",
+      "branch_owner": "dev",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/ops_nv.py and ops_cuda.py when IOCTL"
+      ],
+      "co_move_dependencies": [],
+      "validation": "NV backend compile/qualification",
+      "disposition": "retain pending support decision",
+      "destination": "extra/drivers/nv/",
+      "retention_or_recovery": "retain with supported-backend contract",
+      "unresolved": true,
+      "unresolved_decision": "product owner must decide supported NV IOCTL status"
+    },
+    {
+      "current_path": "extra/other/README.md",
+      "file_type": "markdown",
+      "target_domain": "quarantine",
+      "purpose": "quarantine policy",
+      "branch_owner": "dev",
+      "hot_path": "none",
+      "direct_consumers": [
+        "organization workflow"
+      ],
+      "co_move_dependencies": [],
+      "validation": "organization audit",
+      "disposition": "retain pending classification",
+      "destination": "extra/other/",
+      "retention_or_recovery": "retain only while classification ledger exists",
+      "unresolved": true,
+      "unresolved_decision": "root owner must assign next disposition"
+    },
+    {
+      "current_path": "extra/remote/amd_power_cycle.py",
+      "file_type": "python",
+      "target_domain": "remote-debug",
+      "purpose": "remote power/repro qualification",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "hardware scripts and operator docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "GPU-lock remote workflow",
+      "disposition": "move",
+      "destination": "extra/debug/remote/",
+      "retention_or_recovery": "retain named remote workflow",
+      "unresolved": true,
+      "unresolved_decision": "rewrite stale path references before move"
+    },
+    {
+      "current_path": "extra/remote/amd_repro.py",
+      "file_type": "python",
+      "target_domain": "remote-debug",
+      "purpose": "remote power/repro qualification",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "hardware scripts and operator docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "GPU-lock remote workflow",
+      "disposition": "move",
+      "destination": "extra/debug/remote/",
+      "retention_or_recovery": "retain named remote workflow",
+      "unresolved": true,
+      "unresolved_decision": "rewrite stale path references before move"
+    },
+    {
+      "current_path": "extra/remote/bench.py",
+      "file_type": "python",
+      "target_domain": "remote-debug",
+      "purpose": "remote power/repro qualification",
+      "branch_owner": "dev",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "hardware scripts and operator docs"
+      ],
+      "co_move_dependencies": [],
+      "validation": "GPU-lock remote workflow",
+      "disposition": "move",
+      "destination": "extra/debug/remote/",
+      "retention_or_recovery": "retain named remote workflow",
+      "unresolved": true,
+      "unresolved_decision": "rewrite stale path references before move"
+    },
+    {
+      "current_path": "extra/runtime_models.example.json",
+      "file_type": "json",
+      "target_domain": "runtime-fixture",
+      "purpose": "CLI operating fixture",
+      "branch_owner": "master",
+      "hot_path": "default",
+      "direct_consumers": [
+        "CLI/runtime config loader"
+      ],
+      "co_move_dependencies": [],
+      "validation": "CLI config-load smoke",
+      "disposition": "move",
+      "destination": "extra/llm/runtime_models.example.json",
+      "retention_or_recovery": "retain with CLI promotion",
+      "unresolved": true,
+      "unresolved_decision": "move atomically with extra/llm/cli.py"
+    },
+    {
+      "current_path": "extra/setup_hipcc_osx.sh",
+      "file_type": "shell",
+      "target_domain": "setup",
+      "purpose": "backend/toolchain setup",
+      "branch_owner": "master",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "backend/toolchain operators"
+      ],
+      "co_move_dependencies": [],
+      "validation": "per-backend setup smoke",
+      "disposition": "move",
+      "destination": "extra/setup/",
+      "retention_or_recovery": "retain supported setup contract",
+      "unresolved": false,
+      "unresolved_decision": "none"
+    },
+    {
+      "current_path": "extra/setup_hipcomgr_osx.sh",
+      "file_type": "shell",
+      "target_domain": "setup",
+      "purpose": "backend/toolchain setup",
+      "branch_owner": "master",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "backend/toolchain operators"
+      ],
+      "co_move_dependencies": [],
+      "validation": "per-backend setup smoke",
+      "disposition": "move",
+      "destination": "extra/setup/",
+      "retention_or_recovery": "retain supported setup contract",
+      "unresolved": false,
+      "unresolved_decision": "none"
+    },
+    {
+      "current_path": "extra/setup_mock_amd_osx.sh",
+      "file_type": "shell",
+      "target_domain": "setup",
+      "purpose": "backend/toolchain setup",
+      "branch_owner": "master",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "backend/toolchain operators"
+      ],
+      "co_move_dependencies": [],
+      "validation": "per-backend setup smoke",
+      "disposition": "move",
+      "destination": "extra/setup/",
+      "retention_or_recovery": "retain supported setup contract",
+      "unresolved": false,
+      "unresolved_decision": "none"
+    },
+    {
+      "current_path": "extra/setup_mock_dsp_osx.sh",
+      "file_type": "shell",
+      "target_domain": "setup",
+      "purpose": "backend/toolchain setup",
+      "branch_owner": "master",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "backend/toolchain operators"
+      ],
+      "co_move_dependencies": [],
+      "validation": "per-backend setup smoke",
+      "disposition": "move",
+      "destination": "extra/setup/",
+      "retention_or_recovery": "retain supported setup contract",
+      "unresolved": false,
+      "unresolved_decision": "none"
+    },
+    {
+      "current_path": "extra/setup_mock_nv_osx.sh",
+      "file_type": "shell",
+      "target_domain": "setup",
+      "purpose": "backend/toolchain setup",
+      "branch_owner": "master",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "backend/toolchain operators"
+      ],
+      "co_move_dependencies": [],
+      "validation": "per-backend setup smoke",
+      "disposition": "move",
+      "destination": "extra/setup/",
+      "retention_or_recovery": "retain supported setup contract",
+      "unresolved": false,
+      "unresolved_decision": "none"
+    },
+    {
+      "current_path": "extra/setup_nvcc_osx.sh",
+      "file_type": "shell",
+      "target_domain": "setup",
+      "purpose": "backend/toolchain setup",
+      "branch_owner": "master",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "backend/toolchain operators"
+      ],
+      "co_move_dependencies": [],
+      "validation": "per-backend setup smoke",
+      "disposition": "move",
+      "destination": "extra/setup/",
+      "retention_or_recovery": "retain supported setup contract",
+      "unresolved": false,
+      "unresolved_decision": "none"
+    },
+    {
+      "current_path": "extra/setup_tinygpu_osx.sh",
+      "file_type": "shell",
+      "target_domain": "setup",
+      "purpose": "backend/toolchain setup",
+      "branch_owner": "exp",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "backend/toolchain operators"
+      ],
+      "co_move_dependencies": [],
+      "validation": "per-backend setup smoke",
+      "disposition": "move",
+      "destination": "extra/setup/",
+      "retention_or_recovery": "retain supported setup contract",
+      "unresolved": true,
+      "unresolved_decision": "resolve TinyGPU support status"
+    },
+    {
+      "current_path": "extra/tools/amd_isa_generate.py",
+      "file_type": "python",
+      "target_domain": "tools",
+      "purpose": "repository integrity/source generation",
+      "branch_owner": "master",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "docs checks and generated ISA tables"
+      ],
+      "co_move_dependencies": [],
+      "validation": "tool smoke plus generated-table drift check",
+      "disposition": "retain",
+      "destination": "extra/tools/amd_isa_generate.py",
+      "retention_or_recovery": "retain with repository authorities",
+      "unresolved": false,
+      "unresolved_decision": null
+    },
+    {
+      "current_path": "extra/tools/check_doc_links.py",
+      "file_type": "python",
+      "target_domain": "tools",
+      "purpose": "repository integrity/source generation",
+      "branch_owner": "master",
+      "hot_path": "operator-only",
+      "direct_consumers": [
+        "docs checks and generated ISA tables"
+      ],
+      "co_move_dependencies": [],
+      "validation": "tool smoke plus generated-table drift check",
+      "disposition": "retain",
+      "destination": "extra/tools/check_doc_links.py",
+      "retention_or_recovery": "retain with repository authorities",
+      "unresolved": false,
+      "unresolved_decision": null
+    },
+    {
+      "current_path": "extra/usbgpu/protocol/fixtures/error-v1.json",
+      "file_type": "json",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/protocol/fixtures/handshake-v1.json",
+      "file_type": "json",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/protocol/fixtures/keepalive-status-v1.json",
+      "file_type": "json",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/protocol/fixtures/legacy-rpc-v1.json",
+      "file_type": "json",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/protocol/fixtures/power-residency-status-v4.json",
+      "file_type": "json",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/protocol/tinygpu-wire-v1.md",
+      "file_type": "markdown",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tbgpu/installer/.gitignore",
+      "file_type": "asset",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tbgpu/installer/Shared/Assets.xcassets/AccentColor.colorset/Contents.json",
+      "file_type": "json",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tbgpu/installer/Shared/Assets.xcassets/AppIcon.appiconset/Contents.json",
+      "file_type": "json",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tbgpu/installer/Shared/Assets.xcassets/Contents.json",
+      "file_type": "json",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tbgpu/installer/Shared/TinyGPU-Bridging-Header.h",
+      "file_type": "header",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tbgpu/installer/Shared/TinyGPUApp.swift",
+      "file_type": "swift",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tbgpu/installer/Shared/TinyGPUCLIRunner.swift",
+      "file_type": "swift",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tbgpu/installer/Shared/server.c",
+      "file_type": "native-source",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tbgpu/installer/Shared/tiny_icon.icon/Assets/tiny.svg",
+      "file_type": "asset",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tbgpu/installer/Shared/tiny_icon.icon/icon.json",
+      "file_type": "json",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tbgpu/installer/TinyGPUDriverExtension.xcodeproj/project.pbxproj",
+      "file_type": "project",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tbgpu/installer/TinyGPUDriverExtension.xcodeproj/project.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings",
+      "file_type": "asset",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tbgpu/installer/TinyGPUDriverExtension/Info.plist",
+      "file_type": "asset",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tbgpu/installer/TinyGPUDriverExtension/TinyGPUDriver.NoSIP.entitlements",
+      "file_type": "asset",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tbgpu/installer/TinyGPUDriverExtension/TinyGPUDriver.Release.entitlements",
+      "file_type": "asset",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tbgpu/installer/TinyGPUDriverExtension/TinyGPUDriver.cpp",
+      "file_type": "native-source",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tbgpu/installer/TinyGPUDriverExtension/TinyGPUDriver.entitlements",
+      "file_type": "asset",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tbgpu/installer/TinyGPUDriverExtension/TinyGPUDriver.iig",
+      "file_type": "header",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tbgpu/installer/TinyGPUDriverExtension/TinyGPUDriverUserClient.cpp",
+      "file_type": "native-source",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tbgpu/installer/TinyGPUDriverExtension/TinyGPUDriverUserClient.iig",
+      "file_type": "header",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tbgpu/installer/classify_system_extension_state.sh",
+      "file_type": "shell",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tbgpu/installer/install_nosip.sh",
+      "file_type": "shell",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tbgpu/installer/macOS/macOS.entitlements",
+      "file_type": "asset",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tests/capture_tunnel_idle.py",
+      "file_type": "python",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tests/minimal_amd_compute.py",
+      "file_type": "python",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tests/persistent_model_residency.py",
+      "file_type": "python",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tests/qualify.py",
+      "file_type": "python",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tools/run_upstream_control.py",
+      "file_type": "python",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    },
+    {
+      "current_path": "extra/usbgpu/tools/with_gpu_lock.py",
+      "file_type": "python",
+      "target_domain": "usbgpu",
+      "purpose": "TinyGPU driver/protocol/installer/qualification",
+      "branch_owner": "exp",
+      "hot_path": "conditional",
+      "direct_consumers": [
+        "tinygrad/runtime/support/system.py; tinygrad/runtime/ops_amd.py; TinyGPU tests/tools"
+      ],
+      "co_move_dependencies": [],
+      "validation": "matched upstream-v3 versus Arkey-v13 A/B with GPU lock",
+      "disposition": "retain",
+      "destination": "extra/drivers/usbgpu/",
+      "retention_or_recovery": "retain as one matched experimental unit; recovery current exp commit",
+      "unresolved": true,
+      "unresolved_decision": "hardware owner must complete support-product A/B"
+    }
+  ]
+}
