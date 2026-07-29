@@ -705,6 +705,13 @@ class AMDAllocator(HCQInterfaceAllocator['AMDDevice']):
     super().__init__(dev, copy_bufs=getattr(dev.iface, 'copy_bufs', None), max_copyout_size=0x1000 if dev.is_usb() else None,
                      supports_copy_from_disk=dev.has_sdma_queue, supports_transfer=dev.has_sdma_queue and not dev.is_usb())
 
+  @property
+  def allocation_granularity(self) -> int:
+    # KFD VRAM is page-granular. The AM PCI/USB path deliberately promotes default-VRAM allocations of at least
+    # 8 MiB to 2 MiB pages (PCIIfaceBase.alloc); selected GGUF backing allocations are always in that large tier.
+    # Device-facts consumers use this value for the one whole-file backing allocation and a conservative live reserve.
+    return (2 << 20) if self.dev.is_am() else (4 << 10)
+
   def _alloc(self, size:int, options:BufferSpec) -> HCQBuffer:
     return self.dev.iface.alloc(size, host=options.host, uncached=options.uncached, cpu_access=options.cpu_access or not self.dev.has_sdma_queue)
 
