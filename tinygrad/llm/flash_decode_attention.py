@@ -13,6 +13,7 @@ from tinygrad import Tensor, dtypes
 from tinygrad.dtype import AddrSpace
 from tinygrad.helpers import getenv
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
+from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, execute_promoted_program
 
 _LOG2E = 1.4426950408889634
 _F32 = dtypes.float32
@@ -394,11 +395,19 @@ def flash_decode_live_split_block_tile(q:Tensor, cache_kv:Tensor, Tc:UOp, Hd:int
                                        freqs:Tensor|None=None, query_group_size:int|None=None, stage_width:int=1) -> Tensor:
   """Execute the selected live-split flash decode and return ``[Hq, Hd]``."""
   if not fused_combine: raise ValueError("fused_combine=False is no longer supported for decode live-split routes")
+  route = next((row for row in (FLASH_DECODE_G4, FLASH_DECODE_G5) if row.supports(1, Hq, Hkv, Hd, str(q.device))), None)
+  if route is None or (route.split_size, route.query_group_size, route.stage_width, route.staging) != \
+      (S, query_group_size, stage_width, staging):
+    raise ValueError("flash decode geometry is not an admitted promoted route")
   quant, rope = kv_scale is not None, freqs is not None
   inputs = (q.reshape(Hq * Hd), cache_kv) + ((kv_scale,) if quant else ()) + ((freqs,) if rope else ())
   spec = describe_flash_decode_attention(Hq, Hd, Hkv, MAXC, S, staging=staging, quant=quant, rope=rope,
                                          query_group_size=query_group_size, stage_width=stage_width)
-  partial = Tensor.empty(Hq * S * (Hd + 2), dtype=dtypes.float32, device=q.device).custom_kernel(
-    *inputs, fxn=spec.emit_tile(Tc))[0]
-  out = Tensor.empty(Hq * Hd, dtype=dtypes.float32, device=q.device).custom_kernel(partial, fxn=spec.emit_combine())[0]
+  tile_program = KernelProgram(route.route_id, f"{route.candidate_id}.tile",
+    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, spec.emit_tile(Tc))
+  partial = execute_promoted_program(Tensor.empty(Hq * S * (Hd + 2), dtype=dtypes.float32, device=q.device),
+    *inputs, program=tile_program)
+  combine_program = KernelProgram(route.route_id, f"{route.candidate_id}.combine",
+    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, spec.emit_combine())
+  out = execute_promoted_program(Tensor.empty(Hq * Hd, dtype=dtypes.float32, device=q.device), partial, program=combine_program)
   return out.reshape(Hq, Hd)
