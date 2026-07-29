@@ -283,6 +283,14 @@ The shipped LLM runtime closure is now promoted atomically into `tinygrad/llm/`:
 runtime-boundary audit now use the core owner. The new CLI-boundary test verifies help output and core ownership.
 This is a bounded production promotion; the remaining `extra/llm_research` route adapters are still migration debt.
 
+## R10/R11 freeze gate
+
+The remaining 172 unresolved ledger rows are now explicitly frozen rather than treated as implicit move authority:
+115 rows are retain-in-place follow-ups, while 57 are true tier blockers. The master blockers are the nine live LLM
+route owners, the SQTT decoder boundary, and optional NV IOCTL support. TinyGPU’s 36-row matched product unit blocks
+both `dev` and `master` until the upstream-v3 versus Arkey-v13 decision is qualified. No branch derivation or pruning
+may bypass these freeze groups.
+
 ## Unresolved blockers
 
 R7 is complete for its stated gate (zero unresolved removals). Broader tier pruning and promotion remain blocked by

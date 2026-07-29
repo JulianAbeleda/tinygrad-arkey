@@ -1,8 +1,8 @@
 {
   "schema": "extra-file-level-ledger-20260729",
   "audited_worktree": "/Users/julianabeleda/env/tinygrad-arkey-exp",
-  "audited_commit": "77c68b006",
-  "status": "CLASSIFICATION_COMPLETE_MIGRATION_GATED",
+  "audited_commit": "496b2c317",
+  "status": "CLASSIFICATION_COMPLETE_FREEZE_GATED",
   "scope_baseline_count": 198,
   "current_tracked_count": 200,
   "count_drift": {
@@ -33,6 +33,26 @@
     "unresolved",
     "unresolved_decision"
   ],
+  "freeze_policy_version": "20260729-v1",
+  "freeze_invariant": "Every unresolved row is frozen: no move, delete, or prune until its named follow-up task and exit criteria are complete.",
+  "tier_derivation": {
+    "freezeable_rows": 115,
+    "tier_blocker_rows": 57,
+    "master_blocker_rows": 21,
+    "dev_and_master_blocker_rows": 36,
+    "groups": {
+      "amd-hardware-recovery": {"rows": 18, "owner": "AMD hardware/recovery operator", "followup_task": "AMDPCI-RELOCATION-AND-RECOVERY-QUALIFICATION", "blocks_tiers": ["none"], "no_move": true, "no_delete": true},
+      "remote-legacy-bridge": {"rows": 3, "owner": "TinyGPU/eGPU runtime operator", "followup_task": "REMOTE-LEGACY-TCP-RETIRE-OR-ADAPT", "blocks_tiers": ["none"], "no_move": true, "no_delete": true},
+      "sqtt-boundary": {"rows": 5, "owner": "profiling/viz owner", "followup_task": "SQTT-DECODER-BOUNDARY", "blocks_tiers": ["master"], "no_move": true, "no_delete": true},
+      "llm-research-exp": {"rows": 87, "owner": "LLM route/research owner", "followup_task": "LLM-RESEARCH-SUBDOMAIN-SPLIT", "blocks_tiers": ["none"], "no_move": true, "no_delete": true},
+      "llm-route-live": {"rows": 9, "owner": "LLM production route owner", "followup_task": "LLM-ROUTE-PROMOTION", "blocks_tiers": ["master"], "no_move": true, "no_delete": true},
+      "nv-ioctl": {"rows": 11, "owner": "NV backend product owner", "followup_task": "NV-IOCTL-SUPPORT-DECISION", "blocks_tiers": ["master"], "no_move": true, "no_delete": true},
+      "tinygpu-product": {"rows": 36, "owner": "TinyGPU hardware/product owner", "followup_task": "TINYGPU-UPSTREAM-V3-VS-ARKEY-V13-AB", "blocks_tiers": ["dev", "master"], "no_move": true, "no_delete": true},
+      "llm-cli-fixture": {"rows": 1, "owner": "LLM CLI owner", "followup_task": "CLI-FIXTURE-COLOCATION", "blocks_tiers": ["none"], "no_move": true, "no_delete": true},
+      "compile-capture": {"rows": 1, "owner": "LLM qualification owner", "followup_task": "BANK-COMPILE-FAILURE-CONCLUSION", "blocks_tiers": ["none"], "no_move": true, "no_delete": true},
+      "quarantine": {"rows": 1, "owner": "repository organization owner", "followup_task": "CLASSIFY-QUARANTINE-OR-REMOVE", "blocks_tiers": ["none"], "no_move": true, "no_delete": true}
+    }
+  },
   "rows": [
     {
       "current_path": "extra/audit/codebase_organization_audit.py",
