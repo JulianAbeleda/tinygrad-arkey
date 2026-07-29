@@ -6,6 +6,7 @@ dispatch.  Its only fallback verdict is generic tinygrad lowering.
 from __future__ import annotations
 
 import argparse, hashlib, json
+from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -18,6 +19,9 @@ class GeneratedArtifactError(ValueError): pass
 
 def _sha256_bytes(data: bytes) -> str: return hashlib.sha256(data).hexdigest()
 def _canonical_hash(value: Any) -> str: return _sha256_bytes(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode())
+def _digest(value: Any) -> bool:
+  return isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value) and len(set(value)) > 1
+def _text(value: Any) -> bool: return isinstance(value, str) and bool(value.strip()) and value.strip().lower() not in {"none", "todo", "placeholder"}
 
 @dataclass(frozen=True)
 class ArtifactSelection:
@@ -25,6 +29,17 @@ class ArtifactSelection:
   trace: Mapping[str, Any]
   @property
   def uses_generated_artifact(self) -> bool: return self.artifact_path is not None
+
+@dataclass(frozen=True)
+class GeneratedPlanDispatch:
+  """Result of the core generated-plan seam.
+
+  The seam deliberately accepts an executor callback instead of importing an
+  artifact or any route module.  A production route can provide a generated
+  plan executor later; until then every request follows its normal fallback.
+  """
+  used_generated_plan: bool
+  trace: Mapping[str, Any]
 
 def _catalog_and_root(catalog_path: str | Path | None) -> tuple[Mapping[str, Any], Path]:
   path = Path(catalog_path) if catalog_path else Path(__file__).with_name("generated") / "catalog.json"
@@ -67,6 +82,24 @@ def _verify_entry(entry: Mapping[str, Any], root: Path) -> None:
   except json.JSONDecodeError as exc: raise GeneratedArtifactError("plan and provenance must be JSON") from exc
   if not isinstance(provenance, Mapping) or _PROVENANCE_FIELDS - provenance.keys(): raise GeneratedArtifactError("provenance missing required contract fields")
   if provenance["manual_post_edit"] is not False: raise GeneratedArtifactError("provenance manual_post_edit must be false")
+  for field in ("route_id", "workload_role", "target_backend", "target_architecture", "search_space_id", "search_system",
+                "search_revision", "search_run_id", "search_timestamp", "objective", "exporter_name", "exporter_revision",
+                "generated_path", "runtime_trace_schema", "expected_runtime_identity", "recovery_commit"):
+    if not _text(provenance[field]): raise GeneratedArtifactError(f"invalid provenance field: {field}")
+  for field in ("search_space_sha256", "search_request_digest", "selected_plan_sha256", "generated_sha256"):
+    if not _digest(provenance[field]): raise GeneratedArtifactError(f"invalid provenance digest: {field}")
+  try: datetime.fromisoformat(provenance["search_timestamp"].replace("Z", "+00:00"))
+  except ValueError as exc: raise GeneratedArtifactError("invalid provenance search_timestamp") from exc
+  for field in ("candidate_count", "selected_candidate_rank"):
+    if type(provenance[field]) is not int or provenance[field] <= 0: raise GeneratedArtifactError(f"invalid provenance field: {field}")
+  if provenance["selected_candidate_rank"] > provenance["candidate_count"]: raise GeneratedArtifactError("selected candidate rank exceeds population")
+  if not isinstance(provenance["budget"], (int, Mapping)) or not provenance["budget"]:
+    raise GeneratedArtifactError("invalid provenance field: budget")
+  if not isinstance(provenance["selected_objective_values"], Mapping) or not provenance["selected_objective_values"]:
+    raise GeneratedArtifactError("selected objective values are required")
+  for field in ("declared_reusable_primitives", "forbidden_fallback_kernel_identities"):
+    if not isinstance(provenance[field], list) or any(not _text(value) for value in provenance[field]):
+      raise GeneratedArtifactError(f"invalid provenance field: {field}")
   if not isinstance(entry["target_guard"], Mapping) or not isinstance(entry["shape_guard"], Mapping):
     raise GeneratedArtifactError("target and shape guards must be objects")
   if set(("backend", "architecture")) - entry["target_guard"].keys():
@@ -74,6 +107,7 @@ def _verify_entry(entry: Mapping[str, Any], root: Path) -> None:
   if provenance["target_backend"] != entry["target_guard"]["backend"] or provenance["target_architecture"] != entry["target_guard"]["architecture"] or provenance["shape_quant_guards"] != entry["shape_guard"]:
     raise GeneratedArtifactError("provenance guard binding mismatch")
   if provenance["route_id"] != entry["route_id"] or provenance["generated_path"] != entry["artifact_path"]: raise GeneratedArtifactError("provenance binding mismatch")
+  if provenance["expected_runtime_identity"] != entry["route_id"]: raise GeneratedArtifactError("runtime identity binding mismatch")
   if provenance["generated_sha256"] != entry["artifact_sha256"] or provenance["selected_plan_sha256"] != entry["plan_sha256"]: raise GeneratedArtifactError("provenance digest mismatch")
   if provenance["selected_plan"] != plan: raise GeneratedArtifactError("provenance selected plan drift")
   _verify_evidence(root, provenance["correctness_evidence"], "correctness")
@@ -101,6 +135,28 @@ def load_generated_artifact(route_id: str, target: Mapping[str, Any], shape: Map
     return ArtifactSelection(entry["artifact_path"], {"route_id": route_id, "verdict": entry["verdict"], "plan_digest": entry["plan_sha256"], "artifact_digest": entry["artifact_sha256"], "target": dict(target), "shape": dict(shape), "fallback_reason": None})
   reason = "guard_mismatch" if matching_route else "unknown_route"
   return ArtifactSelection(None, {"route_id": route_id, "verdict": GENERIC_VERDICT, "plan_digest": None, "artifact_digest": None, "target": dict(target), "shape": dict(shape), "fallback_reason": reason})
+
+def dispatch_verified_generated_plan(route_id: str, target: Mapping[str, Any], shape: Mapping[str, Any], fallback, *,
+                                    execute_plan=None, catalog_path: str | Path | None = None) -> tuple[Any, GeneratedPlanDispatch]:
+  """Select a verified generated artifact or invoke the caller's ordinary fallback.
+
+  No artifact is imported or evaluated here. ``execute_plan`` is opt-in and is
+  called only after catalog/provenance verification and an exact guard match.
+  A missing executor (the current production state) is an explicit fallback,
+  so adding generated artifacts alone cannot change runtime behavior.
+  """
+  if not callable(fallback): raise GeneratedArtifactError("ordinary fallback must be callable")
+  if execute_plan is not None and not callable(execute_plan): raise GeneratedArtifactError("generated plan executor must be callable")
+  selection = load_generated_artifact(route_id, target, shape, catalog_path=catalog_path)
+  if not selection.uses_generated_artifact:
+    return fallback(), GeneratedPlanDispatch(False, selection.trace)
+  if execute_plan is None:
+    trace = dict(selection.trace); trace["fallback_reason"] = "no_generated_plan_executor"
+    trace["verdict"] = GENERIC_VERDICT
+    return fallback(), GeneratedPlanDispatch(False, trace)
+  # The callback receives only an already hash-verified, catalog-relative path
+  # plus immutable selection metadata; it owns no fallback authority.
+  return execute_plan(selection.artifact_path, selection.trace), GeneratedPlanDispatch(True, selection.trace)
 
 def main(argv: list[str] | None = None) -> int:
   parser = argparse.ArgumentParser(description="validate LLM generated artifact catalog")

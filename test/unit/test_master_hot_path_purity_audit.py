@@ -10,7 +10,7 @@ def fixture(tmp_path, *, default=True, artifact_text=b"# @generated\nPLAN = {}\n
   plan.write_text('{"op":"fixture"}\n'); artifact.write_bytes(artifact_text)
   for name in ("correctness.json", "performance.json"): (tmp_path / "evidence" / name).write_text("{}\n")
   record = {"schema_version": 1, "route_id": "fixture", "workload_role": "fixture", "target_backend": "TEST", "target_architecture": "test",
-    "shape_quant_guards": {"n": 8}, "search_space_id": "fixture-space", "search_space_sha256": "a"*64, "search_request_digest": "b"*64,
+    "shape_quant_guards": {"n": 8}, "search_space_id": "fixture-space", "search_space_sha256": hashlib.sha256(b"fixture-space").hexdigest(), "search_request_digest": hashlib.sha256(b"fixture-request").hexdigest(),
     "search_system": "fixture-search", "search_revision": "r1", "search_run_id": "run-1", "search_timestamp": "2026-01-01T00:00:00Z",
     "objective": "latency", "budget": 1, "candidate_count": 1, "selected_candidate_rank": 1, "selected_objective_values": {"latency": 1},
     "selected_plan": json.loads(plan.read_text()), "selected_plan_sha256": sha(plan), "exporter_name": "fixture-exporter", "exporter_revision": "r1",
