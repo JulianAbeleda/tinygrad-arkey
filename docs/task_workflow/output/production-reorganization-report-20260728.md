@@ -6,8 +6,9 @@ Baseline audit snapshot: `c4c0579f3` (`exp`), with matching clean-commit snapsho
 (`9e78d3732`) and `master` (`42e9a47b3`). Later reconciliation commits below supersede those snapshots for counts and
 completed-prune records.
 
-Status: first closure checkpoint complete. The durable branch topology, exhaustive low-agent census, and first
-selective production promotion are established. R7 reconciliation and broader tier pruning remain open.
+Status: R7 classification and cleanup ledger reconciled at the current `exp` tip. Zero unresolved removals remain;
+non-removal migration, hardware qualification, and evidence-conclusion blockers are retained explicitly for later
+work.
 
 This report synthesizes:
 
@@ -223,18 +224,40 @@ The audit also records open investigation drift, including the stale pure-machin
 route IDs. That overlay reports `PMS_R0_BLOCKED_ROUTE_ATTRIBUTION_MISSING`; it is route-attribution drift, not evidence
 that the default kernel is impure.
 
+## Current-tip R7 reconciliation
+
+The ledgers were regenerated against `8505f4c5a5b1e31862ace0613672b515f5b60405` after three read-only closure passes
+covering route boundaries, TinyGPU/eGPU ownership, and tests/evidence/documents. The current tracked evidence count is
+135 files under `docs/artifacts/**`; the earlier Packet B count of 173 and its 50 raw replay deletion candidates are
+historical and are not reauthorized. Those raw batches were already replaced by compact summaries in the recorded
+recovery commits.
+
+The retained `tinygrad/llm/route_ops.py` adapters are classified as master-owned consolidation debt with live callers;
+they are not deletion candidates. The TinyGPU stack, its runtime hooks, qualification tests, upstream control runner,
+and handoff evidence are one `exp`-owned matched unit pending the upstream-v3 versus Arkey-v13 A/B run. Five mixed-owner
+tests are retained on `exp` pending a stable-schema/research split. Remaining top-level evidence JSON and campaign
+records remain retained until each family has a named compact conclusion.
+
+One bounded cleanup slice is complete: seven unreferenced scratch executables were removed after an exact-path reference
+scan. Recovery is the pre-slice commit `8505f4c5a5b1e31862ace0613672b515f5b60405`; `scratchpad/audit_bfs.py`, the live
+probe scripts, and `docs/scratchpad/**` remain blocked because they still have manifest/document references or require
+conclusion banking. The machine-readable inventory and cleanup ledger both record this same authorization and result.
+
 ## Unresolved blockers
 
-R7 and broader pruning remain blocked by the following evidence gaps:
+R7 is complete for its stated gate (zero unresolved removals). Broader tier pruning and promotion remain blocked by
+the following non-removal evidence gaps:
 
 1. Packet A still has mixed or unresolved runtime/tooling groups, including the `extra/llm_research` default-path closure,
    `extra/hardware/sqtt/roc.py`, TinyGPU/USB GPU support, experimental MMQ lineage, and safety ownership for
    `gpu_wait_clear.sh`.
 2. Packet B retains a conservative branch partition of 14 master tests, 25 dev-only tests, and 26 exp-only tests.
    Mixed-owner, TinyGPU-dependent, and GPU-lock tests remain unresolved. The unresolved staged/frozen artifact groups
-   total 102 files; the full tracked `docs/artifacts/**` set is now 135 after the two completed raw batches.
-3. The 62 top-level JSON documents require Packet B consumer and compact-replacement decisions. Raw evidence cannot
-   be deleted merely because it sits outside `docs/artifacts/**`.
+   total 102 files; the full tracked `docs/artifacts/**` set is now 135 after the two completed raw batches. These are
+   retained, not deletion candidates.
+3. The 62 top-level JSON documents have conservative dev/exp retention assignments; named compact replacements are
+   still required before any future deletion. Raw evidence cannot be deleted merely because it sits outside
+   `docs/artifacts/**`.
 4. `docs/README.md` leaves 155 current top-level docs/JSON files unlisted. The index now labels these records
    non-authoritative pending R7; rebuild the map after owner reconciliation instead of indexing the sprawl.
 5. The five Packet C link defects are mechanically closed; the maintained local-link scan is clean. Historical or
@@ -248,9 +271,10 @@ R7 and broader pruning remain blocked by the following evidence gaps:
 
 ## Authorization boundary
 
-This report authorizes no additional pruning.
+This report authorizes no additional pruning beyond the exact seven-file scratch batch recorded above.
 
-The two stale prompt deletions and the exact 16-path and 22-path compact raw-artifact prunes listed above are complete. All other proposed deletion, move, consolidation, or tier
+The two stale prompt deletions, the exact 16-path and 22-path compact raw-artifact prunes, and the exact seven-file
+scratch batch listed above are complete. All other proposed deletion, move, consolidation, or tier
 pruning remains advisory until the canonical R7 inventory resolves cross-packet ownership and records the compact
 replacement and recovery path. In particular, this checkpoint does not authorize deletion of:
 
@@ -260,6 +284,6 @@ replacement and recovery path. In particular, this checkpoint does not authorize
 - any task-workflow record, handoff, scratchpad group, `.claude` file, or root scratch script;
 - `extra/llm_research/decode/capture_prefill_compile.py` merely to clear the audit error.
 
-The next safe action is to classify the hard-drift file and reconcile the first runtime closure records into R7. A
-subsequent bounded slice may proceed only when its implementation, tests, evidence, documents, references, and
-recovery record agree on one final owner.
+The next safe action is the route-promotion sequence or the matched TinyGPU A/B, each on its own explicitly scoped
+follow-up. A subsequent bounded cleanup slice may proceed only when its implementation, tests, evidence, documents,
+references, and recovery record agree on one final owner.
