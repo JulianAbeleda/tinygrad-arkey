@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Callable, Iterator, Mapping
 from tinygrad import Tensor, dtypes
 from tinygrad.llm.packed_wmma_prefill import select_packed_wmma_prefill_candidate
+from tinygrad.llm.model_facts import packed_linear_quant, route_role_for_linear
 from tinygrad.llm.prefill_graph_gemm import route_pf16_graph_gemm
 from tinygrad.llm.memory_semantics import (prefill_activation as _prefill_activation,
   prefill_output as _prefill_output, prefill_scratch as _prefill_scratch)
@@ -59,7 +60,7 @@ def _attached_production_route(lin, x: Tensor) -> str | None:
   if not isinstance(candidate_id, str) or not candidate_id or attachment.route_id != candidate_id: return None
   facts = attachment.scanned_target_facts
   if facts is None: return None
-  quant = _direct_packed_quant(lin)
+  quant = packed_linear_quant(lin)
   n, k = getattr(lin, "out_features", None), getattr(lin, "in_features", None)
   if quant == "" or not isinstance(n, int) or not isinstance(k, int) or len(x.shape) != 3 or x.shape[0] != 1:
     return None
@@ -84,9 +85,7 @@ def _attached_production_route(lin, x: Tensor) -> str | None:
   return None
 
 
-def _is_q4k_linear(lin) -> bool: return hasattr(lin, "q4k_storage") and hasattr(lin, "prefill_packed_weight")
-def _is_q6k_linear(lin) -> bool: return hasattr(lin, "q6k_storage") and hasattr(lin, "prefill_packed_weight")
-def is_direct_packed_prefill_linear(lin) -> bool: return _is_q4k_linear(lin) or _is_q6k_linear(lin)
+def is_direct_packed_prefill_linear(lin) -> bool: return bool(packed_linear_quant(lin))
 
 
 @dataclass(frozen=True)
@@ -103,24 +102,11 @@ class PrefillLinearRouteSpec:
     return f"prefill_{self.quant.lower()}_{self.route}_gemm"
 
 def _direct_packed_quant(lin) -> str:
-  if _is_q4k_linear(lin): return "Q4_K"
-  if _is_q6k_linear(lin): return "Q6_K"
-  return ""
+  return packed_linear_quant(lin)
 
 
 def _direct_packed_module_role(lin) -> str:
-  role = str(getattr(lin, "_prefill_graph_role", ""))
-  if role: return role
-  for attr in ("route_role", "role"):
-    role = str(getattr(lin, attr, ""))
-    if role: return role
-  name = str(getattr(lin, "name", ""))
-  if any(x in name for x in ("ffn_gate", "ffn_up")): return "ffn_gate_up"
-  if "ffn_down" in name: return "ffn_down"
-  if any(x in name for x in ("attn_q", "attn_output")): return "attn_qo"
-  if any(x in name for x in ("attn_k", "attn_v")): return "attn_kv"
-  if name == "output.weight" or name.rsplit(".", 1)[-1] == "output": return "lm_head"
-  return ""
+  return route_role_for_linear(lin)
 
 
 def _attached_packed_wmma_spec(lin, x:Tensor) -> PrefillLinearRouteSpec | None:
@@ -141,7 +127,7 @@ def _attached_packed_wmma_spec(lin, x:Tensor) -> PrefillLinearRouteSpec | None:
   if binding.shape != (m, n, k) or binding.role != _direct_packed_module_role(lin): return None
   attachment = getattr(lin, "_prefill_route_attachment", None)
   if not isinstance(attachment, PrefillRouteAttachment) or attachment.invocation_id != binding.invocation_id: return None
-  quant = "q4k" if _is_q4k_linear(lin) else "q6k" if _is_q6k_linear(lin) else ""
+  quant = {"Q4_K": "q4k", "Q6_K": "q6k"}.get(packed_linear_quant(lin), "")
   if quant == "": return None
   return PrefillLinearRouteSpec("packed_wmma", quant, _direct_packed_module_role(lin), m, n, k)
 

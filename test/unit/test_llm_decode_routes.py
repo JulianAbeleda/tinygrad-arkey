@@ -301,6 +301,9 @@ def test_flash_decode_binding_has_fixed_production_parameters(monkeypatch):
 
 
 def test_flash_decode_binding_splits_g4_and_g5_route_identity_cpu_only():
+  from tinygrad.llm.flash_decode_attention import FLASH_DECODE_G4, FLASH_DECODE_G5
+  assert decode_routes.FLASH_DECODE_CANDIDATE.route is FLASH_DECODE_G4
+  assert decode_routes.FLASH_DECODE_G5_CANDIDATE.route is FLASH_DECODE_G5
   g4 = decode_routes.FLASH_DECODE_CANDIDATE.bind(1, 32, 8, 128, "AMD")
   g5 = decode_routes.FLASH_DECODE_G5_CANDIDATE.bind(1, 40, 8, 128, "AMD")
   assert g4 is not None and g4.route_id == "decode_flash_live_split_g4_kvboth"

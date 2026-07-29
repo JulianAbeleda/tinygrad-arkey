@@ -12,6 +12,7 @@ from typing import Any, Callable
 
 from tinygrad import Tensor, dtypes
 from tinygrad.codegen.opt.packed_weight import PackedWeightTransform
+from tinygrad.llm.model_facts import packed_linear_quant, route_role_for_linear
 
 
 @dataclass(frozen=True)
@@ -47,15 +48,10 @@ PACKED_WMMA_ROUTES: tuple[PackedWmmaRoute, ...] = (
 )
 PACKED_WMMA_ROUTE_BY_KEY = {(row.quant, row.role, row.shape): row for row in PACKED_WMMA_ROUTES}
 
-# Compatibility geometry view used by callers and qualification tooling.  A geometry is
-# selected only through the exact route table above; this map alone grants no admission.
+# Compatibility geometry view used by callers and qualification tooling. A geometry is
+# selected only through the exact route table above; this derived map grants no admission.
 PACKED_WMMA_GEOM: dict[tuple[str, str], dict[str, int]] = {
-  ("Q4_K", "attn_qo"): dict(tm=128, tn=32, tk=32, wm=4, wn=1, bc=1),
-  ("Q4_K", "attn_kv"): dict(tm=64, tn=32, tk=32, wm=2, wn=1, bc=1),
-  ("Q4_K", "ffn_gate_up"): dict(tm=256, tn=64, tk=32, wm=8, wn=1, bc=1),
-  ("Q4_K", "ffn_down"): dict(tm=256, tn=128, tk=32, wm=8, wn=2, bc=2),
-  ("Q6_K", "ffn_down"): dict(tm=256, tn=64, tk=32, wm=8, wn=1, bc=1),
-  ("Q6_K", "attn_kv"): dict(tm=64, tn=32, tk=32, wm=2, wn=1, bc=1),
+  (row.quant, row.role): row.geom for row in PACKED_WMMA_ROUTES
 }
 
 
@@ -216,12 +212,11 @@ def select_packed_wmma_prefill_candidate(lin, spec) -> PackedWmmaPrefillCandidat
 
 
 def build_packed_wmma_warmstart_tables(covered_linears, ubatch: int) -> tuple[dict, dict]:
-  from tinygrad.llm.prefill_routes import _direct_packed_module_role, _is_q4k_linear, _is_q6k_linear
   opts, contexts = {}, {}
   for lin, out_f, in_f in covered_linears:
-    quant = "Q4_K" if _is_q4k_linear(lin) else "Q6_K" if _is_q6k_linear(lin) else None
-    if quant is None: continue
-    role = str(getattr(lin, "_prefill_graph_role", "") or _direct_packed_module_role(lin))
+    quant = packed_linear_quant(lin)
+    if not quant: continue
+    role = route_role_for_linear(lin)
     shape = (ubatch, out_f, in_f)
     if _route(quant, role, shape) is None or not gate_combo(quant, role, shape): continue
     try: entry = warmstart_entry(quant, role, shape)

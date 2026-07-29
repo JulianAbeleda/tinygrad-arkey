@@ -26,6 +26,7 @@ def setup_function(): runtime.set_packed_wmma_canary_verifier(None)
 def test_exact_six_selected_rows_and_geometry_are_frozen():
   assert len(runtime.PACKED_WMMA_ROUTES) == 6
   assert {(r.quant, r.role, r.shape): r.geometry for r in runtime.PACKED_WMMA_ROUTES} == EXPECTED
+  assert runtime.PACKED_WMMA_GEOM == {(r.quant, r.role): r.geom for r in runtime.PACKED_WMMA_ROUTES}
   assert all(len(r.canonical_identity) == 64 for r in runtime.PACKED_WMMA_ROUTES)
 
 
