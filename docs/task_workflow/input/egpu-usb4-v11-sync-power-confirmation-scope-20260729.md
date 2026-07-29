@@ -2,11 +2,11 @@
 
 Date: 2026-07-29
 
-Status: implementation commit `544bde177` and clean-commit host-side
-verification are complete. The candidate is not installed. The currently
-active v10 DEXT remains fail-closed in `active_degraded`; no reset, replug, AMD
-initialization, socket server, A1, or workload is authorized by this source
-scope.
+Status: implementation commit `544bde177`, clean-commit host-side verification,
+and the single audited v11 installation are complete. v11 is registered but
+did not bind during the same-boot replacement, so one reboot is pending. Do not
+run the installer again. No reset, replug, AMD initialization, socket server,
+A1, or workload is authorized by this source scope.
 
 Repository/worktree: `/Users/julianabeleda/env/tinygrad-arkey-exp`, branch
 `exp`, starting HEAD `eaeff7ee89092e906d109e6d2bdeb2442fd83e7e`.

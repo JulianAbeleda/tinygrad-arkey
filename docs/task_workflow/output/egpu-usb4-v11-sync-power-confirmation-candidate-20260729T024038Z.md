@@ -1,11 +1,13 @@
 # TinyGPU v11 synchronous power-confirmation candidate and handoff
 
-Collected: 2026-07-29T02:26:01Z through 2026-07-29T02:40:38Z
+Collected: 2026-07-29T02:26:01Z through 2026-07-29T02:43:27Z
 
 Status: v10 runtime diagnosis, v11 implementation, clean-commit focused tests,
-clean analyzer, and signed build-only verification are complete. The v11
-candidate is not installed. No reset, replug, AMD initialization, TinyGPU
-socket server, A1, or workload ran.
+clean analyzer, signed build verification, and the single audited v11
+installation are complete. v11 is registered but did not bind during the
+same-boot replacement, so one reboot is pending. Do not run the installer
+again. No reset, replug, AMD initialization, TinyGPU socket server, A1, or
+workload ran.
 
 Scope:
 `docs/task_workflow/input/egpu-usb4-v11-sync-power-confirmation-scope-20260729.md`.
@@ -14,6 +16,11 @@ Starting HEAD: `eaeff7ee89092e906d109e6d2bdeb2442fd83e7e` on `exp`.
 
 Implementation commit: `544bde177a9bb0ab0dc542a8e4773b0dc321cd38`
 (`[runtime] reconcile synchronous DriverKit power callback`).
+
+Installed source/provenance commit:
+`6435cc0dd0fb3b453fec6ea304bd38e949052e3d` (`[docs] record v11 clean-commit
+verification`). Any later documentation-only handoff commit is not part of the
+installed payload.
 
 ## Runtime finding
 
@@ -130,11 +137,10 @@ Toolchain: Xcode 26.5 build 17F42, macOS SDK 26.5, DriverKit SDK 25.5.
 | DEXT CDHash | `c9e068c1a6cd880262944e52dce81dafbd0476a7` |
 | Signing | ad-hoc, no TeamIdentifier |
 
-## Exact installation boundary
+## Audited installation and immediate diagnostic stop
 
-Do not reinstall v10. After this evidence is committed and the `exp` worktree
-is clean, the only permitted replacement path is the audited installer under
-the GPU lock with both its literal command-line token and immediate interactive
+The audited installer ran under `/tmp/gpu-bench.lock` from the clean installed
+source commit with both its literal command-line token and immediate interactive
 approval:
 
 ```sh
@@ -144,13 +150,45 @@ approval:
   --provenance-out docs/task_workflow/output/tinygpu-development-install-provenance.txt
 ```
 
-If the installer exits 10 with a pending upgrade, that is success at the reboot
-boundary. Do not run it again. Record the installed source commit, retained
-rollback app, registration rows, and provenance transcript, then reboot once.
+Run `20260729T024157Z-2638` replaced `/Applications/TinyGPU.app`, retained v10
+at `/Applications/.TinyGPU.previous.20260729T024157Z-2638.app`, and verified
+that the installed v11 hashes exactly matched the clean build above.
+
+The ignored local provenance transcript is
+`docs/task_workflow/output/tinygpu-development-install-provenance.txt`, SHA-256
+`15ecc7060c59951a83b5c4716da16406139818e27854236caee23c9cdd145c7e`.
+It records `before`, `ready_for_approval`, `operator_approval`, `replaced`, and
+`activated` phases and binds the installed payload to full commit
+`6435cc0dd0fb3b453fec6ea304bd38e949052e3d`.
+
+The installer exited 0 because the registration rows quickly simplified to
+exactly v11 `activated enabled`, with legacy v3 disabled and v10 absent. That
+row-level result did not mean the replacement DEXT had bound to the live PCI
+provider. The immediate locked R6.1 sequence showed:
+
+1. The current boot still began at `2026-07-29T02:19:41Z`.
+2. Registration contained exactly v11 `activated enabled`; v10 was gone and
+   legacy v3 was disabled.
+3. Native `status` reported a clean active registration.
+4. `keepalive handshake` returned `unavailable`, so R6.1 stopped. No keepalive
+   status, power status, `ioreg`, endpoint query, A1, server, or workload ran.
+
+The replacement log establishes the same-boot boundary. At
+`2026-07-29T02:42:16.952Z`, kernelmanagerd began replacing v10. It then reported
+that v10 was being replaced and could not be terminated immediately, installed
+v11 unique ID
+`0459ffba1fd9685605db1efbfa432ae2efa18e9bd84a87b55b8edb55092750a5`,
+and made its codeless registration current. It did not log a v11 launch or
+`tinygpu::start`, and the locked process census found no arkey DEXT process.
+
+The operational state is therefore reboot-required despite the installer's
+exit 0. Do not reinstall v11 and do not attempt to force a rematch with reset or
+replug. The only authorized next system transition is one reboot, followed by
+the R6.1 sequence below.
 
 ## Exact first-boot R6.1 handoff
 
-Every command must run from this feature worktree through
+After that reboot, every command must run from this feature worktree through
 `extra/usbgpu/tools/with_gpu_lock.py`. Do not reset/replug, initialize AMD,
 start the socket server, or run a workload.
 
