@@ -7,7 +7,7 @@ from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.helpers import Target, getenv
 from tinygrad.renderer.isa import IselContext, Register
 from tinygrad.renderer.isa.amd import (
-  AMDISARenderer, FRAG_BASE, FRAG_TOP, WMMA_ACC_BASE, _vpool, _acc_top, AMDOps, _wmma_chain_prev,
+  AMDISARenderer, FRAG_BASE, FRAG_TOP, _vpool, AMDOps, _wmma_chain_prev,
   _chain_epilogue_stores, decompose_lds_index, isel_index, isel_store, lower_inst)
 from tinygrad.codegen import full_rewrite_to_sink, to_program, to_program_cache
 from tinygrad.codegen.late.devectorizer import load_store_folding
@@ -347,22 +347,9 @@ def _tc_matmul_ast_multitile(m_up:int):
   opts = (Opt(OptOps.TC, axis=0, arg=(0, 0, 1)),) + (Opt(OptOps.UPCAST, axis=0, arg=4),) * m_up
   return ast.replace(arg=replace(ast.arg, opts_to_apply=opts))
 
-def _tc_matmul_ast_multitile_transposed_b(m_up:int):
-  # Route-shaped fp16 prefill GEMM: A[M,K] @ B[N,K].T. Unlike the plain unit matmul B[K,N], the B fragment is contiguous
-  # over K, so b128 can fold both A and B fragments.
-  a = Tensor.empty(64, 64, dtype="half"); b = Tensor.empty(64, 64, dtype="half")
-  lin = (a @ b.transpose()).schedule_linear()
-  ast = [u for u in lin.toposort() if u.op is Ops.SINK][0]
-  opts = (Opt(OptOps.TC, axis=0, arg=(0, 0, 1)),) + (Opt(OptOps.UPCAST, axis=0, arg=4),) * m_up
-  return ast.replace(arg=replace(ast.arg, opts_to_apply=opts))
-
-
 class TestAMDISAWmmaMultiOutputTileGate(unittest.TestCase):
-  # B0.M DEV=PYTHON structural gate for the multi-output-tile register model. A hand_coded M/N>16 upcasts the output into
-  # a WM x WN grid of 16x16 subtiles -> WM*WN accumulators. The bug: keying the C base on id(dreg) ALONE aliased all
-  # subtiles onto ONE 8-VGPR run (and isel_index walked cbase+idx.arg off the run). The fix pins each subtile its OWN
-  # fixed, contiguous, 8-aligned, LOW 8-VGPR run (loop-carried, read+written in place by v_wmma). NO numerical check
-  # (the parent's DEV=AMD gate). See amd.py _n_c_runs / _acc_base / _c_low / _vpool.
+  # The promoted hot paths use at most eight 16x16 output subtiles per wave. Keep that shared multi-output machinery live,
+  # but reject the retired 4x4/16-subtile experiment before partially allocating an unsupported register layout.
   def setUp(self):
     self.ren = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))
 
@@ -374,56 +361,9 @@ class TestAMDISAWmmaMultiOutputTileGate(unittest.TestCase):
     fs = graph_rewrite(fs, self.ren.isel_matcher, ctx=ictx, name="isel", bottom_up=True)   # (d) no isel NotImplementedError
     return fs, ictx, n_wmma
 
-  def test_16_subtile_register_model(self):
-    # 64x64x64 WM=WN=4 -> 16 output subtiles, 128 accumulator VGPRs (the bug's 4x4=128 case).
-    fs, ictx, n_wmma = self._isel(_tc_matmul_ast_multitile(2))
-    self.assertEqual(n_wmma, 16, "64x64 UPCASTx2 must build a 16-subtile WM*WN grid")
-    # (a) one V_WMMA INS per subtile
-    vwmma = [u for u in fs.toposort() if u.op is Ops.INS and getattr(u.arg, "name", None) == "V_WMMA"]
-    self.assertEqual(len(vwmma), 16, f"expected 16 V_WMMA INS (one per subtile), got {len(vwmma)}")
-    # (b) WM*WN distinct, non-overlapping, 8-aligned, LOW accumulator ranges, none exceeding the 256-VGPR file
-    bases = sorted(getattr(ictx, "_accfrag", {}).values())
-    self.assertEqual(len(bases), 16, f"expected 16 distinct LOW accumulator ranges, got {bases}")
-    for b in bases:
-      self.assertEqual(b % 8, 0, f"accumulator base {b} not 8-aligned")
-      self.assertGreaterEqual(b, WMMA_ACC_BASE); self.assertLess(b, FRAG_BASE)   # LOW (below the A/B high window)
-      self.assertLess(b + 7, 256)                                                # base+7 inside the file
-    runs = [set(range(b, b + 8)) for b in bases]
-    for i in range(len(runs)):
-      for j in range(i + 1, len(runs)):
-        self.assertEqual(len(runs[i] & runs[j]), 0, f"accumulator ranges {bases} overlap")
-    self.assertEqual(bases, list(range(WMMA_ACC_BASE, WMMA_ACC_BASE + 16 * 8, 8)), "128 contiguous 8-aligned acc VGPRs")
-    # B0.M per-row/col RESIDENCY: WM DISTINCT A-row + WN DISTINCT B-col fragments (NOT one reused pair), each packed ONCE
-    # and shared across its row/col. WM=WN=4 -> 8 resident 8-VGPR runs in the LOW window [_acc_top, FRAG_BASE), none in
-    # the (now free) legacy high window. Distinct, non-overlapping, 8-aligned.
-    self.assertEqual(getattr(ictx, "_frag", {}), {}, "multi-tile must NOT use the legacy high A/B window")
-    ab = sorted(getattr(ictx, "_abfrag", {}).values())
-    self.assertEqual(len(ab), 8, f"expected WM+WN=8 resident A/B fragments (4 A-rows + 4 B-cols), got {ab}")
-    self.assertEqual(ab, list(range(_acc_top(ictx), _acc_top(ictx) + 8 * 8, 8)), "8 contiguous 8-aligned resident A/B runs above the accumulators")
-    for b in ab:
-      self.assertEqual(b % 8, 0); self.assertGreaterEqual(b, _acc_top(ictx)); self.assertLess(b + 7, FRAG_BASE)   # LOW, below the freed high window
-    ab_idx = set().union(*[set(range(b, b + 8)) for b in ab])
-    acc_idx = set().union(*runs)
-    self.assertTrue(ab_idx.isdisjoint(acc_idx), "resident A/B window and LOW accumulator region must not overlap")
-    # A-row fragments are contiguous and default to b128; B-col fragments are strided and still pack once per B-col.
-    packs = [u for u in fs.toposort() if u.op is Ops.INS and getattr(u.arg, "name", None) == "V_PACK"]
-    b128 = [u for u in fs.toposort() if u.op is Ops.INS and getattr(u.arg, "name", None) == "GLOBAL_LOAD_B128"]
-    self.assertEqual(len(b128), 4 * 2, f"expected 8 b128 loads for 4 contiguous A fragments, got {len(b128)}")
-    self.assertEqual(len(packs), 4 * 8, f"expected 32 V_PACK for 4 strided B fragments, got {len(packs)}")
-    self.assertEqual(len(set(u.tag for u in packs)), 32, "each pack pinned to a distinct resident VGPR")
-    # (c) _vpool excludes the LOW accumulator region and resident A/B window, while reclaiming the v1..v7 padding
-    # as scalar scratch. The low scratch keeps post-loop epilogues away from high WMMA/load scratch like v201/v202.
-    pool = {r.index for r in _vpool(ictx)}
-    self.assertEqual(len(pool & acc_idx), 0, "_vpool must exclude the LOW accumulator VGPRs")
-    self.assertEqual(len(pool & ab_idx), 0, "_vpool must exclude the resident A/B fragment window")
-    self.assertEqual(_acc_top(ictx), WMMA_ACC_BASE + 16 * 8, "reserved LOW region top = base + 128")
-    self.assertEqual(set(range(1, WMMA_ACC_BASE)), pool & set(range(1, WMMA_ACC_BASE)), "v1..v7 are available scratch")
-    self.assertEqual(min(p for p in pool if p >= WMMA_ACC_BASE), _acc_top(ictx) + 8 * 8,
-                     "high virtuals start immediately above the accumulator + resident A/B regions")
-    # (e) every physical VGPR the MODEL pins is inside the 256 file (accumulators [8,135], A/B [136,199], pool <=255)
-    self.assertLess(max(acc_idx | ab_idx | pool), 256)
-    # budget: WM*WN*8 accumulators (128) + (WM+WN)*8 resident A/B (64) = 192 physical VGPRs pinned, < 256
-    self.assertEqual(len(acc_idx | ab_idx), 128 + 64)
+  def test_16_subtile_route_fails_closed(self):
+    with self.assertRaisesRegex(NotImplementedError, "at most 8 output subtiles"):
+      self._isel(_tc_matmul_ast_multitile(2))
 
   def test_4_subtile_end_to_end_assembles(self):
     # 64x64x64 WM=4 (one UPCAST) -> 4 subtiles (32 acc VGPRs): fits the file and lowers all the way to a binary with NO
@@ -449,69 +389,6 @@ class TestAMDISAWmmaMultiOutputTileGate(unittest.TestCase):
     mns = [str(u.arg).split("(", 1)[0] for u in insts if not isinstance(u.arg, tuple)]
     self.assertEqual(sum(1 for m in mns if m == "v_wmma_f32_16x16x16_f16"), 4, "one v_wmma per subtile in the rendered list")
     self.assertTrue(any(u.op is Ops.BINARY and len(u.arg) > 0 for u in prg.src), "assemble_linear produced no binary")
-
-  # WIP gate: spill-free 16-subtile multi-output WMMA is not yet implemented (raises NotImplementedError on the
-  # VGPR/SGPR budget). xfail so the suite stays green and real regressions aren't masked; flips to a pass-signal
-  # when the no-spill path lands. Unrelated to flash-prefill work.
-  @unittest.expectedFailure
-  def test_16_subtile_end_to_end_no_spill(self):
-    # B0.M per-row/col residency killer check: 64x64x64 WM=WN=4 (16 subtiles, 128 acc + 64 resident A/B VGPRs) lowers all
-    # the way to a binary with NO spill. BEFORE residency this SPILLED ("Inc 0: no spills") because all 16 subtiles
-    # re-packed A/B into ONE reused 16-VGPR pair (16*16 = 256 packs contending). AFTER: each A-row / B-col is packed ONCE
-    # (WM+WN = 8 fragment sets, 64 packs pinned to 64 distinct regs) -> the constraint is satisfiable -> no spill.
-    prg = to_program(_tc_matmul_ast_multitile(2), self.ren)   # must NOT raise NotImplementedError("no spills")
-    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
-    insts = lin_uop.src
-    mns = [str(u.arg).split("(", 1)[0] for u in insts if not isinstance(u.arg, tuple)]
-    # one v_wmma per subtile; contiguous A rows use b128, strided B cols pack once.
-    self.assertEqual(sum(1 for m in mns if m == "v_wmma_f32_16x16x16_f16"), 16, "16 in-place v_wmma (one per subtile)")
-    self.assertEqual(sum(1 for m in mns if m == "global_load_b128"), 4 * 2, "8 b128: each contiguous A-row loaded once")
-    self.assertEqual(sum(1 for m in mns if m == "v_pack_b32_f16"), 4 * 8, "32 v_pack: each strided B-col packed once")
-    # every VGPR index stays inside the 256 file
-    vidx = set()
-    for u in insts:
-      if isinstance(u.arg, tuple): continue
-      for name, _field in u.arg._fields:
-        v = getattr(u.arg, name)
-        if isinstance(v, Reg):
-          for o in range(v.offset, v.offset + v.sz):
-            if o >= 256: vidx.add(o - 256)
-    self.assertLess(max(vidx), 256, "no VGPR index escapes the 256 file")
-    self.assertTrue(any(u.op is Ops.BINARY and len(u.arg) > 0 for u in prg.src), "assemble_linear produced no binary")
-
-  @unittest.expectedFailure  # WIP: spill-free 16-subtile multi-output WMMA not yet implemented (see above)
-  def test_16_subtile_b128_fragment_load_default(self):
-    # L3 hand-trace parity: when an operand's 16 half lanes are two contiguous 8-half spans, the default path may load
-    # the packed fragment directly with two b128 loads instead of scalar half loads + v_pack. In this AST the A-row
-    # fragments are contiguous (4 rows -> 8 b128 loads), while B is column-strided and correctly remains packed.
-    prg = to_program(_tc_matmul_ast_multitile(2), self.ren)
-    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
-    mns = [str(u.arg).split("(", 1)[0] for u in lin_uop.src if not isinstance(u.arg, tuple)]
-    self.assertEqual(sum(1 for m in mns if m == "v_wmma_f32_16x16x16_f16"), 16)
-    self.assertEqual(sum(1 for m in mns if m == "global_load_b128"), 8, "4 contiguous A fragments -> 2 b128 loads each")
-    self.assertEqual(sum(1 for m in mns if m == "v_pack_b32_f16"), 4 * 8, "strided B fragments still require packing")
-    self.assertTrue(any(u.op is Ops.BINARY and len(u.arg) > 0 for u in prg.src), "assemble_linear produced no binary")
-
-  @unittest.expectedFailure  # WIP: spill-free 16-subtile multi-output WMMA not yet implemented (see above)
-  def test_16_subtile_transposed_b_full_b128_fragment_loads(self):
-    prg = to_program(_tc_matmul_ast_multitile_transposed_b(2), self.ren)
-    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
-    mns = [str(u.arg).split("(", 1)[0] for u in lin_uop.src if not isinstance(u.arg, tuple)]
-    self.assertEqual(sum(1 for m in mns if m == "v_wmma_f32_16x16x16_f16"), 16)
-    self.assertEqual(sum(1 for m in mns if m == "global_load_b128"), (4 + 4) * 2,
-                     "route-shaped A and transposed-B fragments are both contiguous")
-    self.assertEqual(sum(1 for m in mns if m == "v_pack_b32_f16"), 0)
-    self.assertEqual(sum(1 for m in mns if m == "global_load_u16"), 0)
-
-  @unittest.expectedFailure  # WIP: spill-free 16-subtile multi-output WMMA not yet implemented (see above)
-  def test_targeted_waitcnt_coalesces_scalar_pack_path(self):
-    prg = to_program(_tc_matmul_ast_multitile(2), self.ren)
-    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
-    insts = self.ren._resolve_labels(self.ren._insert_waitcnt(self.ren._schedule(list(lin_uop.src))))
-    mns = [str(u.arg).split("(", 1)[0] for u in insts if not isinstance(u.arg, tuple)]
-    self.assertEqual(sum(1 for m in mns if m == "v_pack_b32_f16"), 32)
-    self.assertLessEqual(sum(1 for m in mns if m == "s_waitcnt"), 10,
-                         "targeted waitcnt must not emit one wait per scalar v_pack")
 
 class TestAMDISALDSB128Lowering(unittest.TestCase):
   def _v(self, i:int):

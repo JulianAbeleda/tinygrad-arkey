@@ -1,4 +1,4 @@
-"""VALUE-semantics gate for the fp16 RDNA3 WMMA lowering (16x16x16, K=64 reduce chain, 64x64 multi-tile).
+"""VALUE-semantics gate for the fp16 RDNA3 WMMA lowering (16x16x16 and its K=64 reduce chain).
 
 The structural gates in test_amd_isa_wmma.py only count instructions / inspect the emitted source; their own
 comments defer numeric correctness to a "parent DEV=AMD bit-exact gate". That gate did not exist as a runnable
@@ -129,25 +129,6 @@ class TestAMDISAWmmaValueSemantics(unittest.TestCase):
     A = rng.standard_normal((16, 64)); A[:, ::4] = 0.0; A[:, 1::4] = -np.abs(A[:, 1::4])
     B = rng.standard_normal((64, 16)); B[::4, :] = 0.0
     self._check(A, B, expect_wmma=1)
-
-  # ---- 64x64x64: THE audit-flagged multi-output-tile register model (WM=WN=4 -> 16 subtiles / accumulators) ----
-  def test_64x64_multitile_signed_random(self):
-    rng = np.random.default_rng(6)
-    self._check(rng.standard_normal((64, 64)), rng.standard_normal((64, 64)), expect_wmma=16)
-
-  def test_64x64_multitile_zeros_and_negatives(self):
-    # per-subtile residency bug would cross-wire A-rows/B-cols; structured zeros/negatives localize any misroute.
-    rng = np.random.default_rng(7)
-    A = rng.standard_normal((64, 64)); A[16:32, :] = 0.0; A[:, ::5] = -np.abs(A[:, ::5])
-    B = rng.standard_normal((64, 64)); B[:, 32:48] = 0.0
-    self._check(A, B, expect_wmma=16)
-
-  def test_64x64_multitile_edge_magnitude(self):
-    rng = np.random.default_rng(8)
-    A = (rng.uniform(-1, 1, (64, 64)) * 6.0).astype(np.float16)
-    B = (rng.uniform(-1, 1, (64, 64)) * 6.0).astype(np.float16)
-    self._check(A, B, expect_wmma=16, rtol=6e-3)
-
 
 if __name__ == "__main__":
   unittest.main()
