@@ -979,7 +979,10 @@ class PCIIface(PCIIfaceBase):
     self._collect_interrupts(reset=True)
     raise RuntimeError("Device hang detected")
 
-  def device_fini(self): self.dev_impl.fini()
+  def device_fini(self):
+    try: self.dev_impl.fini()
+    finally:
+      if hasattr(self.pci_dev, "close"): self.pci_dev.close()
 
 class USBIface(PCIIface):
   def __init__(self, dev, dev_id): # pylint: disable=super-init-not-called

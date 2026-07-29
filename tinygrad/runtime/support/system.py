@@ -741,7 +741,6 @@ class APLRemotePCIDevice(RemotePCIDevice):
       lease, payload = self._tinygpu_rpc(RemoteCmd.LEASE_ACQUIRE)
       if lease: self.tinygpu_lease = lease
       if payload or lease == 0: raise TinyGPUWireError("malformed_payload", "invalid lease response")
-      atexit.register(self.close)
     except BaseException:
       with contextlib.suppress(Exception): self._release_workload_lease()
       with contextlib.suppress(OSError): sock.close()

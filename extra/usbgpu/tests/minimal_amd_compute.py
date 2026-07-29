@@ -16,9 +16,9 @@ def validate_result(values: Iterable[object]) -> None:
 
 def run() -> None:
   # Keep tinygrad imports here: importing this module for CPU-only validation is inert.
-  from tinygrad import Device, Tensor
+  from tinygrad import Tensor
 
-  x = Tensor([1, 2, 3, 4], device=Device["AMD"])
+  x = Tensor([1, 2, 3, 4], device="AMD")
   result = (x * x + 1).realize().tolist()
   validate_result(result)
 

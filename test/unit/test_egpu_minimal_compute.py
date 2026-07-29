@@ -35,11 +35,11 @@ class TestEGPUMinimalCompute(unittest.TestCase):
   class FakeTensor:
     def __init__(self, values, device):
       assert values == [1, 2, 3, 4]
-      assert device == "AMD-device"
+      assert device == "AMD"
     def __mul__(self, other): assert other is self; return self
     def __add__(self, other): assert other == 1; return FakeValue()
 
-  fake = types.SimpleNamespace(Device={"AMD": "AMD-device"}, Tensor=FakeTensor)
+  fake = types.SimpleNamespace(Tensor=FakeTensor)
   prior = sys.modules.get("tinygrad")
   sys.modules["tinygrad"] = fake
   try: module.run()

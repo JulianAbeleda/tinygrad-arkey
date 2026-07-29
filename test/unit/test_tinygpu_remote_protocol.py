@@ -1,15 +1,18 @@
 import json
+import inspect
 import os
 import pathlib
 import socket
 import struct
 import subprocess
 import threading
+import types
 
 import pytest
 
 from tinygrad.runtime.support.system import APLRemotePCIDevice, RemoteCmd, RemotePCIDevice, TinyGPUWireError, \
   _tinygpu_validate_status, _tinygpu_validate_power_status
+from tinygrad.runtime.ops_amd import PCIIface
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -202,6 +205,19 @@ def test_failed_lease_release_remains_retryable():
   with pytest.raises(TinyGPUWireError): dev._release_workload_lease()
   assert dev.tinygpu_lease == 42
   thread.join(timeout=2); client.close()
+
+
+def test_amd_finalization_closes_remote_transport_after_device_fini_even_on_failure():
+  events = []
+  iface = object.__new__(PCIIface)
+  iface.pci_dev = types.SimpleNamespace(close=lambda: events.append("close"))
+  def fini():
+    events.append("fini")
+    raise RuntimeError("fini failed")
+  iface.dev_impl = types.SimpleNamespace(fini=fini)
+  with pytest.raises(RuntimeError, match="fini failed"): iface.device_fini()
+  assert events == ["fini", "close"]
+  assert "atexit.register(self.close)" not in inspect.getsource(APLRemotePCIDevice.__init__)
 
 
 def test_ensure_app_never_downloads_or_replaces(monkeypatch):
