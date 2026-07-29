@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from tinygrad.dtype import dtypes
 from tinygrad.uop.ops import AxisType, Ops, UOp, graph_rewrite
 
@@ -34,5 +36,5 @@ def test_warp_reduce_fails_closed_for_non_lane_axes_and_non_power_of_two_widths(
 def test_warp_reduce_core_owns_old_extra_boundary():
   import importlib.util
   assert importlib.util.find_spec("tinygrad.codegen.experimental") is None
-  assert importlib.util.find_spec("extra.llm_research.amd_warp_reduce") is None
-  assert importlib.util.find_spec("extra.llm_research.warp_reduce_lowering") is None
+  assert not (Path(__file__).parents[2] / "extra/llm_research/amd_warp_reduce.py").exists()
+  assert not (Path(__file__).parents[2] / "extra/llm_research/warp_reduce_lowering.py").exists()

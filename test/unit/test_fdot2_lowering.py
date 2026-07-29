@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from tinygrad.dtype import dtypes
 from tinygrad.uop.ops import Ops, UOp, graph_rewrite
 
@@ -75,4 +77,4 @@ def test_fdot2_lowering_declines_non_add_nodes():
 def test_fdot2_core_owns_all_public_hooks():
   import importlib.util
   assert importlib.util.find_spec("tinygrad.codegen.experimental") is None
-  assert importlib.util.find_spec("extra.llm_research.fdot2_lowering") is None
+  assert not (Path(__file__).parents[2] / "extra/llm_research/fdot2_lowering.py").exists()

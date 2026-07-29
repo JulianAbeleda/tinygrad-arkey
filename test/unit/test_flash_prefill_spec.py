@@ -1,4 +1,5 @@
 import importlib.util
+from pathlib import Path
 
 import pytest
 
@@ -7,7 +8,7 @@ from tinygrad.schedule.wmma.flash_prefill import FlashPrefillAttentionSpec, desc
 
 def test_flash_prefill_descriptor_promoted_out_of_extra():
   assert importlib.util.find_spec("tinygrad.schedule.wmma.flash_prefill") is not None
-  assert importlib.util.find_spec("extra.llm_research.prefill.flash_prefill_attention_spec") is None
+  assert not (Path(__file__).parents[2] / "extra/llm_research/prefill/flash_prefill_attention_spec.py").exists()
 
 
 def test_flash_prefill_descriptor_validates_and_serializes():

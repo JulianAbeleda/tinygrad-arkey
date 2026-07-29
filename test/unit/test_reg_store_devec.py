@@ -1,5 +1,6 @@
 import os
 import importlib.util
+from pathlib import Path
 
 from tinygrad import dtypes
 from tinygrad.codegen import full_rewrite_to_sink
@@ -12,7 +13,7 @@ from tinygrad.uop.ops import KernelInfo, Ops, UOp
 
 def test_reg_store_devec_is_core_owned():
   assert importlib.util.find_spec("tinygrad.codegen.late.reg_store") is not None
-  assert importlib.util.find_spec("extra.llm_research.reg_store_devec") is None
+  assert not (Path(__file__).parents[2] / "extra/llm_research/reg_store_devec.py").exists()
 
 
 def _target(reg, indices, *, load=True):

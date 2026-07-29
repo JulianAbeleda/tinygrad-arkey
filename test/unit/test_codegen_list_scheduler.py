@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from tinygrad.dtype import dtypes
 from tinygrad.uop.ops import Ops, UOp
 
@@ -42,4 +44,4 @@ def test_structural_inventory_contains_control_and_definition_ops():
 def test_list_scheduler_core_owns_boundary():
   import importlib.util
   assert importlib.util.find_spec("tinygrad.codegen.experimental") is None
-  assert importlib.util.find_spec("extra.llm_research.codegen_list_scheduler") is None
+  assert not (Path(__file__).parents[2] / "extra/llm_research/codegen_list_scheduler.py").exists()
