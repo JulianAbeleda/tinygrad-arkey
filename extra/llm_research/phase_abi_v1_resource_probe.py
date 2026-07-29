@@ -9,6 +9,7 @@ import argparse, json, traceback
 from pathlib import Path
 
 from tinygrad import Tensor, dtypes
+from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, execute_research_program
 from tinygrad.codegen import to_program
 from tinygrad.helpers import Target
 from tinygrad.renderer.cstyle import HIPRenderer
@@ -43,7 +44,8 @@ def probe(mode: str) -> dict:
       return amd_gfx1100_q16_grid_hd128_loop_attention(qv, kvv, vv, o, q_tokens=q, q_heads=hq, kv_heads=hkv,
         kv_tokens=kv, scale=1/(128**.5), causal=True, kernel_info=KernelInfo(name="phase_abi_v1_probe"),
         acc_blocks=acc_blocks, output_block_base=0, phase_abi_v1=True)
-    scheduled = out.custom_kernel(qi, ki, vi, fxn=kernel)[0].schedule_linear()
+    scheduled = execute_research_program(out, qi, ki, vi, program=KernelProgram(
+      "exp.phase_abi_v1_resource_probe", f"{mode}.acc{acc_blocks}", KernelProgramProvenance.RESEARCH_ONLY, kernel)).schedule_linear()
     calls = [x for x in scheduled.src if x.op is Ops.CALL]
     if len(calls) != 1: raise RuntimeError(f"expected one phase ABI call, got {len(calls)}")
     ast = calls[0].src[0]

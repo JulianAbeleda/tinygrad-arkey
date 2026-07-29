@@ -16,6 +16,7 @@ from typing import Any
 import numpy as np
 
 from tinygrad import Tensor, dtypes
+from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, execute_research_program
 from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
 
@@ -33,6 +34,11 @@ from extra.llm_research.mmq_q4k_q8_reference import (
   q8_1_mmq_ds4_from_row_major_reference,
 )
 from extra.llm_research.quant.q4_k_gemv_primitive import _q4k_group_params, _q4k_group_qpack_lane4, _q4k_quant
+
+
+def _execute_research_atom(output: Tensor, *inputs: Tensor, program_id: str, emitter):
+  return execute_research_program(output, *inputs, program=KernelProgram(
+    "exp.mmq_q4k_q8_atom", program_id, KernelProgramProvenance.RESEARCH_ONLY, emitter))
 
 BACKEND_ATOM_ID = "q4k_q8_1_mmq_reference_backed_atom_v0"
 AMD_BACKEND_ATOM_ID = "q4k_q8_1_mmq_amd_uop_atom_v0"
@@ -751,8 +757,8 @@ def run_q4k_q8_1_mmq_tile_amd(q4k_bytes: np.ndarray, xq: np.ndarray, xscales: np
   words = Tensor(words_np, dtype=dtypes.uint32, device=device).realize()
   xq_t = Tensor(np.ascontiguousarray(np.asarray(xq, dtype=np.int8).reshape(-1)), dtype=dtypes.int8, device=device).realize()
   xs_t = Tensor(np.ascontiguousarray(np.asarray(xscales, dtype=np.float32).reshape(-1)), dtype=dtypes.float32, device=device).realize()
-  out = Tensor.empty(spec.tile_m, spec.tile_n, dtype=dtypes.float32, device=device).custom_kernel(
-    words, xq_t, xs_t, fxn=_q4k_q8_1_tile_kernel(spec))[0].realize()
+  out = _execute_research_atom(Tensor.empty(spec.tile_m, spec.tile_n, dtype=dtypes.float32, device=device), words, xq_t, xs_t,
+    program_id=f"tile.{spec.tile_m}x{spec.tile_n}", emitter=_q4k_q8_1_tile_kernel(spec)).realize()
   return Q4KQ8MMQAtomResult(output=out.numpy().astype(np.float32), lifecycle=_lifecycle_for_spec(spec),
                             backend_atom_id=AMD_BACKEND_ATOM_ID)
 
@@ -764,8 +770,8 @@ def run_q4k_q8_1_mmq_tile_amd_warp(q4k_bytes: np.ndarray, xq: np.ndarray, xscale
   words = Tensor(words_np, dtype=dtypes.uint32, device=device).realize()
   xq_t = Tensor(np.ascontiguousarray(np.asarray(xq, dtype=np.int8).reshape(-1)), dtype=dtypes.int8, device=device).realize()
   xs_t = Tensor(np.ascontiguousarray(np.asarray(xscales, dtype=np.float32).reshape(-1)), dtype=dtypes.float32, device=device).realize()
-  out = Tensor.empty(spec.tile_m, spec.tile_n, dtype=dtypes.float32, device=device).custom_kernel(
-    words, xq_t, xs_t, fxn=_q4k_q8_1_tile_warp_kernel(spec))[0].realize()
+  out = _execute_research_atom(Tensor.empty(spec.tile_m, spec.tile_n, dtype=dtypes.float32, device=device), words, xq_t, xs_t,
+    program_id=f"tile_warp.{spec.tile_m}x{spec.tile_n}", emitter=_q4k_q8_1_tile_warp_kernel(spec)).realize()
   return Q4KQ8MMQAtomResult(output=out.numpy().astype(np.float32), lifecycle=_lifecycle_for_spec(spec),
                             backend_atom_id=AMD_WARP_BACKEND_ATOM_ID)
 
@@ -784,8 +790,8 @@ def run_q4k_q8_1_mmq_bounded_amd_warp(q4k_bytes: np.ndarray, xq: np.ndarray, xsc
   words = Tensor(_as_u32_words(q4), dtype=dtypes.uint32, device=device).realize()
   xq_t = Tensor(np.ascontiguousarray(xq_arr.reshape(-1)), dtype=dtypes.int8, device=device).realize()
   xs_t = Tensor(np.ascontiguousarray(np.asarray(xscales, dtype=np.float32).reshape(-1)), dtype=dtypes.float32, device=device).realize()
-  out = Tensor.empty(m, n, dtype=dtypes.float32, device=device).custom_kernel(
-    words, xq_t, xs_t, fxn=_q4k_q8_1_bounded_warp_kernel(m, n, k, role))[0].realize()
+  out = _execute_research_atom(Tensor.empty(m, n, dtype=dtypes.float32, device=device), words, xq_t, xs_t,
+    program_id=f"bounded_warp.{role}.{m}x{n}x{k}", emitter=_q4k_q8_1_bounded_warp_kernel(m, n, k, role)).realize()
   return Q4KQ8MMQAtomResult(output=out.numpy().astype(np.float32), lifecycle=MMQLifecycleRow(role=role, tile_id=f"bounded_{m}x{n}x{k}",
                             counters=zero_counters(dot_accumulation_epochs=1, output_store_epochs=1, output_stores=m*n)),
                             backend_atom_id=AMD_WARP_BATCHED_BACKEND_ATOM_ID)
@@ -805,8 +811,8 @@ def run_q4k_q8_1_mmq_bounded_amd_dot4(q4k_bytes: np.ndarray, xq: np.ndarray, xsc
   words = Tensor(_as_u32_words(q4), dtype=dtypes.uint32, device=device).realize()
   xq_t = Tensor(np.ascontiguousarray(xq_arr.reshape(-1)), dtype=dtypes.int8, device=device).realize()
   xs_t = Tensor(np.ascontiguousarray(np.asarray(xscales, dtype=np.float32).reshape(-1)), dtype=dtypes.float32, device=device).realize()
-  out = Tensor.empty(m, n, dtype=dtypes.float32, device=device).custom_kernel(
-    words, xq_t, xs_t, fxn=_q4k_q8_1_bounded_dot4_kernel(m, n, k, role))[0].realize()
+  out = _execute_research_atom(Tensor.empty(m, n, dtype=dtypes.float32, device=device), words, xq_t, xs_t,
+    program_id=f"bounded_dot4.{role}.{m}x{n}x{k}", emitter=_q4k_q8_1_bounded_dot4_kernel(m, n, k, role)).realize()
   return Q4KQ8MMQAtomResult(output=out.numpy().astype(np.float32), lifecycle=MMQLifecycleRow(role=role, tile_id=f"bounded_dot4_{m}x{n}x{k}",
                             counters=zero_counters(dot_accumulation_epochs=1, output_store_epochs=1, output_stores=m*n)),
                             backend_atom_id=AMD_DOT4_BATCHED_BACKEND_ATOM_ID)
@@ -826,8 +832,8 @@ def run_q4k_q8_1_mmq_bounded_amd_dot4x4(q4k_bytes: np.ndarray, xq: np.ndarray, x
   words = Tensor(_as_u32_words(q4), dtype=dtypes.uint32, device=device).realize()
   xq_t = Tensor(np.ascontiguousarray(xq_arr.reshape(-1)), dtype=dtypes.int8, device=device).realize()
   xs_t = Tensor(np.ascontiguousarray(np.asarray(xscales, dtype=np.float32).reshape(-1)), dtype=dtypes.float32, device=device).realize()
-  out = Tensor.empty(m, n, dtype=dtypes.float32, device=device).custom_kernel(
-    words, xq_t, xs_t, fxn=_q4k_q8_1_bounded_dot4x4_kernel(m, n, k, role))[0].realize()
+  out = _execute_research_atom(Tensor.empty(m, n, dtype=dtypes.float32, device=device), words, xq_t, xs_t,
+    program_id=f"bounded_dot4x4.{role}.{m}x{n}x{k}", emitter=_q4k_q8_1_bounded_dot4x4_kernel(m, n, k, role)).realize()
   return Q4KQ8MMQAtomResult(output=out.numpy().astype(np.float32), lifecycle=MMQLifecycleRow(role=role, tile_id=f"bounded_dot4x4_{m}x{n}x{k}",
                             counters=zero_counters(dot_accumulation_epochs=1, output_store_epochs=1, output_stores=m*n)),
                             backend_atom_id=AMD_DOT4X4_BATCHED_BACKEND_ATOM_ID)
@@ -853,8 +859,8 @@ def run_q4k_q8_1_mmq_bounded_amd_ds4_warp(q4k_bytes: np.ndarray, ds4: Q81MMQDS4A
   m = ds4.spec.m
   words = Tensor(_as_u32_words(q4), dtype=dtypes.uint32, device=device).realize()
   values_t, scales_t, sums_t = _ds4_tensors(ds4, device)
-  out = Tensor.empty(m, n, dtype=dtypes.float32, device=device).custom_kernel(
-    words, values_t, scales_t, sums_t, fxn=_q4k_q8_1_bounded_ds4_warp_kernel(m, n, k, role))[0].realize()
+  out = _execute_research_atom(Tensor.empty(m, n, dtype=dtypes.float32, device=device), words, values_t, scales_t, sums_t,
+    program_id=f"ds4_warp.{role}.{m}x{n}x{k}", emitter=_q4k_q8_1_bounded_ds4_warp_kernel(m, n, k, role)).realize()
   lifecycle, detail = _staged_ds4_lifecycle_for_spec(
     Q4KQ81MMQTileSpec(role=role, m=m, n=n, k=k, m_tile=m, n_tile=n, activation_layout=Q8_1_MMQ_DS4_LAYOUT))
   detail = {**detail, "backend_stage": "amd_ds4_warp_direct_gpu", "gpu_kernel_emitted": True,
@@ -880,8 +886,8 @@ def run_q4k_q8_1_mmq_bounded_amd_ds4_dot4x4(q4k_bytes: np.ndarray, ds4: Q81MMQDS
     raise ValueError(f"AMD DS4 packed MMQ atom requires M to be a multiple of {micro_m}, got {m}")
   words = Tensor(_as_u32_words(q4), dtype=dtypes.uint32, device=device).realize()
   values_t, scales_t, sums_t = _ds4_tensors(ds4, device)
-  out = Tensor.empty(m, n, dtype=dtypes.float32, device=device).custom_kernel(
-    words, values_t, scales_t, sums_t, fxn=_q4k_q8_1_bounded_ds4_dot4x4_kernel(m, n, k, role, mapping))[0].realize()
+  out = _execute_research_atom(Tensor.empty(m, n, dtype=dtypes.float32, device=device), words, values_t, scales_t, sums_t,
+    program_id=f"ds4_dot4x4.{role}.{m}x{n}x{k}", emitter=_q4k_q8_1_bounded_ds4_dot4x4_kernel(m, n, k, role, mapping)).realize()
   lifecycle, detail = _staged_ds4_lifecycle_for_spec(
     Q4KQ81MMQTileSpec(role=role, m=m, n=n, k=k, m_tile=m, n_tile=n, activation_layout=Q8_1_MMQ_DS4_LAYOUT))
   detail = {**detail, "backend_stage": "amd_ds4_dot4x4_direct_gpu", "gpu_kernel_emitted": True,
@@ -903,8 +909,8 @@ def run_q4k_q8_1_mmq_bounded_amd_ds4_lds_skeleton(q4k_bytes: np.ndarray, ds4: Q8
   m = ds4.spec.m
   words = Tensor(_as_u32_words(q4), dtype=dtypes.uint32, device=device).realize()
   values_t, scales_t, sums_t = _ds4_tensors(ds4, device)
-  out = Tensor.empty(m, n, dtype=dtypes.float32, device=device).custom_kernel(
-    words, values_t, scales_t, sums_t, fxn=_q4k_q8_1_bounded_ds4_lds_skeleton_kernel(m, n, k, role))[0].realize()
+  out = _execute_research_atom(Tensor.empty(m, n, dtype=dtypes.float32, device=device), words, values_t, scales_t, sums_t,
+    program_id=f"ds4_lds_skeleton.{role}.{m}x{n}x{k}", emitter=_q4k_q8_1_bounded_ds4_lds_skeleton_kernel(m, n, k, role)).realize()
   lifecycle, detail = _staged_ds4_lifecycle_for_spec(
     Q4KQ81MMQTileSpec(role=role, m=m, n=n, k=k, m_tile=m, n_tile=n, activation_layout=Q8_1_MMQ_DS4_LAYOUT))
   staged_activation_values = m * k
@@ -943,9 +949,8 @@ def run_q4k_q8_1_mmq_bounded_amd_ds4_coop_tile(q4k_bytes: np.ndarray, ds4: Q81MM
   words = Tensor(_as_u32_words(q4), dtype=dtypes.uint32, device=device).realize()
   values_t, scales_t, sums_t = _ds4_tensors(ds4, device)
   try:
-    out = Tensor.empty(m, n, dtype=dtypes.float32, device=device).custom_kernel(
-      words, values_t, scales_t, sums_t,
-      fxn=_q4k_q8_1_bounded_ds4_coop_tile_kernel(m, n, k, role, writeback_mode))[0].realize()
+    out = _execute_research_atom(Tensor.empty(m, n, dtype=dtypes.float32, device=device), words, values_t, scales_t, sums_t,
+      program_id=f"ds4_coop_tile.{role}.{m}x{n}x{k}", emitter=_q4k_q8_1_bounded_ds4_coop_tile_kernel(m, n, k, role, writeback_mode)).realize()
   except TypeError as exc:
     if "'tuple' and 'NoneType'" in str(exc):
       raise RuntimeError(AMD_DS4_COOP_TILE_BLOCKER) from exc

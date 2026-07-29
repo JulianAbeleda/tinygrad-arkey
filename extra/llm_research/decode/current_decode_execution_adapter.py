@@ -18,6 +18,7 @@ from extra.llm_research.mmq_epoch_manifest_export import (DEFAULT_MAX_ROWS, buil
                                                 summarize_amd_isa_proof_rows)
 from extra.llm_research.route_manifest import PROFILE_DECODE, ROUTES
 from tinygrad.dtype import dtypes
+from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, execute_promoted_program
 from tinygrad.helpers import Target
 from tinygrad.renderer.cstyle import HIPRenderer
 from tinygrad.uop.ops import Ops, UOp
@@ -192,7 +193,8 @@ def verify_decode_full_output(request: CurrentDecodeCompileRequest, artifact: Ma
   x = Tensor(artifact["activation"].copy()).realize()
   before = hashlib.sha256(artifact["words"].tobytes()).hexdigest()
   kfn = q4k_g3_lanemap_gemv_kernel(request.rows, request.k)
-  out = Tensor.empty(request.rows, dtype=dtypes.float32, device=words.device).custom_kernel(words, x, fxn=kfn)[0].numpy()
+  out = execute_promoted_program(Tensor.empty(request.rows, dtype=dtypes.float32, device=words.device), words, x,
+    program=KernelProgram(request.route_id, f"{request.route_id}.gemv", KernelProgramProvenance.MACHINE_SEARCH_GENERATED, kfn)).numpy()
   ref = artifact["reference"]
   finite = bool(np.all(np.isfinite(out)))
   max_abs = float(np.max(np.abs(out - ref)))
