@@ -1,0 +1,20 @@
+{
+  "schema": "tinygrad.llm.boltbeam-prefill-search-contract.v1",
+  "route_id": "prefill_wmma_lds_dbuf_generated",
+  "request_id": "m2a-prefill-wmma-lds-dbuf-qwen3-8b-gfx1100-v1",
+  "public": true,
+  "target": {"backend": "AMD", "arch": "gfx1100", "wave_size": 32},
+  "workloads": [
+    {"role": "attn_kv", "shape": [512, 1024, 4096]},
+    {"role": "attn_qo", "shape": [512, 4096, 4096]},
+    {"role": "ffn_down", "shape": [512, 4096, 12288]},
+    {"role": "ffn_gate_up", "shape": [512, 12288, 4096]}
+  ],
+  "candidate_space_status": "MISSING",
+  "required_coupled_dimensions": ["tile_waves_threads", "lds_windows_strides_padding", "cooperative_loads", "pipeline_buffer_stage", "dependency_wait_barriers", "residency", "epilogue"],
+  "historical_selected_plan_input_only": "The archived four-role candidate set is evidence of selected plans, not a candidate-space definition or a reproducible search run.",
+  "objective": {"name": "latency_ms", "direction": "minimize", "tie_break": "canonical_candidate_hash"},
+  "budget": {"max_candidates": 256, "warmups": 4, "rounds": 3},
+  "required_export": ["complete_ranked_population", "selected_shape_key_plans", "admission_report", "run_metadata"],
+  "search_system": {"name": "BoltBeam", "revision": "1fed624e9bac83d7f58e853489b91d2a56fc90fb"}
+}

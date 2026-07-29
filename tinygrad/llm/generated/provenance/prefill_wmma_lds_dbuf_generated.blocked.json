@@ -1,0 +1,46 @@
+{
+  "default": false,
+  "historical_evidence": [
+    {
+      "hardware_status": "historical",
+      "kind": "archived_candidate_set_not_search_provenance",
+      "path": "bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/candidate-set.json",
+      "sha256": "61b22f8797ece839a2c8a624dad2811437e6760c6e6ab2867b79c8aede8574e0"
+    },
+    {
+      "hardware_status": "historical",
+      "kind": "correctness",
+      "path": "bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/whole-model-quality.json",
+      "sha256": "f68561e9b19a44ee439fbe075f78cd6fda959b9402bb659240570ee8ccb2ad0a"
+    },
+    {
+      "hardware_status": "historical",
+      "kind": "performance",
+      "path": "bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/whole-prefill-pinned.json",
+      "sha256": "967707e8ce5df964b26b32eda00c95a24deecde2e0b0203a6422db6cc6eb10e6"
+    }
+  ],
+  "historical_selected_plan_input": {
+    "path": "bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/candidate-set.json",
+    "sha256": "61b22f8797ece839a2c8a624dad2811437e6760c6e6ab2867b79c8aede8574e0",
+    "usage": "historical_selected_plan_input_only"
+  },
+  "missing_required_inputs": [
+    "search implementation and exporter implementing search-full-kernel",
+    "candidate-space definition with coupled tile/waves/threads, LDS windows/strides/padding, cooperative loads, pipeline/buffer/stage, dependency/wait/barriers, residency, and epilogue constraints",
+    "tinygrad full-kernel admission worker input protocol at extra/qk/prefill/full_kernel_candidate_worker.py",
+    "AMD:gfx1100 measurement host reachable through a supported tinygrad Linux KFD or macOS PCI+AMD backend path for the latency objective"
+  ],
+  "missing_search_command": "BoltBeam has no CLI/API that accepts the public request, defines and enumerates the coupled full-kernel candidate space, ranks the complete population, and exports selected plans plus run metadata. Required command contract: python -m boltbeam.cli search-full-kernel --request <request.json> --tinygrad-root <tinygrad-root> --out <run-dir>.",
+  "missing_worker_path": "extra/qk/prefill/full_kernel_candidate_worker.py",
+  "route_id": "prefill_wmma_lds_dbuf_generated",
+  "schema": "tinygrad.llm.boltbeam-prefill-search-contract.v1",
+  "search_request_path": "tinygrad/llm/generated/requests/prefill_wmma_lds_dbuf_generated.json",
+  "search_request_sha256": "4b60e7128e7b4ff04b1e1a26a8e545f56308f59276238121941407b75c1e7f5c",
+  "search_system": {
+    "name": "BoltBeam",
+    "revision": "1fed624e9bac83d7f58e853489b91d2a56fc90fb"
+  },
+  "status": "BLOCKED",
+  "verdict": "UNPROVEN"
+}
