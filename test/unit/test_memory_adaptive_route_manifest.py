@@ -8,6 +8,7 @@ from extra.llm_research.route_manifest import (canonical_candidate_set_identity,
   canonical_inventory_identity, canonical_policy_rows, canonical_route_id, lookup_policy_row,
   automatic_promoted_prefill_graph_policy, promoted_prefill_candidate_policy, route,
   immutable_route_registry)
+from tinygrad.llm.prefill_candidate_runtime import canonical_candidate_set_identity as production_candidate_set_identity
 
 
 TARGET = {"backend": "AMD", "arch": "gfx1100", "wave_size": 32}
@@ -48,6 +49,13 @@ def test_model_and_profile_renames_are_provenance_only():
   assert canonical_inventory_identity(inv_a) == canonical_inventory_identity(inv_b)
   assert canonical_candidate_set_identity(set_a) == canonical_candidate_set_identity(set_b)
   assert canonical_policy_rows(inv_a, CAPABILITY, set_a) == canonical_policy_rows(inv_b, CAPABILITY, set_b)
+
+
+def test_admitted_candidate_sets_reuse_the_production_identity_implementation():
+  admitted = candidate_set()
+  assert canonical_candidate_set_identity(admitted) == production_candidate_set_identity(admitted)
+  assert canonical_candidate_set_identity(admitted) == \
+         "candidate_set:sha256:8330f9b09c2b024812b69eccf24695c1c7de147e973e568dc83586492e37595d"
 
 
 def test_profiles_are_provenance_only_and_legacy_artifact_is_readable():

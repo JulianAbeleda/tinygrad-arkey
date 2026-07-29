@@ -36,7 +36,7 @@ CURRENT_DEFAULTS = {
   "prefill_wmma_lds_dbuf_generated": ("tinygrad/llm/prefill_routes.py", []),
   "prefill_q4k_direct_tile4x4_default": ("tinygrad/llm/prefill_routes.py", ["extra/llm_research/prefill/q4k_prefill_route_spec.py"]),
   "prefill_q6k_direct_generated": ("tinygrad/llm/prefill_routes.py", ["extra/llm_research/prefill/q6k_prefill_route_spec.py"]),
-  "packed_wmma_prefill_generated": ("tinygrad/llm/prefill_routes.py", ["extra/llm_research/prefill/packed_wmma_prefill_candidates.py"]),
+  "packed_wmma_prefill_generated": ("tinygrad/llm/prefill_routes.py", ["tinygrad/llm/packed_wmma_prefill.py"]),
 }
 
 def _sha(path: pathlib.Path) -> str: return hashlib.sha256(path.read_bytes()).hexdigest()

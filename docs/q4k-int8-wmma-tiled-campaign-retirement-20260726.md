@@ -6,7 +6,8 @@ result, the technique, or the one reusable pattern the campaign produced.
 
 **Do not confuse this with packed-WMMA prefill**, which is a different campaign that SHIPPED and is default-on
 (`tinygrad/llm/prefill_routes.py:293`, `getenv("TINYGRAD_PREFILL_PACKED_WMMA", 1)`), owned by
-`extra/llm_research/prefill/packed_wmma_prefill_candidates.py`. The two share a name and nothing else. Verified 2026-07-26: no
+`tinygrad/llm/packed_wmma_prefill.py` (with EXP qualification through
+`extra/llm_research/prefill/packed_wmma_production_canary.py`). The two share a name and nothing else. Verified 2026-07-26: no
 packed-WMMA file references any file in this campaign.
 
 ## What it tried

@@ -10,8 +10,8 @@ This module is DATA + tiny helpers. It changes NO defaults and runs NO kernels; 
 ad-hoc env maps. For each route, `env` is what you SET to force that route onto the active path; an empty `env` ({})
 means the route is ALREADY the shipped default (no flag needed). `rollback` is the exact env to leave it.
 
-CURRENT-STATE PIN (verified 2026-07-03 against tinygrad/llm/decode_routes.py + extra/llm_research/gemv_g3_codegen_lowering.py +
-extra/llm_research/prefill/prefill_graph_gemm_route.py + generated attention routes):
+CURRENT-STATE PIN (verified 2026-07-03 against tinygrad/llm/decode_routes.py + tinygrad/llm/decode_kernels.py +
+tinygrad/llm/flash_decode_attention.py + tinygrad/llm/prefill_graph_gemm.py; legacy extra modules are research oracles):
 
   * Decode Q4_K GEMV default = the GENERATED G3 LaneMap route. decode_routes.py:q4k_primitive_linear_call reads
     `getenv("BUBBLEBEAM_FUTURESIGHT", 1)` (DEFAULT-ON, flipped in commit 81370ae38). For eligible Q4_K shapes
@@ -27,6 +27,8 @@ from __future__ import annotations
 import hashlib, json, pathlib
 from collections.abc import Mapping
 from types import MappingProxyType
+
+from tinygrad.llm.prefill_candidate_runtime import canonical_candidate_set_identity as _production_candidate_set_identity
 
 PROFILE_DECODE = "qwen3_8b_q4_k_m_gfx1100_decode"
 PROFILE_DECODE_LARGE = "qwen3_14b_32b_q4_k_m_gfx1100_decode"
@@ -255,8 +257,8 @@ def canonical_inventory_identity(inventory: Mapping) -> str:
       if recorded != expected: raise ValueError("inventory identity mismatch")
   return derived
 
-def canonical_candidate_set_identity(candidate_set: Mapping) -> str:
-  """Canonical candidate-set identity. Legacy profile fields are ignored, while payload and target facts remain exact."""
+def _research_candidate_set_identity(candidate_set: Mapping) -> str:
+  """Research-only identity for mixed candidate/fallback experiment manifests."""
   entries = candidate_set.get("entries")
   fallbacks = candidate_set.get("fallbacks", [])
   if not isinstance(entries, list) or not isinstance(fallbacks, list) or not entries and not fallbacks:
@@ -269,6 +271,13 @@ def canonical_candidate_set_identity(candidate_set: Mapping) -> str:
   declared = [_validated_fallback(row) for row in fallbacks]
   return _identity("candidate_set", {"entries":sorted(canonical, key=_semantic_json),
                                      "fallbacks":sorted(declared, key=_semantic_json)})
+
+
+def canonical_candidate_set_identity(candidate_set: Mapping) -> str:
+  """Use production identity for an admitted set; retain research identity for mixed rollback manifests."""
+  if isinstance(candidate_set, Mapping) and set(candidate_set) == {"schema", "entries"}:
+    return _production_candidate_set_identity(candidate_set)
+  return _research_candidate_set_identity(candidate_set)
 
 def _validated_fallback(row: Mapping) -> dict:
   """Validate one exact, evidence-bearing rollback declaration and return its semantic content."""

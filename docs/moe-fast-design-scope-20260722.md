@@ -18,9 +18,9 @@
 - **The ONE slow spot is `ExpertWeights` (model.py:299–305):**
   - `self.weight = Tensor.zeros(num_experts, out, in)` — **dense, not packed-Q4, no `prefill_packed_weight()`**.
   - `__call__` does `self.weight[sel]` — a **data-dependent gather of weights to tokens** → `(B,T,k,out,in)` materialization (prefill VRAM blowup) and a **dynamic-weight matmul** the substrate can't touch.
-- **The substrate is shape-agnostic and reusable AS-IS** — `PackedWmmaPrefillCandidate.run()` (`extra/llm_research/prefill/packed_wmma_prefill_candidates.py:167`): given a **static** packed weight + `x_batch`, builds the fp16-overlay view-chain (`bitcast/reshape/pad/expand/reshape/bitcast`) and does `x_batch @ b.T` on WMMA. It never asks *which* weight it is.
+- **The substrate is shape-agnostic and reusable AS-IS** — `PackedWmmaPrefillCandidate.run()` (`tinygrad/llm/packed_wmma_prefill.py`): given a **static** packed weight + `x_batch`, builds the fp16-overlay view-chain (`bitcast/reshape/pad/expand/reshape/bitcast`) and does `x_batch @ b.T` on WMMA. It never asks *which* weight it is.
 - **Packed bytes come from `lin.prefill_packed_weight()`** (candidate:181) — retained for `nn.Linear`, NOT for `ExpertWeights`.
-- **Geometry is a frozen searched table** — `PACKED_WMMA_GEOM` (candidate:36), 6 `(quant, role)` combos for the *dense* model's shapes at pp512; `gate_combo` (105) declines anything else. Search tool = **BubbleBeam+FutureSight** (`extra/llm_research/bubblebeam_futuresight.py`).
+- **Geometry is a frozen searched table** — `PACKED_WMMA_ROUTES` / derived `PACKED_WMMA_GEOM` (`tinygrad/llm/packed_wmma_prefill.py`), 6 exact `(quant, role, shape)` dense-model rows at pp512; `gate_combo` declines anything else. Search tool = **BubbleBeam+FutureSight** (`extra/llm_research/bubblebeam_futuresight.py`).
 - **Route coverage is nn.Linear-only** — `_prefill_v2_covered` (model.py ~828).
 
 ## 2. The design (target shape)
@@ -39,7 +39,7 @@
 | Need | Reuse (file:symbol) | Change |
 |---|---|---|
 | router/topk/gating/combine | `model.py:_feed_forward` (401), `pairwise_topk` (314) | keep; only the expert-compute call changes |
-| per-expert GEMM | `packed_wmma_prefill_candidates.py:PackedWmmaPrefillCandidate.run()` (167) | **none** — call per expert |
+| per-expert GEMM | `tinygrad/llm/packed_wmma_prefill.py:PackedWmmaPrefillCandidate.run()` | **none** — call per expert |
 | packed bytes | `lin.prefill_packed_weight()` pattern | extend retention to 3D `*_exps` (per-expert slice) |
 | geometry search | `bubblebeam_futuresight.py` (score/rank) | run for expert shapes → new table rows |
 | geometry table | `PACKED_WMMA_GEOM` (candidate:36) + `gate_combo` (105) | add expert `(quant, role)` combos as **data** |

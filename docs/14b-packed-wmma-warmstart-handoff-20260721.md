@@ -62,7 +62,8 @@ The packed-WMMA route uses the scheduler's generic WMMA lowering for the view-ch
 
 ## Key files
 
-- `extra/llm_research/prefill/packed_wmma_prefill_candidates.py` — packed-WMMA candidate dispatch, view chain, warmstart entry
+- `tinygrad/llm/packed_wmma_prefill.py` — production packed-WMMA selection, view chain, and warmstart entry
+- `extra/llm_research/prefill/packed_wmma_production_canary.py` — EXP-only adapter that qualifies an exact production row with the isolated oracle
 - `tinygrad/llm/prefill_routes.py` — route dispatch, `packed_wmma_prefill_enabled()` (now defaults True)
 - `tinygrad/codegen/opt/kernel_lds.py:175-215` — `PackedPrecontractOperandTemplate` validation
 - `tinygrad/codegen/opt/postrange.py:530-595` — warmstart key computation, `apply_opts`

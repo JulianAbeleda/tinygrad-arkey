@@ -3,7 +3,7 @@
 **Companion to** `docs/moe-fast-design-scope-20260722.md` (the design + principle rationale — read it first). This is the *executable* spec: exact code anchors, exact artifacts, hard stops.
 
 ## 0. Task framing (READ — this is how you must work)
-- **You are extending the existing substrate to MoE. You write ZERO new kernels.** The per-expert GEMM is the *existing* `PackedWmmaPrefillCandidate.run()`. If you're writing a matmul kernel or `__builtin_amdgcn`, you're off-spec — stop.
+- **You are extending the existing substrate to MoE. You write ZERO new kernels.** The per-expert GEMM is the *existing* `tinygrad.llm.packed_wmma_prefill.PackedWmmaPrefillCandidate.run()`. If you're writing a matmul kernel or `__builtin_amdgcn`, you're off-spec — stop.
 - **P0 is a HARD STOP before any scaffolding.** Do P0, report the artifact, wait for Claude to gate it. Do NOT scaffold the capacity-permute structure until P0 says GO — if P0 is NO-GO the whole skeleton changes (see §Fallback). You have charged ahead before; do not here.
 - **Per-artifact proof, never prose.** Correctness = numbers vs an oracle. WMMA = per-kernel `__WMMA` call-site dumps, never aggregate grep counts. Model speedup = **BoltBeam**, never an isolated-kernel microbench (the flash lesson: isolated 1.6× ≠ model win).
 - **Refactor steps are behavior-preserving.** Where a step restructures working code (P2), the *current output is the oracle*; match it, don't change it.
@@ -14,10 +14,10 @@
 ## 1. Verified starting facts (line refs — do NOT re-derive)
 - MoE modeling complete: `model.py:_feed_forward` (401), `ExpertWeights` (299), `pairwise_topk` (314), router `ffn_gate_inp`, combine `(x_down*probs).sum(axis=2)`, shared expert, multi-arch config (1165/1173).
 - Slow spot: `ExpertWeights.__call__` does `self.weight[sel]` over a **dense** `Tensor.zeros(num_experts,out,in)` (302) — dynamic-weight gather, no packed bytes, substrate can't touch it.
-- Substrate (reuse verbatim): `extra/llm_research/prefill/packed_wmma_prefill_candidates.py:PackedWmmaPrefillCandidate.run()` (167) — static packed weight + `x_batch` → view-chain → `x_batch @ b.T` on WMMA. Shape/identity-agnostic.
+- Substrate (reuse verbatim): `tinygrad/llm/packed_wmma_prefill.py:PackedWmmaPrefillCandidate.run()` — static packed weight + `x_batch` → view-chain → `x_batch @ b.T` on WMMA. Shape/identity-agnostic.
 - **Packed-weight contract (P1 anchor):** `prefill_routes.py:_is_q4k_linear` (76) — a packed linear has `q4k_storage` (bytes) **and** `prefill_packed_weight()` (method). Q6 = `q6k_storage`. The route calls `lin.prefill_packed_weight()` (174).
 - **Route spec (P4 anchor):** `PrefillLinearRouteSpec("direct_packed", quant, role, m, n, k)` (`prefill_routes.py:230`); roles are `ffn_gate`/`ffn_up`/`ffn_down` (`_direct_packed_module_role`, `_direct_packed_role` 90/206); per-role opts `_direct_packed_opts` (104).
-- **Geometry (P3 anchor):** `PACKED_WMMA_GEOM` (candidate:36) keyed `(quant, role)`; `gate_combo` (105) declines off-table shapes; search = `extra/llm_research/bubblebeam_futuresight.py`.
+- **Geometry (P3 anchor):** `PACKED_WMMA_ROUTES` / derived `PACKED_WMMA_GEOM` in `tinygrad/llm/packed_wmma_prefill.py`, keyed by exact `(quant, role, shape)`; `gate_combo` declines off-table shapes; search = `extra/llm_research/bubblebeam_futuresight.py`.
 - **Fallback anchor:** `model.py:758` already builds a `dense_config = replace(config, num_experts=0, ...)` — a MoE→dense reduction path exists to lean on for the §Fallback interim.
 
 ## 2. P0 — DE-RISK (do FIRST; hard stop; this decides the whole skeleton)

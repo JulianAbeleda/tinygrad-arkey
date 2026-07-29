@@ -120,10 +120,10 @@ CENSUS_OVERLAY = [
     "selector": "env_default",
     "route_guard": "tinygrad/llm/prefill_routes.py route_prefill_linear -> route_packed_wmma_prefill, gated by "
                    "packed_wmma_prefill_enabled() = getenv('TINYGRAD_PREFILL_PACKED_WMMA', 1), i.e. DEFAULT-ON",
-    "kernel_source": "extra/llm_research/prefill/packed_wmma_prefill_candidates.py select_packed_wmma_prefill_candidate, with "
-                     "warmstart tables built at load time by build_packed_wmma_warmstart_tables",
+    "kernel_source": "tinygrad/llm/packed_wmma_prefill.py select_packed_wmma_prefill_candidate, with "
+                     "warmstart tables built from its six exact production rows",
     "authority_artifact": "docs/packed-wmma-14b-promotion-evidence-20260725.json "
-                          "(gate: extra/llm_research/prefill/packed_wmma_prefill_promotion_gate.py)",
+                          "(qualification adapter: extra/llm_research/prefill/packed_wmma_production_canary.py)",
     "rollback_flag": "TINYGRAD_PREFILL_PACKED_WMMA=0 -> direct-packed (prefill_q4k_direct_tile4x4_default / "
                      "prefill_q6k_direct_generated)",
     "next_action": "keep promoted for 8B. NOTE: 14B on this box must currently run with "

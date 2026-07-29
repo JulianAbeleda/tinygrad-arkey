@@ -16,9 +16,9 @@ scheduler-generated matmul shaped by a frozen opt/schedule payload -- NOT a hand
 draft of this analysis called it "a hand-written kernel wearing generated clothes"; that was wrong and is
 retracted here.
 
-**The opt values have no demonstrable search provenance.** `PACKED_WMMA_GEOM`
-(`extra/llm_research/prefill/packed_wmma_prefill_candidates.py:38`) cites
-`e2e_packed_wmma_bench_q6_nopad.py:56-75` as its source. That file has **never existed in this repo** --
+**The opt values have no demonstrable search provenance.** The production
+`tinygrad/llm/packed_wmma_prefill.py` table preserves the six promoted exact rows, but its historical
+source was `e2e_packed_wmma_bench_q6_nopad.py:56-75`. That file has **never existed in this repo** --
 absent from the working tree, from every commit, and from the object database (`git rev-list --all
 --objects`). The only in-repo geometry sweep, `bench/wave32-geometry-compile-sweep/latest.json`, is
 `"scope": "compile-only"`, has 12 results with `result[0] status: FAIL`, and sweeps
@@ -33,7 +33,7 @@ independently of whether they are.
 | 1 | no `ROUTES` row -> no provenance, no `shape_guards`, nothing for `derive_purity_status` to evaluate | **HARD** |
 | 2 | not in `pure_search_guard.HOT_FAMILIES` -> the census structurally cannot see it | **HARD** |
 | 3 | opt constants have no reproducible in-repo search provenance | evidence |
-| 4 | `PACKED_WMMA_GEOM` keyed `(quant, role)` with no shape term -- 8B and 14B share one entry | design |
+| 4 | historical geometry authority was keyed `(quant, role)` with no shape term -- the current production table contains exact shapes, but its original search provenance remains absent | design |
 | 5 | `rebind_full_kernel_workload` (`runtime_specs.py:307`) overwrites `applicability`, then admission (`:392-395`) validates the claim rebind just wrote -- circular, so legality cannot be enforced | correctness |
 | 6 | no authority gate; 14B end-to-end token parity never run with this route live | evidence |
 
@@ -43,7 +43,7 @@ independently of whether they are.
 defensible label today: the kernel genuinely comes from tinygrad's scheduler, and
 `tinygrad_scheduler_generated` is in `FINAL_DEFAULT_PROVENANCE`, so `derive_purity_status` yields
 `search_generated_promoted` for a `promoted_default` row. Claiming `machine_authored_generated` would assert
-that an emitter derives extents from descriptor fields, which the frozen shape-blind table does not do.
+that an emitter derives extents from descriptor fields, which the frozen promoted table does not do.
 **Do not overclaim here -- the whole point of this exercise is that the label must be earned.**
 
 1. **`ROUTES` row** `packed_wmma_prefill_generated` in `extra/llm_research/route_manifest.py`, modelled on the
@@ -56,7 +56,7 @@ that an emitter derives extents from descriptor fields, which the frozen shape-b
    **`shape_guards` MUST carry the shape** -- the four exact 14B `(m,n,k)` triples
    `(512,5120,5120)`, `(512,1024,5120)`, `(512,17408,5120)`, `(512,5120,17408)` -- and the 8B triples where
    a geometry entry exists. This is where blocker 4 gets partially contained: the manifest records the
-   shapes the route is admitted for even while the geometry table stays shape-blind internally.
+   shapes the route is admitted for; the production table now carries those exact shapes as well.
 2. **`HOT_FAMILIES` entry** `prefill_packed_wmma` in `extra/llm_research/pure_search_guard.py`, with
    `rollback_active` reading `TINYGRAD_PREFILL_PACKED_WMMA` via `_env_flag(e, "TINYGRAD_PREFILL_PACKED_WMMA", 1)`
    (note the runtime default is 1, so an UNSET key must resolve to 1 -- `_env_flag` exists for exactly this,
