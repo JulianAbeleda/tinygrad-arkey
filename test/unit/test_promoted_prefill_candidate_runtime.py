@@ -7,7 +7,8 @@ import pytest
 
 from tinygrad.llm import prefill_graph_gemm
 from tinygrad.llm.prefill_candidate_runtime import (ARTIFACT, canonical_candidate_set_identity,
-  decode_prefill_graph_candidate_set, promoted_candidate_registry, promoted_candidate_set)
+  decode_prefill_graph_candidate_set, promoted_candidate_registry, promoted_candidate_set,
+  automatic_promoted_prefill_graph_policy as runtime_automatic_promoted_prefill_graph_policy)
 from tinygrad.llm.promoted_prefill_policy import automatic_promoted_prefill_graph_policy
 
 
@@ -60,6 +61,7 @@ def test_automatic_policy_preserves_exact_promoted_authority_shape():
   candidate_set = promoted_candidate_set().to_json()
   inventory = _inventory(candidate_set)
   policy = automatic_promoted_prefill_graph_policy(inventory, FACTS)
+  assert runtime_automatic_promoted_prefill_graph_policy(inventory, FACTS) == policy
   assert policy["strategy"] == "FULL_RESIDENT_OVERLAY"
   assert policy["candidate_id"] == "prefill_wmma_lds_dbuf_generated"
   assert policy["routes"] == {**{f"candidate-{index}":"prefill_wmma_lds_dbuf_generated" for index in range(4)},
