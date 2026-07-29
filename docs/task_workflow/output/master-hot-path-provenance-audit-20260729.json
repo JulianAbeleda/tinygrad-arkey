@@ -1,0 +1,101 @@
+{
+  "schema": "master-hot-path-provenance-audit-20260729",
+  "audited_branch": "master",
+  "audited_commit": "ddc0e9784db6ba9512538772336497d53e1271b7",
+  "status": "STRICT_PURITY_FAIL",
+  "policy": "The main master hot path must be selected by machine search and lowered through reusable compiler primitives. A descriptor or manifest label around a human-authored kernel body is not machine search.",
+  "current_gate": {
+    "command": "PYTHONPATH=. python extra/audit/pure_machine_search_default_path_census.py --strict-final-default",
+    "reported_verdict": "TINYGRAD_DEFAULT_PURITY_PASS",
+    "reported_defaults": 9,
+    "reported_machine_authored_generated": 7,
+    "reported_tinygrad_scheduler_generated": 2,
+    "audit_gap": "The gate trusts route_manifest provenance labels and overlay commentary; it does not validate the executing source closure, generator identity, search input/output hashes, generated-file immutability, or evidence existence."
+  },
+  "strict_result": {
+    "default_routes": 9,
+    "proven_pure_machine_search": 0,
+    "unproven_or_noncompliant": 9,
+    "interpretation": "Zero routes currently satisfy the new end-to-end proof contract. This is a provenance result, not a claim that all nine kernels were necessarily selected by humans."
+  },
+  "routes": [
+    {
+      "route_id": "decode_q4k_g3_generated",
+      "current_claim": "machine_authored_generated",
+      "executing_source": ["extra/llm_research/gemv_g3_codegen_lowering.py", "extra/llm_research/gemv_g2_lanemap.py"],
+      "strict_classification": "hand_authored_template_or_unproven_search",
+      "reason": "The Python source manually constructs the UOp loop, lane map, loads, accumulation, reduction, and store; no generator/search-run artifact proves that source was emitted from machine search."
+    },
+    {
+      "route_id": "decode_q6k_coop_generated",
+      "current_claim": "machine_authored_generated",
+      "executing_source": ["extra/llm_research/q6k_route_spec.py", "extra/llm_research/quant/q6_k_gemv_primitive.py"],
+      "strict_classification": "hand_authored_template_or_unproven_search",
+      "reason": "A dataclass wraps a hand-written lowering and dequant grammar. Descriptor ownership alone does not prove machine search authored the executable topology."
+    },
+    {
+      "route_id": "decode_flash_live_split_g4_kvboth",
+      "current_claim": "machine_authored_generated",
+      "executing_source": ["extra/llm_research/decode/flash_decode_attention_spec.py", "extra/llm_research/flash_kernels.py", "extra/llm_research/live_split_geometry.py"],
+      "strict_classification": "hand_authored_uop_template",
+      "reason": "flash_kernels.py manually owns the complete route-local load/LDS/online-softmax/PV/store lifecycle. A FlashDecodeAttentionSpec wrapper does not change kernel authorship."
+    },
+    {
+      "route_id": "decode_flash_live_split_g5_kvboth",
+      "current_claim": "machine_authored_generated",
+      "executing_source": ["extra/llm_research/decode/flash_decode_attention_spec.py", "extra/llm_research/flash_kernels.py", "extra/llm_research/live_split_geometry.py"],
+      "strict_classification": "hand_authored_uop_template",
+      "reason": "It shares the same hand-authored executable tile/combine closure as G4; a separate route identity and geometry guard are not generation provenance."
+    },
+    {
+      "route_id": "prefill_flash_attention_generated",
+      "current_claim": "machine_authored_generated",
+      "executing_source": ["tinygrad/llm/fused_attention.py", "tinygrad/schedule/wmma/flash_prefill.py", "tinygrad/schedule/wmma/kernels.py"],
+      "strict_classification": "hand_authored_uop_template",
+      "reason": "tinygrad/schedule/wmma/kernels.py explicitly identifies itself as fixed-geometry hand kernels and manually constructs the full attention lifecycle."
+    },
+    {
+      "route_id": "prefill_wmma_lds_dbuf_generated",
+      "current_claim": "tinygrad_scheduler_generated",
+      "executing_source": ["extra/llm_research/prefill/prefill_graph_gemm_route.py", "ordinary tinygrad matmul lowering"],
+      "strict_classification": "compiler_generated_but_search_provenance_unproven",
+      "reason": "The executing kernel is compiler-generated, but the selected candidate needs a complete public search-input, generator/run identity, candidate-output, and immutable binding chain before it can establish the main hot-path machine-search claim."
+    },
+    {
+      "route_id": "prefill_q4k_direct_tile4x4_default",
+      "current_claim": "machine_authored_generated",
+      "executing_source": ["extra/llm_research/prefill/q4k_prefill_route_spec.py", "extra/llm_research/quant/q4_k_gemv_primitive.py"],
+      "strict_classification": "hand_authored_template_or_unproven_search",
+      "reason": "The route spec and lowering manually encode output layout, tiling, packed-load grammar, loops, and stores; no immutable search artifact owns the concrete choice."
+    },
+    {
+      "route_id": "prefill_q6k_direct_generated",
+      "current_claim": "machine_authored_generated",
+      "executing_source": ["extra/llm_research/prefill/q6k_prefill_route_spec.py", "extra/llm_research/quant/q6_k_gemv_primitive.py"],
+      "strict_classification": "hand_authored_template_or_unproven_search",
+      "reason": "The route mirrors a hand-authored lowering and reuses hand-authored packed-load helpers; the descriptor is not evidence that search authored the implementation."
+    },
+    {
+      "route_id": "packed_wmma_prefill_generated",
+      "current_claim": "tinygrad_scheduler_generated",
+      "executing_source": ["extra/llm_research/prefill/packed_wmma_prefill_candidates.py", "ordinary tinygrad matmul lowering"],
+      "strict_classification": "hand_tuned_schedule_table",
+      "reason": "The kernel body is scheduler-generated, but PACKED_WMMA_GEOM is a frozen manually copied table with no reproducible search provenance; the repository's own 20260725 claim scope records this gap."
+    }
+  ],
+  "master_forbidden_examples": [
+    "model/shape-specific Python functions that build UOp kernel loops",
+    "route-local Tensor.custom_kernel bodies",
+    "manual tile/warp/LDS/WMMA geometry tables presented as search output",
+    "raw HIP/CUDA/C/ASM or precompiled route kernels",
+    "hand-authored custom-kernel rollback implementations, even when default-off"
+  ],
+  "master_allowed": [
+    "ordinary tinygrad scheduler/codegen output",
+    "model-agnostic reusable compiler and backend primitives",
+    "immutable generated route plans/artifacts with verified search provenance",
+    "runtime selection, artifact validation, and fail-closed dispatch",
+    "ordinary tinygrad graph fallback for unsupported shapes"
+  ],
+  "source_scope": "docs/task_workflow/input/master-pure-machine-search-decoupling-scope-20260729.md"
+}
