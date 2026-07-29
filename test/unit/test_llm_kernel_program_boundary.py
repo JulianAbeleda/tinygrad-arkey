@@ -13,11 +13,12 @@ def _repo_root() -> Path:
   raise RuntimeError("could not locate repository root")
 
 
-def _python_sources(root: Path) -> list[Path]:
+def _python_sources(root: Path, *, exclude_tests: bool = False) -> list[Path]:
   sources = []
   for path in root.rglob("*.py"):
     relative = path.relative_to(root)
     if "__pycache__" in relative.parts: continue
+    if exclude_tests and any(part in {"test", "tests"} or part.startswith("test_") for part in relative.parts): continue
     sources.append(path)
   return sorted(sources)
 
@@ -62,3 +63,10 @@ def test_production_llm_does_not_import_or_call_oracle_or_research_execution():
   production_sources = [path for path in _python_sources(root / "tinygrad" / "llm") if path.relative_to(root) != _BOUNDARY]
   assert not _restricted_executor_users(production_sources), (
     "production LLM source may use only execute_promoted_program; oracle/research execution belongs outside production")
+
+
+def test_research_runtime_sources_do_not_call_custom_kernel_directly():
+  root = _repo_root()
+  research_sources = _python_sources(root / "extra" / "llm_research", exclude_tests=True)
+  callers = _custom_kernel_callers(research_sources)
+  assert not callers, "research runtime, benchmark, qualification, and campaign sources must use typed program execution"
