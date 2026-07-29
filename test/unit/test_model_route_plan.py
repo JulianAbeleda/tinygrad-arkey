@@ -4,7 +4,6 @@ import pathlib
 import pytest
 
 from tinygrad import Tensor, dtypes
-from tinygrad.llm import route_policy
 from tinygrad.llm.device_facts import DeviceCapabilities, DeviceFacts, ProbeRecord
 from tinygrad.llm.model_facts import model_facts_from_gguf_metadata
 from tinygrad.llm.model_route_plan import build_model_route_plan, primitive_route_entry_for_tensor
@@ -175,7 +174,7 @@ def test_q4k_install_uses_route_plan_without_direct_policy_call(tmp_path, monkey
   gguf.write_bytes(bytes((256 * 256) // 256 * 144))
   meta = {"data_start": 0, "tensor_infos": [("blk.0.ffn_gate.weight", (256, 256), 12, 0)]}
   plan = build_model_route_plan(meta)
-  monkeypatch.delattr(route_policy, "_qk_generated_policy_entry")
+  monkeypatch.delattr(qk_primitives, "_qk_generated_policy_entry")
 
   installed = _install_q4k_primitives(_install_model(), gguf, meta, route_plan=plan)
 
@@ -234,7 +233,7 @@ def test_q6k_install_uses_route_plan_without_direct_policy_call(tmp_path, monkey
   gguf.write_bytes(bytes((256 * 256) // 256 * 210))
   meta = {"data_start": 0, "tensor_infos": [("blk.0.ffn_down.weight", (256, 256), 14, 0)]}
   plan = build_model_route_plan(meta)
-  monkeypatch.delattr(route_policy, "_qk_generated_policy_entry")
+  monkeypatch.delattr(qk_primitives, "_qk_generated_policy_entry")
 
   installed = _install_q6k_primitives(_install_model(), gguf, meta, route_plan=plan)
 
@@ -244,10 +243,10 @@ def test_q6k_install_uses_route_plan_without_direct_policy_call(tmp_path, monkey
 
 
 def test_legacy_q4_q6_install_policy_dispatchers_are_deleted():
-  assert not hasattr(route_policy, "q4k_policy")
-  assert not hasattr(route_policy, "q6k_policy")
-  assert not hasattr(route_policy, "_q4k_policy")
-  assert not hasattr(route_policy, "_q6k_policy")
+  assert not hasattr(qk_primitives, "q4k_policy")
+  assert not hasattr(qk_primitives, "q6k_policy")
+  assert not hasattr(qk_primitives, "_q4k_policy")
+  assert not hasattr(qk_primitives, "_q6k_policy")
 
 
 def test_runtime_dispatch_install_selection_does_not_branch_on_model_size_or_name_literals():
@@ -255,7 +254,6 @@ def test_runtime_dispatch_install_selection_does_not_branch_on_model_size_or_nam
   runtime_files = [
     repo / "tinygrad/llm/model.py",
     repo / "tinygrad/llm/model_route_plan.py",
-    repo / "tinygrad/llm/route_policy.py",
     repo / "tinygrad/llm/qk_primitives.py",
   ]
   banned = ("8B", "14B", "32B", "8b", "14b", "32b")

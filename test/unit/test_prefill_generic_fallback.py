@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from tinygrad.llm import prefill_routes
-from tinygrad.llm.prefill_route_observer import PrefillDirectPackedBinding, PrefillRouteAttachment
+from tinygrad.llm.prefill_attachments import PrefillDirectPackedBinding, PrefillRouteAttachment
 
 
 class _Weight:

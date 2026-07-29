@@ -13,14 +13,14 @@ from types import SimpleNamespace
 import pytest
 
 from tinygrad import UOp
-from tinygrad.llm.model_route_plan import build_model_route_plan
-from tinygrad.llm.prefill_policy import immutable_prefill_policy, prefill_concrete_kv_auto_decision
-from tinygrad.llm.prefill_route_observer import (PrefillDirectPackedBinding, PrefillRouteAttachment,
-  PrefillRouteExecution, notify_prefill_route, notify_prefill_route_execution, observe_prefill_route_executions,
+from tinygrad.llm.model_route_plan import (build_model_route_plan, load_qk_route_policy, qk_route_policy_selected,
+  qk_route_policy_selects_q4k_g3, qk_route_policy_selects_q6k_generated)
+from tinygrad.llm.admission import immutable_prefill_policy, prefill_concrete_kv_auto_decision
+from tinygrad.llm.prefill_attachments import PrefillDirectPackedBinding, PrefillRouteAttachment
+from tinygrad.llm.prefill_route_observer import (PrefillRouteExecution, notify_prefill_route, notify_prefill_route_execution, observe_prefill_route_executions,
   observe_prefill_routes, prefill_route_scope)
-from tinygrad.llm.promoted_prefill_policy import automatic_promoted_prefill_graph_policy
-from tinygrad.llm.route_policy import (decode_route_mode, load_qk_route_policy, qk_route_policy_selected,
-  qk_route_policy_selects_q4k_g3, qk_route_policy_selects_q6k_generated, should_use_flash_decode)
+from tinygrad.llm.prefill_candidate_runtime import automatic_promoted_prefill_graph_policy
+from tinygrad.llm.decode_routes import decode_route_mode, should_use_flash_decode
 
 
 ROOT = Path(__file__).parents[2]

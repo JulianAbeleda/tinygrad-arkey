@@ -6,7 +6,7 @@ from tinygrad import UOp
 from tinygrad.llm import prefill_routes
 from tinygrad.llm import decode_routes
 from tinygrad.llm.prefill_routes import direct_packed_prefill_policy, prefill_route_mode, validate_prefill_route_mode
-from tinygrad.llm.route_policy import decode_route_mode, should_use_flash_decode
+from tinygrad.llm.decode_routes import decode_route_mode, should_use_flash_decode
 from tinygrad.llm.route_selection import RouteLifecycle
 
 

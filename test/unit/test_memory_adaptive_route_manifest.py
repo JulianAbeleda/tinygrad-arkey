@@ -6,8 +6,9 @@ import pytest
 
 from extra.llm_research.route_manifest import (canonical_candidate_set_identity, canonical_capability_identity,
   canonical_inventory_identity, canonical_policy_rows, canonical_route_id, lookup_policy_row,
-  automatic_promoted_prefill_graph_policy, promoted_prefill_candidate_policy, route,
-  immutable_route_registry)
+  promoted_prefill_candidate_policy, route, immutable_route_registry)
+from tinygrad.llm.prefill_candidate_runtime import canonical_candidate_set_identity as production_candidate_set_identity
+from tinygrad.llm.prefill_candidate_runtime import automatic_promoted_prefill_graph_policy
 
 
 TARGET = {"backend": "AMD", "arch": "gfx1100", "wave_size": 32}

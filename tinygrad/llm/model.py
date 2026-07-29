@@ -7,20 +7,19 @@ from tinygrad.codegen.opt.postrange import warmstart_key as _warmstart_key
 from tinygrad.helpers import prod
 from tinygrad.llm.admission import (
   AUTO_MAX_CONTEXT, AdmissionInputs, ExactSelectedModelPlan, plan_exact_selected_model_load,
-  plan_selected_model_memory,
+  plan_selected_model_memory, immutable_prefill_policy, prefill_concrete_kv_auto_decision,
+  prefill_policy_strategy, prefill_policy_uses_overlay, prefill_v2_validate_ubatch,
+  select_prefill_runtime_policy, bounded_packed_projection_proven_eligible,
 )
 from tinygrad.llm.device_facts import scan_device_facts
 from tinygrad.llm.gguf import MODEL_PARAMETER_ALLOCATION_OWNER, gguf_load, gguf_load_metadata, gguf_load_with_metadata
 from tinygrad.llm.gguf_memory_scan import RuntimeGeometry, selected_gguf_backing_bytes
-from tinygrad.llm.decode_routes import FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_CANDIDATE, flash_decode_attention_route
-from tinygrad.llm.prefill_policy import (
-  immutable_prefill_policy, prefill_concrete_kv_auto_decision, prefill_policy_strategy,
-  prefill_policy_uses_overlay, prefill_v2_validate_ubatch, select_prefill_runtime_policy,
-  bounded_packed_projection_proven_eligible,
-)
+from tinygrad.llm.decode_routes import (FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_CANDIDATE, flash_decode_attention_route,
+                                        should_use_flash_decode as _route_should_use_flash_decode)
 from tinygrad.llm.prefill_routes import direct_packed_prefill_policy, is_direct_packed_prefill_linear, route_prefill_linear, validate_prefill_route_mode
 from tinygrad.llm.prefill_memory_plan import Strategy
-from tinygrad.llm.prefill_route_observer import PrefillDirectPackedBinding, PrefillRouteAttachment, prefill_route_scope, notify_prefill_route
+from tinygrad.llm.prefill_attachments import attach_selected_prefill_inventory
+from tinygrad.llm.prefill_route_observer import prefill_route_scope, notify_prefill_route
 from tinygrad.llm.qk_primitives import (
   QKConfig, QKPrimitiveBudget, Q4KPrimitiveLinear, Q4KPrimitiveRegistry, Q6KPrimitiveLinear,
   _install_q4k_primitives, _install_q6k_primitives, _qk_storage_summary,
@@ -37,9 +36,7 @@ from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OU
                                            runtime_input, runtime_output,
                                            runtime_persistent, runtime_scratch)
 from tinygrad.llm.model_route_plan import build_model_route_plan
-from tinygrad.llm.prefill_candidate_runtime import decode_prefill_graph_candidate_set
-from tinygrad.llm.promoted_prefill_policy import automatic_promoted_prefill_graph_policy
-from tinygrad.llm.route_policy import should_use_flash_decode as _route_should_use_flash_decode
+from tinygrad.llm.prefill_candidate_runtime import decode_prefill_graph_candidate_set, automatic_promoted_prefill_graph_policy
 from tinygrad.llm.physical_memory_ledger import AllocationOwner, bind_allocation_owner
 from tinygrad.uop.ops import Ops, resolve
 
@@ -224,46 +221,6 @@ def select_memory_adaptive_runtime_policy(*, kv:dict, meta:dict, device_facts, u
 _EXACT_ROUTE_MEMORY_KEYS = ("resident_copies", "candidate_workspace_bytes", "batch_size", "kv_element_bytes",
                             "runtime_persistent_bytes", "peak_prefill_activation_bytes", "peak_prefill_output_bytes",
                             "peak_prefill_scratch_bytes")
-
-def _attach_selected_prefill_inventory(model, inventory:dict, policy, scanned_target_facts, direct_packed_policy=None) -> None:
-  """Attach metadata-selected rows to their exact runtime owning linears."""
-  routes = dict(policy.get("routes", {})) if policy is not None else {}
-  rows = inventory.get("rows", ())
-  ids = [row.get("invocation_id") for row in rows]
-  if len(ids) != len(set(ids)): raise ValueError("duplicate selected prefill inventory rows")
-  if set(routes) != set(ids): raise ValueError("selected policy and inventory attachments differ")
-  attached = set()
-  for row in rows:
-    tensor_identity = row.get("tensor_identity")
-    if not isinstance(tensor_identity, str) or not tensor_identity.endswith(".weight"):
-      raise ValueError(f"selected prefill tensor identity is not an exact runtime weight path: {tensor_identity!r}")
-    obj = model
-    try:
-      for component in tensor_identity[:-7].split("."):
-        obj = obj[int(component)] if component.isdigit() and isinstance(obj, (list, tuple)) else getattr(obj, component)
-    except (AttributeError, IndexError, TypeError) as exc:
-      raise ValueError(f"selected prefill tensor {tensor_identity!r} has no exact runtime linear") from exc
-    if hasattr(obj, "_prefill_route_attachment"): raise ValueError(f"duplicate runtime attachment for {tensor_identity!r}")
-    invocation_id = row["invocation_id"]
-    shape = row.get("shape")
-    if not isinstance(shape, dict): raise ValueError(f"selected prefill row {tensor_identity!r} has no concrete shape")
-    try: direct_shape = tuple(shape[axis] for axis in ("m", "n", "k"))
-    except KeyError as exc: raise ValueError(f"selected prefill row {tensor_identity!r} has incomplete shape") from exc
-    if any(not isinstance(value, int) or isinstance(value, bool) or value <= 0 for value in direct_shape):
-      raise ValueError(f"selected prefill row {tensor_identity!r} has invalid concrete shape")
-    proof = policy.get("bounded_packed_projection_proof", {}) if hasattr(policy, "get") else {}
-    owner_identity = proof.get("allocation_owner_identity") if hasattr(proof, "get") else None
-    setattr(obj, "_prefill_route_attachment", PrefillRouteAttachment(invocation_id, routes[invocation_id], tensor_identity,
-                                                                       policy, scanned_target_facts, owner_identity))
-    # This is intentionally separate from the generic route attachment: the
-    # direct helper is phase-owned and must match the selected physical M/N/K,
-    # rather than treating a tensor-level route id as permission for decode.
-    candidate_policy = direct_packed_policy or direct_packed_prefill_policy(0, 0)
-    setattr(obj, "_prefill_direct_packed_binding", PrefillDirectPackedBinding(
-      invocation_id, "prefill", str(row.get("role", "")), direct_shape,
-      candidate_policy.lifecycle, candidate_policy.reason))
-    attached.add(invocation_id)
-  if attached != set(routes): raise ValueError("selected prefill inventory did not attach exactly once")
 
 def _graph_gemm_registry(policy):
   graph = policy.get("graph_gemm") if policy is not None else None
@@ -1305,8 +1262,8 @@ class Transformer:
               f"q6_effective_storage_mode={q6_storage_mode}")
       if primitive_linears: model._q4k_linears = Q4KPrimitiveRegistry(primitive_linears)
     if _runtime_inventory is not None:
-      _attach_selected_prefill_inventory(model, _runtime_inventory, _runtime_policy, _device_facts,
-                                         direct_packed_prefill_policy(config.n_heads, config.n_kv_heads))
+      attach_selected_prefill_inventory(model, _runtime_inventory, _runtime_policy, _device_facts,
+                                        direct_packed_policy=direct_packed_prefill_policy(config.n_heads, config.n_kv_heads))
     # NOTE: without this contiguous, it unpacks the weights from the model every time. we shouldn't need this, but for now it's faster
     if realize:
       for s in (params:=nn.state.get_parameters(model)): s.replace(s.contiguous())

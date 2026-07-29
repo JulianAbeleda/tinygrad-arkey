@@ -3,7 +3,7 @@ import json, subprocess, sys
 import pytest
 
 from extra.llm_research.route_manifest import ROUTES, default_purity_report, route_provenance, validate_manifest
-from tinygrad.llm.route_policy import (_load_qk_route_policy, _qk_route_policy_selected,
+from tinygrad.llm.model_route_plan import (_load_qk_route_policy, _qk_route_policy_selected,
                                        _qk_route_policy_selects_q4k_g3, _qk_route_policy_selects_q6k_generated)
 
 
@@ -49,21 +49,21 @@ def test_only_promoted_generated_prefill_gemm_is_public():
 
 
 def test_route_policy_import_does_not_eagerly_import_qk_manifest():
-  code = "import sys; import tinygrad.llm.route_policy; print(any(k.startswith('extra.llm_research') for k in sys.modules))"
+  code = "import sys; import tinygrad.llm.model_route_plan; print(any(k.startswith('extra.llm_research') for k in sys.modules))"
   out = subprocess.check_output([sys.executable, "-c", code], text=True).strip()
   assert out == "False"
 
 
 def test_route_policy_has_no_module_global_binding_api():
-  from tinygrad.llm import route_policy
-  assert not hasattr(route_policy, "set_qk_route_policy")
-  assert not hasattr(route_policy, "has_qk_route_policy")
+  from tinygrad.llm import model_route_plan
+  assert not hasattr(model_route_plan, "set_qk_route_policy")
+  assert not hasattr(model_route_plan, "has_qk_route_policy")
 
 
 def test_qk_route_policy_supported_ids_include_manifest_defaults():
   from extra.llm_research.route_manifest import default_routes
-  from tinygrad.llm import route_policy
-  assert set(default_routes()) <= route_policy._supported_qk_route_ids(ROUTES)
+  from tinygrad.llm import model_route_plan
+  assert set(default_routes()) <= model_route_plan._supported_qk_route_ids(ROUTES)
 
 
 def test_qk_route_policy_selects_g5_by_shape(tmp_path):
