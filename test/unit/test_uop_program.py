@@ -1,10 +1,18 @@
+import ast
 import inspect
 import warnings
+from pathlib import Path
 
 import numpy as np
 
 from tinygrad import Tensor, dtypes
 from tinygrad.uop.ops import KernelInfo, Ops, UOp
+
+
+def _repo_root() -> Path:
+  for candidate in Path(__file__).resolve().parents:
+    if (candidate / "pyproject.toml").is_file() and (candidate / "tinygrad").is_dir(): return candidate
+  raise RuntimeError("could not locate repository root")
 
 
 def _increment(out:UOp, src:UOp) -> UOp:
@@ -44,3 +52,16 @@ def test_custom_kernel_is_a_silent_equivalent_compatibility_wrapper():
   assert [x.uop.op for x in legacy] == [x.uop.op for x in canonical] == [Ops.AFTER, Ops.AFTER]
   assert legacy[0].uop.src[1].op is canonical[0].uop.src[1].op is Ops.CALL
   np.testing.assert_array_equal(legacy[0].numpy(), canonical[0].numpy())
+
+
+def test_active_source_has_no_legacy_tensor_callers():
+  root, callers = _repo_root(), []
+  for source_root in ("tinygrad", "test", "extra"):
+    for path in (root / source_root).rglob("*.py"):
+      if "__pycache__" in path.parts: continue
+      tree = ast.parse(path.read_text(), filename=str(path))
+      if any(isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and
+             node.func.attr == "custom_kernel" for node in ast.walk(tree)):
+        callers.append(str(path.relative_to(root)))
+  assert sorted(callers) == ["tinygrad/nn/__init__.py", "tinygrad/tensor.py"], (
+    "the legacy spelling is reserved for the Tensor compatibility wrapper and direct internal UOp substrate callers")
