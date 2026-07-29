@@ -36,7 +36,7 @@ def _candidates() -> dict[str, object]:
   out = {}
   for name in dir(decode_routes):
     obj = getattr(decode_routes, name)
-    if dataclasses.is_dataclass(obj) and not isinstance(obj, type) and hasattr(obj, "route_id"):
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type) and hasattr(obj, "route_id") and hasattr(obj, "bind"):
       out[name] = obj
   return out
 
@@ -64,7 +64,7 @@ CHECKED_GUARDS = {
 }
 
 # Fields that are identity or target rather than shape guards; checked by their own tests below.
-_NON_GUARD_FIELDS = {"candidate_id", "route_id", "quant", "target", "query_heads"}
+_NON_GUARD_FIELDS = {"candidate_id", "route_id", "quant", "target", "query_heads", "kv_heads", "head_dim"}
 
 
 def test_every_decode_candidate_names_a_route_that_exists():
@@ -148,7 +148,11 @@ def test_unchecked_guard_list_is_exhaustive():
   guard field with no manifest counterpart fails here, which is the point: it should be a decision, not a
   default."""
   for name, cand in _candidates().items():
-    fields = {f.name for f in dataclasses.fields(cand)} - _NON_GUARD_FIELDS
+    # Flash candidates are compatibility binders over the executor-owned route
+    # descriptor. Inspect that sole configuration authority, not the facade's
+    # implementation fields (`route`, `target`).
+    descriptor = cand.route if hasattr(cand, "route") else cand
+    fields = {f.name for f in dataclasses.fields(descriptor)} - _NON_GUARD_FIELDS
     declared = UNCHECKED_GUARDS.get(name, set()) | CHECKED_GUARDS.get(name, set())
     assert fields == declared, (
       f"{name}: guard fields {sorted(fields)} but only {sorted(declared)} are accounted for. "
