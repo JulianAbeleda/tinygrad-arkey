@@ -52,13 +52,18 @@ def test_decode_candidates_own_separate_g4_and_g5_split_geometry():
 
 
 def test_decode_flash_selector_only_binds_promoted_g4_g5_shapes():
-  """Characterize the production selector itself, rather than a parallel route table."""
-  g4 = decode_routes.FLASH_DECODE_CANDIDATE.bind(1, 32, 8, 128, "AMD:0")
-  g5 = decode_routes.FLASH_DECODE_G5_CANDIDATE.bind(1, 40, 8, 128, "AMD:0")
+  """Characterize the production selector itself, rather than a parallel route table. TG7 split binding
+  admission into shape + capability + policy (docs/task_workflow/input/
+  target-capability-policy-decoupling-scope-20260730.md); no AMD hardware is available on this machine (scope
+  section 8), so an AMD-shaped capability is supplied explicitly rather than resolved from the "AMD:0" string."""
+  from tinygrad.llm.flash_decode_attention import FlashDecodeCapability
+  amd_capability = FlashDecodeCapability(True, True)
+  g4 = decode_routes.FLASH_DECODE_CANDIDATE.bind(1, 32, 8, 128, "AMD:0", capability=amd_capability)
+  g5 = decode_routes.FLASH_DECODE_G5_CANDIDATE.bind(1, 40, 8, 128, "AMD:0", capability=amd_capability)
   assert g4 is not None and g4.route_id == "decode_flash_live_split_g4_kvboth"
   assert g5 is not None and g5.route_id == "decode_flash_live_split_g5_kvboth"
-  assert decode_routes.FLASH_DECODE_CANDIDATE.bind(1, 40, 8, 128, "AMD:0") is None
-  assert decode_routes.FLASH_DECODE_G5_CANDIDATE.bind(1, 32, 8, 128, "AMD:0") is None
+  assert decode_routes.FLASH_DECODE_CANDIDATE.bind(1, 40, 8, 128, "AMD:0", capability=amd_capability) is None
+  assert decode_routes.FLASH_DECODE_G5_CANDIDATE.bind(1, 32, 8, 128, "AMD:0", capability=amd_capability) is None
   assert decode_routes.FLASH_DECODE_CANDIDATE.bind(1, 32, 8, 128, "CPU") is None
 
 

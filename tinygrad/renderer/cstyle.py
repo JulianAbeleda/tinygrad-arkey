@@ -255,6 +255,12 @@ class CStyleLanguage(Renderer):
   # (val, xor_offset, lane) -> lowered CUSTOMI UOp. `lane` is only meaningful to providers that need a per-lane
   # source address (e.g. AMD's ds_bpermute); providers that take a lane mask directly may ignore it.
   warp_shfl_xor: Callable[[UOp, int, UOp], UOp]|None = None
+  # Per-target flash-decode intrinsics (TG7, same declarative shape as warp_shfl_xor above): None means this
+  # target cannot express it, and codegen/late/flash_decode_intrinsics.py raises rather than falling back.
+  # fdot2(acc, a, b) -> acc + a.x*b.x + a.y*b.y for packed-half2 a/b, fp32 accumulate (see the AMD provider's
+  # semantics note on HIPRenderer below). exp2f(x) -> 2**x, the opt-in DECODE_FAST_EXP2 fast path.
+  fdot2: Callable[[UOp, UOp, UOp], UOp]|None = None
+  exp2f: Callable[[UOp], UOp]|None = None
   extra_args: list[str] = []
   float4: str|None = None
   float4_style: tuple[str, str] = ('(', ')')
@@ -498,6 +504,14 @@ class MetalRenderer(CStyleLanguage):
   # lane mask directly (the hardware resolves the source lane itself), so `lane` is unused -- no per-lane
   # address needs computing here.
   warp_shfl_xor = staticmethod(lambda val, offset, lane: UOp(Ops.CUSTOMI, val.dtype, (val,), arg=f"simd_shuffle_xor({{0}}, {offset})"))
+  # TG7: MSL has no packed-fp16x2 dot-accumulate builtin, so this is written out as two explicit fp32
+  # multiply-adds rather than relying on `dot()` over a `half2` (which is not guaranteed to accumulate in
+  # fp32 the way AMD's fdot2 does -- see the semantics note on HIPRenderer.fdot2 below). `{1}`/`{2}` are the
+  # packed-half2 STACK values `a`/`b`; `.x`/`.y` are MSL's native half2 lane accessors.
+  fdot2 = staticmethod(lambda acc, a, b: UOp(Ops.CUSTOMI, dtypes.float32, (acc, a, b),
+    arg="({0}) + float({1}.x) * float({2}.x) + float({1}.y) * float({2}.y)"))
+  # exp2() is native MSL -- no builtin-name translation needed, just the ordinary call form.
+  exp2f = staticmethod(lambda x: UOp(Ops.CUSTOMI, x.dtype, (x,), arg="exp2({0})"))
   code_for_workitem = {"g": lambda x: f"gid.{chr(120+int(x))}", "l": lambda x: f"lid.{chr(120+int(x))}"}
   extra_args = ['uint3 gid [[threadgroup_position_in_grid]]', 'uint3 lid [[thread_position_in_threadgroup]]']
   # MSL uses OpenCL-style compact scalar names for native vector types
@@ -601,6 +615,15 @@ class HIPRenderer(CStyleLanguage):
   # byte offset, so the source lane (lane ^ offset) is computed here and bit-cast through int for the permute.
   warp_shfl_xor = staticmethod(lambda val, offset, lane: UOp(Ops.CUSTOMI, val.dtype, (val, ((lane ^ offset) * 4).cast(dtypes.int)),
     arg="__builtin_bit_cast(float, __builtin_amdgcn_ds_bpermute({1}, __builtin_bit_cast(int, {0})))"))
+  # TG7: byte-identical to the pre-TG7 inline strings in tinygrad/llm/flash_decode_attention.py. fdot2's ISA
+  # semantics: __builtin_amdgcn_fdot2(a, b, c, clamp) computes c + a.x*b.x + a.y*b.y for packed half2 a/b, with
+  # fp32 intermediate accumulation regardless of the (fp16) input precision -- that fp32 accumulate is exactly
+  # why this is a dedicated intrinsic rather than an ordinary half2 dot product. clamp=false: no NaN/overflow
+  # clamping of the fp16 inputs (matching the pre-TG7 literal). Arg order is (a, b, acc) in the call syntax
+  # while the UOp puts acc first (src[0]) so CUSTOMI carries a scalar shape -- {1}/{2}/{0} thread that through.
+  fdot2 = staticmethod(lambda acc, a, b: UOp(Ops.CUSTOMI, dtypes.float32, (acc, a, b),
+    arg="__builtin_amdgcn_fdot2({1}, {2}, {0}, false)"))
+  exp2f = staticmethod(lambda x: UOp(Ops.CUSTOMI, x.dtype, (x,), arg="__builtin_amdgcn_exp2f({0})"))
   code_for_op = {**CStyleLanguage.code_for_op, Ops.TRUNC: _ocml("trunc"), Ops.SIN: _ocml("sin"),
                  Ops.LOG2: _ocml("log2"), Ops.EXP2: _ocml("exp2"), Ops.SQRT: _ocml("sqrt")}
   smem_prefix = "__attribute__((shared, aligned(16)))"

@@ -92,6 +92,15 @@ class Renderer:
     # provide one leave the class attribute at its None default; renderers with no such attribute at all
     # (e.g. LLVMRenderer, PTXRenderer) read as unavailable via getattr, same as the lowering code does.
     return getattr(self, "warp_shfl_xor", None) is not None
+  @property
+  def supports_flash_decode_fdot2(self) -> bool:
+    # TG7 (docs/task_workflow/input/target-capability-policy-decoupling-scope-20260730.md): same derivation
+    # shape as supports_warp_shfl_xor above -- one authority, the codegen/late/flash_decode_intrinsics.py
+    # provider, never restated as an independent boolean.
+    return getattr(self, "fdot2", None) is not None
+  @property
+  def supports_flash_decode_exp2f(self) -> bool:
+    return getattr(self, "exp2f", None) is not None
   def render(self, uops:list[UOp]) -> str: raise NotImplementedError("needs a renderer")
   def asm(self, prg:UOp, lin:UOp) -> bytes: raise NotImplementedError("needs an assembler")
   def aux(self, uops:list[UOp]) -> dict: raise NotImplementedError("needs aux")

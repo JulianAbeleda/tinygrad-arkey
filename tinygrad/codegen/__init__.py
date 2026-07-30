@@ -26,6 +26,7 @@ from tinygrad.codegen.late.coalesced_load import coalesce_loads
 from tinygrad.codegen.late.recurrence import unroll_recurrence
 from tinygrad.codegen.late.fdot2 import pm_fdot2, line_lower_fdot2
 from tinygrad.codegen.late.warp_reduce import pm_warp_reduce, pm_lower_warp_shfl_xor
+from tinygrad.codegen.late.flash_decode_intrinsics import pm_lower_flash_decode_intrinsics
 from tinygrad.codegen.plan import PLAN_GATES, observed_gate_values  # noqa: F401  (PLAN_GATES re-exported for callers)
 from tinygrad.codegen.opt.postrange import apply_opts
 from tinygrad.codegen.late.gater import pm_move_gates_from_index
@@ -92,6 +93,9 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   # so hand-authored kernels that call it directly at AST-construction time see it lowered at the exact same
   # pipeline position the old inline AMD string used to occupy -- required for the AMD byte-identical guarantee.
   ast = graph_rewrite(ast, pm_lower_warp_shfl_xor, ctx=ren, name="lower warp_shfl_xor")
+  # Same TG7 seam for flash-decode's fdot2/exp2f (codegen/late/flash_decode_intrinsics.py) -- resolved at the
+  # identical pipeline position the old inline AMD strings occupied.
+  ast = graph_rewrite(ast, pm_lower_flash_decode_intrinsics, ctx=ren, name="lower flash_decode intrinsics")
   if (_u:=getenv("SCHED_UNROLL")) > 1 and ren.target.device == "AMD":
     # recurrence-aware loop-unroll primitive (default-off codegen scheduling capability)
     ast = unroll_recurrence(ast, _u)
@@ -166,6 +170,7 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   # pm_warp_reduce (above) builds warp_shfl_xor tags fresh during this pass -- resolve them here too, in the
   # same relative position the old inline AMD string occupied, rather than letting them ride further downstream.
   sink = graph_rewrite(sink, pm_lower_warp_shfl_xor, ctx=ren, name="lower warp_shfl_xor (post-expander)")
+  sink = graph_rewrite(sink, pm_lower_flash_decode_intrinsics, ctx=ren, name="lower flash_decode intrinsics (post-expander)")
 
   # add locals
   sink = graph_rewrite(sink, pm_add_buffers_local+rangeify_codegen, ctx=itertools.count(0), name="add local buffers")
@@ -292,7 +297,7 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   extra_matcher = ren.extra_matcher if ren.extra_matcher is not None else PatternMatcher([])
   # Safety net: any warp_shfl_xor tag that reached this point unresolved (e.g. a future call site) still gets
   # caught here, before final string rendering, rather than crashing inside the generic CUSTOMI arg formatter.
-  pm_final_rewrite = pm_decomp+pm_render+extra_matcher+pm_lower_warp_shfl_xor+pm_split_ends
+  pm_final_rewrite = pm_decomp+pm_render+extra_matcher+pm_lower_warp_shfl_xor+pm_lower_flash_decode_intrinsics+pm_split_ends
   sink = graph_rewrite(sink, pm_final_rewrite, ctx=ren, name="final rewrite")
   if getenv("V_DOT2_LOWERING") and ren.target.device == "AMD":
     sink = graph_rewrite(sink, pm_fdot2, name="fdot2 final lowering")

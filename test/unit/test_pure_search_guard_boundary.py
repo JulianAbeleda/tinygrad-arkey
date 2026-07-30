@@ -73,6 +73,25 @@ def _drive_q6k(**overrides):
   return called["fallback"]
 
 
+class _FakeAMDRenderer:
+  """TG7 (docs/task_workflow/input/target-capability-policy-decoupling-scope-20260730.md): flash-decode
+  binding now resolves capability from the target device's renderer (never from the device string alone), and
+  no real AMD hardware is available on this machine (scope section 8) -- so `Device["AMD"]` is faked here with
+  the exact renderer facts a real gfx1100 HIPRenderer reports (both warp_shfl_xor and fdot2 providers), the
+  same structural-verification approach test_qk_capability_policy_gate.py already uses for AMD."""
+  supports_warp_shfl_xor = True
+  supports_flash_decode_fdot2 = True
+  target = SimpleNamespace(device="AMD", arch="gfx1100")
+
+
+class _FakeAMDDevice:
+  renderer = _FakeAMDRenderer()
+
+
+class _FakeDeviceRegistry:
+  def __getitem__(self, ix): return _FakeAMDDevice()
+
+
 def _drive_attention(monkeypatch, **overrides):
   """Drive the real flash_decode_attention_route; a sentinel replaces the generated live-split emitter so we observe
   SELECTION (was the generated route chosen?) without needing the exact KV tile layout or a GPU."""
@@ -81,6 +100,7 @@ def _drive_attention(monkeypatch, **overrides):
     called["live_split"] = True
     return Tensor.empty(32, 128, dtype=dtypes.float32, device="CPU")
   monkeypatch.setattr(dr, "flash_decode_live_split_block_tile", sentinel)
+  monkeypatch.setattr(dr, "Device", _FakeDeviceRegistry())
   B, Hq, Hkv, Hd, MAXC = 1, 32, 8, 128, 4096  # 8B G=4 live-split shape
   q = SimpleNamespace(device="AMD", reshape=lambda *_shape: Tensor.empty(Hq, Hd, dtype=dtypes.float16, device="CPU"))
   kv = Tensor.empty(2, MAXC, Hkv, Hd, dtype=dtypes.float16, device="CPU")

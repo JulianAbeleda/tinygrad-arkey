@@ -3,10 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Any
 
-from tinygrad import Tensor, UOp, dtypes, getenv
+from tinygrad import Device, Tensor, UOp, dtypes, getenv
 from tinygrad.llm.decode_kernels import (emit_q6k_gemv_kernel, emit_q6k_vocab_scalar_reduce_kernel,
   q4k_g3_lanemap_gemv_kernel, q6k_spec_for_role, q6k_vocab_scalar_reduce_eligible)
-from tinygrad.llm.flash_decode_attention import FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeRouteConfig, flash_decode_live_split_block_tile
+from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeCapability, FlashDecodeRouteConfig,
+  flash_decode_capability_from_renderer, flash_decode_live_split_block_tile, flash_decode_target_promoted)
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, execute_promoted_program
 from tinygrad.llm.route_selection import parse_route_mode
 
@@ -143,6 +144,27 @@ class _FlashDecodeBinding:
   staging: str
   stage_width: int
 
+_RESOLVED_FLASH_DECODE_CAPABILITY: dict[str, tuple[FlashDecodeCapability, tuple[str|None, str|None]]] = {}
+
+
+def _flash_decode_capability_and_target_for_device(device:str) -> tuple[FlashDecodeCapability, tuple[str|None, str|None]]:
+  """Resolve (and cache) TG7 capability + (backend, architecture) for `device`, from its actually-open
+  renderer -- never inferred from the device string. `Device[device]` may only be called from an eager
+  context (model setup, e.g. model.py's `_flash_decode` precondition check): `tinygrad/function.py` disallows
+  it (`ALLOW_DEVICE_USAGE=0`) while a Tensor Function is dispatching, which is exactly where
+  flash_decode_attention_route's real per-token call happens. Caching the first (eager) resolution and
+  reusing it here means the runtime call never needs to open a device at all -- the same "resolve once at
+  load time, read many times" shape as scan_device_facts()/DeviceFacts elsewhere in this scope."""
+  if (cached := _RESOLVED_FLASH_DECODE_CAPABILITY.get(device)) is not None: return cached
+  try: renderer = Device[device].renderer
+  except Exception: renderer = None
+  capability = flash_decode_capability_from_renderer(renderer)
+  target = (renderer.target.device, renderer.target.arch) if renderer is not None else \
+    (device.split(":", 1)[0].upper() if device else None, None)
+  if renderer is not None: _RESOLVED_FLASH_DECODE_CAPABILITY[device] = (capability, target)
+  return capability, target
+
+
 @dataclass(frozen=True)
 class _FlashDecodeCandidate:
   """Compatibility selection facade over the executor-owned route definition."""
@@ -164,8 +186,28 @@ class _FlashDecodeCandidate:
   @property
   def stage_width(self): return self.route.stage_width
 
-  def bind(self, B:int, Hq:int, Hkv:int, Hd:int, device:str) -> _FlashDecodeBinding | None:
-    if not self.route.supports(B, Hq, Hkv, Hd, device): return None
+  def bind(self, B:int, Hq:int, Hkv:int, Hd:int, device:str, *,
+           capability:FlashDecodeCapability|None=None, route_plan:Any=None) -> _FlashDecodeBinding | None:
+    """TG7 (docs/task_workflow/input/target-capability-policy-decoupling-scope-20260730.md): the pre-TG7 gate
+    collapsed shape, backend identity, codegen capability and promotion into one `device == "AMD"` check.
+    Shape stays exactly where it was (FlashDecodeRouteConfig.shape_ok). Capability is read from the resolved
+    renderer's declared facts, never inferred from `device`'s string shape: if the caller does not supply one
+    explicitly, it is resolved from (and cached against) the target `device`'s own renderer -- see
+    _flash_decode_capability_and_target_for_device's docstring for why this must be cached rather than
+    resolved fresh on every call: the real per-token call site (flash_decode_attention_route, below) runs
+    inside a Tensor Function dispatch, where opening a device is disallowed by tinygrad/function.py, so this
+    depends on an earlier eager call (model.py's `_flash_decode` precondition check) having resolved and
+    cached it first. Promotion defaults permissively (see flash_decode_target_promoted) until a route_plan is
+    threaded through from model.py, matching AMD's current production default (no promotion record loaded)."""
+    if capability is None:
+      capability, target = _flash_decode_capability_and_target_for_device(device)
+    else:
+      target = (device.split(":", 1)[0].upper() if device else None, None)
+    admission = self.route.evaluate(B, Hq, Hkv, Hd, capability, flash_decode_target_promoted(route_plan, target))
+    if getenv("FLASH_DECODE_ADMISSION_DEBUG"):
+      print(f"FLASH_DECODE_ADMISSION_DEBUG candidate={self.candidate_id} device={device} "
+            f"admitted={admission.admitted} reason={admission.reason}")
+    if not admission.admitted: return None
     return _FlashDecodeBinding(self.candidate_id, self.route_id, self.target, B, Hq, Hkv, Hd,
                                self.split_size, self.query_group_size, self.staging, self.stage_width)
 

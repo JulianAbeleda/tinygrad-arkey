@@ -29,6 +29,11 @@ class CUDARenderer(CStyleLanguage):
   # __shfl_xor_sync takes the lane mask directly (like Metal's simd_shuffle_xor) -- no per-lane address needed,
   # so `lane` is unused. Full-warp mask: every call site in this repo shuffles across the whole warp (WARP=32).
   warp_shfl_xor = staticmethod(lambda val, offset, lane: UOp(Ops.CUSTOMI, val.dtype, (val,), arg=f"__shfl_xor_sync(0xffffffffu, {{0}}, {offset})"))
+  # TG7: exp2f is a native CUDA device function, a one-liner (per TG1's rule for CUDA providers). fdot2 has no
+  # equivalent one-line CUDA builtin (no native packed-fp16x2 dot-accumulate intrinsic), so it is left
+  # unprovided here -- codegen/late/flash_decode_intrinsics.py raises NotImplementedError for CUDA rather than
+  # emitting an unverified hand-rolled substitute.
+  exp2f = staticmethod(lambda x: UOp(Ops.CUSTOMI, x.dtype, (x,), arg="exp2f({0})"))
   code_for_op = { **CStyleLanguage.code_for_op,
     Ops.TRUNC: lambda x,dtype: f"htrunc({x})" if dtype in (dtypes.half, dtypes.bfloat16) else f"trunc({x})",
     Ops.SIN: lambda x,dtype: f"hsin({x})" if dtype in (dtypes.half, dtypes.bfloat16) else f"sin({x})",

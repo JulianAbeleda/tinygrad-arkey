@@ -290,28 +290,58 @@ def test_q6k_binding_is_independent_of_role_and_size_thresholds():
 
 
 def test_flash_decode_binding_has_fixed_production_parameters(monkeypatch):
+  """TG7 (docs/task_workflow/input/target-capability-policy-decoupling-scope-20260730.md): binding admission
+  is now capability+policy, not a device-string match, and no AMD hardware is available on this machine (scope
+  section 8) -- so an AMD-shaped capability is supplied explicitly (real HIPRenderer facts values, the same
+  structural-verification pattern test_qk_capability_policy_gate.py already uses), never inferred from the
+  "AMD:0" string itself. The negative cases below need no injected capability: CPU's real ClangRenderer
+  genuinely has no fdot2/warp_shfl_xor providers, and shape mismatch fails before capability is even read."""
+  from tinygrad.llm.flash_decode_attention import FlashDecodeCapability
   monkeypatch.setenv("DECODE_LIVE_SPLIT", "0")
   monkeypatch.setenv("DECODE_LIVE_SPLIT_S", "7")
   monkeypatch.setenv("DECODE_LIVE_SPLIT_STAGING", "K_ONLY")
-  binding = decode_routes.FLASH_DECODE_CANDIDATE.bind(1, 32, 8, 128, "AMD:0")
+  amd_capability = FlashDecodeCapability(True, True)
+  binding = decode_routes.FLASH_DECODE_CANDIDATE.bind(1, 32, 8, 128, "AMD:0", capability=amd_capability)
   assert binding is not None
   assert (binding.target, binding.split_size, binding.staging) == ("AMD", 48, "KV_BOTH")
-  assert decode_routes.FLASH_DECODE_CANDIDATE.bind(2, 32, 8, 128, "AMD") is None
+  assert decode_routes.FLASH_DECODE_CANDIDATE.bind(2, 32, 8, 128, "AMD", capability=amd_capability) is None
   assert decode_routes.FLASH_DECODE_CANDIDATE.bind(1, 32, 8, 128, "CPU") is None
 
 
+def test_flash_decode_admission_debug_reports_distinct_census_reasons(monkeypatch, capsys):
+  """TG7: each rejection reason is observable, not a silent fallback (scope section 4.4). Mirrors the
+  capability_missing/policy_target_not_promoted census reasons TG3 established for the Q4_K/Q6_K gate."""
+  from tinygrad import getenv
+  from tinygrad.llm.flash_decode_attention import FlashDecodeCapability
+  monkeypatch.setenv("FLASH_DECODE_ADMISSION_DEBUG", "1")
+  getenv.cache_clear()
+  try:
+    decode_routes.FLASH_DECODE_CANDIDATE.bind(1, 999, 8, 128, "CPU", capability=FlashDecodeCapability(True, True))
+    assert "reason=shape_not_supported" in capsys.readouterr().out
+
+    decode_routes.FLASH_DECODE_CANDIDATE.bind(1, 32, 8, 128, "CPU", capability=FlashDecodeCapability(False, True))
+    assert "reason=capability_missing" in capsys.readouterr().out
+
+    decode_routes.FLASH_DECODE_CANDIDATE.bind(1, 32, 8, 128, "CPU", capability=FlashDecodeCapability(True, True))
+    out = capsys.readouterr().out
+    assert "reason=None" in out and "admitted=True" in out
+  finally:
+    getenv.cache_clear()
+
+
 def test_flash_decode_binding_splits_g4_and_g5_route_identity_cpu_only():
-  from tinygrad.llm.flash_decode_attention import FLASH_DECODE_G4, FLASH_DECODE_G5
+  from tinygrad.llm.flash_decode_attention import FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeCapability
   assert decode_routes.FLASH_DECODE_CANDIDATE.route is FLASH_DECODE_G4
   assert decode_routes.FLASH_DECODE_G5_CANDIDATE.route is FLASH_DECODE_G5
-  g4 = decode_routes.FLASH_DECODE_CANDIDATE.bind(1, 32, 8, 128, "AMD")
-  g5 = decode_routes.FLASH_DECODE_G5_CANDIDATE.bind(1, 40, 8, 128, "AMD")
+  amd_capability = FlashDecodeCapability(True, True)
+  g4 = decode_routes.FLASH_DECODE_CANDIDATE.bind(1, 32, 8, 128, "AMD", capability=amd_capability)
+  g5 = decode_routes.FLASH_DECODE_G5_CANDIDATE.bind(1, 40, 8, 128, "AMD", capability=amd_capability)
   assert g4 is not None and g4.route_id == "decode_flash_live_split_g4_kvboth"
   assert g5 is not None and g5.route_id == "decode_flash_live_split_g5_kvboth"
   assert (g4.split_size, g4.staging) == (48, "KV_BOTH")
   assert (g5.split_size, g5.staging) == (32, "KV_BOTH")
-  assert decode_routes.FLASH_DECODE_CANDIDATE.bind(1, 40, 8, 128, "AMD") is None
-  assert decode_routes.FLASH_DECODE_G5_CANDIDATE.bind(1, 32, 8, 128, "AMD") is None
+  assert decode_routes.FLASH_DECODE_CANDIDATE.bind(1, 40, 8, 128, "AMD", capability=amd_capability) is None
+  assert decode_routes.FLASH_DECODE_G5_CANDIDATE.bind(1, 32, 8, 128, "AMD", capability=amd_capability) is None
   for hq in (24, 36, 48):
-    assert decode_routes.FLASH_DECODE_CANDIDATE.bind(1, hq, 8, 128, "AMD") is None
-    assert decode_routes.FLASH_DECODE_G5_CANDIDATE.bind(1, hq, 8, 128, "AMD") is None
+    assert decode_routes.FLASH_DECODE_CANDIDATE.bind(1, hq, 8, 128, "AMD", capability=amd_capability) is None
+    assert decode_routes.FLASH_DECODE_G5_CANDIDATE.bind(1, hq, 8, 128, "AMD", capability=amd_capability) is None

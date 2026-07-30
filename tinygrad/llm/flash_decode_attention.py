@@ -22,7 +22,8 @@ _F32 = dtypes.float32
 def _fexp(x:UOp) -> UOp:
   arg = x * _LOG2E
   if getenv("DECODE_FAST_EXP2", 0):
-    return UOp(Ops.CUSTOMI, arg.dtype, (arg,), arg="__builtin_amdgcn_exp2f({0})")
+    from tinygrad.codegen.late.flash_decode_intrinsics import exp2f
+    return exp2f(arg)
   return arg.exp2()
 
 
@@ -103,6 +104,7 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
 
   def kernel(pout:UOp, q:UOp, cache:UOp, *extra) -> UOp:
     from tinygrad.codegen.late.warp_reduce import _warp_reduce_sum_staged, warp_reduce_sum
+    from tinygrad.codegen.late.flash_decode_intrinsics import fdot2 as _lower_fdot2
     optional = list(extra)
     kvscale = (optional.pop(0) if optional else None) if quant else None
     freqs = (optional.pop(0) if optional else None) if rope else None
@@ -163,8 +165,7 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
       qpair = UOp(Ops.STACK, dtypes.half.vec(2), (q[head * Hd + elem].cast(dtypes.half), q[head * Hd + elem + 1].cast(dtypes.half)))
       kpair = UOp(Ops.STACK, dtypes.half.vec(2), (ksh.after(barrier)[token_in_tile * Hd + elem],
                                                  ksh.after(barrier)[token_in_tile * Hd + elem + 1]))
-      fdot = UOp(Ops.CUSTOMI, _F32, (dot.after(pair_axis)[0], qpair, kpair),
-                 arg="__builtin_amdgcn_fdot2({1}, {2}, {0}, false)")
+      fdot = _lower_fdot2(dot.after(pair_axis)[0], qpair, kpair)
       update = dot[0].store(fdot).end(pair_axis)
       reduced = (warp_reduce_sum(dot.after(update)[0], lane, LANES) if getenv("DECODE_ATTN_BLOCK_TILE_INLINE_REDUCE", 0)
                  else _warp_reduce_sum_staged(dot.after(update)[0], lane, LANES))
@@ -369,6 +370,84 @@ def emit_flash_decode_combine(spec:FlashDecodeAttentionSpec): return spec.emit_c
 
 
 @dataclass(frozen=True)
+class FlashDecodeCapability:
+  """TG7 capability authority (docs/task_workflow/input/target-capability-policy-decoupling-scope-20260730.md):
+  can the resolved target's renderer express what `dot_reduce` (flash_block_tiled_xlane_score_pv_tile_...)
+  requires? Every field is copied verbatim from the renderer that was actually resolved -- never inferred
+  from a device/backend string, and never conflated with promotion (see FlashDecodeAdmission below). Mirrors
+  QKPrimitiveCapability's shape (tinygrad/llm/qk_primitives.py, TG3) so the same two-question pattern is
+  reused, not reinvented.
+
+  `supports_warp_shfl_xor` covers the lane-reduction ladder every score reduces through
+  (codegen/late/warp_reduce.py, TG1); `supports_fdot2` covers the packed-half2 QK dot product this package
+  makes renderer-lowered (codegen/late/flash_decode_intrinsics.py). The opt-in DECODE_FAST_EXP2 fast path
+  (also renderer-lowered by this package, as `exp2f`) is deliberately NOT part of `satisfied`: it is off by
+  default in production, and a target that lacks it still fails loudly at lowering if the env flag is set --
+  gating route admission on an experimental, rarely-used knob would be a second, redundant fail-safe."""
+  supports_warp_shfl_xor: bool | None = None
+  supports_fdot2: bool | None = None
+
+  @property
+  def satisfied(self) -> bool:
+    return self.supports_warp_shfl_xor is True and self.supports_fdot2 is True
+
+
+def flash_decode_capability_from_renderer(renderer:object|None) -> FlashDecodeCapability:
+  """Copy only the immutable renderer capability facts flash decode requires. `renderer` should be an
+  already-open target's renderer (e.g. `Device[device].renderer`, called only on a device already opened
+  elsewhere in the model pipeline) -- never a fresh probe here, and never a parallel capability object."""
+  if renderer is None: return FlashDecodeCapability()
+  return FlashDecodeCapability(getattr(renderer, "supports_warp_shfl_xor", None),
+                                getattr(renderer, "supports_flash_decode_fdot2", None))
+
+
+def flash_decode_capability_from_device_facts(device_facts:object|None) -> FlashDecodeCapability:
+  """Same shape as qk_primitive_capability_from_device_facts (tinygrad/llm/qk_primitives.py, TG3): read the
+  load-entry DeviceFacts scan (tinygrad/llm/device_facts.py) verbatim, never a fresh probe, never a parallel
+  facts object. Not yet wired to a production call site -- doing so requires threading the load-entry
+  DeviceFacts object into decode_routes.py's flash-decode bind, which belongs to the model.py owner (see
+  model.py's `_flash_decode` at the FLASH_DECODE_CANDIDATE.bind call). Provided so that wiring is a one-line
+  change, not a new capability path."""
+  if device_facts is None: return FlashDecodeCapability()
+  capabilities = getattr(device_facts, "capabilities", None)
+  return FlashDecodeCapability(getattr(capabilities, "supports_warp_shfl_xor", None),
+                                getattr(capabilities, "supports_flash_decode_fdot2", None))
+
+
+def flash_decode_target_promoted(route_plan:object|None, target:tuple[str|None, str|None]) -> bool:
+  """TG3-shaped policy check (mirrors qk_primitives._qk_target_promoted): absence of a route plan (or of its
+  target_promoted method) reads as undecided-by-target -- admitted -- not denied; see
+  ModelRoutePlan.target_promoted's own docstring for why. No route_plan reaches flash decode's bind today (no
+  production call site threads one through -- see flash_decode_capability_from_device_facts above), so this
+  currently always resolves True; the mechanism is wired so a future promotion record is a one-line change."""
+  check = getattr(route_plan, "target_promoted", None)
+  return True if check is None else check(target)
+
+
+@dataclass(frozen=True)
+class FlashDecodeAdmission:
+  """The three independent TG7 answers retained for one bind attempt: shape (decode_routes.py's existing
+  authority -- unchanged from the pre-TG7 `supports()` shape check), capability (this file, read from
+  renderer facts), and promotion (ModelRoutePlan.target_promoted, tinygrad/llm/model_route_plan.py --
+  BoltBeam-sourced route policy, TG3's authority, reused rather than restated). `reason` gives each rejection
+  a distinct, observable label instead of the pre-TG7 silent `device == "AMD"` fallback."""
+  shape_ok: bool
+  capability: FlashDecodeCapability
+  target_promoted: bool
+
+  @property
+  def admitted(self) -> bool:
+    return self.shape_ok and self.capability.satisfied and self.target_promoted
+
+  @property
+  def reason(self) -> str | None:
+    if self.admitted: return None
+    if not self.shape_ok: return "shape_not_supported"
+    if not self.capability.satisfied: return "capability_missing"
+    return "policy_target_not_promoted"
+
+
+@dataclass(frozen=True)
 class FlashDecodeRouteConfig:
   candidate_id: str
   route_id: str
@@ -380,8 +459,14 @@ class FlashDecodeRouteConfig:
   head_dim: int = 128
   staging: str = "KV_BOTH"
 
-  def supports(self, B:int, Hq:int, Hkv:int, Hd:int, device:str) -> bool:
-    return (device == "AMD" or device.startswith("AMD:")) and (B, Hq, Hkv, Hd) == (1, self.query_heads, self.kv_heads, self.head_dim)
+  def shape_ok(self, B:int, Hq:int, Hkv:int, Hd:int) -> bool:
+    """Shape admissibility only (scope section 3.1: bind() in decode_routes.py owns shape gates). Unchanged
+    from the pre-TG7 `supports()` shape check -- the only thing that moved is the backend/capability/policy
+    question this used to be ANDed with, split out into FlashDecodeAdmission above."""
+    return (B, Hq, Hkv, Hd) == (1, self.query_heads, self.kv_heads, self.head_dim)
+
+  def evaluate(self, B:int, Hq:int, Hkv:int, Hd:int, capability:FlashDecodeCapability, target_promoted:bool) -> FlashDecodeAdmission:
+    return FlashDecodeAdmission(self.shape_ok(B, Hq, Hkv, Hd), capability, target_promoted)
 
 
 FLASH_DECODE_G4 = FlashDecodeRouteConfig("attention_decode.flash_live_split", "decode_flash_live_split_g4_kvboth",
@@ -395,7 +480,13 @@ def flash_decode_live_split_block_tile(q:Tensor, cache_kv:Tensor, Tc:UOp, Hd:int
                                        freqs:Tensor|None=None, query_group_size:int|None=None, stage_width:int=1) -> Tensor:
   """Execute the selected live-split flash decode and return ``[Hq, Hd]``."""
   if not fused_combine: raise ValueError("fused_combine=False is no longer supported for decode live-split routes")
-  route = next((row for row in (FLASH_DECODE_G4, FLASH_DECODE_G5) if row.supports(1, Hq, Hkv, Hd, str(q.device))), None)
+  # TG7: this is a pure shape-based route SELECTION (which of G4/G5 matches, to label the emitted
+  # KernelProgram) -- capability and promotion were already decided by the caller's bind() before this
+  # function is ever invoked (decode_routes.flash_decode_attention_route only calls here once binding
+  # succeeded), so re-deriving them from `device` here would be both redundant and -- inside a Tensor Function
+  # dispatch, which is exactly where this runs -- unable to open a device at all (see
+  # decode_routes._flash_decode_capability_and_target_for_device's docstring).
+  route = next((row for row in (FLASH_DECODE_G4, FLASH_DECODE_G5) if row.shape_ok(1, Hq, Hkv, Hd)), None)
   if route is None or (route.split_size, route.query_group_size, route.stage_width, route.staging) != \
       (S, query_group_size, stage_width, staging):
     raise ValueError("flash decode geometry is not an admitted promoted route")
