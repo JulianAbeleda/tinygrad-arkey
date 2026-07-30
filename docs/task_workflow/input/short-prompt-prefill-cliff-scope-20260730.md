@@ -2,7 +2,19 @@
 
 Date: 2026-07-30
 
-Status: scoped, not implemented. Branch boundary: tinygrad `exp`. Does not authorize promotion to `dev`/`master`.
+Status: **RECORDED, NOT PRIORITISED — do not schedule this work.** Retained as evidence, not as a queue item.
+
+**Why this was demoted, same day it was written.** The trap is a function of TOTAL context, not incremental
+tokens. The remainder branch at `model.py:1439` tests `prompt_len >= ubatch`, so once a session's total context
+crosses 512 it shifts the window back and processes the last 512 tokens as one prefill-v2 chunk -- every
+subsequent turn stays on the fast path as context grows. Exposure is therefore limited to sessions that never
+exceed 512 tokens in total.
+
+The 5.5x in section 2 was measured with cold one-shot prefills at fixed depths, which is a benchmarking-harness
+access pattern, not a usage pattern. Context in a real session only grows. The finding is real; its practical
+reach is not.
+
+Branch boundary if ever revived: tinygrad `exp`. Does not authorize promotion to `dev`/`master`.
 
 Third scope of the 2026-07-30 campaign, after `target-capability-policy-decoupling-scope-20260730.md` (decode,
 complete) and `prefill-codegen-recovery-scope-20260730.md` (prefill codegen, PR0/PR1 complete).
