@@ -43,9 +43,11 @@ def _model_identity(path:str) -> dict:
   return identity
 
 
-def _token_evidence(tokens:list[int]) -> dict:
+def _token_evidence(tokens:list[int], *, include_token_ids:bool = False) -> dict:
   encoded = ",".join(map(str, tokens)).encode()
-  return {"count": len(tokens), "sha256": hashlib.sha256(encoded).hexdigest(), "first_token_ids": tokens[:16]}
+  evidence = {"count": len(tokens), "sha256": hashlib.sha256(encoded).hexdigest(), "first_token_ids": tokens[:16]}
+  if include_token_ids: evidence["token_ids"] = list(tokens)
+  return evidence
 
 
 def _host_residual(w_ms:float, d_ms:float) -> tuple[float|None, float|None]:
@@ -103,13 +105,14 @@ def _warm_depth(model, prompt:list[int], chunk_size:int, warmup_decode:int) -> N
 def _warm_depth_with_graph_census(model, prompt:list[int], chunk_size:int, warmup_decode:int):
   """Observe exactly the second SDPA rollout capture; prefill remains unobserved."""
   from tinygrad.engine.jit import observe_graph_admissions
+  from tinygrad.helpers import Context
   _reset(model)
   gen, _ = _prefill(model, prompt, chunk_size)
   try:
     census = None
     for index in range(warmup_decode):
       if index == 1:
-        with observe_graph_admissions() as census: next(gen)
+        with Context(TRACEMETA=1), observe_graph_admissions() as census: next(gen)
       else: next(gen)
   finally: gen.close()
   if census is None or getattr(model.rollout_jit, "captured", None) is None:
@@ -120,9 +123,9 @@ def _warm_depth_with_graph_census(model, prompt:list[int], chunk_size:int, warmu
   return payload
 
 
-def _measure_w(model, dev, prompt:list[int], chunk_size:int, nmeas:int) -> tuple[float, list[float], list[int]]:
+def _measure_w(model, dev, prompt:list[int], chunk_size:int, nmeas:int) -> tuple[float, list[float], list[int], int]:
   _reset(model)
-  gen, _ = _prefill(model, prompt, chunk_size)
+  gen, prelude = _prefill(model, prompt, chunk_size)
   latencies, generated = [], []
   try:
     dev.synchronize()
@@ -131,7 +134,7 @@ def _measure_w(model, dev, prompt:list[int], chunk_size:int, nmeas:int) -> tuple
       generated.append(int(next(gen)))
       latencies.append(time.perf_counter() - started)
   finally: gen.close()
-  return sum(latencies), latencies, generated
+  return sum(latencies), latencies, generated, prelude
 
 
 def _measure_d(model, dev, prompt:list[int], chunk_size:int, nmeas:int, max_context:int):
@@ -194,16 +197,17 @@ def main(argv:list[str] | None=None) -> int:
       graph_census["capture"]["fixed_depth"] = depth
     else: _warm_depth(model, prompt, args.chunk_size, args.warmup_decode)
     w_reps, d_reps = [], []
-    route_reps, token_reps = [], []
+    route_reps, prelude_reps, token_reps = [], [], []
     for rep in range(args.reps):
-      w_elapsed, per_token, generated = _measure_w(model, dev, prompt, args.chunk_size, profile.nmeas)
+      w_elapsed, per_token, generated, prelude = _measure_w(model, dev, prompt, args.chunk_size, profile.nmeas)
       d_elapsed, routes, final_token = _measure_d(model, dev, prompt, args.chunk_size, profile.nmeas, profile.max_context)
       w_reps.append({"rep": rep, "elapsed_s": w_elapsed, "tok_s": profile.nmeas / w_elapsed,
                      "per_token_ms": [x * 1e3 for x in per_token]})
       d_reps.append({"rep": rep, "elapsed_s": d_elapsed, "tok_s": profile.nmeas / d_elapsed,
                      "final_token_id": final_token})
       route_reps.append(routes)
-      token_reps.append(_token_evidence(generated))
+      prelude_reps.append(_token_evidence([prelude], include_token_ids=True))
+      token_reps.append(_token_evidence(generated, include_token_ids=True))
 
     w_tok_s = [r["tok_s"] for r in w_reps]
     d_tok_s = [r["tok_s"] for r in d_reps]
@@ -222,7 +226,9 @@ def main(argv:list[str] | None=None) -> int:
            "D_interpretation": ("upper_bound_candidate" if host_ms is not None else
                                 "not_an_upper_bound; host/runtime subtraction refused"),
            "W_reps": w_reps, "D_reps": d_reps,
-           "prompt_evidence": _token_evidence(prompt), "generated_token_evidence": token_reps,
+           "prompt_evidence": _token_evidence(prompt, include_token_ids=True),
+           "prelude_token_evidence": prelude_reps, "generated_token_evidence": token_reps,
+           "prelude_reps_identical": len({x["sha256"] for x in prelude_reps}) == 1,
            "generated_reps_identical": len({x["sha256"] for x in token_reps}) == 1}
     row["flash"] = route_set == ["flash"]
     row["route"] = route_set[0] if len(route_set) == 1 else "mixed"
