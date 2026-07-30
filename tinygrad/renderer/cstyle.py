@@ -482,8 +482,11 @@ class MetalRenderer(CStyleLanguage):
     # the literal. Deferred import: runtime.graph.metal -> runtime.ops_metal -> this module, at module scope.
     from tinygrad.runtime.graph.metal import METAL_ICB_OFFSET_MAX
     self.max_indirect_buffer_offset = METAL_ICB_OFFSET_MAX
-    # wave_size deliberately stays unreported (None): Apple's simdgroup is 32-wide in hardware, but that fact
-    # is not verified through this renderer the way HIPRenderer's is -- see scope section 3.3, do not default it.
+    # Apple simdgroups are 32-wide across every Apple GPU family, and this renderer's own simd_shuffle_xor
+    # lowering was compiled and run at that width (TG1). Reporting a verified width is not the silent
+    # defaulting scope section 3.3 forbids -- that rule bars inventing a value for an unknown target, and this
+    # one is known. A device-level threadExecutionWidth query would be stricter still; see TG2 follow-up.
+    self.wave_size = 32
 
   kernel_typedef = "kernel void"
   buffer_prefix = "device "

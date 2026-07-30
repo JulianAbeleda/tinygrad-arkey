@@ -60,14 +60,20 @@ def test_amd_cdna_wave_size_is_64_not_defaulted_to_32():
   assert _amd("gfx950").wave_size == 64
 
 
-def test_metal_wave_size_is_explicitly_unreported_and_distinguishable_from_32():
-  """Scope section 3.3: Metal's simdgroup is 32-wide in hardware, but that is not modelled here -- it must
-  read as None (unreported), never silently default to 32, and None must be distinguishable from a renderer
-  that actually reports 32."""
-  metal = _metal()
-  assert metal.wave_size is None
-  assert metal.wave_size != 32
-  assert metal.wave_size is not _amd().wave_size  # None vs 32: not the same value, not the same identity
+def test_metal_reports_its_verified_simdgroup_width():
+  """Apple simdgroups are 32-wide on every Apple GPU family, and TG1's simd_shuffle_xor lowering was compiled
+  and run at that width, so Metal reports a *verified* 32. Scope section 3.3 bars inventing a width for an
+  unknown target (see test_cpu_wave_size_is_unreported), not reporting a known one."""
+  assert _metal().wave_size == 32
+
+
+def test_an_unknown_target_is_never_defaulted_to_32():
+  """The section 3.3 guarantee that matters: a renderer that does not know its width reports None, and None
+  stays distinguishable from a renderer that actually reports 32."""
+  cpu = _cpu()
+  assert cpu.wave_size is None
+  assert cpu.wave_size != 32
+  assert cpu.wave_size is not _amd().wave_size
 
 
 def test_cpu_wave_size_is_unreported():
@@ -93,7 +99,7 @@ def test_amd_wave_size_flows_through_the_existing_device_facts_probe(monkeypatch
   assert facts["wave_size"] == 32
 
 
-def test_metal_wave_size_flows_through_the_probe_as_unreported(monkeypatch):
+def test_metal_wave_size_flows_through_the_probe(monkeypatch):
   opened = SimpleNamespace(renderer=_metal(), is_aql=None)
 
   class FakeDevices:
@@ -102,7 +108,7 @@ def test_metal_wave_size_flows_through_the_probe_as_unreported(monkeypatch):
   import tinygrad.device
   monkeypatch.setattr(tinygrad.device, "Device", FakeDevices())
   facts = _tinygrad_target_probe("METAL")
-  assert facts["backend"] == "METAL" and facts["wave_size"] is None
+  assert facts["backend"] == "METAL" and facts["wave_size"] == 32
 
 
 # ---- Fact 3: max_indirect_buffer_offset, reusing METAL_ICB_OFFSET_MAX, not restating the literal -----------
