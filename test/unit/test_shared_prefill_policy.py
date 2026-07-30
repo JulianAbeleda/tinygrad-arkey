@@ -12,7 +12,11 @@ def _base():
   return {"strategy": "DIRECT_PACKED_FALLBACK", "candidate_id": "baseline", "routes": {}}
 
 
-def _facts(): return SimpleNamespace(backend="AMD", architecture="gfx1100")
+def _facts():
+  # TG8: capability (SharedAttentionCapability, tinygrad/llm/admission.py) now reads supports_tensor_cores
+  # from scanned_device_facts.capabilities -- real AMD gfx1100 fact is True (tc.get_amd("gfx1100") is
+  # non-empty, tinygrad/codegen/opt/tc.py), never inferred from the backend/architecture strings alone.
+  return SimpleNamespace(backend="AMD", architecture="gfx1100", capabilities=SimpleNamespace(supports_tensor_cores=True))
 
 def _artifact():
   return {"schema":"tinygrad.shared_attention_proof.v2","status":"PASS","passed":True,"captures":[{} for _ in range(4)]}

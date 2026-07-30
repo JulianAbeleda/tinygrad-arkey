@@ -18,7 +18,6 @@ AUTO_MAX_CONTEXT = "auto"
 _CONCRETE_PREFILL_VALIDATED_M = (512,)
 
 _EXECUTING_STRATEGIES = frozenset(("FULL_RESIDENT_OVERLAY", "BOUNDED_PACKED_TILES", "DIRECT_PACKED_FALLBACK"))
-_TC_ATTN_TARGET_REQUIREMENTS = {"backend": "AMD", "architecture": "gfx1100"}
 # Enabling one shared compiler path changes both supported model routes.  A
 # synthetic or one-model proof is therefore not enough to select it in either
 # model: promotion needs the complete cross-route result, including decode
@@ -27,34 +26,88 @@ _SHARED_ATTENTION_PROOF_FIELDS = ("correctness", "score_resident", "qk_wmma", "p
                                   "model_8b_prefill", "model_14b_prefill",
                                   "decode_nonregression_8b", "decode_nonregression_14b")
 
-def _requirements_met(requirements:Mapping[str, Any], scanned_device_facts:Any) -> bool:
-  """Match an exact candidate target contract against the one load-entry scan."""
-  return all(getattr(scanned_device_facts, name, None) == expected for name, expected in requirements.items())
+# TG8 (docs/task_workflow/input/target-capability-policy-decoupling-scope-20260730.md): split the old
+# `_TC_ATTN_TARGET_REQUIREMENTS = {"backend":"AMD","architecture":"gfx1100"}` hardcoded-target gate into its
+# two independent questions, following the TG3 shape (tinygrad/llm/qk_primitives.py QKPrimitiveCapability /
+# QKPrimitiveRouteAdmission):
+#   (a) capability -- can the resolved target's renderer express tensor-core-based fused QK/PV attention at
+#       all? Read verbatim from Renderer.tensor_cores via DeviceFacts.capabilities.supports_tensor_cores
+#       (tinygrad/llm/device_facts.py) -- MetalRenderer conditions tensor_cores on Apple7+ and HIPRenderer on
+#       tc.get_amd(arch) (tinygrad/renderer/cstyle.py) exactly the same declarative way, so this is a real,
+#       per-renderer fact, not an AMD-only assumption.
+#   (b) policy -- is THIS measured proof promoted for the resolved target? A shared_attention_proof /
+#       bounded_packed_projection_proof IS the BoltBeam-sourced promotion record for this fast path (the
+#       roofline/parity evidence named in _SHARED_ATTENTION_PROOF_FIELDS) -- it records its own `target` and
+#       is only valid evidence for the exact (backend, architecture) it was measured against, so promotion is
+#       "does the proof's recorded target match the live resolved target", never a hardcoded literal.
+@dataclass(frozen=True)
+class SharedAttentionCapability:
+  """TG8 capability authority: copied verbatim from the load-entry DeviceFacts scan, never inferred from a
+  backend/architecture string. `backend`/`architecture` are retained only for census/debug identification."""
+  backend: str|None = None
+  architecture: str|None = None
+  supports_tensor_cores: bool|None = None
 
-def shared_attention_proven_eligible(value:Mapping[str, Any], scanned_device_facts:Any) -> bool:
-  """Admit bounded attention only from a target-bound, complete proof record."""
+  @property
+  def satisfied(self) -> bool:
+    return self.supports_tensor_cores is True
+
+def shared_attention_capability_from_scanned_facts(scanned_device_facts:Any) -> SharedAttentionCapability:
+  """Read only the immutable renderer/device capability fields this route requires, from whatever load-entry
+  DeviceFacts (or DeviceFacts-shaped double) was actually scanned -- never a fresh probe."""
+  backend = getattr(scanned_device_facts, "backend", None)
+  architecture = getattr(scanned_device_facts, "architecture", None)
+  capabilities = getattr(scanned_device_facts, "capabilities", None)
+  supports_tensor_cores = getattr(capabilities, "supports_tensor_cores", None) if capabilities is not None else None
+  return SharedAttentionCapability(backend, architecture, supports_tensor_cores)
+
+def _proof_target_promoted(proof_target:Any, capability:SharedAttentionCapability) -> bool:
+  """Policy check (b) above: the proof is promoted evidence for exactly the target it was measured against."""
+  return isinstance(proof_target, Mapping) and dict(proof_target) == {"backend": capability.backend, "architecture": capability.architecture}
+
+def shared_attention_ineligibility_reason(value:Mapping[str, Any], scanned_device_facts:Any) -> str|None:
+  """Distinct, independently-decidable TG8 census reasons (mirrors qk_primitives.py's `skipped` counter
+  reasons): None means eligible; any other value names exactly which one of capability, policy, or proof
+  completeness was responsible. `shared_attention_proven_eligible` below is the sole admission gate; this
+  helper exists so each question can be asserted independently in tests and, later, logged."""
   proof = value.get("shared_attention_proof")
-  if not isinstance(proof, Mapping) or proof.get("status") != "PASS": return False
-  if not _requirements_met(_TC_ATTN_TARGET_REQUIREMENTS, scanned_device_facts): return False
-  target = proof.get("target")
+  if not isinstance(proof, Mapping) or proof.get("status") != "PASS": return "proof_missing_or_not_pass"
+  capability = shared_attention_capability_from_scanned_facts(scanned_device_facts)
+  if not capability.satisfied: return "capability_missing"
+  if not _proof_target_promoted(proof.get("target"), capability): return "policy_proof_target_not_promoted"
   geometry = proof.get("geometry")
+  if not isinstance(geometry, Mapping) or not geometry: return "proof_incomplete_geometry"
   artifact = proof.get("artifact")
   artifact_ok = (isinstance(artifact, Mapping) and artifact.get("schema") == "tinygrad.shared_attention_proof.v2" and
                  artifact.get("status") == "PASS" and artifact.get("passed") is True and
                  isinstance(artifact.get("captures"), list) and len(artifact["captures"]) == 4)
-  return (isinstance(target, Mapping) and dict(target) == _TC_ATTN_TARGET_REQUIREMENTS and
-          isinstance(geometry, Mapping) and bool(geometry) and
-          artifact_ok and all(proof.get(field) is True for field in _SHARED_ATTENTION_PROOF_FIELDS))
+  if not artifact_ok: return "proof_incomplete_artifact"
+  if not all(proof.get(field) is True for field in _SHARED_ATTENTION_PROOF_FIELDS): return "proof_incomplete_roofline_fields"
+  return None
+
+def shared_attention_proven_eligible(value:Mapping[str, Any], scanned_device_facts:Any) -> bool:
+  """Admit bounded attention only from a target-bound, complete proof record."""
+  return shared_attention_ineligibility_reason(value, scanned_device_facts) is None
+
+def bounded_packed_projection_ineligibility_reason(value:Mapping[str, Any], scanned_device_facts:Any) -> str|None:
+  """Same TG8 split as `shared_attention_ineligibility_reason`, for the bounded packed-projection binder's own
+  compiler-owned proof."""
+  proof = value.get("bounded_packed_projection_proof")
+  if not isinstance(proof, Mapping) or proof.get("status") != "PASS": return "proof_missing_or_not_pass"
+  capability = shared_attention_capability_from_scanned_facts(scanned_device_facts)
+  if not capability.satisfied: return "capability_missing"
+  if not _proof_target_promoted(proof.get("target"), capability): return "policy_proof_target_not_promoted"
+  if proof.get("q4_source_owner") != "MODEL_PARAMETER": return "proof_wrong_q4_source_owner"
+  if not (proof.get("fused_dequant_wmma") is True and proof.get("fp16_qkv_outputs") is True and
+          proof.get("numeric_correctness") is True and proof.get("memory_cap") is True):
+    return "proof_incomplete_fields"
+  if not (isinstance(proof.get("allocation_owner_identity"), str) and bool(proof["allocation_owner_identity"])):
+    return "proof_missing_owner_identity"
+  return None
 
 def bounded_packed_projection_proven_eligible(value:Mapping[str, Any], scanned_device_facts:Any) -> bool:
   """Admit the bounded projection binder only with its own compiler-owned proof."""
-  proof = value.get("bounded_packed_projection_proof")
-  if not isinstance(proof, Mapping) or proof.get("status") != "PASS": return False
-  if not _requirements_met(_TC_ATTN_TARGET_REQUIREMENTS, scanned_device_facts): return False
-  return (proof.get("target") == _TC_ATTN_TARGET_REQUIREMENTS and proof.get("q4_source_owner") == "MODEL_PARAMETER" and
-          proof.get("fused_dequant_wmma") is True and proof.get("fp16_qkv_outputs") is True and
-          proof.get("numeric_correctness") is True and proof.get("memory_cap") is True and
-          isinstance(proof.get("allocation_owner_identity"), str) and bool(proof["allocation_owner_identity"]))
+  return bounded_packed_projection_ineligibility_reason(value, scanned_device_facts) is None
 
 def select_prefill_runtime_policy(value:Mapping[str, Any], *, scanned_device_facts:Any, workload_reuse:bool,
                                   tc_attn_override:bool|None=None) -> Mapping[str, Any]:

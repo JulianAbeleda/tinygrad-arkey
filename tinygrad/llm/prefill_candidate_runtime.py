@@ -159,7 +159,25 @@ def promoted_candidate_set() -> CandidateSet:
   _strict_dict(raw, {"schema", "route_id", "candidate_set_identity", "profile", "target", "template", "entries"}, "compact artifact")
   if raw["schema"] != COMPACT_SCHEMA or raw["route_id"] != ROUTE_ID: raise ValueError("compact artifact identity drifted")
   target = _strict_dict(raw["target"], {"backend", "arch", "wave_size"}, "compact target")
-  if target != {"backend":"AMD", "arch":"gfx1100", "wave_size":32}: raise ValueError("compact target is unsupported")
+  # TG8 (docs/task_workflow/input/target-capability-policy-decoupling-scope-20260730.md): this is an
+  # ARTIFACT-IDENTITY guard, not a live capability/policy admission gate -- it never consults live
+  # scanned_device_facts (this function takes no device argument at all; it is @cache'd on zero args). It
+  # exists for the same reason as the canonical_identity/legacy_identity/candidate_set_identity hash checks
+  # elsewhere in this function: this ONE checked-in compact artifact was searched and compiled for exactly one
+  # target, and this asserts the artifact still declares that expected target rather than having silently
+  # drifted (e.g. a regenerated JSON accidentally describing a different arch while the tile/LDS/thread
+  # geometry below was still the gfx1100-wave32 schedule). Preserve the raise: an artifact that claims a
+  # different target than the schedule it carries must fail loudly at load, not silently admit garbage.
+  #
+  # The actual LIVE capability+policy admission for this candidate set is downstream in
+  # `automatic_promoted_prefill_graph_policy` / `promoted_prefill_graph_targets`, which derive BOTH the
+  # resolved target (from live scanned_device_facts) and the promoted-target set (from this artifact's own
+  # recorded per-entry targets) with no hardcoded literal at all -- already exactly the TG3 shape, and not
+  # split further here: a searched WMMA/LDS schedule is measured and promoted for one exact (backend, arch,
+  # wave_size) triple, so "can this target express the tile geometry" and "was a schedule promoted for it"
+  # are the same fused question for this exact-shape compiled kernel, not two independent ones.
+  _PINNED_COMPACT_ARTIFACT_TARGET = {"backend":"AMD", "arch":"gfx1100", "wave_size":32}
+  if target != _PINNED_COMPACT_ARTIFACT_TARGET: raise ValueError("compact target is unsupported")
   template = _strict_dict(raw["template"], {"schema_version", "dtypes", "layout", "schedule", "static_constraints"}, "candidate template")
   if template["schema_version"] != CANDIDATE_SCHEMA: raise ValueError("candidate schema drifted")
   rows = raw["entries"]
@@ -215,6 +233,18 @@ def promoted_candidate_registry() -> CandidateRegistry:
   return CandidateRegistry(candidate_set, tuple(admissions), MappingProxyType(exact))
 
 
+def promoted_prefill_graph_targets(registry: CandidateRegistry) -> frozenset[tuple[Any, Any, Any]]:
+  """TG8: the promoted-target set for this compiled candidate set, read verbatim from the artifact's own
+  recorded per-entry targets -- never a hardcoded literal. Extracted from `automatic_promoted_prefill_graph_policy`
+  below so the one live capability+policy admission question ("is the resolved target in this set") is a
+  named, independently testable unit, matching the TG3 pattern's testability even though (per the module-level
+  comment on the compact-target guard above) capability and policy are the same fused question here."""
+  return frozenset((admission.normalized_payload["workload"]["target"]["backend"],
+                     admission.normalized_payload["workload"]["target"]["arch"],
+                     admission.normalized_payload["workload"]["target"]["wave_size"])
+                    for admission in registry.admissions)
+
+
 def automatic_promoted_prefill_graph_policy(inventory: Mapping, scanned_device_facts: Mapping) -> dict | None:
   """Bind the promoted candidate set to one exact selected-GGUF inventory.
 
@@ -233,11 +263,10 @@ def automatic_promoted_prefill_graph_policy(inventory: Mapping, scanned_device_f
   except (KeyError, TypeError, ValueError, OSError): return None
   candidate_set = registry.candidate_set.to_json()
   candidate_set_identity = canonical_candidate_set_identity(candidate_set)
-  candidate_targets = {(admission.normalized_payload["workload"]["target"]["backend"],
-                        admission.normalized_payload["workload"]["target"]["arch"],
-                        admission.normalized_payload["workload"]["target"]["wave_size"])
-                       for admission in registry.admissions}
-  if (target["backend"], target["arch"], target["wave_size"]) not in candidate_targets: return None
+  # TG8: capability+policy admission -- both operands are data (live resolved facts vs. the artifact's own
+  # recorded promoted targets), never a hardcoded literal. See promoted_prefill_graph_targets and the
+  # module-level comment on the compact-target guard in promoted_candidate_set above.
+  if (target["backend"], target["arch"], target["wave_size"]) not in promoted_prefill_graph_targets(registry): return None
 
   controlled, routes, bindings = [], {}, {}
   for row in rows:
@@ -293,4 +322,4 @@ def decode_prefill_graph_candidate_set(value: Mapping[str, Any]) -> CandidateReg
 
 __all__ = ["ARTIFACT", "ROUTE_ID", "CandidateRegistry", "canonical_candidate_set_identity",
            "decode_prefill_graph_candidate_set", "promoted_candidate_registry", "promoted_candidate_set",
-           "automatic_promoted_prefill_graph_policy"]
+           "automatic_promoted_prefill_graph_policy", "promoted_prefill_graph_targets"]

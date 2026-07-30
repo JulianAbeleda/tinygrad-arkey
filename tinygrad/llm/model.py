@@ -58,6 +58,34 @@ def generic_llm_control():
 def _should_use_flash_attention(ring_freqs:Tensor|None, start_pos:int|UOp, T:int|UOp, use_flash:bool) -> bool:
   return ring_freqs is not None or _route_should_use_flash_decode(start_pos, T, use_flash)
 
+# TG8 (docs/task_workflow/input/target-capability-policy-decoupling-scope-20260730.md): the pre-TG8 gate
+# ANDed a shape allowlist with a hardcoded `backend == "AMD" and arch == "gfx1100"` target-string equality.
+# The shape half (ADMITTED_GRIDS) stays a shape gate -- it belongs in decode_routes.py-style admission, not
+# here. The target half is split out into its OWN, separately named and separately testable policy predicate
+# below, `_custom_kernel_prefill_attn_promoted`.
+#
+# This is deliberately NOT the TG3 quant-gate pattern (capability read from renderer facts + a promoted_targets
+# policy that defaults OPEN when no record is loaded, tinygrad/llm/model_route_plan.py). There is no
+# independent capability question here to decompose: `custom_kernel_attention` injects an already-CAPTURED,
+# hand-authored AMD gfx1100 machine-code program (.hip.cpp/.amdisa.s produced by
+# extra/llm_research/generate_shared_attention_captures; see fused_attention.py's module docstring) via
+# Tensor.uop_program, not a generically-lowered operation the renderer can express or reject per target. So
+# "capability" and "policy" collapse into one fused question -- "was a captured program promoted for this
+# exact target" -- and it must default CLOSED, not open: an 8B/14B Qwen3 model on Metal satisfies the exact
+# same ADMITTED_GRIDS shape as AMD, and a TG3-style "no record -> admitted" default would attempt to inject
+# raw AMD gfx1100 ISA as an opaque program on a non-AMD renderer -- a correctness/crash risk, not a missed
+# optimization. Promotion is therefore an explicit, hardcoded-but-isolated allowlist (not derived from
+# ModelRoutePlan, whose "no record" default is wrong for this route), so a future promotion can widen it
+# without touching the shape gate or this call site.
+_CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS: frozenset[tuple[str|None, str|None]] = frozenset({("AMD", "gfx1100")})
+
+def _custom_kernel_prefill_attn_promoted(backend:str|None, arch:str|None) -> bool:
+  """TG8 policy authority: is (backend, architecture) promoted for the hand-captured custom-kernel-injection
+  prefill attention route? See the module-level comment above `_CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS`
+  for why this must default closed rather than reusing ModelRoutePlan.target_promoted's "no record -> open"
+  default."""
+  return (backend, arch) in _CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS
+
 def _should_use_custom_kernel_prefill_attn(n_heads:int, n_kv_heads:int, backend:str|None, arch:str|None) -> bool:
   """Independent eligibility boundary for the proven custom-kernel-injection prefill attention route
   (tinygrad/llm/fused_attention.py:custom_kernel_attention -> tinygrad/schedule/wmma/flash_prefill.py
@@ -65,11 +93,12 @@ def _should_use_custom_kernel_prefill_attn(n_heads:int, n_kv_heads:int, backend:
   shared_attention_proven_eligible proof (that proof is unrelated evidence for the OFF-critical-path
   class-2-risk `shared_prefill_attention` route -- see fused_attention.py's module docstring; P5b,
   docs/flash-prefill-pure-search-lift-scope-20260724.md). True only for the PROVEN admitted 8B/14B
-  shapes on AMD/gfx1100 (extra/llm_research/prefill/prefill_hd_sweep_numerics.py Hd=64/128 lower+numerically correct,
-  extra/llm_research/prefill/prefill_flash_e2e_parity.py real-model 8B/14B token parity); every other shape/backend/arch
-  safely falls back to SDPA (the existing default for all of them today)."""
+  shapes (ADMITTED_GRIDS -- extra/llm_research/prefill/prefill_hd_sweep_numerics.py Hd=64/128 lower+numerically
+  correct, extra/llm_research/prefill/prefill_flash_e2e_parity.py real-model 8B/14B token parity) on a
+  promoted target (_custom_kernel_prefill_attn_promoted, TG8); every other shape/backend/arch safely falls
+  back to SDPA (the existing default for all of them today)."""
   from tinygrad.llm.fused_attention import ADMITTED_GRIDS
-  return (n_heads, n_kv_heads, 512) in ADMITTED_GRIDS and backend == "AMD" and arch == "gfx1100"
+  return (n_heads, n_kv_heads, 512) in ADMITTED_GRIDS and _custom_kernel_prefill_attn_promoted(backend, arch)
 
 def _bind_tensor_owner(tensor:Tensor, owner:AllocationOwner) -> Tensor:
   """Attach semantic ownership to a lazy Tensor's eventual physical base."""

@@ -45,6 +45,13 @@ class DeviceCapabilities:
   # Renderer.supports_warp_shfl_xor). Read the same way wave_size already is -- copied verbatim from the
   # renderer that was actually opened, never inferred from a target/backend string.
   supports_warp_shfl_xor: bool | None = None
+  # TG8 (docs/task_workflow/input/target-capability-policy-decoupling-scope-20260730.md): tensor-core
+  # availability, copied verbatim from the same declarative Renderer.tensor_cores attribute TG2 already reuses
+  # for shuffle/wave-size (Renderer.tensor_cores; MetalRenderer conditions it on Apple7+, HIPRenderer on
+  # tc.get_amd(arch), both in tinygrad/renderer/cstyle.py). Unlike wave_size, Renderer.tensor_cores always
+  # resolves to a real list (possibly empty) once a renderer is opened -- so this is None only when the
+  # renderer itself was unreachable (no probe), never a coerced default for a reachable renderer.
+  supports_tensor_cores: bool | None = None
   max_workgroup_threads: int | None = None
   max_workgroup_dimensions: tuple[int, int, int] | None = None
   lds_bytes: int | None = None
@@ -57,6 +64,7 @@ class DeviceCapabilities:
   def from_json(cls, value: Mapping[str, Any]) -> DeviceCapabilities:
     dims = value.get("max_workgroup_dimensions")
     return cls(_optional_int(value.get("wave_size")), _optional_bool(value.get("supports_warp_shfl_xor")),
+               _optional_bool(value.get("supports_tensor_cores")),
                _optional_int(value.get("max_workgroup_threads")),
                None if dims is None else tuple(int(x) for x in dims),
                _optional_int(value.get("lds_bytes")), _optional_int(value.get("lds_allocation_granularity")),
@@ -216,6 +224,10 @@ def _tinygrad_target_probe(device: str) -> Mapping[str, Any]:
   capabilities = {
     "wave_size": getattr(renderer, "wave_size", None),
     "supports_warp_shfl_xor": getattr(renderer, "supports_warp_shfl_xor", None),
+    # TG8: Renderer.tensor_cores always resolves to a real list once a renderer is opened (MetalRenderer
+    # conditions it on Apple7+, HIPRenderer on tc.get_amd(arch) -- tinygrad/renderer/cstyle.py); an empty list
+    # is a verified "no tensor cores" fact, not "unreported". Only a missing renderer stays unreported (None).
+    "supports_tensor_cores": None if renderer is None else bool(getattr(renderer, "tensor_cores", [])),
     "max_workgroup_threads": getattr(renderer, "max_workgroup_threads", None),
     "max_workgroup_dimensions": getattr(renderer, "max_workgroup_dimensions", None),
     "lds_bytes": getattr(renderer, "shared_max", None),
