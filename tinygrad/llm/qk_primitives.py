@@ -115,6 +115,12 @@ class _QKPrimitiveLinear:
   def _fallback(self, x:Tensor) -> Tensor:
     return x.linear(self.weight.transpose(), self.bias)
 
+  def _call_with_metadata(self, x:Tensor, call):
+    factory = getattr(self, "call_metadata_factory", None)
+    if factory is None: return call()
+    from tinygrad.tensor import call_metadata
+    with call_metadata(factory, self, x): return call()
+
   def prefill_packed_weight(self) -> Tensor:
     storage = getattr(self, self._storage_attr)
     if storage.mode in ("sidecar", "shared"): return storage.packed
@@ -134,7 +140,7 @@ class Q4KPrimitiveLinear(_QKPrimitiveLinear):
     self.kernel_mode = kernel_mode
 
   def __call__(self, x:Tensor) -> Tensor:
-    return q4k_primitive_linear_call(self, x, self._fallback, self.eligibility.eligible)
+    return self._call_with_metadata(x, lambda: q4k_primitive_linear_call(self, x, self._fallback, self.eligibility.eligible))
 
 class Q6KPrimitiveLinear(_QKPrimitiveLinear):
   _storage_attr, _prefill_attr, _ggml_type = "q6k_storage", "_prefill_q6k_halfs", 14
@@ -145,7 +151,7 @@ class Q6KPrimitiveLinear(_QKPrimitiveLinear):
       Q6KPrimitiveStorage(halfs, source_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes), route_role, eligibility)
 
   def __call__(self, x:Tensor) -> Tensor:
-    return q6k_primitive_linear_call(self, x, self._fallback, self.eligibility.eligible)
+    return self._call_with_metadata(x, lambda: q6k_primitive_linear_call(self, x, self._fallback, self.eligibility.eligible))
 
 def _q6k_effective_storage_mode(requested_mode:str) -> str:
   # q4_ondemand is a Q4_K-only experiment. Q6_K stays persistent unless storage is shared.

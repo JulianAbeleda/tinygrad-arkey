@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from tinygrad.helpers import Metadata
+from tinygrad.dtype import DType, least_upper_dtype, sum_acc_dtype
 from typing import Any
 
 
@@ -17,6 +19,53 @@ GGML_QUANT_LABELS = {
   12: "Q4_K",
   14: "Q6_K",
 }
+
+@dataclass(frozen=True)
+class ProgramIdentityMetadata(Metadata):
+  phase: str = ""; tensor_name: str = ""; module_path: str = ""; role: str = ""
+  logical_m: int = 0; logical_n: int = 0; logical_k: int = 0
+  source_quant_storage: str = ""; source_layout: str = ""; module_representation: str = ""
+  input_dtype: str = ""; output_dtype: str = ""; accumulator_dtype: str|None = None
+  def __post_init__(self):
+    if self.phase not in ("decode", "prefill") or self.role != normalize_route_role(self.role) or min(self.logical_m, self.logical_n, self.logical_k) < 1:
+      raise ValueError("invalid program semantic identity")
+
+def program_identity_factory(fact: "TensorFact", *, module_representation:str, source_layout:str|None=None):
+  if fact.role is None: return None
+  source_layout = source_layout or ("gguf_packed_row_major" if fact.quant_label in ("Q4_K", "Q6_K") else "dense_row_major")
+  def factory(_module, x):
+    # QK adapters can dispatch either their generated float32 route or the normal Tensor fallback.
+    # Until that choice is observed at the KernelProgram boundary, their result dtype is not factual.
+    if module_representation != "nn_linear": return None
+    if len(x.shape) < 2 or not isinstance(x.shape[-2], int) or x.shape[-2] < 1: return None
+    weight_dtype, input_dtype = getattr(getattr(_module, "weight", None), "dtype", None), getattr(x, "dtype", None)
+    if not isinstance(weight_dtype, DType) or not isinstance(input_dtype, DType): return None
+    phase = getattr(_module, "_program_phase", None)
+    if phase not in ("decode", "prefill"): return None
+    product_dtype = least_upper_dtype(input_dtype, weight_dtype)
+    bias_dtype = getattr(getattr(_module, "bias", None), "dtype", None)
+    output_dtype = least_upper_dtype(product_dtype, bias_dtype) if isinstance(bias_dtype, DType) else product_dtype
+    return ProgramIdentityMetadata(name=fact.role, caller="", phase=phase, tensor_name=fact.name,
+      module_path=fact.module_path, role=fact.role, logical_m=x.shape[-2], logical_n=fact.rows, logical_k=fact.cols,
+      source_quant_storage=fact.quant_label, source_layout=source_layout, module_representation=module_representation,
+      input_dtype=str(input_dtype), output_dtype=str(output_dtype), accumulator_dtype=str(sum_acc_dtype(product_dtype)))
+  return factory
+
+
+def attach_program_identity_metadata(root: Any, facts: tuple["TensorFact", ...], *, primitive_linears: list[Any], module_at) -> tuple[tuple[str, Any], ...]:
+  """Attach source-fact metadata to runtime modules without touching model state tensors."""
+  primitive_ids = {id(linear) for linear in primitive_linears}
+  attached = []
+  for fact in facts:
+    if fact.role is None: continue
+    try: linear = module_at(root, fact.module_path)
+    except (AttributeError, IndexError, ValueError): continue
+    if not hasattr(linear, "__call__"): continue
+    linear._program_tensor_fact = fact
+    representation = "qk_primitive_adapter" if id(linear) in primitive_ids else "nn_linear"
+    linear.call_metadata_factory = program_identity_factory(fact, module_representation=representation)
+    attached.append((fact.module_path, linear))
+  return tuple(attached)
 
 
 def normalize_route_role(role_or_name: str) -> str:

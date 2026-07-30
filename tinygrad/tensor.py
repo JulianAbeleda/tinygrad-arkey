@@ -1439,7 +1439,7 @@ class _ContextVar(Generic[T]):
 _METADATA: _ContextVar[Metadata|None] = _ContextVar(default=None)
 
 @contextlib.contextmanager
-def role_metadata(name:str):
+def role_metadata(name:str|Metadata):
   """Explicitly tag every Tensor op dispatched inside this block with a semantic role `name`
   (e.g. "rms_norm", "attn_score"), for profiling/attribution -- purely additive, no effect on
   numerics. Reuses the exact _METADATA mechanism _metadata_wrapper uses for automatic per-call
@@ -1448,9 +1448,21 @@ def role_metadata(name:str):
   if TRACEMETA < 1 or _METADATA.get() is not None:
     yield
     return
-  token = _METADATA.set(Metadata(name=name, caller=""))
+  token = _METADATA.set(name if isinstance(name, Metadata) else Metadata(name=name, caller=""))
   try: yield
   finally: _METADATA.set(token)
+
+@contextlib.contextmanager
+def call_metadata(factory, module, x):
+  """Optional module-call metadata hook; a no-op when no factory is attached."""
+  if factory is None:
+    yield
+    return
+  metadata = factory(module, x)
+  if metadata is None:
+    yield
+    return
+  with role_metadata(metadata): yield
 
 def _metadata_wrapper(fn: Callable[P, T]) -> Callable[P, T]:
   def _wrapper(*args: P.args, **kwargs: P.kwargs) -> T:

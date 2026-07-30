@@ -23,9 +23,9 @@ from tinygrad.llm.prefill_route_observer import prefill_route_scope, notify_pref
 from tinygrad.llm.qk_primitives import (
   QKConfig, QKPrimitiveBudget, Q4KPrimitiveLinear, Q4KPrimitiveRegistry, Q6KPrimitiveLinear,
   _install_q4k_primitives, _install_q6k_primitives, _qk_storage_summary,
-  qk_primitive_eligibility_from_device_facts,
+  qk_primitive_eligibility_from_device_facts, _module_at,
 )
-from tinygrad.llm.model_facts import model_facts_from_gguf_metadata
+from tinygrad.llm.model_facts import model_facts_from_gguf_metadata, attach_program_identity_metadata
 from tinygrad.llm.memory_adaptive_authority import (adapt_cached_memory_policy, memory_adaptive_adapters_active,
                                                      resolve_memory_adaptive_policy, validate_memory_evidence)
 from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OUTPUT, RUNTIME_INPUT, RUNTIME_OUTPUT,
@@ -986,6 +986,8 @@ class Transformer:
   def __call__(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, use_flash:bool=False,
                ring_freqs:Tensor|None=None, ring_full:bool=False) -> Tensor:
     is_prefill = resolve(tokens.shape[1] != 1)
+    for linear in getattr(self, "_program_identity_linears", ()):
+      linear._program_phase = "prefill" if is_prefill else "decode"
     generic_control = _GENERIC_LLM_CONTROL.get()
     # prefill v2: only when opt-in AND this is a CONCRETE-batch prefill chunk. Normal prefill passes a symbolic
     # v_toks (tokens.shape[1] is a UOp -> not int), so the two paths never collide; decode is T==1.
@@ -1261,6 +1263,10 @@ class Transformer:
               f"requested_storage_mode={q4_storage_mode} q4_effective_storage_mode={q4_storage_mode} "
               f"q6_effective_storage_mode={q6_storage_mode}")
       if primitive_linears: model._q4k_linears = Q4KPrimitiveRegistry(primitive_linears)
+      # Attach immutable source facts after all replacements: generic and packed
+      # modules retain their original paths/state ownership.
+      attachments = attach_program_identity_metadata(model, model_facts.tensors, primitive_linears=primitive_linears, module_at=_module_at)
+      model._program_identity_linears = [linear for _path, linear in attachments]
     if _runtime_inventory is not None:
       attach_selected_prefill_inventory(model, _runtime_inventory, _runtime_policy, _device_facts,
                                         direct_packed_policy=direct_packed_prefill_policy(config.n_heads, config.n_kv_heads))

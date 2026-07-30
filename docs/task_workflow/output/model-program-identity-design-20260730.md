@@ -35,7 +35,7 @@ class ProgramSemanticIdentity:
   logical_k: int
   source_quant_storage: str    # TensorFact.quant_label, or "none"
   source_weight_layout: str    # e.g. gguf_packed_row_major / dense_row_major
-  execution_representation: str # e.g. generic_tensor / qk_packed_primitive
+  module_representation: str    # static adapter identity, e.g. nn_linear / qk_primitive_adapter
   input_dtype: str
   output_dtype: str
   accumulator_dtype: str | None
@@ -62,11 +62,13 @@ change, not a parallel side table or label encoding.
 
 One constructor, `program_identity_for_linear(tensor_fact, *, phase, m,
 input_dtype, output_dtype, accumulator_dtype, source_layout,
-execution_representation)`, belongs next to `TensorFact`. A genuinely dense
+module_representation)`, belongs next to `TensorFact`. A genuinely dense
 source passes `source_quant_storage="none"`. A Q4_K/Q6_K generic fallback and
-its packed primitive pass the same source fact and layout; they differ only in
-the explicit execution representation (and in dtypes when that is actually
-true).
+its packed primitive pass the same source fact and layout; their static adapter
+identity is separate from the route actually taken, which must be observed at
+the kernel/route boundary if needed. Because the current QK adapter can return
+either a float32 generated route or the normal Tensor fallback, it emits no
+rich identity at module entry until that boundary observes the route.
 
 ## Call sites
 
@@ -88,10 +90,9 @@ true).
 4. Derive `m` at invocation from the activation's concrete logical leading
    extent; `n/k`, role and **source storage** quant/layout come from `TensorFact`.
    Keep source storage (`Q4_K` GGUF packed, for example) separate from execution
-   representation (ordinary dequantized Tensor lowering versus a packed
-   primitive). Thus an ordinary fallback of a Q4_K GGUF tensor reports
-   `source_quant_storage="Q4_K"` and `execution_representation="generic_tensor"`,
-   not a false dense/none source claim. This must not consult target/backend.
+   module representation. Thus a Q4_K GGUF tensor reports
+   `source_quant_storage="Q4_K"` and static `module_representation`, without
+   claiming that a packed route fired. This must not consult target/backend.
 5. Preserve metadata through normal Tensor lowering. `KernelInfo` and
 `function.call(...metadata=...)` already carry it; JIT graph batching merges
 member `CallInfo.metadata`. No changes to names, labels, or Metal renderer.

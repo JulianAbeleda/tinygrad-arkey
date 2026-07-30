@@ -1,4 +1,6 @@
-from tinygrad.llm.model_facts import GGML_QUANT_LABELS, model_facts_from_gguf_metadata, tensor_fact_from_gguf_row
+import types
+from tinygrad.dtype import dtypes
+from tinygrad.llm.model_facts import GGML_QUANT_LABELS, TensorFact, attach_program_identity_metadata, model_facts_from_gguf_metadata, program_identity_factory, tensor_fact_from_gguf_row
 
 
 def _qwen_kv(hidden: int, intermediate: int, heads: int, kv_heads: int = 8, head_dim: int = 128) -> dict:
@@ -94,3 +96,40 @@ def test_model_facts_only_include_2d_weight_rows():
   })
 
   assert [t.name for t in facts.tensors] == ["blk.0.ffn_gate.weight"]
+
+
+def test_program_identity_is_fact_derived_and_unavailable_when_execution_context_is_incomplete():
+  fact = TensorFact("blk.0.ffn_down.weight", "blk.0.ffn_down", 14, 4096, 12288, "Q6_K", "ffn_down")
+  factory = program_identity_factory(fact, module_representation="nn_linear")
+  module = types.SimpleNamespace(_program_phase="decode", weight=types.SimpleNamespace(dtype=dtypes.float16))
+  identity = factory(module, types.SimpleNamespace(shape=(1, 12288), dtype=dtypes.float16))
+  assert identity.phase == "decode" and identity.logical_m == 1
+  assert identity.source_quant_storage == "Q6_K" and identity.source_layout == "gguf_packed_row_major"
+  assert identity.module_representation == "nn_linear" and identity.output_dtype == str(dtypes.float16)
+  assert identity.accumulator_dtype == str(dtypes.float32)
+  assert program_identity_factory(fact, module_representation="qk_primitive_adapter")(module, types.SimpleNamespace(shape=(1, 12288), dtype=dtypes.float16)) is None
+  biased = types.SimpleNamespace(_program_phase="decode", weight=module.weight, bias=types.SimpleNamespace(dtype=dtypes.float32))
+  assert factory(biased, types.SimpleNamespace(shape=(1, 12288), dtype=dtypes.float16)).output_dtype == str(dtypes.float32)
+  assert factory(types.SimpleNamespace(weight=module.weight), types.SimpleNamespace(shape=(1, 12288), dtype=dtypes.float16)) is None
+  assert program_identity_factory(TensorFact("unknown.weight", "unknown", 0, 2, 2, "F32", None), module_representation="nn_linear") is None
+
+
+def test_identity_attachment_is_path_counted_and_does_not_mutate_state_ownership():
+  class Linear:
+    def __call__(self, x): return x
+  down, head = Linear(), Linear()
+  root = types.SimpleNamespace(blk=[types.SimpleNamespace(ffn_down=down)], output=head)
+  facts = (
+    TensorFact("blk.0.ffn_down.weight", "blk.0.ffn_down", 14, 4, 8, "Q6_K", "ffn_down"),
+    TensorFact("output.weight", "output", 12, 16, 4, "Q4_K", "lm_head"),
+    TensorFact("unresolved.weight", "missing", 0, 1, 1, "F32", None),
+  )
+  state_dict = {"blk.0.ffn_down.weight": object(), "output.weight": object()}
+  before = dict(state_dict)
+  def module_at(obj, path):
+    for part in path.split("."): obj = obj[int(part)] if isinstance(obj, list) else getattr(obj, part)
+    return obj
+  attached = attach_program_identity_metadata(root, facts, primitive_linears=[down], module_at=module_at)
+  assert [(path, linear) for path, linear in attached] == [("blk.0.ffn_down", down), ("output", head)]
+  assert down.call_metadata_factory is not None and head.call_metadata_factory is not None
+  assert state_dict == before and list(state_dict) == ["blk.0.ffn_down.weight", "output.weight"]

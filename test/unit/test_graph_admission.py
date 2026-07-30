@@ -4,9 +4,12 @@ import pytest
 
 from tinygrad.engine import jit
 from tinygrad.engine.jit import CapturedJit, GraphAdmission, GraphAdmissionCensus, GraphAdmissionDecision, GraphAdmissionReason, GraphException, \
-  GraphRunner, MultiGraphRunner, graph_split_rewrite, observe_graph_admissions
+  GraphAdmissionResource, GraphRunner, MultiGraphRunner, graph_split_rewrite, observe_graph_admissions
 from tinygrad.helpers import Context, Metadata
-from tinygrad.uop.ops import Ops
+from tinygrad.llm.model_facts import ProgramIdentityMetadata
+from tinygrad.tensor import role_metadata
+from tinygrad import Tensor
+from tinygrad.uop.ops import Ops, all_metadata
 
 
 class _Linear:
@@ -26,6 +29,23 @@ class _DeviceMap:
 class _SyntheticGraph(GraphRunner):
   @staticmethod
   def admission(_batch_devs, _new_call): return GraphAdmission(True, GraphAdmissionReason.ADMITTED)
+
+
+class _HybridSyntheticGraph(GraphRunner):
+  @staticmethod
+  def admission(_batch_devs, _new_call):
+    resource = GraphAdmissionResource(2, 7, 0x100000000, 64)
+    return GraphAdmission(True, GraphAdmissionReason.BACKEND_BUFFER_OFFSET_WIDTH, "icb_buffer_offset_bits", 0xFFFFFFFF,
+                          0x100000000, (resource,))
+
+
+class _HybridCensusScaleGraph(GraphRunner):
+  @staticmethod
+  def admission(_batch_devs, new_call):
+    if int(new_call.name) < 736: return GraphAdmission(True, GraphAdmissionReason.ADMITTED)
+    resource = GraphAdmissionResource(2, 7, 0x100000000, 64)
+    return GraphAdmission(True, GraphAdmissionReason.BACKEND_BUFFER_OFFSET_WIDTH, "icb_buffer_offset_bits", 0xFFFFFFFF,
+                          0x100000000, (resource,))
 
 
 def _call(name="kernel", *, op=Ops.PROGRAM, device="SYNTHETIC", metadata=()):
@@ -135,6 +155,52 @@ def test_census_serialization_is_deterministic_reconciled_and_carries_available_
   assert payload["records"][0]["metadata"] == [{"name":"decode_projection", "caller":"fixture", "backward":False}]
   assert payload["records"][2]["batch_boundary_reason"] == "batch_size_limit"
   assert [record["batch_member_index"] for record in payload["records"]] == [0, 1, 0, 1]
+
+
+def test_census_transports_rich_metadata_without_parsing_program_names():
+  identity = ProgramIdentityMetadata(name="ffn_down", caller="", phase="decode", tensor_name="blk.0.ffn_down.weight",
+    module_path="blk.0.ffn_down", role="ffn_down", logical_m=1, logical_n=4, logical_k=8,
+    source_quant_storage="Q6_K", source_layout="gguf_packed_row_major", module_representation="nn_linear",
+    input_dtype="float16", output_dtype="float16")
+  linear = _Linear([_call("opaque_backend_name", metadata=(Metadata("generic", "fixture"), identity))])
+  with observe_graph_admissions() as census: _lower(linear)
+  record = census.to_dict()["records"][0]
+  assert record["program_name"] == "opaque_backend_name"
+  assert record["metadata_status"] == "semantic" and record["metadata_unavailable"] is False
+  assert record["semantic_identities"] == [{"phase":"decode", "tensor_name":"blk.0.ffn_down.weight", "module_path":"blk.0.ffn_down",
+    "role":"ffn_down", "logical_m":1, "logical_n":4, "logical_k":8, "source_quant_storage":"Q6_K",
+    "source_layout":"gguf_packed_row_major", "module_representation":"nn_linear", "input_dtype":"float16",
+    "output_dtype":"float16", "accumulator_dtype":None}]
+
+
+def test_runtime_tracemeta_context_controls_explicit_metadata_without_import_time_mode():
+  tagged = Metadata("runtime_context", "fixture")
+  with Context(TRACEMETA=0), role_metadata(tagged): disabled = Tensor.empty(1) + 1
+  with Context(TRACEMETA=1), role_metadata(tagged): enabled = Tensor.empty(1) + 1
+  assert disabled.uop not in all_metadata
+  assert all_metadata[enabled.uop] == (tagged,)
+
+
+def test_supported_backend_limit_is_graphed_and_remains_visible_in_census():
+  with observe_graph_admissions() as census: _split(_Linear([_call("a"), _call("b")]), observer=census, graph=_HybridSyntheticGraph)
+  payload = census.to_dict()
+  assert payload["counts"]["graph_members"] == 2 and payload["counts"]["direct_calls"] == 0
+  assert payload["reason_histogram"] == {"admitted":2}
+  assert payload["admission_reason_histogram"] == {"backend_buffer_offset_width":2}
+  assert all(row["supported"] is True and row["decision"] == "admitted" and row["assignment"] == "graph" for row in payload["records"])
+  assert all(row["admission_reason"] == "backend_buffer_offset_width" and row["capability"] == "icb_buffer_offset_bits"
+             for row in payload["records"])
+
+
+def test_hybrid_census_scale_projects_five_batches_without_stranded_singletons():
+  census = GraphAdmissionCensus()
+  _split(_Linear([_call(str(i)) for i in range(803)]), observer=census, max_batch_size=32, graph=_HybridCensusScaleGraph)
+  payload = census.to_dict()
+  assert payload["counts"] == {"logical_calls":803, "graph_members":803, "direct_calls":0, "ignored_slice_nodes":0,
+                               "graph_batches":5, "constructor_failures":0}
+  assert [batch["size"] for batch in payload["batches"]] == [32, 64, 128, 256, 323]
+  assert payload["admission_reason_histogram"] == {"admitted":736, "backend_buffer_offset_width":67}
+  assert payload["reason_histogram"] == {"admitted":803}
 
 
 def test_constructor_failure_is_captured_separately_and_original_error_survives():

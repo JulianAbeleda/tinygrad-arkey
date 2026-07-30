@@ -110,10 +110,12 @@ class GraphAdmissionCensus:
     ignored = sum(record.assignment == "ignored" for record in records)
     if graph_members + direct_calls + ignored != len(records): raise ValueError("graph-admission census does not reconcile")
     reasons = collections.Counter((record.assignment_reason or record.admission.reason).value for record in records)
+    admission_reasons = collections.Counter(record.admission.reason.value for record in records)
     boundaries = collections.Counter(record.batch_boundary_reason.value for record in records if record.batch_boundary_reason is not None)
     return {"schema":"tinygrad.graph_admission_census.v1", "counts":{"logical_calls":len(records), "graph_members":graph_members,
       "direct_calls":direct_calls, "ignored_slice_nodes":ignored, "graph_batches":len(batches),
       "constructor_failures":len(self.constructor_failures)}, "reason_histogram":dict(sorted(reasons.items())),
+      "admission_reason_histogram":dict(sorted(admission_reasons.items())),
       "batch_boundary_histogram":dict(sorted(boundaries.items())),
       "batches":[{"batch_index":index, "size":batches[index]} for index in sorted(batches)],
       "records":[_graph_admission_record(record) for record in records],
@@ -134,9 +136,17 @@ def observe_graph_admissions(census:GraphAdmissionCensus|None=None):
 
 def _graph_admission_record(record:GraphAdmissionObservation) -> dict[str, Any]:
   admission = record.admission
+  semantic = []
+  for item in record.metadata:
+    fields = ("phase", "tensor_name", "module_path", "role", "logical_m", "logical_n", "logical_k", "source_quant_storage",
+              "source_layout", "module_representation", "input_dtype", "output_dtype", "accumulator_dtype")
+    if all(hasattr(item, field) for field in fields): semantic.append({field:getattr(item, field) for field in fields})
   return {"call_index":record.call_index, "program_hash":record.program_hash, "program_name":record.program_name,
     "metadata":[{"name":item.name, "caller":item.caller, "backward":item.backward} for item in record.metadata],
-    "decision":record.decision.value, "reason":(record.assignment_reason or admission.reason).value,
+    "semantic_identities":semantic, "metadata_status":"semantic" if semantic else ("generic" if record.metadata else "unavailable"),
+    "metadata_unavailable":not bool(semantic),
+    "decision":record.decision.value, "supported":admission.supported,
+    "reason":(record.assignment_reason or admission.reason).value,
     "admission_reason":admission.reason.value, "batch_boundary_reason":
     record.batch_boundary_reason.value if record.batch_boundary_reason is not None else None, "assignment":record.assignment,
     "batch_index":record.batch_index, "batch_member_index":record.batch_member_index, "batch_size":record.batch_size,

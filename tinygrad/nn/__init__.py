@@ -174,7 +174,11 @@ class Linear:
     self.weight = Tensor.uniform(out_features, in_features, low=-bound, high=bound)
     self.bias = Tensor.uniform(out_features, low=-bound, high=bound) if bias else None
 
-  def __call__(self, x:Tensor) -> Tensor: return x.linear(self.weight.transpose(), self.bias)
+  def __call__(self, x:Tensor) -> Tensor:
+    factory = getattr(self, "call_metadata_factory", None)
+    if factory is None: return x.linear(self.weight.transpose(), self.bias)
+    from tinygrad.tensor import call_metadata
+    with call_metadata(factory, self, x): return x.linear(self.weight.transpose(), self.bias)
 
 class GroupNorm:
   """
