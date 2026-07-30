@@ -403,10 +403,9 @@ def to_manifest_dict() -> dict:
           "owned_defaults": routes_by_status("default_shipped"),
           "default_purity": default_purity_report()}
 
-def dump(out_path: str | None = None) -> str:
+def dump(out_path: str) -> str:
   """Write an EXP inspection report; BoltBeam's hashed asset remains canonical."""
-  root = pathlib.Path(__file__).resolve().parents[2]
-  p = pathlib.Path(out_path) if out_path else (root / "bench/qk-search-spaces/default_route_manifest.json")
+  p = pathlib.Path(out_path)
   p.parent.mkdir(parents=True, exist_ok=True)
   json.dump(to_manifest_dict(), open(p, "w"), indent=2)
   return str(p)
@@ -421,10 +420,9 @@ def refuted_index() -> dict[str, str]:
   """{key -> disposition_class} for every refuted axis, keyed by route_id when present else axis."""
   return {(r.get("route_id") or r["axis"]): disposition_class(r["disposition"]) for r in REFUTED}
 
-def dump_refuted(out_path: str | None = None) -> str:
+def dump_refuted(out_path: str) -> str:
   """Write the canonical refuted-axes json FROM REFUTED (the single source for do_not_search / quant known_refuted)."""
-  root = pathlib.Path(__file__).resolve().parents[2]
-  p = pathlib.Path(out_path) if out_path else (root / "bench/qk-search-spaces/refuted_axes.json")
+  p = pathlib.Path(out_path)
   p.parent.mkdir(parents=True, exist_ok=True)
   json.dump({"_schema": "canonical refuted axes (generated FROM qk_route_manifest.REFUTED)",
              "generated_by": "extra/llm_research/route_manifest.py:dump_refuted",
@@ -435,8 +433,9 @@ def dump_refuted(out_path: str | None = None) -> str:
 if __name__ == "__main__":
   if (errs := validate_manifest()):
     raise SystemExit("manifest validation failed:\n- " + "\n- ".join(errs))
-  path = dump()
-  rpath = dump_refuted()
+  root = pathlib.Path(__file__).resolve().parents[2]
+  path = dump(str(root / "bench/qk-search-spaces/default_route_manifest.json"))
+  rpath = dump_refuted(str(root / "bench/qk-search-spaces/refuted_axes.json"))
   print(f"wrote default route manifest to {path}")
   print(f"wrote canonical refuted axes to {rpath}")
   print("default routes:", default_routes())
