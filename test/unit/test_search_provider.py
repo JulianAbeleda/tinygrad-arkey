@@ -1,4 +1,5 @@
 import io, json
+from types import SimpleNamespace
 
 from extra.llm_research import search_provider as provider
 
@@ -93,6 +94,20 @@ def test_metal_adapter_admits_only_live_exact_target_and_compiler_owned_plan(mon
   assert too_large["error"]["code"] == "resource_limit"
   bad_op = provider.process(request("admit", _metal_payload(identity, op="MSL")), adapter=adapter)
   assert bad_op["error"]["code"] == "unsupported_plan"
+
+
+def test_metal_target_facts_expose_replay_strategy_and_counters_without_hardware(monkeypatch):
+  from tinygrad.runtime import ops_metal
+  from tinygrad.runtime.graph import metal as metal_graph
+  monkeypatch.setattr(ops_metal, "from_ns_str", lambda _value: "mock-metal")
+  monkeypatch.setattr(metal_graph, "metal_replay_facts", lambda _device: {
+    "schema":"tinygrad.metal_replay.v1", "configured_strategy":"hybrid_icb_direct", "experimental_ab":True,
+    "icb_offset_bits":32, "last_graph":{"graph_calls":323, "icb_calls":256, "direct_encoded_calls":67, "committed":True}})
+  sysdevice = SimpleNamespace(name=lambda:object(), registryID=lambda:1, maxThreadsPerThreadgroup=lambda:SimpleNamespace(width=64),
+    maxThreadgroupMemoryLength=lambda:32768, recommendedMaxWorkingSetSize=lambda:1 << 30, currentAllocatedSize=lambda:1 << 20)
+  facts = provider._metal_facts(SimpleNamespace(sysdevice=sysdevice, arch="Apple9"))
+  assert facts["replay"]["configured_strategy"] == "hybrid_icb_direct"
+  assert facts["replay"]["last_graph"] == {"graph_calls":323, "icb_calls":256, "direct_encoded_calls":67, "committed":True}
 
 
 def test_metal_adapter_hardware_compile_is_explicitly_opt_in():

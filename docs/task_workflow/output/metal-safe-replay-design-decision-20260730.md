@@ -2,6 +2,12 @@
 
 Status: **MR2 complete as a design decision; no runtime implementation in this packet.**
 
+MR3 implementation clarification (2026-07-30): `METAL_HYBRID_REPLAY` is an EXP-only, default-off A/B `ContextVar`.
+The partitioned control is selected while rebuilding/lowering the JIT; it is not reconstructed automatically after a
+graph has begun replay. Hybrid mode performs the safe per-call ICB-to-direct fallback before command-buffer creation. If
+a partitioned-control graph ever receives a new dynamic buffer above the ICB limit, it aborts before creating or
+committing a command buffer. This fail-closed abort is intentionally not described as automatic reconstruction.
+
 Decision: implement and measure a **Metal-only hybrid ICB/direct replay** in MR3. Calls whose current bindings are
 representable by the ICB remain indirect; calls with any byte offset above `0xFFFFFFFF` are encoded with the ordinary
 Metal compute-encoder binding API, in original program order, inside the same graph-owned command buffer. Preserve the

@@ -152,6 +152,7 @@ def _metal_device():
 
 def _metal_facts(device: Any) -> dict[str, Any]:
   from tinygrad.runtime.ops_metal import from_ns_str
+  from tinygrad.runtime.graph.metal import metal_replay_facts
   sysdevice = device.sysdevice
   family = getattr(device, "arch", "unknown")
   try: registry_id = int(sysdevice.registryID())
@@ -162,7 +163,7 @@ def _metal_facts(device: Any) -> dict[str, Any]:
           "max_threadgroup_memory_bytes": int(sysdevice.maxThreadgroupMemoryLength()),
           "recommended_max_working_set_bytes": int(sysdevice.recommendedMaxWorkingSetSize()),
           "current_allocated_bytes": int(sysdevice.currentAllocatedSize()), "current_allocated_bytes_status": "volatile_runtime_fact",
-          "os_version": platform.platform()}
+          "replay": metal_replay_facts(device), "os_version": platform.platform()}
 
 
 def _candidate(payload: Mapping[str, Any]) -> dict[str, Any]:
