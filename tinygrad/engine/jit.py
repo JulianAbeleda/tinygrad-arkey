@@ -1,5 +1,6 @@
 from typing import TypeVar, Generic, Callable, Any
-import functools, collections, os
+import contextlib, contextvars, functools, collections, json, os
+from enum import Enum
 from tinygrad.tensor import Tensor
 from tinygrad.helpers import flatten, merge_dicts, DEBUG, getenv, JIT, JIT_BATCH_SIZE, dedup, pluralize, VIZ, Metadata
 from tinygrad.device import Buffer, Compiled, Device, MultiBuffer
@@ -10,7 +11,139 @@ from tinygrad.engine.realize import unwrap_multi, resolve_params, get_call_arg_u
 from tinygrad.schedule.memory import memory_plan_rewrite, _collect_bufs
 from tinygrad.nn.state import get_parameters
 from tinygrad.schedule.rangeify import mop_cleanup
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
+
+class GraphAdmissionReason(str, Enum):
+  ADMITTED = "admitted"
+  NO_GRAPH_BACKEND = "no_graph_backend"
+  UNSUPPORTED_CALL_OP = "unsupported_call_op"
+  MIXED_DEVICE = "mixed_device"
+  BACKEND_BUFFER_OFFSET_WIDTH = "backend_buffer_offset_width"
+  BACKEND_RESOURCE_LIMIT = "backend_resource_limit"
+  EXPLICIT_GRAPH_BARRIER = "explicit_graph_barrier"
+  BATCH_SIZE_LIMIT = "batch_size_limit"
+  GRAPH_CONSTRUCTOR_FAILURE = "graph_constructor_failure"
+  IGNORED_SLICE_NODE = "ignored_slice_node"
+  SINGLETON_GRAPH_ELIDED = "singleton_graph_elided"
+  UNKNOWN = "unknown"
+
+class GraphAdmissionDecision(str, Enum):
+  ADMITTED = "admitted"
+  REJECTED = "rejected"
+  BATCH_BOUNDARY = "batch_boundary"
+  IGNORED = "ignored"
+
+@dataclass(frozen=True)
+class GraphAdmissionResource:
+  buffer_arg_index: int
+  base_allocation_id: int
+  byte_offset: int
+  byte_span: int | None = None
+
+@dataclass(frozen=True)
+class GraphAdmission:
+  supported: bool
+  reason: GraphAdmissionReason
+  capability: str | None = None
+  limit: int | None = None
+  observed: int | None = None
+  resources: tuple[GraphAdmissionResource, ...] = ()
+  def __bool__(self) -> bool: return self.supported
+
+@dataclass(frozen=True)
+class GraphAdmissionObservation:
+  call_index: int
+  decision: GraphAdmissionDecision
+  admission: GraphAdmission
+  batch_boundary_reason: GraphAdmissionReason | None = None
+  program_hash: str | None = None
+  program_name: str | None = None
+  metadata: tuple[Metadata, ...] = ()
+  assignment: str = "unassigned"
+  assignment_reason: GraphAdmissionReason | None = None
+  batch_index: int | None = None
+  batch_member_index: int | None = None
+  batch_size: int | None = None
+  direct_call_index: int | None = None
+
+@dataclass(frozen=True)
+class GraphConstructorFailureObservation:
+  error_type: str
+  message: str
+
+GraphAdmissionEvent = GraphAdmissionObservation | GraphConstructorFailureObservation
+GraphAdmissionObserver = Callable[[GraphAdmissionEvent], None]
+
+@dataclass
+class GraphAdmissionCensus:
+  """In-memory deterministic census. No files or JSON are produced unless explicitly requested."""
+  records: list[GraphAdmissionObservation] = field(default_factory=list)
+  constructor_failures: list[GraphConstructorFailureObservation] = field(default_factory=list)
+
+  def __call__(self, event:GraphAdmissionEvent) -> None:
+    (self.records if isinstance(event, GraphAdmissionObservation) else self.constructor_failures).append(event)
+
+  def to_dict(self) -> dict[str, Any]:
+    records = sorted(self.records, key=lambda record: record.call_index)
+    if len({record.call_index for record in records}) != len(records): raise ValueError("duplicate graph-admission call index")
+    if [record.call_index for record in records] != list(range(len(records))): raise ValueError("graph-admission call indexes are not contiguous")
+    batches: dict[int, int] = {}
+    batch_members: dict[int, list[int]] = collections.defaultdict(list)
+    direct_indexes = []
+    for record in records:
+      if record.assignment == "graph":
+        if record.batch_index is None or record.batch_member_index is None or record.batch_size is None:
+          raise ValueError("graph assignment missing batch identity")
+        if record.batch_index in batches and batches[record.batch_index] != record.batch_size: raise ValueError("inconsistent graph batch size")
+        batches[record.batch_index] = record.batch_size
+        batch_members[record.batch_index].append(record.batch_member_index)
+      elif record.assignment == "direct":
+        if record.direct_call_index is None: raise ValueError("direct assignment missing index")
+        direct_indexes.append(record.direct_call_index)
+      elif record.assignment != "ignored": raise ValueError("unreconciled graph-admission record")
+    if sorted(batches) != list(range(len(batches))): raise ValueError("graph batch indexes are not contiguous")
+    if any(sorted(batch_members[index]) != list(range(size)) for index, size in batches.items()):
+      raise ValueError("graph batch members do not reconcile with batch size")
+    if sorted(direct_indexes) != list(range(len(direct_indexes))): raise ValueError("direct-call indexes are not contiguous")
+    graph_members = sum(record.assignment == "graph" for record in records)
+    direct_calls = sum(record.assignment == "direct" for record in records)
+    ignored = sum(record.assignment == "ignored" for record in records)
+    if graph_members + direct_calls + ignored != len(records): raise ValueError("graph-admission census does not reconcile")
+    reasons = collections.Counter((record.assignment_reason or record.admission.reason).value for record in records)
+    boundaries = collections.Counter(record.batch_boundary_reason.value for record in records if record.batch_boundary_reason is not None)
+    return {"schema":"tinygrad.graph_admission_census.v1", "counts":{"logical_calls":len(records), "graph_members":graph_members,
+      "direct_calls":direct_calls, "ignored_slice_nodes":ignored, "graph_batches":len(batches),
+      "constructor_failures":len(self.constructor_failures)}, "reason_histogram":dict(sorted(reasons.items())),
+      "batch_boundary_histogram":dict(sorted(boundaries.items())),
+      "batches":[{"batch_index":index, "size":batches[index]} for index in sorted(batches)],
+      "records":[_graph_admission_record(record) for record in records],
+      "constructor_failures":[{"error_type":failure.error_type, "message":failure.message} for failure in self.constructor_failures]}
+
+  def deterministic_json(self) -> str: return json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n"
+
+_GRAPH_ADMISSION_OBSERVER: contextvars.ContextVar[GraphAdmissionObserver|None] = contextvars.ContextVar(
+  "tinygrad_graph_admission_observer", default=None)
+
+@contextlib.contextmanager
+def observe_graph_admissions(census:GraphAdmissionCensus|None=None):
+  """Install one context-local admission collector for JIT lowering and graph construction."""
+  collector = census if census is not None else GraphAdmissionCensus()
+  token = _GRAPH_ADMISSION_OBSERVER.set(collector)
+  try: yield collector
+  finally: _GRAPH_ADMISSION_OBSERVER.reset(token)
+
+def _graph_admission_record(record:GraphAdmissionObservation) -> dict[str, Any]:
+  admission = record.admission
+  return {"call_index":record.call_index, "program_hash":record.program_hash, "program_name":record.program_name,
+    "metadata":[{"name":item.name, "caller":item.caller, "backward":item.backward} for item in record.metadata],
+    "decision":record.decision.value, "reason":(record.assignment_reason or admission.reason).value,
+    "admission_reason":admission.reason.value, "batch_boundary_reason":
+    record.batch_boundary_reason.value if record.batch_boundary_reason is not None else None, "assignment":record.assignment,
+    "batch_index":record.batch_index, "batch_member_index":record.batch_member_index, "batch_size":record.batch_size,
+    "direct_call_index":record.direct_call_index, "capability":admission.capability, "limit":admission.limit,
+    "observed":admission.observed, "resources":[{"buffer_arg_index":resource.buffer_arg_index,
+      "base_allocation_id":resource.base_allocation_id, "byte_offset":resource.byte_offset, "byte_span":resource.byte_span}
+      for resource in admission.resources]}
 
 def prune_linear(linear:UOp, needed:set[UOp]) -> tuple[UOp, UOp]:
   kept, onetime = [], []
@@ -38,40 +171,108 @@ def _should_skip_graph_for_prefix(si:UOp) -> bool:
   prefixes = _jit_no_graph_kernel_prefixes()
   return bool(prefixes and si.src[0].arg.name.startswith(prefixes))
 
-def graph_split_rewrite(linear:UOp, max_batch_size:int=0) -> UOp:
+def _typed_graph_admission(graph_t, batch_devs:list[Compiled], new_call:UOp) -> GraphAdmission:
+  # Legacy graph backends may override only supports_uop during migration. Their
+  # bool remains authoritative until that backend adds a typed implementation.
+  if "supports_uop" in graph_t.__dict__ and "admission" not in graph_t.__dict__:
+    supported = bool(graph_t.supports_uop(batch_devs, new_call))
+    return GraphAdmission(supported, GraphAdmissionReason.ADMITTED if supported else GraphAdmissionReason.UNKNOWN)
+  result = graph_t.admission(batch_devs, new_call)
+  return result if isinstance(result, GraphAdmission) else GraphAdmission(bool(result), GraphAdmissionReason.UNKNOWN)
+
+def _admission_observation(call_index:int, call, decision:GraphAdmissionDecision, admission:GraphAdmission,
+                           boundary_reason:GraphAdmissionReason|None=None) -> GraphAdmissionObservation:
+  program = call.src[0]
+  key = getattr(program, "key", None)
+  program_hash = key.hex() if isinstance(key, bytes) else None
+  name = getattr(getattr(program, "arg", None), "name", None)
+  metadata = getattr(getattr(call, "arg", None), "metadata", ())
+  return GraphAdmissionObservation(call_index, decision, admission, boundary_reason, program_hash,
+                                   name if isinstance(name, str) else None,
+                                   tuple(item for item in metadata if isinstance(item, Metadata)) if isinstance(metadata, tuple) else ())
+
+def graph_split_rewrite(linear:UOp, max_batch_size:int=0, observer:GraphAdmissionObserver|None=None) -> UOp:
   new_src: list[UOp] = []
   current_batch: list[UOp] = []
+  current_batch_indexes: list[int] = []
   current_batch_devs: list[Compiled] = []
+  pending: dict[int, GraphAdmissionObservation] = {}
+  batch_index = direct_call_index = 0
 
   def flush_batch():
-    nonlocal current_batch, current_batch_devs, max_batch_size, new_src
-    if len(current_batch) <= 1 and not getenv("GRAPH_ONE_KERNEL"): new_src.extend(current_batch)
+    nonlocal current_batch, current_batch_indexes, current_batch_devs, max_batch_size, new_src, batch_index, direct_call_index
+    if len(current_batch) <= 1 and not getenv("GRAPH_ONE_KERNEL"):
+      new_src.extend(current_batch)
+      if observer is not None:
+        for index in current_batch_indexes:
+          pending[index] = replace(pending[index], assignment="direct", assignment_reason=GraphAdmissionReason.SINGLETON_GRAPH_ELIDED,
+                                   direct_call_index=direct_call_index)
+          direct_call_index += 1
     else:
       new_src.append(create_graph_call(current_batch))
+      if observer is not None:
+        for member_index, index in enumerate(current_batch_indexes):
+          pending[index] = replace(pending[index], assignment="graph", assignment_reason=GraphAdmissionReason.ADMITTED,
+                                   batch_index=batch_index, batch_member_index=member_index, batch_size=len(current_batch))
+        batch_index += 1
       max_batch_size *= 2
       if DEBUG >= 2: print(f"JIT GRAPHing batch with {len(current_batch)} kernels")
-    current_batch, current_batch_devs = [], []
+    current_batch, current_batch_indexes, current_batch_devs = [], [], []
 
-  for si in linear.src:
-    if si.src[0].op is Ops.SLICE: continue
+  def append_direct(call_index:int, call, observation:GraphAdmissionObservation):
+    nonlocal direct_call_index
+    new_src.append(call)
+    if observer is not None:
+      pending[call_index] = replace(observation, assignment="direct", assignment_reason=observation.admission.reason,
+                                    direct_call_index=direct_call_index)
+      direct_call_index += 1
+
+  for call_index, si in enumerate(linear.src):
+    if si.src[0].op is Ops.SLICE:
+      if observer is not None:
+        pending[call_index] = replace(_admission_observation(call_index, si, GraphAdmissionDecision.IGNORED,
+          GraphAdmission(False, GraphAdmissionReason.IGNORED_SLICE_NODE)), assignment="ignored",
+          assignment_reason=GraphAdmissionReason.IGNORED_SLICE_NODE)
+      continue
     if _should_skip_graph_for_prefix(si):
       flush_batch()
-      new_src.append(si)
+      append_direct(call_index, si, _admission_observation(call_index, si, GraphAdmissionDecision.BATCH_BOUNDARY,
+                    GraphAdmission(False, GraphAdmissionReason.EXPLICIT_GRAPH_BARRIER)))
       current_batch_devs = []
       continue
 
     devs = dedup([Device[x] for b in si.src[1:] if b.op is not Ops.BIND for x in (b.device if isinstance(b.device, tuple) else (b.device,))])
     graph_t = graph_class(devs[0]) if devs[0].graph is not None else None
 
-    can_graph = graph_t is not None and graph_t.supports_uop(devs, si)
-    can_extend = can_graph and graph_t is not None and (not current_batch_devs or graph_t.supports_uop(current_batch_devs, si)) \
-      and (max_batch_size == 0 or len(current_batch) < max_batch_size)
+    if observer is None:
+      can_graph = graph_t is not None and graph_t.supports_uop(devs, si)
+      can_extend = can_graph and graph_t is not None and (not current_batch_devs or graph_t.supports_uop(current_batch_devs, si)) \
+        and (max_batch_size == 0 or len(current_batch) < max_batch_size)
+    else:
+      admission = _typed_graph_admission(graph_t, devs, si) if graph_t is not None else \
+        GraphAdmission(False, GraphAdmissionReason.NO_GRAPH_BACKEND)
+      can_graph = bool(admission)
+      extension = _typed_graph_admission(graph_t, current_batch_devs, si) if can_graph and current_batch_devs else admission
+      batch_limited = can_graph and max_batch_size != 0 and len(current_batch) >= max_batch_size
+      can_extend = can_graph and bool(extension) and not batch_limited
+      boundary_reason = (GraphAdmissionReason.BATCH_SIZE_LIMIT if batch_limited else
+                         extension.reason if can_graph and current_batch and not extension else None)
+      pending[call_index] = _admission_observation(call_index, si,
+        GraphAdmissionDecision.ADMITTED if can_graph else GraphAdmissionDecision.REJECTED, admission, boundary_reason)
     if not can_extend and current_batch: flush_batch()
 
     # append this si and update devs
-    (current_batch if can_graph else new_src).append(si)
-    current_batch_devs = dedup(current_batch_devs + devs) if can_graph else []
+    if can_graph:
+      current_batch.append(si)
+      if observer is not None: current_batch_indexes.append(call_index)
+      current_batch_devs = dedup(current_batch_devs + devs)
+    else:
+      if observer is None: new_src.append(si)
+      else: append_direct(call_index, si, pending[call_index])
+      current_batch_devs = []
   if current_batch: flush_batch()
+  if observer is not None:
+    for call_index in sorted(pending): observer(pending[call_index])
   return linear.replace(src=tuple(new_src))
 
 def _copy_input(u:UOp) -> UOp:
@@ -86,7 +287,7 @@ def jit_lower(linear:UOp, held_bufs:set[UOp], input_uops:list[UOp]) -> UOp:
   linear = linear.substitute({u: UOp.param(i, u.dtype, u.shape, u.device) for i,u in enumerate(input_uops)}, walk=True)
   linear = memory_plan_rewrite(linear, held_bufs)
   linear = compile_linear(linear)
-  if JIT < 2: linear = graph_split_rewrite(linear, max_batch_size=JIT_BATCH_SIZE.value)
+  if JIT < 2: linear = graph_split_rewrite(linear, max_batch_size=JIT_BATCH_SIZE.value, observer=_GRAPH_ADMISSION_OBSERVER.get())
   if VIZ: graph_rewrite(linear, PatternMatcher([]), name="View graphed linear")
   return linear
 
@@ -198,15 +399,23 @@ class GraphRunner:
                  for x in (b.device if isinstance(b.device, tuple) else (b.device,))])
 
   @staticmethod
-  def supports_uop(batch_devs:list[Compiled], new_call:UOp) -> bool:
-    return new_call.src[0].op is Ops.PROGRAM and len(GraphRunner._all_devs(batch_devs, new_call)) == 1
+  def admission(batch_devs:list[Compiled], new_call:UOp) -> GraphAdmission:
+    if new_call.src[0].op is not Ops.PROGRAM: return GraphAdmission(False, GraphAdmissionReason.UNSUPPORTED_CALL_OP)
+    if len(GraphRunner._all_devs(batch_devs, new_call)) != 1: return GraphAdmission(False, GraphAdmissionReason.MIXED_DEVICE)
+    return GraphAdmission(True, GraphAdmissionReason.ADMITTED)
+
+  @classmethod
+  def supports_uop(cls, batch_devs:list[Compiled], new_call:UOp) -> bool: return bool(cls.admission(batch_devs, new_call))
 
 # a marker for your graph supporting multiple devices of the same type
 class MultiGraphRunner(GraphRunner):
   @staticmethod
-  def supports_uop(batch_devs:list[Compiled], new_call:UOp) -> bool:
+  def admission(batch_devs:list[Compiled], new_call:UOp) -> GraphAdmission:
     # Devices must be the same type
-    return new_call.src[0].op in (Ops.PROGRAM, Ops.COPY) and len(dedup([type(d) for d in GraphRunner._all_devs(batch_devs, new_call)])) == 1
+    if new_call.src[0].op not in (Ops.PROGRAM, Ops.COPY): return GraphAdmission(False, GraphAdmissionReason.UNSUPPORTED_CALL_OP)
+    if len(dedup([type(d) for d in GraphRunner._all_devs(batch_devs, new_call)])) != 1:
+      return GraphAdmission(False, GraphAdmissionReason.MIXED_DEVICE)
+    return GraphAdmission(True, GraphAdmissionReason.ADMITTED)
 
 ReturnType = TypeVar('ReturnType')
 @dataclass
@@ -231,7 +440,12 @@ class CapturedJit(Generic[ReturnType]):
   def __call__(self, input_uops:list[UOp], var_vals:dict[str, int]) -> ReturnType:
     concrete = tuple(_copy_input(u) if u in self._written_uops else u for u in input_uops)
     if DEBUG >= 1 and len(self.linear.src) >= 10: print(f"jit execs {len(self.linear.src)} calls")
-    run_linear(self.linear, var_vals, input_uops=concrete, jit=True)
+    try: run_linear(self.linear, var_vals, input_uops=concrete, jit=True)
+    except GraphException as exc:
+      if (observer:=_GRAPH_ADMISSION_OBSERVER.get()) is not None:
+        try: observer(GraphConstructorFailureObservation(type(exc).__name__, str(exc)))
+        finally: raise
+      raise
     return self.ret
 
   def free_intermediates(self):

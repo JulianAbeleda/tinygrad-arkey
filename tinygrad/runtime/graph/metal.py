@@ -4,7 +4,7 @@ from tinygrad.dtype import dtypes
 from tinygrad.helpers import dedup, getenv, PROFILE
 from tinygrad.device import Buffer, Device, ProfileGraphEntry, ProfileGraphEvent
 from tinygrad.uop.ops import UOp, Ops
-from tinygrad.engine.jit import GraphRunner, GraphException
+from tinygrad.engine.jit import GraphRunner, GraphException, GraphAdmission, GraphAdmissionReason, GraphAdmissionResource
 from tinygrad.runtime.ops_metal import MetalDevice, MetalAllocator, wait_check, to_ns_str
 from tinygrad.runtime.autogen import metal
 
@@ -107,7 +107,21 @@ class MetalGraph(GraphRunner):
       self.collect_timestamps()
 
   @staticmethod
-  def supports_uop(batch_devs, new_call:UOp) -> bool:
-    # Metal ICB replay encodes offsets as uint32; reject if any Metal buffer offset exceeds 32-bit range.
-    if any(b.op is Ops.SLICE and b.src[1].arg * b.src[0].dtype.itemsize > 0xFFFFFFFF for b in new_call.src[1:]): return False
-    return GraphRunner.supports_uop(batch_devs, new_call)
+  def admission(batch_devs, new_call:UOp) -> GraphAdmission:
+    generic = GraphRunner.admission(batch_devs, new_call)
+    if not generic: return generic
+    # Metal ICB buffer bindings encode byte offsets as uint32. Report every
+    # offending argument without allocating or truncating the synthetic slice.
+    resources = []
+    for arg_index, buf in enumerate(new_call.src[1:]):
+      if buf.op is not Ops.SLICE: continue
+      byte_offset = buf.src[1].arg * buf.src[0].dtype.itemsize
+      if byte_offset <= 0xFFFFFFFF: continue
+      size = getattr(buf, "size", None)
+      resources.append(GraphAdmissionResource(arg_index, id(buf.src[0]), byte_offset,
+                                               size * buf.dtype.itemsize if type(size) is int else None))
+    if resources:
+      return GraphAdmission(False, GraphAdmissionReason.BACKEND_BUFFER_OFFSET_WIDTH,
+                            capability="icb_buffer_offset_bits", limit=0xFFFFFFFF,
+                            observed=max(resource.byte_offset for resource in resources), resources=tuple(resources))
+    return generic
