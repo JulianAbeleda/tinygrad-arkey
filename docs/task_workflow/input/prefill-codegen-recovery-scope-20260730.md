@@ -73,8 +73,10 @@ Measured 2026-07-30 on the current tree. **PR0 is complete.**
 **Peaks, re-derived by observation** (max over every kernel profiled today, restricted to kernels >50us so
 timing noise cannot inflate the rate):
 
-- compute: **>=4172 GFLOPS**, sustained over a 3.7 ms kernel. The ~3500 figure used earlier in this campaign is
-  wrong and every "% of peak" claim made against it understates the gap.
+- compute: **>=2183 GFLOPS**, the best rate observed on a *correct* kernel (depth-512 profile, current tree).
+  An earlier draft of this section claimed >=4172 from `r_toks_256_16_3_16_4_2_2_16` pre-regression -- PR1 later
+  showed that kernel was discarding 15/16 of its epilogue partials, so its time was artificially low and its
+  GFLOPS inflated. Do not use pre-regression rates as a peak basis; they measure incorrect work.
 - the reported GB/s column is **logical bytes touched / time**, not DRAM bandwidth. It equals DRAM bandwidth only
   for kernels that miss cache — validated exactly on lm_head (510,504,960 bytes / 63.64 ms = 8.02 GB/s, matching
   the reported 8.0) — but reaches **954 GB/s** on a small cache-resident kernel, eight times the 120 GB/s memory
@@ -158,14 +160,48 @@ Prerequisite: PR0 for the peak basis only.
 Stop condition: if the two kernels' rendered sources are not materially different in load width, the scalar-load
 hypothesis is wrong — report that and re-scope.
 
+### 2.5 PR1 result — the mechanism, and what it means for PR2
+
+**PR1 is complete. The load-width hypothesis in 2.3 is REFUTED.** The K-loop loads are byte-identical pre and
+post; no vector load became scalar anywhere. The divergence is confined to the output-store epilogue.
+
+What actually happens:
+
+- **Pre-regression Metal was silently discarding partials.** The generic `gep_on_store` path did a "fake argsort"
+  that kept only the *last* partial per duplicate-destination group, dropping 7/8 or 15/16 of them. That is the
+  correctness defect -- the 83659/33235 output.
+- **Post-regression correctly sums them**, via `devectorize_output_projection_store` (`devectorizer.py:490`,
+  wired at `pm_output_projection_store`, `:513`), which builds the replacement as a flat serial scalar chain:
+  `functools.reduce(lambda a,b: a+b, partials)`. That is 7 or 15 dependency-chained scalar `half` adds per output
+  element, per thread.
+- **The logic is not new -- its reach is.** Pre-regression the same body lived at `reg_store.py:263`, reachable
+  only through `pm_distinct_reg_store_devec`, gated `if ren.target.device == "AMD":`. The commit generalised it
+  to all backends. Metal now pays a cost AMD always paid.
+
+**Therefore the 2.40x in 2.1 is not recoverable and must not be treated as PR2's target.** Those numbers were
+achieved by not doing the work. PR2's ceiling is whatever a *correct* reduction can achieve, which is strictly
+below the pre-regression figures.
+
+The admission criteria are correct and load-bearing: GLOBAL addrspace only, proven-additive only (the
+online-softmax MAX-reduce in REG/LOCAL is deliberately excluded so it can never be ADD-mis-combined). The cost
+comes from the reduction *strategy*, not the admission test.
+
 ### PR2 — Narrow the safety condition
 
 Prerequisite: PR1.
 
-- Narrow the condition so it scalarizes only where genuinely unsafe. Correctness is the hard constraint: tokens must
-  remain 13876/38835, and `test/unit/test_devectorizer_output_safety.py` must keep passing unmodified. **Do not
-  regenerate or weaken that test** — if it must change to accommodate a fix, the fix is wrong.
-- Full §4 evidence. Expected recovery is bounded above by the pre-regression numbers in §2.1.
+- **Do not touch the admission criteria** (GLOBAL-only, proven-ADD-only). Per 2.5 they are what makes the
+  correctness fix sound. Change the reduction *strategy* only: replace the serial `functools.reduce(add, ...)`
+  chain in `_sum_distinct_lanes` (and its siblings `_reduce_scalar_reg_group` /
+  `_reduce_scalarized_reg_partials`) with a vectorized or tree-structured horizontal reduce where the group's
+  partials share a uniform stride.
+- Correctness is the hard constraint: tokens must remain 13876/38835, and
+  `test/unit/test_devectorizer_output_safety.py` must keep passing unmodified. **Do not regenerate or weaken that
+  test** — it pins the admission criteria, not the reduction strategy, so a strategy-only change should not
+  require editing it. If it does, the change has strayed into admission and is wrong.
+- Full §4 evidence. **Expected recovery is NOT the 2.40x in 2.1** — see 2.5. That figure includes work the
+  pre-regression code was skipping. The honest target is the gap between a serial scalar chain and a vectorized
+  one, which is unmeasured until PR2 tries it.
 
 ### PR3 — Re-tile prefill attention for Metal tensor-core geometry
 
