@@ -115,6 +115,65 @@ and tile legality is `extent % value == 0` for `schedule.tile.{m,n,k}`.
 | `max_threads_per_threadgroup` | from `MTLDevice.maxThreadsPerThreadgroup` | **not declared — MS0 adds it** |
 | schedule vocabulary | must cover Metal plan kinds/transforms | **unverified — MS0 checks it** |
 
+## 4.1 MS0/MS2 result — measured 2026-07-30, pipeline is live
+
+**MS0 is complete with zero code changes and its stop condition is cleared.** `target_schedule_vocabulary`
+embeds no backend table (`"Consume target facts supplied by an adapter; no backend table is embedded here."`),
+and `extra/llm_research/search_provider.py --backend METAL` already supplies every fact live from `MTLDevice`:
+
+```text
+max_threads_per_threadgroup   = 1024        (:162, MTLDevice.maxThreadsPerThreadgroup)
+max_threadgroup_memory_bytes  = 32768
+subgroup_width                = 32          ("Metal simdgroup renderer contract")
+recommended_max_working_set   = 12713115648 (12.7 GB, matches the hand-computed budget in 2.3)
+compiler_transforms           = TC UPCAST UNROLL LOCAL THREAD GROUP GROUPTOP NOLOCALS PADTO SWAP COALESCE
+supported_plan_kinds          = tinygrad_opt_sequence.v1, tinygrad_heuristic.v1
+```
+
+Section 4's claim that `max_threads_per_threadgroup` was missing is **withdrawn** — it is supplied where it
+belongs, in the search provider rather than the production renderer.
+
+**MS2 runs and every rejection traces to a live Metal fact.** For the gate/up shape (m=512, k=4096, n=12288):
+
+| axis | kept | rejected | rejecting fact |
+| --- | ---: | --- | --- |
+| `schedule.launch.threads` | 6/8 | 2048, 4096 | `> max_threads_per_threadgroup` |
+| `schedule.plan_kind` | 2/3 | `cuda_graph.v1` | not in `supported_plan_kinds` |
+| `schedule.tile.m` | 7/8 | 1024 | `512 % 1024 != 0` |
+| `schedule.tile.k` | 8/9 | 5000 | `4096 % 5000 != 0` |
+| `schedule.tile.n` | 8/8 | — | all divide 12288 |
+| `schedule.transforms` | 4/6 | `MAGIC`, bare `"TC"` | unsupported op; wrong record shape |
+| `static_constraints.max_local_memory_bytes` | 3/4 | 65536 | `> max_threadgroup_memory_bytes` |
+
+Interface note: `schedule.transforms` entries must be records of exactly `{op, axis, arg}`. Bare op-name strings
+are rejected by `_legal_transform_sequence`.
+
+### 4.2 Two gaps this exposed
+
+**Gap 1 — the provider omits `generic_control_plan_kind`.** It declares `supported_plan_kinds` but never names
+which one is the generic control, so FutureSight's only cross-axis rule
+(`heuristic_control_has_explicit_transforms`) never fires. Measured over a 64,512-candidate cartesian product:
+
+| `generic_control_plan_kind` | LEGAL | rejected |
+| --- | ---: | ---: |
+| `None` (what the provider supplies today) | **64,512** | **0** |
+| `"tinygrad_heuristic.v1"` | 32,256 | 32,256 |
+
+Supplying it prunes exactly half. This is a one-line addition to the provider's `describe`.
+
+**Gap 2 — static legality is a validity filter, not a pruner.** Applied to a cartesian product of values that
+`propose_legal_dimensions` has already filtered per axis, it rejects nothing, because it re-checks the same
+constraints. Even with Gap 1 closed, 32,256 candidates survive — far beyond what section 5.2's repetition
+requirement can measure.
+
+Section 6/MS2's phrasing "FutureSight statically rejects dominated candidates" is **corrected**: it rejects
+*illegal* candidates. Dominance and ordering are `build_static_priority`, and real population reduction must come
+from **coupling** — BoltBeam `instantiate_candidate_rows` with coupled rows, i.e. `mr8_population_selection`.
+
+**This is the actual open problem for MS3**, and AMD sidesteps it rather than solving it: `_prefill_v2_opts` is a
+closed-form coupling of upcast factors to shape (`u0 = 4 if in_f > out_f else 2, u1 = 4`), not a search over
+independent axes. A Metal equivalent needs the same treatment — couple the axes so the population is measurable.
+
 ## 5. Evidence contract
 
 1. **Correctness first.** Any promoted schedule must produce prelude `13876` / generated `38835` at depth 128 and
