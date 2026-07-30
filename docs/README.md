@@ -57,6 +57,9 @@ they are refuted — see `prefill-current-state.md`.)
 
 ## Runtime Boundary
 
+- `task_workflow/input/metal-replay-generated-route-parity-scope-20260729.md` - current EXP-only performance scope:
+  prove Metal graph-admission/replay behavior first, then transfer the successful AMD optimization concepts through
+  target-neutral generated search, exact route census, and matched whole-model gates.
 - `task_workflow/input/boltbeam-metal-compatibility-scope-20260729.md` - exhaustive EXP-first scope for making
   BoltBeam + BubbleBeam/FutureSight a real Apple Metal search/evidence path while reusing centralized contracts and
   forbidding hand-authored Metal hot-path kernels.
