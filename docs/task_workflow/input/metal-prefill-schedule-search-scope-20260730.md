@@ -32,17 +32,35 @@ Apple M4 10-core / Metal, Qwen3-8B-Q4_K_M, commit `ce8bfb379`.
 The clean GEMM is a **reference point, not a target**: it has no Q4_K dequant chain fused into it, so the
 achievable fused number is unknown and is what this scope exists to find.
 
-### 2.2 Tensor cores are already reached on Metal
+### 2.2 Tensor cores are reached ONLY on a clean GEMM, never on the fused quant chain — CORRECTED
 
-`MetalRenderer` declares 5 tensor-core configs — `dims=(8,8,8) threads=32 elements_per_thread=(2,2,2)` for
-float/float, half/float, half/half. `TC` defaults to 1. A clean fp16 GEMM generates 17 `simdgroup_matrix`
-references at `DEBUG=4` **with no flags set**.
+**This section previously claimed the opposite and was wrong.** It asserted that "on Metal the generic scheduler
+already reaches tensor cores through the quant chain". Verified 2026-07-30 on the real realize path, with the
+strings `MetalRenderer` actually emits:
 
-This is the key difference from the AMD story. `docs/8b-vs-14b-prefill-regression-20260721.md` records that on
-gfx1100 the quant path never lit up WMMA and sat 10-20x below it, which is why materializing fp16
-(`FULL_RESIDENT_OVERLAY`) was transformative there. **On Metal the generic scheduler already reaches tensor
-cores through the quant chain.** The headroom is a schedule-quality question, not a "reach the matrix units"
-question.
+| kernel | `__WMMA` | `simdgroup_multiply_accumulate` | tensor cores |
+| --- | ---: | ---: | --- |
+| clean fp16 GEMM (512x4096x12288) | **17** | 1 | **yes** |
+| fused Q4_K GEMM, same shape | **0** | **0** | **no** |
+
+The fused kernel renders as `r_16_256_8_16_4_3_16_4_2_8_4`, which is digit-for-digit the production prefill
+kernel from the depth-512 profile (36.6% of prefill, 2070 GFLOPS). MP0 reached the same conclusion independently
+at both MSL and AIR level for all three top prefill kernels.
+
+Note on evidence: `MetalRenderer.render_kernel` (`tinygrad/renderer/cstyle.py:534-546`) emits a `__WMMA_*` helper
+wrapping `simdgroup_multiply_accumulate` over `simdgroup_half8x8`/`simdgroup_float8x8`. It **never emits the
+literal string `simdgroup_matrix`**, so grepping for that returns 0 whether or not tensor cores are used. Any
+future check must search `__WMMA_` or `simdgroup_multiply_accumulate`. (MP0's probe does this correctly; only its
+bucket label is `simdgroup_matrix`.)
+
+**This restores the AMD diagnosis.** `docs/8b-vs-14b-prefill-regression-20260721.md` records that the 8B fix
+worked because materializing fp16 gave the scheduler *"a clean fp16 x fp16 GEMM -- no quant view-chain in the
+way"*. The same blocker is present on Metal: the quant view-chain prevents tensor-core application. What does
+**not** transfer is the AMD fix -- `FULL_RESIDENT_OVERLAY` needs 16.4 GB against a 12.7 GB budget (2.3). Metal
+needs the 14B answer: reach the matrix units *through* the packed chain.
+
+The headroom is therefore not merely a schedule-quality question. It is the same reach-the-matrix-units question
+AMD faced, under a memory constraint that forbids AMD's answer.
 
 ### 2.3 FULL_RESIDENT_OVERLAY is impossible here, and unnecessary
 
