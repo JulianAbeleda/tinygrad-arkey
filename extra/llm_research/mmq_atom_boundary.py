@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from extra.llm_research.layout import Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS
+from tinygrad.llm.roles import DENSE_PROJECTION_ROLES
 
 
 PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_ROUTE_ID = "prefill_14b_q4k_q8_1_hybrid_mmq_atom"
@@ -23,6 +24,10 @@ PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_QUANT = "Q4_K"
 PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_ACTIVATION = "Q8_1"
 
 _SUPPORTED_ROLES = ("ffn_gate_up", "attn_qo", "attn_kv")
+# Deliberate subset of the canonical vocabulary (no ffn_down/lm_head). Raise rather than assert so the
+# drift guard survives `python -O`.
+if (_unknown_roles := set(_SUPPORTED_ROLES) - set(DENSE_PROJECTION_ROLES)):
+  raise ValueError(f"_SUPPORTED_ROLES must be a subset of DENSE_PROJECTION_ROLES; unknown: {sorted(_unknown_roles)}")
 _PACKED_WEIGHT_LAYOUT = "ggml_q4_k_bytes_row_major_nk"
 _ACTIVATION_LAYOUT = "q8_1_row_major_mk_scales_per_32"
 _OUTPUT_LAYOUT = "row_major_mn_tile"

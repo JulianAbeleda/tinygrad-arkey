@@ -5,6 +5,7 @@ import pytest
 from extra.llm_research.mmq_atom_boundary import (
   PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_CLASSIFICATION,
   PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_ROUTE_ID,
+  _SUPPORTED_ROLES,
   Prefill14BHybridMMQAtomDescriptor,
   Prefill14BHybridMMQAtomSpec,
   Prefill14BHybridMMQAtomUnsupported,
@@ -14,6 +15,7 @@ from extra.llm_research.mmq_atom_boundary import (
 )
 from extra.llm_research.route_manifest import ROUTES, default_routes
 from tinygrad.llm.model_route_plan import _load_qk_route_policy, _supported_qk_route_ids
+from tinygrad.llm.roles import DENSE_PROJECTION_ROLES
 
 
 def test_prefill_14b_hybrid_mmq_atom_descriptor_is_non_promoted_and_not_pure():
@@ -93,3 +95,10 @@ def test_prefill_14b_hybrid_mmq_atom_is_not_live_manifest_or_policy_route(tmp_pa
   }))
   with pytest.raises(ValueError, match="unsupported route"):
     _load_qk_route_policy(str(policy_path))
+
+
+def test_mmq_atom_supported_roles_are_subset_of_dense_projection_roles():
+  assert all(role in DENSE_PROJECTION_ROLES for role in _SUPPORTED_ROLES), \
+    f"_SUPPORTED_ROLES must be subset of DENSE_PROJECTION_ROLES"
+  assert set(_SUPPORTED_ROLES) == {"ffn_gate_up", "attn_qo", "attn_kv"}
+  assert set(DENSE_PROJECTION_ROLES) == {"ffn_gate_up", "ffn_down", "attn_qo", "attn_kv", "lm_head"}
