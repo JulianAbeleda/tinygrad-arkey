@@ -67,6 +67,15 @@ class Renderer:
   global_prod_max: tuple[int, ...]|None = None
   shared_max: int = 32768
   tensor_cores: list[TensorCore] = []
+  # Target capability facts (see docs/task_workflow/input/target-capability-policy-decoupling-scope-20260730.md
+  # TG2). Declarative only -- no admission/eligibility logic reads these here.
+  # Lane (wavefront/simdgroup) width. None means unreported, never a silent 32 -- an unreported width must stay
+  # distinguishable from a known 32 (e.g. Metal's simdgroup is 32-wide in hardware but is not modelled here
+  # because it is not verified through this renderer's own reporting path).
+  wave_size: int|None = None
+  # Indirect-command-buffer byte-offset limit. None means "no such constraint on this backend" -- never a
+  # sentinel number that could be mistaken for a real bound (Metal's is METAL_ICB_OFFSET_MAX, set below).
+  max_indirect_buffer_offset: int|None = None
   pre_matcher: PatternMatcher|None = None
   extra_matcher: PatternMatcher|None = None
   code_for_op: dict[Ops, Callable] = {}
@@ -76,6 +85,13 @@ class Renderer:
 
   def __init__(self, target:Target): self.target = target
   def __reduce__(self): return self.__class__, (self.target,)
+  @property
+  def supports_warp_shfl_xor(self) -> bool:
+    # One authority: derived from the TG1 provider (codegen/late/warp_reduce.py), not restated. A renderer
+    # has the capability iff it declares a `warp_shfl_xor` provider -- CStyleLanguage subclasses that don't
+    # provide one leave the class attribute at its None default; renderers with no such attribute at all
+    # (e.g. LLVMRenderer, PTXRenderer) read as unavailable via getattr, same as the lowering code does.
+    return getattr(self, "warp_shfl_xor", None) is not None
   def render(self, uops:list[UOp]) -> str: raise NotImplementedError("needs a renderer")
   def asm(self, prg:UOp, lin:UOp) -> bytes: raise NotImplementedError("needs an assembler")
   def aux(self, uops:list[UOp]) -> dict: raise NotImplementedError("needs aux")

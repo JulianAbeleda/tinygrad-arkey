@@ -478,6 +478,12 @@ class MetalRenderer(CStyleLanguage):
     from tinygrad.runtime.ops_metal import MetalCompiler
     self.compiler = MetalCompiler()
     self.tensor_cores = tc.metal if target.arch.startswith("Apple") and int(target.arch[5:]) >= 7 else []
+    # Reuse the one existing constant for this bound (tinygrad/runtime/graph/metal.py) rather than restating
+    # the literal. Deferred import: runtime.graph.metal -> runtime.ops_metal -> this module, at module scope.
+    from tinygrad.runtime.graph.metal import METAL_ICB_OFFSET_MAX
+    self.max_indirect_buffer_offset = METAL_ICB_OFFSET_MAX
+    # wave_size deliberately stays unreported (None): Apple's simdgroup is 32-wide in hardware, but that fact
+    # is not verified through this renderer the way HIPRenderer's is -- see scope section 3.3, do not default it.
 
   kernel_typedef = "kernel void"
   buffer_prefix = "device "
@@ -548,6 +554,9 @@ class HIPRenderer(CStyleLanguage):
     super().__init__(target)
     from tinygrad.runtime.support.compiler_amd import HIPCompiler, HIPCCCompiler
     self.compiler, self.tensor_cores = (HIPCCCompiler if use_hipcc else HIPCompiler)(target.arch), tc.get_amd(target.arch)
+    # Same conditional-capability shape as tensor_cores/MetalRenderer.tensor_cores above: CDNA (gfx942/gfx950) is
+    # wave64, RDNA (gfx1100 and friends) is wave32 -- both are known, reported facts, not a silent default.
+    self.wave_size = 64 if self.is_cdna(target.arch) else 32
     if not self.is_cdna4(target.arch): self.extra_matcher += pm_manual_bf16_cast + extra_pm
     if target.arch.split(":")[0] == "gfx1100":
       # Exact native attention loop address expressions retain weakint until HIP source rendering.
