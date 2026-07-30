@@ -1,0 +1,606 @@
+{
+  "schema": "tinygrad.amd_concept_transfer_matrix.v1",
+  "date": "2026-07-30",
+  "audit_revision": "007e6b743fbafca62142a3262a0e56838d017dcd",
+  "source_scope": "docs/task_workflow/input/metal-replay-generated-route-parity-scope-20260729.md#mr6--amd-optimization-concept-transfer-matrix",
+  "hardware_execution": "none",
+  "scope": {
+    "phase": "decode",
+    "target_workload": "Qwen3-8B Q4_K_M on Apple M4 10-core Metal",
+    "purpose": "Classify historical AMD wins into target-neutral candidate concepts without transferring AMD ISA, route ids, wave assumptions, thresholds, or policy defaults.",
+    "not_a_policy": true,
+    "not_a_candidate_population": true,
+    "not_a_metal_performance_claim": true
+  },
+  "classification_vocabulary": {
+    "portable_concept": "A semantic mechanism or candidate axis that can be expressed without an AMD backend assumption.",
+    "compiler_work": "A target compiler primitive must be demonstrated before the concept is executable or competitive.",
+    "backend_specific_implementation": "Historical implementation detail that is evidence for AMD only and must not be copied into Metal policy.",
+    "irrelevant_first_metal_workload": "The historical winning applicability does not match the first Qwen3-8B Metal workload; retain only as a later reopen concept."
+  },
+  "metal_capability_vocabulary": {
+    "observed": "Measured on the exact Metal workload with identity-preserving evidence.",
+    "supported": "The backend/compiler exposes the primitive, but the exact transferred route has not been measured.",
+    "unknown": "Neither exact support nor competitive behavior is established by the pinned Metal evidence."
+  },
+  "global_rules": [
+    "AMD speedups establish historical applicability only; they are not Metal priors or performance promises.",
+    "Every Metal candidate must derive subgroup size, legal local size, address spaces, vector width, reduction form, and resource bounds from live target/compiler facts.",
+    "Semantic role, shape, quant, layout, dtypes, schedule, and replay grouping remain independent fields.",
+    "The ordinary tinygrad-generated Metal path is the control and fail-closed fallback for every row.",
+    "Only MR7 role-cost evidence may select rows for MR8; this matrix cannot promote or rank them."
+  ],
+  "rows": [
+    {
+      "id": "q4k_g3_lane_partition",
+      "historical_topic": "Q4_K generated G3/lane-partition GEMV",
+      "classification": {
+        "primary": "portable_concept",
+        "secondary": ["compiler_work", "backend_specific_implementation"],
+        "first_metal_workload": "directly_applicable_shapes_but_unranked"
+      },
+      "semantic_mechanism": "At decode M=1, lanes cooperatively own contiguous packed Q4_K words for one output row, dequantize their owned words in registers, accumulate partials, and reduce the row across the subgroup. The portable idea is packed-word ownership plus a legal reduction, not the AMD G3 topology itself.",
+      "winning_workload": {
+        "models": ["Qwen3-8B-Q4_K_M"],
+        "roles": ["ffn_gate_up", "ffn_down", "attn_qo"],
+        "shapes_n_by_k": [[12288, 4096], [4096, 12288], [4096, 4096]],
+        "quant": "Q4_K",
+        "phase": "decode",
+        "effect": "Generated G3 was token-identical, route-clean, and within -0.13% to +0.41% of the owned AMD warp route at contexts 512, 1024, 2048, and 4096; the machine-authored policy conversion retained it as the generated default."
+      },
+      "compiler_primitives_required": [
+        "coalesced packed-word global loads with proven alignment",
+        "subgroup-local lane ownership derived from the target subgroup extent",
+        "register-resident dequantization and fp32 accumulation",
+        "correct subgroup or partial-buffer reduction",
+        "generated-program identity and exact route-binding observation"
+      ],
+      "amd_specific_implementation": [
+        "wave32 and the exact 4 block-groups x 8 words-per-group factorization",
+        "ds_bpermute/AMD warp-reduction lowering",
+        "gfx1100 route names, environment defaults, and owned AMD warp rollback",
+        "the measured AMD occupancy, bandwidth, and launch geometry"
+      ],
+      "portable_descriptor": {
+        "axes": ["lane_ownership_axis", "rows_per_subgroup", "block_groups", "words_per_group", "load_width", "dequant_placement", "reduction", "output_form"],
+        "constraints": [
+          "factorization derives from live subgroup extent rather than 32",
+          "packed-word indexing derives from Q4_K layout facts",
+          "block grouping divides the exact K-block count",
+          "reduction/output choices are coupled and correctness-gated",
+          "role/shape/quant/layout/dtypes are explicit candidate applicability"
+        ],
+        "prohibited_inheritance": ["G3 route id", "gfx1100 target guard", "wave32", "4x8 factorization", "AMD shuffle opcode"]
+      },
+      "metal_capability_mapping": {
+        "status": "unknown",
+        "supported": ["ordinary generated Metal Q4_K matvec compilation and measurement exist in the earlier portable provider loop"],
+        "unknown": ["profitable packed-word subgroup ownership", "correct generated subgroup reduction for this layout", "resource/occupancy limits", "whole-model role contribution"],
+        "decision": "Eligible for MR8 only if MR7 ranks one of the exact roles and a Metal compiler-capability probe validates the required reduction/load form."
+      },
+      "ordinary_fallback": "The ordinary tinygrad-generated Metal Q4_K matvec/dequant route selected without an exported plan.",
+      "evidence": [
+        {
+          "commit": "59ff850c1b8a7e5b7ee68ea7640c4326949cbb80",
+          "date": "2026-06-30",
+          "subject": "[test] TG1: LaneMapTemplate IR losslessly re-emits the promoted G3 route",
+          "artifact": "bench/qk-lanemap-template-ir/latest.json",
+          "git_blob": "59ad6cb23205b054b07207b666d270786fa0d7e5",
+          "proves": "The five topology degrees of freedom were separated from quant, target, and shape facts and losslessly re-emitted the three 8B roles.",
+          "does_not_prove": "That the AMD 4x8 point is legal or fast on Metal."
+        },
+        {
+          "commit": "dc90b54a6fe2e53c718975c3cf7e7abc25ad0b8b",
+          "date": "2026-06-29",
+          "subject": "[codegen] AMD ISA G3 weight-promotion hardening gate (PASS_SPEED_EQUIVALENT)",
+          "artifact": "bench/amd-isa-backend-g3-weight-promotion/latest.json",
+          "git_blob": "aba9aa656308246210567cb1ea467eb530478092",
+          "proves": "AMD whole-decode token parity, route cleanliness, rollback, and speed equivalence across four contexts.",
+          "does_not_prove": "A Metal speedup or an achieved Metal bandwidth ceiling."
+        },
+        {
+          "commit": "08bcd1d9b2ddac389130f3600c113bae80820300",
+          "date": "2026-07-01",
+          "subject": "[test] TG-P2 Q4_K G3 policy manifest, census, tests, artifacts",
+          "artifact": "bench/tg-p2-q4k-g3-policy-driven/latest.json",
+          "git_blob": "ac65623b214b6817d7c4aa10ade79de45f933890",
+          "proves": "Selection authority moved through a machine-emitted, per-tensor policy with strict fallback checks.",
+          "does_not_prove": "That the historical route identity is portable."
+        }
+      ],
+      "reopen_condition": "MR7 attributes at least 5% of Metal whole-step time to an exact Q4_K GEMV role, and a bounded MR8 population can express target-derived packed ownership and reduction without an AMD route or wave assumption.",
+      "transfer_disposition": "TRANSFER_MECHANISM_ONLY"
+    },
+    {
+      "id": "q6k_cooperative_generated",
+      "historical_topic": "Generated/cooperative Q6_K decode paths",
+      "classification": {
+        "primary": "portable_concept",
+        "secondary": ["compiler_work", "backend_specific_implementation"],
+        "first_metal_workload": "potentially_applicable_pending_role_cost"
+      },
+      "semantic_mechanism": "Replace one-row-per-thread serial Q6_K GEMV with cooperative K ownership: adjacent lanes read adjacent packed positions, emit per-lane partials, and reduce in a second generated stage. Route selection is role/shape-specific because split count and output size change the economics.",
+      "winning_workload": {
+        "models": ["Qwen3-8B-Q4_K_M"],
+        "roles": ["lm_head", "ffn_down", "attn_v"],
+        "shapes_n_by_k": [[151936, 4096], [4096, 12288], [1024, 4096]],
+        "quant": "Q6_K",
+        "phase": "decode",
+        "effect": "The original cooperative path improved lm_head by 17.7-19.2% whole decode and ffn_down by 12.5-13.2%; the later spec-driven generated route was byte-identical to the shipped implementation across all three shapes, with worst generated/shipped timing ratio 1.0106 and 24/24 identical model tokens."
+      },
+      "compiler_primitives_required": [
+        "coalesced packed Q6_K loads",
+        "local-lane K decomposition",
+        "register accumulation",
+        "correct materialized partial buffer and generated reduction",
+        "coupled split/row-tile/resource validation"
+      ],
+      "amd_specific_implementation": [
+        "16-lane packed-position mapping inside an AMD wave",
+        "row_tile=4 and AMD local-size choices",
+        "packed_u16 representation as lowered by the historical AMD path",
+        "gfx1100 bandwidth and role thresholds",
+        "historical Q6_K route names and environment rollback"
+      ],
+      "portable_descriptor": {
+        "axes": ["packed_position_extent", "rows_per_workgroup", "k_parts", "partial_storage", "reduction_stage", "load_width"],
+        "constraints": [
+          "derive packed-position extent from Q6_K layout",
+          "derive workgroup geometry from target limits",
+          "represent partial-buffer traffic explicitly",
+          "keep lm_head, ffn_down, and attention projection applicability separate"
+        ],
+        "prohibited_inheritance": ["q6k_coop route id", "lane_extent=16 as a target fact", "row_tile=4", "gfx1100 threshold"]
+      },
+      "metal_capability_mapping": {
+        "status": "unknown",
+        "supported": ["ordinary generated Metal reduction and matvec execution exist generically"],
+        "unknown": ["Q6_K packed-load lowering quality", "partial-buffer overhead", "subgroup/local geometry", "which Q6_K roles materially contribute at depth 128"],
+        "decision": "Do not preselect cooperative Q6_K; require MR7 role timing and a Metal compiler probe before candidate expansion."
+      },
+      "ordinary_fallback": "The ordinary tinygrad-generated Metal Q6_K dequant/matvec path for the exact role.",
+      "evidence": [
+        {
+          "commit": "d77da2bcc02bf4687070d9db07f23e4184e85db9",
+          "date": "2026-06-17",
+          "subject": "[docs] cooperative-K Q6_K lm_head SHIPPED (+19% decode); supersede \"exhausted\"",
+          "artifact": "docs/qk-mmvq-q6k-lm-head-arc-20260617.md",
+          "git_blob": "1a5ffdb729882db2d72437eafbec5dfe9445d7b6",
+          "proves": "The coalesced K ownership fixed a measured one-row-per-thread pathology on AMD lm_head.",
+          "does_not_prove": "That the same decomposition wins for another role or target."
+        },
+        {
+          "commit": "00e51531d2f0fef2463f884c9481a0ca9151f4d7",
+          "date": "2026-06-17",
+          "subject": "[docs] MMVQ_COOP extended to Q6_K ffn_down (decode ~64% of llama)",
+          "artifact": "docs/qk-mmvq-coop-ffn-down-result-20260617.md",
+          "git_blob": "237ff2a374e21edfffc1755f467a47eccf320b49",
+          "proves": "The same shape-parameterized mechanism transferred to one sibling role after isolated and whole-model gates.",
+          "does_not_prove": "Quant-wide applicability."
+        },
+        {
+          "commit": "06b1608e8fa99a329a9f3580e501e9ecc9ccd525",
+          "date": "2026-07-01",
+          "subject": "[test] TG-P3 Q6_K route spec, gate, manifest, census, artifacts",
+          "artifact": "bench/tg-p3-q6k-generated-coop/latest.json",
+          "git_blob": "f6474e1216a35860ee3ac36a7f9ca4d2022a2ca2",
+          "proves": "A spec-driven generated representation reproduced the three shipped Q6_K routes byte-for-byte with strict fallback and token gates.",
+          "does_not_prove": "That AMD spec values are portable defaults."
+        }
+      ],
+      "reopen_condition": "An exact Q6_K role is material in MR7 and Metal demonstrates legal packed-position ownership plus a reduction whose isolated and whole-model costs beat the ordinary control.",
+      "transfer_disposition": "TRANSFER_MECHANISM_AND_SPEC_SHAPE_NOT_VALUES"
+    },
+    {
+      "id": "q4k_attn_qo_cooperative",
+      "historical_topic": "Q4_K attention q/o cooperative route",
+      "classification": {
+        "primary": "portable_concept",
+        "secondary": ["compiler_work", "backend_specific_implementation"],
+        "first_metal_workload": "exact_shape_present_but_unranked"
+      },
+      "semantic_mechanism": "Apply cooperative packed-word ownership only to a role whose ordinary access is measured as poorly coalesced; preserve ordinary routing for sibling Q4_K roles already near their practical ceiling.",
+      "winning_workload": {
+        "models": ["Qwen3-8B-Q4_K_M"],
+        "roles": ["attn_q", "attn_output"],
+        "shapes_n_by_k": [[4096, 4096]],
+        "quant": "Q4_K",
+        "phase": "decode",
+        "effect": "AMD isolated bandwidth rose from 169 to 258 GB/s (1.47-1.52x); whole decode improved 5.5-6.4% at contexts 512-4096 with byte-identical greedy output. The same mechanism was rejected for ffn_gate/up at only 1.16-1.18x isolated."
+      },
+      "compiler_primitives_required": ["coalesced packed Q4_K loads", "local packed-word lane", "partial output buffer", "generated sum reduction"],
+      "amd_specific_implementation": ["4096x4096 hard guard", "eight-lane lane4 mapping", "AMD local sizes", "19%-of-peak admission rationale"],
+      "portable_descriptor": {
+        "axes": ["role", "exact_shape", "packed_word_lane_extent", "row_tile", "partial_reduction"],
+        "constraints": ["admit by measured role pathology, not quant label", "retain exact role and shape in evidence", "reject sibling-role generalization without measurement"],
+        "prohibited_inheritance": ["Q4K_ATTN_QO_COOP flag", "4096 as universal policy", "AMD local size"]
+      },
+      "metal_capability_mapping": {
+        "status": "unknown",
+        "supported": ["the ordinary exact attention projection matvec is generated on Metal"],
+        "unknown": ["whether q/o is poorly coalesced on Metal", "whether partial-buffer reduction amortizes", "whole-step share"],
+        "decision": "Only enter MR8 if MR7 separately shows q/o cost and an isolated Metal control exposes coalescing headroom."
+      },
+      "ordinary_fallback": "Ordinary tinygrad-generated Metal Q4_K projection matvec.",
+      "evidence": [
+        {
+          "commit": "d94468a4ca645d601f7835fb92d4e9bfdef37c92",
+          "date": "2026-06-17",
+          "subject": "[docs] Q4_K attn_q/o coop SHIPPED (decode ~68% of llama); low-risk coop done",
+          "artifact": "docs/qk-mmvq-coop-q4k-attn-result-20260617.md",
+          "git_blob": "c58af797a028d84e26dff251791c21f862532d60",
+          "proves": "Role-specific isolated and whole-model AMD win and sibling-role refutation.",
+          "does_not_prove": "That Q4_K or the 4096x4096 shape implies the same Metal pathology."
+        },
+        {
+          "commit": "c42f055c5ec93b8cd0fc6b136e7acd61aef90a41",
+          "date": "2026-06-17",
+          "subject": "[nn] route Q4_K attn_q/o through cooperative-K kernel (default on)",
+          "artifact": "tinygrad/llm/model.py",
+          "git_blob": "973f6635b18828ab3bb928925e035aca7939e104",
+          "proves": "The historical implementation was an exact role/shape guard with rollback.",
+          "does_not_prove": "That this hard guard is an acceptable portable descriptor."
+        }
+      ],
+      "reopen_condition": "MR7 measures q/o as material and a Metal isolated A/B proves a coalescing deficit and a candidate win beyond dispersion.",
+      "transfer_disposition": "TRANSFER_ROLE_CONDITIONAL_MECHANISM"
+    },
+    {
+      "id": "flash_decode_regime_selection",
+      "historical_topic": "Flash-decode threshold and implementation regimes",
+      "classification": {
+        "primary": "portable_concept",
+        "secondary": ["compiler_work", "backend_specific_implementation"],
+        "first_metal_workload": "defer_at_depth128_reconsider_at_depth512"
+      },
+      "semantic_mechanism": "Use split-KV decode attention with online softmax state and a combine stage only in the context regime where its extra fixed work is amortized; retain ordinary SDPA below the measured crossover and select the graph per decode token rather than capture order.",
+      "winning_workload": {
+        "models": ["Qwen3-8B-Q4_K_M"],
+        "roles": ["decode_attention"],
+        "shapes": {"Hq": 32, "Hkv": 8, "Hd": 128, "T": 1},
+        "contexts": [128, 256, 384, 512, 768, 1024, 2048, 4096],
+        "effect": "On AMD, flash regressed at contexts 128 and 256, crossed near 384, and increasingly won through 4096. The conservative shipped cutover moved from 1024 to 512 after a byte-identical +12.8% real-generate result near ctx520; a later generate fix ensured sessions that start short actually switch graphs at the threshold."
+      },
+      "compiler_primitives_required": [
+        "symbolic decode length without recompiling each token",
+        "split-KV work decomposition",
+        "online max/sum/weighted-value accumulation",
+        "stable generated reduction/combine",
+        "identity-preserving dual graph capture or equivalent routing"
+      ],
+      "amd_specific_implementation": [
+        "threshold values 384, 512, or 1024",
+        "AMD split counts and local sizes",
+        "owned HIP attention tile and its S=4/S=48 regimes",
+        "AMD OCML and raw-kernel details from the earliest prototype",
+        "gfx1100 occupancy and context crossover"
+      ],
+      "portable_descriptor": {
+        "axes": ["context_regime", "kv_split_length", "split_count", "state_representation", "combine_form", "cache_storage", "fallback"],
+        "constraints": ["T=1 decode only", "threshold is measured per target/workload", "routing changes per-token graph choice without capture-order dependence", "correctness compares logits/tokens to ordinary SDPA"],
+        "prohibited_inheritance": ["FLASH_DECODE_THRESHOLD=512", "AMD owned tile", "S=48", "OCML calls"]
+      },
+      "metal_capability_mapping": {
+        "status": "unknown",
+        "supported": ["ordinary Metal SDPA is the current control"],
+        "unknown": ["Metal context crossover", "generated online-softmax lowering quality", "split/combine cost", "graph interaction", "KV cache locality"],
+        "decision": "Depth 128 is inside the AMD losing regime and cannot justify a flash candidate. Reopen at the required depth-512 measurement only after MR5 identity and MR7 attention cost."
+      },
+      "ordinary_fallback": "Ordinary tinygrad-generated Metal SDPA/attention path.",
+      "evidence": [
+        {
+          "commit": "a8694ba732d520eb4a8ad0725e91c699da3530b0",
+          "date": "2026-06-16",
+          "subject": "[test] flash-threshold search (Stage 1): ctx sweep + crossover -> AcceptedPolicy",
+          "artifact": "bench/qk-flash-search/flash-search.json",
+          "git_blob": "34bdce845d0896551e7059c4f559aa6b90da50f4",
+          "proves": "An AMD context crossover existed and the threshold is a workload/target policy dimension.",
+          "does_not_prove": "The later conservative threshold or any Metal threshold."
+        },
+        {
+          "commit": "d590b55f38b4f162b6b4ed24c4cad27eb883c9f1",
+          "date": "2026-06-17",
+          "subject": "[test] flash-decode auto policy tests + auto-vs-off-vs-on long-context benchmark",
+          "artifact": "bench/qk-flash-decode-auto-20260617/result.json",
+          "git_blob": "9d77f8d2fbb4eb5976f1c83fec6d1589011cf761",
+          "proves": "Auto routing matched off below 1024 and on at 1024+ with increasing AMD long-context benefit.",
+          "does_not_prove": "That 1024 was the optimal cutover."
+        },
+        {
+          "commit": "191223099d56819229c0cab46c0c3ebbc404acbb",
+          "date": "2026-06-17",
+          "subject": "[docs] Arc 1 attention fusion result -> SHIPPED (+12.8% ctx512, FLASH_DECODE_THRESHOLD 1024->512)",
+          "artifact": "docs/qk-8b-attention-fusion-result-20260617.md",
+          "git_blob": "ecadc2b44f5ac87a3e16be2d5e2022e9515d2779",
+          "proves": "The safe AMD cutover was selected from measured losing, marginal, and winning regimes rather than copied from kernel structure.",
+          "does_not_prove": "A Metal cutover."
+        },
+        {
+          "commit": "4e7dc1a4fdad3246024e983b5a9e4fe73a7750e8",
+          "date": "2026-06-30",
+          "subject": "[docs] record shipped flash-crossover fix above the sub-512 owned-tile candidate",
+          "artifact": "docs/decode-lowctx-nonflash-gap-result-20260630.md",
+          "git_blob": "dff7d5f27621365dd07071559e9c0eb3c892c4c1",
+          "proves": "Graph selection had to follow the per-token context policy; capture order had hidden the crossover.",
+          "does_not_prove": "That replay grouping is the attention speed mechanism."
+        }
+      ],
+      "reopen_condition": "At depth 512, MR7 shows material attention cost and a Metal forced-SDPA versus bounded generated-flash sweep establishes a correctness-clean crossover.",
+      "transfer_disposition": "TRANSFER_REGIME_SEARCH_NOT_THRESHOLD_OR_KERNEL"
+    },
+    {
+      "id": "q4k_large_shape_coverage",
+      "historical_topic": "Larger-shape Q4_K G3 coverage for 14B/32B",
+      "classification": {
+        "primary": "irrelevant_first_metal_workload",
+        "secondary": ["portable_concept", "backend_specific_implementation"],
+        "first_metal_workload": "not_applicable_qwen3_8b"
+      },
+      "semantic_mechanism": "Separate generated-kernel representability from route coverage and from shape tuning. A shape-parameterized kernel can be correct for larger shapes while a hardcoded selector misses every invocation and while the reused topology remains suboptimal.",
+      "winning_workload": {
+        "models": ["Qwen3-14B-Q4_K_M", "Qwen3-32B-Q4_K_M"],
+        "roles": ["ffn_gate_up", "ffn_down", "attn_qo"],
+        "shapes_n_by_k": [[5120, 5120], [17408, 5120], [5120, 17408], [8192, 5120], [25600, 5120], [5120, 25600]],
+        "quant": "Q4_K",
+        "effect": "The generated G3 kernel was correct across all audited larger shapes; structural binding fixed 100% route misses and improved 14B whole decode by 8-9%, but the remaining topology gap was classified SEARCH_SPACE_INCOMPLETE."
+      },
+      "compiler_primitives_required": ["shape-generic packed GEMV", "validated dynamic/static launch geometry", "shape-tuned K decomposition"],
+      "amd_specific_implementation": ["the structural guard (K/256)%4==0 and N%32==0", "the 8B-derived G3 topology", "gfx1100 bandwidth interpretation"],
+      "portable_descriptor": {
+        "axes": ["exact_N", "exact_K", "k_block_count", "row_grouping", "words_per_group", "launch_geometry"],
+        "constraints": ["representability, binding coverage, and performance are separate gates", "candidate applicability uses exact shape facts", "shape rules derive from layout/compiler constraints"],
+        "prohibited_inheritance": ["ANYSHAPE flag", "AMD divisibility rule", "14B/32B model name"]
+      },
+      "metal_capability_mapping": {
+        "status": "unknown",
+        "supported": [],
+        "unknown": ["not evaluated because the first Metal workload is the exact 8B shape"],
+        "decision": "Exclude from the initial Metal candidate population; retain the coverage-vs-tuning audit pattern for future models."
+      },
+      "ordinary_fallback": "Ordinary generated Metal route for every unmatched shape.",
+      "evidence": [
+        {
+          "commit": "baafb13215b0d34ca1bcc4e4a421a4ac97b92a54",
+          "date": "2026-06-30",
+          "subject": "[docs] Q1432 result: 14B/32B route-miss fixed (+8-9%), gap is shape-tuning not coverage",
+          "artifact": "docs/qwen-14b-32b-truegen-q1432-result-20260630.md",
+          "git_blob": "6e09f4fd52ca2d930ca7c813185d5c41d9287e9b",
+          "proves": "Correctness across six shapes, total route-miss diagnosis, structural-binding win, and remaining search-space gap.",
+          "does_not_prove": "That its structural guard or topology generalizes to Metal."
+        }
+      ],
+      "reopen_condition": "A later Metal model introduces unmatched larger Q4_K shapes and a route census proves fallback cost; then author exact-shape candidates from live facts.",
+      "transfer_disposition": "RETAIN_AUDIT_PATTERN_EXCLUDE_INITIAL_SEARCH"
+    },
+    {
+      "id": "attn_k_route_coverage",
+      "historical_topic": "Q4_K attn_k route coverage",
+      "classification": {
+        "primary": "portable_concept",
+        "secondary": ["backend_specific_implementation"],
+        "first_metal_workload": "direct_route_census_requirement"
+      },
+      "semantic_mechanism": "A semantic projection omitted from quant-route policy silently fell through to generic lazy dequantization. The portable fix is complete, metadata-driven role coverage with an explicit route census, not assigning attn_k to an AMD G3 route.",
+      "winning_workload": {
+        "models": ["Qwen3-14B-Q4_K_M", "Qwen3-32B-Q4_K_M", "Qwen3-8B-Q4_K_M protected control"],
+        "roles": ["attn_k"],
+        "shapes_n_by_k": [[1024, 5120]],
+        "quant": "Q4_K",
+        "effect": "On 14B, attn_k owned 38% of decode while falling through; routing it to the generated packed GEMV improved 27.8 to 44.5 tok/s at ctx128 and 27.1 to 42.8 at ctx512. The initially different 8B route regressed 4%, proving that role coverage and concrete route choice must be separated."
+      },
+      "compiler_primitives_required": ["no new primitive for coverage itself", "an already validated generated packed GEMV route for the exact shape"],
+      "amd_specific_implementation": ["attn_k-to-G3 binding", "DECODE_ROUTE_ATTN_K default", "large-model structural class", "AMD measured deltas"],
+      "portable_descriptor": {
+        "axes": ["semantic_role", "exact_shape", "quant", "layout", "candidate_route"],
+        "constraints": ["every material projection receives an explicit census result", "coverage does not imply route selection", "protected controls can reject a global rule"],
+        "prohibited_inheritance": ["attn_k always uses G3", "large-model default", "kernel-name inference"]
+      },
+      "metal_capability_mapping": {
+        "status": "unknown",
+        "supported": ["ordinary Metal fallback executes"],
+        "unknown": ["MR5 semantic identity is not yet carried through the Metal route census", "attn_k cost and quant route on Metal"],
+        "decision": "MR5 must report attn_k explicitly; a missing optimized route is a coverage finding, not authorization to bind another role's plan."
+      },
+      "ordinary_fallback": "Ordinary tinygrad-generated Metal linear/dequant route.",
+      "evidence": [
+        {
+          "commit": "9bda1ba0e0474bd00131cfe22e2c96cb3615efd1",
+          "date": "2026-06-30",
+          "subject": "[nn] RSR: fix attn_k route miss (14B decode +60%, byte-identical, default-off)",
+          "artifact": "docs/qwen-14b-32b-attn-k-route-miss-result-20260630.md",
+          "git_blob": "77d2cb8d8a571af51c0cd34944e830c55e5f3113",
+          "proves": "Semantic source attribution, route miss, large-model win, protected 8B regression, and profile-scoped disposition.",
+          "does_not_prove": "That attn_k should share any specific Metal route."
+        },
+        {
+          "commit": "dc4c9f9f8bf9400941538f7f78538a3a19d9d7d2",
+          "date": "2026-06-30",
+          "subject": "[test] refresh Qwen AMD bench: attn_k+g3 promotion (8B now >llama @ctx512)",
+          "artifact": "bench/models/qwen/amd-rx7900xtx-gfx1100.md",
+          "git_blob": "ec734003c743451876a2f5cf04f5b0ef8fa13312",
+          "proves": "The route fix survived the multi-model authority table.",
+          "does_not_prove": "Metal applicability."
+        }
+      ],
+      "reopen_condition": "MR5 produces stable attn_k identity and MR7 shows material fallback cost; then compare only exact-shape, Metal-legal generated candidates.",
+      "transfer_disposition": "TRANSFER_CENSUS_INVARIANT_NOT_ROUTE"
+    },
+    {
+      "id": "attn_v_route_coverage",
+      "historical_topic": "Q4_K attn_v later route-miss fix",
+      "classification": {
+        "primary": "portable_concept",
+        "secondary": ["backend_specific_implementation"],
+        "first_metal_workload": "direct_route_census_requirement"
+      },
+      "semantic_mechanism": "A second adjacent semantic role was absent from route policy and fell to generic lazy dequantization. Completeness must be checked from model facts and runtime binding counts, not assumed after fixing a similar role.",
+      "winning_workload": {
+        "models": ["Qwen3-8B-Q4_K_M", "Qwen3-14B-Q4_K_M"],
+        "roles": ["attn_v"],
+        "shapes_n_by_k": [[1024, 5120]],
+        "quant": "Q4_K in the measured tensors",
+        "effect": "The AMD fallback measured about 24 GB/s and 12.5% of 14B decode; routing the omitted role produced byte-identical +8.9% 8B and +13.3% 14B whole-decode results."
+      },
+      "compiler_primitives_required": ["no new primitive for coverage itself", "an exact-shape generated packed GEMV candidate"],
+      "amd_specific_implementation": ["attn_v-to-G3 binding", "DECODE_ROUTE_ATTN_V default", "AMD bandwidth diagnosis"],
+      "portable_descriptor": {
+        "axes": ["semantic_role", "exact_shape", "quant", "layout", "candidate_route"],
+        "constraints": ["coverage is enumerated from model facts", "requested/admitted/bound counts reconcile", "no adjacent-role inference"],
+        "prohibited_inheritance": ["attn_v always equals attn_k", "G3 route", "kernel-name policy"]
+      },
+      "metal_capability_mapping": {
+        "status": "unknown",
+        "supported": ["ordinary Metal fallback executes"],
+        "unknown": ["stable Metal attn_v identity pending MR5", "Metal quant and cost", "candidate route quality"],
+        "decision": "Treat attn_v as its own required census row even when shape matches attn_k."
+      },
+      "ordinary_fallback": "Ordinary tinygrad-generated Metal linear/dequant route.",
+      "evidence": [
+        {
+          "commit": "6ee3bec5da729c1d7d297b0ac276390ae18d03f4",
+          "date": "2026-07-03",
+          "subject": "[nn] attn_v route-miss fix: +8.9% 8B / +13% 14B decode, byte-identical",
+          "artifact": "tinygrad/llm/route_policy.py",
+          "git_blob": "311ee951e44dee56d9c08e7f6d8811277a8be0be",
+          "proves": "The exact omitted role, fallback diagnosis, rollback, correctness, and measured 8B/14B gains recorded in the implementation commit.",
+          "does_not_prove": "That matching attn_k shape makes a Metal route valid."
+        },
+        {
+          "commit": "8f93398659f823322bd1a19e541f8cf55b023f7b",
+          "date": "2026-07-03",
+          "subject": "[docs] README: refresh Current performance state (2026-07-03)",
+          "artifact": "README.md",
+          "git_blob": "09a307ac9178a6a076ef4e77ad3c6bebcff9c2f7",
+          "proves": "The post-fix 8B/14B/32B authority table and explicit attribution to the attn_v route miss.",
+          "does_not_prove": "A per-route Metal delta."
+        }
+      ],
+      "reopen_condition": "MR5 identifies all attn_v invocations and MR7 demonstrates a material generic fallback bucket with exact quant/layout facts.",
+      "transfer_disposition": "TRANSFER_CENSUS_INVARIANT_NOT_ROUTE"
+    },
+    {
+      "id": "q6k_ffn_down_longk",
+      "historical_topic": "Larger-shape Q6_K ffn_down cooperative coverage",
+      "classification": {
+        "primary": "irrelevant_first_metal_workload",
+        "secondary": ["portable_concept", "backend_specific_implementation"],
+        "first_metal_workload": "historical_fix_did_not_move_8b"
+      },
+      "semantic_mechanism": "Replace a model-dimension gate with a structural long-K/moderate-N candidate class, but validate every shape family and keep lm_head/attention exclusions explicit.",
+      "winning_workload": {
+        "models": ["Qwen3-14B-Q4_K_M", "Qwen3-32B-Q4_K_M", "Qwen3-8B-Q4_K_M control"],
+        "roles": ["ffn_down"],
+        "shapes_n_by_k": [[5120, 17408], [5120, 25600], [4096, 12288]],
+        "quant": "Q6_K",
+        "effect": "The structural cooperative route improved 14B by 17% and 32B by 20%; 8B was unchanged because its ffn_down already used the cooperative path."
+      },
+      "compiler_primitives_required": ["same cooperative Q6_K primitives as q6k_cooperative_generated", "resource validation across long K"],
+      "amd_specific_implementation": ["K>=8192 and N<100000 gate", "gfx1100 cooperative route", "AMD thresholds and bandwidth"],
+      "portable_descriptor": {
+        "axes": ["exact_N", "exact_K", "role", "packed_position_extent", "row_tile", "reduction"],
+        "constraints": ["structural rules derive from candidate legality and measurements", "exclude lm_head and attention explicitly by semantic role", "preserve exact-shape fallback"],
+        "prohibited_inheritance": ["K>=8192", "N<100000", "long-K route default"]
+      },
+      "metal_capability_mapping": {
+        "status": "unknown",
+        "supported": [],
+        "unknown": ["not selected for the first 8B Metal search because the historical coverage fix had zero 8B effect"],
+        "decision": "Exclude from initial MR8; retain structural-coverage lesson for later larger models."
+      },
+      "ordinary_fallback": "Ordinary generated Metal Q6_K ffn_down route.",
+      "evidence": [
+        {
+          "commit": "8920268217f67ccf271726e30bdb8a2a4d1a6834",
+          "date": "2026-07-01",
+          "subject": "[nn] PROMOTE L3 Q6_K ffn_down long-K route (default-on): 14B +17%, 32B +20%, 8B unchanged, token-identical",
+          "artifact": "docs/qwen-14b-32b-l3-q6k-ffn-down-longk-result.md",
+          "git_blob": "83d105f5e900195911145c42406d7c86c519a930",
+          "proves": "Exact 14B/32B gains, 8B no-change control, route binding, token identity, and rollback.",
+          "does_not_prove": "That the historical structural inequality is a Metal legality rule."
+        }
+      ],
+      "reopen_condition": "A later Metal workload has uncovered Q6_K ffn_down shapes and a route census proves an avoidable fallback; author exact structural candidates from live target facts.",
+      "transfer_disposition": "EXCLUDE_INITIAL_SEARCH_RETAIN_STRUCTURAL_PATTERN"
+    },
+    {
+      "id": "generated_g5_k_only_attention",
+      "historical_topic": "Generated G=5 K-only flash attention",
+      "classification": {
+        "primary": "irrelevant_first_metal_workload",
+        "secondary": ["portable_concept", "compiler_work", "backend_specific_implementation"],
+        "first_metal_workload": "g5_does_not_match_qwen3_8b_g4"
+      },
+      "semantic_mechanism": "Treat attention locality as an explicit candidate axis: stage K in local memory while reading V through a measured warm-cache path, reducing local-memory footprint and staging instructions. The choice is valid only when producer/consumer cache residency and resource evidence support it.",
+      "winning_workload": {
+        "models": ["Qwen3-14B-Q4_K_M"],
+        "roles": ["decode_attention"],
+        "shapes": {"Hq": 40, "Hkv": 8, "G": 5, "Hd": 128, "TK": 16},
+        "contexts": [512, 2048],
+        "effect": "The generated UOp K_ONLY route halved local memory from 8192 to 4096 bytes, removed the V staging loop, and improved AMD whole decode by 7.8% at ctx512 and 14.7% at ctx2048. The original K+V G=5 block tile had previously regressed about 80%, so the locality axis—not the G=5 grouping alone—was decisive."
+      },
+      "compiler_primitives_required": [
+        "generated local-memory allocation and barrier",
+        "target-derived subgroup/workgroup mapping for G query groups",
+        "online softmax and weighted-value accumulation",
+        "efficient K local staging",
+        "measured cache-resident V loads",
+        "resource and static-instruction evidence"
+      ],
+      "amd_specific_implementation": [
+        "G=5, 160-thread workgroup, TK=16, and L=128",
+        "AMD ds_bpermute and __builtin_amdgcn_fdot2 lowering",
+        "the E_49152_32_3 producer label and asserted L2 warmth",
+        "gfx1100 4KB/8KB resource economics",
+        "DECODE_FLASH_BLOCK_TILE_G5 and KONLY policy defaults"
+      ],
+      "portable_descriptor": {
+        "axes": ["gqa_group_count", "tile_kv_rows", "staging_policy", "local_bytes", "barrier_count", "value_source", "split_length", "workgroup_geometry"],
+        "constraints": ["G derives from Hq/Hkv", "local bytes fit live target limits", "K_ONLY requires scope-compatible cache-residency evidence", "KV_BOTH remains a separately measured candidate", "ordinary attention is always included"],
+        "prohibited_inheritance": ["G=5 policy", "160 threads", "K_ONLY default", "AMD cache-producer label", "AMD dot/shuffle opcodes"]
+      },
+      "metal_capability_mapping": {
+        "status": "unknown",
+        "supported": ["the Metal target exposes local-memory limits, but no exact generated block-tile route is established by this audit"],
+        "unknown": ["Qwen3-8B uses G=4 rather than the winning G=5 applicability", "Metal V-cache residency", "generated local-memory/barrier performance", "subgroup reduction and dot lowering", "whole-step attention share"],
+        "decision": "Exclude the G=5 row from the first 8B search. Only the staging-policy axis may reopen after MR7 and a Metal cache/locality probe."
+      },
+      "ordinary_fallback": "Ordinary tinygrad-generated Metal SDPA/attention path.",
+      "evidence": [
+        {
+          "commit": "3058b03c9463c3cde899d18b9a0448e6e4599b19",
+          "date": "2026-07-01",
+          "subject": "[nn] DECODE_FLASH_BLOCK_TILE_G5_KONLY=0: K-only LDS staging for G=5 flash (+3.9 tok/s ctx512, GP4_PASS_TIER_A)",
+          "artifact": "docs/gp5-final-report.md",
+          "git_blob": "2898e819e1980344ac26715ad9a701ee6b7fca3a",
+          "proves": "Generated provenance, exact G=5 applicability, local-memory/instruction mechanism, correctness, whole-model gains, and rollback.",
+          "does_not_prove": "G=4 Metal applicability or Metal cache warmth."
+        },
+        {
+          "commit": "3058b03c9463c3cde899d18b9a0448e6e4599b19",
+          "date": "2026-07-01",
+          "subject": "[nn] DECODE_FLASH_BLOCK_TILE_G5_KONLY=0: K-only LDS staging for G=5 flash (+3.9 tok/s ctx512, GP4_PASS_TIER_A)",
+          "artifact": "bench/g5-block-tile/compiler_pathology_v1.json",
+          "git_blob": "8d525c8f5a7161216cfc77ea20b852c2123d130e",
+          "proves": "The AMD K+V route had 8192 local bytes, 91 VGPRs, no scratch, and an LDS_OR_MEMORY_OVERHEAD diagnosis.",
+          "does_not_prove": "That Metal has the same resource pathology."
+        }
+      ],
+      "reopen_condition": "MR7 selects Metal attention, the exact target has a legal generated block-tile form, and a controlled probe demonstrates V cache residency plus a K_ONLY win over both KV_BOTH and ordinary attention.",
+      "transfer_disposition": "EXCLUDE_G5_TRANSFER_STAGING_AXIS_CONDITIONALLY"
+    }
+  ],
+  "summary": {
+    "row_count": 9,
+    "initial_mr8_candidates_authorized": 0,
+    "directly_relevant_but_unranked": ["q4k_g3_lane_partition", "q6k_cooperative_generated", "q4k_attn_qo_cooperative", "attn_k_route_coverage", "attn_v_route_coverage"],
+    "deferred_to_depth512": ["flash_decode_regime_selection"],
+    "excluded_from_first_8b_search": ["q4k_large_shape_coverage", "q6k_ffn_down_longk", "generated_g5_k_only_attention"],
+    "portable_invariants": [
+      "candidate axes derive from semantic facts and live target capabilities",
+      "route coverage is audited independently of route quality",
+      "locality policy is explicit and evidence-backed",
+      "context/shape regimes are measured policy dimensions",
+      "ordinary generated Metal remains the fail-closed fallback"
+    ]
+  }
+}
