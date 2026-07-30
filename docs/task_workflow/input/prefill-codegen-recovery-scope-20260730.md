@@ -52,8 +52,8 @@ Attention is byte-for-byte unaffected by the regression and runs at roughly **0.
 prefill kernels reach 25-30% of peak, and the best reached roofline before the regression. This is not a
 compute-bound kernel performing correctly at low bandwidth — it is slow on both axes.
 
-It is also the only significant kernel whose cost **scales with context length**. At depth 128 it is 18.4% of
-prefill; its share at 512, 4096, and beyond is unmeasured and is the first thing this scope must establish.
+It is also the only significant kernel whose cost **scales with context length**. That curve is now measured --
+see 2.4.
 
 ### 2.3 What is already known about P1's mechanism
 
@@ -65,6 +65,43 @@ consistent with wide loads being replaced by scalar loads.
 
 The commit also **fixed a real correctness defect**: decode output moved from 83659/33235 to 13876/38835, matching
 llama.cpp. That fix is not in question and must not be regressed.
+
+### 2.4 PR0 result — re-derived peaks and attention's depth curve
+
+Measured 2026-07-30 on the current tree. **PR0 is complete.**
+
+**Peaks, re-derived by observation** (max over every kernel profiled today, restricted to kernels >50us so
+timing noise cannot inflate the rate):
+
+- compute: **>=4172 GFLOPS**, sustained over a 3.7 ms kernel. The ~3500 figure used earlier in this campaign is
+  wrong and every "% of peak" claim made against it understates the gap.
+- the reported GB/s column is **logical bytes touched / time**, not DRAM bandwidth. It equals DRAM bandwidth only
+  for kernels that miss cache — validated exactly on lm_head (510,504,960 bytes / 63.64 ms = 8.02 GB/s, matching
+  the reported 8.0) — but reaches **954 GB/s** on a small cache-resident kernel, eight times the 120 GB/s memory
+  roof. Do not read it as DRAM bandwidth for small kernels.
+
+**Attention's depth curve**, all three points on one tree:
+
+| depth | route | prefill | attention | share | attention GFLOPS |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 128 | sdpa | 61164 ms | 14000 ms | 22.9% | 12 |
+| 512 | flash | 19195 ms | 721 ms | 3.8% | 9 |
+| 1024 | flash | 49719 ms | 2775 ms | 5.6% | 5 |
+
+Three facts follow:
+
+1. **Attention is quadratic.** Doubling 512 -> 1024 multiplied its cost by 3.85x while every other prefill term is
+   linear, so its share compounds with depth.
+2. **Its efficiency degrades with depth** — 12 -> 9 -> 5 GFLOPS against a >=4172 peak, i.e. roughly 0.1-0.3%. It
+   does more work at long context *and* does that work worse.
+3. **The flash route only activates at depth >=512.** At 128 the heuristic selects sdpa. This is why TG7's
+   depth-128 decode A/B returned a null: it measured the one depth where flash is not the natural route.
+
+PR0's stop condition is therefore answered: attention's share **does** grow with depth, so P2 stays live. But at
+3.8-5.6% across the measured range it does not yet outrank P1's 2.40x, which is why PR2 is sequenced first.
+
+An open follow-up, cheap: nobody has measured forced-flash *prefill* at depth 128. If flash also helps there, the
+depth threshold is simply mistuned and that is a heuristic change rather than an implementation.
 
 ## 3. Architectural boundaries
 
