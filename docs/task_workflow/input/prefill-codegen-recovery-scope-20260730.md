@@ -130,15 +130,31 @@ Prerequisite: PR1.
   regenerate or weaken that test** — if it must change to accommodate a fix, the fix is wrong.
 - Full §4 evidence. Expected recovery is bounded above by the pre-regression numbers in §2.1.
 
-### PR3 — Prefill attention
+### PR3 — Re-tile prefill attention for Metal tensor-core geometry
 
-Prerequisite: PR0 establishes priority; PR2 lands first if PR0 shows attention's share is flat.
+Prerequisite: PR0 (done, see 2.4 below). PR2 lands first — PR3 is larger and its payoff depends on target depth.
 
-- Determine why the attention kernel runs at ~0.3% of peak: schedule shape, missing route admission, or a
-  genuinely bad generated kernel. Note that `flash_prefill_attention.py` exists and that one of the five
-  target-hardcoded gates in the companion scope (`flash_decode_attention.py:384`, and the grid admission at
-  `model.py:72`) may mean no fast attention route is admitted on Metal at all — check that before assuming the
-  kernel itself is at fault.
+**This was investigated on 2026-07-30 and is NOT a gate problem.** The prefill attention kernel
+(`tinygrad/schedule/wmma/kernels.py`) contains no AMD ISA — it is portable UOps built on the abstract
+`Ops.WMMA`, and `MetalRenderer` already declares `tensor_cores = tc.metal` for Apple7+. The blocker is
+tensor-core *geometry*:
+
+| target | dims | threads | elements_per_thread |
+| --- | --- | ---: | --- |
+| AMD gfx1100 (rdna3) | (16,16,16) | 32 | (16,16,8) |
+| Metal (Apple7+) | (8,8,8) | 32 | (2,2,2) |
+
+`kernels.py:36` hardcodes `warg = ("WMMA_16_16_16_half_float", (16,16,16), ..., "AMD:gfx1100", 32, ...)` and
+accumulates into `dtypes.float.vec(8)`. Metal's fragment is 2 elements per thread, not 8, and its tile is half
+the size in every dimension. Adding a `_PREFILL_EMITTERS` entry cannot work — it would construct a WMMA node
+declaring AMD geometry on a Metal renderer.
+
+The algorithm transfers (flash attention with online softmax over WMMA tiles); the tiling does not. Scope of
+work: re-tile the loop for 8x8x8, re-derive `fragment_axes`, and narrow the softmax accumulators from `vec(8)`
+to the Metal fragment width. The `wave32 VGPR budget` ceiling documented in
+`tinygrad/schedule/wmma/flash_prefill.py:15` is an AMD register-file assumption and must be re-derived too.
+
+Do not begin until PR2 is complete and PR0's depth curve justifies the cost.
 
 ### PR4 — Retest the decode path
 
