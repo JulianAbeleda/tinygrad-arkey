@@ -17,7 +17,13 @@ def _qk_generated_policy_entry(policy:dict|None, typ:int, rows:int, cols:int, na
 
 @dataclass(frozen=True)
 class QKPrimitiveEligibility:
-  """Structural target facts retained by an installed AMD gfx1100 primitive."""
+  """Structural target facts retained by an installed AMD gfx1100 primitive.
+
+  NOTE: this pre-TG3 type is retained, unchanged, only for the unrelated generated-decode-attention KV-dtype
+  probe at model.py's `_generated_decode_shape_supported` (a different gate than the one this scope package
+  splits -- see docs/task_workflow/input/target-capability-policy-decoupling-scope-20260730.md TG7-TG10).
+  The Q4_K/Q6_K primitive gate this file installs now uses `QKPrimitiveCapability` /
+  `QKPrimitiveRouteAdmission` below instead; do not wire this type into new decisions."""
   backend: str|None = None
   architecture: str|None = None
   wave_size: int|None = None
@@ -32,6 +38,46 @@ def qk_primitive_eligibility_from_device_facts(device_facts:object|None) -> QKPr
   capabilities = getattr(device_facts, "capabilities", None)
   return QKPrimitiveEligibility(getattr(device_facts, "backend", None), getattr(device_facts, "architecture", None),
                                 getattr(capabilities, "wave_size", None))
+
+@dataclass(frozen=True)
+class QKPrimitiveCapability:
+  """TG3 capability authority: can the resolved target's renderer express what the Q4_K/Q6_K decode kernels
+  require? Every field is copied verbatim from the TG2 renderer/device-facts scan -- never inferred from a
+  target/backend string, and never conflated with promotion (see QKPrimitiveRouteAdmission below).
+  `backend`/`architecture` are retained only for census/debug identification, not for the eligibility check."""
+  backend: str|None = None
+  architecture: str|None = None
+  wave_size: int|None = None
+  supports_warp_shfl_xor: bool|None = None
+
+  @property
+  def satisfied(self) -> bool:
+    """decode_kernels.py::_lane_partition_reduce_sum -> _warp_reduce_sum_staged reaches warp_shfl_xor
+    (codegen/late/warp_reduce.py, TG1) and assumes a 32-wide lane partition (`WARP`). An unreported wave_size
+    (None -- e.g. Metal, scope section 3.3) must NEVER be treated as 32: this is strict equality against a
+    known fact, not a truthiness check on an absent one."""
+    return self.supports_warp_shfl_xor is True and self.wave_size == 32
+
+def qk_primitive_capability_from_device_facts(device_facts:object|None) -> QKPrimitiveCapability:
+  """Copy only the immutable renderer/device capability fields the Q4_K/Q6_K primitives require from the
+  load-entry DeviceFacts scan (tinygrad/llm/device_facts.py) -- never a fresh probe, never a parallel facts
+  object, never a target-string inference."""
+  if device_facts is None: return QKPrimitiveCapability()
+  capabilities = getattr(device_facts, "capabilities", None)
+  return QKPrimitiveCapability(getattr(device_facts, "backend", None), getattr(device_facts, "architecture", None),
+                               getattr(capabilities, "wave_size", None), getattr(capabilities, "supports_warp_shfl_xor", None))
+
+@dataclass(frozen=True)
+class QKPrimitiveRouteAdmission:
+  """The two independent TG3 answers retained by an installed Q4_K/Q6_K primitive: capability (this file,
+  read from renderer/device facts) and promotion (ModelRoutePlan.target_promoted, tinygrad/llm/model_route_plan.py
+  -- the BoltBeam-sourced route-policy authority). Each is resolved by its own owner; collapsing them back
+  into one hardcoded target-string boolean is exactly the pre-TG3 bug this scope package removes."""
+  capability: QKPrimitiveCapability = QKPrimitiveCapability()
+  target_promoted: bool = True
+
+  @property
+  def admitted(self) -> bool: return self.capability.satisfied and self.target_promoted
 
 def _model_parameter_alias(source:Tensor|None, derived:Tensor) -> Tensor:
   """Attach model ownership to derived storage which already aliases a backing."""
@@ -103,13 +149,16 @@ class _QKPrimitiveLinear:
   _prefill_attr = ""
   _ggml_type = -1
   def _init_common(self, weight:Tensor, bias:Tensor|None, packed:Tensor, out_features:int, in_features:int, parts:int, opts:tuple,
-                   name:str, storage, route_role:str, eligibility:QKPrimitiveEligibility|None):
+                   name:str, storage, route_role:str, route_admission:QKPrimitiveRouteAdmission|None):
     self.weight, self.bias = weight, bias
     _model_parameter_alias(weight, packed)
     setattr(self, self._storage_attr, storage)
     self.out_features, self.in_features, self.parts, self.opts, self.name = out_features, in_features, parts, opts, name
     self.route_role = route_role
-    self.eligibility = eligibility or QKPrimitiveEligibility()
+    # TG3 split: `route_admission.admitted` is `capability.satisfied AND target_promoted`, resolved by two
+    # separate authorities (see QKPrimitiveRouteAdmission) -- this is the ONLY per-instance gate consulted at
+    # call time, and defaults to not-admitted when neither was supplied (isolated construction, tests, etc.).
+    self.route_admission = route_admission or QKPrimitiveRouteAdmission()
     self.decode_enabled = False
 
   def _fallback(self, x:Tensor) -> Tensor:
@@ -130,26 +179,27 @@ class Q4KPrimitiveLinear(_QKPrimitiveLinear):
   def __init__(self, weight:Tensor, bias:Tensor|None, words:Tensor, out_features:int, in_features:int, parts:int, opts:tuple,
                name:str, source_bytes:int, persistent_bytes:int, storage_mode:str,
                shared_bytes:int=0, nonpersistent_bytes:int=0, kernel_mode:str="partial", route_role:str="",
-               eligibility:QKPrimitiveEligibility|None=None):
+               route_admission:QKPrimitiveRouteAdmission|None=None):
     if kernel_mode not in ("partial", "direct_out"): raise ValueError(f"unsupported Q4_K primitive kernel mode {kernel_mode!r}")
     if kernel_mode == "direct_out" and parts != 1: raise ValueError("Q4_K direct_out primitive requires parts=1")
     self._init_common(weight, bias, words, out_features, in_features, parts, opts, name,
-      Q4KPrimitiveStorage(words, source_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes), route_role, eligibility)
+      Q4KPrimitiveStorage(words, source_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes), route_role, route_admission)
     self.kernel_mode = kernel_mode
 
   def __call__(self, x:Tensor) -> Tensor:
-    return self._call_with_program_facts(lambda: q4k_primitive_linear_call(self, x, self._fallback, self.eligibility.eligible))
+    return self._call_with_program_facts(lambda: q4k_primitive_linear_call(self, x, self._fallback, self.route_admission.admitted))
 
 class Q6KPrimitiveLinear(_QKPrimitiveLinear):
   _storage_attr, _prefill_attr, _ggml_type = "q6k_storage", "_prefill_q6k_halfs", 14
   def __init__(self, weight:Tensor, bias:Tensor|None, halfs:Tensor, out_features:int, in_features:int, parts:int, opts:tuple,
                name:str, source_bytes:int, persistent_bytes:int, storage_mode:str,
-               shared_bytes:int=0, nonpersistent_bytes:int=0, route_role:str="", eligibility:QKPrimitiveEligibility|None=None):
+               shared_bytes:int=0, nonpersistent_bytes:int=0, route_role:str="",
+               route_admission:QKPrimitiveRouteAdmission|None=None):
     self._init_common(weight, bias, halfs, out_features, in_features, parts, opts, name,
-      Q6KPrimitiveStorage(halfs, source_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes), route_role, eligibility)
+      Q6KPrimitiveStorage(halfs, source_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes), route_role, route_admission)
 
   def __call__(self, x:Tensor) -> Tensor:
-    return self._call_with_program_facts(lambda: q6k_primitive_linear_call(self, x, self._fallback, self.eligibility.eligible))
+    return self._call_with_program_facts(lambda: q6k_primitive_linear_call(self, x, self._fallback, self.route_admission.admitted))
 
 def _q6k_effective_storage_mode(requested_mode:str) -> str:
   # q4_ondemand is a Q4_K-only experiment. Q6_K stays persistent unless storage is shared.
@@ -237,14 +287,30 @@ class _QKInstallSpec:
   generated_policy: object; route_choice: object; parse_opt: object; make_linear: object; installed_detail: object
   allowed_storage_modes: tuple[str, ...]
 
-def _route_choice(label:str, route_plan:ModelRoutePlan|None, name:str, rows:int, cols:int,
-                  skipped:collections.Counter[str], q4:bool=False) -> _QKInstallChoice|None:
+def _qk_target_promoted(route_plan:object|None, target:tuple[str|None, str|None]) -> bool:
+  """TG3 policy check, tolerant of route_plan doubles that only implement `.primitive` (e.g. the
+  generated-policy test double that must never be consulted at all -- see
+  test_generated_policy_override_still_wins_over_route_plan). Absence of the method reads the same as
+  `route_plan is None`: undecided-by-target, not denied (see ModelRoutePlan.target_promoted)."""
+  check = getattr(route_plan, "target_promoted", None)
+  return True if check is None else check(target)
+
+def _route_choice(label:str, route_plan:ModelRoutePlan|None, name:str, rows:int, cols:int, skipped:collections.Counter[str],
+                  capability_ok:bool, target_promoted:bool, q4:bool=False) -> _QKInstallChoice|None:
   if route_plan is None or (entry := route_plan.primitive(name)) is None: skipped["policy_fallback"] += 1; return None
   if entry.quant_label != label or entry.rows != rows or entry.cols != cols: skipped["policy_unsupported"] += 1; return None
+  # TG3: the two admission questions are independently decidable and reported with distinct census reasons --
+  # QKPrimitiveCapability (renderer/device facts, tinygrad/llm/device_facts.py) answers (a); ModelRoutePlan
+  # .target_promoted (the BoltBeam-sourced route-policy authority) answers (b). Neither is inferred here from
+  # a target string.
+  if not capability_ok: skipped["capability_missing"] += 1; return None
+  if not target_promoted: skipped["policy_target_not_promoted"] += 1; return None
   return _QKInstallChoice(entry.module_path, entry.parts, entry.opts, entry.role, entry.kernel_mode if q4 else "partial")
 
-def _q4_route_choice(route_plan, name, rows, cols, skipped): return _route_choice("Q4_K", route_plan, name, rows, cols, skipped, True)
-def _q6_route_choice(route_plan, name, rows, cols, skipped): return _route_choice("Q6_K", route_plan, name, rows, cols, skipped)
+def _q4_route_choice(route_plan, name, rows, cols, skipped, capability_ok, target_promoted):
+  return _route_choice("Q4_K", route_plan, name, rows, cols, skipped, capability_ok, target_promoted, True)
+def _q6_route_choice(route_plan, name, rows, cols, skipped, capability_ok, target_promoted):
+  return _route_choice("Q6_K", route_plan, name, rows, cols, skipped, capability_ok, target_promoted)
 
 def _generated_choice(policy:dict, typ:int, rows:int, cols:int, name:str, skipped:collections.Counter[str], families:set[str]):
   if (entry := _qk_generated_policy_entry(policy, typ, rows, cols, name)) is None: skipped["policy_missing"] += 1; return None
@@ -262,11 +328,11 @@ def _q6_generated_choice(policy, typ, rows, cols, name, skipped):
   if (entry := _generated_choice(policy, typ, rows, cols, name, skipped, {"q6_k_packed_u16"})) is None: return None
   return _QKInstallChoice(name[:-len(".weight")], entry["parts"], entry["opts"], "")
 
-def _make_q4(module, packed, rows, cols, choice, opts, name, sizes, storage_mode, eligibility):
-  return Q4KPrimitiveLinear(module.weight, module.bias, packed, rows, cols, choice.parts, opts, name, sizes[0], sizes[1], storage_mode, sizes[2], sizes[3], kernel_mode=choice.kernel_mode, route_role=choice.route_role, eligibility=eligibility)
+def _make_q4(module, packed, rows, cols, choice, opts, name, sizes, storage_mode, route_admission):
+  return Q4KPrimitiveLinear(module.weight, module.bias, packed, rows, cols, choice.parts, opts, name, sizes[0], sizes[1], storage_mode, sizes[2], sizes[3], kernel_mode=choice.kernel_mode, route_role=choice.route_role, route_admission=route_admission)
 
-def _make_q6(module, packed, rows, cols, choice, opts, name, sizes, storage_mode, eligibility):
-  return Q6KPrimitiveLinear(module.weight, module.bias, packed, rows, cols, choice.parts, opts, name, sizes[0], sizes[1], storage_mode, sizes[2], sizes[3], route_role=choice.route_role, eligibility=eligibility)
+def _make_q6(module, packed, rows, cols, choice, opts, name, sizes, storage_mode, route_admission):
+  return Q6KPrimitiveLinear(module.weight, module.bias, packed, rows, cols, choice.parts, opts, name, sizes[0], sizes[1], storage_mode, sizes[2], sizes[3], route_role=choice.route_role, route_admission=route_admission)
 
 def _q4_detail(x): return f"{x.name}:mode={x.kernel_mode}:parts={x.parts}:opts={[str(o) for o in x.opts]}"
 def _q6_detail(x): return f"{x.name}:parts={x.parts}:opts={[str(o) for o in x.opts]}"
@@ -280,14 +346,23 @@ def _install_qk_primitives(model, gguf:pathlib.Path, meta:dict, spec:_QKInstallS
                            storage_mode:str, route_plan:ModelRoutePlan|None, device_facts:object|None, debug:bool):
   if storage_mode not in spec.allowed_storage_modes: raise ValueError(f"unsupported {spec.label} primitive storage mode {storage_mode!r}")
   raw, installed, skipped = Tensor(gguf, dtype=spec.dtype), [], collections.Counter()
-  budget, eligibility = budget or QKPrimitiveBudget(), qk_primitive_eligibility_from_device_facts(device_facts)
+  budget = budget or QKPrimitiveBudget()
   if generated_policy is None and route_plan is None: route_plan = build_model_route_plan(meta)
+  # TG3: capability (renderer/device facts) and promotion (route-plan policy) are properties of the resolved
+  # target/plan, not of any individual tensor -- resolve each ONCE per install call, then apply uniformly so
+  # every tensor's admission (or rejection, with its own census reason below) stays observable. This replaces
+  # the pre-TG3 gate that decided, from a single hardcoded target-string match, whether this function even ran
+  # at all (see model.py's use_q4k_primitive/use_q6k_primitive) -- it now always runs, and a target that cannot
+  # be admitted is recorded in `skipped`, never silently dropped.
+  capability = qk_primitive_capability_from_device_facts(device_facts)
+  target_promoted = _qk_target_promoted(route_plan, (capability.backend, capability.architecture))
+  route_admission = QKPrimitiveRouteAdmission(capability, target_promoted)
   for name, dims, typ, off in meta["tensor_infos"]:
     if typ != spec.ggml_type: skipped[spec.not_kind_counter] += 1; continue
     if len(dims) != 2: skipped["not_2d"] += 1; continue
     if not name.endswith(".weight"): skipped["not_weight"] += 1; continue
     rows, cols = tuple(reversed(dims))
-    choice = (spec.route_choice(route_plan, name, rows, cols, skipped) if generated_policy is None else
+    choice = (spec.route_choice(route_plan, name, rows, cols, skipped, capability.satisfied, target_promoted) if generated_policy is None else
               spec.generated_policy(generated_policy, typ, rows, cols, name, skipped))
     if choice is None: continue
     byte_start = meta["data_start"] + off
@@ -305,7 +380,7 @@ def _install_qk_primitives(model, gguf:pathlib.Path, meta:dict, spec:_QKInstallS
       packed = source.contiguous() if storage_mode == "q4_ondemand" else _model_parameter_materialization(module.weight, source.to(None).contiguous())
       shared_bytes = 0
     sizes = (source_bytes, persistent_bytes, shared_bytes, source_bytes if storage_mode == "q4_ondemand" else 0)
-    linear = spec.make_linear(module, packed, rows, cols, choice, tuple(spec.parse_opt(x) for x in choice.opt_specs), name, sizes, storage_mode, eligibility)
+    linear = spec.make_linear(module, packed, rows, cols, choice, tuple(spec.parse_opt(x) for x in choice.opt_specs), name, sizes, storage_mode, route_admission)
     _set_module_at(model, choice.module_path, linear)
     installed.append(linear)
   if debug:

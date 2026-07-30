@@ -33,9 +33,18 @@ def _optional_int(value: Any) -> int | None:
   return value if value >= 0 else None
 
 
+def _optional_bool(value: Any) -> bool | None:
+  if value is None: return None
+  return bool(value)
+
+
 @dataclass(frozen=True)
 class DeviceCapabilities:
   wave_size: int | None = None
+  # Cross-lane XOR shuffle availability (TG1/TG2: tinygrad/codegen/late/warp_reduce.py +
+  # Renderer.supports_warp_shfl_xor). Read the same way wave_size already is -- copied verbatim from the
+  # renderer that was actually opened, never inferred from a target/backend string.
+  supports_warp_shfl_xor: bool | None = None
   max_workgroup_threads: int | None = None
   max_workgroup_dimensions: tuple[int, int, int] | None = None
   lds_bytes: int | None = None
@@ -47,7 +56,8 @@ class DeviceCapabilities:
   @classmethod
   def from_json(cls, value: Mapping[str, Any]) -> DeviceCapabilities:
     dims = value.get("max_workgroup_dimensions")
-    return cls(*(_optional_int(value.get(k)) for k in ("wave_size", "max_workgroup_threads")),
+    return cls(_optional_int(value.get("wave_size")), _optional_bool(value.get("supports_warp_shfl_xor")),
+               _optional_int(value.get("max_workgroup_threads")),
                None if dims is None else tuple(int(x) for x in dims),
                _optional_int(value.get("lds_bytes")), _optional_int(value.get("lds_allocation_granularity")),
                _optional_int(value.get("global_allocation_granularity")))
@@ -205,6 +215,7 @@ def _tinygrad_target_probe(device: str) -> Mapping[str, Any]:
   # capability matching must fail closed.
   capabilities = {
     "wave_size": getattr(renderer, "wave_size", None),
+    "supports_warp_shfl_xor": getattr(renderer, "supports_warp_shfl_xor", None),
     "max_workgroup_threads": getattr(renderer, "max_workgroup_threads", None),
     "max_workgroup_dimensions": getattr(renderer, "max_workgroup_dimensions", None),
     "lds_bytes": getattr(renderer, "shared_max", None),

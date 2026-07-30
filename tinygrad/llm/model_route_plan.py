@@ -125,14 +125,45 @@ _qk_route_policy_selected = qk_route_policy_selected
 _qk_route_policy_selects_q4k_g3 = qk_route_policy_selects_q4k_g3
 _qk_route_policy_selects_q6k_generated = qk_route_policy_selects_q6k_generated
 
+# TG3 (docs/task_workflow/input/target-capability-policy-decoupling-scope-20260730.md): "is this candidate
+# promoted for this resolved target" is a policy question and this is its one authority -- reuse, not a
+# second table. `promoted_targets` is None until a BoltBeam-sourced promotion record has been loaded (TG4
+# packages the canonical manifest; the EXP snapshot is the only artifact that may ever populate this) -- that
+# is deliberately NOT the same as an explicit denial, so every target is admitted by capability alone until a
+# real record exists, matching today's production default. No target string is hardcoded here: the only way
+# a target is ever excluded is by an explicit, loaded promotion record naming (backend, architecture) pairs.
+Target = tuple[str | None, str | None]
+
+def load_qk_target_promotion(path:str) -> frozenset[Target] | None:
+  """Read a Q4_K/Q6_K target-promotion record from an explicit BoltBeam-sourced route-policy snapshot path
+  (the same boltbeam.route_policy.v1 schema `load_qk_route_policy` already validates -- the Boundary Rule
+  forbids tinygrad/** importing extra/llm_research/route_manifest.py directly, so this explicit-path JSON
+  parser is the only channel target-promotion facts may reach production through). A document with no
+  `promoted_targets` key returns None (no restriction recorded); an explicit list -- including an empty one --
+  is a real, enforced boundary once loaded (see ModelRoutePlan.target_promoted)."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return None
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_load_qk_target_promotion = load_qk_target_promotion
+
 @dataclass(frozen=True)
 class PrimitiveRouteEntry:
   name:str; module_path:str; quant_label:str; rows:int; cols:int; role:str; parts:int; opts:tuple[str, ...]; family:str
   kernel_mode:str = "partial"
 
 class ModelRoutePlan:
-  def __init__(self, entries:Iterable[PrimitiveRouteEntry]=()): self._entries = {entry.name: entry for entry in entries}
+  def __init__(self, entries:Iterable[PrimitiveRouteEntry]=(), promoted_targets:frozenset[Target]|None=None):
+    self._entries = {entry.name: entry for entry in entries}
+    self.promoted_targets = promoted_targets
   def primitive(self, name:str) -> PrimitiveRouteEntry|None: return self._entries.get(name)
+  def target_promoted(self, target:Target) -> bool:
+    """Policy authority for TG3's second question. See the module-level note above `load_qk_target_promotion`
+    for why `None` here means "undecided by target", not "denied"."""
+    return self.promoted_targets is None or target in self.promoted_targets
   def __len__(self) -> int: return len(self._entries)
   def __iter__(self): return iter(self._entries.values())
 
@@ -169,14 +200,14 @@ def _record_entry(record:Any) -> PrimitiveRouteEntry|None:
   return primitive_route_entry_for_tensor(str(name), int(typ), int(rows), int(cols), module_path=get("module_path"),
                                           quant_label=get("quant_label"), role=get("role"))
 
-def build_model_route_plan(meta:dict|None=None, model_facts:Any=None) -> ModelRoutePlan:
+def build_model_route_plan(meta:dict|None=None, model_facts:Any=None, promoted_targets:frozenset[Target]|None=None) -> ModelRoutePlan:
   records = getattr(model_facts, "tensors", ()) if model_facts is not None else ()
   entries = [entry for record in records if (entry := _record_entry(record)) is not None]
   if not entries and meta is not None:
     for name, dims, typ, _off in meta.get("tensor_infos", ()):
       if str(name).endswith(".weight") and len(dims) == 2 and (entry := primitive_route_entry_for_tensor(str(name), int(typ), int(dims[1]), int(dims[0]))) is not None:
         entries.append(entry)
-  return ModelRoutePlan(entries)
+  return ModelRoutePlan(entries, promoted_targets)
 
 try: from tinygrad.llm.model_facts import ModelFacts as ModelFacts
 except Exception: ModelFacts = None

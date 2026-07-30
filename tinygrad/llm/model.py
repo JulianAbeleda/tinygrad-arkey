@@ -1030,10 +1030,13 @@ class Transformer:
     # double-count weights already in `used`). Total is stable regardless.
     _measurement_authority = _MEMORY_ADAPTIVE_MEASUREMENT_AUTHORITY.get()
     _device_facts = scan_device_facts() if _measurement_authority is None else _measurement_authority[0]
-    # Decode primitives are installed only when the selected GGUF and the one
-    # live target scan satisfy their structural candidate contract.
-    _qk_eligible = qk_primitive_eligibility_from_device_facts(_device_facts).eligible
-    use_q4k_primitive = use_q6k_primitive = not isinstance(gguf, Tensor) and _qk_eligible
+    # Whether the Q4_K/Q6_K install functions even RUN no longer depends on a hardcoded target match (TG3,
+    # docs/task_workflow/input/target-capability-policy-decoupling-scope-20260730.md): the only remaining
+    # precondition here is having a selected GGUF path to read tensors from. Capability (renderer/device
+    # facts) and promotion (route-plan policy) are resolved per-tensor inside _install_q4k_primitives /
+    # _install_q6k_primitives (tinygrad/llm/qk_primitives.py), so a target that cannot be admitted is recorded
+    # in the route census instead of silently skipping installation altogether.
+    use_q4k_primitive = use_q6k_primitive = not isinstance(gguf, Tensor)
     _authority_workload = _measurement_authority[2] if _measurement_authority is not None else {}
     _prefill_ubatch = int(_authority_workload.get("prefill_ubatch", PREFILL_UBATCH))
     if _prefill_ubatch <= 0: raise ValueError("selected prefill candidate requires a positive physical M")
