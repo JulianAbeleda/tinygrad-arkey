@@ -26,10 +26,16 @@ def test_production_decode_kernels_have_no_research_dependency():
   assert "from extra" not in source
 
 
+# TG1 (docs/task_workflow/input/target-capability-policy-decoupling-scope-20260730.md) made warp_shfl_xor a
+# renderer-lowered operation: it now returns a target-agnostic tagged CUSTOMI (val, lane) instead of eagerly
+# baking the AMD ds_bpermute string and its (lane^offset)*4 address computation into the pre-render UOp graph.
+# That changes this promoted kernel's pre-render identity by design, even though the AMD-*rendered* source is
+# unchanged (test/unit/test_warp_shfl_xor_renderer_lowering.py pins that byte-for-byte). Digests below were
+# regenerated against the new (correct) shape; re-derive them the same way if this kernel legitimately changes.
 @pytest.mark.parametrize("rows,k,digest", [
-  (32, 1024, "38824cc99a243d1341ceb6bacafb932695da49aadbbdb209c4d82820ecafef6b"),
-  (4096, 4096, "5fdb3e94c16b764a3cddef363b8fa8ee950f9bdc6991bd15cdf0a8e397b3847e"),
-  (17408, 5120, "18d537cc1957495049fb02d9c792eccc0754ba0f393113bc828266b60c15ce84"),
+  (32, 1024, "b034e43c12561149fac0faa838142c07d48d1cd55ea2073dce9c25a16a64754f"),
+  (4096, 4096, "10d8d359bca1f310b7b41940680cb1f7c0d84b3d6280b8e63636a6440f91be13"),
+  (17408, 5120, "1f41ea6f1e5466866437835436fb4b040a041220a0c3ccb91e6bfa124cd7409b"),
 ])
 def test_q4_g3_production_lowering_preserves_promoted_uop_identity(rows, k, digest):
   args = _q4_args(rows, k)

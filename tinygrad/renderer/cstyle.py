@@ -250,6 +250,11 @@ class CStyleLanguage(Renderer):
   arg_int_prefix: str = "const int"
   barrier: str = ""
   code_for_workitem: dict[Literal["g", "l", "i"], Callable] = {}
+  # Per-target cross-lane XOR shuffle, in the same shape as barrier/float4/smem_prefix/code_for_workitem above --
+  # None means this target cannot express it, and codegen/late/warp_reduce.py raises rather than falling back.
+  # (val, xor_offset, lane) -> lowered CUSTOMI UOp. `lane` is only meaningful to providers that need a per-lane
+  # source address (e.g. AMD's ds_bpermute); providers that take a lane mask directly may ignore it.
+  warp_shfl_xor: Callable[[UOp, int, UOp], UOp]|None = None
   extra_args: list[str] = []
   float4: str|None = None
   float4_style: tuple[str, str] = ('(', ')')
@@ -480,6 +485,10 @@ class MetalRenderer(CStyleLanguage):
   arg_int_prefix = "constant int&"
   barrier = "threadgroup_barrier(mem_flags::mem_threadgroup);"
   float4 = "float4"
+  # simd_shuffle_xor(value, mask) is MSL's native simdgroup XOR shuffle. Unlike AMD's ds_bpermute it takes the
+  # lane mask directly (the hardware resolves the source lane itself), so `lane` is unused -- no per-lane
+  # address needs computing here.
+  warp_shfl_xor = staticmethod(lambda val, offset, lane: UOp(Ops.CUSTOMI, val.dtype, (val,), arg=f"simd_shuffle_xor({{0}}, {offset})"))
   code_for_workitem = {"g": lambda x: f"gid.{chr(120+int(x))}", "l": lambda x: f"lid.{chr(120+int(x))}"}
   extra_args = ['uint3 gid [[threadgroup_position_in_grid]]', 'uint3 lid [[thread_position_in_threadgroup]]']
   # MSL uses OpenCL-style compact scalar names for native vector types
@@ -576,6 +585,10 @@ class HIPRenderer(CStyleLanguage):
   kernel_typedef = 'extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, {launch_bounds})))'
   code_for_workitem = {"g": lambda x: f"__ockl_get_group_id({x})", "l": lambda x: f"__ockl_get_local_id({x})",
                        "i": lambda x: f"(__ockl_get_group_id({x})*__ockl_get_local_size({x})+__ockl_get_local_id({x}))"}
+  # Existing ds_bpermute behavior (byte-identical to the pre-TG1 inline string): ds_bpermute addresses lanes by
+  # byte offset, so the source lane (lane ^ offset) is computed here and bit-cast through int for the permute.
+  warp_shfl_xor = staticmethod(lambda val, offset, lane: UOp(Ops.CUSTOMI, val.dtype, (val, ((lane ^ offset) * 4).cast(dtypes.int)),
+    arg="__builtin_bit_cast(float, __builtin_amdgcn_ds_bpermute({1}, __builtin_bit_cast(int, {0})))"))
   code_for_op = {**CStyleLanguage.code_for_op, Ops.TRUNC: _ocml("trunc"), Ops.SIN: _ocml("sin"),
                  Ops.LOG2: _ocml("log2"), Ops.EXP2: _ocml("exp2"), Ops.SQRT: _ocml("sqrt")}
   smem_prefix = "__attribute__((shared, aligned(16)))"

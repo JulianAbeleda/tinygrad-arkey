@@ -2,7 +2,7 @@ from tinygrad.codegen.opt import tc
 from tinygrad.dtype import DType, dtypes
 from tinygrad.helpers import Target, prod
 from tinygrad.renderer.cstyle import CStyleLanguage, base_rewrite, create_non_native_float_pats, uops_to_dtypes, wmma_args
-from tinygrad.uop.ops import Ops, PatternMatcher, UPat
+from tinygrad.uop.ops import Ops, PatternMatcher, UPat, UOp
 
 _nms = list("xyzwabcdefghijkl") + [f'v{i}' for i in range(16, 32)]
 
@@ -26,6 +26,9 @@ class CUDARenderer(CStyleLanguage):
   gep_arr_threshold = 8
   code_for_workitem = {"g": lambda x: f"blockIdx.{chr(120+int(x))}", "l": lambda x: f"threadIdx.{chr(120+int(x))}",
                        "i": lambda x: f"(blockIdx.{chr(120+int(x))}*blockDim.{chr(120+int(x))}+threadIdx.{chr(120+int(x))})"}
+  # __shfl_xor_sync takes the lane mask directly (like Metal's simd_shuffle_xor) -- no per-lane address needed,
+  # so `lane` is unused. Full-warp mask: every call site in this repo shuffles across the whole warp (WARP=32).
+  warp_shfl_xor = staticmethod(lambda val, offset, lane: UOp(Ops.CUSTOMI, val.dtype, (val,), arg=f"__shfl_xor_sync(0xffffffffu, {{0}}, {offset})"))
   code_for_op = { **CStyleLanguage.code_for_op,
     Ops.TRUNC: lambda x,dtype: f"htrunc({x})" if dtype in (dtypes.half, dtypes.bfloat16) else f"trunc({x})",
     Ops.SIN: lambda x,dtype: f"hsin({x})" if dtype in (dtypes.half, dtypes.bfloat16) else f"sin({x})",

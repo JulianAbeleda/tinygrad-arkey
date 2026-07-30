@@ -187,7 +187,9 @@ def test_q4k_q8_1_mmq_direct_owner_stages_reduction_before_lane_gate():
                  UOp.placeholder((16 * 2,), dtypes.float32, 3),
                  UOp.placeholder((16 * 2,), dtypes.float32, 4)))
   assert "lidx0" in body
-  assert "ds_bpermute" in body
+  # cross-lane shuffle is now a renderer-lowered tag (TG1) at this pre-render stage, not a literal AMD string;
+  # it still resolves to ds_bpermute once rendered for AMD (see test_warp_shfl_xor_renderer_lowering.py).
+  assert "warp_shfl_xor" in body
   assert "90" in body  # staged REG slot used before the divergent owner gate
 
 

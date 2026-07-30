@@ -19,12 +19,20 @@ from tinygrad.dtype import AddrSpace, dtypes
 WARP = 32  # gfx1100 wave width
 _STAGE_SLOT = 90  # REG slots for staging cross-lane reads (kept clear of kernel slots)
 
+# Renderer-lowered operation tag (same shape as CStyleLanguage.barrier/float4/smem_prefix, but this one needs a
+# builder rather than a fixed string, so it is dispatched through `CStyleLanguage.warp_shfl_xor` -- see
+# `pm_lower_warp_shfl_xor` below and the providers on HIPRenderer/MetalRenderer/CUDARenderer in renderer/cstyle.py
+# and renderer/cuda.py). This tag makes the op renderer-agnostic where it is built (kernel-authoring time, before
+# any target is chosen) and resolved only once a concrete renderer is known.
+WARP_SHFL_XOR_TAG = "warp_shfl_xor"
+
 def warp_shfl_xor(val:UOp, offset:int, lane:UOp) -> UOp:
-  """Read `val` from lane (lane ^ offset) via ds_bpermute. `lane` must be a real thread dim (lidx). Shape-safe:
-  CUSTOMI carries src[0] (=val) shape. Float values only (bit-cast through int for the permute)."""
-  idx = ((lane ^ offset) * 4).cast(dtypes.int)   # ds_bpermute addr = source_lane*4 (byte address)
-  return UOp(Ops.CUSTOMI, val.dtype, (val, idx),
-             arg="__builtin_bit_cast(float, __builtin_amdgcn_ds_bpermute({1}, __builtin_bit_cast(int, {0})))")
+  """Cross-lane XOR shuffle: read `val` from lane (lane ^ offset). Shape-safe: CUSTOMI carries src[0] (=val)
+  shape. `lane` must be a real thread dim (lidx) for providers that need per-lane addressing (e.g. AMD's
+  ds_bpermute, which computes a byte address from it); providers that take a lane mask directly (e.g. Metal's
+  simd_shuffle_xor) ignore `lane` entirely. Which text (if any) this lowers to is a renderer decision, resolved
+  by `pm_lower_warp_shfl_xor`, never baked in here."""
+  return UOp(Ops.CUSTOMI, val.dtype, (val, lane), arg=(WARP_SHFL_XOR_TAG, offset))
 
 def _staged_shfl(val:UOp, offset:int, lane:UOp, slot:int) -> UOp:
   # Materialize the cross-lane read into a REG before consuming it. CUSTOMI is INLINE, so feeding the shuffle
@@ -93,4 +101,27 @@ def lower_warp_reduce(red:UOp) -> UOp|None:
 
 pm_warp_reduce = PatternMatcher([
   (UPat(Ops.REDUCE, name="red"), lower_warp_reduce),
+])
+
+
+def _lower_warp_shfl_xor(ctx, x:UOp) -> UOp|None:
+  """Resolve one tagged warp_shfl_xor CUSTOMI against the target renderer (`ctx`). Never falls back silently:
+  a renderer that does not declare `warp_shfl_xor` raises, naming both the operation and the target, per the
+  evidence contract (a target that cannot express a program must fail loudly at lowering, not run generic text
+  on hardware it wasn't written for)."""
+  if not (isinstance(x.arg, tuple) and x.arg[:1] == (WARP_SHFL_XOR_TAG,)): return None
+  _, offset = x.arg
+  val, lane = x.src
+  if (provider := getattr(ctx, "warp_shfl_xor", None)) is None:
+    raise NotImplementedError(f"{WARP_SHFL_XOR_TAG} is not available on {type(ctx).__name__} "
+                               f"(target={ctx.target.device}:{ctx.target.arch})")
+  return provider(val, offset, lane)
+
+
+# Dispatches purely on the renderer instance passed as `ctx` (never on Device.DEFAULT or a device string) --
+# see codegen/__init__.py for where this runs: once eagerly on the incoming AST (so hand-authored kernels see
+# the exact same lowering position as the AMD string used to occupy) and once more as a final-rewrite safety
+# net (so any WARP_REDUCE_LOWERING-produced tag, built later during the expander pass, still gets resolved).
+pm_lower_warp_shfl_xor = PatternMatcher([
+  (UPat(Ops.CUSTOMI, name="x"), _lower_warp_shfl_xor),
 ])
