@@ -245,8 +245,10 @@ def main(argv:list[str] | None=None) -> int:
     row["flash"] = route_set == ["flash"]
     row["route"] = route_set[0] if len(route_set) == 1 else "mixed"
     rows.append(row)
+    # --skip-dispatch-diagnostic leaves D unmeasured; the progress line must survive that.
+    d_text = f"{d_ms:6.2f}ms ({row['tok_s_D_diagnostic']:.2f} tok/s)" if d_ms is not None else "omitted"
     print(f"ctx {depth:5}: W {w_ms:6.2f}ms ({row['tok_s_W']:.2f} tok/s) | "
-          f"D {d_ms:6.2f}ms ({row['tok_s_D_diagnostic']:.2f} tok/s) | "
+          f"D {d_text} | "
           f"host-sync {f'{host_ms:.2f}ms ({host_pct:.1f}%)' if host_ms is not None else 'N/A (D slower than W)'} | "
           f"{','.join(route_set)}",
           file=sys.stderr, flush=True)
