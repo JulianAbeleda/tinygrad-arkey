@@ -1,4 +1,5 @@
 import io, json
+import pytest
 from types import SimpleNamespace
 
 from extra.llm_research import search_provider as provider
@@ -138,3 +139,50 @@ def test_metal_adapter_hardware_compile_is_explicitly_opt_in():
   response = subprocess.run([sys.executable, str(worker), "--backend", "METAL"], input=line, text=True,
                             stdout=subprocess.PIPE, check=True).stdout
   assert json.loads(response)["result"]["target"]["backend"] == "METAL"
+
+def test_exact_model_cache_reuses_stat_identity_reloads_on_drift_and_rejects_hash_mismatch(monkeypatch, tmp_path):
+  path = tmp_path / "model.gguf"; path.write_bytes(b"first")
+  import extra.llm_research.semantic_workload as semantic
+  loads = []
+  def load(workload, source):
+    if workload["model_hash"] == "wrong": raise ValueError("GGUF content hash mismatch")
+    loads.append((workload["model_hash"], str(source)))
+    return SimpleNamespace(model_hash=workload["model_hash"])
+  def bind(_workload, _path, *, model): return SimpleNamespace(model_hash=model.model_hash)
+  monkeypatch.setattr(semantic, "load_exact_gguf_model", load)
+  monkeypatch.setattr(semantic, "bind_exact_gguf_workload", bind)
+  adapter = provider.MetalAdapter()
+  exact = {"workload": {"model_hash": "good", "fixture_shape_substitution": "forbidden"}, "path": str(path)}
+  assert adapter._exact_binding(exact).model_hash == "good"
+  assert adapter._exact_binding(exact).model_hash == "good" and len(loads) == 1
+  adapter._prepared_cache["old"] = object(); adapter._compile_cache["old"] = {"old": True}
+  path.write_bytes(b"changed-size")
+  assert adapter._exact_binding(exact).model_hash == "good" and len(loads) == 2
+  assert not adapter._prepared_cache and not adapter._compile_cache
+  with pytest.raises(ValueError, match="content hash mismatch"):
+    adapter._exact_binding({"workload": {"model_hash": "wrong", "fixture_shape_substitution": "forbidden"}, "path": str(path)})
+
+@pytest.mark.parametrize("field", ["model_sha256", "phase", "role", "profile"])
+def test_exact_semantic_admission_rejects_candidate_identity_mismatches(monkeypatch, field):
+  facts = {"backend":"METAL","architecture":"Apple9","name":"test","max_threads_per_threadgroup":64}
+  monkeypatch.setattr(provider, "_metal_device", lambda: object()); monkeypatch.setattr(provider, "_metal_facts", lambda _d:facts)
+  identity={"target_id":"x","backend":"METAL","arch":"Apple9","subgroup_size":32,"resolved_target_hash":"h"}
+  candidate=_metal_candidate(identity); candidate["workload"].update({"model_sha256":"m","phase":"decode","profile":"mod","accumulator_dtype":"float32"}); candidate["correctness"]={"atol":1,"rtol":1}
+  semantic={"model_hash":"m","target":identity,"fixture_shape_substitution":"forbidden","tolerance":{"atol":1,"rtol":1},"semantic_identity":{"phase":"decode","role":"decode_q4k_gemv","module_path":"mod","logical_m":1,"logical_n":256,"logical_k":256,"source_quant_storage":"Q4_K","source_layout":None,"accumulator_dtype":"float32"}}
+  candidate["workload"][field]="bad"
+  payload={"candidate":candidate,"candidate_hash":provider._canonical_candidate_hash(candidate),"target_identity":identity,"exact_gguf":{"workload":semantic,"path":"x"}}
+  assert provider.process(request("admit",payload),adapter=provider.MetalAdapter())["error"]["code"]=="identity_mismatch"
+
+def test_prepared_cache_key_is_stable_then_invalidates_exact_file_identity(tmp_path):
+  path = tmp_path / "model.gguf"; path.write_bytes(b"one")
+  identity={"target_id":"x","backend":"METAL","arch":"a","subgroup_size":32,"resolved_target_hash":"h"}
+  payload=_metal_payload(identity); payload["exact_gguf"]={"workload":{"model_hash":"a"*64},"path":str(path)}
+  adapter=provider.MetalAdapter(); first=adapter._prepared_key(payload); assert first==adapter._prepared_key(payload)
+  path.write_bytes(b"two-size")
+  assert first != adapter._prepared_key(payload)
+
+def test_prepared_cache_builds_once_and_reuses_same_object(monkeypatch):
+  identity={"target_id":"x","backend":"METAL","arch":"a","subgroup_size":32,"resolved_target_hash":"h"}
+  payload=_metal_payload(identity); adapter=provider.MetalAdapter(); builds=[]; fake=object()
+  monkeypatch.setattr(provider.MetalAdapter, "_build_prepared", lambda _self, _payload: (builds.append(1) or fake))
+  assert adapter._prepared(payload) is fake and adapter._prepared(payload) is fake and len(builds)==1

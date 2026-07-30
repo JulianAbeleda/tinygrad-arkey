@@ -230,13 +230,62 @@ def _plan(candidate: Mapping[str, Any]) -> tuple[dict[str, Any], list[Any]]:
 
 
 @dataclass(frozen=True)
+class PreparedWorkload:
+  output: Any; raw: Any; call: Any; ast: Any; geometry: tuple; rows: int; k: int
+  activation: Any = None; weight: Any = None
+  packed_source_bytes: int|None = None
+  def __iter__(self): return iter((self.output, self.raw, self.call, self.ast, self.geometry, self.rows, self.k))
+
+@dataclass(frozen=True)
+class _ExactModelCacheEntry:
+  signature: tuple[int, int]
+  model: Any
+
+@dataclass(frozen=True)
 class MetalAdapter:
   """Metal facts/compiler adapter; policy and ranking deliberately remain outside tinygrad."""
-  expected_profile: str = "qwen3_8b_q4k_m_apple_m4"
+  _exact_models: dict[tuple[str, str], _ExactModelCacheEntry] = field(default_factory=dict, init=False, repr=False, compare=False)
+  _prepared_cache: dict[str, PreparedWorkload] = field(default_factory=dict, init=False, repr=False, compare=False)
+  _compile_cache: dict[str, Mapping[str, Any]] = field(default_factory=dict, init=False, repr=False, compare=False)
+
+  def _prepared_key(self, payload: Mapping[str, Any]) -> str:
+    exact = payload.get("exact_gguf")
+    exact_key: Any = None
+    if isinstance(exact, Mapping) and isinstance(exact.get("path"), str) and isinstance(exact.get("workload"), Mapping):
+      from pathlib import Path
+      path = Path(exact["path"]).resolve(); stat = path.stat()
+      exact_key = (str(path), exact["workload"].get("model_hash"), stat.st_size, stat.st_mtime_ns)
+    return _sha256(json.dumps({"candidate": _candidate(payload), "exact": exact_key, "fixture": payload.get("fixture_shape")}, sort_keys=True))
+
+  def _exact_binding(self, exact: Mapping[str, Any]):
+    """Reuse a verified loaded GGUF while invalidating on path content metadata changes."""
+    from pathlib import Path
+    from extra.llm_research.semantic_workload import bind_exact_gguf_workload, load_exact_gguf_model
+    workload, path_value = exact["workload"], exact["path"]
+    path = Path(path_value).resolve()
+    stat = path.stat(); signature = (stat.st_size, stat.st_mtime_ns)
+    key = (str(path), str(workload.get("model_hash")))
+    entry = self._exact_models.get(key)
+    if entry is None or entry.signature != signature:
+      # A backing-file change invalidates every compiled/prepared artifact in
+      # this campaign; retaining one could pin the old multi-GB model buffers.
+      self._prepared_cache.clear(); self._compile_cache.clear()
+      entry = _ExactModelCacheEntry(signature, load_exact_gguf_model(workload, path))
+      self._exact_models[key] = entry
+    return bind_exact_gguf_workload(workload, path, model=entry.model)
 
   def _prepared(self, payload: Mapping[str, Any]):
+    """Campaign cache wrapper; the builder owns no identity policy."""
+    cache_key = self._prepared_key(payload)
+    if cache_key not in self._prepared_cache:
+      self._prepared_cache[cache_key] = self._build_prepared(payload)
+    return self._prepared_cache[cache_key]
+
+  def _build_prepared(self, payload: Mapping[str, Any]):
     """Build one bounded packed-weight program; all execution actions share it."""
     self.admit(payload)
+    cache_key = self._prepared_key(payload)
+    if cache_key in self._prepared_cache: return self._prepared_cache[cache_key]
     from dataclasses import replace
     from tinygrad import Tensor, dtypes
     from tinygrad.codegen import to_program
@@ -248,11 +297,32 @@ class MetalAdapter:
     fmt = "Q4_K" if fmt in ("Q4_K", "Q4K") else "Q6_K" if fmt in ("Q6_K", "Q6K") else None
     if fmt is None: raise ProtocolError("unsupported_plan", "Metal M6 packed program requires Q4_K or Q6_K weight")
     shape = workload["shape"]; fixture = payload.get("fixture_shape", {})
+    exact = payload.get("exact_gguf")
     if not isinstance(fixture, Mapping): raise ProtocolError("admission_rejected", "fixture_shape must be an object")
-    rows, k, m = int(fixture.get("n", min(shape["n"], 256))), int(fixture.get("k", min(shape["k"], 256))), int(fixture.get("m", 1))
-    k -= k % 256
+    if exact is not None:
+      if fixture: raise ProtocolError("admission_rejected", "exact_gguf cannot combine with fixture_shape")
+      if not isinstance(exact, Mapping) or not isinstance(exact.get("workload"), Mapping) or not isinstance(exact.get("path"), str):
+        raise ProtocolError("admission_rejected", "exact_gguf requires workload and path")
+      try: binding = self._exact_binding(exact)
+      except (OSError, ValueError) as exc: raise ProtocolError("identity_mismatch", "exact GGUF binding failed", details={"reason":str(exc)}) from exc
+      rows, k, m = shape["n"], shape["k"], shape["m"]
+      if binding.weight.shape != (rows, k) or binding.activation.shape != (m, k):
+        raise ProtocolError("identity_mismatch", "exact binding does not match candidate shape")
+      weights, activation, raw = binding.weight.to("METAL"), binding.activation.to("METAL"), None
+    else:
+      rows, k, m = int(fixture.get("n", min(shape["n"], 256))), int(fixture.get("k", min(shape["k"], 256))), int(fixture.get("m", 1))
+    if exact is None: k -= k % 256
+    elif k % 256: raise ProtocolError("identity_mismatch", "exact packed K must be divisible by 256")
     if not k: raise ProtocolError("admission_rejected", "representative packed tile requires k >= 256")
     block_bytes, typ = (144, GGML_Q4_K) if fmt == "Q4_K" else (210, GGML_Q6_K)
+    if exact is not None:
+      output = activation @ weights.T
+      linear = output.schedule_linear()
+      if len(linear.src) != 1: raise ProtocolError("provider_failure", "exact bound output must schedule exactly one program")
+      call = linear.src[0]; sink = call.src[0].replace(arg=replace(call.src[0].arg, opts_to_apply=None if opts is None else tuple(opts)))
+      program = to_program(sink, Device["METAL"].renderer)
+      prepared = PreparedWorkload(output, raw, call.replace(src=(program, *call.src[1:])), program, (m, rows, k, block_bytes), rows, k, activation, weights, binding.packed_source_bytes)
+      self._prepared_cache[cache_key] = prepared; return prepared
     import numpy as np
     # Vectorized host fixture avoids a multi-million-element Python list for
     # real decode roles (for example 12288x4096) while retaining deterministic
@@ -274,7 +344,8 @@ class MetalAdapter:
     call = linear.src[0]
     sink = call.src[0].replace(arg=replace(call.src[0].arg, opts_to_apply=None if opts is None else tuple(opts)))
     program = to_program(sink, Device["METAL"].renderer)
-    return output, raw, call.replace(src=(program, *call.src[1:])), program, (m, rows, k, block_bytes), rows, k
+    prepared = PreparedWorkload(output, raw, call.replace(src=(program, *call.src[1:])), program, (m, rows, k, block_bytes), rows, k, activation, weights)
+    self._prepared_cache[cache_key] = prepared; return prepared
 
   def describe(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
     del payload
@@ -290,7 +361,27 @@ class MetalAdapter:
     workload, target = candidate["workload"], candidate["workload"]["target"]
     if payload.get("candidate_hash") != _canonical_candidate_hash(candidate):
       raise ProtocolError("identity_mismatch", "candidate_hash does not match canonical candidate bytes")
-    if workload.get("profile") != self.expected_profile: raise ProtocolError("identity_mismatch", "candidate workload profile does not match adapter")
+    exact = payload.get("exact_gguf")
+    if exact is not None:
+      if not isinstance(exact, Mapping) or not isinstance(exact.get("workload"), Mapping) or not isinstance(exact.get("path"), str):
+        raise ProtocolError("identity_mismatch", "exact_gguf requires semantic workload and path")
+      semantic = exact["workload"]; identity = semantic.get("semantic_identity")
+      if semantic.get("fixture_shape_substitution") != "forbidden" or not isinstance(identity, Mapping):
+        raise ProtocolError("identity_mismatch", "exact semantic workload forbids fixture substitution")
+      shape = {"m": identity.get("logical_m"), "n": identity.get("logical_n"), "k": identity.get("logical_k")}
+      if workload.get("model_sha256") != semantic.get("model_hash") or workload.get("phase") != identity.get("phase") \
+          or workload.get("role") != identity.get("role") or workload.get("profile") != identity.get("module_path") \
+          or workload.get("shape") != shape or workload.get("target") != semantic.get("target"):
+        raise ProtocolError("identity_mismatch", "candidate does not match exact semantic identity")
+      b = workload.get("operands", {}).get("b", {})
+      a, c = workload.get("operands", {}).get("a", {}), workload.get("operands", {}).get("c", {})
+      if b.get("quantization", "").upper() != identity.get("source_quant_storage") or b.get("layout") != identity.get("source_layout") \
+          or a.get("dtype") != identity.get("input_dtype") or c.get("dtype") != identity.get("output_dtype") \
+          or workload.get("accumulator_dtype") != identity.get("accumulator_dtype"):
+        raise ProtocolError("identity_mismatch", "candidate packed operand contract differs from semantic identity")
+      tolerance = semantic.get("tolerance")
+      if not isinstance(tolerance, Mapping) or candidate.get("correctness", {}).get("atol") != tolerance.get("atol") or candidate.get("correctness", {}).get("rtol") != tolerance.get("rtol"):
+        raise ProtocolError("identity_mismatch", "candidate tolerance differs from exact semantic workload")
     if not isinstance(workload.get("shape"), Mapping) or not all(isinstance(workload["shape"].get(k), int) and workload["shape"][k] > 0 for k in ("m", "n", "k")):
       raise ProtocolError("admission_rejected", "workload.shape requires positive m/n/k")
     operands = workload.get("operands")
@@ -308,16 +399,20 @@ class MetalAdapter:
 
   def compile(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
     admitted = self.admit(payload); candidate = _candidate(payload); _, opts = _plan(candidate)
+    cache_key = self._prepared_key(payload)
+    if cache_key in self._compile_cache: return dict(self._compile_cache[cache_key])
     from tinygrad.engine.realize import get_runtime
     _, _, _, ast, _, rows, k = self._prepared(payload)
     source, binary = ast.src[3].arg, ast.src[4].arg
     runtime = get_runtime("METAL", ast)
     local = tuple(ast.arg.local_size or (1, 1, 1))
-    return {**admitted, "source_sha256": _sha256(source), "mtlb_sha256": _sha256(binary),
+    result = {**admitted, "source_sha256": _sha256(source), "mtlb_sha256": _sha256(binary),
             "launch": {"global_size": list(ast.arg.global_size), "local_size": list(local)},
             "pipeline": {"max_total_threads_per_threadgroup": runtime.max_total_threads},
             "bound_compiler_opts": None if opts is None else [{"op": x.op.name, "axis": x.axis, "arg": x.arg} for x in opts],
             "candidate_plan_hash": _sha256(json.dumps(candidate["schedule"], sort_keys=True)), "representative_tile": {"rows": rows, "k": k}}
+    self._compile_cache[cache_key] = result
+    return result
 
   def check(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
     self.admit(payload)
@@ -334,12 +429,23 @@ class MetalAdapter:
       if not np.isfinite(got).all() or not np.array_equal(got, reference(Tensor(raw.copy()), 512).numpy()):
         raise ProtocolError("provider_failure", f"{fmt} canonical reference is non-deterministic or non-finite")
       results.append({"format": fmt, "elements": 512, "oracle": "extra.llm_research.layout canonical reference"})
-    output, raw, call, _, geometry, rows, k = self._prepared(payload)
+    prepared = self._prepared(payload); output, raw, call, _, geometry, rows, k = prepared
     time_call(call)
     # `call` owns the compiled candidate invocation; read its allocated output
     # buffer directly rather than asking the lazy Tensor to schedule again.
     metal = call.src[1].buffer.ensure_allocated().numpy().reshape(geometry[0], rows)
     # Canonical packed reference plus independently materialized activation.
+    if raw is None:
+      activation, weights = prepared.activation.numpy(), prepared.weight.numpy()
+      oracle = activation.astype(np.float32) @ weights.astype(np.float32).T
+      tolerance = payload.get("exact_gguf", {}).get("workload", {}).get("tolerance")
+      if not isinstance(tolerance, Mapping) or not all(isinstance(tolerance.get(key), (int, float)) for key in ("atol", "rtol")):
+        raise ProtocolError("admission_rejected", "exact workload requires numeric tolerance.atol/rtol")
+      evidence = {"representative_role_shape":{"m":geometry[0],"n":rows,"k":k}, "oracle":"exact GGUF tensor + deterministic activation",
+                  "exact_gguf_binding":{"model_sha256":payload["exact_gguf"]["workload"]["model_hash"],
+                                        "tensor_name":payload["exact_gguf"]["workload"]["semantic_identity"]["tensor_name"]},
+                  "tolerance":dict(tolerance), "candidate_call_buffer_read":True}
+      return {"correct":bool(np.allclose(metal, oracle, rtol=tolerance["rtol"], atol=tolerance["atol"])), "evidence":evidence}
     fmt = "Q4_K" if raw.nbytes() // (rows*k//256) == Q4_K_BLOCK_BYTES else "Q6_K"
     m = geometry[0]
     weights = (q4_k_reference if fmt == "Q4_K" else q6_k_reference)(Tensor(raw.numpy()), rows*k).numpy().reshape(rows, k)
@@ -364,13 +470,14 @@ class MetalAdapter:
     if not isinstance(samples, int) or not isinstance(warmups, int) or not (1 <= samples <= 20 and 0 <= warmups <= 10):
       raise ProtocolError("admission_rejected", "samples must be 1..20 and warmups 0..10")
     from tinygrad.engine.realize import time_call
-    _, raw, call, _, geometry, rows, k = self._prepared(payload)
+    prepared = self._prepared(payload); _, raw, call, _, geometry, rows, k = prepared
     before = _metal_facts(_metal_device())["current_allocated_bytes"]
     for _ in range(warmups): time_call(call)
     raw_ns = [int(time_call(call) * 1e9) for _ in range(samples)]
     device = _metal_device(); after = _metal_facts(device)["current_allocated_bytes"]
     m, _, _, block_bytes = geometry
-    operations, bytes_ = 2*m*rows*k, raw.nbytes() + m*k*2 + m*rows*4
+    source_bytes = raw.nbytes() if raw is not None else prepared.packed_source_bytes
+    operations, bytes_ = 2*m*rows*k, source_bytes + m*k*2 + m*rows*4
     mean = sum(raw_ns) / len(raw_ns)
     return {**compiled, "timing_mode": "eager_metal_command_buffer_gpu_time_wait_true", "synchronized": True,
             "warmups": warmups, "samples_ns": raw_ns, "summary_ns": {"min": min(raw_ns), "mean": mean, "max": max(raw_ns),

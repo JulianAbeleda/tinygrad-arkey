@@ -102,12 +102,78 @@ def test_output_projection_devec_is_global_add_only():
   # unrecoverable at this stage), so it must fire ONLY on GLOBAL output-buffer lanes (the additive matmul
   # epilogue).  A LOCAL-addrspace lane would be an online-softmax/composite combine intermediate whose
   # reduction may be MAX (gmax) -- ADD-combining it would be silently wrong.  Assert the pass DECLINES LOCAL.
-  from tinygrad.codegen.late.reg_store import _devec_output_projection_store
+  from tinygrad.codegen.late.devectorizer import devectorize_output_projection_store
   glob = _build_output_projection_store(addrspace=AddrSpace.GLOBAL).src[0]
-  assert _devec_output_projection_store(glob.src[0], glob.src[1]) is not None, "GLOBAL additive projection must still lower"
+  assert devectorize_output_projection_store(glob.src[0], glob.src[1]) is not None, "GLOBAL additive projection must still lower"
   loc = _build_output_projection_store(addrspace=AddrSpace.LOCAL).src[0]
-  assert _devec_output_projection_store(loc.src[0], loc.src[1]) is None, \
+  assert devectorize_output_projection_store(loc.src[0], loc.src[1]) is None, \
     "LOCAL lanes (possible non-ADD combine intermediate) must be declined, not silently ADD-combined"
+
+
+def test_output_projection_devec_declines_nonuniform_groups_and_broadcasts():
+  from tinygrad.codegen.late.devectorizer import devectorize_output_projection_store
+  store = _build_output_projection_store().src[0]
+  tgt, val = store.src
+  short_tgt = UOp(Ops.STACK, dtypes.float.vec(len(tgt.src)-1), tgt.src[:-1])
+  short_val = UOp(Ops.STACK, dtypes.float.vec(len(val.src)-1), val.src[:-1])
+  assert devectorize_output_projection_store(short_tgt, short_val) is None
+  broadcast = UOp(Ops.STACK, val.dtype, tuple(UOp.const(dtypes.float, i//2) for i in range(len(val.src))))
+  assert devectorize_output_projection_store(tgt, broadcast) is None
+
+
+def test_bare_loaded_output_store_restores_global_groups_only():
+  from tinygrad.codegen.late.devectorizer import devectorize_bare_output_store
+  def build(addrspace, broadcast=False):
+    buf = UOp.placeholder((64,), dtypes.float, 0, addrspace=addrspace)
+    loads, values = [], []
+    for group in range(2):
+      lane = buf.index(UOp.const(dtypes.weakint, group * 8)).load()
+      loads.extend((lane,) * 4)
+      values.extend(UOp.const(dtypes.float, group if broadcast else group * 4 + i) for i in range(4))
+    return UOp(Ops.STACK, dtypes.float.vec(8), tuple(loads)), UOp(Ops.STACK, dtypes.float.vec(8), tuple(values))
+  tgt, val = build(AddrSpace.GLOBAL)
+  assert devectorize_bare_output_store(tgt, val) is None, "ordinary repeated stores have no ADD-reduction provenance"
+  tgt, val = build(AddrSpace.GLOBAL, broadcast=True)
+  lowered = devectorize_bare_output_store(tgt, val)
+  assert lowered is not None and len([u for u in lowered.toposort() if u.op is Ops.STORE]) == 2
+  local_tgt, local_val = build(AddrSpace.LOCAL)
+  assert devectorize_bare_output_store(local_tgt, local_val) is None
+
+
+def test_duplicate_gep_projection_reduces_reg_partials_before_store_inversion():
+  from tinygrad.codegen.late.devectorizer import reduce_duplicate_output_store
+  def build(out_space=AddrSpace.GLOBAL, value_space=AddrSpace.REG, arg=(0, 0, 1, 1)):
+    out = UOp.placeholder((64,), dtypes.float, 0, addrspace=out_space)
+    base = UOp(Ops.INDEX, dtypes.float.ptr(64, addrspace=out_space).vec(2),
+               (out, UOp.vectorize(UOp.const(dtypes.weakint, 2), UOp.const(dtypes.weakint, 9))))
+    target = base.gep(arg)
+    reg = UOp(Ops.DEFINE_REG, dtypes.float.ptr(4, addrspace=value_space), arg=0)
+    value = UOp(Ops.INDEX, dtypes.float.vec(4), (reg, UOp.const(dtypes.weakint, 0)))
+    if value_space is AddrSpace.REG:
+      contribution = UOp.vectorize(*(UOp.const(dtypes.float, i+1) for i in range(4)))
+      update = value.store(value + contribution)
+      value = UOp(Ops.INDEX, dtypes.float.vec(4), (reg.after(update), UOp.const(dtypes.weakint, 0)))
+    return target, value
+
+  target, value = build()
+  lowered = reduce_duplicate_output_store(target, value)
+  assert lowered is not None and lowered.op is Ops.STORE and lowered.src[0] is target.src[0]
+  assert lowered.src[1].dtype.count == 2
+  assert lowered.src[1].op is Ops.GEP and lowered.src[1].src[0].op is Ops.STACK
+  assert len({x for x in lowered.src[1].src[0].src if x.op is Ops.ADD}) == 2
+  assert reduce_duplicate_output_store(*build(out_space=AddrSpace.LOCAL)) is None
+  assert reduce_duplicate_output_store(*build(value_space=AddrSpace.LOCAL)) is None
+  assert reduce_duplicate_output_store(*build(arg=(0, 0, 1, 2))) is None
+
+  # A fused residual is shared across each reduction group and must be added
+  # once, while the distinct REG projection partials are horizontally summed.
+  residuals = UOp(Ops.STACK, dtypes.float.vec(4),
+                  (UOp.const(dtypes.float, 7), UOp.const(dtypes.float, 7),
+                   UOp.const(dtypes.float, 11), UOp.const(dtypes.float, 11)))
+  fused = reduce_duplicate_output_store(target, UOp(Ops.ADD, value.dtype, (residuals, value)))
+  assert fused is not None and fused.src[1].dtype.count == 2
+  nonbroadcast = UOp(Ops.STACK, dtypes.float.vec(4), tuple(UOp.const(dtypes.float, x) for x in range(4)))
+  assert reduce_duplicate_output_store(target, UOp(Ops.ADD, value.dtype, (nonbroadcast, value))) is None
 
 
 def test_manual_accumulator_widener_does_not_claim_the_output_projection():

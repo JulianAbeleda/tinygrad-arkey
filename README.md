@@ -51,6 +51,25 @@ test "$(git config --get core.hooksPath)" = .githooks
 python3 sz.py
 ```
 
+## Route-policy authority
+
+BoltBeam is the sole canonical selection-policy authority. Its versioned source is
+`BoltBeam/boltbeam/policy/assets/route_manifest.v1.json` with its SHA-256 sidecar.
+This runtime deliberately carries only the generated, content-hashed snapshot at
+`extra/llm_research/generated/boltbeam_route_manifest.v1.json`; it adds runtime-derived
+execution guards from production descriptors, not another selection table.
+
+Refresh the snapshot only through BoltBeam's single exporter:
+
+```sh
+cd /path/to/BoltBeam
+.venv/bin/python tools/export_route_manifest_snapshot.py \
+  /path/to/tinygrad-arkey-exp/extra/llm_research/generated/boltbeam_route_manifest.v1.json
+```
+
+Missing, hash-mismatched, noncanonical, or stale-schema snapshots fail closed; EXP never
+imports the sibling repository as a fallback.
+
 ## How it differs from upstream tinygrad
 
 * **Hardware:** AMD only, currently gfx1100 / RX 7900 XTX.

@@ -16,6 +16,7 @@ from extra.llm_research.runtime_specs import (
   bind_full_kernel_candidate, full_kernel_candidate_set_from_legacy, full_kernel_candidate_capability,
   full_kernel_workload, q4k_q8_1_five_buffer_abi_plan, rebind_full_kernel_workload,
 )
+from tinygrad.llm.roles import normalize_program_role
 
 
 # Inlined from the retired quant-spec helper module in extra/llm_research (retired 2026-07-26, see
@@ -79,10 +80,9 @@ def _manifest_authority_gates(route_id):
 
 
 def _manifest_runtime_roles(route_id):
-  aliases = {"attn_k": "attn_kv", "attn_v": "attn_kv", "attention_tile": "attention", "attention_combine": "attention"}
   roles = []
   for role in route_manifest.ROUTES[route_id]["roles"]:
-    normalized = aliases.get(role, role)
+    normalized = normalize_program_role(role)
     if normalized not in roles:
       roles.append(normalized)
   return tuple(roles)
@@ -94,6 +94,7 @@ def test_runtime_op_spec_round_trips_and_validates():
                      lowering_strategy="iu8_wmma_grouped_dot", route_id="prefill_q4k_int8_wmma_generated_research")
   row = op.to_json()
   assert RuntimeOpSpec.from_json(row) == op
+  assert RuntimeOpSpec.from_json({**row, "role": "unknown"}).role == "generic"
   with pytest.raises(ValueError, match="family"):
     RuntimeOpSpec("HandKernel", "prefill", "unknown", {}, QuantizedTensorSpec("Q4_K"))
 
@@ -106,6 +107,7 @@ def test_generated_candidate_round_trip_and_provenance():
   assert GeneratedCandidate.from_json(cand.to_json()) == cand
   banned = GeneratedCandidate("c.bad", "QuantizedLinear", ("Q4_K",), ("Q8_1",), ("prefill",), ("unknown",),
                               "iu8_wmma_grouped_dot", "banned")
+  assert banned.roles == ("generic",)
   with pytest.raises(ValueError, match="non-generated provenance"):
     GeneratedCandidateRegistry([banned])
 

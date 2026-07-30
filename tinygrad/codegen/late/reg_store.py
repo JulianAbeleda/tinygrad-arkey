@@ -2,7 +2,7 @@ import functools
 from tinygrad.dtype import dtypes, DType, AddrSpace, PtrDType
 from tinygrad.uop.ops import UOp, Ops, UPat, PatternMatcher, identity_element, AxisType
 from tinygrad.helpers import prod
-from tinygrad.codegen.late.devectorizer import _gep_local_ptrcat
+from tinygrad.codegen.late.devectorizer import _gep_local_ptrcat, _reg_index, devectorize_output_projection_store
 
 # Manual END/AFTER scalar-REG accumulator widening for AMD generated reductions.
 #
@@ -20,14 +20,6 @@ from tinygrad.codegen.late.devectorizer import _gep_local_ptrcat
 # stores whose target is a broadcast of a scalar-REG slot-0 index fed by `op(broadcast(acc), contrib)` for a supported
 # op, and leaves everything else unchanged.
 _reduce_acc_ops = {Ops.ADD, Ops.MAX, Ops.MUL}
-
-def _reg_index(u:UOp) -> tuple[UOp, UOp]|None:
-  # the DEFINE_REG and slot index that INDEX(after-chain(DEFINE_REG in REG space), idx) targets, else None
-  if u.op is not Ops.INDEX or not isinstance(u.src[0].dtype, PtrDType) or u.src[0].dtype.addrspace != AddrSpace.REG: return None
-  if len(u.src) < 2: return None
-  b = u.src[0]
-  while b.op is Ops.AFTER: b = b.src[0]
-  return (b, u.src[1]) if b.op is Ops.DEFINE_REG else None
 
 def _is_const_zero(u:UOp) -> bool:
   return u.op is Ops.CONST and u.arg == 0
@@ -242,65 +234,9 @@ def _devec_stack_store(tgt:UOp, val:UOp, gate:UOp|None=None) -> UOp|None:
     stores.append(ptr.store(val.gep(i), gate.gep(i) if gate is not None else None))
   return UOp.group(*stores)
 
-def _output_load_lane(u:UOp) -> tuple[UOp, int]|None:
-  # (GLOBAL INDEX, float4-lane) if u == GEP(LOAD([CAST] INDEX(GLOBAL buf, addr)), lane), else None.
-  # This is an output address that add_loads turned into a wide vector LOAD, whose lanes were then read
-  # back as the (unassignable) STORE target instead of staying an addressable INDEX.
-  # GLOBAL-only ON PURPOSE (see _devec_output_projection_store): the only validated producer is the GLOBAL
-  # matmul-epilogue (LM-head) whose reduction is ADD.  A LOCAL/REG lane would be an online-softmax/composite
-  # combine intermediate whose reduction may be MAX (gmax) or MUL -- ADD-combining that would be silently
-  # wrong (the reduce op is unrecoverable at this stage), so those are excluded here and owned by
-  # reduce_acc_upcast_fix / a future op-aware combine lowering.
-  if u.op is not Ops.GEP or not isinstance(u.arg, tuple) or len(u.arg) != 1: return None
-  ld = u.src[0]
-  if ld.op is not Ops.LOAD: return None
-  idx = ld.src[0]
-  if idx.op is Ops.CAST: idx = idx.src[0]
-  if idx.op is not Ops.INDEX or len(idx.src) < 2: return None
-  if getattr(idx.src[0], "addrspace", None) is not AddrSpace.GLOBAL: return None
-  return (idx, u.arg[0])
-
-def _devec_output_projection_store(tgt:UOp, val:UOp) -> UOp|None:
-  # Sibling of the bare-LOAD(INDEX) output-projection restoration in codegen/__init__.py:235-244
-  # (the had_deferred_reduce_projection block): that owner only matches lanes that are bare LOAD(INDEX)
-  # and assumes one distinct address per lane.  This handles the wide-load/UPCAST'd variant it misses:
-  # deferred-reduce output projection where lanes are GEP(LOAD(INDEX(out,addr))) and an UPCAST'd inner
-  # reduce axis left each distinct output address duplicated in contiguous same-size groups (the
-  # 32-value -> 16-address make_floatN(...) lvalue on gfx1100).  Restore addressable per-address global
-  # stores, horizontally ADD-reducing each group's partials (the sum the UPCAST'd reduce axis represents).
-  #
-  # ADD-ONLY, by construction.  The reduce op is unrecoverable at this codegen stage (it is baked into the
-  # ALU chain by lower_deferred_reduce_slot; the store carries no op), so this pass cannot combine with the
-  # true op -- it always sums.  That is safe ONLY because _output_load_lane restricts to GLOBAL output-buffer
-  # lanes, whose sole producer is the additive matmul epilogue (LM-head).  A non-additive combine (the
-  # online-softmax gmax MAX-reduce -- exactly TG-P9.4's split-preserving combine) lives in REG/LOCAL and is
-  # excluded, so it can never be silently ADD-mis-combined here.  Making this op-aware (recover/propagate the
-  # reduce op so a MAX/MUL combine lowers correctly) is deferred to the fused-combine work, where a MAX
-  # producer actually exists to test against; adding untested MAX handling here now would be speculative.
-  # Fail-closed: only fires when every lane is a GLOBAL output-load lane read, groups are contiguous and
-  # uniform with size>1, and each group's values are distinct (a genuine many->one reduction, not a broadcast).
-  if val.dtype.count != len(tgt.src): return None
-  info = [_output_load_lane(p) for p in tgt.src]
-  if any(x is None for x in info): return None
-  groups, i = [], 0
-  while i < len(tgt.src):
-    j = i
-    while j < len(tgt.src) and tgt.src[j] is tgt.src[i]: j += 1
-    groups.append(list(range(i, j))); i = j
-  g = len(groups[0])
-  if g < 2 or any(len(pos) != g for pos in groups): return None
-  for pos in groups:
-    if len({val.gep((p,)) for p in pos}) != g: return None      # identical values -> broadcast, leave it
-  stores = []
-  for pos in groups:
-    idx, lane = info[pos[0]]
-    addr = idx.src[0].index(idx.src[1] + UOp.const(idx.src[1].dtype, lane))
-    stores.append(addr.store(functools.reduce(lambda a,b: a+b, [val.gep((p,)) for p in pos])))
-  return UOp.group(*stores)
-
 pm_distinct_reg_store_devec = PatternMatcher([
   (UPat(Ops.GEP, src=(UPat(Ops.PTRCAT, name="cat"),), name="g"), _gep_local_ptrcat),
-  (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"))), _devec_output_projection_store),
+  (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"))), devectorize_output_projection_store),
   (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"))), _devec_distinct_reg_store),
   (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"), UPat.var("gate"))), _devec_stack_store),
   (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"))), _devec_stack_store),

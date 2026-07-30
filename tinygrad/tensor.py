@@ -1452,18 +1452,6 @@ def role_metadata(name:str|Metadata):
   try: yield
   finally: _METADATA.set(token)
 
-@contextlib.contextmanager
-def call_metadata(factory, module, x):
-  """Optional module-call metadata hook; a no-op when no factory is attached."""
-  if factory is None:
-    yield
-    return
-  metadata = factory(module, x)
-  if metadata is None:
-    yield
-    return
-  with role_metadata(metadata): yield
-
 def _metadata_wrapper(fn: Callable[P, T]) -> Callable[P, T]:
   def _wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
     if TRACEMETA < 1 or _METADATA.get() is not None: return fn(*args, **kwargs)

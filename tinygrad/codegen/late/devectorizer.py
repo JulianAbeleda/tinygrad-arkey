@@ -147,11 +147,151 @@ def stack_load(tgt:UOp, ld:UOp) -> UOp|None:
 
 def gep_on_store(gep:UOp, st:UOp, gate:UOp|None=None):
   # NOTE: we need to invert the gep here, but it may be an expanding gep
-  # fake argsort. TODO: handle duplicates
+  # A duplicate destination needs an operation-aware combine. Decline it here:
+  # the projection reducer below owns proven ADD partials, while every other
+  # duplicate shape must remain visible instead of being silently last-wins.
+  # This inversion is valid only for a full permutation of the base lanes.
+  # Sparse/subset maps would lose their destination keys when the GEP is
+  # removed, just as duplicate maps lose their combine semantics.
+  if tuple(sorted(gep.arg)) != tuple(range(gep.src[0].dtype.vcount)): return None
   a = {}
   for i,x in enumerate(gep.arg): a[x] = i
   new_arg = tuple(x[1] for x in sorted(a.items()))
   return gep.src[0].store(st.gep(new_arg), gate)
+
+def _reg_index(u:UOp) -> tuple[UOp, UOp]|None:
+  """Return the DEFINE_REG and slot for an INDEX through an AFTER chain."""
+  if u.op is not Ops.INDEX or len(u.src) < 2 or not isinstance(u.src[0].dtype, PtrDType) or u.src[0].dtype.addrspace is not AddrSpace.REG:
+    return None
+  base = u.src[0]
+  while base.op is Ops.AFTER: base = base.src[0]
+  return (base, u.src[1]) if base.op is Ops.DEFINE_REG else None
+
+def _reg_value_info(u:UOp) -> tuple[UOp, UOp]|None:
+  """Identify a REG value, retaining harmless lane/cast wrappers."""
+  if (ri:=_reg_index(u)) is not None: return ri
+  if u.op is Ops.LOAD and u.src and (ri:=_reg_index(u.src[0])) is not None: return ri
+  if u.op in {Ops.CAST, Ops.BITCAST, Ops.GEP, Ops.RESHAPE, Ops.EXPAND} and u.src:
+    infos = [x for s in u.src if (x:=_reg_value_info(s)) is not None]
+    if len(infos) == 1: return infos[0]
+  return None
+
+def _reg_index_node(u:UOp) -> UOp|None:
+  if _reg_index(u) is not None: return u
+  if u.op is Ops.LOAD and u.src and _reg_index(u.src[0]) is not None: return u.src[0]
+  if u.op in {Ops.CAST, Ops.BITCAST, Ops.GEP, Ops.RESHAPE, Ops.EXPAND}:
+    nodes = [x for s in u.src if (x:=_reg_index_node(s)) is not None]
+    if len(nodes) == 1: return nodes[0]
+  return None
+
+def _is_additive_reg_value(u:UOp) -> bool:
+  """Prove that a REG output read follows one or more ADD accumulator updates."""
+  if (idx:=_reg_index_node(u)) is None or (ri:=_reg_index(idx)) is None: return False
+  reg, _ = ri
+  updates = []
+  for dep in idx.src[0].backward_slice:
+    if dep.op is not Ops.STORE or len(dep.src) < 2 or (target:=_reg_index(dep.src[0])) is None or target[0] is not reg: continue
+    if reg in dep.src[1].backward_slice_with_self: updates.append(dep.src[1].op)
+  return bool(updates) and all(op is Ops.ADD for op in updates)
+
+def _reg_value_leaves(u:UOp) -> list[tuple[UOp, UOp, UOp]]:
+  """Find maximal scalar REG-value leaves in an arbitrary scalar expression."""
+  if u.dtype.count == 1 and (ri:=_reg_value_info(u)) is not None: return [(u, *ri)]
+  return [leaf for s in u.src for leaf in _reg_value_leaves(s)]
+
+def _destination_groups(arg:tuple[int, ...]) -> list[tuple[int, list[int]]]:
+  groups:dict[int, list[int]] = defaultdict(list)
+  for pos, dst in enumerate(arg): groups[dst].append(pos)
+  return sorted(groups.items())
+
+def _store_target_for_keys(base:UOp, keys:tuple[int, ...]) -> UOp|None:
+  # The downstream STORE-GEP inversion can remove only a full permutation.
+  # Keeping a sparse GEP temporarily would not be fail-closed: a later folding
+  # pass would erase the selected keys and store the compact value to the base.
+  return base if keys == tuple(range(base.dtype.vcount)) else None
+
+def _reduce_scalar_reg_group(lanes:list[UOp]) -> tuple[UOp, UOp]|None:
+  """Normalize and ADD-reduce one group of scalar additive-REG expressions."""
+  lane_info = []
+  for lane in lanes:
+    leaves = list(dict.fromkeys(_reg_value_leaves(lane)))
+    if len(leaves) != 1 or not _is_additive_reg_value(leaves[0][0]): return None
+    lane_info.append(leaves[0])
+  # Scalarized REG loads carry distinct INDEX slots; vector REG reads carry a
+  # shared slot plus distinct GEP lanes. The maximal value leaf covers both.
+  if len({leaf for leaf,_,_ in lane_info}) != len(lane_info): return None
+  regs = {reg for _,reg,_ in lane_info}
+  if len(regs) != 1: return None
+  common_leaf = lane_info[0][0]
+  normalized = [lane.substitute({leaf:common_leaf}, walk=True) for lane,(leaf,_,_) in zip(lanes, lane_info)]
+  if len(set(normalized)) != 1: return None
+  summed = functools.reduce(lambda a,b: a+b, (leaf for leaf,_,_ in lane_info))
+  return normalized[0].substitute({common_leaf:summed}, walk=True), next(iter(regs))
+
+def _reduce_scalarized_reg_partials(base:UOp, arg:tuple[int, ...], st:UOp) -> UOp|None:
+  """Reduce a post-devectorization STACK by normalizing one REG leaf per lane.
+
+  Replacing each lane's accumulator leaf with a common leaf makes every other
+  dependency part of the proof: residuals/biases must be group-uniform, while
+  nonlinear expressions derived from that same accumulator remain intact.
+  """
+  if st.op is not Ops.STACK or len(st.src) != len(arg): return None
+  groups = _destination_groups(arg)
+  if not groups or min(len(pos) for _,pos in groups) < 2 or len({len(pos) for _,pos in groups}) != 1: return None
+  values:list[UOp] = []
+  common_reg = None
+  for _, pos in groups:
+    if (reduced:=_reduce_scalar_reg_group([st.src[p] for p in pos])) is None: return None
+    value, reg = reduced
+    if common_reg is not None and reg is not common_reg: return None
+    common_reg = reg
+    values.append(value)
+  target = _store_target_for_keys(base, tuple(key for key,_ in groups))
+  if target is None: return None
+  value = values[0] if len(values) == 1 else UOp(Ops.STACK, st.dtype.scalar().vec(len(values)), tuple(values))
+  return target.store(value)
+
+def reduce_duplicate_output_store(gep:UOp, st:UOp) -> UOp|None:
+  """Preserve additive REG projection partials before generic GEP-store inversion drops duplicates."""
+  base = gep.src[0]
+  global_index = base.op is Ops.INDEX and bool(base.src) and isinstance(base.src[0].dtype, PtrDType) and base.src[0].dtype.addrspace is AddrSpace.GLOBAL
+  global_ptrcat = base.op is Ops.PTRCAT and bool(base.src) and all(isinstance(x.dtype, PtrDType) and x.dtype.addrspace is AddrSpace.GLOBAL for x in base.src)
+  if not (global_index or global_ptrcat): return None
+  if not isinstance(gep.arg, tuple) or st.dtype.count != len(gep.arg): return None
+  if (scalarized:=_reduce_scalarized_reg_partials(base, gep.arg, st)) is not None: return scalarized
+  keyed_groups = _destination_groups(gep.arg)
+  groups = [pos for _,pos in keyed_groups]
+  if not groups or len(groups[0]) < 2 or not all(len(pos) == len(groups[0]) for pos in groups): return None
+  def is_reg_value(x:UOp) -> bool:
+    return x.dtype.count == st.dtype.count and _reg_value_info(x) is not None and _is_additive_reg_value(x)
+  reg, other = (st, None) if is_reg_value(st) else (None, None)
+  if reg is None and st.op in {Ops.ADD, Ops.MUL} and len(st.src) == 2:
+    candidates = [(candidate, other) for candidate,other in ((st.src[0], st.src[1]), (st.src[1], st.src[0])) if is_reg_value(candidate)]
+    if len(candidates) == 1: reg, other = candidates[0]
+  if reg is None: return None
+
+  # Every non-REG lane must either be a proven broadcast within each output
+  # group, or the SiLU reciprocal derived from the same projection value.
+  if other is not None and reg not in other.backward_slice_with_self:
+    for pos in groups:
+      projected = [other.src[0].gep((other.arg[p],)) if other.op is Ops.GEP and isinstance(other.arg, tuple) else other.gep((p,)) for p in pos]
+      if len(set(projected)) != 1: return None
+  elif other is not None and not (st.op is Ops.MUL and other.op is Ops.RECIPROCAL): return None
+
+  replacement_lanes:list[UOp|None] = [None] * st.dtype.count
+  for pos in groups:
+    partials = [reg.gep((p,)) for p in pos]
+    if len(set(partials)) != len(partials): return None
+    value = functools.reduce(lambda a,b: a+b, partials)
+    for p in pos: replacement_lanes[p] = value
+  replacement = UOp(Ops.STACK, reg.dtype, tuple(cast(UOp, x) for x in replacement_lanes))
+  reduced = st.substitute({reg: replacement}, walk=True)
+  target = _store_target_for_keys(base, tuple(key for key,_ in keyed_groups))
+  return target.store(reduced.gep(tuple(pos[0] for pos in groups))) if target is not None else None
+
+pm_reduce_duplicate_output_store = PatternMatcher([
+  (UPat(Ops.STORE, src=(UPat(Ops.GEP, name="gep"), UPat.var("st"))), reduce_duplicate_output_store),
+])
 
 load_store_folding = PatternMatcher([
   (UPat(Ops.PTRCAT, name="cat"), lambda cat: cat.src[0] if len(cat.src) == 1 and cat.dtype == cat.src[0].dtype else None),
@@ -163,6 +303,7 @@ load_store_folding = PatternMatcher([
    lambda gep, ld: ld.replace(dtype=ld.dtype.scalar().vec(gep.dtype.count), src=(gep.src[0],)+ld.src[1:]).gep(gep.arg)),
   (UPat(Ops.LOAD, src=(UPat(Ops.STACK, name="tgt"),), name="ld"), stack_load),
   # GEP on data of STORE
+  (UPat(Ops.STORE, src=(UPat(Ops.GEP, name="gep"), UPat.var("st"))), reduce_duplicate_output_store),
   (UPat(Ops.STORE, src=(UPat(Ops.GEP, name="gep"), UPat.var("st"), UPat.var("gate"))), gep_on_store),
   (UPat(Ops.STORE, src=(UPat(Ops.GEP, name="gep"), UPat.var("st"))), gep_on_store),
   # put PTRCAT after LOAD
@@ -299,6 +440,105 @@ def no_vectorized_alu(alu:UOp):
   alus = tuple(UOp(alu.op, alu.dtype.scalar(), tuple(s.gep(i) for s in alu.src), alu.arg) for i in range(alu.dtype.vcount))
   return UOp(Ops.STACK, alu.dtype, alus)
 
+def _output_load_lane(u:UOp) -> tuple[UOp, int]|None:
+  """Recover (GLOBAL INDEX, vector lane) from an output address consumed as a LOAD."""
+  if u.op is not Ops.GEP or not isinstance(u.arg, tuple) or len(u.arg) != 1: return None
+  ld = u.src[0]
+  if ld.op is not Ops.LOAD: return None
+  idx = ld.src[0]
+  if idx.op is Ops.CAST: idx = idx.src[0]
+  if idx.op is not Ops.INDEX or len(idx.src) < 2: return None
+  if getattr(idx.src[0], "addrspace", None) is not AddrSpace.GLOBAL: return None
+  return (idx, u.arg[0])
+
+def _uniform_contiguous_groups(items:list[UOp]) -> list[list[int]]|None:
+  groups, i = [], 0
+  while i < len(items):
+    j = i
+    while j < len(items) and items[j] is items[i]: j += 1
+    groups.append(list(range(i, j))); i = j
+  return groups if groups and all(len(pos) == len(groups[0]) for pos in groups) else None
+
+def _sum_distinct_lanes(val:UOp, pos:list[int]) -> UOp|None:
+  lanes = [val.gep((p,)) for p in pos]
+  return functools.reduce(lambda a,b: a+b, lanes) if len(set(lanes)) == len(lanes) else None
+
+def devectorize_bare_output_store(tgt:UOp, val:UOp, gate:UOp|None=None) -> UOp|None:
+  """Restore GLOBAL addresses that add_loads consumed as scalar LOAD targets."""
+  if val.dtype.count != len(tgt.src) or gate is not None and gate.dtype.count != len(tgt.src): return None
+  addresses = []
+  for lane in tgt.src:
+    if lane.op is not Ops.LOAD or not lane.src or lane.src[0].op is not Ops.INDEX: return None
+    idx = lane.src[0]
+    if getattr(idx.src[0], "addrspace", None) is not AddrSpace.GLOBAL: return None
+    addresses.append(idx)
+  groups = _uniform_contiguous_groups(list(tgt.src))
+  if groups is None: return None
+  stores = []
+  for pos in groups:
+    if len(pos) == 1: value = val.gep(pos[0])
+    elif gate is not None: return None
+    else:
+      lanes = [val.gep((p,)) for p in pos]
+      if len(set(lanes)) == 1: value = lanes[0]
+      elif val.op is Ops.STACK and (reduced:=_reduce_scalar_reg_group([val.src[p] for p in pos])) is not None: value = reduced[0]
+      elif _is_additive_reg_value(val) and len(set(lanes)) == len(lanes): value = functools.reduce(lambda a,b: a+b, lanes)
+      else: return None
+    stores.append(addresses[pos[0]].store(value, gate.gep(pos[0]) if gate is not None else None))
+  return UOp.group(*stores)
+
+def devectorize_output_projection_store(tgt:UOp, val:UOp) -> UOp|None:
+  """Restore GLOBAL output addresses and ADD-reduce repeated UPCAST partial groups.
+
+  This is intentionally ADD-only and GLOBAL-only: its validated producer is an
+  additive matmul epilogue. LOCAL/REG lanes may carry MAX or MUL reductions, so
+  they fail closed. Uniform repeated groups and distinct partial values are
+  required; nonuniform groups and broadcasts are declined.
+  """
+  if val.dtype.count != len(tgt.src): return None
+  info = [_output_load_lane(p) for p in tgt.src]
+  if any(x is None for x in info): return None
+  groups = _uniform_contiguous_groups(list(tgt.src))
+  if groups is None: return None
+  g = len(groups[0])
+  if g < 2: return None
+  stores = []
+  for pos in groups:
+    idx, lane = info[pos[0]]
+    addr = idx.src[0].index(idx.src[1] + UOp.const(idx.src[1].dtype, lane))
+    if (value:=_sum_distinct_lanes(val, pos)) is None: return None
+    stores.append(addr.store(value))
+  return UOp.group(*stores)
+
+pm_output_projection_store = PatternMatcher([
+  (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"), UPat.var("gate"))), devectorize_bare_output_store),
+  (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"))), devectorize_bare_output_store),
+  (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"))), devectorize_output_projection_store),
+])
+
+def scalarize_shaped_store(store:UOp) -> UOp|None:
+  """Devectorize shaped scatter stores while preserving exact address/value lanes."""
+  # EXP's older lowering already handles ordinary contiguous vector stores.
+  # The missing upstream behavior is specifically a shaped scatter destination;
+  # widening this to every shaped STORE perturbs the established GEP pipeline.
+  if store.src[0].op is not Ops.STACK or store.shape == (): return None
+  # Broadcasting must already be unpacked. Invalid is a scalar sentinel that
+  # intentionally applies to every lane, matching upstream do_devectorize.
+  if not all(source.shape == store.shape or source.base.arg is Invalid for source in store.src): return None
+  # The older movement pipeline represents this scatter as flat STACKs.
+  if len(store.shape) != 1 or store.src[1].op is not Ops.STACK: return None
+  lanes = int(store.shape[0])
+  if len(store.src[0].src) != lanes or len(store.src[1].src) != lanes: return None
+  stores = []
+  for i in range(lanes):
+    src = (store.src[0].src[i], store.src[1].src[i])
+    if len(store.src) == 3:
+      gate = store.src[2].base if store.src[2].base.arg is Invalid else \
+        store.src[2].src[i] if store.src[2].op is Ops.STACK else store.src[2].index(UOp.const(dtypes.weakint, i))
+      src += (gate,)
+    stores.append(store.replace(src=src))
+  return UOp.group(*stores)
+
 def _keep_register_tag(tag) -> bool: return isinstance(tag, RegisterResidentAccumulator) or isinstance(tag, tuple) and tag and tag[0] in ("wmma_frag_buffer_proof", "register_pipe_stage_buffer")
 
 def no_vectorized_buf(buf:UOp):
@@ -338,6 +578,12 @@ devectorize_alu = PatternMatcher([
   # no ALU on vectorized dtypes
   (UPat((*GroupOp.ALU, Ops.CAST, Ops.BITCAST), name="alu"), no_vectorized_alu),
   (UPat(Ops.WMMA, name="wmma"), no_vectorized_wmma),
+])
+
+# Keep shaped STORE ownership separate from value devectorization: output-projection
+# reductions must recover repeated destinations before the fallback scalarizes them.
+devectorize_store = PatternMatcher([
+  (UPat(Ops.STORE, name="store"), scalarize_shaped_store),
 ])
 
 pm_render = PatternMatcher([

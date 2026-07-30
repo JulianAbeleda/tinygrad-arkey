@@ -116,7 +116,8 @@ def selected_gguf_backing_bytes(model_path:str|Path, allocation_alignment:int|No
   return ((size + allocation_alignment - 1) // allocation_alignment) * allocation_alignment
 
 
-def _tensor_spans(meta:Mapping, file_size:int|None) -> tuple[TensorPayloadSpan, ...]:
+def gguf_tensor_spans(meta:Mapping, file_size:int|None) -> tuple[TensorPayloadSpan, ...]:
+  """Return exact payload and offset-derived spans from one GGUF tensor table."""
   data_start, infos = meta.get("data_start"), tuple(meta.get("tensor_infos", ()))
   if not isinstance(data_start, int) or data_start < 0: raise ValueError("GGUF metadata has no valid data_start")
   ordered = sorted(enumerate(infos), key=lambda item: item[1][3])
@@ -151,7 +152,7 @@ def scan_selected_gguf_memory(model_path:str|Path, geometry:RuntimeGeometry, can
   if file_size is None:
     try: file_size = path.stat().st_size
     except OSError: file_size = None
-  spans = _tensor_spans(meta, file_size)
+  spans = gguf_tensor_spans(meta, file_size)
   selected = f"selected path={path}"
   allocations: list[LedgerAllocation] = []
   for span in spans:
@@ -173,5 +174,5 @@ def scan_selected_gguf_memory(model_path:str|Path, geometry:RuntimeGeometry, can
   return GGUFMemoryScan(path, SelectedModelMemoryLedger(tuple(allocations)), spans, kv)
 
 
-__all__ = ["CandidateWorkspace", "GGUFMemoryScan", "RuntimeGeometry", "TensorPayloadSpan",
+__all__ = ["CandidateWorkspace", "GGUFMemoryScan", "RuntimeGeometry", "TensorPayloadSpan", "gguf_tensor_spans",
            "scan_selected_gguf_memory", "selected_gguf_backing_bytes"]

@@ -207,6 +207,27 @@ def classify_candidates(candidates: Iterable[CanonicalCandidate], legalities: It
     (rejected if reason is not None else accepted).append(StaticRejection(candidate_hash, reason) if reason is not None else candidate)
   return accepted, rejected
 
+def apply_coupled_row(baseline: Mapping[str, Any], row: Mapping[str, Any]) -> dict[str, Any]:
+  """Apply dotted schedule fields to a JSON baseline for static row legality."""
+  value = json.loads(json.dumps(baseline));
+  for path, replacement in sorted(row.items()):
+    current = value
+    parts = path.split(".")
+    if not isinstance(path, str) or not parts or any(not part for part in parts): raise ValueError("invalid coupled row path")
+    for part in parts[:-1]:
+      if not isinstance(current, dict) or part not in current: raise ValueError("coupled row path does not exist")
+      current = current[part]
+    if not isinstance(current, dict) or parts[-1] not in current: raise ValueError("coupled row path does not exist")
+    current[parts[-1]] = replacement
+  return value
+
+def classify_coupled_rows(baseline: Mapping[str, Any], proposed_rows: Iterable[Mapping[str, Any]], workload_facts: Mapping[str, Any], target_facts: Mapping[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+  check = build_static_legality(workload_facts, target_facts); legal, rejected = [], []
+  for row in proposed_rows:
+    candidate = apply_coupled_row(baseline, row); reason = check(candidate)
+    (legal if reason is None else rejected).append(dict(row) if reason is None else {"row":dict(row),"reason":reason})
+  return legal, rejected
+
 
 def rank_static_candidates(candidates: Iterable[CanonicalCandidate], priority: Priority) -> list[StaticAssessment]:
   """Deterministically order candidates for measurement; this is never a verdict."""

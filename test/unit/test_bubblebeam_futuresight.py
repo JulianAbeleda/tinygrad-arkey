@@ -108,3 +108,11 @@ def test_historical_q4_wrapper_still_selects_the_lane_partition():
   best = rank_candidates(q4k_lane_partition_candidates(UOp.range(32, 0)))[0]
   assert best.candidate.name == "lane_partition_q4k"
   assert should_route_q4k_lane_partition(12288, 4096) is True
+
+def test_proposals_serialize_to_the_plain_boltbeam_dimension_boundary():
+  proposals = (bf.LegalDimensionProposal("schedule.launch.threads", (32, 64)),
+               bf.LegalDimensionProposal("schedule.tile.k", (256,)))
+  plain = dimension_mapping(proposals)
+  assert plain == {"schedule.launch.threads": (32, 64), "schedule.tile.k": (256,)}
+  import json
+  assert json.loads(json.dumps(plain)) == {"schedule.launch.threads": [32, 64], "schedule.tile.k": [256]}

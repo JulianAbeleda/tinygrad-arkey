@@ -2,23 +2,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from tinygrad.helpers import Metadata
-from tinygrad.dtype import DType, least_upper_dtype, sum_acc_dtype
+from tinygrad.dtype import dtypes
 from typing import Any
+from tinygrad.engine.metadata import bind_buffer_metadata, bind_buffer_metadata_region, buffer_byte_length, buffer_metadata, register_call_metadata_resolver
+from tinygrad.llm.roles import DENSE_PROJECTION_ROLES, normalize_program_role
 
 
-QK_ROUTE_ROLES = ("ffn_gate_up", "ffn_down", "attn_qo", "attn_kv", "lm_head")
-_ROUTE_ROLE_ALIASES = {
-  "ffn_gate": "ffn_gate_up", "ffn_up": "ffn_gate_up", "ffn_gate_up": "ffn_gate_up",
-  "ffn_gate_shexp": "ffn_gate_up", "ffn_up_shexp": "ffn_gate_up",
-  "ffn_down": "ffn_down", "ffn_down_shexp": "ffn_down",
-  "attn_q": "attn_qo", "attn_output": "attn_qo", "attn_qo": "attn_qo",
-  "attn_k": "attn_kv", "attn_v": "attn_kv", "attn_kv": "attn_kv",
-  "output": "lm_head", "lm_head": "lm_head",
-}
+QK_ROUTE_ROLES = DENSE_PROJECTION_ROLES
 GGML_QUANT_LABELS = {
   12: "Q4_K",
   14: "Q6_K",
 }
+PROGRAM_SOURCE_LAYOUTS = ("gguf_packed_row_major",)
+PROGRAM_MODULE_REPRESENTATIONS = ("nn_linear", "qk_primitive_adapter")
+PROGRAM_DTYPES = ("float16", "float32", "bfloat16", str(dtypes.half), str(dtypes.float), str(dtypes.bfloat16))
 
 @dataclass(frozen=True)
 class ProgramIdentityMetadata(Metadata):
@@ -27,34 +24,15 @@ class ProgramIdentityMetadata(Metadata):
   source_quant_storage: str = ""; source_layout: str = ""; module_representation: str = ""
   input_dtype: str = ""; output_dtype: str = ""; accumulator_dtype: str|None = None
   def __post_init__(self):
-    if self.phase not in ("decode", "prefill") or self.role != normalize_route_role(self.role) or min(self.logical_m, self.logical_n, self.logical_k) < 1:
+    if self.phase not in ("decode", "prefill") or self.role not in QK_ROUTE_ROLES or \
+       self.role != normalize_route_role(self.role) or min(self.logical_m, self.logical_n, self.logical_k) < 1 or \
+       self.source_quant_storage not in GGML_QUANT_LABELS.values() or self.source_layout not in PROGRAM_SOURCE_LAYOUTS or \
+       self.module_representation not in PROGRAM_MODULE_REPRESENTATIONS or self.input_dtype not in PROGRAM_DTYPES or \
+       self.output_dtype not in PROGRAM_DTYPES or self.accumulator_dtype is not None and self.accumulator_dtype not in PROGRAM_DTYPES:
       raise ValueError("invalid program semantic identity")
-
-def program_identity_factory(fact: "TensorFact", *, module_representation:str, source_layout:str|None=None):
-  if fact.role is None: return None
-  source_layout = source_layout or ("gguf_packed_row_major" if fact.quant_label in ("Q4_K", "Q6_K") else "dense_row_major")
-  def factory(_module, x):
-    # QK adapters can dispatch either their generated float32 route or the normal Tensor fallback.
-    # Until that choice is observed at the KernelProgram boundary, their result dtype is not factual.
-    if module_representation != "nn_linear": return None
-    if len(x.shape) < 2 or not isinstance(x.shape[-2], int) or x.shape[-2] < 1: return None
-    weight_dtype, input_dtype = getattr(getattr(_module, "weight", None), "dtype", None), getattr(x, "dtype", None)
-    if not isinstance(weight_dtype, DType) or not isinstance(input_dtype, DType): return None
-    phase = getattr(_module, "_program_phase", None)
-    if phase not in ("decode", "prefill"): return None
-    product_dtype = least_upper_dtype(input_dtype, weight_dtype)
-    bias_dtype = getattr(getattr(_module, "bias", None), "dtype", None)
-    output_dtype = least_upper_dtype(product_dtype, bias_dtype) if isinstance(bias_dtype, DType) else product_dtype
-    return ProgramIdentityMetadata(name=fact.role, caller="", phase=phase, tensor_name=fact.name,
-      module_path=fact.module_path, role=fact.role, logical_m=x.shape[-2], logical_n=fact.rows, logical_k=fact.cols,
-      source_quant_storage=fact.quant_label, source_layout=source_layout, module_representation=module_representation,
-      input_dtype=str(input_dtype), output_dtype=str(output_dtype), accumulator_dtype=str(sum_acc_dtype(product_dtype)))
-  return factory
-
 
 def attach_program_identity_metadata(root: Any, facts: tuple["TensorFact", ...], *, primitive_linears: list[Any], module_at) -> tuple[tuple[str, Any], ...]:
   """Attach source-fact metadata to runtime modules without touching model state tensors."""
-  primitive_ids = {id(linear) for linear in primitive_linears}
   attached = []
   for fact in facts:
     if fact.role is None: continue
@@ -62,18 +40,15 @@ def attach_program_identity_metadata(root: Any, facts: tuple["TensorFact", ...],
     except (AttributeError, IndexError, ValueError): continue
     if not hasattr(linear, "__call__"): continue
     linear._program_tensor_fact = fact
-    representation = "qk_primitive_adapter" if id(linear) in primitive_ids else "nn_linear"
-    linear.call_metadata_factory = program_identity_factory(fact, module_representation=representation)
+    linear.call_metadata_binding = bind_module_program_tensor_facts
+    bind_module_program_tensor_facts(linear)
     attached.append((fact.module_path, linear))
   return tuple(attached)
 
 
 def normalize_route_role(role_or_name: str) -> str:
   """Normalize a route role or tensor/module name to the production role vocabulary."""
-  value = str(role_or_name or "")
-  leaf = value[:-len(".weight")] if value.endswith(".weight") else value
-  leaf = leaf.rsplit(".", 1)[-1]
-  return _ROUTE_ROLE_ALIASES.get(leaf, value)
+  return normalize_program_role(role_or_name)
 
 
 def packed_linear_quant(linear: Any) -> str:
@@ -103,6 +78,103 @@ class TensorFact:
   def to_json(self) -> dict[str, Any]:
     return {"name": self.name, "module_path": self.module_path, "ggml_type": self.ggml_type,
             "rows": self.rows, "cols": self.cols, "quant_label": self.quant_label, "role": self.role}
+
+
+@dataclass(frozen=True)
+class ProgramTensorFact:
+  """Immutable source fact attached to a concrete weight allocation out-of-band."""
+  fact: TensorFact
+  alias: str
+  def __post_init__(self):
+    if self.alias not in ("weight", "packed"): raise ValueError("program tensor alias must be weight or packed")
+
+
+def bind_program_tensor_fact(value:Any, fact:TensorFact, *, alias:str) -> None:
+  """Associate an immutable GGUF fact with an existing weight/packed buffer."""
+  bind_buffer_metadata(value, ProgramTensorFact(fact, alias))
+
+def program_tensor_facts(value:Any) -> tuple[ProgramTensorFact, ...]:
+  """Resolve exact facts through stable buffer aliases and offset views."""
+  return tuple(item for item in buffer_metadata(value) if isinstance(item, ProgramTensorFact))
+
+def bind_module_program_tensor_facts(module:Any) -> None:
+  """Refresh bindings from a module's current post-load/post-realize tensors."""
+  fact = getattr(module, "_program_tensor_fact", None)
+  if not isinstance(fact, TensorFact): return
+  if (weight := getattr(module, "weight", None)) is not None: bind_program_tensor_fact(weight, fact, alias="weight")
+  for storage_name, tensor_name in (("q4k_storage", "words"), ("q6k_storage", "halfs")):
+    storage = getattr(module, storage_name, None)
+    if storage is not None and (packed := getattr(storage, tensor_name, None)) is not None:
+      bind_program_tensor_fact(packed, fact, alias="packed")
+  for name in ("_prefill_q4k_words", "_prefill_q6k_halfs"):
+    if (packed := getattr(module, name, None)) is not None: bind_program_tensor_fact(packed, fact, alias="packed")
+
+def bind_gguf_program_tensor_facts(meta:dict, facts:tuple[TensorFact, ...]) -> tuple[str, ...]:
+  """Bind generic dequant routes to their exact source payload intervals."""
+  from tinygrad.llm.gguf_memory_scan import gguf_tensor_spans
+  raw = meta.get("raw_tensor")
+  if raw is None: return ()
+  try: file_size = int(raw.uop.nbytes())
+  except (AttributeError, TypeError, ValueError): return ()
+  by_name = {fact.name: fact for fact in facts if fact.role is not None}
+  bound = []
+  for span in gguf_tensor_spans(meta, file_size):
+    fact = by_name.get(span.name)
+    if fact is None or span.payload_bytes is None: continue
+    if bind_buffer_metadata_region(raw, span.absolute_offset, span.payload_bytes, ProgramTensorFact(fact, "weight")): bound.append(span.name)
+  return tuple(bound)
+
+def program_identities_from_call(call:Any) -> tuple[ProgramIdentityMetadata, ...]:
+  """Derive identities only from registered inputs of the concrete selected program."""
+  from tinygrad.uop.ops import Ops
+  if getattr(call, "op", None) is not Ops.CALL or not getattr(call, "src", ()): return ()
+  program = call.src[0]
+  out_slots = tuple(getattr(getattr(program, "arg", None), "outs", ()))
+  in_slots = tuple(getattr(getattr(program, "arg", None), "ins", ()))
+  if not out_slots: return ()
+  try:
+    slots = tuple(int(slot) for slot in in_slots)
+    output_slots = tuple(int(slot) for slot in out_slots)
+  except (TypeError, ValueError): return ()
+  if any(slot < 0 or slot+1 >= len(call.src) for slot in (*output_slots, *slots)): return ()
+  input_args = tuple(call.src[slot+1] for slot in slots)
+  observed = []
+  for arg in input_args:
+    for binding in program_tensor_facts(arg):
+      if binding not in observed: observed.append(binding)
+  if not observed: return ()
+
+  def dtype_name(arg):
+    dtype = getattr(arg, "dtype", None)
+    return str(getattr(dtype, "base", dtype))
+  def elements(arg):
+    try:
+      byte_length, itemsize = buffer_byte_length(arg), arg.dtype.itemsize
+      return 0 if byte_length is None or byte_length % itemsize else byte_length // itemsize
+    except (AttributeError, RuntimeError, TypeError, ValueError): return 0
+  output_dtypes = {dtype_name(call.src[slot+1]) for slot in output_slots}
+  if len(output_dtypes) != 1: return ()
+  output_dtype = next(iter(output_dtypes))
+  value_args = tuple(call.src[slot+1] for slot in slots if slot not in output_slots and not program_tensor_facts(call.src[slot+1]))
+  identities = []
+  for binding in observed:
+    fact = binding.fact
+    if fact.role is None or fact.quant_label not in ("Q4_K", "Q6_K"): continue
+    candidates = tuple(arg for arg in value_args if elements(arg) >= fact.cols and elements(arg) % fact.cols == 0)
+    logical_ms = {elements(arg) // fact.cols for arg in candidates}
+    if len(logical_ms) != 1: continue
+    logical_m = next(iter(logical_ms))
+    activation = next(arg for arg in candidates if elements(arg) // fact.cols == logical_m)
+    phase = "decode" if logical_m == 1 else "prefill"
+    identity = ProgramIdentityMetadata(name=fact.role, caller="", phase=phase, tensor_name=fact.name,
+      module_path=fact.module_path, role=fact.role, logical_m=logical_m, logical_n=fact.rows, logical_k=fact.cols,
+      source_quant_storage=fact.quant_label, source_layout="gguf_packed_row_major",
+      module_representation="qk_primitive_adapter" if binding.alias == "packed" else "nn_linear",
+      input_dtype=dtype_name(activation), output_dtype=output_dtype, accumulator_dtype=str(dtypes.float32))
+    if identity not in identities: identities.append(identity)
+  return tuple(identities)
+
+register_call_metadata_resolver(program_identities_from_call)
 
 
 @dataclass(frozen=True)

@@ -1,140 +1,56 @@
-"""Route manifest -- the single declarative source of truth for which decode/prefill routes exist on this fork, what
-selects each one, what it rolls back to, and its current disposition. PMS-R1 of
-docs/pure-machine-search-remaining-hot-kernels-scope-20260630.md (supersedes the Phase-1 draft of
-docs/claude-active-work-audit-and-agnostic-search-scope-20260630.md).
+"""EXP read-only adapter for BoltBeam's route-selection policy export.
 
-For why machine-searched routes are frozen into static runtime artifacts, see
-README.md#why-this-is-machine-search-even-though-the-runtime-is-static.
-
-This module is DATA + tiny helpers. It changes NO defaults and runs NO kernels; gates import it instead of copying
-ad-hoc env maps. For each route, `env` is what you SET to force that route onto the active path; an empty `env` ({})
-means the route is ALREADY the shipped default (no flag needed). `rollback` is the exact env to leave it.
-
-CURRENT-STATE PIN (verified 2026-07-03 against tinygrad/llm/decode_routes.py + tinygrad/llm/decode_kernels.py +
-tinygrad/llm/flash_decode_attention.py + tinygrad/llm/prefill_graph_gemm.py; legacy extra modules are research oracles):
-
-  * Decode Q4_K GEMV default = the GENERATED G3 LaneMap route. decode_routes.py:q4k_primitive_linear_call reads
-    `getenv("BUBBLEBEAM_FUTURESIGHT", 1)` (DEFAULT-ON, flipped in commit 81370ae38). For eligible Q4_K shapes
-    the G3 route fires FIRST and short-circuits before the owned-warp guards. So `decode_q4k_g3_generated` is the
-    promoted default; the owned warp kernel is the rollback/reference one flag away (BUBBLEBEAM_FUTURESIGHT=0).
-  * An earlier draft of this file had G3/owned default-status INVERTED (it predated the default flip). This version
-    pins the real state: G3 = default, owned warp = rollback.
-
-Token-identity / speed-equivalence proof: bench/amd-isa-backend-g3-weight-promotion/latest.json
-(AMD_ISA_G3_PROMOTION_PASS_SPEED_EQUIVALENT; lag -0.13..+0.41% across ctx 512-4096; token_match + route_clean all ctx).
+BoltBeam owns declarative selection policy.  This module deliberately owns only
+runtime-derived execution facts (production descriptors) and research helpers;
+it never imports the sibling BoltBeam checkout at runtime.
 """
 from __future__ import annotations
 import hashlib, json, pathlib
 from collections.abc import Mapping
 from types import MappingProxyType
-
 from tinygrad.llm.prefill_candidate_runtime import canonical_candidate_set_identity as _production_candidate_set_identity
 
 PROFILE_DECODE = "qwen3_8b_q4_k_m_gfx1100_decode"
 PROFILE_DECODE_LARGE = "qwen3_14b_32b_q4_k_m_gfx1100_decode"
 PROFILE_PREFILL = "qwen3_8b_q4_k_m_gfx1100_prefill"
-
-# status vocabulary:
-#   promoted_default        -> generated/search-selected route that is now the shipped default
-#   default_shipped         -> shipped default whose writer is owned/hand asm (not yet replaced by a generated route)
-#   rollback_reference      -> kept one flag away as the rollback/oracle for a promoted route; NOT on the default path
-#   superseded_rollback     -> previously promoted, kept as the A/B rollback target for a newer default
-#   refuted                 -> built, token-correct, route-bound, but speed-refuted; default-off, do not re-search as-is
-#   correct_not_fast        -> generated/correct/route-bound but below promotion speed; infrastructure/research, not shipped
-#
-# purity_status vocabulary (docs/pure-machine-search.md definitions):
-#   search_generated_promoted | owned_reference | owned_default | search_selected_specialized_route | refuted | research
-#
-# provenance vocabulary (strict default-purity audit):
-#   machine_authored_generated  -> emitted from profile/grammar/search-owned lowering; allowed as final default
-#   tinygrad_scheduler_generated -> ordinary tinygrad graph lowering; allowed as final default
-#   compiler_primitive_spec_owned -> compiler/search spec owns route lifecycle; reusable backend atom may emit ASM
-#   hand_authored_uop_template  -> Python UOp custom_kernel body written by humans; transitional default only
-#   external_handwritten_kernel -> HIP/ASM/C++/precompiled binary or explicit instruction emitter; not final default
-#   rollback_oracle            -> handwritten/specialized route retained only as rollback/reference
-ROUTE_PROVENANCE = (
-  "machine_authored_generated", "tinygrad_scheduler_generated", "hand_authored_uop_template",
-  "compiler_primitive_spec_owned", "external_handwritten_kernel", "rollback_oracle",
-)
+ROUTE_PROVENANCE = ("machine_authored_generated", "tinygrad_scheduler_generated", "hand_authored_uop_template", "compiler_primitive_spec_owned", "external_handwritten_kernel", "rollback_oracle")
 FINAL_DEFAULT_PROVENANCE = {"machine_authored_generated", "tinygrad_scheduler_generated"}
 TRANSITIONAL_DEFAULT_PROVENANCE = {"hand_authored_uop_template"}
 FORBIDDEN_DEFAULT_PROVENANCE = {"external_handwritten_kernel", "rollback_oracle"}
-
-# purity_status is a DERIVED human-facing label, not an independent axis. It is a pure function of (status, provenance)
-# so it can never silently drift from them (F4: it used to be a hand-maintained third vocabulary that disagreed with
-# the route's real status/provenance). derive_purity_status is the single source; validate_manifest() enforces that
-# every stored purity_status equals the derived value, and the census sources its purity_status from here.
 PURITY_STATUS_VOCAB = ("search_generated_promoted", "refuted", "research")
+_EXPORT = pathlib.Path(__file__).parent / "generated/boltbeam_route_manifest.v1.json"
 
 def derive_purity_status(status: str, provenance: str) -> str:
-  if status in ("promoted_default", "default_shipped") and provenance in FINAL_DEFAULT_PROVENANCE:
-    return "search_generated_promoted"
-  if status == "refuted":
-    return "refuted"
-  return "research"
+  if status in ("promoted_default", "default_shipped") and provenance in FINAL_DEFAULT_PROVENANCE: return "search_generated_promoted"
+  return "refuted" if status == "refuted" else "research"
+
+def _load_export() -> dict:
+  sidecar = _EXPORT.with_suffix(_EXPORT.suffix + ".sha256")
+  try: raw, expected = _EXPORT.read_bytes(), sidecar.read_text().split()[0]
+  except (OSError, IndexError) as exc: raise RuntimeError("BoltBeam route-policy export is unavailable; refusing selection-policy fallback") from exc
+  actual = hashlib.sha256(raw).hexdigest()
+  if actual != expected: raise RuntimeError("BoltBeam route-policy export hash mismatch; refusing selection-policy fallback")
+  try: data = json.loads(raw)
+  except json.JSONDecodeError as exc: raise RuntimeError("BoltBeam route-policy export is invalid") from exc
+  if data.get("schema") != "boltbeam.route-manifest.v1" or data.get("authority") != "BoltBeam" or data.get("version") != 1: raise RuntimeError("BoltBeam route-policy export schema mismatch")
+  if (json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n").encode("ascii") != raw: raise RuntimeError("BoltBeam route-policy export is noncanonical")
+  return data
 
 def _load_routes() -> dict:
-  """Load the ROUTES data table from the sibling JSON file.
-
-  The table itself (workload/profile/shape_guards/env/rollback/etc. per route) is pure data -- no computed
-  values, no tuples, nothing but dicts/lists/strings/bools/None -- so it lives in route_manifest.json to keep
-  it out of sz.py's .py/.js LOC budget. PROFILE_DECODE/PROFILE_DECODE_LARGE/PROFILE_PREFILL are written into
-  the JSON as their plain string VALUES (the JSON loader has no access to these Python names).
-  """
-  routes = json.loads((pathlib.Path(__file__).parent / "route_manifest.json").read_text())
-  # Runtime applicability belongs to the production descriptors. EXP stores
-  # evidence and provenance, then derives these exact guards so the manifest
-  # cannot become a second selected-configuration authority.
+  routes = _load_export()["routes"]
+  # EXP execution-fact overlay: guards derive only from production descriptors,
+  # never from a second policy table.
   from tinygrad.llm.flash_decode_attention import FLASH_DECODE_G4, FLASH_DECODE_G5
   from tinygrad.llm.packed_wmma_prefill import PACKED_WMMA_ROUTES
   for route_id, config in ((FLASH_DECODE_G4.route_id, FLASH_DECODE_G4), (FLASH_DECODE_G5.route_id, FLASH_DECODE_G5)):
     guard = {"B":1, "Hq":config.query_heads, "Hkv":config.kv_heads, "Hd":config.head_dim, "ctx":">=512"}
     if config.query_group_size is None: guard["G"] = config.query_heads // config.kv_heads
     routes[route_id]["shape_guards"] = [guard]
-  routes["packed_wmma_prefill_generated"]["shape_guards"] = [
-    {"role":row.role, "M":row.shape[0], "N":row.shape[1], "K":row.shape[2], "quant":row.quant}
-    for row in PACKED_WMMA_ROUTES]
+  routes["packed_wmma_prefill_generated"]["shape_guards"] = [{"role":row.role, "M":row.shape[0], "N":row.shape[1], "K":row.shape[2], "quant":row.quant} for row in PACKED_WMMA_ROUTES]
   return routes
 
 ROUTES = _load_routes()
-
-# Closed / refuted axes -- do not re-search without a NEW premise (PMS-R3 do_not_search carries these forward).
-REFUTED = [
-  {"axis": "q6k_direct_half_warp_route", "disposition": "refuted: W==D regression -4.77..-6.06% (median -5.44%)",
-   "citation": "bench/amd-isa-backend-q6k-direct-speed/latest.json", "route_id": "decode_q6k_direct_refuted"},
-  {"axis": "q4k_offline_layout_reshuffle", "disposition": "deprioritized: G3 matches owned, no layout gap to recover",
-   "citation": "bench/amd-isa-backend-g3-weight-promotion/search_space_update.json"},
-  {"axis": "prefill_q4k_simple_uop_cooperative_lane_tile", "domain": "prefill",
-   "disposition": "refuted on 14B ffn_gate_up: lane_partials 0.99 GB/s; direct_warp sweep best 1.29 GB/s vs current direct-packed floor ~2.11 GB/s",
-   "citation": "docs/prefill-lessons-ledger.md", "route_id": "prefill_q4k_generated_tile_research"},
-  {"axis": "prefill_q4k_direct_group_reduce_current_uop", "domain": "prefill",
-   "disposition": "refuted for the manual direct-output recurrence: GROUP:0:10 looked fast but is numerically wrong on real 14B ffn_gate (rel_rmse ~1.26); use PREFILL_Q4K_REDUCE_OUT=1 for correct-but-not-fast grouped semantics",
-   "citation": "docs/prefill-lessons-ledger.md", "route_id": "prefill_q4k_direct_tile4x4_default"},
-  {"axis": "attention_combine_fused_lifecycle", "domain": "attention", "disposition": "exhausted/low-leverage (combine overlaps in-graph; fused is codegen-walled)",
-   "citation": "docs/decode-two-kernel-problem-audit-result-20260625.md"},
-  {"axis": "g5_block_tile_as_default", "compatibility_aliases": ("g5_block_tile_8b_as_default",), "domain": "attention", "disposition": "correct_not_fast: token-identical + route-bound but 87.6% of owned @ctx512 / 95.6% @ctx4096 (TG-P5)",
-   "citation": "bench/tg-p5-attention-generated-default/latest.json", "legacy_route_id": "decode_flash_block_tile_g5_8b_refuted"},
-  {"axis": "g5_block_tile_L_geometry", "compatibility_aliases": ("g5_block_tile_8b_L_geometry",), "domain": "attention", "disposition": "refuted: L=128 is the geometry optimum (87.7%/95.9%); larger L monotonically worse (69%/75.6% at L=576, occupancy-starved) -- the generated route needs ~36 splits for parallelism so it over-launches at low ctx (TG-P8.2)",
-   "citation": "bench/tg-p8-generated-8b-attention-parity/geometry_search.json"},
-  {"axis": "g5_block_tile_combine_lifecycle_cap", "compatibility_aliases": ("g5_block_tile_8b_combine_lifecycle_cap",), "domain": "attention", "disposition": "blocking: the generated 3-kernel gmax+combine lifecycle is 556us/fwd (83% of the ctx4096 attention delta) vs owned's fused 224us -> BINDING cap at ctx4096 (95.9%); a perfect tile saves only 112us. Combine COLLAPSE is refuted (guardrail #3); reopen only with a NEW non-collapse coordination primitive (TG-P8.1/P8.2)",
-   "citation": "bench/tg-p8-generated-8b-attention-parity/latest.json"},
-  {"axis": "live_split_geometry_tile", "compatibility_aliases": ("live_split_geometry_8b_tile",), "domain": "attention", "disposition": "SOLVED/PROMOTED: live-context split geometry (fixed S, per=ceildiv(Tc,S)) is expressible in generated UOp; the live-split route plus KV_BOTH staging and fused combine is now the 8B generated default. extra/llm_research/live_split_geometry.py",
-   "citation": "bench/tg-p9-pure-attention-primitive-route/live_split_tile_microgate.json"},
-  {"axis": "split_preserving_lse_combine", "compatibility_aliases": ("split_preserving_lse_combine_8b",), "domain": "attention", "disposition": "EMITTER_BLOCKED (TG-P9.4): a split-preserving generated combine (de-dup the per-d fexp / fuse gmax without collapsing Hq*S or Hq*Hd) mis-vectorizes the reduction-accumulator REG to a non-assignable make_float4(...) store; REG_STORE_DEVEC=1 compiles but NaNs. The ctx4096 556us combine cap cannot be removed in current AMD codegen. Reopen: a codegen fix keeping the reduction-accumulator REG scalar for a multi-reduce/weight-sharing combine.",
-   "citation": "bench/tg-p9-pure-attention-primitive-route/combine_microgate.json"},
-]
-
-# ---- DEFERRED capability frontier: blocked-but-OPEN, NOT refuted on merits. The pure-search north-star (replace the
-#      two hand-written decode kernels with a fully searched native route) is gated on renderer lowering of these
-#      primitives; reopen each when the capability lands. Distinct from REFUTED (lost on its merits) and from shipped. ----
-DEFERRED_CAPABILITIES = [
-  {"capability": "v_dot2_lowering", "status": "deferred", "domain": "codegen",
-   "blocks": "native packed-fp16 dot in a searched decode-attention / GEMV kernel",
-   "reopen_when": "the renderer lowers v_dot2 (packed fp16 dot) so the search space can emit it natively"},
-  {"capability": "cross_lane_mixed_reduce", "status": "deferred", "domain": "codegen",
-   "blocks": "native cross-lane reduction lowering for a searched tile (LDS path already native; ds_bpermute tree TODO)",
-   "reopen_when": "the renderer lowers the cross-lane reduction so a searched kernel can own the reduction topology"},
-]
+REFUTED = _load_export()["refuted_axes"]
 
 # ---- tiny helpers (no side effects unless you call apply_route) ----
 ROUTE_COMPATIBILITY_ALIASES = (
@@ -172,8 +88,8 @@ def canonical_route_id(route_id: str, registry: Mapping|None = None) -> str:
   """Resolve one complete legacy spelling. Prefix, case-folded, and partial matches are intentionally unsupported."""
   aliases = _route_alias_map()
   registry = immutable_route_registry() if registry is None else registry
-  if route_id in registry: return route_id
   if route_id in aliases: return aliases[route_id]
+  if route_id in registry: return route_id
   raise KeyError(f"unknown route_id {route_id!r}; known: {sorted((*registry, *aliases))}")
 
 def route(route_id: str, registry: Mapping|None = None) -> dict:
@@ -488,7 +404,7 @@ def to_manifest_dict() -> dict:
           "default_purity": default_purity_report()}
 
 def dump(out_path: str | None = None) -> str:
-  """Write the canonical manifest json (bench/qk-search-spaces/default_route_manifest.json by default)."""
+  """Write an EXP inspection report; BoltBeam's hashed asset remains canonical."""
   root = pathlib.Path(__file__).resolve().parents[2]
   p = pathlib.Path(out_path) if out_path else (root / "bench/qk-search-spaces/default_route_manifest.json")
   p.parent.mkdir(parents=True, exist_ok=True)

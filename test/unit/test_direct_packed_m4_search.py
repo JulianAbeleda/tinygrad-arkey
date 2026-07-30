@@ -3,13 +3,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from extra.llm_research.prefill.direct_packed_m4_search import (EXPORT_DIR, ROUTES, TARGET, blocked_record, check_exports,
+from extra.llm_research.prefill.direct_packed_m4_search import (DIRECT_PACKED_M4_TOPOLOGIES, EXPORT_DIR, TARGET, blocked_record, check_exports,
   export, request, validate)
 
 
 class TestDirectPackedM4Search(unittest.TestCase):
   def test_requests_cover_exact_8b_and_14b_shape_keys_without_a_fake_space(self):
-    for route_id in ROUTES:
+    for route_id in DIRECT_PACKED_M4_TOPOLOGIES:
       record = request(route_id)
       validate(record)
       self.assertEqual(len(record["workloads"]), 8)

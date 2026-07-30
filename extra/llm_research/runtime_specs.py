@@ -5,10 +5,11 @@ import hashlib
 import json
 from types import MappingProxyType
 from typing import Any
+from tinygrad.llm.roles import PROGRAM_WORKLOAD_ROLES, normalize_program_role
 
 OP_FAMILIES = ("QuantizedLinear", "DenseLinear", "FlashAttention", "KVCache", "ActivationFusion")
 PHASES = ("prefill", "decode")
-ROLES = ("ffn_gate_up", "ffn_down", "attn_qo", "attn_kv", "lm_head", "attention", "unknown")
+ROLES = PROGRAM_WORKLOAD_ROLES
 QUANT_FORMATS = ("Q4_K", "Q6_K", "fp16", "fp8", "int8", "unknown")
 ACTIVATION_FORMATS = ("fp16", "fp32", "Q8_1", "none")
 LOWERING_STRATEGIES = (
@@ -723,6 +724,7 @@ class RuntimeOpSpec:
   admission: CandidateAdmissionFacts = field(default_factory=CandidateAdmissionFacts)
 
   def __post_init__(self):
+    object.__setattr__(self, "role", normalize_program_role(self.role))
     _check("family", self.family, OP_FAMILIES)
     _check("phase", self.phase, PHASES)
     _check("role", self.role, ROLES)
@@ -738,7 +740,7 @@ class RuntimeOpSpec:
 
   @classmethod
   def from_json(cls, row:dict[str, Any]) -> "RuntimeOpSpec":
-    return cls(family=str(row["family"]), phase=str(row["phase"]), role=str(row.get("role", "unknown")),
+    return cls(family=str(row["family"]), phase=str(row["phase"]), role=str(row.get("role", "generic")),
                shape=dict(row.get("shape", {})), weight=QuantizedTensorSpec.from_json(dict(row["weight"])),
                activation=ActivationQuantSpec.from_json(dict(row.get("activation", {"format": "none"}))),
                lowering_strategy=str(row.get("lowering_strategy", "unknown")),
@@ -773,6 +775,7 @@ class GeneratedCandidate:
   required_admission_facts: tuple[str, ...] = ()
 
   def __post_init__(self):
+    object.__setattr__(self, "roles", tuple(dict.fromkeys(normalize_program_role(role) for role in self.roles)))
     _check("op_family", self.op_family, OP_FAMILIES)
     _check("lowering_strategy", self.lowering_strategy, LOWERING_STRATEGIES)
     _check("provenance", self.provenance, PROVENANCE)
@@ -834,7 +837,7 @@ class GeneratedCandidate:
   def supports(self, op:RuntimeOpSpec) -> bool:
     if self.op_family != op.family: return False
     if op.phase not in self.phases: return False
-    if op.role not in self.roles and "unknown" not in self.roles: return False
+    if op.role not in self.roles and "generic" not in self.roles: return False
     if op.weight.format not in self.supported_quant_formats: return False
     if op.activation.format not in self.supported_activation_formats: return False
     if self.device_constraints and op.device not in self.device_constraints: return False

@@ -1,4 +1,4 @@
-import json, types
+import hashlib, json, types
 from unittest.mock import patch
 import pytest
 
@@ -48,8 +48,10 @@ class _HybridCensusScaleGraph(GraphRunner):
                           0x100000000, (resource,))
 
 
-def _call(name="kernel", *, op=Ops.PROGRAM, device="SYNTHETIC", metadata=()):
+def _call(name="kernel", *, op=Ops.PROGRAM, device="SYNTHETIC", metadata=(), compiled=False):
   program = types.SimpleNamespace(op=op, arg=types.SimpleNamespace(name=name), key=bytes.fromhex("12" * 32))
+  if compiled: program.src = (types.SimpleNamespace(op=Ops.SOURCE, arg="kernel source"),
+                              types.SimpleNamespace(op=Ops.BINARY, arg=b"compiled binary"))
   buf = types.SimpleNamespace(op=Ops.BUFFER, device=device)
   return types.SimpleNamespace(src=(program, buf), arg=types.SimpleNamespace(metadata=metadata), name=name)
 
@@ -101,6 +103,13 @@ def test_observation_disabled_and_enabled_produce_identical_graph_output_and_rec
     ("graph", 0, 0, 2), ("graph", 0, 1, 2), ("graph", 1, 0, 2), ("graph", 1, 1, 2)]
 
 
+def test_observation_records_compiled_source_and_binary_content_identities():
+  observed = []
+  _split(_Linear([_call("a", compiled=True), _call("b", compiled=True)]), observer=observed.append)
+  assert all(row.source_sha256 == hashlib.sha256(b"kernel source").hexdigest() for row in observed)
+  assert all(row.binary_sha256 == hashlib.sha256(b"compiled binary").hexdigest() for row in observed)
+
+
 def test_prefix_barrier_is_accounted_as_boundary_not_backend_rejection(monkeypatch):
   monkeypatch.setenv("JIT_NO_GRAPH_KERNEL_PREFIXES", "barrier_")
   linear = _Linear([_call("first"), _call("barrier_exact"), _call("last")])
@@ -148,7 +157,8 @@ def test_census_serialization_is_deterministic_reconciled_and_carries_available_
   assert json.loads(census.deterministic_json()) == payload
   assert census.deterministic_json() == census.deterministic_json()
   assert payload["counts"] == {"logical_calls":4, "graph_members":4, "direct_calls":0, "ignored_slice_nodes":0,
-                               "graph_batches":2, "constructor_failures":0}
+                               "graph_batches":2, "constructor_failures":0, "semantic_calls":0, "generic_calls":4}
+  assert payload["workload_role_histogram"] == {"generic":4}
   assert payload["batches"] == [{"batch_index":0, "size":2}, {"batch_index":1, "size":2}]
   assert payload["batch_boundary_histogram"] == {"batch_size_limit":1}
   assert payload["records"][0]["program_hash"] == "12" * 32
@@ -167,10 +177,30 @@ def test_census_transports_rich_metadata_without_parsing_program_names():
   record = census.to_dict()["records"][0]
   assert record["program_name"] == "opaque_backend_name"
   assert record["metadata_status"] == "semantic" and record["metadata_unavailable"] is False
+  assert record["workload_roles"] == ["ffn_down"]
   assert record["semantic_identities"] == [{"phase":"decode", "tensor_name":"blk.0.ffn_down.weight", "module_path":"blk.0.ffn_down",
     "role":"ffn_down", "logical_m":1, "logical_n":4, "logical_k":8, "source_quant_storage":"Q6_K",
     "source_layout":"gguf_packed_row_major", "module_representation":"nn_linear", "input_dtype":"float16",
     "output_dtype":"float16", "accumulator_dtype":None}]
+
+
+def test_semantic_accounting_is_stable_across_control_hybrid_and_repeated_traces():
+  identity = ProgramIdentityMetadata(name="ffn_down", caller="", phase="decode", tensor_name="blk.0.ffn_down.weight",
+    module_path="blk.0.ffn_down", role="ffn_down", logical_m=1, logical_n=4, logical_k=8,
+    source_quant_storage="Q6_K", source_layout="gguf_packed_row_major", module_representation="nn_linear",
+    input_dtype="float16", output_dtype="float16", accumulator_dtype="float32")
+  linear = _Linear([_call("opaque_a", metadata=(identity,), compiled=True), _call("opaque_b", compiled=True)])
+  def capture(graph):
+    census = GraphAdmissionCensus(); _split(linear, observer=census, graph=graph); return census
+  control, repeated, hybrid = capture(_SyntheticGraph), capture(_SyntheticGraph), capture(_HybridSyntheticGraph)
+  assert control.deterministic_json() == repeated.deterministic_json()
+  control_payload, hybrid_payload = control.to_dict(), hybrid.to_dict()
+  assert control_payload["counts"]["semantic_calls"] == hybrid_payload["counts"]["semantic_calls"] == 1
+  assert control_payload["counts"]["generic_calls"] == hybrid_payload["counts"]["generic_calls"] == 1
+  assert control_payload["workload_role_histogram"] == hybrid_payload["workload_role_histogram"] == {"ffn_down":1, "generic":1}
+  stable_fields = ("program_hash", "program_name", "source_sha256", "binary_sha256", "metadata_status", "workload_roles", "semantic_identities")
+  assert [[record[field] for field in stable_fields] for record in control_payload["records"]] == \
+         [[record[field] for field in stable_fields] for record in hybrid_payload["records"]]
 
 
 def test_runtime_tracemeta_context_controls_explicit_metadata_without_import_time_mode():
@@ -197,7 +227,7 @@ def test_hybrid_census_scale_projects_five_batches_without_stranded_singletons()
   _split(_Linear([_call(str(i)) for i in range(803)]), observer=census, max_batch_size=32, graph=_HybridCensusScaleGraph)
   payload = census.to_dict()
   assert payload["counts"] == {"logical_calls":803, "graph_members":803, "direct_calls":0, "ignored_slice_nodes":0,
-                               "graph_batches":5, "constructor_failures":0}
+                               "graph_batches":5, "constructor_failures":0, "semantic_calls":0, "generic_calls":803}
   assert [batch["size"] for batch in payload["batches"]] == [32, 64, 128, 256, 323]
   assert payload["admission_reason_histogram"] == {"admitted":736, "backend_buffer_offset_width":67}
   assert payload["reason_histogram"] == {"admitted":803}

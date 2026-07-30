@@ -347,5 +347,10 @@ def transform_to_call(big_sink:UOp) -> tuple[UOp, dict[UOp, UOp]]:
       # result. The weak allocation binding above retains ownership without
       # putting MEMORY_SEMANTIC back on decode's feedback value path.
       ctx.buffer_map[original] = mapped
+  # Program/tensor identity is side data like allocation ownership. Propagate
+  # registered weight aliases to their concrete callify buffers without ever
+  # annotating normalized PARAMs or executable value-path UOps.
+  from tinygrad.engine.metadata import propagate_buffer_metadata
+  for source, target in ctx.buffer_map.items(): propagate_buffer_metadata(source, target)
   if VIZ: graph_rewrite(ret, PatternMatcher([]), name="View Call")
   return ret, ctx.buffer_map

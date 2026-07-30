@@ -102,8 +102,8 @@ def _warm_depth(model, prompt:list[int], chunk_size:int, warmup_decode:int) -> N
   finally: gen.close()
 
 
-def _warm_depth_with_graph_census(model, prompt:list[int], chunk_size:int, warmup_decode:int):
-  """Observe exactly the second SDPA rollout capture; prefill remains unobserved."""
+def capture_decode_graph(model, prompt:list[int], chunk_size:int, warmup_decode:int):
+  """Capture the second SDPA rollout and retain its runtime-only call bindings."""
   from tinygrad.engine.jit import observe_graph_admissions
   from tinygrad.helpers import Context
   _reset(model)
@@ -117,6 +117,12 @@ def _warm_depth_with_graph_census(model, prompt:list[int], chunk_size:int, warmu
   finally: gen.close()
   if census is None or getattr(model.rollout_jit, "captured", None) is None:
     raise RuntimeError("second SDPA rollout warmup did not capture rollout_jit")
+  return census
+
+
+def _warm_depth_with_graph_census(model, prompt:list[int], chunk_size:int, warmup_decode:int):
+  """Serialize exactly the second SDPA rollout capture; prefill remains unobserved."""
+  census = capture_decode_graph(model, prompt, chunk_size, warmup_decode)
   payload = census.to_dict()
   payload["capture"] = {"phase": "decode", "route": "sdpa", "warmup_index": 2,
                         "jit": "rollout_jit", "captured": True}
@@ -171,6 +177,8 @@ def main(argv:list[str] | None=None) -> int:
   ap.add_argument("--chunk-size", type=int, default=int(os.environ.get("QK_CHUNK_SIZE", 32)))
   ap.add_argument("--graph-admission-out", default=None,
                   help="optional atomic tinygrad.graph_admission_census.v1 export from second SDPA rollout warmup")
+  ap.add_argument("--skip-dispatch-diagnostic", action="store_true",
+                  help="omit D so W is the final GPU interval for external system tracing")
   ap.add_argument("--out", required=True, help="unique output JSON for this invocation")
   args = ap.parse_args(argv)
   if args.reps < 1: raise ValueError("reps must be positive")
@@ -200,11 +208,14 @@ def main(argv:list[str] | None=None) -> int:
     route_reps, prelude_reps, token_reps = [], [], []
     for rep in range(args.reps):
       w_elapsed, per_token, generated, prelude = _measure_w(model, dev, prompt, args.chunk_size, profile.nmeas)
-      d_elapsed, routes, final_token = _measure_d(model, dev, prompt, args.chunk_size, profile.nmeas, profile.max_context)
       w_reps.append({"rep": rep, "elapsed_s": w_elapsed, "tok_s": profile.nmeas / w_elapsed,
                      "per_token_ms": [x * 1e3 for x in per_token]})
-      d_reps.append({"rep": rep, "elapsed_s": d_elapsed, "tok_s": profile.nmeas / d_elapsed,
-                     "final_token_id": final_token})
+      if args.skip_dispatch_diagnostic:
+        routes = ["flash" if _route(model, len(prompt), 1) else "sdpa"]
+      else:
+        d_elapsed, routes, final_token = _measure_d(model, dev, prompt, args.chunk_size, profile.nmeas, profile.max_context)
+        d_reps.append({"rep": rep, "elapsed_s": d_elapsed, "tok_s": profile.nmeas / d_elapsed,
+                       "final_token_id": final_token})
       route_reps.append(routes)
       prelude_reps.append(_token_evidence([prelude], include_token_ids=True))
       token_reps.append(_token_evidence(generated, include_token_ids=True))
@@ -212,18 +223,19 @@ def main(argv:list[str] | None=None) -> int:
     w_tok_s = [r["tok_s"] for r in w_reps]
     d_tok_s = [r["tok_s"] for r in d_reps]
     w_ms = 1e3 / statistics.median(w_tok_s)
-    d_ms = 1e3 / statistics.median(d_tok_s)
+    d_ms = 1e3 / statistics.median(d_tok_s) if d_tok_s else None
     route_set = sorted({route for routes in route_reps for route in routes})
     jits = [model.rollout_jit_flash if route == "flash" else model.rollout_jit for route in route_set]
     programs = {route: _captured_program_count(jit) for route, jit in zip(route_set, jits)}
-    host_ms, host_pct = _host_residual(w_ms, d_ms)
+    host_ms, host_pct = _host_residual(w_ms, d_ms) if d_ms is not None else (None, None)
     row = {"ctx": depth, "fixed_depth": depth, "decode_tokens": profile.nmeas, "reps": args.reps,
            "route_sequence": route_reps[0], "route_sequences_identical": all(x == route_reps[0] for x in route_reps),
            "routes": route_set, "programs_per_token_by_route": programs,
            "wall_ms_W": w_ms, "dispatch_ms_D": d_ms, "host_sync_residual_ms": host_ms,
            "host_sync_pct_of_wall": host_pct, "tok_s_W": statistics.median(w_tok_s),
-           "tok_s_D_diagnostic": statistics.median(d_tok_s),
-           "D_interpretation": ("upper_bound_candidate" if host_ms is not None else
+           "tok_s_D_diagnostic": statistics.median(d_tok_s) if d_tok_s else None,
+           "D_interpretation": ("omitted_for_external_system_trace" if args.skip_dispatch_diagnostic else
+                                "upper_bound_candidate" if host_ms is not None else
                                 "not_an_upper_bound; host/runtime subtraction refused"),
            "W_reps": w_reps, "D_reps": d_reps,
            "prompt_evidence": _token_evidence(prompt, include_token_ids=True),
@@ -242,6 +254,19 @@ def main(argv:list[str] | None=None) -> int:
   valid_host = [row["host_sync_pct_of_wall"] for row in rows if row["host_sync_pct_of_wall"] is not None]
   median_host = statistics.median(valid_host) if valid_host else None
   identity = _model_identity(args.model)
+  metal_replay = None
+  memory_facts = None
+  if Device.DEFAULT == "METAL":
+    from tinygrad.runtime.graph.metal import metal_replay_facts
+    from tinygrad.helpers import GlobalCounters
+    metal_replay = metal_replay_facts(dev)
+    memory_facts = {"schema":"tinygrad.metal_memory_snapshot.v1",
+      "resident_scope":"last_committed_graph", "allocation_scope":"process_metal_device",
+      "recommended_max_working_set_bytes":int(dev.sysdevice.recommendedMaxWorkingSetSize()),
+      "current_allocated_bytes":int(dev.sysdevice.currentAllocatedSize()),
+      "tinygrad_live_buffer_bytes":int(GlobalCounters.mem_used_per_device[Device.DEFAULT]),
+      "resident_buffer_count":(metal_replay.get("last_graph") or {}).get("resident_buffer_count"),
+      "resident_buffer_bytes":(metal_replay.get("last_graph") or {}).get("resident_buffer_bytes")}
   artifact = {"schema": SCHEMA, "artifact_version": 2, "created_unix_ns": time.time_ns(),
               "model": identity, "model_identity": identity, "model_id": pathlib.Path(args.model).stem,
               "tool": {"path": str(pathlib.Path(__file__).resolve()), "argv": list(sys.argv if argv is None else argv)},
@@ -250,12 +275,14 @@ def main(argv:list[str] | None=None) -> int:
               "nmeas": profile.nmeas, "reps": args.reps, "max_context": profile.max_context,
               "workload": {"ckpts": list(profile.ckpts), "max_context": profile.max_context,
                            "decode_tokens": profile.nmeas, "reps": args.reps, "warmup_decode": args.warmup_decode,
-                           "chunk_size": args.chunk_size, "temperature": 0.0, "seed": 20260617},
+                           "chunk_size": args.chunk_size, "temperature": 0.0, "seed": 20260617,
+                           "dispatch_diagnostic":not args.skip_dispatch_diagnostic},
               "runtime_settings": {"kv_cache": "int8+fp16_scale" if model.config.kv_quant else "fp16",
                                    "flash_decode_capable": bool(model.config.flash_decode),
                                    "flash_decode_mode": os.environ.get("FLASH_DECODE", "auto"),
                                    "flash_decode_threshold": int(os.environ.get("FLASH_DECODE_THRESHOLD", "512")),
-                                   "ring": bool(model.config.ring)},
+                                   "ring": bool(model.config.ring), "metal_replay": metal_replay,
+                                   "memory_facts":memory_facts},
               "method": "genuine prompt prefill; W=production generate item/token; D=same model JITs with final sync",
               "rows": rows, "median_host_sync_pct": median_host}
   out_path = pathlib.Path(args.out).expanduser().resolve()

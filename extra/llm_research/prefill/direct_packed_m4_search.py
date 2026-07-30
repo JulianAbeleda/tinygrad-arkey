@@ -22,7 +22,7 @@ SCHEMA = "tinygrad.prefill.direct-packed-m4-search.v1"
 TARGET = {"backend": "AMD", "architecture": "gfx1100", "wave_size": 32}
 SEARCH_SYSTEM = {"name": "BoltBeam", "revision": "f6ee2763f47316112fbba40b91b859e0e7068a6d"}
 EXPORT_DIR = Path(__file__).with_name("m4_search_exports")
-ROUTES = {
+DIRECT_PACKED_M4_TOPOLOGIES = {
   "prefill_q4k_direct_tile4x4_default": {"quant": "Q4_K", "packed_storage": "uint32"},
   "prefill_q6k_direct_generated": {"quant": "Q6_K", "packed_storage": "uint16"},
 }
@@ -80,14 +80,14 @@ def _weight_presence(profile_id: str, route_id: str, role: str) -> dict[str, str
   if profile_id == "qwen3_14b_q4k_m_gfx1100":
     present = {"Q4_K": {"attn_kv", "attn_qo", "ffn_down", "ffn_gate_up"},
                "Q6_K": {"attn_kv", "ffn_down"}}
-    return {"status": "PRESENT" if role in present[ROUTES[route_id]["quant"]] else "ABSENT",
+    return {"status": "PRESENT" if role in present[DIRECT_PACKED_M4_TOPOLOGIES[route_id]["quant"]] else "ABSENT",
             "evidence": "docs/14b-role-facts-inventory-20260710.json"}
   return {"status": "UNVERIFIED", "evidence": "no checked-in 8B GGUF role/quant inventory"}
 
 
 def workloads(route_id: str) -> list[dict[str, Any]]:
-  if route_id not in ROUTES: raise ValueError(f"unknown direct-packed route {route_id!r}")
-  quant = ROUTES[route_id]["quant"]
+  if route_id not in DIRECT_PACKED_M4_TOPOLOGIES: raise ValueError(f"unknown direct-packed route {route_id!r}")
+  quant = DIRECT_PACKED_M4_TOPOLOGIES[route_id]["quant"]
   return [{"shape_key": f"{profile.id}:{role.role}:m{role.M}-n{role.N}-k{role.K}",
            "profile": profile.id, "model_size": profile.size_label, "role": role.role,
            "quant": quant, "shape": {"M": role.M, "N": role.N, "K": role.K},
@@ -97,7 +97,7 @@ def workloads(route_id: str) -> list[dict[str, Any]]:
 
 
 def request(route_id: str) -> dict[str, Any]:
-  if route_id not in ROUTES: raise ValueError(f"unknown direct-packed route {route_id!r}")
+  if route_id not in DIRECT_PACKED_M4_TOPOLOGIES: raise ValueError(f"unknown direct-packed route {route_id!r}")
   record = {"schema": SCHEMA, "kind": "search_request", "public": True,
           "request_id": f"m4-{route_id}-qwen3-8b-14b-gfx1100-v1", "route_id": route_id,
           "target": dict(TARGET), "workloads": workloads(route_id),
@@ -126,7 +126,7 @@ def validate(record: Mapping[str, Any]) -> None:
   if record.get("schema") != SCHEMA or record.get("kind") not in ("search_request", "blocked_search_readiness"):
     raise ValueError("unknown M4 direct-packed search record")
   route_id = record.get("route_id")
-  if route_id not in ROUTES: raise ValueError("record has unknown route")
+  if route_id not in DIRECT_PACKED_M4_TOPOLOGIES: raise ValueError("record has unknown route")
   if record.get("default") is not False or record.get("catalog_entry") is not False:
     raise ValueError("M4 records must not be catalog/default entries")
   if record["kind"] == "blocked_search_readiness":
@@ -153,7 +153,7 @@ def export(out_dir: str | Path) -> tuple[Path, ...]:
   """Deterministically write one separate BLOCKED/UNPROVEN record per route."""
   out = Path(out_dir); out.mkdir(parents=True, exist_ok=True)
   paths = []
-  for route_id in ROUTES:
+  for route_id in DIRECT_PACKED_M4_TOPOLOGIES:
     record = blocked_record(route_id); validate(record)
     path = out / f"{route_id}.blocked.json"
     path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
@@ -164,13 +164,13 @@ def export(out_dir: str | Path) -> tuple[Path, ...]:
 def check_exports(out_dir: str | Path = EXPORT_DIR) -> None:
   """Fail when checked-in records no longer equal the deterministic export."""
   out = Path(out_dir)
-  expected = {f"{route_id}.blocked.json": json.dumps(blocked_record(route_id), indent=2, sort_keys=True) + "\n" for route_id in ROUTES}
+  expected = {f"{route_id}.blocked.json": json.dumps(blocked_record(route_id), indent=2, sort_keys=True) + "\n" for route_id in DIRECT_PACKED_M4_TOPOLOGIES}
   actual = {path.name: path.read_text() for path in out.glob("*.blocked.json")} if out.is_dir() else {}
   if actual != expected: raise ValueError("M4 checked-in search exports drift; rerun direct_packed_m4_search.py --out-dir extra/llm_research/prefill/m4_search_exports")
   for text in actual.values(): validate(json.loads(text))
   catalog = Path(__file__).resolve().parents[3] / "tinygrad/llm/generated/catalog.json"
   artifacts = json.loads(catalog.read_text()).get("artifacts", [])
-  m4_request_ids = {request(route_id)["request_id"] for route_id in ROUTES}
+  m4_request_ids = {request(route_id)["request_id"] for route_id in DIRECT_PACKED_M4_TOPOLOGIES}
   if any(artifact.get("request_id") in m4_request_ids for artifact in artifacts if isinstance(artifact, Mapping)):
     raise ValueError("M4 search readiness must not have a generated catalog entry")
 

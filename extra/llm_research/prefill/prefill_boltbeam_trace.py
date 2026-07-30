@@ -23,6 +23,7 @@ from tinygrad.device import Compiled
 from tinygrad.helpers import ProfileRangeEvent, prod
 from tinygrad.llm.qk_primitives import Q4KPrimitiveLinear, Q6KPrimitiveLinear
 from tinygrad.llm.generate import load_model_and_tokenizer
+from tinygrad.llm.roles import normalize_program_role
 from extra.llm_research.prefill.prefill_harness import DEFAULT_MODEL  # was extra.llm_research.harness_contract (deleted 0e02a1976)
 
 SCHEMA = "boltbeam.timing_trace.v1"
@@ -30,18 +31,8 @@ HW_SCHEMA = "boltbeam.hw_trace.v1"
 _GEMM_RE = re.compile(r"prefill_(?:graph|gen_sched)_gemm_(\d+)_(\d+)_(\d+)")
 _DIRECT_PACKED_RE = re.compile(r"prefill_(q4k|q6k)(?:_q8_1)?(?:_sdot4|_mmq)?_direct_packed(?:_load)?(?:_direct_out|_reduce_out)?_gemm_(\d+)_(\d+)_(\d+)_(\d+)")
 _GENERATED_PACKED_TILE_RE = re.compile(r"prefill_(q4_k|q6_k)_generated_tile(?:_([a-z0-9_]+))?_(\d+)_(\d+)_(\d+)")
-_ROLE_BY_LINEAR = {
-  "ffn_gate": "ffn_gate_up",
-  "ffn_up": "ffn_gate_up",
-  "ffn_gate_shexp": "ffn_gate_up",
-  "ffn_up_shexp": "ffn_gate_up",
-  "ffn_down": "ffn_down",
-  "ffn_down_shexp": "ffn_down",
-  "attn_q": "attn_qo",
-  "attn_output": "attn_qo",
-  "attn_k": "attn_kv",
-  "attn_v": "attn_kv",
-}
+_LINEAR_ROLE_NAMES = ("ffn_gate", "ffn_up", "ffn_gate_shexp", "ffn_up_shexp", "ffn_down", "ffn_down_shexp",
+                      "attn_q", "attn_output", "attn_k", "attn_v")
 
 
 def _event_name(e:ProfileRangeEvent) -> str:
@@ -81,7 +72,7 @@ def _role_inventory(model:Any, chunk:int) -> tuple[dict[tuple[int, int], dict[st
   by_shape: dict[tuple[int, int], dict[str, Any]] = {}
   bytes_by_role: dict[tuple[str, str | None, tuple[int, ...]], float] = {}
   for block in getattr(model, "blk", []):
-    for name, role in _ROLE_BY_LINEAR.items():
+    for name in _LINEAR_ROLE_NAMES:
       lin = getattr(block, name, None)
       if lin is None:
         continue
@@ -89,6 +80,7 @@ def _role_inventory(model:Any, chunk:int) -> tuple[dict[tuple[int, int], dict[st
       if out_f is None or in_f is None:
         continue
       quant, nbytes = _quant_and_bytes(lin)
+      role = normalize_program_role(name)
       shape = (chunk, out_f, in_f)
       key = (role, quant, shape)
       bytes_by_role[key] = bytes_by_role.get(key, 0.0) + nbytes
@@ -102,7 +94,7 @@ def _classify_kernel(name:str, role_by_shape:dict[tuple[int, int], dict[str, Any
   if m:
     mb, n, k = (int(x) for x in m.groups())
     info = dict(role_by_shape.get((n, k), {}))
-    info.setdefault("role", "quantized_matmul")
+    info.setdefault("role", "generic")
     info.setdefault("quant", None)
     info["shape"] = [mb, n, k]
     info["kind"] = "gemm"
@@ -112,35 +104,36 @@ def _classify_kernel(name:str, role_by_shape:dict[tuple[int, int], dict[str, Any
     quant_tag, n, k, mb, _parts = m.groups()
     mb, n, k = int(mb), int(n), int(k)
     info = dict(role_by_shape.get((n, k), {}))
-    info.setdefault("role", "quantized_matmul")
+    info.setdefault("role", "generic")
     info["quant"] = "Q4_K" if quant_tag == "q4k" else "Q6_K"
     info["shape"] = [mb, n, k]
     info["kind"] = "gemm"
     return info
   m = _GENERATED_PACKED_TILE_RE.search(name)
   if m:
-    quant_tag, role_tag, mb, n, k = m.groups()
+    quant_tag, _role_tag, mb, n, k = m.groups()
     mb, n, k = int(mb), int(n), int(k)
     info = dict(role_by_shape.get((n, k), {}))
-    if role_tag: info["role"] = role_tag
-    info.setdefault("role", "quantized_matmul")
+    # The generated kernel name is not semantic workload authority. Prefer model-derived shape facts and otherwise
+    # classify the call generically; ``role_tag`` remains useful only as part of the physical kernel name.
+    info.setdefault("role", "generic")
     info["quant"] = "Q4_K" if quant_tag == "q4_k" else "Q6_K"
     info["shape"] = [mb, n, k]
     info["kind"] = "gemm"
     return info
   if "flash" in low or "attn" in low:
-    return {"kind": "attention", "role": "attention", "quant": None, "shape": []}
+    return {"kind": "attention", "role": "generic", "quant": None, "shape": []}
   if "rope" in low:
-    return {"kind": "rope", "role": "rope", "quant": None, "shape": []}
+    return {"kind": "rope", "role": "generic", "quant": None, "shape": []}
   if "norm" in low or low.startswith("r_"):
-    return {"kind": "norm", "role": "norm", "quant": None, "shape": []}
+    return {"kind": "norm", "role": "generic", "quant": None, "shape": []}
   if "silu" in low or "gelu" in low or "mul" in low:
-    return {"kind": "activation", "role": "ffn_activation", "quant": None, "shape": []}
+    return {"kind": "activation", "role": "generic", "quant": None, "shape": []}
   if "copy" in low or "cast" in low or low.startswith("d_"):
-    return {"kind": "copy", "role": "copy_cast", "quant": None, "shape": []}
+    return {"kind": "copy", "role": "generic", "quant": None, "shape": []}
   if low.startswith("e_"):
-    return {"kind": "elementwise", "role": "elementwise", "quant": None, "shape": []}
-  return {"kind": "elementwise", "role": "unknown", "quant": None, "shape": []}
+    return {"kind": "elementwise", "role": "generic", "quant": None, "shape": []}
+  return {"kind": "elementwise", "role": "generic", "quant": None, "shape": []}
 
 
 def _profile_events() -> dict[str, dict[str, Any]]:

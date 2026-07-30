@@ -107,8 +107,15 @@ class MetalGraph(GraphRunner):
     self._publish_replay_facts(committed=False)
 
   def _publish_replay_facts(self, *, committed:bool):
+    resources = getattr(self, "all_resources", [])
+    resident_bytes = []
+    for resource in resources:
+      try: resident_bytes.append(int(resource.length()))
+      except (AttributeError, TypeError, ValueError): pass
     self.dev.metal_replay_diagnostics = {"strategy":"hybrid_icb_direct" if self.hybrid_replay else "partitioned_control",
-      "graph_calls":len(self.calls), **self.last_replay_counts, "committed":committed}
+      "graph_calls":len(self.calls), **self.last_replay_counts, "committed":committed,
+      "resident_buffer_count":len(resources),
+      "resident_buffer_bytes":sum(resident_bytes) if len(resident_bytes) == len(resources) else None}
 
   def _prepare_replay(self, input_uops:tuple[UOp, ...], var_vals:dict[str, int]):
     # Resolve every mutable buffer and validate every dispatch before creating a

@@ -21,7 +21,7 @@ import os
 import json
 from typing import Any
 
-from extra.llm_research.route_manifest import ROUTES, FINAL_DEFAULT_PROVENANCE, default_routes, promoted_prefill_candidate_policy
+from extra.llm_research.route_manifest import ROUTES, FINAL_DEFAULT_PROVENANCE, canonical_route_id, default_routes, promoted_prefill_candidate_policy
 
 def _enabled(env: dict[str, Any], key: str) -> bool:
   return str(env.get(key, "0")).strip().lower() not in ("0", "false", "off", "no", "")
@@ -76,7 +76,15 @@ def _route_ids_matching(*, default_only: bool = False, env: dict[str, str] | Non
   candidates = set(default_routes()) if default_only else set(ROUTES)
   out = []
   for rid in candidates:
+    # Compatibility aliases resolve to their canonical record and must not
+    # manufacture a second selectable route during an audit query.
+    if canonical_route_id(rid) != rid:
+      continue
     row = ROUTES[rid]
+    # BoltBeam retains historical routes for audit; EXP's execution overlay may
+    # consume only records explicitly exported for this runtime.
+    if "exp" not in row.get("consumers", ("exp",)):
+      continue
     if env is not None and {k: str(v) for k, v in row.get("env", {}).items()} != env:
       continue
     ok = True

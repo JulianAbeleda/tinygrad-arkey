@@ -1,6 +1,7 @@
-import types
+import types, pytest
 from tinygrad.dtype import dtypes
-from tinygrad.llm.model_facts import GGML_QUANT_LABELS, TensorFact, attach_program_identity_metadata, model_facts_from_gguf_metadata, program_identity_factory, tensor_fact_from_gguf_row
+from tinygrad.llm.model_facts import GGML_QUANT_LABELS, ProgramIdentityMetadata, TensorFact, attach_program_identity_metadata, model_facts_from_gguf_metadata, tensor_fact_from_gguf_row
+from tinygrad.llm.roles import DENSE_PROJECTION_ROLES, PROGRAM_WORKLOAD_ROLES, normalize_program_role
 
 
 def _qwen_kv(hidden: int, intermediate: int, heads: int, kv_heads: int = 8, head_dim: int = 128) -> dict:
@@ -12,6 +13,18 @@ def _qwen_kv(hidden: int, intermediate: int, heads: int, kv_heads: int = 8, head
     "qwen3.attention.head_count_kv": kv_heads,
     "qwen3.attention.key_length": head_dim,
   }
+
+
+def test_program_role_vocabulary_is_minimal_canonical_and_normalized_once():
+  assert DENSE_PROJECTION_ROLES == ("ffn_gate_up", "ffn_down", "attn_qo", "attn_kv", "lm_head")
+  assert PROGRAM_WORKLOAD_ROLES == (*DENSE_PROJECTION_ROLES, "attention", "generic")
+  assert [normalize_program_role(name) for name in
+    ("ffn_gate", "ffn_up_shexp", "ffn_down", "attn_q", "attn_output", "attn_k", "attn_v", "output",
+     "attention_tile", "attention_combine", "unknown")] == \
+    ["ffn_gate_up", "ffn_gate_up", "ffn_down", "attn_qo", "attn_qo", "attn_kv", "attn_kv", "lm_head",
+     "attention", "attention", "generic"]
+  with pytest.raises(ValueError, match="invalid program semantic identity"):
+    ProgramIdentityMetadata(name="generic", caller="", phase="decode", role="generic", logical_m=1, logical_n=1, logical_k=1)
 
 
 def _qwen_tensor_infos(hidden: int, intermediate: int, vocab: int = 151936) -> list[tuple[str, tuple[int, int], int, int]]:
@@ -98,22 +111,6 @@ def test_model_facts_only_include_2d_weight_rows():
   assert [t.name for t in facts.tensors] == ["blk.0.ffn_gate.weight"]
 
 
-def test_program_identity_is_fact_derived_and_unavailable_when_execution_context_is_incomplete():
-  fact = TensorFact("blk.0.ffn_down.weight", "blk.0.ffn_down", 14, 4096, 12288, "Q6_K", "ffn_down")
-  factory = program_identity_factory(fact, module_representation="nn_linear")
-  module = types.SimpleNamespace(_program_phase="decode", weight=types.SimpleNamespace(dtype=dtypes.float16))
-  identity = factory(module, types.SimpleNamespace(shape=(1, 12288), dtype=dtypes.float16))
-  assert identity.phase == "decode" and identity.logical_m == 1
-  assert identity.source_quant_storage == "Q6_K" and identity.source_layout == "gguf_packed_row_major"
-  assert identity.module_representation == "nn_linear" and identity.output_dtype == str(dtypes.float16)
-  assert identity.accumulator_dtype == str(dtypes.float32)
-  assert program_identity_factory(fact, module_representation="qk_primitive_adapter")(module, types.SimpleNamespace(shape=(1, 12288), dtype=dtypes.float16)) is None
-  biased = types.SimpleNamespace(_program_phase="decode", weight=module.weight, bias=types.SimpleNamespace(dtype=dtypes.float32))
-  assert factory(biased, types.SimpleNamespace(shape=(1, 12288), dtype=dtypes.float16)).output_dtype == str(dtypes.float32)
-  assert factory(types.SimpleNamespace(weight=module.weight), types.SimpleNamespace(shape=(1, 12288), dtype=dtypes.float16)) is None
-  assert program_identity_factory(TensorFact("unknown.weight", "unknown", 0, 2, 2, "F32", None), module_representation="nn_linear") is None
-
-
 def test_identity_attachment_is_path_counted_and_does_not_mutate_state_ownership():
   class Linear:
     def __call__(self, x): return x
@@ -131,5 +128,5 @@ def test_identity_attachment_is_path_counted_and_does_not_mutate_state_ownership
     return obj
   attached = attach_program_identity_metadata(root, facts, primitive_linears=[down], module_at=module_at)
   assert [(path, linear) for path, linear in attached] == [("blk.0.ffn_down", down), ("output", head)]
-  assert down.call_metadata_factory is not None and head.call_metadata_factory is not None
+  assert down.call_metadata_binding is not None and head.call_metadata_binding is not None
   assert state_dict == before and list(state_dict) == ["blk.0.ffn_down.weight", "output.weight"]

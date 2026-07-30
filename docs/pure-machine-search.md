@@ -176,7 +176,10 @@ The route must have generated/spec-owned executing topology, not just generated 
 - Prefill has generated/spec-driven role selection, but any path that still executes through the raw WMMA instruction
   emitters remains non-pure until the substrate is replaced by generated tinygrad/codegen lowering.
 
-The local authority is `bench/qk-search-spaces/default_route_manifest.json`; the runtime census is
+BoltBeam's versioned `boltbeam/policy/assets/route_manifest.v1.json` is the selection-policy
+authority. EXP consumes its generated, SHA-256-checked snapshot and contributes only
+runtime-derived execution facts; `bench/qk-search-spaces/default_route_manifest.json` is an
+inspection export, not an authority. The runtime census is
 `extra/audit/pure_machine_search_default_path_census.py`.
 
 ## Ownership Boundary

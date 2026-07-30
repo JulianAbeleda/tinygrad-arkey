@@ -144,12 +144,14 @@ class TestMetalHybridReplaySynthetic(unittest.TestCase):
   def test_replay_diagnostics_are_structured_facts_not_label_parsing(self):
     graph = self.MetalGraph.__new__(self.MetalGraph)
     graph.dev, graph.hybrid_replay, graph.calls = SimpleNamespace(), True, [None] * 323
+    graph.all_resources = [SimpleNamespace(length=lambda:100), SimpleNamespace(length=lambda:200)]
     graph.last_replay_counts = {"icb_calls":256, "direct_encoded_calls":67}
     graph._publish_replay_facts(committed=True)
     with Context(METAL_HYBRID_REPLAY=1): facts = self.mod.metal_replay_facts(graph.dev)
     assert facts["configured_strategy"] == "hybrid_icb_direct" and facts["experimental_ab"] is True
     assert facts["last_graph"] == {"strategy":"hybrid_icb_direct", "graph_calls":323, "icb_calls":256,
-                                   "direct_encoded_calls":67, "committed":True}
+                                   "direct_encoded_calls":67, "committed":True,
+                                   "resident_buffer_count":2, "resident_buffer_bytes":300}
 
 
 class TestMetalDirectEncoderSynthetic(unittest.TestCase):

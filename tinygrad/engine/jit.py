@@ -1,5 +1,5 @@
 from typing import TypeVar, Generic, Callable, Any
-import contextlib, contextvars, functools, collections, json, os
+import contextlib, contextvars, functools, collections, hashlib, json, os
 from enum import Enum
 from tinygrad.tensor import Tensor
 from tinygrad.helpers import flatten, merge_dicts, DEBUG, getenv, JIT, JIT_BATCH_SIZE, dedup, pluralize, VIZ, Metadata
@@ -8,6 +8,7 @@ from tinygrad.dtype import DType, dtypes
 from tinygrad.uop.ops import UOp, UPat, PatternMatcher, Variable, sym_infer, Ops, buffers, track_rewrites, graph_rewrite
 from tinygrad.engine.realize import capturing, Estimates, compile_linear, run_linear, graph_cache, estimate_uop, get_runtime
 from tinygrad.engine.realize import unwrap_multi, resolve_params, get_call_arg_uops, get_call_outs_ins
+from tinygrad.engine.metadata import PROGRAM_IDENTITY_FIELDS
 from tinygrad.schedule.memory import memory_plan_rewrite, _collect_bufs
 from tinygrad.nn.state import get_parameters
 from tinygrad.schedule.rangeify import mop_cleanup
@@ -59,6 +60,8 @@ class GraphAdmissionObservation:
   program_hash: str | None = None
   program_name: str | None = None
   metadata: tuple[Metadata, ...] = ()
+  source_sha256: str | None = None
+  binary_sha256: str | None = None
   assignment: str = "unassigned"
   assignment_reason: GraphAdmissionReason | None = None
   batch_index: int | None = None
@@ -79,9 +82,23 @@ class GraphAdmissionCensus:
   """In-memory deterministic census. No files or JSON are produced unless explicitly requested."""
   records: list[GraphAdmissionObservation] = field(default_factory=list)
   constructor_failures: list[GraphConstructorFailureObservation] = field(default_factory=list)
+  # Runtime-only capture bindings for exact research measurement. They are
+  # deliberately absent from to_dict/deterministic_json and never become
+  # serialized graph-admission policy.
+  calls: dict[int, UOp] = field(default_factory=dict, repr=False, compare=False)
+  execution_linear: UOp|None = field(default=None, repr=False, compare=False)
+  execution_inputs: tuple[UOp, ...] = field(default=(), repr=False, compare=False)
+  execution_var_vals: dict[str, int] = field(default_factory=dict, repr=False, compare=False)
 
   def __call__(self, event:GraphAdmissionEvent) -> None:
     (self.records if isinstance(event, GraphAdmissionObservation) else self.constructor_failures).append(event)
+
+  def bind_call(self, call_index:int, call:UOp) -> None:
+    if call_index in self.calls and self.calls[call_index] is not call: raise ValueError("graph-admission call binding changed")
+    self.calls[call_index] = call
+
+  def bind_execution(self, linear:UOp, input_uops:tuple[UOp, ...], var_vals:dict[str, int]) -> None:
+    self.execution_linear, self.execution_inputs, self.execution_var_vals = linear, tuple(input_uops), dict(var_vals)
 
   def to_dict(self) -> dict[str, Any]:
     records = sorted(self.records, key=lambda record: record.call_index)
@@ -112,13 +129,18 @@ class GraphAdmissionCensus:
     reasons = collections.Counter((record.assignment_reason or record.admission.reason).value for record in records)
     admission_reasons = collections.Counter(record.admission.reason.value for record in records)
     boundaries = collections.Counter(record.batch_boundary_reason.value for record in records if record.batch_boundary_reason is not None)
+    serialized_records = [_graph_admission_record(record) for record in records]
+    semantic_calls = sum(record["metadata_status"] == "semantic" for record in serialized_records)
+    workload_roles = collections.Counter(role for record in serialized_records for role in record["workload_roles"])
     return {"schema":"tinygrad.graph_admission_census.v1", "counts":{"logical_calls":len(records), "graph_members":graph_members,
       "direct_calls":direct_calls, "ignored_slice_nodes":ignored, "graph_batches":len(batches),
-      "constructor_failures":len(self.constructor_failures)}, "reason_histogram":dict(sorted(reasons.items())),
+      "constructor_failures":len(self.constructor_failures), "semantic_calls":semantic_calls,
+      "generic_calls":len(records)-semantic_calls}, "reason_histogram":dict(sorted(reasons.items())),
       "admission_reason_histogram":dict(sorted(admission_reasons.items())),
       "batch_boundary_histogram":dict(sorted(boundaries.items())),
+      "workload_role_histogram":dict(sorted(workload_roles.items())),
       "batches":[{"batch_index":index, "size":batches[index]} for index in sorted(batches)],
-      "records":[_graph_admission_record(record) for record in records],
+      "records":serialized_records,
       "constructor_failures":[{"error_type":failure.error_type, "message":failure.message} for failure in self.constructor_failures]}
 
   def deterministic_json(self) -> str: return json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n"
@@ -138,13 +160,13 @@ def _graph_admission_record(record:GraphAdmissionObservation) -> dict[str, Any]:
   admission = record.admission
   semantic = []
   for item in record.metadata:
-    fields = ("phase", "tensor_name", "module_path", "role", "logical_m", "logical_n", "logical_k", "source_quant_storage",
-              "source_layout", "module_representation", "input_dtype", "output_dtype", "accumulator_dtype")
-    if all(hasattr(item, field) for field in fields): semantic.append({field:getattr(item, field) for field in fields})
+    if all(hasattr(item, field) for field in PROGRAM_IDENTITY_FIELDS):
+      semantic.append({field:getattr(item, field) for field in PROGRAM_IDENTITY_FIELDS})
   return {"call_index":record.call_index, "program_hash":record.program_hash, "program_name":record.program_name,
+    "source_sha256":record.source_sha256, "binary_sha256":record.binary_sha256,
     "metadata":[{"name":item.name, "caller":item.caller, "backward":item.backward} for item in record.metadata],
     "semantic_identities":semantic, "metadata_status":"semantic" if semantic else ("generic" if record.metadata else "unavailable"),
-    "metadata_unavailable":not bool(semantic),
+    "metadata_unavailable":not bool(semantic), "workload_roles":list(dict.fromkeys(item["role"] for item in semantic)) if semantic else ["generic"],
     "decision":record.decision.value, "supported":admission.supported,
     "reason":(record.assignment_reason or admission.reason).value,
     "admission_reason":admission.reason.value, "batch_boundary_reason":
@@ -196,10 +218,20 @@ def _admission_observation(call_index:int, call, decision:GraphAdmissionDecision
   key = getattr(program, "key", None)
   program_hash = key.hex() if isinstance(key, bytes) else None
   name = getattr(getattr(program, "arg", None), "name", None)
+  program_src = getattr(program, "src", ())
+  source = next((item.arg for item in program_src if item.op is Ops.SOURCE and isinstance(item.arg, str)), None)
+  binary = next((item.arg for item in program_src if item.op is Ops.BINARY and isinstance(item.arg, bytes)), None)
   metadata = getattr(getattr(call, "arg", None), "metadata", ())
+  # Concrete program arguments are the truthful authority for packed QK route
+  # attribution. This registry is side data and is queried only after compile.
+  from tinygrad.engine.metadata import resolve_call_metadata
+  registry_metadata = resolve_call_metadata(call)
+  metadata = tuple(dedup((*metadata, *registry_metadata))) if isinstance(metadata, tuple) else registry_metadata
   return GraphAdmissionObservation(call_index, decision, admission, boundary_reason, program_hash,
-                                   name if isinstance(name, str) else None,
-                                   tuple(item for item in metadata if isinstance(item, Metadata)) if isinstance(metadata, tuple) else ())
+    name if isinstance(name, str) else None,
+    tuple(item for item in metadata if isinstance(item, Metadata)) if isinstance(metadata, tuple) else (),
+    hashlib.sha256(source.encode()).hexdigest() if source is not None else None,
+    hashlib.sha256(binary).hexdigest() if binary is not None else None)
 
 def graph_split_rewrite(linear:UOp, max_batch_size:int=0, observer:GraphAdmissionObserver|None=None) -> UOp:
   new_src: list[UOp] = []
@@ -238,6 +270,7 @@ def graph_split_rewrite(linear:UOp, max_batch_size:int=0, observer:GraphAdmissio
       direct_call_index += 1
 
   for call_index, si in enumerate(linear.src):
+    if observer is not None and hasattr(observer, "bind_call"): observer.bind_call(call_index, si)
     if si.src[0].op is Ops.SLICE:
       if observer is not None:
         pending[call_index] = replace(_admission_observation(call_index, si, GraphAdmissionDecision.IGNORED,
@@ -450,6 +483,8 @@ class CapturedJit(Generic[ReturnType]):
   def __call__(self, input_uops:list[UOp], var_vals:dict[str, int]) -> ReturnType:
     concrete = tuple(_copy_input(u) if u in self._written_uops else u for u in input_uops)
     if DEBUG >= 1 and len(self.linear.src) >= 10: print(f"jit execs {len(self.linear.src)} calls")
+    if (observer:=_GRAPH_ADMISSION_OBSERVER.get()) is not None and hasattr(observer, "bind_execution"):
+      observer.bind_execution(self.linear, concrete, var_vals)
     try: run_linear(self.linear, var_vals, input_uops=concrete, jit=True)
     except GraphException as exc:
       if (observer:=_GRAPH_ADMISSION_OBSERVER.get()) is not None:

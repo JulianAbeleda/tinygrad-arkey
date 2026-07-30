@@ -266,11 +266,13 @@ def run_linear(linear:UOp, var_vals:dict[str, int]|None=None, input_uops:tuple[U
   ctx = ExecContext(var_vals or {}, input_uops, update_stats, jit, wait or DEBUG>=2)
   for call in linear.src: pm_exec.rewrite(call, ctx)
 
-def time_call(call:UOp, var_vals:dict[str, int]|None=None, timeout:int|None=None, clear_l2:bool=False) -> float:
+def time_call(call:UOp, var_vals:dict[str, int]|None=None, timeout:int|None=None, clear_l2:bool=False,
+              input_uops:tuple[UOp, ...]=()) -> float:
   if clear_l2:
     if hasattr(dev:=Device[call.src[0].src[1].arg], 'invalidate_caches'): dev.invalidate_caches()
     else:
       from tinygrad.tensor import Tensor
       with Context(DEBUG=0, CAPTURING=0, TRACK_MATCH_STATS=0): Tensor.ones(1024, 1024).contiguous().realize(do_update_stats=False)
   call = compile_linear(UOp(Ops.LINEAR, src=(call,))).src[0]
-  return cast(float, pm_exec.rewrite(call, ExecContext(var_vals or {}, update_stats=False, wait=True, timeout=timeout, cache=False)))
+  return cast(float, pm_exec.rewrite(call, ExecContext(var_vals or {}, input_uops=input_uops,
+    update_stats=False, wait=True, timeout=timeout, cache=False)))

@@ -18,8 +18,8 @@ from tinygrad.codegen.gpudims import pm_add_gpudims
 from tinygrad.uop.symbolic import sym, symbolic_simple, gep_pushing, symbolic, pm_move_where_on_load, pm_clean_up_group_sink
 from tinygrad.uop.decompositions import get_late_rewrite_patterns, get_transcendental_patterns, pm_dtype_decomps
 from tinygrad.codegen.late.expander import expander, pm_pre_expander, pm_group_for_reduce
-from tinygrad.codegen.late.devectorizer import load_store_folding, load_store_indexing, devectorize_buf_and_index, devectorize_alu, \
-  correct_load_store, pm_render, pm_add_loads, pm_make_images
+from tinygrad.codegen.late.devectorizer import load_store_folding, load_store_indexing, devectorize_buf_and_index, devectorize_alu, devectorize_store, \
+  correct_load_store, pm_render, pm_add_loads, pm_make_images, pm_output_projection_store, pm_reduce_duplicate_output_store
 from tinygrad.codegen.late.reduce_lowering import pm_reduce, ReduceContext
 from tinygrad.codegen.late.reg_store import pm_reduce_acc_upcast_fix, pm_distinct_reg_store_devec, pm_reg_store_devec, pm_group_wmma_reg_store
 from tinygrad.codegen.late.coalesced_load import coalesce_loads
@@ -235,6 +235,8 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
 
   # **** optimizations are done, now we lower to actual code ****
 
+  sink = graph_rewrite(sink, pm_reduce_duplicate_output_store, name="reduce duplicate output lanes")
+
   # add loads
   sink = graph_rewrite(sink, pm_add_loads, name="** add loads (code)")
 
@@ -247,18 +249,11 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
                           for u in sink.toposort())
   devectorize_symbolic = register_pipe_symbolic if has_register_pipe else sym
   devectorize_folding = PatternMatcher([]) if has_register_pipe else load_store_folding
-  sink = graph_rewrite(sink, devectorize_symbolic+devectorize_alu+devectorize_buf_and_index+devectorize_folding+correct_load_store+load_store_indexing,
+  sink = graph_rewrite(sink, pm_output_projection_store+devectorize_symbolic+devectorize_alu+devectorize_buf_and_index+
+                       devectorize_folding+correct_load_store+load_store_indexing,
                        ctx=ren, name="devectorize")
-  if had_deferred_reduce_projection:
-    # add_loads may interpret the expanded output INDEX lanes as values and
-    # produce STORE(STACK(LOAD(INDEX)...), values). Restore the original sink
-    # ownership: projection lanes are values, output lanes remain addresses.
-    output_store_subs = {}
-    for store in (u for u in sink.toposort() if u.op is Ops.STORE and u.src[0].op is Ops.STACK):
-      if not store.src[0].src or not all(x.op is Ops.LOAD and x.src[0].op is Ops.INDEX for x in store.src[0].src): continue
-      addresses = tuple(x.src[0] for x in store.src[0].src)
-      output_store_subs[store] = store.replace(src=(store.src[0].replace(src=addresses), *store.src[1:]))
-    if output_store_subs: sink = sink.substitute(output_store_subs)
+  sink = graph_rewrite(sink, pm_output_projection_store, name="post devectorize output projection")
+  sink = graph_rewrite(sink, devectorize_store, name="scalarize shaped stores")
   if ren.target.device == "AMD":
     sink = graph_rewrite(sink, pm_distinct_reg_store_devec, name="distinct reg store devec")
   if (getenv("COALESCED_LOAD_LOWERING") or kernel_coalesced_loads) and ren.target.device == "AMD":

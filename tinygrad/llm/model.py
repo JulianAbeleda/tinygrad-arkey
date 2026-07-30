@@ -25,7 +25,7 @@ from tinygrad.llm.qk_primitives import (
   _install_q4k_primitives, _install_q6k_primitives, _qk_storage_summary,
   qk_primitive_eligibility_from_device_facts, _module_at,
 )
-from tinygrad.llm.model_facts import model_facts_from_gguf_metadata, attach_program_identity_metadata
+from tinygrad.llm.model_facts import model_facts_from_gguf_metadata, attach_program_identity_metadata, bind_gguf_program_tensor_facts
 from tinygrad.llm.memory_adaptive_authority import (adapt_cached_memory_policy, memory_adaptive_adapters_active,
                                                      resolve_memory_adaptive_policy, validate_memory_evidence)
 from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OUTPUT, RUNTIME_INPUT, RUNTIME_OUTPUT,
@@ -986,8 +986,6 @@ class Transformer:
   def __call__(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, use_flash:bool=False,
                ring_freqs:Tensor|None=None, ring_full:bool=False) -> Tensor:
     is_prefill = resolve(tokens.shape[1] != 1)
-    for linear in getattr(self, "_program_identity_linears", ()):
-      linear._program_phase = "prefill" if is_prefill else "decode"
     generic_control = _GENERIC_LLM_CONTROL.get()
     # prefill v2: only when opt-in AND this is a CONCRETE-batch prefill chunk. Normal prefill passes a symbolic
     # v_toks (tokens.shape[1] is a UOp -> not int), so the two paths never collide; decode is T==1.
@@ -1137,7 +1135,10 @@ class Transformer:
       _ring_admitted = _admit.get("ring", False)
       _print_admission(_plan, "(int8)" if _kv_quant else "", f"trained {_admission_inputs.trained_ctx}, fp16-cap {_admit.get('mc_fp16', '-')}, q8-cap {_admit.get('mc_q8', '-')}")
       _admit_resolved = True
-    if use_q4k_primitive or use_q6k_primitive:
+    # A single-file path keeps its raw tensor table even on generic backends
+    # (notably Metal). This is the exact source authority for fused dequant
+    # calls; eligibility controls primitive replacement, not observability.
+    if not isinstance(gguf, Tensor) and _admit_kv.get('split.count', 1) <= 1:
       kv, state_dict, q4k_meta = gguf_load_with_metadata(gguf)
     else:
       kv, state_dict = gguf_load(gguf.to(None).realize() if isinstance(gguf, Tensor) else gguf)
@@ -1263,6 +1264,13 @@ class Transformer:
               f"requested_storage_mode={q4_storage_mode} q4_effective_storage_mode={q4_storage_mode} "
               f"q6_effective_storage_mode={q6_storage_mode}")
       if primitive_linears: model._q4k_linears = Q4KPrimitiveRegistry(primitive_linears)
+      primitive_ids = {id(linear) for linear in primitive_linears}
+      generic_facts = []
+      for fact in model_facts.tensors:
+        try: module = _module_at(model, fact.module_path)
+        except (AttributeError, IndexError, ValueError): continue
+        if id(module) not in primitive_ids: generic_facts.append(fact)
+      model._program_identity_raw_fact_names = bind_gguf_program_tensor_facts(q4k_meta, tuple(generic_facts))
       # Attach immutable source facts after all replacements: generic and packed
       # modules retain their original paths/state ownership.
       attachments = attach_program_identity_metadata(model, model_facts.tensors, primitive_linears=primitive_linears, module_at=_module_at)

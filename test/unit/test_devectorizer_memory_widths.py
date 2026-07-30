@@ -1,9 +1,9 @@
 from types import SimpleNamespace
 
 from tinygrad import dtypes
-from tinygrad.codegen.late.devectorizer import split_load_store
+from tinygrad.codegen.late.devectorizer import devectorize_alu, devectorize_store, load_store_folding, scalarize_shaped_store, split_load_store
 from tinygrad.dtype import AddrSpace
-from tinygrad.uop.ops import Ops, UOp
+from tinygrad.uop.ops import Ops, UOp, graph_rewrite
 
 
 def _context(widths=(), *, requires_alignment=True):
@@ -79,3 +79,18 @@ def test_byte_backed_local_half_vector_uses_byte_stride_per_lane():
   assert len(stores) == 2
   offsets = [s.src[0].src[1].get_idx().src[1].arg for s in stores]
   assert offsets == [0, 2]
+
+
+def test_stacked_store_scalarization_preserves_exact_lane_addresses_and_values():
+  buf = UOp.placeholder((32,), dtypes.float, 10, addrspace=AddrSpace.GLOBAL)
+  offsets = (7, 2, 19, 5)
+  targets = UOp(Ops.STACK, dtypes.float.vec(4), tuple(buf.index(UOp.const(dtypes.weakint, x)) for x in offsets))
+  values = UOp(Ops.STACK, dtypes.float.vec(4), tuple(UOp.const(dtypes.float, x + 0.5) for x in range(4)))
+  store = UOp(Ops.STORE, dtypes.void, (targets, values))
+
+  rewritten = graph_rewrite(store, devectorize_alu + devectorize_store + load_store_folding)
+  stores = [u for u in rewritten.toposort() if u.op is Ops.STORE]
+  assert len(stores) == 4
+  assert [u.src[0].src[1].arg for u in stores] == list(offsets)
+  assert [u.src[1].arg for u in stores] == [0.5, 1.5, 2.5, 3.5]
+  assert all(u.src[0].op is Ops.INDEX and u.src[1].op is Ops.CONST for u in stores)

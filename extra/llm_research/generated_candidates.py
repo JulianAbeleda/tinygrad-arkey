@@ -7,14 +7,7 @@ from typing import Iterable
 
 from extra.llm_research import route_manifest
 from extra.llm_research.runtime_specs import GENERATED_PROVENANCE, GeneratedCandidate, RuntimeOpSpec
-
-
-_ROLE_ALIASES = {
-  "attn_k": "attn_kv",
-  "attn_v": "attn_kv",
-  "attention_tile": "attention",
-  "attention_combine": "attention",
-}
+from tinygrad.llm.roles import normalize_program_role
 
 
 def _manifest(route_id:str) -> dict:
@@ -26,7 +19,7 @@ def _manifest(route_id:str) -> dict:
 def _manifest_roles(route_id:str, *, extra:tuple[str, ...]=()) -> tuple[str, ...]:
   roles: list[str] = []
   for role in list(_manifest(route_id).get("roles", ())) + list(extra):
-    normalized = _ROLE_ALIASES.get(str(role), str(role))
+    normalized = normalize_program_role(str(role))
     if normalized not in roles:
       roles.append(normalized)
   return tuple(roles)
