@@ -100,6 +100,26 @@ def _warm_depth(model, prompt:list[int], chunk_size:int, warmup_decode:int) -> N
   finally: gen.close()
 
 
+def _warm_depth_with_graph_census(model, prompt:list[int], chunk_size:int, warmup_decode:int):
+  """Observe exactly the second SDPA rollout capture; prefill remains unobserved."""
+  from tinygrad.engine.jit import observe_graph_admissions
+  _reset(model)
+  gen, _ = _prefill(model, prompt, chunk_size)
+  try:
+    census = None
+    for index in range(warmup_decode):
+      if index == 1:
+        with observe_graph_admissions() as census: next(gen)
+      else: next(gen)
+  finally: gen.close()
+  if census is None or getattr(model.rollout_jit, "captured", None) is None:
+    raise RuntimeError("second SDPA rollout warmup did not capture rollout_jit")
+  payload = census.to_dict()
+  payload["capture"] = {"phase": "decode", "route": "sdpa", "warmup_index": 2,
+                        "jit": "rollout_jit", "captured": True}
+  return payload
+
+
 def _measure_w(model, dev, prompt:list[int], chunk_size:int, nmeas:int) -> tuple[float, list[float], list[int]]:
   _reset(model)
   gen, _ = _prefill(model, prompt, chunk_size)
@@ -146,6 +166,8 @@ def main(argv:list[str] | None=None) -> int:
   ap.add_argument("--reps", type=int, default=int(os.environ.get("QK_REPS", 5)))
   ap.add_argument("--warmup-decode", type=int, default=int(os.environ.get("QK_WARMUP_DECODE", 3)))
   ap.add_argument("--chunk-size", type=int, default=int(os.environ.get("QK_CHUNK_SIZE", 32)))
+  ap.add_argument("--graph-admission-out", default=None,
+                  help="optional atomic tinygrad.graph_admission_census.v1 export from second SDPA rollout warmup")
   ap.add_argument("--out", required=True, help="unique output JSON for this invocation")
   args = ap.parse_args(argv)
   if args.reps < 1: raise ValueError("reps must be positive")
@@ -163,9 +185,14 @@ def main(argv:list[str] | None=None) -> int:
              tokenizer.encode("the quick brown fox jumps. " * 800)
 
   rows = []
+  graph_census = None
   for depth in profile.ckpts:
     prompt = _make_prompt(base_ids, depth)
-    _warm_depth(model, prompt, args.chunk_size, args.warmup_decode)
+    if args.graph_admission_out is not None:
+      if graph_census is not None: raise ValueError("--graph-admission-out requires exactly one checkpoint")
+      graph_census = _warm_depth_with_graph_census(model, prompt, args.chunk_size, args.warmup_decode)
+      graph_census["capture"]["fixed_depth"] = depth
+    else: _warm_depth(model, prompt, args.chunk_size, args.warmup_decode)
     w_reps, d_reps = [], []
     route_reps, token_reps = [], []
     for rep in range(args.reps):
@@ -227,6 +254,7 @@ def main(argv:list[str] | None=None) -> int:
               "rows": rows, "median_host_sync_pct": median_host}
   out_path = pathlib.Path(args.out).expanduser().resolve()
   _atomic_json(out_path, artifact)
+  if args.graph_admission_out is not None: _atomic_json(pathlib.Path(args.graph_admission_out).expanduser().resolve(), graph_census)
   print(f"artifact: {out_path}", file=sys.stderr)
   print("@@DONE@@")
   return 0
