@@ -25,6 +25,7 @@ from extra.llm_research.finalized_census import validate_finalized_census
 PROTOCOL = "boltbeam.mr7_provider.v1"
 def _canonical(value: Any) -> str: return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 def _sha(value: Any) -> str: return hashlib.sha256(value if isinstance(value, bytes) else _canonical(value).encode()).hexdigest()
+IDENTITY_FIELDS_SHA256 = _sha(list(PROGRAM_IDENTITY_FIELDS))
 
 
 def _file_sha256(path: pathlib.Path) -> str:
@@ -203,10 +204,12 @@ def serve(source: TextIO, sink: TextIO, session: MR7Session) -> int:
       if not isinstance(envelope["request"], Mapping) or envelope["request"].get("request_id") != request_id:
         raise ValueError("MR7 provider request identity mismatch")
       result = {**session.execute(envelope["request"]), "provider_identity":provider_identity}
-      response = {"protocol":PROTOCOL, "request_id":request_id, "status":"ok", "result":dict(result)}
+      response = {"protocol":PROTOCOL, "request_id":request_id, "status":"ok", "result":dict(result),
+        "identity_fields":list(PROGRAM_IDENTITY_FIELDS), "identity_fields_sha256":IDENTITY_FIELDS_SHA256}
     except Exception as exc:
       response = {"protocol":PROTOCOL, "request_id":request_id, "status":"blocked",
-        "error":{"code":"provider_failure", "message":str(exc), "exception_type":type(exc).__name__}}
+        "error":{"code":"provider_failure", "message":str(exc), "exception_type":type(exc).__name__},
+        "identity_fields":list(PROGRAM_IDENTITY_FIELDS), "identity_fields_sha256":IDENTITY_FIELDS_SHA256}
     sink.write(json.dumps(response, sort_keys=True, separators=(",", ":")) + "\n"); sink.flush()
   return 0
 
@@ -227,4 +230,4 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__": raise SystemExit(main())
 
-__all__ = ["PROTOCOL", "MR7Session", "TinygradDecodeMR7Session", "serve", "validate_request"]
+__all__ = ["PROTOCOL", "IDENTITY_FIELDS_SHA256", "MR7Session", "TinygradDecodeMR7Session", "serve", "validate_request"]

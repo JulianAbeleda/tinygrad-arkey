@@ -4,7 +4,8 @@ import json
 import pytest
 
 from extra.llm_research.finalized_census import validate_finalized_census
-from extra.llm_research.mr7_provider import PROTOCOL, serve, validate_request
+from extra.llm_research.mr7_provider import PROTOCOL, IDENTITY_FIELDS_SHA256, serve, validate_request
+from tinygrad.engine.metadata import PROGRAM_IDENTITY_FIELDS
 from tinygrad.engine.jit import GraphAdmissionCensus
 from tinygrad.uop.ops import Ops, UOp
 
@@ -147,3 +148,17 @@ def test_finalized_census_round_trips_identity_through_typed_authority(field, va
 def test_finalized_census_reconciles_workload_roles_with_semantic_identities():
   census = _census(); census["records"][0]["workload_roles"] = ["generic"]
   with pytest.raises(ValueError, match="ambiguous identity"): validate_finalized_census(census)
+
+
+def test_mr7_provider_response_envelope_declares_identity_fields_sha256():
+  class FakeSession:
+    def execute(self, request): return {"echo":"test"}
+  session = FakeSession()
+  rows = [{"protocol":PROTOCOL, "plan_sha256":"a"*64, "request_id":"test",
+           "request":{"request_id":"test", "kind":"fake"}}]
+  source, sink = io.StringIO(json.dumps(rows[0])+"\n"), io.StringIO()
+  assert serve(source, sink, session) == 0
+  response = json.loads(sink.getvalue().splitlines()[0])
+  assert response["identity_fields"] == list(PROGRAM_IDENTITY_FIELDS)
+  assert response["identity_fields_sha256"] == IDENTITY_FIELDS_SHA256
+  assert len(response["identity_fields_sha256"]) == 64
