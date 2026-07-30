@@ -99,6 +99,23 @@ of the AMD table, invisible to a source-level view) reproduced on Metal, though 
 does not show true ISA-level scaffolding such as register allocation or hardware sync; see "Known limitations"
 below).
 
+**Where the two levels disagree (scope's explicit ask, "say where they disagree"):** `select/compare (mask)`'s
+share drops sharply from MSL to AIR, and `index/address math`'s share grows by almost the same amount, in all
+three kernels:
+
+| kernel | MSL select/mask -> AIR select/mask | MSL index/addr -> AIR index/addr |
+| --- | ---: | ---: |
+| gate/up | 34.4% -> 4.5% | 5.7% -> 41.6% |
+| down | 6.0% -> 1.9% | 13.0% -> 41.5% |
+| qkv | 39.3% -> 5.6% | 6.4% -> 40.5% |
+
+This is consistent with (not directly observed as) LLVM resolving many of the MSL-level ternaries -- the
+Q4_K/Q6_K sub-block-selection conditionals, most of whose conditions are loop-index-derived rather than
+data-derived -- into direct `getelementptr`/`phi` address computation rather than a runtime `select`/branch. If
+that reading is right, a meaningful fraction of what the MSL table calls "masking" is address arithmetic in
+disguise once compiled further; this doc reports the shift as observed and leaves the interpretation open rather
+than asserting the LLVM internals as fact.
+
 ## Results
 
 ### gate/up (`r_16_256_8_16_4_3_16_4_2_8_4`, 36.6% of prefill time, profiled 2070 GFLOPS)
