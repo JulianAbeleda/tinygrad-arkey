@@ -1,0 +1,506 @@
+{
+  "below_floor": [
+    {
+      "admitted": false,
+      "iterations": 1,
+      "k": 32,
+      "reason": "ValueError: k must be Q4_K block aligned (256), got 32"
+    },
+    {
+      "admitted": false,
+      "iterations": 2,
+      "k": 64,
+      "reason": "ValueError: k must be Q4_K block aligned (256), got 64"
+    },
+    {
+      "admitted": false,
+      "iterations": 4,
+      "k": 128,
+      "reason": "ValueError: k must be Q4_K block aligned (256), got 128"
+    },
+    {
+      "admitted": false,
+      "iterations": 6,
+      "k": 192,
+      "reason": "ValueError: k must be Q4_K block aligned (256), got 192"
+    },
+    {
+      "admitted": false,
+      "iterations": 7,
+      "k": 224,
+      "reason": "ValueError: k must be Q4_K block aligned (256), got 224"
+    }
+  ],
+  "sweep": [
+    {
+      "canonical_identity": "da6e2e9e0d7fecad2c4aac3c35de70f3a2186191f9ff5bee9f7567bdaf50862e",
+      "compile": {
+        "active_lds_bytes": 25600,
+        "admitted": true,
+        "global_size": [
+          192,
+          2,
+          1
+        ],
+        "kernel_name": "r_2_192_32_8_2_8_4_8_4_aa9565adb0666996d3673adcb0f240769a7616a6f9e2b66d2eb1ec0a8c4d48de",
+        "local_size": [
+          32,
+          8,
+          1
+        ],
+        "threads": 256
+      },
+      "config": {
+        "device": "METAL",
+        "geometry": [
+          256,
+          64,
+          32,
+          8,
+          1,
+          1
+        ],
+        "profile": "qwen3_8b_q4k_m_gfx1100",
+        "quant": "Q4_K",
+        "role": "ffn_gate_up",
+        "rounds": 3,
+        "shape": [
+          512,
+          12288,
+          256
+        ],
+        "warmups": 1
+      },
+      "coverage": {
+        "basis": "round 0 of the captured output arrays; the output buffer is zero-initialized by guarded_execution.allocate before dispatch, so a zero after dispatch means the kernel never wrote that position -- 'nonzero == written' is therefore a lower bound on true coverage (a position that legitimately computes to exactly 0.0 would be undercounted), matching M1c's documented methodology",
+        "never_written_count": 5112022,
+        "never_written_fraction": 0.8125340143839518,
+        "total": 6291456,
+        "value_range_written": [
+          -0.09375,
+          2386.0
+        ],
+        "written_count": 1179434,
+        "written_fraction": 0.1874659856160482
+      },
+      "determinism": {
+        "bit_identical": false,
+        "max_inter_round_diff": 732.0,
+        "rounds_compared": 3
+      },
+      "elapsed_seconds": 1.236146417009877,
+      "iterations": 8,
+      "k": 256,
+      "max_abs_error": 2390.0,
+      "passed": false,
+      "rounds": [
+        {
+          "device_healthy_after": true,
+          "guards_intact": true,
+          "max_abs_error": 2386.0,
+          "numerics_passed": false,
+          "passed": false,
+          "round": 0,
+          "wall_seconds": 0.10992099999566562
+        },
+        {
+          "device_healthy_after": true,
+          "guards_intact": true,
+          "max_abs_error": 2390.0,
+          "numerics_passed": false,
+          "passed": false,
+          "round": 1,
+          "wall_seconds": 0.11034345900407061
+        },
+        {
+          "device_healthy_after": true,
+          "guards_intact": true,
+          "max_abs_error": 2358.0,
+          "numerics_passed": false,
+          "passed": false,
+          "round": 2,
+          "wall_seconds": 0.1116465000086464
+        }
+      ],
+      "schema": "metal-precontract-probe.v1",
+      "skip_reason": null,
+      "status": "measured"
+    },
+    {
+      "canonical_identity": "ad2af75c7bac36acd615b902e5dac8fe6f975aa571abb15b56899bfc8e87014c",
+      "compile": {
+        "active_lds_bytes": 25600,
+        "admitted": true,
+        "global_size": [
+          192,
+          2,
+          1
+        ],
+        "kernel_name": "r_2_192_32_8_2_8_4_16_4_0a374a0252eb026146abb49b23f9f25906c394f34d56911e29c5a1354e2864b1",
+        "local_size": [
+          32,
+          8,
+          1
+        ],
+        "threads": 256
+      },
+      "config": {
+        "device": "METAL",
+        "geometry": [
+          256,
+          64,
+          32,
+          8,
+          1,
+          1
+        ],
+        "profile": "qwen3_8b_q4k_m_gfx1100",
+        "quant": "Q4_K",
+        "role": "ffn_gate_up",
+        "rounds": 3,
+        "shape": [
+          512,
+          12288,
+          512
+        ],
+        "warmups": 1
+      },
+      "coverage": {
+        "basis": "round 0 of the captured output arrays; the output buffer is zero-initialized by guarded_execution.allocate before dispatch, so a zero after dispatch means the kernel never wrote that position -- 'nonzero == written' is therefore a lower bound on true coverage (a position that legitimately computes to exactly 0.0 would be undercounted), matching M1c's documented methodology",
+        "never_written_count": 5112254,
+        "never_written_fraction": 0.8125708897908529,
+        "total": 6291456,
+        "value_range_written": [
+          -0.0625,
+          4116.0
+        ],
+        "written_count": 1179202,
+        "written_fraction": 0.18742911020914713
+      },
+      "determinism": {
+        "bit_identical": false,
+        "max_inter_round_diff": 992.0,
+        "rounds_compared": 3
+      },
+      "elapsed_seconds": 1.2518489169888198,
+      "iterations": 16,
+      "k": 512,
+      "max_abs_error": 4248.0,
+      "passed": false,
+      "rounds": [
+        {
+          "device_healthy_after": true,
+          "guards_intact": true,
+          "max_abs_error": 4112.0,
+          "numerics_passed": false,
+          "passed": false,
+          "round": 0,
+          "wall_seconds": 0.11313670797972009
+        },
+        {
+          "device_healthy_after": true,
+          "guards_intact": true,
+          "max_abs_error": 4100.0,
+          "numerics_passed": false,
+          "passed": false,
+          "round": 1,
+          "wall_seconds": 0.11460412500309758
+        },
+        {
+          "device_healthy_after": true,
+          "guards_intact": true,
+          "max_abs_error": 4248.0,
+          "numerics_passed": false,
+          "passed": false,
+          "round": 2,
+          "wall_seconds": 0.1142932920192834
+        }
+      ],
+      "schema": "metal-precontract-probe.v1",
+      "skip_reason": null,
+      "status": "measured"
+    },
+    {
+      "canonical_identity": "8af0d9c18170fd1e83b0ef54d4c981c47de80fe86b1db8cbccb3fbef7482c3c2",
+      "compile": {
+        "active_lds_bytes": 25600,
+        "admitted": true,
+        "global_size": [
+          192,
+          2,
+          1
+        ],
+        "kernel_name": "r_2_192_32_8_2_8_4_32_4_eb18437868408c6e3b5d62333e416632ca622c763fc637b5258962c99e745a7e",
+        "local_size": [
+          32,
+          8,
+          1
+        ],
+        "threads": 256
+      },
+      "config": {
+        "device": "METAL",
+        "geometry": [
+          256,
+          64,
+          32,
+          8,
+          1,
+          1
+        ],
+        "profile": "qwen3_8b_q4k_m_gfx1100",
+        "quant": "Q4_K",
+        "role": "ffn_gate_up",
+        "rounds": 3,
+        "shape": [
+          512,
+          12288,
+          1024
+        ],
+        "warmups": 1
+      },
+      "coverage": {
+        "basis": "round 0 of the captured output arrays; the output buffer is zero-initialized by guarded_execution.allocate before dispatch, so a zero after dispatch means the kernel never wrote that position -- 'nonzero == written' is therefore a lower bound on true coverage (a position that legitimately computes to exactly 0.0 would be undercounted), matching M1c's documented methodology",
+        "never_written_count": 5112816,
+        "never_written_fraction": 0.8126602172851562,
+        "total": 6291456,
+        "value_range_written": [
+          -0.125,
+          7272.0
+        ],
+        "written_count": 1178640,
+        "written_fraction": 0.18733978271484375
+      },
+      "determinism": {
+        "bit_identical": false,
+        "max_inter_round_diff": 1208.0,
+        "rounds_compared": 3
+      },
+      "elapsed_seconds": 1.288801250018878,
+      "iterations": 32,
+      "k": 1024,
+      "max_abs_error": 7272.0,
+      "passed": false,
+      "rounds": [
+        {
+          "device_healthy_after": true,
+          "guards_intact": true,
+          "max_abs_error": 7272.0,
+          "numerics_passed": false,
+          "passed": false,
+          "round": 0,
+          "wall_seconds": 0.12004066599183716
+        },
+        {
+          "device_healthy_after": true,
+          "guards_intact": true,
+          "max_abs_error": 7196.0,
+          "numerics_passed": false,
+          "passed": false,
+          "round": 1,
+          "wall_seconds": 0.11705258398433216
+        },
+        {
+          "device_healthy_after": true,
+          "guards_intact": true,
+          "max_abs_error": 7252.0,
+          "numerics_passed": false,
+          "passed": false,
+          "round": 2,
+          "wall_seconds": 0.11740412501967512
+        }
+      ],
+      "schema": "metal-precontract-probe.v1",
+      "skip_reason": null,
+      "status": "measured"
+    },
+    {
+      "canonical_identity": "4eb4eeb9bda2e23962874642df57897a7987040ff41388b159fefe913d1da848",
+      "compile": {
+        "active_lds_bytes": 25600,
+        "admitted": true,
+        "global_size": [
+          192,
+          2,
+          1
+        ],
+        "kernel_name": "r_2_192_32_8_2_8_4_64_4_a43c97fd5a7bc0ad11a26844f26b0ee56c0fa93fae7967f8f46c0c29eeadabad",
+        "local_size": [
+          32,
+          8,
+          1
+        ],
+        "threads": 256
+      },
+      "config": {
+        "device": "METAL",
+        "geometry": [
+          256,
+          64,
+          32,
+          8,
+          1,
+          1
+        ],
+        "profile": "qwen3_8b_q4k_m_gfx1100",
+        "quant": "Q4_K",
+        "role": "ffn_gate_up",
+        "rounds": 3,
+        "shape": [
+          512,
+          12288,
+          2048
+        ],
+        "warmups": 1
+      },
+      "coverage": {
+        "basis": "round 0 of the captured output arrays; the output buffer is zero-initialized by guarded_execution.allocate before dispatch, so a zero after dispatch means the kernel never wrote that position -- 'nonzero == written' is therefore a lower bound on true coverage (a position that legitimately computes to exactly 0.0 would be undercounted), matching M1c's documented methodology",
+        "never_written_count": 5112056,
+        "never_written_fraction": 0.8125394185384115,
+        "total": 6291456,
+        "value_range_written": [
+          -0.0625,
+          14384.0
+        ],
+        "written_count": 1179400,
+        "written_fraction": 0.18746058146158853
+      },
+      "determinism": {
+        "bit_identical": false,
+        "max_inter_round_diff": 2480.0,
+        "rounds_compared": 3
+      },
+      "elapsed_seconds": 1.3745627499883994,
+      "iterations": 64,
+      "k": 2048,
+      "max_abs_error": 14632.0,
+      "passed": false,
+      "rounds": [
+        {
+          "device_healthy_after": true,
+          "guards_intact": true,
+          "max_abs_error": 14384.0,
+          "numerics_passed": false,
+          "passed": false,
+          "round": 0,
+          "wall_seconds": 0.12736345900339074
+        },
+        {
+          "device_healthy_after": true,
+          "guards_intact": true,
+          "max_abs_error": 14632.0,
+          "numerics_passed": false,
+          "passed": false,
+          "round": 1,
+          "wall_seconds": 0.13028395801666193
+        },
+        {
+          "device_healthy_after": true,
+          "guards_intact": true,
+          "max_abs_error": 14360.0,
+          "numerics_passed": false,
+          "passed": false,
+          "round": 2,
+          "wall_seconds": 0.13043837502482347
+        }
+      ],
+      "schema": "metal-precontract-probe.v1",
+      "skip_reason": null,
+      "status": "measured"
+    },
+    {
+      "canonical_identity": "339cf155494604b27d7e1f36a91f5d4e76f1616e404bfd814ad52f1097946b09",
+      "compile": {
+        "active_lds_bytes": 25600,
+        "admitted": true,
+        "global_size": [
+          192,
+          2,
+          1
+        ],
+        "kernel_name": "r_2_192_32_8_2_8_4_128_4_568e0a85fe598498b90ffe7c7c7ba66fe99b960d2d63f49238e1f33fc9f733a2",
+        "local_size": [
+          32,
+          8,
+          1
+        ],
+        "threads": 256
+      },
+      "config": {
+        "device": "METAL",
+        "geometry": [
+          256,
+          64,
+          32,
+          8,
+          1,
+          1
+        ],
+        "profile": "qwen3_8b_q4k_m_gfx1100",
+        "quant": "Q4_K",
+        "role": "ffn_gate_up",
+        "rounds": 3,
+        "shape": [
+          512,
+          12288,
+          4096
+        ],
+        "warmups": 1
+      },
+      "coverage": {
+        "basis": "round 0 of the captured output arrays; the output buffer is zero-initialized by guarded_execution.allocate before dispatch, so a zero after dispatch means the kernel never wrote that position -- 'nonzero == written' is therefore a lower bound on true coverage (a position that legitimately computes to exactly 0.0 would be undercounted), matching M1c's documented methodology",
+        "never_written_count": 5112740,
+        "never_written_fraction": 0.8126481374104818,
+        "total": 6291456,
+        "value_range_written": [
+          -0.09375,
+          29072.0
+        ],
+        "written_count": 1178716,
+        "written_fraction": 0.18735186258951822
+      },
+      "determinism": {
+        "bit_identical": false,
+        "max_inter_round_diff": 4224.0,
+        "rounds_compared": 3
+      },
+      "elapsed_seconds": 1.6712418329843786,
+      "iterations": 128,
+      "k": 4096,
+      "max_abs_error": 29072.0,
+      "passed": false,
+      "rounds": [
+        {
+          "device_healthy_after": true,
+          "guards_intact": true,
+          "max_abs_error": 29072.0,
+          "numerics_passed": false,
+          "passed": false,
+          "round": 0,
+          "wall_seconds": 0.1405517079983838
+        },
+        {
+          "device_healthy_after": true,
+          "guards_intact": true,
+          "max_abs_error": 28928.0,
+          "numerics_passed": false,
+          "passed": false,
+          "round": 1,
+          "wall_seconds": 0.139773167000385
+        },
+        {
+          "device_healthy_after": true,
+          "guards_intact": true,
+          "max_abs_error": 29056.0,
+          "numerics_passed": false,
+          "passed": false,
+          "round": 2,
+          "wall_seconds": 0.14210779100540094
+        }
+      ],
+      "schema": "metal-precontract-probe.v1",
+      "skip_reason": null,
+      "status": "measured"
+    }
+  ]
+}
