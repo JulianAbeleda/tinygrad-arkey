@@ -1,0 +1,118 @@
+{
+  "candidate": {
+    "applicability": {
+      "exact_shape": true,
+      "profiles": [
+        "ffn_gate_up"
+      ],
+      "roles": [
+        "ffn_gate_up"
+      ],
+      "targets": [
+        "METAL:Apple9"
+      ]
+    },
+    "correctness": {
+      "atol": 0.001,
+      "oracle": "canonical_packed_reference",
+      "rtol": 0.001
+    },
+    "memory_budget": {
+      "bytes": null,
+      "status": "unavailable"
+    },
+    "provenance": {
+      "generator_id": "bubblebeam_boltbeam_campaign",
+      "generator_revision": "1",
+      "schema_revision": "boltbeam.full_kernel_candidate.v2"
+    },
+    "schedule": {
+      "compute": {
+        "family": "wmma"
+      },
+      "launch": {
+        "threads": 128
+      },
+      "mapping": {
+        "lane_policy": "precontract_wmma"
+      },
+      "memory": {
+        "a": {
+          "alignment": 1,
+          "space": "global",
+          "vector_width": 1
+        },
+        "b": {
+          "alignment": 1,
+          "space": "global",
+          "vector_width": 1
+        },
+        "c": {
+          "alignment": 1,
+          "space": "global",
+          "vector_width": 1
+        }
+      },
+      "numerical_mode": "default",
+      "pipeline": {
+        "stage_count": 1
+      },
+      "plan_kind": "tinygrad_heuristic.v1",
+      "tile": {
+        "k": 32,
+        "m": 64,
+        "n": 32
+      },
+      "transforms": []
+    },
+    "schema_version": "boltbeam.full_kernel_candidate.v2",
+    "static_constraints": {
+      "max_local_memory_bytes": null,
+      "max_registers_per_thread": null,
+      "spill_policy": "unknown"
+    },
+    "workload": {
+      "accumulator_dtype": "float",
+      "model_sha256": "2b9db804dc58fcd50cfd0033f2b604ad53dcbea89d0ca4f17937a4daef5a66cf",
+      "operands": {
+        "a": {
+          "dtype": "half",
+          "layout": "row_major",
+          "quantization": "none"
+        },
+        "b": {
+          "dtype": "uint32",
+          "layout": "packed_q4_k",
+          "quantization": "Q4_K"
+        },
+        "c": {
+          "dtype": "float",
+          "layout": "row_major",
+          "quantization": "none"
+        }
+      },
+      "operation": "matmul",
+      "phase": "prefill",
+      "profile": "qwen3_8b.ffn_gate_up",
+      "role": "ffn_gate_up",
+      "shape": {
+        "k": 4096,
+        "m": 512,
+        "n": 12288
+      },
+      "target": {
+        "arch": "Apple9",
+        "backend": "METAL",
+        "resolved_target_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "subgroup_size": 32,
+        "target_id": "apple_m4_ffn_gate_up_campaign"
+      }
+    }
+  },
+  "candidate_hash": "328f1e61c4f77c27207dd9f0a08c603dbb353d28a0e9ca8635bc6907595cae1b",
+  "geometry": {
+    "wm": 4,
+    "wn": 1,
+    "bc": 1
+  }
+}
