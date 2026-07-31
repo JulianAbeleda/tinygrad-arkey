@@ -17,6 +17,12 @@ class CUDARenderer(CStyleLanguage):
     iface, dev, arch = target.interface, target.device, target.arch
     self.compiler = (NVCCCompiler if use_nvcc else NVRTCCompiler)(arch, ptx=iface.startswith("MOCK") or dev == "CUDA", cache_key=dev.lower())
     self.tensor_cores = tc.get_cuda(arch)
+    # CUDA warps are 32 lanes across every CUDA-capable device (the PTX model fixes warpSize at 32), and this
+    # renderer's own warp_shfl_xor lowering was compiled and run at that width (TG1), including the Q4_K/Q6_K
+    # fused-primitive probe on sm_120. Reporting a verified width is not the silent defaulting scope forbids
+    # (target-capability-policy-decoupling-scope-20260730.md section 3.3): that rule bars inventing a value for
+    # an unknown target, and this one is known. Same discipline as Metal's `self.wave_size = 32` (cstyle.py).
+    self.wave_size = 32
 
   kernel_typedef = 'extern "C" __global__ void __launch_bounds__({launch_bounds})'
   smem_prefix = "__shared__ __align__(16) "

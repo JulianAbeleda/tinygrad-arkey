@@ -316,15 +316,21 @@ tok/s @ pp512. The 8B floor is now explained by a compile-only count, not guesse
 - A 2048x2048 fp16 GEMM through the real `CUDARenderer` emits `HMMA.16816.F32` (32 per block
   body, zero on the generic path) and is numerically correct to fp16 output rounding — the
   multiply DOES reach the matrix unit on NV, and the overlay's core op lowers.
-- The fused Q4_K decode primitive is NOT admitted on this target: its TG3 capability check
-  requires `wave_size == 32` and `CUDARenderer` does not declare `wave_size` (it does declare
-  `supports_warp_shfl_xor`). One missing declared fact keeps the production quant decode on
-  the generic dequant fallback — that is the 21.5 GB/s floor, not a bandwidth ceiling.
+- The fused Q4_K decode primitive was NOT admitted on this target until the fact below was
+  declared: its TG3 capability check requires `wave_size == 32` and `CUDARenderer` did not
+  declare `wave_size` (it does declare `supports_warp_shfl_xor`). One missing declared fact
+  kept production quant decode on the generic dequant fallback — the 21.5 GB/s floor, not a
+  bandwidth ceiling.
 
-So the floor is a missing declaration plus a skipped fused path, not a hardware wall, and the
-two roads from here are the declared-fact fix (declare CUDA `wave_size = 32`, then render the
-Q4_K primitive on CUDA and see which intrinsics it needs) and the overlay (8B fp16 GEMM, which
-this probe already shows lowering to the tensor pipe).
+**The declared-fact fix, measured (same session).** `CUDARenderer` now declares `wave_size = 32`
+(NVIDIA warps are 32 lanes across every CUDA device; the renderer's own `warp_shfl_xor`
+lowering was compiled and run at that width, TG1). Device facts report `wave_size=32` and 253
+Q4_K/Q6_K primitives install and admit. The 8B re-measure with the fused path live: **decode
+156.2 tok/s (755 GB/s — 44% of BW)**, correctness-qualified (CPU full-prefix greedy oracle vs
+two JIT replays), against the 4.49 tok/s floor — 34.8x from a one-line declaration. The same
+run measured prefill 66.3 tok/s @ pp512 against the earlier 87.4; that delta is not yet
+isolated (open gate: native-vector-types renderer commit vs this declaration) and is parked,
+not explained.
 
 **Phase 3 is the branch point, and it went differently from the datacenter guess.** Datacenter parts
 carry 40-80 GB; this card's budget is 32 GB. The 8B fp16 overlay is 16.4 GB and fits with room for KV
