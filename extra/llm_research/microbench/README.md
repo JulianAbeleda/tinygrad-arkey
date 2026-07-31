@@ -20,6 +20,62 @@ efficiency claim on this device; 122.8 is unreachable in practice and 61.4 flatt
 
 ---
 
+# mma_peak_cuda.cu — measured achievable mma.sync peak (NVIDIA sm_120 / RTX 5090)
+
+The CUDA analogue of `wmma_peak.cpp`: isolated back-to-back
+`mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32` — the exact instruction the fork's
+`CUDARenderer` emits for fp16→fp32 (`tinygrad/renderer/cuda.py:75`, shape from
+`tc.get_cuda(arch)` → `cuda_sm89`, `tinygrad/codegen/opt/tc.py:135`) — on register-resident
+fragments: NACC independent accumulators, runtime trip count so the loop is not folded, a
+never-taken store so the result stays live, zero loads in the hot loop.
+
+    export PATH=/usr/local/cuda-13.2/bin:$PATH
+    nvcc -O3 -arch=sm_120 -DNACC=8 mma_peak_cuda.cu -o mma_peak_cuda && ./mma_peak_cuda 32768
+
+Verify purity before believing a number (`cuobjdump --dump-sass`; `nvdisasm` ships inside
+the triton package if the CUDA toolkit lacks it): the hot loop contains only `HMMA.16816.F32`
+(NACC per unrolled body — 232 total at `nacc=8`, iters unrolled 29×), zero `LDG`/`LDS`/`STS`,
+and exactly one gated `STG` (the never-taken sentinel). `--ptxas-options=-v`: 0 spills at
+every NACC (42 regs at nacc=8, 138 at nacc=32).
+
+## Result, NVIDIA GeForce RTX 5090 (GB202, sm_120), 2026-07-31
+
+Grid sweep (`nacc=8, tpb=256, iters=200000`) climbs and plateaus at `blocks=32768`:
+
+| blocks | TFLOPS |
+| ---: | ---: |
+| 2048 | 237.0 |
+| 4096 | 246.5 |
+| 8192 | 251.5 |
+| 16384 | 254.0 |
+| 32768 | 255.4 |
+| 65536 | 255.4 |
+
+**R ≈ 255.4 TFLOPS** — the isolated m16n8k16 f16→f32 rate on this 5090, at steady 2932 MHz
+(SM util 100%, 235 W of the 600 W cap: an instruction-issue ceiling, not a power/clock
+throttle).
+
+Flatness across NACC 1→32 (236.0→237.1 at `blocks=2048`) — the same number at `nacc=1` as at
+`nacc=32` — says this is the tensor pipe's issue rate, not latency-bound work: 1 HMMA.16816
+per ~8 clocks per SM. An operand-rotation A/B probe (each HMMA reading a distinct register
+set) measures identically (255.4), so the shared `.reuse` operands are not a read-port
+serialization artifact. `m16n8k8` (the renderer's alternate descriptor shape) measures
+125.8 TF — same issue rate, half the FLOPs per instruction — so `m16n8k16` is the right
+shape. The fp16→fp16 accumulate probe was discarded: the compiler collapsed it, and it is
+not the path the renderer uses for GEMMs.
+
+External sanity: shiinamiyuki/sm120_gemm's real BF16 GEMMs on the same chip reach 140–217
+TF, i.e. 55–85% of this R — consistent with R as the ceiling. A third-party figure (~319 TF,
+"76% of spec") is not directly comparable (different methodology/instruction), so 255.4 TF
+is the denominator for any efficiency claim in this bring-up, per
+`docs/what-makes-a-token-fast-20260731.md` §9: never quote a spec sheet. 255.4 TF is 61% of
+the 419 TF sheet figure.
+
+`BW` is still unmeasured on this target, so `M* = (w/16)·(R/BW)` is reported as a function
+of `BW`, not a single number — same state Metal was in before its `BW` bench.
+
+---
+
 # wmma_peak_metal.py — measured achievable simdgroup_multiply_accumulate peak (Apple M4)
 
 The Metal analogue of the above: same idea (independent accumulators to cover matrix-op latency,
