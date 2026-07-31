@@ -1,0 +1,238 @@
+{
+  "schema": "prefill-whole-synced-authority.v1",
+  "model": "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+  "model_profile": {
+    "id": "qwen3_14b_q4k_m_gfx1100",
+    "note": "14B automatic memory-safe authority path",
+    "env_defaults": {}
+  },
+  "mode": "authority_incomplete",
+  "chunk_n": 512,
+  "chunk_ms": {
+    "0": 250.5946,
+    "512": 258.8237,
+    "1024": 262.4006,
+    "2048": 273.3817,
+    "3584": 290.851
+  },
+  "chunk_samples_ms": {
+    "0": [
+      254.4341,
+      250.5946,
+      255.5881
+    ],
+    "512": [
+      258.8237,
+      263.8367,
+      260.2383
+    ],
+    "1024": [
+      270.5184,
+      262.4006,
+      267.3308
+    ],
+    "2048": [
+      273.3817,
+      274.0156,
+      274.2508
+    ],
+    "3584": [
+      291.0554,
+      293.4571,
+      290.851
+    ]
+  },
+  "device_profile": {
+    "0": {
+      "schema": "prefill-device-profile-range-summary.v1",
+      "kernel_count": 0,
+      "device_ms": 0,
+      "by_name": {}
+    },
+    "512": {
+      "schema": "prefill-device-profile-range-summary.v1",
+      "kernel_count": 0,
+      "device_ms": 0,
+      "by_name": {}
+    },
+    "1024": {
+      "schema": "prefill-device-profile-range-summary.v1",
+      "kernel_count": 0,
+      "device_ms": 0,
+      "by_name": {}
+    },
+    "2048": {
+      "schema": "prefill-device-profile-range-summary.v1",
+      "kernel_count": 0,
+      "device_ms": 0,
+      "by_name": {}
+    },
+    "3584": {
+      "schema": "prefill-device-profile-range-summary.v1",
+      "kernel_count": 0,
+      "device_ms": 0,
+      "by_name": {}
+    }
+  },
+  "whole_tok_s": {
+    "512": 2043.14,
+    "1024": 2010.14,
+    "2048": 1969.78,
+    "4096": 1889.15
+  },
+  "graph_gemm": false,
+  "prefill_v2": true,
+  "prefill_route": "DIRECT_PACKED_FALLBACK",
+  "shared_attention": {
+    "schema": "shared-prefill-attention-route.v3",
+    "requested": true,
+    "route_id": "prefill_flash_attention_generated",
+    "boundary": "custom_kernel_fused_attention",
+    "semantic_candidate": null,
+    "selected_lowering": "amd_gfx1100_q16_grid_hd128_loop_attention",
+    "fallback_contract": "ordinary_sdpa",
+    "fusion_proven": true,
+    "dual_wmma_proven": false,
+    "performance_proven": false,
+    "promotion_eligible": true,
+    "blocker": null,
+    "model_forward_attn_qo_identity": null,
+    "model_forward_attn_qo_one_buffer": false
+  },
+  "custom_kernel_attention_trace": {
+    "dispatches": 400,
+    "last_identity": "amd_gfx1100_q16_grid_hd128_loop_attention:role=attention_tile,Hq=40,Hkv=8,q_tokens=512,kv_tokens=4096,Hd=128"
+  },
+  "K": 8,
+  "warmups": 4,
+  "rounds": 3,
+  "pin_clock": false,
+  "logits_only": false,
+  "clock_pin": null,
+  "git_short": "18d2fab52",
+  "git_dirty": true,
+  "route_attribution": {
+    "prefill_route_family": "prefill_v2_scheduler_matmul_default",
+    "prefill_route_pure": true,
+    "prefill_route_rolled_back": false,
+    "prefill_route_provenance": "tinygrad_scheduler_generated",
+    "prefill_q4k_route_family": "prefill_q4k_direct_tile4x4_default",
+    "prefill_q4k_route_pure": true,
+    "prefill_q4k_route_rolled_back": false,
+    "prefill_q4k_route_provenance": "machine_authored_generated"
+  },
+  "candidate_set_route_census": null,
+  "prefill_role_routes": {},
+  "timing_authority": "synced model.__call__ prefill-v2 warmstart path, min over repeated bursts, no generate TTFT/sampling",
+  "comparator_id": null,
+  "candidate_id": null,
+  "primitive_class": null,
+  "threshold": null,
+  "ledger": null,
+  "quality_gate": {
+    "status": "MISSING",
+    "note": "no whole-model dNLL/greedy-parity quality gate supplied; supply --quality-gate to promote (F3)"
+  },
+  "reproducibility_band": {
+    "per_chunk": {
+      "0": {
+        "n": 3,
+        "min_ms": 250.5946,
+        "max_ms": 255.5881,
+        "mean_ms": 253.539,
+        "std_ms": 2.1346,
+        "cv": 0.00842,
+        "spread": 0.01993
+      },
+      "512": {
+        "n": 3,
+        "min_ms": 258.8237,
+        "max_ms": 263.8367,
+        "mean_ms": 260.9662,
+        "std_ms": 2.1103,
+        "cv": 0.00809,
+        "spread": 0.01937
+      },
+      "1024": {
+        "n": 3,
+        "min_ms": 262.4006,
+        "max_ms": 270.5184,
+        "mean_ms": 266.7499,
+        "std_ms": 3.3394,
+        "cv": 0.01252,
+        "spread": 0.03094
+      },
+      "2048": {
+        "n": 3,
+        "min_ms": 273.3817,
+        "max_ms": 274.2508,
+        "mean_ms": 273.8827,
+        "std_ms": 0.367,
+        "cv": 0.00134,
+        "spread": 0.00318
+      },
+      "3584": {
+        "n": 3,
+        "min_ms": 290.851,
+        "max_ms": 293.4571,
+        "mean_ms": 291.7878,
+        "std_ms": 1.1833,
+        "cv": 0.00406,
+        "spread": 0.00896
+      }
+    },
+    "worst_cv": 0.01252,
+    "worst_spread": 0.03094,
+    "single_sample": false
+  },
+  "measurement_regime": {
+    "regime_id": "generated_pure",
+    "provenance": "tinygrad_scheduler_generated",
+    "route_pure": true,
+    "route_rolled_back": false,
+    "mode": "authority",
+    "logits_only": false,
+    "authoritative_for_generated_promotion": true
+  },
+  "authority_completeness": {
+    "schema": "prefill-whole-synced-authority-completeness.v1",
+    "fields": {
+      "comparator_id": false,
+      "reproducibility_band": true,
+      "candidate_id": false,
+      "primitive_class": false,
+      "threshold": false,
+      "ledger": false,
+      "quality_gate_pass": false
+    },
+    "missing": [
+      "comparator_id",
+      "candidate_id",
+      "primitive_class",
+      "threshold",
+      "ledger",
+      "quality_gate_pass"
+    ],
+    "ok": false
+  },
+  "authority_blocked_reason": "refusing mode:authority; missing required fields: comparator_id, candidate_id, primitive_class, threshold, ledger, quality_gate_pass",
+  "prefill_route_binding_gate": {
+    "schema": "prefill-route-binding-gate.v1",
+    "verdict": "PREFILL_ROUTE_BINDING_PASS",
+    "required_route": null,
+    "selected_family": "prefill_gemm",
+    "selected_route": "prefill_v2_scheduler_matmul_default",
+    "effective_routes": [
+      "decode_flash_live_split_g4_kvboth",
+      "decode_q4k_g3_generated",
+      "decode_q6k_coop_generated",
+      "packed_wmma_prefill_generated",
+      "prefill_flash_attention_generated",
+      "prefill_q4k_direct_tile4x4_default",
+      "prefill_v2_scheduler_matmul_default"
+    ],
+    "binding_regime": "generated_pure",
+    "candidate_set_requested": false,
+    "failures": []
+  }
+}

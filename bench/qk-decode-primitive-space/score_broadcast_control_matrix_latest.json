@@ -1,0 +1,61 @@
+{
+  "date": "2026-06-26",
+  "timestamp": "20260703-140233",
+  "candidate_id": "decode_attention_physical_tile_score_broadcast_lifecycle",
+  "mode": "jit_capture_same_same",
+  "verdict": "SCORE_BROADCAST_CONTROL_MATRIX_RECORDED",
+  "pass_cases": [],
+  "fail_cases": [
+    "barrier_on_scratch_on",
+    "barrier_off_scratch_on",
+    "barrier_on_scratch_off",
+    "barrier_off_scratch_off"
+  ],
+  "rows": [
+    {
+      "case": "barrier_on_scratch_on",
+      "returncode": null,
+      "pass": false,
+      "failure_class": "stale_replay_removed",
+      "flags": {
+        "DECODE_ATTN_SCORE_BROADCAST_NO_GRAPH": "1",
+        "DECODE_ATTN_SCORE_BROADCAST_SCRATCH": "1"
+      },
+      "note": "the old score-broadcast JIT-phase child replay is not part of the compact repo surface"
+    },
+    {
+      "case": "barrier_off_scratch_on",
+      "returncode": null,
+      "pass": false,
+      "failure_class": "stale_replay_removed",
+      "flags": {
+        "DECODE_ATTN_SCORE_BROADCAST_NO_GRAPH": "0",
+        "DECODE_ATTN_SCORE_BROADCAST_SCRATCH": "1"
+      },
+      "note": "the old score-broadcast JIT-phase child replay is not part of the compact repo surface"
+    },
+    {
+      "case": "barrier_on_scratch_off",
+      "returncode": null,
+      "pass": false,
+      "failure_class": "stale_replay_removed",
+      "flags": {
+        "DECODE_ATTN_SCORE_BROADCAST_NO_GRAPH": "1",
+        "DECODE_ATTN_SCORE_BROADCAST_SCRATCH": "0"
+      },
+      "note": "the old score-broadcast JIT-phase child replay is not part of the compact repo surface"
+    },
+    {
+      "case": "barrier_off_scratch_off",
+      "returncode": null,
+      "pass": false,
+      "failure_class": "stale_replay_removed",
+      "flags": {
+        "DECODE_ATTN_SCORE_BROADCAST_NO_GRAPH": "0",
+        "DECODE_ATTN_SCORE_BROADCAST_SCRATCH": "0"
+      },
+      "note": "the old score-broadcast JIT-phase child replay is not part of the compact repo surface"
+    }
+  ],
+  "decision": "Use this matrix to isolate barrier, scratch, and their interaction at fixed chunks=4. This artifact is diagnostic-only."
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "boltbeam-pinned-smoke-validation-status.v1",
+  "scope": "BOLTBEAM_Q4K_VOCAB_OUTPUT_ROUTE_SCOPE_20260723",
+  "promotion_eligible": false,
+  "runs": [
+    {
+      "profile": "qwen3_8b_q4k_m_gfx1100",
+      "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+      "artifact": "bench/boltbeam-vocab-output-20260723/8b-pinned-smoke.json",
+      "status": "INCOMPLETE",
+      "reason": "missing_authority_json_after_interrupted_execution_channel",
+      "checks": {
+        "clock_provenance": "missing",
+        "route_census": "missing",
+        "model_forward_identity": "missing",
+        "source_binary_candidate_hashes": "missing",
+        "numeric_parity": "missing"
+      }
+    },
+    {
+      "profile": "qwen3_14b_q4k_m_gfx1100",
+      "model": "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+      "artifact": "bench/boltbeam-vocab-output-20260723/14b-pinned-smoke.json",
+      "status": "FAIL_CLOSED",
+      "reason": "memory_admission_declined_before_model_load",
+      "admission": {
+        "requested_max_context": 4608,
+        "fp16_kv_admits": 0,
+        "int8_kv_admits": 0,
+        "free_vram_gb": 15.3,
+        "weights_gb": 9.0,
+        "budget_gb": 4.9
+      },
+      "checks": {
+        "clock_provenance": "missing",
+        "route_census": "missing",
+        "model_forward_identity": "missing",
+        "source_binary_candidate_hashes": "missing",
+        "numeric_parity": "missing"
+      }
+    }
+  ]
+}

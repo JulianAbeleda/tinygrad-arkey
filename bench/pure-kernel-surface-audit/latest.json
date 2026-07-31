@@ -1,0 +1,718 @@
+{
+  "schema": "pure_kernel_surface_audit.v1",
+  "verdict": "PURE_KERNEL_SURFACE_AUDIT_DEBT_FOUND",
+  "strict_default_purity": {
+    "verdict": "STRICT_DEFAULT_PURITY_FAIL",
+    "default_routes": [
+      "decode_q4k_g3_generated",
+      "decode_q6k_coop_generated",
+      "decode_flash_live_split_g4_8b_kvboth",
+      "decode_flash_block_tile_g5_konly",
+      "prefill_pipe_role_selective_generated",
+      "prefill_q4k_direct_tile4x4_default"
+    ],
+    "blockers": [
+      {
+        "route_id": "decode_flash_live_split_g4_8b_kvboth",
+        "status": "promoted_default",
+        "manifest_provenance": "machine_authored_generated",
+        "manifest_pure": true,
+        "surface_class": "route_local_custom_kernel",
+        "strict_pure": false,
+        "contradiction": true,
+        "writer_files": [
+          "extra/qk/live_split_geometry.py",
+          "extra/qk/flash_decode.py",
+          "extra/qk/flash_kernels.py"
+        ],
+        "markers": {
+          "extra/qk/live_split_geometry.py": [
+            ".custom_kernel("
+          ],
+          "extra/qk/flash_decode.py": [
+            ".custom_kernel("
+          ],
+          "extra/qk/flash_kernels.py": [
+            "Ops.CUSTOM",
+            "Ops.CUSTOMI",
+            "__builtin_amdgcn"
+          ]
+        },
+        "descriptor_artifact": "",
+        "reason": "Promoted attention route still executes hand-authored flash/live-split UOp templates until descriptor artifacts prove topology ownership.",
+        "replacement_scope": "Add FlashDecodeTileSpec, LiveSplitGeometrySpec, FlashCombineSpec, and generated-only binding gate."
+      },
+      {
+        "route_id": "decode_flash_block_tile_g5_konly",
+        "status": "promoted_default",
+        "manifest_provenance": "machine_authored_generated",
+        "manifest_pure": true,
+        "surface_class": "route_local_custom_kernel",
+        "strict_pure": false,
+        "contradiction": true,
+        "writer_files": [
+          "extra/qk/live_split_geometry.py",
+          "extra/qk/flash_decode.py",
+          "extra/qk/flash_kernels.py"
+        ],
+        "markers": {
+          "extra/qk/live_split_geometry.py": [
+            ".custom_kernel("
+          ],
+          "extra/qk/flash_decode.py": [
+            ".custom_kernel("
+          ],
+          "extra/qk/flash_kernels.py": [
+            "Ops.CUSTOM",
+            "Ops.CUSTOMI",
+            "__builtin_amdgcn"
+          ]
+        },
+        "descriptor_artifact": "",
+        "reason": "G5 attention route shares live-split/block-tile hand UOp template surface until descriptor artifacts prove topology ownership.",
+        "replacement_scope": "Add FlashDecodeTileSpec, LiveSplitGeometrySpec, FlashCombineSpec, and generated-only binding gate."
+      },
+      {
+        "route_id": "prefill_pipe_role_selective_generated",
+        "status": "promoted_default",
+        "manifest_provenance": "machine_authored_generated",
+        "manifest_pure": true,
+        "surface_class": "external_raw_or_binary",
+        "strict_pure": false,
+        "contradiction": true,
+        "writer_files": [
+          "extra/qk/prefill/prefill_graph_gemm_route.py",
+          "extra/qk/prefill/wmma.py",
+          "extra/qk/prefill_schedule_spec.py"
+        ],
+        "markers": {
+          "extra/qk/prefill/prefill_graph_gemm_route.py": [
+            ".custom_kernel(",
+            "Ops.INS",
+            "Tensor.custom_kernel"
+          ],
+          "extra/qk/prefill/wmma.py": [
+            ".custom_kernel(",
+            "Ops.INS",
+            "Tensor.custom_kernel"
+          ]
+        },
+        "descriptor_artifact": "",
+        "reason": "Schedule selection is spec-shaped, but executing substrate wraps raw RDNA3 instruction lists with Ops.INS.",
+        "replacement_scope": "Route B: generated LDS+WMMA codegen substrate replacing extra/qk/prefill/wmma.py."
+      },
+      {
+        "route_id": "prefill_q4k_direct_tile4x4_default",
+        "status": "promoted_default",
+        "manifest_provenance": "hand_authored_uop_template",
+        "manifest_pure": false,
+        "surface_class": "route_local_custom_kernel",
+        "strict_pure": false,
+        "contradiction": false,
+        "writer_files": [
+          "tinygrad/llm/prefill_routes.py",
+          "extra/qk/quant/q4_k_gemv_primitive.py"
+        ],
+        "markers": {
+          "tinygrad/llm/prefill_routes.py": [
+            ".custom_kernel("
+          ],
+          "extra/qk/quant/q4_k_gemv_primitive.py": [
+            ".custom_kernel(",
+            "Ops.CUSTOM",
+            "Ops.CUSTOMI",
+            "__builtin_amdgcn",
+            "asm volatile"
+          ]
+        },
+        "descriptor_artifact": "",
+        "reason": "Default Q4_K direct-packed prefill calls hand-authored UOp templates.",
+        "replacement_scope": "Generated Q4_K prefill/MMQ substrate."
+      }
+    ],
+    "manifest_contradictions": [
+      {
+        "route_id": "decode_flash_live_split_g4_8b_kvboth",
+        "status": "promoted_default",
+        "manifest_provenance": "machine_authored_generated",
+        "manifest_pure": true,
+        "surface_class": "route_local_custom_kernel",
+        "strict_pure": false,
+        "contradiction": true,
+        "writer_files": [
+          "extra/qk/live_split_geometry.py",
+          "extra/qk/flash_decode.py",
+          "extra/qk/flash_kernels.py"
+        ],
+        "markers": {
+          "extra/qk/live_split_geometry.py": [
+            ".custom_kernel("
+          ],
+          "extra/qk/flash_decode.py": [
+            ".custom_kernel("
+          ],
+          "extra/qk/flash_kernels.py": [
+            "Ops.CUSTOM",
+            "Ops.CUSTOMI",
+            "__builtin_amdgcn"
+          ]
+        },
+        "descriptor_artifact": "",
+        "reason": "Promoted attention route still executes hand-authored flash/live-split UOp templates until descriptor artifacts prove topology ownership.",
+        "replacement_scope": "Add FlashDecodeTileSpec, LiveSplitGeometrySpec, FlashCombineSpec, and generated-only binding gate."
+      },
+      {
+        "route_id": "decode_flash_block_tile_g5_konly",
+        "status": "promoted_default",
+        "manifest_provenance": "machine_authored_generated",
+        "manifest_pure": true,
+        "surface_class": "route_local_custom_kernel",
+        "strict_pure": false,
+        "contradiction": true,
+        "writer_files": [
+          "extra/qk/live_split_geometry.py",
+          "extra/qk/flash_decode.py",
+          "extra/qk/flash_kernels.py"
+        ],
+        "markers": {
+          "extra/qk/live_split_geometry.py": [
+            ".custom_kernel("
+          ],
+          "extra/qk/flash_decode.py": [
+            ".custom_kernel("
+          ],
+          "extra/qk/flash_kernels.py": [
+            "Ops.CUSTOM",
+            "Ops.CUSTOMI",
+            "__builtin_amdgcn"
+          ]
+        },
+        "descriptor_artifact": "",
+        "reason": "G5 attention route shares live-split/block-tile hand UOp template surface until descriptor artifacts prove topology ownership.",
+        "replacement_scope": "Add FlashDecodeTileSpec, LiveSplitGeometrySpec, FlashCombineSpec, and generated-only binding gate."
+      },
+      {
+        "route_id": "prefill_pipe_role_selective_generated",
+        "status": "promoted_default",
+        "manifest_provenance": "machine_authored_generated",
+        "manifest_pure": true,
+        "surface_class": "external_raw_or_binary",
+        "strict_pure": false,
+        "contradiction": true,
+        "writer_files": [
+          "extra/qk/prefill/prefill_graph_gemm_route.py",
+          "extra/qk/prefill/wmma.py",
+          "extra/qk/prefill_schedule_spec.py"
+        ],
+        "markers": {
+          "extra/qk/prefill/prefill_graph_gemm_route.py": [
+            ".custom_kernel(",
+            "Ops.INS",
+            "Tensor.custom_kernel"
+          ],
+          "extra/qk/prefill/wmma.py": [
+            ".custom_kernel(",
+            "Ops.INS",
+            "Tensor.custom_kernel"
+          ]
+        },
+        "descriptor_artifact": "",
+        "reason": "Schedule selection is spec-shaped, but executing substrate wraps raw RDNA3 instruction lists with Ops.INS.",
+        "replacement_scope": "Route B: generated LDS+WMMA codegen substrate replacing extra/qk/prefill/wmma.py."
+      }
+    ]
+  },
+  "summary": {
+    "routes_by_surface_class": {
+      "route_local_custom_kernel": 9,
+      "external_raw_or_binary": 2,
+      "descriptor_owned_uop_codegen": 2,
+      "rollback_oracle": 3,
+      "ordinary_tinygrad_graph": 2
+    },
+    "manifest_contradictions": [
+      "decode_flash_live_split_g4_8b_kvboth",
+      "decode_flash_block_tile_g5_konly",
+      "prefill_pipe_role_selective_generated"
+    ],
+    "unmanifested_runtime_surfaces": [
+      "prefill_q6k_direct_packed_default_capable",
+      "decode_q4k_smallk_batched",
+      "decode_q6k_smallk_batched"
+    ],
+    "routes_missing_explicit_surface_rows": []
+  },
+  "routes": [
+    {
+      "route_id": "decode_attention_generic_flash_generated",
+      "status": "superseded_rollback",
+      "manifest_provenance": "tinygrad_scheduler_generated",
+      "manifest_pure": true,
+      "surface_class": "route_local_custom_kernel",
+      "strict_pure": false,
+      "contradiction": true,
+      "writer_files": [
+        "extra/qk/flash_decode.py",
+        "extra/qk/flash_kernels.py"
+      ],
+      "markers": {
+        "extra/qk/flash_decode.py": [
+          ".custom_kernel("
+        ],
+        "extra/qk/flash_kernels.py": [
+          "Ops.CUSTOM",
+          "Ops.CUSTOMI",
+          "__builtin_amdgcn"
+        ]
+      },
+      "descriptor_artifact": "",
+      "reason": "Generic flash fallback is hand-authored Tensor.custom_kernel UOp templates, not ordinary tinygrad scheduler output.",
+      "replacement_scope": "Convert fallback to ordinary tinygrad graph or descriptor-owned flash specs."
+    },
+    {
+      "route_id": "decode_attention_owned_two_kernel",
+      "status": "removed",
+      "manifest_provenance": "external_handwritten_kernel",
+      "manifest_pure": false,
+      "surface_class": "external_raw_or_binary",
+      "strict_pure": false,
+      "contradiction": false,
+      "writer_files": [
+        "tinygrad/llm/model.py"
+      ],
+      "markers": {},
+      "descriptor_artifact": "",
+      "reason": "Retired owned HIP attention implementation.",
+      "replacement_scope": "decode_flash_live_split_g4_8b_kvboth"
+    },
+    {
+      "route_id": "decode_flash_block_tile_g5_8b_refuted",
+      "status": "removed",
+      "manifest_provenance": "machine_authored_generated",
+      "manifest_pure": true,
+      "surface_class": "route_local_custom_kernel",
+      "strict_pure": false,
+      "contradiction": true,
+      "writer_files": [
+        "extra/qk/flash_decode.py",
+        "extra/qk/flash_kernels.py"
+      ],
+      "markers": {
+        "extra/qk/flash_decode.py": [
+          ".custom_kernel("
+        ],
+        "extra/qk/flash_kernels.py": [
+          "Ops.CUSTOM",
+          "Ops.CUSTOMI",
+          "__builtin_amdgcn"
+        ]
+      },
+      "descriptor_artifact": "",
+      "reason": "Removed/refuted generated-attention candidate still used hand-authored UOp templates.",
+      "replacement_scope": ""
+    },
+    {
+      "route_id": "decode_flash_block_tile_g5_konly",
+      "status": "promoted_default",
+      "manifest_provenance": "machine_authored_generated",
+      "manifest_pure": true,
+      "surface_class": "route_local_custom_kernel",
+      "strict_pure": false,
+      "contradiction": true,
+      "writer_files": [
+        "extra/qk/live_split_geometry.py",
+        "extra/qk/flash_decode.py",
+        "extra/qk/flash_kernels.py"
+      ],
+      "markers": {
+        "extra/qk/live_split_geometry.py": [
+          ".custom_kernel("
+        ],
+        "extra/qk/flash_decode.py": [
+          ".custom_kernel("
+        ],
+        "extra/qk/flash_kernels.py": [
+          "Ops.CUSTOM",
+          "Ops.CUSTOMI",
+          "__builtin_amdgcn"
+        ]
+      },
+      "descriptor_artifact": "",
+      "reason": "G5 attention route shares live-split/block-tile hand UOp template surface until descriptor artifacts prove topology ownership.",
+      "replacement_scope": "Add FlashDecodeTileSpec, LiveSplitGeometrySpec, FlashCombineSpec, and generated-only binding gate."
+    },
+    {
+      "route_id": "decode_flash_live_split_g4_8b_kvboth",
+      "status": "promoted_default",
+      "manifest_provenance": "machine_authored_generated",
+      "manifest_pure": true,
+      "surface_class": "route_local_custom_kernel",
+      "strict_pure": false,
+      "contradiction": true,
+      "writer_files": [
+        "extra/qk/live_split_geometry.py",
+        "extra/qk/flash_decode.py",
+        "extra/qk/flash_kernels.py"
+      ],
+      "markers": {
+        "extra/qk/live_split_geometry.py": [
+          ".custom_kernel("
+        ],
+        "extra/qk/flash_decode.py": [
+          ".custom_kernel("
+        ],
+        "extra/qk/flash_kernels.py": [
+          "Ops.CUSTOM",
+          "Ops.CUSTOMI",
+          "__builtin_amdgcn"
+        ]
+      },
+      "descriptor_artifact": "",
+      "reason": "Promoted attention route still executes hand-authored flash/live-split UOp templates until descriptor artifacts prove topology ownership.",
+      "replacement_scope": "Add FlashDecodeTileSpec, LiveSplitGeometrySpec, FlashCombineSpec, and generated-only binding gate."
+    },
+    {
+      "route_id": "decode_q4k_g3_generated",
+      "status": "promoted_default",
+      "manifest_provenance": "machine_authored_generated",
+      "manifest_pure": true,
+      "surface_class": "descriptor_owned_uop_codegen",
+      "strict_pure": true,
+      "contradiction": false,
+      "writer_files": [
+        "extra/qk/gemv_g3_codegen_lowering.py",
+        "extra/qk/gemv_g2_lanemap.py"
+      ],
+      "markers": {},
+      "descriptor_artifact": "Q4KGateUpLaneMap",
+      "reason": "Q4_K decode G3 is generated from Q4KGateUpLaneMap; no raw/source-string route escape is selected.",
+      "replacement_scope": ""
+    },
+    {
+      "route_id": "decode_q4k_owned_warp",
+      "status": "rollback_reference",
+      "manifest_provenance": "rollback_oracle",
+      "manifest_pure": false,
+      "surface_class": "rollback_oracle",
+      "strict_pure": false,
+      "contradiction": false,
+      "writer_files": [
+        "extra/qk/quant/q4_k_gemv_primitive.py"
+      ],
+      "markers": {
+        "extra/qk/quant/q4_k_gemv_primitive.py": [
+          ".custom_kernel(",
+          "Ops.CUSTOM",
+          "Ops.CUSTOMI",
+          "__builtin_amdgcn",
+          "asm volatile"
+        ]
+      },
+      "descriptor_artifact": "",
+      "reason": "Rollback/reference Q4_K owned warp template.",
+      "replacement_scope": ""
+    },
+    {
+      "route_id": "decode_q6k_coop_generated",
+      "status": "promoted_default",
+      "manifest_provenance": "machine_authored_generated",
+      "manifest_pure": true,
+      "surface_class": "descriptor_owned_uop_codegen",
+      "strict_pure": true,
+      "contradiction": false,
+      "writer_files": [
+        "extra/qk/q6k_route_spec.py",
+        "extra/qk/quant/q6_k_gemv_primitive.py"
+      ],
+      "markers": {
+        "extra/qk/quant/q6_k_gemv_primitive.py": [
+          ".custom_kernel("
+        ]
+      },
+      "descriptor_artifact": "Q6KGEMVRouteSpec",
+      "reason": "Q6_K decode route is emitted from Q6KGEMVRouteSpec; quant-format helpers are shared semantics.",
+      "replacement_scope": ""
+    },
+    {
+      "route_id": "decode_q6k_coop_shipped",
+      "status": "rollback_reference",
+      "manifest_provenance": "rollback_oracle",
+      "manifest_pure": false,
+      "surface_class": "rollback_oracle",
+      "strict_pure": false,
+      "contradiction": false,
+      "writer_files": [
+        "extra/qk/quant/q6_k_gemv_primitive.py"
+      ],
+      "markers": {
+        "extra/qk/quant/q6_k_gemv_primitive.py": [
+          ".custom_kernel("
+        ]
+      },
+      "descriptor_artifact": "",
+      "reason": "Rollback/reference Q6_K shipped hand UOp templates.",
+      "replacement_scope": ""
+    },
+    {
+      "route_id": "decode_q6k_direct_refuted",
+      "status": "refuted",
+      "manifest_provenance": "hand_authored_uop_template",
+      "manifest_pure": false,
+      "surface_class": "route_local_custom_kernel",
+      "strict_pure": false,
+      "contradiction": false,
+      "writer_files": [
+        "extra/qk/quant/q6_k_gemv_primitive.py"
+      ],
+      "markers": {
+        "extra/qk/quant/q6_k_gemv_primitive.py": [
+          ".custom_kernel("
+        ]
+      },
+      "descriptor_artifact": "",
+      "reason": "Refuted half-warp Q6_K hand UOp route.",
+      "replacement_scope": ""
+    },
+    {
+      "route_id": "prefill_pipe_global_rollback",
+      "status": "superseded_rollback",
+      "manifest_provenance": "rollback_oracle",
+      "manifest_pure": false,
+      "surface_class": "rollback_oracle",
+      "strict_pure": false,
+      "contradiction": false,
+      "writer_files": [
+        "extra/qk/prefill/prefill_graph_gemm_route.py",
+        "extra/qk/prefill/wmma.py"
+      ],
+      "markers": {
+        "extra/qk/prefill/prefill_graph_gemm_route.py": [
+          ".custom_kernel(",
+          "Ops.INS",
+          "Tensor.custom_kernel"
+        ],
+        "extra/qk/prefill/wmma.py": [
+          ".custom_kernel(",
+          "Ops.INS",
+          "Tensor.custom_kernel"
+        ]
+      },
+      "descriptor_artifact": "",
+      "reason": "Rollback comparator still uses raw WMMA instruction-list substrate.",
+      "replacement_scope": ""
+    },
+    {
+      "route_id": "prefill_pipe_role_selective_generated",
+      "status": "promoted_default",
+      "manifest_provenance": "machine_authored_generated",
+      "manifest_pure": true,
+      "surface_class": "external_raw_or_binary",
+      "strict_pure": false,
+      "contradiction": true,
+      "writer_files": [
+        "extra/qk/prefill/prefill_graph_gemm_route.py",
+        "extra/qk/prefill/wmma.py",
+        "extra/qk/prefill_schedule_spec.py"
+      ],
+      "markers": {
+        "extra/qk/prefill/prefill_graph_gemm_route.py": [
+          ".custom_kernel(",
+          "Ops.INS",
+          "Tensor.custom_kernel"
+        ],
+        "extra/qk/prefill/wmma.py": [
+          ".custom_kernel(",
+          "Ops.INS",
+          "Tensor.custom_kernel"
+        ]
+      },
+      "descriptor_artifact": "",
+      "reason": "Schedule selection is spec-shaped, but executing substrate wraps raw RDNA3 instruction lists with Ops.INS.",
+      "replacement_scope": "Route B: generated LDS+WMMA codegen substrate replacing extra/qk/prefill/wmma.py."
+    },
+    {
+      "route_id": "prefill_q4k_direct_tile4x4_default",
+      "status": "promoted_default",
+      "manifest_provenance": "hand_authored_uop_template",
+      "manifest_pure": false,
+      "surface_class": "route_local_custom_kernel",
+      "strict_pure": false,
+      "contradiction": false,
+      "writer_files": [
+        "tinygrad/llm/prefill_routes.py",
+        "extra/qk/quant/q4_k_gemv_primitive.py"
+      ],
+      "markers": {
+        "tinygrad/llm/prefill_routes.py": [
+          ".custom_kernel("
+        ],
+        "extra/qk/quant/q4_k_gemv_primitive.py": [
+          ".custom_kernel(",
+          "Ops.CUSTOM",
+          "Ops.CUSTOMI",
+          "__builtin_amdgcn",
+          "asm volatile"
+        ]
+      },
+      "descriptor_artifact": "",
+      "reason": "Default Q4_K direct-packed prefill calls hand-authored UOp templates.",
+      "replacement_scope": "Generated Q4_K prefill/MMQ substrate."
+    },
+    {
+      "route_id": "prefill_q4k_generated_tile_research",
+      "status": "research",
+      "manifest_provenance": "machine_authored_generated",
+      "manifest_pure": true,
+      "surface_class": "route_local_custom_kernel",
+      "strict_pure": false,
+      "contradiction": true,
+      "writer_files": [
+        "extra/qk/prefill_packed_tile_spec.py",
+        "tinygrad/llm/prefill_routes.py"
+      ],
+      "markers": {
+        "tinygrad/llm/prefill_routes.py": [
+          ".custom_kernel("
+        ]
+      },
+      "descriptor_artifact": "",
+      "reason": "Descriptor-shaped research route still returns hand-written UOp bodies; generated-only provenance not proven.",
+      "replacement_scope": "Descriptor-owned generated emitter plus binding audit."
+    },
+    {
+      "route_id": "prefill_q4k_int8_wmma_generated_research",
+      "status": "research",
+      "manifest_provenance": "machine_authored_generated",
+      "manifest_pure": true,
+      "surface_class": "ordinary_tinygrad_graph",
+      "strict_pure": true,
+      "contradiction": false,
+      "writer_files": [
+        "extra/qk/prefill/prefill_int8_wmma_spec.py",
+        "tinygrad/llm/prefill_routes.py"
+      ],
+      "markers": {
+        "tinygrad/llm/prefill_routes.py": [
+          ".custom_kernel("
+        ]
+      },
+      "descriptor_artifact": "Q4KInt8WMMAPrefillSpec",
+      "reason": "Q4_K/Q8_1 int WMMA research expresses core dot as Tensor.matmul(dtype=int), relying on codegen TC matching.",
+      "replacement_scope": ""
+    },
+    {
+      "route_id": "prefill_q4k_int8_wmma_tiled_research",
+      "status": "research",
+      "manifest_provenance": "machine_authored_generated",
+      "manifest_pure": true,
+      "surface_class": "ordinary_tinygrad_graph",
+      "strict_pure": true,
+      "contradiction": false,
+      "writer_files": [
+        "extra/qk/prefill/prefill_int8_wmma_spec.py",
+        "tinygrad/llm/prefill_routes.py"
+      ],
+      "markers": {
+        "tinygrad/llm/prefill_routes.py": [
+          ".custom_kernel("
+        ]
+      },
+      "descriptor_artifact": "Q4KInt8WMMATiledPrefillSpec",
+      "reason": "Tiled Q4_K/Q8_1 WMMA research route is intended to use Tensor/codegen lowering; full route remains blocked.",
+      "replacement_scope": ""
+    },
+    {
+      "route_id": "prefill_q4k_mmq_direct_out_research",
+      "status": "correct_not_fast",
+      "manifest_provenance": "hand_authored_uop_template",
+      "manifest_pure": false,
+      "surface_class": "route_local_custom_kernel",
+      "strict_pure": false,
+      "contradiction": false,
+      "writer_files": [
+        "extra/qk/quant/q4_k_gemv_primitive.py",
+        "tinygrad/llm/prefill_routes.py"
+      ],
+      "markers": {
+        "extra/qk/quant/q4_k_gemv_primitive.py": [
+          ".custom_kernel(",
+          "Ops.CUSTOM",
+          "Ops.CUSTOMI",
+          "__builtin_amdgcn",
+          "asm volatile"
+        ],
+        "tinygrad/llm/prefill_routes.py": [
+          ".custom_kernel("
+        ]
+      },
+      "descriptor_artifact": "",
+      "reason": "Q4_K/Q8_1 MMQ direct-out hand UOp route.",
+      "replacement_scope": ""
+    },
+    {
+      "route_id": "prefill_q4k_reduce_out_research",
+      "status": "correct_not_fast",
+      "manifest_provenance": "hand_authored_uop_template",
+      "manifest_pure": false,
+      "surface_class": "route_local_custom_kernel",
+      "strict_pure": false,
+      "contradiction": false,
+      "writer_files": [
+        "extra/qk/quant/q4_k_gemv_primitive.py",
+        "tinygrad/llm/prefill_routes.py"
+      ],
+      "markers": {
+        "extra/qk/quant/q4_k_gemv_primitive.py": [
+          ".custom_kernel(",
+          "Ops.CUSTOM",
+          "Ops.CUSTOMI",
+          "__builtin_amdgcn",
+          "asm volatile"
+        ],
+        "tinygrad/llm/prefill_routes.py": [
+          ".custom_kernel("
+        ]
+      },
+      "descriptor_artifact": "",
+      "reason": "Correct-but-not-fast Q4_K reduce-out hand UOp route.",
+      "replacement_scope": ""
+    }
+  ],
+  "unmanifested_runtime_surfaces": [
+    {
+      "surface_id": "prefill_q6k_direct_packed_default_capable",
+      "surface_class": "route_local_custom_kernel",
+      "writer_files": [
+        "tinygrad/llm/prefill_routes.py",
+        "extra/qk/quant/q6_k_gemv_primitive.py"
+      ],
+      "reason": "PREFILL_DIRECT_QUANTS defaults to Q4_K,Q6_K and Q6_K direct prefill calls q6k_gemm_packed_load_* hand UOp templates.",
+      "replacement_scope": "Add Q6KPrefillRouteSpec or explicit manifest debt row."
+    },
+    {
+      "surface_id": "decode_q4k_smallk_batched",
+      "surface_class": "route_local_custom_kernel",
+      "writer_files": [
+        "tinygrad/llm/decode_routes.py",
+        "extra/qk/quant/q4_k_gemv_primitive.py"
+      ],
+      "reason": "q4k_primitive_linear_call routes non-decode K<=32 through q4k_gemm_kernel hand UOp template.",
+      "replacement_scope": "Add Q4KSmallBatchGEMMSpec or block under PURE_MACHINE_SEARCH_ONLY."
+    },
+    {
+      "surface_id": "decode_q6k_smallk_batched",
+      "surface_class": "route_local_custom_kernel",
+      "writer_files": [
+        "tinygrad/llm/decode_routes.py",
+        "extra/qk/quant/q6_k_gemv_primitive.py"
+      ],
+      "reason": "q6k_primitive_linear_call routes non-decode K<=32 through q6k_gemm_kernel hand UOp template.",
+      "replacement_scope": "Add Q6KSmallBatchGEMMSpec or block under PURE_MACHINE_SEARCH_ONLY."
+    }
+  ],
+  "next": [
+    "align route_manifest provenance with strict selected-surface classifications",
+    "add explicit manifest rows for unmanifested runtime-capable surfaces",
+    "replace strict blockers with ordinary tinygrad graph or descriptor-owned generated codegen"
+  ]
+}

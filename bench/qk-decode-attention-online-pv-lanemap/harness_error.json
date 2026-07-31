@@ -1,0 +1,6 @@
+{
+  "gate": "attention_online_pv_lanemap",
+  "verdict": "HARNESS_ERROR",
+  "time": "2026-07-03T14:04:49",
+  "traceback": "Traceback (most recent call last):\n  File \"/home/ubuntu/tinygrad-arkey/extra/qk/gate_registry.py\", line 267, in run\n    out = getattr(importlib.import_module(mod_name), fn_name)()\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/extra/qk/decode_attention_online_pv_lanemap.py\", line 40, in build\n    p2 = _load_p2()\n         ^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/extra/qk/decode_attention_online_pv_lanemap.py\", line 16, in _load_p2\n    return json.loads(P2.read_text())\n                      ^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/pathlib.py\", line 1029, in read_text\n    with self.open(mode='r', encoding=encoding, errors=errors) as f:\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/pathlib.py\", line 1015, in open\n    return io.open(self, mode, buffering, encoding, errors, newline)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nFileNotFoundError: [Errno 2] No such file or directory: '/home/ubuntu/tinygrad-arkey/bench/qk-decode-attention-online-pv-tile/latest.json'\n"
+}

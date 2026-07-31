@@ -1,0 +1,57 @@
+{
+  "schema": "boltbeam-14b-track-b-fail-closed.v2",
+  "scope": "BOLTBEAM_8B_14B_COMPLETION_SCOPE_20260723",
+  "model_profile": "qwen3_14b_q4k_m_gfx1100",
+  "model": "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+  "requested_context": 512,
+  "promotion_eligible": false,
+  "memory_preflight": {
+    "status": "ADMITTED",
+    "free_vram_gb": 20.4,
+    "weights_gb": 9.0,
+    "allocator_reserve_gb": 5.4,
+    "budget_gb": 15.0,
+    "kv_gb_per_1k_context": 0.16,
+    "prefill_peak_gb_per_1k_context": 0.08,
+    "fp16_kv_context_cap": 24604,
+    "int8_kv_context_cap": 36621
+  },
+  "required_route": {
+    "quant": "Q6_K",
+    "tensor_identity": "output.weight",
+    "role": "lm_head",
+    "shape": {"m": 512, "n": 151936, "k": 5120}
+  },
+  "shared_descriptor_probe": {
+    "status": "STRUCTURAL_ONLY",
+    "descriptor_valid": true,
+    "kernel_name": "q6k_gen_prefill_direct_out_151936_5120_512",
+    "k_blocks": 20,
+    "output_layout": "direct_out",
+    "registration_status": "not_registered"
+  },
+  "model_forward_binding": {
+    "status": "DECLINED",
+    "reason": "14B lm_head is lazy M=1; shared exact-Q6 vocabulary attachment and runtime inventory special case cover M=512,K=4096 only",
+    "fallback_accepted": false
+  },
+  "gate_status": {
+    "candidate_payload": "MISSING",
+    "canonical_candidate_identity": "MISSING",
+    "source_hash": "MISSING",
+    "compiled_binary_hash": "MISSING",
+    "compile_proof": "NOT_RUN_NO_ATTACHED_CANDIDATE",
+    "resource_proof": "MISSING",
+    "nonconstant_numeric_parity": "NOT_RUN_NO_ATTACHED_CANDIDATE",
+    "route_census": "MISSING",
+    "pinned_timing": "NOT_RUN",
+    "authority_json": "MISSING"
+  },
+  "authority_attempt": {
+    "artifact": "bench/boltbeam-vocab-output-20260723/14b-context512-preflight.json",
+    "status": "INCOMPLETE",
+    "reason": "process exited without authority JSON"
+  },
+  "next_required_join": "register an exact K=5120 payload through the shared attachment machinery, then compile/resource/numeric-prove that attached model-forward route before timing",
+  "fallback_policy": "do_not_accept_ordinary_or_packed_wmma_fallback_as_14b_candidate"
+}

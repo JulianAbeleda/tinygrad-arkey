@@ -1,0 +1,6 @@
+{
+  "gate": "tg_p8_delta_audit",
+  "verdict": "HARNESS_ERROR",
+  "time": "2026-07-03T14:04:49",
+  "traceback": "Traceback (most recent call last):\n  File \"/home/ubuntu/tinygrad-arkey/extra/qk/gate_registry.py\", line 267, in run\n    out = getattr(importlib.import_module(mod_name), fn_name)()\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/extra/qk/tg_p8_delta_audit.py\", line 28, in build\n    base = json.load(open(OUT / \"baseline.json\"))\n                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^\nFileNotFoundError: [Errno 2] No such file or directory: '/home/ubuntu/tinygrad-arkey/bench/tg-p8-generated-8b-attention-parity/baseline.json'\n"
+}

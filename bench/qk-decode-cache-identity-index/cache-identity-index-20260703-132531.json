@@ -1,0 +1,187 @@
+{
+  "date": "2026-06-26",
+  "timestamp": "20260703-132531",
+  "verdict": "CACHE_5D_PTR_VEC_LOAD_FAIL",
+  "shape": {
+    "cache": [
+      2,
+      1,
+      8,
+      16,
+      128
+    ],
+    "lanes": 32,
+    "R": 4,
+    "tolerance": 1e-06
+  },
+  "reg_store_devec": false,
+  "rows": [
+    {
+      "name": "static_v_scalar_5d",
+      "pass": true,
+      "max_abs_error": 0.0,
+      "got_sample": [
+        0.6273248791694641,
+        -0.05436069890856743,
+        -0.01933435909450054,
+        0.23769764602184296,
+        0.1517225205898285,
+        0.4553183913230896,
+        -0.3154184818267822,
+        -0.007582994177937508
+      ],
+      "ref_sample": [
+        0.6273248791694641,
+        -0.05436069890856743,
+        -0.01933435909450054,
+        0.23769764602184296,
+        0.1517225205898285,
+        0.4553183913230896,
+        -0.3154184818267822,
+        -0.007582994177937508
+      ]
+    },
+    {
+      "name": "static_v_upcast_5d",
+      "pass": true,
+      "max_abs_error": 0.0,
+      "got_sample": [
+        0.6273248791694641,
+        -0.05436069890856743,
+        -0.01933435909450054,
+        0.23769764602184296,
+        0.1517225205898285,
+        0.4553183913230896,
+        -0.3154184818267822,
+        -0.007582994177937508
+      ],
+      "ref_sample": [
+        0.6273248791694641,
+        -0.05436069890856743,
+        -0.01933435909450054,
+        0.23769764602184296,
+        0.1517225205898285,
+        0.4553183913230896,
+        -0.3154184818267822,
+        -0.007582994177937508
+      ]
+    },
+    {
+      "name": "ptr_vec_v_5d",
+      "pass": false,
+      "failure_class": "compile_or_verify",
+      "exception_type": "RuntimeError",
+      "exception": "UOp verification failed at 38 on Ops.PTRCAT dtypes.float.ptr(32768).vec(4) 4 [(Ops.INDEX, dtypes.float.ptr(32768), None), (Ops.INDEX, dtypes.float.ptr(32768), None), (Ops.INDEX, dtypes.float.ptr(32768), None), (Ops.INDEX, dtypes.float.ptr(32768), None)] None",
+      "traceback_tail": "Traceback (most recent call last):\n  File \"/home/ubuntu/tinygrad-arkey/extra/qk/decode_cache_identity_index_gate.py\", line 130, in _run\n    got = Tensor.empty(Hd, dtype=dtypes.float32).custom_kernel(Tensor(cache), fxn=fxn)[0].realize().numpy()\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/tensor.py\", line 1417, in _wrapper\n    ret = fn(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/contextlib.py\", line 81, in inner\n    return func(*args, **kwds)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/tensor.py\", line 224, in realize\n    run_linear(*Tensor.linear_with_vars(*to_realize), update_stats=do_update_stats)\n                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/tensor.py\", line 1391, in _wrapper\n    if TRACEMETA < 1 or _METADATA.get() is not None: return fn(*args, **kwargs)\n                                                            ^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/tensor.py\", line 212, in linear_with_vars\n    return create_linear_with_vars(big_sink)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1438, in __wrapper\n    ret = func(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/schedule/__init__.py\", line 124, in create_linear_with_vars\n    linear_call = graph_rewrite(big_sink, pm_schedule, name=\"schedule to linear\", enter_calls=True)\n                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1474, in wrap_profile_matches\n    return fxn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1654, in graph_rewrite\n    return rewrite_ctx.walk_rewrite(sink) if walk else rewrite_ctx.unified_rewrite(sink)\n                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1630, in unified_rewrite\n    if self.pm is None or (new_src_n:=self.pm_rewrite(new_n)) is None:\n                                      ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1553, in pm_rewrite\n    def pm_rewrite(self, x:UOp) -> UOp|None: return unwrap(self.pm).rewrite(x, self.ctx)\n                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1390, in rewrite\n    if (ret:=match(uop, ctx)) is not None and ret is not uop: return ret\n             ^^^^^^^^^^^^^^^\n  File \"<string>\", line 3, in compiled_match\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/schedule/__init__.py\", line 98, in lower_sink_to_linear\n    if SPEC: type_verify(function, spec_tensor)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/spec.py\", line 43, in type_verify\n    raise RuntimeError(f\"UOp verification failed at {i} on {u.op} {u.dtype} {len(u.src)} {[(x.op, x.dtype, x.arg) for x in u.src]} {u.arg}\")\nRuntimeError: UOp verification failed at 38 on Ops.PTRCAT dtypes.float.ptr(32768).vec(4) 4 [(Ops.INDEX, dtypes.float.ptr(32768), None), (Ops.INDEX, dtypes.float.ptr(32768), None), (Ops.INDEX, dtypes.float.ptr(32768), None), (Ops.INDEX, dtypes.float.ptr(32768), None)] None\n"
+    },
+    {
+      "name": "dynamic_v_sum_scalar_5d",
+      "pass": true,
+      "max_abs_error": 0.0,
+      "got_sample": [
+        -0.024888426065444946,
+        -0.671381950378418,
+        -0.4511810541152954,
+        0.3756721615791321,
+        -0.19416889548301697,
+        -0.2444007694721222,
+        -0.15797123312950134,
+        -0.6992456912994385
+      ],
+      "ref_sample": [
+        -0.024888426065444946,
+        -0.671381950378418,
+        -0.4511810541152954,
+        0.3756721615791321,
+        -0.19416889548301697,
+        -0.2444007694721222,
+        -0.15797123312950134,
+        -0.6992456912994385
+      ]
+    },
+    {
+      "name": "dynamic_v_sum_upcast_5d",
+      "pass": true,
+      "max_abs_error": 0.0,
+      "got_sample": [
+        -0.024888426065444946,
+        -0.671381950378418,
+        -0.4511810541152954,
+        0.3756721615791321,
+        -0.19416889548301697,
+        -0.2444007694721222,
+        -0.15797123312950134,
+        -0.6992456912994385
+      ],
+      "ref_sample": [
+        -0.024888426065444946,
+        -0.671381950378418,
+        -0.4511810541152954,
+        0.3756721615791321,
+        -0.19416889548301697,
+        -0.2444007694721222,
+        -0.15797123312950134,
+        -0.6992456912994385
+      ]
+    },
+    {
+      "name": "k_upcast_lds_5d",
+      "pass": true,
+      "max_abs_error": 0.0,
+      "got_sample": [
+        -0.176025390625,
+        -0.224609375,
+        0.007274627685546875,
+        0.5439453125,
+        -0.432861328125,
+        0.134521484375,
+        0.0276031494140625,
+        -0.164794921875
+      ],
+      "ref_sample": [
+        -0.176025390625,
+        -0.224609375,
+        0.007274627685546875,
+        0.5439453125,
+        -0.432861328125,
+        0.134521484375,
+        0.0276031494140625,
+        -0.164794921875
+      ]
+    },
+    {
+      "name": "k_upcast_lds_dynamic_unguarded_5d",
+      "pass": true,
+      "max_abs_error": 0.0,
+      "got_sample": [
+        0.08697509765625,
+        0.46337890625,
+        0.0156707763671875,
+        -0.2222900390625,
+        0.1973876953125,
+        0.1922607421875,
+        0.05364990234375,
+        0.1361083984375
+      ],
+      "ref_sample": [
+        0.08697509765625,
+        0.46337890625,
+        0.0156707763671875,
+        -0.2222900390625,
+        0.1973876953125,
+        0.1922607421875,
+        0.05364990234375,
+        0.1361083984375
+      ]
+    },
+    {
+      "name": "k_upcast_lds_dynamic_masked_5d",
+      "pass": false,
+      "failure_class": "compile_or_verify",
+      "exception_type": "RuntimeError",
+      "exception": "UOp verification failed at 14 on Ops.PTRCAT dtypes.half 1 [(Ops.SHRINK, dtypes.half, None)] None",
+      "traceback_tail": ".custom_kernel(Tensor(cache), fxn=fxn)[0].realize().numpy()\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/tensor.py\", line 1391, in _wrapper\n    if TRACEMETA < 1 or _METADATA.get() is not None: return fn(*args, **kwargs)\n                                                            ^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/contextlib.py\", line 81, in inner\n    return func(*args, **kwds)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/tensor.py\", line 224, in realize\n    run_linear(*Tensor.linear_with_vars(*to_realize), update_stats=do_update_stats)\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/engine/realize.py\", line 251, in run_linear\n    if not jit: linear = compile_linear(linear, validate=VALIDATE_WITH_CPU)\n                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/engine/realize.py\", line 247, in compile_linear\n    linear = graph_rewrite(linear, pm_compile, name=\"precompile kernels\", walk=True)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1474, in wrap_profile_matches\n    return fxn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1654, in graph_rewrite\n    return rewrite_ctx.walk_rewrite(sink) if walk else rewrite_ctx.unified_rewrite(sink)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1581, in walk_rewrite\n    if self.pm is not None and (rewritten:=self.pm_rewrite(new_n)) is not None: new_n = rewritten\n                                           ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1553, in pm_rewrite\n    def pm_rewrite(self, x:UOp) -> UOp|None: return unwrap(self.pm).rewrite(x, self.ctx)\n                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1390, in rewrite\n    if (ret:=match(uop, ctx)) is not None and ret is not uop: return ret\n             ^^^^^^^^^^^^^^^\n  File \"<string>\", line 3, in compiled_match\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/engine/realize.py\", line 228, in <lambda>\n    call.replace(src=(to_program(ast, Device[call.device if isinstance(call.device, str) else call.device[0]].renderer), *call.src[1:]))),\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/codegen/__init__.py\", line 279, in to_program\n    if (prg:=to_program_cache.get(key)) is None: to_program_cache[key] = prg = do_to_program(ast, renderer)\n                                                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1438, in __wrapper\n    ret = func(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/contextlib.py\", line 81, in inner\n    return func(*args, **kwds)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/codegen/__init__.py\", line 262, in do_to_program\n    full_sink = full_rewrite_to_sink(ast, renderer, optimize=ast.tag is None)\n                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/codegen/__init__.py\", line 177, in full_rewrite_to_sink\n    if SPEC: type_verify(sink, spec_program)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/spec.py\", line 43, in type_verify\n    raise RuntimeError(f\"UOp verification failed at {i} on {u.op} {u.dtype} {len(u.src)} {[(x.op, x.dtype, x.arg) for x in u.src]} {u.arg}\")\nRuntimeError: UOp verification failed at 14 on Ops.PTRCAT dtypes.half 1 [(Ops.SHRINK, dtypes.half, None)] None\n"
+    }
+  ],
+  "decision": "If any UPCAST row fails, keep attention layout fixed and repair the coalescing/lowering path before Phase 2 block tiling."
+}

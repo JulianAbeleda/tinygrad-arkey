@@ -1,0 +1,45 @@
+{
+  "verdict": "GP3_PASS_MICROGATE",
+  "all_pass": true,
+  "lds_kvboth_bytes": 8192,
+  "lds_konly_bytes": 4096,
+  "lds_reduction_factor": 2,
+  "results": [
+    {
+      "shape": "G=5 Hq=40 ctx=64",
+      "Hq": 40,
+      "Hkv": 8,
+      "Hd": 128,
+      "ctx": 64,
+      "L": 32,
+      "G": 5,
+      "rel_rmse": 0.0,
+      "max_abs_err": 0.0,
+      "match": true
+    },
+    {
+      "shape": "G=5 Hq=40 ctx=512",
+      "Hq": 40,
+      "Hkv": 8,
+      "Hd": 128,
+      "ctx": 512,
+      "L": 128,
+      "G": 5,
+      "rel_rmse": 0.0,
+      "max_abs_err": 0.0,
+      "match": true
+    },
+    {
+      "shape": "G=4 Hq=32 ctx=128",
+      "Hq": 32,
+      "Hkv": 8,
+      "Hd": 128,
+      "ctx": 128,
+      "L": 32,
+      "G": 4,
+      "rel_rmse": 0.0,
+      "max_abs_err": 0.0,
+      "match": true
+    }
+  ]
+}

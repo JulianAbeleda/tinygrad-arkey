@@ -1,0 +1,8 @@
+{
+  "date": "2026-06-26",
+  "timestamp": "20260703-135510",
+  "verdict": "SCORE_REUSE_PATHS_BLOCKED__BUILDER_EXCEPTION",
+  "exception_type": "NameError",
+  "exception": "name '_LOG2E' is not defined",
+  "traceback_tail": "Traceback (most recent call last):\n  File \"/home/ubuntu/tinygrad-arkey/extra/qk/decode_physical_tile_score_reuse_paths_probe.py\", line 103, in build\n    attempt = _run_probe()\n              ^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/extra/qk/decode_physical_tile_score_reuse_paths_probe.py\", line 68, in _run_probe\n    p = np.exp2((scores - m) * _LOG2E).astype(np.float32)\n                               ^^^^^^\nNameError: name '_LOG2E' is not defined\n"
+}

@@ -1,0 +1,10 @@
+{
+  "schema": "amd_dynamic_tile_owner_validation.v1",
+  "target": "gfx1100",
+  "hardware": "Linux-6.8.0-134-generic-x86_64-with-glibc2.39",
+  "tile_count": 1,
+  "compile": "passed",
+  "run": "passed",
+  "classification": "passed",
+  "uops": 158
+}

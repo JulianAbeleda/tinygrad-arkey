@@ -1,0 +1,55 @@
+{
+  "date": "2026-06-26",
+  "timestamp": "20260703-140124",
+  "candidate_id": "decode_attention_physical_tile_pall_lifecycle",
+  "verdict": "PALL_LIFECYCLE_BUILDER_READY__ROUTE_NEXT",
+  "attempt": {
+    "checked": true,
+    "shape": {
+      "Hq": 32,
+      "Hkv": 8,
+      "Hd": 128,
+      "MAXC": 256,
+      "L": 128,
+      "Tc": 192,
+      "S": 2,
+      "W": 130
+    },
+    "numeric": {
+      "finite": true,
+      "max_abs": 3.0517578125e-05,
+      "rmse": 1.2368097941362066e-06,
+      "rel_rmse": 1.5734293867808447e-07
+    },
+    "kernels": {
+      "flash_pall_score_state_pv_lifecycle_32_128": {
+        "vgpr": 40,
+        "sgpr": 8,
+        "lds": 256,
+        "scratch": 0,
+        "kernarg": 24,
+        "rsrc1": "0xc0af0004",
+        "hist": {
+          "total": 477,
+          "valu": 168,
+          "s_inst": 273,
+          "vmem_load": 10,
+          "vmem_store": 4,
+          "ds": 22,
+          "cross_lane": 20,
+          "fma_dot": 16,
+          "scratch": 0
+        },
+        "primitive_flags": {
+          "has_v_dot2": true,
+          "has_lds": true,
+          "has_cross_lane": true,
+          "has_spill": false
+        }
+      }
+    }
+  },
+  "missing_primitives": [],
+  "known_limit": "This lifecycle probe recomputes q.k per output column because current generated axis ownership cannot reuse one lane-sharded score across the PV output-column axis.",
+  "decision": "Route only if verdict is PALL_LIFECYCLE_BUILDER_READY__ROUTE_NEXT; otherwise use the blocker as the next codegen/lifecycle target."
+}

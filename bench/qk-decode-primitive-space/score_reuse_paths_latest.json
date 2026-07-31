@@ -1,0 +1,8 @@
+{
+  "date": "2026-06-26",
+  "timestamp": "20260703-140235",
+  "verdict": "SCORE_REUSE_PATHS_BLOCKED__BUILDER_EXCEPTION",
+  "exception_type": "NameError",
+  "exception": "name '_LOG2E' is not defined",
+  "traceback_tail": "Traceback (most recent call last):\n  File \"/home/ubuntu/tinygrad-arkey/extra/qk/decode_score_broadcast.py\", line 398, in build_reuse_paths\n    attempt = _reuse_run_probe()\n              ^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/extra/qk/decode_score_broadcast.py\", line 363, in _reuse_run_probe\n    p = np.exp2((scores - m) * _LOG2E).astype(np.float32)\n                               ^^^^^^\nNameError: name '_LOG2E' is not defined\n"
+}

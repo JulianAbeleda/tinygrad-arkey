@@ -1,0 +1,60 @@
+{
+  "id": "qwen3-14b-decode-ctx512",
+  "arch": "qwen3",
+  "model_name": "Qwen3 14B Awq Compatible Instruct",
+  "quant": "Q4_K_M",
+  "params": 14768307200,
+  "file_bytes": 9001752960,
+  "max_context": 512,
+  "vram_used_bytes": 9189074972,
+  "vram_used_gb": 9.19,
+  "load_s": 7.93,
+  "decode": {
+    "n_measured": 80,
+    "skipped": 16,
+    "tok_s": {
+      "median": 67.72,
+      "min": 58.91,
+      "max": 72.35,
+      "spread_pct": 21.36
+    },
+    "gb_s": 592.9,
+    "per_token_us_band": {
+      "median": 14767.099,
+      "min": 13820.859,
+      "max": 16975.361,
+      "spread_pct": 21.36
+    }
+  },
+  "prefill": null,
+  "timing_authority": "clean W==D model.generate, PROFILE=0, auto clock (HARNESS_GUIDE.md)",
+  "provenance": {
+    "command": "python extra/llm/model_e2e_bench.py --model /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --id qwen3-14b-decode-ctx512 --max_context 512 --decode-tokens 96 --warmup-skip 16 --prefill 0 --out bench/models/qwen/data/amd-gfx1100/qwen3-14b-decode-ctx512.json",
+    "git_commit": "2cf0c794f",
+    "git_dirty": false,
+    "hardware": "AMD Radeon RX 7900 XTX",
+    "target": "gfx1100",
+    "perf_state": "auto clock (not pinned)",
+    "warmups": "2x2-token generate JIT capture",
+    "env": {
+      "PREFILL_V2": false,
+      "PREFILL_CONCRETE_KV": false,
+      "Q4K_PRIMITIVE": 1,
+      "Q6K_PRIMITIVE": 1,
+      "HALF": 1
+    }
+  },
+  "llama_cpp": {
+    "bin": "/home/ubuntu/env/llama.cpp/build/bin/llama-bench",
+    "build_commit": "ac4cddeb0",
+    "gpu_info": "AMD Radeon RX 7900 XTX",
+    "reps": 5,
+    "decode_tg_tok_s": 67.79,
+    "decode_tg_stddev": 0.03,
+    "decode_n_gen": 128,
+    "prefill_pp_tok_s": 1863.6,
+    "prefill_pp_stddev": 67.5,
+    "prefill_n_prompt": 512
+  },
+  "decode_ratio_tinygrad_over_llama": 0.999
+}

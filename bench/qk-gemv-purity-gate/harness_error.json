@@ -1,0 +1,9 @@
+{
+  "gate": "gemv_purity",
+  "verdict": "RETIRED_OBSOLETE_GATE",
+  "status": "retired",
+  "retired_time": "2026-07-10",
+  "prior_verdict": "HARNESS_ERROR",
+  "reason": "The gemv_purity gate and its gate_registry are gone: extra/qk/gemv_purity_gate.py and extra/qk/gate_registry.py were deleted by commit 0e02a1976 ('scorched earth: delete all research/gate/probe files not on live path'). Its hardcoded input bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_latest.json has also been removed (dead since 2026-07-03). The purity question it asked is already resolved: the G3 generated GEMV route is pure/search-generated (see docs/gemv-g3-codegen-lowering-scope.md). This stale HARNESS_ERROR artifact was leaking a broken-gate verdict for a gate that no longer exists; it is retired here so it stops presenting as a live failing gate.",
+  "prior_traceback_input_path": "bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_latest.json"
+}

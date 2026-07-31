@@ -1,0 +1,79 @@
+{
+  "device": "AMD",
+  "direct_packed": {
+    "compile": {
+      "device": "AMD",
+      "programs": 1,
+      "source_chars": [
+        27858
+      ],
+      "wmma_programs": 0
+    },
+    "contraction": {
+      "median_ms": 440.8694499870762,
+      "samples_ms": [
+        455.4473159951158,
+        440.8694499870762,
+        439.24254897865467
+      ]
+    }
+  },
+  "fallback_gated": true,
+  "hardware": "Linux-6.8.0-134-generic-x86_64-with-glibc2.39",
+  "memory": {
+    "activation_fp16_bytes": 12582912,
+    "fp16_weight_bytes": 100663296,
+    "output_fp32_bytes": 8388608,
+    "packed_bytes": 41287680,
+    "staged_live_bytes": 121634816
+  },
+  "research_only": true,
+  "resource_constraints": {
+    "lds_bytes": "not exposed by compile artifact",
+    "max_vgpr": "not exposed by compile artifact",
+    "spills": "not observed by host harness; inspect final code object"
+  },
+  "route_default": "direct_packed",
+  "schema": "q6k_14b_ffn_down_wmma_bench.v1",
+  "shape": {
+    "K": 12288,
+    "M": 512,
+    "N": 4096
+  },
+  "staged": {
+    "combined": {
+      "median_ms": 14.436840021517128,
+      "samples_ms": [
+        14.436840021517128,
+        16.32512398646213,
+        14.073025988182053
+      ]
+    },
+    "compile": {
+      "device": "AMD",
+      "programs": 3,
+      "source_chars": [
+        650,
+        5160,
+        2713
+      ],
+      "wmma_programs": 1
+    },
+    "contraction": {
+      "median_ms": 5.404241004725918,
+      "samples_ms": [
+        5.510249990038574,
+        5.404241004725918,
+        5.117310996865854
+      ]
+    },
+    "materialization": {
+      "median_ms": 65.68070099456236,
+      "samples_ms": [
+        65.60883502243087,
+        65.68070099456236,
+        69.27116800216027
+      ]
+    }
+  }
+}

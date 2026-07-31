@@ -1,0 +1,40 @@
+{
+  "schema": "boltbeam-graph-gemm-policy-diagnosis.v1",
+  "promotion_eligible": false,
+  "track_8b": {
+    "profile": "qwen3_8b_q4k_m_gfx1100",
+    "validated_candidate_set": {
+      "status": "PASS_STRUCTURAL_ONLY",
+      "candidate_set_identity": "candidate_set:sha256:2783d3ebb084e465d733cc161aa31485ac3f8ec45ff5c3aa4c1790795e852847",
+      "entries": [
+        {"role":"attn_kv","shape":{"m":512,"n":1024,"k":4096},"canonical_identity":"51b0562291285f98693f5320a5dce21673a32813c507377d0436afa53fe3b006"},
+        {"role":"attn_qo","shape":{"m":512,"n":4096,"k":4096},"canonical_identity":"7508432bc2ab86532eb07bea71fb4f518e82dc259252a704f60131b2aa608d24"},
+        {"role":"ffn_down","shape":{"m":512,"n":4096,"k":12288},"canonical_identity":"fe0e765afd86cdda318f1950ad59b4374d95e862e0f1112d0e576d5c32231d9d"},
+        {"role":"ffn_gate_up","shape":{"m":512,"n":12288,"k":4096},"canonical_identity":"8b6e3b2a9b25f7ad35e2e252d74129d96958b8367653024ad73e81fcac2aebb9"}
+      ]
+    },
+    "required_policy_join": [
+      "selected strategy and promoted route id",
+      "loaded inventory_identity equal to every policy row",
+      "candidate_set_identity equal to the admitted registry",
+      "one exact policy row per required role/shape/target with canonical candidate_identity",
+      "compile artifact keyed by each canonical candidate_identity",
+      "candidate route census with no missing, unexpected, or identity-mismatched rows"
+    ],
+    "missing_for_promotion": ["live_policy_inventory_join","compile_artifact_hashes","model_forward_route_census","attention_identity","full_output_numeric_parity","pinned_authority_json"]
+  },
+  "track_14b": {
+    "profile": "qwen3_14b_q4k_m_gfx1100",
+    "required_dense_payloads": [
+      {"quant":"Q4_K","role":"ffn_gate_up","shape":{"m":512,"n":17408,"k":5120}},
+      {"quant":"Q4_K","role":"attn_qo","shape":{"m":512,"n":5120,"k":5120}},
+      {"quant":"Q4_K","role":"attn_kv","tensor_identity":"blk.*.attn_k.weight","shape":{"m":512,"n":1024,"k":5120}},
+      {"quant":"Q6_K","role":"ffn_down","shape":{"m":512,"n":5120,"k":17408}},
+      {"quant":"Q6_K","role":"attn_kv","tensor_identity":"blk.*.attn_v.weight","shape":{"m":512,"n":1024,"k":5120}},
+      {"quant":"Q6_K","role":"lm_head","tensor_identity":"output.weight","shape":{"m":512,"n":151936,"k":5120}}
+    ],
+    "schema_blocker": "current graph-GEMM binding selects policy rows by role plus shape only; Q4_K attn_k and Q6_K attn_v collide at attn_kv/(512,1024,5120). Exact 14B policy must add quant_format and tensor_identity to the binding key and census key before payload admission.",
+    "missing_for_each_candidate": ["canonical_payload_identity","candidate_set_membership","source_hash","binary_hash","resource_proof","nonconstant_numeric_proof","exact_policy_row","model_forward_attachment","route_census","pinned_timing"],
+    "lm_head_blocker": "current model-forward lm_head is lazy M=1 and the exact vocabulary special case is K=4096 only; a K=5120 M=512 policy requires an explicit workload/attachment change, not a copied 8B row"
+  }
+}

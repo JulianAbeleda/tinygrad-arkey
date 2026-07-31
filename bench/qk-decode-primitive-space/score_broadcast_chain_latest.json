@@ -1,0 +1,15 @@
+{
+  "date": "2026-06-26",
+  "timestamp": "20260703-140231",
+  "candidate_id": "decode_attention_physical_tile_score_broadcast_lifecycle",
+  "verdict": "SCORE_BROADCAST_CHAIN_READY__ROUTE_NEXT",
+  "child": {
+    "checked": true,
+    "numeric": {
+      "finite": true,
+      "max_abs": 2.9802322387695312e-08,
+      "rel_rmse": 2.665206011442933e-07
+    }
+  },
+  "decision": "Route only if standalone chain is clean."
+}

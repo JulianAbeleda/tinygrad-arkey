@@ -1,0 +1,262 @@
+{
+  "artifact_version": 2,
+  "ckpts": [
+    4096
+  ],
+  "created_unix_ns": 1785162344529931547,
+  "device": {
+    "runtime_type": "AMDDevice",
+    "tinygrad_device": "AMD"
+  },
+  "hardware": "AMD / AMDDevice",
+  "max_context": 4608,
+  "median_host_sync_pct": null,
+  "method": "genuine prompt prefill; W=production generate item/token; D=same model JITs with final sync",
+  "model": {
+    "identity_sha256": "785e1a50d7c15a2a9264535e96e158bef042fc0d5eca050a74855b9201be6c79",
+    "mtime_ns": 1781139524597283444,
+    "path": "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+    "size_bytes": 9001752960
+  },
+  "model_id": "Qwen3-14B-Q4_K_M",
+  "model_identity": {
+    "identity_sha256": "785e1a50d7c15a2a9264535e96e158bef042fc0d5eca050a74855b9201be6c79",
+    "mtime_ns": 1781139524597283444,
+    "path": "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+    "size_bytes": 9001752960
+  },
+  "nmeas": 4,
+  "reps": 5,
+  "rows": [
+    {
+      "D_interpretation": "not_an_upper_bound; host/runtime subtraction refused",
+      "D_reps": [
+        {
+          "elapsed_s": 0.10210143499716651,
+          "final_token_id": 13876,
+          "rep": 0,
+          "tok_s": 39.17672655737901
+        },
+        {
+          "elapsed_s": 0.09665019500243943,
+          "final_token_id": 13876,
+          "rep": 1,
+          "tok_s": 41.38636243723089
+        },
+        {
+          "elapsed_s": 0.09761742300179321,
+          "final_token_id": 13876,
+          "rep": 2,
+          "tok_s": 40.97629170078092
+        },
+        {
+          "elapsed_s": 0.09738841200305615,
+          "final_token_id": 13876,
+          "rep": 3,
+          "tok_s": 41.07264835445182
+        },
+        {
+          "elapsed_s": 0.0987896059959894,
+          "final_token_id": 13876,
+          "rep": 4,
+          "tok_s": 40.49008961694198
+        }
+      ],
+      "W_reps": [
+        {
+          "elapsed_s": 0.07672551898576785,
+          "per_token_ms": [
+            19.732255997951142,
+            19.21279900125228,
+            18.941177986562252,
+            18.839286000002176
+          ],
+          "rep": 0,
+          "tok_s": 52.13389303683925
+        },
+        {
+          "elapsed_s": 0.0762579989968799,
+          "per_token_ms": [
+            19.439786003204063,
+            18.74898599635344,
+            19.057326004258357,
+            19.011900993064046
+          ],
+          "rep": 1,
+          "tok_s": 52.453513764027036
+        },
+        {
+          "elapsed_s": 0.07629338599508628,
+          "per_token_ms": [
+            19.558658997993916,
+            18.513333998271264,
+            19.00913599820342,
+            19.212257000617683
+          ],
+          "rep": 2,
+          "tok_s": 52.4291843628178
+        },
+        {
+          "elapsed_s": 0.0762832649925258,
+          "per_token_ms": [
+            19.61746900633443,
+            18.59541700105183,
+            19.01114899374079,
+            19.05922999139875
+          ],
+          "rep": 3,
+          "tok_s": 52.436140487588176
+        },
+        {
+          "elapsed_s": 0.07576866599265486,
+          "per_token_ms": [
+            19.582752996939234,
+            18.35837100225035,
+            18.7321239936864,
+            19.095417999778874
+          ],
+          "rep": 4,
+          "tok_s": 52.7922716811164
+        }
+      ],
+      "ctx": 4096,
+      "decode_tokens": 4,
+      "dispatch_ms_D": 24.404355750448307,
+      "fixed_depth": 4096,
+      "flash": true,
+      "generated_reps_identical": true,
+      "generated_token_evidence": [
+        {
+          "count": 4,
+          "first_token_ids": [
+            13,
+            279,
+            3974,
+            13876
+          ],
+          "sha256": "68ccbad1312754ee10602c35be173d97e5734c0f635b12543717e8a850e8c06d"
+        },
+        {
+          "count": 4,
+          "first_token_ids": [
+            13,
+            279,
+            3974,
+            13876
+          ],
+          "sha256": "68ccbad1312754ee10602c35be173d97e5734c0f635b12543717e8a850e8c06d"
+        },
+        {
+          "count": 4,
+          "first_token_ids": [
+            13,
+            279,
+            3974,
+            13876
+          ],
+          "sha256": "68ccbad1312754ee10602c35be173d97e5734c0f635b12543717e8a850e8c06d"
+        },
+        {
+          "count": 4,
+          "first_token_ids": [
+            13,
+            279,
+            3974,
+            13876
+          ],
+          "sha256": "68ccbad1312754ee10602c35be173d97e5734c0f635b12543717e8a850e8c06d"
+        },
+        {
+          "count": 4,
+          "first_token_ids": [
+            13,
+            279,
+            3974,
+            13876
+          ],
+          "sha256": "68ccbad1312754ee10602c35be173d97e5734c0f635b12543717e8a850e8c06d"
+        }
+      ],
+      "host_sync_pct_of_wall": null,
+      "host_sync_residual_ms": null,
+      "programs_per_token_by_route": {
+        "flash": 1133
+      },
+      "prompt_evidence": {
+        "count": 4096,
+        "first_token_ids": [
+          1782,
+          3974,
+          13876,
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876,
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876,
+          38835
+        ],
+        "sha256": "283a9a863b72936f5aedf408c7d36ec64c4b3e7df1d411d3904ca0b72cd73578"
+      },
+      "reps": 5,
+      "route": "flash",
+      "route_sequence": [
+        "flash",
+        "flash",
+        "flash",
+        "flash"
+      ],
+      "route_sequences_identical": true,
+      "routes": [
+        "flash"
+      ],
+      "tok_s_D_diagnostic": 40.97629170078092,
+      "tok_s_W": 52.436140487588176,
+      "wall_ms_W": 19.07081624813145
+    }
+  ],
+  "runtime_settings": {
+    "flash_decode_capable": true,
+    "flash_decode_mode": "auto",
+    "flash_decode_threshold": 512,
+    "kv_cache": "fp16",
+    "ring": false
+  },
+  "schema": "tinygrad.decode.fixed_depth.v2",
+  "tool": {
+    "argv": [
+      "extra/qk/decode/decode_runtime_overhead.py",
+      "--model",
+      "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+      "--ckpts",
+      "4096",
+      "--max-context",
+      "4608",
+      "--nmeas",
+      "4",
+      "--reps",
+      "5",
+      "--out",
+      "/home/ubuntu/worktrees/tinygrad-g5-qgroup-parity/bench/qk-decode-runtime-overhead/run-1785162231534318631-341907.json"
+    ],
+    "path": "/home/ubuntu/worktrees/tinygrad-g5-qgroup-parity/extra/qk/decode/decode_runtime_overhead.py"
+  },
+  "workload": {
+    "chunk_size": 32,
+    "ckpts": [
+      4096
+    ],
+    "decode_tokens": 4,
+    "max_context": 4608,
+    "reps": 5,
+    "seed": 20260617,
+    "temperature": 0.0,
+    "warmup_decode": 3
+  }
+}

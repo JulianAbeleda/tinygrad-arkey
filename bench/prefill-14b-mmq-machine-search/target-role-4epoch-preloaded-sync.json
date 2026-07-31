@@ -1,0 +1,20 @@
+{
+  "schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1",
+  "status": "BLOCKED",
+  "shape": [512, 17408, 5120],
+  "role": "ffn_gate_up",
+  "bounded_only": true,
+  "production_dispatch_changed": false,
+  "default_route": "direct_packed",
+  "epoch_limit": 4,
+  "n_chunk_tiles": 136,
+  "host_accumulate": false,
+  "per_epoch_check": false,
+  "persistent_buffers": true,
+  "preloaded_epochs": true,
+  "sync_each_epoch": true,
+  "exact_blocker": "target-role child returned no structured result",
+  "returncode": 0,
+  "stderr_tail": "RuntimeError: Wait timeout: 30000 ms! (the signal is not set to 32, but 31)",
+  "interpretation": "Explicit Device[AMD].synchronize() after each epoch did not change the timeline failure: the queue still stalled at signal 32/current 31. This is a bounded lifecycle/driver-health blocker, not correctness or route-promotion evidence."
+}

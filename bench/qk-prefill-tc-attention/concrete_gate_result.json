@@ -1,0 +1,121 @@
+{
+  "date": "2026-06-20",
+  "phase": "BRANCH_B_TC_ATTN_CONCRETE",
+  "model": "Qwen3-8B-Q4_K_M.gguf",
+  "regime": "concrete int start_pos=0, KV=512, graph route ON both arms",
+  "N": 512,
+  "correctness_rel_rmse": 0.0,
+  "correctness_pass": true,
+  "kernel_identity": {
+    "graphs_differ": true,
+    "wmma_off": 0,
+    "wmma_on": 0,
+    "new_wmma_in_on": [],
+    "tc_fired": false
+  },
+  "perf_synced": {
+    "off_sdpa_p50_ms": 161.56,
+    "on_tc_p50_ms": 144.63,
+    "speedup_median": 1.117,
+    "off_toks": 3169.1,
+    "on_toks": 3540.1,
+    "off_pct_llama": 105.2,
+    "on_pct_llama": 117.5,
+    "reps": 3,
+    "off_ms_all": [
+      161.56,
+      161.08,
+      164.56
+    ],
+    "on_ms_all": [
+      144.63,
+      144.63,
+      144.52
+    ]
+  },
+  "verdict": "NO_WIN: TC 1.117x over SDPA (rel_rmse 0.00e+00, tc_fired=False)",
+  "top_kernels_off": [
+    {
+      "name": "prefill_gen_sched_gemm_512_12288_4096",
+      "launches": 72,
+      "pct": 35.1
+    },
+    {
+      "name": "prefill_gen_sched_gemm_512_4096_12288",
+      "launches": 36,
+      "pct": 20.4
+    },
+    {
+      "name": "prefill_gen_sched_gemm_512_4096_4096",
+      "launches": 72,
+      "pct": 14.0
+    },
+    {
+      "name": "r_16_32_2_8_16_4_4_128_4",
+      "launches": 36,
+      "pct": 8.3
+    },
+    {
+      "name": "prefill_gen_sched_gemm_512_1024_4096",
+      "launches": 72,
+      "pct": 6.0
+    },
+    {
+      "name": "r_32_16_8_8_16_4_4_32_4",
+      "launches": 36,
+      "pct": 5.1
+    },
+    {
+      "name": "E_65536_32_3",
+      "launches": 108,
+      "pct": 1.6
+    },
+    {
+      "name": "r_1187_32_4_16_2_2_2_32",
+      "launches": 1,
+      "pct": 1.6
+    }
+  ],
+  "top_kernels_on": [
+    {
+      "name": "prefill_gen_sched_gemm_512_12288_4096",
+      "launches": 72,
+      "pct": 39.8
+    },
+    {
+      "name": "prefill_gen_sched_gemm_512_4096_12288",
+      "launches": 36,
+      "pct": 22.7
+    },
+    {
+      "name": "prefill_gen_sched_gemm_512_4096_4096",
+      "launches": 72,
+      "pct": 15.5
+    },
+    {
+      "name": "prefill_gen_sched_gemm_512_1024_4096",
+      "launches": 72,
+      "pct": 6.7
+    },
+    {
+      "name": "r_8_32_32_2_2_2_2_4_4_32_2",
+      "launches": 36,
+      "pct": 2.2
+    },
+    {
+      "name": "E_65536_32_3",
+      "launches": 108,
+      "pct": 1.8
+    },
+    {
+      "name": "r_128_32_4_128_4n3",
+      "launches": 36,
+      "pct": 1.8
+    },
+    {
+      "name": "r_1187_32_4_16_2_2_2_32",
+      "launches": 1,
+      "pct": 1.8
+    }
+  ]
+}

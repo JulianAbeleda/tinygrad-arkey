@@ -1,0 +1,6 @@
+{
+  "date": "2026-06-26",
+  "timestamp": "20260703-125510",
+  "verdict": "PRIMITIVE_DETECTOR_FAIL__MISSING_ATTRIBUTION",
+  "source": "bench/qk-decode-attention-fused-score-state-pv-attribution/latest.json"
+}

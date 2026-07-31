@@ -1,0 +1,140 @@
+{
+  "date": "2026-06-26",
+  "timestamp": "20260703-135333",
+  "candidate_id": "decode_attention_physical_tile_all_primitives_bundle",
+  "verdict": "PALL_PRIMITIVES_VISIBLE__ROUTE_INTEGRATION_NEXT",
+  "checks": {
+    "CrossLane.reduce_broadcast": true,
+    "LaneMap.score_reuse_across_output_columns": true,
+    "DotLowering.v_dot2": true,
+    "TileMemory.lds_tile": true
+  },
+  "missing": [],
+  "p1_crosslane": {
+    "date": "2026-06-26",
+    "timestamp": "20260703-135332",
+    "candidate_id": "decode_attention_physical_tile_p1",
+    "verdict": "P1_CROSSLANE_PASS__LANEMAP_CROSSLANE_VISIBLE",
+    "probe": {
+      "checked": true,
+      "shape": {
+        "Hq": 32,
+        "Hkv": 8,
+        "Hd": 128,
+        "MAXC": 256,
+        "Tc": 192
+      },
+      "numeric": {
+        "max_abs": 4.470348358154297e-08,
+        "rmse": 7.667981805070667e-09,
+        "pass": true,
+        "thresholds": {
+          "max_abs": 0.0001,
+          "rmse": 1e-05
+        }
+      },
+      "kernels": {
+        "flash_p1_crosslane_score_32_128": {
+          "vgpr": 32,
+          "sgpr": 8,
+          "lds": 0,
+          "scratch": 0,
+          "kernarg": 24,
+          "rsrc1": "0xc0af0003",
+          "hist": {
+            "total": 265,
+            "valu": 57,
+            "s_inst": 190,
+            "vmem_load": 6,
+            "vmem_store": 2,
+            "ds": 10,
+            "cross_lane": 10,
+            "fma_dot": 8,
+            "scratch": 0
+          },
+          "primitive_flags": {
+            "has_v_dot2": false,
+            "has_lds": false,
+            "has_cross_lane": true,
+            "has_vector_global_load": true,
+            "has_spill": false
+          }
+        }
+      }
+    },
+    "primitive_visibility": {
+      "LaneMap": "searchable_probe_visible",
+      "CrossLane": "detected_in_isa",
+      "TileMemory": "not_targeted_in_p1",
+      "DotLowering": "scalar_fma_not_v_dot2_in_p1"
+    },
+    "decision": "P1 proves generated cross-lane score reduction can be emitted; next integrate as a decode route only if the detector/gap gate consumes this as partial primitive visibility.",
+    "ran": true
+  },
+  "vdot2_probe": {
+    "date": "2026-06-25",
+    "timestamp": "20260703-135333",
+    "verdict": "A3_1_RENDERER_VDOT2_PROBE_PASS",
+    "static_hook_check": {
+      "lowering_file_exists": true,
+      "codegen_env_hook": true,
+      "fdot2_builtin_template": true,
+      "customi_renderer": true
+    },
+    "matcher_unit_check": {
+      "matcher_rewrites_dot2_pair": true,
+      "lowered_op": "Ops.CUSTOMI",
+      "lowered_arg": "__builtin_amdgcn_fdot2({1}, {2}, {0}, false)",
+      "uses_builtin": true
+    },
+    "generated_kernel_smoke": {
+      "returncode": 0,
+      "ran": true,
+      "stdout_tail": "opened device PYTHON from pid:320523\nscheduled     3 kernels in    19.80 ms | CACHE MISS abae7efb |      67 uops in cache\nloading libc from /lib/x86_64-linux-gnu/libc.so.6\nloading iokit failed: not found on system\nloading corefoundation failed: not found on system\nloading libusb from /lib/x86_64-linux-gnu/libusb-1.0.so.0\nAMDDevice: opening 0 with target (11, 0, 0) arch gfx1100\nopened device AMD from pid:320523\nloading comgr from /opt/rocm/lib/libamd_comgr.so\nloading comgr_3 from /opt/rocm/lib/libamd_comgr.so\nloading llvm from /lib/x86_64-linux-gnu/libLLVM-20.so\nTC(0): [] [] [(0, 2)]\nr_2                       opts: (Opt(op=OptOps.UNROLL, axis=0, arg=0),)\n#define half _Float16\ntypedef half half2 __attribute__((ext_vector_type(2)));\nstatic inline __attribute__((device)) half2 make_half2(half x, half y) { return { x, y }; }\nextern \"C\" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, 1))) r_2(half* data0_1, half* data1_2, half* data2_2) {\n  half2 val0 = (*((half2*)((data1_2+0))));\n  half2 val1 = (*((half2*)((data2_2+0))));\n  float cast0 = ((float)((val0.x*val1.x)));\n  float cast1 = ((float)((val0.y*val1.y)));\n  *(data0_1+0) = ((half)(__builtin_amdgcn_fdot2(val0, val1, 0.0f, false)));\n}\n\u001b[32m*** AMD        1\u001b[0m \u001b[33mcopy        4 B,     AMD <- PYTHON \u001b[0m            arg  2 mem   0.00 GB tm \u001b[33m   105.94ms\u001b[0m/   105.94ms (      0 GFLOPS    0|0      GB/s) \n*** AMD        2 \u001b[33mcopy        4 B,     AMD <- PYTHON \u001b[0m            arg  2 mem   0.00 GB tm    111.83us/   106.05ms (      0 GFLOPS    0|0      GB/s) \n\u001b[32m*** AMD        3\u001b[0m r\u001b[90m_\u001b[0m\u001b[35m2\u001b[0m\u001b[90m\u001b[0m                                            arg  3 mem   0.00 GB tm     19.44us/   106.07ms (      0 GFLOPS    0|0      GB/s) \n{\"value\": 11.0}\n",
+      "stderr_tail": "",
+      "debug_mentions_builtin": true,
+      "debug_mentions_v_dot2": false
+    },
+    "decision": "Generated v_dot2 hook appears exposable; next wire DECODE_ATTN_SCORE_VDOT2=1 against flash_score_whole_cache.",
+    "ran": true
+  },
+  "lds_probe": {
+    "ran": true,
+    "numeric": {
+      "max_abs": 0.0,
+      "pass": true
+    },
+    "kernels": {
+      "flash_pall_lds_stage_probe": {
+        "vgpr": 8,
+        "sgpr": 8,
+        "lds": 128,
+        "scratch": 0,
+        "kernarg": 16,
+        "rsrc1": "0xc0af0000",
+        "hist": {
+          "total": 123,
+          "valu": 1,
+          "s_inst": 118,
+          "vmem_load": 1,
+          "vmem_store": 1,
+          "ds": 2,
+          "cross_lane": 0,
+          "barrier_wait": 4,
+          "scratch": 0
+        },
+        "primitive_flags": {
+          "has_v_dot2": false,
+          "has_lds": true,
+          "has_cross_lane": false,
+          "has_barrier": false,
+          "has_vector_global_load": true,
+          "has_spill": false
+        }
+      }
+    },
+    "pass": true,
+    "barrier_status": "not_required_or_elided_in_minimal_same-lane_probe"
+  },
+  "decision": "All missing primitive classes are independently emit/detect-visible. Next step is a single fused route candidate that uses them together, then primitive detector + W==D."
+}

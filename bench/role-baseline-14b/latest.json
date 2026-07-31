@@ -1,0 +1,236 @@
+{
+  "hardware": "Linux-6.8.0-134-generic-x86_64-with-glibc2.39",
+  "model": "Qwen3-14B-Q4_K_M",
+  "note": "Run with the AMD measurement environment to populate compile/correctness/WMMA/fallback/tok_s.",
+  "pp": 512,
+  "research_only": true,
+  "route_promotion": false,
+  "rows": [
+    {
+      "K": 5120,
+      "M": 512,
+      "N": 1024,
+      "compile": {
+        "ms": null,
+        "status": "not_run"
+      },
+      "correctness": {
+        "max_abs": null,
+        "status": "not_run"
+      },
+      "fallback": {
+        "route": "direct_packed",
+        "used": null
+      },
+      "mode": "direct_packed",
+      "model": "Qwen3-14B-Q4_K_M",
+      "pp": 512,
+      "quantization": "Q4_K_M",
+      "role": "attn_kv",
+      "route_identity": "generated:14b-q4km:attn_kv:direct_packed:m512n1024k5120:pp512:3710bb3c51d85e11",
+      "tok_s": null,
+      "wmma": {
+        "evidence": "not_run",
+        "present": null
+      }
+    },
+    {
+      "K": 5120,
+      "M": 512,
+      "N": 1024,
+      "compile": {
+        "ms": null,
+        "status": "not_run"
+      },
+      "correctness": {
+        "max_abs": null,
+        "status": "not_run"
+      },
+      "fallback": {
+        "route": null,
+        "used": null
+      },
+      "mode": "wmma_tiled",
+      "model": "Qwen3-14B-Q4_K_M",
+      "pp": 512,
+      "quantization": "Q4_K_M",
+      "role": "attn_kv",
+      "route_identity": "generated:14b-q4km:attn_kv:wmma_tiled:m512n1024k5120:pp512:891ee6b0206fda36",
+      "tok_s": null,
+      "wmma": {
+        "evidence": "not_run",
+        "present": null
+      }
+    },
+    {
+      "K": 5120,
+      "M": 512,
+      "N": 5120,
+      "compile": {
+        "ms": null,
+        "status": "not_run"
+      },
+      "correctness": {
+        "max_abs": null,
+        "status": "not_run"
+      },
+      "fallback": {
+        "route": "direct_packed",
+        "used": null
+      },
+      "mode": "direct_packed",
+      "model": "Qwen3-14B-Q4_K_M",
+      "pp": 512,
+      "quantization": "Q4_K_M",
+      "role": "attn_qo",
+      "route_identity": "generated:14b-q4km:attn_qo:direct_packed:m512n5120k5120:pp512:b7c0976f8e2c077b",
+      "tok_s": null,
+      "wmma": {
+        "evidence": "not_run",
+        "present": null
+      }
+    },
+    {
+      "K": 5120,
+      "M": 512,
+      "N": 5120,
+      "compile": {
+        "ms": null,
+        "status": "not_run"
+      },
+      "correctness": {
+        "max_abs": null,
+        "status": "not_run"
+      },
+      "fallback": {
+        "route": null,
+        "used": null
+      },
+      "mode": "wmma_tiled",
+      "model": "Qwen3-14B-Q4_K_M",
+      "pp": 512,
+      "quantization": "Q4_K_M",
+      "role": "attn_qo",
+      "route_identity": "generated:14b-q4km:attn_qo:wmma_tiled:m512n5120k5120:pp512:5f61eb0bb13c5410",
+      "tok_s": null,
+      "wmma": {
+        "evidence": "not_run",
+        "present": null
+      }
+    },
+    {
+      "K": 17408,
+      "M": 512,
+      "N": 5120,
+      "compile": {
+        "ms": null,
+        "status": "not_run"
+      },
+      "correctness": {
+        "max_abs": null,
+        "status": "not_run"
+      },
+      "fallback": {
+        "route": "direct_packed",
+        "used": null
+      },
+      "mode": "direct_packed",
+      "model": "Qwen3-14B-Q4_K_M",
+      "pp": 512,
+      "quantization": "Q4_K_M",
+      "role": "ffn_down",
+      "route_identity": "generated:14b-q4km:ffn_down:direct_packed:m512n5120k17408:pp512:b30c0b70e3a87029",
+      "tok_s": null,
+      "wmma": {
+        "evidence": "not_run",
+        "present": null
+      }
+    },
+    {
+      "K": 17408,
+      "M": 512,
+      "N": 5120,
+      "compile": {
+        "ms": null,
+        "status": "not_run"
+      },
+      "correctness": {
+        "max_abs": null,
+        "status": "not_run"
+      },
+      "fallback": {
+        "route": null,
+        "used": null
+      },
+      "mode": "wmma_tiled",
+      "model": "Qwen3-14B-Q4_K_M",
+      "pp": 512,
+      "quantization": "Q4_K_M",
+      "role": "ffn_down",
+      "route_identity": "generated:14b-q4km:ffn_down:wmma_tiled:m512n5120k17408:pp512:4a5e8ce3fb290c34",
+      "tok_s": null,
+      "wmma": {
+        "evidence": "not_run",
+        "present": null
+      }
+    },
+    {
+      "K": 5120,
+      "M": 512,
+      "N": 17408,
+      "compile": {
+        "ms": null,
+        "status": "not_run"
+      },
+      "correctness": {
+        "max_abs": null,
+        "status": "not_run"
+      },
+      "fallback": {
+        "route": "direct_packed",
+        "used": null
+      },
+      "mode": "direct_packed",
+      "model": "Qwen3-14B-Q4_K_M",
+      "pp": 512,
+      "quantization": "Q4_K_M",
+      "role": "ffn_gate_up",
+      "route_identity": "generated:14b-q4km:ffn_gate_up:direct_packed:m512n17408k5120:pp512:96b50b2893237c7c",
+      "tok_s": null,
+      "wmma": {
+        "evidence": "not_run",
+        "present": null
+      }
+    },
+    {
+      "K": 5120,
+      "M": 512,
+      "N": 17408,
+      "compile": {
+        "ms": null,
+        "status": "not_run"
+      },
+      "correctness": {
+        "max_abs": null,
+        "status": "not_run"
+      },
+      "fallback": {
+        "route": null,
+        "used": null
+      },
+      "mode": "wmma_tiled",
+      "model": "Qwen3-14B-Q4_K_M",
+      "pp": 512,
+      "quantization": "Q4_K_M",
+      "role": "ffn_gate_up",
+      "route_identity": "generated:14b-q4km:ffn_gate_up:wmma_tiled:m512n17408k5120:pp512:7604676e439b4f3f",
+      "tok_s": null,
+      "wmma": {
+        "evidence": "not_run",
+        "present": null
+      }
+    }
+  ],
+  "schema": "role_baseline_14b_q4km.v1",
+  "status": "BLOCKED_NO_GPU_MEASUREMENT"
+}

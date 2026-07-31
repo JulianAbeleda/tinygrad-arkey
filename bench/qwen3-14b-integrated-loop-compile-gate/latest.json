@@ -1,0 +1,36 @@
+{
+  "schema": "qwen3_14b_integrated_loop_compile_gate.v2",
+  "model": "Qwen3-14B-Q4_K_M",
+  "hardware": "Linux-6.8.0-134-generic-x86_64-with-glibc2.39",
+  "emitter": "emit_q4k_int8_wmma_tiled_scheduler_tensor",
+  "profile": "32x32x512 smoke, then ffn_down 512x4096x12288",
+  "stop_rule": "smoke_32x32x512 then ffn_down; stop at first concrete compile failure",
+  "fallback_policy": "fail_closed; no route substitution",
+  "rows": [
+    {
+      "status": "COMPILE_FAILURE",
+      "graph_build_ms": 0.015908997738733888,
+      "compile_ms": null,
+      "kernel_count": 0,
+      "correctness": {
+        "status": "NOT_CAPTURED"
+      },
+      "instruction_evidence": {
+        "sudot4": false,
+        "wmma": false
+      },
+      "fallback": {
+        "used": false,
+        "policy": "fail_closed"
+      },
+      "error": "NotImplementedError: integrated_loop is fail-closed outside the bounded packed-Q4 owner tile",
+      "role": "smoke_32x32x512",
+      "shape": {
+        "M": 32,
+        "N": 32,
+        "K": 512
+      },
+      "wall_ms": 754.1787610098254
+    }
+  ]
+}

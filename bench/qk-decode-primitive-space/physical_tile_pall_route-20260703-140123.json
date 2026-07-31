@@ -1,0 +1,59 @@
+{
+  "date": "2026-06-26",
+  "timestamp": "20260703-140123",
+  "candidate_id": "decode_attention_physical_tile_pall_route",
+  "verdict": "PALL_ROUTE_BUILDER_READY__ROUTE_NEXT",
+  "attempt": {
+    "checked": true,
+    "shape": {
+      "Hq": 32,
+      "Hkv": 8,
+      "Hd": 128,
+      "MAXC": 256,
+      "Tc": 192
+    },
+    "numeric": {
+      "max_abs": 4.470348358154297e-08,
+      "rmse": 8.133227424877987e-09,
+      "pass": true
+    },
+    "kernels": {
+      "flash_pall_lds_crosslane_score_32_128": {
+        "vgpr": 32,
+        "sgpr": 8,
+        "lds": 256,
+        "scratch": 0,
+        "kernarg": 24,
+        "rsrc1": "0xc0af0003",
+        "hist": {
+          "total": 264,
+          "valu": 58,
+          "s_inst": 182,
+          "vmem_load": 8,
+          "vmem_store": 2,
+          "ds": 14,
+          "cross_lane": 10,
+          "fma_dot": 4,
+          "scratch": 0,
+          "barrier": 0
+        },
+        "primitive_flags": {
+          "has_v_dot2": true,
+          "has_lds": true,
+          "has_cross_lane": true,
+          "has_barrier": false,
+          "has_vector_global_load": true,
+          "has_spill": false
+        }
+      }
+    }
+  },
+  "missing_composed_primitives": [],
+  "required_next_if_ready": [
+    "route flag",
+    "route/materialization gate",
+    "primitive detector",
+    "W==D"
+  ],
+  "decision": "Composed hot builder is ready for default-off route integration."
+}

@@ -1,0 +1,318 @@
+{
+  "artifact": {
+    "packed_bytes": 9437184,
+    "path": "bench/prefill-lds-single-buffer-probe-20260723/attn-qo-q4k-peak-canary.npz",
+    "quant_format": "Q4_K",
+    "reference_elements": 2097152,
+    "shape": [
+      512,
+      4096,
+      4096
+    ]
+  },
+  "clock_pin": false,
+  "clock_pin_detail": "sysfs DPM pin denied; automatic state recorded per sample",
+  "cpu_affinity": [
+    0
+  ],
+  "mode": "isolated_guarded_candidate_only",
+  "profile": "qwen3_8b_q4k_m_gfx1100",
+  "promotion": "not_registered_not_promoted",
+  "quant_format": "Q4_K",
+  "role": "attn_qo",
+  "sample_count": 10,
+  "schema": "tinygrad.prefill_lds_single_buffer_peak_track.v1",
+  "variants": [
+    {
+      "label": "two_buffer_baseline",
+      "samples": [
+        {
+          "canonical_identity": "c7552cc28c88d07ed905951521b6c12bf5320f66a0a0c413211061549dd1ac91",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 13Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.45332,
+          "max_abs_error": 0.0
+        },
+        {
+          "canonical_identity": "c7552cc28c88d07ed905951521b6c12bf5320f66a0a0c413211061549dd1ac91",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 13Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.45496,
+          "max_abs_error": 0.0
+        },
+        {
+          "canonical_identity": "c7552cc28c88d07ed905951521b6c12bf5320f66a0a0c413211061549dd1ac91",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 13Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.45327999999999996,
+          "max_abs_error": 0.0
+        },
+        {
+          "canonical_identity": "c7552cc28c88d07ed905951521b6c12bf5320f66a0a0c413211061549dd1ac91",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 12Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.46236000000000005,
+          "max_abs_error": 0.0
+        },
+        {
+          "canonical_identity": "c7552cc28c88d07ed905951521b6c12bf5320f66a0a0c413211061549dd1ac91",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 12Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.46064,
+          "max_abs_error": 0.0
+        },
+        {
+          "canonical_identity": "c7552cc28c88d07ed905951521b6c12bf5320f66a0a0c413211061549dd1ac91",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 13Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.46032,
+          "max_abs_error": 0.0
+        },
+        {
+          "canonical_identity": "c7552cc28c88d07ed905951521b6c12bf5320f66a0a0c413211061549dd1ac91",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 12Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.45444,
+          "max_abs_error": 0.0
+        },
+        {
+          "canonical_identity": "c7552cc28c88d07ed905951521b6c12bf5320f66a0a0c413211061549dd1ac91",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 11Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.46048000000000006,
+          "max_abs_error": 0.0
+        },
+        {
+          "canonical_identity": "c7552cc28c88d07ed905951521b6c12bf5320f66a0a0c413211061549dd1ac91",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 13Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.45388,
+          "max_abs_error": 0.0
+        },
+        {
+          "canonical_identity": "c7552cc28c88d07ed905951521b6c12bf5320f66a0a0c413211061549dd1ac91",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 14Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.45312,
+          "max_abs_error": 0.0
+        }
+      ],
+      "summary": {
+        "best_ms": 0.45312,
+        "count": 10,
+        "max_abs_error": 0.0,
+        "median_ms": 0.4547,
+        "p10_ms": 0.45326399999999994,
+        "p90_ms": 0.460812
+      },
+      "warmups": [
+        {
+          "canonical_identity": "c7552cc28c88d07ed905951521b6c12bf5320f66a0a0c413211061549dd1ac91",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 11Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.4604,
+          "max_abs_error": 0.0
+        },
+        {
+          "canonical_identity": "c7552cc28c88d07ed905951521b6c12bf5320f66a0a0c413211061549dd1ac91",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 13Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.45976,
+          "max_abs_error": 0.0
+        },
+        {
+          "canonical_identity": "c7552cc28c88d07ed905951521b6c12bf5320f66a0a0c413211061549dd1ac91",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 13Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.4614,
+          "max_abs_error": 0.0
+        }
+      ]
+    },
+    {
+      "label": "one_buffer_probe",
+      "samples": [
+        {
+          "canonical_identity": "83dcb21acfed699cb0f27101422c6bbd6243236d6daf0f4431ce6c0efa6e550a",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 15Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.3688,
+          "max_abs_error": 0.0
+        },
+        {
+          "canonical_identity": "83dcb21acfed699cb0f27101422c6bbd6243236d6daf0f4431ce6c0efa6e550a",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 15Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.36812,
+          "max_abs_error": 0.0
+        },
+        {
+          "canonical_identity": "83dcb21acfed699cb0f27101422c6bbd6243236d6daf0f4431ce6c0efa6e550a",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 14Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.36968,
+          "max_abs_error": 0.0
+        },
+        {
+          "canonical_identity": "83dcb21acfed699cb0f27101422c6bbd6243236d6daf0f4431ce6c0efa6e550a",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 14Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.36848000000000003,
+          "max_abs_error": 0.0
+        },
+        {
+          "canonical_identity": "83dcb21acfed699cb0f27101422c6bbd6243236d6daf0f4431ce6c0efa6e550a",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 12Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.36707999999999996,
+          "max_abs_error": 0.0
+        },
+        {
+          "canonical_identity": "83dcb21acfed699cb0f27101422c6bbd6243236d6daf0f4431ce6c0efa6e550a",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 14Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.36519999999999997,
+          "max_abs_error": 0.0
+        },
+        {
+          "canonical_identity": "83dcb21acfed699cb0f27101422c6bbd6243236d6daf0f4431ce6c0efa6e550a",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 13Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.36548,
+          "max_abs_error": 0.0
+        },
+        {
+          "canonical_identity": "83dcb21acfed699cb0f27101422c6bbd6243236d6daf0f4431ce6c0efa6e550a",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 15Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.36776000000000003,
+          "max_abs_error": 0.0
+        },
+        {
+          "canonical_identity": "83dcb21acfed699cb0f27101422c6bbd6243236d6daf0f4431ce6c0efa6e550a",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 14Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.36435999999999996,
+          "max_abs_error": 0.0
+        },
+        {
+          "canonical_identity": "83dcb21acfed699cb0f27101422c6bbd6243236d6daf0f4431ce6c0efa6e550a",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 13Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.36688,
+          "max_abs_error": 0.0
+        }
+      ],
+      "summary": {
+        "best_ms": 0.36435999999999996,
+        "count": 10,
+        "max_abs_error": 0.0,
+        "median_ms": 0.36741999999999997,
+        "p10_ms": 0.365116,
+        "p90_ms": 0.368888
+      },
+      "warmups": [
+        {
+          "canonical_identity": "83dcb21acfed699cb0f27101422c6bbd6243236d6daf0f4431ce6c0efa6e550a",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 14Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.36448,
+          "max_abs_error": 0.0
+        },
+        {
+          "canonical_identity": "83dcb21acfed699cb0f27101422c6bbd6243236d6daf0f4431ce6c0efa6e550a",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 15Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.3648,
+          "max_abs_error": 0.0
+        },
+        {
+          "canonical_identity": "83dcb21acfed699cb0f27101422c6bbd6243236d6daf0f4431ce6c0efa6e550a",
+          "gpu_state": {
+            "power_dpm_force_performance_level": "manual\n",
+            "pp_dpm_mclk": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *\n",
+            "pp_dpm_sclk": "0: 500Mhz\n1: 15Mhz *\n2: 2304Mhz\n"
+          },
+          "kernel_ms": 0.36468,
+          "max_abs_error": 0.0
+        }
+      ]
+    }
+  ],
+  "warmup_count": 3
+}

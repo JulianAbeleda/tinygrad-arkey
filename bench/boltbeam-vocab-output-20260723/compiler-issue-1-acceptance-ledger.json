@@ -1,0 +1,82 @@
+{
+  "schema": "boltbeam.compiler_issue_1_acceptance_ledger.v6",
+  "issue": "rotating-PV full-route compiler acceptance",
+  "runtime_policy_changed": false,
+  "promotion_eligible": false,
+  "verdict": "REJECT_RESOURCE_AND_ISA_EVIDENCE",
+  "first_real_full_route": {
+    "status": "HIP_PASS_NOT_ADMITTED",
+    "candidate_form": "one-call full-output rotating-PV route",
+    "hip": {
+      "compile_status": "PASS",
+      "wmma_census": {"qk": 8, "pv": 8, "total": 16},
+      "resources": {"vgpr": 198, "lds_bytes": 8704, "scratch_bytes": 0, "vgpr_spills": 0, "sgpr_spills": 0}
+    },
+    "amd_isa": {
+      "status": "UNAVAILABLE",
+      "failure": "opaque fragment failure",
+      "interpretation": "No final AMD ISA program/census/resource cross-check is available; HIP-only evidence cannot prove ISA lowering or synchronization."
+    },
+    "admission": {
+      "vgpr_max": 192,
+      "result": "REJECT_RESOURCE",
+      "delta_over_cap": 6
+    },
+    "allowed_claims": ["HIP compilation succeeds", "full logical 8-QK/8-PV AST/HIP census exists", "LDS total is 8704 bytes", "HIP metadata reports zero scratch and spills"],
+    "forbidden_claims": ["resource admission", "AMD ISA WMMA proof", "no-barrier/wait proof", "numeric parity", "replay timing eligibility", "promotion"]
+  },
+  "required_evidence_for_le_192": [
+    {
+      "id": "same_candidate_compile_join",
+      "requirement": "Capture final HIP source, binary, metadata, and AMD ISA from the same canonical graph/candidate/compiler command. Hash and join source, binary, ISA, graph, target, and compiler identity.",
+      "fields": ["canonical_graph_sha256", "candidate_id", "target", "compiler_identity", "command", "hip_source_sha256", "program_binary_sha256", "amd_isa_sha256"]
+    },
+    {
+      "id": "hip_resource_authority",
+      "requirement": "Final HIP code-object metadata reports vgpr <= 192, lds_bytes=8704, scratch_bytes=0, vgpr_spills=0, sgpr_spills=0. A count of 198 is a hard rejection, not a near pass.",
+      "fields": ["hip_resources.vgpr", "hip_resources.lds_bytes", "hip_resources.scratch_bytes", "hip_resources.vgpr_spills", "hip_resources.sgpr_spills"]
+    },
+    {
+      "id": "amd_isa_deopaque_and_crosscheck",
+      "requirement": "Resolve the opaque fragment failure so final AMD ISA renders for the same candidate. Capture role-attributed WMMA instructions, LDS loads/stores, waits, barriers, scratch/spill markers, highest referenced VGPR, and ISA hash. ISA resource fields are a cross-check, not a replacement for code-object allocation metadata.",
+      "fields": ["amd_isa_text", "amd_isa_sha256", "isa_qk_wmma_count", "isa_pv_wmma_count", "isa_lds_load_count", "isa_lds_store_count", "isa_wait_count", "isa_barrier_count", "isa_scratch_count", "isa_spill_count", "highest_referenced_vgpr"]
+    },
+    {
+      "id": "full_rotating_ownership",
+      "requirement": "Show all eight lane-major PV C windows, each with init/reload/PV-writeback/final-drain lifecycle, exact 8192 accumulator plus 512 probability LDS layout, one live float8 register window per lane, and no inactive PV register ownership.",
+      "fields": ["rotating_pv_abi", "pv_block_lifecycle", "lds_interval_census", "live_register_window_census", "total_lds_bytes"]
+    },
+    {
+      "id": "full_source_isa_wmma_census",
+      "requirement": "One compute call; source and final ISA independently report exact QK=8, PV=8, total=16. No expanded-KV or score/probability allocation is permitted.",
+      "fields": ["compute_call_count", "source_wmma_roles", "isa_wmma_roles", "allocation_census"]
+    },
+    {
+      "id": "single_wave_synchronization",
+      "requirement": "For gfx1100 wave32/local_size32, source and ISA both show zero workgroup barriers and matching ordered LDS wait counts for each reload/writeback and drain transition.",
+      "fields": ["local_size", "wavefront_size", "source_barrier_count", "isa_barrier_count", "source_lds_wait_sites", "isa_lds_wait_sites"]
+    }
+  ],
+  "required_evidence_for_parity": [
+    {
+      "id": "executed_full_output",
+      "requirement": "Dispatch only after resource and ISA gates pass. Execute the same complete 8-block candidate, not a compile-only or partial-PV variant, and compare every output element to an immutable fp32 reference/baseline.",
+      "fields": ["execution_binary_sha256", "input_sha256", "reference_sha256", "baseline_shape", "candidate_shape", "compared_elements"]
+    },
+    {
+      "id": "explicit_numeric_gate",
+      "requirement": "Record configured atol/rtol, max_abs, max_rel, rel_l2, finite-value checks, full_output=true, tolerance_passed=true, and status=PASS. Reference and candidate must use identical causal geometry/context and output block coverage 0..7.",
+      "fields": ["numeric.atol", "numeric.rtol", "numeric.max_abs", "numeric.max_rel", "numeric.rel_l2", "numeric.finite", "numeric.full_output", "numeric.tolerance_passed", "numeric.status", "geometry", "output_block_census"]
+    }
+  ],
+  "failure_semantics": {
+    "vgpr_198": "REJECT_RESOURCE; do not dispatch for parity or timing.",
+    "opaque_amd_isa": "REJECT_ISA_EVIDENCE; HIP role tags/metadata do not establish final ISA lowering.",
+    "missing_full_output_execution": "REJECT_NUMERIC_EVIDENCE; no parity claim.",
+    "any_missing_join_or_gate": "promotion_eligible=false and no runtime route admission."
+  },
+  "minimum_next_artifact": {
+    "schema": "tinygrad.shared_attention_rotating_pv_full_route.v2",
+    "required_fields": ["candidate_id", "canonical_graph_sha256", "target", "compiler_identity", "command", "geometry", "rotating_pv_abi", "hip_source_sha256", "program_binary_sha256", "amd_isa_sha256", "hip_resources", "amd_isa_resource_crosscheck", "source_wmma_roles", "isa_wmma_roles", "allocation_census", "synchronization", "input_sha256", "reference_sha256", "numeric", "admission", "verdict"]
+  }
+}

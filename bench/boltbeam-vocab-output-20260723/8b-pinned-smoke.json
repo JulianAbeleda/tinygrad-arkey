@@ -1,0 +1,319 @@
+{
+  "schema": "prefill-whole-synced-authority.v1",
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "model_profile": {
+    "id": "qwen3_8b_q4k_m_gfx1100",
+    "note": "8B automatic prefill authority path",
+    "env_defaults": {}
+  },
+  "mode": "smoke",
+  "chunk_n": 512,
+  "chunk_ms": {
+    "0": 5201.0958
+  },
+  "chunk_samples_ms": {
+    "0": [
+      5346.0946,
+      5225.4798,
+      5342.7087,
+      5353.2536,
+      5214.8106,
+      5345.1635,
+      5332.3061,
+      5201.0958,
+      5361.5668,
+      5208.3824
+    ]
+  },
+  "device_profile": {
+    "0": {
+      "schema": "prefill-device-profile-range-summary.v1",
+      "kernel_count": 9060,
+      "device_ms": 28124.3263,
+      "by_name": {
+        "E_16384_32_4_4afc55fa132d81165354793cf0b6a0a804be95f4c05003f79e9e7d980decb455": {
+          "calls": 10,
+          "device_ms": 0.0903,
+          "min_ms": 0.0088,
+          "max_ms": 0.0094
+        },
+        "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f": {
+          "calls": 10,
+          "device_ms": 0.1214,
+          "min_ms": 0.0118,
+          "max_ms": 0.0128
+        },
+        "E_32_16_2_8_16_4_4_0132545605631df81ebe8ca65386af1a13361c79063ed3d18dcf3bfc3d53b263": {
+          "calls": 360,
+          "device_ms": 3.6032,
+          "min_ms": 0.0094,
+          "max_ms": 0.0116
+        },
+        "E_32_64_2_8_16_4_d284500cff8b51576f000f919a03f01f8d4eb4dce8ebdd408e25af2bad1f9dcd": {
+          "calls": 360,
+          "device_ms": 3.6802,
+          "min_ms": 0.0085,
+          "max_ms": 0.0229
+        },
+        "E_4_8_8_16_4_012d9ab07e23cb038a68db41f87a16bc5a83bced833178741892bfce0bda184f": {
+          "calls": 360,
+          "device_ms": 2.1073,
+          "min_ms": 0.0055,
+          "max_ms": 0.0133
+        },
+        "E_4_8_8_16_4_d14c5841b95bc7573c01374cb24aaf7f573ef63ab81db65199acd7d4eb1ce822": {
+          "calls": 360,
+          "device_ms": 2.1006,
+          "min_ms": 0.0055,
+          "max_ms": 0.0124
+        },
+        "E_512_16_8_2_4_4_7ba8bb6e17db46be97b12bb14aa0061205f501e4d34840e5e9a887084bd05ccc": {
+          "calls": 10,
+          "device_ms": 0.6476,
+          "min_ms": 0.0523,
+          "max_ms": 0.0765
+        },
+        "E_512_8_8_16_2_38ab5a6b4ffc4e22b0588bf8f0e2297dfb4ae544f0da3f6d785ce1f7058b2d98": {
+          "calls": 360,
+          "device_ms": 5.382,
+          "min_ms": 0.0145,
+          "max_ms": 0.0158
+        },
+        "E_64_192_8_16_4_640bf817cadb0a8147e90971f99a6347b79860af34aa6133d67935af68c02254": {
+          "calls": 360,
+          "device_ms": 11.364,
+          "min_ms": 0.0276,
+          "max_ms": 0.0345
+        },
+        "E_64_2374_8_16_4_7d0d7245229066f2ef0afa3d1ae9106cf30b68e0081babb3ff43bd7e7d13316a": {
+          "calls": 10,
+          "device_ms": 7.1665,
+          "min_ms": 0.7099,
+          "max_ms": 0.7236
+        },
+        "E_64_64_8_16_4_22db9d0fb5a7419924ea6bdd9d95dc7db64100c51de1477280b7272535bdc68d": {
+          "calls": 720,
+          "device_ms": 10.5419,
+          "min_ms": 0.012,
+          "max_ms": 0.0199
+        },
+        "E_64_64_8_16_4_4ca7d648d46b86ea510ec6bddd0cc0ae3bd58b49b538dfa160729cc7630bc50b": {
+          "calls": 720,
+          "device_ms": 8.6948,
+          "min_ms": 0.0116,
+          "max_ms": 0.0128
+        },
+        "E_8_16_2_8_16_4_4_e8453c0df6fe6ba806b7f1f8f05499e65cbd1dcda843833b7fa10c8ff76bc095": {
+          "calls": 360,
+          "device_ms": 2.7619,
+          "min_ms": 0.0074,
+          "max_ms": 0.0088
+        },
+        "q6k_gen_prefill_direct_out_151936_4096_512": {
+          "calls": 10,
+          "device_ms": 3765.3298,
+          "min_ms": 371.0582,
+          "max_ms": 379.5198
+        },
+        "r_16_16_8_16_4_4_16_2_2_2_16_2_8bec98216fc0051d74a4f94c45cad3acc86707ef0b3947f578ac3a3a95e42cd1": {
+          "calls": 180,
+          "device_ms": 292.0007,
+          "min_ms": 1.5484,
+          "max_ms": 1.7557
+        },
+        "r_16_16_8_16_4_4_16_4_2_16_2_3ae3448efc5e3ac33cee0ce86b8f4d960d9157aa0de84f609d9c2c6db5d815b7": {
+          "calls": 540,
+          "device_ms": 463.44,
+          "min_ms": 0.8515,
+          "max_ms": 0.8711
+        },
+        "r_16_256_8_16_4_3_16_4_2_8_4_69a1e63daae7c2cbe6382f6e03713846d26de9ce8f04c055a31d692fd65c47c6": {
+          "calls": 720,
+          "device_ms": 7886.5961,
+          "min_ms": 10.8261,
+          "max_ms": 11.2273
+        },
+        "r_16_64_8_16_4_4_16_4_2_16_2_4889af45036d5236689e3bb3ce1ab57f1b4daadd240f120835cb1f028d22f1c1": {
+          "calls": 360,
+          "device_ms": 1932.1581,
+          "min_ms": 4.9261,
+          "max_ms": 5.7375
+        },
+        "r_16_64_8_16_4_4_16_4_2_16_2_6e4bdc4ee242aeec177ee9fe236100f16eda84336a8ca8e12d2bc9b3999043d5": {
+          "calls": 360,
+          "device_ms": 2201.0864,
+          "min_ms": 5.6556,
+          "max_ms": 6.4976
+        },
+        "r_16_64_8_16_4_4_48_2_2_2_16_2_a453b3bc6d06adf5d2a130a69e572c468eb10942920b3e0580255c7620fc40d8": {
+          "calls": 180,
+          "device_ms": 6761.642,
+          "min_ms": 36.7428,
+          "max_ms": 38.262
+        },
+        "r_16_64_8_16_4_4_48_4_2_16_2_3554a22a8b4cc6e4bbb222dba6eb84fb5ee297c09c54e02d0be55016aea794cc": {
+          "calls": 180,
+          "device_ms": 3811.9373,
+          "min_ms": 19.9983,
+          "max_ms": 21.9904
+        },
+        "r_2_2_16_32_2_8_16_2_2_128_4_a7cfe91b1d0d76f870112b47bd024e0b4710e9f1b3ace2c175168dca0cff2faf": {
+          "calls": 360,
+          "device_ms": 128.4768,
+          "min_ms": 0.2885,
+          "max_ms": 0.3911
+        },
+        "r_2_2_2_2_32_16_8_8_16_32_4_3f24c5fefc7808b800c47c345228d826cfa9f4440b0a29feb73125adefdfdc1c": {
+          "calls": 360,
+          "device_ms": 477.337,
+          "min_ms": 1.3213,
+          "max_ms": 1.3304
+        },
+        "r_32_64_8_8_16_4_512_128_4_a05f7c3b0cb5724d57444a9b331c7f238a5bd2813b1d32ff704bab007180240b": {
+          "calls": 360,
+          "device_ms": 320.4656,
+          "min_ms": 0.8855,
+          "max_ms": 0.9018
+        },
+        "r_32_8_16_32_4_01ccb29688e3306266a60f35a46638380759684fc332d5dc592c56360840b1eb": {
+          "calls": 360,
+          "device_ms": 2.5177,
+          "min_ms": 0.0068,
+          "max_ms": 0.0092
+        },
+        "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561": {
+          "calls": 730,
+          "device_ms": 20.1086,
+          "min_ms": 0.027,
+          "max_ms": 0.0442
+        },
+        "r_4_32_8_16_32_4_c8de7edceff274caf5933f5d3fa68986da46aafacefe13dba3348b2120e3e4b2": {
+          "calls": 360,
+          "device_ms": 2.9685,
+          "min_ms": 0.0076,
+          "max_ms": 0.0107
+        }
+      }
+    }
+  },
+  "whole_tok_s": {
+    "512": 98.44
+  },
+  "graph_gemm": false,
+  "prefill_v2": true,
+  "prefill_route": "DIRECT_PACKED_FALLBACK",
+  "shared_attention": {
+    "schema": "shared-prefill-attention-route.v2",
+    "requested": false,
+    "boundary": "scaled_dot_product_attention",
+    "semantic_candidate": null,
+    "selected_lowering": "ordinary_sdpa",
+    "fallback_contract": "ordinary_sdpa",
+    "fusion_proven": false,
+    "dual_wmma_proven": false,
+    "performance_proven": false,
+    "promotion_eligible": false,
+    "blocker": "generic tiled fused attention lowering is not implemented",
+    "model_forward_attn_qo_identity": null,
+    "model_forward_attn_qo_one_buffer": false
+  },
+  "K": 1,
+  "warmups": 3,
+  "rounds": 10,
+  "pin_clock": true,
+  "logits_only": true,
+  "clock_pin": {
+    "cmd": "rocm-smi --setperflevel manual --setsclk 2 --setmclk 3",
+    "rc": 0,
+    "ok": true,
+    "out": "==\n============================== Set Performance Level ===============================\nGPU[0]\t\t: Performance level set to manual\n====================================================================================\n=============================== End of ROCm SMI Log ================================\n",
+    "transport": "rocm_smi"
+  },
+  "git_short": "b57dcf5d0",
+  "git_dirty": true,
+  "route_attribution": {
+    "prefill_route_family": "prefill_v2_scheduler_matmul_default",
+    "prefill_route_pure": true,
+    "prefill_route_rolled_back": false,
+    "prefill_route_provenance": "tinygrad_scheduler_generated",
+    "prefill_q4k_route_family": "prefill_q4k_direct_tile4x4_default",
+    "prefill_q4k_route_pure": true,
+    "prefill_q4k_route_rolled_back": false,
+    "prefill_q4k_route_provenance": "machine_authored_generated"
+  },
+  "candidate_set_route_census": null,
+  "prefill_role_routes": {},
+  "timing_authority": "synced model.__call__ prefill-v2 warmstart path, min over repeated bursts, no generate TTFT/sampling",
+  "comparator_id": null,
+  "candidate_id": null,
+  "primitive_class": null,
+  "threshold": null,
+  "ledger": null,
+  "quality_gate": {
+    "status": "MISSING",
+    "note": "no whole-model dNLL/greedy-parity quality gate supplied; supply --quality-gate to promote (F3)"
+  },
+  "reproducibility_band": {
+    "per_chunk": {
+      "0": {
+        "n": 10,
+        "min_ms": 5201.0958,
+        "max_ms": 5361.5668,
+        "mean_ms": 5293.0862,
+        "std_ms": 66.4582,
+        "cv": 0.01256,
+        "spread": 0.03085
+      }
+    },
+    "worst_cv": 0.01256,
+    "worst_spread": 0.03085,
+    "single_sample": false
+  },
+  "measurement_regime": {
+    "regime_id": "generated_pure",
+    "provenance": "tinygrad_scheduler_generated",
+    "route_pure": true,
+    "route_rolled_back": false,
+    "mode": "smoke",
+    "logits_only": true,
+    "authoritative_for_generated_promotion": true
+  },
+  "authority_completeness": {
+    "schema": "prefill-whole-synced-authority-completeness.v1",
+    "fields": {
+      "comparator_id": false,
+      "reproducibility_band": true,
+      "candidate_id": false,
+      "primitive_class": false,
+      "threshold": false,
+      "ledger": false,
+      "quality_gate_pass": false
+    },
+    "missing": [
+      "comparator_id",
+      "candidate_id",
+      "primitive_class",
+      "threshold",
+      "ledger",
+      "quality_gate_pass"
+    ],
+    "ok": false
+  },
+  "prefill_route_binding_gate": {
+    "schema": "prefill-route-binding-gate.v1",
+    "verdict": "PREFILL_ROUTE_BINDING_PASS",
+    "required_route": null,
+    "selected_family": "prefill_gemm",
+    "selected_route": "prefill_v2_scheduler_matmul_default",
+    "effective_routes": [
+      "decode_flash_live_split_g4_kvboth",
+      "decode_q4k_g3_generated",
+      "decode_q6k_coop_generated",
+      "prefill_q4k_direct_tile4x4_default",
+      "prefill_v2_scheduler_matmul_default"
+    ],
+    "binding_regime": "generated_pure",
+    "candidate_set_requested": false,
+    "failures": []
+  }
+}

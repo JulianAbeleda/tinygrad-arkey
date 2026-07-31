@@ -1,0 +1,76 @@
+{
+  "date": "2026-06-26",
+  "timestamp": "20260703-133132",
+  "verdict": "FUSED_TILE_LIFECYCLE_ATTENTION_INDEX_NUMERIC_PASS__SCALE_REPRO_NEXT",
+  "minimal_repro": {
+    "checked": true,
+    "verdict": "FUSED_TILE_LIFECYCLE_ATTENTION_INDEX_NUMERIC_PASS__SCALE_REPRO_NEXT",
+    "classified": true,
+    "source": "attention_builder_blocker_artifact",
+    "synthetic": {
+      "checked": true,
+      "compiled": true,
+      "pass": true,
+      "max_abs": 1.862645149230957e-09,
+      "rmse": 7.604217255874346e-10,
+      "shape": {
+        "D": 4,
+        "J": 3,
+        "E": 5,
+        "W": 6
+      }
+    },
+    "synthetic_global_g": {
+      "checked": true,
+      "compiled": true,
+      "pass": true,
+      "max_abs": 2.9802322387695312e-08,
+      "rmse": 8.236926696270075e-09,
+      "shape": {
+        "T": 2,
+        "G": 3,
+        "D": 4,
+        "J": 3,
+        "E": 5,
+        "W": 6
+      }
+    },
+    "synthetic_attention_index": {
+      "checked": true,
+      "compiled": true,
+      "pass": true,
+      "max_abs": 2.384185791015625e-07,
+      "rmse": 5.739043018593293e-08,
+      "shape": {
+        "T": 2,
+        "G": 3,
+        "D": 4,
+        "J": 3,
+        "E": 5,
+        "MAXC": 8,
+        "W": 6
+      }
+    },
+    "known_failure_signature": {
+      "exception": null,
+      "exception_type": null,
+      "has_estimates_from_uops": false,
+      "has_pop_from_empty_list": false
+    }
+  },
+  "attention_blocker_artifact": {
+    "available": false,
+    "path": "bench/qk-decode-attention-fused-score-state-pv-tile/latest.json"
+  },
+  "required_lowering_capability": {
+    "generic_shape": "nested reduce + recurrence tuple + local output axis + compact metadata store",
+    "attention_shape": "q.k score reduce inside token recurrence with local-d PV and l/m metadata columns",
+    "first_fix_target": "scope-balanced lowering/estimation for nested END scopes",
+    "not_yet": [
+      "LDS tuning",
+      "v_dot2 lowering",
+      "W==D promotion"
+    ]
+  },
+  "next_step": "Attention-like indexing passes at small shape; next isolator should scale D/E/W toward Hd=128/W=130 to locate the size/resource threshold."
+}

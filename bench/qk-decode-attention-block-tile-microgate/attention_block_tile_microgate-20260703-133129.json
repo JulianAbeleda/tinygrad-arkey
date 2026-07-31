@@ -1,0 +1,68 @@
+{
+  "date": "2026-06-26",
+  "timestamp": "20260703-133129",
+  "verdict": "BLOCK_TILE_MICROGATE_PASS",
+  "shape": {
+    "Hq": 32,
+    "Hkv": 8,
+    "Hd": 128,
+    "MAXC": 256
+  },
+  "tile": {
+    "threads": 128,
+    "warps": 4,
+    "tk": 16,
+    "lds_target_bytes": 8192
+  },
+  "results": [
+    {
+      "checked": true,
+      "Tc": 128,
+      "L": 64,
+      "S": 2,
+      "finite": true,
+      "max_abs": 1.52587890625e-05,
+      "rel_rmse": 1.1948579015097494e-07,
+      "tol_abs": 0.005,
+      "tol_rel": 5e-05,
+      "pass": true
+    },
+    {
+      "checked": true,
+      "Tc": 130,
+      "L": 64,
+      "S": 3,
+      "finite": true,
+      "max_abs": 1.52587890625e-05,
+      "rel_rmse": 1.2910604141325166e-07,
+      "tol_abs": 0.005,
+      "tol_rel": 5e-05,
+      "pass": true
+    },
+    {
+      "checked": true,
+      "Tc": 32,
+      "L": 64,
+      "S": 1,
+      "finite": true,
+      "max_abs": 5.7220458984375e-06,
+      "rel_rmse": 1.0265874550441367e-07,
+      "tol_abs": 0.005,
+      "tol_rel": 5e-05,
+      "pass": true
+    },
+    {
+      "checked": true,
+      "Tc": 256,
+      "L": 64,
+      "S": 4,
+      "finite": true,
+      "max_abs": 2.288818359375e-05,
+      "rel_rmse": 1.3333576021068438e-07,
+      "tol_abs": 0.005,
+      "tol_rel": 5e-05,
+      "pass": true
+    }
+  ],
+  "decision": "Wire DECODE_ATTN_BLOCK_TILE=1 through route/ISA/W==D gates."
+}

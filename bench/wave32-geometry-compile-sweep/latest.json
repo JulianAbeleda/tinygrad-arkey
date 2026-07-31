@@ -1,0 +1,265 @@
+{
+  "schema": "wave32_geometry_compile_sweep.v1",
+  "scope": "compile-only; existing tensor/compiler path",
+  "geometries": {
+    "wave_size": 32,
+    "waves": [
+      [
+        1,
+        1
+      ],
+      [
+        2,
+        2
+      ],
+      [
+        4,
+        2
+      ]
+    ],
+    "tiles": [
+      16,
+      32,
+      64,
+      128
+    ],
+    "k": 256
+  },
+  "first_failure": {
+    "tile": 16,
+    "waves": [
+      1,
+      1
+    ]
+  },
+  "results": [
+    {
+      "tile": 16,
+      "waves": [
+        1,
+        1
+      ],
+      "wave_size": 32,
+      "k": 256,
+      "wmma_count": null,
+      "lds_bytes": 2048,
+      "register_evidence": {
+        "status": "unavailable",
+        "source": "final allocator"
+      },
+      "status": "FAIL",
+      "failure_stage": "rewrite_or_lowering",
+      "failure_type": "KeyError",
+      "first_failure": "UOp(Ops.SINK, dtypes.void, arg=KernelInfo(name='test', axis_types=(), dont_use_locals=False, applied_opts=(), opts_to_apply=(Opt(op=OptOps.TC, axis=0, arg=(0, 0, 1)), Opt(op=OptOps.UNROLL, axis=0, arg=0)), estimates=None, candidate_context=KernelCandidateContext(schema_version='boltbeam.full_kernel_candidate.v1', canonical_identity='21fccfe14ad1db2c31f0f9a74d980ecacc6fc6a0fae33efdbfbb67683ca90890', geometry=KernelTileGeometry(tile=(16, 16, 32), waves=(1, 1), threads=32, wave_size=32, lds_windows=(KernelLDSWindow(role='A', base=0, end=1024, stride_bytes=64), KernelLDSWindow(role='B', base=1024, end=2048, stride_bytes=64))), pipeline=KernelStage1PipelinePlan(buffer_count=2, slot_bytes=1024, stage_count=1, roles=('A', 'B')), packed_weight=None)), src=(\n  UOp(Ops.END, dtypes.void, arg=None, src=(\n    UOp(Ops.STORE, dtypes.void, arg=None, src=(\n      UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n        UOp(Ops.PARAM, dtypes.half.ptr(256), arg=ParamArg(0), src=()),\n        UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n          UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n            x6:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n              UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                          UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                            UOp(Ops.RANGE, dtypes.weakint, arg=(1, AxisType.GLOBAL), src=(\n                              x15:=UOp(Ops.CONST, dtypes.weakint, arg=1, src=()),)),\n                            x16:=UOp(Ops.CONST, dtypes.weakint, arg=2, src=()),)),\n                          UOp(Ops.RANGE, dtypes.weakint, arg=(5, AxisType.UPCAST), src=(\n                            x16,)),)),\n                        x16,)),\n                      UOp(Ops.RANGE, dtypes.weakint, arg=(4, AxisType.UPCAST), src=(\n                        x16,)),)),\n                    x16,)),\n                  UOp(Ops.RANGE, dtypes.weakint, arg=(3, AxisType.UPCAST), src=(\n                    x16,)),)),\n                x16,)),\n              UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                  x22:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                    x23:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                      x24:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                        x25:=UOp(Ops.RANGE, dtypes.weakint, arg=(-1, AxisType.WARP), src=(\n                          UOp(Ops.CONST, dtypes.weakint, arg=32, src=()),)),\n                        x16,)),\n                      x16,)),\n                    x16,)),\n                  x16,)),\n                x16,)),)),\n            x27:=UOp(Ops.CONST, dtypes.weakint, arg=16, src=()),)),\n          x28:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n            UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n              UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                          UOp(Ops.RANGE, dtypes.weakint, arg=(2, AxisType.GLOBAL), src=(\n                            x15,)),\n                          x16,)),\n                        UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                          x22,\n                          x16,)),)),\n                      x16,)),\n                    UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                      x23,\n                      x16,)),)),\n                  x16,)),\n                UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                  x24,\n                  x16,)),)),\n              x16,)),\n            UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n              x25,\n              x16,)),)),)),)),\n      UOp(Ops.CAST, dtypes.half, arg=None, src=(\n        UOp(Ops.REDUCE, dtypes.float, arg=(Ops.ADD, ()), tag=TC, src=(\n          UOp(Ops.CAST, dtypes.float, arg=None, src=(\n            UOp(Ops.MUL, dtypes.half, arg=None, src=(\n              UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n                UOp(Ops.PARAM, dtypes.half.ptr(4096), arg=ParamArg(1), src=()),\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    x6,\n                    UOp(Ops.CONST, dtypes.weakint, arg=256, src=()),)),\n                  x50:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                          UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                            UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                              UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                                UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                                  UOp(Ops.RANGE, dtypes.weakint, arg=(0, AxisType.REDUCE), src=(\n                                    x27,)),\n                                  x16,)),\n                                UOp(Ops.RANGE, dtypes.weakint, arg=(9, AxisType.UNROLL), src=(\n                                  x16,)),)),\n                              x16,)),\n                            UOp(Ops.RANGE, dtypes.weakint, arg=(8, AxisType.UNROLL), src=(\n                              x16,)),)),\n                          x16,)),\n                        UOp(Ops.RANGE, dtypes.weakint, arg=(7, AxisType.UNROLL), src=(\n                          x16,)),)),\n                      x16,)),\n                    UOp(Ops.RANGE, dtypes.weakint, arg=(6, AxisType.UNROLL), src=(\n                      x16,)),)),)),)),\n              UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n                UOp(Ops.PARAM, dtypes.half.ptr(4096), arg=ParamArg(2), src=()),\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    x50,\n                    x27,)),\n                  x28,)),)),)),)),\n          x50,)),)),)),\n    x6,\n    x28,)),))"
+    },
+    {
+      "tile": 32,
+      "waves": [
+        1,
+        1
+      ],
+      "wave_size": 32,
+      "k": 256,
+      "wmma_count": null,
+      "lds_bytes": 4096,
+      "register_evidence": {
+        "status": "unavailable",
+        "source": "final allocator"
+      },
+      "status": "FAIL",
+      "failure_stage": "rewrite_or_lowering",
+      "failure_type": "TypeError",
+      "first_failure": "'int' object is not subscriptable"
+    },
+    {
+      "tile": 64,
+      "waves": [
+        1,
+        1
+      ],
+      "wave_size": 32,
+      "k": 256,
+      "wmma_count": null,
+      "lds_bytes": 8192,
+      "register_evidence": {
+        "status": "unavailable",
+        "source": "final allocator"
+      },
+      "status": "FAIL",
+      "failure_stage": "rewrite_or_lowering",
+      "failure_type": "TypeError",
+      "first_failure": "'int' object is not subscriptable"
+    },
+    {
+      "tile": 128,
+      "waves": [
+        1,
+        1
+      ],
+      "wave_size": 32,
+      "k": 256,
+      "wmma_count": null,
+      "lds_bytes": 16384,
+      "register_evidence": {
+        "status": "unavailable",
+        "source": "final allocator"
+      },
+      "status": "FAIL",
+      "failure_stage": "rewrite_or_lowering",
+      "failure_type": "TypeError",
+      "first_failure": "'int' object is not subscriptable"
+    },
+    {
+      "tile": 16,
+      "waves": [
+        2,
+        2
+      ],
+      "wave_size": 32,
+      "k": 256,
+      "wmma_count": null,
+      "lds_bytes": 2048,
+      "register_evidence": {
+        "status": "unavailable",
+        "source": "final allocator"
+      },
+      "status": "FAIL",
+      "failure_stage": "rewrite_or_lowering",
+      "failure_type": "KernelOptError",
+      "first_failure": "tile must divide into whole per-wave tensor-core subtiles and K steps"
+    },
+    {
+      "tile": 32,
+      "waves": [
+        2,
+        2
+      ],
+      "wave_size": 32,
+      "k": 256,
+      "wmma_count": null,
+      "lds_bytes": 4096,
+      "register_evidence": {
+        "status": "unavailable",
+        "source": "final allocator"
+      },
+      "status": "FAIL",
+      "failure_stage": "rewrite_or_lowering",
+      "failure_type": "KeyError",
+      "first_failure": "UOp(Ops.SINK, dtypes.void, arg=KernelInfo(name='test', axis_types=(), dont_use_locals=False, applied_opts=(), opts_to_apply=(Opt(op=OptOps.TC, axis=0, arg=(0, 0, 1)), Opt(op=OptOps.UNROLL, axis=0, arg=0)), estimates=None, candidate_context=KernelCandidateContext(schema_version='boltbeam.full_kernel_candidate.v1', canonical_identity='14a8416df04b89dca2494695a6320a1c4bf30f3eb74505997fbb28a3fe9feb4d', geometry=KernelTileGeometry(tile=(32, 32, 32), waves=(2, 2), threads=128, wave_size=32, lds_windows=(KernelLDSWindow(role='A', base=0, end=2048, stride_bytes=64), KernelLDSWindow(role='B', base=2048, end=4096, stride_bytes=64))), pipeline=KernelStage1PipelinePlan(buffer_count=2, slot_bytes=2048, stage_count=1, roles=('A', 'B')), packed_weight=None)), src=(\n  UOp(Ops.END, dtypes.void, arg=None, src=(\n    UOp(Ops.STORE, dtypes.void, arg=None, src=(\n      UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n        UOp(Ops.PARAM, dtypes.half.ptr(1024), arg=ParamArg(0), src=()),\n        UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n          UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n            x6:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n              UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                          UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                            UOp(Ops.RANGE, dtypes.weakint, arg=(1, AxisType.GLOBAL), src=(\n                              x15:=UOp(Ops.CONST, dtypes.weakint, arg=2, src=()),)),\n                            x15,)),\n                          UOp(Ops.RANGE, dtypes.weakint, arg=(5, AxisType.UPCAST), src=(\n                            x15,)),)),\n                        x15,)),\n                      UOp(Ops.RANGE, dtypes.weakint, arg=(4, AxisType.UPCAST), src=(\n                        x15,)),)),\n                    x15,)),\n                  UOp(Ops.RANGE, dtypes.weakint, arg=(3, AxisType.UPCAST), src=(\n                    x15,)),)),\n                x15,)),\n              UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                  x21:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                    x22:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                      x23:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                        x24:=UOp(Ops.RANGE, dtypes.weakint, arg=(-1, AxisType.WARP), src=(\n                          x25:=UOp(Ops.CONST, dtypes.weakint, arg=32, src=()),)),\n                        x15,)),\n                      x15,)),\n                    x15,)),\n                  x15,)),\n                x15,)),)),\n            x25,)),\n          x26:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n            UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n              UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                          UOp(Ops.RANGE, dtypes.weakint, arg=(2, AxisType.GLOBAL), src=(\n                            x15,)),\n                          x15,)),\n                        UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                          x21,\n                          x15,)),)),\n                      x15,)),\n                    UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                      x22,\n                      x15,)),)),\n                  x15,)),\n                UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                  x23,\n                  x15,)),)),\n              x15,)),\n            UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n              x24,\n              x15,)),)),)),)),\n      UOp(Ops.CAST, dtypes.half, arg=None, src=(\n        UOp(Ops.REDUCE, dtypes.float, arg=(Ops.ADD, ()), tag=TC, src=(\n          UOp(Ops.CAST, dtypes.float, arg=None, src=(\n            UOp(Ops.MUL, dtypes.half, arg=None, src=(\n              UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n                UOp(Ops.PARAM, dtypes.half.ptr(8192), arg=ParamArg(1), src=()),\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    x6,\n                    UOp(Ops.CONST, dtypes.weakint, arg=256, src=()),)),\n                  x48:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                          UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                            UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                              UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                                UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                                  UOp(Ops.RANGE, dtypes.weakint, arg=(0, AxisType.REDUCE), src=(\n                                    UOp(Ops.CONST, dtypes.weakint, arg=16, src=()),)),\n                                  x15,)),\n                                UOp(Ops.RANGE, dtypes.weakint, arg=(9, AxisType.UNROLL), src=(\n                                  x15,)),)),\n                              x15,)),\n                            UOp(Ops.RANGE, dtypes.weakint, arg=(8, AxisType.UNROLL), src=(\n                              x15,)),)),\n                          x15,)),\n                        UOp(Ops.RANGE, dtypes.weakint, arg=(7, AxisType.UNROLL), src=(\n                          x15,)),)),\n                      x15,)),\n                    UOp(Ops.RANGE, dtypes.weakint, arg=(6, AxisType.UNROLL), src=(\n                      x15,)),)),)),)),\n              UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n                UOp(Ops.PARAM, dtypes.half.ptr(8192), arg=ParamArg(2), src=()),\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    x48,\n                    x25,)),\n                  x26,)),)),)),)),\n          x48,)),)),)),\n    x6,\n    x26,)),))"
+    },
+    {
+      "tile": 64,
+      "waves": [
+        2,
+        2
+      ],
+      "wave_size": 32,
+      "k": 256,
+      "wmma_count": null,
+      "lds_bytes": 8192,
+      "register_evidence": {
+        "status": "unavailable",
+        "source": "final allocator"
+      },
+      "status": "FAIL",
+      "failure_stage": "rewrite_or_lowering",
+      "failure_type": "KernelOptError",
+      "first_failure": "precontract pipeline allocation does not exactly cover its active LDS slots"
+    },
+    {
+      "tile": 128,
+      "waves": [
+        2,
+        2
+      ],
+      "wave_size": 32,
+      "k": 256,
+      "wmma_count": null,
+      "lds_bytes": 16384,
+      "register_evidence": {
+        "status": "unavailable",
+        "source": "final allocator"
+      },
+      "status": "FAIL",
+      "failure_stage": "rewrite_or_lowering",
+      "failure_type": "KernelOptError",
+      "first_failure": "precontract pipeline allocation does not exactly cover its active LDS slots"
+    },
+    {
+      "tile": 16,
+      "waves": [
+        4,
+        2
+      ],
+      "wave_size": 32,
+      "k": 256,
+      "wmma_count": null,
+      "lds_bytes": 2048,
+      "register_evidence": {
+        "status": "unavailable",
+        "source": "final allocator"
+      },
+      "status": "FAIL",
+      "failure_stage": "rewrite_or_lowering",
+      "failure_type": "KernelOptError",
+      "first_failure": "tile must divide into whole per-wave tensor-core subtiles and K steps"
+    },
+    {
+      "tile": 32,
+      "waves": [
+        4,
+        2
+      ],
+      "wave_size": 32,
+      "k": 256,
+      "wmma_count": null,
+      "lds_bytes": 4096,
+      "register_evidence": {
+        "status": "unavailable",
+        "source": "final allocator"
+      },
+      "status": "FAIL",
+      "failure_stage": "rewrite_or_lowering",
+      "failure_type": "KernelOptError",
+      "first_failure": "tile must divide into whole per-wave tensor-core subtiles and K steps"
+    },
+    {
+      "tile": 64,
+      "waves": [
+        4,
+        2
+      ],
+      "wave_size": 32,
+      "k": 256,
+      "wmma_count": null,
+      "lds_bytes": 8192,
+      "register_evidence": {
+        "status": "unavailable",
+        "source": "final allocator"
+      },
+      "status": "FAIL",
+      "failure_stage": "rewrite_or_lowering",
+      "failure_type": "KeyError",
+      "first_failure": "UOp(Ops.SINK, dtypes.void, arg=KernelInfo(name='test', axis_types=(), dont_use_locals=False, applied_opts=(), opts_to_apply=(Opt(op=OptOps.TC, axis=0, arg=(0, 0, 1)), Opt(op=OptOps.UNROLL, axis=0, arg=0)), estimates=None, candidate_context=KernelCandidateContext(schema_version='boltbeam.full_kernel_candidate.v1', canonical_identity='0022bbbf85efd603feee061d815fe376270e1c22156fdf01980adcb9348d5909', geometry=KernelTileGeometry(tile=(64, 64, 32), waves=(4, 2), threads=256, wave_size=32, lds_windows=(KernelLDSWindow(role='A', base=0, end=4096, stride_bytes=64), KernelLDSWindow(role='B', base=4096, end=8192, stride_bytes=64))), pipeline=KernelStage1PipelinePlan(buffer_count=2, slot_bytes=4096, stage_count=1, roles=('A', 'B')), packed_weight=None)), src=(\n  UOp(Ops.END, dtypes.void, arg=None, src=(\n    UOp(Ops.STORE, dtypes.void, arg=None, src=(\n      UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n        UOp(Ops.PARAM, dtypes.half.ptr(4096), arg=ParamArg(0), src=()),\n        UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n          UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n            x6:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n              UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                          UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                            UOp(Ops.RANGE, dtypes.weakint, arg=(1, AxisType.GLOBAL), src=(\n                              UOp(Ops.CONST, dtypes.weakint, arg=4, src=()),)),\n                            x16:=UOp(Ops.CONST, dtypes.weakint, arg=2, src=()),)),\n                          UOp(Ops.RANGE, dtypes.weakint, arg=(5, AxisType.UPCAST), src=(\n                            x16,)),)),\n                        x16,)),\n                      UOp(Ops.RANGE, dtypes.weakint, arg=(4, AxisType.UPCAST), src=(\n                        x16,)),)),\n                    x16,)),\n                  UOp(Ops.RANGE, dtypes.weakint, arg=(3, AxisType.UPCAST), src=(\n                    x16,)),)),\n                x16,)),\n              UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                  x22:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                    x23:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                      x24:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                        x25:=UOp(Ops.RANGE, dtypes.weakint, arg=(-1, AxisType.WARP), src=(\n                          UOp(Ops.CONST, dtypes.weakint, arg=32, src=()),)),\n                        x16,)),\n                      x16,)),\n                    x16,)),\n                  x16,)),\n                x16,)),)),\n            x27:=UOp(Ops.CONST, dtypes.weakint, arg=64, src=()),)),\n          x28:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n            UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n              UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                          UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                            UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                              UOp(Ops.RANGE, dtypes.weakint, arg=(2, AxisType.GLOBAL), src=(\n                                x16,)),\n                              x16,)),\n                            UOp(Ops.RANGE, dtypes.weakint, arg=(10, AxisType.UPCAST), src=(\n                              x16,)),)),\n                          x16,)),\n                        UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                          x22,\n                          x16,)),)),\n                      x16,)),\n                    UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                      x23,\n                      x16,)),)),\n                  x16,)),\n                UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                  x24,\n                  x16,)),)),\n              x16,)),\n            UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n              x25,\n              x16,)),)),)),)),\n      UOp(Ops.CAST, dtypes.half, arg=None, src=(\n        UOp(Ops.REDUCE, dtypes.float, arg=(Ops.ADD, ()), tag=TC, src=(\n          UOp(Ops.CAST, dtypes.float, arg=None, src=(\n            UOp(Ops.MUL, dtypes.half, arg=None, src=(\n              UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n                UOp(Ops.PARAM, dtypes.half.ptr(16384), arg=ParamArg(1), src=()),\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    x6,\n                    UOp(Ops.CONST, dtypes.weakint, arg=256, src=()),)),\n                  x53:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                          UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                            UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                              UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                                UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                                  UOp(Ops.RANGE, dtypes.weakint, arg=(0, AxisType.REDUCE), src=(\n                                    UOp(Ops.CONST, dtypes.weakint, arg=16, src=()),)),\n                                  x16,)),\n                                UOp(Ops.RANGE, dtypes.weakint, arg=(9, AxisType.UNROLL), src=(\n                                  x16,)),)),\n                              x16,)),\n                            UOp(Ops.RANGE, dtypes.weakint, arg=(8, AxisType.UNROLL), src=(\n                              x16,)),)),\n                          x16,)),\n                        UOp(Ops.RANGE, dtypes.weakint, arg=(7, AxisType.UNROLL), src=(\n                          x16,)),)),\n                      x16,)),\n                    UOp(Ops.RANGE, dtypes.weakint, arg=(6, AxisType.UNROLL), src=(\n                      x16,)),)),)),)),\n              UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n                UOp(Ops.PARAM, dtypes.half.ptr(16384), arg=ParamArg(2), src=()),\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    x53,\n                    x27,)),\n                  x28,)),)),)),)),\n          x53,)),)),)),\n    x6,\n    x28,)),))"
+    },
+    {
+      "tile": 128,
+      "waves": [
+        4,
+        2
+      ],
+      "wave_size": 32,
+      "k": 256,
+      "wmma_count": null,
+      "lds_bytes": 16384,
+      "register_evidence": {
+        "status": "unavailable",
+        "source": "final allocator"
+      },
+      "status": "FAIL",
+      "failure_stage": "rewrite_or_lowering",
+      "failure_type": "KernelOptError",
+      "first_failure": "precontract pipeline allocation does not exactly cover its active LDS slots"
+    }
+  ]
+}

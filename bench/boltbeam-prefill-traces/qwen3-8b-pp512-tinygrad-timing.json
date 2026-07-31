@@ -1,0 +1,50 @@
+{
+  "schema": "boltbeam.timing_trace.v1",
+  "model_id": "qwen3-8b-q4_k_m",
+  "target_id": "amd_gfx1100",
+  "workload": "prefill",
+  "provider_id": "tinygrad/profile",
+  "timing_source": "synced_wall_plus_profile_attribution",
+  "peak_gbs": 960.0,
+  "contexts": [
+    512
+  ],
+  "metadata": {
+    "model_path": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "chunk": 512,
+    "repeats": 4,
+    "mode": "timing",
+    "chunk_timings": [
+      {
+        "start_pos": 0,
+        "wall_us": 116390.469003818,
+        "tok_s": 4398.985624700977
+      }
+    ],
+    "route_flags": {
+      "PREFILL_V2": "1",
+      "PREFILL_CHUNKED": "0",
+      "PREFILL_GRAPH_GEMM": "1",
+      "PROFILE": "0"
+    },
+    "profile_raw_total_us": 0.0,
+    "role_inventory_count": 6
+  },
+  "notes": [
+    "Whole-step timing is synced wall-clock min-of-bursts through the real model call path.",
+    "Kernel rows are PROFILE events scaled to the measured whole-step wall time.",
+    "Physical bytes are model weight source bytes assigned to matching prefill GEMM role rows."
+  ],
+  "rows": [
+    {
+      "scope": "whole_step",
+      "context": 512,
+      "wall_us": 116390.469003818,
+      "tok_s": 4398.985624700977,
+      "total_bytes": 4160028672.0,
+      "launch_count": 0,
+      "time_source": "synced_min_of_bursts",
+      "bytes_source": "tinygrad_qk_primitive_source_bytes"
+    }
+  ]
+}

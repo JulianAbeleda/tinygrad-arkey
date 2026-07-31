@@ -1,0 +1,131 @@
+{
+  "verdict": "R0_PASS_BOUNDARY_PINNED",
+  "entrypoint": "extra/llm/cli.py :: main() --serve (class LLMServer / Handler)",
+  "present_count": 20,
+  "total_count": 20,
+  "missing": [],
+  "client_concern_leakage": [],
+  "checks": [
+    {
+      "id": "v1_models",
+      "description": "GET /v1/models route exists",
+      "present": true,
+      "owner": "runtime"
+    },
+    {
+      "id": "v1_chat",
+      "description": "POST /v1/chat/completions route exists",
+      "present": true,
+      "owner": "runtime"
+    },
+    {
+      "id": "v1_completions",
+      "description": "POST /v1/completions route exists",
+      "present": true,
+      "owner": "runtime"
+    },
+    {
+      "id": "model_load_path",
+      "description": "model load path (RuntimeState.load+from_gguf)",
+      "present": true,
+      "owner": "runtime"
+    },
+    {
+      "id": "max_context",
+      "description": "max_context handling (from_gguf caps by ctx)",
+      "present": true,
+      "owner": "runtime"
+    },
+    {
+      "id": "prefix_cache",
+      "description": "prompt/KV prefix reuse (get_start_pos)",
+      "present": true,
+      "owner": "runtime"
+    },
+    {
+      "id": "streaming",
+      "description": "SSE streaming behavior (stream_json)",
+      "present": true,
+      "owner": "runtime"
+    },
+    {
+      "id": "prompt_guard",
+      "description": "oversized-prompt guard before generate",
+      "present": true,
+      "owner": "runtime"
+    },
+    {
+      "id": "status_ctrl",
+      "description": "GET /runtime/status control",
+      "present": true,
+      "owner": "runtime"
+    },
+    {
+      "id": "models_ctrl",
+      "description": "GET /runtime/models control",
+      "present": true,
+      "owner": "runtime"
+    },
+    {
+      "id": "metrics_ctrl",
+      "description": "GET /runtime/metrics control",
+      "present": true,
+      "owner": "runtime"
+    },
+    {
+      "id": "cache_ctrl",
+      "description": "GET /runtime/cache control",
+      "present": true,
+      "owner": "runtime"
+    },
+    {
+      "id": "compile_counters",
+      "description": "compile-cache hit/miss + kernel-count observability",
+      "present": true,
+      "owner": "runtime"
+    },
+    {
+      "id": "load_ctrl",
+      "description": "POST /runtime/load control",
+      "present": true,
+      "owner": "runtime"
+    },
+    {
+      "id": "unload_ctrl",
+      "description": "POST /runtime/unload control",
+      "present": true,
+      "owner": "runtime"
+    },
+    {
+      "id": "warmup_ctrl",
+      "description": "POST /runtime/warmup control",
+      "present": true,
+      "owner": "runtime"
+    },
+    {
+      "id": "cancel_ctrl",
+      "description": "POST /runtime/cancel control",
+      "present": true,
+      "owner": "runtime"
+    },
+    {
+      "id": "busy_policy",
+      "description": "one-generation-at-a-time busy policy (gen_lock)",
+      "present": true,
+      "owner": "runtime"
+    },
+    {
+      "id": "error_contract",
+      "description": "structured JSON error contract",
+      "present": true,
+      "owner": "runtime"
+    },
+    {
+      "id": "registry",
+      "description": "model registry (build_registry)",
+      "present": true,
+      "owner": "runtime"
+    }
+  ],
+  "live_probe": null
+}

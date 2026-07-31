@@ -1,0 +1,48 @@
+{
+  "env": {
+    "BUBBLEBEAM_FUTURESIGHT": "1",
+    "DECODE_Q6K_GENERATED": "0",
+    "DECODE_LIVE_SPLIT": "1"
+  },
+  "effective_routes": [
+    {
+      "family": "decode_q4k_gemv",
+      "effective_route": "decode_q4k_g3_generated",
+      "provenance": "machine_authored_generated",
+      "rolled_back_to_oracle": false,
+      "pure": true
+    },
+    {
+      "family": "decode_q6k_gemv",
+      "effective_route": "decode_q6k_coop_shipped",
+      "provenance": "rollback_oracle",
+      "rolled_back_to_oracle": true,
+      "pure": false
+    },
+    {
+      "family": "prefill_gemm",
+      "effective_route": "prefill_pipe_role_selective_generated",
+      "provenance": "machine_authored_generated",
+      "rolled_back_to_oracle": false,
+      "pure": true
+    },
+    {
+      "family": "decode_attention",
+      "effective_route": "decode_flash_live_split_g4_8b_kvboth",
+      "provenance": "machine_authored_generated",
+      "rolled_back_to_oracle": false,
+      "pure": true
+    }
+  ],
+  "violations": [
+    {
+      "family": "decode_q6k_gemv",
+      "route_id": "decode_q6k_coop_shipped",
+      "provenance": "rollback_oracle",
+      "rolled_back_to_oracle": true,
+      "replacement_scope": "hand-authored Q6_K coop/partial UOp templates. Byte-identical to the generated route (decode_q6k_coop_generated), retained as the rollback/oracle one flag away (DECODE_Q6K_GENERATED=0).",
+      "reason": "explicit rollback to handwritten oracle"
+    }
+  ],
+  "expected": "impure (explicit rollback to Q6_K shipped oracle)"
+}

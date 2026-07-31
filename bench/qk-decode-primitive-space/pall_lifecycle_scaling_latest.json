@@ -1,0 +1,90 @@
+{
+  "date": "2026-06-26",
+  "timestamp": "20260703-140126",
+  "candidate_id": "decode_attention_physical_tile_pall_lifecycle",
+  "verdict": "PALL_LIFECYCLE_SCALING_CONFIRMS_COLUMN_RECOMPUTE",
+  "repeats": 3,
+  "rows": [
+    {
+      "Wp": 1,
+      "median_s": 0.00571943202521652,
+      "per_col_ms": 5.71943202521652,
+      "times_s": [
+        0.006694456998957321,
+        0.00571943202521652,
+        0.005559591023484245
+      ],
+      "numeric": {
+        "max_abs": 1.9073486328125e-06,
+        "rel_rmse": 2.2419303036258498e-07
+      },
+      "speedup_vs_first": 1.0,
+      "runtime_multiple_vs_first": 1.0
+    },
+    {
+      "Wp": 2,
+      "median_s": 0.007090341008733958,
+      "per_col_ms": 3.545170504366979,
+      "times_s": [
+        0.009774881997145712,
+        0.007090341008733958,
+        0.007089380000252277
+      ],
+      "numeric": {
+        "max_abs": 1.9073486328125e-06,
+        "rel_rmse": 1.9321781508097047e-07
+      },
+      "speedup_vs_first": 0.8066511918356624,
+      "runtime_multiple_vs_first": 1.2396932033588668
+    },
+    {
+      "Wp": 8,
+      "median_s": 0.017398286989191547,
+      "per_col_ms": 2.1747858736489434,
+      "times_s": [
+        0.01891865799552761,
+        0.01707429700763896,
+        0.017398286989191547
+      ],
+      "numeric": {
+        "max_abs": 1.9073486328125e-06,
+        "rel_rmse": 1.8382438327080308e-07
+      },
+      "speedup_vs_first": 0.32873535358795036,
+      "runtime_multiple_vs_first": 3.041960619950353
+    },
+    {
+      "Wp": 32,
+      "median_s": 0.05738981600734405,
+      "per_col_ms": 1.7934317502295016,
+      "times_s": [
+        0.05815411300864071,
+        0.05738981600734405,
+        0.057170583022525534
+      ],
+      "numeric": {
+        "max_abs": 2.86102294921875e-06,
+        "rel_rmse": 2.017973628198888e-07
+      },
+      "speedup_vs_first": 0.09965935462285881,
+      "runtime_multiple_vs_first": 10.03418097362062
+    },
+    {
+      "Wp": 130,
+      "median_s": 0.23871542702545412,
+      "per_col_ms": 1.8362725155804163,
+      "times_s": [
+        0.24099769198801368,
+        0.2374856540118344,
+        0.23871542702545412
+      ],
+      "numeric": {
+        "max_abs": 3.0517578125e-05,
+        "rel_rmse": 1.5656468121960643e-07
+      },
+      "speedup_vs_first": 0.023959205722412984,
+      "runtime_multiple_vs_first": 41.73761065311675
+    }
+  ],
+  "decision": "If runtime scales with Wp, the next primitive is score reuse across PV output columns, not another W==D rerun."
+}

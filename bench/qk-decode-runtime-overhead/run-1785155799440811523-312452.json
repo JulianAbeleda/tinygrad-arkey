@@ -1,0 +1,172 @@
+{
+  "artifact_version": 2,
+  "ckpts": [
+    4096
+  ],
+  "created_unix_ns": 1785155900579766374,
+  "device": {
+    "runtime_type": "AMDDevice",
+    "tinygrad_device": "AMD"
+  },
+  "hardware": "AMD / AMDDevice",
+  "max_context": 4608,
+  "median_host_sync_pct": null,
+  "method": "genuine prompt prefill; W=production generate item/token; D=same model JITs with final sync",
+  "model": {
+    "identity_sha256": "785e1a50d7c15a2a9264535e96e158bef042fc0d5eca050a74855b9201be6c79",
+    "mtime_ns": 1781139524597283444,
+    "path": "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+    "size_bytes": 9001752960
+  },
+  "model_id": "Qwen3-14B-Q4_K_M",
+  "model_identity": {
+    "identity_sha256": "785e1a50d7c15a2a9264535e96e158bef042fc0d5eca050a74855b9201be6c79",
+    "mtime_ns": 1781139524597283444,
+    "path": "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+    "size_bytes": 9001752960
+  },
+  "nmeas": 10,
+  "reps": 1,
+  "rows": [
+    {
+      "D_interpretation": "not_an_upper_bound; host/runtime subtraction refused",
+      "D_reps": [
+        {
+          "elapsed_s": 5.299601631006226,
+          "final_token_id": 13876,
+          "rep": 0,
+          "tok_s": 1.8869342822851607
+        }
+      ],
+      "W_reps": [
+        {
+          "elapsed_s": 5.297619050994399,
+          "per_token_ms": [
+            551.3063149992377,
+            528.1744410021929,
+            524.1389949951554,
+            527.666556998156,
+            525.0037090008846,
+            527.4032809975324,
+            527.6822460000403,
+            527.5781009986531,
+            529.353085992625,
+            529.3123200099217
+          ],
+          "rep": 0,
+          "tok_s": 1.8876404482355016
+        }
+      ],
+      "ctx": 4096,
+      "decode_tokens": 10,
+      "dispatch_ms_D": 529.9601631006226,
+      "fixed_depth": 4096,
+      "flash": false,
+      "generated_reps_identical": true,
+      "generated_token_evidence": [
+        {
+          "count": 10,
+          "first_token_ids": [
+            13,
+            279,
+            3974,
+            13876,
+            38835,
+            34208,
+            13,
+            279,
+            3974,
+            13876
+          ],
+          "sha256": "9676242f050b8ecc18739a33dbc24be9b8ece54140026fa776e9d4dfa1e8eda0"
+        }
+      ],
+      "host_sync_pct_of_wall": null,
+      "host_sync_residual_ms": null,
+      "programs_per_token_by_route": {
+        "sdpa": 1133
+      },
+      "prompt_evidence": {
+        "count": 4096,
+        "first_token_ids": [
+          1782,
+          3974,
+          13876,
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876,
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876,
+          38835
+        ],
+        "sha256": "283a9a863b72936f5aedf408c7d36ec64c4b3e7df1d411d3904ca0b72cd73578"
+      },
+      "reps": 1,
+      "route": "sdpa",
+      "route_sequence": [
+        "sdpa",
+        "sdpa",
+        "sdpa",
+        "sdpa",
+        "sdpa",
+        "sdpa",
+        "sdpa",
+        "sdpa",
+        "sdpa",
+        "sdpa"
+      ],
+      "route_sequences_identical": true,
+      "routes": [
+        "sdpa"
+      ],
+      "tok_s_D_diagnostic": 1.8869342822851607,
+      "tok_s_W": 1.8876404482355016,
+      "wall_ms_W": 529.7619050994399
+    }
+  ],
+  "runtime_settings": {
+    "flash_decode_capable": true,
+    "flash_decode_mode": "auto",
+    "flash_decode_threshold": 512,
+    "kv_cache": "fp16",
+    "ring": false
+  },
+  "schema": "tinygrad.decode.fixed_depth.v2",
+  "tool": {
+    "argv": [
+      "extra/qk/decode/decode_runtime_overhead.py",
+      "--model",
+      "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+      "--ckpts",
+      "4096",
+      "--max-context",
+      "4608",
+      "--nmeas",
+      "10",
+      "--reps",
+      "1",
+      "--out",
+      "/home/ubuntu/tinygrad-arkey/bench/qk-decode-runtime-overhead/run-1785155799440811523-312452.json"
+    ],
+    "path": "/home/ubuntu/tinygrad-arkey/extra/qk/decode/decode_runtime_overhead.py"
+  },
+  "workload": {
+    "chunk_size": 32,
+    "ckpts": [
+      4096
+    ],
+    "decode_tokens": 10,
+    "max_context": 4608,
+    "reps": 1,
+    "seed": 20260617,
+    "temperature": 0.0,
+    "warmup_decode": 3
+  }
+}

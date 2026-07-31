@@ -1,0 +1,44 @@
+{
+  "schema": "q4k_fused_q4_role_sweep.v1",
+  "model": "Qwen3-14B-Q4_K_M",
+  "hardware": "Linux-6.8.0-134-generic-x86_64-with-glibc2.39",
+  "candidate": "fused_packed_q4",
+  "stop_rule": "stop at first PASS scalable shape; PASS requires correctness plus sudot4/WMMA evidence",
+  "fallback_policy": "fail_closed; direct_packed is not run or substituted",
+  "rows": [
+    {
+      "status": "PASS",
+      "graph_build_ms": 8.890202007023618,
+      "compile_ms": 100.76251198188402,
+      "runtime_ms": 0.024480000000000002,
+      "kernel_count": 2,
+      "correctness": {
+        "status": "PASS",
+        "rel_rmse": 1.1691194146123962e-07,
+        "rtol": 0.006
+      },
+      "sudot4_wmma_evidence": {
+        "sudot4": true,
+        "wmma": false
+      },
+      "fallback": {
+        "used": false,
+        "policy": "fail_closed"
+      },
+      "error": null,
+      "role": "bounded_tile",
+      "shape": {
+        "M": 16,
+        "N": 16,
+        "K": 256
+      },
+      "wall_ms": 1646.8017290171701
+    }
+  ],
+  "first_scalable_shape": {
+    "M": 16,
+    "N": 16,
+    "K": 256
+  },
+  "next_geometry": "16x16x256 tile reuse over M/N role loops with fused Q8 producer"
+}

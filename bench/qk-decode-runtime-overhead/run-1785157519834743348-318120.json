@@ -1,0 +1,276 @@
+{
+  "artifact_version": 2,
+  "ckpts": [
+    512,
+    4096
+  ],
+  "created_unix_ns": 1785157611502831387,
+  "device": {
+    "runtime_type": "AMDDevice",
+    "tinygrad_device": "AMD"
+  },
+  "hardware": "AMD / AMDDevice",
+  "max_context": 4608,
+  "median_host_sync_pct": null,
+  "method": "genuine prompt prefill; W=production generate item/token; D=same model JITs with final sync",
+  "model": {
+    "identity_sha256": "785e1a50d7c15a2a9264535e96e158bef042fc0d5eca050a74855b9201be6c79",
+    "mtime_ns": 1781139524597283444,
+    "path": "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+    "size_bytes": 9001752960
+  },
+  "model_id": "Qwen3-14B-Q4_K_M",
+  "model_identity": {
+    "identity_sha256": "785e1a50d7c15a2a9264535e96e158bef042fc0d5eca050a74855b9201be6c79",
+    "mtime_ns": 1781139524597283444,
+    "path": "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+    "size_bytes": 9001752960
+  },
+  "nmeas": 10,
+  "reps": 1,
+  "rows": [
+    {
+      "D_interpretation": "not_an_upper_bound; host/runtime subtraction refused",
+      "D_reps": [
+        {
+          "elapsed_s": 0.1664923339994857,
+          "final_token_id": 330,
+          "rep": 0,
+          "tok_s": 60.06282547538129
+        }
+      ],
+      "W_reps": [
+        {
+          "elapsed_s": 0.14444536100199912,
+          "per_token_ms": [
+            15.422520009451546,
+            14.604113006498665,
+            14.338111999677494,
+            14.33082799485419,
+            14.322402988909744,
+            14.3189060036093,
+            14.2769660014892,
+            14.286354999057949,
+            14.275794994318858,
+            14.269363004132174
+          ],
+          "rep": 0,
+          "tok_s": 69.23032993674059
+        }
+      ],
+      "ctx": 512,
+      "decode_tokens": 10,
+      "dispatch_ms_D": 16.64923339994857,
+      "fixed_depth": 512,
+      "flash": true,
+      "generated_reps_identical": true,
+      "generated_token_evidence": [
+        {
+          "count": 10,
+          "first_token_ids": [
+            30,
+            4710,
+            32313,
+            11,
+            279,
+            1196,
+            3267,
+            291,
+            264,
+            2696
+          ],
+          "sha256": "0cfaa5fe75e1f856f273cd7e5c46c7a96bcced30b46e1189cf9dc330412dcbe0"
+        }
+      ],
+      "host_sync_pct_of_wall": null,
+      "host_sync_residual_ms": null,
+      "programs_per_token_by_route": {
+        "flash": 1133
+      },
+      "prompt_evidence": {
+        "count": 512,
+        "first_token_ids": [
+          1782,
+          3974,
+          13876,
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876,
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876,
+          38835
+        ],
+        "sha256": "e536e95f0307d714bc77b286f8ee4a6f7f38dc5ebc3c7321eda2170149308c49"
+      },
+      "reps": 1,
+      "route": "flash",
+      "route_sequence": [
+        "flash",
+        "flash",
+        "flash",
+        "flash",
+        "flash",
+        "flash",
+        "flash",
+        "flash",
+        "flash",
+        "flash"
+      ],
+      "route_sequences_identical": true,
+      "routes": [
+        "flash"
+      ],
+      "tok_s_D_diagnostic": 60.06282547538129,
+      "tok_s_W": 69.23032993674059,
+      "wall_ms_W": 14.44453610019991
+    },
+    {
+      "D_interpretation": "not_an_upper_bound; host/runtime subtraction refused",
+      "D_reps": [
+        {
+          "elapsed_s": 0.18264963600086048,
+          "final_token_id": 13876,
+          "rep": 0,
+          "tok_s": 54.74963005101685
+        }
+      ],
+      "W_reps": [
+        {
+          "elapsed_s": 0.16447781602619216,
+          "per_token_ms": [
+            17.13341599679552,
+            16.67161801015027,
+            16.399405998527072,
+            16.42598700709641,
+            16.404726993641816,
+            16.345406009349972,
+            16.302264004480094,
+            16.3093180017313,
+            16.285122008412145,
+            16.20055199600756
+          ],
+          "rep": 0,
+          "tok_s": 60.79847265486281
+        }
+      ],
+      "ctx": 4096,
+      "decode_tokens": 10,
+      "dispatch_ms_D": 18.26496360008605,
+      "fixed_depth": 4096,
+      "flash": true,
+      "generated_reps_identical": true,
+      "generated_token_evidence": [
+        {
+          "count": 10,
+          "first_token_ids": [
+            13,
+            279,
+            3974,
+            13876,
+            38835,
+            34208,
+            13,
+            279,
+            3974,
+            13876
+          ],
+          "sha256": "9676242f050b8ecc18739a33dbc24be9b8ece54140026fa776e9d4dfa1e8eda0"
+        }
+      ],
+      "host_sync_pct_of_wall": null,
+      "host_sync_residual_ms": null,
+      "programs_per_token_by_route": {
+        "flash": 1133
+      },
+      "prompt_evidence": {
+        "count": 4096,
+        "first_token_ids": [
+          1782,
+          3974,
+          13876,
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876,
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876,
+          38835
+        ],
+        "sha256": "283a9a863b72936f5aedf408c7d36ec64c4b3e7df1d411d3904ca0b72cd73578"
+      },
+      "reps": 1,
+      "route": "flash",
+      "route_sequence": [
+        "flash",
+        "flash",
+        "flash",
+        "flash",
+        "flash",
+        "flash",
+        "flash",
+        "flash",
+        "flash",
+        "flash"
+      ],
+      "route_sequences_identical": true,
+      "routes": [
+        "flash"
+      ],
+      "tok_s_D_diagnostic": 54.74963005101685,
+      "tok_s_W": 60.79847265486281,
+      "wall_ms_W": 16.447781602619216
+    }
+  ],
+  "runtime_settings": {
+    "flash_decode_capable": true,
+    "flash_decode_mode": "auto",
+    "flash_decode_threshold": 512,
+    "kv_cache": "fp16",
+    "ring": false
+  },
+  "schema": "tinygrad.decode.fixed_depth.v2",
+  "tool": {
+    "argv": [
+      "extra/qk/decode/decode_runtime_overhead.py",
+      "--model",
+      "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+      "--ckpts",
+      "512,4096",
+      "--max-context",
+      "4608",
+      "--nmeas",
+      "10",
+      "--reps",
+      "1",
+      "--out",
+      "/home/ubuntu/tinygrad-arkey/bench/qk-decode-runtime-overhead/run-1785157519834743348-318120.json"
+    ],
+    "path": "/home/ubuntu/tinygrad-arkey/extra/qk/decode/decode_runtime_overhead.py"
+  },
+  "workload": {
+    "chunk_size": 32,
+    "ckpts": [
+      512,
+      4096
+    ],
+    "decode_tokens": 10,
+    "max_context": 4608,
+    "reps": 1,
+    "seed": 20260617,
+    "temperature": 0.0,
+    "warmup_decode": 3
+  }
+}

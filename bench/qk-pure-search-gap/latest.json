@@ -1,0 +1,177 @@
+{
+  "schema": "qk_decode_attention_pure_search_gap_audit_v1",
+  "date": "2026-07-03",
+  "inputs": {
+    "transfer": "bench/qk-pure-search-gap/transfer_snapshot_20260627.json",
+    "hotloop_schedule_diff": "bench/qk-decode-hotloop-schedule-diff/latest.json",
+    "primitive_gap": "bench/qk-decode-primitive-space/gap_latest.json",
+    "primitive_schema": "bench/qk-decode-primitive-space/primitive_schema.json",
+    "search_contract": "bench/qk-decode-primitive-space/search_contract.json",
+    "isa_vectorization": "bench/qk-decode-isa-vectorization/latest.json",
+    "delta_attack_result": "docs/decode-tile-delta-attack-result-20260627.md",
+    "scheduler_capability_scope": "docs/decode-codegen-scheduler-capability-scope.md",
+    "occupancy_guardrail": "bench/qk-decode-occupancy-guardrail/latest.json",
+    "outer_b_split_contract": "bench/qk-decode-outer-b-split-combine/latest.json",
+    "pressure_search_ownership": "bench/qk-decode-pressure-search-ownership/latest.json"
+  },
+  "inputs_missing": [
+    "hotloop",
+    "isa_vectorization",
+    "transfer"
+  ],
+  "degraded": true,
+  "time_delta_explanation": {
+    "authority": "unknown",
+    "wd_authority": "session_reported_not_harness_measured",
+    "transfer_snapshot": "transfer_snapshot_20260627.json",
+    "rows": [],
+    "stack_transfer_vs_no_stack": {
+      "ctx512_pct": null,
+      "ctx4096_pct": null
+    },
+    "remaining_gap_to_owned": {
+      "ctx512_owned_over_full_stack": 0.0,
+      "ctx4096_owned_over_full_stack": 0.0,
+      "ctx512_full_stack_pct_of_owned": 0.0,
+      "ctx4096_full_stack_pct_of_owned": 0.0
+    },
+    "prior_generated_route_gap_closed": {
+      "ctx512_full_stack_over_prior_fused": 0.0,
+      "ctx4096_full_stack_over_prior_fused": 0.0
+    },
+    "schedule_oracle": "missing",
+    "current_hotloop_json_verdict": "missing",
+    "hotloop_tool_status": "SPLIT_AWARENESS_GAP__CURRENT_JSON_MISIDENTIFIED_GENERATED_LOOP",
+    "isa_resource_snapshot": {},
+    "isa_marker_snapshot": {},
+    "occupancy_guardrail": "OCCUPANCY_GUARDRAIL_FAIL__PRESSURE_INCREASE",
+    "closed_deltas": [],
+    "refuted_deltas": [
+      "ds_permute"
+    ],
+    "refutation_reasons": {
+      "ds_permute": "ds_bpermute cross-lane reduce is at per-token parity with owned; no new primitive warranted"
+    },
+    "verdict": "TIME_DELTA_PARTIAL_EXPLAINED__GENERATED_STACK_TRANSFERS__LONG_CTX_GAP_REMAINS"
+  },
+  "primitive_vocabulary_attribution": {
+    "schema": "missing",
+    "search_contract": "missing",
+    "legacy_primitive_gap_verdict": "PRIMITIVE_GAP_FAIL__NO_GENERATED_FUSED_TILE",
+    "present_or_refuted": [
+      {
+        "primitive": "CrossLane.ds_bpermute_reduce",
+        "status": "present_refuted_as_gap",
+        "evidence": "owned and generated use the same ds_bpermute reduce; do not build a new ds_permute primitive"
+      },
+      {
+        "primitive": "TileMemory.lds_tile",
+        "status": "present_generated_default_off",
+        "evidence": "ISA/resource artifact reports LDS tile and block-tile microgate passes"
+      },
+      {
+        "primitive": "DotLowering.v_dot2",
+        "status": "present_generated_default_off",
+        "evidence": "ISA marker reports v_dot2 in generated block tile"
+      },
+      {
+        "primitive": "LaneMap.cooperative_stage",
+        "status": "present_generated_default_off",
+        "evidence": "cooperative-staging LaneMap composes with coalesced-load lowering"
+      },
+      {
+        "primitive": "Math.fast_exp2_valid_domain",
+        "status": "present_manual_flag_not_search_owned",
+        "evidence": "DECODE_FAST_EXP2 closes +8-9% by removing dead range-reduction work"
+      },
+      {
+        "primitive": "Sched.recurrence_unroll_list",
+        "status": "present_manual_flag_not_search_owned",
+        "evidence": "SCHED_UNROLL/SCHED_LIST transfer but are manually selected"
+      },
+      {
+        "primitive": "Audit.split_aware_hotloop_oracle",
+        "status": "present_tooling",
+        "evidence": "branch-target parsing enumerates owned/generated loops and selects the real outer block loop"
+      },
+      {
+        "primitive": "ResourceModel.occupancy_guardrail",
+        "status": "present_tooling",
+        "evidence": "OCCUPANCY_GUARDRAIL_FAIL__PRESSURE_INCREASE"
+      },
+      {
+        "primitive": "OuterBlockLoop.lds_staged_split_combine.search_contract",
+        "status": "present_search_vocab",
+        "evidence": "OUTER_B_SPLIT_COMBINE_LOWERING_BUILT__REFUTED_ON_SPEED__OCCUPANCY_TAX"
+      },
+      {
+        "primitive": "Scheduler.pressure_search_ownership_audit",
+        "status": "present_tooling",
+        "evidence": "PRESSURE_SEARCH_OWNERSHIP_PARTIAL__GUARDRAIL_AND_VOCAB_PRESENT__LOWERING_AND_FLAG_BINDING_REMAIN"
+      }
+    ],
+    "missing_or_not_search_owned": [
+      {
+        "primitive": "OuterBlockLoop.lds_staged_split_combine.lowering",
+        "status": "lowering_built_refuted_on_speed",
+        "why": "outer-b lowering built + correct (microgate PASS) but REFUTED on speed: partition independence costs VGPR 88->176 + LDS 8192->16384, occupancy tax > ILP gain (~18% slower); same class as SCHED_UNROLL_SPLIT"
+      },
+      {
+        "primitive": "Scheduler.pressure_aware_latency_hiding.search_binding",
+        "status": "partial_not_search_owned",
+        "why": "guardrails exist, but winning manual flags are not BubbleBeam-owned"
+      }
+    ],
+    "verdict": "VOCAB_PARTIAL__GUARDRAIL_AND_OUTER_B_SEARCH_VOCAB_PRESENT__LOWERING_AND_SEARCH_BINDING_REMAIN"
+  },
+  "pure_search_score": {
+    "decode_attention_pure_machine_search_score_0_to_100": 0,
+    "score_provenance": "derived_from_live_artifacts",
+    "score_components": {
+      "generated_route_correct_and_transfers": 0,
+      "foundation_primitives_compose": 0,
+      "gap_attributed_not_existential": 0,
+      "outer_b_lowering_built_bends_slope": 0,
+      "flags_search_owned_and_wd_parity": 0
+    },
+    "score_max": 100,
+    "wd_pct_of_owned_avg": 0.0,
+    "wd_promotion_threshold_pct": 90.0,
+    "inputs_missing": [
+      "hotloop",
+      "isa_vectorization",
+      "transfer"
+    ],
+    "degraded": true,
+    "basis": [
+      "generated route is correct and transfers in-model (measured: full-stack > no-stack at ctx512 and ctx4096)",
+      "foundation primitives compose and produce material speedup (ISA marker/resource snapshot present)",
+      "remaining gap is attributed, not existential (hot-loop selected-loop valid + occupancy + outer-b vocab present)",
+      "outer-b split-combine lowering BUILT + correct but REFUTED on speed (occupancy tax) => 20-pt slope component withheld",
+      "manual flags + owned baseline still required for default performance => search-owned component withheld"
+    ]
+  },
+  "next_actions": [
+    {
+      "rank": 1,
+      "action": "implement LDS-staged outer-b split-combine lowering",
+      "gate": "must bend ctx4096 slope and pass occupancy guardrail"
+    },
+    {
+      "rank": 2,
+      "action": "bind manual winning flags into BubbleBeam/FutureSight candidates",
+      "gate": "selection provenance changes from manual flags to search-owned"
+    },
+    {
+      "rank": 3,
+      "action": "use split-aware hot-loop and occupancy guardrail as mandatory preflight",
+      "gate": "selected loop counters improve without VGPR/scratch regression"
+    },
+    {
+      "rank": 4,
+      "action": "regenerate transfer snapshot from a real model.generate W==D run",
+      "gate": "wd_authority becomes harness_measured_w_equals_d"
+    }
+  ],
+  "verdict": "PURE_SEARCH_DEGRADED__INPUTS_MISSING__hotloop,isa_vectorization,transfer"
+}

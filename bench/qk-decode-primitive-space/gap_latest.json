@@ -1,0 +1,16 @@
+{
+  "date": "2026-06-26",
+  "timestamp": "20260703-140449",
+  "verdict": "PRIMITIVE_GAP_FAIL__NO_GENERATED_FUSED_TILE",
+  "detector_artifact": "bench/qk-decode-primitive-space/latest.json",
+  "required_primitives": [
+    "TileMemory.lds_tile",
+    "DotLowering.v_dot2",
+    "CrossLane.reduce_broadcast",
+    "LaneMap.score_reuse_across_output_columns"
+  ],
+  "missing_primitives": [],
+  "p1_crosslane_probe": {},
+  "all_primitives_bundle": {},
+  "decision": "Primitive visibility no longer blocks search; proceed to candidate lowering gates."
+}

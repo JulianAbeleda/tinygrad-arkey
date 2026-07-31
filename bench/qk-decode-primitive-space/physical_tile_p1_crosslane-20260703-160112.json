@@ -1,0 +1,60 @@
+{
+  "date": "2026-06-26",
+  "timestamp": "20260703-160112",
+  "candidate_id": "decode_attention_physical_tile_p1",
+  "verdict": "P1_CROSSLANE_PASS__LANEMAP_CROSSLANE_VISIBLE",
+  "probe": {
+    "checked": true,
+    "shape": {
+      "Hq": 32,
+      "Hkv": 8,
+      "Hd": 128,
+      "MAXC": 256,
+      "Tc": 192
+    },
+    "numeric": {
+      "max_abs": 4.470348358154297e-08,
+      "rmse": 7.667981805070667e-09,
+      "pass": true,
+      "thresholds": {
+        "max_abs": 0.0001,
+        "rmse": 1e-05
+      }
+    },
+    "kernels": {
+      "flash_p1_crosslane_score_32_128": {
+        "vgpr": 32,
+        "sgpr": 8,
+        "lds": 0,
+        "scratch": 0,
+        "kernarg": 24,
+        "rsrc1": "0xc0af0003",
+        "hist": {
+          "total": 265,
+          "valu": 57,
+          "s_inst": 190,
+          "vmem_load": 6,
+          "vmem_store": 2,
+          "ds": 10,
+          "cross_lane": 10,
+          "fma_dot": 8,
+          "scratch": 0
+        },
+        "primitive_flags": {
+          "has_v_dot2": false,
+          "has_lds": false,
+          "has_cross_lane": true,
+          "has_vector_global_load": true,
+          "has_spill": false
+        }
+      }
+    }
+  },
+  "primitive_visibility": {
+    "LaneMap": "searchable_probe_visible",
+    "CrossLane": "detected_in_isa",
+    "TileMemory": "not_targeted_in_p1",
+    "DotLowering": "scalar_fma_not_v_dot2_in_p1"
+  },
+  "decision": "P1 proves generated cross-lane score reduction can be emitted; next integrate as a decode route only if the detector/gap gate consumes this as partial primitive visibility."
+}

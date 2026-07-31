@@ -1,0 +1,21 @@
+{
+  "scope": "TG-P6 PURE_MACHINE_SEARCH_ONLY diagnostic mode",
+  "verdict": "TG_P6_PASS_PURE_SEARCH_DIAGNOSTIC_MODE",
+  "gates": {
+    "pass_current": "PASS (normal generated default has no violations)",
+    "explicit_rollback": "PASS (a named rollback flag surfaces a violation naming the route + scope)",
+    "route_report": "PASS (guard prints per-family route + provenance)"
+  },
+  "note": "The hot default path is generated/spec-driven. Explicit rollback flags still surface as impurity.",
+  "pass_current_violations": [],
+  "rollback_named_violations": [
+    {
+      "family": "decode_q6k_gemv",
+      "route_id": "decode_q6k_coop_shipped",
+      "provenance": "rollback_oracle",
+      "rolled_back_to_oracle": true,
+      "replacement_scope": "hand-authored Q6_K coop/partial UOp templates. Byte-identical to the generated route (decode_q6k_coop_generated), retained as the rollback/oracle one flag away (DECODE_Q6K_GENERATED=0).",
+      "reason": "explicit rollback to handwritten oracle"
+    }
+  ]
+}

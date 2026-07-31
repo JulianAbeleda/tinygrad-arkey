@@ -1,0 +1,82 @@
+{
+  "schema": "boltbeam-fused-attention-harness-audit.v1",
+  "runtime_policy_changed": false,
+  "scope": "harness and artifact schema only; no fused execution is asserted",
+  "current_harness": {
+    "report_field": "shared_attention",
+    "attribution_schema": "shared-prefill-attention-route.v2",
+    "requested_indicator": "config.prefill_tc_attn && config.prefill_v2",
+    "current_selected_lowering": "ordinary_sdpa",
+    "current_blocker": "generic tiled fused attention lowering is not implemented",
+    "available_identity": "model_forward_attn_qo_one_buffer",
+    "missing": [
+      "per-forward observed selected_lowering",
+      "requested-to-observed candidate identity join",
+      "QK and PV WMMA census from the executed model forward",
+      "executed program source and binary identities",
+      "executed resource proof",
+      "attention-specific quality evidence bound to the same execution"
+    ]
+  },
+  "minimal_harness_changes": [
+    {
+      "location": "extra/qk/prefill/prefill_whole_synced.py CLI",
+      "change": "Add --attention-admission PATH and --require-attention-route. The admission file supplies immutable expected identity/profile/context constraints only; it must not set an environment variable, mutate model configuration, or choose a lowering."
+    },
+    {
+      "location": "prefill authority artifact",
+      "change": "Add attention_request and attention_route_census. Keep shared_attention as a compatibility alias if needed. attention_route_census.v3 must record requested, observed selected_lowering, fallback_contract, candidate_id, model-forward identity, source and binary program identities, QK/PV WMMA counts, call count, resource-proof identity, and quality-gate identity."
+    },
+    {
+      "location": "post-forward harness collection",
+      "change": "Read observed values solely from a model/lowering-owned per-forward execution record. Default absent data to ordinary_sdpa/unknown and fail closed. Never promote selected_lowering from the supplied admission artifact or compiler-only evidence."
+    },
+    {
+      "location": "route gate",
+      "change": "Add a separate attention_binding_gate. For a requested fused route, require admitted composite evidence, exact profile/context/candidate identity match, observed selected_lowering=fused_tiled_attention, at least one QK and one PV WMMA, one attention call, matched program identities, valid no-scratch/no-spill resource proof, and a PASS quality gate bound to the same model/input/candidate."
+    },
+    {
+      "location": "authority completeness gate",
+      "change": "When --require-attention-route is set, require attention_binding_gate.status=PASS. Otherwise retain ordinary measurements but mark fused-attention promotion ineligible."
+    }
+  ],
+  "required_model_lowing_interface": {
+    "name": "SharedAttentionExecutionRecord",
+    "ownership": "scheduler/native lowering, emitted once per actual model-forward attention invocation",
+    "minimum_fields": [
+      "selected_lowering",
+      "candidate_id",
+      "profile",
+      "context_tokens",
+      "model_forward_identity",
+      "program_source_identity",
+      "program_binary_identity",
+      "attention_call_count",
+      "qk_wmma_count",
+      "pv_wmma_count",
+      "resource_proof_identity",
+      "resource_proof"
+    ],
+    "note": "This is an observability interface, not a route-selection policy change. Without it, the harness cannot honestly certify fused execution."
+  },
+  "admission_validation": {
+    "existing_validator": "extra/qk/shared_attention_promotion.py: composite_admission_errors",
+    "required_checks": [
+      "selected_lowering=fused_tiled_attention",
+      "one-pass score-resident composite form",
+      "QK/PV WMMA proof",
+      "LDS PV rotation",
+      "profile and context exact match",
+      "VGPR bounds, positive LDS, no scratch, no spills",
+      "route census and full-output numeric PASS"
+    ],
+    "restriction": "Compiler capture and static composite admission are necessary supporting evidence, but are not proof that the benchmarked model forward selected the route."
+  },
+  "fail_closed_contract": {
+    "requested_fused_but_unobserved": "attention_binding_gate FAIL; selected_lowering remains ordinary_sdpa or unknown",
+    "identity_or_context_mismatch": "attention_binding_gate FAIL",
+    "missing_qk_or_pv_wmma_census": "attention_binding_gate FAIL",
+    "missing_or_unbound_quality_gate": "attention_binding_gate FAIL",
+    "default_nonfused_run": "valid ordinary benchmark result; fused-attention promotion_eligible=false"
+  }
+}

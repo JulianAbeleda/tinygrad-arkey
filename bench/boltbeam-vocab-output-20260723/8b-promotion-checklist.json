@@ -1,0 +1,32 @@
+{
+  "schema": "boltbeam-8b-promotion-checklist.v1",
+  "model_profile": "qwen3_8b_q4k_m_gfx1100",
+  "promotion_eligible": false,
+  "current_pinned_smoke": {
+    "artifact": "bench/boltbeam-vocab-output-20260723/8b-pinned-smoke.json",
+    "usable_as_full_kernel_candidate": false,
+    "reason": "selected prefill_v2_scheduler_matmul_default; candidate_set_route_census is null and quality_gate is MISSING",
+    "valid_fields": ["pinned_clock_provenance", "raw_timing_samples", "generated-pure default route attribution"],
+    "missing_fields": ["candidate_set_route_census", "candidate_identity", "model_forward_attention_identity", "source_hashes", "binary_hashes", "route_bound_numeric_parity", "whole_model_quality_gate", "comparator_id", "threshold", "ledger"]
+  },
+  "historical_four_role_candidate": {
+    "artifacts": [
+      "bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/candidate-set.json",
+      "bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/whole-prefill-pinned.json",
+      "bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/whole-model-quality.json"
+    ],
+    "usable_as_current_policy": false,
+    "reason": "historical census/greedy-parity evidence is not a live policy attachment; canonical identities and candidate-set identity must be re-admitted against the current registry, loaded inventory, target scan, and compiler artifacts",
+    "historical_evidence": ["four-role census passed", "pinned timing recorded", "route-bound deterministic greedy parity passed"],
+    "missing_or_stale_joins": ["current canonical_candidate_set_identity", "current inventory_identity", "one exact current policy row per role/shape/target", "per-candidate source_hash", "per-candidate binary_hash", "model-forward attention identity", "whole-model full-output numeric proof", "authority comparator/threshold/ledger completeness"]
+  },
+  "exact_evidence_to_generate": [
+    "admit the candidate set with the current FullKernelCandidateSet decoder and record its canonical candidate-set identity",
+    "derive the selected model inventory and bind each of attn_qo, attn_kv, ffn_down, and ffn_gate_up to one exact policy row carrying inventory_identity, target, candidate_set_identity, and canonical candidate_identity",
+    "compile every bound candidate and record source SHA-256, binary SHA-256, resource summary, and zero-spill constraints keyed by canonical identity",
+    "run route-bound nonconstant full-output numeric parity plus whole-model quality parity",
+    "run the exact 3-warmup/10-round pinned model authority with candidate census, model-forward attention identity, clock provenance, comparator, threshold, and ledger",
+    "reject the result if any census entry is missing, unexpected, or identity-mismatched"
+  ],
+  "policy_safety": "no historical identity may be copied into a current policy row; no candidate set may be activated without all current identity joins"
+}

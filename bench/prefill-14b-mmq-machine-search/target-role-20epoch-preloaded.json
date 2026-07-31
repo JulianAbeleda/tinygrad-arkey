@@ -1,0 +1,18 @@
+{
+  "schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1",
+  "status": "BLOCKED",
+  "shape": [512, 17408, 5120],
+  "role": "ffn_gate_up",
+  "bounded_only": true,
+  "production_dispatch_changed": false,
+  "default_route": "direct_packed",
+  "epoch_limit": 20,
+  "n_chunk_tiles": 136,
+  "host_accumulate": true,
+  "persistent_buffers": true,
+  "preloaded_epochs": true,
+  "exact_blocker": "target-role child returned no structured result",
+  "returncode": 0,
+  "stderr_tail": "HCQ timeout: Wait timeout: 30000 ms! (the signal is not set to 30, but 29)",
+  "interpretation": "The asynchronous GPU/driver failure prevented Python result serialization; this is not a correctness pass or route-promotion evidence."
+}
