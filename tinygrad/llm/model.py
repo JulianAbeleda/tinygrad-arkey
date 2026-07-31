@@ -1146,7 +1146,6 @@ class Transformer:
         _route_memory["provenance"] = json.dumps(_runtime_policy["memory_fact_evidence"]["provenance"],
                                                    sort_keys=True, separators=(",", ":"))
       _route_memory["candidate_id"] = _runtime_policy["candidate_id"]
-      _v2_on = prefill_policy_strategy(_runtime_policy) in ("FULL_RESIDENT_OVERLAY", "BOUNDED_PACKED_TILES", "DIRECT_PACKED_FALLBACK")
       max_context, _kv_quant = _plan.max_context, _plan.kv_quant
       _admit = dict(_plan.report)
       # S4 census (R3): the fp16 overlay is expressible on this target but no promoted candidate exists for
@@ -1212,7 +1211,6 @@ class Transformer:
         stream=str(stream), live_split_s=FLASH_DECODE_CANDIDATE.split_size)
       _plan, _memory_plan, _effective_strategy = plan_selected_model_memory(_admission_inputs,
         _device_facts, direct_packed_supported=True)
-      _v2_on = prefill_policy_strategy(_runtime_policy) in ("FULL_RESIDENT_OVERLAY", "BOUNDED_PACKED_TILES", "DIRECT_PACKED_FALLBACK")
       max_context, _kv_quant, _admit = _plan.max_context, _plan.kv_quant, _plan.report
       _ring_admitted = _admit.get("ring", False)
       _print_admission(_plan, "", f"trained {_admission_inputs.trained_ctx}, mem-cap {_admit.get('mc_mem', '-')}")
@@ -1220,7 +1218,9 @@ class Transformer:
     _runtime_policy = select_prefill_runtime_policy(_runtime_policy, scanned_device_facts=_device_facts,
       workload_reuse=_workload_reuse)
     _workload_reuse = bool(_runtime_policy.get("workload_reuse", False))
-    _concrete_kv, _ = prefill_concrete_kv_auto_decision(_workload_reuse, _v2_on)
+    # S6: the runtime prefill-v2 flag is True for every executed strategy (REFUSE raises at admission), so it
+    # is folded to True here; the admission-time capability keeps the v2_on name on AdmissionInputs.
+    _concrete_kv, _ = prefill_concrete_kv_auto_decision(_workload_reuse, True)
     _flash_decode = any(candidate.bind(1, n_heads, n_kv_heads, head_dim, _device_facts.selected_device) is not None
                         for candidate in (FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_CANDIDATE))
 
@@ -1263,7 +1263,7 @@ class Transformer:
       prefill_device_facts=_device_facts, exact_memory_plan=_exact_memory_plan,
       prefill_tc_attn=bool(_runtime_policy["prefill_tc_attn"]),
       prefill_custom_kernel_attn=_should_use_custom_kernel_prefill_attn(n_heads, n_kv_heads, _device_facts.backend, _device_facts.architecture),
-      prefill_v2=_v2_on, prefill_ubatch=_prefill_ubatch, prefill_concrete_kv=_concrete_kv,
+      prefill_v2=True, prefill_ubatch=_prefill_ubatch, prefill_concrete_kv=_concrete_kv,
       prefill_workload_reuse=_workload_reuse, flash_decode=_flash_decode, lm_head_route="lazy",
       kv_quant=_kv_quant, ring=_ring_admitted)
     if config.prefill_v2: validate_prefill_route_mode(config.n_heads, config.n_kv_heads)
