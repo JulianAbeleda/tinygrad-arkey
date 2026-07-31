@@ -9,7 +9,7 @@ what do you do, in what order, and what do you refuse to do."*
 Two targets have been brought up: AMD gfx1100 (decode and prefill, both ahead of llama.cpp by single
 digits) and Apple M4 / Metal (decode at 84.8% of llama; prefill still on the vector-ALU floor). The
 sequence below is what worked, reordered so the expensive mistakes come out. NVIDIA is used as the
-worked example in §8 because its memory arithmetic lands differently and therefore changes the answer.
+worked example in §9 because its memory arithmetic lands differently and therefore changes the answer.
 
 **The central claim:** the order matters more than the effort. Most of the cost on Metal came from doing
 phase 4 work before phase 0 facts existed.
@@ -287,30 +287,39 @@ into an explicit, reviewable, falsifiable claim.
 
 ## 9. Worked example: NVIDIA from scratch
 
-Nothing below is measured — this repo has no NVIDIA data. It is the procedure applied, to show where
-the branch points are.
+Measured on the RTX 5090 (GB202, sm_120), 32 GB, from `nvidia-bringup-20260731`. The procedure below
+is what was actually followed; the branch points are now numbers, not guesses.
 
-**Phase 0.** Measure `R` with an isolated `mma.sync`/`wgmma` microbenchmark, zero loads in the loop.
-Read the matrix-unit shape from tinygrad's CUDA tensor-core descriptors rather than assuming — the
-shapes differ by architecture and by dtype, and `elements_per_thread` differs from both AMD and Metal.
-Note the existing guard `self.ren.target.device in ("CUDA","NV") and tc.dtype_in == dtypes.float and not
-ALLOW_TF32` (`postrange.py:362`) — NVIDIA already has a dtype path the other two don't. Compute `M*`.
+**Phase 0.** `R = 255.4 TF` — isolated `mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32`, the exact
+instruction the fork's `CUDARenderer` emits for fp16→fp32, on register-resident fragments with zero
+loads in the loop and a never-taken keep-alive store (`extra/llm_research/microbench/mma_peak_cuda.cu`).
+The shape comes from tinygrad's CUDA tensor-core descriptor (`tc.get_cuda` → `cuda_sm89`), not from a
+spec sheet: `m16n8k8` measures 125.8 TF (same issue rate, half the FLOPs), so `m16n8k16` is the shape.
+255.4 TF is 61% of the 419 TF sheet figure and 255.4/419 is the efficiency denominator.
 
-**Phase 3 is the branch point, and it likely goes differently.** Datacenter NVIDIA parts carry 40–80 GB.
-An 8B fp16 overlay is 16.4 GB and a 14B is 29.5 GB — *both* plausibly fit. If so, **NVIDIA is
-8B-on-AMD-shaped, not Metal-shaped**, and the answer is the overlay: materialize fp16, hand the
-scheduler a clean GEMM, let BubbleBeam pick the geometry. That is the path that beat llama on AMD, and
-it skips phase 4 entirely — no fused dequant, no pass conflicts, none of what cost this campaign a week.
+`BW = 1700 GB/s` read / 1682 write / ~1500 copy, flat from 0.25 to 16 GiB
+(`extra/llm_research/microbench/bw_peak_cuda.cu`) — 94.9% of the 1792 GB/s sheet figure. Working-set
+size does not matter on this part, so decode's per-token weight stream (4.5-16.4 GB) sits on the same
+plateau.
 
-On a 12–16 GB consumer card the arithmetic flips back and you are in Metal's position.
+`M* = (w/16)·(R/BW) ≈ 255.4 TF / 1.70 TB/s ≈ 150` elements per byte. Decode and prefill arithmetic
+intensity (~2-4 FLOP/byte) is ~40-75x below the crossover: NVIDIA is bandwidth-bound in the same
+regime as AMD and Metal. The existing dtype guard `self.ren.target.device in ("CUDA","NV") and
+tc.dtype_in == dtypes.float and not ALLOW_TF32` (`postrange.py:362`) is live on this path.
 
-**So the first NVIDIA task is not a kernel. It is a division:** `P · 2` against the device budget. That
-one number decides whether the work is a week or an afternoon, and it is knowable before any code is
-written.
+**Phase 3 is the branch point, and it went differently from the datacenter guess.** Datacenter parts
+carry 40-80 GB; this card's budget is 32 GB. The 8B fp16 overlay is 16.4 GB and fits with room for KV
++ activations — **8B is 8B-on-AMD-shaped, not Metal-shaped**: the overlay path, materialize fp16, hand
+the scheduler a clean GEMM, let BubbleBeam pick the geometry. That is the path that beat llama on AMD,
+and it skips phase 4 entirely — no fused dequant, no pass conflicts. The 14B fp16 overlay is 29.5 GB
+and does not fit — **14B is Metal-shaped**: fused quant path, or q4k resident weights (~8 GB) with a
+dequant-to-fp16 strategy. The division is `P · 2` against the device budget, and on this part the 8B
+decision was an afternoon, not a week.
 
-**Phase 4, only if ineligible.** Expect the same pass conflict — `pm_split_ranges` is target-neutral and
-so is the tensor-core opt's assumption, so a fix made for one target should fix all three. Determine
-whether that code is fork-modified or upstream tinygrad; if upstream, it is worth pushing there.
+**Phase 4, only if ineligible** — on this card, that is 14B. Expect the same pass conflict —
+`pm_split_ranges` is target-neutral and so is the tensor-core opt's assumption, so a fix made for one
+target should fix all three. Determine whether that code is fork-modified or upstream tinygrad; if
+upstream, it is worth pushing there.
 
 **Phases 5 and 6 are unchanged.** They are target-independent by construction.
 
