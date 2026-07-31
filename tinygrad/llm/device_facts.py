@@ -291,6 +291,17 @@ def _rocm_smi_memory_probe(device: str) -> Mapping[str, Any]:
           "provenance": "rocm-smi --showmeminfo vram"}
 
 
+def _nvidia_smi_memory_probe(device: str) -> Mapping[str, Any]:
+  proc = subprocess.run(["nvidia-smi", "--query-gpu=memory.total,memory.used", "--format=csv,noheader,nounits"],
+                        capture_output=True, text=True, timeout=10, check=True)
+  index = int(device.split(":", 1)[1]) if ":" in device else 0
+  rows = [line for line in proc.stdout.splitlines() if line.strip()]
+  if index >= len(rows): raise IndexError(f"nvidia-smi has no GPU ordinal {index}")
+  total, used = (int(x) for x in rows[index].split(","))
+  return {"total_vram_bytes": total << 20, "free_vram_bytes": (total - used) << 20,
+          "provenance": "nvidia-smi --query-gpu=memory.total,memory.used"}
+
+
 def _allocator_memory_probe(device: str) -> Mapping[str, Any]:
   from tinygrad.device import Device
   opened = Device[device]
@@ -303,6 +314,9 @@ def _allocator_memory_probe(device: str) -> Mapping[str, Any]:
 
 
 def _default_memory_probe(device: str) -> Mapping[str, Any]:
+  if device.split(":", 1)[0].upper() == "NV":
+    try: return _nvidia_smi_memory_probe(device)
+    except (OSError, subprocess.SubprocessError, ValueError, IndexError): pass
   try: return _rocm_smi_memory_probe(device)
   except (OSError, subprocess.SubprocessError, ValueError): return _allocator_memory_probe(device)
 

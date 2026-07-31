@@ -350,6 +350,13 @@ class NVProgram(HCQProgram['NVDevice']):
     return res
 
 class NVAllocator(HCQInterfaceAllocator['NVDevice']):
+  @property
+  def allocation_granularity(self) -> int:
+    # NVKIface.alloc rounds GPU memory to 2 MiB huge pages at >= 8 MiB and to the
+    # system page size below it. Selected GGUF backing allocations are always in the
+    # large tier, so the device-facts consumers see the same value AMD's AM path uses.
+    return 2 << 20
+
   def _alloc(self, size:int, options:BufferSpec) -> HCQBuffer:
     return self.dev.iface.alloc(size, cpu_access=options.cpu_access, host=options.host)
 
