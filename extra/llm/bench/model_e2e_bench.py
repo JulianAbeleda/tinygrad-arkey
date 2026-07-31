@@ -167,6 +167,7 @@ def main():
     "params": params,
     "file_bytes": pathlib.Path(source).stat().st_size if pathlib.Path(str(source)).exists() else None,
     "max_context": model.max_context,
+    "prefill_overlay_promotion": (model.config.admit or {}).get("prefill_overlay_promotion"),
     "vram_used_bytes": vram_bytes,
     "vram_used_gb": round(vram_bytes / 1e9, 2),
     "load_s": round(load_s, 2),
