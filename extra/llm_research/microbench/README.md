@@ -71,8 +71,57 @@ is the denominator for any efficiency claim in this bring-up, per
 `docs/what-makes-a-token-fast-20260731.md` §9: never quote a spec sheet. 255.4 TF is 61% of
 the 419 TF sheet figure.
 
-`BW` is still unmeasured on this target, so `M* = (w/16)·(R/BW)` is reported as a function
-of `BW`, not a single number — same state Metal was in before its `BW` bench.
+`BW` is measured in the next section, so `M* = (w/16)·(R/BW)` is a single number now.
+
+---
+
+# bw_peak_cuda.cu — measured achievable streaming bandwidth (NVIDIA sm_120 / RTX 5090)
+
+The BW analogue of `mma_peak_cuda.cu`: grid-stride `float4` streaming loads/stores with
+evict-first hints (`__ldcs`/`__stcs`), no math in the hot loop, and a never-taken store to
+keep the read-mode sum live. Modes: `read`, `write`, `copy`.
+
+    export PATH=/usr/local/cuda-13.2/bin:$PATH
+    nvcc -O3 -arch=sm_120 bw_peak_cuda.cu -o bw_peak_cuda
+    ./bw_peak_cuda read 4294967296 32
+
+Verify purity before believing a number (`cuobjdump --dump-sass`; `nvdisasm` ships inside
+the triton package): the read hot loop is `LDG.E.EF.128` + FFMA only, write is
+`STG.E.EF.128` only, copy is LDG+STG; the only `MUFU.RCP` instructions are the grid-stride
+prologue's loop-bound division, outside the hot loop. 0 spills (22-32 regs).
+
+## Result, NVIDIA GeForce RTX 5090 (GB202, sm_120), 2026-07-31
+
+`blocks=4096, tpb=256`, grid-stride streaming with evict-first hints:
+
+| mode | size | passes | GB/s | % of 1792 GB/s sheet |
+| --- | --- | ---: | ---: | ---: |
+| read | 0.25 GiB | 4 | 1681.0 | 93.8 |
+| read | 1 GiB | 128 | 1700.0 | 94.9 |
+| read | 4 GiB | 32 | 1701.3 | 94.9 |
+| read | 8 GiB | 16 | 1701.2 | 94.9 |
+| read | 16 GiB | 8 | 1699.7 | 94.8 |
+| write | 4 GiB | 32 | 1682.1 | 93.9 |
+| copy | 4 GiB | 16 | 1502.6 | 83.8 |
+| copy | 8 GiB | 8 | 1499.2 | 83.7 |
+
+**BW ≈ 1700 GB/s read / 1682 GB/s write** — flat from 0.25 to 16 GiB, so working-set size
+does not matter on this part: decode's per-token weight stream (4.5-16.4 GB) sits on the
+same plateau. Read hits 94.9% of the sheet figure; copy is ~1500 GB/s because read+write
+contend on the same bus.
+
+**M\* = (w/16)·(R/BW) ≈ 255.4 TF / 1.70 TB/s ≈ 150 elements per byte.** Decode and prefill
+arithmetic intensity (~2-4 FLOP/byte) is ~40-75x below the crossover, so NVIDIA is
+bandwidth-bound in the same regime as AMD and Metal: DRAM, not the tensor pipe, is the
+bottleneck.
+
+**The strategy division (`P·2` vs the 32 GB budget):** the 8B fp16 overlay is 16.4 GB and
+fits with room for KV + activations — **overlay path**: materialize fp16, hand the
+scheduler a clean GEMM, let the search pick the geometry. That is the path that beat
+llama.cpp on AMD, and it skips the fused-dequant work entirely. The 14B fp16 overlay is
+29.5 GB and does not fit — **Metal-shaped**: fused quant path, or q4k resident weights
+(~8 GB) with a dequant-to-fp16 strategy. On this 32 GB part the 8B decision is an
+afternoon, not a week.
 
 ---
 
