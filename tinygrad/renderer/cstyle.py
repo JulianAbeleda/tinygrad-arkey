@@ -500,6 +500,13 @@ class MetalRenderer(CStyleLanguage):
     # always correct to skip -- it only ever affects whether the store is bank-conflict-free, never whether
     # it is a valid one-writer cover of the tile -- so leaving these unknown here is the honest choice:
     # forgo the optimization rather than guess at undocumented hardware structure.
+    #
+    # Renderer.lds_read_before_next_write_ordered (MB2) is left at its `None` default here for the same
+    # reason, with the opposite consequence: Apple publishes no guarantee that one K-loop iteration's
+    # threadgroup-memory reads finish before the next iteration's writes without a barrier, so this
+    # renderer declares nothing and `kernel_lds.py::build_precontract_lds_stage` must emit that barrier.
+    # Unlike the bank facts above, this one is safety-critical, not a bank-conflict tuning knob -- see
+    # that flag's docstring on `Renderer` for the polarity.
 
   kernel_typedef = "kernel void"
   buffer_prefix = "device "
@@ -587,6 +594,26 @@ class HIPRenderer(CStyleLanguage):
     # structure this renderer reports, not a per-target snapshot living in kernel_lds.py (PG1).
     self.lds_bank_dwords = 32
     self.lds_bank_cycle_lanes = 8
+    # Renderer.lds_read_before_next_write_ordered (MB2): does AMD guarantee a K-loop iteration's LDS
+    # reads finish before the next iteration's LDS writes, with no barrier between them? RDNA3 issues
+    # one wave's 32 lanes in true lockstep SIMD (ISA-documented): within a single wave, that wave's own
+    # instruction stream is strictly in-order, so a wave's LDS reads always retire before its own later
+    # LDS writes -- no barrier is needed for *that* part, and it is a real hardware property, not an
+    # assumption. But this precontract stage's geometries run 2-8 waves per threadgroup (`wm*wn`)
+    # sharing one LDS window, and separate waves are not lockstep with each other -- the CU's wave
+    # scheduler interleaves them independently, so the guarantee this flag actually needs is cross-wave,
+    # which lockstep execution alone does not give. MB0 measured exactly that cross-wave traffic on this
+    # precontract stage (one wave's fragment read landing in a region a *different* wave's producer
+    # wrote: write stride `lidx1*320`, read stride `lidx1*1280`) -- so `True` here is not derived from
+    # an RDNA3 ISA property for the cross-wave case. It is asserted from prior campaign evidence: this
+    # exact single-buffered, single-barrier stage has already run correctly on AMD hardware (byte-
+    # identical rendered source across all six `PACKED_WMMA_ROUTES` rows, before this flag existed).
+    # That is evidence, not a measurement of this specific ordering, and it has not been independently
+    # re-verified on real AMD hardware in this campaign (none was available). This is deliberately a
+    # one-line flip: when AMD hardware is available, someone should test the assertion directly: if it
+    # is false, setting this to `False` gives AMD the same fail-safe second barrier Metal already gets,
+    # with no other restructuring.
+    self.lds_read_before_next_write_ordered = True
     if not self.is_cdna4(target.arch): self.extra_matcher += pm_manual_bf16_cast + extra_pm
     if target.arch.split(":")[0] == "gfx1100":
       # Exact native attention loop address expressions retain weakint until HIP source rendering.

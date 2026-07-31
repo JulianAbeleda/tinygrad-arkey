@@ -599,7 +599,8 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
                                 operands:tuple[PrecontractOperand, ...], threads:PrecontractThreadAxes,
                                 k_axis:PrecontractKAxis, subtile_m:UOp, subtile_n:UOp,
                                 contracts:tuple[PrecontractContractSpec, ...], pipeline_plan=None,
-                                lds_bank_dwords:int|None=None, lds_bank_cycle_lanes:int|None=None) -> PrecontractLDSStage:
+                                lds_bank_dwords:int|None=None, lds_bank_cycle_lanes:int|None=None,
+                                lds_read_before_next_write_ordered:bool|None=None) -> PrecontractLDSStage:
   """Build an unwired vector cooperative stage while full operand index templates still exist.
 
   ``lds_bank_dwords``/``lds_bank_cycle_lanes`` are the calling renderer's declared bank facts
@@ -607,6 +608,15 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
   :func:`cooperative_store_row`. Defaulting to ``None`` here matches that function's own default:
   a caller that does not pass a target's facts gets the same always-safe, rotation-skipped result
   as an unknown target, never AMD's arithmetic applied by accident.
+
+  ``lds_read_before_next_write_ordered`` is the calling renderer's declared ordering fact
+  (``Renderer.lds_read_before_next_write_ordered``, MB2). This stage reuses one physical LDS window
+  across every K-tile iteration when ``pipeline_plan is None`` (the only shape any caller uses today);
+  the barrier built below from ``producer`` orders this iteration's stores -> this iteration's reads,
+  but nothing orders reads -> the *next* iteration's stores unless a second barrier is emitted at loop
+  entry, before the stores. Polarity matches the field's own docstring: the barrier is the default,
+  safe behaviour; only an explicit ``True`` skips it, so a caller that does not pass this (``None``)
+  gets the barrier, same as an unrecognised target would.
   """
   factors = derive_precontract_factors(geometry, tc)
   validate_precontract_operand_templates(operands, dtype_in=tc.dtype_in, context="precontract")
@@ -634,6 +644,21 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
   slot_base = UOp.const(dtypes.weakint, 0) if pipeline_plan is None else \
     (k_axis.tile_owner % pipeline_plan.buffer_count) * (slot_bytes // item_bytes)
   thread = (threads.wave_m * geometry.waves[1] + threads.wave_n) * geometry.wave_size + threads.lane
+  # Entry barrier: closes the read(this iter) -> write(next iter) gap the single exit barrier below
+  # (`barrier`, ordering stores -> reads) leaves open, whenever the target has not declared it needs
+  # none. Only meaningful for the single-buffered (`pipeline_plan is None`) shape every caller uses
+  # today -- the pipelined path expresses its loop-carried dependency through
+  # `KernelStage1PipelinePlan` instead, not through this stage. Anchored on `k_axis.tile_owner` (the
+  # live REDUCE range this whole stage is nested in, already validated above), not on anything this
+  # call itself produces: a barrier built from this call's own fragment reads would make the
+  # dependency graph cyclic (the reads depend on the exit barrier, which depends on the stores, which
+  # would then depend on the entry barrier depending on the reads). Anchoring on the range instead
+  # keeps the entry barrier inside the K-loop body -- not hoisted above it, since it depends on
+  # loop-varying state -- while `allocation.after(...)` below (the same construction the exit barrier
+  # already uses for fragment reads, just applied to the store side) sequences every store after it in
+  # the rendered source, exactly the ordering llama.cpp's own loop-entry barrier provides.
+  needs_entry_barrier = pipeline_plan is None and lds_read_before_next_write_ordered is not True
+  store_allocation = allocation.after(k_axis.tile_owner.barrier()) if needs_entry_barrier else allocation
   for operand in operands:
     window = _window(geometry, operand.role)
     loads = factors.loads_a if operand.role == "A" else factors.loads_b
@@ -651,7 +676,7 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
           operand.row_axis: logical_row, operand.k_axis: k_axis.tile_base + logical_k + elem}) for elem in range(vector_elements)))
       index = slot_base + (window.base + row * window.stride_bytes + logical_k * item_bytes) // item_bytes
       store_tag = ("kernel_tile_store", operand.role, row_iteration)
-      store_idx = allocation.index(index, dtype=tc.dtype_in.vec(vector_elements)).replace(tag=store_tag)
+      store_idx = store_allocation.index(index, dtype=tc.dtype_in.vec(vector_elements)).replace(tag=store_tag)
       stores.append(store_idx.store(value).replace(tag=store_tag).end())
   producer = UOp.group(*stores)
   barrier = UOp.barrier(producer)

@@ -87,6 +87,19 @@ class Renderer:
   # undocumented threadgroup memory banking.
   lds_bank_dwords: int|None = None
   lds_bank_cycle_lanes: int|None = None
+  # Whether this target guarantees, without an explicit barrier, that one thread's threadgroup-memory
+  # reads in K-tile iteration i are complete before any thread's writes to the same memory in iteration
+  # i+1 (docs/task_workflow/input/metal-precontract-two-bug-scope-20260731.md, MB2).
+  # `kernel_lds.py::build_precontract_lds_stage` reuses one physical LDS window across every iteration
+  # (`bc=1`) and its only barrier today orders this iteration's stores -> this iteration's reads; nothing
+  # orders reads -> the *next* iteration's stores. That is a real correctness gap, not a tuning knob, so
+  # the polarity here is inverted from `lds_bank_dwords` above: the barrier is the safe path and skipping
+  # it is the optimization. `None` (the default) declares nothing, and codegen must therefore emit the
+  # barrier -- exactly the same fail-safe shape as an unknown target getting no bank rotation, just with
+  # the safe/unsafe roles swapped. Only an explicit `True` may skip it; there is no meaningful `False`
+  # distinct from `None` for this fact -- a target either declares the guarantee, citing the hardware
+  # property it rests on, or it doesn't.
+  lds_read_before_next_write_ordered: bool|None = None
   pre_matcher: PatternMatcher|None = None
   extra_matcher: PatternMatcher|None = None
   code_for_op: dict[Ops, Callable] = {}

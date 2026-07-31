@@ -586,12 +586,14 @@ class Scheduler:
                   raise KernelOptError("buffer2 lifecycle UOp validation failed: "+"; ".join(errors))
                 pipeline_tc_uop=UOp(Ops.UNROLL,tc.dtype_out,(graph.drain[0],),arg=tc_upcast_axes[2],tag=1)
               elif not register_mode:
-                # Thread the renderer's own declared bank facts (Renderer.lds_bank_dwords/lds_bank_cycle_lanes,
-                # PG1) into the cooperative store -- never a per-target snapshot living here or in kernel_lds.py.
+                # Thread the renderer's own declared bank and ordering facts (Renderer.lds_bank_dwords/
+                # lds_bank_cycle_lanes, PG1; Renderer.lds_read_before_next_write_ordered, MB2) into the
+                # cooperative store -- never a per-target snapshot living here or in kernel_lds.py.
                 stage = build_precontract_lds_stage(candidate_geometry, tc=tc, allocation=allocation, operands=operands,
                   threads=thread_axes,k_axis=PrecontractKAxis(outer_k,k_substep,outer_k*candidate_geometry.tile[2],k_substep),
                   subtile_m=subtile_m,subtile_n=subtile_n,contracts=tuple(contracts),pipeline_plan=None,
-                  lds_bank_dwords=self.ren.lds_bank_dwords,lds_bank_cycle_lanes=self.ren.lds_bank_cycle_lanes)
+                  lds_bank_dwords=self.ren.lds_bank_dwords,lds_bank_cycle_lanes=self.ren.lds_bank_cycle_lanes,
+                  lds_read_before_next_write_ordered=self.ren.lds_read_before_next_write_ordered)
                 wmma_srcs = [stage.fragment_a, stage.fragment_b]
             else:
               wmma_srcs = [
