@@ -356,6 +356,16 @@ is robust to the unmeasured `BW`, even though the precise crossover point is not
 
 ### Open gaps
 
+0. **The precontract prefill kernel is correct and measured as of 2026-07-31** (see
+   `docs/qwen3-8b-prefill-metal-precontract-campaign-20260731.md`). Four lowering defects were fixed --
+   a fragment-read row extent hardcoded to AMD's `tc.dims[0]`, dropped leftover-lane K groups, a
+   lane->row/K correspondence assuming RDNA3's low-bit split, and a loop-carried write-after-read race.
+   `max_abs_error` 0.0, coverage 96.67%, bit-identical rounds. First measured campaign: best geometry
+   **3610 GFLOPS sustained** (stress-tested `f0cb8c58d`: full-output coverage proven, flat within
+   ±0.5% from m=256 to m=8192; the earlier 2558 "sustained" figure was measurement-harness overhead) against a **1063** control, 87 of 87 candidates correct.
+   **Not promoted** -- QUALIFY and POLICY remain blocked, so production still runs
+   `DIRECT_PACKED_FALLBACK` at 54.2 tok/s.
+
 1. ~~`R` for Metal is unmeasured.~~ **Resolved 2026-07-31: R ≈ 3.78 TFLOPS**, above. `M*` still needs
    a measured `BW` for this M4 to pin down exactly (see table above for the shape of that dependency).
 2. **Why every TC candidate fails to compile through the provider.** This is now the load-bearing

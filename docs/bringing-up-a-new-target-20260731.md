@@ -124,7 +124,7 @@ The repaired pattern already exists here, in `ee2fa89c6`:
 that bypasses the generic opt. That is what `kernel_lds.py` is. Once you bypass the compiler you must
 re-implement everything it would have done — tile geometry, LDS windows, lane maps, cooperative stores
 — and you will implement it for exactly one GPU. **That produced nine AMD couplings**, each of which
-had to be found by a separate Metal failure a year later. A bypass is not a shortcut; it is a fork of
+had to be found by a separate Metal failure when the second target arrived. A bypass is not a shortcut; it is a fork of
 the compiler that only one target can use.
 
 ### Phase 4a — When lowering is wrong, read a known-good kernel. Do not hypothesise.
@@ -235,6 +235,44 @@ the answer. **Get LOWER right first, then search.**
 Each downstream step also carries its own target-specific gate, and they are cheap to enumerate in
 advance: a seed candidate profile for the canary, a policy-collector entry, and the identity-minting
 path. Enumerate them at bring-up time rather than discovering them one at a time.
+
+### SEARCH needs a door into the kernel that is not the promotion table
+
+**Verify this before running a campaign. It is the second way a search silently measures the wrong
+space, and it survives fixing the first.**
+
+An optimized kernel typically has two entry points, and they are not the same code:
+
+- **production** reaches it through a *frozen promoted record* — in this codebase, a `PackedWmmaRoute`
+  row whose geometry populates the lowering's `candidate_context`
+- **search** must reach it some other way, because during a campaign no promoted record exists yet.
+  That is the entire point of searching.
+
+If the second door is not wired, every candidate falls through to the generic lowering path, that path
+declines on your real AST, and the campaign returns a well-formed result containing only the fallback
+space. **Nothing errors.** The counts look plausible. The winner is real, measured, correct — and drawn
+from a space that could not contain the answer.
+
+This happened twice in one day on Metal. The first campaign blocked all five tensor-core candidates on a
+lowering that crashed. The lowering was then fixed — `max_abs_error` 0.0, coverage 96.7%,
+bit-identical — and the *second* campaign still declined all 22 tensor-core candidates, now cleanly,
+across all five registered tensor cores, every `tc_opt` level, and every UPCAST/LOCAL follow-on. The
+mechanism was found only by asking why: the injection hook existed
+(`postrange.py::warmstart_candidate_state`, consulted in `apply_opts`) and **the search provider
+referenced it nowhere.** The only door to the fixed kernel was the frozen table, and the table had no
+row for the shape being searched.
+
+That is the lifecycle's chicken-and-egg in its sharpest form: production needs a promoted row,
+promotion needs a qualified measurement, and measurement needs a door that is not the row. **Wire the
+search door first, and prove one candidate reaches the intended lowering before spending a campaign on
+it** — a single compile that emits the target's matrix instruction is enough, and it costs minutes
+against a campaign's hours.
+
+Two symptoms that this door is shut, both of which look like ordinary results:
+
+- every candidate carrying the interesting transform is `BLOCKED` or declines, while simpler ones measure
+- the measured winner uses only transforms the *generic* path supports, and lands near the
+  known fallback throughput rather than near the ceiling
 
 ---
 
@@ -390,3 +428,6 @@ sha256 identical (`0721c16fbf70779cb6cebd5cf64eab50a1f61c7882d402c60c27d22597548
 10. Hand geometry to BubbleBeam / FutureSight / BoltBeam with a control row.
 11. **LOWER is the floor, not step six.** Search cannot measure over a broken lowering — get it correct,
     then run the seven-step production lifecycle (§7).
+12. **Before spending a campaign, prove one candidate reaches the lowering you mean to search.** Search's
+    door into an optimized kernel is not production's; if it is unwired, the campaign returns a valid
+    result over the fallback space and nothing errors.

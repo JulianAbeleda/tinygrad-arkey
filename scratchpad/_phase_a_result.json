@@ -1,0 +1,1731 @@
+[
+  {
+    "index": 0,
+    "candidate_hash": "df2bf25a610700d152c0c3a1ce5ca154e1a82cb37949a2b6970cc05545e93998",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 8,
+      "n": 8
+    },
+    "threads": 32,
+    "status": "EXCEPTION",
+    "exception_type": "KeyError",
+    "message": "UOp(Ops.SINK, dtypes.void, arg=KernelInfo(name='test', axis_types=(), dont_use_locals=False, applied_opts=(), opts_to_apply=None, estimates=None, candidate_context=_CandidateContext(schema_version='boltbeam.full_kernel_candidate.v1', canonical_identity='df2bf25a610700d152c0c3a1ce5ca154e1a82cb37949a2b6970cc05545e93998', geometry=_TileGeometry(tile=(8, 8, 32), waves=(1, 1), threads=32, wave_size=32, lds_windows=(_LDSWindow(role='A', base=0, end=640, stride_bytes=80), _LDSWindow(role='B', base=640, end=1280, stride_bytes=80))), pipeline=None, packed_weight=PackedWeightTransform(quant_format='Q4_K', rows=12288, k=4096, block_elems=256, block_bytes=144)), required_native_attention=None, coalesced_loads=False, memory_semantic_slots=()), src=(\n  UOp(Ops.END, dtypes.void, arg=None, src=(\n    UOp(Ops.STORE, dtypes.void, arg=None, src=(\n      UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n        UOp(Ops.PARAM, dtypes.half.ptr(6291456), arg=ParamArg(0), src=()),\n        UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n          UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n            x6:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n              UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.RANGE, dtypes.weakint, arg=(1, AxisType.GLOBAL), src=(\n                          x13:=UOp(Ops.CONST, dtypes.weakint, arg=64, src=()),)),\n                        x14:=UOp(Ops.CONST, dtypes.weakint, arg=2, src=()),)),\n                      UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                          x17:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                            x18:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                              x19:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                x20:=UOp(Ops.RANGE, dtypes.weakint, arg=(-1, AxisType.WARP), src=(\n                                  UOp(Ops.CONST, dtypes.weakint, arg=32, src=()),)),\n                                x14,)),\n                              x14,)),\n                            x14,)),\n                          x14,)),\n                        x14,)),)),\n                    x14,)),\n                  UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                    x18,\n                    x14,)),)),\n                x14,)),\n              UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                x19,\n                x14,)),)),\n            UOp(Ops.CONST, dtypes.weakint, arg=12288, src=()),)),\n          x25:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n            UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n              UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.RANGE, dtypes.weakint, arg=(2, AxisType.GLOBAL), src=(\n                        UOp(Ops.CONST, dtypes.weakint, arg=1536, src=()),)),\n                      x14,)),\n                    UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                      x17,\n                      x14,)),)),\n                  x14,)),\n                UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                  x20,\n                  x14,)),)),\n              x14,)),\n            UOp(Ops.RANGE, dtypes.weakint, arg=(3, AxisType.UPCAST), src=(\n              x14,)),)),)),)),\n      UOp(Ops.CAST, dtypes.half, arg=None, src=(\n        UOp(Ops.REDUCE, dtypes.float, arg=(Ops.ADD, ()), tag=TC, src=(\n          UOp(Ops.CAST, dtypes.float, arg=None, src=(\n            UOp(Ops.MUL, dtypes.half, arg=None, src=(\n              UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n                UOp(Ops.PARAM, dtypes.half.ptr(2097152), arg=ParamArg(1), src=()),\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    x6,\n                    UOp(Ops.CONST, dtypes.weakint, arg=4096, src=()),)),\n                  x45:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                          UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                            UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                              UOp(Ops.RANGE, dtypes.weakint, arg=(0, AxisType.REDUCE), src=(\n                                UOp(Ops.CONST, dtypes.weakint, arg=512, src=()),)),\n                              x14,)),\n                            UOp(Ops.RANGE, dtypes.weakint, arg=(6, AxisType.UNROLL), src=(\n                              x14,)),)),\n                          x14,)),\n                        UOp(Ops.RANGE, dtypes.weakint, arg=(5, AxisType.UNROLL), src=(\n                          x14,)),)),\n                      x14,)),\n                    UOp(Ops.RANGE, dtypes.weakint, arg=(4, AxisType.UNROLL), src=(\n                      x14,)),)),)),)),\n              UOp(Ops.BITCAST, dtypes.half, arg=None, src=(\n                UOp(Ops.WHERE, dtypes.ushort, arg=None, src=(\n                  x58:=UOp(Ops.CMPLT, dtypes.bool, arg=None, src=(\n                    UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                      x60:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                        x45,\n                        x14,)),\n                      UOp(Ops.CONST, dtypes.weakint, arg=128, src=()),)),\n                    UOp(Ops.CONST, dtypes.weakint, arg=72, src=()),)),\n                  UOp(Ops.CAST, dtypes.ushort, arg=None, src=(\n                    UOp(Ops.ADD, dtypes.uint, arg=None, src=(\n                      UOp(Ops.WHERE, dtypes.uint, arg=None, src=(\n                        x66:=UOp(Ops.CMPLT, dtypes.bool, arg=None, src=(\n                          UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                            x60,\n                            x14,)),\n                          UOp(Ops.CONST, dtypes.weakint, arg=1, src=()),)),\n                        UOp(Ops.SHR, dtypes.uint, arg=None, src=(\n                          x70:=UOp(Ops.INDEX, dtypes.uint, arg=None, src=(\n                            UOp(Ops.PARAM, dtypes.uint.ptr(7077888), arg=ParamArg(2), src=()),\n                            UOp(Ops.WHERE, dtypes.weakint, arg=None, src=(\n                              x58,\n                              UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                                    UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                      x45,\n                                      UOp(Ops.CONST, dtypes.weakint, arg=256, src=()),)),\n                                    UOp(Ops.CONST, dtypes.weakint, arg=36, src=()),)),\n                                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                                    x25,\n                                    UOp(Ops.CONST, dtypes.weakint, arg=576, src=()),)),)),\n                                UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                                  UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                    x45,\n                                    UOp(Ops.CONST, dtypes.weakint, arg=4, src=()),)),\n                                  x13,)),)),\n                              UOp(Ops.CONST, dtypes.weakint, arg=Invalid, src=()),)),)),\n                          x85:=UOp(Ops.CONST, dtypes.uint, arg=0, src=()),)),\n                        x85,)),\n                      UOp(Ops.WHERE, dtypes.uint, arg=None, src=(\n                        x66,\n                        x85,\n                        UOp(Ops.SHR, dtypes.uint, arg=None, src=(\n                          x70,\n                          UOp(Ops.CONST, dtypes.uint, arg=16, src=()),)),)),)),)),\n                  UOp(Ops.CONST, dtypes.ushort, arg=0, src=()),)),)),)),)),\n          x45,)),)),)),\n    x6,\n    x25,)),))",
+    "compile_s": 1.2402849197387695
+  },
+  {
+    "index": 1,
+    "candidate_hash": "7e5fc07b8c0c87581bc20a5722c06e9d2590a551ee3248f1506f6d68096e42e1",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 8,
+      "n": 16
+    },
+    "threads": 32,
+    "status": "EXCEPTION",
+    "exception_type": "KeyError",
+    "message": "UOp(Ops.SINK, dtypes.void, arg=KernelInfo(name='test', axis_types=(), dont_use_locals=False, applied_opts=(), opts_to_apply=None, estimates=None, candidate_context=_CandidateContext(schema_version='boltbeam.full_kernel_candidate.v1', canonical_identity='7e5fc07b8c0c87581bc20a5722c06e9d2590a551ee3248f1506f6d68096e42e1', geometry=_TileGeometry(tile=(8, 16, 32), waves=(1, 1), threads=32, wave_size=32, lds_windows=(_LDSWindow(role='A', base=0, end=640, stride_bytes=80), _LDSWindow(role='B', base=640, end=1920, stride_bytes=80))), pipeline=None, packed_weight=PackedWeightTransform(quant_format='Q4_K', rows=12288, k=4096, block_elems=256, block_bytes=144)), required_native_attention=None, coalesced_loads=False, memory_semantic_slots=()), src=(\n  UOp(Ops.END, dtypes.void, arg=None, src=(\n    UOp(Ops.STORE, dtypes.void, arg=None, src=(\n      UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n        UOp(Ops.PARAM, dtypes.half.ptr(6291456), arg=ParamArg(0), src=()),\n        UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n          UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n            x6:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n              UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.RANGE, dtypes.weakint, arg=(1, AxisType.GLOBAL), src=(\n                          x13:=UOp(Ops.CONST, dtypes.weakint, arg=64, src=()),)),\n                        x14:=UOp(Ops.CONST, dtypes.weakint, arg=2, src=()),)),\n                      UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                          x17:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                            x18:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                              x19:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                x20:=UOp(Ops.RANGE, dtypes.weakint, arg=(-1, AxisType.WARP), src=(\n                                  UOp(Ops.CONST, dtypes.weakint, arg=32, src=()),)),\n                                x14,)),\n                              x14,)),\n                            x14,)),\n                          x14,)),\n                        x14,)),)),\n                    x14,)),\n                  UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                    x18,\n                    x14,)),)),\n                x14,)),\n              UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                x19,\n                x14,)),)),\n            UOp(Ops.CONST, dtypes.weakint, arg=12288, src=()),)),\n          x25:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n            UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n              UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                          UOp(Ops.RANGE, dtypes.weakint, arg=(2, AxisType.GLOBAL), src=(\n                            UOp(Ops.CONST, dtypes.weakint, arg=768, src=()),)),\n                          x14,)),\n                        UOp(Ops.RANGE, dtypes.weakint, arg=(7, AxisType.UPCAST), src=(\n                          x14,)),)),\n                      x14,)),\n                    UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                      x17,\n                      x14,)),)),\n                  x14,)),\n                UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                  x20,\n                  x14,)),)),\n              x14,)),\n            UOp(Ops.RANGE, dtypes.weakint, arg=(3, AxisType.UPCAST), src=(\n              x14,)),)),)),)),\n      UOp(Ops.CAST, dtypes.half, arg=None, src=(\n        UOp(Ops.REDUCE, dtypes.float, arg=(Ops.ADD, ()), tag=TC, src=(\n          UOp(Ops.CAST, dtypes.float, arg=None, src=(\n            UOp(Ops.MUL, dtypes.half, arg=None, src=(\n              UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n                UOp(Ops.PARAM, dtypes.half.ptr(2097152), arg=ParamArg(1), src=()),\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    x6,\n                    UOp(Ops.CONST, dtypes.weakint, arg=4096, src=()),)),\n                  x48:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                          UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                            UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                              UOp(Ops.RANGE, dtypes.weakint, arg=(0, AxisType.REDUCE), src=(\n                                UOp(Ops.CONST, dtypes.weakint, arg=512, src=()),)),\n                              x14,)),\n                            UOp(Ops.RANGE, dtypes.weakint, arg=(6, AxisType.UNROLL), src=(\n                              x14,)),)),\n                          x14,)),\n                        UOp(Ops.RANGE, dtypes.weakint, arg=(5, AxisType.UNROLL), src=(\n                          x14,)),)),\n                      x14,)),\n                    UOp(Ops.RANGE, dtypes.weakint, arg=(4, AxisType.UNROLL), src=(\n                      x14,)),)),)),)),\n              UOp(Ops.BITCAST, dtypes.half, arg=None, src=(\n                UOp(Ops.WHERE, dtypes.ushort, arg=None, src=(\n                  x61:=UOp(Ops.CMPLT, dtypes.bool, arg=None, src=(\n                    UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                      x63:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                        x48,\n                        x14,)),\n                      UOp(Ops.CONST, dtypes.weakint, arg=128, src=()),)),\n                    UOp(Ops.CONST, dtypes.weakint, arg=72, src=()),)),\n                  UOp(Ops.CAST, dtypes.ushort, arg=None, src=(\n                    UOp(Ops.ADD, dtypes.uint, arg=None, src=(\n                      UOp(Ops.WHERE, dtypes.uint, arg=None, src=(\n                        x69:=UOp(Ops.CMPLT, dtypes.bool, arg=None, src=(\n                          UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                            x63,\n                            x14,)),\n                          UOp(Ops.CONST, dtypes.weakint, arg=1, src=()),)),\n                        UOp(Ops.SHR, dtypes.uint, arg=None, src=(\n                          x73:=UOp(Ops.INDEX, dtypes.uint, arg=None, src=(\n                            UOp(Ops.PARAM, dtypes.uint.ptr(7077888), arg=ParamArg(2), src=()),\n                            UOp(Ops.WHERE, dtypes.weakint, arg=None, src=(\n                              x61,\n                              UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                                    UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                      x48,\n                                      UOp(Ops.CONST, dtypes.weakint, arg=256, src=()),)),\n                                    UOp(Ops.CONST, dtypes.weakint, arg=36, src=()),)),\n                                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                                    x25,\n                                    UOp(Ops.CONST, dtypes.weakint, arg=576, src=()),)),)),\n                                UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                                  UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                    x48,\n                                    UOp(Ops.CONST, dtypes.weakint, arg=4, src=()),)),\n                                  x13,)),)),\n                              UOp(Ops.CONST, dtypes.weakint, arg=Invalid, src=()),)),)),\n                          x88:=UOp(Ops.CONST, dtypes.uint, arg=0, src=()),)),\n                        x88,)),\n                      UOp(Ops.WHERE, dtypes.uint, arg=None, src=(\n                        x69,\n                        x88,\n                        UOp(Ops.SHR, dtypes.uint, arg=None, src=(\n                          x73,\n                          UOp(Ops.CONST, dtypes.uint, arg=16, src=()),)),)),)),)),\n                  UOp(Ops.CONST, dtypes.ushort, arg=0, src=()),)),)),)),)),\n          x48,)),)),)),\n    x6,\n    x25,)),))",
+    "compile_s": 1.1006789207458496
+  },
+  {
+    "index": 2,
+    "candidate_hash": "2d8c25bcef9e6576b93002ff209df8186da5fb3752926289ed348a603c4b6e9f",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 8,
+      "n": 32
+    },
+    "threads": 32,
+    "status": "EXCEPTION",
+    "exception_type": "KeyError",
+    "message": "UOp(Ops.SINK, dtypes.void, arg=KernelInfo(name='test', axis_types=(), dont_use_locals=False, applied_opts=(), opts_to_apply=None, estimates=None, candidate_context=_CandidateContext(schema_version='boltbeam.full_kernel_candidate.v1', canonical_identity='2d8c25bcef9e6576b93002ff209df8186da5fb3752926289ed348a603c4b6e9f', geometry=_TileGeometry(tile=(8, 32, 32), waves=(1, 1), threads=32, wave_size=32, lds_windows=(_LDSWindow(role='A', base=0, end=640, stride_bytes=80), _LDSWindow(role='B', base=640, end=3200, stride_bytes=80))), pipeline=None, packed_weight=PackedWeightTransform(quant_format='Q4_K', rows=12288, k=4096, block_elems=256, block_bytes=144)), required_native_attention=None, coalesced_loads=False, memory_semantic_slots=()), src=(\n  UOp(Ops.END, dtypes.void, arg=None, src=(\n    UOp(Ops.STORE, dtypes.void, arg=None, src=(\n      UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n        UOp(Ops.PARAM, dtypes.half.ptr(6291456), arg=ParamArg(0), src=()),\n        UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n          UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n            x6:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n              UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.RANGE, dtypes.weakint, arg=(1, AxisType.GLOBAL), src=(\n                          x13:=UOp(Ops.CONST, dtypes.weakint, arg=64, src=()),)),\n                        x14:=UOp(Ops.CONST, dtypes.weakint, arg=2, src=()),)),\n                      UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                          x17:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                            x18:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                              x19:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                x20:=UOp(Ops.RANGE, dtypes.weakint, arg=(-1, AxisType.WARP), src=(\n                                  UOp(Ops.CONST, dtypes.weakint, arg=32, src=()),)),\n                                x14,)),\n                              x14,)),\n                            x14,)),\n                          x14,)),\n                        x14,)),)),\n                    x14,)),\n                  UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                    x18,\n                    x14,)),)),\n                x14,)),\n              UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                x19,\n                x14,)),)),\n            UOp(Ops.CONST, dtypes.weakint, arg=12288, src=()),)),\n          x25:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n            UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n              UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                          UOp(Ops.RANGE, dtypes.weakint, arg=(2, AxisType.GLOBAL), src=(\n                            UOp(Ops.CONST, dtypes.weakint, arg=384, src=()),)),\n                          x35:=UOp(Ops.CONST, dtypes.weakint, arg=4, src=()),)),\n                        UOp(Ops.RANGE, dtypes.weakint, arg=(7, AxisType.UPCAST), src=(\n                          x35,)),)),\n                      x14,)),\n                    UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                      x17,\n                      x14,)),)),\n                  x14,)),\n                UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                  x20,\n                  x14,)),)),\n              x14,)),\n            UOp(Ops.RANGE, dtypes.weakint, arg=(3, AxisType.UPCAST), src=(\n              x14,)),)),)),)),\n      UOp(Ops.CAST, dtypes.half, arg=None, src=(\n        UOp(Ops.REDUCE, dtypes.float, arg=(Ops.ADD, ()), tag=TC, src=(\n          UOp(Ops.CAST, dtypes.float, arg=None, src=(\n            UOp(Ops.MUL, dtypes.half, arg=None, src=(\n              UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n                UOp(Ops.PARAM, dtypes.half.ptr(2097152), arg=ParamArg(1), src=()),\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    x6,\n                    UOp(Ops.CONST, dtypes.weakint, arg=4096, src=()),)),\n                  x49:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                          UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                            UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                              UOp(Ops.RANGE, dtypes.weakint, arg=(0, AxisType.REDUCE), src=(\n                                UOp(Ops.CONST, dtypes.weakint, arg=512, src=()),)),\n                              x14,)),\n                            UOp(Ops.RANGE, dtypes.weakint, arg=(6, AxisType.UNROLL), src=(\n                              x14,)),)),\n                          x14,)),\n                        UOp(Ops.RANGE, dtypes.weakint, arg=(5, AxisType.UNROLL), src=(\n                          x14,)),)),\n                      x14,)),\n                    UOp(Ops.RANGE, dtypes.weakint, arg=(4, AxisType.UNROLL), src=(\n                      x14,)),)),)),)),\n              UOp(Ops.BITCAST, dtypes.half, arg=None, src=(\n                UOp(Ops.WHERE, dtypes.ushort, arg=None, src=(\n                  x62:=UOp(Ops.CMPLT, dtypes.bool, arg=None, src=(\n                    UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                      x64:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                        x49,\n                        x14,)),\n                      UOp(Ops.CONST, dtypes.weakint, arg=128, src=()),)),\n                    UOp(Ops.CONST, dtypes.weakint, arg=72, src=()),)),\n                  UOp(Ops.CAST, dtypes.ushort, arg=None, src=(\n                    UOp(Ops.ADD, dtypes.uint, arg=None, src=(\n                      UOp(Ops.WHERE, dtypes.uint, arg=None, src=(\n                        x70:=UOp(Ops.CMPLT, dtypes.bool, arg=None, src=(\n                          UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                            x64,\n                            x14,)),\n                          UOp(Ops.CONST, dtypes.weakint, arg=1, src=()),)),\n                        UOp(Ops.SHR, dtypes.uint, arg=None, src=(\n                          x74:=UOp(Ops.INDEX, dtypes.uint, arg=None, src=(\n                            UOp(Ops.PARAM, dtypes.uint.ptr(7077888), arg=ParamArg(2), src=()),\n                            UOp(Ops.WHERE, dtypes.weakint, arg=None, src=(\n                              x62,\n                              UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                                    UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                      x49,\n                                      UOp(Ops.CONST, dtypes.weakint, arg=256, src=()),)),\n                                    UOp(Ops.CONST, dtypes.weakint, arg=36, src=()),)),\n                                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                                    x25,\n                                    UOp(Ops.CONST, dtypes.weakint, arg=576, src=()),)),)),\n                                UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                                  UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                    x49,\n                                    x35,)),\n                                  x13,)),)),\n                              UOp(Ops.CONST, dtypes.weakint, arg=Invalid, src=()),)),)),\n                          x88:=UOp(Ops.CONST, dtypes.uint, arg=0, src=()),)),\n                        x88,)),\n                      UOp(Ops.WHERE, dtypes.uint, arg=None, src=(\n                        x70,\n                        x88,\n                        UOp(Ops.SHR, dtypes.uint, arg=None, src=(\n                          x74,\n                          UOp(Ops.CONST, dtypes.uint, arg=16, src=()),)),)),)),)),\n                  UOp(Ops.CONST, dtypes.ushort, arg=0, src=()),)),)),)),)),\n          x49,)),)),)),\n    x6,\n    x25,)),))",
+    "compile_s": 1.1205110549926758
+  },
+  {
+    "index": 3,
+    "candidate_hash": "83f0cbc6a1da9a561afaaf51241cdffd90598fc519a57c889fef59abde6d734b",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 8
+    },
+    "threads": 32,
+    "status": "EXCEPTION",
+    "exception_type": "KeyError",
+    "message": "UOp(Ops.SINK, dtypes.void, arg=KernelInfo(name='test', axis_types=(), dont_use_locals=False, applied_opts=(), opts_to_apply=None, estimates=None, candidate_context=_CandidateContext(schema_version='boltbeam.full_kernel_candidate.v1', canonical_identity='83f0cbc6a1da9a561afaaf51241cdffd90598fc519a57c889fef59abde6d734b', geometry=_TileGeometry(tile=(16, 8, 32), waves=(1, 1), threads=32, wave_size=32, lds_windows=(_LDSWindow(role='A', base=0, end=1280, stride_bytes=80), _LDSWindow(role='B', base=1280, end=1920, stride_bytes=80))), pipeline=None, packed_weight=PackedWeightTransform(quant_format='Q4_K', rows=12288, k=4096, block_elems=256, block_bytes=144)), required_native_attention=None, coalesced_loads=False, memory_semantic_slots=()), src=(\n  UOp(Ops.END, dtypes.void, arg=None, src=(\n    UOp(Ops.STORE, dtypes.void, arg=None, src=(\n      UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n        UOp(Ops.PARAM, dtypes.half.ptr(6291456), arg=ParamArg(0), src=()),\n        UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n          UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n            x6:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n              UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.RANGE, dtypes.weakint, arg=(1, AxisType.GLOBAL), src=(\n                          x13:=UOp(Ops.CONST, dtypes.weakint, arg=64, src=()),)),\n                        x14:=UOp(Ops.CONST, dtypes.weakint, arg=2, src=()),)),\n                      UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                          x17:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                            x18:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                              x19:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                x20:=UOp(Ops.RANGE, dtypes.weakint, arg=(-1, AxisType.WARP), src=(\n                                  UOp(Ops.CONST, dtypes.weakint, arg=32, src=()),)),\n                                x14,)),\n                              x14,)),\n                            x14,)),\n                          x14,)),\n                        x14,)),)),\n                    x14,)),\n                  UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                    x18,\n                    x14,)),)),\n                x14,)),\n              UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                x19,\n                x14,)),)),\n            UOp(Ops.CONST, dtypes.weakint, arg=12288, src=()),)),\n          x25:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n            UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n              UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.RANGE, dtypes.weakint, arg=(2, AxisType.GLOBAL), src=(\n                        UOp(Ops.CONST, dtypes.weakint, arg=1536, src=()),)),\n                      x14,)),\n                    UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                      x17,\n                      x14,)),)),\n                  x14,)),\n                UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                  x20,\n                  x14,)),)),\n              x14,)),\n            UOp(Ops.RANGE, dtypes.weakint, arg=(3, AxisType.UPCAST), src=(\n              x14,)),)),)),)),\n      UOp(Ops.CAST, dtypes.half, arg=None, src=(\n        UOp(Ops.REDUCE, dtypes.float, arg=(Ops.ADD, ()), tag=TC, src=(\n          UOp(Ops.CAST, dtypes.float, arg=None, src=(\n            UOp(Ops.MUL, dtypes.half, arg=None, src=(\n              UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n                UOp(Ops.PARAM, dtypes.half.ptr(2097152), arg=ParamArg(1), src=()),\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    x6,\n                    UOp(Ops.CONST, dtypes.weakint, arg=4096, src=()),)),\n                  x45:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                          UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                            UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                              UOp(Ops.RANGE, dtypes.weakint, arg=(0, AxisType.REDUCE), src=(\n                                UOp(Ops.CONST, dtypes.weakint, arg=512, src=()),)),\n                              x14,)),\n                            UOp(Ops.RANGE, dtypes.weakint, arg=(6, AxisType.UNROLL), src=(\n                              x14,)),)),\n                          x14,)),\n                        UOp(Ops.RANGE, dtypes.weakint, arg=(5, AxisType.UNROLL), src=(\n                          x14,)),)),\n                      x14,)),\n                    UOp(Ops.RANGE, dtypes.weakint, arg=(4, AxisType.UNROLL), src=(\n                      x14,)),)),)),)),\n              UOp(Ops.BITCAST, dtypes.half, arg=None, src=(\n                UOp(Ops.WHERE, dtypes.ushort, arg=None, src=(\n                  x58:=UOp(Ops.CMPLT, dtypes.bool, arg=None, src=(\n                    UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                      x60:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                        x45,\n                        x14,)),\n                      UOp(Ops.CONST, dtypes.weakint, arg=128, src=()),)),\n                    UOp(Ops.CONST, dtypes.weakint, arg=72, src=()),)),\n                  UOp(Ops.CAST, dtypes.ushort, arg=None, src=(\n                    UOp(Ops.ADD, dtypes.uint, arg=None, src=(\n                      UOp(Ops.WHERE, dtypes.uint, arg=None, src=(\n                        x66:=UOp(Ops.CMPLT, dtypes.bool, arg=None, src=(\n                          UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                            x60,\n                            x14,)),\n                          UOp(Ops.CONST, dtypes.weakint, arg=1, src=()),)),\n                        UOp(Ops.SHR, dtypes.uint, arg=None, src=(\n                          x70:=UOp(Ops.INDEX, dtypes.uint, arg=None, src=(\n                            UOp(Ops.PARAM, dtypes.uint.ptr(7077888), arg=ParamArg(2), src=()),\n                            UOp(Ops.WHERE, dtypes.weakint, arg=None, src=(\n                              x58,\n                              UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                                    UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                      x45,\n                                      UOp(Ops.CONST, dtypes.weakint, arg=256, src=()),)),\n                                    UOp(Ops.CONST, dtypes.weakint, arg=36, src=()),)),\n                                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                                    x25,\n                                    UOp(Ops.CONST, dtypes.weakint, arg=576, src=()),)),)),\n                                UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                                  UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                    x45,\n                                    UOp(Ops.CONST, dtypes.weakint, arg=4, src=()),)),\n                                  x13,)),)),\n                              UOp(Ops.CONST, dtypes.weakint, arg=Invalid, src=()),)),)),\n                          x85:=UOp(Ops.CONST, dtypes.uint, arg=0, src=()),)),\n                        x85,)),\n                      UOp(Ops.WHERE, dtypes.uint, arg=None, src=(\n                        x66,\n                        x85,\n                        UOp(Ops.SHR, dtypes.uint, arg=None, src=(\n                          x70,\n                          UOp(Ops.CONST, dtypes.uint, arg=16, src=()),)),)),)),)),\n                  UOp(Ops.CONST, dtypes.ushort, arg=0, src=()),)),)),)),)),\n          x45,)),)),)),\n    x6,\n    x25,)),))",
+    "compile_s": 1.090306043624878
+  },
+  {
+    "index": 4,
+    "candidate_hash": "7539ba7979f674d7794b99991354f019464ba401d0c2b298cd3eb171ad77268f",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 16,
+      "m": 16,
+      "n": 16
+    },
+    "threads": 32,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.2859089374542236
+  },
+  {
+    "index": 5,
+    "candidate_hash": "267f60357c5829de889593de3feedd842931b4386248b6b5652e87690b0f54c7",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 16
+    },
+    "threads": 32,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.1025018692016602
+  },
+  {
+    "index": 6,
+    "candidate_hash": "534f1da0fb8b55b80dbba5775ad0c5c756329005fd7b5740dcd3b7e1efaa8249",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 16,
+      "m": 16,
+      "n": 32
+    },
+    "threads": 32,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.0981688499450684
+  },
+  {
+    "index": 7,
+    "candidate_hash": "516dc16c5165af141214069e0fd0085564e4b3fd05f163381709fbbef5f36b62",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 32
+    },
+    "threads": 32,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.0991201400756836
+  },
+  {
+    "index": 8,
+    "candidate_hash": "388b31b385b3f601249dfed010d7a2dd0320e900ce2d7b43fa438866a549bf99",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 8
+    },
+    "threads": 32,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.1008987426757812
+  },
+  {
+    "index": 9,
+    "candidate_hash": "827a7115d56a772591afd7583261e6ff363cdd3d3bcea871c79acb1dc9b2c546",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 16,
+      "m": 32,
+      "n": 16
+    },
+    "threads": 32,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.0975661277770996
+  },
+  {
+    "index": 10,
+    "candidate_hash": "e96eecd6ea2becae17e487163a7564bb98828b3b4abd388aa68aa8390e942e47",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 16
+    },
+    "threads": 32,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.1028790473937988
+  },
+  {
+    "index": 11,
+    "candidate_hash": "940249707136c68f0f38d6496f1907f4ab3ae122aacdb3fd530801e6909b62ca",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 16,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 32,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.1013860702514648
+  },
+  {
+    "index": 12,
+    "candidate_hash": "d83266ef0941da22e7c3dbb59a0703d9a9ea37bd7b7c878752c0fba164e213fa",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 32,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.1066300868988037
+  },
+  {
+    "index": 13,
+    "candidate_hash": "df2bf25a610700d152c0c3a1ce5ca154e1a82cb37949a2b6970cc05545e93998",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 8,
+      "n": 8
+    },
+    "threads": 32,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.100053071975708
+  },
+  {
+    "index": 14,
+    "candidate_hash": "7e5fc07b8c0c87581bc20a5722c06e9d2590a551ee3248f1506f6d68096e42e1",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 8,
+      "n": 16
+    },
+    "threads": 32,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.1025381088256836
+  },
+  {
+    "index": 15,
+    "candidate_hash": "2d8c25bcef9e6576b93002ff209df8186da5fb3752926289ed348a603c4b6e9f",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 8,
+      "n": 32
+    },
+    "threads": 32,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.1068530082702637
+  },
+  {
+    "index": 16,
+    "candidate_hash": "83f0cbc6a1da9a561afaaf51241cdffd90598fc519a57c889fef59abde6d734b",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 8
+    },
+    "threads": 32,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.1069259643554688
+  },
+  {
+    "index": 17,
+    "candidate_hash": "7539ba7979f674d7794b99991354f019464ba401d0c2b298cd3eb171ad77268f",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 16,
+      "m": 16,
+      "n": 16
+    },
+    "threads": 32,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 0.0001049041748046875
+  },
+  {
+    "index": 18,
+    "candidate_hash": "267f60357c5829de889593de3feedd842931b4386248b6b5652e87690b0f54c7",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 16
+    },
+    "threads": 32,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 6.127357482910156e-05
+  },
+  {
+    "index": 19,
+    "candidate_hash": "534f1da0fb8b55b80dbba5775ad0c5c756329005fd7b5740dcd3b7e1efaa8249",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 16,
+      "m": 16,
+      "n": 32
+    },
+    "threads": 32,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.2928924560546875e-05
+  },
+  {
+    "index": 20,
+    "candidate_hash": "516dc16c5165af141214069e0fd0085564e4b3fd05f163381709fbbef5f36b62",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 32
+    },
+    "threads": 32,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.0067901611328125e-05
+  },
+  {
+    "index": 21,
+    "candidate_hash": "388b31b385b3f601249dfed010d7a2dd0320e900ce2d7b43fa438866a549bf99",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 8
+    },
+    "threads": 32,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 4.9114227294921875e-05
+  },
+  {
+    "index": 22,
+    "candidate_hash": "827a7115d56a772591afd7583261e6ff363cdd3d3bcea871c79acb1dc9b2c546",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 16,
+      "m": 32,
+      "n": 16
+    },
+    "threads": 32,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 4.9114227294921875e-05
+  },
+  {
+    "index": 23,
+    "candidate_hash": "e96eecd6ea2becae17e487163a7564bb98828b3b4abd388aa68aa8390e942e47",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 16
+    },
+    "threads": 32,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 4.8160552978515625e-05
+  },
+  {
+    "index": 24,
+    "candidate_hash": "940249707136c68f0f38d6496f1907f4ab3ae122aacdb3fd530801e6909b62ca",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 16,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 32,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.1975250244140625e-05
+  },
+  {
+    "index": 25,
+    "candidate_hash": "d83266ef0941da22e7c3dbb59a0703d9a9ea37bd7b7c878752c0fba164e213fa",
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 32,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.1975250244140625e-05
+  },
+  {
+    "index": 26,
+    "candidate_hash": "97aa7eed4abd80bf925bcc8aed3c3a04ebec89e6a8a8c2208d9319b31b62ab0e",
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 16
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.103562831878662
+  },
+  {
+    "index": 27,
+    "candidate_hash": "b01ef136e73104a37d5a20992683cf1a4f919c3c26651e52094a86ab05321fb9",
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 32
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.1341757774353027
+  },
+  {
+    "index": 28,
+    "candidate_hash": "a23fa1d4019c951e6ba61664cdda5bd6e1ca18a07fbfc279e2aeacb10138d43c",
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 64
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.1021101474761963
+  },
+  {
+    "index": 29,
+    "candidate_hash": "b4ac36b9befcddc348de0d4582b28208c071e08f709ef4f2eb806a112011ff42",
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 16
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.1080238819122314
+  },
+  {
+    "index": 30,
+    "candidate_hash": "ac618c15070ec5e35e4884938c7852e66c4c3113e31692076aac521e94a8eb25",
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 1
+    },
+    "tile": {
+      "k": 16,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.1108248233795166
+  },
+  {
+    "index": 31,
+    "candidate_hash": "cb2f93a4e8e33eb420820003fdd25eff0496dd84960896a55af316f8b12b21df",
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.118213176727295
+  },
+  {
+    "index": 32,
+    "candidate_hash": "cc753c45f6cd07bd869dba34b843f8387eeb50e8d64ed707a8eff78f8d9eea0e",
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 1
+    },
+    "tile": {
+      "k": 16,
+      "m": 32,
+      "n": 64
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.1080420017242432
+  },
+  {
+    "index": 33,
+    "candidate_hash": "f6f9f059a4c9523c29f7dc1a1f75382868d2acba479e34bfc3255bca9c7b09b3",
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 64
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.1039729118347168
+  },
+  {
+    "index": 34,
+    "candidate_hash": "97aa7eed4abd80bf925bcc8aed3c3a04ebec89e6a8a8c2208d9319b31b62ab0e",
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 16
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 0.00012111663818359375
+  },
+  {
+    "index": 35,
+    "candidate_hash": "b01ef136e73104a37d5a20992683cf1a4f919c3c26651e52094a86ab05321fb9",
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 32
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 6.508827209472656e-05
+  },
+  {
+    "index": 36,
+    "candidate_hash": "a23fa1d4019c951e6ba61664cdda5bd6e1ca18a07fbfc279e2aeacb10138d43c",
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 64
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.507469177246094e-05
+  },
+  {
+    "index": 37,
+    "candidate_hash": "b4ac36b9befcddc348de0d4582b28208c071e08f709ef4f2eb806a112011ff42",
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 16
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.2928924560546875e-05
+  },
+  {
+    "index": 38,
+    "candidate_hash": "ac618c15070ec5e35e4884938c7852e66c4c3113e31692076aac521e94a8eb25",
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 2
+    },
+    "tile": {
+      "k": 16,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.0067901611328125e-05
+  },
+  {
+    "index": 39,
+    "candidate_hash": "cb2f93a4e8e33eb420820003fdd25eff0496dd84960896a55af316f8b12b21df",
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 4.9114227294921875e-05
+  },
+  {
+    "index": 40,
+    "candidate_hash": "cc753c45f6cd07bd869dba34b843f8387eeb50e8d64ed707a8eff78f8d9eea0e",
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 2
+    },
+    "tile": {
+      "k": 16,
+      "m": 32,
+      "n": 64
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.2928924560546875e-05
+  },
+  {
+    "index": 41,
+    "candidate_hash": "f6f9f059a4c9523c29f7dc1a1f75382868d2acba479e34bfc3255bca9c7b09b3",
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 64
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 4.7206878662109375e-05
+  },
+  {
+    "index": 42,
+    "candidate_hash": "89412e2b62a63843d8d4d2785a3d1994a4007291af5fb6d8e533ea94d8484a2b",
+    "geometry": {
+      "wm": 1,
+      "wn": 4,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.115570068359375
+  },
+  {
+    "index": 43,
+    "candidate_hash": "5ce124a46655b15c7ba40cbd80d457e456d09ec7cbb0b38c30efa023b7ad5977",
+    "geometry": {
+      "wm": 1,
+      "wn": 4,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 64
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.1133930683135986
+  },
+  {
+    "index": 44,
+    "candidate_hash": "df812d53443b9ddf53d5791cfbfa3fda7ced1f8173a32b9a0993bef7dd19ca12",
+    "geometry": {
+      "wm": 1,
+      "wn": 4,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 96
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.112185001373291
+  },
+  {
+    "index": 45,
+    "candidate_hash": "7f8fadf6ed76bf5068cde0c597acfa415901cff373081e1ecba416bb199907c1",
+    "geometry": {
+      "wm": 1,
+      "wn": 4,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 128
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.1081616878509521
+  },
+  {
+    "index": 46,
+    "candidate_hash": "89412e2b62a63843d8d4d2785a3d1994a4007291af5fb6d8e533ea94d8484a2b",
+    "geometry": {
+      "wm": 1,
+      "wn": 4,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 0.00010919570922851562
+  },
+  {
+    "index": 47,
+    "candidate_hash": "5ce124a46655b15c7ba40cbd80d457e456d09ec7cbb0b38c30efa023b7ad5977",
+    "geometry": {
+      "wm": 1,
+      "wn": 4,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 64
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.984306335449219e-05
+  },
+  {
+    "index": 48,
+    "candidate_hash": "df812d53443b9ddf53d5791cfbfa3fda7ced1f8173a32b9a0993bef7dd19ca12",
+    "geometry": {
+      "wm": 1,
+      "wn": 4,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 96
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.2928924560546875e-05
+  },
+  {
+    "index": 49,
+    "candidate_hash": "7f8fadf6ed76bf5068cde0c597acfa415901cff373081e1ecba416bb199907c1",
+    "geometry": {
+      "wm": 1,
+      "wn": 4,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 128
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.5789947509765625e-05
+  },
+  {
+    "index": 50,
+    "candidate_hash": "97aa7eed4abd80bf925bcc8aed3c3a04ebec89e6a8a8c2208d9319b31b62ab0e",
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 16
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.412101745605469e-05
+  },
+  {
+    "index": 51,
+    "candidate_hash": "b01ef136e73104a37d5a20992683cf1a4f919c3c26651e52094a86ab05321fb9",
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 32
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.2928924560546875e-05
+  },
+  {
+    "index": 52,
+    "candidate_hash": "b4ac36b9befcddc348de0d4582b28208c071e08f709ef4f2eb806a112011ff42",
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 16
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 6.175041198730469e-05
+  },
+  {
+    "index": 53,
+    "candidate_hash": "ac618c15070ec5e35e4884938c7852e66c4c3113e31692076aac521e94a8eb25",
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 16,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.125999450683594e-05
+  },
+  {
+    "index": 54,
+    "candidate_hash": "cb2f93a4e8e33eb420820003fdd25eff0496dd84960896a55af316f8b12b21df",
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.412101745605469e-05
+  },
+  {
+    "index": 55,
+    "candidate_hash": "ce24718099877c0bf4b84f8cd1068d3485ad121ce89d24fe0e52a7b74bf2d50f",
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 16
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.1056199073791504
+  },
+  {
+    "index": 56,
+    "candidate_hash": "994a917c293a740cbc81168c11238411c438357960d4967b381d0f7cbcfc9fe0",
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 16,
+      "m": 64,
+      "n": 32
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.1073980331420898
+  },
+  {
+    "index": 57,
+    "candidate_hash": "c52c0c52005d4ac7f2a986afc6733161bcae4e490c023ded4871d8f998e34514",
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 32
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.1093108654022217
+  },
+  {
+    "index": 58,
+    "candidate_hash": "97aa7eed4abd80bf925bcc8aed3c3a04ebec89e6a8a8c2208d9319b31b62ab0e",
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 16
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 0.00010800361633300781
+  },
+  {
+    "index": 59,
+    "candidate_hash": "b01ef136e73104a37d5a20992683cf1a4f919c3c26651e52094a86ab05321fb9",
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 32
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.888938903808594e-05
+  },
+  {
+    "index": 60,
+    "candidate_hash": "b4ac36b9befcddc348de0d4582b28208c071e08f709ef4f2eb806a112011ff42",
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 16
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.507469177246094e-05
+  },
+  {
+    "index": 61,
+    "candidate_hash": "ac618c15070ec5e35e4884938c7852e66c4c3113e31692076aac521e94a8eb25",
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 16,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.698204040527344e-05
+  },
+  {
+    "index": 62,
+    "candidate_hash": "cb2f93a4e8e33eb420820003fdd25eff0496dd84960896a55af316f8b12b21df",
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.507469177246094e-05
+  },
+  {
+    "index": 63,
+    "candidate_hash": "ce24718099877c0bf4b84f8cd1068d3485ad121ce89d24fe0e52a7b74bf2d50f",
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 16
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.0067901611328125e-05
+  },
+  {
+    "index": 64,
+    "candidate_hash": "994a917c293a740cbc81168c11238411c438357960d4967b381d0f7cbcfc9fe0",
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 16,
+      "m": 64,
+      "n": 32
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.412101745605469e-05
+  },
+  {
+    "index": 65,
+    "candidate_hash": "c52c0c52005d4ac7f2a986afc6733161bcae4e490c023ded4871d8f998e34514",
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 32
+    },
+    "threads": 64,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 4.935264587402344e-05
+  },
+  {
+    "index": 66,
+    "candidate_hash": "89412e2b62a63843d8d4d2785a3d1994a4007291af5fb6d8e533ea94d8484a2b",
+    "geometry": {
+      "wm": 2,
+      "wn": 2,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.4836273193359375e-05
+  },
+  {
+    "index": 67,
+    "candidate_hash": "5ce124a46655b15c7ba40cbd80d457e456d09ec7cbb0b38c30efa023b7ad5977",
+    "geometry": {
+      "wm": 2,
+      "wn": 2,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 64
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.507469177246094e-05
+  },
+  {
+    "index": 68,
+    "candidate_hash": "328f1e61c4f77c27207dd9f0a08c603dbb353d28a0e9ca8635bc6907595cae1b",
+    "geometry": {
+      "wm": 2,
+      "wn": 2,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 32
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.109710931777954
+  },
+  {
+    "index": 69,
+    "candidate_hash": "4749d07e58219c84401afc3592c0697d23b367b44737eeda6f73388abfaa782b",
+    "geometry": {
+      "wm": 2,
+      "wn": 2,
+      "bc": 1
+    },
+    "tile": {
+      "k": 16,
+      "m": 64,
+      "n": 64
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.112762689590454
+  },
+  {
+    "index": 70,
+    "candidate_hash": "31039d2926c8dc32e822be4a8f0ad16657d21a2606c82fea7d35b0ce63fa303f",
+    "geometry": {
+      "wm": 2,
+      "wn": 2,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 64
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.11185884475708
+  },
+  {
+    "index": 71,
+    "candidate_hash": "89412e2b62a63843d8d4d2785a3d1994a4007291af5fb6d8e533ea94d8484a2b",
+    "geometry": {
+      "wm": 2,
+      "wn": 2,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 0.00011205673217773438
+  },
+  {
+    "index": 72,
+    "candidate_hash": "5ce124a46655b15c7ba40cbd80d457e456d09ec7cbb0b38c30efa023b7ad5977",
+    "geometry": {
+      "wm": 2,
+      "wn": 2,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 64
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 6.031990051269531e-05
+  },
+  {
+    "index": 73,
+    "candidate_hash": "328f1e61c4f77c27207dd9f0a08c603dbb353d28a0e9ca8635bc6907595cae1b",
+    "geometry": {
+      "wm": 2,
+      "wn": 2,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 32
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.173683166503906e-05
+  },
+  {
+    "index": 74,
+    "candidate_hash": "4749d07e58219c84401afc3592c0697d23b367b44737eeda6f73388abfaa782b",
+    "geometry": {
+      "wm": 2,
+      "wn": 2,
+      "bc": 2
+    },
+    "tile": {
+      "k": 16,
+      "m": 64,
+      "n": 64
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.030632019042969e-05
+  },
+  {
+    "index": 75,
+    "candidate_hash": "31039d2926c8dc32e822be4a8f0ad16657d21a2606c82fea7d35b0ce63fa303f",
+    "geometry": {
+      "wm": 2,
+      "wn": 2,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 64
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.316734313964844e-05
+  },
+  {
+    "index": 76,
+    "candidate_hash": "fe5dcc10f204e25f9b4e421282c56eb09d700c1361684140beba42258f636f89",
+    "geometry": {
+      "wm": 2,
+      "wn": 4,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 64
+    },
+    "threads": 256,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.1109061241149902
+  },
+  {
+    "index": 77,
+    "candidate_hash": "5a93b1f1ef3d199c53461013ab6c4e325efdfd22ddadd118ac9100b7f7d14838",
+    "geometry": {
+      "wm": 2,
+      "wn": 4,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 128
+    },
+    "threads": 256,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.127814769744873
+  },
+  {
+    "index": 78,
+    "candidate_hash": "fe5dcc10f204e25f9b4e421282c56eb09d700c1361684140beba42258f636f89",
+    "geometry": {
+      "wm": 2,
+      "wn": 4,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 64
+    },
+    "threads": 256,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 0.0001049041748046875
+  },
+  {
+    "index": 79,
+    "candidate_hash": "5a93b1f1ef3d199c53461013ab6c4e325efdfd22ddadd118ac9100b7f7d14838",
+    "geometry": {
+      "wm": 2,
+      "wn": 4,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 128
+    },
+    "threads": 256,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.793571472167969e-05
+  },
+  {
+    "index": 80,
+    "candidate_hash": "89412e2b62a63843d8d4d2785a3d1994a4007291af5fb6d8e533ea94d8484a2b",
+    "geometry": {
+      "wm": 4,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.3882598876953125e-05
+  },
+  {
+    "index": 81,
+    "candidate_hash": "328f1e61c4f77c27207dd9f0a08c603dbb353d28a0e9ca8635bc6907595cae1b",
+    "geometry": {
+      "wm": 4,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 32
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 4.887580871582031e-05
+  },
+  {
+    "index": 82,
+    "candidate_hash": "4bd7a74dd862d97778fb429af9a1cd5df8854546bd470dbe4181582feecba25f",
+    "geometry": {
+      "wm": 4,
+      "wn": 1,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 128,
+      "n": 32
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.1126060485839844
+  },
+  {
+    "index": 83,
+    "candidate_hash": "89412e2b62a63843d8d4d2785a3d1994a4007291af5fb6d8e533ea94d8484a2b",
+    "geometry": {
+      "wm": 4,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 0.00010395050048828125
+  },
+  {
+    "index": 84,
+    "candidate_hash": "328f1e61c4f77c27207dd9f0a08c603dbb353d28a0e9ca8635bc6907595cae1b",
+    "geometry": {
+      "wm": 4,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 32
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.698204040527344e-05
+  },
+  {
+    "index": 85,
+    "candidate_hash": "4bd7a74dd862d97778fb429af9a1cd5df8854546bd470dbe4181582feecba25f",
+    "geometry": {
+      "wm": 4,
+      "wn": 1,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 128,
+      "n": 32
+    },
+    "threads": 128,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.817413330078125e-05
+  },
+  {
+    "index": 86,
+    "candidate_hash": "fe5dcc10f204e25f9b4e421282c56eb09d700c1361684140beba42258f636f89",
+    "geometry": {
+      "wm": 4,
+      "wn": 2,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 64
+    },
+    "threads": 256,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.0067901611328125e-05
+  },
+  {
+    "index": 87,
+    "candidate_hash": "df6d56d297a6cd909018bfa01577ee14c52b11e91134ac0d2f0b09016ade034c",
+    "geometry": {
+      "wm": 4,
+      "wn": 2,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 128,
+      "n": 64
+    },
+    "threads": 256,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.1123521327972412
+  },
+  {
+    "index": 88,
+    "candidate_hash": "fe5dcc10f204e25f9b4e421282c56eb09d700c1361684140beba42258f636f89",
+    "geometry": {
+      "wm": 4,
+      "wn": 2,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 64
+    },
+    "threads": 256,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 0.000102996826171875
+  },
+  {
+    "index": 89,
+    "candidate_hash": "df6d56d297a6cd909018bfa01577ee14c52b11e91134ac0d2f0b09016ade034c",
+    "geometry": {
+      "wm": 4,
+      "wn": 2,
+      "bc": 2
+    },
+    "tile": {
+      "k": 32,
+      "m": 128,
+      "n": 64
+    },
+    "threads": 256,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 5.888938903808594e-05
+  },
+  {
+    "index": 90,
+    "candidate_hash": "161a90a23df29b285cb627d56e0c7e31b34fe0967fbdd5279d9d2dc60dd1177a",
+    "geometry": {
+      "wm": 4,
+      "wn": 4,
+      "bc": 1
+    },
+    "tile": {
+      "k": 32,
+      "m": 128,
+      "n": 128
+    },
+    "threads": 512,
+    "status": "COMPILED",
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "compile_s": 1.1086080074310303
+  }
+]

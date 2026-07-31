@@ -231,6 +231,62 @@ def _plan(candidate: Mapping[str, Any]) -> tuple[dict[str, Any], list[Any]]:
   return dict(schedule), opts
 
 
+def _geometry_warmstart(payload: Mapping[str, Any], candidate: Mapping[str, Any], workload: Mapping[str, Any],
+                         fmt: str, m: int, rows: int, k: int) -> tuple[dict[Any, Any] | None, dict[Any, Any] | None, Any | None]:
+  """Build a one-shot precontract candidate_context/opt pair for a wire-carried WMMA geometry.
+
+  BoltBeam's v2 full_kernel_candidate schema (BoltBeam/boltbeam/search/spec.py:328-421) is
+  target-neutral and content-hashed, and it genuinely cannot express two of the six precontract
+  geometry components: `schedule.pipeline` is restricted to `{"stage_count"}` (spec.py:382) --
+  there is no `buffer_count`/`bc`, unlike the legacy v1 schema's `{"buffer_count", "stage_count",
+  "epoch_graph"}` (spec.py:305) -- and `schedule.launch` only carries the *product*
+  `wm*wn*32` as `threads` (spec.py:389-390), never the `(wm, wn)` split. `tm`/`tn`/`tk` ARE already
+  expressible, as `schedule.tile.{m,n,k}` (spec.py:386-387), so they are read from the candidate
+  rather than duplicated. Rather than inventing a field inside the hashed v2 candidate, the missing
+  `wm`/`wn`/`bc` ride as a provider-owned sidecar payload key, `candidate_geometry`, next to
+  `candidate` -- the same non-schema-sidecar pattern BoltBeam's own trace_enrich.py /
+  profiler/report.py use for facts (`candidate_geometry` there too) the strict candidate schema
+  cannot carry.
+
+  Returns (None, None, None) when the payload carries no `candidate_geometry` (existing callers
+  are unaffected). Otherwise returns single-entry `(opts, candidate_contexts)` dicts ready for
+  `warmstart_candidate_state`, keyed exactly as `postrange._warmstart_key` will key the built
+  kernel -- so this only ever forces the ONE candidate this request is about, never a persistent
+  table entry -- plus the `PackedWeightTransform` the caller needs to build a genuinely packed
+  (not pre-dequantized) operand-b AST leaf, since `_warmstart_key`'s packed-dtype discriminator
+  only matches a PARAM whose OWN declared dtype is `dtypes.uint16`/`dtypes.uint32`.
+  """
+  wire = payload.get("candidate_geometry")
+  if wire is None: return None, None, None
+  wire = _mapping(wire, "candidate_geometry")
+  required = {"wm", "wn", "bc"}
+  if set(wire) != required or any(isinstance(wire[key], bool) or not isinstance(wire[key], int) or wire[key] <= 0 for key in required):
+    raise ProtocolError("admission_rejected", "candidate_geometry requires positive int wm/wn/bc")
+  schedule = candidate["schedule"]
+  if schedule.get("plan_kind") != "tinygrad_heuristic.v1" or schedule.get("transforms"):
+    raise ProtocolError("unsupported_plan", "candidate_geometry requires an untransformed tinygrad_heuristic.v1 plan; "
+                        "an explicit Opt sequence bypasses the warmstart candidate_context seam entirely")
+  tile = schedule.get("tile") if isinstance(schedule.get("tile"), Mapping) else {}
+  if not all(isinstance(tile.get(ax), int) and not isinstance(tile.get(ax), bool) for ax in ("m", "n", "k")):
+    raise ProtocolError("admission_rejected", "candidate_geometry requires schedule.tile.m/n/k")
+  launch = schedule.get("launch") if isinstance(schedule.get("launch"), Mapping) else {}
+  if launch.get("threads") != wire["wm"] * wire["wn"] * 32:
+    raise ProtocolError("identity_mismatch", "candidate_geometry (wm, wn) does not reproduce schedule.launch.threads")
+  role = workload.get("role")
+  if not isinstance(role, str) or not role: raise ProtocolError("admission_rejected", "candidate_geometry requires workload.role")
+  from tinygrad.codegen.opt import Opt, OptOps
+  from tinygrad.codegen.opt.postrange import warmstart_key
+  from tinygrad.llm.packed_wmma_prefill import PackedWmmaRoute, _candidate_context
+  # This PackedWmmaRoute is never installed in PACKED_WMMA_ROUTES; it exists only so this one
+  # compile can reuse the exact production geometry/pipeline construction formula
+  # (packed_wmma_prefill.py:137-149) instead of re-deriving the LDS stride/window arithmetic here.
+  route = PackedWmmaRoute(fmt, role, (m, rows, k), (tile["m"], tile["n"], tile["k"], wire["wm"], wire["wn"], wire["bc"]),
+                          _canonical_candidate_hash(candidate))
+  context, transform = _candidate_context(route)
+  key = warmstart_key({m, rows}, k, transform.storage_dtype)
+  return {key: (Opt(OptOps.TC, 0, (-1, 2, 1)),)}, {key: context}, transform
+
+
 @dataclass(frozen=True)
 class PreparedWorkload:
   output: Any; raw: Any; call: Any; ast: Any; geometry: tuple; rows: int; k: int
@@ -317,37 +373,65 @@ class MetalAdapter:
     elif k % 256: raise ProtocolError("identity_mismatch", "exact packed K must be divisible by 256")
     if not k: raise ProtocolError("admission_rejected", "representative packed tile requires k >= 256")
     block_bytes, typ = (144, GGML_Q4_K) if fmt == "Q4_K" else (210, GGML_Q6_K)
-    if exact is not None:
+    if exact is not None and payload.get("candidate_geometry") is not None:
+      # Not addressed by this wiring: the exact_gguf branch binds a fully dequantized
+      # `state_dict` tensor (tinygrad/llm/gguf.py:175 -> ggml_data_to_tensor), which never carries
+      # a PARAM of the packed storage dtype the warmstart discriminator matches on (see
+      # _geometry_warmstart's docstring). Fail closed rather than silently falling back to a
+      # decline with no diagnostic.
+      raise ProtocolError("unsupported_plan", "candidate_geometry is only wired for the fixture_shape path, not exact_gguf")
+    from tinygrad.codegen.opt.postrange import warmstart_candidate_state
+    # Installed and restored for exactly this one compile -- a leaked global would silently
+    # contaminate every other candidate this worker process compiles afterward.
+    warm_opts, warm_contexts, warm_transform = _geometry_warmstart(payload, candidate, workload, fmt, m, rows, k)
+    with warmstart_candidate_state(warm_opts, warm_contexts):
+      if exact is not None:
+        output = activation @ weights.T
+        linear = output.schedule_linear()
+        if len(linear.src) != 1: raise ProtocolError("provider_failure", "exact bound output must schedule exactly one program")
+        call = linear.src[0]; sink = call.src[0].replace(arg=replace(call.src[0].arg, opts_to_apply=None if opts is None else tuple(opts)))
+        program = to_program(sink, Device["METAL"].renderer)
+        prepared = PreparedWorkload(output, raw, call.replace(src=(program, *call.src[1:])), program, (m, rows, k, block_bytes), rows, k, activation, weights, binding.packed_source_bytes)
+        self._prepared_cache[cache_key] = prepared; return prepared
+      import numpy as np
+      # Vectorized host fixture avoids a multi-million-element Python list for
+      # real decode roles (for example 12288x4096) while retaining deterministic
+      # nonzero GGUF payload bytes.
+      raw_bytes = (1 + np.arange(rows*k//256*block_bytes, dtype=np.uint32) % 13).astype(np.uint8)
+      d_bytes = np.array([0.01], dtype=np.float16).view(np.uint8).tolist()
+      dmin_bytes = np.array([0.005], dtype=np.float16).view(np.uint8).tolist()
+      for block in range(rows*k//256):
+        base = block*block_bytes
+        raw_bytes[base:base+2] = d_bytes
+        if fmt == "Q4_K": raw_bytes[base+2:base+4] = dmin_bytes
+        else: raw_bytes[base+208:base+210] = d_bytes
+      raw = Tensor(raw_bytes, dtype=dtypes.uint8, device="METAL").realize()
+      if warm_transform is not None:
+        # The generic ggml_data_to_tensor dequant (below) fully unpacks Q4_K/Q6_K into float32
+        # via elementwise ops on a uint8 PARAM -- it never leaves a PARAM whose OWN dtype is
+        # dtypes.uint16/uint32, so postrange._warmstart_key's packed-dtype discriminator (the
+        # thing that lets the candidate_context above actually get matched at apply_opts time)
+        # can never see it.  When a geometry is wired in, build operand b the way production does
+        # instead: a same-byte packed view realized at the storage dtype, run through
+        # packed_half_carrier (packed_wmma_prefill.py:130-134) -- a movement-only reshape that
+        # postrange's precontract candidate lowering recognizes and replaces with the real
+        # per-lane Q4_K/Q6_K decode.
+        from tinygrad.llm.packed_wmma_prefill import packed_half_carrier
+        storage_np = np.uint32 if warm_transform.storage_dtype == dtypes.uint32 else np.uint16
+        packed_words = raw_bytes.reshape(-1).view(storage_np)
+        raw_packed = Tensor(packed_words, dtype=warm_transform.storage_dtype, device="METAL").realize()
+        weights = packed_half_carrier(raw_packed, warm_transform, rows, k)
+      else:
+        weights = ggml_data_to_tensor(raw, rows*k, typ).reshape(rows, k)
+      activation = Tensor([1.0 + (i % 7)/16 for i in range(m*k)], dtype=dtypes.float16, device="METAL").reshape(m, k).realize()
       output = activation @ weights.T
       linear = output.schedule_linear()
-      if len(linear.src) != 1: raise ProtocolError("provider_failure", "exact bound output must schedule exactly one program")
-      call = linear.src[0]; sink = call.src[0].replace(arg=replace(call.src[0].arg, opts_to_apply=None if opts is None else tuple(opts)))
+      if len(linear.src) != 1: raise ProtocolError("provider_failure", "prepared fused output must schedule exactly one program")
+      call = linear.src[0]
+      sink = call.src[0].replace(arg=replace(call.src[0].arg, opts_to_apply=None if opts is None else tuple(opts)))
       program = to_program(sink, Device["METAL"].renderer)
-      prepared = PreparedWorkload(output, raw, call.replace(src=(program, *call.src[1:])), program, (m, rows, k, block_bytes), rows, k, activation, weights, binding.packed_source_bytes)
+      prepared = PreparedWorkload(output, raw, call.replace(src=(program, *call.src[1:])), program, (m, rows, k, block_bytes), rows, k, activation, weights)
       self._prepared_cache[cache_key] = prepared; return prepared
-    import numpy as np
-    # Vectorized host fixture avoids a multi-million-element Python list for
-    # real decode roles (for example 12288x4096) while retaining deterministic
-    # nonzero GGUF payload bytes.
-    raw_bytes = (1 + np.arange(rows*k//256*block_bytes, dtype=np.uint32) % 13).astype(np.uint8)
-    d_bytes = np.array([0.01], dtype=np.float16).view(np.uint8).tolist()
-    dmin_bytes = np.array([0.005], dtype=np.float16).view(np.uint8).tolist()
-    for block in range(rows*k//256):
-      base = block*block_bytes
-      raw_bytes[base:base+2] = d_bytes
-      if fmt == "Q4_K": raw_bytes[base+2:base+4] = dmin_bytes
-      else: raw_bytes[base+208:base+210] = d_bytes
-    raw = Tensor(raw_bytes, dtype=dtypes.uint8, device="METAL").realize()
-    weights = ggml_data_to_tensor(raw, rows*k, typ).reshape(rows, k)
-    activation = Tensor([1.0 + (i % 7)/16 for i in range(m*k)], dtype=dtypes.float16, device="METAL").reshape(m, k).realize()
-    output = activation @ weights.T
-    linear = output.schedule_linear()
-    if len(linear.src) != 1: raise ProtocolError("provider_failure", "prepared fused output must schedule exactly one program")
-    call = linear.src[0]
-    sink = call.src[0].replace(arg=replace(call.src[0].arg, opts_to_apply=None if opts is None else tuple(opts)))
-    program = to_program(sink, Device["METAL"].renderer)
-    prepared = PreparedWorkload(output, raw, call.replace(src=(program, *call.src[1:])), program, (m, rows, k, block_bytes), rows, k, activation, weights)
-    self._prepared_cache[cache_key] = prepared; return prepared
 
   def describe(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
     del payload
