@@ -86,3 +86,86 @@ only external figures found are third-party FP16 ALU benchmarks of the **M4 Max 
 ~13.3–14.2 TFLOPS — 4x this die's core count, and not a matrix-unit-specific number — so no
 "fraction of spec" figure is reported here as authoritative; see the task report for the caveated
 comparison.
+
+---
+
+# fma_peak_metal.py — measured achievable plain-FMA peak (Apple M4)
+
+Decides the question `R` above raises but does not answer: is `simdgroup_multiply_accumulate` a
+separate, faster matrix unit, or does it lower onto the same ALUs plain scalar/vector FMA uses?
+Same harness discipline as `wmma_peak_metal.py` (operands hoisted out of the hot loop, runtime
+trip count, never-taken keep-alive, `Device["METAL"].synchronize()` host timing, `xcrun metal -c`
++ `metal-objdump` disassembly verification), with the inner op changed to plain `fma(a, b, acc)` —
+no `simdgroup` anywhere. Grep generated source for `simdgroup` to confirm zero hits, never
+`simdgroup_matrix`/`simdgroup_multiply_accumulate` (those belong to `wmma_peak_metal.py`).
+
+    python3 extra/llm_research/microbench/fma_peak_metal_run.py
+
+Three precision variants, because `simdgroup_float8x8` accumulates fp16×fp16→fp32, not fp16→fp16:
+`f16f16` (half×half→half), `f16f32` (half×half→float — matches the matmul's actual numerics,
+primary comparator), `f32f32` (float×float→float). Vector width swept 1/2/4/8 (`half8`/`float8` do
+not exist as usable types in this MSL toolchain — `metal_extended_vector.h` forward-declares them
+incomplete; width-8 is emulated as two independent `half4`/`float4` lanes per accumulator, still
+charged 8 elements × 2 FLOP). NACC swept 1/2/4/8/16. Grid swept to plateau. Each config's `iters`
+is *calibrated*, not fixed, via `calibrate_iters()`: measure once, project the iters needed to
+clear a target wall time, verify the result sits ≥50× above a probed single-iteration overhead
+floor. An earlier version of this file used fixed `iters` values copied from the shape of
+`wmma_peak_metal.py`'s sweep and reported up to **1.78 million GFLOPS** with grid-size throughput
+that never plateaued — physically impossible, and never reported externally. Root cause: `iters`
+was too small relative to `blocks`, so measured wall time was dominated by fixed host-side
+dispatch/synchronize round-trip overhead (~0.3–0.7ms) rather than GPU compute time — the enqueue-
+vs-execution trap from `docs/what-makes-a-token-fast-20260731.md` §9.6, reached this time through
+undersized `iters` rather than a missing `synchronize()`. Fixed by calibration; see
+`fma_peak_metal.py`'s module docstring for the full account.
+
+Also guarded (defensively; tested and found not to be the actual failure above) against thread-
+uniform scalarization: every thread otherwise computes bit-identical values, which a sufficiently
+aggressive compiler could in principle hoist to run once per SIMD-group on a scalar/uniform unit
+and broadcast, understating real per-lane throughput. Each kernel reads
+`thread_position_in_grid` once (a register, not a memory load) and perturbs operands by a tiny
+`tid`-dependent amount. An isolated A/B probe (uniform vs. perturbed operands, same grid sweep)
+gave statistically indistinguishable, correctly-plateauing throughput either way, so this was not
+what caused the bad run above — but the perturbation costs nothing and is kept as a standing
+guard.
+
+## Result, Apple M4 (10-core GPU, Mac16,10), 2026-07-31
+
+Vector-width sweep (`nacc=2`, grid swept per width) climbs with width for all three variants and
+plateaus by `blocks=4096`; NACC swept at the winning width; grid-size plateau re-confirmed out to
+`blocks=16384` (4.19M threads):
+
+| variant | plateau (GFLOPS) | width, nacc, blocks | vs `R` (3781.3) |
+| --- | ---: | --- | ---: |
+| `f16f16` (half→half) | 3908.7 | width=8, nacc=16, blocks=16384 | 1.034× |
+| `f16f32` (half→float, matches matmul numerics) | 3527.8 | width=8, nacc=8, blocks=16384 | 0.933× |
+| `f32f32` (float→float) | 3444.9 | width=8, nacc=8, blocks=16384 | 0.911× |
+
+All three land within +3%/−9% of `R` — the same order of magnitude, not a separate unit worth an
+order of magnitude more. Packed-math check: `f16f32`/`f32f32` = 1.024× (no meaningful fp16
+throughput doubling); `f16f16`/`f32f32` = 1.135× (a modest edge, far short of 2×) — fp16 buys
+bandwidth/storage on this hardware, not FLOP/s.
+
+NACC behaviour splits by variant: `f16f16` improves monotonically to nacc=16 (3702→3898 GFLOPS);
+`f16f32` and `f32f32` both peak at nacc=8 and **collapse** at nacc=16 (3517→688 and 3437→606
+GFLOPS, >80% drop) — a register-pressure cliff, since float accumulators cost more registers per
+lane than half ones and 16 of them exhausts the budget.
+
+Disassembly (`xcrun metal -fno-fast-math -c` — flag-matched to `MetalCompiler.compile()`'s actual
+runtime compile flags, unlike a first pass here that used plain `xcrun metal -c`, defaulted to
+fast-math ON, and showed spurious `fma fast`/`fadd fast` that was never evidence about what was
+actually measured) confirms, for the winning config of each variant: `air.compile.fast_math_
+disable` present; the hot loop (between the loop preheader and the back-edge branch) contains only
+`@air.fma.v4f16`/`@air.fma.v4f32` calls — manually counted at exactly `nacc × (width/4)` per
+variant, zero loads, zero `convert` calls inside it; the `f16f32` half→float widening conversion is
+loop-invariant and correctly hoisted to a one-time preheader, never repeated per iteration; zero
+`simdgroup` references anywhere; exactly one load (`iters`) and one gated store (the never-taken
+sentinel) in the whole kernel.
+
+**Verdict: one shared unit, not two.** On this M4, `simdgroup_multiply_accumulate` does not reach a
+separate, faster matrix pipe — it lowers onto (or performs comparably to) the same FP ALUs plain
+FMA already uses. `docs/what-makes-a-token-fast-20260731.md` §5's "which unit — worth 10–20×"
+principle does not apply here; see that doc's §5/§10 for the consequence for Metal prefill
+routing.
+
+Full per-rep numbers: `/tmp/fma_peak_metal_result.json`, per-run stdout:
+`/tmp/fma_peak_metal_stdout.txt`, disassembly: `/tmp/fma_peak_metal_disassembly_*.txt`.
