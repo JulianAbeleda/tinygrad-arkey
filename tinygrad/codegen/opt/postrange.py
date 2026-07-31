@@ -13,6 +13,49 @@ from tinygrad.codegen.opt.kernel_pipeline import validate_scheduler_tile_loop_pr
 from tinygrad.codegen.simplify import pm_flatten_range
 from tinygrad.renderer import Renderer
 
+def _split_range_axis(u:UOp) -> UOp|None:
+  """Recover the RANGE that `pm_split_ranges` (tinygrad/codegen/simplify.py:72-75) leaves behind in place
+  of a reduce-owning RANGE `k` that is referenced somewhere under `RANGE % CONST` (Q4_K's 256-element
+  block addressing does this to the K axis; that pass runs unconditionally, before apply_opts, at
+  codegen/__init__.py:130). Its SINK rule substitutes every occurrence of `k` -- including inside the
+  reduce's own `src[1:]` range list -- with:
+
+    k.replace(src=(k.src[0]//v,), arg=k.arg[:-1]+(0,k.arg[-1])) * v + k.replace(src=(v,), arg=k.arg[:-1]+(1,k.arg[-1]))
+
+  i.e. `ADD(MUL(RANGE_lo, CONST_v), RANGE_hi)`, where RANGE_lo is `k//v` (second-to-last arg field tagged
+  0) and RANGE_hi is `k%v` (tagged 1); both retain everything else about the original range's arg tuple
+  (id and any other fields in `arg[:-1]`) unchanged, and both keep its AxisType in `arg[-1]`. Note the
+  original `k.arg` is not necessarily a bare `(id, AxisType)` pair -- it can carry extra fields before the
+  trailing AxisType -- so RANGE_lo/RANGE_hi's arg tuples are one element LONGER than `k.arg`, with the new
+  0/1 tag inserted second-to-last. `_apply_generic_tensor_core_opt`'s all-RANGE reduce-axis path (below)
+  has no way to read that shape -- it indexes `.arg[0]` on every `reduceop.src[1:]` entry assuming a bare
+  RANGE, which crashes with `TypeError: 'NoneType' object is not subscriptable` on the ADD (whose `.arg`
+  is None).
+
+  This recovers RANGE_hi (the `k%v` block-local half) as the axis this split range contributes to TC
+  selection: it is the finer-grained half pm_split_ranges produced, the one whose extent a TC contraction
+  actually wants to fold, and its `arg[0]` is the same as the original range's `arg[0]` (pm_split_ranges
+  never touches `arg[:-1]` beyond appending the tag), so sorting it alongside never-split RANGE axes by
+  `.arg[0]` (as `_apply_generic_tensor_core_opt` already does) orders it exactly where the pre-split RANGE
+  would have sorted.
+
+  Fails closed (returns None) for anything that is not precisely this shape -- this recovers one exact
+  rewrite, it does not generally simplify ADD/MUL.
+  """
+  if u.op is not Ops.ADD or len(u.src) != 2: return None
+  for mul, hi in (u.src, tuple(reversed(u.src))):
+    if mul.op is not Ops.MUL or len(mul.src) != 2: continue
+    lo, v = mul.src
+    if lo.op is not Ops.RANGE or hi.op is not Ops.RANGE or v.op is not Ops.CONST: continue
+    if hi.src[0] is not v: continue
+    if not (isinstance(lo.arg, tuple) and isinstance(hi.arg, tuple)): continue
+    if len(lo.arg) < 2 or len(lo.arg) != len(hi.arg): continue
+    # everything but the trailing (tag, AxisType) pair must match, and the AxisType itself must match
+    if lo.arg[:-2] != hi.arg[:-2] or lo.arg[-1] != hi.arg[-1]: continue
+    if lo.arg[-2] != 0 or hi.arg[-2] != 1: continue
+    return hi
+  return None
+
 class Scheduler:
   def __init__(self, ast:UOp, ren:Renderer):
     self.ast, self.ren = ast, ren
@@ -372,7 +415,21 @@ class Scheduler:
           # tensor cores have three ranges. X, Y, and REDUCE
           in0_ranges = sorted([u for u in in0.ranges if u not in in1.ranges], key=lambda x: x.arg[0], reverse=True)
           in1_ranges = sorted([u for u in in1.ranges if u not in in0.ranges], key=lambda x: x.arg[0], reverse=True)
-          red_ranges = sorted(reduceop.src[1:], key=lambda x: x.arg[0], reverse=True)
+          # owner: the ordinary case, every reduce src is a bare RANGE.
+          if all(x.op is Ops.RANGE for x in reduceop.src[1:]):
+            red_ranges = sorted(reduceop.src[1:], key=lambda x: x.arg[0], reverse=True)
+          else:
+            # sibling: some reduce axes survived pm_split_ranges as `(k//v)*v + (k%v)` instead of a bare
+            # RANGE (see _split_range_axis). Recover a representative RANGE for each such entry rather than
+            # crashing on `.arg[0]` of the ADD it left behind; decline this tc (continue) if any entry is
+            # neither a RANGE nor that exact split shape.
+            red_axes: list[UOp]|None = []
+            for x in reduceop.src[1:]:
+              if x.op is Ops.RANGE: red_axes.append(x)
+              elif (recovered:=_split_range_axis(x)) is not None: red_axes.append(recovered)
+              else: red_axes = None; break
+            if red_axes is None: continue
+            red_ranges = sorted(red_axes, key=lambda x: x.arg[0], reverse=True)
           if DEBUG >= 3:
             print(f"TC({axis}): {[(x.arg[0],x.vmax+1) for x in in0_ranges]}",
                               f"{[(x.arg[0],x.vmax+1) for x in in1_ranges]} {[(x.arg[0],x.vmax+1) for x in red_ranges]}")
