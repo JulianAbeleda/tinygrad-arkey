@@ -159,6 +159,13 @@ Shape depends on FA0. Apply the method that removed thirteen AMD couplings today
 3. **Replay the working path rather than reimplementing it**, so there is one source of truth.
 4. **Fail closed** on any descriptor family the code cannot resolve.
 5. **No `if backend == "METAL"`.** Thirteen couplings were removed today with zero backend branches.
+6. **Rename what becomes shared, in the same commit that shares it.** Names that describe *geometry* or
+   *flash-attention concepts* rather than hardware must lose their `AMD_` prefix once a second target
+   uses them — `Ops.AMD_ATTENTION_LOOP_STATE` is loop-carried m/l/acc with nothing AMD about it;
+   `AMDAttentionGridSpec` holds head and token counts. **`AMDISARenderer` itself keeps its name** — it
+   renders AMD ISA and Metal will never use it, so that name is accurate. Whatever stays AMD-only keeps
+   its prefix, and the prefix becomes informative instead of misleading. Do not rename before FA0
+   reports, or the churn may hit things that stay AMD-only.
 
 ### FA3 — Measure. Prerequisite: FA2.
 
