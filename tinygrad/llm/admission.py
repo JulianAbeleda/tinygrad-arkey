@@ -213,13 +213,13 @@ def plan_exact_selected_model_load(model_path, *, metadata:tuple[dict, dict], ge
 @dataclass(frozen=True)
 class AdmissionInputs:
   requested:int|str|None; trained_ctx:int; free_vram:int|None; q4_bytes:int; est_fp16:int; num_blocks:int
-  n_heads:int; n_kv_heads:int; head_dim:int; prefill_ubatch:int; v2_on:bool; resident_fp16_admit:bool
+  n_heads:int; n_kv_heads:int; head_dim:int; prefill_ubatch:int; v2_on:bool
   model_label:str; stream:str="auto"; rope_dim:int|None=None; kv_quant_supported:bool=False
   kv_quant_disabled:bool=False; live_split_s:int=48
 
   @staticmethod
   def from_model_metadata(requested:int|str|None, kv:Mapping[str, Any], *, free_vram:int|None, q4_bytes:int,
-                          est_fp16:int, prefill_ubatch:int, v2_on:bool, resident_fp16_admit:bool,
+                          est_fp16:int, prefill_ubatch:int, v2_on:bool,
                           model_label:str|None=None, stream:str="auto", kv_quant_supported:bool=False,
                           kv_quant_disabled:bool=False, live_split_s:int=48) -> "AdmissionInputs":
     """Single owner for translating GGUF model metadata into context-admission geometry."""
@@ -229,7 +229,7 @@ class AdmissionInputs:
                       kv.get(f"{arch}.attention.key_length", kv[f"{arch}.embedding_length"] // n_heads))
     return AdmissionInputs(requested, kv[f"{arch}.context_length"], free_vram, q4_bytes, est_fp16,
       kv[f"{arch}.block_count"] - kv.get(f"{arch}.nextn_predict_layers", 0), n_heads, n_kv_heads, head_dim, prefill_ubatch,
-      v2_on, resident_fp16_admit, model_label or f"{arch} selected model", stream, kv.get(f"{arch}.rope.dimension_count", head_dim),
+      v2_on, model_label or f"{arch} selected model", stream, kv.get(f"{arch}.rope.dimension_count", head_dim),
       kv_quant_supported, kv_quant_disabled, live_split_s)
 
 @dataclass(frozen=True)
@@ -359,7 +359,7 @@ def plan_selected_model_memory(inp:AdmissionInputs, facts:DeviceFacts, *, direct
              ByteLifetime.SAFETY_RESERVE), facts.memory_probe.source)
   explicit_overlay = overlay_requested is True
   terms = ContextMemoryTerms.from_inputs(inp, resident_fp16=explicit_overlay)
-  context = _plan_context_admission(replace(inp, free_vram=facts.free_vram_bytes, resident_fp16_admit=explicit_overlay), scanned_budget, terms)
+  context = _plan_context_admission(replace(inp, free_vram=facts.free_vram_bytes), scanned_budget, terms)
   scale_per_tok = terms.kv_scale_per_tok if context.kv_quant else 0
   kv_bytes = (terms.kv_per_tok // (2 if context.kv_quant else 1) + scale_per_tok) * context.max_context
   base = (

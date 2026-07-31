@@ -348,6 +348,13 @@ upstream, it is worth pushing there.
 
 **Phases 5 and 6 are unchanged.** They are target-independent by construction.
 
+**FP16 overlay admission refactor, Piece 1 (2026-07-31) — non-moving.** `[refactor]` commits move the overlay
+coverage list to `PREFILL_OVERLAY_ROLES` in `model_facts.py`, derive `overlay_bytes` once at inventory time
+(GGUF) via the shared role helper (state dict), and delete the never-read `resident_fp16_admit` switch. NV 8B
+re-verified with the same invocation as `044c9be17`: strategy `DIRECT_PACKED_FALLBACK`, decode 155.94 tok/s
+(753.9 GB/s), first token 50994, correctness-qualified. The ratchet holds on the real fixture: inventory
+`overlay_bytes` == `_prefill_v2_covered()` walk bytes == 13,891,534,848.
+
 ---
 
 ## 10. The shortest version

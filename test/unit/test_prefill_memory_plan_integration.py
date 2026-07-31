@@ -18,7 +18,7 @@ def _facts(total=32_000_000_000, free=30_000_000_000):
 def _inputs(**updates):
   values = dict(requested=2048, trained_ctx=8192, free_vram=None, q4_bytes=6_000_000_000,
     est_fp16=8_000_000_000, num_blocks=32, n_heads=32, n_kv_heads=8, head_dim=128,
-    prefill_ubatch=512, v2_on=True, resident_fp16_admit=False, model_label="selected-model")
+    prefill_ubatch=512, v2_on=True, model_label="selected-model")
   values.update(updates)
   return AdmissionInputs(**values)
 
@@ -28,7 +28,7 @@ def test_metadata_builder_is_the_geometry_owner():
         "unit.nextn_predict_layers": 2, "unit.attention.head_count": 32, "unit.attention.head_count_kv": 8,
         "unit.embedding_length": 4096, "unit.attention.key_length": 128, "unit.rope.dimension_count": 96}
   inp = AdmissionInputs.from_model_metadata(2048, kv, free_vram=30_000_000_000, q4_bytes=6_000_000_000,
-    est_fp16=8_000_000_000, prefill_ubatch=512, v2_on=True, resident_fp16_admit=False)
+    est_fp16=8_000_000_000, prefill_ubatch=512, v2_on=True)
   assert (inp.trained_ctx, inp.num_blocks, inp.n_heads, inp.n_kv_heads, inp.head_dim, inp.rope_dim) == (8192, 32, 32, 8, 128, 96)
   terms = ContextMemoryTerms.from_inputs(inp, resident_fp16=False)
   assert (terms.weights, terms.kv_per_tok, terms.prefill_per_tok, terms.flash_scratch, terms.kv_scale_per_tok) == \
