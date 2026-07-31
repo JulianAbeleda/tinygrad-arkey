@@ -20,8 +20,8 @@ caught after the scope was updated.
 
 ## §1 HARD BANS — violating any is task failure
 
-1. ❌ **No commits to `master`, `dev`, or `exp`.** All work on `nvidia-bringup-20260731`. Commit prefix
-   `[refactor]`.
+1. ❌ **No commits to `master`, `dev`, or `exp`.** All work on `nvidia-bringup-20260731`.
+   **Commit prefix `[nn]`, not `[refactor]`** (correction — see below).
 2. ❌ **No new subsystem.** No new registry, no new selection table, no new control plane, no new env var, no new
    flag. This task is a net deletion. If your diff adds a module, you have misread it.
 3. ❌ **Do not touch `tinygrad/llm/prefill_routes.py`** or anything on the per-call dispatch path. That is an
@@ -36,6 +36,40 @@ caught after the scope was updated.
    `type + file:line + traceback`, or a measured number. Never write "this should be fine" — run it.
 7. ❌ **Do not delete a test to make a change pass.** `test_explicit_overlay_cannot_bypass_shared_byte_budget` is
    *replaced* by a specified test in the same commit (§4), not removed.
+
+### §1.1 Commit prefix — CORRECTION (supersedes any earlier `[refactor]` guidance)
+
+`[refactor]` is **not an allowed prefix in this repo.** The allowed set is fixed by
+`structure/Development/tinygrad-coding-overrides.md`:
+
+| prefix | owns |
+| --- | --- |
+| `[codegen]` | `tinygrad/` lowering, renderers, UOp/codegen, linearizer |
+| `[runtime]` | `tinygrad/` device/runtime/JIT/storage, ops execution |
+| `[nn]` | model / `tinygrad/llm` changes |
+| `[test]` | `extra/`, `test/`, and the `bench/` artifacts they produce |
+| `[docs]` | docs and `structure/` content |
+| `[repo]` | repo plumbing |
+
+Every slice in this task touches `tinygrad/llm/` → **`[nn]`**. Test-only follow-ups → `[test]`. One owning prefix
+per commit; never bundle generated `bench/` artifacts with a source change.
+
+The already-landed commits `d4d2b12a5`, `565618e5d`, `28d7f379c` carry `[refactor]`. **Leave them alone** — the
+branch is pushed and history is not to be rewritten. Apply `[nn]` from the next commit forward.
+
+**NFC marking.** Per the override, mark behaviour-preserving commits `NFC`, and never tag NFC on anything that
+changes an output byte:
+
+| slice | NFC? | why |
+| --- | --- | --- |
+| S1, S2 | **yes** — `[nn] NFC - …` | coverage-as-data and a dead-field deletion; byte-identical by construction |
+| S3 | **no** | infeasible overlay now degrades instead of raising — that is a behaviour change |
+| S4 | **no** | census entry is new observable output |
+| S5 | **no** | new `fp16_spend_gb` report field |
+| S6 | **yes** — `[nn] NFC - …` | flag folded to `True`; no behaviour change |
+
+An NFC claim must be **byte-proven** (fixed-seed token parity or a golden hash), never asserted. Never mix an NFC
+refactor with a functional change.
 
 ## §2 What is already established — do NOT re-derive
 

@@ -18,7 +18,7 @@ and fixes the same structure for AMD and Metal.
 
 Branch rules: no commits to `master`; all work on `nvidia-bringup-20260731`; selective merge to `exp`; promote
 to `dev` only after NVIDIA is proven end-to-end. Commit prefixes in use: `[nv]`, `[docs]`, `[bench]`, `[test]`.
-This refactor proposes `[refactor]` for its slices (a new prefix; confirm or map to `[nv]`).
+This refactor uses `[nn]` for its slices (`tinygrad/llm/` is `[nn]` per `structure/Development/tinygrad-coding-overrides.md`; `[refactor]` is not an allowed prefix). S1/S2/S6 are additionally NFC and must be byte-proven.
 
 ## 2. Process
 
@@ -137,7 +137,7 @@ path. R3 is resolved: no log line; report field + bench row.
 | capability = fp16 dtype only vs + tensor cores (R2) | resolved: fp16 dtype only; tensor cores are promotion/perf |
 | coverage-equality test on toy arch vs real GGUF | real Qwen3 8B GGUF fixture (drift is exactly what we are eliminating; a toy arch cannot prove it) — accepted |
 | runtime flag rename vs fold (R4) | resolved: fold to `True` (it is not a decision variable; `_prefill_overlay_active` would mislabel the packed path) |
-| commit prefix for refactor slices | `[refactor]` (accepted in review) |
+| commit prefix for refactor slices | **`[nn]`** — corrected 2026-07-31; `[refactor]` is not in the allowed set (`[codegen] [runtime] [nn] [test] [docs] [repo]`). S1/S2/S6 also carry `NFC`. |
 
 ## 6. Files a reviewer should open
 

@@ -162,7 +162,13 @@ grounds without a measurement.
   `model_facts.py:49-68`) covers every `_PREFILL_V2_LINEARS` name including the `_shexp` variants - not checked
   in this review. This is a prerequisite for S1, not a consequence of it: if a role does not resolve, the
   equality test fails and the cause will look like a byte-math bug.
-- **Commit prefix:** `[refactor]` is fine.
+- **Commit prefix:** ~~`[refactor]` is fine.~~ **WRONG — corrected 2026-07-31.** `[refactor]` is not in the
+  allowed set. `structure/Development/tinygrad-coding-overrides.md` fixes it at `[codegen] [runtime] [nn] [test]
+  [docs] [repo]`; `tinygrad/llm/` work is **`[nn]`**. This review accepted the brief's proposal without checking
+  the override file — the same failure the review itself flags elsewhere (a cited authority nobody opened).
+  S1/S2/S6 are additionally **NFC** and must be marked so, byte-proven; S3/S4/S5 change behaviour or observable
+  output and must not be. Landed commits `d4d2b12a5`, `565618e5d`, `28d7f379c` keep their `[refactor]` prefix —
+  the branch is pushed and history is not rewritten. See §1.1 of the deepseek task file.
 
 ## Suggested revision order
 
