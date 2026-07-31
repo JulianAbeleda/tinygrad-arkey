@@ -124,7 +124,7 @@ The repaired pattern already exists here, in `ee2fa89c6`:
 that bypasses the generic opt. That is what `kernel_lds.py` is. Once you bypass the compiler you must
 re-implement everything it would have done — tile geometry, LDS windows, lane maps, cooperative stores
 — and you will implement it for exactly one GPU. **That produced nine AMD couplings**, each of which
-had to be found by a separate Metal failure a year later. A bypass is not a shortcut; it is a fork of
+had to be found by a separate Metal failure when the second target arrived. A bypass is not a shortcut; it is a fork of
 the compiler that only one target can use.
 
 ### Phase 4a — When lowering is wrong, read a known-good kernel. Do not hypothesise.
