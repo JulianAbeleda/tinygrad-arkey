@@ -4,7 +4,6 @@ from dataclasses import dataclass, replace
 from tinygrad import Tensor, nn, UOp, TinyJit, dtypes, function, Device, role_metadata
 from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.codegen.opt.postrange import warmstart_key as _warmstart_key
-from tinygrad.helpers import prod
 from tinygrad.llm.admission import (
   AUTO_MAX_CONTEXT, AdmissionInputs, ExactSelectedModelPlan, plan_exact_selected_model_load,
   plan_selected_model_memory, immutable_prefill_policy, prefill_concrete_kv_auto_decision,
@@ -25,7 +24,10 @@ from tinygrad.llm.qk_primitives import (
   _install_q4k_primitives, _install_q6k_primitives, _qk_storage_summary,
   qk_primitive_eligibility_from_device_facts, _module_at,
 )
-from tinygrad.llm.model_facts import model_facts_from_gguf_metadata, attach_program_identity_metadata, bind_gguf_program_tensor_facts
+from tinygrad.llm.model_facts import (
+  PREFILL_OVERLAY_LINEAR_NAMES, attach_program_identity_metadata, bind_gguf_program_tensor_facts,
+  estimate_prefill_overlay_bytes, is_prefill_overlay_role, model_facts_from_gguf_metadata, normalize_route_role,
+)
 from tinygrad.llm.memory_adaptive_authority import (adapt_cached_memory_policy, memory_adaptive_adapters_active,
                                                      resolve_memory_adaptive_policy, validate_memory_evidence)
 from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OUTPUT, RUNTIME_INPUT, RUNTIME_OUTPUT,
@@ -148,7 +150,7 @@ def _memory_adaptive_measurement_authority(*, device_facts, inventory:dict, work
   try: yield
   finally: _MEMORY_ADAPTIVE_MEASUREMENT_AUTHORITY.reset(token)
 
-def derive_selected_gguf_prefill_inventory(kv:dict, meta:dict, ubatch:int=512) -> dict:
+def derive_selected_gguf_prefill_inventory(kv:dict, meta:dict, ubatch:int=512, *, lm_head_resident_fp16:bool=False) -> dict:
   """Derive runtime route identity only from the explicitly opened GGUF's tensor metadata."""
   facts = model_facts_from_gguf_metadata(kv, meta)
   rows = []
@@ -181,7 +183,15 @@ def derive_selected_gguf_prefill_inventory(kv:dict, meta:dict, ubatch:int=512) -
       rows.append({**semantic, "invocation_id": invocation_id})
   rows.sort(key=lambda x: x["invocation_id"])
   identity = hashlib.sha256(json.dumps(rows, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-  return {"schema": "tinygrad.model_runtime_prefill_inventory.v2", "inventory_identity": identity, "rows": rows}
+  # fp16 bytes of the covered overlay weights, computed once at derivation from the same role+shape rows the
+  # route identity is built from. lm_head joins only under the resident-fp16 workload policy, matching the
+  # _prefill_v2_covered() boundary. The inventory_identity intentionally excludes this key: it is a byte
+  # estimate, not route identity.
+  overlay_bytes = sum(row["shape"]["n"] * row["shape"]["k"] * 2 for row in rows
+                      if is_prefill_overlay_role(row["role"]) or
+                      (lm_head_resident_fp16 and normalize_route_role(row["role"]) == "lm_head"))
+  return {"schema": "tinygrad.model_runtime_prefill_inventory.v2", "inventory_identity": identity, "rows": rows,
+          "overlay_bytes": overlay_bytes}
 
 def _selected_inventory_routes(inventory:dict, candidate_route_id:str) -> dict[str, str]:
   return {row["invocation_id"]: (candidate_route_id if row.get("candidate_controlled") is True else row["fixed_route_id"])
@@ -880,9 +890,6 @@ class Transformer:
   @property
   def prefill_policy(self): return self.config.prefill_policy
 
-  # the dense FFN + attn projection linears prefill-v2 accelerates (per block)
-  _PREFILL_V2_LINEARS = ("ffn_gate", "ffn_up", "ffn_down", "ffn_gate_shexp", "ffn_up_shexp", "ffn_down_shexp",
-                         "attn_q", "attn_k", "attn_v", "attn_output")
   def _prefill_v2_role_for_name(self, name:str) -> str:
     from tinygrad.llm.model_facts import QK_ROUTE_ROLES, normalize_route_role
     role = normalize_route_role(name)
@@ -897,7 +904,7 @@ class Transformer:
     # (linear, out_f, in_f) for each covered linear with a known concrete shape -- single source for the
     # warmstart table, the VRAM estimate, and the realization, so they can't drift apart.
     for block in self.blk:
-      for n in self._PREFILL_V2_LINEARS:
+      for n in PREFILL_OVERLAY_LINEAR_NAMES:
         lin = getattr(block, n, None)
         if lin is None or getattr(lin, "weight", None) is None: continue
         setattr(lin, "_prefill_selected_strategy", prefill_policy_strategy(self.config.prefill_policy))
@@ -1075,7 +1082,6 @@ class Transformer:
     _workload_reuse = False
     _runtime_policy = immutable_prefill_policy({"strategy": "DIRECT_PACKED_FALLBACK", "candidate_id": "direct-packed-baseline",
       "routes": {}, "provenance": "preloaded tensors have no selected-GGUF inventory", "measured": False})
-    _cov = tuple(f"{n}.weight" for n in Transformer._PREFILL_V2_LINEARS)
     def _print_admission(plan, kv_tag:str, cap_text:str):
       admit = plan.report
       print(f"max_context={admit['mode']} -> {plan.max_context} "
@@ -1102,10 +1108,10 @@ class Transformer:
       _q4_bytes = selected_gguf_backing_bytes(gguf, _device_facts.capabilities.global_allocation_granularity)
       if _q4_bytes is None:
         raise RuntimeError(f"{_admit_arch}: selected-GGUF backing allocation is unknown from the selected path and scanned allocation granularity")
-      _est_fp16 = sum(prod(dims) * 2 for name, dims, _, _ in _admit_meta["tensor_infos"] if any(name.endswith(s) for s in _cov))
+      _est_fp16 = _runtime_inventory["overlay_bytes"]
       _admission_inputs = AdmissionInputs.from_model_metadata(_requested_max_context, _admit_kv,
         free_vram=_device_facts.free_vram_bytes, q4_bytes=_q4_bytes, est_fp16=_est_fp16,
-        prefill_ubatch=_prefill_ubatch, v2_on=_automatic_overlay_policy is not None or _overlay_request is not False, resident_fp16_admit=False,
+        prefill_ubatch=_prefill_ubatch, v2_on=_automatic_overlay_policy is not None or _overlay_request is not False,
         model_label=f"{_admit_arch} selected GGUF", stream=str(stream), kv_quant_supported=True,
         live_split_s=FLASH_DECODE_CANDIDATE.split_size)
       if _automatic_overlay_policy is not None:
@@ -1197,10 +1203,10 @@ class Transformer:
 
     if not _admit_resolved:
       _q4_bytes = pathlib.Path(gguf).stat().st_size if not isinstance(gguf, Tensor) else 0
-      _est_fp16 = sum(t.numel() * 2 for k, t in state_dict.items() if any(k.endswith(s) for s in _cov))
+      _est_fp16 = estimate_prefill_overlay_bytes((k, t.numel()) for k, t in state_dict.items())
       _admission_inputs = AdmissionInputs.from_model_metadata(_requested_max_context, kv,
         free_vram=_device_facts.free_vram_bytes, q4_bytes=_q4_bytes, est_fp16=_est_fp16,
-        prefill_ubatch=_prefill_ubatch, v2_on=_overlay_request is not False, resident_fp16_admit=False,
+        prefill_ubatch=_prefill_ubatch, v2_on=_overlay_request is not False,
         stream=str(stream), live_split_s=FLASH_DECODE_CANDIDATE.split_size)
       _plan, _memory_plan, _effective_strategy = plan_selected_model_memory(_admission_inputs,
         _device_facts, direct_packed_supported=True, overlay_requested=_overlay_request)

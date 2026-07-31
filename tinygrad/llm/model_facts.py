@@ -51,6 +51,24 @@ def normalize_route_role(role_or_name: str) -> str:
   return normalize_program_role(role_or_name)
 
 
+# One authority for which linears carry a resident-fp16 overlay weight: the raw module attribute names the
+# model walk covers. The canonical role set is derived from the name->role alias table, so the walk and the
+# inventory byte estimate cannot drift apart (scope 5.1 / R4).
+PREFILL_OVERLAY_LINEAR_NAMES = ("ffn_gate", "ffn_up", "ffn_down", "ffn_gate_shexp", "ffn_up_shexp",
+                                "ffn_down_shexp", "attn_q", "attn_k", "attn_v", "attn_output")
+PREFILL_OVERLAY_ROLES = frozenset(normalize_route_role(name) for name in PREFILL_OVERLAY_LINEAR_NAMES)
+
+
+def is_prefill_overlay_role(name_or_role: str) -> bool:
+  """True when a linear name or canonical role is covered by the resident-fp16 overlay."""
+  return normalize_route_role(name_or_role) in PREFILL_OVERLAY_ROLES
+
+
+def estimate_prefill_overlay_bytes(names_and_numels) -> int:
+  """fp16 bytes (2/elt) for overlay-covered weights from (name, numel) pairs."""
+  return sum(numel * 2 for name, numel in names_and_numels if is_prefill_overlay_role(name))
+
+
 def packed_linear_quant(linear: Any) -> str:
   """Return the packed quant family carried by a runtime linear, if any."""
   if not hasattr(linear, "prefill_packed_weight"): return ""
@@ -194,6 +212,7 @@ class ModelFacts:
 @dataclass(frozen=True)
 class QwenDenseRoleResolver:
   architecture:str; hidden_size:int|None; intermediate_size:int|None; n_heads:int|None; n_kv_heads:int|None; head_dim:int|None
+  shared_expert_size:int|None = None
 
   @classmethod
   def from_kv(cls, kv: dict[str, Any]) -> "QwenDenseRoleResolver":
@@ -204,7 +223,8 @@ class QwenDenseRoleResolver:
     head_dim = _int_or_none(kv.get(f"{arch}.attention.key_length"))
     if head_dim is None and hidden_size is not None and n_heads: head_dim = hidden_size // n_heads
     intermediate_size = _int_or_none(kv.get(f"{arch}.feed_forward_length"))
-    return cls(arch, hidden_size, intermediate_size, n_heads, n_kv_heads, head_dim)
+    shared_expert_size = _int_or_none(kv.get(f"{arch}.expert_shared_feed_forward_length"))
+    return cls(arch, hidden_size, intermediate_size, n_heads, n_kv_heads, head_dim, shared_expert_size)
 
   @property
   def kv_size(self) -> int|None: return None if self.n_kv_heads is None or self.head_dim is None else self.n_kv_heads * self.head_dim
@@ -216,8 +236,13 @@ class QwenDenseRoleResolver:
     if not self.architecture.startswith("qwen"): return None
     leaf = name.rsplit(".", 2)[-2:] if "." in name else [name]
     suffix = ".".join(leaf)
-    if suffix in ("ffn_gate.weight", "ffn_up.weight"): return self._if_shape(rows, cols, self.intermediate_size, self.hidden_size, "ffn_gate_up")
-    if suffix == "ffn_down.weight": return self._if_shape(rows, cols, self.hidden_size, self.intermediate_size, "ffn_down")
+    if suffix in ("ffn_gate.weight", "ffn_up.weight", "ffn_gate_shexp.weight", "ffn_up_shexp.weight"):
+      # The shared-expert gate/up projections carry the shared expert size, not the dense FFN size, on MoE GGUFs.
+      return self._if_shape(rows, cols, self.shared_expert_size if suffix.endswith("_shexp.weight") else self.intermediate_size,
+                            self.hidden_size, "ffn_gate_up")
+    if suffix in ("ffn_down.weight", "ffn_down_shexp.weight"):
+      return self._if_shape(rows, cols, self.hidden_size,
+                            self.shared_expert_size if suffix.endswith("_shexp.weight") else self.intermediate_size, "ffn_down")
     if suffix == "attn_q.weight": return self._if_shape(rows, cols, self.q_size, self.hidden_size, "attn_qo")
     if suffix == "attn_output.weight": return self._if_shape(rows, cols, self.hidden_size, self.q_size, "attn_qo")
     if suffix in ("attn_k.weight", "attn_v.weight"): return self._if_shape(rows, cols, self.kv_size, self.hidden_size, "attn_kv")

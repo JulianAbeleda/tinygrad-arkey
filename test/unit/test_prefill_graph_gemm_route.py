@@ -7,6 +7,7 @@ from extra.llm_research.route_manifest import canonical_candidate_set_identity
 from tinygrad import Tensor, dtypes
 from tinygrad.llm import prefill_graph_gemm as production_route
 from tinygrad.llm.memory_semantics import model_parameter
+from tinygrad.llm.model_facts import PREFILL_OVERLAY_LINEAR_NAMES
 
 
 def test_prefill_v2_covered_linears_are_role_tagged():
@@ -21,7 +22,7 @@ def test_prefill_v2_covered_linears_are_role_tagged():
     attn_v=SimpleNamespace(weight=Weight((1024,4096))), attn_output=SimpleNamespace(weight=Weight((4096,4096))),
     ffn_gate=SimpleNamespace(weight=Weight((12288,4096))), ffn_up=SimpleNamespace(weight=Weight((12288,4096))),
     ffn_down=SimpleNamespace(weight=Weight((4096,12288))))]
-  covered = {name:getattr(tr.blk[0],name) for name in tr._PREFILL_V2_LINEARS if hasattr(tr.blk[0],name)}
+  covered = {name:getattr(tr.blk[0],name) for name in PREFILL_OVERLAY_LINEAR_NAMES if hasattr(tr.blk[0],name)}
   list(tr._prefill_v2_covered())
   assert covered["attn_q"]._prefill_graph_role == covered["attn_output"]._prefill_graph_role == "attn_qo"
   assert covered["attn_k"]._prefill_graph_role == covered["attn_v"]._prefill_graph_role == "attn_kv"
