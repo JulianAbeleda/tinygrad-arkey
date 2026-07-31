@@ -16,6 +16,7 @@ from __future__ import annotations
 import os, sys, json, time, argparse, pathlib, subprocess, hashlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 from tinygrad import Tensor, nn
+from tinygrad.device import Device
 from tinygrad.helpers import getenv, GlobalCounters, fetch, Context, DEBUG
 from tinygrad.llm.model import Transformer, TransformerConfig
 from tinygrad.llm.runtime_state import SimpleTokenizer, models as BUILTIN, _quant_from_name, _device_target
@@ -177,7 +178,7 @@ def main():
       "command": "python " + " ".join(sys.argv),
       "git_commit": _git("rev-parse", "--short", "HEAD"),
       "git_dirty": bool(_git("status", "--porcelain")),
-      "hardware": "AMD Radeon RX 7900 XTX",
+      "hardware": f"{Device.DEFAULT} {_device_target() or ''}".strip(),
       "target": _device_target(),
       "perf_state": "auto clock (not pinned)",
       "warmups": "2x2-token generate JIT capture",
