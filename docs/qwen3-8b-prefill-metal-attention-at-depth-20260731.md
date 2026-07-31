@@ -1,5 +1,37 @@
 # Metal prefill attention at depth
 
+> **CORRECTION 2026-07-31, same day — SECTIONS 1–3 ARE REFUTED BY WHOLE-MODEL MEASUREMENT.**
+>
+> This document concluded that attention does not grow with depth on Metal (336 ms at depth 512 →
+> 291 ms at 4096) and that the shared half is flat, implying mild whole-model decay. **A whole-model
+> run (`bench/prefill-whole-synced/metal-depth-decay-20260731.json`, 4 warmups, 3 rounds,
+> `worst_cv` 0.0071) measured the opposite:**
+>
+> | depth | tok/s | per-chunk |
+> | ---: | ---: | ---: |
+> | 512 | 54.20 | 9,446 ms |
+> | 1024 | 50.79 | 10,715 ms |
+> | 2048 | 41.10 | 18,515 ms |
+> | 4096 | **26.49** | **33,881 ms** |
+>
+> **Metal prefill decays −51.1% from pp512 to pp4096**, and per-chunk cost grows **3.59×** with start
+> position. Against AMD's −12.48% and llama-on-AMD's −5.62%, Metal decays **4× worse than AMD and 9×
+> worse than llama**.
+>
+> **Why the per-kernel attribution below was wrong:** the `JIT=0 DEBUG=2` capture summed to **652 ms
+> against 9,446 ms of wall clock at the same start position — roughly 7% coverage.** Shares were
+> computed from an unrepresentative fraction, and the totals were never checked against wall clock
+> before the conclusion was drawn. The "attention is not growing" claim is retracted.
+>
+> **What survives:** the observation that attention kernels are recompiled per depth with the KV length
+> in the kernel name, and that 24 kernels are depth-invariant. The *shares*, the *no-growth* conclusion,
+> and the §3 Amdahl projection built on them are **all refuted**.
+>
+> **What this means for the precontract win:** §3 projected 1.5–1.9× end-to-end from a 3.4× kernel win.
+> That projection rested on the refuted split and must not be quoted. Metal prefill is depth-decaying and
+> the dominant cost at depth has not been correctly attributed yet.
+
+
 Date: 2026-07-31
 
 Qwen3-8B-Q4_K_M, Apple M4 10-core / Metal, current production path
