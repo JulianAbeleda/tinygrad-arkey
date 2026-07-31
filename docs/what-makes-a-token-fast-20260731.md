@@ -107,6 +107,23 @@ The entire ~5× is this switch. Nothing else in that table changed.
 **Until this is settled, no other optimisation matters.** Tuning a vector-ALU route is polishing
 something capped an order of magnitude below the alternative.
 
+**This principle is target-conditional, not universal — it does not hold on Apple M4.** Measured
+directly (`extra/llm_research/microbench/fma_peak_metal.py`, 2026-07-31, same 10-core M4 as `R`):
+plain fp16 FMA on ordinary vector ALUs, no `simdgroup` op anywhere, disassembly-verified pure-FMA
+hot loop, reaches **3445–3909 GFLOPS depending on precision variant** (fp32→fp32 3445, fp16→fp32
+mixed-accumulate 3528, fp16→fp16 3909) — **0.91×–1.03× `R`'s 3781 GFLOPS**, i.e. the same order of
+magnitude, not the ~10–20× gap AMD gfx1100 shows between `DIRECT_PACKED_FALLBACK` and
+`BOUNDED_PACKED_TILES`. Full sweep and verdict in §10. The reason §5's gap exists on gfx1100 and
+not here is architectural, not a measurement artifact of this campaign: gfx1100 has a physically
+separate WMMA execution pipe alongside its vector ALUs, so routing onto the wrong one strands most
+of the silicon idle; on this M4, `simdgroup_multiply_accumulate` appears to lower onto the same FP
+ALUs plain FMA already uses — there is no second, faster pipe to strand work off of. **Before
+invoking this principle for a new target, check whether that target's matrix path is measured
+separately from its plain-ALU path (as gfx1100's WMMA-vs-vector split was) — if the two numbers
+converge, as here, the 10–20× lever isn't available, and any strategy built around chasing "the
+matrix unit" over "the ALU" needs a different premise (see §10 for what does remain true on
+Metal).**
+
 ---
 
 ## 6. Which strategy you may use is decided by memory arithmetic, not preference
@@ -266,6 +283,54 @@ against; the only external figures found (`chsasank/device-benchmarks`, web sear
 third-party FP16 ALU benchmarks of the **M4 Max (40-core)**, ~13.3–14.2 TFLOPS — 4x this die's core
 count and not a matrix-unit-specific number — so no "fraction of spec" figure is reported as
 authoritative.
+
+**Plain FP16 FMA peak, measured 2026-07-31** (`extra/llm_research/microbench/fma_peak_metal.py`),
+same M4, same harness (calibrated `iters` so wall time sits ≥50× above a probed dispatch-overhead
+floor — a first version of this run reported up to 1.78M GFLOPS with no grid plateau because
+`iters` was too small relative to `blocks`, timing host overhead rather than the GPU; retracted
+before being reported, root-caused, and fixed by calibration; see the module docstring). Directly
+answers §5's question for this hardware: is `simdgroup_multiply_accumulate` a separate, faster
+matrix unit, or does it lower onto the same ALUs plain FMA uses?
+
+Swept vector width (scalar `half` through `half4`×2 as an emulated width-8 — this MSL toolchain has
+no `half8`/`float8`; naming one fails `xcrun metal -c` with "incomplete type"), NACC (1/2/4/8/16),
+and grid size, for three precision variants, since `simdgroup_float8x8` accumulates fp16×fp16→fp32,
+not fp16→fp16:
+
+| variant | plateau (GFLOPS) | width, nacc, blocks | vs `R` (3781.3) |
+| --- | ---: | --- | ---: |
+| fp16→fp16 | 3908.7 | width=8, nacc=16, blocks=16384 | **1.034×** |
+| fp16→fp32 (matches matmul numerics) | 3527.8 | width=8, nacc=8, blocks=16384 | **0.933×** |
+| fp32→fp32 | 3444.9 | width=8, nacc=8, blocks=16384 | **0.911×** |
+
+All three land within +3%/−9% of `R` — the same order of magnitude, not a separate unit worth
+10–20× (§5). fp16→fp32 is the primary comparator (it is what the matrix op actually computes) and
+sits at 0.933× `R`. Packed-math check: fp16→fp32 / fp32→fp32 = 1.024× — essentially no packed-fp16
+throughput doubling; fp16→fp16 / fp32→fp32 = 1.135× — a modest edge, far short of 2×. Apple's ALUs
+here do not reward fp16 with a compute-throughput multiplier the way AMD/NVIDIA packed-fp16 paths
+do; fp16 buys bandwidth/storage, not FLOP/s.
+
+NACC behaviour differs sharply by variant, and differently from `R`: fp16→fp16 improves
+monotonically out to nacc=16 (3702→3842→3883→3890→3898 GFLOPS), but fp16→fp32 and fp32→fp32 both
+peak at nacc=8 and then **collapse** at nacc=16 (3517→688 and 3437→606 GFLOPS respectively, a
+>80% drop) — a register-pressure cliff, since float accumulators cost more registers per lane than
+half ones and 16 of them blow the budget. Disassembly (`xcrun metal -fno-fast-math -c` — flag-
+matched to `MetalCompiler.compile()`'s actual `-fno-fast-math` runtime flag; an unmatched-flags
+disassembly earlier in this investigation showed spurious `fma fast`/`fadd fast` from default
+fast-math and was not evidence about what was measured) confirms all three:
+`air.compile.fast_math_disable` present, hot loop is `@air.fma.v4f16`/`@air.fma.v4f32` only with zero loads/converts
+inside it (the fp16→fp32 widening conversion is loop-invariant and correctly hoisted to a one-time
+preheader, not repeated per iteration), zero `simdgroup` references anywhere, one load (`iters`)
+and one gated store (the never-taken sentinel) total.
+
+**Verdict: one shared unit, not two.** `simdgroup_multiply_accumulate` does not access a separate,
+faster matrix pipe on this hardware — it lowers onto (or performs comparably to) the ordinary FP
+ALUs that plain scalar/vector FMA already uses. §5's "which unit — worth 10–20×" principle, while
+correct for gfx1100 (§5's WMMA-vs-vector split, ~5× measured), **does not apply to Metal on M4**:
+there is no faster unit to route onto. Metal prefill's remaining headroom (§10, 24.5% of llama) is
+therefore a **routing/tiling problem, not a units problem** — closer to llama's 81%-of-`R` decode
+ratio than to AMD 14B's pre-fix 0.19×-of-`R` state, and the fix looks like §7/§8 (tile geometry,
+searched not derived), not like "reach the matrix unit instead of the ALU."
 
 **Crossover, `M* = (w/16)·(R/BW)`, `w = 4.5` bits/weight (Q4_K):** no measured `BW` exists for this
 M4 anywhere in this corpus (checked: no `GB/s` figure tied to Metal/M4 in `docs/`), so `M*` is
