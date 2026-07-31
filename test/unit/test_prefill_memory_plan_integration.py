@@ -96,6 +96,18 @@ def test_nv_shaped_fp16_capability_without_promotion_uses_packed_baseline():
   assert json.loads(admission.prefill_memory_plan)["decision"] is None
 
 
+def test_fp16_spend_gb_composes_overlay_and_kv_against_scanned_budget():
+  inp = _inputs()
+  admission, _, effective = plan_selected_model_memory(inp, _facts(), direct_packed_supported=True,
+                                                       policy={"strategy": "FULL_RESIDENT_OVERLAY"})
+  assert effective is Strategy.FULL_RESIDENT_OVERLAY
+  kv_bytes = admission.kv_per_tok * admission.max_context  # fp16 KV elected (kv_quant False)
+  assert admission.report["fp16_spend_gb"] == pytest.approx((inp.est_fp16 + kv_bytes) / 1e9)
+  assert admission.report["fp16_spend_gb"] <= admission.report["budget_gb"]
+  packed_admission, _, packed_effective = plan_selected_model_memory(inp, _facts(), direct_packed_supported=True)
+  assert packed_effective is Strategy.DIRECT_PACKED_FALLBACK
+  packed_kv = packed_admission.kv_per_tok * packed_admission.max_context
+  assert packed_admission.report["fp16_spend_gb"] == pytest.approx(packed_kv / 1e9)
 
 
 def test_non_overlay_plan_never_walks_or_realizes_pf16_weights():

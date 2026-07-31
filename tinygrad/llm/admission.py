@@ -397,7 +397,8 @@ def admit_selected_model_memory(inp:AdmissionInputs, facts:DeviceFacts, *, direc
     report = {"mode": "refused", "refusal": refusal, "free_gb": scanned_budget.free_bytes/1e9,
               "budget_gb": scanned_budget.admitted_bytes/1e9, "weights_gb": terms.weights/1e9,
               "prefill_memory_strategy": Strategy.REFUSE.value,
-              "prefill_memory_feasible": [x.value for x in memory_plan.feasible_strategies]}
+              "prefill_memory_feasible": [x.value for x in memory_plan.feasible_strategies],
+              "fp16_spend_gb": 0.0}
     return (AdmissionPlan(0, False, report, terms.weights, terms.kv_per_tok, terms.prefill_per_tok,
                           memory_plan.to_json()), memory_plan, Strategy.REFUSE)
   if memory_plan.decision is Strategy.REFUSE:
@@ -409,7 +410,10 @@ def admit_selected_model_memory(inp:AdmissionInputs, facts:DeviceFacts, *, direc
       effective = memory_plan.feasible_strategies[0]
   report = {**context.report, "prefill_memory_strategy": effective.value,
             "prefill_memory_feasible": [x.value for x in memory_plan.feasible_strategies],
-            "prefill_memory_selection_deferred": memory_plan.decision is None}
+            "prefill_memory_selection_deferred": memory_plan.decision is None,
+            # S5: one fp16 spend ledger -- overlay bytes only when elected, plus KV bytes at the elected KV
+            # representation (context.kv_quant already selects fp16 vs q8 in kv_bytes).
+            "fp16_spend_gb": ((inp.est_fp16 if effective is Strategy.FULL_RESIDENT_OVERLAY else 0) + kv_bytes) / 1e9}
   return AdmissionPlan(context.max_context, context.kv_quant, report, context.weights, context.kv_per_tok,
                        context.prefill_per_tok, memory_plan.to_json()), memory_plan, effective
 
