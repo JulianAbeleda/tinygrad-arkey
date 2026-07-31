@@ -1114,26 +1114,23 @@ class Transformer:
         prefill_ubatch=_prefill_ubatch, v2_on=_automatic_overlay_policy is not None or _overlay_request is not False,
         model_label=f"{_admit_arch} selected GGUF", stream=str(stream), kv_quant_supported=True,
         live_split_s=FLASH_DECODE_CANDIDATE.split_size)
-      if _automatic_overlay_policy is not None:
-        # First enumerate from the same workload/context facts without forcing
-        # a route.  Only an admitted full-overlay candidate may consume the
-        # retained promoted performance policy.
-        _candidate_plan, _candidate_memory_plan, _ = plan_selected_model_memory(
-          _admission_inputs, _device_facts, direct_packed_supported=True, overlay_requested=None)
-        if Strategy.FULL_RESIDENT_OVERLAY in _candidate_memory_plan.feasible_strategies:
-          _overlay_request = True
-          _plan, _memory_plan, _effective_strategy = plan_selected_model_memory(
-            _admission_inputs, _device_facts, direct_packed_supported=True, overlay_requested=True)
+      # The promotion lookup is a caller concern; its result is passed in as a preference, never as a
+      # single-strategy restriction (R1/R6). A preferred overlay that does not fit degrades to the packed
+      # evaluation inside the planner -- no None -> True -> False replan loop.
+      _policy = _automatic_overlay_policy if _automatic_overlay_policy is not None else (
+        _runtime_policy if _overlay_request else None)
+      _plan, _memory_plan, _effective_strategy = plan_selected_model_memory(
+        _admission_inputs, _device_facts, direct_packed_supported=True, policy=_policy)
+      if _effective_strategy is Strategy.FULL_RESIDENT_OVERLAY:
+        if _automatic_overlay_policy is not None:
           selected = dict(_automatic_overlay_policy)
           selected["memory_plan"] = json.loads(_plan.prefill_memory_plan)
           _runtime_policy = immutable_prefill_policy(selected)
-        else:
-          _overlay_request = False
-          _plan, _memory_plan, _effective_strategy = plan_selected_model_memory(
-            _admission_inputs, _device_facts, direct_packed_supported=True, overlay_requested=False)
-      else:
-        _plan, _memory_plan, _effective_strategy = plan_selected_model_memory(_admission_inputs,
-          _device_facts, direct_packed_supported=True, overlay_requested=_overlay_request)
+      elif prefill_policy_uses_overlay(_runtime_policy):
+        # Planned packed: a retained overlay-strategy policy would realize fp16 weights against a packed plan.
+        _runtime_policy = immutable_prefill_policy({"strategy": "DIRECT_PACKED_FALLBACK",
+          "candidate_id": "direct-packed-baseline", "routes": {},
+          "provenance": "overlay preference degraded to packed at admission", "measured": False})
 
       _provided_route_memory = _runtime_policy.get("memory_facts")
       if _provided_route_memory is not None and not isinstance(_provided_route_memory, dict):
@@ -1209,7 +1206,7 @@ class Transformer:
         prefill_ubatch=_prefill_ubatch, v2_on=_overlay_request is not False,
         stream=str(stream), live_split_s=FLASH_DECODE_CANDIDATE.split_size)
       _plan, _memory_plan, _effective_strategy = plan_selected_model_memory(_admission_inputs,
-        _device_facts, direct_packed_supported=True, overlay_requested=_overlay_request)
+        _device_facts, direct_packed_supported=True)
       _v2_on = prefill_policy_strategy(_runtime_policy) in ("FULL_RESIDENT_OVERLAY", "BOUNDED_PACKED_TILES", "DIRECT_PACKED_FALLBACK")
       max_context, _kv_quant, _admit = _plan.max_context, _plan.kv_quant, _plan.report
       _ring_admitted = _admit.get("ring", False)

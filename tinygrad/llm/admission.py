@@ -257,6 +257,9 @@ class _ContextCandidate:
             "bytes_per_token": self.bytes_per_token, "exact_context": self.exact_context,
             "ring_buffer": self.ring_buffer, "supported": supported, "capacity_tokens": max(capacity, 0)}
 
+class _ContextRefused(RuntimeError):
+  """One residency cannot fit any context; converted to a REFUSE-carrying plan, never a dead load (R1/R6)."""
+
 def _plan_context_admission(inp:AdmissionInputs, budget:ScannedMemoryBudget, terms:ContextMemoryTerms) -> AdmissionPlan:
   kv_quant_shape = inp.head_dim == 128 and inp.n_kv_heads == 8 and inp.n_heads % inp.n_kv_heads == 0; kv_quant_supported = inp.kv_quant_supported and kv_quant_shape and not inp.kv_quant_disabled
   ring_supported = kv_quant_shape and (inp.rope_dim if inp.rope_dim is not None else inp.head_dim) == inp.head_dim
@@ -331,7 +334,7 @@ def _resolve_max_context_admission(requested, trained_ctx:int, scanned_budget:Sc
   if not is_auto:
     _hint = (f" For unbounded generation with a smaller lossy window, pass --stream (window would be N={max(ring_N,0)})."
              if ring_supported and ring_N > 0 else "")
-    raise RuntimeError(
+    raise _ContextRefused(
       f"{model_label}: requested --max_context {requested} needs {target} tokens; fp16 KV admits {max(mc_fp16,0)},{q8note} "
       f"(free {free_bytes/1e9:.1f}GB, weights {weights_bytes/1e9:.1f}GB, budget {budget/1e9:.1f}GB; {budget_policy})."
       f" Largest admissible is {max(max(mc_q8,0), max(mc_fp16,0))}. Reduce --max_context or free VRAM.{_hint}")
@@ -344,29 +347,38 @@ def _resolve_max_context_admission(requested, trained_ctx:int, scanned_budget:Sc
   # Final refusal: not even the streaming window is usable.
   _ringnote = (f" even the streaming window has no positive capacity." if ring_supported
                else " (streaming unsupported for this shape).")
-  raise RuntimeError(
+  raise _ContextRefused(
     f"{model_label}: auto-scan needs {target} tokens; fp16 KV admits {max(mc_fp16,0)},{q8note}{_ringnote} "
     f"(free {free_bytes/1e9:.1f}GB, weights {weights_bytes/1e9:.1f}GB, budget {budget/1e9:.1f}GB; {budget_policy}). "
     f"Refusing: free VRAM or use a smaller model. (Q8+ring composition would ~double the streaming window; not yet implemented.)")
 
-def plan_selected_model_memory(inp:AdmissionInputs, facts:DeviceFacts, *, direct_packed_supported:bool,
-                               overlay_requested:bool|None=None) -> tuple[AdmissionPlan, PrefillMemoryPlan, Strategy]:
+def admit_selected_model_memory(inp:AdmissionInputs, facts:DeviceFacts, *, direct_packed_supported:bool,
+                                resident_fp16:bool) -> tuple[AdmissionPlan, PrefillMemoryPlan, Strategy]:
+  """Pure per-residency admission evaluation (R6): no registry, no policy, no side effects.
+
+  The residency sizes BOTH the weights term and max_context, so the two residencies are two evaluations over a
+  two-element domain. A residency that cannot fit returns a REFUSE-carrying plan with labeled reasons instead of
+  raising; plan_selected_model_memory chooses between the evaluations and raises only when nothing fits.
+  """
   scanned_budget = scanned_device_memory_budget(facts)
   reserve = scanned_budget.reserve_bytes
   device = DeviceMemoryFacts(facts.total_vram_bytes, scanned_budget,
     ByteTerm("runtime_safety_reserve", reserve, facts.memory_probe.source,
              "align_up(total_vram_bytes - free_vram_bytes, scanned_allocator_granularity)",
              ByteLifetime.SAFETY_RESERVE), facts.memory_probe.source)
-  explicit_overlay = overlay_requested is True
-  terms = ContextMemoryTerms.from_inputs(inp, resident_fp16=explicit_overlay)
-  context = _plan_context_admission(replace(inp, free_vram=facts.free_vram_bytes), scanned_budget, terms)
-  scale_per_tok = terms.kv_scale_per_tok if context.kv_quant else 0
-  kv_bytes = (terms.kv_per_tok // (2 if context.kv_quant else 1) + scale_per_tok) * context.max_context
+  terms = ContextMemoryTerms.from_inputs(inp, resident_fp16=resident_fp16)
+  try:
+    context = _plan_context_admission(replace(inp, free_vram=facts.free_vram_bytes), scanned_budget, terms)
+  except _ContextRefused as e:
+    context, refusal = None, str(e)
+  scale_per_tok = terms.kv_scale_per_tok if context is not None and context.kv_quant else 0
+  kv_bytes = (terms.kv_per_tok // (2 if context is not None and context.kv_quant else 1) + scale_per_tok) * \
+             (context.max_context if context is not None else 0)
   base = (
     ByteTerm("packed_weights", inp.q4_bytes, "selected GGUF tensor/file inventory", "sum resident packed allocations", ByteLifetime.PERSISTENT),
     ByteTerm("kv_cache", kv_bytes, "transformer geometry and admitted context",
              "kv_bytes_per_token * admitted_context + scale_bytes", ByteLifetime.PERSISTENT),
-    ByteTerm("prefill_activations", context.prefill_per_tok * context.max_context, "prefill workload geometry",
+    ByteTerm("prefill_activations", (context.prefill_per_tok * context.max_context) if context is not None else 0, "prefill workload geometry",
              "prefill_bytes_per_token * admitted_context", ByteLifetime.PREFILL_PEAK),
     ByteTerm("flash_scratch", terms.flash_scratch, "decode/prefill attention geometry",
              "n_heads * live_split_s * (head_dim + 2) * sizeof(float32)", ByteLifetime.PREFILL_PEAK),
@@ -378,16 +390,58 @@ def plan_selected_model_memory(inp:AdmissionInputs, facts:DeviceFacts, *, direct
   candidates.append(CandidateMemoryCoverage("direct-packed-baseline", Strategy.DIRECT_PACKED_FALLBACK,
     required_invocations=("prefill",), covered_invocations=(("prefill",) if direct_packed_supported else ()),
     supported=direct_packed_supported, reasons=(() if direct_packed_supported else ("direct packed coverage is unavailable",))))
-  override = Strategy.FULL_RESIDENT_OVERLAY if explicit_overlay else (Strategy.DIRECT_PACKED_FALLBACK if overlay_requested is False else None)
-  memory_plan = plan_prefill_memory(device=device, base_terms=base, candidates=candidates, override=override)
+  # No single-strategy override: restrict semantics would turn an infeasible preference into REFUSE (R1). The
+  # preference is applied by choosing among the two evaluations' results, never by narrowing the candidate set.
+  memory_plan = plan_prefill_memory(device=device, base_terms=base, candidates=candidates)
+  if context is None:
+    report = {"mode": "refused", "refusal": refusal, "free_gb": scanned_budget.free_bytes/1e9,
+              "budget_gb": scanned_budget.admitted_bytes/1e9, "weights_gb": terms.weights/1e9,
+              "prefill_memory_strategy": Strategy.REFUSE.value,
+              "prefill_memory_feasible": [x.value for x in memory_plan.feasible_strategies]}
+    return (AdmissionPlan(0, False, report, terms.weights, terms.kv_per_tok, terms.prefill_per_tok,
+                          memory_plan.to_json()), memory_plan, Strategy.REFUSE)
   if memory_plan.decision is Strategy.REFUSE:
-    raise RuntimeError(f"{inp.model_label}: memory plan refused load: {'; '.join(memory_plan.reasons)}")
-  effective = (Strategy.FULL_RESIDENT_OVERLAY if memory_plan.decision is Strategy.FULL_RESIDENT_OVERLAY else
-               Strategy.DIRECT_PACKED_FALLBACK)
-  if effective not in memory_plan.feasible_strategies:
-    effective = memory_plan.feasible_strategies[0]
+    effective = Strategy.REFUSE
+  else:
+    effective = (Strategy.FULL_RESIDENT_OVERLAY if resident_fp16 and
+                 Strategy.FULL_RESIDENT_OVERLAY in memory_plan.feasible_strategies else Strategy.DIRECT_PACKED_FALLBACK)
+    if effective not in memory_plan.feasible_strategies:
+      effective = memory_plan.feasible_strategies[0]
   report = {**context.report, "prefill_memory_strategy": effective.value,
             "prefill_memory_feasible": [x.value for x in memory_plan.feasible_strategies],
             "prefill_memory_selection_deferred": memory_plan.decision is None}
   return AdmissionPlan(context.max_context, context.kv_quant, report, context.weights, context.kv_per_tok,
                        context.prefill_per_tok, memory_plan.to_json()), memory_plan, effective
+
+def plan_selected_model_memory(inp:AdmissionInputs, facts:DeviceFacts, *, direct_packed_supported:bool,
+                               policy:Mapping[str, Any]|None=None) -> tuple[AdmissionPlan, PrefillMemoryPlan, Strategy]:
+  """Admit both residencies as pure evaluations and choose per the policy preference (R6).
+
+  policy is a preference over the feasible set, never a restriction: a preferred overlay that does not fit
+  degrades to the packed evaluation (with its own context) and a labeled reason, never REFUSE. REFUSE survives
+  only for its honest meaning: nothing fits.
+  """
+  overlay = admit_selected_model_memory(inp, facts, direct_packed_supported=direct_packed_supported, resident_fp16=True)
+  packed = admit_selected_model_memory(inp, facts, direct_packed_supported=direct_packed_supported, resident_fp16=False)
+  overlay_preferred = policy is not None and prefill_policy_strategy(policy) == "FULL_RESIDENT_OVERLAY"
+  if overlay_preferred and overlay[2] is Strategy.FULL_RESIDENT_OVERLAY:
+    admission, memory_plan, _ = overlay
+    # The policy preference resolves the deferred decision; the feasible set is unchanged.
+    memory_plan = replace(memory_plan, decision=Strategy.FULL_RESIDENT_OVERLAY)
+    admission = replace(admission, report={**admission.report,
+                                           "prefill_memory_strategy": Strategy.FULL_RESIDENT_OVERLAY.value,
+                                           "prefill_memory_selection_deferred": False},
+                        prefill_memory_plan=memory_plan.to_json())
+    return admission, memory_plan, Strategy.FULL_RESIDENT_OVERLAY
+  if overlay_preferred:
+    # R1: an infeasible preferred overlay degrades to the packed evaluation, loudly.
+    overlay_reasons = next((d.reasons for d in overlay[1].candidate_decisions
+                            if d.strategy is Strategy.FULL_RESIDENT_OVERLAY and d.reasons), ())
+    reason = "; ".join(overlay_reasons) or "; ".join(overlay[1].reasons) or overlay[0].report.get("refusal")
+    packed = (replace(packed[0], report={**packed[0].report, "prefill_overlay_degradation": reason}),
+              packed[1], packed[2])
+  admission, memory_plan, effective = packed
+  if effective is Strategy.REFUSE:
+    refusal = admission.report.get("refusal")
+    raise RuntimeError(refusal if refusal else f"{inp.model_label}: memory plan refused load: {'; '.join(memory_plan.reasons)}")
+  return admission, memory_plan, effective

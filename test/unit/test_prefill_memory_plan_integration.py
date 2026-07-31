@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from tinygrad.llm.admission import AdmissionInputs, ContextMemoryTerms, plan_selected_model_memory
+from tinygrad.llm.admission import AdmissionInputs, ContextMemoryTerms, admit_selected_model_memory, plan_selected_model_memory
 from tinygrad.llm.device_facts import DeviceCapabilities, DeviceFacts, ProbeRecord
 from tinygrad.llm.model import Transformer
 from tinygrad.llm.prefill_memory_plan import Strategy
@@ -44,16 +44,25 @@ def test_auto_exposes_multiple_feasible_strategies_and_uses_packed_baseline():
   assert json.loads(admission.prefill_memory_plan)["decision"] is None
 
 
-def test_explicit_overlay_cannot_bypass_shared_byte_budget():
-  with pytest.raises(RuntimeError, match="memory plan refused load|requested --max_context"):
-    plan_selected_model_memory(_inputs(q4_bytes=7_000_000_000, est_fp16=7_000_000_000),
-                               _facts(total=12_000_000_000, free=12_000_000_000),
-                               direct_packed_supported=True, overlay_requested=True)
+def test_infeasible_overlay_degrades_instead_of_refusing():
+  inp = _inputs(q4_bytes=7_000_000_000, est_fp16=7_000_000_000)
+  facts = _facts(total=12_000_000_000, free=12_000_000_000)
+  admission, plan, effective = plan_selected_model_memory(inp, facts, direct_packed_supported=True,
+                                                          policy={"strategy": "FULL_RESIDENT_OVERLAY"})
+  # R1: a preferred overlay that cannot fit degrades, never REFUSEs.
+  assert effective is Strategy.DIRECT_PACKED_FALLBACK
+  assert plan.decision is Strategy.DIRECT_PACKED_FALLBACK
+  # Loudness: the degradation reason names the byte shortfall.
+  degradation = admission.report["prefill_overlay_degradation"]
+  assert "exceeds" in degradation and "budget" in degradation
+  # R6: the degraded packed load gets the packed-sized context, not one sized against the phantom overlay.
+  packed = admit_selected_model_memory(inp, facts, direct_packed_supported=True, resident_fp16=False)
+  assert admission.max_context == packed[0].max_context
 
 
 def test_explicit_safe_overlay_is_selected_and_serialized():
   admission, plan, effective = plan_selected_model_memory(_inputs(), _facts(), direct_packed_supported=True,
-                                                           overlay_requested=True)
+                                                          policy={"strategy": "FULL_RESIDENT_OVERLAY"})
   assert plan.decision is Strategy.FULL_RESIDENT_OVERLAY
   assert effective is Strategy.FULL_RESIDENT_OVERLAY
   payload = json.loads(admission.prefill_memory_plan)

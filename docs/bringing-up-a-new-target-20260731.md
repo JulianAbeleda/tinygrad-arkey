@@ -355,6 +355,13 @@ re-verified with the same invocation as `044c9be17`: strategy `DIRECT_PACKED_FAL
 (753.9 GB/s), first token 50994, correctness-qualified. The ratchet holds on the real fixture: inventory
 `overlay_bytes` == `_prefill_v2_covered()` walk bytes == 13,891,534,848.
 
+**FP16 overlay admission refactor, Piece 2 (2026-07-31) — non-moving.** `[refactor]` commits replace the
+`overlay_requested` tri-state override with two pure per-residency evaluations (`admit_selected_model_memory`)
+plus a policy-preference `choose`: an infeasible preferred overlay degrades to the packed evaluation with its
+own packed-sized `max_context` and a labeled byte-shortfall reason, never REFUSE. NV 8B re-verified with the
+same invocation: strategy `DIRECT_PACKED_FALLBACK`, decode 155.96 tok/s (754.0 GB/s), first token 50994,
+correctness-qualified.
+
 ---
 
 ## 10. The shortest version
