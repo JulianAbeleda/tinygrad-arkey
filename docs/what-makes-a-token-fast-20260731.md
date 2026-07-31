@@ -53,7 +53,8 @@ Two consequences:
   measured here. They are not two settings of one problem; they are two different problems (§3, §4).
 
 Computing `M*` for a target requires measured `R` and `BW` for that target. On AMD gfx1100 both exist
-(§5). **On Metal, `R` has never been measured** — see §10, it is the largest open gap.
+(§5). **On Metal, `R` is now measured (§10, 2026-07-31): ≈3.78 TFLOPS.** `BW` is still unmeasured
+for Metal, so `M*` there is reported as a function of `BW` rather than a single number (§10).
 
 ---
 
@@ -239,12 +240,59 @@ prefill shape (`m=512`, `phase: prefill`, `ffn_gate_up`, 18 candidates):
 So the campaign measured the vector-ALU floor at prefill shape. **It did not test tensor cores**, and by
 §5 the floor is the thing that needs escaping. The block reason is the finding.
 
+**Metal `R`, measured 2026-07-31** (`extra/llm_research/microbench/wmma_peak_metal.py`,
+`extra/llm_research/microbench/README.md`), on the same 10-core M4 (Mac16,10) as the rest of this
+table — an isolated `simdgroup_multiply_accumulate` microbenchmark mirroring `wmma_peak.cpp`: zero
+loads in the hot loop, independent accumulators, runtime trip count, never-taken keep-alive,
+disassembly-verified (`xcrun metal -c` + `metal-objdump`: zero `addrspace(1)`/`addrspace(3)`
+references inside the loop; operands `mat_a`/`mat_b` constant-folded directly into the intrinsic
+call, never loaded).
+
+Grid-size sweep plateaus; a swept NACC (2/4/8/16) shows the *opposite* shape from gfx1100 — this
+hardware needs almost no independent accumulators to hide matrix-op latency (`nacc=1` reaches
+3718 GFLOPS, only 1.6% below the `nacc=2` peak), and throughput **falls** as NACC grows past 2
+(2380 GFLOPS at nacc=4, 1742 at nacc=16) because register pressure costs occupancy faster than
+extra ILP buys anything. The true plateau, found by re-sweeping grid size at the winning
+`nacc=2`, is:
+
+**R ≈ 3781 GFLOPS ≈ 3.78 TFLOPS** (`nacc=2, blocks=32768, tpb=256`, 262144 simdgroups; spread
+<1 GFLOPS across 5 reps at the plateau; insensitive to threadgroup shape 32–1024).
+
+This is now the achievable denominator for any Metal matrix-unit efficiency claim: the 2733 GFLOPS
+fp16-GEMM "ceiling" above is 72.3% of it (as expected — a full kernel bundling load/address/epilogue
+cost sits below the isolated rate); the 2293 and 544 GFLOPS figures are 60.6% and 14.4% of it. No
+Apple-published TFLOPS spec exists for this instruction or for the base 10-core M4 GPU to compare
+against; the only external figures found (`chsasank/device-benchmarks`, web search 2026-07-31) are
+third-party FP16 ALU benchmarks of the **M4 Max (40-core)**, ~13.3–14.2 TFLOPS — 4x this die's core
+count and not a matrix-unit-specific number — so no "fraction of spec" figure is reported as
+authoritative.
+
+**Crossover, `M* = (w/16)·(R/BW)`, `w = 4.5` bits/weight (Q4_K):** no measured `BW` exists for this
+M4 anywhere in this corpus (checked: no `GB/s` figure tied to Metal/M4 in `docs/`), so `M*` is
+reported as a function of `BW` rather than substituting a spec figure — the exact error this frame
+exists to prevent:
+
+```
+M*(BW) = (4.5/16) · (3.78e12 / BW_bytes_per_s) = 1063 / BW_GBps
+```
+
+| `BW` (GB/s) | `M*` (tokens) |
+| ---: | ---: |
+| 50 | 21.3 |
+| 100 | 10.6 |
+| 200 | 5.3 |
+| 500 | 2.1 |
+| 800 | 1.3 |
+
+Across this entire plausible range for a unified-memory device, `M*` stays in the low single/double
+digits. **Decode (`M=1`) sits below `M*` for every value in the table except the most extreme
+(≥800 GB/s), and prefill (`M=512`) sits far above `M*` for all of them** — the classification in §3/§4
+is robust to the unmeasured `BW`, even though the precise crossover point is not yet known.
+
 ### Open gaps
 
-1. **`R` for Metal is unmeasured.** AMD's 105 TF came from an isolated microbenchmark with zero loads in
-   the loop; no equivalent isolated `simdgroup_multiply_accumulate` benchmark exists. Every Metal
-   "ceiling" quoted above bundles load and epilogue cost that the AMD figure deliberately excludes.
-   Without `R`, `M*` (§2) cannot be computed for this device.
+1. ~~`R` for Metal is unmeasured.~~ **Resolved 2026-07-31: R ≈ 3.78 TFLOPS**, above. `M*` still needs
+   a measured `BW` for this M4 to pin down exactly (see table above for the shape of that dependency).
 2. **Why every TC candidate fails to compile through the provider.** This is now the load-bearing
    blocker for Metal prefill.
 3. **Why the hand-authored precontract path writes 18.75% of its output non-deterministically.** Four
@@ -252,3 +300,4 @@ So the campaign measured the vector-ALU floor at prefill shape. **It did not tes
    decomposition, device-blind admission. Unexplained.
 4. **Whether the candidate space should be emitting a GEMM family rather than `generic_matvec`** at
    `m=512`.
+5. **No measured `BW` for Metal/M4.** Needed to turn `M*(BW)` above into a single number.
