@@ -362,6 +362,14 @@ own packed-sized `max_context` and a labeled byte-shortfall reason, never REFUSE
 same invocation: strategy `DIRECT_PACKED_FALLBACK`, decode 155.96 tok/s (754.0 GB/s), first token 50994,
 correctness-qualified.
 
+**FP16 overlay admission refactor, Piece 3 (2026-07-31) — non-moving.** `[nn]` commits read the fp16 capability
+from the published `supports_fp16` device fact (dtype only, never `supports_tensor_cores`), label NV's
+expressible-but-unpromoted case with the census entry `prefill_overlay_promotion: "no-promoted-candidate"` in
+both the admission report and the e2e bench row, add `fp16_spend_gb` to the admission report, and fold the
+runtime `_v2_on` to `True` (`[nn] NFC`, byte-proven). NV 8B re-verified with the same invocation: strategy
+`DIRECT_PACKED_FALLBACK`, decode 155.95 tok/s (753.9 GB/s), first token 50994, pre-S6/after-S6 decode token
+sha256 identical (`0721c16fbf70779cb6cebd5cf64eab50a1f61c7882d402c60c27d22597548ebe`), correctness-qualified.
+
 ---
 
 ## 10. The shortest version
