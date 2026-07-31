@@ -17,7 +17,7 @@ This is step 1 (SEARCH) of the seven-step lifecycle — see
 | --- | ---: | ---: | --- |
 | control — unforced heuristic, no `candidate_geometry` | 48,476,812 | **1063.2** | 6 runs, `relative_mad` 0.0000 |
 | best geometry, isolated repeats | 14,278,458 | **3609.6** | 6 runs, `relative_mad` 0.0007 |
-| best geometry, during the 91-pair sweep | 20,148,000 | **2558.1** | single run |
+| best geometry, during the 91-pair sweep | 20,148,000 | 2558.1 | single run — **harness artifact, see §3** |
 | materialized dequant→GEMM (prior incumbent) | — | 2293 | prior measurement, same shape |
 
 Best geometry: **`tm=64, tn=32, tk=32, wm=4, wn=1, bc=1`**, tied within noise with
@@ -42,7 +42,8 @@ cross-validation that this measurement reproduces a known baseline.
 
 **Valid — same shape, same harness:**
 
-- beats the materialized dequant→GEMM incumbent (2293) by **+12% sustained / +57% burst**
+- beats the materialized dequant→GEMM incumbent (2293) by **+57%** (3610 sustained, per §3's
+  refutation; the earlier "+12% sustained" framing rested on 2558, now shown to be harness overhead)
 - beats the fp16 GEMM figure (2733) — but note that figure was an *unsearched default schedule*, so it
   was never a ceiling. Treating it as one would be trap 7 in `what-makes-a-token-fast` §9.
 
@@ -55,32 +56,64 @@ cross-validation that this measurement reproduces a known baseline.
 
 ---
 
-## 3. The 40% measurement swing — unexplained, and it bounds the claim
+## 3. The 40% measurement swing — diagnosed 2026-07-31; both original hypotheses REFUTED
 
-Byte-identical candidates measured **20.15 ms during the continuous 91-pair sweep** and **14.28 ms in
-isolated repeats** — a ~40% swing. The control, by contrast, was stable to <0.01% across the same
-period (48.46–48.50 ms).
+**This section originally offered two hypotheses, "sustained-load throttling" and "cache residency in
+isolated repeats," and advised preferring 2558 as the honest sustained number. Direct testing refuted
+both, and inverted the advice.** Superseding evidence, `scratchpad/stress_test_part2_*.py`, commit
+`f0cb8c58d`:
 
-All 87 sweep candidates show the same depressed band, so this is not a per-geometry effect. Two
-hypotheses, neither tested:
+- **Sustained-load throttling — REFUTED.** 400 consecutive single-buffer dispatches, 5.9 s of
+  continuous GPU load: GFLOPS flat at **3609–3615** across all 10 buckets, **+0.02% total drift**. No
+  monotonic decay.
+- **Cache residency — REFUTED as stated.** Alternating dispatches between two independent ~28 MB weight
+  buffers at distinct physical addresses held **3611.7 GFLOPS** — statistically identical to repeating
+  one buffer. Forcing alternation does not reproduce the swing.
+- **What does reproduce it: the harness's own burst/idle cycle.** Replaying the campaign's `run_one()`
+  (fresh `MetalAdapter` → compile → full-oracle correctness check → measure) 15 times back-to-back on a
+  **single geometry** oscillated between 3612–3615 and 2922–3080 GFLOPS, median 3057.7. The swing needs
+  no second geometry. After a 10 s host-side idle gap, dispatches ramp back over ~9 calls:
+  2101 → 2762 → 2961 → 3047 → 3163 → 3367 → … → 3614.
 
-1. **Sustained-load throttling.** `MetalAdapter` reports `thermal_status: unavailable_no_authoritative_api`,
-   so there is no telemetry to test it with.
-2. **Cache residency in isolated repeats.** Repeatedly measuring one call against the same buffers may
-   keep ~28 MB of packed weights resident in M4's system-level cache. If so the burst figure is
-   optimistic and **2558 is the honest sustained number**.
+**Mechanism:** a GPU idle/ramp effect tied to the CPU-bound compile-and-check gap *between* measurement
+bursts — not thermal, not data-cache residency. The physical cause (DVFS / P-state) is **unestablished**;
+this device exposes no thermal or frequency telemetry.
 
-Ranking *within* the sweep is internally fair — every candidate paid the same conditions. Absolute
-GFLOPS from the sweep reads low relative to isolated bursts.
+**Consequence, which reverses this section's original guidance:** under genuine back-to-back load — the
+regime a real prefill runs in — throughput is **3610 GFLOPS and flat**. The 2558 figure is an artifact
+of the sweep harness inserting CPU-bound gaps between candidates, not a sustained-load ceiling. **Quote
+3610 for sustained throughput; treat 2558 as measurement-harness overhead.**
 
-**Until this is resolved, quote the range: 2558–3610 GFLOPS, and prefer 2558 for any sustained claim.**
-The win over the 2293 incumbent holds at both ends.
-
-Also worth flagging: 3610 is **92.3% of the isolated FMA peak** (3909, `fma_peak_metal.py`) for a kernel
-that also performs Q4_K dequant. That is high enough to warrant independent confirmation before it is
-relied on.
+Ranking *within* the sweep remains internally fair — every candidate paid the same conditions.
 
 ---
+
+## 3a. Depth: GEMM throughput is flat (stress test, `f0cb8c58d`)
+
+Measured with a steady-state protocol — ramp-discard prefix, then median of 20 back-to-back dispatches
+on an already-warm buffer, which §3 shows is the only regime that measures the kernel rather than the
+harness:
+
+| m | GFLOPS | vs m=512 |
+| ---: | ---: | ---: |
+| 64 | 1763.9 | −51.1% |
+| 128 | 2902.0 | −19.6% |
+| 256 | 3597.1 | −0.35% |
+| **512** | **3609.8** | 0.00% |
+| 1024 | 3593.2 | −0.46% |
+| 2048 | 3599.3 | −0.29% |
+| 4096 | 3606.4 | −0.09% |
+| 8192 | 3605.3 | −0.12% |
+
+`m=512` steady-state reproduces §1's isolated figure to 0.006% (3609.8 vs 3609.6) — independent
+cross-validation.
+
+**From m=256 to m=8192, throughput is flat within ±0.5%**, matching AMD's finding that GEMM is flat with
+context while attention alone decays. Degradation at m=64/128 is fixed launch overhead failing to
+amortize — an underutilization effect at the *opposite* end of the range from a depth-decay mechanism.
+
+This is kernel-level only. It says nothing about attention or whole-model behaviour with depth, which
+remain unmeasured on Metal.
 
 ## 4. Geometry choice is flat
 
