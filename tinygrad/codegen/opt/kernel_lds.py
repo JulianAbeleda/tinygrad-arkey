@@ -659,7 +659,14 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
   ordered = allocation.after(barrier)
   def _fragment(role:str, subtile:UOp, wave:UOp, subtiles:int, contract:PrecontractContractSpec) -> UOp:
     window = _window(geometry, role)
-    row = (wave * subtiles + subtile) * 16 + lane % 16
+    # The per-subtile row extent is the descriptor's own M dim (`tc.dims[1]`) for role A and N dim
+    # (`tc.dims[0]`) for role B -- the exact same per-role dim `derive_precontract_shape_factors`
+    # already divides tm/tn by to get `subtiles`/`sm`/`sn` above. A literal `16` here happened to be
+    # correct for every target so far only because AMD's WMMA (`dims=(16,16,16)`) is square with
+    # M==N==16; Metal's square 8x8x8 (`dims=(8,8,8)`) makes the same literal wrong by exactly 2x per
+    # axis, which is what pushed the fragment read past the LDS window.
+    tc_dim = tc.dims[1] if role == "A" else tc.dims[0]
+    row = (wave * subtiles + subtile) * tc_dim + lane % tc_dim
     logical_k = k_axis.substep * tc.dims[2] + contract.element
     index = slot_base + (window.base + row * window.stride_bytes + logical_k * item_bytes) // item_bytes
     load = ordered.index(index, dtype=tc.dtype_in).replace(tag=("kernel_tile_fragment_load", role)).load()
