@@ -692,10 +692,23 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
     # axis, which is what pushed the fragment read past the LDS window.
     tc_dim = tc.dims[1] if role == "A" else tc.dims[0]
     row = (wave * subtiles + subtile) * tc_dim + lane % tc_dim
+    operand_idx = 0 if role == "A" else 1
+    # `lane % tc_dim` only ever selects one of `tc_dim` rows; the other `_PRECONTRACT_WARP_THREADS
+    # // tc_dim` lane-groups this leaves on the table were, until now, silently dropped -- correct
+    # for AMD only because AMD's own per-thread vector (`elements_per_thread[operand_idx]`) already
+    # spans the descriptor's *entire* K extent (`tc.dims[2]`) by itself (16/16 == 1 group needed:
+    # every leftover lane-group is a genuine RDNA3 same-data redundant pair, never a distinct K
+    # slice). Metal's vector covers only 2 of 8 (8/2 == 4 groups needed), so the leftover
+    # `lane // tc_dim` isn't redundant there -- it is the otherwise-unaddressed remainder of K this
+    # thread must contribute, and the fragment read silently missed it (BUG B: reads never touched
+    # 3 of every 4 real K-groups the producer wrote). `% k_groups` makes this the identity (adds a
+    # literal 0) whenever a target's own vector already covers the whole of K, so it changes nothing
+    # for AMD by construction, not by re-checking AMD's specific numbers.
+    k_groups = tc.dims[2] // tc.elements_per_thread[operand_idx]
     logical_k = k_axis.substep * tc.dims[2] + contract.element
+    if k_groups > 1: logical_k = logical_k + (lane // tc_dim % k_groups) * tc.elements_per_thread[operand_idx]
     index = slot_base + (window.base + row * window.stride_bytes + logical_k * item_bytes) // item_bytes
     load = ordered.index(index, dtype=tc.dtype_in).replace(tag=("kernel_tile_fragment_load", role)).load()
-    operand_idx = 0 if role == "A" else 1
     return UOp(Ops.CONTRACT, tc.dtype_in.vec(tc.elements_per_thread[operand_idx]), (load,), contract.arg,
                tag=("kernel_tile_fragment", role))
   return PrecontractLDSStage(allocation, producer, barrier, _fragment("A", subtile_m, wave_m, factors.subtiles_m, contracts[0]),

@@ -15,6 +15,12 @@ __WMMA call) are transcribed VERBATIM below from the rendered source text (grepp
 the MB0 report; re-grep `buf1+` in both files and diff against what's transcribed here before
 trusting these numbers again after a codegen change).
 
+NOTE: the Metal transcription below was re-grepped 2026-07-31 against a fresh render at HEAD
+(0cd5d0614, post c40e87d1a) -- the version of this file present through c40e87d1a's own measurement
+still encoded the PRE-c40e87d1a formulas (alu4 masked with &15, alu5's lidx1 coefficient 2560) and so
+silently reproduced the *old* 1,536/[12800,20465] gap on a stale transcription. Always re-grep `buf1+`
+in the regenerated /tmp/m1d_*_source.c before trusting a run of this script, per the warning below.
+
 Both targets' LDS address formulas depend only on (lidx0, lidx1) -- gidx0/gidx1 do not appear in
 any `buf1`-relative offset in either source (grep confirms no gidx term in alu3/alu4/alu5 on Metal
 or alu4/alu6/alu7 on AMD). So the write/read SET for one threadgroup's private `buf1` copy is fully
@@ -57,48 +63,47 @@ def _grid(local_only: bool):
 
 def metal_addresses(local_only=True):
   L0, L1 = _grid(local_only)
-  # --- source constants, /tmp/m1d_metal_source.c lines 17-22 ---
+  # --- source constants, /tmp/m1d_metal_source.c lines 17-24 (re-grepped post BUG-B fix, MB1) ---
   # int alu0 = (lidx0>>2);
   # int alu1 = (lidx0&3);
   # int alu2 = (alu1<<3);
-  # int alu3 = ((lidx1*320)+(alu0*40)+alu2);        -- WRITE base
-  # int alu4 = ((lidx0&15)*40);                      -- READ base (block 2 and 3)
-  # int alu5 = ((lidx1*2560)+alu4);                  -- READ base (block 1)
+  # int alu3 = ((lidx1*320)+(alu0*40)+alu2);        -- WRITE base (unchanged)
+  # int alu4 = (lidx0>>3);
+  # int alu5 = (alu4<<1);                            -- extra-K term added by MB1's kernel_lds.py fix
+  # int alu6 = ((lidx0&7)*40);                        -- READ base (block 2, role B)
+  # int alu7 = ((lidx1*1280)+alu5+alu6);               -- READ base (block 1, role A)
+  # int alu8 = (alu5+alu6);                            -- READ base (block 2, role B; wave_n const 0)
   alu0 = L0 >> 2
   alu1 = L0 & 3
   alu2 = alu1 << 3
   alu3 = L1 * 320 + alu0 * 40 + alu2
-  alu4 = (L0 & 15) * 40
-  alu5 = L1 * 2560 + alu4
+  alu4x = L0 >> 3
+  alu5x = alu4x << 1
+  alu6 = (L0 & 7) * 40
+  alu5 = L1 * 1280 + alu5x + alu6  # role A read base (was "alu5" in the pre-fix transcription; kept the name)
+  alu4 = alu5x + alu6              # role B read base (was "alu4")
 
-  # --- WRITE addresses: lines 147-156, ten half4 (4-element) stores ---
+  # --- WRITE addresses: lines 148-157, ten half4 (4-element) stores -- unchanged ---
   write_bases = [4, 2560, 2564, 5120, 5124, 7680, 7684, 10240, 10244, 0]
   assert len(write_bases) == 10
   writes = np.concatenate([np.stack([alu3 + b + k for k in range(4)]).ravel() for b in write_bases])
 
   # --- READ addresses ---
-  # block 1 (lines 158-189): 32 single-half reads off alu5
-  read5_offsets = [1, 8, 9, 16, 17, 24, 25, 640, 641, 648, 649, 656, 657, 664, 665,
-                    1280, 1281, 1288, 1289, 1296, 1297, 1304, 1305,
-                    1920, 1921, 1928, 1929, 1936, 1937, 1944, 1945, 0]
-  assert len(read5_offsets) == 32
-  reads_a = np.concatenate([alu5 + o for o in read5_offsets])
+  # block 1 (lines 159-174): 16 half2 (2-element) reads off alu5
+  read5_offsets = [8, 16, 24, 320, 328, 336, 344, 640, 648, 656, 664,
+                    960, 968, 976, 984, 0]
+  assert len(read5_offsets) == 16
+  reads_a = np.concatenate([np.stack([alu5 + o, alu5 + o + 1]).ravel() for o in read5_offsets])
 
-  # block 2 (lines 190-221): 32 single-half reads off alu4, offsets 12800..14745
-  read4_single_offsets = [12800, 12801, 12808, 12809, 12816, 12817, 12824, 12825,
-                           13440, 13441, 13448, 13449, 13456, 13457, 13464, 13465,
-                           14080, 14081, 14088, 14089, 14096, 14097, 14104, 14105,
-                           14720, 14721, 14728, 14729, 14736, 14737, 14744, 14745]
-  assert len(read4_single_offsets) == 32
-  reads_b = np.concatenate([alu4 + o for o in read4_single_offsets])
+  # block 2 (lines 175-206): 32 half2 (2-element) reads off alu4
+  read4_offsets = [10240, 10248, 10256, 10264, 10560, 10568, 10576, 10584,
+                    10880, 10888, 10896, 10904, 11200, 11208, 11216, 11224,
+                    11520, 11528, 11536, 11544, 11840, 11848, 11856, 11864,
+                    12160, 12168, 12176, 12184, 12480, 12488, 12496, 12504]
+  assert len(read4_offsets) == 32
+  reads_b = np.concatenate([np.stack([alu4 + o, alu4 + o + 1]).ravel() for o in read4_offsets])
 
-  # block 3 (lines 222-237): 16 half2 (2-element) reads off alu4, offsets 10240..12184
-  read4_pair_offsets = [10240, 10248, 10256, 10264, 10880, 10888, 10896, 10904,
-                         11520, 11528, 11536, 11544, 12160, 12168, 12176, 12184]
-  assert len(read4_pair_offsets) == 16
-  reads_c = np.concatenate([np.stack([alu4 + o, alu4 + o + 1]).ravel() for o in read4_pair_offsets])
-
-  reads = np.concatenate([reads_a, reads_b, reads_c])
+  reads = np.concatenate([reads_a, reads_b])
   return writes, reads
 
 
