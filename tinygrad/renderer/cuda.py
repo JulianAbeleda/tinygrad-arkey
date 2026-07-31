@@ -42,6 +42,21 @@ class CUDARenderer(CStyleLanguage):
     Ops.SQRT: lambda x,dtype: f"hsqrt({x})" if dtype in (dtypes.half, dtypes.bfloat16) else f"sqrt({x})",
     Ops.RECIPROCAL: lambda x,dtype: f"hrcp({x})" if dtype in (dtypes.half, dtypes.bfloat16) else f"(1/{x})" }
   type_map = {dtypes.bfloat16: "nv_bfloat16", dtypes.fp8e4m3: "__nv_fp8_e4m3", dtypes.fp8e5m2: "__nv_fp8_e5m2"}
+  # CUDA ships native vector types (and make_ constructors) for 2/3/4 lanes of the common
+  # scalars; half is native only as half2. Everything else gets the custom struct emitted
+  # by render_vector_prefix.
+  native_vector_types = {dtypes.char: "char", dtypes.uchar: "uchar", dtypes.short: "short", dtypes.ushort: "ushort",
+                         dtypes.int: "int", dtypes.uint: "uint", dtypes.int64: "long", dtypes.uint64: "ulong",
+                         dtypes.float: "float", dtypes.double: "double", dtypes.half: "half"}
+  native_vector_lanes = {dtypes.half: (2,)}
+  default_native_lanes = (2, 3, 4)
+
+  def render_vector_dtype(self, dtype: DType, lanes: int) -> str:
+    native = self.native_vector_types.get(dtype.scalar())
+    if native is not None and lanes in self.native_vector_lanes.get(dtype.scalar(), self.default_native_lanes):
+      return f"{native}{lanes}"
+    return super().render_vector_dtype(dtype, lanes)
+
   extra_matcher = create_non_native_float_pats(dtypes.fp8s, casting=False) + PatternMatcher([
     (UPat(Ops.CAST, dtypes.fp8s, UPat.var("x", dtypes.fp8s), name='y'), lambda x,y: x.cast(dtypes.float).cast(y.dtype) if x.dtype!=y.dtype else None),
   ])
@@ -51,8 +66,12 @@ class CUDARenderer(CStyleLanguage):
 
   def render_vector_prefix(self, dt:DType) -> str:
     vec, scal = self.render_vector_dtype(dt, dt.count), self.render_dtype(dt)
-    elems, header = ', '.join(_nms[:dt.count]), ', '.join([f"{scal} {x}" for x in _nms[:dt.count]])
-    return f"struct __align__({dt.itemsize}) {vec} {{ {scal} {elems}; }}; __device__ {vec} make_{vec}({header}) {{ {vec} r={{{elems}}}; return r; }}"
+    names = _nms[:dt.count] if dt.count <= len(_nms) else [f"v{i}" for i in range(dt.count)]
+    elems, header = ', '.join(names), ', '.join([f"{scal} {x}" for x in names])
+    # nvcc rejects alignment values above 128, so cap there; wider structs stay correct,
+    # just without their ideal alignment.
+    align = min(dt.itemsize, 128)
+    return f"struct __align__({align}) {vec} {{ {scal} {elems}; }}; __device__ {vec} make_{vec}({header}) {{ {vec} r={{{elems}}}; return r; }}"
 
   def render_kernel(self, function_name, kernel, bufs, uops, prefix=None):
     prefix = ["#define INFINITY (__int_as_float(0x7f800000))", "#define NAN (__int_as_float(0x7fffffff))",
@@ -61,8 +80,9 @@ class CUDARenderer(CStyleLanguage):
     if any(dt.scalar() in dtypes.fp8s for dt in used_dtypes): prefix.append("#include <cuda_fp8.h>")
     if any(dt.scalar() == dtypes.half for dt in used_dtypes): prefix.append("#include <cuda_fp16.h>")
     if any(dt.scalar() == dtypes.bfloat16 for dt in used_dtypes): prefix.append("#include <cuda_bf16.h>")
-    prefix += [self.render_vector_prefix(dt) for dt in used_dtypes if (dt.count in (4,8) and dt.scalar() in {dtypes.half, dtypes.bfloat16})
-      or (dt.count in (2,4,8,16) and dt.scalar() in dtypes.fp8s)]
+    prefix += [self.render_vector_prefix(dt) for dt in used_dtypes if dt.count > 1 and
+      (dt.scalar() not in self.native_vector_types or
+       dt.count not in self.native_vector_lanes.get(dt.scalar(), self.default_native_lanes))]
     dt_map_in = { dtypes.float: "tf32", dtypes.half: "f16", dtypes.bfloat16: "bf16", dtypes.fp8e4m3: "e4m3", dtypes.fp8e5m2: "e5m2" }
     dt_map_out = { dtypes.float: "f32", dtypes.half: "f16" }
     for name, (N, M, K), dtype_in, dtype_out, _, _, upcast_axes, _ in wmma_args(uops):
