@@ -361,7 +361,8 @@ is robust to the unmeasured `BW`, even though the precise crossover point is not
    a fragment-read row extent hardcoded to AMD's `tc.dims[0]`, dropped leftover-lane K groups, a
    lane->row/K correspondence assuming RDNA3's low-bit split, and a loop-carried write-after-read race.
    `max_abs_error` 0.0, coverage 96.67%, bit-identical rounds. First measured campaign: best geometry
-   **2558 GFLOPS sustained / 3610 isolated** against a **1063** control, 87 of 87 candidates correct.
+   **3610 GFLOPS sustained** (stress-tested `f0cb8c58d`: full-output coverage proven, flat within
+   ±0.5% from m=256 to m=8192; the earlier 2558 "sustained" figure was measurement-harness overhead) against a **1063** control, 87 of 87 candidates correct.
    **Not promoted** -- QUALIFY and POLICY remain blocked, so production still runs
    `DIRECT_PACKED_FALLBACK` at 54.2 tok/s.
 
