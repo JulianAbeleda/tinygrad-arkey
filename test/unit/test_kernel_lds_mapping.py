@@ -1,9 +1,12 @@
 import pytest
 
-from tinygrad.codegen.opt.kernel_lds import (binary_axis_count, derive_precontract_factors, derive_precontract_shape_factors,
+from tinygrad.codegen.opt.kernel_lds import (binary_axis_count, cooperative_store_octet_rows, cooperative_store_row,
+                                             cooperative_store_row_rotation, derive_precontract_factors, derive_precontract_shape_factors,
                                              fold_binary_axes, validate_precontract_carriers, validate_wmma_descriptor)
 from tinygrad.codegen.opt.tc import amd_cdna_161616, amd_rdna3
 from tinygrad import dtypes
+from tinygrad.helpers import Target
+from tinygrad.renderer.cstyle import HIPRenderer, MetalRenderer
 from extra.llm_research.kernel_vocabulary import KernelLDSWindow, KernelTileGeometry
 
 
@@ -116,6 +119,62 @@ def test_non_permutation_remap_fails_closed():
   broken_swizzle = ((broken_local, tc.swizzle[0][1], tc.swizzle[0][2]), tc.swizzle[1])
   drift = _DescriptorDrift(tc, "swizzle", broken_swizzle)
   with pytest.raises(ValueError, match="permutation"): validate_wmma_descriptor(drift)
+
+
+def test_renderers_declare_lds_bank_facts_amd_known_metal_unknown():
+  """PG1's vocabulary: bank count/cycle-lanes are TG2 capability facts, sourced from each renderer's
+  own reporting, never restated in kernel_lds.py. AMD's ISA manuals document both numbers for every
+  generation this renderer targets; Apple documents neither for its threadgroup memory, so Metal must
+  read back the same explicit-unknown ``None`` that ``wave_size`` uses for an unreported width -- not
+  a silent 32/8 borrowed from AMD."""
+  amd = HIPRenderer(Target.parse("AMD:HIP:gfx1100"))
+  assert (amd.lds_bank_dwords, amd.lds_bank_cycle_lanes) == (32, 8)
+  metal = MetalRenderer(Target.parse("METAL:METAL:Apple9"))
+  assert (metal.lds_bank_dwords, metal.lds_bank_cycle_lanes) == (None, None)
+
+
+def test_cooperative_store_rotation_fires_for_amds_shipped_geometry():
+  """The real AMD production geometry (stride 80 B, vector 16 B -> vectors_per_row=4, rows a multiple
+  of 8) must still take the rotation once AMD's declared facts (32 bank dwords, 8 cycle lanes) are
+  threaded through: this is the 'AMD must still take the rotation' regression this change must not
+  cause. Same geometry with unknown facts (Metal, or any unreported target) always skips."""
+  amd = HIPRenderer(Target.parse("AMD:HIP:gfx1100"))
+  assert cooperative_store_row_rotation(vectors_per_row=4, rows=128, stride_bytes=80, bank_dwords=amd.lds_bank_dwords,
+                                        bank_cycle_lanes=amd.lds_bank_cycle_lanes) is True
+  metal = MetalRenderer(Target.parse("METAL:METAL:Apple9"))
+  assert cooperative_store_row_rotation(vectors_per_row=4, rows=128, stride_bytes=80, bank_dwords=metal.lds_bank_dwords,
+                                        bank_cycle_lanes=metal.lds_bank_cycle_lanes) is False
+
+
+def test_cooperative_store_rotation_unknown_facts_never_fall_through_to_amd_arithmetic():
+  """Before this change, an unreported target still ran AMD's literal 32/8 bank arithmetic, so a
+  probe that happened to reuse AMD's tuned geometry (vectors_per_row==4, rows%8==0) took the
+  rotation by numeric accident -- nothing target-specific was ever consulted. Either fact missing
+  must return False outright, never fall through to compute ``quads`` from a default."""
+  assert cooperative_store_row_rotation(vectors_per_row=4, rows=128, stride_bytes=80, bank_dwords=None, bank_cycle_lanes=8) is False
+  assert cooperative_store_row_rotation(vectors_per_row=4, rows=128, stride_bytes=80, bank_dwords=32, bank_cycle_lanes=None) is False
+  assert cooperative_store_row_rotation(vectors_per_row=4, rows=128, stride_bytes=80, bank_dwords=None, bank_cycle_lanes=None) is False
+
+
+def test_cooperative_store_row_defaults_to_unknown_and_is_identity_when_skipped():
+  """``cooperative_store_row``'s bank facts default to ``None`` so an unmigrated caller keeps today's
+  safe behaviour (identity), and applying known AMD facts still produces the documented permutation
+  of an aligned eight-row block (0,4,1,5,2,6,3,7), not merely 'some' rotation."""
+  assert cooperative_store_row(5, vectors_per_row=4, rows=128, stride_bytes=80) == 5
+  amd = HIPRenderer(Target.parse("AMD:HIP:gfx1100"))
+  rotated = [cooperative_store_row(r, vectors_per_row=4, rows=128, stride_bytes=80,
+                                   bank_dwords=amd.lds_bank_dwords, bank_cycle_lanes=amd.lds_bank_cycle_lanes) for r in range(8)]
+  assert rotated == [0, 4, 1, 5, 2, 6, 3, 7]
+
+
+def test_cooperative_store_octet_rows_is_parameterized_and_unreferenced():
+  """cooperative_store_octet_rows is dead code (PG1a's audit: nothing in this tree calls it), but it
+  still hardcoded AMD's 8-lanes-per-cycle fact in its own arithmetic and docstring. Parameterized on
+  the same declared fact as the row rotation: known AMD facts reproduce the original 8//vectors_per_row
+  answer, and an unknown fact still raises rather than silently defaulting to AMD's 8."""
+  assert cooperative_store_octet_rows(4, bank_cycle_lanes=8) == 2
+  with pytest.raises(ValueError, match="whole rows"): cooperative_store_octet_rows(4, bank_cycle_lanes=None)
+  with pytest.raises(ValueError, match="whole rows"): cooperative_store_octet_rows(3, bank_cycle_lanes=8)
 
 
 def test_precontract_factor_derivation_rejects_nondivisible_and_bad_windows():

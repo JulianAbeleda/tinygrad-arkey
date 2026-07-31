@@ -457,25 +457,51 @@ def _window(geometry:KernelTileGeometry, role:str) -> KernelLDSWindow:
   return next(w for w in geometry.lds_windows if w.role == role)
 
 
-def cooperative_store_octet_rows(vectors_per_row:int) -> int:
+def cooperative_store_octet_rows(vectors_per_row:int, *, bank_cycle_lanes:int|None) -> int:
   """Rows spanned by one LDS bank-cycle group of the cooperative store.
 
-  RDNA3 services a wave32 b128 LDS access eight lanes at a time (8 lanes x 4 dwords = the
-  32 x 4 B banks).  The cooperative store elects consecutive lanes onto consecutive
-  ``(row, vector)`` slots, so one such octet covers ``8 // vectors_per_row`` consecutive rows.
+  ``bank_cycle_lanes`` is the target's declared lanes-serviced-per-b128-bank-cycle fact (e.g.
+  ``Renderer.lds_bank_cycle_lanes``; AMD RDNA3: 8, from a wave32 b128 LDS access), not a restated
+  constant. The cooperative store elects consecutive lanes onto consecutive ``(row, vector)``
+  slots, so one such cycle group covers ``bank_cycle_lanes // vectors_per_row`` consecutive rows.
+
+  Unreferenced anywhere in this tree today -- nothing calls this function, including the rest of
+  this module (PG1a's audit already flagged the two ``cooperative_store_row*`` functions below as
+  the actually-exercised path). Parameterized anyway, on the same declared fact as
+  ``cooperative_store_row_rotation``, rather than left frozen to AMD's 8: its docstring's original
+  "RDNA3 services..." claim was exactly the per-target-snapshot defect this campaign removes,
+  whether or not the function currently has a caller.
   """
-  if vectors_per_row <= 0 or 8 % vectors_per_row: raise ValueError("cooperative octet must cover whole rows")
-  return 8 // vectors_per_row
+  if bank_cycle_lanes is None or vectors_per_row <= 0 or bank_cycle_lanes % vectors_per_row:
+    raise ValueError("cooperative octet must cover whole rows")
+  return bank_cycle_lanes // vectors_per_row
 
 
-def cooperative_store_row_rotation(*, vectors_per_row:int, rows:int, stride_bytes:int, vector_bytes:int=16) -> bool:
+def cooperative_store_row_rotation(*, vectors_per_row:int, rows:int, stride_bytes:int, vector_bytes:int=16,
+                                   bank_dwords:int|None, bank_cycle_lanes:int|None) -> bool:
   """Whether re-electing lane-quads onto rotated rows removes the store bank conflict.
+
+  ``bank_dwords`` and ``bank_cycle_lanes`` are declared target facts (``Renderer.lds_bank_dwords`` /
+  ``Renderer.lds_bank_cycle_lanes``), never restated constants here. They are real hardware
+  structure, not something derivable from ``vectors_per_row``/``rows``/``stride_bytes`` alone, so a
+  target that does not report them (Apple does not document its threadgroup memory banking the way
+  AMD's ISA manuals document LDS) always returns ``False``. That is always the *safe* choice, never
+  a correctness one: the rotation this function gates is an exact one-writer cover of the tile
+  whichever way it comes out (see :func:`cooperative_store_row`'s docstring), so an unknown target
+  simply forgoes the optimization rather than guessing at undocumented bank structure.
 
   Bank arithmetic.  A b128 slot ``(row, vector)`` starts at dword ``row*S + vector*V`` with
   ``S = stride_bytes//4`` and ``V = vector_bytes//4``; it occupies ``V`` consecutive dwords, so
-  the only thing that matters for a b128 access is which of the ``32//V`` aligned dword *quads*
-  it lands in:  ``Q(row, vector) = (row*(stride_bytes//vector_bytes) + vector) mod (32//V)``.
-  For the shipped geometry (stride 80, vector 16) that is ``Q = (5*row + vector) mod 8``.
+  the only thing that matters for a b128 access is which of the ``bank_dwords//V`` aligned dword
+  *quads* it lands in:  ``Q(row, vector) = (row*(stride_bytes//vector_bytes) + vector) mod (bank_dwords//V)``.
+  For AMD's shipped geometry (32 banks of 4 B, stride 80, vector 16) that is ``Q = (5*row + vector) mod 8``.
+
+  The rotation below (the octet-of-eight, rows-four-apart pairing) is proven only for an eight-lane
+  bank cycle -- i.e. only when ``bank_dwords//V`` and the independently declared ``bank_cycle_lanes``
+  both land on 8, the same scope-limiting shape as this file's ``_PRECONTRACT_WARP_THREADS`` guard.
+  A target whose declared facts don't land there (a different cycle width, or one whose two facts
+  disagree at this vector width) also skips: this is an optimization proven for one geometry, not a
+  bank-count-agnostic algorithm.
 
   An octet is conflict-free iff its eight slots hit eight distinct ``Q``.  With
   ``vectors_per_row == 4`` an octet is two rows x four vectors:
@@ -488,9 +514,10 @@ def cooperative_store_row_rotation(*, vectors_per_row:int, rows:int, stride_byte
   adjacent while leaving every lane-quad on one contiguous ``vector_bytes*vectors_per_row``
   source row, so the wave still issues exactly the same global-memory segments.
   """
-  if vector_bytes <= 0 or 32 % (vector_bytes//4) or stride_bytes % vector_bytes: return False
-  quads = 32 // (vector_bytes//4)
-  if quads != 8 or vectors_per_row != 4 or rows % 8: return False
+  if bank_dwords is None or bank_cycle_lanes is None: return False
+  if vector_bytes <= 0 or bank_dwords <= 0 or bank_dwords % (vector_bytes//4) or stride_bytes % vector_bytes: return False
+  quads = bank_dwords // (vector_bytes//4)
+  if quads != 8 or bank_cycle_lanes != 8 or vectors_per_row != 4 or rows % 8: return False
   m = (stride_bytes//vector_bytes) % quads
   def conflicted(delta:int) -> bool:
     q = [(m*row + vector) % quads for row in (0, delta) for vector in range(vectors_per_row)]
@@ -498,7 +525,8 @@ def cooperative_store_row_rotation(*, vectors_per_row:int, rows:int, stride_byte
   return conflicted(1) and not conflicted(4)
 
 
-def cooperative_store_row(raw_row, *, vectors_per_row:int, rows:int, stride_bytes:int, vector_bytes:int=16):
+def cooperative_store_row(raw_row, *, vectors_per_row:int, rows:int, stride_bytes:int, vector_bytes:int=16,
+                          bank_dwords:int|None=None, bank_cycle_lanes:int|None=None):
   """Apply the lane->row re-election of :func:`cooperative_store_row_rotation`.
 
   ``raw_row = linear_vector // vectors_per_row`` is the row the naive election would store.
@@ -506,9 +534,15 @@ def cooperative_store_row(raw_row, *, vectors_per_row:int, rows:int, stride_byte
   ``0..7`` onto rows ``0,4,1,5,2,6,3,7``, so every octet (quads ``2j, 2j+1``) holds rows four
   apart.  It is an involution-free permutation of each aligned eight-row block, hence still an
   exact one-writer cover of the tile, and it is loop-invariant so it hoists out of the K loop.
+
+  ``bank_dwords``/``bank_cycle_lanes`` default to ``None`` (unknown) so a caller that has not yet
+  threaded a target's declared bank facts through gets today's always-safe behaviour: the rotation
+  is skipped, ``raw_row`` returned unchanged -- still an exact one-writer cover, just not necessarily
+  bank-conflict-optimal.
   """
-  if not cooperative_store_row_rotation(vectors_per_row=vectors_per_row, rows=rows,
-                                        stride_bytes=stride_bytes, vector_bytes=vector_bytes): return raw_row
+  if not cooperative_store_row_rotation(vectors_per_row=vectors_per_row, rows=rows, stride_bytes=stride_bytes,
+                                        vector_bytes=vector_bytes, bank_dwords=bank_dwords,
+                                        bank_cycle_lanes=bank_cycle_lanes): return raw_row
   return (raw_row//8)*8 + (raw_row % 2)*4 + (raw_row % 8)//2
 
 
@@ -564,8 +598,16 @@ def instantiate_precontract_fragments(geometry:KernelTileGeometry, *, tc, alloca
 def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:UOp,
                                 operands:tuple[PrecontractOperand, ...], threads:PrecontractThreadAxes,
                                 k_axis:PrecontractKAxis, subtile_m:UOp, subtile_n:UOp,
-                                contracts:tuple[PrecontractContractSpec, ...], pipeline_plan=None) -> PrecontractLDSStage:
-  """Build an unwired vector cooperative stage while full operand index templates still exist."""
+                                contracts:tuple[PrecontractContractSpec, ...], pipeline_plan=None,
+                                lds_bank_dwords:int|None=None, lds_bank_cycle_lanes:int|None=None) -> PrecontractLDSStage:
+  """Build an unwired vector cooperative stage while full operand index templates still exist.
+
+  ``lds_bank_dwords``/``lds_bank_cycle_lanes`` are the calling renderer's declared bank facts
+  (``Renderer.lds_bank_dwords``/``Renderer.lds_bank_cycle_lanes``), threaded straight through to
+  :func:`cooperative_store_row`. Defaulting to ``None`` here matches that function's own default:
+  a caller that does not pass a target's facts gets the same always-safe, rotation-skipped result
+  as an unknown target, never AMD's arithmetic applied by accident.
+  """
   factors = derive_precontract_factors(geometry, tc)
   validate_precontract_operand_templates(operands, dtype_in=tc.dtype_in, context="precontract")
   for operand in operands:
@@ -600,7 +642,8 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
       linear_vector = thread + row_iteration*geometry.threads
       row, vector = linear_vector//factors.vectors_per_row, linear_vector%factors.vectors_per_row
       row = cooperative_store_row(row, vectors_per_row=factors.vectors_per_row, rows=rows,
-                                  stride_bytes=window.stride_bytes, vector_bytes=vector_bytes)
+                                  stride_bytes=window.stride_bytes, vector_bytes=vector_bytes,
+                                  bank_dwords=lds_bank_dwords, bank_cycle_lanes=lds_bank_cycle_lanes)
       logical_k = vector * vector_elements
       logical_row = operand.row_tile_base + row
       value = operand.transform.dequant_tile(operand.source, logical_row, k_axis.tile_base + logical_k, vector_elements).value \

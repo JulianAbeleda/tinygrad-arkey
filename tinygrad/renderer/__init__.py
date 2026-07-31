@@ -76,6 +76,17 @@ class Renderer:
   # Indirect-command-buffer byte-offset limit. None means "no such constraint on this backend" -- never a
   # sentinel number that could be mistaken for a real bound (Metal's is METAL_ICB_OFFSET_MAX, set below).
   max_indirect_buffer_offset: int|None = None
+  # Threadgroup/LDS memory bank structure (docs/task_workflow/input/precontract-target-generalization-
+  # scope-20260730.md PG1). Same discipline as wave_size above: None means unreported, never a silent
+  # AMD-shaped default. `lds_bank_dwords` is the interleaved bank count (each bank one dword wide; AMD
+  # RDNA3: 32, from AMD's published LDS architecture -- see HIPRenderer). `lds_bank_cycle_lanes` is how
+  # many lanes one LDS access cycle services for a full b128 vector (AMD RDNA3: 8, also ISA-documented).
+  # These affect only whether kernel_lds.py's cooperative-store row rotation is *beneficial*, never
+  # whether it is *correct* -- the rotation is an exact one-writer cover of the tile regardless of bank
+  # structure -- so an unknown target simply forgoes the optimization rather than guessing at Apple's
+  # undocumented threadgroup memory banking.
+  lds_bank_dwords: int|None = None
+  lds_bank_cycle_lanes: int|None = None
   pre_matcher: PatternMatcher|None = None
   extra_matcher: PatternMatcher|None = None
   code_for_op: dict[Ops, Callable] = {}

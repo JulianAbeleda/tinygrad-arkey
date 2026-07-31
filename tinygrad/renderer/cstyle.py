@@ -493,6 +493,13 @@ class MetalRenderer(CStyleLanguage):
     # defaulting scope section 3.3 forbids -- that rule bars inventing a value for an unknown target, and this
     # one is known. A device-level threadExecutionWidth query would be stricter still; see TG2 follow-up.
     self.wave_size = 32
+    # lds_bank_dwords / lds_bank_cycle_lanes (Renderer, PG1) are left at their None default here, on
+    # purpose: unlike wave_size above, Apple does not publish threadgroup memory's bank count or per-cycle
+    # lane service width the way AMD's ISA manuals do for LDS, and this renderer has no verified reporting
+    # path (a compiled/run probe, TG1-style) for either. kernel_lds.py's cooperative-store row rotation is
+    # always correct to skip -- it only ever affects whether the store is bank-conflict-free, never whether
+    # it is a valid one-writer cover of the tile -- so leaving these unknown here is the honest choice:
+    # forgo the optimization rather than guess at undocumented hardware structure.
 
   kernel_typedef = "kernel void"
   buffer_prefix = "device "
@@ -574,6 +581,12 @@ class HIPRenderer(CStyleLanguage):
     # Same conditional-capability shape as tensor_cores/MetalRenderer.tensor_cores above: CDNA (gfx942/gfx950) is
     # wave64, RDNA (gfx1100 and friends) is wave32 -- both are known, reported facts, not a silent default.
     self.wave_size = 64 if self.is_cdna(target.arch) else 32
+    # LDS is 32 banks of one dword each on every generation this renderer targets (GCN through RDNA3/CDNA),
+    # documented in AMD's ISA reference manuals; a wave32 b128 (16 B) LDS access is serviced eight lanes per
+    # cycle (32 banks x 4 B = 128 B/cycle, / 16 B per lane = 8 lanes), also ISA-documented. Real hardware
+    # structure this renderer reports, not a per-target snapshot living in kernel_lds.py (PG1).
+    self.lds_bank_dwords = 32
+    self.lds_bank_cycle_lanes = 8
     if not self.is_cdna4(target.arch): self.extra_matcher += pm_manual_bf16_cast + extra_pm
     if target.arch.split(":")[0] == "gfx1100":
       # Exact native attention loop address expressions retain weakint until HIP source rendering.
