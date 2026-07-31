@@ -127,6 +127,34 @@ re-implement everything it would have done — tile geometry, LDS windows, lane 
 had to be found by a separate Metal failure a year later. A bypass is not a shortcut; it is a fork of
 the compiler that only one target can use.
 
+### Phase 4a — When lowering is wrong, read a known-good kernel. Do not hypothesise.
+
+**This was the highest-leverage move of the Metal campaign, and it was made a day late.**
+
+A broken kernel was chased through five hypotheses — lane permutation, C-fragment width overcount,
+multi-wave decomposition, device-blind admission, store addressing — each plausible, each refuted, each
+costing hours. Meanwhile a correct kernel for the same operation on the same hardware
+(`llama.cpp`'s `kernel_mul_mm`) sat unread on the same disk.
+
+One structural comparison converted five dead hypotheses into **two located defects**:
+
+- **a hardcoded dimension** — our fragment-read row extent was the literal `16`, which is AMD's
+  `tc.dims[0]`. The target's is `8`. Deriving it cut `max_abs_error` from 29,072 to 91.6 and moved write
+  coverage from 18.7% to 47%.
+- **a missing barrier** — the reference emits two `threadgroup_barrier`s per K-loop iteration; we emitted
+  one. The one we lacked sits at *loop start, before the producer stores*, ordering the previous
+  iteration's reads against this iteration's writes.
+
+**Use the oracle for structure, never for content.** What transfers is *what a correct kernel emits* —
+barrier count and placement, staging shape, whether buffers are single or double. What does **not**
+transfer is geometry: the reference's tile shape is an input to your search space's sanity check, not an
+answer to copy. This codebase has the measured proof — transplanting a tuned schedule between two of its
+own configurations ran **31% slower** (§7.2).
+
+Practically: render your kernel, read theirs, and put them side by side on barriers, memory layout, tile
+shape, where the dequant happens, and edge-tile guards. State each as same / different / absent. The
+differences that matter will be the ones that map onto your symptoms.
+
 ---
 
 ## Phase 5 — Prove correctness on three axes before measuring speed
@@ -166,7 +194,81 @@ Rules that were learned the hard way:
 
 ---
 
-## 7. Anti-patterns, each one paid for
+## 7. From a correct kernel to production: the seven-step lifecycle
+
+Phases 0-6 get you a *correct, fast kernel*. That is not a shipped route. AMD's routes reached
+production through seven gated steps, and Metal decode completed all seven:
+
+```
+SEARCH    BoltBeam campaign -> candidates with canonical_identity
+QUALIFY   on-device canary -> compile / execution / correctness / timing phases,
+          max_abs_error against an independent reference, health probe, N rounds
+PROMOTE   the qualified artifact becomes a durable, identified production record
+POLICY    memory-adaptive collector: live device scan, candidate enumeration,
+          guarded runs, exact cache -> a SELECTED policy with measured memory_facts
+ADMIT     strategy validated, memory evidence bound, route coverage matched
+LOWER     the strategy's execution hook
+EXECUTE
+```
+
+`model.py:210-247` enforces POLICY/ADMIT strictly: the policy must match the exact opened model
+inventory, workload, and immutable load-entry device scan; `decision` must be `SELECTED`; `validation`
+must be `exact_cache` or `measured`; and **any strategy other than the slow fallback requires complete
+measured `memory_facts` bound to evidence.** An environment variable satisfies none of this. A fast
+number obtained by bypassing these steps is a research datapoint, not a route.
+
+**The numbering hides the real dependency order, and this is the part worth internalising.**
+
+`LOWER` is not the sixth step — **it is the floor everything else stands on.** SEARCH compiles and runs
+candidates, so it cannot measure anything over a broken lowering. QUALIFY needs a correct kernel to
+qualify. PROMOTE needs a qualified result. POLICY needs a promoted record. The true order is:
+
+```
+LOWER -> SEARCH -> QUALIFY -> PROMOTE -> POLICY -> ADMIT -> EXECUTE
+```
+
+The Metal campaign learned this expensively: a full BoltBeam campaign was run against a lowering that
+crashed on every tensor-core candidate. It returned eleven measured vector-ALU candidates and five
+blocked ones — a complete, well-formed, correctly-executed search over a space that could not contain
+the answer. **Get LOWER right first, then search.**
+
+Each downstream step also carries its own target-specific gate, and they are cheap to enumerate in
+advance: a seed candidate profile for the canary, a policy-collector entry, and the identity-minting
+path. Enumerate them at bring-up time rather than discovering them one at a time.
+
+---
+
+## 7a. Keeping two targets correct without branching on the target
+
+When a fix is right for one target and changes another's output, the answer is neither "branch on
+backend" nor "ship it and hope." **Declare the hardware fact the difference rests on, and derive
+behaviour from the declaration.**
+
+Precedents in this codebase: declared capability facts (shuffle availability, wave size, indirect-buffer
+offset limits), and declared LDS bank facts where AMD declares real numbers from its ISA manuals and
+Apple declares `None` because it publishes no equivalent — so the target that declares nothing forgoes
+the optimization rather than guessing.
+
+**Get the polarity right; it is the whole design.** Ask whether the behaviour in question is an
+*optimization* or a *correctness requirement*:
+
+- **optimization** (e.g. a bank-conflict rotation): default off. A target that declares the facts may
+  enable it. Unknown target -> skip it, lose a little speed.
+- **correctness** (e.g. a barrier ordering cross-iteration memory access): default **on**. Only a target
+  that explicitly declares a guarantee, **citing the hardware property it rests on**, may skip it.
+  Unknown target -> emit it, stay correct.
+
+Both are fail-safe; the safe direction is simply opposite. Getting this backwards produces a fast wrong
+answer on every target you have not characterised.
+
+Two further properties worth insisting on. The declaration must be **one line to flip**, so that when
+hardware becomes available someone tests the assertion and reverses it without restructuring. And it
+must **cite what it rests on** — the value of this pattern is that it converts an accidental omission
+into an explicit, reviewable, falsifiable claim.
+
+---
+
+## 8. Anti-patterns, each one paid for
 
 1. **Hand-authoring a lowering bypass** — nine target-specific couplings, discovered one crash at a time.
 2. **Porting another target's geometry.** The recipe is not the cause of the speed. Applying 8B's
@@ -183,7 +285,7 @@ Rules that were learned the hard way:
 
 ---
 
-## 8. Worked example: NVIDIA from scratch
+## 9. Worked example: NVIDIA from scratch
 
 Nothing below is measured — this repo has no NVIDIA data. It is the procedure applied, to show where
 the branch points are.
@@ -214,7 +316,7 @@ whether that code is fork-modified or upstream tinygrad; if upstream, it is wort
 
 ---
 
-## 9. The shortest version
+## 10. The shortest version
 
 1. Measure `R` and `BW`. Compute `M*`. Never quote a spec sheet.
 2. Measure the floor in commensurable units, and record which route actually ran.
@@ -223,5 +325,12 @@ whether that code is fork-modified or upstream tinygrad; if upstream, it is wort
 5. If the overlay fits, take it.
 6. If not, make the fused path *lower* — recognizer, sibling rule, fail closed, regression test. Never
    hand-author a bypass.
-7. Prove error, coverage, and determinism before measuring speed.
-8. Hand geometry to BubbleBeam / FutureSight / BoltBeam with a control row.
+7. **If lowering is wrong, read a known-good kernel before forming a sixth hypothesis.** Take structure
+   from it — barriers, staging, buffering — never geometry.
+8. Where a fix is right for one target and moves another, **declare the hardware fact and derive from
+   it.** Correctness defaults on; optimizations default off. Cite what the declaration rests on, and make
+   it one line to flip.
+9. Prove error, coverage, and determinism before measuring speed.
+10. Hand geometry to BubbleBeam / FutureSight / BoltBeam with a control row.
+11. **LOWER is the floor, not step six.** Search cannot measure over a broken lowering — get it correct,
+    then run the seven-step production lifecycle (§7).
