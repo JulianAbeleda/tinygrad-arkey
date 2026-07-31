@@ -223,7 +223,9 @@ def _plan(candidate: Mapping[str, Any]) -> tuple[dict[str, Any], list[Any]]:
   for transform in transforms:
     if not isinstance(transform, Mapping) or not isinstance(transform.get("op"), str):
       raise ProtocolError("unsupported_plan", "each transform must name a compiler OptOps operation")
-    try: opts.append(Opt(OptOps[transform["op"]], transform.get("axis"), transform.get("arg")))
+    arg = transform.get("arg")
+    if isinstance(arg, list): arg = tuple(arg)  # JSON has no tuple; the wire schema encodes one (e.g. TC's tc_select/tc_opt/use_tensor_cores) as a list.
+    try: opts.append(Opt(OptOps[transform["op"]], transform.get("axis"), arg))
     except KeyError as exc: raise ProtocolError("unsupported_plan", "unknown compiler OptOps transform",
                                                 details={"op": transform["op"]}) from exc
   return dict(schedule), opts
