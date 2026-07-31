@@ -532,6 +532,7 @@ class Scheduler:
                 from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1FragmentStage, KernelStage1ProducerStage,
                   Stage1StorageAdapter, build_stage1_uop_graph_with_storage, validate_stage1_uop_graph,
                   storage_policy_from_stage1)
+                from tinygrad.codegen.opt.kernel_lds import binary_axis_count, fold_binary_axes
                 template=PrecontractPipelineTemplate(candidate_geometry,tc,allocation,operands,thread_axes,
                   subtile_m,subtile_n,tuple(contracts),candidate_pipeline)
                 factors=template.factors
@@ -552,26 +553,33 @@ class Scheduler:
                       (stage.fragments[2*substep],stage.fragments[2*substep+1],chain),wmma_arg,tag=("pipeline_k_substep",substep))
                   return chain
                 c_axes=tuple(range_by_id[a] for a,sz in tc_upcast_axes[2] if sz == 2)
-                if len(c_axes) != 3: raise KernelOptError("buffer2 accumulator contract does not have three binary axes")
-                c_elem=(c_axes[0]*2+c_axes[1])*2+c_axes[2]
-                # NOTE: 8 here is tc.elements_per_thread[2] (_RDNA3_ELEMENTS[2]), the fixed number of
-                # accumulator elements a lane owns per WMMA subtile on RDNA3 -- a hardware constant, not
-                # tied to sm*sn. The total accumulator element count is subtiles_m*subtiles_n*8 and need
-                # not equal 64: previously this was compared against a hardcoded 64, which silently forced
-                # sm*sn==8. Compare against the actual derived total instead so any sm*sn is admissible.
-                accumulator_total = factors.subtiles_m*factors.subtiles_n*8
-                accumulator_owners=[(sm*factors.subtiles_n+sn)*8+elem for sm in range(factors.subtiles_m)
-                  for sn in range(factors.subtiles_n) for elem in range(8)]
+                # NOTE: the binary-axis count and accumulator-elements-per-subtile-pair are both
+                # tc.elements_per_thread[2] (log2 of it, for the axis count), the descriptor's own
+                # per-lane accumulator width -- not a per-target constant. RDNA3's (16,16,8) gives
+                # log2=3 (three binary axes, 8 elements); Metal's (2,2,2) gives log2=1 (one binary
+                # axis, 2 elements). Derived exactly as PG0/PG1a derived the sibling A/B-operand
+                # binary-axis folds, never branched on backend. The total accumulator element count
+                # is subtiles_m*subtiles_n*tc.elements_per_thread[2] and need not equal 64: an
+                # earlier version compared against a hardcoded 64, which silently forced sm*sn==8 on
+                # RDNA3. Compare against the actual derived total instead so any sm*sn is admissible.
+                accumulator_lane_width = tc.elements_per_thread[2]
+                if len(c_axes) != binary_axis_count(tc, 2):
+                  raise KernelOptError(f"buffer2 accumulator contract does not have {binary_axis_count(tc, 2)} binary axes")
+                c_elem = fold_binary_axes(c_axes)
+                accumulator_total = factors.subtiles_m*factors.subtiles_n*accumulator_lane_width
+                accumulator_owners=[(sm*factors.subtiles_n+sn)*accumulator_lane_width+elem for sm in range(factors.subtiles_m)
+                  for sn in range(factors.subtiles_n) for elem in range(accumulator_lane_width)]
                 if len(accumulator_owners) != accumulator_total or set(accumulator_owners) != set(range(accumulator_total)):
-                  raise KernelOptError("buffer2 accumulator ownership must be an exact unique cover of [0, subtiles_m*subtiles_n*8)")
+                  raise KernelOptError("buffer2 accumulator ownership must be an exact unique cover of "
+                                       "[0, subtiles_m*subtiles_n*elements_per_thread[2])")
                 class _StageCallbacks:
                   producer = staticmethod(_produce)
                   fragments = staticmethod(_fragments)
                 storage_adapter = Stage1StorageAdapter(_StageCallbacks(), storage_policy_from_stage1(candidate_pipeline))
                 pipeline_plan = candidate_pipeline
                 graph=build_stage1_uop_graph_with_storage(storage_adapter, pipeline_plan, outer_k.vmax+1, _wmma, subtile_count=1,
-                  accumulator_elements=factors.subtiles_m*factors.subtiles_n*8,
-                  accumulator_offset=(subtile_m*factors.subtiles_n+subtile_n)*8,
+                  accumulator_elements=accumulator_total,
+                  accumulator_offset=(subtile_m*factors.subtiles_n+subtile_n)*accumulator_lane_width,
                   accumulator_contract=(c_elem,tc_upcast_axes[2]),body_range_id=next(self.opt_range),accumulator_id=next(self.opt_range),
                   accumulator_dtype=tc.dtype_out)
                 if errors := validate_stage1_uop_graph(graph):
