@@ -1111,7 +1111,7 @@ class Transformer:
       _est_fp16 = _runtime_inventory["overlay_bytes"]
       _admission_inputs = AdmissionInputs.from_model_metadata(_requested_max_context, _admit_kv,
         free_vram=_device_facts.free_vram_bytes, q4_bytes=_q4_bytes, est_fp16=_est_fp16,
-        prefill_ubatch=_prefill_ubatch, v2_on=_automatic_overlay_policy is not None or _overlay_request is not False,
+        prefill_ubatch=_prefill_ubatch, v2_on=_device_facts.capabilities.supports_fp16 is True,
         model_label=f"{_admit_arch} selected GGUF", stream=str(stream), kv_quant_supported=True,
         live_split_s=FLASH_DECODE_CANDIDATE.split_size)
       # The promotion lookup is a caller concern; its result is passed in as a preference, never as a
@@ -1149,6 +1149,11 @@ class Transformer:
       _v2_on = prefill_policy_strategy(_runtime_policy) in ("FULL_RESIDENT_OVERLAY", "BOUNDED_PACKED_TILES", "DIRECT_PACKED_FALLBACK")
       max_context, _kv_quant = _plan.max_context, _plan.kv_quant
       _admit = dict(_plan.report)
+      # S4 census (R3): the fp16 overlay is expressible on this target but no promoted candidate exists for
+      # (backend, arch, wave_size) -- the load continues on packed, loudly labeled in the admission report and
+      # the e2e bench row, never a silent drop.
+      if _device_facts.capabilities.supports_fp16 is True and _automatic_overlay_policy is None and not _overlay_request:
+        _admit["prefill_overlay_promotion"] = "no-promoted-candidate"
       # A completed machine-search record may carry a fully attributed allocation ledger. Apply it only after context
       # and KV representation are resolved. Ordinary direct-packed loading needs no caller-injected hardware facts.
       if all(_route_memory.get(key) is not None for key in _EXACT_ROUTE_MEMORY_KEYS):
@@ -1203,7 +1208,7 @@ class Transformer:
       _est_fp16 = estimate_prefill_overlay_bytes((k, t.numel()) for k, t in state_dict.items())
       _admission_inputs = AdmissionInputs.from_model_metadata(_requested_max_context, kv,
         free_vram=_device_facts.free_vram_bytes, q4_bytes=_q4_bytes, est_fp16=_est_fp16,
-        prefill_ubatch=_prefill_ubatch, v2_on=_overlay_request is not False,
+        prefill_ubatch=_prefill_ubatch, v2_on=_device_facts.capabilities.supports_fp16 is True,
         stream=str(stream), live_split_s=FLASH_DECODE_CANDIDATE.split_size)
       _plan, _memory_plan, _effective_strategy = plan_selected_model_memory(_admission_inputs,
         _device_facts, direct_packed_supported=True)

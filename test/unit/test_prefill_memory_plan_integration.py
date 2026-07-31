@@ -73,6 +73,31 @@ def test_explicit_safe_overlay_is_selected_and_serialized():
   assert payload["device"]["scanned_budget"]["admitted_bytes"] == plan.admitted_budget_bytes
 
 
+def test_fp16_capability_with_promotion_policy_selects_overlay_when_feasible():
+  # AMD-shaped: fp16 expressible (v2_on) + promoted-candidate policy -> overlay when feasible.
+  _, plan, effective = plan_selected_model_memory(_inputs(), _facts(), direct_packed_supported=True,
+                                                  policy={"strategy": "FULL_RESIDENT_OVERLAY"})
+  assert effective is Strategy.FULL_RESIDENT_OVERLAY
+  assert plan.decision is Strategy.FULL_RESIDENT_OVERLAY
+
+
+def test_without_fp16_dtype_capability_the_overlay_candidate_is_unsupported():
+  _, plan, effective = plan_selected_model_memory(_inputs(v2_on=False), _facts(), direct_packed_supported=True)
+  assert effective is Strategy.DIRECT_PACKED_FALLBACK
+  assert plan.decision is Strategy.DIRECT_PACKED_FALLBACK
+  assert Strategy.FULL_RESIDENT_OVERLAY not in plan.feasible_strategies
+
+
+def test_nv_shaped_fp16_capability_without_promotion_uses_packed_baseline():
+  # NV-shaped: fp16 expressible, no promoted candidate (policy None) -> baseline, deferred like today's auto.
+  admission, plan, effective = plan_selected_model_memory(_inputs(), _facts(), direct_packed_supported=True)
+  assert effective is Strategy.DIRECT_PACKED_FALLBACK
+  assert admission.report["prefill_memory_selection_deferred"] is True
+  assert json.loads(admission.prefill_memory_plan)["decision"] is None
+
+
+
+
 def test_non_overlay_plan_never_walks_or_realizes_pf16_weights():
   admission, _, _ = plan_selected_model_memory(_inputs(), _facts(), direct_packed_supported=True)
   model = Transformer.__new__(Transformer)

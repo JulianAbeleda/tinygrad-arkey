@@ -100,3 +100,12 @@ def test_inventory_overlay_bytes_equal_model_walk_on_real_qwen3_8b():
   resident = derive_selected_gguf_prefill_inventory(kv, meta, lm_head_resident_fp16=True)
   lm_head_row = next(row for row in inventory["rows"] if row["role"] == "lm_head")
   assert resident["overlay_bytes"] == inventory["overlay_bytes"] + lm_head_row["shape"]["n"] * lm_head_row["shape"]["k"] * 2
+
+
+@pytest.mark.skipif(not pathlib.Path("/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf").exists(),
+                    reason="no local Qwen3 8B GGUF fixture")
+def test_nv_no_promoted_candidate_census_in_admit_report():
+  """S4/R3: expressible fp16 capability with no promoted candidate is loud in the admission report."""
+  model, _ = Transformer.from_gguf(str(pathlib.Path("/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf")), 2048)
+  assert model.config.admit["prefill_overlay_promotion"] == "no-promoted-candidate"
+  assert model.config.prefill_policy["strategy"] == "DIRECT_PACKED_FALLBACK"

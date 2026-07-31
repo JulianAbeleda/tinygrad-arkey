@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 import hashlib, json, re, subprocess
 from typing import Any, Callable, Mapping
 
+from tinygrad.dtype import dtypes
+
 
 SCHEMA_VERSION = 2
 QUEUE_MODES = ("PM4", "AQL")
@@ -52,6 +54,10 @@ class DeviceCapabilities:
   # resolves to a real list (possibly empty) once a renderer is opened -- so this is None only when the
   # renderer itself was unreachable (no probe), never a coerced default for a reachable renderer.
   supports_tensor_cores: bool | None = None
+  # fp16 dtype expressibility, copied verbatim from the opened renderer's supported_dtypes() (R2a: the fp16
+  # overlay bottoms out in an ordinary fp16 linear, so dtype expressibility is the capability; tensor cores are
+  # a promotion/perf question and must never gate admission).
+  supports_fp16: bool | None = None
   max_workgroup_threads: int | None = None
   max_workgroup_dimensions: tuple[int, int, int] | None = None
   lds_bytes: int | None = None
@@ -65,6 +71,7 @@ class DeviceCapabilities:
     dims = value.get("max_workgroup_dimensions")
     return cls(_optional_int(value.get("wave_size")), _optional_bool(value.get("supports_warp_shfl_xor")),
                _optional_bool(value.get("supports_tensor_cores")),
+               _optional_bool(value.get("supports_fp16")),
                _optional_int(value.get("max_workgroup_threads")),
                None if dims is None else tuple(int(x) for x in dims),
                _optional_int(value.get("lds_bytes")), _optional_int(value.get("lds_allocation_granularity")),
@@ -228,6 +235,7 @@ def _tinygrad_target_probe(device: str) -> Mapping[str, Any]:
     # conditions it on Apple7+, HIPRenderer on tc.get_amd(arch) -- tinygrad/renderer/cstyle.py); an empty list
     # is a verified "no tensor cores" fact, not "unreported". Only a missing renderer stays unreported (None).
     "supports_tensor_cores": None if renderer is None else bool(getattr(renderer, "tensor_cores", [])),
+    "supports_fp16": None if renderer is None else (dtypes.half in renderer.supported_dtypes()),
     "max_workgroup_threads": getattr(renderer, "max_workgroup_threads", None),
     "max_workgroup_dimensions": getattr(renderer, "max_workgroup_dimensions", None),
     "lds_bytes": getattr(renderer, "shared_max", None),

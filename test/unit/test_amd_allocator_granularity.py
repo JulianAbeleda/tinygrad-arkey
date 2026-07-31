@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+from tinygrad.dtype import dtypes
 from tinygrad.llm.device_facts import _tinygrad_target_probe
 from tinygrad.llm.gguf_memory_scan import selected_gguf_backing_bytes
 from tinygrad.runtime.ops_amd import AMDAllocator
@@ -24,7 +25,8 @@ def test_selected_large_am_gguf_uses_the_reported_hugepage_granularity(tmp_path)
 
 def test_target_probe_keeps_allocator_fact_without_rocminfo(monkeypatch):
   opened = SimpleNamespace(renderer=SimpleNamespace(arch="gfx1100", wave_size=32, max_workgroup_threads=None,
-    max_workgroup_dimensions=None, shared_max=65536, lds_allocation_granularity=None),
+    max_workgroup_dimensions=None, shared_max=65536, lds_allocation_granularity=None,
+    supported_dtypes=lambda: {dtypes.half, dtypes.float}),
     allocator=_allocator(True), is_aql=False)
 
   class FakeDevices:
