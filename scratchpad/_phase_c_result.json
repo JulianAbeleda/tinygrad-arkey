@@ -1,0 +1,175 @@
+{
+  "control": {
+    "median_ns": 48477833,
+    "gflops": 1063.1582387768858,
+    "correct": true,
+    "reached_precontract": false
+  },
+  "finalists": [
+    {
+      "candidate_hash": "328f1e61c4f77c27207dd9f0a08c603dbb353d28a0e9ca8635bc6907595cae1b",
+      "tile": {
+        "k": 32,
+        "m": 64,
+        "n": 32
+      },
+      "threads": 128,
+      "geometry": {
+        "wm": 4,
+        "wn": 1,
+        "bc": 1
+      },
+      "reached_precontract": true,
+      "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+      "correct": true,
+      "check_evidence": {
+        "tolerance": {
+          "atol": 0.001,
+          "rtol": 0.001
+        },
+        "packed_block_fixtures": [
+          {
+            "format": "Q4_K",
+            "elements": 512,
+            "oracle": "extra.llm_research.layout canonical reference"
+          },
+          {
+            "format": "Q6_K",
+            "elements": 512,
+            "oracle": "extra.llm_research.layout canonical reference"
+          }
+        ],
+        "representative_role_shape": {
+          "m": 512,
+          "n": 12288,
+          "k": 4096
+        },
+        "oracle": "canonical packed reference",
+        "candidate_call_buffer_read": true
+      },
+      "status": "MEASURED",
+      "samples_ns": [
+        20143958,
+        20396499,
+        20148000,
+        20146541,
+        20387500
+      ],
+      "median_ns": 20148000,
+      "operations": 51539607552,
+      "gflops": 2558.050801667659
+    },
+    {
+      "candidate_hash": "89412e2b62a63843d8d4d2785a3d1994a4007291af5fb6d8e533ea94d8484a2b",
+      "tile": {
+        "k": 32,
+        "m": 32,
+        "n": 32
+      },
+      "threads": 128,
+      "geometry": {
+        "wm": 2,
+        "wn": 2,
+        "bc": 2
+      },
+      "reached_precontract": true,
+      "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+      "correct": true,
+      "check_evidence": {
+        "tolerance": {
+          "atol": 0.001,
+          "rtol": 0.001
+        },
+        "packed_block_fixtures": [
+          {
+            "format": "Q4_K",
+            "elements": 512,
+            "oracle": "extra.llm_research.layout canonical reference"
+          },
+          {
+            "format": "Q6_K",
+            "elements": 512,
+            "oracle": "extra.llm_research.layout canonical reference"
+          }
+        ],
+        "representative_role_shape": {
+          "m": 512,
+          "n": 12288,
+          "k": 4096
+        },
+        "oracle": "canonical packed reference",
+        "candidate_call_buffer_read": true
+      },
+      "status": "MEASURED",
+      "samples_ns": [
+        20148249,
+        20395125,
+        20145041,
+        20390749,
+        20140958
+      ],
+      "median_ns": 20148249,
+      "operations": 51539607552,
+      "gflops": 2558.0191882679233
+    }
+  ],
+  "stability": [
+    {
+      "label": "control",
+      "candidate_hash": "df2bf25a610700d152c0c3a1ce5ca154e1a82cb37949a2b6970cc05545e93998",
+      "geometry": null,
+      "run_medians_ns": [
+        48477833,
+        48478916,
+        48474208
+      ],
+      "aggregate_median_ns": 48477833,
+      "relative_mad": 2.2340107487890394e-05,
+      "status": "stable"
+    },
+    {
+      "label": "finalist1",
+      "candidate_hash": "328f1e61c4f77c27207dd9f0a08c603dbb353d28a0e9ca8635bc6907595cae1b",
+      "geometry": {
+        "wm": 4,
+        "wn": 1,
+        "bc": 1
+      },
+      "tile": {
+        "k": 32,
+        "m": 64,
+        "n": 32
+      },
+      "run_medians_ns": [
+        20148000,
+        14268166,
+        14497374
+      ],
+      "aggregate_median_ns": 14497374,
+      "relative_mad": 0.015810311577807126,
+      "status": "stable"
+    },
+    {
+      "label": "finalist2",
+      "candidate_hash": "89412e2b62a63843d8d4d2785a3d1994a4007291af5fb6d8e533ea94d8484a2b",
+      "geometry": {
+        "wm": 2,
+        "wn": 2,
+        "bc": 2
+      },
+      "tile": {
+        "k": 32,
+        "m": 32,
+        "n": 32
+      },
+      "run_medians_ns": [
+        20148249,
+        14284000,
+        14265000
+      ],
+      "aggregate_median_ns": 14284000,
+      "relative_mad": 0.0013301596191542986,
+      "status": "stable"
+    }
+  ]
+}

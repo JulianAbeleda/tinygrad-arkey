@@ -1,0 +1,4681 @@
+[
+  {
+    "candidate_hash": "df2bf25a610700d152c0c3a1ce5ca154e1a82cb37949a2b6970cc05545e93998",
+    "tile": {
+      "k": 32,
+      "m": 8,
+      "n": 8
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "status": "EXCEPTION",
+    "exception_type": "KeyError",
+    "message": "UOp(Ops.SINK, dtypes.void, arg=KernelInfo(name='test', axis_types=(), dont_use_locals=False, applied_opts=(), opts_to_apply=None, estimates=None, candidate_context=_CandidateContext(schema_version='boltbeam.full_kernel_candidate.v1', canonical_identity='df2bf25a610700d152c0c3a1ce5ca154e1a82cb37949a2b6970cc05545e93998', geometry=_TileGeometry(tile=(8, 8, 32), waves=(1, 1), threads=32, wave_size=32, lds_windows=(_LDSWindow(role='A', base=0, end=640, stride_bytes=80), _LDSWindow(role='B', base=640, end=1280, stride_bytes=80))), pipeline=None, packed_weight=PackedWeightTransform(quant_format='Q4_K', rows=12288, k=4096, block_elems=256, block_bytes=144)), required_native_attention=None, coalesced_loads=False, memory_semantic_slots=()), src=(\n  UOp(Ops.END, dtypes.void, arg=None, src=(\n    UOp(Ops.STORE, dtypes.void, arg=None, src=(\n      UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n        UOp(Ops.PARAM, dtypes.half.ptr(6291456), arg=ParamArg(0), src=()),\n        UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n          UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n            x6:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n              UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.RANGE, dtypes.weakint, arg=(1, AxisType.GLOBAL), src=(\n                          x13:=UOp(Ops.CONST, dtypes.weakint, arg=64, src=()),)),\n                        x14:=UOp(Ops.CONST, dtypes.weakint, arg=2, src=()),)),\n                      UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                          x17:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                            x18:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                              x19:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                x20:=UOp(Ops.RANGE, dtypes.weakint, arg=(-1, AxisType.WARP), src=(\n                                  UOp(Ops.CONST, dtypes.weakint, arg=32, src=()),)),\n                                x14,)),\n                              x14,)),\n                            x14,)),\n                          x14,)),\n                        x14,)),)),\n                    x14,)),\n                  UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                    x18,\n                    x14,)),)),\n                x14,)),\n              UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                x19,\n                x14,)),)),\n            UOp(Ops.CONST, dtypes.weakint, arg=12288, src=()),)),\n          x25:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n            UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n              UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.RANGE, dtypes.weakint, arg=(2, AxisType.GLOBAL), src=(\n                        UOp(Ops.CONST, dtypes.weakint, arg=1536, src=()),)),\n                      x14,)),\n                    UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                      x17,\n                      x14,)),)),\n                  x14,)),\n                UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                  x20,\n                  x14,)),)),\n              x14,)),\n            UOp(Ops.RANGE, dtypes.weakint, arg=(3, AxisType.UPCAST), src=(\n              x14,)),)),)),)),\n      UOp(Ops.CAST, dtypes.half, arg=None, src=(\n        UOp(Ops.REDUCE, dtypes.float, arg=(Ops.ADD, ()), tag=TC, src=(\n          UOp(Ops.CAST, dtypes.float, arg=None, src=(\n            UOp(Ops.MUL, dtypes.half, arg=None, src=(\n              UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n                UOp(Ops.PARAM, dtypes.half.ptr(2097152), arg=ParamArg(1), src=()),\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    x6,\n                    UOp(Ops.CONST, dtypes.weakint, arg=4096, src=()),)),\n                  x45:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                          UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                            UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                              UOp(Ops.RANGE, dtypes.weakint, arg=(0, AxisType.REDUCE), src=(\n                                UOp(Ops.CONST, dtypes.weakint, arg=512, src=()),)),\n                              x14,)),\n                            UOp(Ops.RANGE, dtypes.weakint, arg=(6, AxisType.UNROLL), src=(\n                              x14,)),)),\n                          x14,)),\n                        UOp(Ops.RANGE, dtypes.weakint, arg=(5, AxisType.UNROLL), src=(\n                          x14,)),)),\n                      x14,)),\n                    UOp(Ops.RANGE, dtypes.weakint, arg=(4, AxisType.UNROLL), src=(\n                      x14,)),)),)),)),\n              UOp(Ops.BITCAST, dtypes.half, arg=None, src=(\n                UOp(Ops.WHERE, dtypes.ushort, arg=None, src=(\n                  x58:=UOp(Ops.CMPLT, dtypes.bool, arg=None, src=(\n                    UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                      x60:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                        x45,\n                        x14,)),\n                      UOp(Ops.CONST, dtypes.weakint, arg=128, src=()),)),\n                    UOp(Ops.CONST, dtypes.weakint, arg=72, src=()),)),\n                  UOp(Ops.CAST, dtypes.ushort, arg=None, src=(\n                    UOp(Ops.ADD, dtypes.uint, arg=None, src=(\n                      UOp(Ops.WHERE, dtypes.uint, arg=None, src=(\n                        x66:=UOp(Ops.CMPLT, dtypes.bool, arg=None, src=(\n                          UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                            x60,\n                            x14,)),\n                          UOp(Ops.CONST, dtypes.weakint, arg=1, src=()),)),\n                        UOp(Ops.SHR, dtypes.uint, arg=None, src=(\n                          x70:=UOp(Ops.INDEX, dtypes.uint, arg=None, src=(\n                            UOp(Ops.PARAM, dtypes.uint.ptr(7077888), arg=ParamArg(2), src=()),\n                            UOp(Ops.WHERE, dtypes.weakint, arg=None, src=(\n                              x58,\n                              UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                                    UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                      x45,\n                                      UOp(Ops.CONST, dtypes.weakint, arg=256, src=()),)),\n                                    UOp(Ops.CONST, dtypes.weakint, arg=36, src=()),)),\n                                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                                    x25,\n                                    UOp(Ops.CONST, dtypes.weakint, arg=576, src=()),)),)),\n                                UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                                  UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                    x45,\n                                    UOp(Ops.CONST, dtypes.weakint, arg=4, src=()),)),\n                                  x13,)),)),\n                              UOp(Ops.CONST, dtypes.weakint, arg=Invalid, src=()),)),)),\n                          x85:=UOp(Ops.CONST, dtypes.uint, arg=0, src=()),)),\n                        x85,)),\n                      UOp(Ops.WHERE, dtypes.uint, arg=None, src=(\n                        x66,\n                        x85,\n                        UOp(Ops.SHR, dtypes.uint, arg=None, src=(\n                          x70,\n                          UOp(Ops.CONST, dtypes.uint, arg=16, src=()),)),)),)),)),\n                  UOp(Ops.CONST, dtypes.ushort, arg=0, src=()),)),)),)),)),\n          x45,)),)),)),\n    x6,\n    x25,)),))"
+  },
+  {
+    "candidate_hash": "7e5fc07b8c0c87581bc20a5722c06e9d2590a551ee3248f1506f6d68096e42e1",
+    "tile": {
+      "k": 32,
+      "m": 8,
+      "n": 16
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "status": "EXCEPTION",
+    "exception_type": "KeyError",
+    "message": "UOp(Ops.SINK, dtypes.void, arg=KernelInfo(name='test', axis_types=(), dont_use_locals=False, applied_opts=(), opts_to_apply=None, estimates=None, candidate_context=_CandidateContext(schema_version='boltbeam.full_kernel_candidate.v1', canonical_identity='7e5fc07b8c0c87581bc20a5722c06e9d2590a551ee3248f1506f6d68096e42e1', geometry=_TileGeometry(tile=(8, 16, 32), waves=(1, 1), threads=32, wave_size=32, lds_windows=(_LDSWindow(role='A', base=0, end=640, stride_bytes=80), _LDSWindow(role='B', base=640, end=1920, stride_bytes=80))), pipeline=None, packed_weight=PackedWeightTransform(quant_format='Q4_K', rows=12288, k=4096, block_elems=256, block_bytes=144)), required_native_attention=None, coalesced_loads=False, memory_semantic_slots=()), src=(\n  UOp(Ops.END, dtypes.void, arg=None, src=(\n    UOp(Ops.STORE, dtypes.void, arg=None, src=(\n      UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n        UOp(Ops.PARAM, dtypes.half.ptr(6291456), arg=ParamArg(0), src=()),\n        UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n          UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n            x6:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n              UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.RANGE, dtypes.weakint, arg=(1, AxisType.GLOBAL), src=(\n                          x13:=UOp(Ops.CONST, dtypes.weakint, arg=64, src=()),)),\n                        x14:=UOp(Ops.CONST, dtypes.weakint, arg=2, src=()),)),\n                      UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                          x17:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                            x18:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                              x19:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                x20:=UOp(Ops.RANGE, dtypes.weakint, arg=(-1, AxisType.WARP), src=(\n                                  UOp(Ops.CONST, dtypes.weakint, arg=32, src=()),)),\n                                x14,)),\n                              x14,)),\n                            x14,)),\n                          x14,)),\n                        x14,)),)),\n                    x14,)),\n                  UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                    x18,\n                    x14,)),)),\n                x14,)),\n              UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                x19,\n                x14,)),)),\n            UOp(Ops.CONST, dtypes.weakint, arg=12288, src=()),)),\n          x25:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n            UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n              UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                          UOp(Ops.RANGE, dtypes.weakint, arg=(2, AxisType.GLOBAL), src=(\n                            UOp(Ops.CONST, dtypes.weakint, arg=768, src=()),)),\n                          x14,)),\n                        UOp(Ops.RANGE, dtypes.weakint, arg=(7, AxisType.UPCAST), src=(\n                          x14,)),)),\n                      x14,)),\n                    UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                      x17,\n                      x14,)),)),\n                  x14,)),\n                UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                  x20,\n                  x14,)),)),\n              x14,)),\n            UOp(Ops.RANGE, dtypes.weakint, arg=(3, AxisType.UPCAST), src=(\n              x14,)),)),)),)),\n      UOp(Ops.CAST, dtypes.half, arg=None, src=(\n        UOp(Ops.REDUCE, dtypes.float, arg=(Ops.ADD, ()), tag=TC, src=(\n          UOp(Ops.CAST, dtypes.float, arg=None, src=(\n            UOp(Ops.MUL, dtypes.half, arg=None, src=(\n              UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n                UOp(Ops.PARAM, dtypes.half.ptr(2097152), arg=ParamArg(1), src=()),\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    x6,\n                    UOp(Ops.CONST, dtypes.weakint, arg=4096, src=()),)),\n                  x48:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                          UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                            UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                              UOp(Ops.RANGE, dtypes.weakint, arg=(0, AxisType.REDUCE), src=(\n                                UOp(Ops.CONST, dtypes.weakint, arg=512, src=()),)),\n                              x14,)),\n                            UOp(Ops.RANGE, dtypes.weakint, arg=(6, AxisType.UNROLL), src=(\n                              x14,)),)),\n                          x14,)),\n                        UOp(Ops.RANGE, dtypes.weakint, arg=(5, AxisType.UNROLL), src=(\n                          x14,)),)),\n                      x14,)),\n                    UOp(Ops.RANGE, dtypes.weakint, arg=(4, AxisType.UNROLL), src=(\n                      x14,)),)),)),)),\n              UOp(Ops.BITCAST, dtypes.half, arg=None, src=(\n                UOp(Ops.WHERE, dtypes.ushort, arg=None, src=(\n                  x61:=UOp(Ops.CMPLT, dtypes.bool, arg=None, src=(\n                    UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                      x63:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                        x48,\n                        x14,)),\n                      UOp(Ops.CONST, dtypes.weakint, arg=128, src=()),)),\n                    UOp(Ops.CONST, dtypes.weakint, arg=72, src=()),)),\n                  UOp(Ops.CAST, dtypes.ushort, arg=None, src=(\n                    UOp(Ops.ADD, dtypes.uint, arg=None, src=(\n                      UOp(Ops.WHERE, dtypes.uint, arg=None, src=(\n                        x69:=UOp(Ops.CMPLT, dtypes.bool, arg=None, src=(\n                          UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                            x63,\n                            x14,)),\n                          UOp(Ops.CONST, dtypes.weakint, arg=1, src=()),)),\n                        UOp(Ops.SHR, dtypes.uint, arg=None, src=(\n                          x73:=UOp(Ops.INDEX, dtypes.uint, arg=None, src=(\n                            UOp(Ops.PARAM, dtypes.uint.ptr(7077888), arg=ParamArg(2), src=()),\n                            UOp(Ops.WHERE, dtypes.weakint, arg=None, src=(\n                              x61,\n                              UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                                    UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                      x48,\n                                      UOp(Ops.CONST, dtypes.weakint, arg=256, src=()),)),\n                                    UOp(Ops.CONST, dtypes.weakint, arg=36, src=()),)),\n                                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                                    x25,\n                                    UOp(Ops.CONST, dtypes.weakint, arg=576, src=()),)),)),\n                                UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                                  UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                    x48,\n                                    UOp(Ops.CONST, dtypes.weakint, arg=4, src=()),)),\n                                  x13,)),)),\n                              UOp(Ops.CONST, dtypes.weakint, arg=Invalid, src=()),)),)),\n                          x88:=UOp(Ops.CONST, dtypes.uint, arg=0, src=()),)),\n                        x88,)),\n                      UOp(Ops.WHERE, dtypes.uint, arg=None, src=(\n                        x69,\n                        x88,\n                        UOp(Ops.SHR, dtypes.uint, arg=None, src=(\n                          x73,\n                          UOp(Ops.CONST, dtypes.uint, arg=16, src=()),)),)),)),)),\n                  UOp(Ops.CONST, dtypes.ushort, arg=0, src=()),)),)),)),)),\n          x48,)),)),)),\n    x6,\n    x25,)),))"
+  },
+  {
+    "candidate_hash": "2d8c25bcef9e6576b93002ff209df8186da5fb3752926289ed348a603c4b6e9f",
+    "tile": {
+      "k": 32,
+      "m": 8,
+      "n": 32
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "status": "EXCEPTION",
+    "exception_type": "KeyError",
+    "message": "UOp(Ops.SINK, dtypes.void, arg=KernelInfo(name='test', axis_types=(), dont_use_locals=False, applied_opts=(), opts_to_apply=None, estimates=None, candidate_context=_CandidateContext(schema_version='boltbeam.full_kernel_candidate.v1', canonical_identity='2d8c25bcef9e6576b93002ff209df8186da5fb3752926289ed348a603c4b6e9f', geometry=_TileGeometry(tile=(8, 32, 32), waves=(1, 1), threads=32, wave_size=32, lds_windows=(_LDSWindow(role='A', base=0, end=640, stride_bytes=80), _LDSWindow(role='B', base=640, end=3200, stride_bytes=80))), pipeline=None, packed_weight=PackedWeightTransform(quant_format='Q4_K', rows=12288, k=4096, block_elems=256, block_bytes=144)), required_native_attention=None, coalesced_loads=False, memory_semantic_slots=()), src=(\n  UOp(Ops.END, dtypes.void, arg=None, src=(\n    UOp(Ops.STORE, dtypes.void, arg=None, src=(\n      UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n        UOp(Ops.PARAM, dtypes.half.ptr(6291456), arg=ParamArg(0), src=()),\n        UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n          UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n            x6:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n              UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.RANGE, dtypes.weakint, arg=(1, AxisType.GLOBAL), src=(\n                          x13:=UOp(Ops.CONST, dtypes.weakint, arg=64, src=()),)),\n                        x14:=UOp(Ops.CONST, dtypes.weakint, arg=2, src=()),)),\n                      UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                          x17:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                            x18:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                              x19:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                x20:=UOp(Ops.RANGE, dtypes.weakint, arg=(-1, AxisType.WARP), src=(\n                                  UOp(Ops.CONST, dtypes.weakint, arg=32, src=()),)),\n                                x14,)),\n                              x14,)),\n                            x14,)),\n                          x14,)),\n                        x14,)),)),\n                    x14,)),\n                  UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                    x18,\n                    x14,)),)),\n                x14,)),\n              UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                x19,\n                x14,)),)),\n            UOp(Ops.CONST, dtypes.weakint, arg=12288, src=()),)),\n          x25:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n            UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n              UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                          UOp(Ops.RANGE, dtypes.weakint, arg=(2, AxisType.GLOBAL), src=(\n                            UOp(Ops.CONST, dtypes.weakint, arg=384, src=()),)),\n                          x35:=UOp(Ops.CONST, dtypes.weakint, arg=4, src=()),)),\n                        UOp(Ops.RANGE, dtypes.weakint, arg=(7, AxisType.UPCAST), src=(\n                          x35,)),)),\n                      x14,)),\n                    UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                      x17,\n                      x14,)),)),\n                  x14,)),\n                UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                  x20,\n                  x14,)),)),\n              x14,)),\n            UOp(Ops.RANGE, dtypes.weakint, arg=(3, AxisType.UPCAST), src=(\n              x14,)),)),)),)),\n      UOp(Ops.CAST, dtypes.half, arg=None, src=(\n        UOp(Ops.REDUCE, dtypes.float, arg=(Ops.ADD, ()), tag=TC, src=(\n          UOp(Ops.CAST, dtypes.float, arg=None, src=(\n            UOp(Ops.MUL, dtypes.half, arg=None, src=(\n              UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n                UOp(Ops.PARAM, dtypes.half.ptr(2097152), arg=ParamArg(1), src=()),\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    x6,\n                    UOp(Ops.CONST, dtypes.weakint, arg=4096, src=()),)),\n                  x49:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                          UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                            UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                              UOp(Ops.RANGE, dtypes.weakint, arg=(0, AxisType.REDUCE), src=(\n                                UOp(Ops.CONST, dtypes.weakint, arg=512, src=()),)),\n                              x14,)),\n                            UOp(Ops.RANGE, dtypes.weakint, arg=(6, AxisType.UNROLL), src=(\n                              x14,)),)),\n                          x14,)),\n                        UOp(Ops.RANGE, dtypes.weakint, arg=(5, AxisType.UNROLL), src=(\n                          x14,)),)),\n                      x14,)),\n                    UOp(Ops.RANGE, dtypes.weakint, arg=(4, AxisType.UNROLL), src=(\n                      x14,)),)),)),)),\n              UOp(Ops.BITCAST, dtypes.half, arg=None, src=(\n                UOp(Ops.WHERE, dtypes.ushort, arg=None, src=(\n                  x62:=UOp(Ops.CMPLT, dtypes.bool, arg=None, src=(\n                    UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                      x64:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                        x49,\n                        x14,)),\n                      UOp(Ops.CONST, dtypes.weakint, arg=128, src=()),)),\n                    UOp(Ops.CONST, dtypes.weakint, arg=72, src=()),)),\n                  UOp(Ops.CAST, dtypes.ushort, arg=None, src=(\n                    UOp(Ops.ADD, dtypes.uint, arg=None, src=(\n                      UOp(Ops.WHERE, dtypes.uint, arg=None, src=(\n                        x70:=UOp(Ops.CMPLT, dtypes.bool, arg=None, src=(\n                          UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                            x64,\n                            x14,)),\n                          UOp(Ops.CONST, dtypes.weakint, arg=1, src=()),)),\n                        UOp(Ops.SHR, dtypes.uint, arg=None, src=(\n                          x74:=UOp(Ops.INDEX, dtypes.uint, arg=None, src=(\n                            UOp(Ops.PARAM, dtypes.uint.ptr(7077888), arg=ParamArg(2), src=()),\n                            UOp(Ops.WHERE, dtypes.weakint, arg=None, src=(\n                              x62,\n                              UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                                    UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                      x49,\n                                      UOp(Ops.CONST, dtypes.weakint, arg=256, src=()),)),\n                                    UOp(Ops.CONST, dtypes.weakint, arg=36, src=()),)),\n                                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                                    x25,\n                                    UOp(Ops.CONST, dtypes.weakint, arg=576, src=()),)),)),\n                                UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                                  UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                    x49,\n                                    x35,)),\n                                  x13,)),)),\n                              UOp(Ops.CONST, dtypes.weakint, arg=Invalid, src=()),)),)),\n                          x88:=UOp(Ops.CONST, dtypes.uint, arg=0, src=()),)),\n                        x88,)),\n                      UOp(Ops.WHERE, dtypes.uint, arg=None, src=(\n                        x70,\n                        x88,\n                        UOp(Ops.SHR, dtypes.uint, arg=None, src=(\n                          x74,\n                          UOp(Ops.CONST, dtypes.uint, arg=16, src=()),)),)),)),)),\n                  UOp(Ops.CONST, dtypes.ushort, arg=0, src=()),)),)),)),)),\n          x49,)),)),)),\n    x6,\n    x25,)),))"
+  },
+  {
+    "candidate_hash": "83f0cbc6a1da9a561afaaf51241cdffd90598fc519a57c889fef59abde6d734b",
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 8
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "status": "EXCEPTION",
+    "exception_type": "KeyError",
+    "message": "UOp(Ops.SINK, dtypes.void, arg=KernelInfo(name='test', axis_types=(), dont_use_locals=False, applied_opts=(), opts_to_apply=None, estimates=None, candidate_context=_CandidateContext(schema_version='boltbeam.full_kernel_candidate.v1', canonical_identity='83f0cbc6a1da9a561afaaf51241cdffd90598fc519a57c889fef59abde6d734b', geometry=_TileGeometry(tile=(16, 8, 32), waves=(1, 1), threads=32, wave_size=32, lds_windows=(_LDSWindow(role='A', base=0, end=1280, stride_bytes=80), _LDSWindow(role='B', base=1280, end=1920, stride_bytes=80))), pipeline=None, packed_weight=PackedWeightTransform(quant_format='Q4_K', rows=12288, k=4096, block_elems=256, block_bytes=144)), required_native_attention=None, coalesced_loads=False, memory_semantic_slots=()), src=(\n  UOp(Ops.END, dtypes.void, arg=None, src=(\n    UOp(Ops.STORE, dtypes.void, arg=None, src=(\n      UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n        UOp(Ops.PARAM, dtypes.half.ptr(6291456), arg=ParamArg(0), src=()),\n        UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n          UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n            x6:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n              UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.RANGE, dtypes.weakint, arg=(1, AxisType.GLOBAL), src=(\n                          x13:=UOp(Ops.CONST, dtypes.weakint, arg=64, src=()),)),\n                        x14:=UOp(Ops.CONST, dtypes.weakint, arg=2, src=()),)),\n                      UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                          x17:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                            x18:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                              x19:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                x20:=UOp(Ops.RANGE, dtypes.weakint, arg=(-1, AxisType.WARP), src=(\n                                  UOp(Ops.CONST, dtypes.weakint, arg=32, src=()),)),\n                                x14,)),\n                              x14,)),\n                            x14,)),\n                          x14,)),\n                        x14,)),)),\n                    x14,)),\n                  UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                    x18,\n                    x14,)),)),\n                x14,)),\n              UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                x19,\n                x14,)),)),\n            UOp(Ops.CONST, dtypes.weakint, arg=12288, src=()),)),\n          x25:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n            UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n              UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.RANGE, dtypes.weakint, arg=(2, AxisType.GLOBAL), src=(\n                        UOp(Ops.CONST, dtypes.weakint, arg=1536, src=()),)),\n                      x14,)),\n                    UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                      x17,\n                      x14,)),)),\n                  x14,)),\n                UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                  x20,\n                  x14,)),)),\n              x14,)),\n            UOp(Ops.RANGE, dtypes.weakint, arg=(3, AxisType.UPCAST), src=(\n              x14,)),)),)),)),\n      UOp(Ops.CAST, dtypes.half, arg=None, src=(\n        UOp(Ops.REDUCE, dtypes.float, arg=(Ops.ADD, ()), tag=TC, src=(\n          UOp(Ops.CAST, dtypes.float, arg=None, src=(\n            UOp(Ops.MUL, dtypes.half, arg=None, src=(\n              UOp(Ops.INDEX, dtypes.half, arg=None, src=(\n                UOp(Ops.PARAM, dtypes.half.ptr(2097152), arg=ParamArg(1), src=()),\n                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                    x6,\n                    UOp(Ops.CONST, dtypes.weakint, arg=4096, src=()),)),\n                  x45:=UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                    UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                      UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                        UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                          UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                            UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                              UOp(Ops.RANGE, dtypes.weakint, arg=(0, AxisType.REDUCE), src=(\n                                UOp(Ops.CONST, dtypes.weakint, arg=512, src=()),)),\n                              x14,)),\n                            UOp(Ops.RANGE, dtypes.weakint, arg=(6, AxisType.UNROLL), src=(\n                              x14,)),)),\n                          x14,)),\n                        UOp(Ops.RANGE, dtypes.weakint, arg=(5, AxisType.UNROLL), src=(\n                          x14,)),)),\n                      x14,)),\n                    UOp(Ops.RANGE, dtypes.weakint, arg=(4, AxisType.UNROLL), src=(\n                      x14,)),)),)),)),\n              UOp(Ops.BITCAST, dtypes.half, arg=None, src=(\n                UOp(Ops.WHERE, dtypes.ushort, arg=None, src=(\n                  x58:=UOp(Ops.CMPLT, dtypes.bool, arg=None, src=(\n                    UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                      x60:=UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                        x45,\n                        x14,)),\n                      UOp(Ops.CONST, dtypes.weakint, arg=128, src=()),)),\n                    UOp(Ops.CONST, dtypes.weakint, arg=72, src=()),)),\n                  UOp(Ops.CAST, dtypes.ushort, arg=None, src=(\n                    UOp(Ops.ADD, dtypes.uint, arg=None, src=(\n                      UOp(Ops.WHERE, dtypes.uint, arg=None, src=(\n                        x66:=UOp(Ops.CMPLT, dtypes.bool, arg=None, src=(\n                          UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                            x60,\n                            x14,)),\n                          UOp(Ops.CONST, dtypes.weakint, arg=1, src=()),)),\n                        UOp(Ops.SHR, dtypes.uint, arg=None, src=(\n                          x70:=UOp(Ops.INDEX, dtypes.uint, arg=None, src=(\n                            UOp(Ops.PARAM, dtypes.uint.ptr(7077888), arg=ParamArg(2), src=()),\n                            UOp(Ops.WHERE, dtypes.weakint, arg=None, src=(\n                              x58,\n                              UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                                UOp(Ops.ADD, dtypes.weakint, arg=None, src=(\n                                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                                    UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                      x45,\n                                      UOp(Ops.CONST, dtypes.weakint, arg=256, src=()),)),\n                                    UOp(Ops.CONST, dtypes.weakint, arg=36, src=()),)),\n                                  UOp(Ops.MUL, dtypes.weakint, arg=None, src=(\n                                    x25,\n                                    UOp(Ops.CONST, dtypes.weakint, arg=576, src=()),)),)),\n                                UOp(Ops.FLOORMOD, dtypes.weakint, arg=None, src=(\n                                  UOp(Ops.FLOORDIV, dtypes.weakint, arg=None, src=(\n                                    x45,\n                                    UOp(Ops.CONST, dtypes.weakint, arg=4, src=()),)),\n                                  x13,)),)),\n                              UOp(Ops.CONST, dtypes.weakint, arg=Invalid, src=()),)),)),\n                          x85:=UOp(Ops.CONST, dtypes.uint, arg=0, src=()),)),\n                        x85,)),\n                      UOp(Ops.WHERE, dtypes.uint, arg=None, src=(\n                        x66,\n                        x85,\n                        UOp(Ops.SHR, dtypes.uint, arg=None, src=(\n                          x70,\n                          UOp(Ops.CONST, dtypes.uint, arg=16, src=()),)),)),)),)),\n                  UOp(Ops.CONST, dtypes.ushort, arg=0, src=()),)),)),)),)),\n          x45,)),)),)),\n    x6,\n    x25,)),))"
+  },
+  {
+    "candidate_hash": "7539ba7979f674d7794b99991354f019464ba401d0c2b298cd3eb171ad77268f",
+    "tile": {
+      "k": 16,
+      "m": 16,
+      "n": 16
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20395625,
+      20136291,
+      20385666,
+      20139333,
+      20382874
+    ],
+    "median_ns": 20382874,
+    "operations": 51539607552,
+    "gflops": 2528.5741133463316
+  },
+  {
+    "candidate_hash": "267f60357c5829de889593de3feedd842931b4386248b6b5652e87690b0f54c7",
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 16
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20399375,
+      20385125,
+      20145874,
+      20382541,
+      20385583
+    ],
+    "median_ns": 20385125,
+    "operations": 51539607552,
+    "gflops": 2528.294898952054
+  },
+  {
+    "candidate_hash": "534f1da0fb8b55b80dbba5775ad0c5c756329005fd7b5740dcd3b7e1efaa8249",
+    "tile": {
+      "k": 16,
+      "m": 16,
+      "n": 32
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20391625,
+      20147125,
+      20391458,
+      20385500,
+      20142749
+    ],
+    "median_ns": 20385500,
+    "operations": 51539607552,
+    "gflops": 2528.2483898849673
+  },
+  {
+    "candidate_hash": "516dc16c5165af141214069e0fd0085564e4b3fd05f163381709fbbef5f36b62",
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 32
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20405000,
+      20142208,
+      20389875,
+      20383583,
+      20147749
+    ],
+    "median_ns": 20383583,
+    "operations": 51539607552,
+    "gflops": 2528.486162221823
+  },
+  {
+    "candidate_hash": "388b31b385b3f601249dfed010d7a2dd0320e900ce2d7b43fa438866a549bf99",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 8
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20396000,
+      20135250,
+      20254625,
+      20408749,
+      20142624
+    ],
+    "median_ns": 20254625,
+    "operations": 51539607552,
+    "gflops": 2544.5846344723736
+  },
+  {
+    "candidate_hash": "827a7115d56a772591afd7583261e6ff363cdd3d3bcea871c79acb1dc9b2c546",
+    "tile": {
+      "k": 16,
+      "m": 32,
+      "n": 16
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20149583,
+      20386499,
+      20146916,
+      20391250,
+      20385375
+    ],
+    "median_ns": 20385375,
+    "operations": 51539607552,
+    "gflops": 2528.263892717205
+  },
+  {
+    "candidate_hash": "e96eecd6ea2becae17e487163a7564bb98828b3b4abd388aa68aa8390e942e47",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 16
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20383666,
+      20142958,
+      20384125,
+      20385000,
+      20142124
+    ],
+    "median_ns": 20383666,
+    "operations": 51539607552,
+    "gflops": 2528.475866509979
+  },
+  {
+    "candidate_hash": "940249707136c68f0f38d6496f1907f4ab3ae122aacdb3fd530801e6909b62ca",
+    "tile": {
+      "k": 16,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20158750,
+      20391124,
+      20382749,
+      20144458,
+      20387000
+    ],
+    "median_ns": 20382749,
+    "operations": 51539607552,
+    "gflops": 2528.589620173412
+  },
+  {
+    "candidate_hash": "d83266ef0941da22e7c3dbb59a0703d9a9ea37bd7b7c878752c0fba164e213fa",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20412875,
+      20387374,
+      20147916,
+      20380708,
+      20381874
+    ],
+    "median_ns": 20381874,
+    "operations": 51539607552,
+    "gflops": 2528.698173288678
+  },
+  {
+    "candidate_hash": "df2bf25a610700d152c0c3a1ce5ca154e1a82cb37949a2b6970cc05545e93998",
+    "tile": {
+      "k": 32,
+      "m": 8,
+      "n": 8
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20403250,
+      20390958,
+      20146875,
+      20386083,
+      20391500
+    ],
+    "median_ns": 20390958,
+    "operations": 51539607552,
+    "gflops": 2527.571659556162
+  },
+  {
+    "candidate_hash": "7e5fc07b8c0c87581bc20a5722c06e9d2590a551ee3248f1506f6d68096e42e1",
+    "tile": {
+      "k": 32,
+      "m": 8,
+      "n": 16
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20171666,
+      20389833,
+      20390583,
+      20135958,
+      20384500
+    ],
+    "median_ns": 20384500,
+    "operations": 51539607552,
+    "gflops": 2528.372417866516
+  },
+  {
+    "candidate_hash": "2d8c25bcef9e6576b93002ff209df8186da5fb3752926289ed348a603c4b6e9f",
+    "tile": {
+      "k": 32,
+      "m": 8,
+      "n": 32
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20396250,
+      20142833,
+      20390666,
+      20139916,
+      20387916
+    ],
+    "median_ns": 20387916,
+    "operations": 51539607552,
+    "gflops": 2527.948788488239
+  },
+  {
+    "candidate_hash": "83f0cbc6a1da9a561afaaf51241cdffd90598fc519a57c889fef59abde6d734b",
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 8
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20144333,
+      20390124,
+      20388916,
+      20144375,
+      20382874
+    ],
+    "median_ns": 20382874,
+    "operations": 51539607552,
+    "gflops": 2528.5741133463316
+  },
+  {
+    "candidate_hash": "7539ba7979f674d7794b99991354f019464ba401d0c2b298cd3eb171ad77268f",
+    "tile": {
+      "k": 16,
+      "m": 16,
+      "n": 16
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20401375,
+      20398874,
+      20141958,
+      20388541,
+      20385833
+    ],
+    "median_ns": 20388541,
+    "operations": 51539607552,
+    "gflops": 2527.8712955478277
+  },
+  {
+    "candidate_hash": "267f60357c5829de889593de3feedd842931b4386248b6b5652e87690b0f54c7",
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 16
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20401250,
+      20408500,
+      20148791,
+      20380750,
+      20139000
+    ],
+    "median_ns": 20380750,
+    "operations": 51539607552,
+    "gflops": 2528.837631196104
+  },
+  {
+    "candidate_hash": "534f1da0fb8b55b80dbba5775ad0c5c756329005fd7b5740dcd3b7e1efaa8249",
+    "tile": {
+      "k": 16,
+      "m": 16,
+      "n": 32
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20407500,
+      20143791,
+      20392749,
+      20131583,
+      20390333
+    ],
+    "median_ns": 20390333,
+    "operations": 51539607552,
+    "gflops": 2527.6491341264514
+  },
+  {
+    "candidate_hash": "516dc16c5165af141214069e0fd0085564e4b3fd05f163381709fbbef5f36b62",
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 32
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20416375,
+      20141958,
+      20387458,
+      20390499,
+      20137208
+    ],
+    "median_ns": 20387458,
+    "operations": 51539607552,
+    "gflops": 2528.005578331541
+  },
+  {
+    "candidate_hash": "388b31b385b3f601249dfed010d7a2dd0320e900ce2d7b43fa438866a549bf99",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 8
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20385000,
+      20387500,
+      20140374,
+      20384083,
+      20393541
+    ],
+    "median_ns": 20385000,
+    "operations": 51539607552,
+    "gflops": 2528.3104023546725
+  },
+  {
+    "candidate_hash": "827a7115d56a772591afd7583261e6ff363cdd3d3bcea871c79acb1dc9b2c546",
+    "tile": {
+      "k": 16,
+      "m": 32,
+      "n": 16
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20389749,
+      20425083,
+      20151458,
+      20396125,
+      20139666
+    ],
+    "median_ns": 20389749,
+    "operations": 51539607552,
+    "gflops": 2527.7215306573903
+  },
+  {
+    "candidate_hash": "e96eecd6ea2becae17e487163a7564bb98828b3b4abd388aa68aa8390e942e47",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 16
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20398083,
+      20146499,
+      20395208,
+      20136875,
+      20149708
+    ],
+    "median_ns": 20149708,
+    "operations": 51539607552,
+    "gflops": 2557.833967221758
+  },
+  {
+    "candidate_hash": "940249707136c68f0f38d6496f1907f4ab3ae122aacdb3fd530801e6909b62ca",
+    "tile": {
+      "k": 16,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20388708,
+      20146083,
+      20385250,
+      20383750,
+      20141374
+    ],
+    "median_ns": 20383750,
+    "operations": 51539607552,
+    "gflops": 2528.4654468387807
+  },
+  {
+    "candidate_hash": "d83266ef0941da22e7c3dbb59a0703d9a9ea37bd7b7c878752c0fba164e213fa",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 32,
+    "geometry": {
+      "wm": 1,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20388124,
+      20148124,
+      20395250,
+      20382374,
+      20151583
+    ],
+    "median_ns": 20382374,
+    "operations": 51539607552,
+    "gflops": 2528.636141795848
+  },
+  {
+    "candidate_hash": "97aa7eed4abd80bf925bcc8aed3c3a04ebec89e6a8a8c2208d9319b31b62ab0e",
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 16
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20148833,
+      20392500,
+      20379499,
+      20136749,
+      20389958
+    ],
+    "median_ns": 20379499,
+    "operations": 51539607552,
+    "gflops": 2528.9928644467655
+  },
+  {
+    "candidate_hash": "b01ef136e73104a37d5a20992683cf1a4f919c3c26651e52094a86ab05321fb9",
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 32
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20391500,
+      20148874,
+      20386874,
+      20242500,
+      20149958
+    ],
+    "median_ns": 20242500,
+    "operations": 51539607552,
+    "gflops": 2546.10880829937
+  },
+  {
+    "candidate_hash": "a23fa1d4019c951e6ba61664cdda5bd6e1ca18a07fbfc279e2aeacb10138d43c",
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 64
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20424499,
+      20136124,
+      20388041,
+      20138125,
+      20380250
+    ],
+    "median_ns": 20380250,
+    "operations": 51539607552,
+    "gflops": 2528.8996725751645
+  },
+  {
+    "candidate_hash": "b4ac36b9befcddc348de0d4582b28208c071e08f709ef4f2eb806a112011ff42",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 16
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20411416,
+      20136333,
+      20410750,
+      20381374,
+      20139416
+    ],
+    "median_ns": 20381374,
+    "operations": 51539607552,
+    "gflops": 2528.7602078250466
+  },
+  {
+    "candidate_hash": "ac618c15070ec5e35e4884938c7852e66c4c3113e31692076aac521e94a8eb25",
+    "tile": {
+      "k": 16,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20389291,
+      20144375,
+      20149375,
+      20419375,
+      20139333
+    ],
+    "median_ns": 20149375,
+    "operations": 51539607552,
+    "gflops": 2557.8762394367072
+  },
+  {
+    "candidate_hash": "cb2f93a4e8e33eb420820003fdd25eff0496dd84960896a55af316f8b12b21df",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20408916,
+      20149125,
+      20395333,
+      20136250,
+      20381750
+    ],
+    "median_ns": 20381750,
+    "operations": 51539607552,
+    "gflops": 2528.713557569885
+  },
+  {
+    "candidate_hash": "cc753c45f6cd07bd869dba34b843f8387eeb50e8d64ed707a8eff78f8d9eea0e",
+    "tile": {
+      "k": 16,
+      "m": 32,
+      "n": 64
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20146708,
+      20393250,
+      20388916,
+      20150208,
+      20399208
+    ],
+    "median_ns": 20388916,
+    "operations": 51539607552,
+    "gflops": 2527.8248020640235
+  },
+  {
+    "candidate_hash": "f6f9f059a4c9523c29f7dc1a1f75382868d2acba479e34bfc3255bca9c7b09b3",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 64
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20378249,
+      20144999,
+      20398124,
+      20379833,
+      20147208
+    ],
+    "median_ns": 20378249,
+    "operations": 51539607552,
+    "gflops": 2529.147992646473
+  },
+  {
+    "candidate_hash": "97aa7eed4abd80bf925bcc8aed3c3a04ebec89e6a8a8c2208d9319b31b62ab0e",
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 16
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20143166,
+      20388749,
+      20386208,
+      20144083,
+      20391749
+    ],
+    "median_ns": 20386208,
+    "operations": 51539607552,
+    "gflops": 2528.1605854310915
+  },
+  {
+    "candidate_hash": "b01ef136e73104a37d5a20992683cf1a4f919c3c26651e52094a86ab05321fb9",
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 32
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20409250,
+      20398708,
+      20158749,
+      20397000,
+      20389749
+    ],
+    "median_ns": 20397000,
+    "operations": 51539607552,
+    "gflops": 2526.822942197382
+  },
+  {
+    "candidate_hash": "a23fa1d4019c951e6ba61664cdda5bd6e1ca18a07fbfc279e2aeacb10138d43c",
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 64
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20417083,
+      20144708,
+      20385916,
+      20387374,
+      20141583
+    ],
+    "median_ns": 20385916,
+    "operations": 51539607552,
+    "gflops": 2528.1967978284615
+  },
+  {
+    "candidate_hash": "b4ac36b9befcddc348de0d4582b28208c071e08f709ef4f2eb806a112011ff42",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 16
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20152708,
+      20395500,
+      20148083,
+      20395125,
+      20137041
+    ],
+    "median_ns": 20152708,
+    "operations": 51539607552,
+    "gflops": 2557.453199440988
+  },
+  {
+    "candidate_hash": "ac618c15070ec5e35e4884938c7852e66c4c3113e31692076aac521e94a8eb25",
+    "tile": {
+      "k": 16,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20385500,
+      20393749,
+      20141833,
+      20380000,
+      20384041
+    ],
+    "median_ns": 20384041,
+    "operations": 51539607552,
+    "gflops": 2528.4293507847633
+  },
+  {
+    "candidate_hash": "cb2f93a4e8e33eb420820003fdd25eff0496dd84960896a55af316f8b12b21df",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20388208,
+      20139166,
+      20391250,
+      20396625,
+      20149166
+    ],
+    "median_ns": 20388208,
+    "operations": 51539607552,
+    "gflops": 2527.9125831951487
+  },
+  {
+    "candidate_hash": "cc753c45f6cd07bd869dba34b843f8387eeb50e8d64ed707a8eff78f8d9eea0e",
+    "tile": {
+      "k": 16,
+      "m": 32,
+      "n": 64
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20417916,
+      20150333,
+      20416583,
+      20142374,
+      20299625
+    ],
+    "median_ns": 20299625,
+    "operations": 51539607552,
+    "gflops": 2538.9438254154943
+  },
+  {
+    "candidate_hash": "f6f9f059a4c9523c29f7dc1a1f75382868d2acba479e34bfc3255bca9c7b09b3",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 64
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 1,
+      "wn": 2,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20411583,
+      20142416,
+      20384375,
+      20145291,
+      20386374
+    ],
+    "median_ns": 20384375,
+    "operations": 51539607552,
+    "gflops": 2528.3879222198375
+  },
+  {
+    "candidate_hash": "89412e2b62a63843d8d4d2785a3d1994a4007291af5fb6d8e533ea94d8484a2b",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 1,
+      "wn": 4,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20152374,
+      20145999,
+      20396458,
+      20147125,
+      20391500
+    ],
+    "median_ns": 20152374,
+    "operations": 51539607552,
+    "gflops": 2557.495585979101
+  },
+  {
+    "candidate_hash": "5ce124a46655b15c7ba40cbd80d457e456d09ec7cbb0b38c30efa023b7ad5977",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 64
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 1,
+      "wn": 4,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20164999,
+      20387874,
+      20136500,
+      20295041,
+      20390458
+    ],
+    "median_ns": 20295041,
+    "operations": 51539607552,
+    "gflops": 2539.5172915393473
+  },
+  {
+    "candidate_hash": "df812d53443b9ddf53d5791cfbfa3fda7ced1f8173a32b9a0993bef7dd19ca12",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 96
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 1,
+      "wn": 4,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20167583,
+      20389458,
+      20389541,
+      20149124,
+      20389124
+    ],
+    "median_ns": 20389124,
+    "operations": 51539607552,
+    "gflops": 2527.7990144157247
+  },
+  {
+    "candidate_hash": "7f8fadf6ed76bf5068cde0c597acfa415901cff373081e1ecba416bb199907c1",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 128
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 1,
+      "wn": 4,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20425499,
+      20392375,
+      20140125,
+      20388374,
+      20397500
+    ],
+    "median_ns": 20392375,
+    "operations": 51539607552,
+    "gflops": 2527.3960267992325
+  },
+  {
+    "candidate_hash": "89412e2b62a63843d8d4d2785a3d1994a4007291af5fb6d8e533ea94d8484a2b",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 1,
+      "wn": 4,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20420875,
+      20140875,
+      20403375,
+      20390999,
+      20139624
+    ],
+    "median_ns": 20390999,
+    "operations": 51539607552,
+    "gflops": 2527.5665773903474
+  },
+  {
+    "candidate_hash": "5ce124a46655b15c7ba40cbd80d457e456d09ec7cbb0b38c30efa023b7ad5977",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 64
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 1,
+      "wn": 4,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20391083,
+      20250958,
+      20144875,
+      20388000,
+      20143625
+    ],
+    "median_ns": 20250958,
+    "operations": 51539607552,
+    "gflops": 2545.045402395284
+  },
+  {
+    "candidate_hash": "df812d53443b9ddf53d5791cfbfa3fda7ced1f8173a32b9a0993bef7dd19ca12",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 96
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 1,
+      "wn": 4,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20149541,
+      20303249,
+      20386291,
+      20144583,
+      20396083
+    ],
+    "median_ns": 20303249,
+    "operations": 51539607552,
+    "gflops": 2538.4906401926114
+  },
+  {
+    "candidate_hash": "7f8fadf6ed76bf5068cde0c597acfa415901cff373081e1ecba416bb199907c1",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 128
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 1,
+      "wn": 4,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20176624,
+      20398374,
+      20400500,
+      20152874,
+      20423666
+    ],
+    "median_ns": 20398374,
+    "operations": 51539607552,
+    "gflops": 2526.6527396742504
+  },
+  {
+    "candidate_hash": "97aa7eed4abd80bf925bcc8aed3c3a04ebec89e6a8a8c2208d9319b31b62ab0e",
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 16
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20392750,
+      20134166,
+      20291583,
+      20385374,
+      20145166
+    ],
+    "median_ns": 20291583,
+    "operations": 51539607552,
+    "gflops": 2539.9500646154615
+  },
+  {
+    "candidate_hash": "b01ef136e73104a37d5a20992683cf1a4f919c3c26651e52094a86ab05321fb9",
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 32
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20386499,
+      20149333,
+      20390624,
+      20243416,
+      20150916
+    ],
+    "median_ns": 20243416,
+    "operations": 51539607552,
+    "gflops": 2545.9935987088343
+  },
+  {
+    "candidate_hash": "b4ac36b9befcddc348de0d4582b28208c071e08f709ef4f2eb806a112011ff42",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 16
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20144875,
+      20393083,
+      20388750,
+      20142958,
+      20388333
+    ],
+    "median_ns": 20388333,
+    "operations": 51539607552,
+    "gflops": 2527.8970846709244
+  },
+  {
+    "candidate_hash": "ac618c15070ec5e35e4884938c7852e66c4c3113e31692076aac521e94a8eb25",
+    "tile": {
+      "k": 16,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20413666,
+      20150833,
+      20393791,
+      20388250,
+      20143791
+    ],
+    "median_ns": 20388250,
+    "operations": 51539607552,
+    "gflops": 2527.9073756698094
+  },
+  {
+    "candidate_hash": "cb2f93a4e8e33eb420820003fdd25eff0496dd84960896a55af316f8b12b21df",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20400124,
+      20391208,
+      20151583,
+      20384000,
+      20386249
+    ],
+    "median_ns": 20386249,
+    "operations": 51539607552,
+    "gflops": 2528.155500896707
+  },
+  {
+    "candidate_hash": "ce24718099877c0bf4b84f8cd1068d3485ad121ce89d24fe0e52a7b74bf2d50f",
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 16
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20418583,
+      20148499,
+      20446333,
+      20394541,
+      20142875
+    ],
+    "median_ns": 20394541,
+    "operations": 51539607552,
+    "gflops": 2527.127604980176
+  },
+  {
+    "candidate_hash": "994a917c293a740cbc81168c11238411c438357960d4967b381d0f7cbcfc9fe0",
+    "tile": {
+      "k": 16,
+      "m": 64,
+      "n": 32
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20386666,
+      20393875,
+      20153333,
+      20398749,
+      20136249
+    ],
+    "median_ns": 20386666,
+    "operations": 51539607552,
+    "gflops": 2528.1037886234067
+  },
+  {
+    "candidate_hash": "c52c0c52005d4ac7f2a986afc6733161bcae4e490c023ded4871d8f998e34514",
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 32
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20386749,
+      20142624,
+      20392999,
+      20390874,
+      20142749
+    ],
+    "median_ns": 20386749,
+    "operations": 51539607552,
+    "gflops": 2528.0934960252857
+  },
+  {
+    "candidate_hash": "97aa7eed4abd80bf925bcc8aed3c3a04ebec89e6a8a8c2208d9319b31b62ab0e",
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 16
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20143833,
+      20395166,
+      20389249,
+      20147583,
+      20393791
+    ],
+    "median_ns": 20389249,
+    "operations": 51539607552,
+    "gflops": 2527.783517284035
+  },
+  {
+    "candidate_hash": "b01ef136e73104a37d5a20992683cf1a4f919c3c26651e52094a86ab05321fb9",
+    "tile": {
+      "k": 32,
+      "m": 16,
+      "n": 32
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20394708,
+      20147958,
+      20399791,
+      20381625,
+      20150874
+    ],
+    "median_ns": 20381625,
+    "operations": 51539607552,
+    "gflops": 2528.7290661073393
+  },
+  {
+    "candidate_hash": "b4ac36b9befcddc348de0d4582b28208c071e08f709ef4f2eb806a112011ff42",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 16
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20146083,
+      20387750,
+      20396374,
+      20145249,
+      20385333
+    ],
+    "median_ns": 20385333,
+    "operations": 51539607552,
+    "gflops": 2528.26910171151
+  },
+  {
+    "candidate_hash": "ac618c15070ec5e35e4884938c7852e66c4c3113e31692076aac521e94a8eb25",
+    "tile": {
+      "k": 16,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20417333,
+      20387625,
+      20152124,
+      20398124,
+      20385375
+    ],
+    "median_ns": 20387625,
+    "operations": 51539607552,
+    "gflops": 2527.9848708223735
+  },
+  {
+    "candidate_hash": "cb2f93a4e8e33eb420820003fdd25eff0496dd84960896a55af316f8b12b21df",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20385750,
+      20143250,
+      20270750,
+      20378374,
+      20141291
+    ],
+    "median_ns": 20270750,
+    "operations": 51539607552,
+    "gflops": 2542.5604653009877
+  },
+  {
+    "candidate_hash": "ce24718099877c0bf4b84f8cd1068d3485ad121ce89d24fe0e52a7b74bf2d50f",
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 16
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20160250,
+      20399749,
+      20140999,
+      20297958,
+      20396874
+    ],
+    "median_ns": 20297958,
+    "operations": 51539607552,
+    "gflops": 2539.1523399545904
+  },
+  {
+    "candidate_hash": "994a917c293a740cbc81168c11238411c438357960d4967b381d0f7cbcfc9fe0",
+    "tile": {
+      "k": 16,
+      "m": 64,
+      "n": 32
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20143333,
+      20397124,
+      20388499,
+      20145250,
+      20391375
+    ],
+    "median_ns": 20388499,
+    "operations": 51539607552,
+    "gflops": 2527.876502924516
+  },
+  {
+    "candidate_hash": "c52c0c52005d4ac7f2a986afc6733161bcae4e490c023ded4871d8f998e34514",
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 32
+    },
+    "threads": 64,
+    "geometry": {
+      "wm": 2,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20143458,
+      20391708,
+      20141666,
+      20398833,
+      20393541
+    ],
+    "median_ns": 20391708,
+    "operations": 51539607552,
+    "gflops": 2527.478696340689
+  },
+  {
+    "candidate_hash": "89412e2b62a63843d8d4d2785a3d1994a4007291af5fb6d8e533ea94d8484a2b",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 2,
+      "wn": 2,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20142833,
+      20388749,
+      20393374,
+      20136125,
+      20383875
+    ],
+    "median_ns": 20383875,
+    "operations": 51539607552,
+    "gflops": 2528.4499415346686
+  },
+  {
+    "candidate_hash": "5ce124a46655b15c7ba40cbd80d457e456d09ec7cbb0b38c30efa023b7ad5977",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 64
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 2,
+      "wn": 2,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20411083,
+      20394458,
+      20142374,
+      20393374,
+      20393750
+    ],
+    "median_ns": 20393750,
+    "operations": 51539607552,
+    "gflops": 2527.2256231443453
+  },
+  {
+    "candidate_hash": "328f1e61c4f77c27207dd9f0a08c603dbb353d28a0e9ca8635bc6907595cae1b",
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 32
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 2,
+      "wn": 2,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20392375,
+      20145333,
+      20392500,
+      20389541,
+      20145416
+    ],
+    "median_ns": 20389541,
+    "operations": 51539607552,
+    "gflops": 2527.747316724786
+  },
+  {
+    "candidate_hash": "4749d07e58219c84401afc3592c0697d23b367b44737eeda6f73388abfaa782b",
+    "tile": {
+      "k": 16,
+      "m": 64,
+      "n": 64
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 2,
+      "wn": 2,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20146458,
+      20396624,
+      20388916,
+      20145041,
+      20394000
+    ],
+    "median_ns": 20388916,
+    "operations": 51539607552,
+    "gflops": 2527.8248020640235
+  },
+  {
+    "candidate_hash": "31039d2926c8dc32e822be4a8f0ad16657d21a2606c82fea7d35b0ce63fa303f",
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 64
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 2,
+      "wn": 2,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20401249,
+      20144958,
+      20387625,
+      20148041,
+      20394416
+    ],
+    "median_ns": 20387625,
+    "operations": 51539607552,
+    "gflops": 2527.9848708223735
+  },
+  {
+    "candidate_hash": "89412e2b62a63843d8d4d2785a3d1994a4007291af5fb6d8e533ea94d8484a2b",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 2,
+      "wn": 2,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20148249,
+      20395125,
+      20145041,
+      20390749,
+      20140958
+    ],
+    "median_ns": 20148249,
+    "operations": 51539607552,
+    "gflops": 2558.0191882679233
+  },
+  {
+    "candidate_hash": "5ce124a46655b15c7ba40cbd80d457e456d09ec7cbb0b38c30efa023b7ad5977",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 64
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 2,
+      "wn": 2,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20401000,
+      20393916,
+      20137874,
+      20382499,
+      20390124
+    ],
+    "median_ns": 20390124,
+    "operations": 51539607552,
+    "gflops": 2527.675042682428
+  },
+  {
+    "candidate_hash": "328f1e61c4f77c27207dd9f0a08c603dbb353d28a0e9ca8635bc6907595cae1b",
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 32
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 2,
+      "wn": 2,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20398124,
+      20147166,
+      20393374,
+      20395750,
+      20143375
+    ],
+    "median_ns": 20393374,
+    "operations": 51539607552,
+    "gflops": 2527.2722185156804
+  },
+  {
+    "candidate_hash": "4749d07e58219c84401afc3592c0697d23b367b44737eeda6f73388abfaa782b",
+    "tile": {
+      "k": 16,
+      "m": 64,
+      "n": 64
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 2,
+      "wn": 2,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20395750,
+      20150708,
+      20396833,
+      20385208,
+      20146999
+    ],
+    "median_ns": 20385208,
+    "operations": 51539607552,
+    "gflops": 2528.2846047977528
+  },
+  {
+    "candidate_hash": "31039d2926c8dc32e822be4a8f0ad16657d21a2606c82fea7d35b0ce63fa303f",
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 64
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 2,
+      "wn": 2,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20151624,
+      20401999,
+      20391583,
+      20151416,
+      20394749
+    ],
+    "median_ns": 20391583,
+    "operations": 51539607552,
+    "gflops": 2527.4941897350486
+  },
+  {
+    "candidate_hash": "fe5dcc10f204e25f9b4e421282c56eb09d700c1361684140beba42258f636f89",
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 64
+    },
+    "threads": 256,
+    "geometry": {
+      "wm": 2,
+      "wn": 4,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20411916,
+      20151000,
+      20396416,
+      20143125,
+      20391208
+    ],
+    "median_ns": 20391208,
+    "operations": 51539607552,
+    "gflops": 2527.5406710578404
+  },
+  {
+    "candidate_hash": "5a93b1f1ef3d199c53461013ab6c4e325efdfd22ddadd118ac9100b7f7d14838",
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 128
+    },
+    "threads": 256,
+    "geometry": {
+      "wm": 2,
+      "wn": 4,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20147250,
+      20392999,
+      20144999,
+      20390374,
+      20161791
+    ],
+    "median_ns": 20161791,
+    "operations": 51539607552,
+    "gflops": 2556.301052421384
+  },
+  {
+    "candidate_hash": "fe5dcc10f204e25f9b4e421282c56eb09d700c1361684140beba42258f636f89",
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 64
+    },
+    "threads": 256,
+    "geometry": {
+      "wm": 2,
+      "wn": 4,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20391124,
+      20392124,
+      20141999,
+      20396833,
+      20388625
+    ],
+    "median_ns": 20391124,
+    "operations": 51539607552,
+    "gflops": 2527.551083108513
+  },
+  {
+    "candidate_hash": "5a93b1f1ef3d199c53461013ab6c4e325efdfd22ddadd118ac9100b7f7d14838",
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 128
+    },
+    "threads": 256,
+    "geometry": {
+      "wm": 2,
+      "wn": 4,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20388749,
+      20147000,
+      20388583,
+      20389833,
+      20151000
+    ],
+    "median_ns": 20388583,
+    "operations": 51539607552,
+    "gflops": 2527.866088192593
+  },
+  {
+    "candidate_hash": "89412e2b62a63843d8d4d2785a3d1994a4007291af5fb6d8e533ea94d8484a2b",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 4,
+      "wn": 1,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20384250,
+      20149083,
+      20438874,
+      20150708,
+      20398374
+    ],
+    "median_ns": 20384250,
+    "operations": 51539607552,
+    "gflops": 2528.40342676331
+  },
+  {
+    "candidate_hash": "328f1e61c4f77c27207dd9f0a08c603dbb353d28a0e9ca8635bc6907595cae1b",
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 32
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 4,
+      "wn": 1,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20143958,
+      20396499,
+      20148000,
+      20146541,
+      20387500
+    ],
+    "median_ns": 20148000,
+    "operations": 51539607552,
+    "gflops": 2558.050801667659
+  },
+  {
+    "candidate_hash": "4bd7a74dd862d97778fb429af9a1cd5df8854546bd470dbe4181582feecba25f",
+    "tile": {
+      "k": 32,
+      "m": 128,
+      "n": 32
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 4,
+      "wn": 1,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20169374,
+      20396750,
+      20385124,
+      20143999,
+      20398249
+    ],
+    "median_ns": 20385124,
+    "operations": 51539607552,
+    "gflops": 2528.295022978521
+  },
+  {
+    "candidate_hash": "89412e2b62a63843d8d4d2785a3d1994a4007291af5fb6d8e533ea94d8484a2b",
+    "tile": {
+      "k": 32,
+      "m": 32,
+      "n": 32
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 4,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20410124,
+      20145333,
+      20406708,
+      20148624,
+      20395416
+    ],
+    "median_ns": 20395416,
+    "operations": 51539607552,
+    "gflops": 2527.019186664297
+  },
+  {
+    "candidate_hash": "328f1e61c4f77c27207dd9f0a08c603dbb353d28a0e9ca8635bc6907595cae1b",
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 32
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 4,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20166125,
+      20392625,
+      20388625,
+      20146791,
+      20391375
+    ],
+    "median_ns": 20388625,
+    "operations": 51539607552,
+    "gflops": 2527.860880858812
+  },
+  {
+    "candidate_hash": "4bd7a74dd862d97778fb429af9a1cd5df8854546bd470dbe4181582feecba25f",
+    "tile": {
+      "k": 32,
+      "m": 128,
+      "n": 32
+    },
+    "threads": 128,
+    "geometry": {
+      "wm": 4,
+      "wn": 1,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20392000,
+      20398916,
+      20154666,
+      20396666,
+      20389999
+    ],
+    "median_ns": 20392000,
+    "operations": 51539607552,
+    "gflops": 2527.442504511573
+  },
+  {
+    "candidate_hash": "fe5dcc10f204e25f9b4e421282c56eb09d700c1361684140beba42258f636f89",
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 64
+    },
+    "threads": 256,
+    "geometry": {
+      "wm": 4,
+      "wn": 2,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20395375,
+      20400625,
+      20150166,
+      20386291,
+      20140374
+    ],
+    "median_ns": 20386291,
+    "operations": 51539607552,
+    "gflops": 2528.150292370495
+  },
+  {
+    "candidate_hash": "df6d56d297a6cd909018bfa01577ee14c52b11e91134ac0d2f0b09016ade034c",
+    "tile": {
+      "k": 32,
+      "m": 128,
+      "n": 64
+    },
+    "threads": 256,
+    "geometry": {
+      "wm": 4,
+      "wn": 2,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20540124,
+      20141958,
+      20383833,
+      20145291,
+      20385375
+    ],
+    "median_ns": 20383833,
+    "operations": 51539607552,
+    "gflops": 2528.4551512956373
+  },
+  {
+    "candidate_hash": "fe5dcc10f204e25f9b4e421282c56eb09d700c1361684140beba42258f636f89",
+    "tile": {
+      "k": 32,
+      "m": 64,
+      "n": 64
+    },
+    "threads": 256,
+    "geometry": {
+      "wm": 4,
+      "wn": 2,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20169541,
+      20392291,
+      20394749,
+      20145541,
+      20391250
+    ],
+    "median_ns": 20391250,
+    "operations": 51539607552,
+    "gflops": 2527.5354650646723
+  },
+  {
+    "candidate_hash": "df6d56d297a6cd909018bfa01577ee14c52b11e91134ac0d2f0b09016ade034c",
+    "tile": {
+      "k": 32,
+      "m": 128,
+      "n": 64
+    },
+    "threads": 256,
+    "geometry": {
+      "wm": 4,
+      "wn": 2,
+      "bc": 2
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20418125,
+      20452374,
+      20145458,
+      20393374,
+      20401749
+    ],
+    "median_ns": 20401749,
+    "operations": 51539607552,
+    "gflops": 2526.23476310781
+  },
+  {
+    "candidate_hash": "161a90a23df29b285cb627d56e0c7e31b34fe0967fbdd5279d9d2dc60dd1177a",
+    "tile": {
+      "k": 32,
+      "m": 128,
+      "n": 128
+    },
+    "threads": 512,
+    "geometry": {
+      "wm": 4,
+      "wn": 4,
+      "bc": 1
+    },
+    "reached_precontract": true,
+    "source_sha256": "9f56f741424e45ea37e9d80ae1c4a17d792452748ed5c45a158d85562d560075",
+    "correct": true,
+    "check_evidence": {
+      "tolerance": {
+        "atol": 0.001,
+        "rtol": 0.001
+      },
+      "packed_block_fixtures": [
+        {
+          "format": "Q4_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        },
+        {
+          "format": "Q6_K",
+          "elements": 512,
+          "oracle": "extra.llm_research.layout canonical reference"
+        }
+      ],
+      "representative_role_shape": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096
+      },
+      "oracle": "canonical packed reference",
+      "candidate_call_buffer_read": true
+    },
+    "status": "MEASURED",
+    "samples_ns": [
+      20416333,
+      20209999,
+      20397458,
+      20404416,
+      20152250
+    ],
+    "median_ns": 20397458,
+    "operations": 51539607552,
+    "gflops": 2526.7662054752113
+  }
+]
