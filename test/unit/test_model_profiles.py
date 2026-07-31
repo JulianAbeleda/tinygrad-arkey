@@ -61,6 +61,20 @@ def test_profile_lookup_by_id_and_transformer_config():
   local_config = SimpleNamespace(family="qwen3", dim=4096, hidden_dim=12288, n_heads=32, n_kv_heads=8, head_dim=128)
   assert profile_from_transformer_config(local_config, quant="Q4_K_M",
                                          device_profile="gfx1100") is QWEN3_8B_Q4_K_M_GFX1100
+  # A model profile is a fact about the MODEL; device_profile is accepted for call-site
+  # compatibility only and is never part of what identifies the profile.
+  assert profile_from_transformer_config(local_config, quant="Q4_K_M") is QWEN3_8B_Q4_K_M_GFX1100
+  assert profile_from_transformer_config(local_config, quant="Q4_K_M",
+                                         device_profile="apple_m4_10c") is QWEN3_8B_Q4_K_M_GFX1100
+
+
+def test_profile_lookup_is_target_neutral():
+  # Existing device-labelled ids keep resolving (hard backward-compatibility requirement)...
+  assert profile_by_id("qwen3_8b_q4k_m_gfx1100") is QWEN3_8B_Q4_K_M_GFX1100
+  # ...and the same model profile also resolves without naming any target at all.
+  assert profile_by_id("qwen3_8b_q4k_m") is QWEN3_8B_Q4_K_M_GFX1100
+  assert profile_by_id("qwen3_14b_q4k_m") is QWEN3_14B_Q4_K_M_GFX1100
+  assert profile_by_id("QWEN3_8B_Q4K_M") is QWEN3_8B_Q4_K_M_GFX1100
 
 
 def test_profile_lookup_from_model_path_uses_central_model_facts():

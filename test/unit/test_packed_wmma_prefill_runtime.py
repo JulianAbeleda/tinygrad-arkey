@@ -61,11 +61,23 @@ def test_verifier_error_declines_without_entry():
 def test_exp_qualification_adapter_installs_on_the_production_seam(monkeypatch):
   from extra.llm_research.prefill import packed_wmma_production_canary as adapter
   seen = []
-  monkeypatch.setattr(adapter, "verify_production_row", lambda row, *, timeout_seconds: (seen.append((row, timeout_seconds)) is None, 0.0))
+  monkeypatch.setattr(adapter, "verify_production_row",
+    lambda row, *, timeout_seconds, device: (seen.append((row, timeout_seconds, device)) is None, 0.0))
   adapter.install_production_qualification_verifier(timeout_seconds=17.0)
   row = runtime.PACKED_WMMA_ROUTES[0]
   assert runtime.gate_combo(row.quant, row.role, row.shape)
-  assert seen == [(row, 17.0)]
+  assert seen == [(row, 17.0, "AMD")]
+
+
+def test_exp_qualification_adapter_threads_an_explicit_device(monkeypatch):
+  from extra.llm_research.prefill import packed_wmma_production_canary as adapter
+  seen = []
+  monkeypatch.setattr(adapter, "verify_production_row",
+    lambda row, *, timeout_seconds, device: (seen.append((row, timeout_seconds, device)) is None, 0.0))
+  adapter.install_production_qualification_verifier(timeout_seconds=17.0, device="METAL")
+  row = runtime.PACKED_WMMA_ROUTES[0]
+  assert runtime.gate_combo(row.quant, row.role, row.shape)
+  assert seen == [(row, 17.0, "METAL")]
 
 
 def test_warmstart_context_preserves_geometry_identity_and_packed_semantics():

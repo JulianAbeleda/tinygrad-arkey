@@ -97,14 +97,34 @@ MODEL_PROFILES: tuple[ModelProfile, ...] = (
   QWEN3_14B_Q4_K_M_GFX1100,
 )
 
+def _device_neutral_id(profile: ModelProfile) -> str:
+  """Strip the trailing device-profile label a model profile's `id` happens to carry.
+
+  A `ModelProfile` describes the MODEL (family/size/quant/roles/attention) -- `device_profile`
+  is a caller-supplied label, not a fact this profile derives anything from (see module
+  docstring intent: roles come from hidden_size/intermediate_size, attention from head counts).
+  The `_gfx1100` suffix on today's ids is therefore a naming artifact, not part of the model's
+  identity. Deriving the neutral form from each profile's own fields (instead of hand-writing a
+  second literal per profile) keeps this from silently drifting out of sync with `id`/`device_profile`.
+  """
+  suffix = f"_{profile.device_profile}"
+  return profile.id[:-len(suffix)] if profile.id.endswith(suffix) else profile.id
+
+
 _PROFILE_ALIASES = {
   **{profile.size_label.lower(): profile.id for profile in MODEL_PROFILES},
+  # Device-neutral aliases: the same model profile, addressable without naming a target.
+  # Existing device-labelled ids below are retained verbatim for backward compatibility.
+  **{_device_neutral_id(profile): profile.id for profile in MODEL_PROFILES},
   "qwen3_8b_q4_k_m_gfx1100": "qwen3_8b_q4k_m_gfx1100",
   "qwen3_14b_q4_k_m_gfx1100": "qwen3_14b_q4k_m_gfx1100",
 }
 _PROFILES_BY_ID = {profile.id: profile for profile in MODEL_PROFILES}
+# Model identity never included a target fact beyond this tuple's own fields: `device_profile` is
+# deliberately absent here (see `_device_neutral_id`) so resolving a profile from transformer config
+# facts does not require the caller to also guess a target label unrelated to the model itself.
 _PROFILES_BY_CONFIG = {
-  (profile.family, profile.quant, profile.device_profile, profile.attention.Hq * profile.attention.Hd,
+  (profile.family, profile.quant, profile.attention.Hq * profile.attention.Hd,
    profile.role_shape("ffn_gate_up").N, profile.attention.Hq, profile.attention.Hkv, profile.attention.Hd): profile
   for profile in MODEL_PROFILES
 }
@@ -143,7 +163,10 @@ def _config_get(config: Any, key: str, default: Any = None) -> Any:
   return getattr(config, key, default)
 
 
-def profile_from_transformer_config(config: Any, *, quant: str, device_profile: str) -> ModelProfile:
+def profile_from_transformer_config(config: Any, *, quant: str, device_profile: str | None = None) -> ModelProfile:
+  """Resolve a profile from model facts alone; `device_profile` is accepted for call-site
+  compatibility but never part of the model's identity (see `_PROFILES_BY_CONFIG`)."""
+  del device_profile
   family = str(_config_get(config, "model_type", _config_get(config, "family", "qwen3"))).lower()
   if family == "qwen2": family = "qwen3"
   hidden_size = int(_config_get(config, "hidden_size", _config_get(config, "dim")))
@@ -151,8 +174,7 @@ def profile_from_transformer_config(config: Any, *, quant: str, device_profile: 
   num_attention_heads = int(_config_get(config, "num_attention_heads", _config_get(config, "n_heads")))
   num_key_value_heads = int(_config_get(config, "num_key_value_heads", _config_get(config, "n_kv_heads")))
   head_dim = int(_config_get(config, "head_dim", hidden_size // num_attention_heads))
-  key = (family, quant, device_profile, hidden_size, intermediate_size, num_attention_heads, num_key_value_heads,
-         head_dim)
+  key = (family, quant, hidden_size, intermediate_size, num_attention_heads, num_key_value_heads, head_dim)
   try:
     return _PROFILES_BY_CONFIG[key]
   except KeyError as exc:

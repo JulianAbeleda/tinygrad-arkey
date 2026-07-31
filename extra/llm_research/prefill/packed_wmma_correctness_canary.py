@@ -132,7 +132,8 @@ def build_artifact(quant_format:str, path:str, shape:tuple[int,int,int]=(M,N,K))
           "reference_elements":reference.size, "shape":list(shape)}
 
 
-def run_canary(quant_format:str, artifact_path:str, timeout_seconds:float = 30.0, *, base_payload:dict|None=None) -> dict:
+def run_canary(quant_format:str, artifact_path:str, timeout_seconds:float = 30.0, *, base_payload:dict|None=None,
+                device:str="AMD") -> dict:
   entry = derive_packed_weight_candidate(base_payload or candidate_payload(), quant_format)
   payload = entry.to_json()["payload"]
   workload = full_kernel_workload(payload)
@@ -140,14 +141,14 @@ def run_canary(quant_format:str, artifact_path:str, timeout_seconds:float = 30.0
   from extra.llm_research.prefill.current_prefill_execution_adapter import admit_current_prefill
   admission = admit_current_prefill(payload, entry.canonical_identity)
   inputs, reference = _arrays(artifact_path, workload.shape, admission.context.packed_weight)
-  _, evidence = prepare_current_prefill_compile(payload, entry.canonical_identity, device="AMD")
+  _, evidence = prepare_current_prefill_compile(payload, entry.canonical_identity, device=device)
   builder = make_tinygrad_bundle_builder(build=build_current_prefill_bundle, payload=payload,
-    canonical_identity=entry.canonical_identity, compile_evidence=evidence, compile_device="AMD", runtime_device="AMD")
+    canonical_identity=entry.canonical_identity, compile_evidence=evidence, compile_device=device, runtime_device=device)
   request = ExecutionRequest(inputs, reference,
     GuardPolicy(timeout_seconds=timeout_seconds, check_inputs_unchanged=True, rtol=2e-2, atol=2e-2),
     {"canonical_identity":entry.canonical_identity, "quant_format":quant_format}, np.float16)
   outcome = run_isolated_guarded_execution(builder=builder, request=request,
-    health_probe=make_tiny_health_probe(device="AMD"), timeout_seconds=timeout_seconds)
+    health_probe=make_tiny_health_probe(device=device), timeout_seconds=timeout_seconds)
   return outcome.to_dict()
 
 
@@ -160,13 +161,15 @@ def main() -> None:
   parser.add_argument("--candidate-set", default="")
   parser.add_argument("--build-only", action="store_true")
   parser.add_argument("--timeout", type=float, default=30.0)
+  parser.add_argument("--device", default="AMD")
   args = parser.parse_args()
   payload = candidate_payload(args.profile, args.role, args.candidate_set or None)
   workload = full_kernel_workload(payload)
   print(json.dumps({"profile":workload.profile, "role":workload.role,
     "artifact":build_artifact(args.format, args.artifact, workload.shape)}, sort_keys=True))
   if not args.build_only:
-    print(json.dumps(run_canary(args.format, args.artifact, args.timeout, base_payload=payload), sort_keys=True))
+    print(json.dumps(run_canary(args.format, args.artifact, args.timeout, base_payload=payload, device=args.device),
+                      sort_keys=True))
 
 
 if __name__ == "__main__": main()

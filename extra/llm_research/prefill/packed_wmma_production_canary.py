@@ -32,13 +32,15 @@ def _payload_for_production_row(row: production.PackedWmmaRoute) -> dict:
   return payload
 
 
-def verify_production_row(row: production.PackedWmmaRoute, *, timeout_seconds: float = 90.0) -> tuple[bool, float | None]:
+def verify_production_row(row: production.PackedWmmaRoute, *, timeout_seconds: float = 90.0,
+                           device: str = "AMD") -> tuple[bool, float | None]:
   """Run the isolated oracle against exactly the supplied production row."""
   fd, artifact_path = tempfile.mkstemp(prefix=f"packed_wmma_production_{row.quant}_{row.role}_", suffix=".npz")
   os.close(fd)
   try:
     build_artifact(row.quant, artifact_path, row.shape)
-    outcome = run_canary(row.quant, artifact_path, timeout_seconds, base_payload=_payload_for_production_row(row))
+    outcome = run_canary(row.quant, artifact_path, timeout_seconds, base_payload=_payload_for_production_row(row),
+                          device=device)
   finally:
     try: os.remove(artifact_path)
     except OSError: pass
@@ -46,6 +48,7 @@ def verify_production_row(row: production.PackedWmmaRoute, *, timeout_seconds: f
   return bool(outcome.get("passed")), guarded.get("max_abs_error") if isinstance(guarded, dict) else None
 
 
-def install_production_qualification_verifier(*, timeout_seconds: float = 90.0) -> None:
+def install_production_qualification_verifier(*, timeout_seconds: float = 90.0, device: str = "AMD") -> None:
   """Make production gate_combo use the isolated EXP oracle for this process."""
-  production.set_packed_wmma_canary_verifier(lambda row: verify_production_row(row, timeout_seconds=timeout_seconds))
+  production.set_packed_wmma_canary_verifier(
+    lambda row: verify_production_row(row, timeout_seconds=timeout_seconds, device=device))
