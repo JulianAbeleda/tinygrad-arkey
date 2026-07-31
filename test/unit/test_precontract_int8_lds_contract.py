@@ -4,8 +4,8 @@ import pytest
 
 from tinygrad import dtypes
 from tinygrad.codegen.opt.kernel_lds import (PrecontractContractSpec, PrecontractKAxis, PrecontractOperandTemplate,
-  PrecontractThreadAxes, build_precontract_lds_stage, derive_precontract_factors, instantiate_precontract_fragments,
-  validate_precontract_carriers, validate_precontract_wmma_abi, validate_wmma_descriptor)
+  PrecontractThreadAxes, build_precontract_lds_stage, derive_precontract_factors, fold_binary_axes,
+  instantiate_precontract_fragments, validate_precontract_carriers, validate_precontract_wmma_abi, validate_wmma_descriptor)
 from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import AxisType, Ops, UOp
@@ -64,6 +64,22 @@ def test_exact_rdna3_int8_descriptor_and_dense_k256_stage_abi():
   node = _wmma((stage.fragment_a, stage.fragment_b), contracts)
   validate_precontract_wmma_abi(node)
   assert node.dtype == node.src[2].dtype == dtypes.int.vec(8)
+
+
+def test_contract_axis_count_disagreeing_with_elements_per_thread_still_rejects():
+  """The candidate-contract guard used to demand exactly four binary axes per operand, a literal
+  snapshot of RDNA3's own elements_per_thread=(16,16,8) (log2 = (4,4,3)). Generalizing that literal
+  to a derived count must not turn into accepting any count: an A contract built with three axes
+  for this int8 descriptor (which itself implies four, log2(16)=4) still disagrees with what the
+  descriptor claims and must still raise -- a real, not a per-target, self-consistency check."""
+  tc = _tc()
+  allocation, operands, threads, k_axis, sm, sn, contracts = _fixture()
+  bad_axes = tuple(UOp.range(2, 200 + i, AxisType.UPCAST) for i in range(3))
+  bad_contract = PrecontractContractSpec("A", bad_axes, tuple((x.arg[0], 2) for x in bad_axes),
+    fold_binary_axes(bad_axes), contracts[0].descriptor_remap)
+  with pytest.raises(ValueError, match="does not match actual descriptor operand mapping"):
+    build_precontract_lds_stage(_geometry(), tc=tc, allocation=allocation, operands=operands, threads=threads,
+      k_axis=k_axis, subtile_m=sm, subtile_n=sn, contracts=(bad_contract, contracts[1]))
 
 
 def test_32_wide_native_outputs_leave_a_float_group_epilogue_boundary():

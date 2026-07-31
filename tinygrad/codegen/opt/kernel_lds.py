@@ -1,6 +1,7 @@
 """Pure cooperative LDS ownership math for compiler-bound kernel geometry."""
 from __future__ import annotations
 
+import functools, math
 from dataclasses import dataclass
 from typing import Callable, TypeAlias, TYPE_CHECKING
 
@@ -52,6 +53,29 @@ def validate_wmma_descriptor(tc) -> None:
     raise ValueError("WMMA descriptor dtype_in is not a pairing this precontract path expresses")
   if dtype_out != (dtypes.float if dtype_in == dtypes.half else dtypes.int):
     raise ValueError("WMMA descriptor dtype_out is not a pairing this precontract path expresses")
+
+
+def binary_axis_count(tc, operand_idx:int) -> int:
+  """How many binary (size-2) upcast axes ``tc`` itself says operand ``operand_idx`` folds.
+
+  ``tc.elements_per_thread[operand_idx]`` is the descriptor's own per-thread element count for
+  that operand; a Horner fold over binary axes reproduces it exactly when there are
+  ``log2(elements_per_thread[operand_idx])`` of them (postrange.py derives ``tc_upcast_axes`` the
+  same way). Not a per-target constant: RDNA3's 16/16/8 gives 4/4/3, Metal's 2/2/2 gives 1/1/1.
+  """
+  return int(math.log2(tc.elements_per_thread[operand_idx]))
+
+
+def fold_binary_axes(axes:tuple) -> UOp:
+  """Horner-fold ``axes`` (MSB first) into one element index: ``axes[0]*2**(n-1) + ... + axes[n-1]``.
+
+  Reduces with the first axis as the seed (not a ``0`` starting accumulator) so the emitted UOp
+  tree is exactly the old hand-unrolled ``((axes[0]*2+axes[1])*2+axes[2])*2+axes[3]`` for RDNA3's
+  four axes -- no redundant ``+0`` node relying on a later simplification pass to disappear -- and
+  the same Horner shape for any other axis count, including Metal's one.
+  """
+  if not axes: raise ValueError("cannot fold zero binary axes into an element index")
+  return functools.reduce(lambda acc, a: acc*2 + a, axes[1:], axes[0])
 
 
 def contract_symbolic_upcast(value:UOp, axis:UOp) -> UOp:
@@ -198,8 +222,9 @@ class PrecontractCandidateContract:
     contracts = []
     for operand_idx, role in enumerate(("A", "B")):
       axes = tuple(range_by_id[a] for a, size in tc_upcast_axes[operand_idx] if size == 2)
-      if len(axes) != 4: raise ValueError(f"candidate {role} contract does not have four binary axes")
-      element = ((axes[0]*2+axes[1])*2+axes[2])*2+axes[3]
+      expected = binary_axis_count(tc, operand_idx)
+      if len(axes) != expected: raise ValueError(f"candidate {role} contract does not have {expected} binary axes")
+      element = fold_binary_axes(axes)
       contracts.append(PrecontractContractSpec(role, axes, tc_upcast_axes[operand_idx], element,
                                                tuple(tc.lane_map.remaps()[operand_idx].items())))
     contracts = tuple(contracts)
@@ -299,9 +324,9 @@ def validate_precontract_contracts(tc, contracts:tuple[PrecontractContractSpec, 
     raise ValueError(f"{context} contracts must be exactly ordered A and B")
   descriptor_remaps = tuple(tuple(x.items()) for x in tc.lane_map.remaps())
   for operand_idx, contract in enumerate(contracts):
-    folded = ((contract.axes[0] * 2 + contract.axes[1]) * 2 + contract.axes[2]) * 2 + contract.axes[3] \
-      if len(contract.axes) == 4 else None
-    if (len(contract.axes) != 4 or any(a.op is not Ops.RANGE or a.vmax + 1 != 2 for a in contract.axes) or
+    expected = binary_axis_count(tc, operand_idx)
+    folded = fold_binary_axes(contract.axes) if len(contract.axes) == expected else None
+    if (len(contract.axes) != expected or any(a.op is not Ops.RANGE or a.vmax + 1 != 2 for a in contract.axes) or
         contract.arg != tuple((a.arg[0], 2) for a in contract.axes) or contract.element is not folded or
         contract.descriptor_remap != descriptor_remaps[operand_idx]):
       raise ValueError(f"{context} {contract.role} contract {mismatch}")

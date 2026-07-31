@@ -1,7 +1,7 @@
 import pytest
 
-from tinygrad.codegen.opt.kernel_lds import (derive_precontract_factors, derive_precontract_shape_factors,
-                                             validate_precontract_carriers, validate_wmma_descriptor)
+from tinygrad.codegen.opt.kernel_lds import (binary_axis_count, derive_precontract_factors, derive_precontract_shape_factors,
+                                             fold_binary_axes, validate_precontract_carriers, validate_wmma_descriptor)
 from tinygrad.codegen.opt.tc import amd_cdna_161616, amd_rdna3
 from tinygrad import dtypes
 from extra.llm_research.kernel_vocabulary import KernelLDSWindow, KernelTileGeometry
@@ -39,6 +39,27 @@ def test_wave64_cdna_descriptor_is_self_consistent_but_unsupported():
   cdna = amd_cdna_161616[0]
   assert cdna.threads == 64
   with pytest.raises(ValueError, match="threads must be 32"): validate_wmma_descriptor(cdna)
+
+
+def test_binary_axis_count_derives_from_elements_per_thread_not_a_literal_four():
+  """PrecontractCandidateContract.assemble used to demand exactly four binary axes per operand --
+  a frozen snapshot of RDNA3's own numbers (elements_per_thread=(16,16,8) -> log2 = (4,4,3)), one
+  layer below the validator PG0 fixed. Metal's descriptor (elements_per_thread=(2,2,2) -> log2 =
+  (1,1,1)) is just as valid a mapping but could never satisfy the literal ``4``."""
+  from tinygrad.codegen.opt.tc import metal
+  amd, mtl = _tc(), next(tc for tc in metal if tc.dtype_in == dtypes.half and tc.dtype_out == dtypes.float)
+  assert tuple(binary_axis_count(amd, i) for i in range(3)) == (4, 4, 3)
+  assert tuple(binary_axis_count(mtl, i) for i in range(3)) == (1, 1, 1)
+
+
+def test_fold_binary_axes_reproduces_the_original_horner_expression():
+  """The four-axis fold used to be hand-unrolled as ``((a0*2+a1)*2+a2)*2+a3``. The general
+  reduction must reproduce that exact value for RDNA3's four axes, and the same Horner shape for
+  any other axis count (Metal folds one axis; the fold degenerates to that axis itself)."""
+  a0, a1, a2, a3 = 1, 0, 1, 1
+  assert fold_binary_axes((a0, a1, a2, a3)) == ((a0*2+a1)*2+a2)*2+a3
+  assert fold_binary_axes((1,)) == 1
+  with pytest.raises(ValueError, match="zero binary axes"): fold_binary_axes(())
 
 
 def test_precontract_factor_derivation_exact_anchor_and_legal_smaller_family():
