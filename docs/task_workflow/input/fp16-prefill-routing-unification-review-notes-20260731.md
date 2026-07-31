@@ -200,3 +200,75 @@ review brief; committed with these notes.
 
 One maintainer caveat added to R1: the existing test is the only thing asserting the "cannot force an infeasible
 overlay" safety property today, so the degradation path needs its census assertion in the S3 commit itself.
+
+---
+
+## R6 (blocking, second round) - the one-call form sizes max_context against an overlay that is never allocated
+
+Raised after re-reading `4359d7b55` against the code. **This defect is downstream of R1's wording**: R1 said "one
+planner call", the brief implemented one call faithfully, and one call is the part that is wrong. R1's contract
+change (restrict -> prefer) is correct and stands; the call-count reduction does not.
+
+**The coupling that was missed.**
+
+- `ContextMemoryTerms.from_inputs(inp, resident_fp16=...)` sets
+  `weights = q4_bytes + (est_fp16 if resident_fp16 else 0)` (`admission.py:240-241`)
+- `_plan_context_admission` passes `terms.weights` into `_resolve_max_context_admission`
+  (`admission.py:260-266`), which resolves `max_context` from `budget - weights`
+
+So `max_context` is a function of the residency decision, and the residency decision's feasibility is a function
+of `max_context` (kv_cache and prefill_activations are `per_tok * max_context`, `admission.py:364-370`). This is a
+**fixpoint**, and the "three hops" are the two-step evaluation of it.
+
+**The failure under revised 5.2.** With an overlay-strategy policy preferred:
+
+1. `overlay_preferred = True` -> context admitted as if `est_fp16` were resident
+2. plan evaluates; overlay is infeasible; caller degrades to `DIRECT_PACKED_FALLBACK` (R1 fix works)
+3. the returned `AdmissionPlan.max_context` is still the overlay-sized one - **the degraded packed load runs with
+   a context sized against 16.4 GB that was never allocated**
+
+Today this cannot happen: the probe call passes `overlay_requested=None`, and
+`explicit_overlay = overlay_requested is True` (`admission.py:360`) is therefore **False**, so the probe and the
+`False` replan both size context without the overlay. The degraded path gets the correct, larger context.
+
+**Magnitude, 8B.** `kv_per_tok = 2 * 8 * 128 * 2 * 36` ~= 144 KB/token, so 16.4 GB of phantom overlay is ~116k
+tokens of context. And when `q4_bytes + est_fp16` exceeds the budget outright, `_resolve_max_context_admission`
+does not shrink - it raises (`admission.py:350`). Note the existing test already matches both refusal strings
+(`"memory plan refused load|requested --max_context"`,
+`test_prefill_memory_plan_integration.py:48`), which is direct evidence that the context path refuses too. So R6
+is either a silent context amputation or **R1's dead load reintroduced at a different line**.
+
+**Root cause worth recording.** Scope section 3.5 names the defect as *call count* ("up to three planner calls").
+It is not. The defect is that the sequence is **side-effecting, with a registry lookup in the middle**. Call count
+is a symptom of a real circularity that must be evaluated, not removed.
+
+**Fix - keep two evaluations, make them pure:**
+
+```
+admit(inp, facts, resident_fp16: bool) -> AdmissionPlan    # pure; no registry, no policy, no side effects
+overlay, packed = admit(..., True), admit(..., False)
+choose(overlay if overlay_preferred and overlay_feasible else packed)
+```
+
+Two calls to a pure function is not "replanning" - it is evaluating a function over a two-element domain. F3 is
+still killed: no side effects, no registry mid-sequence, no `None -> True -> False` imperative loop, and the
+promotion lookup stays a caller concern. R6 cannot exist in this shape because each candidate carries its own
+context admission.
+
+**Test the current degradation test does not catch.** As specced, the S3 degradation test asserts only the
+selected strategy, so it passes while R6 is live. It must also assert the context:
+
+```
+overlay-preferred policy + budget too small for the overlay
+  -> effective is DIRECT_PACKED_FALLBACK          (R1: no REFUSE)
+  -> max_context == admit(resident_fp16=False).max_context   (R6: context not amputated)
+```
+
+**Revision order, second round:**
+
+1. Re-spec S3 per R6 (two pure evaluations, not one call). Scope 5.2 and brief S3.
+2. Add the `max_context` assertion to the S3 degradation test.
+3. Correct scope section 3.5 to name the defect as side-effecting sequencing rather than call count, so a future
+   reader does not re-derive "fewer calls is better" and land here again.
+
+S1, S2, S4, S5, S6 are unaffected by R6.
