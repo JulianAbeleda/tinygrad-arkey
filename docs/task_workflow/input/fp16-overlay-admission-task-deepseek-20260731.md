@@ -58,6 +58,12 @@ Verified by review, in code, on this branch:
   match, so MoE expert tensors (`ffn_gate_exps`) are correctly excluded. S1's prerequisite is met.
 - Capability is fp16 dtype only (R2a resolution). Tensor cores are a **promotion/perf** question, not a
   capability question — the overlay bottoms out in an ordinary fp16 `.linear()` (`prefill_routes.py:222`).
+- **Correction (review, before execution): the fp16 capability needs a facts owner.** `v2_on` must read a
+  published device-fact, not call a renderer method at admission time. Add `supports_fp16: bool | None = None`
+  to `DeviceCapabilities` (`device_facts.py:40`) and publish it in the capabilities dict of the device-facts
+  scan as `"supports_fp16": None if renderer is None else (dtypes.half in renderer.supported_dtypes())`,
+  following the exact `supports_tensor_cores` pattern (`device_facts.py:225-230`). S4 then computes
+  `v2_on = capabilities.supports_fp16 is True`.
 
 ## §3 PIECE 1 — S1 + S2 (safe, independent). HARD STOP after.
 
@@ -93,6 +99,11 @@ constructors (`_inputs()` at `:20-23`, and `from_model_metadata` at `:31`).
 Plus the NV 8B e2e using **the same invocation used for `044c9be17`** (check your campaign history; if you do not
 have it, STOP and ask — do not invent a bench command). Strategy and first-token digits must be unchanged.
 
+**Correction (addition): record a §9 line in `docs/bringing-up-a-new-target-20260731.md` at each of the Piece 1
+and Piece 2 HARD STOPs** (raw bench JSON is gitignored; the durable record is §9). The line states strategy,
+decode tok/s, and first-token digits, and marks the refactor as non-moving. Same for Piece 3's census entry as
+it appears in the bench row.
+
 **HARD STOP.** Report: the two commits, the pytest output, the e2e strategy + digits, and the `overlay_bytes`
 equality number from the ratchet test.
 
@@ -109,7 +120,9 @@ The failure being avoided has two halves:
 ### Required shape
 
 ```
-admit(inp, facts, *, resident_fp16: bool) -> AdmissionPlan   # pure. no registry, no policy, no side effects
+admit(inp, facts, *, direct_packed_supported, resident_fp16: bool) -> (AdmissionPlan, PrefillMemoryPlan, Strategy)
+#   pure. no registry, no policy, no side effects. keeps the existing 3-tuple return shape
+#   (Correction: the required tests assert `effective is Strategy...`, so the Strategy must travel with the plan)
 overlay, packed = admit(..., resident_fp16=True), admit(..., resident_fp16=False)
 choose(overlay if overlay_preferred and overlay_is_feasible else packed)
 ```
@@ -118,6 +131,13 @@ choose(overlay if overlay_preferred and overlay_is_feasible else packed)
 - **Never pass a single-strategy `override` into `plan_prefill_memory`.** Its restrict semantics stay exactly as
   they are; the preference is applied by choosing among results, not by narrowing `allowed`.
 - `REFUSE` survives only for its honest meaning: nothing fits.
+- **Correction: the public entry keeps the `plan_selected_model_memory` name** with signature
+  `(inp, facts, *, direct_packed_supported, policy: Mapping|None)`; it internally runs the two `admit`
+  evaluations and `choose`. `admit(resident_fp16=True)` whose residency cannot fit returns a REFUSE-carrying
+  plan with labeled reasons **instead of raising** (today `_resolve_max_context_admission` raises at
+  `admission.py:335`/`:348` when `q4_bytes + est_fp16` exceeds budget — that would reintroduce R1's dead load
+  one line lower). The user-facing raise survives only when **both** residencies refuse (nothing fits), keeping
+  today's message for the packed-only case so non-overlay loads (policy None, NV today) are unchanged.
 - The promotion lookup stays a caller concern in `model.py`; its result is passed in as `policy`.
 - Delete the `None → True → False` imperative loop at `model.py:1115-1130`.
 
@@ -157,6 +177,9 @@ prefill delta must be unchanged in direction.
   **never `supports_tensor_cores`** (R2a). Registry miss with expressible capability →
   `DIRECT_PACKED_FALLBACK` plus a labeled census entry `prefill_overlay_promotion: "no-promoted-candidate"`,
   carried in **both** the admission report **and** the e2e bench row (R3). Promotion authority unchanged.
+  (Correction: read the new `supports_fp16` device-fact per §2; the census field name
+  `prefill_overlay_promotion` is intentional — it is R4's domain naming, not a typo of the scope's older
+  `prefill_v2_promotion`. Do not "fix" it back.)
 - **S5** — add `fp16_spend_gb` (overlay bytes if elected + KV bytes per the elected KV representation) to the
   admission report, with a composition test against one scanned budget. No planner changes;
   `_resolve_max_context_admission` stays the KV owner.
