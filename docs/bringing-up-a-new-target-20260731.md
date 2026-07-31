@@ -307,6 +307,25 @@ intensity (~2-4 FLOP/byte) is ~40-75x below the crossover: NVIDIA is bandwidth-b
 regime as AMD and Metal. The existing dtype guard `self.ren.target.device in ("CUDA","NV") and
 tc.dtype_in == dtypes.float and not ALLOW_TF32` (`postrange.py:362`) is live on this path.
 
+**Phase 1/2 — the floor and the first question, measured.** `extra/llm/bench/model_e2e_bench.py`
+now runs clean on NV with decode correctness qualified (CPU full-prefix greedy oracle vs two JIT
+replays). The 0.6B Q8 smoke decodes 171.8 tok/s (114.5 GB/s, 6.7% of BW) and prefills 780.4 tok/s
+@ pp128; the 8B Q4_K_M flagship decodes 4.49 tok/s (21.5 GB/s — 1.3% of BW) and prefills 87.4
+tok/s @ pp512. The 8B floor is now explained by a compile-only count, not guessed:
+
+- A 2048x2048 fp16 GEMM through the real `CUDARenderer` emits `HMMA.16816.F32` (32 per block
+  body, zero on the generic path) and is numerically correct to fp16 output rounding — the
+  multiply DOES reach the matrix unit on NV, and the overlay's core op lowers.
+- The fused Q4_K decode primitive is NOT admitted on this target: its TG3 capability check
+  requires `wave_size == 32` and `CUDARenderer` does not declare `wave_size` (it does declare
+  `supports_warp_shfl_xor`). One missing declared fact keeps the production quant decode on
+  the generic dequant fallback — that is the 21.5 GB/s floor, not a bandwidth ceiling.
+
+So the floor is a missing declaration plus a skipped fused path, not a hardware wall, and the
+two roads from here are the declared-fact fix (declare CUDA `wave_size = 32`, then render the
+Q4_K primitive on CUDA and see which intrinsics it needs) and the overlay (8B fp16 GEMM, which
+this probe already shows lowering to the tensor pipe).
+
 **Phase 3 is the branch point, and it went differently from the datacenter guess.** Datacenter parts
 carry 40-80 GB; this card's budget is 32 GB. The 8B fp16 overlay is 16.4 GB and fits with room for KV
 + activations — **8B is 8B-on-AMD-shaped, not Metal-shaped**: the overlay path, materialize fp16, hand
