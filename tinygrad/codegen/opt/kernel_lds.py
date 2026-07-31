@@ -5,35 +5,53 @@ from dataclasses import dataclass
 from typing import Callable, TypeAlias, TYPE_CHECKING
 
 from tinygrad.codegen.opt.packed_weight import PackedWeightTransform
+from tinygrad.codegen.opt.tc import LaneMap
 from tinygrad.dtype import AddrSpace, PtrDType, dtypes
 from tinygrad.uop.ops import AxisType, Ops, UOp
 if TYPE_CHECKING: from tinygrad.uop.ops import KernelLDSWindow, KernelTileGeometry
 
-_RDNA3_DIMS = (16, 16, 16)
-_RDNA3_ELEMENTS = (16, 16, 8)
-_RDNA3_OPTS = ("l0", "l0", "l0", "l0", "l1", "u1", "u1", "u1")
-_RDNA3_SWIZZLE = ((('l4', 'u0', 'u1', 'u2', 'l0'), ('r1', 'r2', 'r3'), ('l1', 'l2', 'l3', 'r0')),
-                  (('l0', 'l1', 'l2', 'l3', 'l4'), ('r1', 'r2', 'r3'), ('u0', 'u1', 'u2', 'r0')))
-_RDNA3_REMAPS = ({'l0': 'l4', 'l1': 'u0', 'l2': 'u1', 'l3': 'u2', 'l4': 'l0', 'u0': 'r1', 'u1': 'r2', 'u2': 'r3',
-                   'r0': 'l1', 'r1': 'l2', 'r2': 'l3', 'r3': 'r0'},
-                  {'l0': 'l0', 'l1': 'l1', 'l2': 'l2', 'l3': 'l3', 'l4': 'l4', 'u0': 'r1', 'u1': 'r2', 'u2': 'r3',
-                   'r0': 'u0', 'r1': 'u1', 'r2': 'u2', 'r3': 'r0'})
+# The precontract fold/fragment/cooperative-store math below elects one lane-quad's worth of work per
+# store and folds exactly one warp's lanes into the fragment layout. That is a real limitation of this
+# implementation, not a per-target snapshot: AMD wave32 and Metal's 32-wide SIMD group both satisfy it,
+# while e.g. AMD CDNA's wave64 genuinely does not (see test_wave64_cdna_descriptor_is_self_consistent_but_unsupported).
+_PRECONTRACT_WARP_THREADS = 32
 
 
-def validate_rdna3_wmma_descriptor(tc) -> None:
-  """Admit only the exact fp16->fp32 and int8->int32 descriptors this mapping proves."""
-  fields = (("dims", _RDNA3_DIMS), ("threads", 32), ("elements_per_thread", _RDNA3_ELEMENTS),
-            ("opts", _RDNA3_OPTS), ("swizzle", _RDNA3_SWIZZLE))
-  for name, expected in fields:
-    if getattr(tc, name, None) != expected: raise ValueError(f"RDNA3 WMMA descriptor {name} drifted")
-  dtype_in, dtype_out = getattr(tc, "dtype_in", None), getattr(tc, "dtype_out", None)
-  if dtype_in not in (dtypes.half, dtypes.char): raise ValueError("RDNA3 WMMA descriptor dtype_in drifted")
+def validate_wmma_descriptor(tc) -> None:
+  """Admit a WMMA descriptor this precontract mapping can prove, from its own declared facts.
+
+  This asks what ``tc`` itself claims, never what a specific target's numbers are: (1) is it
+  self-consistent -- do its own dims/threads/elements_per_thread/opts re-derive a valid thread/value ->
+  fragment-coordinate map from its own swizzle (``LaneMap.validate``'s contract), and do the resulting
+  lane-coordinate remaps form an honest permutation of that coordinate space, not a partial or colliding
+  map; (2) is it a dtype pairing and warp width this precontract fold/fragment/cooperative-store math is
+  actually proven for. Neither question compares ``tc`` against another target's frozen numbers, so any
+  descriptor -- AMD's, Metal's, or a future target's -- that answers both honestly is admitted.
+  """
+  dims, threads, elements_per_thread, opts, swizzle, dtype_in, dtype_out = (getattr(tc, name, None) for name in
+    ("dims", "threads", "elements_per_thread", "opts", "swizzle", "dtype_in", "dtype_out"))
+  if not (isinstance(dims, tuple) and len(dims) == 3 and all(isinstance(d, int) and d > 0 for d in dims) and not dims[2] & (dims[2]-1)):
+    raise ValueError("WMMA descriptor dims must be three positive ints with a power-of-two K extent")
+  if not isinstance(opts, tuple): raise ValueError("WMMA descriptor opts must be a tuple")
+  local_axes = sum(1 for o in opts if isinstance(o, str) and o[:1] == "l")
+  upcast_axes = sum(1 for o in opts if isinstance(o, str) and o[:1] == "u")
+  reduce_axes = dims[2].bit_length() - 1
+  try:
+    lane_map = LaneMap(swizzle, local_axes, upcast_axes, reduce_axes, opts, dims, threads, elements_per_thread)
+    lane_map.validate()
+    remaps = lane_map.remaps()
+  except (AssertionError, AttributeError, IndexError, TypeError, ValueError) as exc:
+    raise ValueError("WMMA descriptor is not self-consistent") from exc
+  universe = {f"l{i}" for i in range(local_axes)} | {f"u{i}" for i in range(upcast_axes)} | {f"r{i}" for i in range(reduce_axes)}
+  if any(set(remap) != universe or set(remap.values()) != universe for remap in remaps):
+    raise ValueError("WMMA descriptor remaps are not a permutation of their own lane/value coordinate space")
+  if threads != _PRECONTRACT_WARP_THREADS:
+    raise ValueError(f"WMMA descriptor threads must be {_PRECONTRACT_WARP_THREADS} for this precontract "
+                      "path's warp-wide fragment and cooperative-store math")
+  if dtype_in not in (dtypes.half, dtypes.char):
+    raise ValueError("WMMA descriptor dtype_in is not a pairing this precontract path expresses")
   if dtype_out != (dtypes.float if dtype_in == dtypes.half else dtypes.int):
-    raise ValueError("RDNA3 WMMA descriptor dtype_out drifted")
-  try: remaps = tuple(tc.lane_map.remaps())
-  except (AttributeError, AssertionError, TypeError, ValueError) as exc:
-    raise ValueError("RDNA3 WMMA descriptor remaps are unavailable or invalid") from exc
-  if remaps != _RDNA3_REMAPS: raise ValueError("RDNA3 WMMA descriptor remaps drifted")
+    raise ValueError("WMMA descriptor dtype_out is not a pairing this precontract path expresses")
 
 
 def contract_symbolic_upcast(value:UOp, axis:UOp) -> UOp:
@@ -223,7 +241,7 @@ def derive_precontract_shape_factors(geometry:KernelTileGeometry, tc) -> Precont
   ``derive_precontract_factors`` below adds the LDS-window checks needed by the
   legacy staged implementation.
   """
-  validate_rdna3_wmma_descriptor(tc)
+  validate_wmma_descriptor(tc)
   tm, tn, tk = geometry.tile
   if (tm % (geometry.waves[0] * tc.dims[1]) or tn % (geometry.waves[1] * tc.dims[0]) or
       tk % tc.dims[2]):
@@ -289,11 +307,10 @@ def validate_precontract_contracts(tc, contracts:tuple[PrecontractContractSpec, 
       raise ValueError(f"{context} {contract.role} contract {mismatch}")
 
 
-def validate_precontract_carriers(fragment_dtype, accumulator_dtype, *, tc=None, context:str="precontract") -> None:
-  """Validate the stable WMMA fragment and accumulator carrier ABI."""
-  if tc is not None: validate_rdna3_wmma_descriptor(tc)
-  dtype_in, dtype_out, elements = (dtypes.half, dtypes.float, _RDNA3_ELEMENTS) if tc is None else \
-    (tc.dtype_in, tc.dtype_out, tc.elements_per_thread)
+def validate_precontract_carriers(fragment_dtype, accumulator_dtype, *, tc, context:str="precontract") -> None:
+  """Validate the stable WMMA fragment and accumulator carrier ABI against a specific descriptor."""
+  validate_wmma_descriptor(tc)
+  dtype_in, dtype_out, elements = tc.dtype_in, tc.dtype_out, tc.elements_per_thread
   expected_fragments = (dtype_in.vec(elements[0]), dtype_in.vec(elements[1]))
   if fragment_dtype not in expected_fragments:
     raise ValueError(f"{context} fragment carrier must match the tensor-core input carrier")
@@ -319,22 +336,26 @@ def validate_precontract_wmma_abi(node: UOp, *, context: str = "precontract") ->
   try: dims = tuple(arg[1])
   except (TypeError, ValueError) as exc:
     raise ValueError(f"{context} WMMA descriptor dimensions are invalid") from exc
+  if len(dims) != 3 or any(not isinstance(d, int) or d <= 0 for d in dims):
+    raise ValueError(f"{context} WMMA descriptor dimensions are invalid")
   dtype_in, dtype_out = arg[2], arg[3]
-  if dims != _RDNA3_DIMS or dtype_in not in (dtypes.half, dtypes.char) or \
-     dtype_out != (dtypes.float if dtype_in == dtypes.half else dtypes.int) or arg[5] != 32:
+  if dtype_in not in (dtypes.half, dtypes.char) or \
+     dtype_out != (dtypes.float if dtype_in == dtypes.half else dtypes.int) or arg[5] != _PRECONTRACT_WARP_THREADS:
     raise ValueError(f"{context} WMMA descriptor carrier ABI drifted")
-  expected_a, expected_b = (dtype_in.vec(x) for x in _RDNA3_ELEMENTS[:2])
-  expected_out = dtype_out.vec(_RDNA3_ELEMENTS[2])
-  if node.src[0].dtype != expected_a: raise ValueError(f"{context} A fragment carrier does not match the descriptor")
-  if node.src[1].dtype != expected_b: raise ValueError(f"{context} B fragment carrier does not match the descriptor")
-  if node.src[2].dtype != expected_out: raise ValueError(f"{context} accumulator carrier does not match the descriptor")
-  if node.dtype != expected_out: raise ValueError(f"{context} WMMA result carrier does not match the descriptor")
   axes = arg[6]
   if not isinstance(axes, tuple) or len(axes) != 3:
     raise ValueError(f"{context} WMMA descriptor requires A/B/C axis groups")
   for role, count, group in (("A", 4, axes[0]), ("B", 4, axes[1]), ("C", 3, axes[2])):
     if not isinstance(group, tuple) or len(group) != count or any(not isinstance(x, tuple) or len(x) != 2 or x[1] != 2 for x in group):
       raise ValueError(f"{context} {role} WMMA contract requires {count} binary axes")
+  # Fragment/accumulator widths are derived from the arg's own axis-group sizes (2**|group|), not a
+  # per-target frozen elements_per_thread: the arg tuple never carries elements_per_thread directly.
+  expected_a, expected_b = (dtype_in.vec(2**len(g)) for g in (axes[0], axes[1]))
+  expected_out = dtype_out.vec(2**len(axes[2]))
+  if node.src[0].dtype != expected_a: raise ValueError(f"{context} A fragment carrier does not match the descriptor")
+  if node.src[1].dtype != expected_b: raise ValueError(f"{context} B fragment carrier does not match the descriptor")
+  if node.src[2].dtype != expected_out: raise ValueError(f"{context} accumulator carrier does not match the descriptor")
+  if node.dtype != expected_out: raise ValueError(f"{context} WMMA result carrier does not match the descriptor")
 
 
 def validate_precontract_thread_axes(geometry:KernelTileGeometry, factors:PrecontractFactors,

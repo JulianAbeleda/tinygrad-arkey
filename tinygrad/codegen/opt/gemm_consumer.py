@@ -120,8 +120,8 @@ class WMMAConsumerAdapter:
                           carrier_width=self.carrier_width, layout=self.layout)
 
   def validate_descriptor(self, tc: object) -> None:
-    from tinygrad.codegen.opt.kernel_lds import validate_rdna3_wmma_descriptor
-    validate_rdna3_wmma_descriptor(tc)
+    from tinygrad.codegen.opt.kernel_lds import validate_wmma_descriptor
+    validate_wmma_descriptor(tc)
 
   def validate_node(self, node: UOp) -> None:
     from tinygrad.codegen.opt.kernel_lds import validate_precontract_wmma_abi

@@ -5,7 +5,7 @@ import pytest
 from tinygrad import dtypes
 from tinygrad.codegen.opt.kernel_lds import (PrecontractContractSpec, PrecontractKAxis, PrecontractOperandTemplate,
   PrecontractThreadAxes, build_precontract_lds_stage, derive_precontract_factors, instantiate_precontract_fragments,
-  validate_precontract_carriers, validate_precontract_wmma_abi, validate_rdna3_wmma_descriptor)
+  validate_precontract_carriers, validate_precontract_wmma_abi, validate_wmma_descriptor)
 from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import AxisType, Ops, UOp
@@ -52,7 +52,7 @@ def _wmma(fragments, contracts, accumulator=None):
 
 def test_exact_rdna3_int8_descriptor_and_dense_k256_stage_abi():
   tc, geometry = _tc(), _geometry()
-  validate_rdna3_wmma_descriptor(tc)
+  validate_wmma_descriptor(tc)
   factors = derive_precontract_factors(geometry, tc)
   assert (factors.k_substeps, factors.vectors_per_row, factors.loads_a, factors.loads_b) == (16, 16, 8, 8)
   allocation, operands, threads, k_axis, sm, sn, contracts = _fixture()
@@ -94,7 +94,7 @@ def test_int8_abi_rejects_mixed_carriers_and_incorrect_layouts():
     validate_precontract_wmma_abi(_wmma((char_fragment, half_fragment), contracts))
   drift = SimpleNamespace(**{name:getattr(tc, name) for name in
     ("dims", "threads", "elements_per_thread", "dtype_in", "dtype_out", "opts", "lane_map")}, swizzle=(((), (), ()), ((), (), ())))
-  with pytest.raises(ValueError, match="swizzle drifted"): validate_rdna3_wmma_descriptor(drift)
+  with pytest.raises(ValueError, match="self-consistent"): validate_wmma_descriptor(drift)
   bad_geometry = KernelTileGeometry((128, 128, 256), (4, 2), 256, 32,
     (KernelLDSWindow("A", 0, 30_720, 240), KernelLDSWindow("B", 30_720, 61_440, 240)))
   with pytest.raises(ValueError, match="padded operand rows"): derive_precontract_factors(bad_geometry, tc)
