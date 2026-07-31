@@ -335,7 +335,13 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
   from tinygrad.device import Compiled
   from extra.llm_research.timing_harness import pinned_peak_from_env
 
-  dev = Device["AMD"]
+  # T2 (Metal pp512 comparability): this authority hardcoded Device["AMD"], which raises on any
+  # machine without an AMD GPU (e.g. this Apple M4 Metal box: `Device["AMD"]` ->
+  # ExceptionGroup "No interface for AMD:0 is available"). Resolve the sync device generically
+  # instead, matching the exact pattern extra/llm_research/decode/decode_runtime_overhead.py:193
+  # already uses (`Device[Device.DEFAULT]`). No routing/config behavior changes: this only picks
+  # which device's `.synchronize()` the timing window calls.
+  dev = Device[Device.DEFAULT]
   model, _ = load_model_and_tokenizer(model_path, max_context, seed=20260617)
   runtime_route_env = _runtime_route_env(model)
   for block in model.blk: block._use_flash, block._prefill_v2 = True, True
