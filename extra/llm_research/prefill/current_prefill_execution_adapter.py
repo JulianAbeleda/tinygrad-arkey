@@ -49,16 +49,24 @@ def packed_half_carrier(src, transform, n: int, k: int):
     .reshape(blocks, 128, 1).expand(blocks, 128, 2).reshape(n, k).bitcast(dtypes.half)
 
 
-def admit_current_prefill(payload: dict[str, Any], canonical_identity: str):
-  """Admit any exact prefill workload supported by its typed hardware capability."""
+def admit_current_prefill(payload: dict[str, Any], canonical_identity: str, *, device: str = _COMPILE_DEVICE):
+  """Admit any exact prefill workload supported by its typed hardware capability.
+
+  `device` resolves the tensor-core facts the geometry_divisibility check is proven against (T6:
+  extra/llm_research/runtime_specs.py's `_resolve_tensor_core`) -- it defaults to `_COMPILE_DEVICE` ("AMD"),
+  preserving today's admission behaviour exactly for every existing caller that does not pass it. Previously
+  this was resolved unconditionally from `tinygrad.codegen.opt.tc.amd_rdna3` regardless of what device the
+  caller was actually about to compile for; a config admitted against AMD's 16x16x16 subtile decomposition
+  could then be compiled and dispatched against a different target's own tensor-core shape.
+  """
   workload = full_kernel_workload(payload)
   return admit_full_kernel_candidate(payload, canonical_identity, profile=workload.profile, role=workload.role,
-    shape=workload.shape, target=workload.target, capability=full_kernel_candidate_capability(payload))
+    shape=workload.shape, target=workload.target, capability=full_kernel_candidate_capability(payload), device=device)
 
 
 def compile_current_prefill_program(payload: dict[str, Any], canonical_identity: str, *, device: str):
   """Compile the admitted current Tensor GEMM; never allocate runtime buffers or dispatch."""
-  admission = admit_current_prefill(payload, canonical_identity)
+  admission = admit_current_prefill(payload, canonical_identity, device=device)
   canonical_identity = admission.canonical_identity
   m, n, k = full_kernel_workload(admission.normalized_payload).shape
   from tinygrad import Tensor, dtypes

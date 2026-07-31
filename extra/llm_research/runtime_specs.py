@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 import hashlib
 import json
 from types import MappingProxyType
-from typing import Any
+from typing import Any, Callable
 from tinygrad.llm.roles import PROGRAM_WORKLOAD_ROLES, normalize_program_role
 
 OP_FAMILIES = ("QuantizedLinear", "DenseLinear", "FlashAttention", "KVCache", "ActivationFusion")
@@ -369,9 +369,35 @@ def full_kernel_candidate_set_from_legacy(payload:dict[str,Any],canonical_identi
   """Adapt the current JSON/hash environment pair without changing its individual candidate identity."""
   return FullKernelCandidateSet((FullKernelCandidateSetEntry(canonical_identity,payload),))
 
+# TG-style device-aware tensor-core resolution (docs/task_workflow/input/precontract-target-generalization-
+# scope-20260730.md T6): the tensor-core descriptor used for the geometry_divisibility check below must come
+# from the target this candidate is actually going to be compiled/dispatched for, not from the payload's own
+# (possibly stale/AMD-labeled -- M1b decoupled model profile from target label but workload.target itself still
+# reads AMD:gfx1100:wave32 for every payload in this campaign) `workload.target`. Each entry is exactly the
+# declared per-backend family a real Renderer already uses to set its own `tensor_cores` attribute
+# (tinygrad/renderer/cstyle.py): `tc.get_amd(arch)` for HIPRenderer, `tc.metal` for MetalRenderer (Apple7+ --
+# every Metal qualification target in this campaign, M1a-M1e, is Apple9, well past that gate). A data table one
+# row per backend, not a branch: a new backend is a new row, never new logic here.
+def _tensor_core_family_by_device() -> dict[str, Callable[[str], list]]:
+  from tinygrad.codegen.opt import tc
+  return {"AMD": tc.get_amd, "METAL": lambda arch: tc.metal}
+
+def _resolve_tensor_core(device:str, arch:str, dtype_in, dtype_out):
+  """Device-aware replacement for the old hardcoded `from tinygrad.codegen.opt.tc import amd_rdna3` import."""
+  family_for_arch = _tensor_core_family_by_device().get(device)
+  if family_for_arch is None:
+    raise FullKernelAdmissionError("capability_device", f"no declared tensor-core family for device {device!r}")
+  family = family_for_arch(arch)
+  try: return next(x for x in family if x.dtype_in == dtype_in and x.dtype_out == dtype_out)
+  except StopIteration:
+    raise FullKernelAdmissionError("capability_tc",
+      f"device {device!r} target {arch!r} has no tensor-core descriptor for ({dtype_in}, {dtype_out})") from None
+
+
 def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, *, profile:str, role:str,
                                 shape:tuple[int,int,int], target:dict[str,Any],
-                                capability:FullKernelCapability=GFX1100_SINGLE_BUFFER_CAPABILITY) -> FullKernelAdmission:
+                                capability:FullKernelCapability=GFX1100_SINGLE_BUFFER_CAPABILITY,
+                                device:str="AMD") -> FullKernelAdmission:
   try: normalized = json.loads(json.dumps(payload, allow_nan=False))
   except (TypeError, ValueError) as exc: raise FullKernelAdmissionError("payload_json", str(exc)) from exc
   try: _validate_full_kernel_payload(normalized)
@@ -450,9 +476,8 @@ def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, 
     raise FullKernelAdmissionError("capability_lds", "active LDS exceeds a declared limit")
   try:
     from tinygrad.codegen.opt.kernel_lds import derive_precontract_factors, derive_precontract_shape_factors
-    from tinygrad.codegen.opt.tc import amd_rdna3
     from tinygrad.dtype import dtypes
-    tc = next(x for x in amd_rdna3 if x.dtype_in == dtypes.half and x.dtype_out == dtypes.float)
+    tc = _resolve_tensor_core(device, target["arch"], dtypes.half, dtypes.float)
     plan = (derive_precontract_shape_factors(geometry, tc) if storage_kind == "global_register_resident" else
             derive_precontract_factors(geometry, tc))
   except ValueError as exc: raise FullKernelAdmissionError("capability_geometry", str(exc)) from exc

@@ -167,7 +167,7 @@ def admit_probe_config(config: ProbeConfig):
   payload = _payload_for_config(config)
   entry = derive_packed_weight_candidate(payload, config.quant)
   final_payload = entry.to_json()["payload"]
-  admission = admit_current_prefill(final_payload, entry.canonical_identity)
+  admission = admit_current_prefill(final_payload, entry.canonical_identity, device=config.device)
   return entry, admission
 
 
@@ -198,7 +198,7 @@ def _child_run(payload: dict, canonical_identity: str, device: str, artifact_pat
     "admitted": True,
   }
 
-  admission_again = admit_current_prefill(payload, canonical_identity)  # cheap, pure-python re-check
+  admission_again = admit_current_prefill(payload, canonical_identity, device=device)  # cheap, pure-python re-check
   inputs, reference = _arrays(artifact_path, shape, admission_again.context.packed_weight)
 
   executable = prepare_executable(program, minimal_evidence, device=device)
