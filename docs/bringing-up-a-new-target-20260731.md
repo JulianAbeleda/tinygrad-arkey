@@ -408,6 +408,30 @@ runtime `_v2_on` to `True` (`[nn] NFC`, byte-proven). NV 8B re-verified with the
 `DIRECT_PACKED_FALLBACK`, decode 155.95 tok/s (753.9 GB/s), first token 50994, pre-S6/after-S6 decode token
 sha256 identical (`0721c16fbf70779cb6cebd5cf64eab50a1f61c7882d402c60c27d22597548ebe`), correctness-qualified.
 
+**Canonical prefill qualification path, C1–C4 (2026-08-01) — non-moving.** `[codegen]` commits declare
+per-target capability rows keyed `(backend, arch) x schedule shape` (NV sm120 rows with the CUDA
+`wmma_f32_8x16x16_f16` descriptor facts, Metal m4_10c rows), resolve `tc.get_cuda` for both `sm_120` and
+`sm120` spellings, device-parameterize the compile-evidence producer (AMD ISA manifest stays the AMD
+enrichment; every other target gets minimal evidence with `final_isa_manifest: null` and a named
+not-applicable reason), and make the precontract probe lane canonical (`ProbeConfig.device` required,
+opt-in `use_lane` beside `run_canary`). NV 8B re-verified with the same invocation: strategy
+`DIRECT_PACKED_FALLBACK`, census `prefill_overlay_promotion: "no-promoted-candidate"`, decode 158.15 tok/s
+(764.6 GB/s), first token 50994, decode token sha256 identical to Piece 3's
+(`0721c16fbf70779cb6cebd5cf64eab50a1f61c7882d402c60c27d22597548ebe`), correctness-qualified.
+
+**C5 measured on the 5090 through the canonical lane (2026-08-01) — the next step is the accumulator-dtype
+boundary, not geometry search.** The sm120 mint as committed (CUDA target, AMD-cloned wmma facts) is rejected
+by admission with `capability_tc` — the pinned outcome, since the NV row derives `wmma_f32_8x16x16_f16`.
+The NV-typed buffer2 schedule ADMITS through the lane (active LDS 40960, precontract factors 2/8/2 vs AMD's
+2/4/2) and fails in the child compile at `kernel_pipeline.py:181` with `mixed accumulator dtypes: expected
+dtypes.float.vec(8), got dtypes.float.vec(4)` — the known dtype-identity migration boundary
+(`docs/dtype-orthogonality-amd-validation-20260729.md`), not a scheduler defect. The NV-typed single-buffer
+schedule also ADMITS and fails closed at `kernel_lds.py:171` (`derive_wmma_operand_lane_layout`: operand 0
+contract-axis bits are not an LSB-aligned contiguous prefix) because CUDA's A-fragment layout does not fit
+the AMD/Metal-proven pattern. Both failures are fail-loud lowering gates, exactly the intended behavior for
+an unproven descriptor. Next slice: M1f-style emitted-kernel diff / resolve the accumulator-carrier
+migration boundary against the CUDA descriptor's vec(4).
+
 ---
 
 ## 10. The shortest version
