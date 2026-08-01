@@ -412,6 +412,18 @@ class Scheduler:
       for tc in tensor_cores:
         if self.ren.target.device in ("CUDA", "NV") and tc.dtype_in == dtypes.float and not ALLOW_TF32: continue
         if tc.dtype_in == in0.dtype.scalar() and tc.dtype_in == in1.dtype.scalar() and tc.dtype_out == reduceop.dtype.scalar():
+          # Fail closed: a descriptor whose operand dtype the renderer cannot express natively (e.g.
+          # fp8 on gfx942, where only gfx950 has fp8_ocp) must not be emitted. The dtype decomposer
+          # would emulate that dtype (fp8 -> half) after the TC opt, but WMMA render paths require
+          # native operands; emulated operands either crash the renderer (K=128 fp8_index) or, worse,
+          # silently reach an fp8 builtin with half-typed values (K=32). Refuse the descriptor here
+          # with a message naming the capability, instead of either failure mode.
+          if tc.dtype_in.scalar() not in self.ren.supported_dtypes():
+            raise KernelOptError(
+              f"tensor core {tc.dims} {tc.dtype_in.name}:{tc.dtype_out.name} cannot be emitted: "
+              f"{type(self.ren).__name__} (target {self.ren.target.arch}) does not support "
+              f"{tc.dtype_in.name} natively, and dtype emulation (fp8->half) is incompatible with "
+              "WMMA descriptors")
           # tensor cores have three ranges. X, Y, and REDUCE
           in0_ranges = sorted([u for u in in0.ranges if u not in in1.ranges], key=lambda x: x.arg[0], reverse=True)
           in1_ranges = sorted([u for u in in1.ranges if u not in in0.ranges], key=lambda x: x.arg[0], reverse=True)

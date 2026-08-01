@@ -566,7 +566,15 @@ f"""{dstr_out} __{name}({dstr_in} a, {dstr_in} b, {dstr_out} c){{
 
 _nms = list("xyzwabcdefghijkl") + [f'v{i}' for i in range(16, 32)]
 
-def fp8_index(dtype: DType): return (dtypes.fp8e4m3, dtypes.fp8e5m2).index(dtype.scalar())
+def fp8_index(dtype: DType):
+  try: return (dtypes.fp8e4m3, dtypes.fp8e5m2).index(dtype.scalar())
+  except ValueError:
+    # The TC opt now refuses fp8 descriptors on renderers without native fp8 (postrange.py
+    # _apply_generic_tensor_core_opt), so this only fires on hand-built graphs. Name the mismatch
+    # instead of leaking tuple.index's bare ValueError.
+    raise RuntimeError(
+      f"fp8 WMMA render requires fp8e4m3/fp8e5m2 operands, got {dtype.scalar()}: fp8->half dtype "
+      "emulation is incompatible with the fp8 WMMA builtins") from None
 def _ocml(op): return lambda x,dtype: f"__ocml_{op}_f{ {dtypes.half:16, dtypes.double:64}.get(dtype, 32)}({x})"
 
 class HIPRenderer(CStyleLanguage):
