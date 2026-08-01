@@ -11,7 +11,6 @@ from types import MappingProxyType
 from tinygrad.llm.prefill_candidate_runtime import canonical_candidate_set_identity as _production_candidate_set_identity
 
 PROFILE_DECODE = "qwen3_8b_q4_k_m_gfx1100_decode"
-PROFILE_DECODE_LARGE = "qwen3_14b_32b_q4_k_m_gfx1100_decode"
 PROFILE_PREFILL = "qwen3_8b_q4_k_m_gfx1100_prefill"
 ROUTE_PROVENANCE = ("machine_authored_generated", "tinygrad_scheduler_generated", "hand_authored_uop_template", "compiler_primitive_spec_owned", "external_handwritten_kernel", "rollback_oracle")
 FINAL_DEFAULT_PROVENANCE = {"machine_authored_generated", "tinygrad_scheduler_generated"}
