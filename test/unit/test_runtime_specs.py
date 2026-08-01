@@ -1,6 +1,7 @@
 import pytest
 import json, pickle
 import hashlib
+import dataclasses
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -618,6 +619,60 @@ def test_nv_typed_schedule_admits_with_cuda_tc_and_resolves_different_precontrac
   amd_factors = derive_precontract_shape_factors(admission.geometry, amd_descriptor)
   assert (amd_factors.subtiles_m, amd_factors.subtiles_n, amd_factors.k_substeps) == (2, 4, 2)
   assert (admission.plan.subtiles_m, admission.plan.subtiles_n) != (amd_factors.subtiles_m, amd_factors.subtiles_n)
+
+
+def test_capability_vector_gate_reads_row_declared_vector_width():
+  # T3: the old literal `!= 8` becomes `vector_bytes // itemsize`, so a row with a different
+  # vector width changes what admits without touching the payload's width literal.
+  def _nv_typed_payload():
+    payload = _mint_payload("multirole-buffer2-candidate-set-sm120-v1")
+    capability = full_kernel_candidate_capability(payload)
+    payload["schedule"]["wmma"]["instruction_family"] = capability.instruction_family
+    payload["schedule"]["wmma"]["fragment_layout"] = capability.fragment_layout
+    payload["schedule"]["lane_ownership"] = capability.fragment_layout
+    return payload, capability
+
+  payload, capability = _nv_typed_payload()
+  payload["schedule"]["lds"]["store_vector_width"] = 4
+  payload["schedule"]["lds"]["load_vector_width"] = 4
+  entry = derive_packed_weight_candidate(payload, "Q4_K")
+  final = entry.to_json()["payload"]
+  workload = full_kernel_workload(final)
+  with pytest.raises(FullKernelAdmissionError, match="capability_vector"):
+    admit_full_kernel_candidate(final, entry.canonical_identity, profile=workload.profile, role=workload.role,
+      shape=workload.shape, target=workload.target, capability=capability, device="CUDA")
+
+  # Same payload admits against a row whose declared vector width is 4 (16-byte vector over fp32).
+  payload, _ = _nv_typed_payload()
+  payload["schedule"]["lds"]["store_vector_width"] = 4
+  payload["schedule"]["lds"]["load_vector_width"] = 4
+  for operand in ("a", "b"):
+    payload["schedule"]["cooperative_load"][operand]["vector_width"] = 4
+    payload["schedule"]["cooperative_load"][operand]["alignment"] = 8
+  entry = derive_packed_weight_candidate(payload, "Q4_K")
+  final = entry.to_json()["payload"]
+  workload = full_kernel_workload(final)
+  narrow = dataclasses.replace(capability, vector_bytes=8)
+  admission = admit_full_kernel_candidate(final, entry.canonical_identity, profile=workload.profile,
+    role=workload.role, shape=workload.shape, target=workload.target, capability=narrow, device="CUDA")
+  assert admission.active_lds_bytes == 40960
+
+
+def test_capability_lane_map_gate_reads_row_declared_mapping():
+  # T3: the expected lane mapping is the row's declared contract, not a storage-kind literal.
+  payload = _mint_payload("multirole-buffer2-candidate-set-sm120-v1")
+  capability = full_kernel_candidate_capability(payload)
+  payload["schedule"]["wmma"]["instruction_family"] = capability.instruction_family
+  payload["schedule"]["wmma"]["fragment_layout"] = capability.fragment_layout
+  payload["schedule"]["lane_ownership"] = capability.fragment_layout
+  for operand in ("a", "b"):
+    payload["schedule"]["cooperative_load"][operand]["lane_mapping"] = "wave_contiguous_b128"
+  entry = derive_packed_weight_candidate(payload, "Q4_K")
+  final = entry.to_json()["payload"]
+  workload = full_kernel_workload(final)
+  with pytest.raises(FullKernelAdmissionError, match="capability_lane_map"):
+    admit_full_kernel_candidate(final, entry.canonical_identity, profile=workload.profile, role=workload.role,
+      shape=workload.shape, target=workload.target, capability=capability, device="CUDA")
 
 
 def test_metal_mint_resolves_declared_m4_10c_row():
