@@ -1,7 +1,7 @@
 from tinygrad.codegen.opt import tc
 from tinygrad.dtype import DType, dtypes
 from tinygrad.helpers import Target, prod
-from tinygrad.renderer.cstyle import CStyleLanguage, base_rewrite, create_non_native_float_pats, uops_to_dtypes, wmma_args
+from tinygrad.renderer.cstyle import CStyleLanguage, base_rewrite, create_non_native_float_pats, uops_to_dtypes, wmma_args, _install_native_attention_bindings
 from tinygrad.uop.ops import Ops, PatternMatcher, UPat, UOp
 
 _nms = list("xyzwabcdefghijkl") + [f'v{i}' for i in range(16, 32)]
@@ -120,4 +120,10 @@ class CUDARenderer(CStyleLanguage):
             and (d not in dtypes.fp8_ocp or ver >= 89) and d not in dtypes.fp8_fnuz}
 
 class NVCCRenderer(CUDARenderer):
-  def __init__(self, target:Target): super().__init__(target, use_nvcc=True)
+  def __init__(self, target:Target):
+    super().__init__(target, use_nvcc=True)
+    if target.arch.split(":")[0] == "sm_120":
+      # The fused-prefill-attention native matchers, bound on NVCC exactly as HIP binds them on gfx1100
+      # (same shared install function -- see cstyle.py). Literal-first: the lane math is still AMD-shaped
+      # until the fragment-model package (P3); this proves the NVCC path can consume the same expansions.
+      _install_native_attention_bindings(self)

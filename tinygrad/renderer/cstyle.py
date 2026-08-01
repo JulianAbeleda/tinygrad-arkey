@@ -138,11 +138,11 @@ def _hip_native_row_state(x:UOp) -> UOp|None:
     return x.src[0].src[0].after(*x.src[1:])
   return None
 
-def _hip_expand_native_row_softmax(ctx, x:UOp) -> UOp:
+def _cstyle_expand_native_row_softmax(ctx, x:UOp) -> UOp:
   from tinygrad.renderer.isa.amd import expand_native_row_softmax_repack
   return expand_native_row_softmax_repack(ctx,x,native_state=False)
 
-def _hip_expand_attention_loop_state(x:UOp) -> UOp:
+def _cstyle_expand_attention_loop_state(x:UOp) -> UOp:
   from tinygrad.uop.ops import AMDLoopStateSpec
   if not isinstance(x.arg, AMDLoopStateSpec): raise ValueError("HIP attention loop state is missing its typed ABI")
   x.arg.validate()
@@ -151,11 +151,11 @@ def _hip_expand_attention_loop_state(x:UOp) -> UOp:
   addr=reg.after(*x.src[1:]).index(UOp.const(dtypes.weakint,offset))
   return addr.load()
 
-def _hip_expand_loop_fragment(x:UOp) -> UOp:
+def _cstyle_expand_loop_fragment(x:UOp) -> UOp:
   from tinygrad.renderer.isa.amd import expand_loop_fragment
   return expand_loop_fragment(x)
 
-def _hip_expand_attention_output_drain(x:UOp) -> UOp:
+def _cstyle_expand_attention_output_drain(x:UOp) -> UOp:
   """Expand the typed native-output ABI to ordinary HIP SSA stores."""
   from tinygrad.uop.ops import AMDAttentionOutputDrainSpec
   if not isinstance(x.arg, AMDAttentionOutputDrainSpec): raise ValueError("HIP attention output drain is missing its typed ABI")
@@ -182,7 +182,7 @@ def _hip_expand_attention_output_drain(x:UOp) -> UOp:
       stores.append(dst.store((acc[j].gep(e)*recip).cast(dtypes.half)))
   return UOp.group(*stores)
 
-def _hip_expand_attention_stats_drain(x:UOp) -> UOp:
+def _cstyle_expand_attention_stats_drain(x:UOp) -> UOp:
   from tinygrad.uop.ops import AMDAttentionStatsDrainSpec
   if not isinstance(x.arg,AMDAttentionStatsDrainSpec) or len(x.src) != 4: raise ValueError("HIP attention stats drain is malformed")
   x.arg.validate(); stats,group,m,l=x.src; lane=UOp.special(32,"lidx0"); half=lane.alu(Ops.SHR,UOp.const(dtypes.weakint,4)); stores=[]
@@ -198,6 +198,30 @@ hip_native_repack_pm = PatternMatcher([
     arg=_HIP_BPERMUTE_F32)
     if x.arg == "bpermute" and x.dtype == dtypes.float else None),
 ])
+
+def _install_native_attention_bindings(ren) -> None:
+  """Bind the fused-prefill-attention native matchers + weakint type map on a C-style renderer.
+
+  Shared by HIPRenderer (gfx1100) and NVCCRenderer (sm_120) so the two cannot drift apart at the binding
+  site. The expansions are renderer-neutral UOp lowerings of the typed ABI ops in
+  renderer/isa/amd_attention_abi.py; only the leaves are per-target (bpermute spellings resolve through the
+  warp_bpermute providers). HIP-specific extras -- the fmaxf peer rule and the bpermute spelling matcher --
+  are added by the caller after this returns; NVCC adds none.
+  """
+  # Exact native attention loop address expressions retain weakint until source rendering.
+  ren.type_map = {**ren.type_map, dtypes.weakint: "int"}
+  # The scheduler-owned expansion is shared with the native ISA renderer.
+  from tinygrad.renderer.isa.amd import native_repack_matcher
+  from tinygrad.renderer.isa.amd import native_state_lane_matcher
+  ren.native_repack_matcher = PatternMatcher([
+    (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, name="x"), _cstyle_expand_attention_output_drain),
+    (UPat(Ops.AMD_ATTENTION_STATS_DRAIN, name="x"), _cstyle_expand_attention_stats_drain),
+    (UPat(Ops.AMD_ATTENTION_LOOP_STATE, name="x"), _cstyle_expand_attention_loop_state),
+    (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, name="x"), _cstyle_expand_native_row_softmax)]) + native_repack_matcher
+  ren.native_state_lane_matcher = PatternMatcher([
+    (UPat(Ops.AMD_ATTENTION_LOOP_STATE, name="x"), _cstyle_expand_attention_loop_state)]) + native_state_lane_matcher
+  ren.native_loop_fragment_matcher = PatternMatcher([
+    (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD, name="x"), _cstyle_expand_loop_fragment)])
 
 def create_non_native_float_pats(dts:tuple[DType, ...], casting:bool=True):
   patterns = PatternMatcher([
@@ -629,20 +653,10 @@ class HIPRenderer(CStyleLanguage):
     self.lds_read_before_next_write_ordered = True
     if not self.is_cdna4(target.arch): self.extra_matcher += pm_manual_bf16_cast + extra_pm
     if target.arch.split(":")[0] == "gfx1100":
-      # Exact native attention loop address expressions retain weakint until HIP source rendering.
-      self.type_map = {**self.type_map, dtypes.weakint:"int"}
-      # The scheduler-owned expansion is shared with the native ISA renderer;
-      # HIP only supplies source spelling for its existing bpermute marker.
-      from tinygrad.renderer.isa.amd import native_repack_matcher
-      from tinygrad.renderer.isa.amd import native_state_lane_matcher
-      self.native_repack_matcher = PatternMatcher([(UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN,name="x"), _hip_expand_attention_output_drain),
-        (UPat(Ops.AMD_ATTENTION_STATS_DRAIN,name="x"), _hip_expand_attention_stats_drain),
-        (UPat(Ops.AMD_ATTENTION_LOOP_STATE,name="x"), _hip_expand_attention_loop_state),
-        (UPat(Ops.AMD_ROW_SOFTMAX_REPACK,name="x"), _hip_expand_native_row_softmax)]) + native_repack_matcher + \
-        PatternMatcher([(UPat(Ops.MAX, name="x"), _hip_native_bpermute_max)])
-      self.native_state_lane_matcher = native_state_lane_matcher
-      self.native_state_lane_matcher = PatternMatcher([(UPat(Ops.AMD_ATTENTION_LOOP_STATE,name="x"), _hip_expand_attention_loop_state)]) + native_state_lane_matcher
-      self.native_loop_fragment_matcher = PatternMatcher([(UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"), _hip_expand_loop_fragment)])
+      _install_native_attention_bindings(self)
+      # HIP-only extras: the PREFILL_SOFTMAX_REDUCE_FUSE fmaxf peer rule (native __builtin_fmaxf spelling)
+      # and the bpermute/row-state spelling matcher.
+      self.native_repack_matcher += PatternMatcher([(UPat(Ops.MAX, name="x"), _hip_native_bpermute_max)])
       self.extra_matcher += hip_native_repack_pm
     if self.is_cdna(target.arch):
       self.string_rewrite = PatternMatcher([
