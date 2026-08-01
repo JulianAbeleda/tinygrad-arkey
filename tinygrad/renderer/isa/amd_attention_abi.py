@@ -255,6 +255,7 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
     """Masked, scaled score element at (row, col); validity is not published here."""
     valid = None
     fused_causal = False
+    kv = qrow = None
     if x.arg.validity_mode in {"tail_v1", "causal_v1"}:
       fused_causal = x.arg.validity_mode == "causal_v1" and x.arg.grid is not None and \
         x.arg.query_start == x.arg.valid_kv-x.arg.grid.q_tokens
