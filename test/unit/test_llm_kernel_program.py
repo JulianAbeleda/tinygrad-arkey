@@ -1,6 +1,9 @@
 import pytest
+from types import SimpleNamespace
 
-from tinygrad.llm.kernel_program import (KernelProgram, KernelProgramProvenance, execute_oracle_program,
+import tinygrad.llm.kernel_program as kernel_program
+from tinygrad import dtypes
+from tinygrad.llm.kernel_program import (KernelProgram, KernelProgramProvenance, OutputSpec, execute_oracle_program,
                                           execute_promoted_program, execute_research_program,
                                           execute_research_program_outputs)
 
@@ -88,3 +91,48 @@ def test_trace_facts_are_stable_and_exclude_emitter():
   value = program(KernelProgramProvenance.MACHINE_SEARCH_GENERATED)
   assert value.to_dict() == {"route_id": "route", "program_id": "program", "provenance": "machine_search_generated"}
   assert "emitter" not in value.to_dict()
+
+
+def test_promoted_program_allocates_output_from_program_output_spec(monkeypatch):
+  allocated = []
+
+  class FakeEmpty:
+    def __init__(self, *shape, dtype, device):
+      allocated.append((shape, dtype, device))
+
+    def uop_program(self, *inputs, fxn):
+      return ("allocated-output",)
+
+  monkeypatch.setattr(kernel_program, "Tensor", SimpleNamespace(empty=FakeEmpty))
+  first, second = SimpleNamespace(device="GPU:0"), SimpleNamespace(device="GPU:0")
+  spec = OutputSpec((4, 8), dtypes.float32)
+  promoted = KernelProgram("route", "program", KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emitter,
+                           output_spec=spec)
+  assert execute_promoted_program(None, first, second, program=promoted) == "allocated-output"
+  assert allocated == [((4, 8), dtypes.float32, "GPU:0")]
+
+
+def test_positional_output_overrides_program_output_spec():
+  output, first = Output(), object()
+  promoted = KernelProgram("route", "program", KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emitter,
+                           output_spec=OutputSpec((3,), dtypes.float32))
+  assert execute_promoted_program(output, first, program=promoted) == "output-zero"
+  assert output.calls == [((first,), emitter)]
+
+
+def test_promoted_program_requires_output_or_program_output_spec():
+  with pytest.raises(ValueError, match="output_spec"):
+    execute_promoted_program(None, program=program(KernelProgramProvenance.MACHINE_SEARCH_GENERATED))
+
+
+@pytest.mark.parametrize("shape,dtype", [((), dtypes.float32), ((0,), dtypes.float32),
+                                         ((4, "x"), dtypes.float32), ((4,), None)])
+def test_output_spec_validates_shape_and_dtype(shape, dtype):
+  with pytest.raises(ValueError):
+    OutputSpec(shape, dtype)
+
+
+def test_kernel_program_requires_output_spec_value_type():
+  with pytest.raises(ValueError, match="output_spec"):
+    KernelProgram("route", "program", KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emitter,
+                  output_spec=object())

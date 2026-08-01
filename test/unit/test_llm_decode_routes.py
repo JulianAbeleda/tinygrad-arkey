@@ -9,6 +9,7 @@ from tinygrad import Tensor, UOp
 from tinygrad.uop.ops import Ops
 from tinygrad.llm import decode_routes
 from tinygrad.llm.model import Transformer, _generation_input_slice, _should_use_flash_attention
+import tinygrad.llm.kernel_program as kernel_program
 
 
 def test_generation_decode_slice_retains_lazy_symbolic_jit_contract():
@@ -89,6 +90,8 @@ class _MockPartials:
 
 
 class _Words:
+  device = "CPU"
+
   def to(self, *_args, **_kwargs):
     return self
 
@@ -142,7 +145,7 @@ def test_q4k_single_token_keeps_generated_g3_path(monkeypatch):
     def contiguous(self):
       return self
 
-  monkeypatch.setattr(decode_routes, "Tensor", TensorStub)
+  monkeypatch.setattr(kernel_program, "Tensor", TensorStub)
   linear = SimpleNamespace(
     decode_enabled=True, bias=None, in_features=1024, out_features=32, parts=1, opts=(), kernel_mode="partial",
     name="decode_g3_test_linear", q4k_storage=SimpleNamespace(mode="sidecar", words=_Words()))
@@ -255,10 +258,12 @@ def test_q6k_single_token_keeps_generated_path(monkeypatch):
   partials = _MockPartials(partial)
 
   class _HalfStorage:
+    device = "CPU"
+
     def to(self, *_, **__):
       return self
 
-  monkeypatch.setattr(decode_routes, "Tensor", SimpleNamespace(empty=lambda *_, **__: partials), raising=True)
+  monkeypatch.setattr(kernel_program, "Tensor", SimpleNamespace(empty=lambda *_, **__: partials), raising=True)
   spec = SimpleNamespace(route_family="q6k_coop", rows=16, partial_axis_extent=8)
   spec_calls = []
   monkeypatch.setattr(decode_routes, "q6k_spec_for_role",
