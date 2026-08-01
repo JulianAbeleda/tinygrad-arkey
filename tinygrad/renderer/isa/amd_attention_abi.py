@@ -163,7 +163,34 @@ def expand_loop_fragment(x:UOp) -> UOp:
   # instruction-for-instruction identical to the pre-fix baseline.
   grid_kv_tokens=x.arg.grid.kv_tokens if x.arg.grid is not None else None
   def _row_ok(token): return None if grid_kv_tokens is None else token < grid_kv_tokens
-  if role=="Q": offs=tuple(gbase+col*hd+block*16+i for i in range(16))
+  model=getattr(x.arg,"fragment_model",None)
+  if model is not None:
+    # Fragment-model path: per-element load addresses derive from the target's own operand lane
+    # layouts. The call offset is added only when this fragment belongs to a later WMMA call of a
+    # multi-call tile (call 0 stays node-identical with the literal AMD tree).
+    lanes=model.fragment_lanes(role)
+    call_off=x.arg.call*model.tc.dims[0] if x.arg.call else 0
+    if role=="Q":
+      offs=tuple(gbase+model.operand_row(0,i,lane)*hd+block*16+model.operand_k(0,i,lane) for i in range(lanes))
+    elif role=="K":
+      row=model.operand_row(1,0,lane)
+      if call_off: row=row.alu(Ops.ADD,UOp.const(dtypes.weakint,call_off))
+      row_ok=_row_ok(rng*UOp.const(dtypes.weakint,16)+row)  # one KV row for the whole fragment
+      offs=tuple(gbase+rng*16*hd+row*hd+block*16+model.operand_k(1,i,lane) for i in range(lanes))
+      if row_ok is not None: offs=tuple(o.valid(row_ok) for o in offs)
+    elif getenv("PREFILL_V_TRANSPOSED") and x.arg.grid is not None:
+      row=model.operand_row(1,0,lane)
+      if call_off: row=row.alu(Ops.ADD,UOp.const(dtypes.weakint,call_off))
+      offs=tuple(gbase+(block*16+row)*x.arg.grid.kv_tokens+rng*16+model.operand_k(1,i,lane) for i in range(lanes))
+      row_oks=tuple(_row_ok(rng*UOp.const(dtypes.weakint,16)+model.operand_k(1,i,lane)) for i in range(lanes))
+      offs=tuple(o if g is None else o.valid(g) for o,g in zip(offs,row_oks))
+    else:
+      row=model.operand_row(1,0,lane)
+      if call_off: row=row.alu(Ops.ADD,UOp.const(dtypes.weakint,call_off))
+      offs=tuple(gbase+rng*16*hd+block*16+model.operand_k(1,i,lane)*hd+row for i in range(lanes))
+      row_oks=tuple(_row_ok(rng*UOp.const(dtypes.weakint,16)+model.operand_k(1,i,lane)) for i in range(lanes))
+      offs=tuple(o if g is None else o.valid(g) for o,g in zip(offs,row_oks))
+  elif role=="Q": offs=tuple(gbase+col*hd+block*16+i for i in range(16))
   elif role=="K":
     row_ok=_row_ok(rng*UOp.const(dtypes.weakint,16)+col)  # same KV row for all 16 lanes of this fragment
     offs=tuple(gbase+rng*16*hd+col*hd+block*16+i for i in range(16))
@@ -184,7 +211,7 @@ def expand_loop_fragment(x:UOp) -> UOp:
     offs=tuple(gbase+rng*16*hd+block*16+i*hd+col for i in range(16))
     row_oks=tuple(_row_ok(rng*UOp.const(dtypes.weakint,16)+UOp.const(dtypes.weakint,i)) for i in range(16))
     offs=tuple(o if g is None else o.valid(g) for o,g in zip(offs,row_oks))
-  return UOp(Ops.STACK,dtypes.half.vec(16),tuple(owner.index(off).load() for off in offs),
+  return UOp(Ops.STACK,dtypes.half.vec(model.fragment_lanes(role) if model is not None else 16),tuple(owner.index(off).load() for off in offs),
     tag=("amd_gfx1100_fragment_load_hd128_loop_v1",role,block,x.arg,*x.src))
 
 def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
@@ -201,8 +228,12 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
     if len(x.src) != expected: raise ValueError("row-softmax transition repack requires score/m/l and its declared tile source")
     score, m, l, *tile_src = x.src
     if x.arg.dynamic_kv_v1 and tile_src[0].op is not Ops.RANGE: raise ValueError("dynamic repack tile source must be RANGE")
-  if score.op is not Ops.WMMA or score.dtype != dtypes.float.vec(8):
-    raise ValueError("AMD row-softmax repack requires one raw QK WMMA float.vec(8)")
+  # A single-call tile carries the raw QK WMMA; a multi-call tile carries the
+  # per-call C fragments concatenated into one STACK (both float.vec(8)).
+  if not (score.op is Ops.WMMA and score.dtype == dtypes.float.vec(8)) and not \
+      (score.op is Ops.STACK and score.dtype == dtypes.float.vec(8) and len(score.src) == 8 and
+       all(s.dtype == dtypes.float for s in score.src)):
+    raise ValueError("row-softmax repack requires one QK score carrier of float.vec(8)")
   stateful = x.arg.mode in {"initial_state_v1", "stateful_unnormalized_v1", "loop_state_v1"}
   native_state = native_state and x.arg.mode != "loop_state_v1"
   state_dt, state_shape = (dtypes.float.vec(8), (8,)) if stateful else (dtypes.float, ())
@@ -219,9 +250,9 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
   state_owner = next(ctx) if stateful and native_state else None
   state_writes_m, state_writes_l, state_writes_alpha = [], [], []
   stores, new_ms, new_ls, alphas, log2e = [], [], [], [], UOp.const(dtypes.float, 1.4426950408889634)
-  for e in range(8):
-    old_m, old_l = (m.gep(e), l.gep(e)) if stateful and not initial_state else (m, l)
-    row = UOp.const(dtypes.weakint, 2*e).alu(Ops.ADD, halfwave)
+  model=getattr(x.arg,"fragment_model",None)
+  def _score_value(e:int, row:UOp, col:UOp):
+    """Masked, scaled score element at (row, col); validity is not published here."""
     valid = None
     fused_causal = False
     if x.arg.validity_mode in {"tail_v1", "causal_v1"}:
@@ -250,52 +281,124 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
        x.arg.query_start == x.arg.valid_kv-x.arg.grid.q_tokens:
       value=UOp(Ops.CUSTOMI,dtypes.float,(value,kv,qrow),"(({1}<={2})?{0}:-INFINITY)")
     if valid is not None: value = valid.where(value, UOp.const(dtypes.float, -float("inf")))
-    if stores: value = value.bitcast(dtypes.uint).after(UOp.group(stores[-1])).bitcast(dtypes.float)
-    # THEORY 6 (measured, 2026-07-24) -- the two butterflies below are exactly the two the algorithm
-    # needs, but on the SHIPPED HIP path they used to cost THREE cross-lane traversals per row. Neither
-    # extra traversal is emitted here; both are artifacts of how this expression tree is RENDERED, and
-    # both are addressed by PREFILL_SOFTMAX_REDUCE_FUSE in tinygrad/renderer/cstyle.py:
-    #   (a) Ops.CUSTOMI is inlined unconditionally by the C renderer, ignoring child_count. Every rung of
-    #       these ladders has two consumers (the next fmaxf AND the next bpermute), so the emitted C grows
-    #       as 2^n: a 4-step ladder renders as 15 textual bpermutes, 272 across the 8-row repack where
-    #       only 64 are distinct.
-    #   (b) `new_m = max(old_m, row_max)` below is not a native HIP op, so decompositions.py rewrites it
-    #       to (a<b).where(b,a) -- inlining the whole ladder twice more, and lowering to an exec-masked
-    #       v_cmpx_lt_f32/s_cbranch_execz region that LLVM's CSE will not cross, so a third ladder is
-    #       REMATERIALIZED inside the guard.
-    # Result was 96 ds_bpermute_b32 + 97 mandatory s_waitcnt lgkmcnt(0) + 135 v_max_f32 per KV tile,
-    # against 64 bpermute for the two real reductions. Do not "simplify" this by hoisting row_max into a
-    # Python temp -- it already is one; the duplication is in the renderer, not here.
-    row_max = value
-    for mask in x.arg.xor_masks:
-      addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
-      row_max = row_max.alu(Ops.MAX, warp_bpermute(addr, row_max))
-    new_m = row_max if initial_state else old_m.alu(Ops.MAX, row_max)
-    weight = (value-new_m).alu(Ops.MUL, log2e).exp2()
-    if fused_causal: weight=UOp(Ops.CUSTOMI,dtypes.float,(weight,kv,qrow),"(({1}<={2})?{0}:0.0f)")
-    if valid is not None: weight = valid.where(weight, UOp.const(dtypes.float, 0))
-    row_sum = weight
-    for mask in x.arg.xor_masks:
-      addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
-      row_sum = row_sum.alu(Ops.ADD, warp_bpermute(addr, row_sum))
-    raw_alpha = UOp.const(dtypes.float, 1) if initial_state else row_sum.ne(UOp.const(dtypes.float, 0)).where(
-      (old_m-new_m).alu(Ops.MUL, log2e).exp2(), UOp.const(dtypes.float, 1))
-    alpha = raw_alpha
-    new_l = row_sum if initial_state else old_l.alu(Ops.MUL, alpha).alu(Ops.ADD, row_sum)
-    if not stateful or not native_state: new_ms.append(new_m); new_ls.append(new_l)
-    alphas.append(alpha)
-    normalized = (weight if stateful else weight / new_l).cast(dtypes.half)
-    published_row = lds.index(wave_base.alu(Ops.ADD,
-      row.alu(Ops.MUL, UOp.const(dtypes.weakint, 16)).alu(Ops.ADD, col))).store(normalized)
-    # Serialize row publication so eight independent butterfly/exp/CVT trees
-    # do not become simultaneously live before the barrier.
-    if stateful and native_state:
-      mw = UOp(Ops.CUSTOMI, dtypes.void, (new_m,), arg=("amd_gfx1100_row_state_write_v1", state_owner, "m", e))
-      lw = UOp(Ops.CUSTOMI, dtypes.void, (new_l,), arg=("amd_gfx1100_row_state_write_v1", state_owner, "l", e))
-      aw = UOp(Ops.CUSTOMI, dtypes.void, (alpha,), arg=("amd_gfx1100_row_state_write_v1", state_owner, "alpha", e))
-      state_writes_m.append(mw); state_writes_l.append(lw); state_writes_alpha.append(aw)
-      stores.append(UOp.group(published_row, mw, lw, aw))
-    else: stores.append(published_row)
+    return value, valid, fused_causal, kv, qrow
+  if model is not None and model.reduction_within_lane:
+    # DEFERRED reduction (NV-shaped tiles): element steps combine the lane's own
+    # score elements pairwise, so no value may be reduced incrementally while its
+    # pair is still live. Two passes over the ladder keep every step reading the
+    # previous step's values: row-max first, then row-sum over the weights.
+    n = model.score_elements
+    raw = [_score_value(e, model.c_row_uop(e, lane), model.c_col_uop(e, lane)) for e in range(n)]
+    row_maxs = [r[0] for r in raw]
+    for kind, bit in model.col_reduction:
+      if kind == "element":
+        mask = 1 << bit
+        for e in range(n):
+          if e & mask == 0:
+            partner = e | mask
+            combined = row_maxs[e].alu(Ops.MAX, row_maxs[partner])
+            row_maxs[e] = row_maxs[partner] = combined
+      else:
+        addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, 1 << bit)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
+        for e in range(n): row_maxs[e] = row_maxs[e].alu(Ops.MAX, warp_bpermute(addr, row_maxs[e]))
+    weights = []
+    for e in range(n):
+      value, valid, fused_causal, kv, qrow = raw[e]
+      new_m = row_maxs[e] if initial_state else m.gep(e).alu(Ops.MAX, row_maxs[e])
+      weight = (value-new_m).alu(Ops.MUL, log2e).exp2()
+      if fused_causal: weight=UOp(Ops.CUSTOMI,dtypes.float,(weight,kv,qrow),"(({1}<={2})?{0}:0.0f)")
+      if valid is not None: weight = valid.where(weight, UOp.const(dtypes.float, 0))
+      new_ms.append(new_m); weights.append(weight)
+    row_sums = list(weights)
+    for kind, bit in model.col_reduction:
+      if kind == "element":
+        mask = 1 << bit
+        for e in range(n):
+          if e & mask == 0:
+            partner = e | mask
+            combined = row_sums[e].alu(Ops.ADD, row_sums[partner])
+            row_sums[e] = row_sums[partner] = combined
+      else:
+        addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, 1 << bit)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
+        for e in range(n): row_sums[e] = row_sums[e].alu(Ops.ADD, warp_bpermute(addr, row_sums[e]))
+    state_rows = []
+    for e in range(n):
+      old_m, old_l = (m.gep(e), l.gep(e)) if stateful and not initial_state else (m, l)
+      new_m = new_ms[e]
+      raw_alpha = UOp.const(dtypes.float, 1) if initial_state else row_sums[e].ne(UOp.const(dtypes.float, 0)).where(
+        (old_m-new_m).alu(Ops.MUL, log2e).exp2(), UOp.const(dtypes.float, 1))
+      alpha = raw_alpha
+      new_l = row_sums[e] if initial_state else old_l.alu(Ops.MUL, alpha).alu(Ops.ADD, row_sums[e])
+      if not stateful or not native_state: new_ls.append(new_l)
+      alphas.append(alpha)
+      state_rows.append((new_m, new_l, alpha))
+    # Publish every element at its C-fragment position; the PV-A reload below
+    # transposes through LDS exactly as the interleaved path does.
+    for e in range(n):
+      new_m, new_l, alpha = state_rows[e]
+      normalized = (weights[e] if stateful else weights[e] / new_l).cast(dtypes.half)
+      row, col_e = model.c_row_uop(e, lane), model.c_col_uop(e, lane)
+      published_row = lds.index(wave_base.alu(Ops.ADD,
+        row.alu(Ops.MUL, UOp.const(dtypes.weakint, 16)).alu(Ops.ADD, col_e))).store(normalized)
+      if stateful and native_state:
+        mw = UOp(Ops.CUSTOMI, dtypes.void, (new_m,), arg=("amd_gfx1100_row_state_write_v1", state_owner, "m", e))
+        lw = UOp(Ops.CUSTOMI, dtypes.void, (new_l,), arg=("amd_gfx1100_row_state_write_v1", state_owner, "l", e))
+        aw = UOp(Ops.CUSTOMI, dtypes.void, (alpha,), arg=("amd_gfx1100_row_state_write_v1", state_owner, "alpha", e))
+        state_writes_m.append(mw); state_writes_l.append(lw); state_writes_alpha.append(aw)
+        stores.append(UOp.group(published_row, mw, lw, aw))
+      else: stores.append(published_row)
+  else:
+    for e in range(model.score_elements if model is not None else 8):
+      old_m, old_l = (m.gep(e), l.gep(e)) if stateful and not initial_state else (m, l)
+      row = model.c_row_uop(e, lane) if model is not None else UOp.const(dtypes.weakint, 2*e).alu(Ops.ADD, halfwave)
+      col_e = model.c_col_uop(0, lane) if model is not None else col
+      value, valid, fused_causal, kv, qrow = _score_value(e, row, col_e)
+      if stores: value = value.bitcast(dtypes.uint).after(UOp.group(stores[-1])).bitcast(dtypes.float)
+      # THEORY 6 (measured, 2026-07-24) -- the two butterflies below are exactly the two the algorithm
+      # needs, but on the SHIPPED HIP path they used to cost THREE cross-lane traversals per row. Neither
+      # extra traversal is emitted here; both are artifacts of how this expression tree is RENDERED, and
+      # both are addressed by PREFILL_SOFTMAX_REDUCE_FUSE in tinygrad/renderer/cstyle.py:
+      #   (a) Ops.CUSTOMI is inlined unconditionally by the C renderer, ignoring child_count. Every rung of
+      #       these ladders has two consumers (the next fmaxf AND the next bpermute), so the emitted C grows
+      #       as 2^n: a 4-step ladder renders as 15 textual bpermutes, 272 across the 8-row repack where
+      #       only 64 are distinct.
+      #   (b) `new_m = max(old_m, row_max)` below is not a native HIP op, so decompositions.py rewrites it
+      #       to (a<b).where(b,a) -- inlining the whole ladder twice more, and lowering to an exec-masked
+      #       v_cmpx_lt_f32/s_cbranch_execz region that LLVM's CSE will not cross, so a third ladder is
+      #       REMATERIALIZED inside the guard.
+      # Result was 96 ds_bpermute_b32 + 97 mandatory s_waitcnt lgkmcnt(0) + 135 v_max_f32 per KV tile,
+      # against 64 bpermute for the two real reductions. Do not "simplify" this by hoisting row_max into a
+      # Python temp -- it already is one; the duplication is in the renderer, not here.
+      row_max = value
+      for mask in x.arg.xor_masks:
+        addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
+        row_max = row_max.alu(Ops.MAX, warp_bpermute(addr, row_max))
+      new_m = row_max if initial_state else old_m.alu(Ops.MAX, row_max)
+      weight = (value-new_m).alu(Ops.MUL, log2e).exp2()
+      if fused_causal: weight=UOp(Ops.CUSTOMI,dtypes.float,(weight,kv,qrow),"(({1}<={2})?{0}:0.0f)")
+      if valid is not None: weight = valid.where(weight, UOp.const(dtypes.float, 0))
+      row_sum = weight
+      for mask in x.arg.xor_masks:
+        addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
+        row_sum = row_sum.alu(Ops.ADD, warp_bpermute(addr, row_sum))
+      raw_alpha = UOp.const(dtypes.float, 1) if initial_state else row_sum.ne(UOp.const(dtypes.float, 0)).where(
+        (old_m-new_m).alu(Ops.MUL, log2e).exp2(), UOp.const(dtypes.float, 1))
+      alpha = raw_alpha
+      new_l = row_sum if initial_state else old_l.alu(Ops.MUL, alpha).alu(Ops.ADD, row_sum)
+      if not stateful or not native_state: new_ms.append(new_m); new_ls.append(new_l)
+      alphas.append(alpha)
+      normalized = (weight if stateful else weight / new_l).cast(dtypes.half)
+      published_row = lds.index(wave_base.alu(Ops.ADD,
+        row.alu(Ops.MUL, UOp.const(dtypes.weakint, 16)).alu(Ops.ADD, col))).store(normalized)
+      # Serialize row publication so eight independent butterfly/exp/CVT trees
+      # do not become simultaneously live before the barrier.
+      if stateful and native_state:
+        mw = UOp(Ops.CUSTOMI, dtypes.void, (new_m,), arg=("amd_gfx1100_row_state_write_v1", state_owner, "m", e))
+        lw = UOp(Ops.CUSTOMI, dtypes.void, (new_l,), arg=("amd_gfx1100_row_state_write_v1", state_owner, "l", e))
+        aw = UOp(Ops.CUSTOMI, dtypes.void, (alpha,), arg=("amd_gfx1100_row_state_write_v1", state_owner, "alpha", e))
+        state_writes_m.append(mw); state_writes_l.append(lw); state_writes_alpha.append(aw)
+        stores.append(UOp.group(published_row, mw, lw, aw))
+      else: stores.append(published_row)
   # A workgroup barrier is necessary unless the launch descriptor proves that
   # the complete workgroup is one gfx1100 wave.  In that exact case wave issue
   # order plus lgkmcnt(0) publishes all P stores before any PV-A reload without
@@ -311,12 +414,20 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
   else: ready = UOp.barrier(UOp.group(*stores))
   reload_row = wave_base.alu(Ops.ADD, col.alu(Ops.MUL, UOp.const(dtypes.weakint, 16)))
   published = lds.after(ready)
-  vals = [published.index(reload_row.alu(Ops.ADD, UOp.const(dtypes.weakint, i))).load() for i in range(16)]
+  if model is not None:
+    # PV-A reload reads the A-operand positions of the target's own layout; the
+    # LDS transpose from the C positions published above is the same move the
+    # literal AMD path makes (there, A row == col and A k == element index).
+    vals = [published.index(wave_base.alu(Ops.ADD,
+      model.operand_row(0, i, lane).alu(Ops.MUL, UOp.const(dtypes.weakint, 16)).alu(Ops.ADD,
+      model.operand_k(0, i, lane)))).load() for i in range(model.pv_a_lanes)]
+  else: vals = [published.index(reload_row.alu(Ops.ADD, UOp.const(dtypes.weakint, i))).load() for i in range(16)]
   if stateful and native_state:
     new_ms = [UOp(Ops.CUSTOMI, dtypes.float, (state_writes_m[i], ready), arg=("amd_gfx1100_row_state_read_v1", state_owner, "m", i)) for i in range(8)]
     new_ls = [UOp(Ops.CUSTOMI, dtypes.float, (state_writes_l[i], ready), arg=("amd_gfx1100_row_state_read_v1", state_owner, "l", i)) for i in range(8)]
     alphas = [UOp(Ops.CUSTOMI, dtypes.float, (state_writes_alpha[i], ready), arg=("amd_gfx1100_row_state_read_v1", state_owner, "alpha", i)) for i in range(8)]
-  p = UOp(Ops.STACK, dtypes.half.vec(16), tuple(vals), tag=("amd_gfx1100_pv_a_reload_v1",))
+  p = UOp(Ops.STACK, dtypes.half.vec(model.pv_a_lanes if model is not None else 16), tuple(vals),
+    tag=("amd_gfx1100_pv_a_reload_v1",))
   # Each physical accumulator element owns one row. These vector states stay
   # replicated in the native C layout until a descriptor-owned final store.
   alpha_owner = x

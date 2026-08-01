@@ -173,12 +173,18 @@ def _cstyle_expand_attention_output_drain(x:UOp) -> UOp:
   # `half`/`col` (wave32 lane math) and `range(x.arg.blocks)` stay as they are -- hardware, or already
   # derived. The per-group row stride is 16 q-tokens * the halfwave stride.
   c_e, c_half, c_j, c_col = x.arg.drain_lane_coeffs
-  if c_e != 2*c_half or c_col != 1: raise ValueError("HIP attention output drain needs the factored wave32 lane convention")
+  model=getattr(x.arg,"fragment_model",None)
+  if model is None and (c_e != 2*c_half or c_col != 1):
+    raise ValueError("HIP attention output drain needs the factored wave32 lane convention")
   for j in range(x.arg.blocks):
-    for e in range(8):
+    for e in range(model.score_elements if model is not None else 8):
       den=l.gep(e); recip=den.ne(UOp.const(dtypes.float,0)).where(UOp.const(dtypes.float,1)/den,UOp.const(dtypes.float,0))
       base=group*UOp.const(dtypes.weakint,16*c_half) if group is not None else UOp.const(dtypes.weakint,0)
-      dst=out.index(base+(UOp.const(dtypes.weakint,2*e)+half)*UOp.const(dtypes.weakint,c_half)+(j+x.arg.output_block_base)*c_j+col)
+      if model is not None:
+        dst=out.index(base+model.c_row_uop(e,lane)*UOp.const(dtypes.weakint,c_half)+
+          UOp.const(dtypes.weakint,(j+x.arg.output_block_base)*c_j)+model.c_col_uop(e,lane))
+      else:
+        dst=out.index(base+(UOp.const(dtypes.weakint,2*e)+half)*UOp.const(dtypes.weakint,c_half)+(j+x.arg.output_block_base)*c_j+col)
       stores.append(dst.store((acc[j].gep(e)*recip).cast(dtypes.half)))
   return UOp.group(*stores)
 

@@ -1636,6 +1636,10 @@ class RowSoftmaxRepackSpec(NamedTuple):
       raise ValueError("online softmax LDS repack requires a workgroup barrier")
     return self
 
+def native_attention_abi(abi: str, suffix: str) -> bool:
+  """True for the native fused-attention ABI names of any modeled target."""
+  return abi in {f"amd_gfx1100_{suffix}", f"nv_sm120_{suffix}"}
+
 class AMDRowSoftmaxRepackSpec(NamedTuple):
   """Exact RDNA3 wave32 realization of ``online_softmax_qk_pv_v1``.
 
@@ -1664,14 +1668,22 @@ class AMDRowSoftmaxRepackSpec(NamedTuple):
   valid_kv: int = 16
   dynamic_kv_v1: bool = False
   grid: Any|None = None
+  fragment_model: Any|None = None
 
   def validate(self):
-    if (self.native_abi, self.target, self.wave_size) != ("amd_gfx1100_online_softmax_qk_pv_v1", "gfx1100", 32):
-      raise ValueError("row-softmax native repack requires exact AMD gfx1100 wave32 v1 ABI")
-    if (self.qk_c_lanes, self.pv_a_lanes) != (8, 16):
-      raise ValueError("row-softmax native repack requires 8-lane float QK-C and 16-lane half PV-A")
-    if (self.row_expr, self.col_expr) != ("2*e+(lane>>4)", "lane&15") or self.xor_masks != (1, 2, 4, 8):
-      raise ValueError("row-softmax native repack has an unsupported lane reduction layout")
+    if self.fragment_model is not None:
+      if self.native_abi != self.fragment_model.abi("online_softmax_qk_pv_v1") or \
+         self.target != self.fragment_model.arch or self.wave_size != 32:
+        raise ValueError("row-softmax native repack requires its fragment model's ABI")
+      if (self.qk_c_lanes, self.pv_a_lanes) != (self.fragment_model.qk_c_lanes, self.fragment_model.pv_a_lanes):
+        raise ValueError("row-softmax native repack requires the fragment model's lane widths")
+    else:
+      if (self.native_abi, self.target, self.wave_size) != ("amd_gfx1100_online_softmax_qk_pv_v1", "gfx1100", 32):
+        raise ValueError("row-softmax native repack requires exact AMD gfx1100 wave32 v1 ABI")
+      if (self.qk_c_lanes, self.pv_a_lanes) != (8, 16):
+        raise ValueError("row-softmax native repack requires 8-lane float QK-C and 16-lane half PV-A")
+      if (self.row_expr, self.col_expr) != ("2*e+(lane>>4)", "lane&15") or self.xor_masks != (1, 2, 4, 8):
+        raise ValueError("row-softmax native repack has an unsupported lane reduction layout")
     if (self.lds_dtype, self.lds_elements, self.lds_address) != ("half", 256, "row*16+col"):
       raise ValueError("row-softmax native repack requires the exact 256-half LDS identity map")
     if self.requires_barrier is not True or self.reload_layout != "wmma_f32_16x16x16_f16_pv_a_wave32_v1":
@@ -1718,6 +1730,7 @@ class AMDRowSoftmaxSlotSpec(NamedTuple):
   slot: int = 0
   scalar_dtypes: tuple[str, ...] = ("half", "float", "float", "float")
   lane_counts: tuple[int, ...] = (16, 8, 8, 8)
+  fragment_model: Any|None = None
 
   @property
   def lanes(self) -> int: return self.lane_counts[self.slot]
@@ -1729,8 +1742,13 @@ class AMDRowSoftmaxSlotSpec(NamedTuple):
   def carrier_dtype(self) -> DType: return self.scalar_dtype.vec(self.lanes)
 
   def validate(self):
-    if self.native_abi != "amd_gfx1100_online_softmax_qk_pv_v1" or self.scalar_dtypes != \
-       ("half", "float", "float", "float") or self.lane_counts != (16, 8, 8, 8):
+    if self.fragment_model is not None:
+      expected_lanes = (self.fragment_model.pv_a_lanes,) + (self.fragment_model.score_elements,) * 3
+      if self.native_abi != self.fragment_model.abi("online_softmax_qk_pv_v1") or \
+         self.scalar_dtypes != ("half", "float", "float", "float") or self.lane_counts != expected_lanes:
+        raise ValueError("native row-softmax slot requires its fragment model's repack ABI")
+    elif self.native_abi != "amd_gfx1100_online_softmax_qk_pv_v1" or self.scalar_dtypes != \
+         ("half", "float", "float", "float") or self.lane_counts != (16, 8, 8, 8):
       raise ValueError("native row-softmax slot requires exact gfx1100 repack ABI")
     if not isinstance(self.slot, int) or not 0 <= self.slot < 4:
       raise ValueError("native row-softmax slot must be in [0,4)")
@@ -1748,6 +1766,7 @@ class AMDAttentionGridSpec(NamedTuple):
   group_expr: str = "q_tile=group%q_tiles;q_head=group//q_tiles;kv_head=q_head//group_ratio"
   wave_size: int = 32
   local_size: int = 32
+  fragment_model: Any|None = None
 
   @property
   def q_tiles(self): return self.q_tokens//16
@@ -1763,7 +1782,10 @@ class AMDAttentionGridSpec(NamedTuple):
     return q_head,q_tile,q_head//self.group_ratio
 
   def validate(self):
-    if self.native_abi != "amd_gfx1100_attention_grid_hd128_v1" or self.group_expr != "q_tile=group%q_tiles;q_head=group//q_tiles;kv_head=q_head//group_ratio": raise ValueError("AMD attention grid has an unsupported ownership ABI")
+    if self.fragment_model is not None:
+      if self.native_abi != self.fragment_model.abi("attention_grid_hd128_v1"): raise ValueError("attention grid has an unsupported fragment-model ABI")
+    elif self.native_abi != "amd_gfx1100_attention_grid_hd128_v1": raise ValueError("AMD attention grid has an unsupported ownership ABI")
+    if self.group_expr != "q_tile=group%q_tiles;q_head=group//q_tiles;kv_head=q_head//group_ratio": raise ValueError("attention grid has an unsupported ownership ABI")
     if not all(isinstance(x,int) and not isinstance(x,bool) for x in (self.q_tokens,self.q_heads,self.kv_heads,self.group_ratio,self.kv_tokens,self.head_dim,self.wave_size,self.local_size)): raise ValueError("AMD attention grid dimensions must be integral")
     # head_dim was pinned "!=128" here; de-literalized to "any positive 16-wide head_dim" (the 16 is
     # our fragment granularity, hardware, and stays literal -- symmetric with decode's Hd%64 posture).
@@ -1821,6 +1843,7 @@ class AMDAttentionOutputDrainSpec(NamedTuple):
   address_expr: str = "e*256+halfwave*128+j*16+col"
   grid: AMDAttentionGridSpec|None = None
   output_block_base: int = 0
+  fragment_model: Any|None = None
 
   @property
   def drain_lane_coeffs(self) -> tuple[int, int, int, int]:
@@ -1865,13 +1888,22 @@ class AMDAttentionOutputDrainSpec(NamedTuple):
     # this validator is what now encodes the invariant -- byte-identical at head_dim=128.
     hdb = self.head_dim // 16
     expected_addr = self.address_expr_text
-    full = self.native_abi == "amd_gfx1100_attention_output_drain_v1" and self.blocks == hdb and \
-      self.lanes_per_fragment == 8 and self.address_expr == expected_addr and self.output_block_base == 0
     # Proper divisors of hdb (< hdb): at head_dim=128 (hdb=8) this is exactly {1,2,4}, unchanged.
     slice_divisors = {d for d in range(1, hdb) if hdb % d == 0}
-    slice_ok = self.native_abi == "amd_gfx1100_attention_output_drain_acc_slice_v2" and \
-      self.blocks in slice_divisors and self.lanes_per_fragment == 8 and self.address_expr == expected_addr and \
-      0 <= self.output_block_base <= hdb-self.blocks and self.output_block_base % self.blocks == 0
+    if self.fragment_model is not None:
+      # The fragment model is the drain lane-layout authority; address_expr is
+      # decorative on the model path (NV has no hand-authored text).
+      full = self.native_abi == self.fragment_model.abi("attention_output_drain_v1") and self.blocks == hdb and \
+        self.lanes_per_fragment == self.fragment_model.score_elements and self.output_block_base == 0
+      slice_ok = self.native_abi == self.fragment_model.abi("attention_output_drain_acc_slice_v2") and \
+        self.blocks in slice_divisors and self.lanes_per_fragment == self.fragment_model.score_elements and \
+        0 <= self.output_block_base <= hdb-self.blocks and self.output_block_base % self.blocks == 0
+    else:
+      full = self.native_abi == "amd_gfx1100_attention_output_drain_v1" and self.blocks == hdb and \
+        self.lanes_per_fragment == 8 and self.address_expr == expected_addr and self.output_block_base == 0
+      slice_ok = self.native_abi == "amd_gfx1100_attention_output_drain_acc_slice_v2" and \
+        self.blocks in slice_divisors and self.lanes_per_fragment == 8 and self.address_expr == expected_addr and \
+        0 <= self.output_block_base <= hdb-self.blocks and self.output_block_base % self.blocks == 0
     if not full and not slice_ok:
       raise ValueError("AMD attention output drain requires the exact gfx1100 Hd128 v1 ABI")
     if self.grid is not None: self.grid.validate()
@@ -1932,10 +1964,20 @@ class AMDPackedFragmentLoopSpec(NamedTuple):
   grid: AMDAttentionGridSpec|AMDMultiWaveAttentionGridSpec|None = None
   output_block_base: int = 0
   fragment_lanes: int = 16
+  call: int = 0
+  fragment_model: Any|None = None
 
   def validate(self):
-    if self.native_abi != "amd_gfx1100_packed_fragment_hd128_loop_v1" or self.role not in {"Q", "K", "V"} or self.fragment_lanes != 16:
+    if self.fragment_model is not None:
+      if self.native_abi != self.fragment_model.abi("packed_fragment_hd128_loop_v1") or \
+         self.role not in {"Q", "K", "V"} or self.fragment_lanes != self.fragment_model.fragment_lanes(self.role):
+        raise ValueError("loop fragment has an unsupported fragment-model ABI or role")
+      if not isinstance(self.call, int) or isinstance(self.call, bool) or not 0 <= self.call < self.fragment_model.calls_per_tile:
+        raise ValueError("loop fragment call is outside its fragment model's tile composition")
+    elif self.native_abi != "amd_gfx1100_packed_fragment_hd128_loop_v1" or self.role not in {"Q", "K", "V"} or self.fragment_lanes != 16:
       raise ValueError("AMD loop fragment has an unsupported ABI or role")
+    if self.grid is None and self.call != 0:
+      raise ValueError("loop fragment call requires a grid")
     # `head_block` is a HEAD-BLOCK COUNT -> derives from the bound grid's head_dim (128//16==8,
     # byte-identical). When grid is None, keep the legacy literal 8 default for back-compat.
     hdb = self.grid.head_dim//16 if self.grid is not None else 8
