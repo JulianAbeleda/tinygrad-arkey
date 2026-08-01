@@ -91,7 +91,9 @@ def test_native_gqa_prefill_semantic_owner_reaches_one_grid_wmma_body(hq):
   linear = next(u for u in program.src if u.op is Ops.LINEAR)
   mnemonics = [str(u.arg).split("(", 1)[0] for u in linear.src if not isinstance(u.arg, tuple)]
   assert mnemonics.count("v_wmma_f32_16x16x16_f16") == 16
-  assert mnemonics.count("s_barrier") == 1
+  waits=[u.arg for u in linear.src if str(u.arg).split("(",1)[0] == "s_waitcnt"]
+  assert mnemonics.count("s_barrier") == 0
+  assert sum(getattr(w,"simm16",None) == (63 << 10) | 7 for w in waits) == 1
 
 def _final_model_attention_program(context=None, *, hq=32, hkv=8, qt=512, kv=512):
   from dataclasses import replace
