@@ -47,17 +47,29 @@ The `amd_rdna3` AMDISA fixture golden is asserted exactly via `_emit_fixture(_tc
 binary `4a558d215767...`, mnemonic `f415079ccd15...`, 972 bytes, 149 instructions, 1 wmma --
 matching `FIXTURES["tc_16x16x16_unrolled"]` at HEAD.
 
-## Finding: gfx942 K=128 fp8 render crash (unreachable in production)
+## Follow-up: fp8 WMMA now fails closed on renderers without native fp8
 
-`amd_cdna_1616128` (K=128 fp8) fails to render on `gfx942` with `ValueError: tuple.index(x): x
-not in tuple` from `tinygrad/renderer/cstyle.py:fp8_index`. Mechanism: gfx942 has no native
-fp8_ocp support (`HIPRenderer.supported_dtypes` admits fp8_ocp only on gfx950), so the dtype
-decomposer emulates fp8 as half, and the CDNA K=128 string pattern then calls `fp8_index(half)`.
-On gfx950 (where fp8 is native) the same descriptor renders cleanly -- the family row above uses
-its natural gfx950 binding, which is the only binding production ever makes (`get_amd("gfx950")`
-= `amd_cdna4` contains 1616128; `get_amd("gfx942")` = `amd_cdna3` does not). The control keeps a
-non-fatal gfx942 cross-check row so the crash stays visible. Reported, not worked around --
-same posture as FA-CTRL's STOP CONDITION. No emitter change was made.
+The original finding was that `amd_cdna_1616128` (K=128 fp8) crashed the gfx942 renderer with a
+bare `ValueError` from `cstyle.py:fp8_index`: gfx942 has no native fp8_ocp support
+(`HIPRenderer.supported_dtypes` admits fp8_ocp only on gfx950), so the dtype decomposer emulated
+fp8 as half, and the CDNA K=128 string pattern then called `fp8_index(half)`. K=32 fp8 on gfx942
+(`amd_cdna3` does bind those descriptors) was the quieter sibling: it rendered with half operands
+handed to an fp8 builtin -- the same mismatch, without the crash.
+
+Per the owner's direction ("fail loudly if we run into it"), this is now a fail-closed guard in
+`postrange.py::_apply_generic_tensor_core_opt`: a descriptor whose operand dtype the renderer
+cannot express natively is refused at TC selection with a `KernelOptError` naming the capability
+and target, instead of either historical failure mode. `cstyle.py:fp8_index` additionally raises
+a descriptive `RuntimeError` (only reachable now by hand-built graphs). gfx950 and CUDA sm_89 are
+fp8-native and unaffected; gfx942's half/bf16 descriptors are unaffected (the guard is
+dtype-specific, and the control's `amd_cdna_161632` / `amd_cdna3` rows now report the fp8 pair as
+`blocked` -- the intended behavior). The gfx942 K=128 cross-check row verifies the guard fires
+there; the natural gfx950 row is the production path (`get_amd("gfx950")` = `amd_cdna4` contains
+1616128; `get_amd("gfx942")` = `amd_cdna3` does not).
+
+Coverage: `test/unit/test_tc_fp8_wmma_admission.py` (4 tests: forced-select and search-mode
+fail-closed on gfx942, half-descriptor regression, gfx950 native fp8 carriers). The mutation
+check above still fails all 14 families when the oracle dtype lines are changed.
 
 ## Mutation check (the gate can fail)
 
