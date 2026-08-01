@@ -6,7 +6,7 @@ Read-only inspection plus two scratchpad probes in `/tmp` (not committed). No co
 ## Stop-condition finding
 
 **Category B is a handful, not a diffuse pattern.** The load-bearing dtype-identity sites are
-seven rewrites/creations, enumerated in full below (§ Category B). This materially shrinks the
+eight rewrites/creations, enumerated in full below (§ Category B). This materially shrinks the
 shape of the follow-on work: a carrier shape-aware migration needs to touch these seven sites
 first, not a sprawling pattern family.
 
@@ -136,4 +136,4 @@ Shared rules (`spec.py`, `symbolic.py`, `rangeify.py`, `llvmir.py`) are hardwire
 ## Stop condition
 
 This is the census artifact WC2/D1/D2/D3 are gated on. Per task §5: Category B is a handful
-(seven sites, § Category B), stated prominently. No fix was designed and none was made.
+(eight sites, § Category B), stated prominently. No fix was designed and none was made.
