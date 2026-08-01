@@ -10,6 +10,7 @@ from tinygrad.uop.ops import Ops
 from tinygrad.llm import decode_routes
 from tinygrad.llm.model import Transformer, _generation_input_slice, _should_use_flash_attention
 import tinygrad.llm.kernel_program as kernel_program
+from tinygrad.llm.qk_layout import Q4_K, Q6_K
 
 
 def test_generation_decode_slice_retains_lazy_symbolic_jit_contract():
@@ -169,7 +170,7 @@ def test_q4k_candidate_binds_explicit_quant_shape_target_requirements():
 
   assert binding is not None
   assert (binding.quant, binding.target, binding.B, binding.T, binding.K, binding.N) == \
-    ("Q4_K", "amd_gfx1100", 1, 1, 2048, 96)
+    (Q4_K, "amd_gfx1100", 1, 1, 2048, 96)
   with pytest.raises(FrozenInstanceError): binding.N = 32
 
 
@@ -229,7 +230,7 @@ def test_q6k_candidate_binds_explicit_quant_shape_target_requirements():
 
   assert binding is not None
   assert (binding.quant, binding.target, binding.B, binding.T, binding.K, binding.N) == \
-    ("Q6_K", "amd_gfx1100", 1, 1, 256, 16)
+    (Q6_K, "amd_gfx1100", 1, 1, 256, 16)
   assert (binding.parts, binding.row_tile, binding.use_coop) == (1, 4, True)
 
 

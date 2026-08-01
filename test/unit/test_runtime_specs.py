@@ -303,7 +303,7 @@ def test_full_kernel_operand_sources_roundtrip_and_typed_context(kind, quant_for
     target={"backend":"AMD","arch":"gfx1100","wave_size":32})
   if kind == "dense": assert admission.context.packed_weight is None
   else:
-    assert admission.context.packed_weight.quant_format == quant_format
+    assert admission.context.packed_weight.quant_format.name == quant_format
     assert (admission.context.packed_weight.rows, admission.context.packed_weight.k) == (12288,4096)
 
 

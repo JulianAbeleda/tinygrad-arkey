@@ -70,7 +70,7 @@ def test_admit_probe_config_admits_the_established_m1b_m1c_m1d_dispatch_with_no_
   entry, admission = lane.admit_probe_config(config)
   assert admission.active_lds_bytes == 25600
   assert admission.context.packed_weight is not None
-  assert admission.context.packed_weight.quant_format == QUANT
+  assert admission.context.packed_weight.quant_format.name == QUANT
   assert entry.canonical_identity == admission.canonical_identity
 
 

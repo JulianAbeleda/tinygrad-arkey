@@ -4,6 +4,7 @@ from pathlib import Path
 from tinygrad import Tensor
 from tinygrad.llm.memory_semantics import PREFILL_ACTIVATION, memory_semantic_owner
 from tinygrad.llm import prefill_routes
+from tinygrad.llm.qk_layout import Q4_K
 
 
 def test_packed_wmma_materialized_input_is_prefill_activation(monkeypatch):
@@ -21,7 +22,7 @@ def test_packed_wmma_materialized_input_is_prefill_activation(monkeypatch):
 
   monkeypatch.setattr(prefill_routes, "packed_wmma_prefill_enabled", lambda: True)
   monkeypatch.setattr(prefill_routes, "_attached_packed_wmma_spec",
-                      lambda *_: prefill_routes.PrefillLinearRouteSpec("packed_wmma", "q4k", "attn_qo", 2, 3, 4))
+                      lambda *_: prefill_routes.PrefillLinearRouteSpec("packed_wmma", Q4_K, "attn_qo", 2, 3, 4))
   monkeypatch.setattr(prefill_routes, "select_packed_wmma_prefill_candidate", lambda *_: Candidate())
   out = prefill_routes.route_packed_wmma_prefill(Lin(), Tensor.zeros(1, 2, 4, device="CPU"))
   assert out is not None and observed["owner"] == PREFILL_ACTIVATION
