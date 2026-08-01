@@ -68,25 +68,35 @@ def _should_use_flash_attention(ring_freqs:Tensor|None, start_pos:int|UOp, T:int
 # below, `_custom_kernel_prefill_attn_promoted`.
 #
 # This is deliberately NOT the TG3 quant-gate pattern (capability read from renderer facts + a promoted_targets
-# policy that defaults OPEN when no record is loaded, tinygrad/llm/model_route_plan.py). There is no
-# independent capability question here to decompose: `custom_kernel_attention` injects an already-CAPTURED,
-# hand-authored AMD gfx1100 machine-code program (.hip.cpp/.amdisa.s produced by
-# extra/llm_research/generate_shared_attention_captures; see fused_attention.py's module docstring) via
-# Tensor.uop_program, not a generically-lowered operation the renderer can express or reject per target. So
-# "capability" and "policy" collapse into one fused question -- "was a captured program promoted for this
-# exact target" -- and it must default CLOSED, not open: an 8B/14B Qwen3 model on Metal satisfies the exact
-# same ADMITTED_GRIDS shape as AMD, and a TG3-style "no record -> admitted" default would attempt to inject
-# raw AMD gfx1100 ISA as an opaque program on a non-AMD renderer -- a correctness/crash risk, not a missed
-# optimization. Promotion is therefore an explicit, hardcoded-but-isolated allowlist (not derived from
-# ModelRoutePlan, whose "no record" default is wrong for this route), so a future promotion can widen it
-# without touching the shape gate or this call site.
-_CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS: frozenset[tuple[str|None, str|None]] = frozenset({("AMD", "gfx1100")})
+# policy that defaults OPEN when no record is loaded, tinygrad/llm/model_route_plan.py) -- but the reason is
+# NOT the retired "captured program" claim: the fused kernel is no longer an opaque AMD gfx1100 machine-code
+# injection. FlashPrefillAttentionSpec (schedule/wmma/flash_prefill.py) owns the topology as DATA and builds
+# the kernel as ordinary UOps through spec.emit(); the renderer lowers them like any other program, and
+# injection is via Tensor.uop_program. What still makes admission target-dependent is the FRAGMENT MATH:
+# until the per-target decomposition is numerically proven, running it on an unproven target yields a compile
+# failure or wrong numbers, not a crash. So the closed default stands, sourced from a BoltBeam route-policy
+# record in the exact shape of `load_qk_target_promotion` (model_route_plan.py): JSON,
+# `schema == "boltbeam.route_policy.v1"`, `promoted_targets` list of {backend, architecture}. No record ->
+# CLOSED (this route's deliberate deviation from TG3's "no record -> open" default); record loaded -> the
+# enforced set. The checked-in record is the promotion gate: `git diff` on that file is the promotion review
+# artifact, and widening promotion never touches the shape gate or this call site.
+_CUSTOM_KERNEL_PREFILL_ATTN_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "custom-kernel-prefill-attention-route-policy.json"
+
+def _load_custom_kernel_prefill_attn_promotion() -> frozenset[tuple[str|None, str|None]]:
+  """Read the fused-prefill-attention promotion record (boltbeam.route_policy.v1, see the comment above)."""
+  data = json.loads(_CUSTOM_KERNEL_PREFILL_ATTN_PROMOTION_RECORD.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1":
+    raise ValueError(f"{_CUSTOM_KERNEL_PREFILL_ATTN_PROMOTION_RECORD} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()  # no promotion record -> closed (see the module comment above)
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS: frozenset[tuple[str|None, str|None]] = _load_custom_kernel_prefill_attn_promotion()
 
 def _custom_kernel_prefill_attn_promoted(backend:str|None, arch:str|None) -> bool:
-  """TG8 policy authority: is (backend, architecture) promoted for the hand-captured custom-kernel-injection
-  prefill attention route? See the module-level comment above `_CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS`
-  for why this must default closed rather than reusing ModelRoutePlan.target_promoted's "no record -> open"
-  default."""
+  """TG8 policy authority: is (backend, architecture) promoted for the fused prefill attention route?
+  See the module-level comment above `_CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS` for why this must
+  default closed rather than reusing ModelRoutePlan.target_promoted's "no record -> open" default."""
   return (backend, arch) in _CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS
 
 def _should_use_custom_kernel_prefill_attn(n_heads:int, n_kv_heads:int, backend:str|None, arch:str|None) -> bool:

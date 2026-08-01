@@ -1,0 +1,8 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "custom_kernel_prefill_attention",
+  "description": "Fused prefill attention (FlashPrefillAttentionSpec) target-promotion record. Admission for this route is closed unless a target is listed here; the NV sm_120 entry lands only after 5090 e2e token parity (nv-fused-prefill-attention-port-scope-20260801.md P5).",
+  "promoted_targets": [
+    {"backend": "AMD", "architecture": "gfx1100"}
+  ]
+}

@@ -15,10 +15,14 @@ ROUTING (the one decision point)
 The model calls exactly one entry: `route_prefill_attention(q, k, v, ...)`. It
 chooses, in order:
   1. CUSTOM-KERNEL INJECTION (this module, `custom_kernel_attention`) -- inject the
-     already-proven captured program via Tensor.uop_program. Attention becomes an
-     opaque fp16 buffer-in/buffer-out CALL. The compiler realizes Q/K/V as ordinary
-     buffers (the working path); NO composite reduce, so NONE of the class-2
-     reach-through / store-forwarding / cycle failures can occur.
+     proven fused-attention program via Tensor.uop_program. The kernel is built as
+     ordinary UOps by FlashPrefillAttentionSpec.emit() through the target-keyed
+     emitter seam (per-target fragment geometry comes from the fragment model, not
+     captured machine code) and lowered by the renderer like any other program.
+     Attention becomes an opaque fp16 buffer-in/buffer-out CALL. The compiler
+     realizes Q/K/V as ordinary buffers (the working path); NO composite reduce,
+     so NONE of the class-2 reach-through / store-forwarding / cycle failures can
+     occur.
   2. COMPOSITE-SEMANTIC (legacy/dormant) -- `shared_prefill_attention` ->
      `q._semantic_attention` -> `lower_attention_semantic` (rangeify.py). This is
      the path that hits class-2; kept for reference, OFF the critical path.
@@ -40,8 +44,11 @@ MAP OF THE SCATTERED CODE THIS CENTRALIZES / REPLACES
 - (legacy) combine + V-lane packing: codegen/late/composite_combines.py (online_softmax_state, _pack_online_softmax_v_lanes)
 - (legacy) devectorize V load: codegen/late/reduce_lowering.py (_vectorize_live_v_index, _load_v_at_reduce_pos)
 - (legacy) native swap to the hand kernel: codegen/opt/postrange.py:328-361 -> schedule/wmma.py:545
-- The proven kernel source + ABI (the "base"): produced by extra/llm_research/generate_shared_attention_captures
-  (emits .hip.cpp/.amdisa.s + JSON; ABI = out[slot0], Q[slot1], K[slot2], V[slot3], scale/causal baked CONST)
+- The kernel topology + ABI (the "base"): FlashPrefillAttentionSpec
+  (schedule/wmma/flash_prefill.py) owns the topology as DATA and builds the kernel
+  as UOps through the emitter seam (ABI = out[slot0], Q[slot1], K[slot2], V[slot3],
+  scale/causal baked CONST). Per-target fragment decomposition comes from the
+  fragment model (codegen/opt/attention_fragment.py), not from captured machine code.
 - Loud class-2 diagnostic (safety net): uop/ops.py DISALLOW_BROADCAST site (ScopedValueSpec vs rank-0)
 
 PROMOTED PROGRAM BOUNDARY (verified, tensor.py:194 / uop/ops.py:1256)
@@ -59,12 +66,12 @@ from tinygrad import Tensor, dtypes
 from tinygrad.uop.ops import AttentionGridSpec, SharedAttentionCandidateContext
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
 
-# ADMITTED GEOMETRIES (Hq, Hkv, q_tokens) for which a captured kernel exists / is
-# generatable. Extend as the capture matrix grows (see B7 in the scope doc). This stays
-# the proven-on-GPU shape allowlist; FlashPrefillAttentionSpec.validate() (below) is a
-# SECOND, independent geometric-legality gate -- admission requires BOTH, so today's
-# admitted set is unchanged (the allowlist is strictly narrower than what validate()
-# alone would accept).
+# ADMITTED GEOMETRIES (Hq, Hkv, q_tokens) for which the fragment-model kernel exists /
+# is generatable. Extend as the proven matrix grows (see B7 in the scope doc). This
+# stays the proven-on-GPU shape allowlist; FlashPrefillAttentionSpec.validate() (below)
+# is a SECOND, independent geometric-legality gate -- admission requires BOTH, so
+# today's admitted set is unchanged (the allowlist is strictly narrower than what
+# validate() alone would accept).
 ADMITTED_GRIDS: frozenset = frozenset({(32, 8, 512), (40, 8, 512)})
 
 # TARGET-KEYED EMITTER DISPATCH (the multi-GPU seam): a FlashPrefillAttentionSpec
