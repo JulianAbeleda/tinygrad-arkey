@@ -11,4 +11,4 @@ is `qwen3_8b_q4k_m_m4_10c`, the target part of each identity is
 
 This is a minted qualification artifact, not a completed promotion decision.
 GPU execution, admission, and timing remain the authority and are pending via
-the M1e Metal precontract lane (`extra/llm_research/prefill/metal_precontract_lane.py`).
+the M1e precontract probe lane (`extra/llm_research/prefill/precontract_probe_lane.py`).

@@ -33,13 +33,25 @@ def _payload_for_production_row(row: production.PackedWmmaRoute) -> dict:
 
 
 def verify_production_row(row: production.PackedWmmaRoute, *, timeout_seconds: float = 90.0,
-                           device: str = "AMD") -> tuple[bool, float | None]:
-  """Run the isolated oracle against exactly the supplied production row."""
+                           device: str = "AMD", use_lane: bool = False) -> tuple[bool, float | None]:
+  """Run the isolated oracle against exactly the supplied production row.
+
+  ``use_lane=True`` routes through :func:`run_precontract_probe`, the canonical three-axis lane
+  (max_abs_error + write coverage + determinism) every target qualifies through. It stays
+  opt-in beside ``run_canary``: ``run_canary`` is AMD's only working promotion verifier today,
+  and re-pointing the default on a box that cannot run AMD would ship an unexercised gate. The
+  measured AMD lane run on AMD hardware is what flips the default, and it is campaign evidence.
+  """
+  if use_lane:
+    from extra.llm_research.prefill.precontract_probe_lane import ProbeConfig, run_precontract_probe
+    result = run_precontract_probe(ProbeConfig(row.quant.name, row.role, row.shape, row.geometry,
+      device=device, rounds=3, warmups=1, timeout_seconds=timeout_seconds))
+    return result.passed, result.max_abs_error
   fd, artifact_path = tempfile.mkstemp(prefix=f"packed_wmma_production_{row.quant}_{row.role}_", suffix=".npz")
   os.close(fd)
   try:
-    build_artifact(row.quant, artifact_path, row.shape)
-    outcome = run_canary(row.quant, artifact_path, timeout_seconds, base_payload=_payload_for_production_row(row),
+    build_artifact(row.quant.name, artifact_path, row.shape)
+    outcome = run_canary(row.quant.name, artifact_path, timeout_seconds, base_payload=_payload_for_production_row(row),
                           device=device)
   finally:
     try: os.remove(artifact_path)
@@ -48,7 +60,8 @@ def verify_production_row(row: production.PackedWmmaRoute, *, timeout_seconds: f
   return bool(outcome.get("passed")), guarded.get("max_abs_error") if isinstance(guarded, dict) else None
 
 
-def install_production_qualification_verifier(*, timeout_seconds: float = 90.0, device: str = "AMD") -> None:
+def install_production_qualification_verifier(*, timeout_seconds: float = 90.0, device: str = "AMD",
+                                               use_lane: bool = False) -> None:
   """Make production gate_combo use the isolated EXP oracle for this process."""
   production.set_packed_wmma_canary_verifier(
-    lambda row: verify_production_row(row, timeout_seconds=timeout_seconds, device=device))
+    lambda row: verify_production_row(row, timeout_seconds=timeout_seconds, device=device, use_lane=use_lane))

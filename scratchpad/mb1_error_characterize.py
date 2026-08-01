@@ -5,8 +5,8 @@ few outlier cells, or a broad per-cell shuffle? Reuses the same lane, keeps the 
 import sys, tempfile
 sys.path.insert(0, ".")
 import numpy as np
-import extra.llm_research.prefill.metal_precontract_lane as lane_mod
-from extra.llm_research.prefill.metal_precontract_lane import ProbeConfig, run_precontract_probe
+import extra.llm_research.prefill.precontract_probe_lane as lane_mod
+from extra.llm_research.prefill.precontract_probe_lane import ProbeConfig, run_precontract_probe
 
 captured_paths = []
 _orig_mkstemp = tempfile.mkstemp

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """MB2: sweep bc=2 geometries through the committed lane
-(`extra/llm_research/prefill/metal_precontract_lane.py`) after parameterizing the buffer2
+(`extra/llm_research/prefill/precontract_probe_lane.py`) after parameterizing the buffer2
 accumulator-contract binary-axis literals in `tinygrad/codegen/opt/postrange.py` (were hardcoded
 to RDNA3's three-binary-axes/8-elements-per-lane; now derived from `tc.elements_per_thread[2]`
 via `binary_axis_count`/`fold_binary_axes`, exactly as PG0/PG1a/PG1 did for the sibling A/B
@@ -27,7 +27,7 @@ from __future__ import annotations
 import sys, json, time
 sys.path.insert(0, "/Users/julianabeleda/env/tinygrad-arkey-exp")
 
-from extra.llm_research.prefill.metal_precontract_lane import ProbeConfig, admit_probe_config, run_precontract_probe
+from extra.llm_research.prefill.precontract_probe_lane import ProbeConfig, admit_probe_config, run_precontract_probe
 
 QUANT, ROLE = "Q4_K", "ffn_gate_up"
 SHAPE = (512, 12288, 4096)

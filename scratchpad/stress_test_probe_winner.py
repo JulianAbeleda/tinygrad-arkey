@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Independent Part 1 coverage check for the campaign's winning geometry, using the
-committed metal_precontract_lane.py probe (zero-initialized output buffer, nonzero-count
+committed precontract_probe_lane.py probe (zero-initialized output buffer, nonzero-count
 coverage, bit-identical determinism across rounds). Not part of the campaign scripts --
 an independent re-verification."""
 import sys, json
 sys.path.insert(0, ".")
-from extra.llm_research.prefill.metal_precontract_lane import ProbeConfig, run_precontract_probe
+from extra.llm_research.prefill.precontract_probe_lane import ProbeConfig, run_precontract_probe
 
 if __name__ == "__main__":
   cfg = ProbeConfig(

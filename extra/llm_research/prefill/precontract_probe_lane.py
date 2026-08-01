@@ -1,4 +1,4 @@
-"""M1e -- one reusable Metal precontract test lane.
+"""M1e -- one reusable precontract probe lane for every declared target.
 
 M1b, M1c, and M1d each rebuilt the same payload/compile/admit/guarded-execute setup as a
 throwaway scratchpad driver (`scratchpad/m1b_metal_qualification_run.py`,
@@ -52,7 +52,7 @@ from extra.llm_research.runtime_specs import (FullKernelAdmissionError, derive_p
   full_kernel_workload, rebind_full_kernel_workload)
 from tinygrad.runtime.process_isolated import run_isolated
 
-SCHEMA = "metal-precontract-probe.v1"
+SCHEMA = "precontract-probe.v1"
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 ARGUMENT_ORDER = ("output", "a", "b")
 GEOMETRY_FIELDS = ("tm", "tn", "tk", "wm", "wn", "bc")
@@ -66,7 +66,7 @@ class ProbeConfig:
   role: str
   shape: tuple[int, int, int]
   geometry: tuple[int, int, int, int, int, int]  # (tm, tn, tk, wm, wn, bc)
-  device: str = "METAL"
+  device: str
   rounds: int = 3
   warmups: int = 1
   profile: str = DEFAULT_PROFILE

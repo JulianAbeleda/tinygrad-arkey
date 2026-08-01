@@ -65,7 +65,7 @@ def test_exp_qualification_adapter_installs_on_the_production_seam(monkeypatch):
   from extra.llm_research.prefill import packed_wmma_production_canary as adapter
   seen = []
   monkeypatch.setattr(adapter, "verify_production_row",
-    lambda row, *, timeout_seconds, device: (seen.append((row, timeout_seconds, device)) is None, 0.0))
+    lambda row, *, timeout_seconds, device, use_lane=False: (seen.append((row, timeout_seconds, device)) is None, 0.0))
   adapter.install_production_qualification_verifier(timeout_seconds=17.0)
   row = runtime.PACKED_WMMA_ROUTES[0]
   assert runtime.gate_combo(row.quant, row.role, row.shape)
@@ -76,11 +76,47 @@ def test_exp_qualification_adapter_threads_an_explicit_device(monkeypatch):
   from extra.llm_research.prefill import packed_wmma_production_canary as adapter
   seen = []
   monkeypatch.setattr(adapter, "verify_production_row",
-    lambda row, *, timeout_seconds, device: (seen.append((row, timeout_seconds, device)) is None, 0.0))
+    lambda row, *, timeout_seconds, device, use_lane=False: (seen.append((row, timeout_seconds, device)) is None, 0.0))
   adapter.install_production_qualification_verifier(timeout_seconds=17.0, device="METAL")
   row = runtime.PACKED_WMMA_ROUTES[0]
   assert runtime.gate_combo(row.quant, row.role, row.shape)
   assert seen == [(row, 17.0, "METAL")]
+
+
+def test_exp_qualification_adapter_lane_path_is_opt_in_and_uses_the_canonical_probe(monkeypatch):
+  # C4: the lane qualifies a production row through run_precontract_probe (the canonical
+  # three-axis probe) with the row's own quant/role/shape/geometry and the requested device;
+  # run_canary stays the default and is not invoked on the lane path.
+  from extra.llm_research.prefill import packed_wmma_production_canary as adapter
+  from extra.llm_research.prefill import precontract_probe_lane as lane
+  calls = []
+
+  class _Result:
+    passed = True
+    max_abs_error = 0.001
+
+  monkeypatch.setattr(lane, "run_precontract_probe", lambda config: (calls.append(config), _Result())[1])
+  monkeypatch.setattr(adapter, "run_canary", lambda *a, **k: pytest.fail("run_canary must not run on the lane path"))
+  row = runtime.PACKED_WMMA_ROUTES[0]
+  passed, error = adapter.verify_production_row(row, device="AMD", use_lane=True)
+  assert passed is True and error == 0.001
+  assert len(calls) == 1
+  config = calls[0]
+  assert (config.quant, config.role, config.shape, config.geometry, config.device) == \
+    (row.quant.name, row.role, row.shape, row.geometry, "AMD")
+
+
+def test_exp_qualification_adapter_default_path_still_routes_through_run_canary(monkeypatch):
+  from extra.llm_research.prefill import packed_wmma_production_canary as adapter
+  from extra.llm_research.prefill import precontract_probe_lane as lane
+  calls = []
+  monkeypatch.setattr(adapter, "build_artifact", lambda *a, **k: None)
+  monkeypatch.setattr(adapter, "run_canary", lambda *a, **k: (calls.append(a), {"passed": True, "guarded": {"max_abs_error": 0.0}})[1])
+  monkeypatch.setattr(lane, "run_precontract_probe", lambda config: pytest.fail("lane must not run on the default path"))
+  row = runtime.PACKED_WMMA_ROUTES[0]
+  passed, error = adapter.verify_production_row(row, device="AMD", use_lane=False)
+  assert passed is True and error == 0.0
+  assert len(calls) == 1
 
 
 def test_warmstart_context_preserves_geometry_identity_and_packed_semantics():
