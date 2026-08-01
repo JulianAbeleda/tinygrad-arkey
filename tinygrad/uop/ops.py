@@ -260,6 +260,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
           return ()
 
       case Ops.INDEX:
+        if len(self.src) == 0: return ()
         shp:list[sint] = []
         for s in self.src[1:]: shp.extend(list(s.shape))
         return tuple(shp) + self.src[0].shape[len(self.src[1:]):]
@@ -1723,6 +1724,9 @@ class AMDRowSoftmaxSlotSpec(NamedTuple):
 
   @property
   def scalar_dtype(self) -> DType: return getattr(dtypes, self.scalar_dtypes[self.slot])
+
+  @property
+  def carrier_dtype(self) -> DType: return self.scalar_dtype.vec(self.lanes)
 
   def validate(self):
     if self.native_abi != "amd_gfx1100_online_softmax_qk_pv_v1" or self.scalar_dtypes != \

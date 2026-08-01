@@ -253,7 +253,7 @@ def test_gfx1100_native_row_softmax_repack_descriptor_is_exact():
   score = UOp(Ops.CONST, dtypes.float32.vec(8), (), (0.0,) * 8)
   m, l = UOp.const(dtypes.float32, 0), UOp.const(dtypes.float32, 1)
   native = amd_gfx1100_row_softmax_repack(score, m, l)
-  assert native.op is Ops.AMD_ROW_SOFTMAX_SLOT and native.dtype == dtypes.half and native.shape == (16,)
+  assert native.op is Ops.AMD_ROW_SOFTMAX_SLOT and native.dtype == dtypes.half.vec(16) and native.shape == (16,)
   owner = native.src[0]
   assert owner.op is Ops.AMD_ROW_SOFTMAX_REPACK and owner.arg.target == "gfx1100" and owner.arg.wave_size == 32
   assert owner.arg.row_expr == "2*e+(lane>>4)" and owner.arg.col_expr == "lane&15"
@@ -269,7 +269,7 @@ def test_gfx1100_native_row_softmax_state_has_one_owner_and_typed_slots():
   score = UOp(Ops.WMMA, dtypes.float.vec(8), (UOp.const(dtypes.half.vec(16), (0,)*16),)*2+
     (UOp.const(dtypes.float.vec(8), (0,)*8),), ("WMMA_16_16_16_half_float", (16,16,16), dtypes.half, dtypes.float, "AMD:gfx1100", 32, ((),(),()), ()))
   slots = amd_gfx1100_row_softmax_state(score, UOp.const(dtypes.float.vec(8), (-float("inf"),)*8), UOp.const(dtypes.float.vec(8), (0,)*8))
-  assert [x.dtype for x in slots] == [dtypes.half, dtypes.float, dtypes.float, dtypes.float]
+  assert [x.dtype for x in slots] == [dtypes.half.vec(16), dtypes.float.vec(8), dtypes.float.vec(8), dtypes.float.vec(8)]
   assert [x.shape for x in slots] == [(16,), (8,), (8,), (8,)]
   assert len({x.src[0] for x in slots}) == 1 and all(x.op is Ops.AMD_ROW_SOFTMAX_SLOT for x in slots)
   from tinygrad.renderer.isa.amd import native_repack_matcher

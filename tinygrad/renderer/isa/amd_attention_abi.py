@@ -80,7 +80,7 @@ def _opaque_exact_fragment_inputs(x:UOp) -> UOp|None:
       else:
         owner,lane,col,rng=payload
         spec,fragment_src=AMDPackedFragmentLoopSpec(role=role,head_block=hd_block),[owner,lane,col,rng]
-      src[pos]=UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half,tuple(fragment_src),arg=spec)
+      src[pos]=UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(spec.fragment_lanes),tuple(fragment_src),arg=spec)
       changed=True
       continue
     if c.tag[0] == "amd_gfx1100_fragment_load_hd128_v1": _,role,tile,hd_block,owner,lane,col=c.tag
@@ -89,7 +89,7 @@ def _opaque_exact_fragment_inputs(x:UOp) -> UOp|None:
     if role == "Q" and pos != 0 or role == "K" and pos != 1 or role == "V" and pos != 1: raise ValueError("fragment role/WMMA operand mismatch")
     abi="amd_gfx1100_packed_fragment_hd128_v1" if hd_block is not None else "amd_gfx1100_packed_fragment_v1"
     arg=(abi,role,tile,hd_block) if hd_block is not None else (abi,role,tile)
-    src[pos]=UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half,(owner,lane,col),arg=arg)
+    src[pos]=UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col),arg=arg)
     changed=True
   return x.replace(src=tuple(src)) if changed else None
 
