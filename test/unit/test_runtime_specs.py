@@ -15,7 +15,8 @@ from extra.llm_research.runtime_specs import (
   FullKernelAdmissionError,
   GFX1100_SINGLE_BUFFER_CAPABILITY, GFX1100_REGISTER_RESIDENT_CAPABILITY,
   GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY, GFX1100_TWO_BUFFER_STAGE1_CAPABILITY,
-  NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY, METAL_M4_10C_TWO_BUFFER_STAGE1_CAPABILITY,
+  NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY, METAL_M4_10C_SINGLE_BUFFER_CAPABILITY,
+  METAL_M4_10C_TWO_BUFFER_STAGE1_CAPABILITY,
   Q4KQ8FiveBufferEmitterPlan,
   admit_full_kernel_candidate, admit_full_kernel_candidate_set, capability_transport, derive_packed_weight_candidate,
   derive_q4k_q8_1_five_buffer_candidate,
@@ -584,18 +585,42 @@ def test_amd_admission_outcomes_identical_with_table_resolved_capability():
   assert (admission.plan.subtiles_m, admission.plan.subtiles_n, admission.plan.k_substeps) == (2, 4, 2)
 
 
-def test_nv_mint_clears_frozen_target_gate_but_cloned_schedule_blocks_on_tc_family():
-  # The mint's schedule still carries AMD's wmma facts (cloned, not NV-typed). After C1 the
-  # structural capability_target gate is gone -- the error must now be the family mismatch,
-  # not "target is outside frozen capability" -- until NV schedules carry NV facts.
+def test_nv_mint_as_committed_now_admits_with_typed_schedule():
+  # T6: the sm120 mint is produced through the typed path, so the old capability_tc skip
+  # is gone -- the mint's own schedule carries NV facts and admits through the canonical lane.
   payload = _mint_payload("multirole-buffer2-candidate-set-sm120-v1")
   entry = derive_packed_weight_candidate(payload, "Q4_K")
   final = entry.to_json()["payload"]
   workload = full_kernel_workload(final)
-  with pytest.raises(FullKernelAdmissionError, match="capability_tc"):
-    admit_full_kernel_candidate(final, entry.canonical_identity, profile=workload.profile, role=workload.role,
-      shape=workload.shape, target=workload.target, capability=full_kernel_candidate_capability(final),
-      device="CUDA")
+  admission = admit_full_kernel_candidate(final, entry.canonical_identity, profile=workload.profile,
+    role=workload.role, shape=workload.shape, target=workload.target,
+    capability=full_kernel_candidate_capability(final), device="CUDA")
+  assert admission.capability is NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY
+  assert admission.active_lds_bytes == 40960
+  assert (admission.plan.subtiles_m, admission.plan.subtiles_n, admission.plan.k_substeps) == (2, 8, 2)
+
+
+def test_metal_mint_admission_outcomes_are_row_declared():
+  # T6: the m4_10c mint is typed; buffer2's 128x128x32 / waves 4x2 geometry needs 40960 bytes
+  # and the row declares 32768 -> capability_lds, while the single-buffer shape admits.
+  payload = _mint_payload("multirole-buffer2-candidate-set-m4-10c-v1")
+  entry = derive_packed_weight_candidate(payload, "Q4_K")
+  final = entry.to_json()["payload"]
+  workload = full_kernel_workload(final)
+  with pytest.raises(FullKernelAdmissionError, match="capability_lds"):
+    admit_full_kernel_candidate(final, entry.canonical_identity, profile=workload.profile,
+      role=workload.role, shape=workload.shape, target=workload.target,
+      capability=full_kernel_candidate_capability(final), device="Metal")
+  single = json.loads(json.dumps(payload))
+  single["schedule"]["pipeline"]["buffer_count"] = 1
+  entry = derive_packed_weight_candidate(single, "Q4_K")
+  final = entry.to_json()["payload"]
+  workload = full_kernel_workload(final)
+  admission = admit_full_kernel_candidate(final, entry.canonical_identity, profile=workload.profile,
+    role=workload.role, shape=workload.shape, target=workload.target,
+    capability=full_kernel_candidate_capability(final), device="Metal")
+  assert admission.capability is METAL_M4_10C_SINGLE_BUFFER_CAPABILITY
+  assert admission.active_lds_bytes == 20480
 
 
 def test_nv_typed_schedule_admits_with_cuda_tc_and_resolves_different_precontract_factors():
