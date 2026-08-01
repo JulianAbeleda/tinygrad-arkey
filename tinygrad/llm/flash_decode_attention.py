@@ -13,7 +13,7 @@ from tinygrad import Tensor, dtypes
 from tinygrad.dtype import AddrSpace
 from tinygrad.helpers import getenv
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
-from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, execute_promoted_program
+from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
 
 _LOG2E = 1.4426950408889634
 _F32 = dtypes.float32
@@ -495,10 +495,11 @@ def flash_decode_live_split_block_tile(q:Tensor, cache_kv:Tensor, Tc:UOp, Hd:int
   spec = describe_flash_decode_attention(Hq, Hd, Hkv, MAXC, S, staging=staging, quant=quant, rope=rope,
                                          query_group_size=query_group_size, stage_width=stage_width)
   tile_program = KernelProgram(route.route_id, f"{route.candidate_id}.tile",
-    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, spec.emit_tile(Tc))
-  partial = execute_promoted_program(Tensor.empty(Hq * S * (Hd + 2), dtype=dtypes.float32, device=q.device),
-    *inputs, program=tile_program)
+    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, spec.emit_tile(Tc),
+    output_spec=OutputSpec((Hq * S * (Hd + 2),), dtypes.float32))
+  partial = execute_promoted_program(None, *inputs, program=tile_program)
   combine_program = KernelProgram(route.route_id, f"{route.candidate_id}.combine",
-    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, spec.emit_combine())
-  out = execute_promoted_program(Tensor.empty(Hq * Hd, dtype=dtypes.float32, device=q.device), partial, program=combine_program)
+    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, spec.emit_combine(),
+    output_spec=OutputSpec((Hq * Hd,), dtypes.float32))
+  out = execute_promoted_program(None, partial, program=combine_program)
   return out.reshape(Hq, Hd)

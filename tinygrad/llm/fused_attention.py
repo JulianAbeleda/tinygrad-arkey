@@ -57,7 +57,7 @@ from contextvars import ContextVar
 from typing import Any
 from tinygrad import Tensor, dtypes
 from tinygrad.uop.ops import AMDAttentionGridSpec, SharedAttentionCandidateContext
-from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, execute_promoted_program
+from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
 
 # ADMITTED GEOMETRIES (Hq, Hkv, q_tokens) for which a captured kernel exists / is
 # generatable. Extend as the capture matrix grows (see B7 in the scope doc). This stays
@@ -212,12 +212,12 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
   from tinygrad.helpers import getenv as _getenv
   v_flat = (v.cast(dtypes.half).permute(0, 1, 3, 2).reshape(Hkv * Hd * KV) if _getenv("PREFILL_V_TRANSPOSED")
             else v.cast(dtypes.half).reshape(Hkv * KV * Hd))
-  out_flat = Tensor.empty(Hq * T * Hd, dtype=dtypes.half, device=q.device)
   identity = (f"amd_gfx1100_q16_grid_hd128_loop_attention:role=attention_tile,"
               f"Hq={Hq},Hkv={Hkv},q_tokens={T},kv_tokens={KV},Hd={Hd}")
   program = KernelProgram("prefill_flash_attention_generated", f"prefill_flash_attention.{identity}",
-    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, fxn)
-  result = execute_promoted_program(out_flat, q_flat, k_flat, v_flat, program=program)
+    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, fxn,
+    output_spec=OutputSpec((Hq * T * Hd,), dtypes.half))
+  result = execute_promoted_program(None, q_flat, k_flat, v_flat, program=program)
   # Record the dispatch AFTER every geometry/spec gate above has passed (i.e. only
   # once we know this call is committed to the fused custom-kernel route, not a
   # NotImplementedError fallback). role="attention_tile" matches the manifest row's
