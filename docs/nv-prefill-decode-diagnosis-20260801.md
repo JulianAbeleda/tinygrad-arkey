@@ -32,12 +32,26 @@ Bench artifact: `/tmp/qwen3-8b-p5-final2.json` (decode median 158.21, prefill 10
 baseline).
 
 **Paired llama.cpp baseline (same machine, same model, same session, CUDA build
-`ac4cddeb0`, `llama-bench -p 512 -n 96 -ngl 99`):**
+`ac4cddeb0`, `llama-bench -ngl 99`, verbose run confirms `n_layer = 36` all on CUDA0).**
 
-| phase | llama.cpp | tinygrad NV | BoltBeam ceiling |
+Prefill sweep at depth:
+
+| context | llama.cpp tok/s | tinygrad NV tok/s | BoltBeam ceiling tok/s |
 | --- | ---: | ---: | ---: |
-| prefill pp512 | 12,326 tok/s (90% of ceiling) | ~101-115 tok/s | 13,664 tok/s |
-| decode tg96 | 254.3 tok/s (66% of ceiling) | 158.2 tok/s | 383.6 tok/s |
+| pp128 | 7,733 | - | - |
+| pp256 | 11,542 | - | - |
+| pp512 | 14,250 | ~101-115 | 13,664 |
+| pp1024 | 14,633 | - | - |
+| pp2048 | 14,342 | - | - |
+| pp4096 | 13,801 | - | - |
+
+Decode at depth (gen 10, `-d`):
+
+| depth | llama.cpp tok/s | tinygrad NV tok/s |
+| --- | ---: | ---: |
+| d512 | 237.1 | 158.2 |
+| d2048 | 225.7 | - |
+| d4096 | 217.0 | - |
 
 Prefill is the 100x+ gap and it is the same root cause as section 4: llama's Q4_K GEMMs
 dequant-to-fp16 and reach `mma`; ours stay scalarized. Decode is a smaller 1.6x gap inside the
