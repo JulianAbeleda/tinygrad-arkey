@@ -237,6 +237,7 @@ admission and only feeds the concrete-KV default and config; a naming lie that c
 | fp16-covered roles | `PREFILL_OVERLAY_ROLES` data (model_facts) |
 | fp16-covered bytes | inventory derivation (GGUF) / one shared helper (state dict), `overlay_bytes` |
 | can this target express prefill-v2 fp16 | renderer/device facts (`supported_dtypes`; tensor cores are a promotion/perf question) |
+| compute precision | derived value, not a constant: the widest precision the device expresses that the workload admits — `DeviceCapabilities.supports_fp16` gates the fp16 execution casts; `sum_acc_dtype` (`dtype.py:274`) composes accumulate width from it (dtype-authority-decomposition-scope D2.2) |
 | is this candidate promoted here | BoltBeam registry via `automatic_promoted_prefill_graph_policy` |
 | memory plan (strategy, feasibility, context) | `plan_selected_model_memory` (pure, called once) |
 | KV representation | `_resolve_max_context_admission` (unchanged) |

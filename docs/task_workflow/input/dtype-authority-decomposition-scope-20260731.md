@@ -1,8 +1,8 @@
 # dtype authority decomposition: scope
 
 Date: 2026-07-31 (rev 2 — re-graded against `structure/Development/coding-principles.md`)
-Status: **scoped, not scheduled.** No branch assigned. Deliberately not part of the NVIDIA campaign and must not
-be interleaved with the fp16 admission slices (S1–S6).
+Status: rev 3 — D1 and D3 landed on `nvidia-bringup-20260731` (D1: 91134defb/1341674af; D3: 19f033822,
+53c8bdf8b, a0976d3ca, 90301f805, e37a94549); D2 executed to close the scope per explicit user direction.
 
 Governing document: `structure/Development/coding-principles.md` + `structure/Development/tinygrad-coding-overrides.md`
 (the authority for this repo). `knowledge_base/principles/codebase-organization-principles.md` is the general
@@ -266,3 +266,50 @@ rules, so that unit is a rule violation being corrected, not a preference being 
 Schedule it as design work on its own merits, or not at all. It must **not** be sold as correctness or performance
 work, and it must not be interleaved with S1–S6: those slices gate on "decode unchanged," and D1/D2 touch the
 decode path, so concurrent work would make that gate unattributable.
+
+## 10. D2.0 census result (measured 2026-07-31)
+
+Classification rule: every `dtypes.*` reference in the LLM layer belongs to exactly one category, decided by who
+owns the fact:
+
+- `storage` — the GGUF file format and its decode; the packed-weight storage carrier (uint32 words / uint16
+  halfwords). Owned by the file. Cannot move.
+- `abi` — the kernel artifact: UOp placeholders/consts/casts inside kernel builders, the packed-to-half operand
+  carrier, and identity metadata naming the artifact's dtypes. Caller-restated output ABIs are absorbed by D1
+  (6 sites, committed 91134defb/1341674af); artifact-internal references stay where the artifact lives.
+- `express` — the device: one read, `device_facts.py:238` publishing `supports_fp16` (fp16-scope S4). Zero
+  references in the census restate it.
+- `compute` — the one decision: the widest precision the device expresses that the workload admits. Every
+  reference in this column is a materialization of that decision on a path already gated by fp16 expressibility.
+
+Measured counts (103 references, 12 files):
+
+| category | count | files |
+| --- | ---: | --- |
+| storage | 41 | `gguf.py` 39, `qk_primitives.py` 2 |
+| abi (artifact-internal) | 27 | `decode_kernels.py` 15, `flash_decode_attention.py` 9, `packed_wmma_prefill.py` 2, `model_facts.py` 1 (identity) |
+| abi (output, absorbed by D1) | 6 | `flash_decode_attention.py` 2, `decode_routes.py` 3, `fused_attention.py` 1 |
+| express | 0 | (the single owner read is `device_facts.py:238`) |
+| compute | 27 | `model.py` 13, `fused_attention.py` 4, `decode_routes.py` 2, `prefill_routes.py` 3, `prefill_graph_gemm.py` 2, `adapter.py` 3 |
+| unclassifiable (finding) | 2 | `model.py:1394` (index dtype), `model_facts.py:19` (dtype-name vocabulary) |
+
+Findings (references that could not be classified into the four categories):
+
+- `model.py:1394` `dtypes.int32` — an *index* dtype for the RoPE position map, not a precision. There is a fifth
+  flavor (working/index dtypes) that is neither of the four; it is not a precision literal and needs no owner.
+- `model_facts.py:19` `PROGRAM_DTYPES` — a dtype-*name* vocabulary for program identity metadata (`"float16"`,
+  `str(dtypes.half)`, ...). It names dtypes as strings at the identity boundary, which is metadata, not a
+  precision decision. Stays.
+
+D2.1 result: subtraction is complete. Storage stays (`gguf.py` untouched by this scope's commits; the two
+`qk_primitives.py` storage dtypes stay with the install specs). Output ABI was absorbed by D1 (6 sites). Express
+is read once at `device_facts.py:238`; nothing in the census restates it.
+
+D2.2 result: the one decision is named. Compute precision is the widest precision the device expresses that the
+workload admits; its single owner is `DeviceCapabilities.supports_fp16` (the express read), which gates every
+materialization in the compute column. `sum_acc_dtype` (`dtype.py:274`) composes accumulate width from it and is
+not duplicated in `llm/`. The fp16-scope authority table gains the compute-precision row.
+
+D2.3 result: spelling settled to a single spelling, `dtypes.float16`, across `tinygrad/llm` (19 `dtypes.half`
+references collapsed; `half`/`float16` are the same interned instance per `dtype.py:200`, so this is
+byte-identical by construction).
