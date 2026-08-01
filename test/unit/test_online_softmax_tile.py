@@ -382,7 +382,8 @@ def test_gfx1100_preisel_expands_native_repack_to_row_ops_lds_barrier_reload():
   assert expanded.op is Ops.STACK and expanded.dtype == dtypes.half.vec(16)
   assert expanded.tag == ("amd_gfx1100_pv_a_reload_v1",)
   assert len([u for u in nodes if u.op is Ops.WMMA]) == 1
-  assert len([u for u in nodes if u.op is Ops.CUSTOMI and u.arg == "bpermute"]) == 64
+  from tinygrad.codegen.late.warp_reduce import WARP_BPERMUTE_TAG
+  assert len([u for u in nodes if u.op is Ops.CUSTOMI and u.arg == (WARP_BPERMUTE_TAG,)]) == 64
   assert len([u for u in nodes if u.op is Ops.EXP2]) == 16
   locals_ = [u for u in nodes if u.op is Ops.DEFINE_LOCAL]
   assert len(locals_) == 1 and locals_[0].ptrdtype.size == 256 and locals_[0].ptrdtype.base == dtypes.half
@@ -397,7 +398,7 @@ def test_gfx1100_preisel_native_repack_fails_closed_on_non_wmma_score():
   from tinygrad.uop.ops import graph_rewrite
   native = amd_gfx1100_row_softmax_repack(UOp.const(dtypes.float.vec(8), (0.0,)*8),
                                            UOp.const(dtypes.float, 0), UOp.const(dtypes.float, 1))
-  with pytest.raises(ValueError, match="raw QK WMMA"):
+  with pytest.raises(ValueError, match="QK score carrier"):
     graph_rewrite(native, native_repack_matcher, ctx=itertools.count(750), bottom_up=True)
 
 def test_gfx1100_native_repack_direct_builder_reaches_final_program():
@@ -553,7 +554,8 @@ def test_gfx1100_row_state_broadcast_has_canonical_halfwave_owner_address():
   from tinygrad.schedule.wmma import amd_gfx1100_broadcast_row_state
   lane, state = UOp.special(32, "lidx0"), UOp.const(dtypes.float, 3)
   broadcast = amd_gfx1100_broadcast_row_state(state, lane)
-  assert broadcast.op is Ops.CUSTOMI and broadcast.arg == "bpermute"
+  from tinygrad.codegen.late.warp_reduce import WARP_BPERMUTE_TAG
+  assert broadcast.op is Ops.CUSTOMI and broadcast.arg == (WARP_BPERMUTE_TAG,)
   assert "16" in broadcast.src[0].render() and "4" in broadcast.src[0].render()
 
 def test_rangeify_handoff_unwraps_only_exact_tile_carriers():
