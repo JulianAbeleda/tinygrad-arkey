@@ -590,7 +590,7 @@ def _validate_full_kernel_payload(payload:dict[str, Any]) -> None:
         from tinygrad.codegen.opt.packed_weight import PackedWeightTransform
         transform = PackedWeightTransform(b["quant_format"], b["rows"], b["k"], b["block_elems"], b["block_bytes"])
       except (TypeError, ValueError) as exc: raise ValueError(f"invalid packed operand_sources.b: {exc}") from exc
-      expected_storage_dtype = "uint32" if transform.quant_format == "Q4_K" else "uint16"
+      expected_storage_dtype = "uint32" if transform.quant_format.name == "Q4_K" else "uint16"
       if b["storage_dtype"] != expected_storage_dtype:
         raise ValueError(f"packed operand_sources.b storage_dtype must be {expected_storage_dtype}")
       if workload["dtypes"]["b"] != "fp16":

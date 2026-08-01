@@ -6,10 +6,9 @@ from typing import Callable, Literal, TypeAlias
 from tinygrad.dtype import DType, dtypes
 from tinygrad.uop.ops import Ops, UOp
 
-from tinygrad.llm.qk_layout import (Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS,
-                                    Q6K_HALFWORDS_PER_BLOCK, Q6_K_BLOCK_BYTES, Q6_K_BLOCK_ELEMS)
+from tinygrad.llm.qk_layout import Q4K_WORDS_PER_BLOCK, Q6K_HALFWORDS_PER_BLOCK
+from tinygrad.llm.qk_layout import Q4_K, Q6_K, QUANT_FORMATS, QuantFormat
 
-PackedFormat: TypeAlias = Literal["Q4_K", "Q6_K"]
 ScalarIndex: TypeAlias = int | UOp
 LoadSource: TypeAlias = UOp | Callable[[ScalarIndex], UOp]
 
@@ -141,38 +140,43 @@ class PackedWeightTransform:
   ``k`` is the row stride in logical elements. Q4_K sources are uint32 words and
   Q6_K sources are uint16 halfwords, matching the aligned GGUF loaders.
   """
-  quant_format: PackedFormat
+  quant_format: QuantFormat
   rows: int
   k: int
   block_elems: int = 256
   block_bytes: int | None = None
 
   def __post_init__(self) -> None:
-    if self.quant_format not in ("Q4_K", "Q6_K"):
-      raise ValueError(f"quant_format must be Q4_K or Q6_K, got {self.quant_format!r}")
-    canonical_elems = Q4_K_BLOCK_ELEMS if self.quant_format == "Q4_K" else Q6_K_BLOCK_ELEMS
-    canonical_bytes = Q4_K_BLOCK_BYTES if self.quant_format == "Q4_K" else Q6_K_BLOCK_BYTES
+    quant_format = self.quant_format
+    if isinstance(quant_format, str):
+      try: quant_format = QUANT_FORMATS[quant_format]
+      except KeyError as exc: raise ValueError(f"quant_format must be Q4_K or Q6_K, got {quant_format!r}") from exc
+      object.__setattr__(self, "quant_format", quant_format)
+    if quant_format is not Q4_K and quant_format is not Q6_K:
+      raise ValueError(f"quant_format must be Q4_K or Q6_K, got {quant_format!r}")
+    canonical_elems = quant_format.block_elems
+    canonical_bytes = quant_format.block_bytes
     if self.block_elems != canonical_elems:
-      raise ValueError(f"{self.quant_format} block_elems must be {canonical_elems}, got {self.block_elems}")
+      raise ValueError(f"{quant_format.name} block_elems must be {canonical_elems}, got {self.block_elems}")
     if self.block_bytes is None: object.__setattr__(self, "block_bytes", canonical_bytes)
     elif self.block_bytes != canonical_bytes:
-      raise ValueError(f"{self.quant_format} block_bytes must be {canonical_bytes}, got {self.block_bytes}")
+      raise ValueError(f"{quant_format.name} block_bytes must be {canonical_bytes}, got {self.block_bytes}")
     if not isinstance(self.rows, int) or self.rows <= 0: raise ValueError(f"rows must be a positive integer, got {self.rows!r}")
     if not isinstance(self.k, int) or self.k <= 0: raise ValueError(f"k must be a positive integer, got {self.k!r}")
-    if self.k % canonical_elems: raise ValueError(f"k must be {self.quant_format} block aligned ({canonical_elems}), got {self.k}")
+    if self.k % canonical_elems: raise ValueError(f"k must be {quant_format.name} block aligned ({canonical_elems}), got {self.k}")
 
   @property
   def blocks_per_row(self) -> int: return self.k // self.block_elems
 
   @property
-  def storage_dtype(self): return dtypes.uint32 if self.quant_format == "Q4_K" else dtypes.uint16
+  def storage_dtype(self): return dtypes.uint32 if self.quant_format is Q4_K else dtypes.uint16
 
   @property
-  def storage_width(self) -> int: return 4 if self.quant_format == "Q4_K" else 2
+  def storage_width(self) -> int: return 4 if self.quant_format is Q4_K else 2
 
   @property
   def units_per_block(self) -> int:
-    return Q4K_WORDS_PER_BLOCK if self.quant_format == "Q4_K" else Q6K_HALFWORDS_PER_BLOCK
+    return Q4K_WORDS_PER_BLOCK if self.quant_format is Q4_K else Q6K_HALFWORDS_PER_BLOCK
 
   @property
   def packed_bytes(self) -> int: return self.rows * self.blocks_per_row * int(self.block_bytes)
@@ -187,7 +191,7 @@ class PackedWeightTransform:
     self._check_coords(row, k)
     block = row * self.blocks_per_row + k // self.block_elems
     base = block * int(self.block_bytes)
-    if self.quant_format == "Q4_K":
+    if self.quant_format is Q4_K:
       group, pos = (k % 256) // 32, k % 32
       payload = base + 16 + (group // 2) * 32 + pos
       # Groups 4..7 combine low bits from bytes 4..11 with high bits from bytes 12..15.
@@ -250,8 +254,8 @@ class PackedWeightTransform:
     self._check_coords(row, k)
     block = row * self.blocks_per_row + k // self.block_elems
     unit_base = block * self.units_per_block
-    if self.quant_format == "Q4_K": return self._dequant_q4(source, unit_base, k % 256)
-    return self._dequant_q6(source, unit_base, k % 256)
+    if self.quant_format is Q4_K: return self._dequant_q4(source, unit_base, k % self.block_elems)
+    return self._dequant_q6(source, unit_base, k % self.block_elems)
 
   def dequant_tile(self, source:LoadSource, row:ScalarIndex, k_base:ScalarIndex, width:Literal[8, 16]=8) -> PackedWeightTile:
     """Decode 8 or 16 adjacent weights while sharing loads of their native packed units.
@@ -312,7 +316,7 @@ class PackedWeightTransform:
     return (d * q * scale).cast(dtypes.float16)
 
   def to_json(self) -> dict[str, int | str]:
-    return {"quant_format": self.quant_format, "rows": self.rows, "k": self.k, "block_elems": self.block_elems,
+    return {"quant_format": self.quant_format.name, "rows": self.rows, "k": self.k, "block_elems": self.block_elems,
             "block_bytes": int(self.block_bytes), "storage_dtype": self.storage_dtype.name,
             "storage_width": self.storage_width, "units_per_block": self.units_per_block, "packed_bytes": self.packed_bytes}
 
@@ -324,7 +328,7 @@ class PackedWeightTransform:
     if extra := obj.keys() - allowed: raise ValueError(f"unknown packed-weight fields: {', '.join(sorted(extra))}")
     ret = cls(obj["quant_format"], obj["rows"], obj["k"], obj.get("block_elems", 256), obj.get("block_bytes"))  # type: ignore[arg-type]
     for key in ("storage_dtype", "storage_width", "units_per_block", "packed_bytes"):
-      if key in obj and obj[key] != ret.to_json()[key]: raise ValueError(f"{key} does not match {ret.quant_format} geometry")
+      if key in obj and obj[key] != ret.to_json()[key]: raise ValueError(f"{key} does not match {ret.quant_format.name} geometry")
     return ret
 
 
