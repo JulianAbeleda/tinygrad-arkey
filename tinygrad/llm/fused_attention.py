@@ -74,7 +74,17 @@ ADMITTED_GRIDS: frozenset = frozenset({(32, 8, 512), (40, 8, 512)})
 # (e.g. kernel_info=...) so every call site -- including postrange.py's AST-swap,
 # which needs to inject its own carried-forward KernelInfo -- routes through this
 # SAME seam instead of ever calling the gfx1100 builder directly.
-_PREFILL_EMITTERS = {"amd_gfx1100": lambda spec, **kw: spec.emit(**kw)}
+#
+# FA2 Phase B: "metal" is exactly that second dict entry -- the emitter fxn shape is
+# unchanged (spec.emit() still builds amd_gfx1100_q16_grid_hd128_loop_attention; the
+# renderer-facing port is MetalRenderer's own native_*_matcher registrations in
+# tinygrad/renderer/cstyle.py, not a different kernel graph). Compile-only render
+# proof: scratchpad/fa2_metal_attention_rendered_source_equality.py. Not wired into
+# route_prefill_attention/custom_kernel_attention's target selection (that stays
+# amd_gfx1100-only, per FA2's scope boundary -- this is a compile-time render port,
+# not a whole-model prefill change); a caller must construct
+# FlashPrefillAttentionSpec(..., target="metal") explicitly to reach it.
+_PREFILL_EMITTERS = {"amd_gfx1100": lambda spec, **kw: spec.emit(**kw), "metal": lambda spec, **kw: spec.emit(**kw)}
 
 # RUNTIME DISPATCH TRACE (BoltBeam observability seam)
 # --------------------------------------------------

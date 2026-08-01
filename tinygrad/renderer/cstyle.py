@@ -197,6 +197,48 @@ hip_native_repack_pm = PatternMatcher([
     if x.arg == "bpermute" and x.dtype == dtypes.float else None),
 ])
 
+# ============================ Metal's attention-ABI wiring ============================
+# FA2 Phase B (docs/task_workflow/input/metal-fused-attention-port-scope-20260731.md). Mirrors the HIP
+# block above -- same seam, same precedent -- for the two Ops FA0 found are NOT renderer-neutral by
+# default (Ops.AMD_ATTENTION_LOOP_STATE, welded to a physical AMD VGPR; Ops.AMD_ROW_SOFTMAX_REPACK's
+# default lowering, welded to AMD-ISA-only CUSTOMI markers). The other four Ops (AMD_PACKED_FRAGMENT_LOAD,
+# AMD_ROW_SOFTMAX_SLOT, AMD_PV_C_LANE, StateHandle phase publication) are registered unmodified below,
+# exactly as HIP registers them, because FA0 established they already lower to ordinary UOps.
+
+# Ops.AMD_ATTENTION_LOOP_STATE: Metal's buffer-indexed expansion is the IDENTICAL shape to
+# _hip_expand_attention_loop_state above -- ordinary INDEX/LOAD/STORE against the caller-owned register
+# buffer, nothing ISA-specific in it (unlike lower_amd_attention_loop_state's physical-VGPR alias, which
+# only an ISA backend can interpret). Reused directly rather than restated a second time; "write the Metal
+# equivalent" here means "the same 8-line design", not a third implementation.
+_metal_expand_attention_loop_state = _hip_expand_attention_loop_state
+
+def _metal_expand_native_row_softmax(ctx, x:UOp) -> UOp:
+  """Same HIP precedent (cstyle.py:139-141): route through the portable native_state=False branch of
+  expand_native_row_softmax_repack instead of the default native_state=True branch, which emits
+  AMD-ISA-only physical-register CUSTOMI markers (FA0 3.5(b))."""
+  from tinygrad.renderer.isa.amd import expand_native_row_softmax_repack
+  return expand_native_row_softmax_repack(ctx, x, native_state=False)
+
+def _metal_native_bpermute_shfl_xor(x:UOp) -> UOp|None:
+  """Rewrite the row-softmax repack's AMD-ds_bpermute-shaped CUSTOMI marker into Metal's own
+  simd_shuffle_xor, via CStyleLanguage.warp_shfl_xor (cstyle.py:520) -- the existing portable hook
+  MetalRenderer already implements but expand_native_row_softmax_repack bypasses by hardcoding a bare
+  "bpermute" marker (FA0 3.5(a)). AMD's ds_bpermute takes a per-lane BYTE ADDRESS `(lane XOR mask)*4`;
+  Metal's simd_shuffle_xor takes the XOR mask directly and resolves the source lane in hardware -- these
+  are two different calling conventions carried in the same CUSTOMI src shape `(addr, value)`. This
+  discards the AMD-style address arithmetic and recovers the constant XOR mask baked into it (FA0's
+  option (a): substitute simd_shuffle_xor(value, mask) rather than transplant ds_bpermute's addressing).
+  """
+  if not (x.op is Ops.CUSTOMI and x.arg == "bpermute" and x.dtype == dtypes.float): return None
+  if len(x.src) != 2: return None
+  addr, val = x.src
+  if addr.op is not Ops.MUL or len(addr.src) != 2: return None
+  xor_op, four = addr.src
+  if not (four.op is Ops.CONST and four.arg == 4 and xor_op.op is Ops.XOR and len(xor_op.src) == 2): return None
+  lane_hw, maskc = xor_op.src
+  if maskc.op is not Ops.CONST or not isinstance(maskc.arg, int) or isinstance(maskc.arg, bool): return None
+  return MetalRenderer.warp_shfl_xor(val, maskc.arg, lane_hw)
+
 def create_non_native_float_pats(dts:tuple[DType, ...], casting:bool=True):
   patterns = PatternMatcher([
     (UPat(Ops.WHERE, src=(UPat.var("b"), UPat.var("x", dtype=dts), UPat.var("y", dtype=dts))),
@@ -484,6 +526,37 @@ class MetalRenderer(CStyleLanguage):
     from tinygrad.runtime.ops_metal import MetalCompiler
     self.compiler = MetalCompiler()
     self.tensor_cores = tc.metal if target.arch.startswith("Apple") and int(target.arch[5:]) >= 7 else []
+    if self.tensor_cores:
+      # FA2 Phase B: bind the shared attention-ABI matchers (tinygrad/renderer/isa/amd_attention_abi.py)
+      # the same way HIPRenderer does below, gated on the same simdgroup-matmul capability fact that
+      # already gates self.tensor_cores above (not a `target.device == "METAL"` string check) -- a target
+      # with no tensor cores has no WMMA to feed this ABI in the first place.
+      from tinygrad.renderer.isa.amd import native_repack_matcher, native_state_lane_matcher, expand_loop_fragment
+      # Same fix HIPRenderer applies for gfx1100 below: expand_loop_fragment/expand_native_row_softmax_repack
+      # build their own UOp.const(dtypes.weakint, ...) index arithmetic AFTER the generic "lower all index
+      # dtypes" pass already ran (codegen/__init__.py's native_loop_fragment_matcher is wired explicitly
+      # "after index lowering") -- so weakint never gets resolved to a concrete int type for this kernel
+      # unless the renderer's own type_map names it. Not AMD-specific: a bare dtype-name mapping fact.
+      self.type_map = {**self.type_map, dtypes.weakint: "int"}
+      # The bpermute->simd_shuffle_xor rewrite runs HERE (inside native_repack_matcher, bottom_up=True,
+      # same graph_rewrite pass that constructs the CUSTOMI("bpermute") markers in the first place) rather
+      # than in extra_matcher (the final pre-string-render pass HIP uses for its own bpermute rewrite):
+      # by the time extra_matcher runs, index-lowering/decompositions/symbolic have already reshaped the
+      # `(lane XOR mask)*4` address arithmetic this rewrite pattern-matches on, and the match no longer
+      # fires. HIP's own late-stage rewrite doesn't need this -- it treats `addr` as an opaque already-
+      # rendered operand (its builtin call takes the raw address), so it is insensitive to that reshaping.
+      # tinygrad's bottom_up graph_rewrite revisits freshly-substituted subtrees to a fixpoint, so a rule
+      # placed alongside the expansion itself sees the address in its pristine, just-constructed shape.
+      self.native_repack_matcher = PatternMatcher([
+        (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, name="x"), _hip_expand_attention_output_drain),
+        (UPat(Ops.AMD_ATTENTION_LOOP_STATE, name="x"), _metal_expand_attention_loop_state),
+        (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, name="x"), _metal_expand_native_row_softmax),
+        (UPat(Ops.CUSTOMI, name="x"), _metal_native_bpermute_shfl_xor),
+      ]) + native_repack_matcher
+      self.native_state_lane_matcher = PatternMatcher([
+        (UPat(Ops.AMD_ATTENTION_LOOP_STATE, name="x"), _metal_expand_attention_loop_state),
+      ]) + native_state_lane_matcher
+      self.native_loop_fragment_matcher = PatternMatcher([(UPat(Ops.AMD_PACKED_FRAGMENT_LOAD, name="x"), expand_loop_fragment)])
     # Reuse the one existing constant for this bound (tinygrad/runtime/graph/metal.py) rather than restating
     # the literal. Deferred import: runtime.graph.metal -> runtime.ops_metal -> this module, at module scope.
     from tinygrad.runtime.graph.metal import METAL_ICB_OFFSET_MAX
