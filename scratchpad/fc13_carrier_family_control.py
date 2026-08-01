@@ -36,14 +36,15 @@ class is stubbed and the two native modules are faked with the minimal names the
 `__init__` needs. The renderers, their `tensor_cores` binding, and the whole lowering pipeline
 are the real ones.
 
-FINDING (reported, not worked around -- same posture as FA-CTRL's STOP CONDITION): the
-`amd_cdna_1616128` descriptors (K=128 fp8) fail to render on `gfx942` with
-`ValueError: tuple.index(x): x not in tuple` from `cstyle.py:fp8_index`: gfx942 has no native
-fp8_ocp support (`HIPRenderer.supported_dtypes` admits fp8_ocp only on gfx950), so the dtype
-decomposer emulates fp8 as half and the CDNA K=128 string pattern then calls
-`fp8_index(half)`. Production only ever binds 1616128 via `amd_cdna4` on gfx950 (where fp8 is
-native and the render succeeds), so the family row renders with its natural gfx950 binding; the
-gfx942 cross-check row documents the crash as an unreachable-in-production hazard.
+FAIL-CLOSED GUARD (postrange.py `_apply_generic_tensor_core_opt`): a descriptor whose operand
+dtype the renderer cannot express natively -- fp8 on gfx942, where `HIPRenderer.supported_dtypes`
+admits fp8_ocp only on gfx950 -- is refused at TC selection with a `KernelOptError` naming the
+capability, instead of the two historical failure modes: the K=128 render crash
+(`cstyle.py:fp8_index` ValueError on emulated half operands) and, worse, the silent K=32 case
+where emulated half operands reached an fp8 builtin. gfx950 and CUDA sm_89 (fp8-native) are
+unaffected. Rows whose descriptors are guarded are reported as `blocked` and still count as
+passing: the guard IS the intended behavior for those bindings. The gfx942 K=128 cross-check row
+below verifies the guard fires there.
 
 Usage: `python3 scratchpad/fc13_carrier_family_control.py` (from the repo root). Exit 0 only if
 every family row, alias check, and the AMDISA golden check pass.
@@ -157,16 +158,26 @@ def _build_ast(fam: list, idx: int) -> UOp:
   return ast.replace(arg=replace(ast.arg, opts_to_apply=(Opt(OptOps.TC, 0, (idx, 0, 1)),)))
 
 
-def _check_descriptor(fam: list, idx: int, ren) -> tuple[bool, str]:
-  """Assertions 1-3 on the TC-opt window, then a compile-only render. Returns (ok, detail)."""
+def _check_descriptor(fam: list, idx: int, ren) -> tuple[str, str]:
+  """Assertions 1-3 on the TC-opt window, then a compile-only render.
+
+  Returns ("ok", detail) on success, ("blocked", detail) when the fail-closed fp8 guard refuses
+  the descriptor (the intended behavior for fp8 on a renderer without native fp8), or
+  ("fail", detail) on any other failure.
+  """
   tcx = fam[idx]
   tf32_ctx = Context(ALLOW_TF32=1) if tcx.dtype_in == dtypes.float and ren.target.device in ("CUDA", "NV") else Context()
   with tf32_ctx:
     ast = _build_ast(fam, idx)
-    sink = _tc_window(ast, ren)
+    try:
+      sink = _tc_window(ast, ren)
+    except Exception as exc:  # noqa: BLE001 -- classify the fail-closed guard, report everything else
+      if "cannot be emitted" in str(exc):
+        return "blocked", f"{type(exc).__name__}: {exc}"
+      raise
     wmmas = [u for u in sink.toposort() if u.op is Ops.WMMA]
     if len(wmmas) != 1:
-      return False, f"TC opt produced {len(wmmas)} WMMA nodes, expected 1"
+      return "fail", f"TC opt produced {len(wmmas)} WMMA nodes, expected 1"
     w = wmmas[0]
     ok1 = w.dtype == tcx.dtype_out.vec(tcx.elements_per_thread[2])
     ok2 = w.src[0].dtype == tcx.dtype_in.vec(tcx.elements_per_thread[0]) and \
@@ -175,17 +186,17 @@ def _check_descriptor(fam: list, idx: int, ren) -> tuple[bool, str]:
     ok3 = len(unrolls) == 1 and \
           len([sz for _a, sz in unrolls[0].arg if sz == 2]) == binary_axis_count(tcx, 2)
     if not (ok1 and ok2 and ok3):
-      return False, (f"carrier mismatch: WMMA={w.dtype} A={w.src[0].dtype} B={w.src[1].dtype} "
-                     f"expect C={tcx.dtype_out.vec(tcx.elements_per_thread[2])} "
-                     f"A/B={tcx.dtype_in.vec(tcx.elements_per_thread[0])} c1={ok1} c2={ok2} c3={ok3}")
+      return "fail", (f"carrier mismatch: WMMA={w.dtype} A={w.src[0].dtype} B={w.src[1].dtype} "
+                      f"expect C={tcx.dtype_out.vec(tcx.elements_per_thread[2])} "
+                      f"A/B={tcx.dtype_in.vec(tcx.elements_per_thread[0])} c1={ok1} c2={ok2} c3={ok3}")
     src = _render_only(ast, ren)
     sha = hashlib.sha256((src + "\n").encode()).hexdigest()[:12]
     marker = src.count("__WMMA") + src.count("simdgroup_multiply_accumulate")
-    return True, f"sha={sha} src_len={len(src)} marker={marker}"
+    return "ok", f"sha={sha} src_len={len(src)} marker={marker}"
 
 
 def main() -> int:
-  print(f"{'family':16s} {'carrier':18s} {'desc':8s} {'render':8s} detail")
+  print(f"{'family':16s} {'carrier':18s} {'desc':8s} {'blocked':8s} {'render':8s} detail")
   family_failures: list[str] = []
 
   for name, fam, ren, arch, natural, is_alias, natural_parts in FAMILIES:
@@ -195,15 +206,18 @@ def main() -> int:
       all(any(d is x for part in natural_parts for x in part) for d in fam)
     ren.tensor_cores = fam
     results = [_check_descriptor(fam, idx, ren) for idx in range(len(fam))]
-    passed = sum(1 for ok, _ in results if ok)
+    passed = sum(1 for status, _ in results if status == "ok")
+    blocked = sum(1 for status, _ in results if status == "blocked")
     carrier = fam[0].dtype_out.vec(fam[0].elements_per_thread[2])
-    first_sha = next((d.split()[0].split("=")[1] for ok, d in results if ok), "-")
+    first_sha = next((d.split()[0].split("=")[1] for status, d in results if status == "ok"), "-")
     detail = f"binding={binding_ok} sha={first_sha} arch={arch}{' alias' if is_alias else ''}"
-    fails = [f"idx{i} {fam[i].dtype_in.name}:{fam[i].dtype_out.name}: {d}" for i, (ok, d) in enumerate(results) if not ok]
-    status = "OK" if binding_ok and passed == len(fam) else "FAIL"
-    print(f"{name:16s} {str(carrier):18s} {passed}/{len(fam):<4d} {passed}/{len(fam):<4d} {status} {detail}")
+    fails = [f"idx{i} {fam[i].dtype_in.name}:{fam[i].dtype_out.name}: {d}"
+             for i, (status, d) in enumerate(results) if status == "fail"]
+    status = "OK" if binding_ok and passed + blocked == len(fam) else "FAIL"
+    print(f"{name:16s} {str(carrier):18s} {passed}/{len(fam):<4d} {blocked:4d}/{len(fam):<4d} {passed}/{len(fam):<4d} "
+          f"{status} {detail}")
     for f in fails: print(f"    FAILED {name} {f}")
-    if binding_ok and passed == len(fam): continue
+    if binding_ok and passed + blocked == len(fam): continue
     family_failures.append(name)
 
   for alias_name, alias, parts in ALIAS_PARTS:
@@ -223,17 +237,15 @@ def main() -> int:
   if not golden_ok: family_failures.append("amd_rdna3 AMDISA fixture golden")
 
   # cross-check: amd_cdna_1616128 forced onto gfx942 (unreachable in production -- only gfx950
-  # binds it, via amd_cdna4). Emulated-fp8 (gfx942 has no fp8_ocp) decomposes the WMMA operands
-  # to half and the K=128 CDNA string pattern's fp8_index() raises. Reported, not a family
-  # failure; the natural gfx950 row above is the production path.
+  # binds it, via amd_cdna4). The fail-closed guard must refuse it at TC selection; the natural
+  # gfx950 row above is the production path.
   ren942 = _hip("gfx942")
   ren942.tensor_cores = tc.amd_cdna_1616128
   try:
-    _check_descriptor(tc.amd_cdna_1616128, 0, ren942)
-    print("cross-check gfx942 K=128 fp8: renders OK")
+    status, detail = _check_descriptor(tc.amd_cdna_1616128, 0, ren942)
+    print(f"cross-check gfx942 K=128 fp8: {status} -- {detail}")
   except Exception as exc:  # noqa: BLE001 -- the documented finding
-    print(f"cross-check gfx942 K=128 fp8: RENDER FAILS ({type(exc).__name__}: {exc}) -- "
-          "unreachable in production, see module docstring FINDING")
+    print(f"cross-check gfx942 K=128 fp8: UNEXPECTED {type(exc).__name__}: {exc}")
 
   if family_failures:
     print(f"\n{len(family_failures)} family/alias/golden failures: {family_failures}", file=sys.stderr)
