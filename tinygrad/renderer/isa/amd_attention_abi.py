@@ -104,6 +104,10 @@ def expand_loop_fragment(x:UOp) -> UOp:
   from tinygrad.uop.ops import AMDPackedFragmentLoopSpec, AMDMultiWaveAttentionGridSpec
   if not isinstance(x.arg, AMDPackedFragmentLoopSpec): raise ValueError("loop fragment is malformed")
   x.arg.validate(); role,block=x.arg.role,x.arg.head_block
+  # Fragment tile width, derived from the descriptor (AMDPackedFragmentLoopSpec.fragment_lanes, itself
+  # derived from tc.dims[0] -- see its validate()), not restated as a literal. AMD's is 16; byte-identical
+  # here because every construction site today builds this descriptor at AMD's default (16).
+  fl = x.arg.fragment_lanes
   if isinstance(x.arg.grid, AMDMultiWaveAttentionGridSpec):
     if len(x.src) != 6: raise ValueError("multiwave loop fragment requires owner/lane/wave/column/range/group")
     owner,lane,wave_id,col,rng,*grid_src=x.src
@@ -127,8 +131,8 @@ def expand_loop_fragment(x:UOp) -> UOp:
   elif isinstance(x.arg.grid, AMDMultiWaveAttentionGridSpec):
     grid,group=x.arg.grid,grid_src[0]
     kv_head,q_tile=group//grid.q_tiles,group%grid.q_tiles
-    gbase=((kv_head*grid.waves_per_group+wave_id)*(grid.q_tokens*hd)+q_tile*16*hd) if role=="Q" else kv_head*(grid.kv_tokens*hd)
-  elif role=="Q": gbase=grid_src[0]*(16*hd)
+    gbase=((kv_head*grid.waves_per_group+wave_id)*(grid.q_tokens*hd)+q_tile*fl*hd) if role=="Q" else kv_head*(grid.kv_tokens*hd)
+  elif role=="Q": gbase=grid_src[0]*(fl*hd)
   else:
     grid=x.arg.grid
     gbase=(grid_src[0]//(grid.q_tiles*grid.group_ratio))*(grid.kv_tokens*hd)
@@ -162,10 +166,10 @@ def expand_loop_fragment(x:UOp) -> UOp:
   # instruction-for-instruction identical to the pre-fix baseline.
   grid_kv_tokens=x.arg.grid.kv_tokens if x.arg.grid is not None else None
   def _row_ok(token): return None if grid_kv_tokens is None else token < grid_kv_tokens
-  if role=="Q": offs=tuple(gbase+col*hd+block*16+i for i in range(16))
+  if role=="Q": offs=tuple(gbase+col*hd+block*fl+i for i in range(fl))
   elif role=="K":
-    row_ok=_row_ok(rng*UOp.const(dtypes.weakint,16)+col)  # same KV row for all 16 lanes of this fragment
-    offs=tuple(gbase+rng*16*hd+col*hd+block*16+i for i in range(16))
+    row_ok=_row_ok(rng*UOp.const(dtypes.weakint,fl)+col)  # same KV row for all fl lanes of this fragment
+    offs=tuple(gbase+rng*fl*hd+col*hd+block*fl+i for i in range(fl))
     if row_ok is not None: offs=tuple(o.valid(row_ok) for o in offs)
   elif getenv("PREFILL_V_TRANSPOSED") and x.arg.grid is not None:
     # V VECTORIZATION (measured lever): row-major V is [kv][hd], so the PV WMMA B-fragment -- which
@@ -176,14 +180,14 @@ def expand_loop_fragment(x:UOp) -> UOp:
     # same 16 halves fold into 2 `global_load_b128` per block (16 total, matching K).
     # The caller must pass V pre-transposed (llm/fused_attention.py); gbase is unchanged because
     # hd*kv_tokens == kv_tokens*hd.
-    offs=tuple(gbase+(block*16+col)*x.arg.grid.kv_tokens+rng*16+i for i in range(16))
-    row_oks=tuple(_row_ok(rng*UOp.const(dtypes.weakint,16)+UOp.const(dtypes.weakint,i)) for i in range(16))
+    offs=tuple(gbase+(block*fl+col)*x.arg.grid.kv_tokens+rng*fl+i for i in range(fl))
+    row_oks=tuple(_row_ok(rng*UOp.const(dtypes.weakint,fl)+UOp.const(dtypes.weakint,i)) for i in range(fl))
     offs=tuple(o if g is None else o.valid(g) for o,g in zip(offs,row_oks))
   else:
-    offs=tuple(gbase+rng*16*hd+block*16+i*hd+col for i in range(16))
-    row_oks=tuple(_row_ok(rng*UOp.const(dtypes.weakint,16)+UOp.const(dtypes.weakint,i)) for i in range(16))
+    offs=tuple(gbase+rng*fl*hd+block*fl+i*hd+col for i in range(fl))
+    row_oks=tuple(_row_ok(rng*UOp.const(dtypes.weakint,fl)+UOp.const(dtypes.weakint,i)) for i in range(fl))
     offs=tuple(o if g is None else o.valid(g) for o,g in zip(offs,row_oks))
-  return UOp(Ops.STACK,dtypes.half.vec(16),tuple(owner.index(off).load() for off in offs),
+  return UOp(Ops.STACK,dtypes.half.vec(fl),tuple(owner.index(off).load() for off in offs),
     tag=("amd_gfx1100_fragment_load_hd128_loop_v1",role,block,x.arg,*x.src))
 
 def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:

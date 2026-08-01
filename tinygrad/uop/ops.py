@@ -1931,10 +1931,16 @@ class AMDPackedFragmentLoopSpec(NamedTuple):
   head_block: int = 0
   grid: AMDAttentionGridSpec|AMDMultiWaveAttentionGridSpec|None = None
   output_block_base: int = 0
+  # WMMA fragment tile width -- the SAME quantity kernel_lds.binary_axis_count reads off `tc.dims`/
+  # `tc.elements_per_thread` for the precontract path (tc.dims[0]). AMD rdna3's WMMA is dims=(16,16,16),
+  # so this default is amd_rdna3[0].dims[0], derived below rather than restated -- byte-identical (==16).
   fragment_lanes: int = 16
 
   def validate(self):
-    if self.native_abi != "amd_gfx1100_packed_fragment_hd128_loop_v1" or self.role not in {"Q", "K", "V"} or self.fragment_lanes != 16:
+    from tinygrad.codegen.opt.tc import amd_rdna3
+    amd_fragment_lanes = amd_rdna3[0].dims[0]  # 16: AMD's WMMA M/N/K tile width, derived not literal
+    if self.native_abi != "amd_gfx1100_packed_fragment_hd128_loop_v1" or self.role not in {"Q", "K", "V"} or \
+       self.fragment_lanes != amd_fragment_lanes:
       raise ValueError("AMD loop fragment has an unsupported ABI or role")
     # `head_block` is a HEAD-BLOCK COUNT -> derives from the bound grid's head_dim (128//16==8,
     # byte-identical). When grid is None, keep the legacy literal 8 default for back-compat.
