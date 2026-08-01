@@ -26,10 +26,20 @@ warmup):
 | decode d2048 | - | 225.7 | - | - |
 | decode d4096 | - | 217.0 | - | - |
 
-llama's one pp512 pass: 1,186 kernel launches, **32.96 ms GPU busy**, 35.9 ms wall at 14,250
-tok/s (92% GPU-efficient). Its GPU-busy ceiling for this mechanism is ~15.5k tok/s, and it
-already exceeds the modeled 13,664 ceiling at pp1024/2048, so the modeled 180 TFLOPS fact is
-conservative; measured `R` may revise the ceiling upward. P0 measures it.
+llama's one pp512 pass: 1,186 kernel launches, **32.96 ms GPU busy**. Its GPU-busy ceiling for
+this mechanism is ~15.5k tok/s (512 / 32.96ms).
+
+**The "BoltBeam ceiling" column is superseded, not conservative** (review, 2026-08-01). llama
+measures 14,633 at pp1024 and 14,342 at pp2048 against a modeled 13,664 - a model something has
+already exceeded is falsified, not a ceiling. It stays in the table only as the historical
+figure; nothing may be sized against it until P0 returns a measured `R`.
+
+**The 92% GPU-efficiency figure is withdrawn pending a same-run measurement** (review). It was
+computed as 32.96ms busy / 35.9ms wall, but those come from two different runs: the busy figure
+is the `nsys` trace (single rep, **no warmup**), and the 35.9ms wall is derived from
+llama-bench's warm, averaged 14,250 tok/s. Under `nsys`, cold, llama's own wall is larger and
+unknown. This matters because L3/P3 adopt 92% as their target shape - a success criterion must
+not be a cross-run ratio. P0 re-measures busy and wall from one run.
 
 ## 1a. What llama actually dispatches (traced, same session)
 
@@ -54,10 +64,16 @@ launches ~7 GEMMs (6 Q4_K + 1 Q6_K), so it does not fuse qkv/gate-up at the kern
 either. This corrects the earlier diagnosis claim that "llama dequantizes to fp16 and reaches
 mma": it does neither.
 
-Consequence for the campaign: llama's mechanism is a strictly weaker one than what tinygrad
-already owns (fp16 `mma` full-kernel candidates + fp16 overlay). We are not behind llama on
-kernel primitives anywhere except launch overhead; the GEMM gap is routing, and the launch gap
-is host code.
+Consequence for the campaign, stated as a **hypothesis P0 must confirm** (review, 2026-08-01):
+llama's mechanism may be a weaker one than what tinygrad already owns (fp16 `mma` full-kernel
+candidates + fp16 overlay), in which case the GEMM gap is routing and the launch gap is host
+code. That is the working thesis, not an established fact - on Blackwell, `dp4a` on the integer
+pipe and fp16 tensor-core `mma` are closer in aggregate throughput than "strictly stronger"
+implies, and which wins *on these shapes at these sizes* is precisely what P0 returns. Section 4
+requires every number to come from a command actually run, and this campaign has already
+retracted three conclusions; the previous revision's "strictly stronger mechanism" phrasing was
+the same failure mode as the "llama dequantizes to fp16 and reaches mma" claim it replaced.
+P0 promotes this to a fact or kills it.
 
 ## 2. The levers, sized by evidence
 
@@ -67,8 +83,10 @@ is host code.
 `r_16_64_..._48_...` ffn_down Q4_K 22%, `r_16_64_..._16_...` 20%), running 6-24 TFLOPS. Generated
 CUDA has no `mma.sync`/`dp4a`/`half2`. llama gets 14,250 tok/s from int8 `dp4a` MMQ on the same
 shapes; we do not need to replicate that - the sm120 full-kernel candidate set (fused Q4_K
-dequant + fp16 `cuda_mma`) exists, compiles on the 5090 (C5, `948b26318`, `max_abs_error 0.0`),
-and is a strictly stronger mechanism.
+dequant + fp16 `cuda_mma`) exists and compiles on the 5090 (C5, `948b26318`,
+`max_abs_error 0.0`). Whether it is a *stronger* mechanism than llama's `dp4a` MMQ on these
+shapes is the section 1a hypothesis that P0 confirms; this lever stands either way, because the
+current routes reach 6-24 TFLOPS and both mechanisms are far above that.
 
 Lever: promote the sm120 candidate set, exactly the path AMD uses with WMMA full-kernel
 candidates. This is `nv-prefill-gemm-promotion-scope-20260801.md`. **Build verdict: no new
@@ -76,31 +94,57 @@ kernel - the work is artifact minting + target-parametric selection plumbing.**
 
 ### L2 - Q6_K and lm_head prefill routes remain on the scalar path
 
-The sm120 candidate set covers 4 roles, all Q4_K-shaped. Q6_K roles (ffn_down Q6_K = 22% of
-traced prefill time, attn_v, lm_head) are not covered; their prefill GEMMs stay scalarized.
-AMD's promoted set has the same 4-role shape, so this is also an AMD gap, but on NV it is
-visible today in the trace (the `_48_` route is 7.8ms/call).
+The sm120 candidate set covers 4 roles, all Q4_K-shaped. Q6_K roles (attn_v, lm_head, and the
+Q6_K share of ffn_down) are not covered; their prefill GEMMs stay scalarized. AMD's promoted set
+has the same 4-role shape, so this is also an AMD gap.
+
+**Correction (review, 2026-08-01): this lever has no measured NV size yet.** An earlier revision
+sized it at "ffn_down Q6_K = 22% of traced prefill time, the `_48_` route at 7.8ms/call". That
+route is **Q4_K, not Q6_K**: `docs/nv-prefill-decode-diagnosis-20260801.md:75` records
+`r_16_64_8_16_4_4_48_4_2_16_2` as *ffn_down Q4_K*, 18 calls, 140ms total, 7.8ms/call, 21.9%. It
+is therefore inside L1's 89% and is covered by B1's promotion, not by this lever. L2 borrowed
+L1's number.
+
+Consequence: L1's 89% stands as written (the `_48_` route is correctly counted there), but **L2
+is currently unsized** - the real Q6_K prefill cost on NV has not been separated out of the
+trace. P0 must produce it before P2 is ordered; if it is small, B2 may not be worth building at
+all.
 
 Lever: extend promotion coverage to Q6_K shapes, or route Q6_K prefill GEMMs through the fp16
 overlay (`route_pf16_graph_gemm` / `_install_candidate_matmul` TC warmstart) so dequant happens
 once and the GEMM is a plain fp16 tensor-core matmul. llama covers Q6_K with the same MMQ
-mechanism (`mul_mat_q<Q6_K>`, 4.2 ms/pass = 13% of its GEMM time), so the shape is known-good;
-our 18-call 7.8 ms Q6_K route is the before number. **Build verdict: no new kernel - mint a Q6_K
-candidate or reuse the existing fp16 overlay.**
+mechanism (`mul_mat_q<Q6_K>`, 4.2 ms/pass = 13% of its GEMM time), so the shape is known-good -
+that 13% is the only current estimate of the lever's size, and it is llama's, not ours.
+**Build verdict: no new kernel - mint a Q6_K candidate or reuse the existing fp16 overlay.**
 
 ### L3 - Warm prefill is launch/sync-bound on top of slow kernels
 
 Warm wall is ~4.3s; the cold trace sums to ~642ms GPU busy. cProfile: 4.31s of 4.39s in GPU
 `wait()`, 1.35M `to_mv` calls, ~2,000 kernels per iteration. The per-kernel host cost is
-~2.1 ms; llama's is ~2.5 us over 1,186 kernels (32.96 ms GPU busy in 35.9 ms wall, 92%
-GPU-efficient). So after L1 removes the slow kernels, our wall will not collapse unless launch
-overhead is addressed - and llama proves the achievable shape (wall ~= GPU busy, single-digit ms
-of host time per pass).
+~2.1 ms; llama's is ~2.5 us over 1,186 kernels. So after L1 removes the slow kernels, our wall
+will not collapse unless launch overhead is addressed - and llama proves the achievable shape
+(wall ~= GPU busy, single-digit ms of host time per pass). The precise busy/wall ratio is the
+withdrawn 92% figure (section 1); the *shape* of the claim survives its withdrawal, the target
+number does not, and P0 supplies the replacement.
 
-Lever: graph replay / JIT batching / kernel-count reduction for the prefill schedule; confirm the
-warm-path kernel mix (the trace's tail `batched 32..512` kernels need identification - they run
-at 13-16 TFLOPS and may already be a replay path). **Build verdict: the only genuine build in
-this campaign - a host-side replay/launch mechanism, not a kernel.**
+**The variable is per-kernel host cost, not kernel count** (review, 2026-08-01). Our ~2,000
+kernels/iteration against llama's 1,186 is 1.7x; our 2.1ms/kernel against llama's 2.5us is 840x.
+Cutting kernel count cannot pay for a constant factor three orders of magnitude too large, so
+kernel-count reduction is dropped from this lever - it is at best a second-order follow-on. B3
+already reflects this; the lever text used to disagree with it.
+
+Lever: graph replay / JIT batching for the prefill schedule, targeting per-kernel host cost;
+confirm the warm-path kernel mix (the trace's tail `batched 32..512` kernels need identification
+- they run at 13-16 TFLOPS and may already be a replay path). **Build verdict: the only genuine
+build in this campaign - a host-side replay/launch mechanism, not a kernel.**
+
+**Characterize before building.** 1.35M `to_mv` calls over ~2,000 kernels is ~675 calls per
+kernel. That ratio is not what generic launch overhead looks like; it is the signature of a hot
+path constructing a memoryview per buffer or per element inside dispatch. B3's phrasing
+("batch/async the host-side copies") presumes the answer is batching. If instead it is a path
+that should not run per-element at all, the fix is deleting it, and a replay layer built over it
+would ship the constant factor at lower frequency rather than removing it. P3 therefore opens
+with one profiling step naming what those calls are, and B3's shape is chosen after.
 
 ### L4 - Decode GEMV efficiency: 41% of the bandwidth ceiling vs llama's 66%
 
@@ -170,10 +214,18 @@ route is the before number.
 
 ### P3 - Prefill launch overhead (L3)
 
-Re-measure warm wall vs GPU busy after P1/P2. If host time still dominates, work the replay
-path: identify the `batched` kernels, reduce kernel count per prefill, enable/verify graph
-capture on the whole prefill schedule. The measured target shape is llama's: 1,186 kernels,
-32.96 ms GPU busy, 35.9 ms wall (92%) - wall tracks GPU busy, not 3.6s of fixed overhead.
+**First, characterize** (review): name what the ~675 `to_mv` calls per kernel are doing before
+choosing B3's shape - batching and deleting are different fixes and only one of them is right.
+
+Then re-measure warm wall vs GPU busy after P1/P2. If host time still dominates, work the replay
+path: identify the `batched` kernels, enable/verify graph capture on the whole prefill schedule.
+Kernel-count reduction is explicitly *not* the target here (L3: 1.7x, versus 840x on per-kernel
+host cost).
+
+The target shape is llama's - wall tracks GPU busy rather than carrying 3.6s of fixed overhead -
+but **the target number is not yet measured**. The old "35.9 ms wall (92%)" mixed a cold `nsys`
+busy with a warm bench wall (section 1). P0 supplies llama's true single-run busy/wall ratio, and
+that becomes P3's criterion.
 
 ### P4 - Decode GEMV efficiency (L4)
 
@@ -210,3 +262,55 @@ report for review; nothing beyond.
 
 Measure NV facts, promote the sm120 tensor-core candidates to production prefill, cover Q6_K,
 kill the launch overhead, and tune decode GEMVs until the paired llama sweep is matched.
+
+---
+
+## 7. Review findings (Claude, 2026-08-01)
+
+Reviewed at `65e41549f`. Arithmetic that checks out and was not changed: decode bandwidth
+(158.2 tok/s x 4.834 GB/token = 764.8 GB/s of 1792), the per-token budgets (4.22ms llama vs
+6.32ms ours), the GPU-busy ceiling (512 / 32.96ms = 15.5k tok/s), and L1's 47/22/20 = 89%.
+
+The `nsys` kernel census in section 1a is the most valuable thing in this revision. Replacing
+"llama dequantizes to fp16 and reaches mma" with a measured kernel table reframes the campaign
+from *catch up on primitives* to *route what we already have*, and re-verdicting every lever to
+"no new kernel" except one is the right discipline before a build.
+
+Findings, folded in above at their sites:
+
+1. **`_48_` route was mislabelled in L2 (resolved).** L1 called it Q4_K, L2 called it Q6_K and
+   used its 7.8ms/call as the Q6_K evidence. `nv-prefill-decode-diagnosis-20260801.md:75` settles
+   it: `r_16_64_8_16_4_4_48_4_2_16_2` is *ffn_down Q4_K*, 18 calls, 7.8ms/call, 21.9%. L1 is
+   correct; **L2 is now unsized** and P0 must separate real Q6_K cost out of the trace before P2
+   is ordered. This is the finding that moves work between phases.
+
+2. **L3 targeted the wrong variable.** Kernel count is 1.7x off llama; per-kernel host cost is
+   840x off. Kernel-count reduction dropped from the lever (B3 never included it - the lever text
+   disagreed with its own build row). Added: characterize the ~675 `to_mv` calls *per kernel*
+   before choosing B3's shape, since "batch the copies" presumes an answer.
+
+3. **The 92% GPU-efficiency figure is withdrawn.** Cold-`nsys` busy over warm-bench wall, two
+   runs. It had been promoted into the deliverable as L3/P3's target shape, so a cross-run ratio
+   was about to become a success criterion.
+
+4. **"Strictly stronger mechanism" downgraded to a hypothesis** pending P0, per section 4's own
+   rule and this campaign's three prior retractions.
+
+5. **The 13,664 "BoltBeam ceiling" is marked superseded**, not conservative - llama exceeds it at
+   pp1024 and pp2048.
+
+Open, not folded in (needs a run, not an edit):
+
+6. **Cross-check the llama NV figure.** 14,250 tok/s pp512 implies ~248 TFLOPS effective on
+   Qwen3-8B. Against our own AMD data - llama 8B pp512 on the 7900 XTX is ~3,095 tok/s, derived
+   from the +11.4% margin at 3,448 - that is a 4.6x ratio between two llama runs where the raw
+   compute ratio between those parts is nearer 2-3x. CUDA MMQ being better tuned than ROCm MMQ
+   plausibly explains some of it, so this is a confirm-don't-assume flag rather than a defect
+   claim. But the campaign's headline "~125x" rests entirely on this number, so it deserves one
+   paired run using the same `llama-bench` invocation shape used on AMD.
+
+7. **Two different role breakdowns are in circulation.** L1 gives gate_up 47% / ffn_down Q4_K 22%
+   / `_16_` 20%; `nv-prefill-decode-diagnosis-20260801.md:17` gives `ffn_gate_up` 55.0% /
+   `attn_qo` 18.3% / `ffn_down` 13.8%. These may be role-share versus kernel-share of different
+   phases, but the doc cites that file as its measurement source, so the two should be reconciled
+   or explicitly distinguished.
