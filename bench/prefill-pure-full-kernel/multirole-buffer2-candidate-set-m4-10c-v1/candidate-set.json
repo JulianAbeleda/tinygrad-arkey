@@ -1,7 +1,7 @@
 {
   "entries": [
     {
-      "canonical_identity": "3dadb9ace8440743a41f0dbc37b9b62f8d8ddf469a20f843c07950e7199d68dc",
+      "canonical_identity": "836dcea25ef5adc2ed1864869ba521dcd168f4cddd9a78a71b379106a090ab79",
       "payload": {
         "applicability": {
           "exact_shape": true,
@@ -34,15 +34,15 @@
               "after_wmma_before_slot_reuse"
             ],
             "waitcnt": {
-              "lgkm": 0,
-              "vm": 0
+              "lgkm": null,
+              "vm": null
             }
           },
           "epilogue": {
             "lane_mapping": "wmma_accumulator_scalar_b16",
             "vector_width": 1
           },
-          "lane_ownership": "rdna3_wmma_f32_16x16x16_f16_lds2_static",
+          "lane_ownership": "metal_simdgroup_matrix_f32_8x8x8_f16_lds2_static",
           "lds": {
             "banks": 32,
             "load_vector_width": 8,
@@ -112,14 +112,14 @@
           },
           "wmma": {
             "accumulator_ownership": "wmma_accum_wm_x_wn_8_vgprs",
-            "fragment_layout": "rdna3_wmma_f32_16x16x16_f16_lds2_static",
-            "instruction_family": "wmma_f32_16x16x16_f16"
+            "fragment_layout": "metal_simdgroup_matrix_f32_8x8x8_f16_lds2_static",
+            "instruction_family": "wmma_f32_8x8x8_f16"
           }
         },
         "schema_version": "boltbeam.full_kernel_candidate.v1",
         "static_constraints": {
           "allow_spill": false,
-          "max_lds_bytes": 65536,
+          "max_lds_bytes": 32768,
           "max_vgpr_per_thread": 256
         },
         "workload": {
@@ -150,7 +150,7 @@
       }
     },
     {
-      "canonical_identity": "96089dde39fb3e05476c54803111c1ac6a3dcbd7b5c0f53d949ec92cc09d33c4",
+      "canonical_identity": "f92e765b8536b8c212b05725a1cec41aeca5bed8169fe9f600af1f5cf8198e5d",
       "payload": {
         "applicability": {
           "exact_shape": true,
@@ -183,15 +183,15 @@
               "after_wmma_before_slot_reuse"
             ],
             "waitcnt": {
-              "lgkm": 0,
-              "vm": 0
+              "lgkm": null,
+              "vm": null
             }
           },
           "epilogue": {
             "lane_mapping": "wmma_accumulator_scalar_b16",
             "vector_width": 1
           },
-          "lane_ownership": "rdna3_wmma_f32_16x16x16_f16_lds2_static",
+          "lane_ownership": "metal_simdgroup_matrix_f32_8x8x8_f16_lds2_static",
           "lds": {
             "banks": 32,
             "load_vector_width": 8,
@@ -261,14 +261,14 @@
           },
           "wmma": {
             "accumulator_ownership": "wmma_accum_wm_x_wn_8_vgprs",
-            "fragment_layout": "rdna3_wmma_f32_16x16x16_f16_lds2_static",
-            "instruction_family": "wmma_f32_16x16x16_f16"
+            "fragment_layout": "metal_simdgroup_matrix_f32_8x8x8_f16_lds2_static",
+            "instruction_family": "wmma_f32_8x8x8_f16"
           }
         },
         "schema_version": "boltbeam.full_kernel_candidate.v1",
         "static_constraints": {
           "allow_spill": false,
-          "max_lds_bytes": 65536,
+          "max_lds_bytes": 32768,
           "max_vgpr_per_thread": 256
         },
         "workload": {
@@ -299,7 +299,7 @@
       }
     },
     {
-      "canonical_identity": "42793843577f88033bbd5a54f629d9b09711595283423bb190a8095becd2c2fa",
+      "canonical_identity": "aa2e424285cd0a5adee7a508e38490f75e53519255ee3c2b273f8ded6f9d0dbb",
       "payload": {
         "applicability": {
           "exact_shape": true,
@@ -332,15 +332,15 @@
               "after_wmma_before_slot_reuse"
             ],
             "waitcnt": {
-              "lgkm": 0,
-              "vm": 0
+              "lgkm": null,
+              "vm": null
             }
           },
           "epilogue": {
             "lane_mapping": "wmma_accumulator_scalar_b16",
             "vector_width": 1
           },
-          "lane_ownership": "rdna3_wmma_f32_16x16x16_f16_lds2_static",
+          "lane_ownership": "metal_simdgroup_matrix_f32_8x8x8_f16_lds2_static",
           "lds": {
             "banks": 32,
             "load_vector_width": 8,
@@ -410,14 +410,14 @@
           },
           "wmma": {
             "accumulator_ownership": "wmma_accum_wm_x_wn_8_vgprs",
-            "fragment_layout": "rdna3_wmma_f32_16x16x16_f16_lds2_static",
-            "instruction_family": "wmma_f32_16x16x16_f16"
+            "fragment_layout": "metal_simdgroup_matrix_f32_8x8x8_f16_lds2_static",
+            "instruction_family": "wmma_f32_8x8x8_f16"
           }
         },
         "schema_version": "boltbeam.full_kernel_candidate.v1",
         "static_constraints": {
           "allow_spill": false,
-          "max_lds_bytes": 65536,
+          "max_lds_bytes": 32768,
           "max_vgpr_per_thread": 256
         },
         "workload": {
@@ -448,7 +448,7 @@
       }
     },
     {
-      "canonical_identity": "bcfb2d2add30d03291148690d9b4aa174a5e251c419fe5f5ce1150ae1346ba28",
+      "canonical_identity": "ab99006337c077097dc857f1fc9ca72e26163d4dc18e2b17be4509e67a5d7afa",
       "payload": {
         "applicability": {
           "exact_shape": true,
@@ -481,15 +481,15 @@
               "after_wmma_before_slot_reuse"
             ],
             "waitcnt": {
-              "lgkm": 0,
-              "vm": 0
+              "lgkm": null,
+              "vm": null
             }
           },
           "epilogue": {
             "lane_mapping": "wmma_accumulator_scalar_b16",
             "vector_width": 1
           },
-          "lane_ownership": "rdna3_wmma_f32_16x16x16_f16_lds2_static",
+          "lane_ownership": "metal_simdgroup_matrix_f32_8x8x8_f16_lds2_static",
           "lds": {
             "banks": 32,
             "load_vector_width": 8,
@@ -559,14 +559,14 @@
           },
           "wmma": {
             "accumulator_ownership": "wmma_accum_wm_x_wn_8_vgprs",
-            "fragment_layout": "rdna3_wmma_f32_16x16x16_f16_lds2_static",
-            "instruction_family": "wmma_f32_16x16x16_f16"
+            "fragment_layout": "metal_simdgroup_matrix_f32_8x8x8_f16_lds2_static",
+            "instruction_family": "wmma_f32_8x8x8_f16"
           }
         },
         "schema_version": "boltbeam.full_kernel_candidate.v1",
         "static_constraints": {
           "allow_spill": false,
-          "max_lds_bytes": 65536,
+          "max_lds_bytes": 32768,
           "max_vgpr_per_thread": 256
         },
         "workload": {
