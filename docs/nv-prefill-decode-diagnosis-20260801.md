@@ -31,6 +31,18 @@ Bench artifact: `/tmp/qwen3-8b-p5-final2.json` (decode median 158.21, prefill 10
 `prefill_overlay_promotion: "no-promoted-candidate"`, first tokens byte-identical to the SDPA
 baseline).
 
+**Paired llama.cpp baseline (same machine, same model, same session, CUDA build
+`ac4cddeb0`, `llama-bench -p 512 -n 96 -ngl 99`):**
+
+| phase | llama.cpp | tinygrad NV | BoltBeam ceiling |
+| --- | ---: | ---: | ---: |
+| prefill pp512 | 12,326 tok/s (90% of ceiling) | ~101-115 tok/s | 13,664 tok/s |
+| decode tg96 | 254.3 tok/s (66% of ceiling) | 158.2 tok/s | 383.6 tok/s |
+
+Prefill is the 100x+ gap and it is the same root cause as section 4: llama's Q4_K GEMMs
+dequant-to-fp16 and reach `mma`; ours stay scalarized. Decode is a smaller 1.6x gap inside the
+same bandwidth-bound regime (their per-token GEMV kernels are more efficient).
+
 ## 3. What path each phase takes
 
 **Decode — flash-decode route (`rollout_jit_flash`, `use_flash=True`).** Uses CUDA `fdot2` /
