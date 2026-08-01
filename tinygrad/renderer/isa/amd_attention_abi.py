@@ -35,6 +35,7 @@ from tinygrad.dtype import dtypes, AddrSpace
 from tinygrad.helpers import getenv
 from tinygrad.renderer.isa.amd_physical_regs import _fixed_alias
 from tinygrad.renderer.isa.amd_register_contracts import AMD_ATTENTION_LOOP_STATE
+from tinygrad.codegen.late.warp_reduce import warp_bpermute
 
 
 def drain_lane_encoding(head_dim:int, e:int, j:int, output_block_base:int) -> tuple[int, int, int]:
@@ -268,7 +269,7 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
     row_max = value
     for mask in x.arg.xor_masks:
       addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
-      row_max = row_max.alu(Ops.MAX, UOp(Ops.CUSTOMI, dtypes.float, (addr, row_max), "bpermute"))
+      row_max = row_max.alu(Ops.MAX, warp_bpermute(addr, row_max))
     new_m = row_max if initial_state else old_m.alu(Ops.MAX, row_max)
     weight = (value-new_m).alu(Ops.MUL, log2e).exp2()
     if fused_causal: weight=UOp(Ops.CUSTOMI,dtypes.float,(weight,kv,qrow),"(({1}<={2})?{0}:0.0f)")
@@ -276,7 +277,7 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
     row_sum = weight
     for mask in x.arg.xor_masks:
       addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
-      row_sum = row_sum.alu(Ops.ADD, UOp(Ops.CUSTOMI, dtypes.float, (addr, row_sum), "bpermute"))
+      row_sum = row_sum.alu(Ops.ADD, warp_bpermute(addr, row_sum))
     raw_alpha = UOp.const(dtypes.float, 1) if initial_state else row_sum.ne(UOp.const(dtypes.float, 0)).where(
       (old_m-new_m).alu(Ops.MUL, log2e).exp2(), UOp.const(dtypes.float, 1))
     alpha = raw_alpha

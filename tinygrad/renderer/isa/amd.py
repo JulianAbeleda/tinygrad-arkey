@@ -2420,6 +2420,9 @@ class AMDISARenderer(ISARenderer):
   # EXP2 listed as natively supported -> the shared transcendental pass leaves Ops.EXP2 intact (no VALU polynomial)
   # so isel can lower it to hardware v_exp_f32 (Phase N1A).
   code_for_op = {op: (lambda: None) for op in (Ops.ADD, Ops.MUL, Ops.SUB, Ops.LOAD, Ops.STORE, Ops.EXP2)}
+  # The tagged attention bpermute resolves back to the Phase F.2 marker isel_customi consumes
+  # (arg == "bpermute", src=(addr, data)) -- the encoder path is untouched byte-for-byte.
+  warp_bpermute = staticmethod(lambda addr, value: UOp(Ops.CUSTOMI, value.dtype, (addr, value), arg="bpermute"))
 
   @staticmethod
   def bind_attention_wmma_roles(ctx:IselContext, sink:UOp, roles:tuple) -> None:

@@ -125,7 +125,9 @@ def _hip_native_bpermute_max(x:UOp) -> UOp|None:
   if x.dtype != dtypes.float or len(x.src) != 2: return None
   fuse = getenv("PREFILL_SOFTMAX_REDUCE_FUSE", 1)
   args = ("bpermute", _HIP_BPERMUTE_F32) + ((_HIP_FMAX_F32,) if fuse else ())
-  peers = [s for s in x.src if s.op is Ops.CUSTOMI and s.dtype == dtypes.float and s.arg in args]
+  from tinygrad.codegen.late.warp_reduce import WARP_BPERMUTE_TAG
+  peers = [s for s in x.src if s.op is Ops.CUSTOMI and s.dtype == dtypes.float and
+           (s.arg in args or (isinstance(s.arg, tuple) and s.arg[:1] == (WARP_BPERMUTE_TAG,)))]
   if len(peers) != 1 and not (fuse and peers): return None
   return UOp(Ops.CUSTOMI, dtypes.float, x.src, _HIP_FMAX_F32)
 
@@ -255,6 +257,9 @@ class CStyleLanguage(Renderer):
   # (val, xor_offset, lane) -> lowered CUSTOMI UOp. `lane` is only meaningful to providers that need a per-lane
   # source address (e.g. AMD's ds_bpermute); providers that take a lane mask directly may ignore it.
   warp_shfl_xor: Callable[[UOp, int, UOp], UOp]|None = None
+  # Byte-address cross-lane permute (the fused-attention row-softmax lowering, warp_reduce.py warp_bpermute).
+  # (addr, value) -> lowered CUSTOMI UOp; a renderer that leaves this None fails loudly at lowering.
+  warp_bpermute: Callable[[UOp, UOp], UOp]|None = None
   # Per-target flash-decode intrinsics (TG7, same declarative shape as warp_shfl_xor above): None means this
   # target cannot express it, and codegen/late/flash_decode_intrinsics.py raises rather than falling back.
   # fdot2(acc, a, b) -> acc + a.x*b.x + a.y*b.y for packed-half2 a/b, fp32 accumulate (see the AMD provider's
@@ -663,6 +668,10 @@ class HIPRenderer(CStyleLanguage):
   # byte offset, so the source lane (lane ^ offset) is computed here and bit-cast through int for the permute.
   warp_shfl_xor = staticmethod(lambda val, offset, lane: UOp(Ops.CUSTOMI, val.dtype, (val, ((lane ^ offset) * 4).cast(dtypes.int)),
     arg="__builtin_bit_cast(float, __builtin_amdgcn_ds_bpermute({1}, __builtin_bit_cast(int, {0})))"))
+  # Byte-address variant used by the fused-attention row-softmax lowering: the caller computes the source
+  # lane's register byte address, and the value is bit-cast through unsigned int -- the exact spelling the
+  # pre-tag attention rendering used (see _HIP_BPERMUTE_F32), so the pinned attention hashes stay byte-identical.
+  warp_bpermute = staticmethod(lambda addr, value: UOp(Ops.CUSTOMI, value.dtype, (addr, value), arg=_HIP_BPERMUTE_F32))
   # TG7: byte-identical to the pre-TG7 inline strings in tinygrad/llm/flash_decode_attention.py. fdot2's ISA
   # semantics: __builtin_amdgcn_fdot2(a, b, c, clamp) computes c + a.x*b.x + a.y*b.y for packed half2 a/b, with
   # fp32 intermediate accumulation regardless of the (fp16) input precision -- that fp32 accumulate is exactly

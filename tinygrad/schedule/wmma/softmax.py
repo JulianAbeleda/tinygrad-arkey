@@ -103,4 +103,5 @@ def amd_gfx1100_broadcast_row_state(state:UOp, lane:UOp) -> UOp:
   if state.dtype != dtypes.float or state.shape != () or lane.dtype.scalar() not in dtypes.ints+(dtypes.weakint,):
     raise ValueError("gfx1100 row-state broadcast requires scalar fp32 state and integer lane")
   addr = lane.cast(dtypes.int).alu(Ops.AND, UOp.const(dtypes.int, 16)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
-  return UOp(Ops.CUSTOMI, dtypes.float, (addr, state), "bpermute")
+  from tinygrad.codegen.late.warp_reduce import warp_bpermute
+  return warp_bpermute(addr, state)

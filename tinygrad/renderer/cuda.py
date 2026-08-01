@@ -35,6 +35,11 @@ class CUDARenderer(CStyleLanguage):
   # __shfl_xor_sync takes the lane mask directly (like Metal's simd_shuffle_xor) -- no per-lane address needed,
   # so `lane` is unused. Full-warp mask: every call site in this repo shuffles across the whole warp (WARP=32).
   warp_shfl_xor = staticmethod(lambda val, offset, lane: UOp(Ops.CUSTOMI, val.dtype, (val,), arg=f"__shfl_xor_sync(0xffffffffu, {{0}}, {offset})"))
+  # Byte-address variant (fused-attention row softmax): the caller carries the source lane's register byte
+  # address; CUDA cannot address registers by byte, but the address IS the source lane index times four, so
+  # __shfl_sync's srcLane is `addr >> 2` -- correct for both the XOR butterfly and the half-wave broadcast.
+  warp_bpermute = staticmethod(lambda addr, value: UOp(Ops.CUSTOMI, value.dtype, (addr, value),
+    arg="__shfl_sync(0xffffffffu, {1}, (({0}) >> 2))"))
   # TG7: exp2f is a native CUDA device function, a one-liner. fdot2 has no native packed-fp16x2 dot-accumulate
   # CUDA builtin either, so it reuses the exact two-fp32-FMA substitute Metal's provider uses (cstyle.py):
   # CUDA's half2 exposes .x/.y and float() conversions just like MSL, so the identical template is the asset
