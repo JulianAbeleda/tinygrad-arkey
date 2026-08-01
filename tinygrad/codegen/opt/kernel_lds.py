@@ -102,17 +102,28 @@ def _tc_opt_bit_trace(tc) -> tuple[list[int], list[int], list[str], list[int]]:
 class WmmaOperandLaneLayout:
   """One WMMA operand's (A or B) derived within-tile addressing.
 
-  ``{row,k}_contract_bits`` physical LSBs of the row (respectively K) index are supplied by the
-  operand's own CONTRACT/binary-axis value (already correctly folded by ``fold_binary_axes`` off
-  ``tc.lane_map``'s validated remap -- PG0/PG1a's existing, unchanged derivation); the remaining
-  bits are supplied by ``{row,k}_lane_bits``, an ordered (LSB..MSB) tuple of physical ``lane`` bit
-  indices. Exactly one of ``row_contract_bits``/``k_contract_bits`` is nonzero (and then equals the
-  operand's full contract-axis width) -- see :func:`derive_wmma_operand_lane_layout`.
+  Each of the operand's two within-tile axes (row and K) is described by two ordered term tuples,
+  and every bit position of the axis index is covered by exactly one of them:
+
+  * ``{row,k}_contract_terms`` -- ``(element_bit, axis_bit)`` pairs: the operand's own
+    CONTRACT/binary-axis element (the ``fold_binary_axes`` value over ``tc.base_upcast_axes()``,
+    MSB first -- PG0/PG1a's existing, unchanged derivation) contributes element bit
+    ``element_bit`` at axis position ``axis_bit``. The element may be split across row and K with
+    each fragment at an arbitrary axis position (e.g. NVIDIA's m16n8k16 A: element bit 1 at row
+    bit 3, element bits 0 and 2 at K bits 0 and 3).
+  * ``{row,k}_lane_terms`` -- ``(lane_bit, axis_bit)`` pairs: physical ``lane`` bit ``lane_bit``
+    contributes at axis position ``axis_bit``.
+
+  ``element_bits`` is the operand's full contract-element width
+  (``log2(tc.elements_per_thread[operand])``); :func:`_fold_operand_axis` collapses a whole
+  identity run ``((i, i), ...)`` back to the folded element UOp unchanged only when this axis owns
+  every element bit.
   """
-  row_contract_bits: int
-  row_lane_bits: tuple[int, ...]
-  k_contract_bits: int
-  k_lane_bits: tuple[int, ...]
+  row_contract_terms: tuple[tuple[int, int], ...]
+  row_lane_terms: tuple[tuple[int, int], ...]
+  k_contract_terms: tuple[tuple[int, int], ...]
+  k_lane_terms: tuple[tuple[int, int], ...]
+  element_bits: int
 
 
 def derive_wmma_operand_lane_layout(tc) -> tuple[WmmaOperandLaneLayout, WmmaOperandLaneLayout]:
@@ -136,10 +147,14 @@ def derive_wmma_operand_lane_layout(tc) -> tuple[WmmaOperandLaneLayout, WmmaOper
   ``METAL:METAL:Apple9``), read directly out of the compiled C source, which this function's output
   matches term-for-term for ``tc.metal``.
 
-  Raises ``ValueError`` if a ``tc`` descriptor's substitution does not resolve into "some
-  contiguous LSB-aligned prefix of contract-axis bits, the rest physical lane bits, entirely on one
-  side of row/K" -- fails closed (an untested TC descriptor, e.g. AMD's RDNA4/CDNA wave64 families,
-  raises here) rather than emit an address this derivation was never shown correct for.
+  NVIDIA's m16n8k16 splits each operand's contract element across row and K (and places the row
+  term at the top of the row axis), so the general form here is per-axis term tuples rather than
+  "one LSB-aligned contiguous contract run on one side" -- the old shape is exactly the AMD/Metal
+  special case of these tuples. The structural checks below (every row/K axis bit position used
+  exactly once, every element bit used exactly once) still fail closed: a ``tc`` descriptor whose
+  substitution does not resolve into lane bits and contract element bits at every position raises
+  ``ValueError`` (an untested TC descriptor, e.g. AMD's CDNA wave64 families, raises here) rather
+  than emit an address this derivation was never shown correct for.
   """
   validate_wmma_descriptor(tc)
   own_dim, own_ordinal, kind, bit_index = _tc_opt_bit_trace(tc)
@@ -157,55 +172,80 @@ def derive_wmma_operand_lane_layout(tc) -> tuple[WmmaOperandLaneLayout, WmmaOper
     ept = tc.elements_per_thread[operand_idx]
     n_contract = int(math.log2(ept))
     if 2 ** n_contract != ept: raise ValueError(f"operand {operand_idx} elements_per_thread is not a power of two")
-    contract_positions = {base.index(name) for name in bua[:n_contract]} if n_contract else set()
+    # `element` is the Horner fold of bua[:n_contract] (MSB first), so bua[i] is element bit
+    # n_contract-1-i -- the same fold `PrecontractCandidateContract.assemble` feeds
+    # `PrecontractContractSpec.element`.
+    element_bit = {name: n_contract - 1 - i for i, name in enumerate(bua[:n_contract])} if n_contract else {}
+    contract_positions = {base.index(name) for name in element_bit}
 
-    def _classify(positions:list[int], operand_idx=operand_idx, inv=inv, contract_positions=contract_positions) -> tuple[int, tuple[int, ...]]:
-      terms:list[tuple] = []
+    def _classify(positions:list[int], operand_idx=operand_idx, inv=inv, element_bit=element_bit,
+                  contract_positions=contract_positions) -> tuple[tuple[tuple[int, int], ...], tuple[tuple[int, int], ...]]:
+      contract_terms:list[tuple[int, int]] = []
+      lane_terms:list[tuple[int, int]] = []
       for pos in positions:
         target = inv[pos]
-        if target in contract_positions: terms.append(("contract",))
-        elif kind[target] == "l": terms.append(("lane", bit_index[target]))
+        if target in contract_positions: contract_terms.append((element_bit[base[target]], own_ordinal[pos]))
+        elif kind[target] == "l": lane_terms.append((bit_index[target], own_ordinal[pos]))
         else: raise ValueError(f"operand {operand_idx} lane layout does not resolve cleanly at canonical position {pos}")
-      contract_hits = sum(1 for t in terms if t[0] == "contract")
-      if any(t[0] == "contract" for t in terms[contract_hits:]):
-        raise ValueError(f"operand {operand_idx} contract-axis bits are not an LSB-aligned contiguous prefix")
-      return contract_hits, tuple(t[1] for t in terms[contract_hits:])
+      return tuple(contract_terms), tuple(lane_terms)
 
     row_positions = sorted([i for i in range(len(own_dim)) if own_dim[i] == row_dim and kind[i] != "r"], key=lambda i: own_ordinal[i])
     k_positions = sorted([i for i in range(len(own_dim)) if own_dim[i] == 2], key=lambda i: own_ordinal[i])
     row_contract, row_lane = _classify(row_positions)
     k_contract, k_lane = _classify(k_positions)
-    if row_contract + k_contract != n_contract:
-      raise ValueError(f"operand {operand_idx} contract axis is split or duplicated across row/K ({row_contract}+{k_contract} != {n_contract})")
-    if row_contract not in (0, n_contract) or k_contract not in (0, n_contract):
-      raise ValueError(f"operand {operand_idx} contract axis lands partially in row and partially in K")
-    layouts.append(WmmaOperandLaneLayout(row_contract, row_lane, k_contract, k_lane))
+    # Structural fail-closed checks: every axis bit position and every element bit used exactly once.
+    row_bits = int(math.log2(tc.dims[1] if row_dim == 1 else tc.dims[0]))
+    k_bits = int(math.log2(tc.dims[2]))
+    if sorted(p for _, p in row_contract + row_lane) != list(range(row_bits)):
+      raise ValueError(f"operand {operand_idx} row axis positions do not exactly cover its {row_bits} bits")
+    if sorted(p for _, p in k_contract + k_lane) != list(range(k_bits)):
+      raise ValueError(f"operand {operand_idx} K axis positions do not exactly cover its {k_bits} bits")
+    used_element_bits = {eb for eb, _ in row_contract + k_contract}
+    if used_element_bits != set(range(n_contract)):
+      raise ValueError(f"operand {operand_idx} contract element bits are not used exactly once across row/K "
+                       f"({sorted(used_element_bits)} != {list(range(n_contract))})")
+    layouts.append(WmmaOperandLaneLayout(row_contract, row_lane, k_contract, k_lane, n_contract))
   return layouts[0], layouts[1]
 
 
-def _fold_operand_axis(contract_bits:int, lane_bits:tuple[int, ...], lane:UOp, contract_element:UOp):
-  """Build the within-tile index UOp: `contract_element` (already the operand's full, correctly
-  folded contract-axis value) occupies the LSBs when `contract_bits` is nonzero, then `lane_bits`
-  contributes the physical `lane` bits above that, LSB..MSB -- exactly
-  :func:`derive_wmma_operand_lane_layout`'s contract.
+def _fold_operand_axis(contract_terms:tuple[tuple[int, int], ...], lane_terms:tuple[tuple[int, int], ...],
+                       lane:UOp, contract_element:UOp, element_bits:int):
+  """Build the within-tile index UOp from :func:`derive_wmma_operand_lane_layout`'s term tuples.
 
-  When `lane_bits` is a single contiguous ascending run (the only shape AMD's rdna3 descriptor ever
-  produces, per that function's own validated output), this collapses to the same `lane %
-  tc_dim` / `lane // tc_dim % k_groups` two-op idiom the pre-derivation code emitted, not a sum of
-  one term per bit -- so AMD's rendered source is unchanged bit-for-bit by this derivation existing
-  (verified: `scratchpad/pg2_amd_all_routes_rendered_source_equality.py` six hashes unmoved). A
-  non-contiguous run (Metal's real, swizzle-scrambled bit sets) falls back to an explicit per-bit
-  sum -- there is no shorter equivalent, and no existing rendered source depends on its exact shape.
+  The contract part is ``sum(((contract_element >> element_bit) & 1) << axis_bit)`` -- or, when
+  this axis owns every element bit as an identity run ``((i, i), ...)``, the folded element UOp
+  itself, unchanged. The lane part is ``sum(((lane >> lane_bit) & 1) << axis_bit)``.
+
+  Two collapses keep the UOp trees (and therefore the rendered source) identical to the
+  pre-derivation idioms the established families are pinned on: a contiguous ascending lane-bit
+  run at contiguous ascending axis positions collapses to the same ``lane % span`` /
+  ``(lane // 2**b) % span * 2**p`` two-op form the pre-derivation code emitted (AMD's rdna3 row,
+  whose terms are ``((0, 0), (1, 1), (2, 2), (3, 3))``, renders as ``lane % 16`` -- verified:
+  `scratchpad/pg2_amd_all_routes_rendered_source_equality.py` six hashes unmoved), and a whole
+  identity contract run collapses to ``contract_element`` (AMD's rdna3 K, Metal's single-element
+  contract axes). A non-contiguous run (Metal's real, swizzle-scrambled bit sets; NVIDIA's split
+  contracts) falls back to the explicit per-bit sum -- there is no shorter equivalent, and no
+  existing rendered source depends on its exact shape.
   """
-  contiguous = len(lane_bits) > 0 and lane_bits == tuple(range(lane_bits[0], lane_bits[0] + len(lane_bits)))
-  if contiguous:
-    span = 1 << len(lane_bits)
-    lane_part = lane % span if lane_bits[0] == 0 else (lane // (1 << lane_bits[0])) % span
-    lane_term = lane_part if contract_bits == 0 else lane_part * (1 << contract_bits)
-    return lane_term if contract_bits == 0 else contract_element + lane_term
-  expr = contract_element if contract_bits else None
-  for i, bit in enumerate(lane_bits):
-    contribution = ((lane // (1 << bit)) % 2) * (1 << (contract_bits + i))
+  n_contract = len(contract_terms)
+  if n_contract and n_contract == element_bits and contract_terms == tuple((i, i) for i in range(n_contract)):
+    expr: UOp | None = contract_element
+  elif n_contract:
+    expr = None
+    for element_bit, axis_bit in contract_terms:
+      contribution = ((contract_element // (1 << element_bit)) % 2) * (1 << axis_bit)
+      expr = contribution if expr is None else expr + contribution
+  else:
+    expr = None
+  n_lane = len(lane_terms)
+  first_lane_bit, first_axis_bit = lane_terms[0] if n_lane else (0, 0)
+  if n_lane and lane_terms == tuple((first_lane_bit + i, first_axis_bit + i) for i in range(n_lane)):
+    span = 1 << n_lane
+    lane_part = lane % span if first_lane_bit == 0 else (lane // (1 << first_lane_bit)) % span
+    lane_term = lane_part if first_axis_bit == 0 else lane_part * (1 << first_axis_bit)
+    return lane_term if expr is None else expr + lane_term
+  for lane_bit, axis_bit in lane_terms:
+    contribution = ((lane // (1 << lane_bit)) % 2) * (1 << axis_bit)
     expr = contribution if expr is None else expr + contribution
   if expr is None: raise ValueError("operand axis has neither a contract-axis nor a lane-bit contribution")
   return expr
@@ -476,7 +516,7 @@ def validate_precontract_carriers(fragment_dtype, accumulator_dtype, *, tc, cont
     raise ValueError(f"{context} accumulator carrier must match the tensor-core output carrier")
 
 
-def validate_precontract_wmma_abi(node: UOp, *, context: str = "precontract") -> None:
+def validate_precontract_wmma_abi(node: UOp, *, context: str = "precontract", tc: object|None = None) -> None:
   """Validate the WMMA node ABI before a backend/devectorizer sees it.
 
   The tensor-core matcher accepts two descriptor-sized input fragments and one
@@ -503,7 +543,13 @@ def validate_precontract_wmma_abi(node: UOp, *, context: str = "precontract") ->
   axes = arg[6]
   if not isinstance(axes, tuple) or len(axes) != 3:
     raise ValueError(f"{context} WMMA descriptor requires A/B/C axis groups")
-  for role, count, group in (("A", 4, axes[0]), ("B", 4, axes[1]), ("C", 3, axes[2])):
+  # The per-operand binary-axis counts come from the descriptor itself
+  # (log2 of elements_per_thread, the one existing derivation) whenever the
+  # caller holds it.  The 4/4/3 fallback is the RDNA3-shaped legacy surface
+  # (the RDNA3-only consumer adapter and its unit tests); production callers
+  # that can reach more than one family must pass the descriptor.
+  expected_counts = tuple(binary_axis_count(tc, i) for i in range(3)) if tc is not None else (4, 4, 3)
+  for role, count, group in zip(("A", "B", "C"), expected_counts, axes):
     if not isinstance(group, tuple) or len(group) != count or any(not isinstance(x, tuple) or len(x) != 2 or x[1] != 2 for x in group):
       raise ValueError(f"{context} {role} WMMA contract requires {count} binary axes")
   # Fragment/accumulator widths are derived from the arg's own axis-group sizes (2**|group|), not a
@@ -715,13 +761,22 @@ def instantiate_precontract_fragments(geometry:KernelTileGeometry, *, tc, alloca
   factors=derive_precontract_factors(geometry,tc); item_bytes=tc.dtype_in.itemsize
   slot_base=slot*(geometry.lds_windows[-1].end//item_bytes)
   ordered=allocation.after(ready); lane=threads.lane
+  # Same derivation the legacy stage's `_fragment` uses (see `build_precontract_lds_stage`): the
+  # per-subtile row extent is the descriptor's own M dim (`tc.dims[1]`) for role A and N dim
+  # (`tc.dims[0]`) for role B, and the within-tile lane/element bits come from
+  # `derive_wmma_operand_lane_layout` -- not RDNA3's lane%16 ABI, which overflows the B window of
+  # any descriptor whose B rows are narrower than 16 (e.g. NVIDIA's m16n8k16).
+  operand_layouts = derive_wmma_operand_lane_layout(tc)
   def fragment(role,subtile,wave,subtiles,contract):
-    window=_window(geometry,role); row=(wave*subtiles+subtile)*16+lane%16
-    logical_k=k_substep*tc.dims[2]+contract.element
+    window=_window(geometry,role)
+    tc_dim = tc.dims[1] if role == "A" else tc.dims[0]
+    operand_idx = 0 if role == "A" else 1
+    layout = operand_layouts[operand_idx]
+    row=(wave*subtiles+subtile)*tc_dim+_fold_operand_axis(layout.row_contract_terms, layout.row_lane_terms, lane, contract.element, layout.element_bits)
+    logical_k=k_substep*tc.dims[2]+_fold_operand_axis(layout.k_contract_terms, layout.k_lane_terms, lane, contract.element, layout.element_bits)
     idx=slot_base+(window.base+row*window.stride_bytes+logical_k*item_bytes)//item_bytes
     semantic=(role,epoch,slot,k_substep,subtile)
     load=ordered.index(idx,dtype=tc.dtype_in).replace(tag=("kernel_tile_fragment_load",*semantic)).load()
-    operand_idx = 0 if role == "A" else 1
     return UOp(Ops.CONTRACT,tc.dtype_in.vec(tc.elements_per_thread[operand_idx]),(load,),contract.arg,
                tag=("kernel_tile_fragment",*semantic))
   frags=(fragment("A",subtile_m,threads.wave_m,factors.subtiles_m,contracts[0]),
@@ -830,8 +885,8 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
     tc_dim = tc.dims[1] if role == "A" else tc.dims[0]
     operand_idx = 0 if role == "A" else 1
     layout = operand_layouts[operand_idx]
-    row = (wave * subtiles + subtile) * tc_dim + _fold_operand_axis(layout.row_contract_bits, layout.row_lane_bits, lane, contract.element)
-    logical_k = k_axis.substep * tc.dims[2] + _fold_operand_axis(layout.k_contract_bits, layout.k_lane_bits, lane, contract.element)
+    row = (wave * subtiles + subtile) * tc_dim + _fold_operand_axis(layout.row_contract_terms, layout.row_lane_terms, lane, contract.element, layout.element_bits)
+    logical_k = k_axis.substep * tc.dims[2] + _fold_operand_axis(layout.k_contract_terms, layout.k_lane_terms, lane, contract.element, layout.element_bits)
     index = slot_base + (window.base + row * window.stride_bytes + logical_k * item_bytes) // item_bytes
     load = ordered.index(index, dtype=tc.dtype_in).replace(tag=("kernel_tile_fragment_load", role)).load()
     return UOp(Ops.CONTRACT, tc.dtype_in.vec(tc.elements_per_thread[operand_idx]), (load,), contract.arg,

@@ -3,7 +3,7 @@ import struct
 from collections import defaultdict
 from tinygrad.codegen.opt import tc
 from tinygrad.uop.ops import Ops, UOp, PatternMatcher, UPat, GroupOp
-from tinygrad.dtype import dtypes, DType, AddrSpace
+from tinygrad.dtype import dtypes, DType, PtrDType, AddrSpace
 from tinygrad.renderer import Renderer
 from tinygrad.renderer.cuda import CUDARenderer
 from tinygrad.helpers import flatten, prod, unwrap, Target
@@ -99,18 +99,18 @@ string_rewrite = PatternMatcher([
   (UPat(Ops.STORE, src=(UPat(name="loc"), UPat.var("var"))), lambda ctx, loc, var:
    f"mov.{'pred' if var.dtype == dtypes.bool else 'b'+ctx.types[var.dtype][1:]} {ctx.r[loc]}, {ctx.r[var]};" \
      if loc.addrspace == AddrSpace.REG else None),
-  (UPat(Ops.STORE, src=(UPat((Ops.INDEX, Ops.SHRINK), name="loc"), UPat.var("var"))),
+  (UPat(Ops.STORE, src=(UPat((Ops.INDEX, Ops.SHRINK, Ops.CAST), name="loc"), UPat.var("var"))),
    lambda ctx, loc, var: f"st.{mem_type(loc)}" + \
     f"{f'.v{cnt}' if ((cnt:=var.max_numel())>1) else ''}.{ctx.mem_types[var.dtype.scalar()]} " + \
     f"[{ctx.r[loc]}+0], {('{' + ', '.join(ctx.r[var]) + '}') if var.max_numel() > 1 else ctx.r[var]};"),
-  (UPat(Ops.LOAD, name="x", src=(UPat((Ops.INDEX, Ops.SHRINK), name="loc"), UPat.var("alt"), UPat.var("gate"))),
+  (UPat(Ops.LOAD, name="x", src=(UPat((Ops.INDEX, Ops.SHRINK, Ops.CAST), name="loc"), UPat.var("alt"), UPat.var("gate"))),
     lambda ctx, x, loc, alt, gate: flatten([
     [f"mov.{ctx.mem_types[x.dtype.scalar()]} {v}, {render_val(0, x.dtype.scalar())};" for v in ctx.r[x]],
     [f"@{ctx.r[gate]} ld.{mem_type(loc)}.v{x.max_numel()}.{ctx.mem_types[x.dtype.scalar()]} {{{', '.join(ctx.r[x])}}}, [{ctx.r[loc]}+0];"]
   ]) if alt.max_numel() > 1 else [
     f"@{ctx.r[gate]} ld.{mem_type(loc)}.{ctx.mem_types[x.dtype.scalar()]} {ctx.r[x]}, [{ctx.r[loc]}+0];",
     f"@!{ctx.r[gate]} mov.b{ctx.types[x.dtype.scalar()][1:]} {ctx.r[x]}, {ctx.r[alt]};"]),
-  (UPat(Ops.LOAD, name="x", src=(UPat((Ops.INDEX, Ops.SHRINK), name="loc"),)),
+  (UPat(Ops.LOAD, name="x", src=(UPat((Ops.INDEX, Ops.SHRINK, Ops.CAST), name="loc"),)),
     lambda ctx, x, loc: f"ld.{mem_type(loc)}.v{x.max_numel()}.{ctx.mem_types[x.dtype.scalar()]} {{{', '.join(ctx.r[x])}}}, [{ctx.r[loc]}+0];" \
      if x.max_numel() > 1 else f"ld.{mem_type(loc)}.{ctx.mem_types[x.dtype]} {ctx.r[x]}, [{ctx.r[loc]}+0];"),
   # simple
@@ -151,7 +151,8 @@ class PTXRenderer(Renderer):
   barrier = "bar.sync\t0;"
   types: dict[DType, str] = { dtypes.int8: "s16", dtypes.int16: "s16", dtypes.int32: "s32", dtypes.int64: "s64",
                               dtypes.uint8: "u16", dtypes.uint16: "u16", dtypes.uint32: "u32", dtypes.uint64: "u64",
-                              dtypes.float16: "f16", dtypes.float32: "f32", dtypes.float64: "f64", dtypes.bool: "pred" }
+                              dtypes.float16: "f16", dtypes.float32: "f32", dtypes.float64: "f64", dtypes.bool: "pred",
+                              dtypes.weakint: "s32" }
 
   mem_types: dict[DType, str] = {**types, dtypes.int8: "s8", dtypes.uint8: "u8", dtypes.bool: "u8", dtypes.float16: "b16"}
   cast_types: dict[DType, str] = {**types, dtypes.int8: "s8", dtypes.uint8: "u8"}
@@ -185,16 +186,40 @@ class PTXRenderer(Renderer):
       if u.op is Ops.AFTER:
         self.r[u] = self.r[u.src[0]]
         continue
+      if u.op is Ops.CAST and isinstance(u.dtype, PtrDType) and isinstance(u.src[0].dtype, PtrDType):
+        # Pointer-to-pointer CAST is an address no-op in PTX; the devectorizer emits
+        # INDEX(...).cast(vecN.ptr(...)) for vectorized loads, so alias the u64 address.
+        r[u] = r[u.src[0]]
+        continue
       if u.op is Ops.SINK:
         if u.arg is not None: name = u.arg.function_name
         continue
       if u.op is Ops.STACK:
         r[u] = [cast(str,r[x]) for x in u.src]
         continue
+      if u.op is Ops.GEP and len(u.src) == 1 and isinstance(u.arg, tuple) and len(u.arg) == 1 and isinstance(u.arg[0], int):
+        # Vector lane select: the devectorizer keeps vec loads/WMMA results as register lists
+        # and extracts lanes with GEP(vec, (i,)).
+        r[u] = r[u.src[0]][u.arg[0]]
+        continue
       if u.op is Ops.BUFFER and u.addrspace == AddrSpace.REG:
         r[u] = [ssa("reg", u, self.types[u.dtype.base.scalar()]) for _ in range(u.max_numel())]
         continue
-      if u.op in {Ops.INDEX, Ops.SHRINK, Ops.LOAD} and u.src[0].addrspace in (AddrSpace.REG, AddrSpace.ALU):
+      if u.op is Ops.DEFINE_REG and u.addrspace == AddrSpace.REG:
+        # The stage-1 precontract pipeline builds its register-resident accumulator as
+        # DEFINE_REG (AddrSpace.REG).  Same per-scalar register-array contract the BUFFER
+        # form gets after the new-style rewrite; PTX (old-style) sees the define directly.
+        r[u] = [ssa("reg", u, self.types[u.dtype.base.scalar()]) for _ in range(u.max_numel())]
+        continue
+      if u.op is Ops.DEFINE_LOCAL:
+        # LDS windows arrive as DEFINE_LOCAL on the old-style path.  Emit the shared
+        # declaration (byte-sized from the element dtype, not the pointer) plus the u64 base.
+        slot = u.arg
+        kernel.append(f".shared .align 16 .b8 local{slot}[{u.max_numel()*u.dtype.base.itemsize}];")
+        r[u] = ssa("local", u, "u64")
+        kernel.append(f"mov.u64 {r[u]}, local{slot}[0];")
+        continue
+      if u.op in {Ops.INDEX, Ops.SHRINK, Ops.LOAD} and u.src[0].addrspace == AddrSpace.REG:
         # on REG, INDEX/SHRINK pick the register (must be CONST) and LOAD is a noop
         r[u] = r[u.src[0]] if u.op is Ops.LOAD else r[u.src[0]][u.src[1].arg]
         continue

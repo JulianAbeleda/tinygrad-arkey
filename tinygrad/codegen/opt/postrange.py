@@ -593,8 +593,8 @@ class Scheduler:
                   accumulator_elements=accumulator_total,
                   accumulator_offset=(subtile_m*factors.subtiles_n+subtile_n)*accumulator_lane_width,
                   accumulator_contract=(c_elem,tc_upcast_axes[2]),body_range_id=next(self.opt_range),accumulator_id=next(self.opt_range),
-                  accumulator_dtype=tc.dtype_out)
-                if errors := validate_stage1_uop_graph(graph):
+                  accumulator_dtype=tc.dtype_out, accumulator_lane_width=accumulator_lane_width)
+                if errors := validate_stage1_uop_graph(graph, tc=tc):
                   raise KernelOptError("buffer2 lifecycle UOp validation failed: "+"; ".join(errors))
                 pipeline_tc_uop=UOp(Ops.UNROLL,tc.dtype_out,(graph.drain[0],),arg=tc_upcast_axes[2],tag=1)
               elif not register_mode:

@@ -164,6 +164,7 @@ class KernelStage1UOpGraph:
   subtile_count: int
   body_readiness: Literal["legacy", "matching", "sequential"] = "legacy"
   accumulator_dtype: DType = dtypes.float
+  accumulator_lane_width: int = 8
 
 
 def build_stage1_uop_graph(plan:KernelStage1PipelinePlan, k_tiles:int,
@@ -174,11 +175,13 @@ def build_stage1_uop_graph(plan:KernelStage1PipelinePlan, k_tiles:int,
                            accumulator_contract:tuple[UOp,tuple[tuple[int,int],...]]|None=None,
                            body_range_id:int=9100, accumulator_id:int=9200,
                            body_readiness:Literal["legacy", "matching", "sequential"]="legacy",
-                           accumulator_dtype:DType=dtypes.float) -> KernelStage1UOpGraph:
+                           accumulator_dtype:DType=dtypes.float,
+                           accumulator_lane_width:int=8) -> KernelStage1UOpGraph:
   if subtile_count <= 0: raise ValueError("subtile_count must be positive")
   if not isinstance(accumulator_dtype, DType) or accumulator_dtype.count != 1:
     raise ValueError("accumulator_dtype must be a scalar dtype")
-  accumulator_vec_dtype=accumulator_dtype.vec(8)
+  if accumulator_lane_width <= 0: raise ValueError("accumulator_lane_width must be positive")
+  accumulator_vec_dtype=accumulator_dtype.vec(accumulator_lane_width)
 
   def accumulate(stage:KernelStage1FragmentStage, accumulator:UOp, subtile:int) -> UOp:
     value=wmma(stage,accumulator,subtile)
@@ -192,7 +195,7 @@ def build_stage1_uop_graph(plan:KernelStage1PipelinePlan, k_tiles:int,
     frag=fragments(last,zero,prologue.ready)
     drain=tuple(accumulate(frag,UOp.const(accumulator_vec_dtype,0),i) for i in range(subtile_count))
     return KernelStage1UOpGraph(plan,k_tiles,UOp.sink(*drain),drain,None,None,None,None,None,
-      prologue,None,None,frag,drain,subtile_count,body_readiness,accumulator_dtype)
+      prologue,None,None,frag,drain,subtile_count,body_readiness,accumulator_dtype,accumulator_lane_width)
   rng=UOp.range(k_tiles-1,body_range_id,AxisType.REDUCE)
   # gfx1100 has no indirect VGPR addressing. A sequential register schedule
   # therefore carries a compile-time slot zero through the whole K loop.
@@ -212,13 +215,14 @@ def build_stage1_uop_graph(plan:KernelStage1PipelinePlan, k_tiles:int,
     body_frag=fragments(rng,slot,prologue.ready)
   else:
     raise ValueError(f"unsupported body readiness mode {body_readiness!r}")
-  acc_elements=subtile_count*8 if accumulator_elements is None else accumulator_elements
-  if acc_elements < subtile_count*8 or acc_elements % 8: raise ValueError("accumulator_elements must contain whole vec8 slices")
+  acc_elements=subtile_count*accumulator_lane_width if accumulator_elements is None else accumulator_elements
+  if acc_elements < subtile_count*accumulator_lane_width or acc_elements % accumulator_lane_width:
+    raise ValueError(f"accumulator_elements must contain whole vec{accumulator_lane_width} slices")
   reg=UOp.placeholder((acc_elements,),accumulator_dtype,accumulator_id,addrspace=AddrSpace.REG)
   init=reg.index(UOp.const(dtypes.weakint,0),dtype=accumulator_dtype.vec(acc_elements)).store(UOp.const(accumulator_dtype.vec(acc_elements),0))
   updates=[]
   for i in range(subtile_count):
-    off=UOp.const(dtypes.weakint,i*8) if accumulator_offset is None else accumulator_offset+i*8
+    off=UOp.const(dtypes.weakint,i*accumulator_lane_width) if accumulator_offset is None else accumulator_offset+i*accumulator_lane_width
     if accumulator_contract is None:
       acc=reg.after(init,rng).index(off,dtype=accumulator_vec_dtype); value=accumulate(body_frag,acc,i)
       updates.append(reg.index(off,dtype=accumulator_vec_dtype).store(value))
@@ -249,13 +253,13 @@ def build_stage1_uop_graph(plan:KernelStage1PipelinePlan, k_tiles:int,
   drain_frag=fragments(last,UOp.const(dtypes.weakint,plan.slot_for_epoch(k_tiles-1)),end)
   drain=[]
   for i in range(subtile_count):
-    off=UOp.const(dtypes.weakint,i*8) if accumulator_offset is None else accumulator_offset+i*8
+    off=UOp.const(dtypes.weakint,i*accumulator_lane_width) if accumulator_offset is None else accumulator_offset+i*accumulator_lane_width
     acc=(reg.after(end).index(off,dtype=accumulator_vec_dtype) if accumulator_contract is None else
          UOp(Ops.CONTRACT,accumulator_vec_dtype,(reg.after(end).index(off+accumulator_contract[0]).load(),),accumulator_contract[1]))
     drain.append(accumulate(drain_frag,acc,i))
   drain=tuple(drain)
   return KernelStage1UOpGraph(plan,k_tiles,UOp.sink(*drain,end),drain,reg,init,rng,end,join,
-    prologue,body_prod,body_frag,drain_frag,drain,subtile_count,body_readiness,accumulator_dtype)
+    prologue,body_prod,body_frag,drain_frag,drain,subtile_count,body_readiness,accumulator_dtype,accumulator_lane_width)
 
 
 def build_stage1_uop_graph_with_storage(adapter: Stage1StorageAdapter, plan: KernelStage1PipelinePlan, k_tiles: int,
@@ -264,7 +268,8 @@ def build_stage1_uop_graph_with_storage(adapter: Stage1StorageAdapter, plan: Ker
                                         accumulator_contract: tuple[UOp,tuple[tuple[int,int],...]]|None = None,
                                         body_range_id: int = 9100, accumulator_id: int = 9200,
                                         body_readiness: Literal["legacy", "matching", "sequential"] | None = None,
-                                        accumulator_dtype: DType = dtypes.float) -> KernelStage1UOpGraph:
+                                        accumulator_dtype: DType = dtypes.float,
+                                        accumulator_lane_width: int = 8) -> KernelStage1UOpGraph:
   """Build a stage-1 graph through a typed storage adapter.
 
   This is deliberately a wrapper around ``build_stage1_uop_graph``: existing
@@ -285,22 +290,22 @@ def build_stage1_uop_graph_with_storage(adapter: Stage1StorageAdapter, plan: Ker
   return build_stage1_uop_graph(plan, k_tiles, adapter.producer_stage, adapter.fragment_stage, wmma,
     subtile_count=subtile_count, accumulator_elements=accumulator_elements, accumulator_offset=accumulator_offset,
     accumulator_contract=accumulator_contract, body_range_id=body_range_id, accumulator_id=accumulator_id,
-    body_readiness=mode, accumulator_dtype=accumulator_dtype)
+    body_readiness=mode, accumulator_dtype=accumulator_dtype, accumulator_lane_width=accumulator_lane_width)
 
-def validate_stage1_uop_graph(graph:KernelStage1UOpGraph) -> tuple[str, ...]:
+def validate_stage1_uop_graph(graph:KernelStage1UOpGraph, *, tc:object|None=None) -> tuple[str, ...]:
   """Return structural errors that must reject a stage-1 production candidate."""
   errors:list[str] = []
   if not isinstance(graph.accumulator_dtype, DType) or graph.accumulator_dtype.count != 1:
     errors.append("accumulator dtype metadata must be scalar")
     accumulator_vec_dtype = None
-  else: accumulator_vec_dtype=graph.accumulator_dtype.vec(8)
+  else: accumulator_vec_dtype=graph.accumulator_dtype.vec(graph.accumulator_lane_width)
   topo=graph.sink.toposort(); regs=[u for u in topo if u.op is Ops.DEFINE_REG]; ends=[u for u in topo if u.op is Ops.END]
   # Validate WMMA carrier/contract ABI while the graph is still structured;
   # malformed output contracts must not reach vector decomposition.
   from tinygrad.codegen.opt.kernel_lds import validate_precontract_wmma_abi
   for u in topo:
     if u.op is Ops.WMMA:
-      try: validate_precontract_wmma_abi(u, context="stage1 pipeline")
+      try: validate_precontract_wmma_abi(u, context="stage1 pipeline", tc=tc)
       except ValueError as exc: errors.append(str(exc))
   if graph.k_tiles == 1:
     if graph.body_readiness == "legacy" and regs: errors.append("single tile must not emit REG/RANGE/END")
@@ -317,7 +322,8 @@ def validate_stage1_uop_graph(graph:KernelStage1UOpGraph) -> tuple[str, ...]:
     if (graph.body_readiness == "legacy" and regs != [graph.accumulator_reg]) or \
        (graph.body_readiness in ("matching", "sequential") and graph.accumulator_reg not in regs) or \
        graph.accumulator_reg.ptrdtype.base != graph.accumulator_dtype or \
-       graph.accumulator_reg.ptrdtype.size < graph.subtile_count*8 or graph.accumulator_reg.ptrdtype.size%8:
+       graph.accumulator_reg.ptrdtype.size < graph.subtile_count*graph.accumulator_lane_width or \
+       graph.accumulator_reg.ptrdtype.size%graph.accumulator_lane_width:
       errors.append("bad shared accumulator layout")
     expected_init_dtype=graph.accumulator_dtype.vec(graph.accumulator_reg.ptrdtype.size)
     if graph.accumulator_init.op is not Ops.STORE or graph.accumulator_init.src[0].dtype != expected_init_dtype or \
