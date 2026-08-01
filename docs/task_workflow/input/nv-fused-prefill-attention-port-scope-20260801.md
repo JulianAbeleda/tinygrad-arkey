@@ -80,10 +80,11 @@ decomposition** to data.
 
 - The builder (`kernels.py`) keeps writing tile-level math: one 16x16 QK score, one 16x16 PV
   accumulate per head block, flash state, causal boundary.
-- A per-target **fragment model** (data, derived from `tc`: dims, elements_per_thread, swizzle,
-  plus the documented C-fragment lane map where swizzle does not encode it) answers: how many
-  WMMA calls compose the 16x16 tile (AMD: 1 m16n16k16; NV: 2 m16n8k16), each call's warg, each
-  operand's lane->element map, and the C carrier width (AMD vec(8), NV vec(4) per call).
+- A per-target **fragment model** (data, derived from `tc`: dims, elements_per_thread, opts/lane_map
+  for A/B/C - the C-fragment map is encoded in `tc.opts` upcast/local bits, verified at scope time,
+  review 10.3) answers: how many WMMA calls compose the 16x16 tile (AMD: 1 m16n16k16; NV: 2
+  m16n8k16), each call's warg, each operand's lane->element map, and the C carrier width
+  (AMD vec(8), NV vec(4) per call).
 - The expansions in `amd_attention_abi.py` and `cstyle.py` consume that model instead of
   `col = lane & 15` / `row = 2*e + halfwave` / `(2e+halfwave)*c_half` literals. The softmax and
   drain then see the same *tile*; only the lane decomposition differs.
@@ -125,16 +126,22 @@ the difference between "two provider lines" and a real (bounded) geometry-deriva
   selection; `AMDISARenderer` and `HIPRenderer` both consume them today.
 - **Grid admission is model-shaped**: `ADMITTED_GRIDS = {(32,8,512), (40,8,512)}`
   (`fused_attention.py:68`) - Qwen3-8B and 14B head counts, shared by AMD and NV identically.
-- **The AMD attention control exists and passes** (`scratchpad/fa_ctrl_amd_attention_rendered_source_equality.py`):
+- **The AMD attention control exists and now has two arms** (`scratchpad/fa_ctrl_amd_attention_rendered_source_equality.py`),
+  because HIP is a live production consumer, not optional coverage (review 10.1). The model compiles
+  the custom-kernel program through the device's C-style renderer, where `cstyle.py:630` binds the
+  native attention matchers under `arch == "gfx1100"`; the ISA arm is the capture/reference path.
+  Both arms build the AST through the production seam (`FlashPrefillAttentionSpec.emit()`), both
+  render at dcc1bc778, and all four hashes are pinned in the control's docstring:
 
-  | grid | sha256 | v_wmma | instructions |
-  | --- | --- | ---: | ---: |
-  | (32,8,512) | `19829976aa55` | 16 | 1752 |
-  | (40,8,512) | `7efc22cdda57` | 16 | 1753 |
+  | arm | grid | sha256 | WMMA count | size |
+  | --- | --- | --- | ---: | ---: |
+  | AMD:ISA | (32,8,512) | `19829976aa55` | 16 v_wmma | 1752 instrs |
+  | AMD:ISA | (40,8,512) | `7efc22cdda57` | 16 v_wmma | 1753 instrs |
+  | AMD:HIP | (32,8,512) | `ea8cdefba409` | 17 `__WMMA` | 57930 chars |
+  | AMD:HIP | (40,8,512) | `daefec1dd70a` | 17 `__WMMA` | 57930 chars |
 
-  These hashes are the acceptance gate for every later package (see section 6.1). The control builds the
-  AST through the production seam (`FlashPrefillAttentionSpec.emit()`), renders with
-  `AMDISARenderer` (`AMD:ISA:gfx1100`), pure-Python assemble, no GPU.
+  (HIP's 17 = 16 call sites + 1 device-function definition, matching the ISA arm's 16 instructions.)
+  All four hashes are the acceptance gate for every later package (see section 6.1).
 - **Decode's portability machinery is in place and NV-proven**: tagged `warp_shfl_xor`
   (`warp_reduce.py:29`) with CUDA `__shfl_xor_sync(0xffffffffu, ...)` provider
   (`renderer/cuda.py:58`); `fdot2`/`exp2f` providers (`:59`); NVCC compile pin
@@ -145,6 +152,13 @@ the difference between "two provider lines" and a real (bounded) geometry-deriva
   (`bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-sm120-v1/`).
 - **The fused-causal ternary CUSTOMI** `(({1}<={2})?{0}:-INFINITY)` is renderer-neutral C and
   works verbatim on NVCC.
+- **The C-fragment lane map is derivable, not a hand table** (review 10.3, probed at scope time):
+  `tc.opts` splits each dim of the C accumulator into upcast bits (element bits) and local bits
+  (lane bits). For `amd_rdna3` that yields the shipped convention verbatim (`col = lane & 15`,
+  `halfwave = lane >> 4`, `row = 2*e + halfwave`); for `cuda_81616` it yields PTX's m16n8k16 C
+  layout (rows `t/4`/`t/4+8`, cols `2*(t%4)`/`2*(t%4)+1`) with no hand-transcribed table. P3
+  reuses the same derivation family `derive_wmma_operand_lane_layout` uses; the probe is a
+  committed unit test from P0.
 - **Descriptor data for NV already exists**: `cuda_81616` / `cuda_8168_f16` in
   `codegen/opt/tc.py:116` / `:122`, with swizzle and `str(tc)` naming that the CUDA renderer
   already consumes (`renderer/cuda.py` `render_kernel` mma.sync emission).
@@ -216,10 +230,13 @@ binding gate. None of these requires a new emitter; all four are data-or-registr
 ### 3.5 The promotion question, resolved
 
 `model.py:70-88` currently documents the fused route as injecting "an already-CAPTURED,
-hand-authored AMD gfx1100 machine-code program" and therefore default-closed. **That comment is
-stale**: `FlashPrefillAttentionSpec` (P4a, `schedule/wmma/flash_prefill.py`) turned the route into
-a UOp builder lowered per renderer through the emitter seam. The kernel is no longer opaque ISA
-injection - it is renderer-lowered UOps like everything else.
+hand-authored AMD gfx1100 machine-code program" and therefore default-closed. **That claim is
+stale, in three places** (review 10.2): `model.py:70-88`, `fused_attention.py:18`, and
+`fused_attention.py:43`. `FlashPrefillAttentionSpec` (P4a, `schedule/wmma/flash_prefill.py`)
+turned the route into a UOp builder lowered per renderer through the emitter seam; the kernel is
+no longer opaque ISA injection - it is renderer-lowered UOps like everything else. What stays
+true is the mechanism (`Tensor.uop_program`); what is retired is the "captured `.hip.cpp` /
+`.amdisa.s` program" provenance claim.
 
 The default-closed posture still stands for a *different, still-true* reason: the fragment math is
 AMD-shaped until P3 lands, and admission must not run unproven geometry on a target. So:
@@ -231,8 +248,9 @@ AMD-shaped until P3 lands, and admission must not run unproven geometry on a tar
   `promoted_targets` list of `{backend, architecture}`), minted for this route, containing
   `("AMD","gfx1100")` AND `("NV","sm_120")` once P5 proves NV.
 - Replace the hardcoded `_CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS` frozenset with a load of
-  that record; rewrite the stale `model.py:70` comment to name the real reason (unproven fragment
-  geometry) instead of the retired "captured program" claim.
+  that record; rewrite all three stale comments to name the real reason (unproven fragment
+  geometry) and the true failure mode (compile failure or wrong numbers on a target that cannot
+  express the fragment math) instead of the retired "captured program" crash claim.
 
 This is the house pattern (Q4K/Q6K promotion via `load_qk_target_promotion`; fp16 overlay via the
 checked-in `ARTIFACT` in `prefill_candidate_runtime.py:24`), and it is how the user's
@@ -243,17 +261,26 @@ consumer is the explicit-path JSON loader, and no target string is hardcoded in 
 
 ## 4. Work packages
 
-### P0 - Compile-only NVCC probe. First. Prerequisite: none.
+### P0 - Compile-only probes and gate hardening. First. Prerequisite: none.
 
-Build the 8B AST via the production seam (`FlashPrefillAttentionSpec(Hq=32, Hkv=8, Hd=128,
-q_tokens=512, kv_tokens=512, causal=True, ...).emit()` with PARAM placeholders in slots 0-3) and
-run it through `NVCCRenderer(Target.parse("NV:NVCC:sm_120"))` via `to_program`, mirroring
-`test/unit/test_flash_decode_intrinsics_renderer_lowering.py`'s `_tile_ast`/`_rendered_source`.
-
-Deliverable: a catalog of the exact failure points (expected: WMMA warg invalid on sm_120, vec(8)
-C width, bpermute provider missing on CUDA, native matcher not bound, weakint mapping). This
-converts the audit's "should fail at X" into "fails at X, Y, Z" and pins the order P1-P3 must
-land. Also check the section 3.2.9 rangeify question.
+1. **Gate hardening (review 10.1).** The control's HIP arm is added and both arms pinned at scope
+   time (section 3.1); P0 verifies the control is rerunnable and records the four hashes in the
+   evidence trail. This is what makes section 6.1's "structural AMD non-regression" claim true
+   for the code P1/P2 actually edit (HIP-path `cstyle.py:139`, `:155-176`, `:630`).
+2. **NVCC failure catalog.** Build the 8B AST via the production seam
+   (`FlashPrefillAttentionSpec(Hq=32, Hkv=8, Hd=128, q_tokens=512, kv_tokens=512, causal=True,
+   ...).emit()` with PARAM placeholders in slots 0-3) and run it through
+   `NVCCRenderer(Target.parse("NV:NVCC:sm_120"))` via `to_program`, mirroring
+   `test/unit/test_flash_decode_intrinsics_renderer_lowering.py`'s `_tile_ast`/`_rendered_source`.
+   Deliverable: a catalog of the exact failure points (expected: WMMA warg invalid on sm_120, vec(8)
+   C width, bpermute provider missing on CUDA, native matcher not bound, weakint mapping). This
+   converts the audit's "should fail at X" into "fails at X, Y, Z" and pins the order P1-P3 must
+   land. Also check the section 3.2.9 rangeify question.
+3. **C-fragment derivability probe (review 10.3).** Prove in one committed unit test that
+   `tc.opts` encodes the C-fragment lane map for `amd_rdna3` AND `cuda_81616` (the scope-time
+   probe already reproduced both conventions; P0 turns it into a test). If it holds, P3 is a pure
+   derivation package with no hand-authored PTX table; if a descriptor family fails to resolve,
+   that family is recorded as the one declared exception, cited, and labelled.
 
 ### P1 - Genericize the raw bpermute strings. Prerequisite: P0.
 
@@ -262,48 +289,52 @@ Replace the raw `"bpermute"` CUSTOMI in `expand_native_row_softmax_repack` and
 whose HIP provider (`cstyle.py` `__builtin_amdgcn_ds_bpermute`) is byte-identical to the current
 literal and whose CUDA provider already exists. Pure decode-machinery reuse; no geometry change.
 
-Gate: AMD control hashes unchanged (both grids), plus the `PREFILL_SOFTMAX_REDUCE_FUSE` fmaxf
-peer-matching rule (`_hip_native_bpermute_max`, `cstyle.py:139`) still matches the tagged form.
+Gate: AMD control hashes unchanged (all four: both grids x both arms), plus the
+`PREFILL_SOFTMAX_REDUCE_FUSE` fmaxf peer-matching rule (`_hip_native_bpermute_max`, `cstyle.py:139`)
+still matches the tagged form.
 
-### P2 - NVCC native matcher bindings. Prerequisite: P1.
+### P2 - NVCC native matcher bindings, literal-first. Prerequisite: P1.
 
 Give NVCCRenderer the analogue of the gfx1100 block (`cstyle.py:630`): bind
 `native_repack_matcher`, `native_state_lane_matcher`, `native_loop_fragment_matcher`, the drain
-expansions, and the `weakint -> int` type_map - but **parameterized by the fragment model** (P3's
-data), not by copied literals. This is the package where the "same expansions, per-target lane
-model" architecture becomes real: the expansions stop reading `lane & 15` and start reading the
-model.
+expansions, and the `weakint -> int` type_map - with the lane literals still in place. This is
+deliberately the binding half only (review 10.4): it proves the NVCC path can consume the same
+expansions end to end before any geometry changes; the lane math moves to the fragment model in
+P3. It also converts the shared gfx1100 block into a function both HIP and NVCC call, so the two
+renderers cannot drift apart at the binding site.
 
-Gate: AMD control unchanged; NVCC render now produces *a* program for the 8B grid (compile may
-still fail on the warg; see P3).
+Gate: AMD control unchanged (all four hashes); NVCC render now produces *a* program for the 8B
+grid (compile may still fail on the warg; see P3).
 
 ### P3 - NV WMMA geometry from `tc`, emitter entry, ABI generalization. Prerequisite: P2.
 
-1. **Derive the warg from `tc`**: for target NV, resolve `tc.get_cuda("sm_120")` and build each
+1. **Define the fragment model** (review 10.4, 10.3): a per-target data object derived from `tc`
+   (dims, elements_per_thread, opts/lane_map for A/B/C) that answers tile composition (how many
+   WMMA calls make a 16x16 tile), each call's warg, each operand's lane->element map, and the C
+   width. The C map comes from the `tc.opts` derivation probed in P0 - no hand table.
+2. **Derive the warg from `tc`**: for target NV, resolve `tc.get_cuda("sm_120")` and build each
    WMMA call's warg from the descriptor (dims, `str(tc)` name, dtype pair, threads, upcast axes).
    The 16x16 tile becomes two m16n8k16 QK calls (C vec(4) each) and two PV calls; the builder
    composes the tile from the fragment model instead of one m16n16k16.
-2. **Generalize `expand_loop_fragment`** to address operands from the fragment model's
+3. **Generalize `expand_loop_fragment`** to address operands from the fragment model's
    lane->element map (reuse `derive_wmma_operand_lane_layout`'s term-tuple representation from
-   `kernel_lds.py:129` where the operand shapes match; extend where C-fragment/softmax layout is
-   needed - PTX ISA fragment tables are the declared source for the parts swizzle does not
-   encode).
-3. **Generalize the softmax row map and drain lanes** to the model (row/col ownership per lane,
+   `kernel_lds.py:129`; the P0 probe proves the same family covers the C accumulator).
+4. **Generalize the softmax row map and drain lanes** to the model (row/col ownership per lane,
    C width vec(8)/vec(4)).
-4. **Emitter entry**: `_PREFILL_EMITTERS["nv_sm120"]` -> a spec target `"nv_sm120"` whose emit
+5. **Emitter entry**: `_PREFILL_EMITTERS["nv_sm120"]` -> a spec target `"nv_sm120"` whose emit
    routes through the same builder with the NV fragment model.
-5. **Identity generalization**: `AMDAttentionGridSpec.validate()`'s `native_abi` pin becomes
+6. **Identity generalization**: `AMDAttentionGridSpec.validate()`'s `native_abi` pin becomes
    parameterized (grid spec already carries shape; add the ABI/fragment identity), the identity
    string in `fused_attention.py:205` derives target/geometry instead of the literal
    `amd_gfx1100_q16_grid_hd128_loop_attention` prefix, and `FlashPrefillAttentionSpec.target`
    resolves via the emitter registry.
-6. **Rename what becomes shared, in the same commit that shares it** (metal scope FA2 rule 6):
+7. **Rename what becomes shared, in the same commit that shares it** (metal scope FA2 rule 6):
    names that describe geometry or flash-attention concepts rather than AMD hardware lose the
    `AMD_` prefix once a second target consumes them (`Ops.AMD_ATTENTION_LOOP_STATE` -> the
    loop-state op; `AMDAttentionGridSpec` -> grid spec). `AMDISARenderer` keeps its name. Renames
    happen only for the Ops/names P3 actually shares, in the same commit, with the AMD control
    re-run after.
-7. **No `if backend == "NV"`**: every branch is a data look-up on the fragment model or the
+8. **No `if backend == "NV"`**: every branch is a data look-up on the fragment model or the
    renderer's declared facts.
 
 Gate: AMD control unchanged; NVCC compile-only render succeeds for both admitted grids with no
@@ -315,7 +346,12 @@ Mint a `boltbeam.route_policy.v1` record for the fused prefill attention route w
 `promoted_targets = [{"backend": "AMD", "architecture": "gfx1100"}]` initially (byte-identical
 AMD behavior), checked in under `tinygrad/llm/generated/` (fp16 overlay precedent,
 `prefill_candidate_runtime.py:24`). Replace the hardcoded frozenset in `model.py:83` with the
-record load; rewrite the stale comment (section 3.5). **The NV entry is added to the record only after
+record load; rewrite ALL THREE stale-comment sites (review 10.2): `model.py:70-88`,
+`fused_attention.py:18`, and `fused_attention.py:43`. Each keeps the accurate clause (injection is
+via `Tensor.uop_program`) and drops the retired "captured `.hip.cpp`/`.amdisa.s` program" claim;
+the consequence wording changes from "inject raw AMD ISA on a non-AMD renderer -> crash" to
+"render AMD fragment math on a target that cannot express it -> compile failure or wrong numbers".
+Same closed default; different, true failure mode. **The NV entry is added to the record only after
 P5's e2e token parity passes** - the record is the promotion gate, so AMD behavior never flips
 and NV admission is a one-line data change gated on evidence.
 
@@ -325,7 +361,8 @@ policy tests updated to load the record.
 
 ### P5 - Verify and measure. Prerequisite: P4.
 
-1. **AMD control**: both grid hashes byte-identical to section 3.1 after every commit in P1-P4.
+1. **AMD control**: all four hashes (both grids x both renderer arms) byte-identical to section 3.1
+   after every commit in P1-P4.
 2. **NVCC compile**: both admitted grids render through NVCCRenderer and `ren.compiler.compile`
    succeeds (the `dcc1bc778` pattern).
 3. **Correctness on three axes, reported separately** (metal scope section 6.2): `max_abs_error` vs the
@@ -356,10 +393,13 @@ policy tests updated to load the record.
 
 ## 6. Evidence contract
 
-1. **AMD non-regression is structural and mandatory.** The section 3.1 control hashes (`19829976aa55`,
-   `7efc22cdda57`) are byte-identical after every commit in P1-P4. No AMD hardware here; rendered
-   source equality through the production seam is the strongest available guarantee, and it
-   covers both admitted grids.
+1. **AMD non-regression is structural and mandatory, and it is a FOUR-hash gate.** The section 3.1
+   control hashes - `19829976aa55` / `7efc22cdda57` (ISA) and `ea8cdefba409` / `daefec1dd70a`
+   (HIP) - are byte-identical after every commit in P1-P4. HIP coverage is mandatory because
+   P1/P2 edit HIP-path code (`cstyle.py:139`, `:155-176`, `:630`) and HIP is the production AMD
+   consumer; a HIP-only regression would leave the ISA arm green. No AMD hardware here; rendered
+   source equality through the production seam on both arms is the strongest available guarantee,
+   and it covers both admitted grids.
 2. **Correctness on three axes, reported separately** - `max_abs_error`, write coverage,
    determinism across >= 3 rounds. Collapsing them hid a two-bug structure for a day (metal
    scope section 6.2).
@@ -369,7 +409,7 @@ policy tests updated to load the record.
    campaign; the retraction ledger is the reason.
 5. **No backend branches.** A `backend == "NV"` literal anywhere in the attention lowering is a
    review failure, not a style point.
-6. **Rename-in-the-same-commit** for anything that becomes shared (P3.6), with the AMD control
+6. **Rename-in-the-same-commit** for anything that becomes shared (P3.7), with the AMD control
    re-run immediately after the rename commit.
 7. **GPU work serialised**; the 5090 is shared.
 8. Test identity sets, not counts: `test/unit` failing IDs recorded per commit if any.
@@ -394,9 +434,11 @@ policy tests updated to load the record.
 
 - **No AMD hardware.** AMD non-regression is structural only (rendered source + instruction
   counts), never an execution result.
-- **No PTX/ISA fragment tables reproduced in this doc.** P3's fragment model needs the CUDA
-  m16n8k16 C-fragment lane map; the PTX ISA (and `tc.py`'s swizzle data) is the declared source.
-  If the derived map is wrong, P5's max_abs_error axis catches it - that axis is why it exists.
+- **No hand-transcribed PTX fragment table.** The scope-time probe reproduced both the AMD
+  hardcoded C convention and PTX's m16n8k16 C layout from `tc.opts` alone (section 3.1). P0 turns
+  that probe into a committed test; if a future descriptor family fails to resolve, it is declared
+  and labelled as the one hand-authored exception, and P5's max_abs_error axis remains the
+  backstop for a wrong derivation.
 - **The m16n8k16 tile is two WMMA calls per 16x16 tile on NV.** This may be slower than one
   m16n16k16 on AMD; P5 measures head-to-head and the scope makes no speed promise.
 - **The `_opaque_exact_fragment_inputs` matcher and the repack's `float.vec(8)` requirement**
@@ -414,7 +456,7 @@ policy tests updated to load the record.
 
 Derive the fused prefill attention fragment decomposition from `tc` per target, bind the shared
 C-style expansions on NVCC, mint a BoltBeam promotion record for AMD+NV, and prove the 5090 e2e
-parity while keeping the AMD rendered-source hashes byte-identical.
+parity while keeping the AMD rendered-source hashes byte-identical on both renderer arms (ISA + HIP).
 
 ---
 
@@ -498,3 +540,12 @@ Either is fine; as written the ordering is unbuildable.
   diff *is* the promotion review artifact. This is the strongest part of the doc.
 - **The no-`if backend == "NV"` rule and rename-in-the-same-commit** (section 6.5, 6.6).
 - **The refusal to promise a speedup before P5 measures** (section 1 caveat, section 7).
+
+## 11. Review dispositions (2026-08-01, folded into the body above)
+
+| finding | disposition |
+| --- | --- |
+| 10.1 acceptance gate misses HIP-path code | FIXED at scope time. Control now has two arms; four hashes pinned (section 3.1); P0.1 verifies rerunnability; section 6.1 is now a four-hash gate. |
+| 10.2 stale comment under-scoped | Folded. Three sites named (`model.py:70-88`, `fused_attention.py:18`, `fused_attention.py:43`); accurate clause kept, consequence wording corrected; P4 owns the rewrite. |
+| 10.3 PTX table may be unnecessary | ANSWERED at scope time: `tc.opts` encodes the C-fragment map for both `amd_rdna3` and `cuda_81616` (probed; reproduced the shipped AMD convention and PTX's m16n8k16 layout). P0.3 commits the probe as a test; P3 is a derivation package, not a transcription package. |
+| 10.4 P2/P3 dependency graph unbuildable | FIXED. P2 is literal-first binding only (lane math stays until P3); P3 step 1 defines the fragment model before the geometry work. |
