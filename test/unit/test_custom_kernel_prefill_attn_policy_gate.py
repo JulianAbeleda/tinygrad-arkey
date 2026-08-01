@@ -42,7 +42,7 @@ def test_promoted_targets_default_is_closed_not_open():
   """Unlike ModelRoutePlan.target_promoted (TG3's "no record -> admitted" default, correct for the quant
   primitives because a real capability check ALSO fails closed on Metal), this route has no independent
   capability check, so an unpromoted target must read as denied, never as undecided-and-therefore-admitted."""
-  assert _CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS == frozenset({("AMD", "gfx1100")})
+  assert _CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS == frozenset({("AMD", "gfx1100"), ("NV", "sm_120")})
   # A shape that is proven identical on AMD (8B: n_heads=32, n_kv_heads=8) must NOT silently light up on a
   # same-shaped Metal model just because the shape gate alone matched.
   assert (32, 8, 512) in ADMITTED_GRIDS
@@ -59,8 +59,9 @@ def test_promoted_set_is_sourced_from_the_boltbeam_record():
   assert record["schema"] == "boltbeam.route_policy.v1"
   assert frozenset((t.get("backend"), t.get("architecture")) for t in record["promoted_targets"]) == \
     _CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS
-  # NV is not in the record until 5090 e2e token parity (P5 of the NV fused-attention port scope).
-  assert ("NV", "sm_120") not in _CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS
+  # NV sm_120 entered the record only after 5090 e2e token parity (P5 of the NV fused-attention port
+  # scope): first-token digits identical to the SDPA baseline, max_abs_error ~1e-4, full write coverage.
+  assert ("NV", "sm_120") in _CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS
 
 
 def test_amd_admission_is_unchanged_by_the_tg8_split():
