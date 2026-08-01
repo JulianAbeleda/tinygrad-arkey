@@ -74,7 +74,8 @@ ADMITTED_GRIDS: frozenset = frozenset({(32, 8, 512), (40, 8, 512)})
 # (e.g. kernel_info=...) so every call site -- including postrange.py's AST-swap,
 # which needs to inject its own carried-forward KernelInfo -- routes through this
 # SAME seam instead of ever calling the gfx1100 builder directly.
-_PREFILL_EMITTERS = {"amd_gfx1100": lambda spec, **kw: spec.emit(**kw)}
+_PREFILL_EMITTERS = {"amd_gfx1100": lambda spec, **kw: spec.emit(**kw),
+                     "nv_sm120": lambda spec, **kw: spec.emit(**kw)}
 
 # RUNTIME DISPATCH TRACE (BoltBeam observability seam)
 # --------------------------------------------------
@@ -212,7 +213,7 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
   from tinygrad.helpers import getenv as _getenv
   v_flat = (v.cast(dtypes.float16).permute(0, 1, 3, 2).reshape(Hkv * Hd * KV) if _getenv("PREFILL_V_TRANSPOSED")
             else v.cast(dtypes.float16).reshape(Hkv * KV * Hd))
-  identity = (f"amd_gfx1100_q16_grid_hd128_loop_attention:role=attention_tile,"
+  identity = (f"{spec.target}_q16_grid_hd128_loop_attention:role=attention_tile,"
               f"Hq={Hq},Hkv={Hkv},q_tokens={T},kv_tokens={KV},Hd={Hd}")
   program = KernelProgram("prefill_flash_attention_generated", f"prefill_flash_attention.{identity}",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED, fxn,
