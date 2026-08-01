@@ -432,6 +432,26 @@ the AMD/Metal-proven pattern. Both failures are fail-loud lowering gates, exactl
 an unproven descriptor. Next slice: M1f-style emitted-kernel diff / resolve the accumulator-carrier
 migration boundary against the CUDA descriptor's vec(4).
 
+**C5 resolved on the 5090 through the canonical lane (2026-08-01) — both NV buffer shapes now measure.**
+`948b26318` fixes the two lowering gates C5 recorded and the fault behind them. The CUDA Error 700 was a
+shared-memory overrun, not a WMMA packing defect: the pipelined fragment builder hardcoded RDNA3's
+`row = (wave*subtiles+subtile)*16 + lane%16`, and `cuda_81616`'s B operand owns only 8 rows per tile
+(`tc.dims[0]`), so fragment loads addressed up to ~2.5x past the B LDS window. `derive_wmma_operand_lane_layout`
+was generalized from "one LSB-aligned contiguous contract run on one axis" to explicit
+`(element_bit, axis_bit)` / `(lane_bit, axis_bit)` term tuples, so NVIDIA's split contracts (m16n8k16 A:
+element bit 1 at row bit 3, element bits 0 and 2 at K bits 0 and 3) derive instead of failing closed, and
+both fragment paths (legacy `build_precontract_lds_stage` and pipelined `instantiate_precontract_fragments`)
+consume the same derivation. The fold keeps AMD's `lane % 16` / folded-element idioms byte-identical — the
+six-route rendered-source hashes are unmoved (pg2). The PTX renderer additionally maps `dtypes.weakint` to
+`s32` (the cstyle `int` equivalent), closing the legacy path's `KeyError: dtypes.weakint`. Result on the
+5090, both shapes through `scratchpad/c5_nv_canonical_lane_probe.py`: buffer2 (bc=2, active LDS 40960) and
+buffer1 (bc=1, active LDS 20480) each admit, compile, dispatch, and measure with `max_abs_error 0.0`,
+bit-identical across three rounds, guards intact, device healthy; a PTX-level sweep of every
+(lane, wave, epoch) combination confirms all shared accesses land inside the declared allocation. Coverage
+is 96.67% written under the zero-init lower-bound methodology (both shapes write the identical 506830
+positions). The next NV slice is promotion work, not lowering: bench-row/census wiring for the measured
+buffer kernels and the remaining quant routes.
+
 **Target schedule derivation, T1-T6 (2026-08-01) — the mints stop cloning AMD; the sm120 mint as
 committed now ADMITS through the canonical lane, and the NV e2e ratchet holds.** The schedule is no longer
 one AMD literal with a new name: `derive_target_schedule` (`extra/llm_research/target_schedule.py`)
