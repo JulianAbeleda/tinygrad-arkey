@@ -68,14 +68,14 @@ def main() -> None:
     try:
       src, wmma_calls = render_route(row)
     except Exception as exc:  # noqa: BLE001 -- report, don't crash the sweep over a single bad row
-      print(f"{str(row.quant):5s} {row.role:10s} {str(row.shape):20s} {str(row.geometry):24s} FAILED: {exc!r}")
+      print(f"{row.quant.name:5s} {row.role:10s} {str(row.shape):20s} {str(row.geometry):24s} FAILED: {exc!r}")
       results.append((row, None, None))
       continue
     # Hash `src + "\n"`, matching `print(src) | shasum -a 256` (PG0/MB2's own convention: the
     # piped stdout includes the trailing newline `print` adds), so hashes here are directly
     # comparable to PG0's/MB2's documented values without a second invocation.
     digest = hashlib.sha256((src + "\n").encode()).hexdigest()
-    print(f"{str(row.quant):5s} {row.role:10s} {str(row.shape):20s} {str(row.geometry):24s} "
+    print(f"{row.quant.name:5s} {row.role:10s} {str(row.shape):20s} {str(row.geometry):24s} "
           f"sha256={digest[:12]} wmma={wmma_calls} src_len={len(src)}")
     results.append((row, digest, wmma_calls))
 

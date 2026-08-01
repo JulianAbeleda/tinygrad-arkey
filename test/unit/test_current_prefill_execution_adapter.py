@@ -1,4 +1,5 @@
 import hashlib, json, pickle
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -10,7 +11,29 @@ from extra.llm_research.runtime_specs import derive_packed_weight_candidate
 from extra.llm_research.model_profiles import MODEL_PROFILES, prefill_role_shapes
 from extra.llm_research.prefill.packed_wmma_correctness_canary import candidate_payload
 from extra.llm_research.prefill.execution_bridge_contracts import ExecutionRequest, TransportPlan
-from tinygrad.uop.ops import Ops
+from tinygrad.uop.ops import Ops, ProgramInfo, UOp
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _nv_mint_payload() -> dict:
+  candidate_set = json.loads((_REPO_ROOT / "bench" / "prefill-pure-full-kernel"
+    / "multirole-buffer2-candidate-set-sm120-v1" / "candidate-set.json").read_text())
+  return json.loads(json.dumps(candidate_set["entries"][0]["payload"]))
+
+
+def _nv_typed_packed_candidate():
+  """The NV mint's geometry with NV-typed wmma facts and a packed B operand, single-buffer."""
+  from extra.llm_research.runtime_specs import full_kernel_candidate_capability
+  payload = _nv_mint_payload()
+  capability = full_kernel_candidate_capability(payload)
+  payload["schedule"]["wmma"]["instruction_family"] = capability.instruction_family
+  payload["schedule"]["wmma"]["fragment_layout"] = capability.fragment_layout
+  payload["schedule"]["lane_ownership"] = capability.fragment_layout
+  payload["schedule"]["pipeline"]["buffer_count"] = 1
+  payload["schedule"]["lds"]["windows"] = {"a": [0, 10240], "b": [10240, 20480]}
+  entry = derive_packed_weight_candidate(payload, "Q4_K")
+  return entry.to_json()["payload"], entry.canonical_identity
 
 
 def _candidate():
@@ -87,6 +110,36 @@ def test_adapter_reuses_admission_and_rejects_identity_or_typed_transport_drift(
     request.target_context, request.compiler_context)
   with pytest.raises(ValueError, match="does not match admitted"):
     instance.prepare(request)
+
+
+def test_non_amd_compile_evidence_is_minimal_with_named_not_applicable_manifest(monkeypatch):
+  # C3: the producer branches on device only, so a non-AMD device never reaches the ROCm
+  # toolchain, and the AMD-only manifest fields are present but null with a named reason --
+  # "not applicable on this target" must not render like "nobody looked".
+  payload, identity = _nv_typed_packed_candidate()
+  admission = adapter.admit_current_prefill(payload, identity, device="CUDA")
+  fake_program = UOp(Ops.PROGRAM, src=(UOp(Ops.SINK), UOp(Ops.DEVICE, arg="CUDA"),
+    UOp(Ops.LINEAR), UOp(Ops.SOURCE, arg="source"), UOp(Ops.BINARY, arg=b"binary")),
+    arg=ProgramInfo(name="nv_kernel", globals=(0, 1, 2), outs=(0,), ins=(1, 2),
+                    local_size=(256, 1, 1), global_size=(1, 1, 1)))
+  monkeypatch.setattr(adapter, "compile_current_prefill_program",
+    lambda payload, identity, *, device: (fake_program, admission))
+  program, evidence = adapter.prepare_current_prefill_compile(payload, identity, device="CUDA")
+  assert program is fake_program
+  assert evidence["passed"] is True
+  assert evidence["final_isa_manifest"] is None
+  assert evidence["final_isa_manifest_reason"] == adapter.NON_AMD_ISA_MANIFEST_REASON
+  assert evidence["resource_summary"] is None
+  assert evidence["resource_summary_reason"] == adapter.NON_AMD_ISA_MANIFEST_REASON
+  assert evidence["final_isa"] is None and evidence["isa_structure"] is None
+  assert evidence["target_id"] == "CUDA:sm120:wave32"
+  assert evidence["target"] == "sm120"
+  assert evidence["compiled_device"] == "CUDA"
+  contract = evidence["child_recompile_binary_identity_contract"]
+  assert contract["enabled"] is True and contract["target"] == "sm120" and contract["compile_target"] == "CUDA"
+  assert evidence["executed_binary_matches_compile"] is True
+  assert "packed_wmma_compile_gate" not in evidence
+  assert "wmma_families" not in evidence
 
 
 @pytest.mark.parametrize("quant_format", ("Q4_K", "Q6_K"))

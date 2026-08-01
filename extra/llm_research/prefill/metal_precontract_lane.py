@@ -28,18 +28,18 @@ load-bearing for every call this module makes:
   * `admit_current_prefill`/`derive_packed_weight_candidate`/`rebind_full_kernel_workload` are
     pure Python (no `Device[...]`, no GPU, no ROCm) -- admission is checked in the parent process
     before any child is ever spawned, so illegal configs are skipped for free.
-  * GPU compile+dispatch calls `compile_current_prefill_program` directly and builds its own
-    minimal `{"passed": True, "binary_sha256": ...}` evidence, the same way M1b/M1c did, instead
-    of calling `current_prefill_execution_adapter.prepare_current_prefill_compile` -- that
-    function unconditionally AMD-ELF-disassembles the compiled binary
-    (`disassemble_amdgpu`/`kernel_descriptor_from_elf`) regardless of `device`, which requires a
-    ROCm `llvm-objdump`/`llvm-readelf` toolchain this machine does not have. That production file
-    is not patched here.
+  * GPU compile+dispatch calls the one device-parameterized producer
+    `current_prefill_execution_adapter.prepare_current_prefill_compile`: on AMD it produces the
+    full ISA manifest, on every other declared target it produces the minimal evidence this lane
+    used to hand-build (`{passed, binary_sha256}` plus source sha and target facts) with the
+    AMD-only fields present and explicitly not applicable. The lane's old `_child_run` workaround
+    (calling `compile_current_prefill_program` directly) is deleted: one producer for every
+    target, and the ROCm toolchain is only reached on the AMD branch.
   * `Device[device].synchronize()` is called before and after every round, exactly as M1b/M1c did.
 """
 from __future__ import annotations
 
-import copy, dataclasses, hashlib, os, re, tempfile, time
+import copy, dataclasses, os, re, tempfile, time
 from dataclasses import dataclass
 from typing import Any
 
@@ -177,16 +177,12 @@ def admit_probe_config(config: ProbeConfig):
 def _child_run(payload: dict, canonical_identity: str, device: str, artifact_path: str,
                shape: tuple[int, int, int], warmups: int, rounds: int, dump_npz_path: str) -> dict:
   from extra.llm_research.prefill.current_prefill_execution_adapter import (
-    compile_current_prefill_program, admit_current_prefill, _arrays)
+    prepare_current_prefill_compile, admit_current_prefill, _arrays)
   from tinygrad.device import Device
   from tinygrad.runtime.bridge import prepare_executable
 
-  program, admission = compile_current_prefill_program(payload, canonical_identity, device=device)
-  binary = next((u.arg for u in program.src if u.op.name == "BINARY" and isinstance(u.arg, bytes)), None)
-  source = next((u.arg for u in program.src if u.op.name == "SOURCE" and isinstance(u.arg, str)), None)
-  if binary is None or source is None:
-    return {"ok": False, "stage": "compile", "error": "no final SOURCE/BINARY on the compiled PROGRAM"}
-  minimal_evidence = {"passed": True, "binary_sha256": hashlib.sha256(binary).hexdigest()}
+  program, compile_evidence = prepare_current_prefill_compile(payload, canonical_identity, device=device)
+  admission = admit_current_prefill(payload, canonical_identity, device=device)
   compile_record = {
     "kernel_name": str(getattr(program.arg, "name", "")),
     "local_size": list(getattr(program.arg, "local_size", None) or ()) or None,
@@ -198,10 +194,9 @@ def _child_run(payload: dict, canonical_identity: str, device: str, artifact_pat
     "admitted": True,
   }
 
-  admission_again = admit_current_prefill(payload, canonical_identity, device=device)  # cheap, pure-python re-check
-  inputs, reference = _arrays(artifact_path, shape, admission_again.context.packed_weight)
+  inputs, reference = _arrays(artifact_path, shape, admission.context.packed_weight)
 
-  executable = prepare_executable(program, minimal_evidence, device=device)
+  executable = prepare_executable(program, compile_evidence, device=device)
 
   # Wrap only `readback` so every round's raw output array is captured, in addition to the
   # summary dict run_guarded_execution already returns -- exactly M1c's technique.
