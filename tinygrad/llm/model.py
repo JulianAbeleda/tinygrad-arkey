@@ -1234,6 +1234,15 @@ class Transformer:
     _concrete_kv, _ = prefill_concrete_kv_auto_decision(_workload_reuse, True)
     _flash_decode = any(candidate.bind(1, n_heads, n_kv_heads, head_dim, _device_facts.selected_device) is not None
                         for candidate in (FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_CANDIDATE))
+    # Warm the fused-attention spec-target cache at load time (decode's resolve-once pattern,
+    # decode_routes.py:151): custom_kernel_attention runs inside a Tensor Function dispatch where
+    # Device[...] is disallowed, so the runtime lookup must be a cache hit. Devices without a renderer
+    # stay unwarmed and fail closed to SDPA at the call site.
+    try:
+      from tinygrad.llm.fused_attention import warm_attention_spec_target
+      warm_attention_spec_target(_device_facts.selected_device)
+    except ValueError:
+      pass
 
     # Permute RoPE weights from interleaved to half-split layout.
     for name in state_dict:

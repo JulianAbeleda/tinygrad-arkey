@@ -103,6 +103,15 @@ def _attention_spec_target(device: str) -> str:
   _ATTENTION_SPEC_TARGETS[device] = target
   return target
 
+def warm_attention_spec_target(device: str) -> str:
+  """Eagerly resolve and cache the attention spec target for ``device`` at model-load time.
+
+  ``custom_kernel_attention`` runs inside a Tensor Function dispatch (ALLOW_DEVICE_USAGE=0), where
+  ``Device[device]`` cannot be opened -- the same constraint decode's ``bind`` resolves once at load
+  (decode_routes.py:151). Call this from the eager admission path so the runtime lookup is a cache hit.
+  """
+  return _attention_spec_target(device)
+
 # RUNTIME DISPATCH TRACE (BoltBeam observability seam)
 # --------------------------------------------------
 # tinygrad/llm/prefill_graph_gemm.py owns the candidate route census.

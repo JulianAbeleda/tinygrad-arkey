@@ -87,6 +87,11 @@ def test_attention_spec_target_resolves_from_renderer_facts(monkeypatch):
   monkeypatch.setattr(fa, "_ATTENTION_SPEC_TARGETS", {})
   assert fa._attention_spec_target("NV") == "nv_sm120"
   assert fa._attention_spec_target("AMD") == "amd_gfx1100"
+  # The warm entry is the load-time cache population (custom_kernel_attention cannot open Device[...]
+  # inside a Tensor Function dispatch, so the runtime lookup must be a cache hit).
+  monkeypatch.setattr(fa, "_ATTENTION_SPEC_TARGETS", {})
+  assert fa.warm_attention_spec_target("NV") == "nv_sm120"
+  assert fa._ATTENTION_SPEC_TARGETS == {"NV": "nv_sm120"}
   # A renderer whose fragment model is not registered fails closed (SDPA fallback at the call site).
   with pytest.raises(ValueError, match="no attention fragment model"):
     attention_fragment_model(fa._attention_spec_target("METAL"))
