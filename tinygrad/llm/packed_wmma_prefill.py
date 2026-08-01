@@ -154,7 +154,7 @@ def _candidate_context(row: PackedWmmaRoute) -> tuple[_CandidateContext, PackedW
   # Preserve the established single-buffer context identity: buffer-1 carries
   # no explicit pipeline object, while buffer-2 owns a typed stage-1 plan.
   pipeline = KernelStage1PipelinePlan(g["bc"], geometry.lds_bytes, 1) if g["bc"] > 1 else None
-  transform = PackedWeightTransform(row.quant.name, row.shape[1], row.shape[2])
+  transform = PackedWeightTransform(row.quant, row.shape[1], row.shape[2])
   return _CandidateContext("boltbeam.full_kernel_candidate.v1", row.canonical_identity, geometry, pipeline, transform), transform
 
 
