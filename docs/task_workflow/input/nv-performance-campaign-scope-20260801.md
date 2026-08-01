@@ -120,6 +120,24 @@ vec-dot, fused epilogue) + `flash_attn_ext_vec`; ours is the same class of kerne
 AMD control re-run after every commit; first-token digits and decode sha256 pinned; bench rows
 carry route/census; paired llama runs in the same session. P5 formalizes the control matrix.
 
+### The build list - what this campaign actually produces
+
+The verdicts above say "no new kernels", which can read as "no build". To be precise, the
+campaign produces exactly three engineering pieces, and two of them are mostly wiring on top of
+machinery that already exists in this repo:
+
+| # | piece | phase | what it is | already exists | new code/artifact |
+| --- | --- | --- | --- | --- | --- |
+| B1 | NV artifact mint + promotion selection | P1 | make the sm120 candidate set promotable: mint the compact artifact, extend target-parametric selection so NV resolves without a pinned-target raise | candidate set JSON (`bench/.../multirole-buffer2-candidate-set-sm120-v1/`), selection machinery (`automatic_promoted_prefill_graph_policy` / `promoted_prefill_graph_targets`) | minted artifact data + selection/census wiring. No kernel. |
+| B2 | Q6_K prefill coverage | P2 | get Q6_K roles (ffn_down, attn_v, lm_head) off the scalar path | `route_pf16_graph_gemm` fp16 overlay (prefill_graph_gemm.py), mint tooling | either a minted Q6_K candidate (generated artifact) or overlay wiring. No new hand-written kernel. |
+| B3 | L3 host-side replay/launch mechanism | P3 | capture the concrete prefill schedule as a replayable graph; kill the `wait()`/`to_mv` tax (4.31s/4.39s, 1.35M calls) | `CUDAGraph` (runtime/graph/cuda.py), `prefill_v2_jit` TinyJit already bound (model.py:880), decode JIT graphs | the only genuinely new mechanism: verify prefill_v2_jit lowers to CUDAGraph for concrete shapes, capture per-concrete-schedule where dynamic vars block it, batch/async the host-side copies, identify the `batched 32..512` kernels. No new kernel. |
+
+Everything else in the campaign is data, selection policy, census/bench-row reporting, or
+launch-dims/occupancy tuning of kernels that already exist. Explicitly NOT built: new CUDA kernel
+primitives, a new subsystem, `prefill_routes.py` changes, and dtype/precision cleanup (parked).
+B3 is deliberately last: its design only becomes concrete once B1/B2 fix the kernel mix it would
+replay.
+
 ## 3. The work - phases with HARD STOPs
 
 ### P0 - Measure NV facts (`R`, `BW`), re-derive ceilings
