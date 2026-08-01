@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import NamedTuple
 from tinygrad.dtype import DType, dtypes, PtrDType, AddrSpace
 from tinygrad.uop.ops import (Ops, UOp, CompositeReduce, CompositeTileCarrier, TileGatherSpec,
-  RowSoftmaxRepackSpec, AMDRowSoftmaxRepackSpec, AMDRowSoftmaxSlotSpec, AMDPVCLaneSpec)
+  RowSoftmaxRepackSpec, NativeRowSoftmaxRepackSpec, RowSoftmaxSlotSpec, AMDPVCLaneSpec)
 
 from tinygrad.schedule.wmma.fragments import (
   grouped_tile_load, tile_gather, build_owned_fragment_index_map,
@@ -38,7 +38,7 @@ from tinygrad.schedule.wmma.composite import (
 __all__ = [
   "math", "dataclass", "NamedTuple", "DType", "dtypes", "PtrDType", "AddrSpace",
   "Ops", "UOp", "CompositeReduce", "CompositeTileCarrier", "TileGatherSpec",
-  "RowSoftmaxRepackSpec", "AMDRowSoftmaxRepackSpec", "AMDRowSoftmaxSlotSpec", "AMDPVCLaneSpec",
+  "RowSoftmaxRepackSpec", "NativeRowSoftmaxRepackSpec", "RowSoftmaxSlotSpec", "AMDPVCLaneSpec",
   "grouped_tile_load", "tile_gather", "build_owned_fragment_index_map",
   "lower_tile_gather", "lower_attached_tile_gather", "emit_tile_gather_shaped_wmma",
   "adapt_wmma_fragment", "shaped_wmma",

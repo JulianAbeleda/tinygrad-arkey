@@ -247,7 +247,7 @@ def _register_stage_index(ctx:IselContext, dreg:UOp, idx:UOp) -> tuple[str, int,
   return meta["role"], elem, _register_stage_base(ctx, meta) + (elem // 2)
 
 def _register_stage_fragment_role(carrier:UOp) -> str|None:
-  if carrier.op is Ops.AMD_PACKED_FRAGMENT_LOAD and isinstance(carrier.arg,tuple) and carrier.arg[:1]==("amd_gfx1100_packed_fragment_v1",):
+  if carrier.op is Ops.PACKED_FRAGMENT_LOAD and isinstance(carrier.arg,tuple) and carrier.arg[:1]==("amd_gfx1100_packed_fragment_v1",):
     return None
   """Return A/B when every lane is backed by one logical register stage."""
   if carrier.op not in {Ops.STACK, Ops.NOOP} or carrier.dtype != dtypes.half.vec(16) or len(carrier.src) != 16: return None
@@ -315,10 +315,10 @@ def _wmma_acc_regs(ctx:IselContext) -> set:
 def _is_wmma_acc(ctx:IselContext, dreg:UOp) -> bool: return id(dreg) in _wmma_acc_regs(ctx)
 
 def _hd128_fragment_meta(x:UOp) -> tuple[str,int,int]|None:
-  from tinygrad.uop.ops import AMDPackedFragmentLoopSpec
-  if x.op is Ops.AMD_PACKED_FRAGMENT_LOAD and isinstance(x.arg, AMDPackedFragmentLoopSpec):
+  from tinygrad.uop.ops import PackedFragmentLoopSpec
+  if x.op is Ops.PACKED_FRAGMENT_LOAD and isinstance(x.arg, PackedFragmentLoopSpec):
     x.arg.validate(); return x.arg.role, 0, x.arg.head_block
-  if x.op not in {Ops.AMD_PACKED_FRAGMENT_LOAD,Ops.NOOP} or not isinstance(x.arg,tuple) or len(x.arg)!=4 or \
+  if x.op not in {Ops.PACKED_FRAGMENT_LOAD,Ops.NOOP} or not isinstance(x.arg,tuple) or len(x.arg)!=4 or \
      x.arg[0]!="amd_gfx1100_packed_fragment_hd128_v1": return None
   return x.arg[1],x.arg[2],x.arg[3]
 
@@ -508,7 +508,7 @@ def _ab_base(ctx:IselContext, key, nregs:int=8) -> int|None:
 
 def _shared_high_ab_regs(ctx:IselContext) -> tuple[int, ...]:
   """Physical high A/B lease used by serialized, non-resident WMMA chains."""
-  has_opaque=any(u.op is Ops.WMMA and any(s.op is Ops.AMD_PACKED_FRAGMENT_LOAD for s in u.src[:2]) for u in ctx.uses)
+  has_opaque=any(u.op is Ops.WMMA and any(s.op is Ops.PACKED_FRAGMENT_LOAD for s in u.src[:2]) for u in ctx.uses)
   if not has_opaque and (_progressive_c_assignment(ctx) is None or _resident_ab_enabled(ctx) or _ab_reserved_regs(ctx)): return ()
   def uses_low_resident_ab(u:UOp) -> bool:
     c2 = u.src[2]
@@ -516,11 +516,11 @@ def _shared_high_ab_regs(ctx:IselContext) -> tuple[int, ...]:
       c2.src[0].src[0].op is Ops.INDEX and \
       (dr := _reg_base(c2.src[0].src[0].src[0])).op is Ops.DEFINE_REG and dr.dtype.addrspace == AddrSpace.REG
   wmmas = [u for u in ctx.uses if u.op is Ops.WMMA and not uses_low_resident_ab(u) and
-           (u.src[0].op is Ops.AMD_PACKED_FRAGMENT_LOAD or u.src[1].op is Ops.AMD_PACKED_FRAGMENT_LOAD or
+           (u.src[0].op is Ops.PACKED_FRAGMENT_LOAD or u.src[1].op is Ops.PACKED_FRAGMENT_LOAD or
             not (_register_stage_fragment_role(u.src[0]) == "A" and _register_stage_fragment_role(u.src[1]) == "B"))]
   if not wmmas: return ()
   width = max(_wmma_operand_regs(u.src[0]) for u in wmmas) + max(_wmma_operand_regs(u.src[1]) for u in wmmas) + \
-    int(any(s.op is Ops.AMD_PACKED_FRAGMENT_LOAD for u in wmmas for s in u.src[:2]))
+    int(any(s.op is Ops.PACKED_FRAGMENT_LOAD for u in wmmas for s in u.src[:2]))
   if FRAG_BASE + width > FRAG_TOP: raise NotImplementedError("AMD:ISA shared high A/B lease exceeds the fragment window")
   return tuple(range(FRAG_BASE, FRAG_BASE + width))
 

@@ -4,11 +4,11 @@ The prefill fused-attention kernel does not go through generic instruction
 selection alone. It carries six renderer-specific Ops whose meaning is fixed by
 typed descriptors in tinygrad/uop/ops.py:
 
-    Ops.AMD_PACKED_FRAGMENT_LOAD    (AMDPackedFragmentLoopSpec) Q/K/V fragment addressing
-    Ops.AMD_ROW_SOFTMAX_REPACK      (AMDRowSoftmaxRepackSpec)   QK-C -> P -> PV-A bridge
-    Ops.AMD_ROW_SOFTMAX_SLOT                                    projection of the above
+    Ops.PACKED_FRAGMENT_LOAD    (PackedFragmentLoopSpec) Q/K/V fragment addressing
+    Ops.NATIVE_ROW_SOFTMAX_REPACK      (NativeRowSoftmaxRepackSpec)   QK-C -> P -> PV-A bridge
+    Ops.ROW_SOFTMAX_SLOT                                    projection of the above
     Ops.AMD_PV_C_LANE               (AMDPVCLaneSpec)            PV accumulator lane view
-    Ops.AMD_ATTENTION_LOOP_STATE    (AMDLoopStateSpec)          loop-carried m/l/acc
+    Ops.ATTENTION_LOOP_STATE    (LoopStateSpec)          loop-carried m/l/acc
     (plus StateHandle-based generic phase publication)
 
 This module is the whole lowering surface for them: descriptor -> ordinary UOps,
@@ -42,7 +42,7 @@ def drain_lane_encoding(head_dim:int, e:int, j:int, output_block_base:int) -> tu
   """Register-level encoding of one C-fragment drain store, derived from the spec authority.
 
   The wave32 drain lane convention lives in exactly one place --
-  ``AMDAttentionOutputDrainSpec.drain_lane_coeffs`` -- and this function is how
+  ``AttentionOutputDrainSpec.drain_lane_coeffs`` -- and this function is how
   the AMD:ISA encoder consumes it, rather than restating the same 128/256/2048
   constants as shifts and immediates (which is how the HIP and ISA paths were
   free to drift apart from each other and from the declared ``address_expr``).
@@ -55,8 +55,8 @@ def drain_lane_encoding(head_dim:int, e:int, j:int, output_block_base:int) -> tu
   ``c_col == 1`` and ``c_e == 2*c_halfwave`` are required because the encoder
   folds ``col`` in with no scale and encodes ``c_halfwave`` as a left shift.
   """
-  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec
-  c_e, c_half, c_j, c_col = AMDAttentionOutputDrainSpec(head_dim=head_dim).drain_lane_coeffs
+  from tinygrad.uop.ops import AttentionOutputDrainSpec
+  c_e, c_half, c_j, c_col = AttentionOutputDrainSpec(head_dim=head_dim).drain_lane_coeffs
   if c_col != 1 or c_half & (c_half-1):
     raise ValueError("AMD:ISA attention drain encoder needs a unit column stride and a power-of-two halfwave stride")
   # NOTE (unresolved, pre-existing): group_row_stride is added to a BYTE address while the HIP path adds
@@ -75,13 +75,13 @@ def _opaque_exact_fragment_inputs(x:UOp) -> UOp|None:
             c.tag[:1] in {("amd_gfx1100_fragment_load_v1",),("amd_gfx1100_fragment_load_hd128_v1",),("amd_gfx1100_fragment_load_hd128_loop_v1",)} and
             all(v.op is Ops.LOAD and v.dtype==dtypes.half for v in c.src)): continue
     if c.tag[0] == "amd_gfx1100_fragment_load_hd128_loop_v1":
-      from tinygrad.uop.ops import AMDPackedFragmentLoopSpec
+      from tinygrad.uop.ops import PackedFragmentLoopSpec
       _,role,hd_block,*payload=c.tag
-      if payload and isinstance(payload[0], AMDPackedFragmentLoopSpec): spec,*fragment_src=payload
+      if payload and isinstance(payload[0], PackedFragmentLoopSpec): spec,*fragment_src=payload
       else:
         owner,lane,col,rng=payload
-        spec,fragment_src=AMDPackedFragmentLoopSpec(role=role,head_block=hd_block),[owner,lane,col,rng]
-      src[pos]=UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(spec.fragment_lanes),tuple(fragment_src),arg=spec)
+        spec,fragment_src=PackedFragmentLoopSpec(role=role,head_block=hd_block),[owner,lane,col,rng]
+      src[pos]=UOp(Ops.PACKED_FRAGMENT_LOAD,dtypes.half.vec(spec.fragment_lanes),tuple(fragment_src),arg=spec)
       changed=True
       continue
     if c.tag[0] == "amd_gfx1100_fragment_load_hd128_v1": _,role,tile,hd_block,owner,lane,col=c.tag
@@ -90,7 +90,7 @@ def _opaque_exact_fragment_inputs(x:UOp) -> UOp|None:
     if role == "Q" and pos != 0 or role == "K" and pos != 1 or role == "V" and pos != 1: raise ValueError("fragment role/WMMA operand mismatch")
     abi="amd_gfx1100_packed_fragment_hd128_v1" if hd_block is not None else "amd_gfx1100_packed_fragment_v1"
     arg=(abi,role,tile,hd_block) if hd_block is not None else (abi,role,tile)
-    src[pos]=UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col),arg=arg)
+    src[pos]=UOp(Ops.PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col),arg=arg)
     changed=True
   return x.replace(src=tuple(src)) if changed else None
 
@@ -102,8 +102,8 @@ def expand_loop_fragment(x:UOp) -> UOp:
   Its tag retains the owner and RANGE identity; the normal late opaque pass
   turns this back into a physical AMD carrier after index lowering.
   """
-  from tinygrad.uop.ops import AMDPackedFragmentLoopSpec, AMDMultiWaveAttentionGridSpec
-  if not isinstance(x.arg, AMDPackedFragmentLoopSpec): raise ValueError("loop fragment is malformed")
+  from tinygrad.uop.ops import PackedFragmentLoopSpec, AMDMultiWaveAttentionGridSpec
+  if not isinstance(x.arg, PackedFragmentLoopSpec): raise ValueError("loop fragment is malformed")
   x.arg.validate(); role,block=x.arg.role,x.arg.head_block
   if isinstance(x.arg.grid, AMDMultiWaveAttentionGridSpec):
     if len(x.src) != 6: raise ValueError("multiwave loop fragment requires owner/lane/wave/column/range/group")
@@ -216,8 +216,8 @@ def expand_loop_fragment(x:UOp) -> UOp:
 
 def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
   """Expand the exact gfx1100-v1 QK-C -> PV-A bridge before isel."""
-  from tinygrad.uop.ops import AMDRowSoftmaxRepackSpec, AMDMultiWaveAttentionGridSpec
-  if not isinstance(x.arg, AMDRowSoftmaxRepackSpec): raise ValueError("AMD row-softmax repack is missing its native descriptor")
+  from tinygrad.uop.ops import NativeRowSoftmaxRepackSpec, AMDMultiWaveAttentionGridSpec
+  if not isinstance(x.arg, NativeRowSoftmaxRepackSpec): raise ValueError("AMD row-softmax repack is missing its native descriptor")
   x.arg.validate()
   initial_state = x.arg.mode == "initial_state_v1"
   if initial_state:
@@ -503,11 +503,11 @@ def lower_state_phase_reload_gep(x:UOp, carrier:UOp) -> UOp|None:
 native_repack_matcher = PatternMatcher([
   (UPat(Ops.GEP, src=(UPat(Ops.CUSTOMI,name="carrier"),), name="x"), lower_state_phase_reload_gep),
   (UPat((Ops.CUSTOMI,Ops.CUSTOM),name="x"), lower_state_phase_transfer),
-  (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, name="x"), expand_native_row_softmax_repack),
-  (UPat(Ops.AMD_ROW_SOFTMAX_SLOT, src=(UPat(Ops.TUPLE, name="owner"),), name="x"), lambda x,owner: owner.src[x.arg.slot]),
+  (UPat(Ops.NATIVE_ROW_SOFTMAX_REPACK, name="x"), expand_native_row_softmax_repack),
+  (UPat(Ops.ROW_SOFTMAX_SLOT, src=(UPat(Ops.TUPLE, name="owner"),), name="x"), lambda x,owner: owner.src[x.arg.slot]),
   (UPat(Ops.GEP, src=(UPat(Ops.STACK, name="s"),), name="x"), lower_native_row_state_gep),
 ])
-native_loop_fragment_matcher=PatternMatcher([(UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"),expand_loop_fragment)])
+native_loop_fragment_matcher=PatternMatcher([(UPat(Ops.PACKED_FRAGMENT_LOAD,name="x"),expand_loop_fragment)])
 
 def lower_native_pv_c_lane(x:UOp) -> UOp:
   x.arg.validate()
@@ -517,8 +517,8 @@ def lower_native_pv_c_lane(x:UOp) -> UOp:
   return x.src[0].gep(e)
 
 def lower_amd_attention_loop_state(x:UOp) -> UOp:
-  from tinygrad.uop.ops import AMDLoopStateSpec
-  if not isinstance(x.arg, AMDLoopStateSpec): raise ValueError("AMD attention loop state is missing its typed ABI")
+  from tinygrad.uop.ops import LoopStateSpec
+  if not isinstance(x.arg, LoopStateSpec): raise ValueError("AMD attention loop state is missing its typed ABI")
   # The physical VGPR map is contained in amd_register_contracts.AMD_ATTENTION_LOOP_STATE; see its
   # docstring for the invariant, the caller list, and the negative result that came of it being a bare dict.
   x.arg.validate(); base=AMD_ATTENTION_LOOP_STATE.base(x.arg.role, x.arg.block if x.arg.role=="acc" else 0)
@@ -533,5 +533,5 @@ native_state_lane_matcher = PatternMatcher([
 ])
 
 native_loop_state_matcher = PatternMatcher([
-  (UPat(Ops.AMD_ATTENTION_LOOP_STATE, name="x"), lower_amd_attention_loop_state),
+  (UPat(Ops.ATTENTION_LOOP_STATE, name="x"), lower_amd_attention_loop_state),
 ])

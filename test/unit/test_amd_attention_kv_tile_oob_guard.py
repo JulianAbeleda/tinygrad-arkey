@@ -20,7 +20,7 @@ import pytest
 
 from tinygrad.dtype import Invalid, dtypes
 from tinygrad.helpers import getenv
-from tinygrad.uop.ops import (AMDAttentionGridSpec, AMDPackedFragmentLoopSpec, AxisType, KernelInfo,
+from tinygrad.uop.ops import (AttentionGridSpec, PackedFragmentLoopSpec, AxisType, KernelInfo,
                                Ops, ParamArg, UOp, graph_rewrite)
 from tinygrad.uop.symbolic import sym
 from tinygrad.renderer.isa.amd_attention_abi import expand_loop_fragment
@@ -29,7 +29,7 @@ REMAINDERS = list(range(1, 16))  # kv_tokens % 16 == 1..15
 
 
 def _grid(kv_tokens, q_tokens=32, q_heads=4, kv_heads=2, group_ratio=2, head_dim=128):
-  return AMDAttentionGridSpec(q_tokens=q_tokens, q_heads=q_heads, kv_heads=kv_heads,
+  return AttentionGridSpec(q_tokens=q_tokens, q_heads=q_heads, kv_heads=kv_heads,
                                group_ratio=group_ratio, kv_tokens=kv_tokens, head_dim=head_dim).validate()
 
 
@@ -49,8 +49,8 @@ def _fragment_loads(role, grid, block=0):
   full_kv_tiles = (grid.kv_tokens + 15) // 16
   rng = UOp.range(full_kv_tiles, 9600, AxisType.REDUCE)
   group = UOp.special(grid.q_heads * grid.q_tiles, "gidx0")
-  spec = AMDPackedFragmentLoopSpec(role=role, head_block=block, grid=grid)
-  x = UOp(Ops.AMD_PACKED_FRAGMENT_LOAD, dtypes.half, (owner, lane, col, rng, group), arg=spec)
+  spec = PackedFragmentLoopSpec(role=role, head_block=block, grid=grid)
+  x = UOp(Ops.PACKED_FRAGMENT_LOAD, dtypes.half, (owner, lane, col, rng, group), arg=spec)
   stack = graph_rewrite(expand_loop_fragment(x), sym)
   assert stack.op is Ops.STACK and len(stack.src) == 16
   return list(stack.src)
@@ -125,12 +125,12 @@ def test_grid_spec_still_rejects_non_positive_or_oversized_kv_tokens():
   q_tokens stays 16-wide (Q addressing is unguarded and out of scope for this fix), and kv_tokens
   must still be a positive integer <= 4096."""
   with pytest.raises(ValueError):
-    AMDAttentionGridSpec(kv_tokens=0).validate()
+    AttentionGridSpec(kv_tokens=0).validate()
   with pytest.raises(ValueError):
-    AMDAttentionGridSpec(kv_tokens=4097).validate()
+    AttentionGridSpec(kv_tokens=4097).validate()
   with pytest.raises(ValueError):
-    AMDAttentionGridSpec(q_tokens=33).validate()  # q_tokens must stay 16-wide
-  AMDAttentionGridSpec(kv_tokens=500).validate()  # kv_tokens itself no longer needs to be 16-wide
+    AttentionGridSpec(q_tokens=33).validate()  # q_tokens must stay 16-wide
+  AttentionGridSpec(kv_tokens=500).validate()  # kv_tokens itself no longer needs to be 16-wide
 
 
 @pytest.mark.parametrize("remainder", REMAINDERS)

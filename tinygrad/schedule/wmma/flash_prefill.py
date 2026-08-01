@@ -11,7 +11,7 @@ P-B1..P-B3 de-literalized the substrate validators, the emitter's index math, an
 drain address math to all derive from head_dim. P4a (this file) closes the last gap: Hd is now THREADED
 into the builder call (not just a decorative field the emitter ignored) -- `self.Hd` flows into
 `amd_gfx1100_q16_grid_hd128_loop_attention`'s `head_dim=` kwarg, which threads into the
-AMDAttentionGridSpec and AMDAttentionOutputDrainSpec it constructs, so the descriptor genuinely owns
+AttentionGridSpec and AttentionOutputDrainSpec it constructs, so the descriptor genuinely owns
 head_dim end to end. Hd remains validated up to a ceiling (see validate()): the wave32 VGPR budget
 hard-ceilings at Hd=128, so Hd must be a positive 16-multiple <=128 -- form-generic + spec-threaded up
 to that ceiling. Hd=64 and Hd=128 are numerically PROVEN; the promoted default route admits only

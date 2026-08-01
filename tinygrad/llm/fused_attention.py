@@ -34,7 +34,7 @@ MAP OF THE SCATTERED CODE THIS CENTRALIZES / REPLACES
 -----------------------------------------------------
 - Entry + eligibility (GQA/grid admission): flash_prefill_attention.py:shared_prefill_attention
 - Model call site + candidate-context build: llm/model.py:600-618 (_attention, prefill_tc_attn branch)
-- Geometry/admission spec: uop/ops.py:AMDAttentionGridSpec (+ SharedAttentionCandidateContext)
+- Geometry/admission spec: uop/ops.py:AttentionGridSpec (+ SharedAttentionCandidateContext)
 - (legacy) semantic lowering: schedule/rangeify.py:19-197 lower_attention_semantic
 - (legacy) range-assignment V handling: schedule/indexing.py:132 (SCOPED_VALUE branch)  <-- class-2 site
 - (legacy) combine + V-lane packing: codegen/late/composite_combines.py (online_softmax_state, _pack_online_softmax_v_lanes)
@@ -56,7 +56,7 @@ from __future__ import annotations
 from contextvars import ContextVar
 from typing import Any
 from tinygrad import Tensor, dtypes
-from tinygrad.uop.ops import AMDAttentionGridSpec, SharedAttentionCandidateContext
+from tinygrad.uop.ops import AttentionGridSpec, SharedAttentionCandidateContext
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
 
 # ADMITTED GEOMETRIES (Hq, Hkv, q_tokens) for which a captured kernel exists / is
@@ -126,14 +126,14 @@ def reset_custom_kernel_attention_trace() -> None:
   _CUSTOM_KERNEL_ATTENTION_LAST_IDENTITY.set(None)
 
 
-def prefill_grid_spec(q:Tensor, k:Tensor) -> AMDAttentionGridSpec | None:
+def prefill_grid_spec(q:Tensor, k:Tensor) -> AttentionGridSpec | None:
   """Return the admitted grid spec for (q,k), else None (-> caller falls back)."""
   if not (q.shape[0] == 1 and all(isinstance(x, int) for x in
           (q.shape[-3], q.shape[-2], q.shape[-1], k.shape[-3], k.shape[-2]))):
     return None
   if k.shape[-3] == 0 or q.shape[-3] % k.shape[-3]:
     return None
-  spec = AMDAttentionGridSpec(q_tokens=q.shape[-2], q_heads=q.shape[-3], kv_heads=k.shape[-3],
+  spec = AttentionGridSpec(q_tokens=q.shape[-2], q_heads=q.shape[-3], kv_heads=k.shape[-3],
     group_ratio=q.shape[-3] // k.shape[-3], kv_tokens=k.shape[-2], head_dim=q.shape[-1])
   try:
     spec.validate()

@@ -107,7 +107,7 @@ class TestAttentionSemantic(unittest.TestCase):
     self.assertEqual(sum(u.op is Ops.WMMA for u in nodes), 2)
     self.assertEqual(sum(u.op is Ops.DEFINE_LOCAL for u in nodes), 1)
     self.assertEqual(sum(u.op is Ops.BARRIER for u in nodes), 1)
-    self.assertFalse(any(u.op is Ops.AMD_ROW_SOFTMAX_REPACK for u in nodes))
+    self.assertFalse(any(u.op is Ops.NATIVE_ROW_SOFTMAX_REPACK for u in nodes))
     output_stores = [u for u in nodes if u.op is Ops.STORE and any(
       p.op is Ops.PARAM and p.arg.slot == 0 for p in u.src[0].toposort())]
     self.assertEqual(len(output_stores), 8)

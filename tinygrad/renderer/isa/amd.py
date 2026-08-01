@@ -532,8 +532,8 @@ def isel_customi(ctx:IselContext, x:UOp):
   raise NotImplementedError(f"AMD:ISA CUSTOMI unmapped arg: {arg[:70]}")
 
 def isel_attention_output_drain(ctx:IselContext, x:UOp):
-  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec, AMDAttentionOutputDrainPayload
-  if not isinstance(x.arg, AMDAttentionOutputDrainSpec): raise ValueError("AMD attention output drain is missing its typed ABI")
+  from tinygrad.uop.ops import AttentionOutputDrainSpec, AMDAttentionOutputDrainPayload
+  if not isinstance(x.arg, AttentionOutputDrainSpec): raise ValueError("AMD attention output drain is missing its typed ABI")
   x.arg.validate()
   grid=x.arg.grid; expected=(3+x.arg.blocks) if grid is not None else (2+x.arg.blocks); src=list(x.src)
   if grid is not None and src[1].op is Ops.CAST: src[1]=src[1].src[0]
@@ -959,7 +959,7 @@ def _frag_b128_loads(ctx:IselContext, E:tuple[UOp, ...], base:int, dep:tuple[UOp
 # read it (WAR guard). Returns the 8-lane NOOP output carrier (lane 0 = the V_WMMA def, lanes 1..7 = passthrough MOVs).
 def _build_wmma_tile(ctx:IselContext, A:UOp, B:UOp, cin:list[UOp], abase:int, bbase:int, cbase:int, dep:tuple[UOp,...],
                      zero_init:bool=False, fixed_output:bool=False):
-  opaque_fragment = any(s.op is Ops.AMD_PACKED_FRAGMENT_LOAD or
+  opaque_fragment = any(s.op is Ops.PACKED_FRAGMENT_LOAD or
     (s.op is Ops.NOOP and isinstance(s.arg, tuple) and s.arg[:1] == ("amd_gfx1100_packed_fragment_v1",)) for s in (A, B))
   apk = _pack_frag_tile(ctx, A, abase, dep, "A")
   bpk = _pack_frag_tile(ctx, B, bbase, dep, "B")
@@ -1024,9 +1024,9 @@ def _pack_stage_fragment(ctx:IselContext, carrier:UOp, dep:tuple[UOp,...]=()) ->
 
 
 def _pack_frag_tile(ctx:IselContext, carrier:UOp, base:int, dep:tuple[UOp,...], role:str) -> tuple[UOp,...]:
-  if carrier.op is Ops.AFTER and carrier.src and carrier.src[0].op is Ops.AMD_PACKED_FRAGMENT_LOAD:
+  if carrier.op is Ops.AFTER and carrier.src and carrier.src[0].op is Ops.PACKED_FRAGMENT_LOAD:
     return _pack_frag_tile(ctx, carrier.src[0], base, dep+tuple(carrier.src[1:]), role)
-  if carrier.op is Ops.AMD_PACKED_FRAGMENT_LOAD:
+  if carrier.op is Ops.PACKED_FRAGMENT_LOAD:
     lowered=isel_packed_fragment(ctx,carrier,base)
     bad=next((u for u in lowered.toposort() if u.op not in {Ops.INS,Ops.NOOP,Ops.CONST,Ops.PARAM,Ops.SPECIAL,Ops.RANGE}),None)
     if bad is not None: raise RuntimeError(f"lazy opaque fragment lowering produced unselected {bad.op}/{bad.dtype}")
@@ -1070,8 +1070,8 @@ def _validate_fragment_lane_provenance(lane:UOp, wave_id:UOp|None, col:UOp, mult
   return lane
 
 def isel_packed_fragment(ctx:IselContext,x:UOp, base:int|None=None) -> UOp:
-  from tinygrad.uop.ops import AMDPackedFragmentLoopSpec, AMDMultiWaveAttentionGridSpec
-  loop = isinstance(x.arg, AMDPackedFragmentLoopSpec)
+  from tinygrad.uop.ops import PackedFragmentLoopSpec, AMDMultiWaveAttentionGridSpec
+  loop = isinstance(x.arg, PackedFragmentLoopSpec)
   multiwave = loop and isinstance(x.arg.grid, AMDMultiWaveAttentionGridSpec)
   if loop:
     x.arg.validate(); abi,role,tile,hd_block="amd_gfx1100_packed_fragment_hd128_loop_v1",x.arg.role,0,x.arg.head_block
@@ -1194,12 +1194,12 @@ def preselect_packed_fragment(ctx:IselContext, x:UOp) -> UOp:
   return lowered
 
 native_fragment_isel_matcher=PatternMatcher([
-  (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"),lambda ctx,x: preselect_packed_fragment(ctx,x)),
+  (UPat(Ops.PACKED_FRAGMENT_LOAD,name="x"),lambda ctx,x: preselect_packed_fragment(ctx,x)),
 ])
 
 def isel_attention_loop_state(ctx:IselContext, x:UOp):
-  from tinygrad.uop.ops import AMDLoopStateSpec
-  if not isinstance(x.arg, AMDLoopStateSpec): raise ValueError("AMD attention loop state is missing its typed ABI")
+  from tinygrad.uop.ops import LoopStateSpec
+  if not isinstance(x.arg, LoopStateSpec): raise ValueError("AMD attention loop state is missing its typed ABI")
   x.arg.validate()
   base=AMD_ATTENTION_LOOP_STATE.base(x.arg.role, x.arg.block if x.arg.role=="acc" else 0)
   if x.arg.access == "read":
@@ -1351,7 +1351,7 @@ def _corrected_c_transition(vals:list[UOp], descriptor) -> UOp|None:
     tagged = [s for s in val.src if isinstance(s.tag, tuple) and s.tag[:1] == ("amd_gfx1100_online_softmax_alpha_v1",)]
     if len(tagged) != 1 or len(tagged[0].tag) != 2: return None
     alpha_owner = tagged[0].tag[1]
-    if alpha_owner.op is not Ops.AMD_ROW_SOFTMAX_REPACK or not alpha_owner.src or \
+    if alpha_owner.op is not Ops.NATIVE_ROW_SOFTMAX_REPACK or not alpha_owner.src or \
        alpha_owner.src[0].op is not Ops.WMMA or alpha_owner.src[0].arg != descriptor: return None
     lane = val.src[1] if val.src[0] is tagged[0] else val.src[0]
     if lane.op is not Ops.GEP or lane.arg != (i,) or len(lane.src) != 1: return None
@@ -1749,8 +1749,8 @@ def isel_wmma_with_role(ctx:IselContext, x:UOp):
   raise RuntimeError("attention WMMA role lost during instruction selection")
 
 isel_matcher = PatternMatcher([
-  (UPat(Ops.AMD_ATTENTION_LOOP_STATE,name="x"), isel_attention_loop_state),
-  (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"), lambda ctx,x: isel_packed_fragment(ctx,x)),
+  (UPat(Ops.ATTENTION_LOOP_STATE,name="x"), isel_attention_loop_state),
+  (UPat(Ops.PACKED_FRAGMENT_LOAD,name="x"), lambda ctx,x: isel_packed_fragment(ctx,x)),
   (UPat(Ops.WAIT, name="x"), isel_typed_wait),
   (UPat(Ops.PARAM, name="x"), isel_param),
   (UPat(Ops.DEFINE_VAR, name="x"), isel_var),
@@ -1781,7 +1781,7 @@ isel_matcher = PatternMatcher([
   (UPat(Ops.DEFINE_LOCAL, name="x"), lambda x: x.replace(op=Ops.DEFINE_REG) if x.op is Ops.DEFINE_LOCAL else None),
   # decode-attention primitives injected as CUSTOMI markers (Phase F.2/F.3): cross-lane exchange + packed fp16 dot
   (UPat(Ops.CUSTOMI, name="x"), lambda ctx, x: isel_customi(ctx, x)),
-  (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, name="x"), isel_attention_output_drain),
+  (UPat(Ops.ATTENTION_OUTPUT_DRAIN, name="x"), isel_attention_output_drain),
   (UPat(Ops.AMD_ATTENTION_STATS_DRAIN, name="x"), isel_attention_stats_drain),
   (UPat(Ops.EXP2, name="x"), lambda ctx, x: UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=AMDOps.V_EXP, tag=_vreg_def(ctx, x.dtype))),  # N1A: hardware exp2
   (UPat(Ops.RECIPROCAL, dtype=dtypes.float32, name="x"),
@@ -2166,7 +2166,7 @@ def lower_inst(x:UOp):
     # ABI v0 is lidx0. v1=col, v2=halfwave, v3=per-store byte address / reciprocal.
     # The drain lane convention is NOT restated here: the halfwave shift, the group row stride and the
     # store immediate all come from drain_lane_encoding(), whose authority is
-    # AMDAttentionOutputDrainSpec.drain_lane_coeffs. This encoder only implements the Hd=128 drain (it has
+    # AttentionOutputDrainSpec.drain_lane_coeffs. This encoder only implements the Hd=128 drain (it has
     # no head_dim in scope), so it asks the authority for Hd=128 explicitly.
     half_shift, group_row_stride, _ = drain_lane_encoding(128, 0, 0, output_block_base)
     insts=[_ins(v_and_b32_e32(_V[1],15,_V[0]),None), _ins(v_lshrrev_b32_e32(_V[2],4,_V[0]),None)]

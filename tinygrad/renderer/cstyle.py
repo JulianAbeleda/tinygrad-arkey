@@ -143,8 +143,8 @@ def _cstyle_expand_native_row_softmax(ctx, x:UOp) -> UOp:
   return expand_native_row_softmax_repack(ctx,x,native_state=False)
 
 def _cstyle_expand_attention_loop_state(x:UOp) -> UOp:
-  from tinygrad.uop.ops import AMDLoopStateSpec
-  if not isinstance(x.arg, AMDLoopStateSpec): raise ValueError("HIP attention loop state is missing its typed ABI")
+  from tinygrad.uop.ops import LoopStateSpec
+  if not isinstance(x.arg, LoopStateSpec): raise ValueError("HIP attention loop state is missing its typed ABI")
   x.arg.validate()
   if x.arg.access in {"init","write"}: return x.src[0]
   reg=x.src[0]; offset=x.arg.block*8+x.arg.lane if x.arg.role=="acc" else x.arg.lane
@@ -157,8 +157,8 @@ def _cstyle_expand_loop_fragment(x:UOp) -> UOp:
 
 def _cstyle_expand_attention_output_drain(x:UOp) -> UOp:
   """Expand the typed native-output ABI to ordinary HIP SSA stores."""
-  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec
-  if not isinstance(x.arg, AMDAttentionOutputDrainSpec): raise ValueError("HIP attention output drain is missing its typed ABI")
+  from tinygrad.uop.ops import AttentionOutputDrainSpec
+  if not isinstance(x.arg, AttentionOutputDrainSpec): raise ValueError("HIP attention output drain is missing its typed ABI")
   x.arg.validate()
   grid=x.arg.grid
   if len(x.src) != (3+x.arg.blocks if grid is not None else 2+x.arg.blocks) or x.dtype != dtypes.void: raise ValueError("HIP attention output drain has malformed sources")
@@ -167,7 +167,7 @@ def _cstyle_expand_attention_output_drain(x:UOp) -> UOp:
   lane=UOp.special(32,"lidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); half=lane.alu(Ops.SHR,UOp.const(dtypes.weakint,4))
   stores=[]
   # The drain lane convention is NOT restated here: c_e/c_half/c_j/c_col come from the spec's
-  # `drain_lane_coeffs`, which is its single authority (see AMDAttentionOutputDrainSpec).
+  # `drain_lane_coeffs`, which is its single authority (see AttentionOutputDrainSpec).
   # `e*c_e + halfwave*c_half` is emitted in the factored form `(2e+halfwave)*c_half`, which is why
   # c_e == 2*c_half is checked rather than assumed. `range(8)` (qk_c_lanes wave32 C-fragment width),
   # `half`/`col` (wave32 lane math) and `range(x.arg.blocks)` stay as they are -- hardware, or already
@@ -220,14 +220,14 @@ def _install_native_attention_bindings(ren) -> None:
   from tinygrad.renderer.isa.amd import native_repack_matcher
   from tinygrad.renderer.isa.amd import native_state_lane_matcher
   ren.native_repack_matcher = PatternMatcher([
-    (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, name="x"), _cstyle_expand_attention_output_drain),
+    (UPat(Ops.ATTENTION_OUTPUT_DRAIN, name="x"), _cstyle_expand_attention_output_drain),
     (UPat(Ops.AMD_ATTENTION_STATS_DRAIN, name="x"), _cstyle_expand_attention_stats_drain),
-    (UPat(Ops.AMD_ATTENTION_LOOP_STATE, name="x"), _cstyle_expand_attention_loop_state),
-    (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, name="x"), _cstyle_expand_native_row_softmax)]) + native_repack_matcher
+    (UPat(Ops.ATTENTION_LOOP_STATE, name="x"), _cstyle_expand_attention_loop_state),
+    (UPat(Ops.NATIVE_ROW_SOFTMAX_REPACK, name="x"), _cstyle_expand_native_row_softmax)]) + native_repack_matcher
   ren.native_state_lane_matcher = PatternMatcher([
-    (UPat(Ops.AMD_ATTENTION_LOOP_STATE, name="x"), _cstyle_expand_attention_loop_state)]) + native_state_lane_matcher
+    (UPat(Ops.ATTENTION_LOOP_STATE, name="x"), _cstyle_expand_attention_loop_state)]) + native_state_lane_matcher
   ren.native_loop_fragment_matcher = PatternMatcher([
-    (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD, name="x"), _cstyle_expand_loop_fragment)])
+    (UPat(Ops.PACKED_FRAGMENT_LOAD, name="x"), _cstyle_expand_loop_fragment)])
 
 def create_non_native_float_pats(dts:tuple[DType, ...], casting:bool=True):
   patterns = PatternMatcher([

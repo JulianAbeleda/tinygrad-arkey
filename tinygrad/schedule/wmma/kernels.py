@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace
 from tinygrad.helpers import getenv
-from tinygrad.uop.ops import Ops, UOp, AMDRowSoftmaxRepackSpec
+from tinygrad.uop.ops import Ops, UOp, NativeRowSoftmaxRepackSpec
 from tinygrad.schedule.wmma.softmax import amd_gfx1100_row_softmax_initial, amd_gfx1100_row_softmax_state
 from tinygrad.schedule.wmma.loop_state import loop_state_write, loop_state_read, packed_fragment_load
 
@@ -35,7 +35,7 @@ def amd_gfx1100_q16_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float, kern
   fragment_axes = ((), (), tuple((-120-i, 2) for i in range(3)))
   warg = ("WMMA_16_16_16_half_float", (16,16,16), dtypes.half, dtypes.float, "AMD:gfx1100", 32, fragment_axes, ())
   qk = UOp(Ops.WMMA, dtypes.float.vec(8), (qfrag, kfrag, zero), warg)
-  weights,sm,sl,_ = amd_gfx1100_row_softmax_initial(qk, spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale),
+  weights,sm,sl,_ = amd_gfx1100_row_softmax_initial(qk, spec=NativeRowSoftmaxRepackSpec(score_scale=float(scale),
     mode="initial_state_v1",validity_mode="causal_v1" if causal else "all_v1",query_start=query_start,
     kv_start=0,valid_kv=valid_kv))
   vfrag = UOp(Ops.STACK, dtypes.half.vec(16), tuple(v.index(i*16+col).load() for i in range(16)),
@@ -70,10 +70,10 @@ def amd_gfx1100_q16_kv32_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float,
     qk=UOp(Ops.WMMA,dtypes.float.vec(8),(qf,kf,zero),warg)
     if tile == 0:
       p,sm,sl,alpha=amd_gfx1100_row_softmax_initial(qk,
-        spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale),mode="initial_state_v1"))
+        spec=NativeRowSoftmaxRepackSpec(score_scale=float(scale),mode="initial_state_v1"))
     else:
       p,sm,sl,alpha=amd_gfx1100_row_softmax_state(qk,sm,sl,
-        spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale),mode="stateful_unnormalized_v1"))
+        spec=NativeRowSoftmaxRepackSpec(score_scale=float(scale),mode="stateful_unnormalized_v1"))
     corrected=zero
     if tile:
       corrected=acc.alu(Ops.MUL,alpha)
@@ -121,10 +121,10 @@ def amd_gfx1100_q16_kv32_hd128_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:
       qk=UOp(Ops.WMMA,dtypes.float.vec(8),(qf,kf,qk),warg)
     if tile == 0:
       p,sm,sl,alpha=amd_gfx1100_row_softmax_initial(qk,
-        spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale),mode="initial_state_v1"))
+        spec=NativeRowSoftmaxRepackSpec(score_scale=float(scale),mode="initial_state_v1"))
     else:
       p,sm,sl,alpha=amd_gfx1100_row_softmax_state(qk,sm,sl,
-        spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale),mode="stateful_unnormalized_v1",kv_start=16,
+        spec=NativeRowSoftmaxRepackSpec(score_scale=float(scale),mode="stateful_unnormalized_v1",kv_start=16,
           validity_mode="causal_v1",query_start=16,valid_kv=32))
     next_acc=[]
     for hd_block in range(hd//16):
@@ -134,8 +134,8 @@ def amd_gfx1100_q16_kv32_hd128_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:
         tag=("amd_gfx1100_fragment_load_hd128_v1","V",tile,hd_block,v,lane,col))
       next_acc.append(UOp(Ops.WMMA,dtypes.float.vec(8),(p,vf,corrected),warg))
     acc=next_acc
-  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec
-  drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,sl,*acc),arg=AMDAttentionOutputDrainSpec())
+  from tinygrad.uop.ops import AttentionOutputDrainSpec
+  drain=UOp(Ops.ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,sl,*acc),arg=AttentionOutputDrainSpec())
   return UOp.sink(drain,arg=kernel_info)
 
 def amd_gfx1100_q16_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float, kernel_info,
@@ -147,7 +147,7 @@ def amd_gfx1100_q16_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, s
   implementation while retaining the exact graph that a future backend must
   consume.
   """
-  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AxisType
+  from tinygrad.uop.ops import AttentionOutputDrainSpec, LoopStateSpec, PackedFragmentLoopSpec, AxisType
   # No head_dim kwarg exists on this fixed micro-kernel; `hd` is a local Track-A pinned-validated-
   # constant (same posture as amd_gfx1100_q16_kv32_hd128_attention) so the sizes/loop-bound math below
   # reads as head_dim-derived. Byte-identical (hd==128 always, for this function).
@@ -172,7 +172,7 @@ def amd_gfx1100_q16_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, s
   state_owner=9404
   # NOTE: fragment() below is deliberately NOT centralized into
   # loop_state.packed_fragment_load -- this kernel has no grid/group source
-  # (its AMD_PACKED_FRAGMENT_LOAD is a 4-tuple, not the shared 5-tuple), so
+  # (its PACKED_FRAGMENT_LOAD is a 4-tuple, not the shared 5-tuple), so
   # sharing it would change the emitted UOp's source arity.
   def state_write(reg, role, value, block=0, offset=0, access="write"):
     return loop_state_write(reg, value, role=role, owner=state_owner, offset=offset, block=block, access=access)
@@ -182,13 +182,13 @@ def amd_gfx1100_q16_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, s
   def state_read(reg, init, role, block=0, offset=0, final=False):
     return loop_state_read(reg, init, rng, role=role, owner=state_owner, block=block, final=final)
   def fragment(owner, role, block):
-    spec = AMDPackedFragmentLoopSpec(role=role,head_block=block)
-    return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(spec.fragment_lanes),(owner,lane,col,rng),arg=spec)
+    spec = PackedFragmentLoopSpec(role=role,head_block=block)
+    return UOp(Ops.PACKED_FRAGMENT_LOAD,dtypes.half.vec(spec.fragment_lanes),(owner,lane,col,rng),arg=spec)
   old_m,old_l=state_read(mreg,m_init,"m"),state_read(lreg,l_init,"l")
   qk=zero
   for block in range(hd//16): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fragment(q,"Q",block),fragment(k,"K",block),qk),warg)
   p,new_m,new_l,alpha=amd_gfx1100_row_softmax_state(qk,old_m,old_l,
-    spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale),mode="loop_state_v1",validity_mode="causal_v1" if causal else "tail_v1",
+    spec=NativeRowSoftmaxRepackSpec(score_scale=float(scale),mode="loop_state_v1",validity_mode="causal_v1" if causal else "tail_v1",
       query_start=query_start,kv_start=-1,valid_kv=valid_kv,dynamic_kv_v1=True),kv_tile=rng)
   writes=[*state_write(mreg,"m",new_m),*state_write(lreg,"l",new_l)]
   for block in range(hd//16):
@@ -199,14 +199,14 @@ def amd_gfx1100_q16_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, s
   end=UOp.group(*writes).end(rng).replace(tag=("amd_gfx1100_attention_kv64_loop_end_v1",rng))
   final_l=state_read(lreg,end,"l",final=True)
   final_c=tuple(state_read(creg,end,"acc",block,block*8,final=True) for block in range(hd//16))
-  drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,final_l,*final_c),arg=AMDAttentionOutputDrainSpec())
+  drain=UOp(Ops.ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,final_l,*final_c),arg=AttentionOutputDrainSpec())
   return UOp.sink(m_init,l_init,c_init,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_q16_kv64_hd128_loop_v1",))
 
 def amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float, kernel_info,
                                                           causal:bool=False, valid_kv:int=64, query_start:int|None=None) -> UOp:
   """Grid-native Q32/Hq4/Hkv2/G2 attention; one wave32 per Q-head tile."""
-  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec, AMDAttentionGridSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AxisType
-  grid=AMDAttentionGridSpec(); grid.validate(); hd=grid.head_dim; owners=(q,k,v,out)
+  from tinygrad.uop.ops import AttentionOutputDrainSpec, AttentionGridSpec, LoopStateSpec, PackedFragmentLoopSpec, AxisType
+  grid=AttentionGridSpec(); grid.validate(); hd=grid.head_dim; owners=(q,k,v,out)
   # Unlike the coincidental-16384 read at a glance, this is genuinely grid.q_heads*grid.q_tokens*hd ==
   # grid.kv_heads*grid.kv_tokens*hd == 4*32*128 == 2*64*128 for this fixed G2 default grid -- sourcing
   # it from grid fields (which already exist here, unlike the two grid-less sibling kernels above)
@@ -236,7 +236,7 @@ def amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:
     return packed_fragment_load(owner, role=role, head_block=block, grid=grid, lane=lane, col=col, rng=rng, group=group)
   old_m,old_l=state_read(mreg,m_init,"m"),state_read(lreg,l_init,"l"); qk=zero
   for block in range(hd//16): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fragment(q,"Q",block),fragment(k,"K",block),qk),warg)
-  p,new_m,new_l,alpha=amd_gfx1100_row_softmax_state(qk,old_m,old_l,spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale),mode="loop_state_v1",
+  p,new_m,new_l,alpha=amd_gfx1100_row_softmax_state(qk,old_m,old_l,spec=NativeRowSoftmaxRepackSpec(score_scale=float(scale),mode="loop_state_v1",
     validity_mode="causal_v1" if causal else "tail_v1",query_start=query_start,kv_start=-1,valid_kv=valid_kv,dynamic_kv_v1=True,grid=grid),kv_tile=rng,grid_id=group)
   writes=[*state_write(mreg,"m",new_m),*state_write(lreg,"l",new_l)]
   for block in range(hd//16):
@@ -244,19 +244,19 @@ def amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:
     writes.extend(state_write(creg,"acc",pv,block,block*8))
   end=UOp.group(*writes).end(rng).replace(tag=("amd_gfx1100_attention_grid_kv64_loop_end_v1",rng)); final_l=state_read(lreg,end,"l",final=True)
   final_c=tuple(state_read(creg,end,"acc",block,block*8,final=True) for block in range(hd//16))
-  drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,final_l,*final_c),arg=AMDAttentionOutputDrainSpec(grid=grid))
+  drain=UOp(Ops.ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,final_l,*final_c),arg=AttentionOutputDrainSpec(grid=grid))
   return UOp.sink(m_init,l_init,c_init,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_v1",))
 
 def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,causal:bool=False,valid_kv:int|None=None,query_start:int|None=None,output_block_base:int=0,acc_blocks:int=8,phase_abi_v1:bool=False,head_dim:int=128,fragment_model=None)->UOp:
   """Fixed 16-WMMA attention wave with compile-time model geometry."""
-  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec, AMDAttentionGridSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AxisType
+  from tinygrad.uop.ops import AttentionOutputDrainSpec, AttentionGridSpec, LoopStateSpec, PackedFragmentLoopSpec, AxisType
   # head_dim is now THREADED (not just the grid's own default): the descriptor genuinely owns it.
   # Everything downstream (hd/hd_blocks locals, packed_fragment_load's grid-derived hdb bound from
   # P-B1/P-B2) already reads from grid.head_dim, so passing it here cascades correctly.
   if fragment_model is None:
     from tinygrad.codegen.opt.attention_fragment import attention_fragment_model
     fragment_model = attention_fragment_model("amd_gfx1100")
-  grid=AMDAttentionGridSpec(q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,group_ratio=q_heads//kv_heads,kv_tokens=kv_tokens,head_dim=head_dim,native_abi=fragment_model.abi("attention_grid_hd128_v1"),fragment_model=fragment_model); grid.validate()
+  grid=AttentionGridSpec(q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,group_ratio=q_heads//kv_heads,kv_tokens=kv_tokens,head_dim=head_dim,native_abi=fragment_model.abi("attention_grid_hd128_v1"),fragment_model=fragment_model); grid.validate()
   hd=grid.head_dim; hd_blocks=hd//16
   owners=(q,k,v,out); sizes=(q_heads*q_tokens*hd,kv_heads*kv_tokens*hd,kv_heads*kv_tokens*hd,q_heads*q_tokens*hd)
   if any(x.op is not Ops.PARAM or not isinstance(x.dtype,PtrDType) for x in owners) or tuple(x.arg.slot for x in owners)!=(1,2,3,0) or tuple(x.ptrdtype.size for x in owners)!=sizes: raise ValueError(f"grid loop requires Q1/K2/V3/out0 sized {sizes}")
@@ -320,7 +320,7 @@ def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_toke
   if phase_abi_v1:
     om=UOp(Ops.STACK,dtypes.float.vec(8),tuple(ml.loop_read(i,init_token) for i in range(8)))
     ol=UOp(Ops.STACK,dtypes.float.vec(8),tuple(ml.loop_read(8+i,init_token) for i in range(8)))
-  p,nm,nl,alpha=amd_gfx1100_row_softmax_state(qk,om,ol,spec=AMDRowSoftmaxRepackSpec(score_scale=scale,mode="loop_state_v1",validity_mode="causal_v1" if causal else "tail_v1",query_start=query_start,kv_start=-1,valid_kv=valid_kv,dynamic_kv_v1=True,grid=grid,native_abi=fragment_model.abi("online_softmax_qk_pv_v1"),target=fragment_model.arch,fragment_model=fragment_model,qk_c_lanes=fragment_model.score_elements,pv_a_lanes=fragment_model.pv_a_lanes),kv_tile=rng,grid_id=group)
+  p,nm,nl,alpha=amd_gfx1100_row_softmax_state(qk,om,ol,spec=NativeRowSoftmaxRepackSpec(score_scale=scale,mode="loop_state_v1",validity_mode="causal_v1" if causal else "tail_v1",query_start=query_start,kv_start=-1,valid_kv=valid_kv,dynamic_kv_v1=True,grid=grid,native_abi=fragment_model.abi("online_softmax_qk_pv_v1"),target=fragment_model.arch,fragment_model=fragment_model,qk_c_lanes=fragment_model.score_elements,pv_a_lanes=fragment_model.pv_a_lanes),kv_tile=rng,grid_id=group)
   # Phase ABI keeps m/l in LDS. Commit the next recurrence state before the
   # PV body and make that body consume the commit token: p/alpha are already
   # formed from the old state, so this preserves the recurrence while giving
@@ -329,7 +329,7 @@ def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_toke
   ml_commit=UOp.group(*( [*(ml.loop_write(nm.gep(i),i,after=nm.gep(i)) for i in range(8)),
                             *(ml.loop_write(nl.gep(i),8+i,after=nl.gep(i)) for i in range(8))] )) if phase_abi_v1 else None
   writes=[ml_commit] if ml_commit is not None else [*wr(mreg,"m",nm),*wr(lreg,"l",nl)]
-  # AMD_ROW_SOFTMAX_SLOT is a verifier ABI value and cannot be wrapped in AFTER.
+  # ROW_SOFTMAX_SLOT is a verifier ABI value and cannot be wrapped in AFTER.
   # Gate V's PARAM owner, which makes the PV fragment load wait for the commit
   # while keeping p/alpha as direct slot values.
   pv_v=v.after(ml_commit) if ml_commit is not None else v
@@ -346,22 +346,22 @@ def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_toke
         warg,tag=("attention_wmma","PV",b,c)) for c in range(fragment_model.calls_per_tile))
       pv=UOp(Ops.STACK,dtypes.float.vec(fragment_model.score_elements),tuple(x.gep(i) for x in pv_calls for i in range(fragment_model.c_carrier)))
     writes.extend(wr(creg,"acc",pv,b,b*8))
-  # NEWLY DE-WELDED: AMDAttentionOutputDrainSpec previously took no head_dim/address_expr here, so it
+  # NEWLY DE-WELDED: AttentionOutputDrainSpec previously took no head_dim/address_expr here, so it
   # silently rode the drain spec's own default (128 / "e*256+halfwave*128+j*16+col") regardless of the
   # threaded grid -- masked because the grid always defaulted to 128 too. Now both are derived from the
   # SAME threaded `hd`, matching cstyle.py's P-B3 formula exactly. Byte-identical at hd=128
   # (2*128==256, hd==128 -> "e*256+halfwave*128+j*16+col", the exact previous default string).
-  end=UOp.group(*writes).end(rng).replace(tag=(fragment_model.abi("attention_grid_loop_end_v1"),rng)); final_token=end if phase_abi_v1 else None; fl=(UOp(Ops.STACK,dtypes.float.vec(8),tuple(ml.loop_read(8+i,final_token) for i in range(8))) if phase_abi_v1 else rd(lreg,end,"l",final=True)); fc=tuple(rd(creg,end,"acc",b,b*8,final=True) for b in range(acc_blocks)); drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AMDAttentionOutputDrainSpec(native_abi=fragment_model.abi("attention_output_drain_v1" if acc_blocks==hd_blocks else "attention_output_drain_acc_slice_v2"),head_dim=hd,blocks=acc_blocks,address_expr=fragment_model.drain_address_expr(hd),grid=grid,output_block_base=output_block_base,fragment_model=fragment_model))
+  end=UOp.group(*writes).end(rng).replace(tag=(fragment_model.abi("attention_grid_loop_end_v1"),rng)); final_token=end if phase_abi_v1 else None; fl=(UOp(Ops.STACK,dtypes.float.vec(8),tuple(ml.loop_read(8+i,final_token) for i in range(8))) if phase_abi_v1 else rd(lreg,end,"l",final=True)); fc=tuple(rd(creg,end,"acc",b,b*8,final=True) for b in range(acc_blocks)); drain=UOp(Ops.ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AttentionOutputDrainSpec(native_abi=fragment_model.abi("attention_output_drain_v1" if acc_blocks==hd_blocks else "attention_output_drain_acc_slice_v2"),head_dim=hd,blocks=acc_blocks,address_expr=fragment_model.drain_address_expr(hd),grid=grid,output_block_base=output_block_base,fragment_model=fragment_model))
   return UOp.sink(mi,li,ci,end,drain,arg=kernel_info).replace(tag=(fragment_model.abi("q16_grid_hd128_loop_v1"),))
 
 
 def amd_gfx1100_q16_grid_qk_stats_stage(q:UOp,k:UOp,stats:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,causal:bool=True,query_start:int|None=None,head_dim:int=128)->UOp:
   """Direct diagnostic Stage A: QK online reduction to fp32 `[query, m/l]` state only."""
-  from tinygrad.uop.ops import AMDAttentionGridSpec, AMDAttentionStatsDrainSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AxisType
+  from tinygrad.uop.ops import AttentionGridSpec, AMDAttentionStatsDrainSpec, LoopStateSpec, PackedFragmentLoopSpec, AxisType
   # head_dim threaded (matching amd_gfx1100_q16_grid_hd128_loop_attention). No drain-spec change needed
   # here: AMDAttentionStatsDrainSpec carries no head_dim field at all (confirmed head_dim-independent
   # in P-B3 -- it's per-row m/l stats, not an Hd-sized buffer).
-  grid=AMDAttentionGridSpec(q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,group_ratio=q_heads//kv_heads,kv_tokens=kv_tokens,head_dim=head_dim); grid.validate()
+  grid=AttentionGridSpec(q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,group_ratio=q_heads//kv_heads,kv_tokens=kv_tokens,head_dim=head_dim); grid.validate()
   hd=grid.head_dim; hd_blocks=hd//16
   qn,kn=q_heads*q_tokens*hd,kv_heads*kv_tokens*hd
   if tuple(x.arg.slot for x in (q,k,stats)) != (1,2,0) or q.ptrdtype.size != qn or k.ptrdtype.size != kn or stats.ptrdtype.size != q_heads*q_tokens*2:
@@ -376,16 +376,16 @@ def amd_gfx1100_q16_grid_qk_stats_stage(q:UOp,k:UOp,stats:UOp,*,q_tokens:int,q_h
   def fr(owner,role,b): return packed_fragment_load(owner, role=role, head_block=b, grid=grid, lane=lane, col=col, rng=rng, group=group)
   mi=UOp.group(*wr(mreg,"m",UOp.const(dtypes.float.vec(8),(-float("inf"),)*8),"init")); li=UOp.group(*wr(lreg,"l",zero,"init")); om,ol=rd(mreg,mi,"m"),rd(lreg,li,"l"); qk=zero
   for b in range(hd_blocks): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q,"Q",b),fr(k,"K",b),qk),warg,tag=("attention_wmma","QK",b))
-  _,nm,nl,_=amd_gfx1100_row_softmax_state(qk,om,ol,spec=AMDRowSoftmaxRepackSpec(score_scale=scale,mode="loop_state_v1",validity_mode="causal_v1",query_start=query_start,kv_start=-1,valid_kv=kv_tokens,dynamic_kv_v1=True,grid=grid),kv_tile=rng,grid_id=group)
+  _,nm,nl,_=amd_gfx1100_row_softmax_state(qk,om,ol,spec=NativeRowSoftmaxRepackSpec(score_scale=scale,mode="loop_state_v1",validity_mode="causal_v1",query_start=query_start,kv_start=-1,valid_kv=kv_tokens,dynamic_kv_v1=True,grid=grid),kv_tile=rng,grid_id=group)
   end=UOp.group(*wr(mreg,"m",nm),*wr(lreg,"l",nl)).end(rng); fm,fl=rd(mreg,end,"m",True),rd(lreg,end,"l",True)
   drain=UOp(Ops.AMD_ATTENTION_STATS_DRAIN,dtypes.void,(stats,group,fm,fl),arg=AMDAttentionStatsDrainSpec())
   return UOp.sink(mi,li,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_qk_stats_stage_v1",))
 
 def amd_gfx1100_q16_grid_pv_slice_stage(q:UOp,k:UOp,v:UOp,stats:UOp,out:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,output_block_base:int,v_input_block_base:int=0,acc_blocks:int=2,causal:bool=True,query_start:int|None=None,head_dim:int=128)->UOp:
   """Direct diagnostic Stage B: reload final m/l, recompute QK/P, and own one aligned PV slice."""
-  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec, AMDAttentionGridSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AxisType
+  from tinygrad.uop.ops import AttentionOutputDrainSpec, AttentionGridSpec, LoopStateSpec, PackedFragmentLoopSpec, AxisType
   # head_dim threaded (matching amd_gfx1100_q16_grid_hd128_loop_attention).
-  grid=AMDAttentionGridSpec(q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,group_ratio=q_heads//kv_heads,kv_tokens=kv_tokens,head_dim=head_dim); grid.validate()
+  grid=AttentionGridSpec(q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,group_ratio=q_heads//kv_heads,kv_tokens=kv_tokens,head_dim=head_dim); grid.validate()
   hd=grid.head_dim; hd_blocks=hd//16
   qn,kn,outn=q_heads*q_tokens*hd,kv_heads*kv_tokens*hd,q_heads*q_tokens*hd
   if tuple(x.arg.slot for x in (q,k,v,stats,out)) != (1,2,3,4,0) or tuple(x.ptrdtype.size for x in (q,k,v,stats,out)) != (qn,kn,kn-v_input_block_base*16,q_heads*q_tokens*2,outn): raise ValueError("pv slice stage requires Q1/K2/prebiased-V3/stats4/out0 exact geometry")
@@ -398,7 +398,7 @@ def amd_gfx1100_q16_grid_pv_slice_stage(q:UOp,k:UOp,v:UOp,stats:UOp,out:UOp,*,q_
   def stat(which): return UOp(Ops.STACK,dtypes.float.vec(8),tuple(stats.index(group*UOp.const(dtypes.weakint,32)+(UOp.const(dtypes.weakint,2*e)+lane.alu(Ops.SHR,UOp.const(dtypes.weakint,4)))*UOp.const(dtypes.weakint,2)+UOp.const(dtypes.weakint,which)).load() for e in range(8)))
   fm,fl=stat(0),stat(1); ci=UOp.group(*(x for b in range(2) for x in wr(zero,b))); qk=zero
   for b in range(hd_blocks): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q,"Q",b),fr(k,"K",b),qk),warg,tag=("attention_wmma","QK",b))
-  p,_,_,alpha=amd_gfx1100_row_softmax_state(qk,fm,fl,spec=AMDRowSoftmaxRepackSpec(score_scale=scale,mode="loop_state_v1",validity_mode="causal_v1",query_start=query_start,kv_start=-1,valid_kv=kv_tokens,dynamic_kv_v1=True,grid=grid),kv_tile=rng,grid_id=group); writes=[]
+  p,_,_,alpha=amd_gfx1100_row_softmax_state(qk,fm,fl,spec=NativeRowSoftmaxRepackSpec(score_scale=scale,mode="loop_state_v1",validity_mode="causal_v1",query_start=query_start,kv_start=-1,valid_kv=kv_tokens,dynamic_kv_v1=True,grid=grid),kv_tile=rng,grid_id=group); writes=[]
   for b in range(2): writes.extend(wr(UOp(Ops.WMMA,dtypes.float.vec(8),(p,fr(v,"V",b),rd(ci,b).alu(Ops.MUL,alpha)),warg,tag=("attention_wmma","PV",b)),b))
   # NEWLY DE-WELDED (same as amd_gfx1100_q16_grid_hd128_loop_attention): head_dim/address_expr were
   # previously unset here, silently riding the drain spec's own default. Now derived from the same
@@ -406,5 +406,5 @@ def amd_gfx1100_q16_grid_pv_slice_stage(q:UOp,k:UOp,v:UOp,stats:UOp,out:UOp,*,q_
   # ({(0,2),(2,2),(4,2),(6,2)}) still assumes hd_blocks==8 and was NOT generalized in this step (out of
   # scope here; flagged in the P4a report) -- this stage is not on FlashPrefillAttentionSpec's emit()
   # path, so it does not affect the spec-driven route's Hd-threading.
-  end=UOp.group(*writes).end(rng); fc=tuple(rd(end,b,True) for b in range(2)); drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AMDAttentionOutputDrainSpec(native_abi="amd_gfx1100_attention_output_drain_acc_slice_v2",head_dim=hd,blocks=2,address_expr=f"e*{2*hd}+halfwave*{hd}+j*16+col",grid=grid,output_block_base=output_block_base))
+  end=UOp.group(*writes).end(rng); fc=tuple(rd(end,b,True) for b in range(2)); drain=UOp(Ops.ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AttentionOutputDrainSpec(native_abi="amd_gfx1100_attention_output_drain_acc_slice_v2",head_dim=hd,blocks=2,address_expr=f"e*{2*hd}+halfwave*{hd}+j*16+col",grid=grid,output_block_base=output_block_base))
   return UOp.sink(ci,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_pv_slice_stage_v1",))

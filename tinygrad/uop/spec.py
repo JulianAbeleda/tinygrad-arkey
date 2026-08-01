@@ -201,7 +201,7 @@ spec_shared = PatternMatcher([
   (UPat(Ops.GROUP, dtypes.void, src=UPat((Ops.GROUP, Ops.STORE, Ops.NOOP, Ops.UNROLL, Ops.INS))), lambda: True),
   (UPat(Ops.GROUP, dtypes.void, src=UPat(Ops.CUSTOMI, name="x")),
    lambda x: isinstance(x.arg, tuple) and x.arg[:1] in {("amd_register_stage_pair",), ("amd_gfx1100_row_state_write_v1",), ("amd_gfx1100_attention_loop_state_write_v1",), ("state_loop_write_v1",)}),
-  (UPat(Ops.GROUP, dtypes.void, name="x"), lambda x: all(s.op in {Ops.GROUP, Ops.STORE, Ops.NOOP, Ops.UNROLL, Ops.INS, Ops.AMD_ATTENTION_LOOP_STATE} or
+  (UPat(Ops.GROUP, dtypes.void, name="x"), lambda x: all(s.op in {Ops.GROUP, Ops.STORE, Ops.NOOP, Ops.UNROLL, Ops.INS, Ops.ATTENTION_LOOP_STATE} or
     (s.op is Ops.CUSTOMI and isinstance(s.arg, tuple) and s.arg[:1] in {("amd_gfx1100_row_state_write_v1",), ("amd_gfx1100_attention_loop_state_write_v1",), ("state_loop_write_v1",)}) for s in x.src)),
 
   # TOOD: these should be buffer with different addrspace
@@ -210,7 +210,7 @@ spec_shared = PatternMatcher([
   # AFTER on Movement Op, PARAM, BUFFER, CONTIGUOUS, or another AFTER
   (UPat(Ops.AFTER, src=(UPat(GroupOp.Movement.union({Ops.PARAM, Ops.BUFFER, Ops.CONTIGUOUS, Ops.DEFINE_REG, Ops.DEFINE_LOCAL, Ops.AFTER, Ops.MULTI,
                                                      Ops.BITCAST, Ops.INS, Ops.STACK, Ops.INDEX, Ops.LOAD, Ops.WAIT, Ops.WMMA,
-                                                     Ops.MEMORY_SEMANTIC, Ops.AMD_PACKED_FRAGMENT_LOAD})),),
+                                                     Ops.MEMORY_SEMANTIC, Ops.PACKED_FRAGMENT_LOAD})),),
         allow_any_len=True), lambda: True),
 
   # CUSTOM (inline and non inline)
@@ -350,45 +350,45 @@ spec_tensor = PatternMatcher([
    and x.dtype == dtypes.half and all(s.dtype == dtypes.float32 for s in x.src)),
   # Descriptor-specific scheduler legalization. This remains non-renderable
   # until AMD instruction selection explicitly implements the declared ABI.
-  (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, src=(UPat(), UPat(), UPat()), name="x"),
+  (UPat(Ops.NATIVE_ROW_SOFTMAX_REPACK, src=(UPat(), UPat(), UPat()), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and native_attention_abi(x.arg.native_abi, "online_softmax_qk_pv_v1")
    and x.dtype == dtypes.half.vec(x.arg.pv_a_lanes) and x.shape == (x.arg.pv_a_lanes,) and x.src[0].dtype == dtypes.float32.vec(8)
    and ((x.arg.mode == "legacy_normalized" and x.src[1].dtype == x.src[2].dtype == dtypes.float32)
         or (x.arg.mode in {"stateful_unnormalized_v1", "loop_state_v1"}
             and x.src[1].dtype == x.src[2].dtype == dtypes.float32.vec(8)))),
-  (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, src=(UPat(), UPat(), UPat(), UPat(Ops.RANGE)), name="x"),
+  (UPat(Ops.NATIVE_ROW_SOFTMAX_REPACK, src=(UPat(), UPat(), UPat(), UPat(Ops.RANGE)), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and native_attention_abi(x.arg.native_abi, "online_softmax_qk_pv_v1")
    and x.arg.mode == "loop_state_v1" and x.arg.dynamic_kv_v1 and x.dtype == dtypes.half.vec(x.arg.pv_a_lanes) and x.shape == (x.arg.pv_a_lanes,)
    and x.src[0].dtype == x.src[1].dtype == x.src[2].dtype == dtypes.float32.vec(8)),
-  (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, src=(UPat(), UPat(), UPat(), UPat(Ops.RANGE), UPat()), name="x"),
+  (UPat(Ops.NATIVE_ROW_SOFTMAX_REPACK, src=(UPat(), UPat(), UPat(), UPat(Ops.RANGE), UPat()), name="x"),
    lambda x: hasattr(x.arg,'native_abi') and native_attention_abi(x.arg.native_abi, "online_softmax_qk_pv_v1") and x.arg.grid is not None
    and x.arg.dynamic_kv_v1 and x.dtype==dtypes.half.vec(x.arg.pv_a_lanes) and x.shape==(x.arg.pv_a_lanes,) and x.src[0].dtype==x.src[1].dtype==x.src[2].dtype==dtypes.float32.vec(8)),
-  (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, src=(UPat(),), name="x"),
+  (UPat(Ops.NATIVE_ROW_SOFTMAX_REPACK, src=(UPat(),), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and native_attention_abi(x.arg.native_abi, "online_softmax_qk_pv_v1")
    and x.arg.mode == "initial_state_v1" and x.dtype == dtypes.half.vec(x.arg.pv_a_lanes) and x.shape == (x.arg.pv_a_lanes,) and x.src[0].dtype == dtypes.float32.vec(8)),
-  (UPat(Ops.AMD_ROW_SOFTMAX_SLOT, src=(UPat(Ops.AMD_ROW_SOFTMAX_REPACK),), name="x"),
+  (UPat(Ops.ROW_SOFTMAX_SLOT, src=(UPat(Ops.NATIVE_ROW_SOFTMAX_REPACK),), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and native_attention_abi(x.arg.native_abi, "online_softmax_qk_pv_v1")
    and x.dtype == x.arg.carrier_dtype and x.shape == (x.arg.lanes,)),
-  (UPat(Ops.GEP, src=(UPat(Ops.AMD_ROW_SOFTMAX_SLOT, name="slot"),), name="x"),
+  (UPat(Ops.GEP, src=(UPat(Ops.ROW_SOFTMAX_SLOT, name="slot"),), name="x"),
    lambda x,slot: x.dtype == slot.dtype.scalar() and slot.shape == (slot.arg.lanes,) and len(x.arg) == 1 and 0 <= x.arg[0] < slot.arg.lanes),
   (UPat(Ops.AMD_PV_C_LANE, src=(UPat(),), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_pv_c_lane_v1"
    and x.src[0].dtype == dtypes.float.vec(8) and x.dtype == dtypes.float),
-  (UPat(Ops.AMD_ATTENTION_LOOP_STATE, name="x"),
+  (UPat(Ops.ATTENTION_LOOP_STATE, name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_attention_loop_state_v1"),
-  (UPat(Ops.GEP, src=(UPat(Ops.AMD_ATTENTION_LOOP_STATE, name="state"),), name="x"),
+  (UPat(Ops.GEP, src=(UPat(Ops.ATTENTION_LOOP_STATE, name="state"),), name="x"),
    lambda x,state: state.dtype == dtypes.float.vec(8) and x.dtype == dtypes.float and len(x.arg) == 1 and 0 <= x.arg[0] < 8),
-  (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD, src=(UPat(), UPat(), UPat(), UPat(Ops.RANGE)), name="x"),
+  (UPat(Ops.PACKED_FRAGMENT_LOAD, src=(UPat(), UPat(), UPat(), UPat(Ops.RANGE)), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and native_attention_abi(x.arg.native_abi, "packed_fragment_hd128_loop_v1")
    and x.dtype == dtypes.half.vec(x.arg.fragment_lanes) and x.shape == (x.arg.fragment_lanes,)),
-  (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD, src=(UPat(), UPat(), UPat(), UPat(Ops.RANGE), UPat(Ops.SPECIAL)), name="x"),
+  (UPat(Ops.PACKED_FRAGMENT_LOAD, src=(UPat(), UPat(), UPat(), UPat(Ops.RANGE), UPat(Ops.SPECIAL)), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and native_attention_abi(x.arg.native_abi, "packed_fragment_hd128_loop_v1") and getattr(x.arg,"grid",None) is not None
    and str(x.src[4].arg)=="gidx0" and x.dtype == dtypes.half.vec(x.arg.fragment_lanes) and x.shape == (x.arg.fragment_lanes,)),
-  (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD, src=(UPat(), UPat(), UPat(), UPat(), UPat(Ops.RANGE), UPat(Ops.SPECIAL)), name="x"),
+  (UPat(Ops.PACKED_FRAGMENT_LOAD, src=(UPat(), UPat(), UPat(), UPat(), UPat(Ops.RANGE), UPat(Ops.SPECIAL)), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and native_attention_abi(x.arg.native_abi, "packed_fragment_hd128_loop_v1") and
    getattr(getattr(x.arg,"grid",None),"native_abi",None) == "amd_gfx1100_attention_multiwave_g2_v1" and
    str(x.src[5].arg)=="gidx0" and x.dtype == dtypes.half.vec(x.arg.fragment_lanes) and x.shape == (x.arg.fragment_lanes,)),
-  (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, name="x"), validate_amd_attention_output_drain),
+  (UPat(Ops.ATTENTION_OUTPUT_DRAIN, name="x"), validate_amd_attention_output_drain),
   (UPat(Ops.AMD_ATTENTION_STATS_DRAIN, name="x"), validate_amd_attention_stats_drain),
 
   # ATTENTION keeps a normal fallback plus explicit Q/K/V/(optional mask)
@@ -436,13 +436,13 @@ spec_program = PatternMatcher([
   (UPat((Ops.ADD, Ops.MUL, Ops.SHR, Ops.CDIV), dtypes.weakint, src=(UPat(dtype=dtypes.weakint), UPat(dtype=dtypes.weakint))), lambda: True),
   # A fully masked row folds -inf to its uint bit pattern while retaining LDS publication ordering.
   (UPat(Ops.AFTER, dtypes.uint, src=(UPat(Ops.CONST, dtypes.uint), UPat(Ops.STORE))), lambda: True),
-  (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,src=(UPat(),UPat(),UPat(),UPat()),name="x"),
+  (UPat(Ops.PACKED_FRAGMENT_LOAD,src=(UPat(),UPat(),UPat(),UPat()),name="x"),
    lambda x: hasattr(x.arg,'native_abi') and native_attention_abi(x.arg.native_abi,"packed_fragment_hd128_loop_v1") and
    x.dtype==dtypes.half.vec(x.arg.fragment_lanes) and x.shape==(x.arg.fragment_lanes,) and all(s.dtype.scalar() in {dtypes.int,dtypes.weakint} for s in x.src[1:])),
-  (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"),
+  (UPat(Ops.PACKED_FRAGMENT_LOAD,name="x"),
    lambda x: hasattr(x.arg,'native_abi') and native_attention_abi(x.arg.native_abi,"packed_fragment_hd128_loop_v1") and getattr(x.arg,"grid",None) is not None and
    len(x.src)==5 and x.dtype==dtypes.half.vec(x.arg.fragment_lanes) and x.shape==(x.arg.fragment_lanes,) and all(s.dtype.scalar() in {dtypes.int,dtypes.weakint} for s in x.src[1:])),
-  (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"),
+  (UPat(Ops.PACKED_FRAGMENT_LOAD,name="x"),
    lambda x: hasattr(x.arg,'native_abi') and native_attention_abi(x.arg.native_abi,"packed_fragment_hd128_loop_v1") and
    getattr(getattr(x.arg,"grid",None),"native_abi",None)=="amd_gfx1100_attention_multiwave_g2_v1" and len(x.src)==6 and
    x.dtype==dtypes.half.vec(x.arg.fragment_lanes) and x.shape==(x.arg.fragment_lanes,) and all(s.dtype.scalar() in {dtypes.int,dtypes.weakint} for s in x.src[1:])),
@@ -455,9 +455,9 @@ spec_program = PatternMatcher([
   # artifact (lane-derived index folds), not about one vendor's spelling.
   (UPat(Ops.CAST,dtype=dtypes.weakint,src=(UPat(dtype=dtypes.int,name="f"),)),
    lambda f: _is_lane_fold(f)),
-  (UPat(Ops.AMD_ATTENTION_LOOP_STATE, name="x"),
+  (UPat(Ops.ATTENTION_LOOP_STATE, name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_attention_loop_state_v1"),
-  (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, name="x"), validate_amd_attention_output_drain),
+  (UPat(Ops.ATTENTION_OUTPUT_DRAIN, name="x"), validate_amd_attention_output_drain),
   (UPat(Ops.AMD_ATTENTION_STATS_DRAIN, name="x"), validate_amd_attention_stats_drain),
   # REDUCE with composite arg may reach program level before lowering
   (UPat(Ops.REDUCE, src=(UPat(),), allow_any_len=True, name="x"),

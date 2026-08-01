@@ -253,9 +253,9 @@ def test_gfx1100_native_row_softmax_repack_descriptor_is_exact():
   score = UOp(Ops.CONST, dtypes.float32.vec(8), (), (0.0,) * 8)
   m, l = UOp.const(dtypes.float32, 0), UOp.const(dtypes.float32, 1)
   native = amd_gfx1100_row_softmax_repack(score, m, l)
-  assert native.op is Ops.AMD_ROW_SOFTMAX_SLOT and native.dtype == dtypes.half.vec(16) and native.shape == (16,)
+  assert native.op is Ops.ROW_SOFTMAX_SLOT and native.dtype == dtypes.half.vec(16) and native.shape == (16,)
   owner = native.src[0]
-  assert owner.op is Ops.AMD_ROW_SOFTMAX_REPACK and owner.arg.target == "gfx1100" and owner.arg.wave_size == 32
+  assert owner.op is Ops.NATIVE_ROW_SOFTMAX_REPACK and owner.arg.target == "gfx1100" and owner.arg.wave_size == 32
   assert owner.arg.row_expr == "2*e+(lane>>4)" and owner.arg.col_expr == "lane&15"
   assert owner.arg.xor_masks == (1, 2, 4, 8)
   assert (owner.arg.lds_dtype, owner.arg.lds_elements, owner.arg.lds_address) == ("half", 256, "row*16+col")
@@ -271,10 +271,10 @@ def test_gfx1100_native_row_softmax_state_has_one_owner_and_typed_slots():
   slots = amd_gfx1100_row_softmax_state(score, UOp.const(dtypes.float.vec(8), (-float("inf"),)*8), UOp.const(dtypes.float.vec(8), (0,)*8))
   assert [x.dtype for x in slots] == [dtypes.half.vec(16), dtypes.float.vec(8), dtypes.float.vec(8), dtypes.float.vec(8)]
   assert [x.shape for x in slots] == [(16,), (8,), (8,), (8,)]
-  assert len({x.src[0] for x in slots}) == 1 and all(x.op is Ops.AMD_ROW_SOFTMAX_SLOT for x in slots)
+  assert len({x.src[0] for x in slots}) == 1 and all(x.op is Ops.ROW_SOFTMAX_SLOT for x in slots)
   from tinygrad.renderer.isa.amd import native_repack_matcher
   lowered = graph_rewrite(UOp.sink(*slots), native_repack_matcher, ctx=itertools.count(950), bottom_up=True)
-  assert not any(u.op in {Ops.AMD_ROW_SOFTMAX_REPACK, Ops.AMD_ROW_SOFTMAX_SLOT} for u in lowered.toposort())
+  assert not any(u.op in {Ops.NATIVE_ROW_SOFTMAX_REPACK, Ops.ROW_SOFTMAX_SLOT} for u in lowered.toposort())
   # One owner means one physical LDS allocation and one eight-element pair of butterfly trees.
   assert sum(u.op is Ops.DEFINE_LOCAL for u in lowered.toposort()) == 1
   assert sum(u.op is Ops.BARRIER for u in lowered.toposort()) == 1
@@ -282,37 +282,37 @@ def test_gfx1100_native_row_softmax_state_has_one_owner_and_typed_slots():
 
 def test_gfx1100_native_repack_modes_fail_closed():
   from tinygrad.schedule.wmma import amd_gfx1100_row_softmax_state
-  from tinygrad.uop.ops import AMDRowSoftmaxRepackSpec
+  from tinygrad.uop.ops import NativeRowSoftmaxRepackSpec
   score = UOp.const(dtypes.float.vec(8), (0,)*8)
   with pytest.raises(ValueError, match="stateful_unnormalized"):
     amd_gfx1100_row_softmax_state(score, UOp.const(dtypes.float, 0), UOp.const(dtypes.float, 1))
   with pytest.raises(ValueError, match="unknown normalization"):
-    AMDRowSoftmaxRepackSpec(mode="mixed").validate()
+    NativeRowSoftmaxRepackSpec(mode="mixed").validate()
 
 def test_gfx1100_native_repack_validity_contract_is_typed_and_fails_closed():
-  from tinygrad.uop.ops import AMDRowSoftmaxRepackSpec
-  causal=AMDRowSoftmaxRepackSpec(mode="initial_state_v1",validity_mode="causal_v1",query_start=0,kv_start=0,valid_kv=16)
-  tail=AMDRowSoftmaxRepackSpec(mode="initial_state_v1",validity_mode="causal_v1",query_start=0,kv_start=0,valid_kv=13)
+  from tinygrad.uop.ops import NativeRowSoftmaxRepackSpec
+  causal=NativeRowSoftmaxRepackSpec(mode="initial_state_v1",validity_mode="causal_v1",query_start=0,kv_start=0,valid_kv=16)
+  tail=NativeRowSoftmaxRepackSpec(mode="initial_state_v1",validity_mode="causal_v1",query_start=0,kv_start=0,valid_kv=13)
   causal.validate(); tail.validate()
   assert (causal.row_expr,causal.col_expr)==("2*e+(lane>>4)","lane&15")
   assert (tail.kv_start,tail.valid_kv)==(0,13)
   for bad in (
-    AMDRowSoftmaxRepackSpec(validity_mode="implicit"),
-    AMDRowSoftmaxRepackSpec(validity_mode="causal_v1",kv_start=1),
-    AMDRowSoftmaxRepackSpec(validity_mode="causal_v1",valid_kv=33),
-    AMDRowSoftmaxRepackSpec(validity_mode="all_v1",valid_kv=13),
+    NativeRowSoftmaxRepackSpec(validity_mode="implicit"),
+    NativeRowSoftmaxRepackSpec(validity_mode="causal_v1",kv_start=1),
+    NativeRowSoftmaxRepackSpec(validity_mode="causal_v1",valid_kv=33),
+    NativeRowSoftmaxRepackSpec(validity_mode="all_v1",valid_kv=13),
   ):
     with pytest.raises(ValueError,match="validity|KV tile"): bad.validate()
 
 def test_gfx1100_native_row_softmax_repack_fails_closed():
   from tinygrad.schedule.wmma import amd_gfx1100_row_softmax_repack
-  from tinygrad.uop.ops import AMDRowSoftmaxRepackSpec
+  from tinygrad.uop.ops import NativeRowSoftmaxRepackSpec
   m, l = UOp.const(dtypes.float32, 0), UOp.const(dtypes.float32, 1)
   with pytest.raises(ValueError, match="float.vec"):
     amd_gfx1100_row_softmax_repack(UOp.const(dtypes.float32.vec(4), (0.0,) * 4), m, l)
   with pytest.raises(ValueError, match="exact AMD"):
     amd_gfx1100_row_softmax_repack(UOp.const(dtypes.float32.vec(8), (0.0,) * 8), m, l,
-      spec=AMDRowSoftmaxRepackSpec(target="gfx1200"))
+      spec=NativeRowSoftmaxRepackSpec(target="gfx1200"))
 
 def test_rangeify_legalizes_exact_logical_repack_and_rejects_logical_tiles():
   from tinygrad.schedule.rangeify import lower_row_softmax_repack
@@ -321,7 +321,7 @@ def test_rangeify_legalizes_exact_logical_repack_and_rejects_logical_tiles():
   # The exact native handoff is accepted.
   logical_native = UOp(Ops.ROW_SOFTMAX_REPACK, dtypes.half,
     (UOp.const(dtypes.float32.vec(8), (0.0,) * 8), m, l), arg=__import__('tinygrad.uop.ops', fromlist=['RowSoftmaxRepackSpec']).RowSoftmaxRepackSpec())
-  assert lower_row_softmax_repack(logical_native).op is Ops.AMD_ROW_SOFTMAX_SLOT
+  assert lower_row_softmax_repack(logical_native).op is Ops.ROW_SOFTMAX_SLOT
   # A logical 16x16 tile has not established native lane ownership and must
   # fail instead of being flattened or silently repacked.
   logical_tile = row_softmax_lds_repack(UOp.placeholder((16, 16), dtypes.float32, 90),
@@ -342,7 +342,7 @@ def test_native_qk_consumer_exposes_raw_c_and_reaches_two_wmmas():
   m, l = UOp.const(dtypes.float32, 0), UOp.const(dtypes.float32, 1)
   logical = UOp(Ops.ROW_SOFTMAX_REPACK, dtypes.half, (qk, m, l), RowSoftmaxRepackSpec())
   bridge = graph_rewrite(logical, pm_native_row_softmax_repack, ctx=itertools.count(100), bottom_up=False)
-  assert bridge.op is Ops.AMD_ROW_SOFTMAX_SLOT and bridge.src[0].op is Ops.AMD_ROW_SOFTMAX_REPACK and bridge.src[0].src[0].op is Ops.WMMA
+  assert bridge.op is Ops.ROW_SOFTMAX_SLOT and bridge.src[0].op is Ops.NATIVE_ROW_SOFTMAX_REPACK and bridge.src[0].src[0].op is Ops.WMMA
   assert bridge.src[0].src[0].dtype == dtypes.float32.vec(8)
   v = UOp.const(dtypes.half.vec(16), (0.0,) * 16)
   pv_acc = UOp.const(dtypes.float32.vec(8), (0.0,) * 8)
@@ -350,9 +350,9 @@ def test_native_qk_consumer_exposes_raw_c_and_reaches_two_wmmas():
   lowered = graph_rewrite(pv, pm_mops, ctx=itertools.count(200), bottom_up=True)
   wmmas = [u for u in lowered.toposort() if u.op is Ops.WMMA]
   assert len(wmmas) == 2
-  native = [u for u in lowered.toposort() if u.op is Ops.AMD_ROW_SOFTMAX_REPACK]
+  native = [u for u in lowered.toposort() if u.op is Ops.NATIVE_ROW_SOFTMAX_REPACK]
   assert len(native) == 1 and native[0].src[0] is wmmas[0]
-  assert wmmas[1].src[0].op is Ops.AMD_ROW_SOFTMAX_SLOT and wmmas[1].src[0].src[0] is native[0]
+  assert wmmas[1].src[0].op is Ops.ROW_SOFTMAX_SLOT and wmmas[1].src[0].src[0] is native[0]
 
 def test_native_qk_consumer_does_not_truncate_logical_c_fragment():
   import itertools
@@ -417,7 +417,7 @@ def test_gfx1100_native_repack_direct_builder_reaches_final_program():
   ren = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))
   final = full_rewrite_to_sink(ast, ren, optimize=False)
   nodes = final.toposort()
-  assert not any(u.op in (Ops.ROW_SOFTMAX_REPACK, Ops.AMD_ROW_SOFTMAX_REPACK) for u in nodes)
+  assert not any(u.op in (Ops.ROW_SOFTMAX_REPACK, Ops.NATIVE_ROW_SOFTMAX_REPACK) for u in nodes)
   assert len([u for u in nodes if u.op is Ops.WMMA]) == 2
   assert len([u for u in nodes if u.op is Ops.DEFINE_LOCAL]) == 1
   assert len([u for u in nodes if u.op is Ops.BARRIER]) == 1
@@ -441,7 +441,7 @@ def test_gfx1100_q16_live_owner_builder_has_exact_fragment_addresses():
   weights, vfrag = wmmas[1].src[:2]
   assert qfrag.op is kfrag.op is vfrag.op is Ops.STACK
   assert qfrag.dtype == kfrag.dtype == vfrag.dtype == dtypes.half.vec(16)
-  assert weights.op is Ops.AMD_ROW_SOFTMAX_SLOT and weights.src[0].op is Ops.AMD_ROW_SOFTMAX_REPACK and weights.src[0].arg.score_scale == 0.25
+  assert weights.op is Ops.ROW_SOFTMAX_SLOT and weights.src[0].op is Ops.NATIVE_ROW_SOFTMAX_REPACK and weights.src[0].arg.score_scale == 0.25
   assert all(x.op is Ops.LOAD and x.src[0].src[0] is params[1] for x in qfrag.src)
   assert all(x.op is Ops.LOAD and x.src[0].src[0] is params[2] for x in kfrag.src)
   assert all(x.op is Ops.LOAD and x.src[0].src[0] is params[3] for x in vfrag.src)
@@ -475,7 +475,7 @@ def test_gfx1100_q16_live_owner_builder_feeds_proven_dual_wmma_pipeline():
   final = full_rewrite_to_sink(sink, ren, optimize=False)
   assert len([u for u in final.toposort() if u.op is Ops.WMMA]) == 2
   assert len([u for u in final.toposort() if u.op is Ops.BARRIER]) == 1
-  assert not any(u.op is Ops.AMD_ROW_SOFTMAX_REPACK for u in final.toposort())
+  assert not any(u.op is Ops.NATIVE_ROW_SOFTMAX_REPACK for u in final.toposort())
   program = to_program(sink, ren)
   linear = next(u for u in program.src if u.op is Ops.LINEAR)
   mnemonics = [str(u.arg).split("(", 1)[0] for u in linear.src if not isinstance(u.arg, tuple)]
@@ -595,7 +595,7 @@ def test_gfx1100_q16_kv32_builder_is_one_online_chain():
      2:UOp(Ops.PARAM,dtypes.half.ptr(512),arg=ParamArg(2)),3:UOp(Ops.PARAM,dtypes.half.ptr(512),arg=ParamArg(3))}
   sink=amd_gfx1100_q16_kv32_attention(p[1],p[2],p[3],p[0],scale=.25,kernel_info=KernelInfo(name="q16_kv32")); topo=sink.toposort()
   assert sum(u.op is Ops.WMMA for u in topo)==4
-  owners=[u for u in topo if u.op is Ops.AMD_ROW_SOFTMAX_REPACK]
+  owners=[u for u in topo if u.op is Ops.NATIVE_ROW_SOFTMAX_REPACK]
   assert len(owners)==2 and [u.arg.mode for u in owners]==["initial_state_v1", "stateful_unnormalized_v1"]
   assert sum(u.op is Ops.RECIPROCAL for u in topo)==8
 
@@ -606,16 +606,16 @@ def test_gfx1100_q16_kv32_hd128_has_exact_shared_p_and_output_ownership():
   p=[UOp(Ops.PARAM,dtypes.half.ptr(sizes[i]),arg=ParamArg(i)) for i in range(4)]
   sink=amd_gfx1100_q16_kv32_hd128_attention(p[1],p[2],p[3],p[0],scale=.25,kernel_info=KernelInfo(name="q16_kv32_hd128"))
   topo=sink.toposort(); wmmas=[u for u in topo if u.op is Ops.WMMA]
-  repacks=[u for u in topo if u.op is Ops.AMD_ROW_SOFTMAX_REPACK]
+  repacks=[u for u in topo if u.op is Ops.NATIVE_ROW_SOFTMAX_REPACK]
   assert len(wmmas)==32 and len(repacks)==2
   assert [r.arg.mode for r in repacks]==["initial_state_v1","stateful_unnormalized_v1"]
   for owner in repacks:
     score=owner.src[0]; chain=[]
     while score.op is Ops.WMMA: chain.append(score); score=score.src[2]
     assert len(chain)==8
-    pslot=next(u for u in topo if u.op is Ops.AMD_ROW_SOFTMAX_SLOT and u.arg.slot==0 and u.src[0] is owner)
+    pslot=next(u for u in topo if u.op is Ops.ROW_SOFTMAX_SLOT and u.arg.slot==0 and u.src[0] is owner)
     assert sum(u.op is Ops.WMMA and u.src[0] is pslot for u in topo)==8
-  drains=[u for u in topo if u.op is Ops.AMD_ATTENTION_OUTPUT_DRAIN]
+  drains=[u for u in topo if u.op is Ops.ATTENTION_OUTPUT_DRAIN]
   assert len(drains)==1 and drains[0].src[0] is p[0] and drains[0].src[1].dtype==dtypes.float.vec(8)
   assert tuple(drains[0].src[2:]) == tuple(acc for acc in drains[0].src[2:]) and len(set(drains[0].src[2:]))==8
 
@@ -628,8 +628,8 @@ def test_gfx1100_q16_kv32_hd128_reaches_spill_free_final_isa():
   sizes=(2048,2048,4096,4096); p=[UOp(Ops.PARAM,dtypes.half.ptr(sizes[i]),arg=ParamArg(i)) for i in range(4)]
   sink=amd_gfx1100_q16_kv32_hd128_attention(p[1],p[2],p[3],p[0],scale=.25,kernel_info=KernelInfo(name="hd128_isa"))
   ren=AMDISARenderer(Target.parse("AMD:ISA:gfx1100")); final=full_rewrite_to_sink(sink,ren,optimize=False)
-  assert sum(u.op is Ops.AMD_ATTENTION_OUTPUT_DRAIN for u in final.toposort())==1
-  assert final.src[0].op is Ops.AMD_ATTENTION_OUTPUT_DRAIN
+  assert sum(u.op is Ops.ATTENTION_OUTPUT_DRAIN for u in final.toposort())==1
+  assert final.src[0].op is Ops.ATTENTION_OUTPUT_DRAIN
   prg=to_program(sink,ren); linear=next(u for u in prg.src if u.op is Ops.LINEAR)
   mn=[str(u.arg).split("(",1)[0] for u in linear.src if not isinstance(u.arg,tuple)]
   assert mn.count("v_wmma_f32_16x16x16_f16")==32 and mn.count("s_barrier")==2
@@ -655,9 +655,9 @@ def test_gfx1100_acc_slice_v2_drain_preserves_output_block_base_to_amd_stores(ou
   assert offsets == {2*(e*256+j*16) for e in range(8) for j in expected_blocks}
 
 def test_gfx1100_acc_slice_v2_drain_rejects_invalid_output_block_base():
-  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec
+  from tinygrad.uop.ops import AttentionOutputDrainSpec
   with pytest.raises(ValueError,match="exact gfx1100"):
-    AMDAttentionOutputDrainSpec(native_abi="amd_gfx1100_attention_output_drain_acc_slice_v2",blocks=4,output_block_base=2).validate()
+    AttentionOutputDrainSpec(native_abi="amd_gfx1100_attention_output_drain_acc_slice_v2",blocks=4,output_block_base=2).validate()
 
 def test_gfx1100_acc_slice_v2_two_launch_causal_diagnostic():
   """Test-only split-output diagnostic: two independent QK/softmax launches own Hd[0:64]/Hd[64:128]."""
@@ -819,7 +819,7 @@ def test_gfx1100_q16_kv32_hd128_numeric():
 
 def test_gfx1100_q16_kv64_hd128_loop_has_one_static_stateful_body():
   from tinygrad.schedule.wmma import amd_gfx1100_q16_kv64_hd128_loop_attention
-  from tinygrad.uop.ops import KernelInfo, ParamArg, AMDLoopStateSpec, AMDPackedFragmentLoopSpec
+  from tinygrad.uop.ops import KernelInfo, ParamArg, LoopStateSpec, PackedFragmentLoopSpec
   sizes=(2048,2048,8192,8192)
   p=[UOp(Ops.PARAM,dtypes.half.ptr(sizes[i]),arg=ParamArg(i)) for i in range(4)]
   sink=amd_gfx1100_q16_kv64_hd128_loop_attention(p[1],p[2],p[3],p[0],scale=.25,kernel_info=KernelInfo(name="kv64_loop"))
@@ -827,19 +827,19 @@ def test_gfx1100_q16_kv64_hd128_loop_has_one_static_stateful_body():
   assert len(ranges)==len(ends)==1 and ranges[0].src[0].arg==4 and ends[0].src[1] is ranges[0]
   assert len([u for u in topo if u.op is Ops.DEFINE_REG])==3
   assert len([u for u in topo if u.op is Ops.WMMA])==16
-  repacks=[u for u in topo if u.op is Ops.AMD_ROW_SOFTMAX_REPACK]
+  repacks=[u for u in topo if u.op is Ops.NATIVE_ROW_SOFTMAX_REPACK]
   assert len(repacks)==1 and repacks[0].arg.mode=="loop_state_v1"
-  states=[u for u in topo if u.op is Ops.AMD_ATTENTION_LOOP_STATE]
+  states=[u for u in topo if u.op is Ops.ATTENTION_LOOP_STATE]
   assert {x.arg.role for x in states}=={"m","l","acc"}
   slots={(x.arg.role,x.arg.block,x.arg.lane) for x in states}
   assert len(slots)==80 and len({x.arg.owner for x in states})==1
   assert len([x for x in states if x.arg.role=="acc" and x.arg.access=="write"])==64
   assert len([x for x in states if x.arg.access=="final_read"])==72
-  frags=[u for u in topo if u.op is Ops.AMD_PACKED_FRAGMENT_LOAD]
-  assert len(frags)==24 and all(isinstance(x.arg,AMDPackedFragmentLoopSpec) and x.src[3] is ranges[0] for x in frags)
-  drains=[u for u in topo if u.op is Ops.AMD_ATTENTION_OUTPUT_DRAIN]
+  frags=[u for u in topo if u.op is Ops.PACKED_FRAGMENT_LOAD]
+  assert len(frags)==24 and all(isinstance(x.arg,PackedFragmentLoopSpec) and x.src[3] is ranges[0] for x in frags)
+  drains=[u for u in topo if u.op is Ops.ATTENTION_OUTPUT_DRAIN]
   assert len(drains)==1 and ends[0] in drains[0].backward_slice
-  assert all(isinstance(x.arg,AMDLoopStateSpec) for x in states)
+  assert all(isinstance(x.arg,LoopStateSpec) for x in states)
 
 def test_gfx1100_q16_kv64_hd128_loop_reaches_bounded_final_isa():
   from tinygrad.codegen import to_program
@@ -897,14 +897,14 @@ def test_gfx1100_q16_kv64_hd128_loop_causal_tail_numeric(valid_kv,query_start):
 
 def test_gfx1100_q32_hq4_hkv2_kv64_hd128_grid_loop_contract():
   from tinygrad.schedule.wmma import amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention
-  from tinygrad.uop.ops import KernelInfo, ParamArg, AMDAttentionGridSpec, AMDPackedFragmentLoopSpec
+  from tinygrad.uop.ops import KernelInfo, ParamArg, AttentionGridSpec, PackedFragmentLoopSpec
   p=[UOp(Ops.PARAM,dtypes.half.ptr(16384),arg=ParamArg(i)) for i in range(4)]
   sink=amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention(p[1],p[2],p[3],p[0],scale=.25,kernel_info=KernelInfo(name="grid_loop"))
   topo=sink.toposort(); group=next(u for u in topo if u.op is Ops.SPECIAL and str(u.arg)=="gidx0")
-  frags=[u for u in topo if u.op is Ops.AMD_PACKED_FRAGMENT_LOAD]
-  assert len(frags)==24 and all(isinstance(u.arg,AMDPackedFragmentLoopSpec) and isinstance(u.arg.grid,AMDAttentionGridSpec) and u.src[4] is group for u in frags)
-  drain=next(u for u in topo if u.op is Ops.AMD_ATTENTION_OUTPUT_DRAIN)
-  assert drain.src[1] is group and drain.arg.grid == AMDAttentionGridSpec()
+  frags=[u for u in topo if u.op is Ops.PACKED_FRAGMENT_LOAD]
+  assert len(frags)==24 and all(isinstance(u.arg,PackedFragmentLoopSpec) and isinstance(u.arg.grid,AttentionGridSpec) and u.src[4] is group for u in frags)
+  drain=next(u for u in topo if u.op is Ops.ATTENTION_OUTPUT_DRAIN)
+  assert drain.src[1] is group and drain.arg.grid == AttentionGridSpec()
 
 def test_gfx1100_q32_hq4_hkv2_kv64_hd128_grid_loop_numeric():
   import numpy as np
@@ -935,7 +935,7 @@ def test_gfx1100_q16_causal_and_tail_masks_preserve_native_topology():
   for valid_kv in (16,13):
     sink=amd_gfx1100_q16_attention(p[1],p[2],p[3],p[0],scale=.25,causal=True,valid_kv=valid_kv,
       kernel_info=KernelInfo(name=f"q16_causal_kv{valid_kv}"))
-    topo=sink.toposort(); owners=[u for u in topo if u.op is Ops.AMD_ROW_SOFTMAX_REPACK]
+    topo=sink.toposort(); owners=[u for u in topo if u.op is Ops.NATIVE_ROW_SOFTMAX_REPACK]
     assert sum(u.op is Ops.WMMA for u in topo)==2 and len(owners)==1
     assert (owners[0].arg.validity_mode,owners[0].arg.valid_kv)==("causal_v1",valid_kv)
     assert owners[0].src[0].op is Ops.WMMA
@@ -952,7 +952,7 @@ def test_gfx1100_q16_causal_tail_reaches_final_isa_without_intermediate_buffers(
   ren=AMDISARenderer(Target.parse("AMD:ISA:gfx1100")); final=full_rewrite_to_sink(sink,ren,optimize=False)
   nodes=final.toposort()
   assert sum(u.op is Ops.WMMA for u in nodes)==2 and sum(u.op is Ops.BARRIER for u in nodes)==1
-  assert not any(u.op in {Ops.AMD_ROW_SOFTMAX_REPACK,Ops.AMD_ROW_SOFTMAX_SLOT} for u in nodes)
+  assert not any(u.op in {Ops.NATIVE_ROW_SOFTMAX_REPACK,Ops.ROW_SOFTMAX_SLOT} for u in nodes)
   program=to_program(sink,ren); linear=next(u for u in program.src if u.op is Ops.LINEAR)
   mn=[str(u.arg).split("(",1)[0] for u in linear.src if not isinstance(u.arg,tuple)]
   assert mn.count("v_wmma_f32_16x16x16_f16")==2 and mn.count("s_barrier")==1
@@ -969,7 +969,7 @@ def test_gfx1100_q16_kv32_reaches_final_isa_program():
   ren=AMDISARenderer(Target.parse("AMD:ISA:gfx1100")); final=full_rewrite_to_sink(sink,ren,optimize=False)
   nodes=final.toposort()
   assert sum(u.op is Ops.WMMA for u in nodes)==4 and sum(u.op is Ops.BARRIER for u in nodes)==2
-  assert not any(u.op in {Ops.AMD_ROW_SOFTMAX_REPACK,Ops.AMD_ROW_SOFTMAX_SLOT} for u in nodes)
+  assert not any(u.op in {Ops.NATIVE_ROW_SOFTMAX_REPACK,Ops.ROW_SOFTMAX_SLOT} for u in nodes)
   program=to_program(sink,ren); linear=next(u for u in program.src if u.op is Ops.LINEAR)
   mn=[str(u.arg).split("(",1)[0] for u in linear.src if not isinstance(u.arg,tuple)]
   assert mn.count("v_wmma_f32_16x16x16_f16")==4 and mn.count("s_barrier")==2
@@ -1023,12 +1023,12 @@ def test_gfx1100_q16_causal_tail_numeric(valid_kv,query_start):
 
 def test_gfx1100_corrected_c_requires_exact_alpha_and_prior_wmma_lanes():
   from tinygrad.renderer.isa.amd import _corrected_c_transition
-  from tinygrad.uop.ops import AMDRowSoftmaxRepackSpec
+  from tinygrad.uop.ops import NativeRowSoftmaxRepackSpec
   arg=("WMMA_16_16_16_half_float",(16,16,16),dtypes.half,dtypes.float,"AMD:gfx1100",32,(),())
   prior=UOp(Ops.WMMA,dtypes.float.vec(8),(UOp.const(dtypes.half.vec(16),(0,)*16),
     UOp.const(dtypes.half.vec(16),(0,)*16),UOp.const(dtypes.float.vec(8),(0,)*8)),arg)
-  owner=UOp(Ops.AMD_ROW_SOFTMAX_REPACK,dtypes.half,(prior,
-    UOp.const(dtypes.float.vec(8),(0,)*8),UOp.const(dtypes.float.vec(8),(0,)*8)),AMDRowSoftmaxRepackSpec(mode="stateful_unnormalized_v1"))
+  owner=UOp(Ops.NATIVE_ROW_SOFTMAX_REPACK,dtypes.half,(prior,
+    UOp.const(dtypes.float.vec(8),(0,)*8),UOp.const(dtypes.float.vec(8),(0,)*8)),NativeRowSoftmaxRepackSpec(mode="stateful_unnormalized_v1"))
   alphas=[UOp.const(dtypes.float,1).replace(tag=("amd_gfx1100_online_softmax_alpha_v1",owner)) for _ in range(8)]
   vals=[prior.gep(i)*alphas[i] for i in range(8)]
   assert _corrected_c_transition(vals,arg) is prior
@@ -1058,8 +1058,8 @@ def test_gfx1100_q32_hq4_hkv2_kv64_hd128_grid_loop_final_isa():
 
 @pytest.mark.parametrize("hq,hkv",[(32,8),(40,8)])
 def test_gfx1100_model_grid_group_mapping_is_bijective_and_gqa_shared(hq,hkv):
-  from tinygrad.uop.ops import AMDAttentionGridSpec
-  grid=AMDAttentionGridSpec(q_tokens=512,q_heads=hq,kv_heads=hkv,group_ratio=hq//hkv,kv_tokens=512)
+  from tinygrad.uop.ops import AttentionGridSpec
+  grid=AttentionGridSpec(q_tokens=512,q_heads=hq,kv_heads=hkv,group_ratio=hq//hkv,kv_tokens=512)
   coords=[grid.group_coords(gid) for gid in range(grid.grid_size)]
   assert len(set((qh,qt) for qh,qt,_ in coords))==grid.grid_size
   assert all(kvh==qh//grid.group_ratio for qh,_,kvh in coords)
@@ -1074,14 +1074,14 @@ def test_gfx1100_model_grid_static_loop_body_is_invariant(hq,hkv,kv):
   from tinygrad.helpers import Target
   from tinygrad.renderer.isa.amd import AMDISARenderer
   from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention
-  from tinygrad.uop.ops import AMDAttentionGridSpec,KernelInfo,ParamArg
+  from tinygrad.uop.ops import AttentionGridSpec,KernelInfo,ParamArg
   sizes=(hq*512*128,hq*512*128,hkv*kv*128,hkv*kv*128)
   p=[UOp(Ops.PARAM,dtypes.half.ptr(sizes[i]),arg=ParamArg(i)) for i in range(4)]
   sink=amd_gfx1100_q16_grid_hd128_loop_attention(p[1],p[2],p[3],p[0],q_tokens=512,q_heads=hq,kv_heads=hkv,
     kv_tokens=kv,scale=.25,kernel_info=KernelInfo(name=f"model_{hq}_{kv}"))
   linear=next(u for u in to_program(sink,AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))).src if u.op is Ops.LINEAR)
   mn=[str(u.arg).split("(",1)[0] for u in linear.src if not isinstance(u.arg,tuple)]
-  assert AMDAttentionGridSpec(q_tokens=512,q_heads=hq,kv_heads=hkv,group_ratio=hq//hkv,kv_tokens=kv).single_wave_workgroup
+  assert AttentionGridSpec(q_tokens=512,q_heads=hq,kv_heads=hkv,group_ratio=hq//hkv,kv_tokens=kv).single_wave_workgroup
   waits=[u.arg for u in linear.src if str(u.arg).split("(",1)[0] == "s_waitcnt"]
   assert mn.count("v_wmma_f32_16x16x16_f16")==16 and mn.count("s_barrier")==0
   assert sum(getattr(w,"simm16",None) == (63 << 10) | 7 for w in waits) == 1

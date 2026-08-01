@@ -298,14 +298,14 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
         # Scheduler-only QK-C -> PV-A bridge. Backend lowering must consume it
         # before program construction.
         return self.arg.fragment_shape
-      case Ops.AMD_ROW_SOFTMAX_REPACK:
+      case Ops.NATIVE_ROW_SOFTMAX_REPACK:
         # Physical wave32 QK-C -> PV-A bridge. The descriptor, not DType,
         # owns the native per-lane PV-A fragment width.
         return (self.arg.pv_a_lanes,)
-      case Ops.AMD_ROW_SOFTMAX_SLOT: return (self.arg.lanes,)
-      case Ops.AMD_PACKED_FRAGMENT_LOAD: return (self.arg.fragment_lanes,)
-      case Ops.AMD_ATTENTION_LOOP_STATE: return (self.dtype.count,) if self.dtype != dtypes.void and self.dtype.count != 1 else ()
-      case Ops.AMD_ATTENTION_OUTPUT_DRAIN | Ops.AMD_ATTENTION_STATS_DRAIN: return self.src[0]._shape
+      case Ops.ROW_SOFTMAX_SLOT: return (self.arg.lanes,)
+      case Ops.PACKED_FRAGMENT_LOAD: return (self.arg.fragment_lanes,)
+      case Ops.ATTENTION_LOOP_STATE: return (self.dtype.count,) if self.dtype != dtypes.void and self.dtype.count != 1 else ()
+      case Ops.ATTENTION_OUTPUT_DRAIN | Ops.AMD_ATTENTION_STATS_DRAIN: return self.src[0]._shape
       case Ops.AMD_PV_C_LANE: return ()
       case Ops.SCOPED_REDUCE:
         # The first SCOPED_REDUCE source is its semantically identical
@@ -1456,7 +1456,7 @@ class SharedAttentionCandidateContext(NamedTuple):
 class NativeAttentionRequest(NamedTuple):
   native_abi: str
   candidate_context: SharedAttentionCandidateContext
-  grid: AMDAttentionGridSpec
+  grid: AttentionGridSpec
   input_dtype: DType
   combine_fn: str
 
@@ -1640,7 +1640,7 @@ def native_attention_abi(abi: str, suffix: str) -> bool:
   """True for the native fused-attention ABI names of any modeled target."""
   return abi in {f"amd_gfx1100_{suffix}", f"nv_sm120_{suffix}"}
 
-class AMDRowSoftmaxRepackSpec(NamedTuple):
+class NativeRowSoftmaxRepackSpec(NamedTuple):
   """Exact RDNA3 wave32 realization of ``online_softmax_qk_pv_v1``.
 
   This descriptor is scheduler-owned. It deliberately records every physical
@@ -1725,7 +1725,7 @@ class AMDPVCLaneSpec(NamedTuple):
       raise ValueError("PV-C lane projection element must be in [0,8)")
     return self
 
-class AMDRowSoftmaxSlotSpec(NamedTuple):
+class RowSoftmaxSlotSpec(NamedTuple):
   native_abi: str = "amd_gfx1100_online_softmax_qk_pv_v1"
   slot: int = 0
   scalar_dtypes: tuple[str, ...] = ("half", "float", "float", "float")
@@ -1754,7 +1754,7 @@ class AMDRowSoftmaxSlotSpec(NamedTuple):
       raise ValueError("native row-softmax slot must be in [0,4)")
     return self
 
-class AMDAttentionGridSpec(NamedTuple):
+class AttentionGridSpec(NamedTuple):
   """Compile-time launch ownership for the fixed 16x16x128 attention wave."""
   native_abi: str = "amd_gfx1100_attention_grid_hd128_v1"
   q_tokens: int = 32
@@ -1834,14 +1834,14 @@ class AMDMultiWaveAttentionGridSpec(NamedTuple):
       raise ValueError("AMD multiwave attention requires 16-wide tokens and G2 heads")
     return self
 
-class AMDAttentionOutputDrainSpec(NamedTuple):
+class AttentionOutputDrainSpec(NamedTuple):
   """Typed final ownership boundary for the native Hd128 attention ABI."""
   native_abi: str = "amd_gfx1100_attention_output_drain_v1"
   head_dim: int = 128
   blocks: int = 8
   lanes_per_fragment: int = 8
   address_expr: str = "e*256+halfwave*128+j*16+col"
-  grid: AMDAttentionGridSpec|None = None
+  grid: AttentionGridSpec|None = None
   output_block_base: int = 0
   fragment_model: Any|None = None
 
@@ -1927,7 +1927,7 @@ class AMDAttentionStatsDrainSpec(NamedTuple):
     if self.native_abi != "amd_gfx1100_attention_qk_stats_drain_v1": raise ValueError("AMD attention stats drain ABI mismatch")
     return self
 
-class AMDLoopStateSpec(NamedTuple):
+class LoopStateSpec(NamedTuple):
   """Scheduler-visible recurrence ownership for the unlowered KV tile loop."""
   native_abi: str = "amd_gfx1100_attention_loop_state_v1"
   role: str = "m"
@@ -1935,7 +1935,7 @@ class AMDLoopStateSpec(NamedTuple):
   block: int = 0
   lane: int = 0
   owner: int = 9404
-  # This NamedTuple has no grid field to read head_dim from (unlike AMDPackedFragmentLoopSpec), so an
+  # This NamedTuple has no grid field to read head_dim from (unlike PackedFragmentLoopSpec), so an
   # optional head_dim is added here, defaulted to 128 -> every existing construction site (both in
   # tinygrad/schedule/wmma/loop_state.py) is unchanged/byte-identical without threading a new arg.
   head_dim: int = 128
@@ -1956,12 +1956,12 @@ class AMDLoopStateSpec(NamedTuple):
       raise ValueError("AMD attention loop state has an invalid owner")
     return self
 
-class AMDPackedFragmentLoopSpec(NamedTuple):
+class PackedFragmentLoopSpec(NamedTuple):
   """Exact Hd128 fragment role plus a runtime KV-tile RANGE source."""
   native_abi: str = "amd_gfx1100_packed_fragment_hd128_loop_v1"
   role: str = "Q"
   head_block: int = 0
-  grid: AMDAttentionGridSpec|AMDMultiWaveAttentionGridSpec|None = None
+  grid: AttentionGridSpec|AMDMultiWaveAttentionGridSpec|None = None
   output_block_base: int = 0
   fragment_lanes: int = 16
   call: int = 0
@@ -2065,7 +2065,7 @@ class AttentionSpec(NamedTuple):
   # Native GQA is opt-in at the shared prefill boundary.  It records the
   # original Q/K/V head ownership instead of making repeat_interleave part of
   # the selected path; unsupported targets keep the ordinary fallback.
-  attention_grid: AMDAttentionGridSpec|None = None
+  attention_grid: AttentionGridSpec|None = None
   attention_context: SharedAttentionCandidateContext|None = None
 
 

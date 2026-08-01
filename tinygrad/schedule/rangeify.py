@@ -2,7 +2,7 @@ from dataclasses import dataclass, field, replace
 import itertools
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace, Invalid
 from tinygrad.uop.ops import PatternMatcher, UPat, Ops, UOp, resolve, GroupOp, _substitute, KernelInfo, ParamArg, ScheduleHints, NativeAttentionRequest
-from tinygrad.uop.ops import graph_rewrite, sint, AxisType, BottomUpGate, profile_matches, identity_element, AccumulatorSlot, CompositeReduce, CompositeInputSpec, CompositeTileCarrier, AttentionSpec, AMDRowSoftmaxRepackSpec, composite_reduce_provenance
+from tinygrad.uop.ops import graph_rewrite, sint, AxisType, BottomUpGate, profile_matches, identity_element, AccumulatorSlot, CompositeReduce, CompositeInputSpec, CompositeTileCarrier, AttentionSpec, NativeRowSoftmaxRepackSpec, composite_reduce_provenance
 from tinygrad.uop.symbolic import symbolic
 from tinygrad.helpers import prod, all_same, getenv, dedup, all_int, DEBUG, SPLIT_REDUCEOP, DEBUG_RANGEIFY, VIZ, MAX_KERNEL_BUFFERS
 from tinygrad.helpers import PCONTIG, FLOAT16, OPENPILOT_HACKS, Context, argsort, partition, get_single_element
@@ -310,7 +310,7 @@ def lower_row_softmax_repack(x: UOp) -> UOp:
   """
   from tinygrad.schedule.wmma import amd_gfx1100_row_softmax_repack
   x.arg.validate()
-  native = AMDRowSoftmaxRepackSpec()
+  native = NativeRowSoftmaxRepackSpec()
   return amd_gfx1100_row_softmax_repack(*x.src, spec=native)
 
 def lower_row_softmax_repack_with_qk(ctx, x:UOp, qk:UOp) -> UOp:
@@ -318,7 +318,7 @@ def lower_row_softmax_repack_with_qk(ctx, x:UOp, qk:UOp) -> UOp:
   from tinygrad.schedule.wmma import amd_gfx1100_row_softmax_repack
   x.arg.validate()
   raw_c = _lower_shaped_wmma(ctx, qk, True)
-  return amd_gfx1100_row_softmax_repack(raw_c, x.src[1], x.src[2], spec=AMDRowSoftmaxRepackSpec())
+  return amd_gfx1100_row_softmax_repack(raw_c, x.src[1], x.src[2], spec=NativeRowSoftmaxRepackSpec())
 
 pm_native_row_softmax_repack = PatternMatcher([
   (UPat(Ops.ROW_SOFTMAX_REPACK, src=(UPat(Ops.SHAPED_WMMA, name="qk"), UPat(), UPat()), name="x"),
