@@ -72,8 +72,8 @@ def make_kv_element_loader(cache:UOp, Hd:int, kvscale:UOp|None=None, freqs:UOp|N
   if pos_of is None: pos_of = lambda tok: tok
 
   def raw(which, kvh, tok, elem):
-    val = cache[which, 0, kvh, tok, elem].cast(dtypes.half)
-    if quant: val = val * kvscale[which, 0, kvh, tok].cast(dtypes.half)
+    val = cache[which, 0, kvh, tok, elem].cast(dtypes.float16)
+    if quant: val = val * kvscale[which, 0, kvh, tok].cast(dtypes.float16)
     return val
 
   def load(which, kvh, tok, elem):
@@ -81,8 +81,8 @@ def make_kv_element_loader(cache:UOp, Hd:int, kvscale:UOp|None=None, freqs:UOp|N
     if rope and which == 0:
       pos, rotary_elem, low = pos_of(tok), elem % half_dim, elem < half_dim
       pair = raw(0, kvh, tok, low.where(elem + half_dim, elem - half_dim))
-      cos = freqs[pos, rotary_elem].cast(dtypes.half)
-      sin = freqs[pos, half_dim + rotary_elem].cast(dtypes.half)
+      cos = freqs[pos, rotary_elem].cast(dtypes.float16)
+      sin = freqs[pos, half_dim + rotary_elem].cast(dtypes.float16)
       val = val * cos + low.where(-(pair * sin), pair * sin)
     return val
   return load
@@ -121,8 +121,8 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
     raw_head = kvh * G + grouped_head
     head = warp_active.where(raw_head, raw_head.const_like(0))
     tid = warp * LANES + lane
-    ksh = UOp.placeholder((TK * Hd,), dtypes.half, 230, addrspace=AddrSpace.LOCAL)
-    vsh = UOp.placeholder((TK * Hd,), dtypes.half, 231, addrspace=AddrSpace.LOCAL) if staging == "KV_BOTH" else None
+    ksh = UOp.placeholder((TK * Hd,), dtypes.float16, 230, addrspace=AddrSpace.LOCAL)
+    vsh = UOp.placeholder((TK * Hd,), dtypes.float16, 231, addrspace=AddrSpace.LOCAL) if staging == "KV_BOTH" else None
     acc = UOp.placeholder((R,), _F32, 232, addrspace=AddrSpace.REG)
     den = UOp.placeholder((1,), _F32, 233, addrspace=AddrSpace.REG)
     mx = UOp.placeholder((1,), _F32, 234, addrspace=AddrSpace.REG)
@@ -162,8 +162,8 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
       dot = dot.after(dot_init)
       pair_axis = UOp.range(RP, 6, axis_type=AxisType.REDUCE)
       elem = pair_axis * 64 + lane * 2
-      qpair = UOp(Ops.STACK, dtypes.half.vec(2), (q[head * Hd + elem].cast(dtypes.half), q[head * Hd + elem + 1].cast(dtypes.half)))
-      kpair = UOp(Ops.STACK, dtypes.half.vec(2), (ksh.after(barrier)[token_in_tile * Hd + elem],
+      qpair = UOp(Ops.STACK, dtypes.float16.vec(2), (q[head * Hd + elem].cast(dtypes.float16), q[head * Hd + elem + 1].cast(dtypes.float16)))
+      kpair = UOp(Ops.STACK, dtypes.float16.vec(2), (ksh.after(barrier)[token_in_tile * Hd + elem],
                                                  ksh.after(barrier)[token_in_tile * Hd + elem + 1]))
       fdot = _lower_fdot2(dot.after(pair_axis)[0], qpair, kpair)
       update = dot[0].store(fdot).end(pair_axis)

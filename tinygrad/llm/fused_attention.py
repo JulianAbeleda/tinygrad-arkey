@@ -203,20 +203,20 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
     raise NotImplementedError(f"custom_kernel_attention: no emitter registered for target {spec.target!r}")
   fxn = emitter(spec)
 
-  q_flat = q.cast(dtypes.half).reshape(Hq * T * Hd)
-  k_flat = k.cast(dtypes.half).reshape(Hkv * KV * Hd)
+  q_flat = q.cast(dtypes.float16).reshape(Hq * T * Hd)
+  k_flat = k.cast(dtypes.float16).reshape(Hkv * KV * Hd)
   # V VECTORIZATION (PREFILL_V_TRANSPOSED): uop_program already .contiguous()'s each input into a
   # fresh buffer, so materializing V as [Hkv][Hd][KV] instead of [Hkv][KV][Hd] costs one transposed
   # copy in place of a free reshape -- and turns the emitter's 128 2-byte V gathers per KV tile into
   # 16 b128 loads (see amd_attention_abi.expand_loop_fragment). Element count is identical.
   from tinygrad.helpers import getenv as _getenv
-  v_flat = (v.cast(dtypes.half).permute(0, 1, 3, 2).reshape(Hkv * Hd * KV) if _getenv("PREFILL_V_TRANSPOSED")
-            else v.cast(dtypes.half).reshape(Hkv * KV * Hd))
+  v_flat = (v.cast(dtypes.float16).permute(0, 1, 3, 2).reshape(Hkv * Hd * KV) if _getenv("PREFILL_V_TRANSPOSED")
+            else v.cast(dtypes.float16).reshape(Hkv * KV * Hd))
   identity = (f"amd_gfx1100_q16_grid_hd128_loop_attention:role=attention_tile,"
               f"Hq={Hq},Hkv={Hkv},q_tokens={T},kv_tokens={KV},Hd={Hd}")
   program = KernelProgram("prefill_flash_attention_generated", f"prefill_flash_attention.{identity}",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED, fxn,
-    output_spec=OutputSpec((Hq * T * Hd,), dtypes.half))
+    output_spec=OutputSpec((Hq * T * Hd,), dtypes.float16))
   result = execute_promoted_program(None, q_flat, k_flat, v_flat, program=program)
   # Record the dispatch AFTER every geometry/spec gate above has passed (i.e. only
   # once we know this call is committed to the fused custom-kernel route, not a

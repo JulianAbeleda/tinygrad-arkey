@@ -644,7 +644,7 @@ class TransformerBlock(FFNBlock):
         start_pos, self.config.n_heads, self.config.n_kv_heads, self.config.head_dim, True)
       with role_metadata("shared_prefill_attention"):
         attn = _prefill_semantic(_prefill, prefill_scratch,
-          route_prefill_attention(q.cast(dtypes.half), k.cast(dtypes.half), v.cast(dtypes.half),
+          route_prefill_attention(q.cast(dtypes.float16), k.cast(dtypes.float16), v.cast(dtypes.float16),
             mask=mask, causal=True, ctx=_ctx, use_custom_kernel=True).cast(q.dtype))
     elif self.config.prefill_tc_attn and getattr(self, '_prefill_v2', False) and isinstance(start_pos, int) and resolve(T != 1):
       # Q/K/V have the same fp16 activation contract for resident-overlay and
@@ -669,10 +669,10 @@ class TransformerBlock(FFNBlock):
           # realizes Q/K/V as opaque buffers. See llm/fused_attention.py.
           from tinygrad.llm.fused_attention import route_prefill_attention
           attn = _prefill_semantic(_prefill, prefill_scratch,
-            route_prefill_attention(q.cast(dtypes.half), k.cast(dtypes.half), v.cast(dtypes.half),
+            route_prefill_attention(q.cast(dtypes.float16), k.cast(dtypes.float16), v.cast(dtypes.float16),
               mask=mask, causal=True, ctx=_ctx, use_custom_kernel=True).cast(q.dtype))
         else:
-          _qkv_h = (q.cast(dtypes.half), k.cast(dtypes.half), v.cast(dtypes.half))
+          _qkv_h = (q.cast(dtypes.float16), k.cast(dtypes.float16), v.cast(dtypes.float16))
           attn = _prefill_semantic(_prefill, prefill_scratch,
             shared_prefill_attention(*_qkv_h, mask=mask, candidate_context=_ctx).cast(q.dtype))
     else:

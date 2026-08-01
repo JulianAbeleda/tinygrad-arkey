@@ -140,7 +140,7 @@ def packed_half_carrier(src: Tensor, transform: PackedWeightTransform, n: int, k
   """Movement-only packed-to-half carrier consumed by packed-weight postrange lowering."""
   blocks, halfwords = n * k // transform.block_elems, int(transform.block_bytes) // 2
   return src.bitcast(dtypes.uint16).reshape(blocks, halfwords).pad(((0, 0), (0, 128-halfwords))) \
-    .reshape(blocks, 128, 1).expand(blocks, 128, 2).reshape(n, k).bitcast(dtypes.half)
+    .reshape(blocks, 128, 1).expand(blocks, 128, 2).reshape(n, k).bitcast(dtypes.float16)
 
 
 def _candidate_context(row: PackedWmmaRoute) -> tuple[_CandidateContext, PackedWeightTransform]:

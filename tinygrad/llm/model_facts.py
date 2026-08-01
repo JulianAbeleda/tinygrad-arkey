@@ -16,7 +16,7 @@ GGML_QUANT_LABELS = {
 }
 PROGRAM_SOURCE_LAYOUTS = ("gguf_packed_row_major",)
 PROGRAM_MODULE_REPRESENTATIONS = ("nn_linear", "qk_primitive_adapter")
-PROGRAM_DTYPES = ("float16", "float32", "bfloat16", str(dtypes.half), str(dtypes.float), str(dtypes.bfloat16))
+PROGRAM_DTYPES = ("float16", "float32", "bfloat16", str(dtypes.float16), str(dtypes.float), str(dtypes.bfloat16))
 
 @dataclass(frozen=True)
 class ProgramIdentityMetadata(Metadata):

@@ -235,7 +235,7 @@ def _tinygrad_target_probe(device: str) -> Mapping[str, Any]:
     # conditions it on Apple7+, HIPRenderer on tc.get_amd(arch) -- tinygrad/renderer/cstyle.py); an empty list
     # is a verified "no tensor cores" fact, not "unreported". Only a missing renderer stays unreported (None).
     "supports_tensor_cores": None if renderer is None else bool(getattr(renderer, "tensor_cores", [])),
-    "supports_fp16": None if renderer is None else (dtypes.half in renderer.supported_dtypes()),
+    "supports_fp16": None if renderer is None else (dtypes.float16 in renderer.supported_dtypes()),
     "max_workgroup_threads": getattr(renderer, "max_workgroup_threads", None),
     "max_workgroup_dimensions": getattr(renderer, "max_workgroup_dimensions", None),
     "lds_bytes": getattr(renderer, "shared_max", None),
