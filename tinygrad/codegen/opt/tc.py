@@ -132,7 +132,9 @@ cuda_sm75: list[TensorCore] = cuda_8168_f16
 cuda_sm80: list[TensorCore] = cuda_81616 + cuda_8168_f16 + cuda_8168_tf32
 cuda_sm89: list[TensorCore] = cuda_sm80 + cuda_81632_f8
 
-def get_cuda(arch): return cuda_sm89 if (ver:=int(arch[3:])) >= 89 else cuda_sm80 if ver >= 80 else cuda_sm75 if ver >= 75 else []
+def get_cuda(arch):
+  # Accept both the runtime's "sm_120" spelling (ops_nv.py) and the campaign's "sm120" spelling.
+  return cuda_sm89 if (ver:=int(arch.replace("_", "")[2:])) >= 89 else cuda_sm80 if ver >= 80 else cuda_sm75 if ver >= 75 else []
 
 # ***** AMD *****
 

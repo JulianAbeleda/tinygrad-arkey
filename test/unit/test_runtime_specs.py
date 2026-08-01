@@ -2,6 +2,7 @@ import pytest
 import json, pickle
 import hashlib
 from dataclasses import dataclass
+from pathlib import Path
 
 from extra.llm_research.generated_candidates import GeneratedCandidateRegistry, builtin_registry, select_generated_candidate
 from extra.llm_research import route_manifest
@@ -10,13 +11,28 @@ from extra.llm_research.prefill import prefill_graph_gemm_route
 from extra.llm_research.runtime_specs import (
   ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH, FULL_KERNEL_CANDIDATE_SCHEMA, PACKED_SCALAR_DECODER_VERSION, ActivationQuantSpec, GeneratedCandidate,
   CandidateAdmissionFacts, QuantizedTensorSpec, RuntimeOpSpec, FullKernelCandidateSet, FullKernelCandidateSetEntry,
-  GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY, GFX1100_TWO_BUFFER_STAGE1_CAPABILITY, Q4KQ8FiveBufferEmitterPlan,
+  FullKernelAdmissionError,
+  GFX1100_SINGLE_BUFFER_CAPABILITY, GFX1100_REGISTER_RESIDENT_CAPABILITY,
+  GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY, GFX1100_TWO_BUFFER_STAGE1_CAPABILITY,
+  NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY, METAL_M4_10C_TWO_BUFFER_STAGE1_CAPABILITY,
+  Q4KQ8FiveBufferEmitterPlan,
   admit_full_kernel_candidate, admit_full_kernel_candidate_set, capability_transport, derive_packed_weight_candidate,
   derive_q4k_q8_1_five_buffer_candidate,
   bind_full_kernel_candidate, full_kernel_candidate_set_from_legacy, full_kernel_candidate_capability,
   full_kernel_workload, q4k_q8_1_five_buffer_abi_plan, rebind_full_kernel_workload,
 )
+from tinygrad.codegen.opt import tc
+from tinygrad.codegen.opt.kernel_lds import derive_precontract_shape_factors
+from tinygrad.dtype import dtypes
 from tinygrad.llm.roles import normalize_program_role
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _mint_payload(candidate_set_dir: str) -> dict:
+  path = _REPO_ROOT / "bench" / "prefill-pure-full-kernel" / candidate_set_dir / "candidate-set.json"
+  candidate_set = json.loads(path.read_text())
+  return json.loads(json.dumps(candidate_set["entries"][0]["payload"]))
 
 
 # Inlined from the retired quant-spec helper module in extra/llm_research (retired 2026-07-26, see
@@ -521,6 +537,94 @@ def test_two_buffer_stage1_requires_separate_capability_and_typed_plan():
   assert admission.pipeline_plan.slot_window(0) == (0,20480)
   assert admission.pipeline_plan.slot_window(1) == (20480,40960)
   assert admission.context.pipeline == admission.pipeline_plan
+
+
+def test_capability_table_declares_nv_and_metal_rows_from_renderer_facts():
+  # NV facts: CUDARenderer's own declared LDS budget (cuda.py:12) and the descriptor
+  # `tc.get_cuda` returns for sm_120 (cuda_sm89), whose fp16-in/fp32-out dims are (8,16,16).
+  nv = NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY
+  assert (nv.backend, nv.arch, nv.wave_size) == ("CUDA", "sm120", 32)
+  assert nv.max_lds_bytes == 49152
+  assert nv.vector_bytes == 16
+  nv_descriptor = next(x for x in tc.get_cuda("sm_120") if x.dtype_in == dtypes.half and x.dtype_out == dtypes.float)
+  assert nv.instruction_family == f"wmma_f32_{nv_descriptor.dims[0]}x{nv_descriptor.dims[1]}x{nv_descriptor.dims[2]}_f16"
+  assert nv_descriptor.dims == (8, 16, 16)
+  # Metal facts: MetalRenderer.shared_max (cstyle.py:481) and tc.metal's (8,8,8) descriptor.
+  metal = METAL_M4_10C_TWO_BUFFER_STAGE1_CAPABILITY
+  assert (metal.backend, metal.arch, metal.wave_size) == ("Metal", "m4_10c", 32)
+  assert metal.max_lds_bytes == 32768
+  metal_descriptor = next(x for x in tc.metal if x.dtype_in == dtypes.half and x.dtype_out == dtypes.float)
+  assert metal.instruction_family == f"wmma_f32_{metal_descriptor.dims[0]}x{metal_descriptor.dims[1]}x{metal_descriptor.dims[2]}_f16"
+
+
+def test_all_four_amd_rows_still_resolve_by_schedule_shape():
+  payload = _single_buffer_anchor_candidate().full_kernel_candidate
+  assert full_kernel_candidate_capability(payload) is GFX1100_SINGLE_BUFFER_CAPABILITY
+  two_buffer = json.loads(json.dumps(payload))
+  two_buffer["schedule"]["pipeline"]["buffer_count"] = 2
+  assert full_kernel_candidate_capability(two_buffer) is GFX1100_TWO_BUFFER_STAGE1_CAPABILITY
+  register = json.loads(json.dumps(payload))
+  register["schedule"]["residency"]["resident"] = ["accumulator", "stage_ab_register"]
+  assert full_kernel_candidate_capability(register) is GFX1100_REGISTER_RESIDENT_CAPABILITY
+  five_buffer = json.loads(json.dumps(payload))
+  five_buffer["schedule"]["family"] = "q4k_q8_1_direct_global_v1"
+  assert full_kernel_candidate_capability(five_buffer) is GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY
+
+
+def test_amd_admission_outcomes_identical_with_table_resolved_capability():
+  candidate = _single_buffer_anchor_candidate()
+  payload = candidate.full_kernel_candidate
+  admission = admit_full_kernel_candidate(payload, candidate.canonical_identity,
+    profile="qwen3_8b_q4k_m_gfx1100", role="ffn_gate_up", shape=(512,12288,4096),
+    target={"backend":"AMD","arch":"gfx1100","wave_size":32},
+    capability=full_kernel_candidate_capability(payload))
+  assert admission.capability is GFX1100_SINGLE_BUFFER_CAPABILITY
+  assert admission.active_lds_bytes == 20480
+  assert (admission.plan.subtiles_m, admission.plan.subtiles_n, admission.plan.k_substeps) == (2, 4, 2)
+
+
+def test_nv_mint_clears_frozen_target_gate_but_cloned_schedule_blocks_on_tc_family():
+  # The mint's schedule still carries AMD's wmma facts (cloned, not NV-typed). After C1 the
+  # structural capability_target gate is gone -- the error must now be the family mismatch,
+  # not "target is outside frozen capability" -- until NV schedules carry NV facts.
+  payload = _mint_payload("multirole-buffer2-candidate-set-sm120-v1")
+  entry = derive_packed_weight_candidate(payload, "Q4_K")
+  final = entry.to_json()["payload"]
+  workload = full_kernel_workload(final)
+  with pytest.raises(FullKernelAdmissionError, match="capability_tc"):
+    admit_full_kernel_candidate(final, entry.canonical_identity, profile=workload.profile, role=workload.role,
+      shape=workload.shape, target=workload.target, capability=full_kernel_candidate_capability(final),
+      device="CUDA")
+
+
+def test_nv_typed_schedule_admits_with_cuda_tc_and_resolves_different_precontract_factors():
+  # C2: with NV-typed wmma facts the mint's geometry admits against the NV row, and the resolved
+  # PrecontractFactors differ from AMD's because the CUDA descriptor is (8,16,16), not (16,16,16).
+  payload = _mint_payload("multirole-buffer2-candidate-set-sm120-v1")
+  capability = full_kernel_candidate_capability(payload)
+  payload["schedule"]["wmma"]["instruction_family"] = capability.instruction_family
+  payload["schedule"]["wmma"]["fragment_layout"] = capability.fragment_layout
+  payload["schedule"]["lane_ownership"] = capability.fragment_layout
+  entry = derive_packed_weight_candidate(payload, "Q4_K")
+  final = entry.to_json()["payload"]
+  workload = full_kernel_workload(final)
+  admission = admit_full_kernel_candidate(final, entry.canonical_identity, profile=workload.profile,
+    role=workload.role, shape=workload.shape, target=workload.target,
+    capability=full_kernel_candidate_capability(final), device="CUDA")
+  assert admission.capability is NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY
+  assert admission.active_lds_bytes == 40960
+  assert (admission.plan.subtiles_m, admission.plan.subtiles_n, admission.plan.k_substeps) == (2, 8, 2)
+  amd_descriptor = next(x for x in tc.get_amd("gfx1100") if x.dtype_in == dtypes.half and x.dtype_out == dtypes.float)
+  amd_factors = derive_precontract_shape_factors(admission.geometry, amd_descriptor)
+  assert (amd_factors.subtiles_m, amd_factors.subtiles_n, amd_factors.k_substeps) == (2, 4, 2)
+  assert (admission.plan.subtiles_m, admission.plan.subtiles_n) != (amd_factors.subtiles_m, amd_factors.subtiles_n)
+
+
+def test_metal_mint_resolves_declared_m4_10c_row():
+  payload = _mint_payload("multirole-buffer2-candidate-set-m4-10c-v1")
+  capability = full_kernel_candidate_capability(payload)
+  assert capability is METAL_M4_10C_TWO_BUFFER_STAGE1_CAPABILITY
+  assert capability.max_lds_bytes == 32768
 
 
 def test_register_candidate_admission_uses_zero_lds_typed_plan():

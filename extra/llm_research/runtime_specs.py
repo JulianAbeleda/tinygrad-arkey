@@ -5,6 +5,7 @@ import hashlib
 import json
 from types import MappingProxyType
 from typing import Any, Callable
+from tinygrad.dtype import dtypes
 from tinygrad.llm.roles import PROGRAM_WORKLOAD_ROLES, normalize_program_role
 
 OP_FAMILIES = ("QuantizedLinear", "DenseLinear", "FlashAttention", "KVCache", "ActivationFusion")
@@ -53,6 +54,84 @@ GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY = FullKernelCapability(
   capability_id="amd.gfx1100.prefill.q4k_q8.direct_physical_ds4.v1", max_lds_bytes=0,
   buffer_count=0, stage_count=0, vector_bytes=16, instruction_family="wmma_i32_16x16x16_iu8",
   fragment_layout="rdna3_wave32_signed_i8_direct_global", transport="direct_global")
+
+def _wave_size_for_arch(arch: str) -> int:
+  """Declared wave size by arch: 64 on CDNA parts, else 32 (HIPRenderer, cstyle.py:598)."""
+  return 64 if arch.split(":")[0] in {"gfx942", "gfx950"} else 32
+
+def _tensor_core_family(backend: str, arch: str) -> list:
+  """The tensor-core family a real Renderer uses for this target, by name:
+  ``tc.get_amd`` for HIPRenderer (cstyle.py:595), ``tc.get_cuda`` for CUDARenderer (cuda.py:19),
+  ``tc.metal`` for MetalRenderer (cstyle.py:486). A new backend is a new row, never new logic.
+  """
+  from tinygrad.codegen.opt import tc
+  return {"AMD": tc.get_amd, "CUDA": tc.get_cuda, "METAL": lambda arch: tc.metal}[backend.upper()](arch)
+
+def _instruction_family_for(backend: str, arch: str, dtype_in, dtype_out) -> str:
+  """instruction_family is a hardware fact, so it is derived at load from the target's own
+  tensor-core descriptor (dims + dtypes), never declared from another target's numbers.
+  AMD gfx1100's (half, float) descriptor derives to the historical literal below, which is
+  what makes that literal a declaration that can be falsified rather than a default.
+  """
+  descriptor = next(tc for tc in _tensor_core_family(backend, arch)
+                    if tc.dtype_in == dtype_in and tc.dtype_out == dtype_out)
+  return f"wmma_f{dtype_out.itemsize*8}_{descriptor.dims[0]}x{descriptor.dims[1]}x{descriptor.dims[2]}_f{dtype_in.itemsize*8}"
+
+# Declared per-target capability rows. The table is keyed by (backend, arch) x schedule shape:
+# the target selects the hardware facts, the schedule selects the pipeline/transport row within
+# that target. ``wave_size`` is derived from arch (``_wave_size_for_arch``) and is asserted by
+# the existing three-way ``capability_target`` equality check; it is not part of the key.
+# ``fragment_layout`` names this repo's emitter contract, not hardware -- it stays a declared
+# literal cited to the emitter that implements it (AMD: cstyle.py rdna3 packed-WMMA branch;
+# CUDA: cuda.py ``mma.sync`` lowering; Metal: cstyle.py ``simdgroup_multiply_accumulate``).
+NV_SM120_SINGLE_BUFFER_CAPABILITY = FullKernelCapability(
+  capability_id="nvidia.sm120.prefill.wmma_lds.single_buffer.v1", backend="CUDA", arch="sm120",
+  wave_size=_wave_size_for_arch("sm120"), max_lds_bytes=49152, vector_bytes=16,
+  instruction_family=_instruction_family_for("CUDA", "sm120", dtypes.half, dtypes.float),
+  fragment_layout="cuda_mma_f32_8x16x16_f16_lds2_static", transport="lds")
+NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY = FullKernelCapability(
+  capability_id="nvidia.sm120.prefill.wmma_lds.two_buffer_stage1.v1", backend="CUDA", arch="sm120",
+  wave_size=_wave_size_for_arch("sm120"), max_lds_bytes=49152, vector_bytes=16, buffer_count=2,
+  stage_count=1,
+  instruction_family=_instruction_family_for("CUDA", "sm120", dtypes.half, dtypes.float),
+  fragment_layout="cuda_mma_f32_8x16x16_f16_lds2_static", transport="lds")
+METAL_M4_10C_SINGLE_BUFFER_CAPABILITY = FullKernelCapability(
+  capability_id="apple.m4_10c.prefill.wmma_lds.single_buffer.v1", backend="Metal", arch="m4_10c",
+  wave_size=_wave_size_for_arch("m4_10c"), max_lds_bytes=32768, vector_bytes=16,
+  instruction_family=_instruction_family_for("Metal", "m4_10c", dtypes.half, dtypes.float),
+  fragment_layout="metal_simdgroup_matrix_f32_8x8x8_f16_lds2_static", transport="lds")
+METAL_M4_10C_TWO_BUFFER_STAGE1_CAPABILITY = FullKernelCapability(
+  capability_id="apple.m4_10c.prefill.wmma_lds.two_buffer_stage1.v1", backend="Metal", arch="m4_10c",
+  wave_size=_wave_size_for_arch("m4_10c"), max_lds_bytes=32768, vector_bytes=16, buffer_count=2,
+  stage_count=1,
+  instruction_family=_instruction_family_for("Metal", "m4_10c", dtypes.half, dtypes.float),
+  fragment_layout="metal_simdgroup_matrix_f32_8x8x8_f16_lds2_static", transport="lds")
+
+_CAPABILITY_ROWS: dict[tuple[str, str], dict[str, "FullKernelCapability"]] = {
+  ("AMD", "gfx1100"): {
+    "single_buffer": GFX1100_SINGLE_BUFFER_CAPABILITY,
+    "two_buffer_stage1": GFX1100_TWO_BUFFER_STAGE1_CAPABILITY,
+    "register_resident": GFX1100_REGISTER_RESIDENT_CAPABILITY,
+    "q4k_q8_five_buffer": GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY,
+  },
+  ("CUDA", "sm120"): {
+    "single_buffer": NV_SM120_SINGLE_BUFFER_CAPABILITY,
+    "two_buffer_stage1": NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY,
+  },
+  ("Metal", "m4_10c"): {
+    "single_buffer": METAL_M4_10C_SINGLE_BUFFER_CAPABILITY,
+    "two_buffer_stage1": METAL_M4_10C_TWO_BUFFER_STAGE1_CAPABILITY,
+  },
+}
+
+def _schedule_shape(payload: dict[str, Any]) -> str:
+  """The schedule-shape selector inside a target: storage/family/pipeline -> row name."""
+  family = payload.get("schedule", {}).get("family")
+  if family == Q4K_Q8_1_DIRECT_SCHEDULE_FAMILY: return "q4k_q8_five_buffer"
+  if candidate_storage_kind(payload) == "global_register_resident": return "register_resident"
+  pipeline = payload.get("schedule", {}).get("pipeline", {})
+  return "two_buffer_stage1" if \
+    (pipeline.get("buffer_count"), pipeline.get("stage_count")) == (2, 1) else "single_buffer"
 @dataclass(frozen=True)
 class Q4KQ8FiveBufferEmitterPlan:
   tile: tuple[int,int,int] = (16,16,256)
@@ -82,14 +161,23 @@ def capability_transport(capability: "FullKernelCapability") -> str:
   return capability.transport
 
 def full_kernel_candidate_capability(payload:dict[str,Any]) -> "FullKernelCapability":
-  """Resolve the frozen hardware capability from typed schedule facts in one place."""
-  family = payload.get("schedule", {}).get("family")
-  if family == Q4K_Q8_1_DIRECT_SCHEDULE_FAMILY: return GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY
-  if candidate_storage_kind(payload) == "global_register_resident": return GFX1100_REGISTER_RESIDENT_CAPABILITY
-  pipeline = payload.get("schedule", {}).get("pipeline", {})
-  return GFX1100_TWO_BUFFER_STAGE1_CAPABILITY if \
-    (pipeline.get("buffer_count"), pipeline.get("stage_count")) == (2, 1) else GFX1100_SINGLE_BUFFER_CAPABILITY
+  """Resolve the declared per-target capability from the payload's own target and schedule shape.
 
+  The target selects the hardware row, the schedule selects the pipeline/transport row within
+  that target. A payload whose target has no declared row (or a schedule shape the target does
+  not express) fails closed here instead of inheriting another target's numbers.
+  """
+  target = payload.get("workload", {}).get("target", {})
+  backend, arch = target.get("backend"), target.get("arch")
+  rows = _CAPABILITY_ROWS.get((backend, arch))
+  if rows is None:
+    raise FullKernelAdmissionError("capability_target", f"no declared capability row for target {backend}:{arch}")
+  shape = _schedule_shape(payload)
+  row = rows.get(shape)
+  if row is None:
+    raise FullKernelAdmissionError("capability_target",
+      f"schedule shape {shape!r} is not declared for target {backend}:{arch}")
+  return row
 @dataclass(frozen=True)
 class FullKernelAdmission:
   canonical_identity: str
@@ -380,7 +468,7 @@ def full_kernel_candidate_set_from_legacy(payload:dict[str,Any],canonical_identi
 # row per backend, not a branch: a new backend is a new row, never new logic here.
 def _tensor_core_family_by_device() -> dict[str, Callable[[str], list]]:
   from tinygrad.codegen.opt import tc
-  return {"AMD": tc.get_amd, "METAL": lambda arch: tc.metal}
+  return {"AMD": tc.get_amd, "CUDA": tc.get_cuda, "METAL": lambda arch: tc.metal}
 
 def _resolve_tensor_core(device:str, arch:str, dtype_in, dtype_out):
   """Device-aware replacement for the old hardcoded `from tinygrad.codegen.opt.tc import amd_rdna3` import."""
