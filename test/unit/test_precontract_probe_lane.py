@@ -8,6 +8,7 @@ provably GPU-free: it returns before `run_isolated` is called.
 """
 import numpy as np
 import pytest
+import copy, json
 
 from extra.llm_research.prefill import precontract_probe_lane as lane
 from extra.llm_research.runtime_specs import FullKernelAdmissionError
@@ -70,6 +71,32 @@ def test_payload_for_config_supports_a_smaller_shape_than_the_model_profile_has(
   config = lane.ProbeConfig(QUANT, ROLE, small_shape, GEOMETRY, device="METAL")
   payload = lane._payload_for_config(config)
   assert tuple(payload["workload"]["shape"][k] for k in ("m", "n", "k")) == small_shape
+
+
+def test_payload_for_config_is_byte_identical_to_the_historical_injection():
+  # T5: derive-based injection must reproduce the old hardcoded wm*wn*32 / stride-80
+  # schedule exactly for the established AMD/Metal dispatch -- the derive replaced the
+  # literals, not the values.
+  config = lane.ProbeConfig(QUANT, ROLE, SHAPE, GEOMETRY, device="METAL")
+  payload = lane._payload_for_config(config)
+  g = config.geom
+
+  def _legacy_injection(base: dict) -> dict:
+    out = copy.deepcopy(base)
+    schedule = out["schedule"]
+    schedule["tile"] = {"m": g["tm"], "n": g["tn"], "k": g["tk"]}
+    schedule["waves"] = {"m": g["wm"], "n": g["wn"]}
+    schedule["threads"] = g["wm"] * g["wn"] * 32
+    a_end, b_end = g["tm"] * 80, (g["tm"] + g["tn"]) * 80
+    schedule["lds"]["windows"] = {"a": [0, a_end], "b": [a_end, b_end]}
+    schedule["lds"]["strides"] = {"a": 80, "b": 80}
+    schedule["pipeline"]["buffer_count"] = g["bc"]
+    return out
+
+  legacy = _legacy_injection(lane._base_payload_for_shape(config.profile, config.role, config.shape))
+  compact = lambda value: json.dumps(value, sort_keys=True, separators=(",", ":"))
+  assert compact(payload["schedule"]) == compact(legacy["schedule"])
+  assert compact(payload["static_constraints"]) == compact(legacy["static_constraints"])
 
 
 def test_admit_probe_config_admits_the_established_m1b_m1c_m1d_dispatch_with_no_gpu():

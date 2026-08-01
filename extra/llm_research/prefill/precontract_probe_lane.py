@@ -49,7 +49,8 @@ from extra.llm_research.prefill.candidate_payloads import find_role_template, lo
 from extra.llm_research.prefill.packed_wmma_correctness_canary import DEFAULT_PROFILE, build_artifact
 from extra.llm_research.prefill.guarded_execution import GuardPolicy, run_guarded_execution, make_tinygrad_executable_hooks
 from extra.llm_research.runtime_specs import (FullKernelAdmissionError, derive_packed_weight_candidate,
-  full_kernel_workload, rebind_full_kernel_workload)
+  full_kernel_candidate_capability, full_kernel_workload, rebind_full_kernel_workload)
+from extra.llm_research.target_schedule import derive_target_schedule
 from tinygrad.runtime.process_isolated import run_isolated
 
 SCHEMA = "precontract-probe.v1"
@@ -143,19 +144,26 @@ def _payload_for_config(config: ProbeConfig) -> dict:
 
   Schedule-field injection is line-for-line `scratchpad/m1c_isolate_cause.py`'s
   `_payload_for_local_row`, generalized off of `PackedWmmaRoute` so any `(shape, geometry)` pair
-  can be probed, not only a route already recorded in a frozen production table.
+  can be probed, not only a route already recorded in a frozen production table. The schedule
+  itself comes from the one derive authority (`derive_target_schedule`, T2/T5): the payload's
+  own declared capability row plus the probe geometry/shape -- the hardcoded wave-32 and
+  stride-80 literals are gone, and any declared target gets its own typed schedule instead of
+  the AMD clone.
   """
   payload = copy.deepcopy(_base_payload_for_shape(config.profile, config.role, config.shape))
   if tuple(payload["workload"]["shape"][k] for k in ("m", "n", "k")) != config.shape:
     raise ValueError("rebound payload shape does not match the requested probe shape")
-  g, schedule = config.geom, payload["schedule"]
-  schedule["tile"] = {"m": g["tm"], "n": g["tn"], "k": g["tk"]}
-  schedule["waves"] = {"m": g["wm"], "n": g["wn"]}
-  schedule["threads"] = g["wm"] * g["wn"] * 32
-  a_end, b_end = g["tm"] * 80, (g["tm"] + g["tn"]) * 80
-  schedule["lds"]["windows"] = {"a": [0, a_end], "b": [a_end, b_end]}
-  schedule["lds"]["strides"] = {"a": 80, "b": 80}
-  schedule["pipeline"]["buffer_count"] = g["bc"]
+  row = full_kernel_candidate_capability(payload)
+  g = config.geom
+  geometry = {"tile": {"m": g["tm"], "n": g["tn"], "k": g["tk"]},
+              "waves": {"m": g["wm"], "n": g["wn"]},
+              "buffer_count": g["bc"],
+              "stage_count": payload["schedule"]["pipeline"]["stage_count"]}
+  shape = {"m": config.shape[0], "n": config.shape[1], "k": config.shape[2],
+           "dtypes": payload["workload"]["dtypes"]}
+  derived = derive_target_schedule(row, geometry, shape)
+  payload["schedule"] = derived["schedule"]
+  payload["static_constraints"] = derived["static_constraints"]
   return payload
 
 
