@@ -1675,7 +1675,7 @@ class AMDRowSoftmaxRepackSpec(NamedTuple):
       if self.native_abi != self.fragment_model.abi("online_softmax_qk_pv_v1") or \
          self.target != self.fragment_model.arch or self.wave_size != 32:
         raise ValueError("row-softmax native repack requires its fragment model's ABI")
-      if (self.qk_c_lanes, self.pv_a_lanes) != (self.fragment_model.qk_c_lanes, self.fragment_model.pv_a_lanes):
+      if (self.qk_c_lanes, self.pv_a_lanes) != (self.fragment_model.score_elements, self.fragment_model.pv_a_lanes):
         raise ValueError("row-softmax native repack requires the fragment model's lane widths")
     else:
       if (self.native_abi, self.target, self.wave_size) != ("amd_gfx1100_online_softmax_qk_pv_v1", "gfx1100", 32):

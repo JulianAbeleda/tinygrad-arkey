@@ -95,7 +95,9 @@ class FlashPrefillAttentionSpec:
     self.validate()
     from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention
     from tinygrad.uop.ops import KernelInfo
-    ki = kernel_info if kernel_info is not None else KernelInfo(name="amd_gfx1100_q16_grid_hd128_loop_attention")
+    from tinygrad.codegen.opt.attention_fragment import attention_fragment_model
+    fragment_model = attention_fragment_model(self.target)
+    ki = kernel_info if kernel_info is not None else KernelInfo(name=f"{self.target}_q16_grid_hd128_loop_attention")
 
     def fxn(out_ph: UOp, q_ph: UOp, k_ph: UOp, v_ph: UOp) -> UOp:
       return amd_gfx1100_q16_grid_hd128_loop_attention(
@@ -103,12 +105,12 @@ class FlashPrefillAttentionSpec:
         kv_heads=self.Hkv, kv_tokens=self.kv_tokens, scale=self.scale, causal=self.causal,
         valid_kv=self.valid_kv, query_start=self.query_start,
         output_block_base=self.output_block_base, acc_blocks=self.acc_blocks,
-        phase_abi_v1=self.phase_abi_v1, head_dim=self.Hd, kernel_info=ki)
+        phase_abi_v1=self.phase_abi_v1, head_dim=self.Hd, kernel_info=ki, fragment_model=fragment_model)
     return fxn
 
   @property
   def emitted_kernel_names(self) -> tuple[str, ...]:
-    return ("amd_gfx1100_q16_grid_hd128_loop_attention",)
+    return (f"{self.target}_q16_grid_hd128_loop_attention",)
 
   def to_json(self) -> dict[str, Any]:
     return {"Hq": self.Hq, "Hkv": self.Hkv, "Hd": self.Hd, "q_tokens": self.q_tokens,

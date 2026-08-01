@@ -218,27 +218,38 @@ def _lane_part(terms: tuple[tuple[int, int], ...], lane: UOp) -> UOp | None:
   lane-bit run at contiguous axis positions folds to the two-op
   ``(lane >> b0) & span`` / ``<< p0`` form the shipped AMD addressing emitted
   (``lane & 15``, ``(lane >> 2) & 7``); anything else becomes the explicit
-  per-bit sum. This deliberately does not reuse kernel_lds's
+  per-bit sum. The bit math is done in ``int`` and rewrapped in a weakint
+  cast, which is the exact post-lowering form the fused-attention expansions
+  consume (the AST-time AMD literals reached the same shape through
+  ``pm_lower_index_dtype``). This deliberately does not reuse kernel_lds's
   ``_fold_operand_axis``, whose ``%``-based collapse would change the rendered
   AMD source.
   """
   if not terms: return None
   first_lane_bit, first_axis_bit = terms[0]
+  # Post-index-lowering lanes arrive as CAST weakint (SPECIAL int); unwrap so
+  # the AND/SHR math lands in int and the weakint cast wraps the result --
+  # byte-identical to what pm_lower_index_dtype produced for the AST-time
+  # weakint literals, and accepted by the program spec's weakint rules.
+  lane = lane.src[0] if (lane.op is Ops.CAST and lane.dtype is dtypes.weakint) else lane
+  const_dt = dtypes.int if lane.dtype is not dtypes.weakint else dtypes.weakint
+  def _const(v: int) -> UOp: return UOp.const(const_dt, v)
+  def _wrap(expr: UOp) -> UOp: return expr if const_dt is dtypes.weakint else expr.cast(dtypes.weakint)
   if len(terms) == 1:
-    expr = lane.alu(Ops.SHR, UOp.const(dtypes.weakint, first_lane_bit)) if first_lane_bit else lane
-    return expr.alu(Ops.SHL, UOp.const(dtypes.weakint, first_axis_bit)) if first_axis_bit else expr
+    expr = lane.alu(Ops.SHR, _const(first_lane_bit)) if first_lane_bit else lane
+    return _wrap(expr.alu(Ops.SHL, _const(first_axis_bit)) if first_axis_bit else expr)
   if terms == tuple((first_lane_bit + i, first_axis_bit + i) for i in range(len(terms))):
     span = 1 << len(terms)
-    base = lane if first_lane_bit == 0 else lane.alu(Ops.SHR, UOp.const(dtypes.weakint, first_lane_bit))
-    base = base.alu(Ops.AND, UOp.const(dtypes.weakint, span - 1))
-    return base.alu(Ops.SHL, UOp.const(dtypes.weakint, first_axis_bit)) if first_axis_bit else base
+    base = lane if first_lane_bit == 0 else lane.alu(Ops.SHR, _const(first_lane_bit))
+    base = base.alu(Ops.AND, _const(span - 1))
+    return _wrap(base.alu(Ops.SHL, _const(first_axis_bit)) if first_axis_bit else base)
   expr: UOp | None = None
   for lane_bit, axis_bit in terms:
-    contribution = lane.alu(Ops.SHR, UOp.const(dtypes.weakint, lane_bit)).alu(Ops.AND, UOp.const(dtypes.weakint, 1))
-    if axis_bit: contribution = contribution.alu(Ops.SHL, UOp.const(dtypes.weakint, axis_bit))
+    contribution = lane.alu(Ops.SHR, _const(lane_bit)).alu(Ops.AND, _const(1))
+    if axis_bit: contribution = contribution.alu(Ops.SHL, _const(axis_bit))
     expr = contribution if expr is None else expr.alu(Ops.ADD, contribution)
   if expr is None: raise ValueError("axis has no lane-bit contribution")
-  return expr
+  return _wrap(expr)
 
 
 def _axis_uop(contract_terms: tuple[tuple[int, int], ...], lane_terms: tuple[tuple[int, int], ...],

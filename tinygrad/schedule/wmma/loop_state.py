@@ -37,6 +37,9 @@ def loop_state_read(reg, init, rng, *, role, owner, block=0, final=False, lanes=
     arg=AMDLoopStateSpec(role=role, access="final_read" if final else "read", block=block, lane=i, owner=owner))
     for i in range(lanes)))
 
-def packed_fragment_load(owner_uop, *, role, head_block, grid, lane, col, rng, group):
-  spec = AMDPackedFragmentLoopSpec(role=role, head_block=head_block, grid=grid)
+def packed_fragment_load(owner_uop, *, role, head_block, grid, lane, col, rng, group, call=0, fragment_model=None):
+  spec = AMDPackedFragmentLoopSpec(role=role, head_block=head_block, grid=grid, call=call,
+    native_abi=fragment_model.abi("packed_fragment_hd128_loop_v1") if fragment_model is not None else "amd_gfx1100_packed_fragment_hd128_loop_v1",
+    fragment_lanes=fragment_model.fragment_lanes(role) if fragment_model is not None else 16,
+    fragment_model=fragment_model)
   return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD, dtypes.half.vec(spec.fragment_lanes), (owner_uop, lane, col, rng, group), arg=spec)

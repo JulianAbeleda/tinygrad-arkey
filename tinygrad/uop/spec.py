@@ -98,6 +98,21 @@ def validate_amd_attention_stats_drain(x:UOp):
   except ValueError: return False
   return isinstance(stats.dtype,PtrDType) and stats.dtype.base == dtypes.float and group.op in {Ops.SPECIAL,Ops.CAST} and m.dtype == l.dtype == dtypes.float.vec(8)
 
+def _is_lane_fold(x:UOp) -> bool:
+  """True when ``x`` is int bit-math over ``lidx0`` and bounded constants.
+
+  The fused-attention drain/fragment expansions lower lane indices as weakint
+  casts around int AND/SHR/SHL chains (``lane & 15`` on AMD, ``(lane >> 2) & 7``
+  and ``2*(lane & 3)`` on sm_120). This accepts that whole class of lane-derived
+  folds while still rejecting arbitrary weakint in programs.
+  """
+  if x.dtype is not dtypes.int: return False
+  if x.op is Ops.SPECIAL: return str(x.arg) in {"lidx0", "gidx0"}
+  if x.op is Ops.CONST: return isinstance(x.arg, int) and 0 <= x.arg <= 2_621_440
+  if x.op in {Ops.AND, Ops.SHR, Ops.SHL} and len(x.src) == 2:
+    return all(_is_lane_fold(s) for s in x.src)
+  return False
+
 def validate_state_transfer(x:UOp):
   """Validate generic state publication/reload descriptors without backend policy."""
   if not (isinstance(x.arg, tuple) and len(x.arg) == 2 and x.arg[0] in {"state_publish_v1", "state_reload_v1"} and isinstance(x.arg[1], StateHandle)):
@@ -433,8 +448,13 @@ spec_program = PatternMatcher([
    x.dtype==dtypes.half.vec(x.arg.fragment_lanes) and x.shape==(x.arg.fragment_lanes,) and all(s.dtype.scalar() in {dtypes.int,dtypes.weakint} for s in x.src[1:])),
   (UPat(Ops.CAST,dtype=dtypes.weakint,src=(UPat(Ops.RANGE,dtype=dtypes.int),)), lambda: True),
   (UPat(Ops.CAST,dtype=dtypes.weakint,src=(UPat(Ops.SPECIAL,dtype=dtypes.int,name="s"),)), lambda s: str(s.arg) in {"lidx0","gidx0"}),
-  (UPat(Ops.CAST,dtype=dtypes.weakint,src=(UPat(Ops.AND,dtype=dtypes.int,name="a"),)),
-   lambda a: any(s.op is Ops.CONST and int(s.arg)==15 for s in a.src) and any(s.op is Ops.SPECIAL and str(s.arg)=="lidx0" for s in a.src)),
+  # Lane-fold artifacts the fused-attention ABI leaves after index lowering:
+  # AMD's `lane & 15` and sm_120's `(lane >> 2) & 7` / `2*(lane & 3)` are all
+  # int bit-math over `lidx0` and bounded constants, wrapped in weakint by the
+  # drain/fragment expansions. Accepting the class keeps the gate about the
+  # artifact (lane-derived index folds), not about one vendor's spelling.
+  (UPat(Ops.CAST,dtype=dtypes.weakint,src=(UPat(dtype=dtypes.int,name="f"),)),
+   lambda f: _is_lane_fold(f)),
   (UPat(Ops.AMD_ATTENTION_LOOP_STATE, name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_attention_loop_state_v1"),
   (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, name="x"), validate_amd_attention_output_drain),
