@@ -63,6 +63,7 @@ from __future__ import annotations
 from contextvars import ContextVar
 from typing import Any
 from tinygrad import Tensor, dtypes
+from tinygrad.device import Device
 from tinygrad.uop.ops import AttentionGridSpec, SharedAttentionCandidateContext
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
 
@@ -83,6 +84,24 @@ ADMITTED_GRIDS: frozenset = frozenset({(32, 8, 512), (40, 8, 512)})
 # SAME seam instead of ever calling the gfx1100 builder directly.
 _PREFILL_EMITTERS = {"amd_gfx1100": lambda spec, **kw: spec.emit(**kw),
                      "nv_sm120": lambda spec, **kw: spec.emit(**kw)}
+
+# DEVICE -> SPEC TARGET (the fused-attention fragment-model registry key, codegen/opt/attention_fragment.py).
+# The spec target is resolved from the LIVE renderer's declared (backend, arch) facts, never from the device
+# string: the key is the registry's own naming convention -- backend lowercase + arch with underscores removed
+# ("amd_gfx1100", "nv_sm120") -- so a new GPU is a new fragment-model + emitter entry, not a backend branch.
+# Resolve once and cache (decode's pattern, decode_routes.py:151: Device[device] cannot be opened inside a
+# Tensor Function dispatch). Unknown devices fail closed (ValueError -> NotImplementedError -> SDPA fallback).
+_ATTENTION_SPEC_TARGETS: dict[str, str] = {}
+
+def _attention_spec_target(device: str) -> str:
+  """Derive the fused-attention spec target key from the live renderer's facts for ``device``."""
+  if (cached := _ATTENTION_SPEC_TARGETS.get(device)) is not None: return cached
+  try: renderer = Device[device].renderer
+  except Exception: renderer = None
+  if renderer is None: raise ValueError(f"cannot resolve a fused-attention target for device {device!r}")
+  target = f"{renderer.target.device.lower()}_{renderer.target.arch.replace('_', '')}"
+  _ATTENTION_SPEC_TARGETS[device] = target
+  return target
 
 # RUNTIME DISPATCH TRACE (BoltBeam observability seam)
 # --------------------------------------------------
@@ -198,9 +217,13 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
   # forwarded). An explicit non-full slice (output_block_base!=0, or an acc_blocks the caller
   # intentionally set to something other than 8) is preserved exactly as given.
   ctx_full_default = ctx.output_block_base == 0 and ctx.acc_blocks == 8
+  try:
+    spec_target = _attention_spec_target(q.device)
+  except ValueError as e:
+    raise NotImplementedError(f"custom_kernel_attention: {e}") from None
   spec = FlashPrefillAttentionSpec(Hq=Hq, Hkv=Hkv, Hd=Hd, q_tokens=T, kv_tokens=KV, causal=causal, scale=sc,
     valid_kv=ctx.kv_tokens, query_start=ctx.start_pos, output_block_base=ctx.output_block_base,
-    acc_blocks=None if ctx_full_default else ctx.acc_blocks)
+    acc_blocks=None if ctx_full_default else ctx.acc_blocks, target=spec_target)
   try:
     spec.validate()
   except ValueError as e:

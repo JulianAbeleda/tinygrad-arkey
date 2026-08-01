@@ -66,3 +66,34 @@ def test_flash_prefill_nv_target_threads_the_nv_fragment_model(monkeypatch):
   fm = captured["fragment_model"]
   assert fm.target == "nv_sm120" and fm.calls_per_tile == 2 and fm.score_elements == 8
   assert captured["kernel_info"].name == "nv_sm120_q16_grid_hd128_loop_attention"
+
+
+def test_attention_spec_target_resolves_from_renderer_facts(monkeypatch):
+  """The spec target is derived from the live renderer's (backend, arch) facts, not the device string,
+  and unknown devices fail closed instead of silently falling back to the AMD default."""
+  from tinygrad.helpers import Target
+  from tinygrad.codegen.opt.attention_fragment import attention_fragment_model
+  from tinygrad.llm import fused_attention as fa
+
+  class _StubRenderer:
+    def __init__(self, target_text: str): self.target = Target.parse(target_text)
+  class _StubDevicesMeta(type):
+    def __getitem__(cls, device: str):
+      renderers = {"NV": _StubRenderer("NV:NVCC:sm_120"), "AMD": _StubRenderer("AMD:HIP:gfx1100"),
+                   "METAL": _StubRenderer("METAL:APPLE:Apple7")}
+      return type("_StubDevice", (), {"renderer": renderers[device]})()
+  class _StubDevices(metaclass=_StubDevicesMeta): pass
+  monkeypatch.setattr(fa, "Device", _StubDevices)
+  monkeypatch.setattr(fa, "_ATTENTION_SPEC_TARGETS", {})
+  assert fa._attention_spec_target("NV") == "nv_sm120"
+  assert fa._attention_spec_target("AMD") == "amd_gfx1100"
+  # A renderer whose fragment model is not registered fails closed (SDPA fallback at the call site).
+  with pytest.raises(ValueError, match="no attention fragment model"):
+    attention_fragment_model(fa._attention_spec_target("METAL"))
+
+  class _NoRendererMeta(type):
+    def __getitem__(cls, device: str): raise RuntimeError("no device")
+  class _NoRenderer(metaclass=_NoRendererMeta): pass
+  monkeypatch.setattr(fa, "Device", _NoRenderer)
+  with pytest.raises(ValueError, match="cannot resolve"):
+    fa._attention_spec_target("CPU")
