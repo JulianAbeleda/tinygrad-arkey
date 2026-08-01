@@ -432,6 +432,33 @@ the AMD/Metal-proven pattern. Both failures are fail-loud lowering gates, exactl
 an unproven descriptor. Next slice: M1f-style emitted-kernel diff / resolve the accumulator-carrier
 migration boundary against the CUDA descriptor's vec(4).
 
+**Target schedule derivation, T1-T6 (2026-08-01) — the mints stop cloning AMD; the sm120 mint as
+committed now ADMITS through the canonical lane, and the NV e2e ratchet holds.** The schedule is no longer
+one AMD literal with a new name: `derive_target_schedule` (`extra/llm_research/target_schedule.py`)
+assembles a target's schedule from its declared capability row (extended with the C-class emitter
+contracts, pinned by the census table in `extra/llm_research/target_contracts.py`) plus caller-supplied
+geometry/shape. The AMD row + seed geometry reproduces the promoted template byte-for-byte; the family
+string is read from the row, never fabricated. Admission now checks `vector_bytes // itemsize` and the
+row's declared lane mapping instead of hardcoded literals; the lane builds probe payloads through the same
+derive; BoltBeam's builder accepts the tinygrad-derived typed schedule template and stamps identity onto it
+(AMD set_hash pin `e9839825993c...` unchanged). Both target mints were re-minted through that typed path:
+sm120 carries `cuda_mma_*` fragment vocabulary, `wmma_f32_8x16x16_f16`, `max_lds_bytes: 49152`, null
+waitcnt (no `rdna3_*`, no AMD `lgkm` value); m4_10c carries the `simdgroup_matrix` vocabulary and 32768.
+The old C5 result inverts where it should: the sm120 mint as committed now ADMITS through the lane
+(buffer2 active LDS 40960, factors 2/8/2) and fails in the child compile only at the two known lowering
+boundaries — buffer2 at `kernel_pipeline.py:181` (`mixed accumulator dtypes: expected dtypes.float.vec(8),
+got dtypes.float.vec(4)`), buffer1 at `kernel_lds.py:171` (operand lane-layout derivation) — with the
+`_nv_typed` retyping step deleted from the C5 driver (one call per `(mint_path, device)`). Metal
+admission-level outcomes on the m4_10c mint: buffer2 rejected by `capability_lds` (40960 > 32768),
+single-buffer admits (20480 <= 32768); the GPU run needs a Mac
+(`scratchpad/t6_metal_admission_probe.py --gpu`). NV 8B re-verified with the same invocation: strategy
+`DIRECT_PACKED_FALLBACK`, census `prefill_overlay_promotion: "no-promoted-candidate"`, decode 158.31 tok/s
+(765.3 GB/s), first token 50994, decode token sha256 identical to Piece 3's
+(`0721c16fbf70779cb6cebd5cf64eab50a1f61c7882d402c60c27d22597548ebe`), correctness-qualified. Unmeasured
+NV/Metal C-class fields (waitcnt policy, epilogue, residency, banks/padding, accumulator ownership) are
+carried as explicitly pending defaults in the census table, never sold as proven facts; the next NV slice
+is still the accumulator-carrier migration boundary.
+
 ---
 
 ## 10. The shortest version
