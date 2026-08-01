@@ -9,6 +9,7 @@ from tinygrad.llm.memory_semantics import MODEL_PARAMETER, memory_semantic_owner
 from tinygrad.llm.physical_memory_ledger import allocation_owner, bind_allocation_owner
 from tinygrad.llm.decode_routes import q4k_primitive_linear_call, q6k_primitive_linear_call
 from tinygrad.llm.model_route_plan import ModelRoutePlan, build_model_route_plan
+from tinygrad.llm.qk_layout import Q4_K, Q6_K, QuantFormat
 
 def _qk_generated_policy_entry(policy:dict|None, typ:int, rows:int, cols:int, name:str|None=None) -> dict|None:
   if policy is None: return None
@@ -112,6 +113,7 @@ class _QKPrimitiveStorage:
     self.shared_bytes, self.nonpersistent_bytes, self.mode = shared_bytes, nonpersistent_bytes, mode
 
 class Q4KPrimitiveStorage(_QKPrimitiveStorage):
+  format: QuantFormat = Q4_K
   __slots__ = ()
   @property
   def words(self) -> Tensor: return self.packed
@@ -119,6 +121,7 @@ class Q4KPrimitiveStorage(_QKPrimitiveStorage):
   def words(self, value:Tensor) -> None: self.packed = value
 
 class Q6KPrimitiveStorage(_QKPrimitiveStorage):
+  format: QuantFormat = Q6_K
   __slots__ = ()
   @property
   def halfs(self) -> Tensor: return self.packed
@@ -283,7 +286,7 @@ class _QKInstallChoice:
 
 @dataclass(frozen=True)
 class _QKInstallSpec:
-  ggml_type: int; label: str; not_kind_counter: str; dtype: object; block_bytes: int
+  ggml_type: int; label: QuantFormat; not_kind_counter: str; dtype: object; block_bytes: int
   generated_policy: object; route_choice: object; parse_opt: object; make_linear: object; installed_detail: object
   allowed_storage_modes: tuple[str, ...]
 
@@ -295,10 +298,10 @@ def _qk_target_promoted(route_plan:object|None, target:tuple[str|None, str|None]
   check = getattr(route_plan, "target_promoted", None)
   return True if check is None else check(target)
 
-def _route_choice(label:str, route_plan:ModelRoutePlan|None, name:str, rows:int, cols:int, skipped:collections.Counter[str],
+def _route_choice(label:QuantFormat, route_plan:ModelRoutePlan|None, name:str, rows:int, cols:int, skipped:collections.Counter[str],
                   capability_ok:bool, target_promoted:bool, q4:bool=False) -> _QKInstallChoice|None:
   if route_plan is None or (entry := route_plan.primitive(name)) is None: skipped["policy_fallback"] += 1; return None
-  if entry.quant_label != label or entry.rows != rows or entry.cols != cols: skipped["policy_unsupported"] += 1; return None
+  if entry.quant_label != label.name or entry.rows != rows or entry.cols != cols: skipped["policy_unsupported"] += 1; return None
   # TG3: the two admission questions are independently decidable and reported with distinct census reasons --
   # QKPrimitiveCapability (renderer/device facts, tinygrad/llm/device_facts.py) answers (a); ModelRoutePlan
   # .target_promoted (the BoltBeam-sourced route-policy authority) answers (b). Neither is inferred here from
@@ -308,9 +311,9 @@ def _route_choice(label:str, route_plan:ModelRoutePlan|None, name:str, rows:int,
   return _QKInstallChoice(entry.module_path, entry.parts, entry.opts, entry.role, entry.kernel_mode if q4 else "partial")
 
 def _q4_route_choice(route_plan, name, rows, cols, skipped, capability_ok, target_promoted):
-  return _route_choice("Q4_K", route_plan, name, rows, cols, skipped, capability_ok, target_promoted, True)
+  return _route_choice(Q4_K, route_plan, name, rows, cols, skipped, capability_ok, target_promoted, True)
 def _q6_route_choice(route_plan, name, rows, cols, skipped, capability_ok, target_promoted):
-  return _route_choice("Q6_K", route_plan, name, rows, cols, skipped, capability_ok, target_promoted)
+  return _route_choice(Q6_K, route_plan, name, rows, cols, skipped, capability_ok, target_promoted)
 
 def _generated_choice(policy:dict, typ:int, rows:int, cols:int, name:str, skipped:collections.Counter[str], families:set[str]):
   if (entry := _qk_generated_policy_entry(policy, typ, rows, cols, name)) is None: skipped["policy_missing"] += 1; return None
@@ -337,14 +340,14 @@ def _make_q6(module, packed, rows, cols, choice, opts, name, sizes, storage_mode
 def _q4_detail(x): return f"{x.name}:mode={x.kernel_mode}:parts={x.parts}:opts={[str(o) for o in x.opts]}"
 def _q6_detail(x): return f"{x.name}:parts={x.parts}:opts={[str(o) for o in x.opts]}"
 
-_Q4_INSTALL_SPEC = _QKInstallSpec(12, "Q4_K", "not_q4_k", dtypes.uint32, 144, _q4_generated_choice, _q4_route_choice,
+_Q4_INSTALL_SPEC = _QKInstallSpec(12, Q4_K, "not_q4_k", dtypes.uint32, 144, _q4_generated_choice, _q4_route_choice,
   parse_opt, _make_q4, _q4_detail, ("sidecar", "q4_ondemand", "shared"))
-_Q6_INSTALL_SPEC = _QKInstallSpec(14, "Q6_K", "not_q6_k", dtypes.uint16, 210, _q6_generated_choice, _q6_route_choice,
+_Q6_INSTALL_SPEC = _QKInstallSpec(14, Q6_K, "not_q6_k", dtypes.uint16, 210, _q6_generated_choice, _q6_route_choice,
   parse_opt, _make_q6, _q6_detail, ("sidecar", "shared"))
 
 def _install_qk_primitives(model, gguf:pathlib.Path, meta:dict, spec:_QKInstallSpec, generated_policy:dict|None, budget:QKPrimitiveBudget|None,
                            storage_mode:str, route_plan:ModelRoutePlan|None, device_facts:object|None, debug:bool):
-  if storage_mode not in spec.allowed_storage_modes: raise ValueError(f"unsupported {spec.label} primitive storage mode {storage_mode!r}")
+  if storage_mode not in spec.allowed_storage_modes: raise ValueError(f"unsupported {spec.label.name} primitive storage mode {storage_mode!r}")
   raw, installed, skipped = Tensor(gguf, dtype=spec.dtype), [], collections.Counter()
   budget = budget or QKPrimitiveBudget()
   if generated_policy is None and route_plan is None: route_plan = build_model_route_plan(meta)
@@ -373,7 +376,7 @@ def _install_qk_primitives(model, gguf:pathlib.Path, meta:dict, spec:_QKInstallS
     if getattr(module, "bias", None) is not None: skipped["bias"] += 1; continue
     source_bytes = prod(dims) // 256 * spec.block_bytes
     persistent_bytes = source_bytes if storage_mode == "sidecar" else 0
-    if not budget.reserve(name, persistent_bytes, spec.label): skipped["runtime_storage_cap"] += 1; continue
+    if not budget.reserve(name, persistent_bytes, spec.label.name): skipped["runtime_storage_cap"] += 1; continue
     if storage_mode == "shared": packed, shared_bytes = _shared_packed_view(meta, byte_start, source_bytes, spec.dtype), source_bytes
     else:
       source = raw[byte_start//spec.dtype.itemsize:byte_start//spec.dtype.itemsize+source_bytes//spec.dtype.itemsize]
@@ -386,10 +389,10 @@ def _install_qk_primitives(model, gguf:pathlib.Path, meta:dict, spec:_QKInstallS
   if debug:
     skipped_s = " ".join(f"{k}={v}" for k, v in sorted(skipped.items()))
     summary, cap = _qk_storage_summary(installed), -1 if budget.cap_bytes is None else budget.cap_bytes
-    print(f"{spec.label.replace('_', '')}_PRIMITIVE_DEBUG installed={len(installed)} skipped_total={sum(skipped.values())} {skipped_s} "
+    print(f"{spec.label.name.replace('_', '')}_PRIMITIVE_DEBUG installed={len(installed)} skipped_total={sum(skipped.values())} {skipped_s} "
           f"source_bytes={summary['source_bytes']} storage_bytes={summary['persistent_bytes']} shared_bytes={summary['shared_bytes']} "
           f"nonpersistent_bytes={summary['nonpersistent_bytes']} runtime_cap_bytes={cap} runtime_cap_used_bytes={budget.used_bytes} storage_mode={storage_mode}")
-    if installed: print(f"{spec.label.replace('_', '')}_PRIMITIVE_DEBUG installed_linears {' '.join(spec.installed_detail(x) for x in installed[:8])}"
+    if installed: print(f"{spec.label.name.replace('_', '')}_PRIMITIVE_DEBUG installed_linears {' '.join(spec.installed_detail(x) for x in installed[:8])}"
                         f"{f' ...+{len(installed)-8}' if len(installed) > 8 else ''}")
   return installed
 

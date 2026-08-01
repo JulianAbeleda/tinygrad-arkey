@@ -9,6 +9,7 @@ from tinygrad.llm.decode_kernels import (emit_q6k_gemv_kernel, emit_q6k_vocab_sc
 from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeCapability, FlashDecodeRouteConfig,
   flash_decode_capability_from_renderer, flash_decode_live_split_block_tile, flash_decode_target_promoted)
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
+from tinygrad.llm.qk_layout import Q4_K, Q6_K, QuantFormat
 from tinygrad.llm.route_selection import parse_route_mode
 
 def decode_route_mode(getenv_fn=getenv) -> str:
@@ -34,7 +35,7 @@ def _decode_shape(x:Tensor) -> tuple[Any, Any, Any]:
 class _LinearDecodeBinding:
   candidate_id: str
   route_id: str
-  quant: str
+  quant: QuantFormat
   target: str
   B: int
   T: int
@@ -48,7 +49,7 @@ class _LinearDecodeBinding:
 class _Q4KDecodeCandidate:
   candidate_id: str = "quant_linear_decode.q4k_generated_g3"
   route_id: str = "decode_q4k_g3_generated"
-  quant: str = "Q4_K"
+  quant: QuantFormat = Q4_K
   target: str = "amd_gfx1100"
   batch: int = 1
   tokens: int = 1
@@ -87,7 +88,7 @@ def q4k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], 
 class _Q6KDecodeCandidate:
   candidate_id: str = "quant_linear_decode.q6k_generated_coop"
   route_id: str = "decode_q6k_coop_generated"
-  quant: str = "Q6_K"
+  quant: QuantFormat = Q6_K
   target: str = "amd_gfx1100"
   batch: int = 1
   tokens: int = 1

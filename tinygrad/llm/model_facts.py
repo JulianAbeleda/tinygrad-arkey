@@ -5,13 +5,14 @@ from tinygrad.helpers import Metadata
 from tinygrad.dtype import dtypes
 from typing import Any
 from tinygrad.engine.metadata import bind_buffer_metadata, bind_buffer_metadata_region, buffer_byte_length, buffer_metadata, register_call_metadata_resolver
+from tinygrad.llm.qk_layout import Q4_K, Q6_K, QUANT_FORMATS, QuantFormat
 from tinygrad.llm.roles import DENSE_PROJECTION_ROLES, normalize_program_role
 
 
 QK_ROUTE_ROLES = DENSE_PROJECTION_ROLES
 GGML_QUANT_LABELS = {
-  12: "Q4_K",
-  14: "Q6_K",
+  12: Q4_K.name,
+  14: Q6_K.name,
 }
 PROGRAM_SOURCE_LAYOUTS = ("gguf_packed_row_major",)
 PROGRAM_MODULE_REPRESENTATIONS = ("nn_linear", "qk_primitive_adapter")
@@ -69,12 +70,12 @@ def estimate_prefill_overlay_bytes(names_and_numels) -> int:
   return sum(numel * 2 for name, numel in names_and_numels if is_prefill_overlay_role(name))
 
 
-def packed_linear_quant(linear: Any) -> str:
-  """Return the packed quant family carried by a runtime linear, if any."""
-  if not hasattr(linear, "prefill_packed_weight"): return ""
-  if hasattr(linear, "q4k_storage"): return "Q4_K"
-  if hasattr(linear, "q6k_storage"): return "Q6_K"
-  return ""
+def packed_linear_quant(linear: Any) -> QuantFormat | None:
+  """Return the typed packed quant format carried by a runtime linear, if any."""
+  if not hasattr(linear, "prefill_packed_weight"): return None
+  if hasattr(linear, "q4k_storage"): return Q4_K
+  if hasattr(linear, "q6k_storage"): return Q6_K
+  return None
 
 
 def route_role_for_linear(linear: Any) -> str:
@@ -177,7 +178,7 @@ def program_identities_from_call(call:Any) -> tuple[ProgramIdentityMetadata, ...
   identities = []
   for binding in observed:
     fact = binding.fact
-    if fact.role is None or fact.quant_label not in ("Q4_K", "Q6_K"): continue
+    if fact.role is None or fact.quant_label not in QUANT_FORMATS: continue
     candidates = tuple(arg for arg in value_args if elements(arg) >= fact.cols and elements(arg) % fact.cols == 0)
     logical_ms = {elements(arg) // fact.cols for arg in candidates}
     if len(logical_ms) != 1: continue

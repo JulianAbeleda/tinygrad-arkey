@@ -13,7 +13,7 @@ from tinygrad import dtypes
 from tinygrad.codegen.late.warp_reduce import WARP, _warp_reduce_sum_staged
 from tinygrad.dtype import AddrSpace
 from tinygrad.helpers import cdiv
-from tinygrad.llm.qk_layout import Q4_K_BLOCK_ELEMS, Q4K_WORDS_PER_BLOCK, Q6_K_BLOCK_ELEMS, Q6K_HALFWORDS_PER_BLOCK
+from tinygrad.llm.qk_layout import Q4_K_BLOCK_ELEMS, Q4K_WORDS_PER_BLOCK, Q6_K, Q6_K_BLOCK_ELEMS, Q6K_HALFWORDS_PER_BLOCK, QuantFormat
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
 
 
@@ -173,7 +173,7 @@ class Q6KGEMVRouteSpec:
   block_axis: str = "reduce"
   reduction: str = "external_sum"
   storage: str = "packed_u16"
-  quant: str = "Q6_K"
+  quant: QuantFormat = Q6_K
   opts: tuple = field(default_factory=tuple)
 
   @property
@@ -187,7 +187,7 @@ class Q6KGEMVRouteSpec:
     return f"q6k_gen_coop_{self.rows}_{self.k}" if self.route_family == "q6k_coop" else f"q6k_gen_partial_{self.rows}_{self.k}_{self.parts}"
 
   def validate(self) -> None:
-    if self.quant != "Q6_K": raise ValueError(f"Q6KGEMVRouteSpec quant must be Q6_K, got {self.quant!r}")
+    if self.quant is not Q6_K: raise ValueError(f"Q6KGEMVRouteSpec quant must be Q6_K, got {self.quant!r}")
     if self.route_family not in ("q6k_coop", "q6k_partial"): raise ValueError(f"unknown route_family {self.route_family!r}")
     if self.reduction != "external_sum": raise ValueError(f"unsupported reduction {self.reduction!r}")
     if self.storage != "packed_u16": raise ValueError(f"unsupported storage {self.storage!r}")
@@ -202,7 +202,7 @@ class Q6KGEMVRouteSpec:
       if self.parts < 1: raise ValueError(f"partial route requires parts>=1, got {self.parts}")
 
   def to_json(self) -> dict[str, Any]:
-    return {"quant": self.quant, "rows": self.rows, "k": self.k, "role": self.role, "route_family": self.route_family,
+    return {"quant": self.quant.name, "rows": self.rows, "k": self.k, "role": self.role, "route_family": self.route_family,
             "target": self.target, "row_tile": self.row_tile, "lane_extent": self.lane_extent, "parts": self.parts,
             "pos_axis": self.pos_axis, "block_axis": self.block_axis, "reduction": self.reduction, "storage": self.storage}
 

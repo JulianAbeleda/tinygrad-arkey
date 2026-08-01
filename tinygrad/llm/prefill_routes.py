@@ -7,6 +7,7 @@ from typing import Callable, Iterator, Mapping
 from tinygrad import Tensor, dtypes
 from tinygrad.llm.packed_wmma_prefill import select_packed_wmma_prefill_candidate
 from tinygrad.llm.model_facts import packed_linear_quant, route_role_for_linear
+from tinygrad.llm.qk_layout import QuantFormat
 from tinygrad.llm.prefill_graph_gemm import route_pf16_graph_gemm
 from tinygrad.llm.memory_semantics import (prefill_activation as _prefill_activation,
   prefill_output as _prefill_output, prefill_scratch as _prefill_scratch)
@@ -64,7 +65,7 @@ def _attached_production_route(lin, x: Tensor) -> str | None:
   if facts is None: return None
   quant = packed_linear_quant(lin)
   n, k = getattr(lin, "out_features", None), getattr(lin, "in_features", None)
-  if quant == "" or not isinstance(n, int) or not isinstance(k, int) or len(x.shape) != 3 or x.shape[0] != 1:
+  if quant is None or not isinstance(n, int) or not isinstance(k, int) or len(x.shape) != 3 or x.shape[0] != 1:
     return None
   if not isinstance(x.shape[-2], int) or not isinstance(x.shape[-1], int) or x.shape[-1] != k: return None
   # These are the stable production candidate ids.  Research/MMQ ids are not
@@ -72,8 +73,8 @@ def _attached_production_route(lin, x: Tensor) -> str | None:
   # Legacy attachments named the packed-storage strategy after its old
   # handwritten fallback. They now authorize only the exact searched
   # packed-WMMA rows; a selector decline falls through to ordinary tinygrad.
-  baseline_ids = {"direct_packed", "direct-packed-baseline", f"prefill_{quant.lower()}_direct_packed",
-                  f"prefill_{quant.lower()}_direct_packed_load_direct_out"}
+  baseline_ids = {"direct_packed", "direct-packed-baseline", f"prefill_{quant.name.lower()}_direct_packed",
+                  f"prefill_{quant.name.lower()}_direct_packed_load_direct_out"}
   if attachment.route_id in baseline_ids:
     return "packed_wmma"
   if policy.get("strategy") == "BOUNDED_PACKED_TILES":
@@ -92,7 +93,7 @@ def is_direct_packed_prefill_linear(lin) -> bool: return bool(packed_linear_quan
 @dataclass(frozen=True)
 class PrefillLinearRouteSpec:
   route: str
-  quant: str
+  quant: QuantFormat
   role: str
   m: int
   n: int
@@ -100,9 +101,9 @@ class PrefillLinearRouteSpec:
 
   @property
   def kernel_prefix(self) -> str:
-    return f"prefill_{self.quant.lower()}_{self.route}_gemm"
+    return f"prefill_{self.quant.name.lower().replace('_', '')}_{self.route}_gemm"
 
-def _direct_packed_quant(lin) -> str:
+def _direct_packed_quant(lin) -> QuantFormat | None:
   return packed_linear_quant(lin)
 
 
@@ -128,8 +129,8 @@ def _attached_packed_wmma_spec(lin, x:Tensor) -> PrefillLinearRouteSpec | None:
   if binding.shape != (m, n, k) or binding.role != _direct_packed_module_role(lin): return None
   attachment = getattr(lin, "_prefill_route_attachment", None)
   if not isinstance(attachment, PrefillRouteAttachment) or attachment.invocation_id != binding.invocation_id: return None
-  quant = {"Q4_K": "q4k", "Q6_K": "q6k"}.get(packed_linear_quant(lin), "")
-  if quant == "": return None
+  quant = packed_linear_quant(lin)
+  if quant is None: return None
   return PrefillLinearRouteSpec("packed_wmma", quant, _direct_packed_module_role(lin), m, n, k)
 
 

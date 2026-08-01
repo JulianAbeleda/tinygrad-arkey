@@ -13,16 +13,25 @@ from typing import Any, Callable
 from tinygrad import Tensor, dtypes
 from tinygrad.codegen.opt.packed_weight import PackedWeightTransform
 from tinygrad.llm.model_facts import packed_linear_quant, route_role_for_linear
+from tinygrad.llm.qk_layout import Q4_K, Q6_K, QUANT_FORMATS, QuantFormat
 
 
 @dataclass(frozen=True)
 class PackedWmmaRoute:
-  quant: str
+  quant: QuantFormat
   role: str
   shape: tuple[int, int, int]
   geometry: tuple[int, int, int, int, int, int]
   canonical_identity: str
   canary_max_abs_error: float = 0.0
+
+  def __post_init__(self):
+    if isinstance(self.quant, str):
+      try: quant = QUANT_FORMATS[self.quant]
+      except KeyError as exc: raise ValueError(f"packed-WMMA quant must be Q4_K or Q6_K, got {self.quant!r}") from exc
+      object.__setattr__(self, "quant", quant)
+    elif self.quant is not Q4_K and self.quant is not Q6_K:
+      raise ValueError(f"packed-WMMA quant must be Q4_K or Q6_K, got {self.quant!r}")
 
   @property
   def geom(self) -> dict[str, int]:
@@ -33,17 +42,17 @@ class PackedWmmaRoute:
 # the promoted buffer-2 candidate templates after geometry mutation and packed-weight
 # binding; profile labels are intentionally absent from identity.
 PACKED_WMMA_ROUTES: tuple[PackedWmmaRoute, ...] = (
-  PackedWmmaRoute("Q4_K", "attn_qo", (512, 5120, 5120), (128, 32, 32, 4, 1, 1),
+  PackedWmmaRoute(Q4_K, "attn_qo", (512, 5120, 5120), (128, 32, 32, 4, 1, 1),
                   "3506a4e53c3375aabdda6ca3fe451a7730a332d4ff757709794969aa36f5baae"),
-  PackedWmmaRoute("Q4_K", "attn_kv", (512, 1024, 5120), (64, 32, 32, 2, 1, 1),
+  PackedWmmaRoute(Q4_K, "attn_kv", (512, 1024, 5120), (64, 32, 32, 2, 1, 1),
                   "32e1d4aeef93c04b5fbbead31199de2ce71593751341e524d156f365de57b360"),
-  PackedWmmaRoute("Q4_K", "ffn_gate_up", (512, 17408, 5120), (256, 64, 32, 8, 1, 1),
+  PackedWmmaRoute(Q4_K, "ffn_gate_up", (512, 17408, 5120), (256, 64, 32, 8, 1, 1),
                   "eb1bef353afeec27d2aa569d0e6df03894be63fd133614fff87b8a29a0e7c677"),
-  PackedWmmaRoute("Q4_K", "ffn_down", (512, 5120, 17408), (256, 128, 32, 8, 2, 2),
+  PackedWmmaRoute(Q4_K, "ffn_down", (512, 5120, 17408), (256, 128, 32, 8, 2, 2),
                   "1b543534011aa9060bd7aea1e13c7c61891d6b45b3184885609344e539cfa1c3"),
-  PackedWmmaRoute("Q6_K", "attn_kv", (512, 1024, 5120), (64, 32, 32, 2, 1, 1),
+  PackedWmmaRoute(Q6_K, "attn_kv", (512, 1024, 5120), (64, 32, 32, 2, 1, 1),
                   "f80fd2595f3c3f25a9256867f34dbee13457f8fcd47840b58784660661b64081"),
-  PackedWmmaRoute("Q6_K", "ffn_down", (512, 5120, 17408), (256, 64, 32, 8, 1, 1),
+  PackedWmmaRoute(Q6_K, "ffn_down", (512, 5120, 17408), (256, 64, 32, 8, 1, 1),
                   "ac1184a78db8be3ca22379a37531af54415666e1a5260195a0adddd4b8fcdf15"),
 )
 PACKED_WMMA_ROUTE_BY_KEY = {(row.quant, row.role, row.shape): row for row in PACKED_WMMA_ROUTES}
@@ -87,7 +96,7 @@ class _CandidateContext:
   def packed_operand_b(self) -> PackedWeightTransform: return self.packed_weight
 
 
-def _route(quant: str, role: str, shape: tuple[int, int, int]) -> PackedWmmaRoute | None:
+def _route(quant: QuantFormat, role: str, shape: tuple[int, int, int]) -> PackedWmmaRoute | None:
   return PACKED_WMMA_ROUTE_BY_KEY.get((quant, role, shape))
 
 
@@ -97,8 +106,8 @@ def _route(quant: str, role: str, shape: tuple[int, int, int]) -> PackedWmmaRout
 # the qualification harness.
 CanaryVerifier = Callable[[PackedWmmaRoute], tuple[bool, float | None]]
 _CANARY_VERIFIER: CanaryVerifier | None = None
-_GATE_CACHE: dict[tuple[str, str, int, int, int], tuple[bool, float | None]] = {}
-_ENTRY_CACHE: dict[tuple[str, str, int, int, int], dict[str, Any]] = {}
+_GATE_CACHE: dict[tuple[QuantFormat, str, int, int, int], tuple[bool, float | None]] = {}
+_ENTRY_CACHE: dict[tuple[QuantFormat, str, int, int, int], dict[str, Any]] = {}
 
 
 def set_packed_wmma_canary_verifier(verifier: CanaryVerifier | None) -> None:
@@ -109,7 +118,7 @@ def set_packed_wmma_canary_verifier(verifier: CanaryVerifier | None) -> None:
   _ENTRY_CACHE.clear()
 
 
-def gate_combo(quant: str, role: str, shape: tuple[int, int, int]) -> bool:
+def gate_combo(quant: QuantFormat, role: str, shape: tuple[int, int, int]) -> bool:
   key = (quant, role, *shape)
   if key not in _GATE_CACHE:
     row = _route(quant, role, shape)
@@ -123,7 +132,7 @@ def gate_combo(quant: str, role: str, shape: tuple[int, int, int]) -> bool:
   return bool(_GATE_CACHE[key][0])
 
 
-def gate_result(quant: str, role: str, shape: tuple[int, int, int]) -> tuple[bool, float | None] | None:
+def gate_result(quant: QuantFormat, role: str, shape: tuple[int, int, int]) -> tuple[bool, float | None] | None:
   return _GATE_CACHE.get((quant, role, *shape))
 
 
@@ -145,11 +154,11 @@ def _candidate_context(row: PackedWmmaRoute) -> tuple[_CandidateContext, PackedW
   # Preserve the established single-buffer context identity: buffer-1 carries
   # no explicit pipeline object, while buffer-2 owns a typed stage-1 plan.
   pipeline = KernelStage1PipelinePlan(g["bc"], geometry.lds_bytes, 1) if g["bc"] > 1 else None
-  transform = PackedWeightTransform(row.quant, row.shape[1], row.shape[2])
+  transform = PackedWeightTransform(row.quant.name, row.shape[1], row.shape[2])
   return _CandidateContext("boltbeam.full_kernel_candidate.v1", row.canonical_identity, geometry, pipeline, transform), transform
 
 
-def warmstart_entry(quant: str, role: str, shape: tuple[int, int, int]) -> dict[str, Any]:
+def warmstart_entry(quant: QuantFormat, role: str, shape: tuple[int, int, int]) -> dict[str, Any]:
   """Return the exact compiler warmstart entry for an admitted production row."""
   key = (quant, role, *shape)
   if not gate_combo(quant, role, shape): raise ValueError(f"packed-WMMA row {(quant, role, shape)!r} is not admitted")
@@ -165,15 +174,12 @@ def warmstart_entry(quant: str, role: str, shape: tuple[int, int, int]) -> dict[
   return _ENTRY_CACHE[key]
 
 
-_SPEC_QUANT_TO_FORMAT = {"q4k": "Q4_K", "q6k": "Q6_K"}
-
-
 @dataclass(frozen=True)
 class PackedWmmaPrefillCandidate:
-  quant: str
+  quant: QuantFormat
 
   def matches(self, lin, spec) -> bool:
-    return _SPEC_QUANT_TO_FORMAT.get(str(getattr(spec, "quant", ""))) == self.quant
+    return getattr(spec, "quant", None) == self.quant
 
   def run(self, lin, x: Tensor, x_batch: Tensor, spec) -> Tensor | None:
     del x
@@ -191,11 +197,11 @@ class PackedWmmaPrefillCandidate:
 
 
 class Q4KPackedWmmaPrefillCandidate(PackedWmmaPrefillCandidate):
-  def __init__(self): super().__init__("Q4_K")
+  def __init__(self): super().__init__(Q4_K)
 
 
 class Q6KPackedWmmaPrefillCandidate(PackedWmmaPrefillCandidate):
-  def __init__(self): super().__init__("Q6_K")
+  def __init__(self): super().__init__(Q6_K)
 
 
 PACKED_WMMA_PREFILL_CANDIDATES: tuple[PackedWmmaPrefillCandidate, ...] = (
@@ -215,7 +221,7 @@ def build_packed_wmma_warmstart_tables(covered_linears, ubatch: int) -> tuple[di
   opts, contexts = {}, {}
   for lin, out_f, in_f in covered_linears:
     quant = packed_linear_quant(lin)
-    if not quant: continue
+    if quant is None: continue
     role = route_role_for_linear(lin)
     shape = (ubatch, out_f, in_f)
     if _route(quant, role, shape) is None or not gate_combo(quant, role, shape): continue

@@ -28,6 +28,7 @@ from tinygrad.llm.model_facts import (
   PREFILL_OVERLAY_LINEAR_NAMES, attach_program_identity_metadata, bind_gguf_program_tensor_facts,
   estimate_prefill_overlay_bytes, is_prefill_overlay_role, model_facts_from_gguf_metadata, normalize_route_role,
 )
+from tinygrad.llm.qk_layout import QUANT_FORMATS
 from tinygrad.llm.memory_adaptive_authority import (adapt_cached_memory_policy, memory_adaptive_adapters_active,
                                                      resolve_memory_adaptive_policy, validate_memory_evidence)
 from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OUTPUT, RUNTIME_INPUT, RUNTIME_OUTPUT,
@@ -159,7 +160,7 @@ def derive_selected_gguf_prefill_inventory(kv:dict, meta:dict, ubatch:int=512, *
     # Generation consumes only the final token's output projection.  The
     # pp512 dense candidate set therefore cannot own LM-head merely because
     # its source tensor is quantized; keep it on the explicit fixed lazy route.
-    candidate_controlled = tensor.quant_label in ("Q4_K", "Q6_K") and tensor.role != "lm_head"
+    candidate_controlled = tensor.quant_label in QUANT_FORMATS and tensor.role != "lm_head"
     # The lazy lm-head projection is physically M=1 after final-token pruning. Other selected prefill linears
     # execute at the concrete ubatch. Fixed rows remain census obligations, but are outside candidate geometry.
     physical_m = 1 if tensor.role == "lm_head" else ubatch
