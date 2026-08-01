@@ -1052,7 +1052,9 @@ def test_gfx1100_q32_hq4_hkv2_kv64_hd128_grid_loop_final_isa():
   linear=next(u for u in program.src if u.op is Ops.LINEAR)
   mn=[str(u.arg).split("(",1)[0] for u in linear.src if not isinstance(u.arg,tuple)]
   assert mn.count("v_wmma_f32_16x16x16_f16")==16
-  assert mn.count("s_barrier")==1 and mn.count("ds_load_b128")==2
+  waits=[u.arg for u in linear.src if str(u.arg).split("(",1)[0] == "s_waitcnt"]
+  assert mn.count("s_barrier")==0 and sum(getattr(w,"simm16",None) == (63 << 10) | 7 for w in waits) == 1
+  assert mn.count("ds_load_b128")==2
 
 @pytest.mark.parametrize("hq,hkv",[(32,8),(40,8)])
 def test_gfx1100_model_grid_group_mapping_is_bijective_and_gqa_shared(hq,hkv):
