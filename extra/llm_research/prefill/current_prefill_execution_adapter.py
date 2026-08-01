@@ -263,7 +263,7 @@ def _arrays(path: str, shape: tuple[int, int, int], packed_weight: Any | None = 
   if packed_weight is None:
     if b.shape != (n, k) or b.dtype != np.float16: raise ValueError("dense prefill B must be fp16 with exact (N,K) shape")
   else:
-    expected_dtype = np.dtype(np.uint32 if packed_weight.quant_format == "Q4_K" else np.uint16)
+    expected_dtype = np.dtype(np.uint32 if packed_weight.quant_format.name == "Q4_K" else np.uint16)
     expected_shape = (packed_weight.packed_bytes // packed_weight.storage_width,)
     if b.shape != expected_shape or b.dtype != expected_dtype or b.nbytes != packed_weight.packed_bytes:
       raise ValueError(f"packed prefill B must be {expected_dtype.name}{expected_shape} with {packed_weight.packed_bytes} bytes")

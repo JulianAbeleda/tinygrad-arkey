@@ -9,9 +9,9 @@ def main():
   for row in production.PACKED_WMMA_ROUTES:
     passed = production.gate_combo(row.quant, row.role, row.shape)
     r = production.gate_result(row.quant, row.role, row.shape)
-    results.append({"quant": row.quant, "role": row.role, "shape": list(row.shape), "passed": bool(passed),
+    results.append({"quant": row.quant.name, "role": row.role, "shape": list(row.shape), "passed": bool(passed),
                      "max_abs": r[1] if r is not None else None})
-    print(row.quant, row.role, row.shape, "->", r, flush=True)
+    print(row.quant.name, row.role, row.shape, "->", r, flush=True)
 
   print(json.dumps(results, indent=2))
   n_pass = sum(1 for r in results if r["passed"])
