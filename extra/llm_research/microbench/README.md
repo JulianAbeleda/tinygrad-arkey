@@ -125,6 +125,47 @@ afternoon, not a week.
 
 ---
 
+# dp4a_peak_cuda.cu — measured achievable dp4a peak (NVIDIA sm_120 / RTX 5090)
+
+The int8 CUDA-core analogue of `mma_peak_cuda.cu`, measuring the mechanism the
+`nv-performance-campaign-scope-20260801.md` section 1a originally attributed to llama.cpp's
+prefill MMQ kernels: back-to-back `dp4a.s32.s32` on register-resident int8x4 operands, NACC
+independent accumulators, runtime trip count, never-taken store, zero loads in the hot loop.
+
+    export PATH=/usr/local/cuda-13.2/bin:$PATH
+    nvcc -O3 -arch=sm_120 -DNACC=8 dp4a_peak_cuda.cu -o dp4a_peak_cuda && ./dp4a_peak_cuda 32768
+
+Verify purity before believing a number (`cuobjdump --dump-sass`): the hot loop contains only
+`IDP.4A.S8.S8` (the sm_120 SASS form of dp4a), zero `LDG`/`LDS`/`STS`, and exactly one gated
+`STG` sentinel. 0 spills, 16 registers at `nacc=8`.
+
+## Result, NVIDIA GeForce RTX 5090 (GB202, sm_120), 2026-08-02
+
+Grid sweep (`tpb=256, iters=200000` at nacc=8):
+
+| blocks | G dp4a/s | INT8 TOPS (fp16-equiv TFLOPS) |
+| ---: | ---: | ---: |
+| 2048 | 894.8 | 7.2 |
+| 4096 | 929.7 | 7.4 |
+| 8192 | 942.5 | 7.5 |
+| 16384 | 949.0 | 7.6 |
+| 32768 | 950.8 | 7.6 |
+| 65536 | 950.1 | 7.6 |
+
+**R ≈ 950 G dp4a/s = 3.8 TMAC/s = 7.6 INT8 TOPS**, invariant across NACC 8->32 (959.0 G at
+nacc=32) — a hard instruction-issue ceiling on the CUDA-core integer pipe, ~34x below the fp16
+tensor pipe (255.4 TF). Each dp4a is 4 int8 MACs (8 int8 ops); "fp16-equiv TFLOPS" counts 2
+FLOP/MAC for apples-to-apples with llama-bench's `2*N*pp` convention.
+
+This number settles the mechanism question in `nv-performance-campaign-scope-20260801.md`
+section 8.2: llama.cpp's prefill `mul_mat_q<Q4_K,128>` / `<Q6_K,128>` kernels cannot be dp4a at
+their measured throughput (4.19e12 MACs in 32.95 ms busy needs 127 TMAC/s average; dp4a tops
+out at 3.8 TMAC/s). Their SASS is `IMMA.16832` / `IMMA.16816` — int8 tensor-core MMA. dp4a
+remains the right instruction in llama's decode GEMVs (`mul_mat_vec_q`), which are
+bandwidth-bound.
+
+---
+
 # wmma_peak_metal.py — measured achievable simdgroup_multiply_accumulate peak (Apple M4)
 
 The Metal analogue of the above: same idea (independent accumulators to cover matrix-op latency,
