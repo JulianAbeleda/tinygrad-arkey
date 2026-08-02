@@ -813,7 +813,9 @@ needed), SUBSTRATE (the shared emitter/lowering sits below a hardware-agnostic c
 fix lifts every target that admits the route, proven by AMD+Metal render arms moving
 together), or STRUCTURAL-additive (capability-gated variant, legacy route untouched), and
 adds the missing decode render-equality control (pg3) with a Metal arm. Estimated stack
-unchanged: 5.83ms -> 4.0-4.2ms busy at d512 (~195-210 tok/s).
+corrected in the replacement scope's section 8 (2026-08-02): values-only levers land at
+~4.37-4.93 ms/token (1.07-1.21x llama, parity in reach), not the earlier 4.0-4.2ms; the
+old number was not supported by the reviewed budget.
 
 HARD STOP after section 14. This is gap analysis + scope only; no code changed in this
 section. The levers are the next campaign's pieces, each with an AMD control requirement.
