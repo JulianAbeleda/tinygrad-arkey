@@ -98,7 +98,7 @@ def test_prefill_policy_and_observer_sequence_contract():
 
 def test_promoted_policy_identity_and_generated_artifact_hash_contract():
   from tinygrad.llm.prefill_candidate_runtime import promoted_candidate_set
-  candidate_set = promoted_candidate_set().to_json()
+  candidate_set = promoted_candidate_set("AMD", "gfx1100", 32).to_json()
   rows = [{"invocation_id": f"candidate-{i}", "candidate_controlled": True,
            "role": entry["payload"]["workload"]["role"], "shape": entry["payload"]["workload"]["shape"]}
           for i, entry in enumerate(candidate_set["entries"])]

@@ -1,5 +1,4 @@
 import pathlib
-
 import pytest
 
 from tinygrad.llm.gguf import gguf_load_metadata
@@ -86,15 +85,24 @@ def test_moe_shared_expert_rows_resolve_against_shared_expert_size():
   assert {row["role"] for row in inventory["rows"]} == {"ffn_gate_up", "ffn_down"}
 
 
+@pytest.fixture(scope="module")
+def qwen3_8b_model():
+  """One real 8B load for both GGUF-gated tests: the NV overlay is 16+ GB, so a second concurrent
+  load cannot be admitted on a 32 GB part. Module scope keeps the suite to a single allocation."""
+  if not pathlib.Path("/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf").exists():
+    pytest.skip("no local Qwen3 8B GGUF fixture")
+  return Transformer.from_gguf("/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf", 2048)
+
+
 @pytest.mark.skipif(not pathlib.Path("/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf").exists(),
                     reason="no local Qwen3 8B GGUF fixture")
-def test_inventory_overlay_bytes_equal_model_walk_on_real_qwen3_8b():
+def test_inventory_overlay_bytes_equal_model_walk_on_real_qwen3_8b(qwen3_8b_model):
   """Ratchet: the inventory-derived estimate must equal the _prefill_v2_covered() walk on the real 8B fixture."""
   fixture = pathlib.Path("/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf")
   kv, meta = gguf_load_metadata(fixture)
   inventory = derive_selected_gguf_prefill_inventory(kv, meta)
   assert inventory["overlay_bytes"] > 0
-  model, _ = Transformer.from_gguf(str(fixture), 2048)
+  model, _ = qwen3_8b_model
   walk_bytes = sum(out_f * in_f * 2 for _, out_f, in_f in model._prefill_v2_covered())
   assert inventory["overlay_bytes"] == walk_bytes
   resident = derive_selected_gguf_prefill_inventory(kv, meta, lm_head_resident_fp16=True)
@@ -104,8 +112,10 @@ def test_inventory_overlay_bytes_equal_model_walk_on_real_qwen3_8b():
 
 @pytest.mark.skipif(not pathlib.Path("/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf").exists(),
                     reason="no local Qwen3 8B GGUF fixture")
-def test_nv_no_promoted_candidate_census_in_admit_report():
-  """S4/R3: expressible fp16 capability with no promoted candidate is loud in the admission report."""
-  model, _ = Transformer.from_gguf(str(pathlib.Path("/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf")), 2048)
-  assert model.config.admit["prefill_overlay_promotion"] == "no-promoted-candidate"
-  assert model.config.prefill_policy["strategy"] == "DIRECT_PACKED_FALLBACK"
+def test_nv_promoted_candidate_census_in_admit_report(qwen3_8b_model):
+  """P2: on NV the sm120 promoted candidate is admitted and labeled in the admission report and policy."""
+  model, _ = qwen3_8b_model
+  identity = model.config.prefill_policy["graph_gemm"]["candidate_set_identity"]
+  assert model.config.admit["prefill_overlay_promotion"] == identity
+  assert identity.startswith("candidate_set:sha256:")
+  assert model.config.prefill_policy["strategy"] == "FULL_RESIDENT_OVERLAY"
