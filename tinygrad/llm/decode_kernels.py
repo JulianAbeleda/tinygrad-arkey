@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from tinygrad import dtypes
-from tinygrad.codegen.late.warp_reduce import WARP, _warp_reduce_sum_staged
+from tinygrad.codegen.late.warp_reduce import WARP, _staged_shfl, _warp_reduce_sum_staged
 from tinygrad.dtype import AddrSpace
 from tinygrad.helpers import cdiv
 from tinygrad.llm.qk_layout import Q4_K_BLOCK_ELEMS, Q4K_WORDS_PER_BLOCK, Q6_K, Q6_K_BLOCK_ELEMS, Q6K_HALFWORDS_PER_BLOCK, QuantFormat
@@ -172,6 +172,19 @@ def _q6k_block_dot(halfs:UOp, x:UOp, base:UOp, x_block:UOp, pos:UOp) -> UOp:
   return contrib
 
 
+def _q6k_coop_pos_reduce_sum(val:UOp, lane:UOp, row_tile:int, slot_base:int=90) -> UOp:
+  """Cross-lane sum over the coop route's 16 pos lanes. The lane map is row_i-fastest
+  (tid = pos*row_tile + row_i), so each ladder step must advance by row_tile lane ids to
+  stay within one (row, pos) group; the standard offset ladder (width/2..1) would mix the
+  row_i bit on the last step. Requires a single warp: row_tile * Q6K_POS_EXTENT <= 32."""
+  off = Q6K_POS_EXTENT >> 1
+  while off >= 1:
+    val = val + _staged_shfl(val, off * row_tile, lane, slot_base)
+    off >>= 1
+    slot_base += 1
+  return val
+
+
 @dataclass(frozen=True)
 class Q6KGEMVRouteSpec:
   rows: int
@@ -197,12 +210,17 @@ class Q6KGEMVRouteSpec:
 
   @property
   def kernel_name(self) -> str:
-    return f"q6k_gen_coop_{self.rows}_{self.k}" if self.route_family == "q6k_coop" else f"q6k_gen_partial_{self.rows}_{self.k}_{self.parts}"
+    suffix = "_inkernel" if self.reduction == "in_kernel" else ""
+    return (f"q6k_gen_coop_{self.rows}_{self.k}" if self.route_family == "q6k_coop"
+            else f"q6k_gen_partial_{self.rows}_{self.k}_{self.parts}") + suffix
 
   def validate(self) -> None:
     if self.quant is not Q6_K: raise ValueError(f"Q6KGEMVRouteSpec quant must be Q6_K, got {self.quant!r}")
     if self.route_family not in ("q6k_coop", "q6k_partial"): raise ValueError(f"unknown route_family {self.route_family!r}")
-    if self.reduction != "external_sum": raise ValueError(f"unsupported reduction {self.reduction!r}")
+    if self.reduction not in ("external_sum", "in_kernel"): raise ValueError(f"unsupported reduction {self.reduction!r}")
+    if self.reduction == "in_kernel" and self.route_family == "q6k_partial":
+      raise ValueError("in_kernel reduction is not implemented for the q6k_partial family (M2 non-landing, "
+                       "l1-decode-plumbing-fusion-design-20260802.md section 6 class 9); use external_sum")
     if self.storage != "packed_u16": raise ValueError(f"unsupported storage {self.storage!r}")
     if self.k % Q6_K_BLOCK_ELEMS != 0: raise ValueError(f"k={self.k} must be a multiple of {Q6_K_BLOCK_ELEMS}")
     if self.lane_extent != Q6K_POS_EXTENT: raise ValueError(f"lane_extent must be {Q6K_POS_EXTENT}, got {self.lane_extent}")
@@ -210,6 +228,9 @@ class Q6KGEMVRouteSpec:
       if self.pos_axis != "local": raise ValueError("coop route requires pos_axis=local")
       if self.row_tile < 1 or self.rows % self.row_tile != 0:
         raise ValueError(f"coop route requires rows({self.rows}) % row_tile({self.row_tile}) == 0")
+      if self.reduction == "in_kernel" and self.row_tile * self.lane_extent > 32:
+        raise ValueError("coop in_kernel reduce requires a single warp: row_tile * lane_extent <= 32, got "
+                         f"row_tile={self.row_tile} lane_extent={self.lane_extent}")
     else:
       if self.pos_axis != "reduce": raise ValueError("partial route requires pos_axis=reduce")
       if self.parts < 1: raise ValueError(f"partial route requires parts>=1, got {self.parts}")
@@ -221,12 +242,12 @@ class Q6KGEMVRouteSpec:
 
 
 def q6k_spec_for_role(rows:int, k:int, *, role:str="", parts:int=1, row_tile:int=4, use_coop:bool=True,
-                      target:str="amd_gfx1100", opts:tuple=()) -> Q6KGEMVRouteSpec:
+                      target:str="amd_gfx1100", opts:tuple=(), reduction:str="external_sum") -> Q6KGEMVRouteSpec:
   if use_coop and parts == 1:
     return Q6KGEMVRouteSpec(rows=rows, k=k, role=role, route_family="q6k_coop", row_tile=row_tile,
-                            pos_axis="local", target=target)
+                            pos_axis="local", target=target, reduction=reduction)
   return Q6KGEMVRouteSpec(rows=rows, k=k, role=role, route_family="q6k_partial", parts=parts,
-                          pos_axis="reduce", target=target, opts=opts)
+                          pos_axis="reduce", target=target, opts=opts, reduction=reduction)
 
 
 def emit_q6k_gemv_kernel(spec:Q6KGEMVRouteSpec):
@@ -250,6 +271,7 @@ def emit_q6k_vocab_scalar_reduce_kernel(spec:Q6KGEMVRouteSpec):
 
 def _emit_q6k_coop(spec:Q6KGEMVRouteSpec):
   rows, row_tile, k_blocks, name = spec.rows, spec.row_tile, spec.k_blocks, spec.kernel_name
+  in_kernel = spec.reduction == "in_kernel"
   def kernel(partials:UOp, halfs:UOp, x:UOp) -> UOp:
     row_o = UOp.range(cdiv(rows, row_tile), 0)
     row_i = UOp.range(row_tile, 1, axis_type=AxisType.LOCAL)
@@ -257,6 +279,12 @@ def _emit_q6k_coop(spec:Q6KGEMVRouteSpec):
     blk = UOp.range(k_blocks, 3, axis_type=AxisType.REDUCE)
     row, base = row_o * row_tile + row_i, ((row_o * row_tile + row_i) * k_blocks + blk) * Q6K_HALFWORDS_PER_BLOCK
     contrib = _q6k_block_dot(halfs, x, base, blk, pos)
+    if in_kernel:
+      acc = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG)
+      acc = acc.after(acc[0].store(0.0))
+      acc = acc.after(acc[0].store(acc.after(blk)[0] + contrib).end(blk))
+      total = _q6k_coop_pos_reduce_sum(acc[0], pos, row_tile)
+      return partials[row].store(total).end(row_o, row_i, pos).sink(arg=KernelInfo(name=name, opts_to_apply=()))
     acc = partials[row, pos].set(0.0)
     acc = partials[row, pos].set(acc.after(blk)[row, pos] + contrib, end=blk)
     return acc.end(row_o, row_i, pos).sink(arg=KernelInfo(name=name, opts_to_apply=()))
