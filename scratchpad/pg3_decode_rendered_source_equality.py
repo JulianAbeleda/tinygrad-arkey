@@ -31,8 +31,8 @@ import hashlib, sys
 from tinygrad import dtypes
 from tinygrad.codegen import do_estimates, do_linearize, do_render, full_rewrite_to_sink
 from tinygrad.helpers import Target, getenv
-from tinygrad.llm.decode_kernels import (emit_q6k_gemv_kernel, emit_q6k_vocab_scalar_reduce_kernel,
-  q4k_g3_lanemap_gemv_kernel, q6k_spec_for_role)
+from tinygrad.llm.decode_kernels import (DecodeRMSNormSpec, emit_decode_rmsnorm_kernel, emit_q6k_gemv_kernel,
+  emit_q6k_vocab_scalar_reduce_kernel, q4k_g3_lanemap_gemv_kernel, q6k_spec_for_role)
 from tinygrad.llm.flash_decode_attention import describe_flash_decode_attention
 from tinygrad.llm.qk_layout import Q4_K_BLOCK_ELEMS, Q4K_WORDS_PER_BLOCK, Q6_K_BLOCK_ELEMS, Q6K_HALFWORDS_PER_BLOCK
 from tinygrad.renderer import Renderer
@@ -99,6 +99,16 @@ def _flash_combine_ast() -> UOp:
   return spec.emit_combine()(out, pout)
 
 
+def _rmsnorm_ast(rows: int, dim: int, *, warps: int, out_dtype) -> UOp:
+  spec = DecodeRMSNormSpec(rows=rows, dim=dim, eps=1e-6, warps_per_row=warps,
+                           weight_dtype=dtypes.float16, out_dtype=out_dtype)
+  numel = rows * dim
+  out = UOp.placeholder((numel,), out_dtype, 0)
+  x = UOp.placeholder((numel,), dtypes.float32, 1)
+  w = UOp.placeholder((dim,), dtypes.float16, 2)
+  return emit_decode_rmsnorm_kernel(spec)(out, x, w)
+
+
 # Campaign shapes/roles (nv-performance-campaign-scope-20260801.md section 14.1):
 # gate/up 12288x4096, q/o 4096x4096, down 4096x12288, k/v 1024x4096; Q6_K vocab head 151936.
 KERNELS = [
@@ -113,6 +123,9 @@ KERNELS = [
   ("q6k_vocab_scalar_reduce_151936_4096", "vocab", _q6k_vocab_reduce_ast),
   ("flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128", "G4", _flash_tile_ast),
   ("flash_fused_gmax_combine_32_128", "G4", _flash_combine_ast),
+  ("decode_rmsnorm_1_4096", "norm", lambda: _rmsnorm_ast(1, 4096, warps=16, out_dtype=dtypes.float16)),
+  ("decode_rmsnorm_32_128", "norm", lambda: _rmsnorm_ast(32, 128, warps=1, out_dtype=dtypes.float32)),
+  ("decode_rmsnorm_8_128", "norm", lambda: _rmsnorm_ast(8, 128, warps=1, out_dtype=dtypes.float32)),
 ]
 
 
