@@ -291,6 +291,26 @@ STRUCTURAL-additive lever must keep the AMD- and Metal-admitted routes' hashes u
 The Metal arm runs on the macOS box where pg2 already runs (MetalRenderer imports the macOS
 Metal runtime; it cannot instantiate on this Linux NV box). The AMD arm runs on either.
 
+**pg3 HIP baseline (2026-08-02, `scratchpad/pg3_decode_rendered_source_equality.py`, HIPRenderer
+gfx1100, render-only).** Re-derive with `PYTHONPATH=. .venv/bin/python
+scratchpad/pg3_decode_rendered_source_equality.py`; hashes are the house convention
+(`sha256((src + "\n").encode())`, first 12 hex; pg2). The flash tile is pinned at the campaign's
+measured max_context=4608 (`/tmp/qwen3-8b-nv-p4-decode.json`), rendered at Tc=start_pos+1. The
+Metal arm is macOS-only and gets its own pinned block when it first runs on the macOS box.
+
+| kernel | sha256 |
+| --- | --- |
+| q4k_g3_lanemap_gemv_12288_4096 | 312422c73a49 |
+| q4k_g3_lanemap_gemv_4096_4096 | 27857cb8ca03 |
+| q4k_g3_lanemap_gemv_4096_12288 | 851760e2053c |
+| q4k_g3_lanemap_gemv_1024_4096 | 39ddb717ddd4 |
+| q6k_gen_coop_4096_12288 | cc38fbb3db92 |
+| q6k_gen_coop_151936_4096 | 5795e66a7292 |
+| q6k_gen_partial_1024_4096_4 | 344e1c388eeb |
+| q6k_vocab_scalar_reduce_151936_4096 | c708302aa2d2 |
+| flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128 | 66d4c4da3108 |
+| flash_fused_gmax_combine_32_128 | c78e4651ad35 |
+
 ### 5.2 NV pins (existing, re-run per lever)
 
 - First-token digits `[50994, 82, 31109, 3508, 692, 2, 11162, 100, 254, 30317, 2655, 12080,
