@@ -11,7 +11,7 @@ from typing import Any
 
 from tinygrad import dtypes
 from tinygrad.codegen.late.warp_reduce import WARP, _staged_shfl, _warp_reduce_sum_staged
-from tinygrad.dtype import AddrSpace
+from tinygrad.dtype import AddrSpace, DType
 from tinygrad.helpers import cdiv
 from tinygrad.llm.qk_layout import Q4_K_BLOCK_ELEMS, Q4K_WORDS_PER_BLOCK, Q6_K, Q6_K_BLOCK_ELEMS, Q6K_HALFWORDS_PER_BLOCK, QuantFormat
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
@@ -183,6 +183,84 @@ def _q6k_coop_pos_reduce_sum(val:UOp, lane:UOp, row_tile:int, slot_base:int=90) 
     off >>= 1
     slot_base += 1
   return val
+
+
+@dataclass(frozen=True)
+class DecodeRMSNormSpec:
+  """One fused decode RMSNorm kernel: per-row sumsq reduce + `x * rsqrt(sumsq/dim + eps) * w`
+  epilogue in a single UOp builder (l1-decode-plumbing-fusion-design-20260802.md section 6,
+  norm family). One warp per row; the epilogue reuses the legacy graph's exact ops (DIV by dim,
+  SQRT, RECIPROCAL, then (x*scale)*w) so only the sumsq summation ORDER differs from the generic
+  reduce, and that delta is gated by the fixed-depth token sha like every other fused variant."""
+  rows: int
+  dim: int
+  eps: float
+  lane_width: int = 32
+  warps_per_row: int = 1
+  x_dtype: DType = dtypes.float32
+  weight_dtype: DType = dtypes.float32
+  out_dtype: DType = dtypes.float32
+  x_rank: int = 1
+  target: str = "amd_gfx1100"
+
+  @property
+  def kernel_name(self) -> str: return f"decode_rmsnorm_{self.rows}_{self.dim}"
+
+  def validate(self) -> None:
+    if self.rows < 1: raise ValueError(f"DecodeRMSNormSpec requires rows>=1, got {self.rows}")
+    if self.dim < self.lane_width or self.dim % self.lane_width != 0:
+      raise ValueError(f"DecodeRMSNormSpec requires dim >= lane_width and dim % lane_width == 0, "
+                       f"got dim={self.dim} lane_width={self.lane_width}")
+    if self.warps_per_row < 1 or self.dim % (self.lane_width * self.warps_per_row) != 0:
+      raise ValueError(f"DecodeRMSNormSpec requires dim % (lane_width * warps_per_row) == 0, got "
+                       f"dim={self.dim} lane_width={self.lane_width} warps_per_row={self.warps_per_row}")
+    if not isinstance(self.eps, float) or self.eps <= 0: raise ValueError(f"DecodeRMSNormSpec requires eps>0, got {self.eps!r}")
+    if self.x_rank not in (1, 3): raise ValueError(f"DecodeRMSNormSpec requires x_rank in (1, 3), got {self.x_rank}")
+    if self.out_dtype not in (dtypes.float16, dtypes.float32):
+      raise ValueError(f"DecodeRMSNormSpec requires out_dtype float16/float32, got {self.out_dtype}")
+
+
+def emit_decode_rmsnorm_kernel(spec:DecodeRMSNormSpec):
+  spec.validate()
+  rows, dim, lane, warps = spec.rows, spec.dim, spec.lane_width, spec.warps_per_row
+  per_lane = dim // (lane * warps)
+  dim_f = UOp.const(dtypes.float32, float(dim))
+  eps = UOp.const(dtypes.float32, spec.eps)
+  def kernel(out:UOp, x:UOp, w:UOp) -> UOp:
+    row = UOp.range(rows, 0)
+    laneid = UOp.range(lane, 1, axis_type=AxisType.LOCAL)
+    warp = UOp.range(warps, 2, axis_type=AxisType.LOCAL)
+    red = UOp.range(per_lane, 3, axis_type=AxisType.REDUCE)
+    base = row * dim + warp * (per_lane * lane) + laneid + red * lane
+    # The input is passed as a flat (numel,) view and the custom-kernel transport
+    # contiguous()s it into the buffer this flat base indexes. That per-call
+    # materialization is the measured reason the norm-fusion route is closed-default
+    # non-landing (m3-fused-norm-measurement-record-20260802.md). Rank 3 inputs
+    # (B,T,dim activations) index the two leading extent-1 dims; rank 1 inputs
+    # (q/k slices) index the flat base directly.
+    x_sel = x[UOp.const(dtypes.int, 0), UOp.const(dtypes.int, 0), base] if spec.x_rank == 3 else x[base]
+    acc = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG)
+    acc = acc.after(acc[0].store(0.0))
+    xv = x_sel.cast(dtypes.float32)
+    acc = acc.after(acc[0].store(acc.after(red)[0] + xv * xv).end(red))
+    warp_total = _warp_reduce_sum_staged(acc[0], laneid, lane, slot_base=90)
+    if warps > 1:
+      smem = UOp.placeholder((warps,), dtypes.float32, 230, addrspace=AddrSpace.LOCAL)
+      wstore = smem[warp].store(warp_total, laneid.eq(0))
+      barrier = UOp.barrier(UOp.group(wstore))
+      total = UOp.const(dtypes.float32, 0.0)
+      for wi in range(warps):
+        total = total + smem.after(barrier)[wi]
+    else:
+      total = warp_total
+    scale = UOp(Ops.RECIPROCAL, dtypes.float32, (UOp(Ops.SQRT, dtypes.float32, (total / dim_f + eps,)),))
+    epi = UOp.range(per_lane, 3)
+    obase = row * dim + warp * (per_lane * lane) + laneid + epi * lane
+    wv = w[warp * (per_lane * lane) + laneid + epi * lane].cast(dtypes.float32)
+    x_epi = x[UOp.const(dtypes.int, 0), UOp.const(dtypes.int, 0), obase] if spec.x_rank == 3 else x[obase]
+    return out[obase].store(((x_epi.cast(dtypes.float32) * scale) * wv).cast(spec.out_dtype)).end(row, laneid, warp, epi).sink(
+      arg=KernelInfo(name=spec.kernel_name, opts_to_apply=()))
+  return kernel
 
 
 @dataclass(frozen=True)

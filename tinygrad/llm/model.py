@@ -2,6 +2,7 @@ from __future__ import annotations
 import contextlib, contextvars, functools, hashlib, itertools, json, pathlib
 from dataclasses import dataclass, replace
 from tinygrad import Tensor, nn, UOp, TinyJit, dtypes, function, Device, role_metadata
+from tinygrad.helpers import prod
 from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.codegen.opt.postrange import warmstart_key as _warmstart_key
 from tinygrad.llm.admission import (
@@ -15,6 +16,8 @@ from tinygrad.llm.gguf import MODEL_PARAMETER_ALLOCATION_OWNER, gguf_load, gguf_
 from tinygrad.llm.gguf_memory_scan import RuntimeGeometry, selected_gguf_backing_bytes
 from tinygrad.llm.decode_routes import (FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_CANDIDATE, flash_decode_attention_route,
                                         should_use_flash_decode as _route_should_use_flash_decode)
+from tinygrad.llm.decode_kernels import DecodeRMSNormSpec, emit_decode_rmsnorm_kernel
+from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
 from tinygrad.llm.prefill_routes import direct_packed_prefill_policy, is_direct_packed_prefill_linear, route_prefill_linear, validate_prefill_route_mode
 from tinygrad.llm.prefill_memory_plan import Strategy
 from tinygrad.llm.prefill_attachments import attach_selected_prefill_inventory
@@ -22,7 +25,7 @@ from tinygrad.llm.prefill_route_observer import prefill_route_scope, notify_pref
 from tinygrad.llm.qk_primitives import (
   QKConfig, QKPrimitiveBudget, Q4KPrimitiveLinear, Q4KPrimitiveRegistry, Q6KPrimitiveLinear,
   _install_q4k_primitives, _install_q6k_primitives, _qk_storage_summary,
-  qk_primitive_eligibility_from_device_facts, _module_at,
+  qk_primitive_capability_from_device_facts, qk_primitive_eligibility_from_device_facts, _module_at,
 )
 from tinygrad.llm.model_facts import (
   PREFILL_OVERLAY_LINEAR_NAMES, attach_program_identity_metadata, bind_gguf_program_tensor_facts,
@@ -38,7 +41,7 @@ from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OU
                                            prefill_activation, prefill_output, prefill_scratch, runtime_activation,
                                            runtime_input, runtime_output,
                                            runtime_persistent, runtime_scratch)
-from tinygrad.llm.model_route_plan import build_model_route_plan
+from tinygrad.llm.model_route_plan import build_model_route_plan, decode_epilogue_fusion_promoted, decode_norm_fusion_promoted
 from tinygrad.llm.prefill_candidate_runtime import decode_prefill_graph_candidate_set, automatic_promoted_prefill_graph_policy
 from tinygrad.llm.physical_memory_ledger import AllocationOwner, bind_allocation_owner
 from tinygrad.uop.ops import Ops, resolve
@@ -332,6 +335,43 @@ def _prefill_semantic(enabled:bool, mark, value:Tensor) -> Tensor:
   if runtime_mark is None: raise ValueError("execution semantic requires a prefill role marker")
   return (mark if enabled else runtime_mark)(value)
 
+def _decode_rmsnorm(norm, x:Tensor, promoted:bool, out_dtype=dtypes.float32) -> Tensor|None:
+  """L1 M3 fused decode RMSNorm (l1-decode-plumbing-fusion-design-20260802.md section 6 norm
+  family): one kernel per norm replaces the generic mean/var reduce + epilogue pair. Returns
+  None to keep the legacy graph when the route is not promoted or the shape/strides contract
+  does not hold. Decode-only by construction: the call sites gate on `not _prefill`."""
+  if not promoted or x.dtype not in (dtypes.float32, dtypes.float16): return None
+  dim = x.shape[-1]
+  if dim < 32 or dim % 32: return None
+  numel = prod(x.shape)
+  rows = numel // dim
+  if rows < 1 or rows * dim != numel: return None
+  # The model stores norm weights packed; the lazy fp16 view is a per-token dequant when fed
+  # through the opaque kernel boundary. The fp16 weights are materialized ONCE at load (see
+  # Transformer.from_gguf) because the traced call sites run inside a Function dispatch where
+  # ALLOW_DEVICE_USAGE is 0 and realizing here would raise. No prep means no fused route.
+  w = getattr(norm, "_decode_fused_weight", None)
+  if w is None: return None
+  # Pass the exact flat activation view. The raw producer uop (x.uop.base) can
+  # carry axes the opaque boundary must not materialize (the embedding gather's
+  # vocab-block loop shows up as an extra rank and the scheduler stages it at
+  # the wrong shape, collapsing the kernel's sumsq to a scalar). The custom-kernel
+  # transport contiguous()s this view into the exact (numel,) buffer the emitter
+  # indexes, so rows stay row-major. That per-call materialization is the measured
+  # reason this route is closed-default non-landing (see the norm-fusion record).
+  x_in = x.reshape(numel)
+  x_rank = 1
+  # 256 elements per warp is the measured occupancy sweet spot for the single-row 4096 shape
+  # (512 threads, 8 elems/lane); smaller norms stay at one warp per row.
+  warps = max(1, min(16, dim // 256))
+  spec = DecodeRMSNormSpec(rows=rows, dim=dim, eps=norm.eps, warps_per_row=warps,
+                           x_dtype=x.dtype, weight_dtype=dtypes.float16, out_dtype=out_dtype, x_rank=x_rank)
+  program = KernelProgram("decode_norm", spec.kernel_name, KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
+                          emit_decode_rmsnorm_kernel(spec), output_spec=OutputSpec((numel,), out_dtype))
+  out = execute_promoted_program(None, x_in, w, program=program)
+  return out.reshape(x.shape)
+
+
 def _generation_input_slice(tokens:Tensor, start_pos:int|UOp, token_extent:UOp, bound_extent:int) -> Tensor:
   """Retain the lazy symbolic slice used by decode and chunked prefill JITs."""
   return tokens[:, start_pos:start_pos + token_extent]
@@ -499,10 +539,15 @@ class FFNBlock:
     @function(precompile=True, allow_implicit=True)
     def _run(x:Tensor, start_pos:int|UOp, ring_freqs):
       _prefill = getattr(self, "_is_prefill", False)
-      with role_metadata("rms_norm"): normed_x = _prefill_semantic(_prefill, prefill_scratch, self.attn_norm(x))
+      _fused_norm = not _prefill and getattr(self, "_decode_norm_fusion_promoted", False)
+      with role_metadata("rms_norm"):
+        _nx = _decode_rmsnorm(self.attn_norm, x, _fused_norm, dtypes.float16)
+        normed_x = _prefill_semantic(_prefill, prefill_scratch, _nx if _nx is not None else self.attn_norm(x))
       attn_out = self._attention(normed_x, start_pos, ring_freqs)
       with role_metadata("residual"): h = _prefill_semantic(_prefill, prefill_activation, x + attn_out)
-      with role_metadata("rms_norm"): normed_h = _prefill_semantic(_prefill, prefill_scratch, self.ffn_norm(h))
+      with role_metadata("rms_norm"):
+        _nh = _decode_rmsnorm(self.ffn_norm, h, _fused_norm, dtypes.float16)
+        normed_h = _prefill_semantic(_prefill, prefill_scratch, _nh if _nh is not None else self.ffn_norm(h))
       ffn_out = self._feed_forward(normed_h)
       with role_metadata("residual"):
         return _prefill_semantic(_prefill, prefill_activation, (h + ffn_out).contiguous())
@@ -532,10 +577,13 @@ class TransformerBlock(FFNBlock):
     elif hasattr(self, "attn_qkv"): q, k, v = self.attn_qkv(x)  # B1 fused q/k/v
     else: q, k, v = self.attn_q(x), self.attn_k(x), self.attn_v(x)
     q, k, v = (_prefill_semantic(_prefill, prefill_scratch, value) for value in (q, k, v))
+    _fused_norm = not _prefill and getattr(self, "_decode_norm_fusion_promoted", False)
     if self.config.qk_norm and self.config.qk_norm != self.config.head_dim:
       with role_metadata("rms_norm"):
-        q, k = (_prefill_semantic(_prefill, prefill_scratch, norm(value))
-                for norm, value in ((self.attn_q_norm, q), (self.attn_k_norm, k)))
+        _nq = _decode_rmsnorm(self.attn_q_norm, q, _fused_norm)
+        _nk = _decode_rmsnorm(self.attn_k_norm, k, _fused_norm)
+        q = _prefill_semantic(_prefill, prefill_scratch, _nq if _nq is not None else self.attn_q_norm(q))
+        k = _prefill_semantic(_prefill, prefill_scratch, _nk if _nk is not None else self.attn_k_norm(k))
 
     B, T, _ = x.shape
     if self.config.attn_output_gate:
@@ -546,8 +594,10 @@ class TransformerBlock(FFNBlock):
     v = v.reshape(B, T, self.config.n_kv_heads, self.config.head_dim).transpose(1, 2)  # (B,KvH,T,Hd)
     if self.config.qk_norm == self.config.head_dim:
       with role_metadata("rms_norm"):
-        q, k = (_prefill_semantic(_prefill, prefill_scratch, norm(value))
-                for norm, value in ((self.attn_q_norm, q), (self.attn_k_norm, k)))
+        _nq = _decode_rmsnorm(self.attn_q_norm, q, _fused_norm)
+        _nk = _decode_rmsnorm(self.attn_k_norm, k, _fused_norm)
+        q = _prefill_semantic(_prefill, prefill_scratch, _nq if _nq is not None else self.attn_q_norm(q))
+        k = _prefill_semantic(_prefill, prefill_scratch, _nk if _nk is not None else self.attn_k_norm(k))
 
     # rope-at-read (DECODE_ROPE_AT_READ, opt-in; requires full-head rope): store UN-roped K and rotate at read -- the
     # prerequisite for the StreamingLLM ring's position re-basing. Q is never cached, so it is always roped here.
@@ -1300,7 +1350,27 @@ class Transformer:
     finally:
       for _n, _v in zip(("uniform", "glorot_uniform"), _saved_init):
         delattr(Tensor, _n) if _v is None else setattr(Tensor, _n, _v)
+    # L1 M3: the fused decode RMSNorm route resolves ONCE from the load-entry facts (same
+    # (backend, arch) the QK primitives use), never from a target-string guess. Blocks read
+    # their own copy so the traced norm call sites need no transformer back-reference.
+    _norm_cap = qk_primitive_capability_from_device_facts(_device_facts)
+    _norm_promoted = decode_norm_fusion_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_norm_fusion_promoted = _norm_promoted
+    for _b in model.blk: _b._decode_norm_fusion_promoted = _norm_promoted
     nn.state.load_state_dict(model, state_dict, verbose=False, consume=True, realize=False)  # NOTE: rope_freqs.weight (32,) is unused
+    if _norm_promoted:
+      # Materialize the packed norm weights once at load (~600KB total fp16) so the fused decode
+      # kernels read plain buffers. Failure on any norm just declines its fused route (legacy graph).
+      for _b in model.blk:
+        for _name in ("attn_norm", "ffn_norm", "attn_q_norm", "attn_k_norm"):
+          _norm = getattr(_b, _name, None)
+          if _norm is None: continue
+          try:
+            _norm._decode_fused_weight = Tensor.empty(_norm.weight.shape[-1], dtype=dtypes.float16,
+                                                      device=_norm.weight.device).assign(
+              _norm.weight.cast(dtypes.float16).contiguous()).realize()
+          except Exception:
+            _norm._decode_fused_weight = None
     if q4k_meta is not None:
       model_facts = model_facts_from_gguf_metadata(kv, q4k_meta)
       route_plan = build_model_route_plan(q4k_meta, model_facts)
