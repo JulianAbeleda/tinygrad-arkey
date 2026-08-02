@@ -484,3 +484,62 @@ Carried forward as *questions* because no settling command has been named yet:
 2. Is there a quantize-excluded GEMV class comparison? Settles: whether the 8.1 cap is right or
    whether L2+L5 genuinely have more room.
 3. Does the ~0.13 ms of non-score flash cost (L3) belong to a lever at all?
+
+---
+
+## 10. P1 results - L3 substrate verdict, L4 values row landed (2026-08-02)
+
+RTX 5090, Qwen3-8B-Q4_K_M, d512 fixed-depth decode authority (`bench.py --decode`,
+5 reps median), DEBUG=2 prime-token per-kernel times. Pins before/after: first-token digits
+`[50994, 82, 31109, 3508, 692, 2, 11162, 100, 254, 30317, 2655, 12080, 25, 576, 35264, 5624]`,
+decode sha256 `0721c16fbf70779cb6cebd5cf64eab50a1f61c7882d402c60c27d22597548ebe`, census
+`prefill_overlay_promotion: candidate_set:sha256:1b8ea95d50bb55962474721cf013a6c3a704038916856353c65281112a166c7f`,
+and all 36 swept configs kept the fixed-depth token sha `5662f1cd...`.
+
+### L3 - SUBSTRATE verdict (no code change)
+
+36-config sweep of the G4 route values in-process (query_group_size x stage_width x split_size,
+monkeypatched `FLASH_DECODE_G4`, never edited shared rows). Best score kernel
+`flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128`:
+
+| qg (None=4) | stage_width | split_size | score us | combine us | tok/s |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 4 | 4 | 48 | 7.41 | 3.65 | 163.25 |
+| 4 | 8 | 48 | 7.46 | 3.63 | 163.41 |
+| 4 | 2 | 48 | 7.48 | 3.63 | 163.12 |
+| 4 | 1 | 48 (baseline) | 7.59 | 3.71 | 162.97 |
+| 2 | 4 | 48 | 9.24 | 3.65 | 161.61 |
+| 1 | 8 | 48 | 14.02 | 3.68 | 157.17 |
+
+| split_size (qg=4) | score us |
+| --- | ---: |
+| 48 | 7.4-7.6 |
+| 32 | 9.6-9.8 |
+| 16 | 11.9-12.4 |
+
+No row reaches the ~4us go/no-go bar (llama ext_vec 3.17us); the best value shaves only
+0.18us (2.4%) off the baseline and the tok/s spread across all 36 rows is 149.1-163.4. L3 is
+classified SUBSTRATE (whole-cache tile structure, per section 4's criterion) and value tuning
+stops here.
+
+### L4 - VALUES row landed: Q6K coop row_tile=2 on NV
+
+`q6k_gen_coop` row_tile sweep (151936-row vocab head + 4096-row down, same emitter, in-process
+`Q6K_DECODE_CANDIDATE` replace; lane_extent is pinned to 16 by the emitter's validate and the
+coop emitter exposes no other staging/vector knob):
+
+| row_tile | vocab coop us | down coop us | scalar reduce us | d512 tok/s |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 473.4 | 57.6 | 72.5 | 158.9 |
+| 2 | 330.1 | 35.5 | 72.5 | 172.4 |
+| 4 (baseline) | 397.4 | 49.7 | 72.5 | 163.2 |
+| 8 | 383.7 | 54.2 | 72.5 | 161.4 |
+
+row_tile=2 clears the ~340us bar and is implemented as per-target data (commit `ab3cb84c1`):
+`Q6K_COOP_ROW_TILE_BY_TARGET = {("NV", "sm_120"): 2}` in `tinygrad/llm/decode_kernels.py`,
+resolved at bind time from the installed primitive's TG3 admission capability
+(`decode_routes.py::_Q6KDecodeCandidate.bind`); an undeclared target keeps the AMD search value
+4. AMD pg3 hashes re-verified byte-identical after the change (all 10 rows, section 5.1 block).
+Measured after: vocab coop 330.1us (1.55 TB/s, 86% of ceiling), down coop 35.5us, d512 decode
+**163.5 -> 172.6 tok/s** (6.12 -> 5.80 ms/token), e2e growing-window decode 158.3 -> 166.8
+tok/s, all NV pins unchanged.
