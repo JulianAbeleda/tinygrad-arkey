@@ -616,3 +616,68 @@ are now recorded as substrate; they remain recoverable only through the structur
 scopes (in-kernel single-pass partial, cross-wave lane map), which this campaign does
 not build. Section 8.2's end-state stands unchanged on its own terms, with the L2+L5
 line now understood as substrate-parked rather than values-open.
+
+## 12. P4 M2 result - Q6K in-kernel merges: coop lands, partial documented non-landing (2026-08-02)
+
+Design: l1-decode-plumbing-fusion-design-20260802.md section 6 classes 9 (`r_8_8_16_2_4`,
+partial v merge) and 10 (`r_32_32_4_2_8`, down coop merge). Landing commit: `[nn]` M2 (see
+git log); the promotion record `decode-epilogue-fusion-route-policy.json` now names
+`NV:sm_120` as the first fused consumer, and every other target stays closed.
+
+### Landed - coop down merge (`q6k_gen_coop_4096_12288_inkernel`)
+
+The coop emitter gains a `reduction="in_kernel"` variant: a REG accumulator plus a staged
+shuffle ladder over the 16 pos lanes, writing `(rows,)` instead of `(rows,16)` and removing
+the generic `partial.sum(axis=1)` merge kernel and its 4.6 MB/token fp32 round-trip.
+Admission rides the M1 closed-default gate: `_Q6KDecodeCandidate.execute` selects it only
+when `fusion_admitted` AND the binding is coop AND not the vocab head (the vocab head keeps
+the scalar-reduce path; design Q9, L4 boundary).
+
+Measured (d512 fixed-depth, DEBUG=2 prime-token medians, same rig as section 11):
+
+| kernel | before | after |
+| --- | ---: | ---: |
+| down coop gemv + merge | 35.5 + 2.08 us | 34.9 us (fused) |
+| partial v gemv + merge | 17.15 + 2.09 us | unchanged (17.2 + 2.11) |
+
+Tokens: fixed-depth sha unchanged (`9d6b3787ce...`, 3/3 reps), first-token digits
+unchanged (`151936`), d512 tok/s 172.97 -> 173.45 (the down-path launch-count win is small
+at d512 because it is ~0.05 ms/token of a 5.8 ms budget; the kernel-level evidence above is
+the primary row). Numeric parity probe (real weights, bitwise compare vs legacy merge):
+2814/4096 last-bit order deltas, max_abs 7.2e-07, no digit movement - the same order-only
+class the e2e sha gate already accepts.
+
+### Non-landing - partial in-kernel merge (class 9), evidence
+
+Two in-kernel partial shapes were built and timed on NV before the landing decision:
+
+| shape | us | vs legacy 17.15 + 2.09 |
+| --- | ---: | --- |
+| 4-thread blocks (part LOCAL only) | 25.3 | +6.0 us/layer LOSS |
+| 8-row x 4-part 32-thread blocks (this shape) | 466.6 | 27x SLOWER |
+
+The 8-row shape is a reproducible 466.6 us in the real decode loop (token sha still
+parity-clean at 3/3 reps while it was active). CUDA and HIP source diffs against legacy
+(LOCAL:0:32, 128 blocks x 32 threads, identical loops and per-thread work) show only two
+staged shuffles and a gated store added - no structural explanation found at source level,
+and a standalone launch-config hypothesis (2D block 4x8 vs 1D 32) was not the driver in the
+4-thread control. Pursuing this shape further was not justified: its ceiling is ~2.1 us
+per layer (~0.04 ms/token) against the norm family's 0.58 ms, so the mystery is recorded
+here, not chased. The partial in-kernel merge is a documented non-landing; the legacy
+`external_sum` route is untouched and `Q6KGEMVRouteSpec.validate` now rejects
+`reduction="in_kernel"` for the partial family with a pointer to this record. Revisit under
+the substrate single-pass partial scope (section 11 L2 verdict), not under L1.
+
+### Constraints and controls
+
+- Single-warp constraint: the coop in-kernel ladder requires `row_tile * lane_extent <= 32`,
+  enforced in `validate()`. NV's measured row_tile=2 is legal (2 x 16 = 32); AMD's row_tile=4
+  is not (4 x 16 = 64) - AMD stays external_sum until a two-warp ladder exists. This is why
+  the pg3 fused row renders at row_tile=2 through both renderers.
+- pg3 HIP arm: all 10 legacy hashes re-verified byte-identical to section 5.1; new fused row
+  `q6k_gen_coop_4096_12288_inkernel = add50a7aa43f` (src_len 9440, ds_bpermute=4).
+- Unit gate updated: `test_decode_epilogue_fusion_gate.py` now pins the M2 promotion set
+  (NV only), the partial in-kernel rejection, the single-warp constraint, and a compile-only
+  render of the fused kernel through HIPRenderer and CUDARenderer.
+- Census: 695 -> 677 E_/r_ kernels/token (the 18 `r_32_32_4_2_8` merges disappear; the 18
+  `E_8_8_16_2` down-path companions remain, owned by M4).
