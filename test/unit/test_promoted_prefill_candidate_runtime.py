@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from tinygrad.llm import prefill_graph_gemm
+from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.llm.prefill_candidate_runtime import (ARTIFACT, NV_ARTIFACT, canonical_candidate_set_identity,
   decode_prefill_graph_candidate_set, promoted_candidate_registry, promoted_candidate_set,
   automatic_promoted_prefill_graph_policy)
@@ -14,12 +15,23 @@ from tinygrad.llm.prefill_candidate_runtime import (ARTIFACT, NV_ARTIFACT, canon
 ROOT = Path(__file__).parents[2]
 FACTS = {"backend":"AMD", "architecture":"gfx1100", "capabilities":{"wave_size":32}}
 NV_FACTS = {"backend":"NV", "architecture":"sm_120", "capabilities":{"wave_size":32}}
+_TC_ONLY = (Opt(OptOps.TC, 0, (-1, 2, 1)),)
+_NV_MEASURED = (Opt(OptOps.TC, 0, (-1, 2, 1)), Opt(OptOps.UPCAST, 1, 4), Opt(OptOps.UPCAST, 0, 2))
 EXPECTED = {
   "attn_kv":((512, 1024, 4096), "51b0562291285f98693f5320a5dce21673a32813c507377d0436afa53fe3b006"),
   "attn_qo":((512, 4096, 4096), "7508432bc2ab86532eb07bea71fb4f518e82dc259252a704f60131b2aa608d24"),
   "ffn_down":((512, 4096, 12288), "fe0e765afd86cdda318f1950ad59b4374d95e862e0f1112d0e576d5c32231d9d"),
   "ffn_gate_up":((512, 12288, 4096), "8b6e3b2a9b25f7ad35e2e252d74129d96958b8367653024ad73e81fcac2aebb9"),
 }
+
+
+def test_candidate_warmstart_opts_are_target_declared_with_safe_default():
+  # NV sm_120 wave32 carries the measured schedule (campaign P1, 2026-08-02); every other target keeps
+  # the TC-only default, including AMD gfx1100 whose behavior must not move without its own measurement.
+  assert prefill_graph_gemm._candidate_warmstart_opts("NV", "sm_120", 32) == _NV_MEASURED
+  assert prefill_graph_gemm._candidate_warmstart_opts("AMD", "gfx1100", 32) == _TC_ONLY
+  assert prefill_graph_gemm._candidate_warmstart_opts("NV", "sm_90", 32) == _TC_ONLY
+  assert prefill_graph_gemm._candidate_warmstart_opts("METAL", "m1", 32) == _TC_ONLY
 NV_EXPECTED = {
   "attn_kv":((512, 1024, 4096), "81b2583b95e4fcddb614036cfd9ab0abcbd8a245774be7c36dcc143e3bbdb945"),
   "attn_qo":((512, 4096, 4096), "c45a763ae5c9670c8487face4b4e20a015b239ee60a2ad1520cde4ede6ef36c2"),
