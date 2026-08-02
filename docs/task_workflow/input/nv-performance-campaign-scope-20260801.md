@@ -802,11 +802,16 @@ node-sum 4.77ms vs wall 4.44ms this session (225 tok/s) and 4.07ms in P4 (245.6 
 - L4 (vocab, ~0.15ms): fuse the scalar reduce into the coop kernel epilogue or switch the
   head to the q4k lanemap route (llama-class 304us single kernel).
 
-Every lever is shared AMD+NV code; per the campaign guardrail, no lever lands blind - each
-needs the AMD-side render control (pg2 hashes, currently green) plus a measured AMD runtime
-number before promotion. Estimated stack: 5.83ms -> 4.0-4.2ms busy at d512 (~195-210 tok/s),
-which still leaves the last 10-15% to per-kernel bandwidth on the q4k lanemap path (66% vs
-llama's 73-78% of ceiling).
+**Superseded by `decode-gap-per-target-lever-scope-20260802.md`.** This lever list
+over-applied the AMD guardrail: it treated the emitters as one shared thing that must be
+tuned once for both targets. The emitters ARE shared (one UOp builder per kernel, rendered
+per target), but the tuning VALUES are per-target data already (`DeviceCapabilities`,
+`FlashDecodeRouteConfig` G4/G5, `Q6KGEMVRouteSpec` fields, per-target admission). The
+replacement scope classifies each lever as VALUES-ONLY (NV row changes, AMD's generated
+source stays byte-identical, render equality is the control, no AMD runtime measurement
+needed) or STRUCTURAL (additive, capability-gated variant, legacy AMD route untouched), and
+adds the missing decode render-equality control (pg3). Estimated stack unchanged:
+5.83ms -> 4.0-4.2ms busy at d512 (~195-210 tok/s).
 
 HARD STOP after section 14. This is gap analysis + scope only; no code changed in this
 section. The levers are the next campaign's pieces, each with an AMD control requirement.
