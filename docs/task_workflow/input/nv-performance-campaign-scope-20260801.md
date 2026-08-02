@@ -79,14 +79,18 @@ P0 promotes this to a fact or kills it.
 
 ### L1 - Prefill dense GEMMs do not reach the matrix unit (the ~125x)
 
-89% of traced prefill GPU time is three scalarized Q4_K GEMM routes (`r_16_256_...` gate_up 47%,
-`r_16_64_..._48_...` ffn_down Q4_K 22%, `r_16_64_..._16_...` 20%), running 6-24 TFLOPS. Generated
-CUDA has no `mma.sync`/`dp4a`/`half2`. llama gets 14,250 tok/s from int8 `dp4a` MMQ on the same
-shapes; we do not need to replicate that - the sm120 full-kernel candidate set (fused Q4_K
-dequant + fp16 `cuda_mma`) exists and compiles on the 5090 (C5, `948b26318`,
-`max_abs_error 0.0`). Whether it is a *stronger* mechanism than llama's `dp4a` MMQ on these
-shapes is the section 1a hypothesis that P0 confirms; this lever stands either way, because the
-current routes reach 6-24 TFLOPS and both mechanisms are far above that.
+98.2% of traced prefill GPU time is six scalarized Q4_K/Q6_K GEMM routes (corrected table in
+`docs/nv-prefill-decode-diagnosis-20260801.md` section 3, re-aggregated 2026-08-01): ffn_down
+Q6_K 33.2%, ffn_gate_up Q4_K 31.5%, ffn_down Q4_K 14.6%, attn_qo Q4_K 13.4%, attn_v Q6_K 2.9%,
+attn_kv Q4_K 2.6%, running 6-24 TFLOPS. Generated CUDA has no `mma.sync`/`dp4a`/`half2`. llama
+gets 14,250 tok/s from int8 `dp4a` MMQ on the same shapes; we do not need to replicate that -
+the sm120 full-kernel candidate set (fused Q4_K dequant + fp16 `cuda_mma`) exists and compiles on
+the 5090 (C5, `948b26318`, `max_abs_error 0.0`). Whether it is a *stronger* mechanism than
+llama's `dp4a` MMQ on these shapes is the section 1a hypothesis that P0 confirms; this lever
+stands either way, because the current routes reach 6-24 TFLOPS and both mechanisms are far
+above that. **L1's earlier "89% = 47/22/20" claim is withdrawn**: it was computed against a
+subtotal that silently dropped the ms-denominated ffn_down Q6_K route (the biggest single kernel
+in the trace); the correct Q4_K-only share is 62.1%, and the Q6_K share belongs to L2.
 
 Lever: promote the sm120 candidate set, exactly the path AMD uses with WMMA full-kernel
 candidates. This is `nv-prefill-gemm-promotion-scope-20260801.md`. **Build verdict: no new
@@ -98,28 +102,30 @@ The sm120 candidate set covers 4 roles, all Q4_K-shaped. Q6_K roles (attn_v, lm_
 Q6_K share of ffn_down) are not covered; their prefill GEMMs stay scalarized. AMD's promoted set
 has the same 4-role shape, so this is also an AMD gap.
 
-**Correction (review, 2026-08-01): this lever has no measured NV size yet.** An earlier revision
-sized it at "ffn_down Q6_K = 22% of traced prefill time, the `_48_` route at 7.8ms/call". That
-route is **Q4_K, not Q6_K**: `docs/nv-prefill-decode-diagnosis-20260801.md:75` records
-`r_16_64_8_16_4_4_48_4_2_16_2` as *ffn_down Q4_K*, 18 calls, 140ms total, 7.8ms/call, 21.9%. It
-is therefore inside L1's 89% and is covered by B1's promotion, not by this lever. L2 borrowed
-L1's number.
+**Correction (review, 2026-08-01, then overtaken by re-aggregation): this lever now has a
+measured NV size, and it is the biggest single role in the trace.** The review correctly caught
+that the earlier "ffn_down Q6_K = 22%" had borrowed L1's `_48_` route (which is ffn_down Q4_K,
+18 calls, 140ms, 7.8ms/call) and marked L2 unsized. The re-aggregation went further: the raw
+trace contains a second `_48_`-family route, `r_16_64_8_16_4_4_48_2_2_2_16_2` (18 calls,
+**319.1ms, 17.7ms/call**), which the first pass had dropped because it logs `tm ...ms` and was
+parsed as ~0. Its 18 calls match the 18 Q6_K `ffn_down.weight` tensors in the GGUF exactly, and
+its schedule signature matches the Q6_K ffn_down policy (parts=1). It is the single most
+expensive kernel in the trace.
 
-Consequence: L1's 89% stands as written (the `_48_` route is correctly counted there), but **L2
-is currently unsized** - the real Q6_K prefill cost on NV has not been separated out of the
-trace. P0 must produce it before P2 is ordered; if it is small, B2 may not be worth building at
-all.
+Consequence: **Q6_K prefill on NV is measured at 36.4% of traced time** (ffn_down Q6_K 33.2% +
+attn_v Q6_K 2.9% + lm_head 0.3%, 349.9ms of 961.0ms) - larger than any single Q4_K role. B2 is
+worth building; P2's before-number is 319.1ms / 17.7ms per call. The llama-13% estimate is
+retired in favor of our own trace.
 
 Lever: extend promotion coverage to Q6_K shapes, or route Q6_K prefill GEMMs through the fp16
 overlay (`route_pf16_graph_gemm` / `_install_candidate_matmul` TC warmstart) so dequant happens
 once and the GEMM is a plain fp16 tensor-core matmul. llama covers Q6_K with the same MMQ
-mechanism (`mul_mat_q<Q6_K>`, 4.2 ms/pass = 13% of its GEMM time), so the shape is known-good -
-that 13% is the only current estimate of the lever's size, and it is llama's, not ours.
+mechanism (`mul_mat_q<Q6_K>`, 4.2 ms/pass = 13% of its GEMM time), so the shape is known-good.
 **Build verdict: no new kernel - mint a Q6_K candidate or reuse the existing fp16 overlay.**
 
 ### L3 - Warm prefill is launch/sync-bound on top of slow kernels
 
-Warm wall is ~4.3s; the cold trace sums to ~642ms GPU busy. cProfile: 4.31s of 4.39s in GPU
+Warm wall is ~4.3s; the cold trace sums to ~961ms GPU busy. cProfile: 4.31s of 4.39s in GPU
 `wait()`, 1.35M `to_mv` calls, ~2,000 kernels per iteration. The per-kernel host cost is
 ~2.1 ms; llama's is ~2.5 us over 1,186 kernels. So after L1 removes the slow kernels, our wall
 will not collapse unless launch overhead is addressed - and llama proves the achievable shape
@@ -173,7 +179,7 @@ machinery that already exists in this repo:
 | # | piece | phase | what it is | already exists | new code/artifact |
 | --- | --- | --- | --- | --- | --- |
 | B1 | NV artifact mint + promotion selection | P1 | make the sm120 candidate set promotable: mint the compact artifact, extend target-parametric selection so NV resolves without a pinned-target raise | candidate set JSON (`bench/.../multirole-buffer2-candidate-set-sm120-v1/`), selection machinery (`automatic_promoted_prefill_graph_policy` / `promoted_prefill_graph_targets`) | minted artifact data + selection/census wiring. No kernel. |
-| B2 | Q6_K prefill coverage | P2 | get Q6_K roles (ffn_down, attn_v, lm_head) off the scalar path | `route_pf16_graph_gemm` fp16 overlay (prefill_graph_gemm.py), mint tooling | either a minted Q6_K candidate (generated artifact) or overlay wiring. No new hand-written kernel. |
+| B2 | Q6_K prefill coverage | P2 | get Q6_K roles (ffn_down, attn_v, lm_head) off the scalar path - measured 36.4% of traced prefill time (ffn_down Q6_K alone 33.2%, the largest single kernel) | `route_pf16_graph_gemm` fp16 overlay (prefill_graph_gemm.py), mint tooling | either a minted Q6_K candidate (generated artifact) or overlay wiring. No new hand-written kernel. |
 | B3 | L3 host-side replay/launch mechanism | P3 | capture the concrete prefill schedule as a replayable graph; kill the `wait()`/`to_mv` tax (4.31s/4.39s, 1.35M calls) | `CUDAGraph` (runtime/graph/cuda.py), `prefill_v2_jit` TinyJit already bound (model.py:880), decode JIT graphs | the only genuinely new mechanism: verify prefill_v2_jit lowers to CUDAGraph for concrete shapes, capture per-concrete-schedule where dynamic vars block it, batch/async the host-side copies, identify the `batched 32..512` kernels. No new kernel. |
 
 Everything else in the campaign is data, selection policy, census/bench-row reporting, or
@@ -209,8 +215,9 @@ Expected ceiling after P0's measured `R`.
 ### P2 - Q6_K prefill coverage (L2)
 
 After P1 proves the mechanism, extend to Q6_K roles: either mint Q6_K candidates or route them
-through the fp16 overlay TC warmstart. Measure ffn_down Q6_K before/after; the 18-call 7.8ms
-route is the before number.
+through the fp16 overlay TC warmstart. Measure ffn_down Q6_K before/after; the before number is
+measured: 18 calls, 319.1ms, 17.7ms/call (33.2% of traced prefill time, the largest single
+kernel in the trace).
 
 ### P3 - Prefill launch overhead (L3)
 
@@ -269,7 +276,15 @@ kill the launch overhead, and tune decode GEMVs until the paired llama sweep is 
 
 Reviewed at `65e41549f`. Arithmetic that checks out and was not changed: decode bandwidth
 (158.2 tok/s x 4.834 GB/token = 764.8 GB/s of 1792), the per-token budgets (4.22ms llama vs
-6.32ms ours), the GPU-busy ceiling (512 / 32.96ms = 15.5k tok/s), and L1's 47/22/20 = 89%.
+6.32ms ours), the GPU-busy ceiling (512 / 32.96ms = 15.5k tok/s).
+
+**Post-review correction (2026-08-01, re-aggregation of the same trace): the review's item 1
+premise "L1's 89% stands as written" did not survive.** The 47/22/20 shares were computed
+against a 641.9ms subtotal that silently excluded ms-denominated kernels; the raw log has a
+second `_48_`-family route, `r_16_64_8_16_4_4_48_2_2_2_16_2` = ffn_down Q6_K (18 calls,
+319.1ms, 17.7ms/call), which the first aggregation parsed as ~0. It is the biggest kernel in
+the trace. Corrected shares (961.0ms total) and the full route table are in the diagnosis doc
+section 3; L1/L2 above use them.
 
 The `nsys` kernel census in section 1a is the most valuable thing in this revision. Replacing
 "llama dequantizes to fp16 and reaches mma" with a measured kernel table reframes the campaign
@@ -278,11 +293,14 @@ from *catch up on primitives* to *route what we already have*, and re-verdicting
 
 Findings, folded in above at their sites:
 
-1. **`_48_` route was mislabelled in L2 (resolved).** L1 called it Q4_K, L2 called it Q6_K and
+1. **`_48_` route was mislabelled in L2 (resolved, then superseded by the re-aggregation).** L1
+   called it Q4_K, L2 called it Q6_K and
    used its 7.8ms/call as the Q6_K evidence. `nv-prefill-decode-diagnosis-20260801.md:75` settles
    it: `r_16_64_8_16_4_4_48_4_2_16_2` is *ffn_down Q4_K*, 18 calls, 7.8ms/call, 21.9%. L1 is
    correct; **L2 is now unsized** and P0 must separate real Q6_K cost out of the trace before P2
-   is ordered. This is the finding that moves work between phases.
+   is ordered. This is the finding that moves work between phases. The re-aggregation
+   (correction note above) then *sized* L2: a second `_48_`-family route was hiding in the same
+   log, ffn_down Q6_K at 33.2%, so this item's "L2 unsized" conclusion no longer holds.
 
 2. **L3 targeted the wrong variable.** Kernel count is 1.7x off llama; per-kernel host cost is
    840x off. Kernel-count reduction dropped from the lever (B3 never included it - the lever text
@@ -299,18 +317,29 @@ Findings, folded in above at their sites:
 5. **The 13,664 "BoltBeam ceiling" is marked superseded**, not conservative - llama exceeds it at
    pp1024 and pp2048.
 
-Open, not folded in (needs a run, not an edit):
+Open, now resolved by runs (2026-08-01):
 
-6. **Cross-check the llama NV figure.** 14,250 tok/s pp512 implies ~248 TFLOPS effective on
-   Qwen3-8B. Against our own AMD data - llama 8B pp512 on the 7900 XTX is ~3,095 tok/s, derived
-   from the +11.4% margin at 3,448 - that is a 4.6x ratio between two llama runs where the raw
-   compute ratio between those parts is nearer 2-3x. CUDA MMQ being better tuned than ROCm MMQ
-   plausibly explains some of it, so this is a confirm-don't-assume flag rather than a defect
-   claim. But the campaign's headline "~125x" rests entirely on this number, so it deserves one
-   paired run using the same `llama-bench` invocation shape used on AMD.
+6. **Cross-check the llama NV figure (resolved: reproduced, ratio explained).** NV re-run with
+   the AMD invocation shape (`llama-bench -fa 1 -ngl 99`, same build, fresh session):
+   **13,552 +/- 1,756 tok/s pp512**, consistent with the sweep's 14,250. Effective FLOPs:
+   2*N*pp = 8.39 TFLOP/pass -> NV 233 TFLOPS (35.9ms), AMD 54.8 TFLOPS (153ms). The
+   4.1-4.3x llama NV/AMD ratio (14,250 / 3,347, using the authoritative same-session AMD pair
+   3,727/3,347 from `docs/prefill-current-state.md`; the review's 3,095 came from the older
+   cross-session 3,448) decomposes as 2.7x silicon (335 TF dense fp16 tensor vs 122.8 TF WMMA
+   spec) x ~1.5x efficiency (NV ~70% of peak vs AMD ~45%), which is exactly the "CUDA MMQ
+   better tuned than ROCm MMQ" mechanism the review named. No AMD GPU exists on this machine
+   (5090 only; no ssh target), so a true same-machine AMD re-run is impossible here; the
+   cross-check is closed as confirm-don't-assume with the ratio explained. The "~125x"
+   headline is NV-same-machine (14,250 vs ~110) and was never AMD-derived.
 
-7. **Two different role breakdowns are in circulation.** L1 gives gate_up 47% / ffn_down Q4_K 22%
-   / `_16_` 20%; `nv-prefill-decode-diagnosis-20260801.md:17` gives `ffn_gate_up` 55.0% /
-   `attn_qo` 18.3% / `ffn_down` 13.8%. These may be role-share versus kernel-share of different
-   phases, but the doc cites that file as its measurement source, so the two should be reconciled
-   or explicitly distinguished.
+7. **Two role breakdowns (resolved: they are different quantities, and the measured one needed
+   correcting).** The 55.0/18.3/13.8 is BoltBeam's *modeled FLOP-share* (diagnosis section 1);
+   the 47/22/20 was the *measured kernel-share* (diagnosis section 3). They are now explicitly
+   labeled as such. The measured one itself had a units bug (see the post-review correction
+   above): ms-denominated kernels were parsed as ~0, dropping ffn_down Q6_K (33.2%), the largest
+   route. Corrected measured shares: ffn_down Q6_K 33.2%, ffn_gate_up Q4_K 31.5%, ffn_down Q4_K
+   14.6%, attn_qo Q4_K 13.4%, attn_v Q6_K 2.9%, attn_kv Q4_K 2.6% (961.0ms total, 2,041 kernel
+   lines, roles verified against the GGUF quant layout + route policy). The modeled split still
+   disagrees with measurement on magnitude (e.g. ffn_down modeled 13.8% vs measured 47.8%
+   including both quants) because BoltBeam's model has no dequant cost; that is now stated, not
+   silently assumed.
