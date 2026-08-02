@@ -698,3 +698,115 @@ neither of which can be landed blind from this NV-only session.
 
 HARD STOP per section 5. Nothing beyond this report without review. No promotion to
 `dev`/`exp`/`master` is authorized by this campaign.
+
+## 14. Decode gap - exhaustive per-kernel attribution (2026-08-02)
+
+P4 (section 12) established the decode gap (1.50-1.58x behind llama, 95% GPU busy, 46% of the
+bandwidth ceiling) but left the per-kernel attribution open. This section closes it with three
+measurements, all d512, same machine, same llama build (`ac4cddeb0`):
+
+- tinygrad kernel mix: graph-admission census of the flash-decode rollout
+  (`/tmp/census_flash_decode.py`, 1021 programs/token, all graph-admitted). Note the census
+  only fires on jit CAPTURE; the flash jit primes on decode token 1 (direct exec) and captures
+  on token 2, so the observed window needs 3 `next(gen)` calls.
+- tinygrad per-kernel times: `DEBUG=2` trace of the prime token (direct exec, one row per
+  kernel, `/tmp/debug_decode_probe.py`, `/tmp/debug_decode_probe.log`). Per-kernel durations
+  in the prime equal replay durations (same GPU work); replay sums 5.83ms vs prime sum
+  6.61ms (graphs amortize launch gaps, factor 0.883).
+- llama per-kernel times: fresh `llama-bench -p 512 -n 16 -r 1` under
+  `nsys profile --cuda-graph-trace=node` (`/tmp/llama_tg10_node.sqlite`). llama's tg graph
+  (graphId 5, 762 nodes, 16 replays) yields per-node times per token directly.
+
+### 14.1 tinygrad flash-decode graph, per kernel class (prime, 1021 programs, 6.607ms)
+
+| class | n | tot ms | avg us | share | note |
+| --- | ---: | ---: | ---: | ---: | --- |
+| q4k_g3_lanemap_gemv (all) | 216 | 2.95 | 9.5-27.0 | 44.7% | 12288x4096 gate+up 72x21.2us; 4096x4096 q/o 72x9.5us; 4096x12288 down 18x27.0us; 1024x4096 k/v 54x4.9us |
+| q6k_gen_coop (incl vocab) | 19 | 1.30 | 50.1 / 397.2 | 19.7% | down 18x50.1us; vocab 1x397.2us |
+| E_ elementwise | 510 | 0.97 | 1.6-2.5 | 14.7% | per-layer plumbing, see 14.4 |
+| r_ reduce | 185 | 0.59 | 2.1-3.9 | 8.9% | includes q6k partial-sum merges |
+| q6k_gen_partial 1024x4096_4 | 18 | 0.31 | 17.3 | 4.7% | k/v proj on Q6_K layers |
+| flash_block_tiled_xlane_score_pv 32_128 | 36 | 0.27 | 7.6 | 4.1% | flash attention score/PV |
+| flash_fused_gmax_combine 32_128 | 36 | 0.13 | 3.6 | 2.0% | flash max/sum combine |
+| q6k_vocab_scalar_reduce | 1 | 0.07 | 72.5 | 1.1% | vocab head epilogue |
+| other | 9 | 0.07 | 1.4-38.5 | 1.1% | vocab scatter chain (r_32_4_1187 38.5us, E_1187 x2, ...) |
+
+GEMV+quantized total (incl vocab coop): 4.63ms (70%). Flash attention: 0.40ms (6%).
+Plumbing (E_/r_/vocab aux): 1.64ms (24%).
+
+### 14.2 llama tg graph, per kernel class (16 replays, 762 nodes, 4.774ms/rep)
+
+| class | n/rep | avg us | ms/rep | share |
+| --- | ---: | ---: | ---: | ---: |
+| mul_mat_vec_q | 217 | 16.33 | 3.543 | 74.2% |
+| quantize_q8_1 | 217 | 2.22 | 0.482 | 10.1% |
+| rms_norm_f32 | 145 | 2.12 | 0.308 | 6.4% |
+| rope_neox | 72 | 1.76 | 0.127 | 2.7% |
+| flash_attn_combine_results | 36 | 3.35 | 0.120 | 2.5% |
+| flash_attn_ext_vec | 36 | 3.17 | 0.114 | 2.4% |
+| k_set_rows | 36 | 2.07 | 0.074 | 1.6% |
+| k_get_rows_float / k_bin_bcast | 3 | 1.5 | 0.005 | 0.1% |
+
+llama per-shape GEMV (per-node avg over replays): q 9.5us, k 5.2us, v 3.3us, o 10.3us,
+w1+w3 fused 37.9us (ONE 12288-row kernel computes both projections with silu folded in; the
+tg graph has no separate silu kernel), w2 19.2us (Q4_K layers) / 29.3us (Q6_K layers),
+vocab 303.75us. llama's graph has NO add/residual kernels: the epilogue (bias, act, add) is
+fused into the GEMV kernels.
+
+### 14.3 Head-to-head (per token, d512)
+
+| class | tinygrad | llama | delta |
+| --- | ---: | ---: | ---: |
+| GEMV (non-vocab, incl quantize) | 4.16 ms | 3.72 ms | +0.44 ms |
+| flash attention | 0.40 ms | 0.234 ms | +0.17 ms |
+| norms / rope / adds / aux | 1.56 ms | 0.51 ms | +1.05 ms |
+| vocab head | 0.54 ms | 0.304 ms | +0.24 ms |
+| node-sum total | 6.61 ms | 4.77 ms | +1.84 ms |
+
+Replay-equivalent tinygrad busy is 5.83ms (prime x0.883), wall 6.12ms at 163.4 tok/s; llama
+node-sum 4.77ms vs wall 4.44ms this session (225 tok/s) and 4.07ms in P4 (245.6 tok/s).
+
+### 14.4 Where the gap lives, with evidence
+
+1. Plumbing kernel count: tinygrad emits 695 tiny kernels (510 E_ + 185 r_) at 1.6-3.9us
+   each = 1.56ms; llama runs 327 (rms 145 + rope 72 + flash 72 + kv 38) at 1.3-3.4us each =
+   0.51ms. The E_/r_ sets are IDENTICAL in the flash and SDPA decode graphs (census diff,
+   `/tmp/census_sdpa_decode.py`), so they are model plumbing, not flash-specific. llama fuses
+   these into GEMV epilogues; tinygrad lowers each per-layer norm/add/cast/partial-merge as a
+   separate kernel. This is the single largest gap (+1.05ms).
+2. Q6_K decode kernels: tinygrad `q6k_gen_coop` down is 50.1us (0.82 TB/s = 46% of ceiling)
+   vs llama w2 Q6_K 29.3us (1.4 TB/s); tinygrad `q6k_gen_partial` k/v path is 17.3us
+   (0.2 TB/s = 11% of ceiling) vs llama v 3.3us (1.03 TB/s). Q6_K coverage was resolved by
+   P2 for PREFILL (promoted overlay), but the DECODE Q6_K kernels are the slowest class.
+   (+0.6ms of the GEMV delta.)
+3. Flash score kernel: 7.6us vs llama ext_vec 3.17us (36x). tinygrad config:
+   `flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128`, LANES=32, WARPS=QG=4,
+   TK=16, whole-cache tile, LDS-staged; llama vec grid (1,2) block 32. (+0.17ms.)
+4. Vocab head: tinygrad `q6k_gen_coop_151936_4096` 397.2us + scalar reduce 72.5us + scatter
+   chain ~0.07ms = 0.54ms vs llama single mmq 303.75us. (+0.24ms.)
+5. Bytes/token: 5.04 GB vs llama ~4.7 GB. The extra ~0.3-0.9 GB is the fp32 gemv outputs and
+   intermediate tensors read/written by the E_/r_ plumbing (P4 measured 824 GB/s effective
+   vs llama 1150 GB/s).
+
+### 14.5 Scoped levers (ranked by recovery, all shared-kernel)
+
+- L1 (plumbing fusion, ~1.0ms): fold the per-layer elementwise chain into the q4k/q6k GEMV
+  epilogues and the flash score epilogue, matching llama's fused-graph shape. Largest single
+  recovery; touches `decode_routes.py`/`decode_kernels.py` epilogue emission and the flash
+  route. Must keep AMD pg2 render equality (the E_/r_ kernels are AMD+NV shared).
+- L2 (Q6_K decode kernels, ~0.5-0.65ms): retune `q6k_gen_coop` (row_tile=4, staging) toward
+  1.3+ TB/s and rework `q6k_gen_partial` (parts=4 + separate merge chain) toward the
+  single-pass shape llama uses. k/v-proj Q6_K at 0.2 TB/s is the worst single kernel class.
+- L3 (flash score, ~0.15ms): sweep WARPS/query_group_size, TK, staging against llama's vec
+  shape; d512 latency-bound, d4096 grows with cache.
+- L4 (vocab, ~0.15ms): fuse the scalar reduce into the coop kernel epilogue or switch the
+  head to the q4k lanemap route (llama-class 304us single kernel).
+
+Every lever is shared AMD+NV code; per the campaign guardrail, no lever lands blind - each
+needs the AMD-side render control (pg2 hashes, currently green) plus a measured AMD runtime
+number before promotion. Estimated stack: 5.83ms -> 4.0-4.2ms busy at d512 (~195-210 tok/s),
+which still leaves the last 10-15% to per-kernel bandwidth on the q4k lanemap path (66% vs
+llama's 73-78% of ceiling).
+
+HARD STOP after section 14. This is gap analysis + scope only; no code changed in this
+section. The levers are the next campaign's pieces, each with an AMD control requirement.
