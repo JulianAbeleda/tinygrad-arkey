@@ -37,6 +37,18 @@ flash-decode rollout is already graph-replayed into 6 batches (`batched 32/64/12
 | vocab head | 0.54 ms | 0.304 ms | +0.24 ms |
 | node-sum total | 6.61 ms | 4.77 ms | +1.84 ms |
 
+**Evidence class warning (review, 2026-08-02).** Node-sum is not wall time and must not be
+substituted for it. For tinygrad, node-sum 6.61 ms > wall 6.12 ms > replay busy 5.83 ms; for
+llama, node-sum 4.77 ms > wall 4.07 ms. A serialized decode cannot contain more kernel-time
+than wall-time, so node-sum over-counts - by ~8% on our side and ~17% on llama's. Because it
+over-counts llama *more*, the node-sum delta (1.84 ms) is **smaller** than the real wall gap
+(6.12 - 4.07 = **2.05 ms**); 0.21 ms of the true gap is unattributed by this table.
+
+Per `structure/Development/coding-principles.md` ("Classify Evidence Before Fixing
+Mechanisms"), node-sum is licensed to prove *relative attribution between kernel classes*. It
+is not licensed to size a lever in wall-time milliseconds. Every recovery number in section 4
+is stated in node-sum and must be read that way until re-measured against wall.
+
 llama's tg graph is 762 nodes/token; tinygrad's is 1021. llama fuses the add/silu/norm
 plumbing into GEMV epilogues (its graph has no separate add or silu kernels), fuses w1+w3 into
 one 12288-row GEMV, and runs Q6_K decode kernels at 1.4 TB/s vs tinygrad's 0.82 TB/s (coop)
@@ -141,6 +153,12 @@ are not additive across levers (the node-sum total exceeds replay busy exceeds w
 stacked estimate is 60-80% of the sum, and the campaign doc's 4.0-4.2ms target is the
 re-measured end-state, not the arithmetic sum.
 
+**The 60-80% haircut and the 4.0-4.2ms target are incompatible** (review, 2026-08-02). Sum of
+levers 2.05-2.25 ms, x 60-80% = **1.23-1.80 ms** of real recovery; from 6.12 ms that lands at
+**4.32-4.89 ms**. The 4.0-4.2ms target needs 1.92-2.12 ms and is unreachable even in the best
+case. Keep the haircut - it is the honest number - and restate the target as what the levers
+support. See section 8 for the revised end-state after the per-lever corrections below.
+
 ### L1 - plumbing fusion (E_/r_), ~0.9-1.0 ms. SUBSTRATE
 
 - Evidence: 695 kernels (510 E_ + 185 r_) at 1.6-3.9us each = 1.56ms vs llama's 327 at
@@ -199,7 +217,12 @@ re-measured end-state, not the arithmetic sum.
   row sweeps QG/stage_width/split_size; AMD G4 row unchanged. Diagnostic: sweep per the
   protocol below; if no row reaches ~3.2us per kernel, the whole-cache tile structure itself
   is substrate (it is the same tile AMD admits, so the structure fix lifts both).
-- Recovery: ~0.15ms at d512; grows with depth (cache reads scale).
+- Recovery: **~0.039ms at d512** (corrected, review 2026-08-02); grows with depth (cache reads
+  scale). The earlier ~0.15ms counted llama's `flash_attn_ext_vec` (3.17us) but dropped its
+  `combine` kernel (3.35us), which llama does pay: llama's real per-layer cost is 6.52us
+  against our 7.6us, so the delta is 1.08us x 36 = 0.039ms, not 4.4us x 36. The flash *class*
+  delta is +0.17ms, but the remaining ~0.13ms sits in flash kernels this lever does not touch -
+  sizing those is a separate diagnostic, not part of L3.
 - Controls: decode render equality; NV digits/sha.
 - Open question: at d512 the kernel is latency-bound on tiny data; is the sweep protocol
   (QG in {1,2,4}, stage_width in {1,2,4,8}, split_size in {16,32,48}) the right frame, or is
@@ -215,10 +238,18 @@ re-measured end-state, not the arithmetic sum.
   it is the row_tile=4 layout on a 151936-row shape, that is a value. The scalar-reduce
   fusion into the coop kernel is a SUBSTRATE variant if pursued (emitter change,
   capability-gated; the generic scatter chain it replaces is shared).
-- Recovery: ~0.2ms.
+- Recovery: **~0.093ms VALUES-ONLY; ~0.24ms only with the substrate variant** (corrected,
+  review 2026-08-02). The 397.2us coop kernel moves ~510 MB of Q6_K weights (151936 x 4096 x
+  210/256 bytes) at **1.29 TB/s = 72% of the 1792 GB/s ceiling**. There is not 0.2ms of
+  headroom inside it; there is 93us to llama's 303.75us. The recoverable mass is the 72.5us
+  scalar reduce plus the ~70us scatter chain (0.14ms), and removing those *is* the substrate
+  fusion variant. So L4 cannot deliver 0.2ms in its VALUES-ONLY form.
 - Controls: decode render equality; NV digits/sha (token stream is the strongest pin here).
-- Open question: does the coop head kernel's 397us come from occupancy/vector width, or from
-  the row_tile=4 layout on a 151936-row shape (row count not divisible by useful tiles)?
+- Open question (narrowed): **the row_tile hypothesis is already falsified - 151936 / 4 =
+  37,984 exactly**, so the shape is divisible and no diagnostic is needed to rule it out. With
+  the kernel at 72% of the bandwidth ceiling, the only live values-only branch is
+  occupancy/vector width, and it is bounded at 93us. The real L4 question is therefore whether
+  the substrate fusion (scalar reduce + scatter into the coop kernel) is worth building.
 
 ### L5 - q4k lanemap bandwidth, ~0.2-0.3 ms. SUBSTRATE (emitter) + VALUES (lanes)
 
@@ -316,3 +347,111 @@ open questions to settle:
 7. Is the claim "VALUES-ONLY levers need no AMD runtime measurement" still the right call
    given the substrate trichotomy, or should any lever carry a measured AMD number out of
    caution?
+
+---
+
+## 8. Revised budget after the review corrections (2026-08-02)
+
+### 8.1 L2 + L5 exceed their shared class delta
+
+L2 (~0.63ms) and L5 (~0.2-0.3ms) both draw from the **GEMV (non-vocab, incl quantize)** class,
+whose total delta is **+0.44 ms**. Together they claim 0.83-0.93 ms - roughly 2x the entire gap
+in the class they share. Recovering that would mean finishing ~0.5 ms *ahead* of llama on GEMV.
+
+The 60-80% haircut in section 4 does not fix this, because the over-subscription is
+class-specific, not global: 0.93 x 0.8 = 0.74 ms, still 1.7x the class delta.
+
+Named cause: the class is labelled *incl quantize*, so llama's 3.72 ms carries its q8_1
+quantize kernels, which tinygrad does not pay. L2 and L5 compare against llama's **bare** GEMV
+kernel times (29.3us, 3.3us, 37.9us), which exclude quantize. They are targeting a per-kernel
+number llama does not achieve end-to-end.
+
+This is the evidence-class error again: per-kernel trace times are licensed to prove *this
+kernel is slower than that kernel*; they are not licensed to sum into a class-level wall-time
+recovery when the two classes contain different work. **Cap L2+L5 jointly at the 0.44 ms class
+delta until a quantize-excluded class comparison exists.**
+
+### 8.2 Revised end-state
+
+| lever | claimed | evidenced |
+| --- | ---: | ---: |
+| L1 plumbing | 0.9-1.0 ms | 0.9-1.0 ms (consistent with the 1.05 ms class delta) |
+| L2 + L5 GEMV | 0.83-0.93 ms | <= 0.44 ms (class cap, 8.1) |
+| L3 flash score | 0.15 ms | 0.039 ms |
+| L4 vocab | 0.2 ms | 0.093 ms values-only / 0.24 ms with substrate |
+| **gross** | **2.05-2.25 ms** | **~1.47-1.62 ms** |
+| after 60-80% haircut | 1.23-1.80 ms | **~0.88-1.30 ms** |
+| end-state ms/token | 4.32-4.89 | **~4.82-5.24** |
+
+Against llama's 4.07 ms that is decode at roughly **1.18-1.29x**, not parity. Still a real
+result and still worth doing - but it is a different plan from one that reaches 4.0-4.2 ms, and
+the sequencing follows from it: **L1 is now ~60-70% of the realistic total**, so the SUBSTRATE
+work belongs early, not last. Section 6's ordering (L1 as P4) should be revisited.
+
+Every number in this table is node-sum-derived and inherits section 1's over-count. It is a
+corrected *upper* bound, not a forecast.
+
+---
+
+## 9. Reviewer disagreement protocol (first principles)
+
+Two model reviewers producing findings on the same doc will disagree, and there is no authority
+that settles it by argument. This section derives the resolution rule from the repo's own
+principle rather than inventing one.
+
+### 9.1 The governing principle
+
+`structure/Development/coding-principles.md`, **"Classify Evidence Before Fixing Mechanisms"**:
+
+> classify what each piece of evidence is allowed to prove before changing code [...] Do not let
+> a passing narrow gate authorize a wider claim.
+
+Every disputed item in this campaign has been an instance of that rule, not a factual conflict:
+
+| disputed number | evidence class | what it was licensed to prove | what it was used for |
+| --- | --- | --- | --- |
+| 92% GPU-efficiency | cold `nsys` busy / warm bench wall | nothing (two runs) | P3's success criterion |
+| 0.85 busy/wall | cold capture / warm wall | nothing (two runs) | "P3 already met" |
+| L1's 89% | share of a subtotal | share *of that subtotal* | share of total prefill |
+| 24.1 ms busy | `GlobalCounters` estimate | tinygrad-internal accounting | comparison against llama's `nsys` |
+| L3's 0.15 ms | one kernel's per-call delta | that kernel's delta | the whole flash class |
+| L4's 0.2 ms | class-level delta | reduce + scatter + kernel | a values-only kernel tune |
+
+None of these were wrong measurements. All were correct measurements used past their license.
+
+### 9.2 The rule
+
+**A finding is admissible only if it names (a) the claim it disputes, (b) the evidence class the
+disputed claim rests on, (c) what that class is licensed to prove, and (d) the single command
+that would settle it.** A finding without (d) is a question, not a defect, and is recorded as
+such.
+
+**Disagreements are resolved by running (d), never by argument.** Whichever reviewer's finding
+names a runnable check wins by default; if both name checks, run the cheaper one first.
+
+### 9.3 The dissolution case
+
+Most reviewer disagreements are not conflicts - they are two reviewers licensing different
+evidence classes and talking past each other. If reviewer A says "L4 has 0.2 ms of headroom"
+from a class-level node-sum and reviewer B says "0.093 ms" from bandwidth arithmetic on the
+kernel, both are right about their own class and the disagreement dissolves once the classes are
+named. **Name the class before adjudicating; only a same-class conflict is a real disagreement.**
+
+### 9.4 What this asks of each reviewer
+
+- State the evidence class of every number you produce or dispute.
+- Never divide two numbers from different runs or different instruments; if you must, label the
+  result as unlicensed and do not let it become a criterion.
+- Prefer the check that falsifies your own finding cheapest.
+- A ceiling that a measurement has already exceeded is a falsified model, not a conservative
+  one; say so rather than widening the model.
+
+### 9.5 Open items under this protocol
+
+Carried forward as *questions* because no settling command has been named yet:
+
+1. What does node-sum double-count such that it exceeds wall (section 1)? Settles: sections 4
+   and 8 recovery numbers.
+2. Is there a quantize-excluded GEMV class comparison? Settles: whether the 8.1 cap is right or
+   whether L2+L5 genuinely have more room.
+3. Does the ~0.13 ms of non-score flash cost (L3) belong to a lever at all?
