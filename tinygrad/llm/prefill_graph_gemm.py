@@ -13,11 +13,27 @@ from collections.abc import Mapping
 from typing import Any
 
 from tinygrad import Tensor, dtypes
+from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.llm.prefill_candidate_runtime import canonical_candidate_set_identity
 from tinygrad.uop.ops import Ops
 
 
 _CANDIDATE_ROUTE_CENSUS: ContextVar[dict[str, Any] | None] = ContextVar("candidate_route_census", default=None)
+
+# Measured per-target warmstart schedule for admitted fp16 overlay GEMMs, keyed by the same declared
+# (backend, arch, wave_size) triple the compact artifacts use. NV sm_120 was measured 2026-08-02 on the
+# campaign's 5090: UPCAST(1,4)+UPCAST(0,2) after TC drops warm pp512 from 117ms to 46ms (~4.4k -> ~11.1k
+# tok/s) with byte-identical output (first-token digits and decode sha256 unmoved). An undeclared target
+# keeps the TC-only default -- the same fail-safe shape as other declared per-target facts.
+_CANDIDATE_WARMSTART_OPTS: tuple[tuple[tuple[str, str, int], tuple[Opt, ...]], ...] = (
+  (("NV", "sm_120", 32), (Opt(OptOps.TC, 0, (-1, 2, 1)), Opt(OptOps.UPCAST, 1, 4), Opt(OptOps.UPCAST, 0, 2))),
+)
+
+
+def _candidate_warmstart_opts(backend: str, arch: str, wave_size: int) -> tuple[Opt, ...]:
+  for target, opts in _CANDIDATE_WARMSTART_OPTS:
+    if target == (backend, arch, wave_size): return opts
+  return (Opt(OptOps.TC, 0, (-1, 2, 1)),)
 
 
 @contextmanager
@@ -95,7 +111,6 @@ def _install_candidate_matmul(x, w, out_f, in_f, admission, compile_artifact: Ma
   # Register-resident candidates remain experimental until their compile/resource authority is promoted too.
   # Fail closed instead of importing that research-only evidence stack into production.
   if _candidate_storage_kind(admission.normalized_payload) == "global_register_resident": return None
-  from tinygrad.codegen.opt import Opt, OptOps
   import tinygrad.codegen.opt.postrange as pr
   m = int(x.shape[-2])
   packed_dtype = admission.context.packed_weight.storage_dtype if admission.context.packed_weight is not None else None
@@ -103,7 +118,9 @@ def _install_candidate_matmul(x, w, out_f, in_f, admission, compile_artifact: Ma
   existing = (pr._WARMSTART_CANDIDATE_CONTEXTS or {}).get(key)
   if existing is not None and existing.canonical_identity != admission.canonical_identity:
     raise ValueError(f"candidate warmstart key collision for {key!r}")
-  pr._WARMSTART_OPTS = {**(pr._WARMSTART_OPTS or {}), key:(Opt(OptOps.TC, 0, (-1, 2, 1)),)}
+  target = admission.normalized_payload["workload"]["target"]
+  opts = _candidate_warmstart_opts(target["backend"], target["arch"], target["wave_size"])
+  pr._WARMSTART_OPTS = {**(pr._WARMSTART_OPTS or {}), key:opts}
   pr._WARMSTART_CANDIDATE_CONTEXTS = {**(pr._WARMSTART_CANDIDATE_CONTEXTS or {}), key:admission.context}
   a = x.reshape(m, in_f).cast(dtypes.float16).contiguous()
   bt = _contiguous_candidate_operand(w.cast(dtypes.float16))
