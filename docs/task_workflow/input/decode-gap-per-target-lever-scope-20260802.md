@@ -83,6 +83,25 @@ are per-target **data** (fact rows, route config rows), never per-target **branc
 shared emitters; an undeclared target keeps the safe default; a structural change lands as an
 additive route variant with per-target admission, leaving the legacy route untouched.
 
+**Third category - substrate.** A gap is SUBSTRATE-shaped when the shared kernel sits far
+below a hardware-agnostic ceiling: per-kernel bandwidth, kernel count, occupancy, and access
+pattern are substrate, not values. The partial route at 0.2 TB/s (5x below llama on the same
+shape) and the 695-kernel plumbing chain (llama has no separate add/silu kernels) are
+substrate-shaped on their face; they are not NV tuning problems. Fixing substrate lifts every
+target that admits the route, because there is one emitter and one lowering. NV is simply
+where we can measure it. The criterion for SUBSTRATE is "if the math allows it, all targets
+gain": a substrate lever is proven generic by the AMD **and** Metal render arms moving
+together (section 5.1), never by assertion. Values-shaped gaps ("this default row was tuned
+on gfx1100") stay fact rows. Some levers are both: the emitter generalization is substrate,
+the numeric row for the given target is a value (L2's staging, L5's lanes).
+
+So the per-lever class is decided by measurement, not assumption: each lever opens with a
+diagnostic microbench (the `wmma_peak`-style method: multiple accumulators, operands hoisted,
+zero loads in the loop, sweep the knob) that names the class, then a go/no-go: if the knob
+sweep clears the llama-class floor, the gap is values and the fact row is the answer; if the
+sweep stalls well below the floor, the gap is substrate and the shared emitter/lowering is
+the fix, for all three targets.
+
 ---
 
 ## 3. Established state (checked, with refs)
@@ -114,77 +133,102 @@ additive route variant with per-target admission, leaving the legacy route untou
 
 ## 4. The levers (exhaustive, ranked by recovery)
 
-Every lever states: evidence, mechanism class, where the per-target value lives, recovery
+Every lever states: evidence, mechanism class (VALUES-ONLY / SUBSTRATE / STRUCTURAL-additive,
+decided by the diagnostic step, not assumed), where the per-target value lives, recovery
 estimate, controls, and the open question for review. Recovery estimates are node-sum based;
-they are upper bounds until measured, and each lever re-measures in-place.
+they are upper bounds until measured, and each lever re-measures in-place. Recovery numbers
+are not additive across levers (the node-sum total exceeds replay busy exceeds wall); the
+stacked estimate is 60-80% of the sum, and the campaign doc's 4.0-4.2ms target is the
+re-measured end-state, not the arithmetic sum.
 
-### L1 - plumbing fusion (E_/r_), ~0.9-1.0 ms. STRUCTURAL
+### L1 - plumbing fusion (E_/r_), ~0.9-1.0 ms. SUBSTRATE
 
 - Evidence: 695 kernels (510 E_ + 185 r_) at 1.6-3.9us each = 1.56ms vs llama's 327 at
   1.3-3.4us = 0.51ms. llama has no separate add/silu kernels; the epilogue is folded into the
   GEMV kernels.
-- Mechanism: structural. Two candidate shapes for review:
+- Mechanism: substrate. The plumbing is ordinary generic JIT lowering shared by every target
+  (the E_/r_ chain is present in both the flash and SDPA decode graphs, and in AMD's decode
+  graph too); llama's graph shows the ceiling by folding the epilogue into the GEMV kernels.
+  Two candidate shapes for review:
   (a) epilogue absorption: the q4k/q6k custom GEMV kernels and the flash block tile absorb
-  their immediate per-layer epilogue (residual add, cast, norm, ffn activation mul), gated by
-  a per-target declared capability (e.g. `decode_epilogue_fusion`) so AMD's admitted route is
-  untouched;
+  their immediate per-layer epilogue (residual add, cast, norm, ffn activation mul). Gated by
+  a per-target declared capability (e.g. `decode_epilogue_fusion`) so no target's admitted
+  route changes without opting in;
   (b) graph-level fusion pass at JIT lowering, keyed by the same per-target fact, which would
   also cover the generic `partial.sum(axis=1)` merges without touching the custom emitters.
-- Per-target value lives in: new `DeviceCapabilities` field or a decode route fact row.
+- Diagnostic first: count E_/r_ kernels per target in the AMD and Metal decode graphs; if the
+  chain is present in all three, the fix is shared and the only per-target question is the
+  capability gate's default.
+- Per-target value lives in: new `DeviceCapabilities` field or a decode route fact row
+  (gate default only; the fusion itself is one shared change).
 - Recovery: node-sum 6.61 -> ~5.6ms; replay busy 5.83 -> ~4.9ms (estimate).
-- Controls: NV digits/sha; legacy AMD route render equality (the capability defaults off for
-  AMD).
+- Controls: NV digits/sha; AMD and Metal render equality on the legacy route (capability
+  defaults off for both, so both stay byte-identical until each target opts in).
 - Open question: which shape fits the repo's migration pattern (additive, data-driven, no
   per-target branches)? (a) touches two custom emitters; (b) touches generic machinery with a
   wider blast radius but covers the partial merges too.
 
-### L2 - Q6_K decode kernels, ~0.6 ms. VALUES-ONLY, with one structural variant option
+### L2 - Q6_K decode kernels, ~0.6 ms. VALUES-ONLY or SUBSTRATE, decided by diagnostic
 
 - Evidence: `q6k_gen_coop_4096_12288` (down, 18x) 50.1us at 0.82 TB/s (kernel's own mem
   estimate, 46% of ceiling) vs llama w2 Q6_K same shape 29.3us (18x); `q6k_gen_partial_1024_4096_4`
   (k/v, 18x) 17.3us at 0.2 TB/s vs llama v 3.3us (18x).
-- Mechanism: VALUES-ONLY for the emitter knobs (`row_tile`, lane extent, staging, vector
-  width) as per-target rows in the route spec table; AMD's row keeps the current values.
+- Mechanism: values-first. The emitter knobs (`row_tile`, lane extent, staging, vector
+  width) are per-target rows in the route spec table; AMD's row keeps the current values.
+  Diagnostic: microbench the coop kernel sweeping those knobs. Go/no-go: if the sweep clears
+  ~1.1 TB/s (llama-class), the gap is values and the fact row is the whole answer. If it
+  stalls below that, the gap is substrate (access pattern / occupancy / instruction mix) and
+  the fix is shared, not a NV row -- which is the likely case for the partial route at 0.2
+  TB/s (5x off llama's 3.3us on the same shape).
   The partial route's parts count is fixed by the packed storage (`linear.parts`), so the
   llama-class single-pass shape requires either a new additive route family that consumes the
-  same parts=4 storage with an in-kernel reduce (STRUCTURAL variant), or a load-time repack
-  (expensive, not recommended).
+  same parts=4 storage with an in-kernel reduce (SUBSTRATE variant -- the generic
+  `partial.sum(axis=1)` merge chain is shared, so absorbing it lifts AMD's partial layers
+  too), or a load-time repack (expensive, not recommended).
 - Recovery: coop 18x(50.1-29.3)us + partial 18x(17.3-3.3)us ~= 0.63ms.
 - Controls: decode render equality (section 5); NV digits/sha.
 - Open question: is the single-pass variant worth building, or is the values-only gain
   (coop at llama-class BW, partial staged wider) sufficient for this campaign?
 
-### L3 - flash score kernel, ~0.15 ms. VALUES-ONLY
+### L3 - flash score kernel, ~0.15 ms. VALUES-ONLY or SUBSTRATE, decided by diagnostic
 
 - Evidence: `flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128` 7.6us x 36 vs llama
   `flash_attn_ext_vec` 3.17us x 36 (+ combine 3.35us x 36). G4 runs `query_group_size=None`
   (QG=4 -> WARPS=4, THREADS=128), `stage_width=1`, `split_size=48`.
-- Mechanism: per-target route config row (G4/G5 already are exactly that): NV row sweeps
-  QG/stage_width/split_size; AMD G4 row unchanged.
+- Mechanism: values-first. Per-target route config row (G4/G5 already are exactly that): NV
+  row sweeps QG/stage_width/split_size; AMD G4 row unchanged. Diagnostic: sweep per the
+  protocol below; if no row reaches ~3.2us per kernel, the whole-cache tile structure itself
+  is substrate (it is the same tile AMD admits, so the structure fix lifts both).
 - Recovery: ~0.15ms at d512; grows with depth (cache reads scale).
 - Controls: decode render equality; NV digits/sha.
 - Open question: at d512 the kernel is latency-bound on tiny data; is the sweep protocol
   (QG in {1,2,4}, stage_width in {1,2,4,8}, split_size in {16,32,48}) the right frame, or is
   the whole-cache tile structure itself the issue at larger depths?
 
-### L4 - vocab head, ~0.2 ms. VALUES-ONLY, with a fused variant option
+### L4 - vocab head, ~0.2 ms. VALUES-ONLY or SUBSTRATE, decided by diagnostic
 
 - Evidence: `q6k_gen_coop_151936_4096` 397.2us + `q6k_vocab_scalar_reduce` 72.5us + generic
   scatter chain ~0.07ms = 0.54ms vs llama single mmq 303.75us.
-- Mechanism: VALUES-ONLY: tune the coop head kernel (row_tile, staging) toward llama-class
-  BW. The scalar-reduce fusion into the coop kernel is a STRUCTURAL variant if pursued
-  (emitter change, capability-gated).
+- Mechanism: values-first: tune the coop head kernel (row_tile, staging) toward llama-class
+  BW. Diagnostic decides the 397us question: if it is occupancy/vector width, that is
+  substrate (shared emitter, AMD's head kernel has the same shape) and the fix is shared; if
+  it is the row_tile=4 layout on a 151936-row shape, that is a value. The scalar-reduce
+  fusion into the coop kernel is a SUBSTRATE variant if pursued (emitter change,
+  capability-gated; the generic scatter chain it replaces is shared).
 - Recovery: ~0.2ms.
 - Controls: decode render equality; NV digits/sha (token stream is the strongest pin here).
 - Open question: does the coop head kernel's 397us come from occupancy/vector width, or from
   the row_tile=4 layout on a 151936-row shape (row count not divisible by useful tiles)?
 
-### L5 - q4k lanemap bandwidth, ~0.2-0.3 ms. VALUES-ONLY
+### L5 - q4k lanemap bandwidth, ~0.2-0.3 ms. SUBSTRATE (emitter) + VALUES (lanes)
 
 - Evidence: gate/up 21.2us (72x) and down q4k 27us (18x) vs llama's fused w1w3 37.9us for the
   pair and w2 q4k 19.2us; q/o at parity (9.5 vs 9.5-10.3us). `lanes` is hard-wired to WARP
   (32) in `q4k_g3_lanemap_gemv_kernel`; llama's mmq blocks are 128 threads.
-- Mechanism: per-target `lanes`/vector-width fact row on the route spec; AMD keeps 32.
+- Mechanism: split. Widening the lane map past WARP=32 is a shared emitter generalization
+  (`LanePartition` is one UOp builder; Metal's simdgroups are also 32-wide today, and AMD's
+  wave-64 can use a wider lane map through the same mechanism) -- substrate. The numeric
+  `lanes`/vector-width row per target is a value; AMD and Metal keep their admitted rows.
 - Recovery: ~0.2-0.3ms if the per-kernel delta is occupancy/lane-map.
 - Controls: decode render equality; NV digits/sha.
 - Open question: `LanePartition` validates `lane_extent == WARP` today
@@ -200,10 +244,13 @@ they are upper bounds until measured, and each lever re-measures in-place.
 pg2 covers prefill routes only. This scope adds the same technique for the decode emitters:
 render `q4k_g3_lanemap_gemv` (4 measured shapes), `q6k_gen_coop` (down + vocab),
 `q6k_gen_partial`, `q6k_vocab_scalar_reduce`, `flash_block_tiled_xlane_score_pv`,
-`flash_fused_gmax_combine` through `HIPRenderer` (render-only, no ROCm compiler needed,
-exactly as pg2 does) and pin SHA-256 hashes in the campaign doc. Any VALUES-ONLY lever must
-leave these hashes unchanged; any STRUCTURAL lever must keep the AMD-admitted route's hashes
-unchanged.
+`flash_fused_gmax_combine` through `HIPRenderer` **and** `MetalRenderer` (render-only, no
+ROCm compiler and no Apple hardware needed, exactly as pg2 does) and pin both SHA-256 hash
+sets in the campaign doc. Any VALUES-ONLY lever must leave both hash sets unchanged; any
+SUBSTRATE lever must change both in the same way (that is the proof the fix is generic); any
+STRUCTURAL-additive lever must keep the AMD- and Metal-admitted routes' hashes unchanged.
+The Metal arm runs on the macOS box where pg2 already runs (MetalRenderer imports the macOS
+Metal runtime; it cannot instantiate on this Linux NV box). The AMD arm runs on either.
 
 ### 5.2 NV pins (existing, re-run per lever)
 
@@ -217,21 +264,31 @@ unchanged.
 Fixed-depth W decode at d512/d2048/d4096 (same-session llama `tg10 @ d`), 5 reps median,
 5.83ms busy baseline recorded per lever. AMD runtime measurement is NOT required for
 VALUES-ONLY levers; it is required only if a future scope changes AMD's admitted values or
-route.
+route. SUBSTRATE levers get the same treatment up front: the AMD and Metal render arms prove
+the change is shared, and a measured AMD runtime number is the promotion gate later, not the
+landing gate here.
 
 ---
 
 ## 6. Sequencing and delivery
 
-1. P0: pg3 decode render-equality script + baseline re-measure of all pins (no code change).
-2. P1: L3 (smallest surface, values-only) and L4 (values-only head tuning).
-3. P2: L5 (lane-map generalization, if reviewed in).
-4. P3: L2 values-only tuning (coop to llama-class BW; partial staging).
-5. P4: L1 structural, capability-gated, additive (largest recovery, largest blast radius).
+1. P0: pg3 decode render-equality script (HIP + Metal arms) + baseline re-measure of all
+   pins (no code change).
+2. P1: L3 (smallest surface) and L4 (head tuning), each opening with its diagnostic sweep,
+   then the values row or the shared fix per the go/no-go.
+3. P2: L5 lane-map generalization (shared emitter) + per-target lanes rows.
+4. P3: L2 diagnostic first (coop knob sweep; partial single-pass substrate variant only if
+   the sweep stalls below ~1.1 TB/s).
+5. P4: L1 substrate fusion, capability-gated, additive (largest recovery, largest blast
+   radius; needs its own design doc before code).
 
 Each piece is a separate commit with one owning prefix (`[nn]`, `[test]`, `[docs]`), pushed
 to `nvidia-bringup-20260731` only. No promotion to `dev`/`exp`/`master` is authorized by this
 scope.
+
+Endpoint expectation, stated up front: the re-measured stack targets 195-210 tok/s at d512
+vs llama's 245.6 (close to parity, not beating it); the last 10-15% sits in per-kernel q4k
+bandwidth on the lanemap path and is explicitly not claimed by this scope.
 
 HARD STOP after this section. Nothing beyond this scope without review.
 
@@ -239,15 +296,23 @@ HARD STOP after this section. Nothing beyond this scope without review.
 
 ## 7. Review request
 
-Please review with the repo's data-driven, additive-migration principles in mind. The five
+Please review with the repo's data-driven, additive-migration principles in mind. The seven
 open questions to settle:
 
-1. L1 shape (epilogue absorption vs graph-level fusion pass), and whether the capability gate
+1. Is the SUBSTRATE / VALUES-ONLY / STRUCTURAL-additive trichotomy the right classification,
+   and is the diagnostic-first go/no-go per lever the right way to decide it? Are any levers
+   misclassified (in particular L5, where the emitter change is substrate but the lanes value
+   is per-target)?
+2. L1 shape (epilogue absorption vs graph-level fusion pass), and whether the capability gate
    belongs in `DeviceCapabilities` or in a decode route fact row.
-2. L2: is the parts=4 single-pass variant worth building, or is values-only sufficient?
-3. L3: is QG/stage_width/split_size the right sweep frame, and is there a d512-vs-d4096
+3. L2: is the parts=4 single-pass variant worth building, or is values-only sufficient? Does
+   the 0.2 TB/s partial route count as substrate by the stated criterion?
+4. L3: is QG/stage_width/split_size the right sweep frame, and is there a d512-vs-d4096
    tradeoff to name?
-4. L4: does the vocab coop kernel's 397us point at row_tile on a 151936-row shape?
-5. Controls: is pg3's kernel set complete, and is the claim "VALUES-ONLY levers need no AMD
-   runtime measurement" the right call, or should any of these still carry a measured AMD
-   number out of caution?
+5. L4: does the vocab coop kernel's 397us point at row_tile on a 151936-row shape, or at
+   occupancy/vector width (substrate)?
+6. Controls: is pg3's kernel set complete, and is the Metal render arm (macOS box, render
+   only) the right way to prove a substrate fix is generic?
+7. Is the claim "VALUES-ONLY levers need no AMD runtime measurement" still the right call
+   given the substrate trichotomy, or should any lever carry a measured AMD number out of
+   caution?

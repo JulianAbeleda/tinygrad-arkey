@@ -809,9 +809,11 @@ per target), but the tuning VALUES are per-target data already (`DeviceCapabilit
 `FlashDecodeRouteConfig` G4/G5, `Q6KGEMVRouteSpec` fields, per-target admission). The
 replacement scope classifies each lever as VALUES-ONLY (NV row changes, AMD's generated
 source stays byte-identical, render equality is the control, no AMD runtime measurement
-needed) or STRUCTURAL (additive, capability-gated variant, legacy AMD route untouched), and
-adds the missing decode render-equality control (pg3). Estimated stack unchanged:
-5.83ms -> 4.0-4.2ms busy at d512 (~195-210 tok/s).
+needed), SUBSTRATE (the shared emitter/lowering sits below a hardware-agnostic ceiling; one
+fix lifts every target that admits the route, proven by AMD+Metal render arms moving
+together), or STRUCTURAL-additive (capability-gated variant, legacy route untouched), and
+adds the missing decode render-equality control (pg3) with a Metal arm. Estimated stack
+unchanged: 5.83ms -> 4.0-4.2ms busy at d512 (~195-210 tok/s).
 
 HARD STOP after section 14. This is gap analysis + scope only; no code changed in this
 section. The levers are the next campaign's pieces, each with an AMD control requirement.
