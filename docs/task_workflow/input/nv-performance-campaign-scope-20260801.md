@@ -497,3 +497,95 @@ tok/s. llama still measures 14,250 tok/s on the same machine; per P0's finding (
 llama's int8 tensor-core mechanism is 25-40% faster than the fp16-mma ceiling this campaign can
 reach), full prefill parity is not reachable with the fp16 mechanism, and decode parity remains
 the realistic beat target (P4). The remaining prefill gap is sized and attributed in P5.
+
+## 10. P2 results - Q6_K coverage is resolved by P1's mechanism, no build needed (2026-08-02)
+
+### 10.1 Why Q6_K rides the promoted path without a new artifact
+
+P2's premise (section 2, L2) was that Q6_K roles (attn_v, lm_head, and the Q6_K share of
+ffn_down) are not covered by the sm120 candidate set. That premise held only while promotion
+was keyed to the Q4_K candidate artifacts. Candidate admission (`automatic_promoted_prefill_graph_policy`)
+matches on `(role, shape)` and the fp16 overlay casts packed weights to fp16 once, so the quant
+family of the source tensor is not an admission input. Once P1 promoted the overlay path on NV,
+every covered role shape executes it regardless of Q4_K vs Q6_K.
+
+Route census on a warm pp512 pass with production env
+(`Q4K_PRIMITIVE=1 Q6K_PRIMITIVE=1 HALF=1 prefill_v2=true prefill_concrete_kv=true`,
+`/tmp/census_routes.py`):
+
+| role | linears | candidate-executed |
+| --- | ---: | ---: |
+| attn_qo | 72 | 72 |
+| attn_kv (incl. attn_v, which is Q6_K) | 72 | 72 |
+| ffn_gate_up | 72 | 72 |
+| ffn_down (incl. the Q6_K share) | 36 | 36 |
+| **total covered** | **252** | **252** |
+
+Every covered linear executed the candidate overlay path; the Q6_K roles are inside that set.
+lm_head (`output.weight`) is not a covered role and stays on its existing path - sized at 0.3%
+of the old 961ms trace, i.e. a fraction of a millisecond inside the current 44-46ms warm wall.
+
+### 10.2 Compile-level proof for the Q6_K ffn_down shape
+
+`/tmp/render_q6k_nv.py` renders the Q6_K ffn_down shape (512, 4096, 12288) as an fp16 overlay
+GEMM with the production NV warmstart schedule on sm_120 (compile-only, no GPU run). Re-run
+2026-08-02: warmstart opts `(TC, UPCAST(1,4), UPCAST(0,2))`, `sha256=7d47c7b2d8bc`,
+`len=8056`, `mma.sync` count 1. The largest single pre-P1 kernel
+(ffn_down Q6_K: 18 calls, 319.1ms, 17.7ms/call, 33.2% of traced time) renders as a tensor-core
+kernel under the exact production schedule.
+
+### 10.3 Verdict
+
+P2 is resolved by P1's mechanism. The B2 build row ("mint a Q6_K candidate or reuse the fp16
+overlay") collapses to "reuse the overlay" - no mint, no new kernel. The measured before/after
+is folded into P5's per-lever attribution (the 319.1ms ffn_down Q6_K route is inside the
+44-46ms warm wall with all 252 covered linears on the candidate path).
+
+## 11. P3 results - host overhead characterized, criterion not met (2026-08-02)
+
+### 11.1 Same-session warm measurement (production tuned code)
+
+P3's criterion (section 8.4): warm prefill wall tracks GPU busy within llama's measured
+envelope, wall/busy 1.15-1.35x (llama warm avg: 37.76ms wall vs ~32.95ms busy = 1.15x). All
+numbers below are same-session warm measurements on the production tuned schedule
+(`04e500079`), 2026-08-02:
+
+| quantity | measured | source |
+| --- | ---: | --- |
+| warm pp512 wall (steady) | 44-46 ms | `/tmp/measure_warm_prefill.py` passes_s `[5.76, 1.91, 0.046, 0.045]`; first replay 1.9s is one-time graph instantiation, steady state is the last two |
+| GPU busy (warm replay) | 24.1 ms / 8 graph groups | `DEBUG=2` + `GlobalCounters.time_sum_s`, `/tmp/measure_busy_debug2.py`: 2 copies + batched 32/64/128/256/512/27 |
+| NV `wait()` CPU time | 23.7-23.8 ms across 10 waits | `/tmp/probe_warm2.py`, HCQSignal.wait monkeypatch, pass2/pass3 |
+| wall/busy | ~1.9x | 46 / 24.1 |
+
+The P3 criterion is NOT met: 1.9x is above llama's 1.15-1.35x envelope. Note the correction:
+section 9.2's closing line ("P3 already met at 0.85 busy/wall") compared the *cold-capture* busy
+(98.8ms, pre-tuning) against the *warm* wall (117ms) - a cross-run ratio, the same failure mode
+as the withdrawn 92%. The same-session warm measurement above does not reproduce it and
+supersedes it.
+
+### 11.2 Structure of the 44-46ms wall
+
+wait() CPU time (23.7ms) tracks GPU busy (24.1ms): the host polls while the GPU runs, so the
+waits are mostly overlapped with execution. The non-overlapped host submit cost is therefore
+wall - busy = ~20-22ms across 10 submits (~2ms each). The named cause is unchanged from
+section 8.5: `HCQSignal.wait` polls `self.value`, and the `value` property builds a fresh
+`cpu_view().view(0, 8, 'Q')[0]` memoryview+cast on every poll (~2.5us/poll,
+`tinygrad/runtime/support/hcq.py`), while `NVSignal._sleep` is the base no-op stub (it only
+sleeps after 200ms elapsed). With 8 graph groups and 10 waits per pass, ~23.7ms of wall is
+Python-speed polling.
+
+### 11.3 Options and recommendation
+
+From section 8.5, in order of size: (a) cache the `HcqView` per signal so each poll is one
+plain memory read; (b) use a real blocking wait on the NV uvm semaphore instead of the sleep
+stub; (c) graph replay of the whole schedule - already active at the group level (the warm pass
+is 8 replayed groups). Two facts decide the shape: wait time (23.7ms) approximately equals GPU
+busy (24.1ms), so (a)/(b) alone may not cut single-pass wall - they remove the constant factor
+but the ~20-22ms non-overlapped submit is the real target; and that submit path is shared HCQ
+code that also serves AMD, so a blind change without an AMD control risks the shared target.
+
+Recommendation: record this analysis and leave B3 open as a runtime build requiring an AMD
+control. The current warm wall is 44-46ms = 11.2-11.6k tok/s (P1 gate MET), the fp16-path busy
+ceiling is 512/24.1ms = 21.2k tok/s - above llama's 14,250 - so the entire remaining prefill
+gap vs llama is this host factor. P3 is therefore the last prefill lever, and it is a
+host-side runtime build, not a kernel.
