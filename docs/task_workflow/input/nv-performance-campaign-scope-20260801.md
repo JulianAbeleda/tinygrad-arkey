@@ -429,3 +429,71 @@ plain memory read (~0.1 us), (b) actually block instead of spin (the NV uvm sema
 real wait primitive the `sleep` stub does not use), (c) reduce wait count via graph replay of
 the whole prefill schedule (B3's original shape). (c) is still the endgame; (a)+(b) remove the
 constant factor that makes (c) necessary at 71 waits.
+
+## 9. P1 results - prefill GEMM promotion lands, gate MET (2026-08-02)
+
+### 9.1 The "promoted path is slower" claim was a measurement artifact, now solved
+
+The promoted path looked 2.3x slower than the baseline in the first post-P1 pass. It was not:
+`Transformer.generate` mutates its prompt list (`tokens.append(...)`), and the bench script
+reused one prompt list across passes. Once the list crossed 512 tokens, the next pass ran the
+model's generate loop with `v_start_pos.bind(prompt_len-ubatch)`, which re-processed the last
+512 tokens through the slow symbolic SDPA path (55ms/layer attention kernels
+`r_4_8_(start_pos+512)...` x 36 = 1.99s GPU busy). That branch2 behavior is pre-existing
+user-facing behavior for prompts with a non-multiple-of-512 remainder, not a P1 regression.
+The bench scripts now build a fresh prompt list inside each `measure()` call.
+
+### 9.2 Clean before/after (same scripts, same session, after P1 before tuning)
+
+| state | GPU busy | kernels | warm pp512 wall | tok/s |
+| --- | ---: | ---: | ---: | ---: |
+| before P1 (recorded in diagnosis doc) | 961 ms | 2041 | ~4.3 s | ~110 |
+| after P1, TC-only warmstart | 98.8 ms (cold capture) | 2093 | 117 ms | 4.4k |
+| after P1 + tuned schedule | - | - | 44-46 ms | 11.2-11.6k |
+
+The first prompt remains host-compile-bound (wall 4.3-4.8s for jit capture); warm steady-state
+is the number that matters. P1 promotion alone: GPU busy 961 -> 98.8ms (~10x), warm wall 4.3s ->
+117ms (~37x). Warm busy/wall after P1 is ~0.85, i.e. wall/busy 1.18x, inside llama's measured
+envelope (1.15-1.35x), so the P3 host-overhead criterion is already met without B3.
+
+### 9.3 The tuning win: target-declared warmstart schedule
+
+The candidate path installed TC-only warmstart while AMD's dense path uses UPCAST/UNROLL. A
+monkeypatched variant sweep on the 5090 (`/tmp/tune_nv_candidate.py`, `CAND_OPTS=<key>`):
+
+| schedule | warm pp512 | note |
+| --- | ---: | --- |
+| TC only (base) | 117 ms | GEMM families 571/527/187/178 us/call = 86.4ms |
+| +UPCAST(1,4) | 78 ms | |
+| +UPCAST(1,4) then UPCAST(0,2) | 44-46 ms | order matters; reverse fails ("upcast is for GLOBAL/LOCAL/LOOP, not AxisType.WARP") |
+| +UNROLL(0,8) | fails | "8 can't divide 127" after TC on NV; u0=4u1=4 also fails |
+
+With the winning schedule the GEMM families become 282/18.9/18.1/18.0 us/call (~14.1ms total;
+busy events undercount, wall is the reliable number).
+
+Correctness with `u1=4,u0=2`: first tokens
+`[50994, 82, 31109, 3508, 692, 2, 11162, 100, 254, 30317, 2655, 12080, 25, 576, 35264, 5624]`
+and decode sha256 `0721c16fbf70779cb6cebd5cf64eab50a1f61c7882d402c60c27d22597548ebe` are
+unchanged; decode 158.3-158.4 tok/s unchanged.
+
+### 9.4 Production change and controls
+
+`tinygrad/llm/prefill_graph_gemm.py` now carries `_CANDIDATE_WARMSTART_OPTS`, keyed by the same
+declared `(backend, arch, wave_size)` triple the compact artifacts use: NV sm_120 wave32 ->
+`(TC, UPCAST(1,4), UPCAST(0,2))`; every undeclared target keeps the TC-only default, so AMD
+gfx1100's behavior cannot move without its own measurement. AMD control re-run on this change:
+pg2 six-route rendered-source hashes byte-identical
+(`0e4c2e9218a7 8e01063e3c8f ce03d94bb58a 5ced48b9fa7c b0df79b8bb58 349a2c8c521f`).
+
+Production warm measurement (`passes_s [5.59, 1.86, 0.0457, 0.0442]`) = 11.2-11.6k tok/s.
+E2e bench `qwen3-8b-nv-p1-tuned` (`/tmp/qwen3-8b-nv-p1-tuned.json`): decode 158.31 tok/s,
+prefill 88.3 tok/s cold (compile-bound ttft 5.8s), census row
+`prefill_overlay_promotion: candidate_set:sha256:1b8ea95d50bb55962474721cf013a6c3a704038916856353c65281112a166c7f`.
+
+### 9.5 Gate status
+
+P1's gate (warm pp512 in the 10k+ tok/s regime with identical first tokens) is MET at 11.2k
+tok/s. llama still measures 14,250 tok/s on the same machine; per P0's finding (section 8.2,
+llama's int8 tensor-core mechanism is 25-40% faster than the fp16-mma ceiling this campaign can
+reach), full prefill parity is not reachable with the fp16 mechanism, and decode parity remains
+the realistic beat target (P4). The remaining prefill gap is sized and attributed in P5.
