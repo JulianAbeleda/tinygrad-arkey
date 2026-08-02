@@ -589,3 +589,112 @@ control. The current warm wall is 44-46ms = 11.2-11.6k tok/s (P1 gate MET), the 
 ceiling is 512/24.1ms = 21.2k tok/s - above llama's 14,250 - so the entire remaining prefill
 gap vs llama is this host factor. P3 is therefore the last prefill lever, and it is a
 host-side runtime build, not a kernel.
+
+## 12. P4 results - decode gap measured, kernel-bound, tuning left open (2026-08-02)
+
+### 12.1 Same-session paired decode sweep
+
+Same session, same machine, same llama build (`ac4cddeb0`). tinygrad rows are the fixed-depth
+decode authority (`extra/llm_research/bench.py --decode`, W = production generate path,
+`/tmp/qwen3-8b-nv-p4-decode.json`); llama rows are `llama-bench -p 0 -n 10 -d <depth> -r 5`
+(`tg10 @ d<depth>`, `/tmp/llama_p4_decode.json`):
+
+| depth | tinygrad tok/s (W) | tinygrad ms/token | llama tok/s | gap |
+| --- | ---: | ---: | ---: | ---: |
+| d512 | 163.4 | 6.12 | 245.6 +/- 12.8 | 1.50x |
+| d2048 | 153.5 | 6.52 | 234.8 +/- 7.6 | 1.53x |
+| d4096 | 142.7 | 7.01 | 225.1 +/- 6.1 | 1.58x |
+
+All tinygrad rows route `flash` (flash-decode live-split); generated token evidence is
+identical across reps (sha256 `5662f1cd7239f1e3...`), preludes identical. The campaign targets
+(d512 >= 237, d2048 >= 225, d4096 >= 217) are NOT met.
+
+### 12.2 Per-token kernel budget (d512, production)
+
+The old L4 framing ("per-token kernels are tiny 9-50us and numerous; launch overhead
+dominates") is superseded by measurement: the flash-decode rollout is already graph-replayed
+into 6 groups per token (`batched 32/64/128/256/512/29` = 1021 programs/token,
+`DEBUG=2` trace). GPU busy is 5.83ms of the 6.12ms wall = 95% busy; the queued dispatch
+diagnostic D (6.24ms) is not faster than per-token-synced W, so host launch is amortized and
+decode is GPU/kernel-bound, not host-bound.
+
+Bytes: 5.04 GB/token (weights + KV at depth) in 6.12ms = **824 GB/s = 46% of the measured 1792
+GB/s ceiling**. llama at d512 is 4.07ms/token = ~1150 GB/s = 64% of ceiling. The gap is
+per-kernel bandwidth efficiency in the shared q4k/q6k GEMV and flash score/PV kernels, not
+launch cost and not the roofline.
+
+### 12.3 Verdict
+
+The remaining decode lever is vector-width / occupancy tuning in `q4k_g3_lanemap_gemv`,
+`q6k_gen_coop`, and `flash_block_tiled_xlane_score_pv` - shared AMD+NV kernels. Landing a
+change blind without an AMD runtime measurement would violate the campaign guardrail (the pg2
+AMD control is compile-only render equality, not a runtime perf control), so this is recorded
+as gap analysis with no code change. Decode parity remains the realistic beat target and the
+tuning is the next step after B3, on hardware that can validate both targets.
+
+## 13. P5 results - full control matrix and closeout (2026-08-02)
+
+### 13.1 Same-session paired matrix
+
+Prefill (warm steady-state; tinygrad production env, `/tmp/qwen3-8b-nv-p5-prefill-sweep.json`;
+llama `-p <n> -n 0 -r 5`, `/tmp/llama_p5_pp.json`):
+
+| pp | tinygrad tok/s | tinygrad wall | llama tok/s | ratio |
+| --- | ---: | ---: | ---: | ---: |
+| 128 | 42.7 | 2.996 s | 8,662.6 | 0.005x |
+| 256 | 40.2 | 6.369 s | 12,012.1 | 0.003x |
+| 512 | 11,158 | 45.9 ms | 14,468.4 | 0.77x |
+| 1024 | 14,003 | 73.1 ms | 14,450.3 | 0.97x |
+| 2048 | 14,947 | 137.0 ms | 14,231.6 | 1.05x |
+| 4096 | 13,657 | 299.9 ms | 13,793.7 | 0.99x |
+
+pp128/256 are sub-ubatch prompts (prompt < prefill_ubatch 512): they fall to the symbolic
+chunked path, which is the documented short-prompt cliff
+(`short-prompt-prefill-cliff-scope-20260730.md`), not the promoted path. The campaign's
+promoted prefill (pp512+) reaches 0.77x-1.05x of llama, with pp2048 measured ABOVE llama.
+
+Decode (fixed depth; tinygrad W vs llama `tg10 @ depth`, section 12.1):
+
+| depth | tinygrad tok/s | llama tok/s | ratio |
+| --- | ---: | ---: | ---: |
+| d512 | 163.4 | 245.6 | 1.50x |
+| d2048 | 153.5 | 234.8 | 1.53x |
+| d4096 | 142.7 | 225.1 | 1.58x |
+
+### 13.2 Controls
+
+All controls green on this HEAD (`1d4fef2ed`):
+
+- AMD pg2 six-route rendered-source equality: byte-identical hashes
+  `0e4c2e9218a7 8e01063e3c8f ce03d94bb58a 5ced48b9fa7c b0df79b8bb58 349a2c8c521f`.
+- First-token digits unchanged:
+  `[50994, 82, 31109, 3508, 692, 2, 11162, 100, 254, 30317, 2655, 12080, 25, 576, 35264, 5624]`.
+- Decode sha256 unchanged: `0721c16fbf70779cb6cebd5cf64eab50a1f61c7882d402c60c27d22597548ebe`.
+- Bench census row unchanged:
+  `prefill_overlay_promotion: candidate_set:sha256:1b8ea95d50bb55962474721cf013a6c3a704038916856353c65281112a166c7f`.
+- E2E bench `/tmp/qwen3-8b-nv-p5-final.json`: decode 158.33 tok/s (765.4 GB/s), prefill 89.0
+  tok/s cold (compile-bound ttft), strategy `FULL_RESIDENT_OVERLAY`.
+
+### 13.3 Per-lever attribution (ms recovered)
+
+| lever | before | after | delta |
+| --- | ---: | ---: | ---: |
+| P1 GEMM promotion (TC-only warmstart) | 961 ms GPU busy, 4.3 s wall | 98.8 ms busy, 117 ms wall | ~10x busy, ~37x wall |
+| P1 target-declared warmstart tuning | 117 ms wall | 44-46 ms wall | 2.5x |
+| P2 Q6_K coverage | ffn_down Q6_K 319.1 ms / 18 calls on scalar path | inside the 44-46 ms overlay wall, no build | resolved by P1 |
+| P3 host overhead | - | 24.1 ms busy / 44-46 ms wall (1.9x, above llama's 1.15-1.35x envelope) | characterized; B3 left open |
+| P4 decode | 158.2 tok/s e2e | 163.4-142.7 tok/s fixed-depth (1.50-1.58x vs llama) | kernel-bound; tuning left open |
+
+### 13.4 Verdict
+
+Prefill gate MET (P1: 11.2k warm tok/s at pp512, byte-identical tokens), and the promoted
+path reaches llama parity at pp1024-4096 (0.97x-1.05x). The remaining prefill gap is host
+overhead at pp512 (B3, requires an AMD-side control) and the separately-scoped short-prompt
+cliff below ubatch. Decode is 1.50-1.58x behind llama and kernel-bound at 46% of the
+bandwidth ceiling vs llama's 64%; closing it is vector/occupancy tuning on shared kernels that
+must be validated on AMD too. Everything remaining is either a runtime build with an AMD
+control requirement (B3) or a shared-kernel tuning with an AMD measurement requirement (P4),
+neither of which can be landed blind from this NV-only session.
+
+HARD STOP per section 5. Nothing beyond this report without review. No promotion to
+`dev`/`exp`/`master` is authorized by this campaign.
