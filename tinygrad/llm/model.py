@@ -1164,6 +1164,8 @@ class Transformer:
       # the e2e bench row, never a silent drop.
       if _device_facts.capabilities.supports_fp16 is True and _automatic_overlay_policy is None and not _overlay_request:
         _admit["prefill_overlay_promotion"] = "no-promoted-candidate"
+      elif _automatic_overlay_policy is not None and _effective_strategy is Strategy.FULL_RESIDENT_OVERLAY:
+        _admit["prefill_overlay_promotion"] = _automatic_overlay_policy["graph_gemm"]["candidate_set_identity"]
       # A completed machine-search record may carry a fully attributed allocation ledger. Apply it only after context
       # and KV representation are resolved. Ordinary direct-packed loading needs no caller-injected hardware facts.
       if all(_route_memory.get(key) is not None for key in _EXACT_ROUTE_MEMORY_KEYS):

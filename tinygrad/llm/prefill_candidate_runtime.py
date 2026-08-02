@@ -1,9 +1,12 @@
-"""Exact runtime decoder for the promoted four-role fp16 prefill candidate set.
+"""Exact runtime decoder for the promoted four-role fp16 prefill candidate sets.
 
-The compact checked-in artifact factors the identical schedule shared by all
-four searched workloads.  This module expands it to the historical candidate
-set shape, verifies every entry and aggregate identity, and constructs only the
-typed compiler context required by the production graph-GEMM executor.
+Each compact checked-in artifact factors the identical schedule shared by its
+four searched workloads, for one exact (backend, arch, wave_size) triple.  This
+module expands the artifact selected for a requested target to the historical
+candidate set shape, verifies every entry and aggregate identity, and
+constructs only the typed compiler context required by the production
+graph-GEMM executor.  Selection is a data lookup over the per-artifact declared
+targets (TG8); an unknown target raises, never silently admits.
 """
 from __future__ import annotations
 
@@ -22,6 +25,8 @@ CANDIDATE_SET_SCHEMA = "boltbeam.full_kernel_candidate_set.v1"
 CANDIDATE_SCHEMA = "boltbeam.full_kernel_candidate.v1"
 ROUTE_ID = "prefill_wmma_lds_dbuf_generated"
 ARTIFACT = Path(__file__).with_name("generated") / "prefill_wmma_lds_dbuf_candidate_set.json"
+NV_ARTIFACT = Path(__file__).with_name("generated") / "prefill_sm120_lds_dbuf_candidate_set.json"
+_COMPACT_ARTIFACTS = (ARTIFACT, NV_ARTIFACT)
 _PROVENANCE_KEYS = frozenset(("profile", "profile_id", "profiles", "model", "model_id", "model_name",
                               "model_path", "filename", "size_label", "model_size"))
 
@@ -154,30 +159,46 @@ def _strict_dict(value: Any, keys: set[str], label: str) -> dict[str, Any]:
 
 
 @cache
-def promoted_candidate_set() -> CandidateSet:
-  raw = json.loads(ARTIFACT.read_text())
+def _compact_artifact_for_target(backend: str, arch: str, wave_size: int) -> Path:
+  """TG8: resolve the artifact whose declared target matches the request. Both operands are data
+  (the requested triple vs. each artifact's own recorded `target`), never a hardcoded literal.
+  Duplicate declared targets raise; a miss raises the same fail-loud guard the pinned check used."""
+  selected: Path | None = None
+  for path in _COMPACT_ARTIFACTS:
+    raw = json.loads(path.read_text())
+    declared = _strict_dict(raw.get("target"), {"backend", "arch", "wave_size"}, "compact target")
+    if (declared["backend"], declared["arch"], declared["wave_size"]) == (backend, arch, wave_size):
+      if selected is not None: raise ValueError(f"duplicate compact artifact target: {backend}:{arch}:wave{wave_size}")
+      selected = path
+  if selected is None: raise ValueError(f"compact target is unsupported: {backend}:{arch}:wave{wave_size}")
+  return selected
+
+
+@cache
+def promoted_candidate_set(backend: str, arch: str, wave_size: int) -> CandidateSet:
+  raw = json.loads(_compact_artifact_for_target(backend, arch, wave_size).read_text())
   _strict_dict(raw, {"schema", "route_id", "candidate_set_identity", "profile", "target", "template", "entries"}, "compact artifact")
   if raw["schema"] != COMPACT_SCHEMA or raw["route_id"] != ROUTE_ID: raise ValueError("compact artifact identity drifted")
   target = _strict_dict(raw["target"], {"backend", "arch", "wave_size"}, "compact target")
-  # TG8 (docs/task_workflow/input/target-capability-policy-decoupling-scope-20260730.md): this is an
-  # ARTIFACT-IDENTITY guard, not a live capability/policy admission gate -- it never consults live
-  # scanned_device_facts (this function takes no device argument at all; it is @cache'd on zero args). It
+  # ARTIFACT-IDENTITY guard (TG8, docs/task_workflow/input/target-capability-policy-decoupling-scope-20260730.md):
+  # this is not a live capability/policy admission gate -- it never consults live scanned_device_facts. It
   # exists for the same reason as the canonical_identity/legacy_identity/candidate_set_identity hash checks
-  # elsewhere in this function: this ONE checked-in compact artifact was searched and compiled for exactly one
-  # target, and this asserts the artifact still declares that expected target rather than having silently
-  # drifted (e.g. a regenerated JSON accidentally describing a different arch while the tile/LDS/thread
-  # geometry below was still the gfx1100-wave32 schedule). Preserve the raise: an artifact that claims a
-  # different target than the schedule it carries must fail loudly at load, not silently admit garbage.
+  # elsewhere in this function: each checked-in compact artifact was searched and compiled for exactly one
+  # target, and this asserts the artifact selected for the requested triple still declares that exact target
+  # rather than having silently drifted (e.g. a regenerated JSON accidentally describing a different arch
+  # while the tile/LDS/thread geometry below was still the gfx1100-wave32 schedule). Preserve the raise: an
+  # artifact that claims a different target than the schedule it carries must fail loudly at load, not
+  # silently admit garbage.
   #
-  # The actual LIVE capability+policy admission for this candidate set is downstream in
+  # The actual LIVE capability+policy admission for these candidate sets is downstream in
   # `automatic_promoted_prefill_graph_policy` / `promoted_prefill_graph_targets`, which derive BOTH the
-  # resolved target (from live scanned_device_facts) and the promoted-target set (from this artifact's own
+  # resolved target (from live scanned_device_facts) and the promoted-target set (from the artifact's own
   # recorded per-entry targets) with no hardcoded literal at all -- already exactly the TG3 shape, and not
   # split further here: a searched WMMA/LDS schedule is measured and promoted for one exact (backend, arch,
   # wave_size) triple, so "can this target express the tile geometry" and "was a schedule promoted for it"
   # are the same fused question for this exact-shape compiled kernel, not two independent ones.
-  _PINNED_COMPACT_ARTIFACT_TARGET = {"backend":"AMD", "arch":"gfx1100", "wave_size":32}
-  if target != _PINNED_COMPACT_ARTIFACT_TARGET: raise ValueError("compact target is unsupported")
+  if target != {"backend":backend, "arch":arch, "wave_size":wave_size}:
+    raise ValueError("compact target is unsupported")
   template = _strict_dict(raw["template"], {"schema_version", "dtypes", "layout", "schedule", "static_constraints"}, "candidate template")
   if template["schema_version"] != CANDIDATE_SCHEMA: raise ValueError("candidate schema drifted")
   rows = raw["entries"]
@@ -206,8 +227,8 @@ def promoted_candidate_set() -> CandidateSet:
 
 
 @cache
-def promoted_candidate_registry() -> CandidateRegistry:
-  candidate_set = promoted_candidate_set()
+def promoted_candidate_registry(backend: str, arch: str, wave_size: int) -> CandidateRegistry:
+  candidate_set = promoted_candidate_set(backend, arch, wave_size)
   admissions, exact = [], {}
   for entry in candidate_set.entries:
     workload, schedule = entry.payload["workload"], entry.payload["schedule"]
@@ -259,7 +280,7 @@ def automatic_promoted_prefill_graph_policy(inventory: Mapping, scanned_device_f
   inventory_identity = inventory.get("inventory_identity")
   if not isinstance(inventory_identity, str) or not inventory_identity: return None
 
-  try: registry = promoted_candidate_registry()
+  try: registry = promoted_candidate_registry(target["backend"], target["arch"], target["wave_size"])
   except (KeyError, TypeError, ValueError, OSError): return None
   candidate_set = registry.candidate_set.to_json()
   candidate_set_identity = canonical_candidate_set_identity(candidate_set)
@@ -312,14 +333,22 @@ def automatic_promoted_prefill_graph_policy(inventory: Mapping, scanned_device_f
 
 
 def decode_prefill_graph_candidate_set(value: Mapping[str, Any]) -> CandidateRegistry:
-  """Decode only the exact promoted set; altered, partial, or foreign sets fail closed."""
-  canonical = promoted_candidate_set().to_json()
+  """Decode only the exact promoted set for the target the value itself declares; altered, partial,
+  or foreign sets fail closed. The target triple is read from the value's own first-entry workload,
+  so AMD and NV policies each decode against their own artifact with no caller-supplied facts."""
+  entries = value.get("entries") if isinstance(value, Mapping) else None
+  if not isinstance(entries, list) or not entries: raise ValueError("candidate set is not the exact promoted production set")
+  target = entries[0].get("payload", {}).get("workload", {}).get("target") if isinstance(entries[0], Mapping) else None
+  if not isinstance(target, Mapping) or not all(isinstance(target.get(key), (str, int)) for key in ("backend", "arch", "wave_size")):
+    raise ValueError("candidate set is not the exact promoted production set")
+  backend, arch, wave_size = str(target["backend"]), str(target["arch"]), int(target["wave_size"])
+  canonical = promoted_candidate_set(backend, arch, wave_size).to_json()
   if not isinstance(value, Mapping) or value != canonical: raise ValueError("candidate set is not the exact promoted production set")
   if canonical_candidate_set_identity(value) != canonical_candidate_set_identity(canonical):
     raise ValueError("candidate-set identity mismatch")
-  return promoted_candidate_registry()
+  return promoted_candidate_registry(backend, arch, wave_size)
 
 
-__all__ = ["ARTIFACT", "ROUTE_ID", "CandidateRegistry", "canonical_candidate_set_identity",
+__all__ = ["ARTIFACT", "NV_ARTIFACT", "ROUTE_ID", "CandidateRegistry", "canonical_candidate_set_identity",
            "decode_prefill_graph_candidate_set", "promoted_candidate_registry", "promoted_candidate_set",
            "automatic_promoted_prefill_graph_policy", "promoted_prefill_graph_targets"]
