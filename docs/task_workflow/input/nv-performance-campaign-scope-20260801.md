@@ -343,3 +343,89 @@ Open, now resolved by runs (2026-08-01):
    disagrees with measurement on magnitude (e.g. ffn_down modeled 13.8% vs measured 47.8%
    including both quants) because BoltBeam's model has no dequant cost; that is now stated, not
    silently assumed.
+
+## 8. P0 results - measured NV facts (2026-08-02)
+
+All numbers below are measured on this 5090 in the runs named; no spec-sheet figures.
+
+### 8.1 Matrix-unit ceilings
+
+`extra/llm_research/microbench/mma_peak_cuda.cu` (m16n8k16 f16->f32, the exact instruction the
+fork's `CUDARenderer` emits; disassembly-verified, 0 spills): **R(fp16 mma) = 255.4 TF = 127.7
+TMAC/s**, plateaued at blocks=32768. Same run set already recorded in the microbench README.
+
+`extra/llm_research/microbench/bw_peak_cuda.cu` (streaming, evict-first, disassembly-verified):
+**BW = 1700 GB/s read / 1682 GB/s write**, flat 0.25-16 GiB. M* = (w/16)(R/BW) = 150 elements
+per byte; prefill (fp16 overlay: 512 FLOP/byte at pp512) and decode (3.3 FLOP/byte) sit far below
+the crossover. Prefill with the fp16 overlay is compute-bound; decode is bandwidth-bound.
+
+`extra/llm_research/microbench/dp4a_peak_cuda.cu` (new this pass; back-to-back
+`dp4a.s32.s32`, register-resident operands, NACC swept 8/16/32, disassembly-verified:
+hot loop is `IDP.4A.S8.S8` only, 0 spills): **R(dp4a) = ~950 G dp4a/s = 3.8 TMAC/s = 7.6 INT8
+TOPS**, plateaued at blocks=32768, invariant across NACC 8->32. This is the CUDA-core integer
+pipe, and it is ~34x below the fp16 tensor pipe.
+
+### 8.2 llama's mechanism is int8 tensor-core MMA, not dp4a (section 1a corrected)
+
+Section 1a claimed llama's prefill GEMMs are "int8 dp4a dot products". That claim is
+**falsified by two independent measurements**:
+
+1. Throughput: llama's pp512 pass needs 4.19e12 MACs (2*N*pp). At the measured dp4a ceiling
+   (3.8 TMAC/s) the GEMMs alone would take >= 1.1s; llama's whole pass is 32.95 ms GPU busy
+   (`/tmp/llama_pp512_singlerun.nsys-rep`, `--no-warmup -r 1`). A 30x contradiction.
+2. SASS: `cuobjdump -sass` of the same binary's `libggml-cuda.so` (sm_120). The prefill
+   `mul_mat_q<Q4_K,128>` kernel contains 512 `IMMA.16832` and zero `HMMA`/`IDP.4A`;
+   `mul_mat_q<Q6_K,128>` contains 512 `IMMA.16816`, zero `HMMA`/`IDP.4A`. Both are int8
+   tensor-core MMA. `IDP.4A` appears in the binary only in the decode `mul_mat_vec_q` GEMV
+   kernels (bandwidth-bound, appropriate there).
+
+Consequence: llama's prefill GEMM mechanism is int8 tensor cores, whose ceiling is ~2x the fp16
+tensor pipe. Its Q4_K GEMM kernels run at ~157 TMAC/s effective (3.14e12 Q4_K MACs / 20.0 ms),
+above our fp16 mma ceiling of 127.7 TMAC/s. **The section 1a "fp16 mma may be strictly
+stronger" hypothesis is rejected**: on raw GEMM rate, llama's mechanism is 25-40% faster than
+ours can be at 100% fp16-mma issue. The lever still stands (routing: our routes run at 6-24
+TFLOPS = 3-12 TMAC/s), but the honest ceiling for the fp16 mechanism is below llama's measured
+14,250 tok/s, and parity on prefill is not reachable with fp16 mma alone.
+
+### 8.3 Revised ceiling table (fp16 mechanism, this campaign's mechanism)
+
+| case | GEMM busy at 100% R | realistic 55-85% R | + attention/norms/quant (~9ms, llama's measured non-GEMM busy) | pp512 tok/s |
+| --- | ---: | ---: | ---: | ---: |
+| fp16 overlay, all GEMMs | 32.8 ms | 38.6-59.6 ms | 47.6-68.6 ms | 7.5-10.8k |
+
+The P1 gate ("pp512 moves to the 10k+ tok/s regime") sits at the top of this band; it is
+reachable only if the promoted candidates land near the top of the README's real-kernel range
+(55-85% of R). We will report the measured number either way. Decode parity (L4) is independent
+and bandwidth-bound, so it is the realistic "beat/parity" target.
+
+### 8.4 llama same-run busy/wall (P3's criterion, replacing the withdrawn 92%)
+
+Same binary, same session family, one pp512 pass each (`/tmp/llama_pp512_singlerun.nsys-rep`,
+`/tmp/llama_pp512_warm.nsys-rep`):
+
+| run | wall (llama-bench json) | GPU busy (trace kernel sum) | busy/wall |
+| --- | ---: | ---: | ---: |
+| cold, `--no-warmup -r 1` | 75.38 ms | 32.95 ms (1,186 kernels) | 0.437 |
+| warm, default warmup `-r 1` | 43.96 ms | 32.93 ms (1,186 kernels) | 0.749 |
+| warm averaged, 5 reps (`-fa 1` re-run, 2026-08-01) | 37.76 ms | ~32.95 ms (busy invariant) | 0.872 |
+
+GPU busy per pass is constant (~32.95 ms) across runs; only wall moves. P3's criterion becomes:
+warm prefill wall tracks GPU busy within 1.15-1.35x (llama's measured envelope), not the
+withdrawn 92% single number. Ours today: 4.3s wall vs 961 ms busy = 4.5x.
+
+### 8.5 The ~675 to_mv calls per kernel are named (P3's characterization step)
+
+`/tmp/nv_exec_profile.log` (cProfile, warm run): 1,352,164 `to_mv` calls, all reached from
+`hcq.py:285 wait()` via `HCQSignal.value` -> `cpu_view().view()` -> `HcqView.__init__` ->
+`to_mv(addr, nbytes).cast(fmt)`. 71 waits, ~19k polls each: **one fresh memoryview + cast per
+poll iteration of the `wait()` spin loop**, not per-buffer copies in dispatch. NV never sleeps
+(`NVSignal._sleep` only sleeps after 200ms elapsed and `NVKIface.sleep` is a no-op), so `wait()`
+busy-spins at Python speed (~2.5 us/poll -> ~3.4s of the 4.39s wall). The `_sleep` +
+`time.perf_counter` pair (1.35M each) is the same loop.
+
+B3's shape decision: this is not "batch the copies"; it is "stop polling with fresh
+memoryviews". Options, in order of size: (a) cache the `HcqView` per signal so each poll is one
+plain memory read (~0.1 us), (b) actually block instead of spin (the NV uvm semaphore has a
+real wait primitive the `sleep` stub does not use), (c) reduce wait count via graph replay of
+the whole prefill schedule (B3's original shape). (c) is still the endgame; (a)+(b) remove the
+constant factor that makes (c) necessary at 71 waits.
