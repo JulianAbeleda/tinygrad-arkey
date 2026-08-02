@@ -130,6 +130,19 @@ def q4k_g3_lanemap_gemv_kernel(rows:int, k:int, lanes:int=WARP):
 Q6K_POS_EXTENT = 16
 Q6K_VOCAB_SCALAR_REDUCE_MIN_ROWS = 131072
 
+# Per-target coop row_tile values. This is route-config data, not an emitter branch: the emitter
+# below is one shared lowering, and a target without a measured row keeps the safe default (the
+# AMD gfx1100 machine-search value). NV:sm_120 measured 2026-08-02 on the RTX 5090 (P1 sweep,
+# d512 fixed-depth): vocab coop 397.4 -> 330.1us, down coop 49.7 -> 35.5us, decode tok/s
+# 163.2 -> 172.4, token sha unchanged.
+Q6K_COOP_ROW_TILE_BY_TARGET: dict[tuple[str, str], int] = {("NV", "sm_120"): 2}
+Q6K_COOP_ROW_TILE_DEFAULT = 4
+
+
+def q6k_coop_row_tile_for_target(backend: str | None, architecture: str | None) -> int:
+  """Resolve the coop row_tile for a resolved (backend, architecture) fact pair."""
+  return Q6K_COOP_ROW_TILE_BY_TARGET.get((backend, architecture), Q6K_COOP_ROW_TILE_DEFAULT)
+
 
 def _f16_half(half:UOp) -> UOp: return half.cast(dtypes.uint16).bitcast(dtypes.float16).cast(dtypes.float32)
 

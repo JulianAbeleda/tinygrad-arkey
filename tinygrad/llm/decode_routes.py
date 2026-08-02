@@ -5,7 +5,8 @@ from typing import Callable, Any
 
 from tinygrad import Device, Tensor, UOp, dtypes, getenv
 from tinygrad.llm.decode_kernels import (emit_q6k_gemv_kernel, emit_q6k_vocab_scalar_reduce_kernel,
-  q4k_g3_lanemap_gemv_kernel, q6k_spec_for_role, q6k_vocab_scalar_reduce_eligible)
+  q4k_g3_lanemap_gemv_kernel, q6k_coop_row_tile_for_target, q6k_spec_for_role,
+  q6k_vocab_scalar_reduce_eligible)
 from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeCapability, FlashDecodeRouteConfig,
   flash_decode_capability_from_renderer, flash_decode_live_split_block_tile, flash_decode_target_promoted)
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
@@ -104,14 +105,23 @@ class _Q6KDecodeCandidate:
     if not isinstance(linear.out_features, int) or linear.out_features <= 0: return None
     parts = int(getattr(linear, "parts", 1))
     if parts < 1: return None
-    use_coop = parts == 1 and linear.out_features % self.row_tile == 0
+    # Per-target route value (decode_kernels.py): the target facts ride on the installed
+    # primitive's admission record (TG3, resolved at install time) -- never re-opened here.
+    capability = getattr(getattr(linear, "route_admission", None), "capability", None)
+    backend, architecture = getattr(capability, "backend", None), getattr(capability, "architecture", None)
+    row_tile = q6k_coop_row_tile_for_target(backend, architecture)
+    use_coop = parts == 1 and linear.out_features % row_tile == 0
     return _LinearDecodeBinding(self.candidate_id, self.route_id, self.quant, self.target, self.batch, self.tokens,
-                                linear.in_features, linear.out_features, parts, self.row_tile, use_coop)
+                                linear.in_features, linear.out_features, parts, row_tile, use_coop)
 
   def execute(self, linear:Any, x:Tensor, binding:_LinearDecodeBinding) -> Tensor:
     x_vec = x[:, 0, :].reshape(binding.K).cast(dtypes.float16).contiguous()
+    capability = getattr(getattr(linear, "route_admission", None), "capability", None)
+    target = f"{capability.backend}:{capability.architecture}" if capability is not None and \
+      getattr(capability, "backend", None) is not None and getattr(capability, "architecture", None) is not None \
+      else self.target
     spec = q6k_spec_for_role(binding.N, binding.K, parts=binding.parts, row_tile=binding.row_tile,
-                            use_coop=binding.use_coop, opts=linear.opts)
+                            use_coop=binding.use_coop, opts=linear.opts, target=target)
     gemv_program = KernelProgram(binding.route_id, f"{binding.candidate_id}.gemv",
       KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emit_q6k_gemv_kernel(spec),
       output_spec=OutputSpec((binding.N, spec.partial_axis_extent), dtypes.float32))
