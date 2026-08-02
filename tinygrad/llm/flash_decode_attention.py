@@ -430,14 +430,21 @@ class FlashDecodeAdmission:
   authority -- unchanged from the pre-TG7 `supports()` shape check), capability (this file, read from
   renderer facts), and promotion (ModelRoutePlan.target_promoted, tinygrad/llm/model_route_plan.py --
   BoltBeam-sourced route policy, TG3's authority, reused rather than restated). `reason` gives each rejection
-  a distinct, observable label instead of the pre-TG7 silent `device == "AMD"` fallback."""
+  a distinct, observable label instead of the pre-TG7 silent `device == "AMD"` fallback.
+  `epilogue_fusion_promoted` is the L1 decode epilogue-fusion answer (closed default, resolved by
+  decode_routes.py bind from model_route_plan.decode_epilogue_fusion_promoted; it gates the fused combine/
+  epilogue variants only -- the legacy `admitted` route is unchanged by it)."""
   shape_ok: bool
   capability: FlashDecodeCapability
   target_promoted: bool
+  epilogue_fusion_promoted: bool = False
 
   @property
   def admitted(self) -> bool:
     return self.shape_ok and self.capability.satisfied and self.target_promoted
+
+  @property
+  def fusion_admitted(self) -> bool: return self.admitted and self.epilogue_fusion_promoted
 
   @property
   def reason(self) -> str | None:
@@ -465,8 +472,9 @@ class FlashDecodeRouteConfig:
     question this used to be ANDed with, split out into FlashDecodeAdmission above."""
     return (B, Hq, Hkv, Hd) == (1, self.query_heads, self.kv_heads, self.head_dim)
 
-  def evaluate(self, B:int, Hq:int, Hkv:int, Hd:int, capability:FlashDecodeCapability, target_promoted:bool) -> FlashDecodeAdmission:
-    return FlashDecodeAdmission(self.shape_ok(B, Hq, Hkv, Hd), capability, target_promoted)
+  def evaluate(self, B:int, Hq:int, Hkv:int, Hd:int, capability:FlashDecodeCapability, target_promoted:bool,
+               epilogue_fusion_promoted:bool=False) -> FlashDecodeAdmission:
+    return FlashDecodeAdmission(self.shape_ok(B, Hq, Hkv, Hd), capability, target_promoted, epilogue_fusion_promoted)
 
 
 FLASH_DECODE_G4 = FlashDecodeRouteConfig("attention_decode.flash_live_split", "decode_flash_live_split_g4_kvboth",

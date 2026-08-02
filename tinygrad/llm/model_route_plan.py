@@ -150,6 +150,26 @@ def load_qk_target_promotion(path:str) -> frozenset[Target] | None:
 
 _load_qk_target_promotion = load_qk_target_promotion
 
+def load_decode_epilogue_fusion_promotion(path:str) -> frozenset[Target]:
+  """Read the L1 decode epilogue-fusion promotion record (boltbeam.route_policy.v1, same schema family as
+  `load_qk_target_promotion`). CLOSED default, deliberately the inverse of TG3's "no record -> open": the
+  fused decode variants are additive emitter changes and must not move AMD/Metal admitted routes until each
+  target opts in with a measured record (l1-decode-plumbing-fusion-design-20260802.md section 5). A document
+  without `promoted_targets` -- or with an empty list -- promotes nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_EPILOGUE_FUSION_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-epilogue-fusion-route-policy.json"
+_DECODE_EPILOGUE_FUSION_PROMOTED_TARGETS: frozenset[Target] = load_decode_epilogue_fusion_promotion(_DECODE_EPILOGUE_FUSION_PROMOTION_RECORD)
+
+def decode_epilogue_fusion_promoted(target:Target) -> bool:
+  """Policy authority for the L1 decode epilogue-fusion route (closed default, see the loader above)."""
+  return target in _DECODE_EPILOGUE_FUSION_PROMOTED_TARGETS
+
 @dataclass(frozen=True)
 class PrimitiveRouteEntry:
   name:str; module_path:str; quant_label:str; rows:int; cols:int; role:str; parts:int; opts:tuple[str, ...]; family:str

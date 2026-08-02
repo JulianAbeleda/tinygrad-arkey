@@ -1,0 +1,6 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_epilogue_fusion",
+  "description": "L1 decode epilogue-fusion promotion record (decode-gap-per-target-lever-scope-20260802.md P4; l1-decode-plumbing-fusion-design-20260802.md section 5). Closed default: no target is promoted until the fused variants land and are measured on that target. AMD and Metal entries land only after their own runtime measurement; NV sm_120 is the campaign's measured opt-in and lands in the same commit as the first fused consumer (M2).",
+  "promoted_targets": []
+}

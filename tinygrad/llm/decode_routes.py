@@ -10,6 +10,7 @@ from tinygrad.llm.decode_kernels import (emit_q6k_gemv_kernel, emit_q6k_vocab_sc
 from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeCapability, FlashDecodeRouteConfig,
   flash_decode_capability_from_renderer, flash_decode_live_split_block_tile, flash_decode_target_promoted)
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
+from tinygrad.llm.model_route_plan import decode_epilogue_fusion_promoted
 from tinygrad.llm.qk_layout import Q4_K, Q6_K, QuantFormat
 from tinygrad.llm.route_selection import parse_route_mode
 
@@ -214,7 +215,8 @@ class _FlashDecodeCandidate:
       capability, target = _flash_decode_capability_and_target_for_device(device)
     else:
       target = (device.split(":", 1)[0].upper() if device else None, None)
-    admission = self.route.evaluate(B, Hq, Hkv, Hd, capability, flash_decode_target_promoted(route_plan, target))
+    admission = self.route.evaluate(B, Hq, Hkv, Hd, capability, flash_decode_target_promoted(route_plan, target),
+                                    decode_epilogue_fusion_promoted(target))
     if getenv("FLASH_DECODE_ADMISSION_DEBUG"):
       print(f"FLASH_DECODE_ADMISSION_DEBUG candidate={self.candidate_id} device={device} "
             f"admitted={admission.admitted} reason={admission.reason}")
