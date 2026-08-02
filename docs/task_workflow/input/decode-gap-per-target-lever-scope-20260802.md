@@ -543,3 +543,76 @@ resolved at bind time from the installed primitive's TG3 admission capability
 Measured after: vocab coop 330.1us (1.55 TB/s, 86% of ceiling), down coop 35.5us, d512 decode
 **163.5 -> 172.6 tok/s** (6.12 -> 5.80 ms/token), e2e growing-window decode 158.3 -> 166.8
 tok/s, all NV pins unchanged.
+
+---
+
+## 11. P2 + P3 results - L5 lanemap verdict, L2 partial verdict (2026-08-02)
+
+Same rig/protocol as section 10. Sweeps were in-process config patches only; no shared
+route row was edited. The fixed-depth token sha for every legal sweep row in this section
+is `9d6b3787ce...` (this harness: nmeas=20, reps=3; the sha is per-harness, like L4's
+`5662f1cd...` at nmeas=40).
+
+### L5 - SUBSTRATE verdict (q4k lanemap lanes sweep, no code change)
+
+Swept `Q4KGateUpLaneMap.lane_extent` = 32/64/128 in-process (relaxed the wave-32
+`LanePartition.validate` gate; the XOR-shuffle reduce ladder is wave-32, so lanes>32
+runs are timing-only with garbage output - the per-kernel time is the diagnostic).
+Median kernel us:
+
+| kernel | lanes=32 | lanes=64 | lanes=128 |
+| --- | ---: | ---: | ---: |
+| q4k_g3_lanemap_gemv_12288_4096 (gate/up, 72x) | 20.98 | 19.97 | 20.95 |
+| q4k_g3_lanemap_gemv_4096_4096 (q/o, 36x) | 9.36 | 8.72 | 9.28 |
+| q4k_g3_lanemap_gemv_4096_12288 (down, 18x) | 26.74 | 28.74 | 21.81 |
+| q4k_g3_lanemap_gemv_1024_4096 (k/v, 36x) | 4.86 | 4.28 | 4.19 |
+
+No class-wide win: gate/up - the 72x mass of the class - is flat across all three widths,
+and 64 lanes gains nothing anywhere. Only down (-18% at 128) and k/v (-14% at 128) move,
+and those shapes are a minority of the class time. Even the optimistic partial win would
+not move the class. Widening past WARP=32 requires a real cross-wave reduce (the wave-32
+staged shuffle ladder cannot extend), which is shared substrate, not the "small emitter
+generalization" the scope assumed. **L5 = SUBSTRATE; the lane-value hypothesis is
+falsified.** No code change.
+
+### L2 - partial route SUBSTRATE verdict (q6k opts sweep, no code change)
+
+The partial spec's ONLY free value knob is `opts` (forwarded to
+`KernelInfo.opts_to_apply`); `lane_extent`/`pos_axis`/`block_axis`/`reduction`/`storage`
+are validate-pinned. Swept installed `Q6KPrimitiveLinear.opts` on the 18 Q6_K k/v layers
+(`q6k_gen_partial_1024_4096_4`, parts=4), DEBUG=2 prime-token kernel time + d512 e2e:
+
+| opts | partial us | d512 tok/s |
+| --- | ---: | ---: |
+| `()` (no opts) | 45.25 | 159.9 |
+| `LOCAL:0:32` (installed policy row) | 17.15 | 172.97 |
+| `LOCAL:1:4` | 18.47 | 172.1 |
+| `LOCAL:0:64` | 21.68 | 170.2 |
+| `UPCAST:0:2` / `0:4` / `1:2` / `1:4` (+/- LOCAL) | CRASH: shared devectorizer `fold_expanded_index` AssertionError | - |
+| `UNROLL:0:2` / `0:4` (blk_part) | CRASH: same devectorizer AssertionError | - |
+| `UNROLL:0:8` (blk_part, under LOCAL) | KernelOptError: 8 can't divide the size-4 reduce | - |
+| `UNROLL:1:4` / `1:8` / `1:16` (pos) | nvcc fails: CUDA renderer emits `val50.y` on a scalar float | - |
+
+The expansion defects were proven backend-independent where it matters: rendering the
+partial route with `UPCAST:0:2` through HIPRenderer fails with the identical
+devectorizer AssertionError (compile-only, no ROCm), so the UPCAST defect is shared late
+codegen, not an NV row. `UNROLL:1:4` renders through HIPRenderer (src_len 23223) but
+fails nvcc on the CUDA arm, so the unrolled-reduce vectorization is an NV-renderer bug.
+Both are shared-code defects, i.e. substrate evidence under section 4's criterion.
+
+The legal rows show the installed machine-search value is already optimal: 17.15us at
+0.20 TB/s versus llama's v kernel 3.3us at 1.04 TB/s (5x). The route is structurally
+bound: 4096 threads (rows x parts) each serially reduce 4 blocks x 16 pos; llama's
+single-pass shape spreads the reduction over more threads. **L2 partial = SUBSTRATE**;
+the in-kernel single-pass variant (parts merged in-kernel, or the reduce split across
+threads) is the structural fix and is a separate scope - recorded here, not built. The
+other L2 item, the Q6_K down coop route, was already improved by L4's row_tile=2
+(35.5us vs llama 29.3us, 1.2x, values-saturated per the L4 sweep).
+
+Budget consequence: L2+L5's values-only headroom was capped at 0.92ms (section 8.1). The
+live values-only mass after these verdicts is only the coop-down residual
+(18 x 6.2us ~= 0.11ms, already values-saturated). The partial 0.25ms and the L5 class
+are now recorded as substrate; they remain recoverable only through the structural
+scopes (in-kernel single-pass partial, cross-wave lane map), which this campaign does
+not build. Section 8.2's end-state stands unchanged on its own terms, with the L2+L5
+line now understood as substrate-parked rather than values-open.
