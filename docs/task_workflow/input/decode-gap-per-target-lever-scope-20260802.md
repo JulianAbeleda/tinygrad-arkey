@@ -37,12 +37,18 @@ flash-decode rollout is already graph-replayed into 6 batches (`batched 32/64/12
 | vocab head | 0.54 ms | 0.304 ms | +0.24 ms |
 | node-sum total | 6.61 ms | 4.77 ms | +1.84 ms |
 
-**Evidence class warning (review, 2026-08-02).** Node-sum is not wall time and must not be
-substituted for it. For tinygrad, node-sum 6.61 ms > wall 6.12 ms > replay busy 5.83 ms; for
-llama, node-sum 4.77 ms > wall 4.07 ms. A serialized decode cannot contain more kernel-time
-than wall-time, so node-sum over-counts - by ~8% on our side and ~17% on llama's. Because it
-over-counts llama *more*, the node-sum delta (1.84 ms) is **smaller** than the real wall gap
-(6.12 - 4.07 = **2.05 ms**); 0.21 ms of the true gap is unattributed by this table.
+**Evidence class warning (review, 2026-08-02, corrected 2026-08-02).** Node-sum is not wall
+time and must not be substituted for it. For tinygrad, prime node-sum 6.61 ms > replay wall
+6.12 ms > replay busy 5.83 ms (prime node-sum over-counts replay wall by ~8%); for llama,
+node-sum 4.77 ms vs same-session wall 4.44 ms at 225 tok/s (over-count ~7.5%). The earlier
+17% figure for llama mixed sessions: 4.07 ms is P4's wall at 245.6 tok/s, a different run
+than the tg-trace session that produced node-sum 4.77. A serialized decode cannot contain
+more kernel-time than wall-time, so node-sum over-counts by roughly the same ~8% on both
+sides, and the class-level relative attribution is preserved. What is NOT licensed: the
+"0.21 ms unattributed" claim (2.05 - 1.84) subtracts a P4 same-session wall gap from a
+cross-session node-sum delta; both numbers are real, but they are different instruments and
+the difference is not attributable. The P4 paired wall gap (6.12 - 4.07 = 2.05 ms) stands on
+its own as the same-session gap.
 
 Per `structure/Development/coding-principles.md` ("Classify Evidence Before Fixing
 Mechanisms"), node-sum is licensed to prove *relative attribution between kernel classes*. It
@@ -217,12 +223,14 @@ support. See section 8 for the revised end-state after the per-lever corrections
   row sweeps QG/stage_width/split_size; AMD G4 row unchanged. Diagnostic: sweep per the
   protocol below; if no row reaches ~3.2us per kernel, the whole-cache tile structure itself
   is substrate (it is the same tile AMD admits, so the structure fix lifts both).
-- Recovery: **~0.039ms at d512** (corrected, review 2026-08-02); grows with depth (cache reads
-  scale). The earlier ~0.15ms counted llama's `flash_attn_ext_vec` (3.17us) but dropped its
-  `combine` kernel (3.35us), which llama does pay: llama's real per-layer cost is 6.52us
-  against our 7.6us, so the delta is 1.08us x 36 = 0.039ms, not 4.4us x 36. The flash *class*
-  delta is +0.17ms, but the remaining ~0.13ms sits in flash kernels this lever does not touch -
-  sizing those is a separate diagnostic, not part of L3.
+- Recovery: **~0.16ms at d512** (corrected, review 2026-08-02); grows with depth (cache reads
+  scale). Corrected back up from 0.039ms: our 7.6us is score-only, and we pay our own combine
+  (`flash_fused_gmax_combine`, 3.6us x 36 = 0.13ms) at parity with llama's (3.35us x 36).
+  Apples-to-apples per layer: our flash is 7.6 + 3.6 = 11.2us vs llama 3.17 + 3.35 = 6.52us.
+  The score-kernel delta is 7.6 - 3.17 = 4.43us x 36 = **0.16ms**; the combine delta is
+  0.25us x 36 = 0.009ms. The flash *class* delta +0.17ms is therefore ~all score kernel, and
+  the earlier ~0.15ms estimate was essentially right; the "remaining ~0.13ms in untouched
+  kernels" was our own combine cost, already at parity.
 - Controls: decode render equality; NV digits/sha.
 - Open question: at d512 the kernel is latency-bound on tiny data; is the sweep protocol
   (QG in {1,2,4}, stage_width in {1,2,4,8}, split_size in {16,32,48}) the right frame, or is
@@ -352,41 +360,42 @@ open questions to settle:
 
 ## 8. Revised budget after the review corrections (2026-08-02)
 
-### 8.1 L2 + L5 exceed their shared class delta
+### 8.1 L2 + L5 versus the GEMV class - cap is the bare-GEMV delta, not the incl-quantize delta
 
-L2 (~0.63ms) and L5 (~0.2-0.3ms) both draw from the **GEMV (non-vocab, incl quantize)** class,
-whose total delta is **+0.44 ms**. Together they claim 0.83-0.93 ms - roughly 2x the entire gap
-in the class they share. Recovering that would mean finishing ~0.5 ms *ahead* of llama on GEMV.
+L2 (~0.63ms) and L5 (~0.2-0.3ms) both draw from the **GEMV (non-vocab, incl quantize)** class.
+The class table says +0.44 ms (ours 4.16 vs llama 3.72), but the label hides the asymmetry:
+llama's 3.72 ms includes its `quantize_q8_1` kernels (0.482 ms across 217 nodes), which
+tinygrad does not pay. The like-for-like comparison excludes quantize from both sides: llama's
+bare GEMV class is 3.543 - 0.304 (vocab) = **3.24 ms** vs ours 4.16 ms = **0.92 ms** of
+headroom. L2+L5 (0.83-0.93 ms) fits under that cap. "Finishing ~0.5 ms ahead of llama on
+GEMV" is exactly the quantize asymmetry: llama pays q8_1 activation quantization as separate
+kernels, tinygrad's kernels consume packed storage directly. That is the point of the fused
+storage, not an arithmetic violation.
 
-The 60-80% haircut in section 4 does not fix this, because the over-subscription is
-class-specific, not global: 0.93 x 0.8 = 0.74 ms, still 1.7x the class delta.
-
-Named cause: the class is labelled *incl quantize*, so llama's 3.72 ms carries its q8_1
-quantize kernels, which tinygrad does not pay. L2 and L5 compare against llama's **bare** GEMV
-kernel times (29.3us, 3.3us, 37.9us), which exclude quantize. They are targeting a per-kernel
-number llama does not achieve end-to-end.
-
-This is the evidence-class error again: per-kernel trace times are licensed to prove *this
-kernel is slower than that kernel*; they are not licensed to sum into a class-level wall-time
-recovery when the two classes contain different work. **Cap L2+L5 jointly at the 0.44 ms class
-delta until a quantize-excluded class comparison exists.**
+This is the evidence-class discipline, applied correctly: per-kernel trace times are licensed
+to compare like work. The cap that matters is **0.92 ms (quantize-excluded)**, and L2+L5 stay
+under it. A measured quantize-excluded comparison (a DEBUG=2 trace of our GEMV class and a
+node-filtered llama trace excluding `quantize_q8_1`) would harden it; that measurement is the
+settling check, and it is cheap to run on the 5090.
 
 ### 8.2 Revised end-state
 
 | lever | claimed | evidenced |
 | --- | ---: | ---: |
 | L1 plumbing | 0.9-1.0 ms | 0.9-1.0 ms (consistent with the 1.05 ms class delta) |
-| L2 + L5 GEMV | 0.83-0.93 ms | <= 0.44 ms (class cap, 8.1) |
-| L3 flash score | 0.15 ms | 0.039 ms |
+| L2 + L5 GEMV | 0.83-0.93 ms | <= 0.92 ms (bare-GEMV cap, 8.1) |
+| L3 flash score | 0.15 ms | 0.16 ms (score delta 4.43us x 36; combine at parity) |
 | L4 vocab | 0.2 ms | 0.093 ms values-only / 0.24 ms with substrate |
-| **gross** | **2.05-2.25 ms** | **~1.47-1.62 ms** |
-| after 60-80% haircut | 1.23-1.80 ms | **~0.88-1.30 ms** |
-| end-state ms/token | 4.32-4.89 | **~4.82-5.24** |
+| **gross** | **2.05-2.25 ms** | **~1.98-2.18 ms** (values-only L4) / 2.13-2.33 with L4 substrate |
+| after 60-80% haircut | 1.23-1.80 ms | **~1.19-1.75 ms** |
+| end-state ms/token | 4.32-4.89 | **~4.37-4.93 ms** (values-only) / 4.26-4.84 with L4 substrate |
 
-Against llama's 4.07 ms that is decode at roughly **1.18-1.29x**, not parity. Still a real
-result and still worth doing - but it is a different plan from one that reaches 4.0-4.2 ms, and
-the sequencing follows from it: **L1 is now ~60-70% of the realistic total**, so the SUBSTRATE
-work belongs early, not last. Section 6's ordering (L1 as P4) should be revisited.
+Against llama's 4.07 ms that is decode at roughly **1.07-1.21x** - parity is back in reach at
+the optimistic end (4.37 vs 4.07 = 1.07x), not guaranteed, and not the old "not parity,
+1.18-1.29x" verdict. L1 remains the largest single lever at ~45-50% of the realistic total
+(0.9-1.0 of 1.98-2.18), so the SUBSTRATE work still belongs early; section 6's ordering
+(L1 as P4) should be revisited. The 4.0-4.2 ms target is not supported by this budget; the
+honest target is 4.37-4.93 ms with the values-only stack.
 
 Every number in this table is node-sum-derived and inherits section 1's over-count. It is a
 corrected *upper* bound, not a forecast.
