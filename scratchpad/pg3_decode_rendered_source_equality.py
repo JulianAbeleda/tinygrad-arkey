@@ -63,9 +63,12 @@ def _q4k_ast(rows: int, k: int) -> UOp:
   return q4k_g3_lanemap_gemv_kernel(rows, k)(out, words, x)
 
 
-def _q6k_gemv_ast(rows: int, k: int, *, parts: int = 1, use_coop: bool = True) -> UOp:
-  spec = q6k_spec_for_role(rows, k, parts=parts, row_tile=4, use_coop=use_coop)
-  partials = UOp.placeholder((rows, spec.partial_axis_extent), dtypes.float32, 0)
+def _q6k_gemv_ast(rows: int, k: int, *, parts: int = 1, use_coop: bool = True,
+                  reduction: str = "external_sum", row_tile: int = 4) -> UOp:
+  spec = q6k_spec_for_role(rows, k, parts=parts, row_tile=row_tile, use_coop=use_coop, reduction=reduction)
+  extent = 1 if reduction == "in_kernel" else spec.partial_axis_extent
+  shape = (rows,) if extent == 1 else (rows, extent)
+  partials = UOp.placeholder(shape, dtypes.float32, 0)
   halfs = UOp.placeholder((rows * (k // Q6_K_BLOCK_ELEMS) * Q6K_HALFWORDS_PER_BLOCK,), dtypes.uint16, 1)
   x = UOp.placeholder((k,), dtypes.float16, 2)
   return emit_q6k_gemv_kernel(spec)(partials, halfs, x)
@@ -106,6 +109,7 @@ KERNELS = [
   ("q6k_gen_coop_4096_12288", "down", lambda: _q6k_gemv_ast(4096, 12288)),
   ("q6k_gen_coop_151936_4096", "vocab", lambda: _q6k_gemv_ast(151936, 4096)),
   ("q6k_gen_partial_1024_4096_4", "k/v", lambda: _q6k_gemv_ast(1024, 4096, parts=4, use_coop=False)),
+  ("q6k_gen_coop_4096_12288_inkernel", "down", lambda: _q6k_gemv_ast(4096, 12288, reduction="in_kernel", row_tile=2)),
   ("q6k_vocab_scalar_reduce_151936_4096", "vocab", _q6k_vocab_reduce_ast),
   ("flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128", "G4", _flash_tile_ast),
   ("flash_fused_gmax_combine_32_128", "G4", _flash_combine_ast),
