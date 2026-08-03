@@ -64,8 +64,8 @@ deviations). The copies around the norms are present and measurable:
 | --- | ---: | ---: | ---: |
 | `rmsnorm_native_1_4096` | 0 | 73 | +73 |
 | `E_32_32_4_0a5eb0ac...` (input copy class) | 36 | 108 | +72 |
-| `E_32_32_4_f6721331...` (output materialization class) | 0 | 72 | +72 |
-| `E_32_32_4_86a23e1a...` | 0 | 36 | +36 |
+| `E_32_32_4_f6721331...` | 0 | 72 | +72 (same role as default's `E_32_32_4_f14a5cc0...` x72: the consumer-owned GEMV-activation materialization on the norm output; renamed by the producer change, not a new copy) |
+| `E_32_32_4_86a23e1a...` | 0 | 36 | +36 (per-layer boundary class, same family as M3's `E_32_32_4_86a2` copies) |
 | `E_32_32_4_fab82d40...` | 72 | 73 | +1 |
 
 The task protocol's no-copy census (norm family ~145 kernels with no copy/materialization
