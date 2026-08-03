@@ -129,10 +129,31 @@ def test_typed_abi_folds_contiguous_request_to_view_with_zero_materialization():
   assert _schedule_names(_combine_program(), _gemv_program()) == [COMBINE_F16, GEMV]
 
 
+def test_real_model_fp32_pipeline_chain_folds_to_view_with_zero_materialization():
+  # The real o-proj chain (model.py:704 with fp32 decode q + the prelude): the fp16
+  # combine AFTER is upcast to fp32, permuted/reshaped, then the consumer prelude casts
+  # back to fp16 and asks for contiguous. The fp16->fp32->fp16 pair is exact, so under
+  # the typed ABI the contiguous request folds to a view of the AFTER with no copy.
+  assert _real_schedule_names(_combine_program(), _gemv_program()) == [COMBINE_F16, GEMV]
+
+
 def test_without_typed_abi_the_copy_is_materialized():
   names = _schedule_names(_combine_program(), _gemv_program(opt_in=False))
   assert names == [COMBINE_F16, "test", GEMV]
   linear, _ = _schedule_linear(_combine_program(), _gemv_program(opt_in=False))
+  copies = _copy_calls(linear)
+  assert len(copies) == 1
+  bufs = [s.buf_uop for s in copies[0].src[1:]]
+  assert bufs[0].shape == bufs[1].shape == (Hq * Hd,)
+  assert bufs[0].dtype == bufs[1].dtype == dtypes.float16
+
+
+def test_real_model_chain_without_abi_still_materializes_the_copy():
+  # Fail-closed contrast on the real chain: without the typed ABI the fp32 pipeline
+  # materializes the fp16 activation (the E_32_32_4_3b0fcfbc-shaped copy class).
+  assert _real_schedule_names(_combine_program(), _gemv_program(opt_in=False)) == \
+    [COMBINE_F16, "test", GEMV]
+  linear, _ = _real_schedule_linear(_combine_program(), _gemv_program(opt_in=False))
   copies = _copy_calls(linear)
   assert len(copies) == 1
   bufs = [s.buf_uop for s in copies[0].src[1:]]
@@ -155,6 +176,53 @@ def test_typed_abi_binds_the_gemv_to_the_combine_after_buffer():
   assert len(gemv_calls) == 1
   input_bufs = [s.buf_uop for s in gemv_calls[0].src[1:]]
   assert any(b is after.src[0] for b in input_bufs)
+
+
+def test_lossy_bf16_roundtrip_rejects_to_generic_abi():
+  # A bf16 intermediate between the casts is not the exact fp16->fp32->fp16 pair (bf16
+  # round trips are lossy); the validator must reject and the copy stays materialized.
+  partial = Tensor.empty(Hq * S * (Hd + 2), dtype=dtypes.float32)
+  out = execute_promoted_program(None, partial, program=_combine_program())
+  attn = out.reshape(1, Hq, 1, Hd).cast(dtypes.bfloat16).transpose(1, 2).reshape(1, 1, -1)
+  v = attn[:, 0, :].reshape(Hq * Hd).cast(dtypes.float16).contiguous()
+  words = Tensor.empty(Hq * Hd * Hq * Hd // 16, dtype=dtypes.uint32)
+  gemv_out = execute_promoted_program(None, words, v, program=_gemv_program())
+  linear, _ = gemv_out.linear_with_vars()
+  names = [getattr(getattr(u.src[0], "arg", None), "name", None) for u in linear.toposort()
+           if u.op is Ops.CALL]
+  assert names == [COMBINE_F16, "test", GEMV]
+
+
+def test_arithmetic_between_cast_pair_rejects_to_generic_abi():
+  # fp32 arithmetic between the upcast and the downcast changes values; the pair is not
+  # lossless, so the fold must reject and the copy stays materialized.
+  partial = Tensor.empty(Hq * S * (Hd + 2), dtype=dtypes.float32)
+  out = execute_promoted_program(None, partial, program=_combine_program())
+  attn = (out.reshape(1, Hq, 1, Hd).cast(dtypes.float32) + 1.0)
+  attn = attn.transpose(1, 2).reshape(1, 1, -1)
+  v = attn[:, 0, :].reshape(Hq * Hd).cast(dtypes.float16).contiguous()
+  words = Tensor.empty(Hq * Hd * Hq * Hd // 16, dtype=dtypes.uint32)
+  gemv_out = execute_promoted_program(None, words, v, program=_gemv_program())
+  linear, _ = gemv_out.linear_with_vars()
+  names = [getattr(getattr(u.src[0], "arg", None), "name", None) for u in linear.toposort()
+           if u.op is Ops.CALL]
+  assert names == [COMBINE_F16, "test", GEMV]
+
+
+def test_data_moving_permute_in_cast_pair_rejects_to_generic_abi():
+  # A non-identity movement between the two casts: the composed fp16 view is not an
+  # offset-0 reshape, so the fold must reject even though the cast pair is fp16->fp32->fp16.
+  partial = Tensor.empty(Hq * S * (Hd + 2), dtype=dtypes.float32)
+  out = execute_promoted_program(None, partial, program=_combine_program())
+  attn = out.reshape(1, Hq, 1, Hd).cast(dtypes.float32).permute(0, 3, 2, 1)
+  attn = attn.reshape(1, 1, -1)
+  v = attn[:, 0, :].reshape(Hq * Hd).cast(dtypes.float16).contiguous()
+  words = Tensor.empty(Hq * Hd * Hq * Hd // 16, dtype=dtypes.uint32)
+  gemv_out = execute_promoted_program(None, words, v, program=_gemv_program())
+  linear, _ = gemv_out.linear_with_vars()
+  names = [getattr(getattr(u.src[0], "arg", None), "name", None) for u in linear.toposort()
+           if u.op is Ops.CALL]
+  assert names == [COMBINE_F16, "test", GEMV]
 
 
 # ── fail-closed validator (scope section 4) ─────────────────────────────────
@@ -237,6 +305,25 @@ def test_gemv_function_ast_unchanged_under_typed_view():
     hashlib.sha256(repr(folded.key).encode()).hexdigest()
 
 
+def test_real_chain_gemv_function_ast_unchanged_under_typed_view():
+  # The fp32 pipeline chain must also leave the emitted o-proj GEMV byte-identical: the
+  # fold only changes the buffer binding, never the index math or buffer roles (scope 7).
+  def gemv_function(opt_in: bool):
+    partial = Tensor.empty(Hq * S * (Hd + 2), dtype=dtypes.float32)
+    out = execute_promoted_program(None, partial, program=_combine_program())
+    attn = out.reshape(1, Hq, 1, Hd).cast(dtypes.float32).transpose(1, 2).reshape(1, 1, -1)
+    v = attn[:, 0, :].reshape(Hq * Hd).cast(dtypes.float16).contiguous()
+    words = Tensor.empty(Hq * Hd * Hq * Hd // 16, dtype=dtypes.uint32)
+    gemv_out = execute_promoted_program(None, words, v, program=_gemv_program(opt_in=opt_in))
+    linear, _ = gemv_out.linear_with_vars()
+    for u in linear.toposort():
+      if u.op is Ops.CALL and getattr(getattr(u.src[0], "arg", None), "name", None) == GEMV:
+        return u.src[0]
+    raise AssertionError("GEMV call missing")
+  plain, folded = gemv_function(False), gemv_function(True)
+  assert plain.key == folded.key
+
+
 # ── decode_routes consumer wiring ───────────────────────────────────────────
 
 def _decode_binding() -> _LinearDecodeBinding:
@@ -268,6 +355,21 @@ def test_decode_routes_o_proj_opts_in_and_folds():
   assert _copy_calls(linear) == []
 
 
+def test_decode_routes_o_proj_folds_real_model_fp32_pipeline_chain():
+  # The decode_routes consumer wiring must fold the full real-model chain: the fp16
+  # combine AFTER upcast to fp32 (model.py:704), permuted/reshaped, then the prelude's
+  # cast back to fp16 + contiguous. No E_32_32_4_3b0fcfbc-shaped copy may be scheduled.
+  partial = Tensor.empty(Hq * S * (Hd + 2), dtype=dtypes.float32)
+  out = execute_promoted_program(None, partial, program=_combine_program())
+  attn = out.reshape(1, Hq, 1, Hd).cast(dtypes.float32).transpose(1, 2).reshape(1, 1, -1)
+  gemv_out = Q4K_DECODE_CANDIDATE.execute(_FakeQ4KLinear("attn_qo"), attn, _decode_binding())
+  linear, _ = gemv_out.linear_with_vars()
+  names = [getattr(getattr(u.src[0], "arg", None), "name", None) for u in linear.toposort()
+           if u.op is Ops.CALL]
+  assert COMBINE_F16 in names and GEMV in names
+  assert _copy_calls(linear) == []
+
+
 def test_decode_routes_attn_kv_keeps_generic_flat_buffer_abi():
   x = _attn_output_chain()
   out = Q4K_DECODE_CANDIDATE.execute(_FakeQ4KLinear("attn_kv", q4k_epi=True), x, _decode_binding())
@@ -286,6 +388,32 @@ def _schedule_linear(combine: KernelProgram, gemv: KernelProgram):
   x = out.reshape(1, Hq, 1, Hd).cast(dtypes.float16)
   x = x.transpose(1, 2).reshape(1, 1, -1)
   v = x[:, 0, :].reshape(Hq * Hd).cast(dtypes.float16).contiguous()
+  words = Tensor.empty(Hq * Hd * Hq * Hd // 16, dtype=dtypes.uint32)
+  gemv_out = execute_promoted_program(None, words, v, program=gemv)
+  return gemv_out.linear_with_vars()
+
+
+def _real_schedule_names(combine: KernelProgram, gemv: KernelProgram) -> list[str]:
+  partial = Tensor.empty(Hq * S * (Hd + 2), dtype=dtypes.float32)
+  out = execute_promoted_program(None, partial, program=combine)
+  attn = out.reshape(1, Hq, 1, Hd).cast(dtypes.float32).transpose(1, 2).reshape(1, 1, -1)
+  v = attn[:, 0, :].reshape(Hq * Hd).cast(dtypes.float16).contiguous()
+  words = Tensor.empty(Hq * Hd * Hq * Hd // 16, dtype=dtypes.uint32)
+  gemv_out = execute_promoted_program(None, words, v, program=gemv)
+  linear, _ = gemv_out.linear_with_vars()
+  names = []
+  for u in linear.toposort():
+    if u.op is Ops.CALL:
+      name = getattr(getattr(u.src[0], "arg", None), "name", None)
+      if name: names.append(name)
+  return names
+
+
+def _real_schedule_linear(combine: KernelProgram, gemv: KernelProgram):
+  partial = Tensor.empty(Hq * S * (Hd + 2), dtype=dtypes.float32)
+  out = execute_promoted_program(None, partial, program=combine)
+  attn = out.reshape(1, Hq, 1, Hd).cast(dtypes.float32).transpose(1, 2).reshape(1, 1, -1)
+  v = attn[:, 0, :].reshape(Hq * Hd).cast(dtypes.float16).contiguous()
   words = Tensor.empty(Hq * Hd * Hq * Hd // 16, dtype=dtypes.uint32)
   gemv_out = execute_promoted_program(None, words, v, program=gemv)
   return gemv_out.linear_with_vars()
