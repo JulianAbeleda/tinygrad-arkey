@@ -180,3 +180,147 @@ Priority, largest measured mass first, each additive and closed-gate:
 Path 2 moves to the prefill campaign (B3), where its evidence lives. The campaign's stated
 endpoint stays 195-210 tok/s at d512 (llama 245.6; like-for-like closer once llama's q8_1
 asymmetry is excluded).
+
+---
+
+## 9. Reviewer amendment for feedback (2026-08-02)
+
+Status: proposed correction, not implementation authority. This section is the canonical
+review amendment and supersedes sections 1-8 wherever the accounting, mechanism ownership,
+expected outcome, or sequencing differs. The HARD STOP remains in force.
+
+### 9.1 Reconciled M2 -> M3 accounting
+
+The name-level census explains the full `1021 -> 1093` kernel delta without assigning
+unchanged q/k work to only one side of the comparison:
+
+| changed component | M2 baseline | M2+M3 fused | delta |
+| --- | ---: | ---: | ---: |
+| replaced legacy norm work | 288 kernels, ~750.6us | 0 | -288 kernels |
+| fused norm kernels | 0 | 144 kernels, ~594.7us | +144 kernels |
+| norm input-boundary copies | 0 | 144 kernels, ~215.3us | +144 kernels |
+| downstream output materializations | 0 | 72 kernels, ~110.9us | +72 kernels |
+| **changed-component total** | **288 kernels, ~750.6us** | **360 kernels, ~920.9us** | **+72 kernels, ~+170.3us** |
+
+The whole-decode trace measures `+72` kernels and `+142us`; the difference from the
+per-name-median arithmetic is ordinary cross-run/kernel timing variation. The count identity
+is exact: `1021 - 288 + 360 = 1093`.
+
+The earlier `361 -> 288` family row mixed memberships. The 361-kernel legacy family also
+contains 72 q/k-adjacent E_ kernels and the final norm that remain in the fused trace, while
+the 288-kernel fused column counted only 144 fused norms plus 144 input copies. A like-for-like
+copy-free norm comparison is therefore either:
+
+- changed component: 288 legacy kernels / ~750.6us -> 144 fused kernels / ~594.7us; or
+- full logical family: 361 legacy kernels / ~876.5us -> approximately 217 kernels / ~718us
+  (144 fused norms + 72 retained q/k-adjacent kernels + final norm).
+
+Both views imply approximately **-144 launches and -0.16ms of node-sum**, not -216 launches
+and -0.28ms. Node-sum is not wall time; a first-order ~178 tok/s value is only directional and
+is not licensed as a promotion forecast. Path 1 may recover additional non-norm copies, but
+their count and time must be measured before a larger `+4-6%` claim is restored.
+
+### 9.2 What the llama trace proves
+
+llama proves the required externally visible topology: one RMSNorm kernel per norm, no
+adjacent norm copies, 145 norm nodes including the final norm. It does **not** decide whether
+tinygrad reaches that topology through a copy-free typed program boundary or through a
+scheduler-native lowering; either mechanism can produce the same graph shape. The M3
+non-landing proves the current opaque transport contract is uneconomic for this use, not that
+opacity by itself is disqualified.
+
+The reviewer preference is still Path 3 for the norm family, but only under the concrete
+semantic-lowering contract below. Path 1 remains a separate transport proposal justified by
+measured copy taxes, not by analogy to llama's internal implementation.
+
+### 9.3 Path 3 candidate contract - semantic RMSNorm lowering
+
+Tinygrad has no RMSNorm semantic/lowering today: `nn.RMSNorm` is the ordinary
+`square -> mean -> rsqrt -> multiply` Tensor expression. Path 3 must not be implemented as a
+decode/model-name special case in global `jit_lower`.
+
+Proposed contract for review:
+
+1. Represent RMSNorm once as a semantic operation carrying the reduction axis, epsilon,
+   input/output dtype, and optional affine weight.
+2. Preserve the current ordinary Tensor expression as the generic fallback for every
+   unadmitted shape/target.
+3. Add an admitted native lowering that produces one scheduler-owned kernel with the
+   reduction result consumed by its epilogue in-kernel. Admission is closed-default by
+   target, shape, dtype, and required shuffle/barrier capabilities; it is not keyed to a
+   model name.
+4. Keep decode and prefill promotion separate. A decode result does not authorize prefill;
+   each target/shape class needs its own correctness, occupancy, and performance evidence.
+5. Gate reduction order with isolation parity plus the fixed-depth token sha. The fallback
+   and native lowering share semantic tests so they cannot silently become two definitions of
+   RMSNorm.
+
+A genuinely generic reduction-result-to-epilogue fusion facility remains a possible later
+compiler project, but it has a broader reduction-level blast radius and is not implied by
+this norm scope.
+
+### 9.4 The 72 output materializations are an independent P0
+
+The output copies have a narrower mechanism than logical input views. `KernelProgram`
+allocates a flat output and execution returns an `AFTER` value; `_decode_rmsnorm` reshapes it.
+`has_buffer_identity()` follows `RESHAPE` but not `AFTER`, while `UOp.custom_kernel` preserves
+an exact `AFTER` but not `RESHAPE(AFTER)`. The downstream Q4K/Q6K routes additionally request
+`.contiguous()` on their activation inputs.
+
+Before changing the general opaque ABI, run a narrow output-identity P0:
+
+- prove which of buffer identity, the explicit consumer `.contiguous()`, or both owns
+  `E_32_32_4_3b0f`;
+- add a unit graph probe for contiguous `RESHAPE(AFTER)` and a decode census asserting the
+  exact 72-count delta;
+- keep the default flat-buffer transport unchanged; and
+- re-measure M3, but do not reopen it on this fix alone unless the full fixed-depth protocol
+  beats M2.
+
+Path 3 should naturally avoid this custom-output boundary if its scheduler-owned output has
+the same identity behavior as the legacy epilogue, but the census must prove that rather than
+assuming it.
+
+### 9.5 Path 1 and Path 2 disposition
+
+Path 1 becomes a separately justified, typed transport proposal. Before designing it, census
+the existing flash/GEMV input materializations by producer, consumer, shape, count, and time,
+and distinguish a contiguous view of an already produced buffer from a lazy producer that
+requires real computation. If the measured tax warrants a build, add a new opt-in input ABI
+mode to `KernelProgram`; do not change `custom_kernel`'s default flat-buffer contract.
+
+Path 2/B3 leaves the decode matrix. B3 owns the measured prefill wait/submit problem. Decode's
+5.83ms busy / 6.12ms wall bounds total non-GPU wall recovery at roughly 5% and shows that host
+launch is already amortized by graph replay. A device-side CUDA-graph node/launch-floor
+hypothesis would be a new lever requiring its own microbenchmark; it is not licensed by B3.
+
+### 9.6 Amended sequencing and outcome language
+
+1. Proceed with M4/M5 under their existing closed gates. Attribute approximately 0.4ms of
+   node-sum opportunity to their GEMV/flash epilogue scope, not the full +1.05ms plumbing
+   class.
+2. Run the narrow 72-copy output-identity P0 and record its independent verdict.
+3. Review the semantic RMSNorm contract above; only after approval, build Path 3 behind a
+   closed target/shape gate and measure d512/d2048/d4096 plus sha pins.
+4. Measure the non-norm flash/GEMV copy inventory before deciding whether Path 1 merits a
+   transport campaign.
+5. Continue the separately scoped GEMV-bandwidth, vocab, and flash work according to their
+   measured masses.
+
+The campaign's `195-210 tok/s` remains a **target**, not a forecast supported by this norm
+scope. Recompute any end-state forecast after M4/M5 and the corrected ~0.16ms norm hypothesis
+are measured in wall time; do not carry forward the old 0.9-1.0ms L1 arithmetic unchanged.
+
+### 9.7 Questions for feedback
+
+1. Accept the reconciled `-144 launches / ~-0.16ms node-sum` norm hypothesis as the planning
+   basis?
+2. Accept semantic RMSNorm + generic-expression fallback + closed native lowering as Path 3,
+   and reject a decode-specialized global `jit_lower` rule?
+3. Approve the 72-copy output-identity investigation as an independent P0?
+4. Approve M4/M5 first with an approximately 0.4ms node-sum claim, while Path 3 remains behind
+   its own review and measurement gate?
+5. Require a named non-norm copy census before Path 1 receives an implementation scope?
+
+HARD STOP. This amendment requests feedback only; it authorizes no implementation or route
+promotion.
