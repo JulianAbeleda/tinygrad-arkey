@@ -406,3 +406,17 @@ every other layer was closed: measured, recorded, reviewed.
   `mma_peak_cuda.cu`, `dp4a_peak_cuda.cu`, `l2_q6k_partial_sweep.cu`
 - Code facts: `tinygrad/llm/decode_kernels.py`, `tinygrad/renderer/cuda.py:48`,
   `tinygrad/codegen/__init__.py:275-305,373-374`
+
+---
+
+## 10. Amendment (2026-08-03, operator directive)
+
+The per-item HARD STOP language in sections 4 and 7 is LIFTED for this execution
+pass. Proceed through all three mechanism classes to completion: diagnostic
+microbench -> go/no-go -> implementation where a floor is cleared (additive route,
+per-target admission, legacy rows untouched) -> isolated same-session wall ->
+record. Stop only when a blocker leaves no named legal next step; in that case,
+record the blocker and stop. Parent review happens on the commits, not between
+items. All other bans in section 0 are unchanged: no q8_1 quantization pass, no
+promotion to `dev`/`exp`/`master`, no push by agents, user-owned artifacts
+untouched, no composed forecasts.
