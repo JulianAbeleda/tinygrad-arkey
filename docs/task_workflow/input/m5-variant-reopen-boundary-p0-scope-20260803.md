@@ -185,8 +185,11 @@ This scope authorizes no implementation and no record change. It is the variant-
 boundary P0 request for M5 only. A successful M5 P0 does NOT automatically reopen M3, M4, or
 Path 3; each route needs its own d512/d2048/d4096 wall and sha record (amendment section 4.1
 item 4). No route record is touched until the full section 5 gate passes, and even then the
-record change is a separate, subsequent decision. This document is docs-only; no code and no
-GPU use.
+record change is a separate, subsequent decision. The infrastructure (validator + typed
+ABI, closed-default) may land closed on its own, but the `decode_flash_combine_fusion`
+route may open ONLY with measured benefit at the section 5 gate - copy removal alone is not
+an opening criterion, and a wall regression fails the gate with the copy gone (section 5).
+This document is docs-only; no code and no GPU use.
 
 ## 9. References
 
