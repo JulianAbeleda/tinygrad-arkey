@@ -182,6 +182,10 @@ Path 2 moves to the prefill campaign (B3), where its evidence lives. The campaig
 endpoint stays 195-210 tok/s at d512 (llama 245.6; like-for-like closer once llama's q8_1
 asymmetry is excluded).
 
+WITHDRAWN (2026-08-03): the sentence above is superseded. `195-210 tok/s` is not a target
+or expected outcome; no composed decode endpoint is stated. The canonical forward
+authority is `nv-parity-and-beyond-forward-scope-20260803.md`.
+
 ---
 
 ## 9. Reviewer amendment for feedback (2026-08-02)
@@ -308,9 +312,11 @@ hypothesis would be a new lever requiring its own microbenchmark; it is not lice
 5. Continue the separately scoped GEMV-bandwidth, vocab, and flash work according to their
    measured masses.
 
-The campaign's `195-210 tok/s` remains a **target**, not a forecast supported by this norm
-scope. Recompute any end-state forecast after M4/M5 and the corrected ~0.16ms norm hypothesis
-are measured in wall time; do not carry forward the old 0.9-1.0ms L1 arithmetic unchanged.
+The campaign's `195-210 tok/s` was a **target**, not a forecast supported by this norm
+scope. WITHDRAWN as a target (2026-08-03): no end-state forecast is recomputed from this
+document; the canonical forward authority is
+`nv-parity-and-beyond-forward-scope-20260803.md`, and the old 0.9-1.0ms L1 arithmetic is
+not carried forward.
 
 ### 9.7 Questions for feedback
 
@@ -403,9 +409,10 @@ No Path 1 implementation scope before that census exists.
 2. Section 9.3's "no RMSNorm semantic today" is verified correct; the semantic-op precedent
    (attention) and the closed-record pattern (route_policy) are already in the repo and the
    contract should cite them.
-3. Section 9.6's endpoint discipline is accepted: 195-210 tok/s is a target, and any end-state
-   forecast is recomputed from wall measurements of M4/M5 plus the norm hypothesis, not carried
-   forward from the old L1 arithmetic.
+3. Section 9.6's endpoint discipline is accepted, with one 2026-08-03 amendment:
+   `195-210 tok/s` is no longer a target at all; any end-state forecast is recomputed
+   from wall measurements of landed pieces and the canonical forward authority is
+   `nv-parity-and-beyond-forward-scope-20260803.md`.
 
 No further questions from this side. The amended scope (9.1-9.6) plus this response is the
 working basis for M4/M5 sequencing and the Path 3 review.

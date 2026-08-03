@@ -6,6 +6,10 @@ Status: scoped, not implemented. Supersedes the lever list in
 `nv-performance-campaign-scope-20260801.md` section 14.5, which over-applied the AMD
 validation guardrail (see section 2 here for the retraction). Branch boundary:
 tinygrad `nvidia-bringup-20260731`. Does not authorize promotion to `dev`/`master`.
+FORWARD-SCOPE NOTE (2026-08-03): this document remains the lever evidence and verdict
+taxonomy; its endpoint expectations and ordering claims (section 6 "Endpoint
+expectation", section 8.2) are WITHDRAWN and superseded by
+`nv-parity-and-beyond-forward-scope-20260803.md`, the canonical forward authority.
 
 Bans for this scope: no `prefill_routes.py`, no dtype cleanup, no commits to
 `master`/`dev`/`exp`, and never commit the untracked scratchpads
@@ -345,9 +349,11 @@ Each piece is a separate commit with one owning prefix (`[nn]`, `[test]`, `[docs
 to `nvidia-bringup-20260731` only. No promotion to `dev`/`exp`/`master` is authorized by this
 scope.
 
-Endpoint expectation, stated up front: the re-measured stack targets 195-210 tok/s at d512
-vs llama's 245.6 (close to parity, not beating it); the last 10-15% sits in per-kernel q4k
-bandwidth on the lanemap path and is explicitly not claimed by this scope.
+Endpoint expectation (WITHDRAWN 2026-08-03): the earlier statement that "the re-measured
+stack targets 195-210 tok/s at d512" is no longer a target or expectation. No decode
+endpoint is stated by this document; the canonical forward authority is
+`nv-parity-and-beyond-forward-scope-20260803.md`, and no composed endpoint exists until
+isolated same-session wall measurements are landed.
 
 HARD STOP after this section. Nothing beyond this scope without review.
 
@@ -410,12 +416,12 @@ settling check, and it is cheap to run on the 5090.
 | after 60-80% haircut | 1.23-1.80 ms | **~1.19-1.75 ms** |
 | end-state ms/token | 4.32-4.89 | **~4.37-4.93 ms** (values-only) / 4.26-4.84 with L4 substrate |
 
-Against llama's 4.07 ms that is decode at roughly **1.07-1.21x** - parity is back in reach at
-the optimistic end (4.37 vs 4.07 = 1.07x), not guaranteed, and not the old "not parity,
-1.18-1.29x" verdict. L1 remains the largest single lever at ~45-50% of the realistic total
-(0.9-1.0 of 1.98-2.18), so the SUBSTRATE work still belongs early; section 6's ordering
-(L1 as P4) should be revisited. The 4.0-4.2 ms target is not supported by this budget; the
-honest target is 4.37-4.93 ms with the values-only stack.
+WITHDRAWN (2026-08-03): the conclusion drawn from this table - "decode at roughly
+1.07-1.21x, parity is back in reach" and "L1 remains the largest single lever... so the
+SUBSTRATE work still belongs early; section 6's ordering should be revisited" - is not a
+current expectation or ordering authority. The table remains as node-sum evidence only;
+no endpoint, L1-first ordering, or 0.9-1.0 ms lever claim survives from it. The canonical
+forward authority is `nv-parity-and-beyond-forward-scope-20260803.md`.
 
 Every number in this table is node-sum-derived and inherits section 1's over-count. It is a
 corrected *upper* bound, not a forecast.

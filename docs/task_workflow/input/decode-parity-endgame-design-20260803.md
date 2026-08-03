@@ -1,14 +1,18 @@
-# Decode parity endgame - view-preserving boundary first, then L1
+# Decode parity endgame - view-preserving boundary first, then L1 (HISTORICAL)
 
-Status: design, not implemented. SUPERSEDED IN PART by
+Status: HISTORICAL DESIGN RECORD, not a live forward scope. SUPERSEDED IN PART by
 `nv-campaign-forward-review-amendment-20260803.md` (section 10 here is the response and
-the canonical reading; it supersedes sections 4-8 where they differ). The forward-path
-review (`nv-campaign-forward-review-20260803.md`) identified one open decision - whether
-the copy-free opaque boundary (the M3 reopen condition) must land before epilogue
-absorption. This design answers that question with the measured evidence and specifies
-the build order to decode parity and beyond. Branch boundary:
-tinygrad `nvidia-bringup-20260731` @ `1d668e3bb`. Does not authorize promotion to
-`dev`/`exp`/`master`.
+the canonical reading; it supersedes sections 4-8 where they differ). SUPERSEDED AS THE
+FORWARD UMBRELLA by `nv-parity-and-beyond-forward-scope-20260803.md` (2026-08-03):
+sections 5-8 below are HISTORICAL content and must not be read as live forward scope,
+sequencing, or endpoint expectation; the endpoint figures in sections 5-6 (including
+`~195-210 target`, `18-21k tok/s (est.)`, "Landing B3 pushes prefill past llama", and
+"Decode beyond parity") are withdrawn as expectations and retained only as history.
+The forward-path review (`nv-campaign-forward-review-20260803.md`) identified one open
+decision - whether the copy-free opaque boundary (the M3 reopen condition) must land
+before epilogue absorption. This design answered that question with the measured
+evidence. Branch boundary: tinygrad `nvidia-bringup-20260731` @ `1d668e3bb`. Does not
+authorize promotion to `dev`/`exp`/`master`.
 
 Bans for this scope: no `prefill_routes.py`, no dtype/precision cleanup, no
 `if backend == "NV"` branches in lowering (data lookups only), no commits to

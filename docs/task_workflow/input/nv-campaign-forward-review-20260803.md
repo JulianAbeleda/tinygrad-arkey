@@ -3,6 +3,10 @@
 Status: review scope, response recorded. This document is the request-of-record;
 `nv-campaign-forward-review-amendment-20260803.md` is the response-of-record and
 supersedes sections 2-6 below wherever they differ (section 7 here is the reconciliation).
+FORWARD-SCOPE NOTE (2026-08-03): this document is review history; the canonical forward
+authority for parity and beyond-parity sequencing is
+`nv-parity-and-beyond-forward-scope-20260803.md`. Sections 2-3 below retain the
+superseded L1 arithmetic and broad "pp512+ parity" wording as historical text only.
 Records where the NV performance campaign stands after the decode-norm tail closed.
 Branch boundary: tinygrad `nvidia-bringup-20260731` @ `72dca8010`, pushed and in sync.
 Does not authorize promotion to `dev`/`exp`/`master`.
