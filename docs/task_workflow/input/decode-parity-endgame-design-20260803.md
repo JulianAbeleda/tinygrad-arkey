@@ -1,8 +1,10 @@
 # Decode parity endgame - view-preserving boundary first, then L1
 
-Status: design, not implemented. The forward-path review
-(`nv-campaign-forward-review-20260803.md`) identified one open decision - whether the
-copy-free opaque boundary (the M3 reopen condition) must land before L1 epilogue
+Status: design, not implemented. SUPERSEDED IN PART by
+`nv-campaign-forward-review-amendment-20260803.md` (section 10 here is the response and
+the canonical reading; it supersedes sections 4-8 where they differ). The forward-path
+review (`nv-campaign-forward-review-20260803.md`) identified one open decision - whether
+the copy-free opaque boundary (the M3 reopen condition) must land before epilogue
 absorption. This design answers that question with the measured evidence and specifies
 the build order to decode parity and beyond. Branch boundary:
 tinygrad `nvidia-bringup-20260731` @ `1d668e3bb`. Does not authorize promotion to
@@ -184,14 +186,21 @@ the fixed-depth protocol (d512/d2048/d4096, same-session llama rows pinned in
 
 ## 8. Sequencing and delivery
 
-1. `[codegen]` view-preserving opaque boundary + fail-closed admission + unit gates.
-2. `[nn]` reopen semantic RMSNorm through the view mode behind the closed record;
-   `[docs]` measured reopen record at d512/d2048/d4096 with sha pins.
-3. `[nn]` + `[test]` L1 epilogue absorption (M4/M5 re-measurement first, then the full
-   design's pieces), each additive and capability-gated.
-4. `[docs]` endgame measurement record vs the pinned llama rows; verdict: parity met or
-   not, per-lever attribution.
-5. B3 prefill host overhead as a separate scope with its AMD control.
+1. `[docs]` correct the state-of-record: parity protocol names M2 open, M3/M4/M5/Path 3
+   closed; "implement L1" language replaced by "redesign/reopen existing variants"
+   (amendment section 4.1 item 1).
+2. `[nn]` + `[test]` decompose M4 without changing default behavior: isolated census/wall
+   rows for residual-add, k/v fp16-output, and FFN-down variants; reject the current
+   SiLU/multiply prelude unless a new design proves the activation is computed once
+   (amendment section 2.3).
+3. `[codegen]` one minimal variant-reopen boundary P0, closed-default and
+   consumer-specific. M5 is the cleanest first probe (measured 1:1 cast-to-copy
+   substitution, zero confounding wall gain); scope it per amendment section 2.2's five
+   required items.
+4. `[nn]` + `[docs]` re-measure each reopened route independently at d512/d2048/d4096
+   with sha pins; no composition without isolated wall records.
+5. B3 prefill host overhead as an independent scope with its AMD control - NOT gated on
+   decode progress (amendment Q4).
 
 Each piece is one owning-prefix commit on `nvidia-bringup-20260731` only. No promotion
 to `dev`/`exp`/`master`.
@@ -212,3 +221,44 @@ to `dev`/`exp`/`master`.
    proceed in parallel given its AMD control requirement is independent?
 
 HARD STOP after this section. No implementation beyond this design until it is reviewed.
+
+---
+
+## 10. Response to the reviewer amendment (2026-08-03)
+
+The amendment (`nv-campaign-forward-review-amendment-20260803.md`) is accepted; this
+section is the response and supersedes sections 4-8 of this design wherever they differ.
+All five review questions are answered there (sections 2-3 of the amendment). Key
+reconciliations:
+
+1. **Lifecycle**: the nine L1 design questions are no longer the applicable gate; the
+   next decision is which existing CLOSED variant (M3/M4/M5/Path 3) earns a narrowly
+   scoped reopen, not whether to implement the original L1 design. This design's
+   section 4 is rewritten by amendment section 4.1 and is no longer a delivery sequence.
+2. **Boundary-first survives, reframed**: the amendment confirms per-emitter opt-in does
+   NOT solve transport (its section 2.2 table reproduces the same four measured
+   non-landings). The boundary work is renamed a **variant-reopen boundary P0** - not a
+   general Path-1 transport campaign, which remains NO-GO per the non-norm census. The
+   P0 must name producer/consumer/chain, copy class and variant-only existence, the
+   typed opt-in contract, the byte-identical legacy hash, and the fixed-depth wall+sha
+   gate (amendment section 2.2).
+3. **M4 decomposition accepted**: M4's +1264us/token is NOT explained by 126 copies
+   (~189us). The `ffn_down_fused` kernel computes `_silu_uop(gate)*up` inside the
+   per-row reduction (decode_kernels.py, the `idx` loop), recomputing the 12288-element
+   activation once per 4096 output row - the +~1075us residual. M4's combined record
+   stays closed; residual-add, k/v fp16-output, and FFN-down are measured separately, and
+   the current FFN-down prelude shape is rejected until a compute-once design exists
+   (amendment section 2.3).
+4. **Forecast withdrawn**: section 6's `0.9-1.0ms` and `1.07-1.21x` figures are
+   superseded, not conservative. The norm hypothesis stands at approximately -144
+   launches / -0.16ms node-sum (paths-forward section 9); no composed decode endpoint is
+   stated until each reopened component has an isolated same-session wall measurement.
+   `nv-decode-parity-final-20260802.md` (1.44x/1.46x/1.52x) remains the wall authority,
+   with the next evidenced wall lever in decode GEMV efficiency.
+5. **B3 is independent**: it is not sequenced behind decode (section 5's framing is
+   superseded); it may proceed under its own scope with the AMD control.
+
+The open questions in section 9 are answered by amendment sections 2-3; no further
+questions from this side. This design, as amended, does not authorize implementation;
+the next step is a variant-specific reopen scope with its settling command, legacy hash
+controls, correctness pins, and fixed-depth wall gate.

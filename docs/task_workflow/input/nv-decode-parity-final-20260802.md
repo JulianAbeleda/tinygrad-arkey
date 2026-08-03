@@ -4,12 +4,16 @@ Date: 2026-08-02 (measured 2026-08-03 04:20-04:30 UTC)
 Status: parity record for the decode-norm campaign tail. Same session, same model
 (Qwen3-8B-Q4_K_M), same RTX 5090 (sm_120), NVRTC-compiled CUDA kernels on the tinygrad side.
 No promotion is claimed by this record; it is the campaign's final wall-time comparison at
-d512/d2048/d4096 after M2/M3/M4/M5 and Path 3 all landed closed-default.
+d512/d2048/d4096 after M2/M3/M4/M5 and Path 3 all landed. Reproducible promotion state
+(correction per `nv-campaign-forward-review-amendment-20260803.md` section 2.5): M2's
+`decode_epilogue_fusion` record is OPEN for `NV:sm_120` (Q6K down-coop in-kernel merge);
+M3 norm, M4 Q4K epilogue, M5 combine, and Path 3 semantic RMSNorm are CLOSED. The baseline
+this record compares against is the M2-on state.
 
 ## Protocol
 
-- tinygrad: `nvidia-bringup-20260731` @ `19cff5c46`, default runtime (all promotion records
-  closed), `--no-fused-prefill` (HEAD's fused prefill attention is a broken AMD-loop-state ABI
+- tinygrad: `nvidia-bringup-20260731` @ `19cff5c46`, default runtime (M2 open for
+  NV:sm_120, M3/M4/M5/Path 3 closed), `--no-fused-prefill` (HEAD's fused prefill attention is a broken AMD-loop-state ABI
   on NV and is excluded from the NV baseline), fixed-depth prompt `[1]*depth`, chunk 32,
   temperature 0.0, nmeas=20, reps=3, median tok/s.
 - llama.cpp: CUDA build `ac4cddeb0` (`build-cuda`), `llama-bench -ngl 99 -fa 1 -pg 0,10
