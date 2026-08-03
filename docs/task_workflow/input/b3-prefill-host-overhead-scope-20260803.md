@@ -32,33 +32,55 @@ The llama envelope (campaign doc section 8.4): warm wall tracks GPU busy within
 **1.15-1.35x** (llama warm avg: 37.76 ms wall vs ~32.95 ms busy = 1.15x). Ours at 1.9x is
 above that envelope, so P3's criterion is not met.
 
-The to_mv tax (`/tmp/nv_exec_profile.log`, cProfile, warm run): **1,352,164 `to_mv` calls,
-all reached from `hcq.py:285 wait()`** via `HCQSignal.value` -> `cpu_view().view()` ->
-`HcqView.__init__` -> `to_mv(addr, nbytes).cast(fmt)` (current code:
-`hcq.py:262` `value` property, `hcq.py:18` `HcqView.__init__`). 71 waits, ~19k polls each:
-**one fresh memoryview + cast per poll iteration of the `wait()` spin loop**, not per-buffer
-copies in dispatch. NV never sleeps (`NVSignal._sleep` at `ops_nv.py:27-31` only sleeps after
-200 ms elapsed, and `NVKIface.sleep` at `ops_nv.py:567` is `pass`), so `wait()` busy-spins at
-Python speed, ~2.5 us/poll -> ~23.7 ms of the 44-46 ms wall. The `_sleep` +
-`time.perf_counter` pair (1.35M each) is the same loop.
+The polling mechanism, verified in code: `HCQSignal.value`
+(`tinygrad/runtime/support/hcq.py:262`) builds `cpu_view().view(0, 8, 'Q')` fresh on every
+poll, and `MMIOInterface.__init__` (`hcq.py:18`) creates a new `to_mv(addr,
+nbytes).cast(fmt)` per call; NV never sleeps (`NVSignal._sleep` at `ops_nv.py:27-31` only
+after 200 ms, `NVKIface.sleep` at `ops_nv.py:567` is `pass`), so `wait()` busy-spins at
+Python speed. The per-poll cost and poll count ON THE TUNED SCHEDULE ARE NOT MEASURED YET;
+the historical cProfile figures (1,352,164 `to_mv` calls, 71 waits x ~19k polls, ~2.5
+us/poll) come from the PRE-TUNING 4.39 s run (`/tmp/nv_exec_profile.log`) and must not be
+reused to size or name the cause on the 44-46 ms schedule (correction, section 1.1).
 
 Structure of the wall: `wait()` CPU time (23.7 ms) tracks GPU busy (24.1 ms), so the waits
 are mostly overlapped with execution; the **non-overlapped host submit cost is wall - busy =
-~20-22 ms across 10 submits (~2 ms each)** (campaign doc section 11.2).
+~20-22 ms across 10 submits (~2 ms each)** (campaign doc section 11.2). The split of that
+residual between submit latency and unmeasured polling cost is not yet established.
 
 Why B3 is the last prefill lever: the fp16-path busy ceiling is **512/24.1 ms = 21.2k tok/s,
 above llama's 14,250** (same-session P5: 14,468.4). The promoted prefill path already reaches
-0.77x-1.05x of llama at pp512-4096 (pp2048 measured above llama). The entire remaining
-pp512 gap vs llama is this host factor. B3 is a host-side runtime build, not a kernel.
+0.77x-1.05x of llama at pp512-4096 (pp2048 measured above llama). The remaining pp512 gap
+vs llama is the host factor (1.9x wall/busy vs llama's 1.15-1.35x envelope); its internal
+cause decomposition is pending the same-run measurement in section 1.1. B3 is a host-side
+runtime build, not a kernel.
+
+## 1.1 Correction - re-characterization on the tuned schedule (2026-08-03)
+
+Codex review correction: do not name the cause with figures from the old 4.39 s run. The
+historical profile (`/tmp/nv_exec_profile.log`, 1,352,164 `to_mv` calls, ~2.5 us/poll) was
+captured on the PRE-TUNING schedule; the tuned schedule's 44-46 ms wall runs 8 replayed
+graph groups with 10 waits, and no same-run poll instrumentation exists for it. The three
+measured rows that DO stand for the tuned schedule are the ones in section 1: wall 44-46
+ms, busy 24.1 ms, wait() CPU 23.7-23.8 ms, all same-session.
+
+Before any fix shape is chosen or any cause is named, the probe must measure, in the SAME
+run on the tuned schedule: (a) poll count per wait and total (count the spin iterations);
+(b) exclusive polling cost (time inside `HCQSignal.value`, excluding the rest of
+`wait()`); (c) submission latency (per-submit host cost, e.g. time inside the submit path
+per graph group); and (d) the wall-minus-busy residual split between (b), (c), and
+overlap. Section 4.1 gains these instruments. The fix-shape ordering in section 2 is
+unchanged in spirit but its "(a)/(b) may not cut wall" argument now rests on (d), not on
+the old per-poll arithmetic.
 
 ## 2. Fix shapes, ranked (campaign doc sections 8.5 and 11.3)
 
 In order of size:
 
-1. **(a) Cache the `HcqView` per signal.** Build the `cpu_view().view(0, 8, 'Q')` once per
-   signal and reuse it across polls, so each poll is one plain memory read (~0.1 us instead
-   of ~2.5 us). Smallest blast radius: touches only the signal value/timestamp read path in
-   shared HCQ code.
+1. **(a) Cache the signal view per wait.** Build `cpu_view().view(0, 8, 'Q')` once per
+   signal and reuse it across polls, so each poll is one plain memory read instead of a
+   fresh `to_mv` + cast; the per-poll delta is measured by instrument (b), not assumed.
+   Smallest blast radius: touches only the signal value/timestamp read path in shared HCQ
+   code.
 2. **(b) Real blocking wait on the NV uvm semaphore.** Replace the sleep stub with the actual
    wait primitive the uvm semaphore exposes, so `wait()` blocks instead of spinning at Python
    speed. Larger blast radius than (a) (driver-facing, timeout/fault semantics) and requires
@@ -101,16 +123,23 @@ guardrail.
 
 ## 4. Measurement protocol
 
-### 4.1 Same-session warm pp512 wall + busy + wait-time, before and after
+### 4.1 Same-session warm pp512 wall + busy + wait-time + poll/submit breakdown, before and after
 
-Each of the three instruments from section 1, run as a before/after pair in the same session
-family on the production tuned schedule, on each target:
+Each of the instruments below, run as a before/after pair in the same session family on the
+production tuned schedule, on each target:
 
 | instrument | pattern | reports |
 | --- | --- | --- |
 | wall | `/tmp/measure_warm_prefill.py` | steady-state passes_s entries (last two, after the one-time 1.9s graph instantiation) |
 | busy | `/tmp/measure_busy_debug2.py` (`DEBUG=2` + `GlobalCounters.time_sum_s`) | 8 graph groups, ms |
 | wait() CPU time | `/tmp/probe_warm2.py` (HCQSignal.wait monkeypatch) | total ms across the 10 waits, pass2/pass3 |
+| poll count per wait / total | same probe, counting spin iterations in `wait()` | polls per wait and per pass |
+| exclusive polling cost | same probe, timing `HCQSignal.value` only | ms across the pass, per-poll median |
+| submission latency | submit-path monkeypatch (per graph group) | us per submit, total ms |
+| wall-minus-busy residual | wall - busy - wait overlap | split between polling, submit, overlap |
+
+The first run of these instruments establishes the tuned-schedule baseline that replaces
+the withdrawn pre-tuning figures; no cause is named and no shape is chosen before it runs.
 
 ### 4.2 Llama envelope as the criterion
 
