@@ -23,9 +23,9 @@ from operator import mul
 from typing import Callable
 
 from tinygrad import Tensor
-from tinygrad.dtype import DType
+from tinygrad.dtype import DType, dtypes
 from tinygrad.helpers import getenv
-from tinygrad.uop import Ops
+from tinygrad.uop import GroupOp, Ops
 from tinygrad.uop.ops import UOp, graph_rewrite
 
 
@@ -174,13 +174,39 @@ def _is_pure_contiguous_view(chain: UOp) -> bool:
   return rewritten.op is Ops.INDEX and rewritten.src[1].op is Ops.RANGE
 
 
+def _cancel_lossless_fp16_roundtrip(chain: UOp) -> tuple[UOp | None, str]:
+  """Cancel a lossless fp16->fp32->fp16 cast pair over pure movement legs (the real
+  o-proj chain: model.py:704 upcasts the fp16 combine output to fp32 because decode q is
+  fp32, then the prelude casts back). fp16->fp32->fp16 is exact for every fp16 value, so
+  the composed fp16 movement chain is a view of the AFTER. Returns ``(chain, None)`` on
+  success, else ``(None, reason)``; a lossy shape (bf16 round trips, arithmetic between
+  the casts, non-identity movement) rejects back to the generic flat-buffer ABI."""
+  if chain.op is not Ops.CAST or chain.dtype != dtypes.float16: return None, "request chain is not an fp16 cast"
+  outer, base_cast = chain.src[0], chain.src[0].base
+  if base_cast.op is not Ops.CAST or base_cast.dtype != dtypes.float32: return None, "outer view leg does not bottom out at an fp32 cast"
+  inner = base_cast.src[0]
+  if inner.dtype != dtypes.float16 or inner.base.op is not Ops.AFTER or inner.base.dtype != dtypes.float16:
+    return None, "inner view leg is not an fp16 view of an fp16 AFTER"
+  ops: list[tuple[Ops, object, tuple[UOp, ...]]] = []
+  while outer.op in GroupOp.Movement: ops.append((outer.op, outer.arg, outer.src[1:])); outer = outer.src[0]
+  if outer is not base_cast: return None, "outer view leg is not a pure movement chain"
+  return reduce(lambda cur, op: UOp(op[0], cur.dtype, (cur,) + op[2], op[1]), reversed(ops), inner), None
+
+
 def _validated_typed_view(uop: UOp, request: TypedViewRequest, program: KernelProgram) -> tuple[UOp | None, str]:
   """M5 typed-boundary fail-closed validator (scope sections 3.3 and 4). Returns the producer
   AFTER node when every check passes, else ``(None, reason)``; a rejection keeps the generic
   flat-buffer ABI, which is byte-identical (the consumer simply materializes as before)."""
   # (b) the request must be a contiguous() request over a movement-only view chain
   if uop.op is not Ops.CONTIGUOUS: return None, "request is not a contiguous() request"
-  chain = uop.src[0]
+  # (b-cont) cancel a lossless fp16->fp32->fp16 cast pair over pure movement legs. The
+  # pair is exact for every fp16 value; it exists only because decode q is fp32, so the
+  # model upcasts the fp16 combine output at model.py:704 before the consumer casts back.
+  # On success the remaining chain is the composed fp16 view of the AFTER and every
+  # subsequent check runs unchanged on it; on failure the original chain (with its real
+  # cast) is kept, which the checks below reject as not a pure fp16 view of the AFTER.
+  cancelled = _cancel_lossless_fp16_roundtrip(uop.src[0])[0]
+  chain = cancelled if cancelled is not None else uop.src[0]
   if chain.base.op is not Ops.AFTER: return None, "view base is not an opaque program AFTER"
   # (a) the request chain must be a pure row-major view: dtype/numel preserved, no permute/stride/pad
   if uop.dtype != request.dtype: return None, "request dtype does not match the view request"
