@@ -128,3 +128,55 @@ record flips.
    story as non-optional per design doc section 6 and sequence one of Path 1/3 before M4?
 
 HARD STOP after this section. No implementation on any path until this scope is reviewed.
+
+---
+
+## 8. Correction and llama-informed priority (2026-08-02)
+
+Reconciling this scope against the llama trace (`decode-gap-per-target-lever-scope-20260802.md`
+section 1) changes two claims and the sequencing. This section supersedes sections 3 and 6
+where they disagree.
+
+### 8.1 Path 2 is a prefill lever, not a decode lever (correction)
+
+Decode is 95% GPU-busy (5.83ms busy of 6.12ms wall at d512) and the flash-decode rollout is
+already graph-replayed into 6 batches (`batched 32/64/128/256/512/29` = 1021 programs/token) -
+the B3 replay mechanism is in place for decode. The per-kernel host-cost ceiling for decode is
+therefore ~5%, not the "order +10-20%" stated in section 3. The 840x per-kernel / 1.9x
+wall-busy evidence is the PREFILL prime path (24.1ms busy / 44-46ms wall, 1.35M to_mv calls),
+where B3 remains open. Path 2 stays a live lever for prefill; it is demoted for decode.
+
+### 8.2 llama's shape argues for Path 3 (generic norm), not Path 1
+
+llama's graph has no opaque boundary and no norm copy tax: RMSNorm is one generic kernel per
+norm (`rms_norm_f32`, 145 nodes, 1.3-3.4us class) - exactly the shape Path 3 (scheduler-native
+in-kernel norm) produces, and exactly the 145-kernel end-state the design doc already targets.
+llama does NOT keep a two-kernel reduce+epilogue pair, and it does not pay a contiguous copy to
+read its norm input. The M3 opaque emitter was the wrong shape for the norm family
+specifically: it introduced a toll booth llama does not have. Path 1 remains useful only for
+consumers whose inputs are non-identity views (flash/gemv), which is a separate question.
+
+### 8.3 llama-informed priority
+
+llama's advantage decomposes as: plumbing +1.05ms (no separate add/silu kernels; fused w1w3),
+GEMV bandwidth +0.44ms (Q6_K 1.4 TB/s vs our 0.82/0.2; k/v 1.04 vs 0.2), vocab +0.24ms (single
+mmq 303.75us vs our ~540us chain), flash +0.17ms (3.17+3.35us vs 7.6+3.6us per layer). Two
+asymmetries cut the other way: llama pays q8_1 quantization (217 nodes, 0.482ms) that we do
+not, and llama's per-kernel times (1.3-3.4us) are the same league as ours (1.6-3.9us) - the gap
+is count and bandwidth, not launch economics.
+
+Priority, largest measured mass first, each additive and closed-gate:
+
+1. M4/M5 epilogue absorption (the +1.05ms plumbing class; llama's "no separate add/silu"
+   shape). Independent of the norm decision; this is the biggest single next lever.
+2. Path 3 - generic in-kernel norm (the norm half of that class; llama's `rms_norm_f32` shape,
+   no copies, all targets). Path 1 only if a later measurement shows flash/gemv view consumers
+   also pay a material copy tax.
+3. L2/L5 GEMV bandwidth (+0.44ms; llama mmq blocks are 128 threads vs our lanes=32, Q6_K at
+   1.4 TB/s) - diagnostic microbench first, per the substrate trichotomy.
+4. L4 vocab substrate fusion (+0.24ms; scalar reduce + scatter into the coop kernel).
+5. Flash tile (+0.17ms; 7.6 vs 3.17us) - values/occupancy first.
+
+Path 2 moves to the prefill campaign (B3), where its evidence lives. The campaign's stated
+endpoint stays 195-210 tok/s at d512 (llama 245.6; like-for-like closer once llama's q8_1
+asymmetry is excluded).
