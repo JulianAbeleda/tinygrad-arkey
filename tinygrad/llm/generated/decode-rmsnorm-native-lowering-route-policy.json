@@ -1,0 +1,6 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_rmsnorm_native_lowering",
+  "description": "Path 3 semantic RMSNorm native-lowering promotion record (path3-semantic-rmsnorm-task-20260802.md). CLOSED default: the semantic marker lowers to ONE scheduler-owned kernel only for a target with a measured fixed-depth d512/d2048/d4096 win vs the M2 decode baseline behind it (census: norm family ~145 kernels with NO copy/materialization kernels; token sha 9d6b3787... and first token 151936 pinned). Distinct mechanism and record from M3's opaque decode_norm_fusion (measured non-landing: 1021 -> 1093 kernels, +142us from boundary copies). No target is promoted yet; the machinery is exercised by unit tests and a force-open measurement probe.",
+  "promoted_targets": []
+}

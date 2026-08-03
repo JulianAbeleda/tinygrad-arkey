@@ -302,8 +302,15 @@ class RMSNorm:
   def _norm(self, x:Tensor) -> Tensor: return x * (x.square().mean(-1, keepdim=True) + self.eps).rsqrt()
 
   def __call__(self, x:Tensor) -> Tensor:
-    x = self._norm(x.float()).cast(x.dtype)
-    return x if self.weight is None else x * self.weight
+    normed = self._norm(x.float()).cast(x.dtype)
+    out = normed if self.weight is None else normed * self.weight
+    # Path 3 semantic RMSNorm: the marker is created ONLY when a load-time
+    # promotion record opened this norm's route (decode-norm-fusion-paths-
+    # forward-20260802.md section 9.3). The ordinary graph above is always
+    # the marker's fallback source; prefill shapes are rejected here too.
+    if self.weight is not None and getattr(self, "_rmsnorm_native_promoted", False):
+      return out._semantic_rmsnorm(x, out, self.weight, self.eps)
+    return out
 
 from tinygrad.uop.ops import UOp, KernelInfo, Ops, AxisType
 def _embedding_bwd(grad_emb:UOp, call:UOp) -> tuple:

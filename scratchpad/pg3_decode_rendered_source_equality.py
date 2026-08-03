@@ -137,6 +137,20 @@ def _rmsnorm_ast(rows: int, dim: int, *, warps: int, out_dtype) -> UOp:
   return emit_decode_rmsnorm_kernel(spec)(out, x, w)
 
 
+def _rmsnorm_native_ast(rows: int, dim: int, *, warps: int) -> UOp:
+  """Path 3 semantic lowering (rangeify.py lower_rmsnorm_semantic): the scheduler-owned
+  kernel is built from the marker's x/weight/out dtypes, so this mirrors the model's
+  fp32 residual stream with fp32 weights (nn.RMSNorm over x.float(), model.py:1093)."""
+  spec = DecodeRMSNormSpec(rows=rows, dim=dim, eps=1e-6, warps_per_row=warps,
+                           x_dtype=dtypes.float32, weight_dtype=dtypes.float32,
+                           out_dtype=dtypes.float32, native=True)
+  numel = rows * dim
+  out = UOp.placeholder((numel,), spec.out_dtype, 0)
+  x = UOp.placeholder((numel,), spec.x_dtype, 1)
+  w = UOp.placeholder((dim,), spec.weight_dtype, 2)
+  return emit_decode_rmsnorm_kernel(spec)(out, x, w)
+
+
 # Campaign shapes/roles (nv-performance-campaign-scope-20260801.md section 14.1):
 # gate/up 12288x4096, q/o 4096x4096, down 4096x12288, k/v 1024x4096; Q6_K vocab head 151936.
 KERNELS = [
@@ -160,6 +174,9 @@ KERNELS = [
   ("decode_rmsnorm_1_4096", "norm", lambda: _rmsnorm_ast(1, 4096, warps=16, out_dtype=dtypes.float16)),
   ("decode_rmsnorm_32_128", "norm", lambda: _rmsnorm_ast(32, 128, warps=1, out_dtype=dtypes.float32)),
   ("decode_rmsnorm_8_128", "norm", lambda: _rmsnorm_ast(8, 128, warps=1, out_dtype=dtypes.float32)),
+  # Path 3 semantic RMSNorm: distinct scheduler-owned kernel (rmsnorm_native_*); the M3
+  # decode_rmsnorm_* rows above are untouched and stay byte-identical.
+  ("rmsnorm_native_1_4096", "norm", lambda: _rmsnorm_native_ast(1, 4096, warps=16)),
 ]
 
 

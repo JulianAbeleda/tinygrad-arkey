@@ -155,6 +155,9 @@ class Ops(FastEnum):
   # semantic attention boundary. This is tensor-graph only and is lowered by
   # rangeify either to a fused implementation or its explicit fallback src.
   ATTENTION = auto()
+  # semantic RMSNorm boundary. Same contract as ATTENTION: src[0] is the
+  # ordinary fallback graph and rangeify lowers the marker fail-closed.
+  RMSNORM = auto()
 
   # multi-output reduce slot access: REDUCE_SLOT(composite_reduce, i) returns slot i
   REDUCE_SLOT = auto()

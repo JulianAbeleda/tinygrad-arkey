@@ -235,6 +235,26 @@ def decode_norm_fusion_promoted(target:Target) -> bool:
   """Policy authority for the L1 M3 fused decode RMSNorm route (closed default, measured non-landing)."""
   return target in _DECODE_NORM_FUSION_PROMOTED_TARGETS
 
+def load_decode_rmsnorm_native_lowering_promotion(path:str) -> frozenset[Target]:
+  """Read the Path 3 semantic RMSNorm native-lowering promotion record (boltbeam.route_policy.v1,
+  same schema family as `load_decode_norm_fusion_promotion`). CLOSED default: a document without
+  `promoted_targets` -- or with an empty list -- promotes nothing. The semantic marker lowers to a
+  scheduler-owned kernel only for a target with a measured fixed-depth win behind it
+  (path3-semantic-rmsnorm-task-20260802.md section 3); decode evidence never authorizes prefill."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_RMSNORM_NATIVE_LOWERING_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-rmsnorm-native-lowering-route-policy.json"
+_DECODE_RMSNORM_NATIVE_LOWERING_PROMOTED_TARGETS: frozenset[Target] = load_decode_rmsnorm_native_lowering_promotion(_DECODE_RMSNORM_NATIVE_LOWERING_PROMOTION_RECORD)
+
+def decode_rmsnorm_native_lowering_promoted(target:Target) -> bool:
+  """Policy authority for the Path 3 semantic RMSNorm native-lowering route (closed default)."""
+  return target in _DECODE_RMSNORM_NATIVE_LOWERING_PROMOTED_TARGETS
+
 @dataclass(frozen=True)
 class PrimitiveRouteEntry:
   name:str; module_path:str; quant_label:str; rows:int; cols:int; role:str; parts:int; opts:tuple[str, ...]; family:str

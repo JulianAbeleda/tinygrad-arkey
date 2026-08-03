@@ -316,6 +316,10 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
         # src[0] is the ordinary, semantically identical fallback result. The
         # remaining sources are the explicit Q/K/V/(optional mask) inputs.
         return self.src[0]._shape if len(self.src) else None
+      case Ops.RMSNORM:
+        # src[0] is the ordinary fallback result; the remaining sources are
+        # the explicit x and optional affine weight inputs.
+        return self.src[0]._shape if len(self.src) else None
       case Ops.STACK:
         if len(self.src) == 0: return ()
         if isinstance(self.dtype, PtrDType):
@@ -2067,6 +2071,20 @@ class AttentionSpec(NamedTuple):
   # the selected path; unsupported targets keep the ordinary fallback.
   attention_grid: AttentionGridSpec|None = None
   attention_context: SharedAttentionCandidateContext|None = None
+
+
+class RMSNormSpec(NamedTuple):
+  """Immutable semantics for an RMSNorm operation before scheduler lowering.
+
+  src[0] of Ops.RMSNORM is the ordinary, semantically identical fallback
+  result; src[1] is the input x and src[2] is the optional affine weight.
+  The arg carries only scalar/layout facts so substitution cannot lose a
+  tensor dependency (path3-semantic-rmsnorm-task-20260802.md section 2).
+  """
+  dim: int
+  eps: float
+  out_dtype: Any
+  affine: bool = True
 
 
 @dataclass(frozen=True)

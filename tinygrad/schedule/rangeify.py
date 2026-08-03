@@ -2,7 +2,7 @@ from dataclasses import dataclass, field, replace
 import itertools
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace, Invalid
 from tinygrad.uop.ops import PatternMatcher, UPat, Ops, UOp, resolve, GroupOp, _substitute, KernelInfo, ParamArg, ScheduleHints, NativeAttentionRequest
-from tinygrad.uop.ops import graph_rewrite, sint, AxisType, BottomUpGate, profile_matches, identity_element, AccumulatorSlot, CompositeReduce, CompositeInputSpec, CompositeTileCarrier, AttentionSpec, NativeRowSoftmaxRepackSpec, composite_reduce_provenance
+from tinygrad.uop.ops import graph_rewrite, sint, AxisType, BottomUpGate, profile_matches, identity_element, AccumulatorSlot, CompositeReduce, CompositeInputSpec, CompositeTileCarrier, AttentionSpec, RMSNormSpec, NativeRowSoftmaxRepackSpec, composite_reduce_provenance
 from tinygrad.uop.symbolic import symbolic
 from tinygrad.helpers import prod, all_same, getenv, dedup, all_int, DEBUG, SPLIT_REDUCEOP, DEBUG_RANGEIFY, VIZ, MAX_KERNEL_BUFFERS
 from tinygrad.helpers import PCONTIG, FLOAT16, OPENPILOT_HACKS, Context, argsort, partition, get_single_element
@@ -180,6 +180,61 @@ def lower_attention_semantic(att:UOp) -> UOp:
 
 pm_attention_semantic = PatternMatcher([
   (UPat(Ops.ATTENTION, name="att"), lower_attention_semantic),
+])
+
+def lower_rmsnorm_semantic(att:UOp) -> UOp:
+  """Fail-closed semantic RMSNorm lowering (path3-semantic-rmsnorm-task-20260802.md).
+
+  Mirrors ``lower_attention_semantic``: the marker is the sole eligibility
+  boundary and ``src[0]`` is the ordinary fallback. For admitted decode
+  shapes the lowering builds ONE fused kernel (``rmsnorm_native_*``) whose
+  reduction feeds its epilogue in-kernel, bound through the proven
+  custom-kernel transport; every other shape/device/dtype keeps the ordinary
+  source unchanged. Buffer-backed inputs bind with no copy; lazy producer
+  values (the decode activation chains) materialize one contiguous input copy
+  per call -- the measured M3-class boundary tax that keeps this route
+  non-landing (see the Path 3 measurement record).
+  """
+  assert isinstance(att.arg, RMSNormSpec)
+  spec = att.arg
+  x, w = att.src[1], att.src[2]
+  # Admission is re-checked here (fail-closed), independently of the marker
+  # creation gate: only decode-shaped contiguous rows, fp16/fp32, affine.
+  if x.shape is None or not all_int(x.shape) or len(x.shape) == 0: return att.src[0]
+  dim = spec.dim
+  if dim < 32 or dim % 32: return att.src[0]
+  if len(x.shape) not in (1, 2, 3): return att.src[0]
+  rows = prod(x.shape[:-1])
+  if not isinstance(rows, int) or rows < 1 or rows > 32: return att.src[0]
+  # The fused kernel reads the producer's buffer through one flat (numel,) view.
+  # That read is only correct for a contiguous, buffer-backed activation; a
+  # PERMUTE (q/k head slices) or any movement chain would make the flat base
+  # index the wrong lanes, so those stay on the ordinary graph (fail-closed).
+  if not (x.op is Ops.MEMORY_SEMANTIC or x.has_buffer_identity()): return att.src[0]
+  if x.dtype not in (dtypes.float32, dtypes.float16): return att.src[0]
+  if att.dtype not in (dtypes.float32, dtypes.float16): return att.src[0]
+  device = x.device
+  if not isinstance(device, str): return att.src[0]
+  numel = rows * dim
+  from tinygrad.llm.decode_kernels import DecodeRMSNormSpec, emit_decode_rmsnorm_kernel
+  # 256 elements per warp is the measured occupancy sweet spot for the
+  # single-row 4096 shape (512 threads, 8 elems/lane); smaller norms stay at
+  # one warp per row (same policy as the M3 opaque emitter).
+  warps = max(1, min(16, dim // 256))
+  kspec = DecodeRMSNormSpec(rows=rows, dim=dim, eps=spec.eps, warps_per_row=warps,
+                            x_dtype=x.dtype, weight_dtype=w.dtype, out_dtype=att.dtype,
+                            x_rank=1, target=device, native=True)
+  out_buf = UOp.new_buffer(device, numel, att.dtype)
+  # Bind through the custom-kernel transport exactly like the M3 opaque path.
+  # A manual kernel.call with a RESHAPE-over-lazy-producer arg crashes the
+  # symbolic pass (`bad reshape: () -> (4096,)` when the producer collapses),
+  # so the transport's CONTIGUOUS boundary is the scheduler-stable binding.
+  x_arg = x.reshape(numel).contiguous()
+  outs = UOp.custom_kernel(out_buf, x_arg, w, fxn=emit_decode_rmsnorm_kernel(kspec))
+  return outs[0].reshape(att.shape)
+
+pm_rmsnorm_semantic = PatternMatcher([
+  (UPat(Ops.RMSNORM, name="att"), lower_rmsnorm_semantic),
 ])
 
 def lower_scoped_value_semantic(value:UOp) -> UOp:
@@ -1011,7 +1066,7 @@ def _get_kernel_graph(sink:UOp) -> UOp:
   # Attention may only be lowered from its explicit semantic marker. The
   # previous broad ADD-REDUCE matcher was unsound: ordinary reductions must
   # always retain their original semantics.
-  tsink = graph_rewrite(tsink, pm_attention_semantic+pm_scoped_reduce_semantic, name="attention_semantic")
+  tsink = graph_rewrite(tsink, pm_attention_semantic+pm_rmsnorm_semantic+pm_scoped_reduce_semantic, name="attention_semantic")
 
   # convert movement ops to ranges
   tsink, rctx = run_rangeify(tsink, bool(DEBUG_RANGEIFY))

@@ -42,7 +42,7 @@ from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OU
                                            runtime_input, runtime_output,
                                            runtime_persistent, runtime_scratch)
 from tinygrad.llm.model_route_plan import (build_model_route_plan, decode_norm_fusion_promoted,
-  decode_q4k_epilogue_fusion_promoted)
+  decode_q4k_epilogue_fusion_promoted, decode_rmsnorm_native_lowering_promoted)
 from tinygrad.llm.prefill_candidate_runtime import decode_prefill_graph_candidate_set, automatic_promoted_prefill_graph_policy
 from tinygrad.llm.physical_memory_ledger import AllocationOwner, bind_allocation_owner
 from tinygrad.uop.ops import Ops, resolve
@@ -1399,6 +1399,17 @@ class Transformer:
     _q4k_epi_promoted = decode_q4k_epilogue_fusion_promoted((_norm_cap.backend, _norm_cap.architecture))
     model._decode_q4k_epilogue_fusion_promoted = _q4k_epi_promoted
     for _b in model.blk: _b._decode_q4k_epilogue_fusion_promoted = _q4k_epi_promoted
+    # Path 3 semantic RMSNorm: per-norm marker flag resolved ONCE from the same
+    # load-entry facts. CLOSED default (decode-rmsnorm-native-lowering-route-
+    # policy.json, empty promoted_targets); nn.RMSNorm.__call__ reads the flag
+    # and additionally rejects prefill shapes, so no prefill marker can exist.
+    _rmsnorm_native_promoted = decode_rmsnorm_native_lowering_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_rmsnorm_native_promoted = _rmsnorm_native_promoted
+    for _b in model.blk:
+      for _name in ("attn_norm", "ffn_norm", "attn_q_norm", "attn_k_norm"):
+        _norm = getattr(_b, _name, None)
+        if _norm is not None: _norm._rmsnorm_native_promoted = _rmsnorm_native_promoted
+    model.output_norm._rmsnorm_native_promoted = _rmsnorm_native_promoted
     nn.state.load_state_dict(model, state_dict, verbose=False, consume=True, realize=False)  # NOTE: rope_freqs.weight (32,) is unused
     if _norm_promoted:
       # Materialize the packed norm weights once at load (~600KB total fp16) so the fused decode

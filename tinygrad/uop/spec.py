@@ -397,6 +397,12 @@ spec_tensor = PatternMatcher([
    lambda x: hasattr(x.arg, 'scale') and len(x.src) == ((5 if x.arg.kv_block else 4) + int(x.arg.mask_present))
    and x.dtype == x.src[0].dtype == x.arg.output_dtype),
 
+  # RMSNORM keeps a normal fallback plus explicit x/weight dependencies until
+  # rangeify selects a lowering (path3-semantic-rmsnorm-task-20260802.md).
+  (UPat(Ops.RMSNORM, name="x"),
+   lambda x: hasattr(x.arg, 'dim') and len(x.src) == (3 if x.arg.affine else 2)
+   and x.dtype == x.src[0].dtype == x.arg.out_dtype),
+
   # COPY. TODO: this should not have allow_any_len, but something is adding ranges
   (UPat(Ops.COPY, name="copy", src=(UPat.var("x"), UPat(Ops.DEVICE)), allow_any_len=True, arg=None), lambda copy,x: copy.dtype == x.dtype),
   (UPat(Ops.ALLREDUCE, name="red", src=(UPat.var("x"), UPat(Ops.DEVICE))), lambda red,x: red.dtype == x.dtype and isinstance(red.arg, Ops)),

@@ -213,10 +213,12 @@ class Tensor(RandMixin):
     # realization ownership. Waiting until rangeify is too late: ATTENTION can
     # itself become a scheduled producer and retain its bounded primitive even
     # when the lowering chooses the ordinary fallback.
-    from tinygrad.schedule.rangeify import lower_attention_semantic
+    from tinygrad.schedule.rangeify import lower_attention_semantic, lower_rmsnorm_semantic
     raw_sink = UOp.sink(*[x.uop for x in (self,)+lst])
     attention_map = {u:lower_attention_semantic(u) for u in raw_sink.toposort() if u.op is Ops.ATTENTION}
     if attention_map: _apply_map_to_tensors(attention_map, name="attention semantic")
+    rmsnorm_map = {u:lower_rmsnorm_semantic(u) for u in raw_sink.toposort() if u.op is Ops.RMSNORM}
+    if rmsnorm_map: _apply_map_to_tensors(rmsnorm_map, name="rmsnorm semantic")
     sink = UOp.sink(*[x.uop for x in (self,)+lst])
     big_sink, becomes_map = transform_to_call(sink)
     _apply_map_to_tensors(becomes_map, name="buffers")
@@ -1248,6 +1250,27 @@ class Tensor(RandMixin):
     src = (out.uop,) + ((primitive.uop,) if primitive is not None else ()) + (q.uop, key.uop, value.uop) + \
           ((attn_mask.uop,) if attn_mask is not None else ())
     return Tensor(UOp(Ops.ATTENTION, out.uop.dtype, src=src, arg=spec), device=out.device)
+
+  def _semantic_rmsnorm(self, x:Tensor, out:Tensor, weight:Tensor, eps:float) -> Tensor:
+    """Create an explicit RMSNorm semantic boundary with a correct fallback.
+
+    `Ops.RMSNORM` owns the complete normalization contract while its first
+    source is the ordinary graph (the value this marker replaces). Rangeify
+    may replace this marker only after it has a proven fused lowering;
+    otherwise it returns that source unchanged. Admission is deliberately
+    narrow here and re-checked fail-closed at lowering: decode-shaped rows
+    only, so prefill (rows >> 32) never receives a marker.
+    """
+    from tinygrad.uop.ops import RMSNormSpec
+    if not all_int(x.shape) or len(x.shape) == 0: return out
+    dim = x.shape[-1]
+    if dim < 32 or dim % 32: return out
+    rows = prod(x.shape[:-1])
+    if not isinstance(rows, int) or rows < 1 or rows > 32: return out
+    if x.dtype not in (dtypes.float32, dtypes.float16): return out
+    spec = RMSNormSpec(dim, eps, out.dtype, True)
+    src = (out.uop, x.uop, weight.uop)
+    return Tensor(UOp(Ops.RMSNORM, out.dtype, src=src, arg=spec), device=out.device)
 
   def _online_attention_primitive(self, key:Tensor, value:Tensor, attn_mask:Tensor|None,
                                   scale:float, acc_dtype:DType, out_dtype:DType) -> Tensor|None:

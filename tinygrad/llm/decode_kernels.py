@@ -279,9 +279,14 @@ class DecodeRMSNormSpec:
   out_dtype: DType = dtypes.float32
   x_rank: int = 1
   target: str = "amd_gfx1100"
+  # Path 3 semantic lowering names the kernel after its scheduler-owned
+  # boundary (`rmsnorm_native_*`); the M3 opaque path keeps `decode_rmsnorm_*`
+  # byte-identical (pg3 pins: 2f3b80f7b426 / 9cf696d384ba / 061dd2e554d0).
+  native: bool = False
 
   @property
-  def kernel_name(self) -> str: return f"decode_rmsnorm_{self.rows}_{self.dim}"
+  def kernel_name(self) -> str:
+    return f"rmsnorm_native_{self.rows}_{self.dim}" if self.native else f"decode_rmsnorm_{self.rows}_{self.dim}"
 
   def validate(self) -> None:
     if self.rows < 1: raise ValueError(f"DecodeRMSNormSpec requires rows>=1, got {self.rows}")
@@ -292,7 +297,7 @@ class DecodeRMSNormSpec:
       raise ValueError(f"DecodeRMSNormSpec requires dim % (lane_width * warps_per_row) == 0, got "
                        f"dim={self.dim} lane_width={self.lane_width} warps_per_row={self.warps_per_row}")
     if not isinstance(self.eps, float) or self.eps <= 0: raise ValueError(f"DecodeRMSNormSpec requires eps>0, got {self.eps!r}")
-    if self.x_rank not in (1, 3): raise ValueError(f"DecodeRMSNormSpec requires x_rank in (1, 3), got {self.x_rank}")
+    if self.x_rank not in (1, 2, 3): raise ValueError(f"DecodeRMSNormSpec requires x_rank in (1, 2, 3), got {self.x_rank}")
     if self.out_dtype not in (dtypes.float16, dtypes.float32):
       raise ValueError(f"DecodeRMSNormSpec requires out_dtype float16/float32, got {self.out_dtype}")
 
@@ -315,7 +320,13 @@ def emit_decode_rmsnorm_kernel(spec:DecodeRMSNormSpec):
     # non-landing (m3-fused-norm-measurement-record-20260802.md). Rank 3 inputs
     # (B,T,dim activations) index the two leading extent-1 dims; rank 1 inputs
     # (q/k slices) index the flat base directly.
-    x_sel = x[UOp.const(dtypes.int, 0), UOp.const(dtypes.int, 0), base] if spec.x_rank == 3 else x[base]
+    # The input param mirrors the producer's logical activation view (rank 1
+    # flat, rank 2/3 leading unit axes) and is indexed with the flat base, so
+    # the scheduler can bind the producer's buffer through a contiguous view
+    # instead of materializing a copy. Rank-3 is the decode (1,1,dim) shape;
+    # rank-2 is the (1,dim) shape used by the isolation probes.
+    x_sel = x[UOp.const(dtypes.int, 0), UOp.const(dtypes.int, 0), base] if spec.x_rank == 3 else \
+            x[UOp.const(dtypes.int, 0), base] if spec.x_rank == 2 else x[base]
     acc = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG)
     acc = acc.after(acc[0].store(0.0))
     xv = x_sel.cast(dtypes.float32)
@@ -335,7 +346,16 @@ def emit_decode_rmsnorm_kernel(spec:DecodeRMSNormSpec):
     obase = row * dim + warp * (per_lane * lane) + laneid + epi * lane
     wv = w[warp * (per_lane * lane) + laneid + epi * lane].cast(dtypes.float32)
     x_epi = x[UOp.const(dtypes.int, 0), UOp.const(dtypes.int, 0), obase] if spec.x_rank == 3 else x[obase]
-    return out[obase].store(((x_epi.cast(dtypes.float32) * scale) * wv).cast(spec.out_dtype)).end(row, laneid, warp, epi).sink(
+    # The Path 3 semantic marker's fallback is the ordinary nn.RMSNorm graph,
+    # which rounds `(x * rsqrt) ` through x.dtype BEFORE the fp32 weight
+    # multiply. The native epilogue replicates that intermediate cast so the
+    # lowering and its fallback share one value definition (isolation parity);
+    # the M3 opaque epilogue (native=False) is untouched and byte-identical.
+    if spec.native:
+      normed = (x_epi.cast(dtypes.float32) * scale).cast(spec.x_dtype)
+    else:
+      normed = (x_epi.cast(dtypes.float32) * scale)
+    return out[obase].store((normed * wv).cast(spec.out_dtype)).end(row, laneid, warp, epi).sink(
       arg=KernelInfo(name=spec.kernel_name, opts_to_apply=()))
   return kernel
 
