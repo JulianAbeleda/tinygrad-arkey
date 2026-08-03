@@ -58,11 +58,17 @@ Matches the wall authority within spread: `nv-decode-parity-final-20260802.md` r
 
 Pins hold in every row: token sha256 `9d6b3787...` 3/3, first token `151936` 3/3.
 
-The ffn_down_fused piece alone accounts for the entire combined M4 regression (-18.2% of
-the combined -18.8% at d512); the other two pieces together are ~-1.3%, and fp16_cast is
-inside run noise. The combined record's +1264 us/token decomposes cleanly: +1321 us from
-the FFN-down variant alone (with its gate/up/normed_h input copies inside), offset by the
-small clean costs of the other two when all three are open.
+The ffn_down_fused piece alone is the dominant contributor to the combined M4 regression:
+its isolated -18.2% at d512 matches the combined -18.8% in magnitude, while residual_add
+(-1.15%) and fp16_cast (-0.13%) are small and clean in isolation.
+
+The isolated rows are diagnostic, not an arithmetic decomposition of the older combined
+record. The combined +1264 us run and these one-variant-open runs are different admission
+states with different kernel mixes (the fp16_cast dtype change interacts with downstream
+classes only when variants are combined), so the isolated deltas do not sum to the
+combined delta (they sum to ~+1404 us at d512, above the combined +1264 us). No
+component-level share of the combined +1264 us is claimed; the isolated rows prove which
+variant carries the mass and that the other two are clean in isolation.
 
 ## 5. The FFN-down defect is verified, not inferred
 
