@@ -322,5 +322,92 @@ are measured in wall time; do not carry forward the old 0.9-1.0ms L1 arithmetic 
    its own review and measurement gate?
 5. Require a named non-norm copy census before Path 1 receives an implementation scope?
 
+---
+
+## 10. Response to the reviewer amendment (2026-08-02)
+
+Answers to 9.7, with the amendment's factual claims verified against the census files and the
+transport code before writing this section.
+
+### 10.1 Q1 - accepted, with the verification that makes it exact
+
+Accepted as the planning basis. The whole-decode count identity `1021 - 288 + 360 = 1093`
+holds exactly against the M2-on baseline, and the two census checks that could have broken it
+both pass:
+
+- The 72 retained q/k-adjacent kernels exist in the fused trace
+  (`E_4_2_8_16_4` x36 + `E_2_8_16_4` x36), so the changed component is 288, not 361.
+- The `E_32_32_4_02a9` +18 (54 -> 72) belongs to the M2 composition change, not M3: the
+  all-fusion-off baseline has it at 54 with `r_32_32_4_2_8` x18 present, and the M2-on closed
+  state has it at 72 with the merge kernel present - both at a constant 1021 kernels/token.
+
+The time deltas are softer than the count identity: my runs give +141us (all-off baseline vs
+fused) and +211us (M2-on closed vs fused) for the same pair of states, with the amendment's
++170.3us between them. That spread is median/cross-run variance, and it is why the -0.16ms
+node-sum and the ~178 tok/s first-order value stay directional, not promotion language.
+
+### 10.2 Q2 - accepted; the semantic-op precedent already exists
+
+Accepted: semantic RMSNorm (reduction axis, eps, dtypes, optional affine weight) with the
+ordinary expression preserved as the universal fallback, and a closed-default admitted native
+lowering, not keyed to a model name. Verified: there is no RMSNorm semantic today (only
+`role_metadata("rms_norm")` strings and the ordinary `square -> mean -> rsqrt -> multiply`
+expression), so the reviewer's premise is correct.
+
+The repo already has the mechanism to mirror: `ATTENTION` is lowered as a semantic at
+`lower_attention_semantic` (rangeify) with an ordinary fallback, and promotion records follow
+`boltbeam.route_policy.v1` with decode and prefill as separate records. The norm semantic
+should use both: a `lower_rmsnorm_semantic`-style hook plus a separate
+`norm_fusion`/`norm_lowering` record per path. Decode and prefill stay independent admission
+classes, each with correctness, occupancy, and performance evidence. Reduction-order parity is
+gated exactly as the amendment says (isolation parity + fixed-depth sha), which is also the
+M2/M3 precedent.
+
+### 10.3 Q3 - approved; the mechanism claim checks out
+
+Approved as an independent P0. Verified in the code: `has_buffer_identity` follows `RESHAPE`
+but not `AFTER` (uop/ops.py), and `UOp.custom_kernel` preserves an exact `AFTER` src but
+contiguous()s `RESHAPE(AFTER)` - so the flat output's reshape is a candidate materialization
+site, and the downstream Q4K/Q6K routes additionally request `.contiguous()` on activation
+inputs. The 72 count is exactly attn+ffn (2 x 36), matching the trace-order signature
+`copy -> decode_rmsnorm -> copy`; the q/k outputs reshape to `(1,32,1,128)`/`(1,8,1,128)` and
+show no companion, which leans toward the consumer `.contiguous()` side of the P0's question
+but does not decide it. If the P0 removes the 72 kernels (~110.9us node-sum), the changed
+component becomes `-144` launches / ~-281us node-sum, which would be a materially better
+planning basis; the P0 verdict lands before Path 3 sequencing is finalized. Agreed that this
+fix alone must not reopen M3 without the full fixed-depth protocol beating M2.
+
+### 10.4 Q4 - approved; claim stated as node-sum, not wall
+
+Approved. This matches the design doc's own ordering (M4 = step 5, M5 = step 6) and the
+measured class table: the +1.05ms plumbing class splits into the norm half (gated behind Path
+3) and the GEMV/flash epilogue half, so M4/M5's claim is the approximately 0.4ms node-sum
+epilogue-absorption mass, restated as node-sum and re-measured in wall after landing. The
+norm story remains behind its own review and measurement gate.
+
+### 10.5 Q5 - accepted; the census has concrete starting candidates
+
+Accepted. The named census starts with three known classes rather than an open hunt:
+`E_32_32_4_0a5e` (36x, combine-output normalization), the explicit per-call
+`.contiguous()`/`.cast()` materializations in `decode_routes.py` (`_xv`, `x_vec`), and the
+flash q/k/v view handling. The census must record producer, consumer, shape, count, and time
+per class, and must distinguish a contiguous view of an already-produced buffer (fixable by an
+opt-in input ABI mode) from a lazy producer requiring real computation (not a transport fix).
+No Path 1 implementation scope before that census exists.
+
+### 10.6 Corrections and notes on 9.1-9.6
+
+1. Section 9.1's `+170.3us` sits inside the measured spread (+141 to +211us across the two
+   baseline choices); the count identity is the hard claim and it is exact. No change needed.
+2. Section 9.3's "no RMSNorm semantic today" is verified correct; the semantic-op precedent
+   (attention) and the closed-record pattern (route_policy) are already in the repo and the
+   contract should cite them.
+3. Section 9.6's endpoint discipline is accepted: 195-210 tok/s is a target, and any end-state
+   forecast is recomputed from wall measurements of M4/M5 plus the norm hypothesis, not carried
+   forward from the old L1 arithmetic.
+
+No further questions from this side. The amended scope (9.1-9.6) plus this response is the
+working basis for M4/M5 sequencing and the Path 3 review.
+
 HARD STOP. This amendment requests feedback only; it authorizes no implementation or route
 promotion.
