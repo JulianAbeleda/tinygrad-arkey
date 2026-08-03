@@ -190,6 +190,28 @@ def decode_q4k_epilogue_fusion_promoted(target:Target) -> bool:
   """Policy authority for the L1 M4 q4k GEMV epilogue-fusion route (closed default, see the loader above)."""
   return target in _DECODE_Q4K_EPILOGUE_FUSION_PROMOTED_TARGETS
 
+def load_decode_q4k_w1w3_fusion_promotion(path:str) -> frozenset[Target]:
+  """Read the w1+w3 fused gate/up decode GEMV promotion record (boltbeam.route_policy.v1, same schema
+  family as `load_decode_q4k_epilogue_fusion_promotion`). CLOSED default; deliberately a SEPARATE record
+  from M4's q4k epilogue record and M2's Q6K merge record: the fused w1+w3 kernel replaces the gate GEMV
+  + silu + up GEMV + mul chain (72 -> 36 kernels/token) with one 12288-row kernel, and must not fire on
+  any target until a measured record opts it in (mc3-w1w3-fusion-measurement-record-20260803.md,
+  q4k-w1w3-fused-qv-implementation-record-20260803.md). A document without `promoted_targets` -- or with
+  an empty list -- promotes nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_Q4K_W1W3_FUSION_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-q4k-w1w3-fusion-route-policy.json"
+_DECODE_Q4K_W1W3_FUSION_PROMOTED_TARGETS: frozenset[Target] = load_decode_q4k_w1w3_fusion_promotion(_DECODE_Q4K_W1W3_FUSION_PROMOTION_RECORD)
+
+def decode_q4k_w1w3_fusion_promoted(target:Target) -> bool:
+  """Policy authority for the fused w1+w3 gate/up decode GEMV route (closed default, see the loader above)."""
+  return target in _DECODE_Q4K_W1W3_FUSION_PROMOTED_TARGETS
+
 def load_decode_flash_combine_fusion_promotion(path:str) -> frozenset[Target]:
   """Read the L1 M5 flash-decode combine fp16 absorption promotion record (boltbeam.route_policy.v1, same
   schema family as `load_decode_epilogue_fusion_promotion`). CLOSED default; deliberately a SEPARATE record

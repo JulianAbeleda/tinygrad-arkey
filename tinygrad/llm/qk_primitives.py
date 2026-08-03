@@ -9,7 +9,7 @@ from tinygrad.llm.memory_semantics import MODEL_PARAMETER, memory_semantic_owner
 from tinygrad.llm.physical_memory_ledger import allocation_owner, bind_allocation_owner
 from tinygrad.llm.decode_routes import q4k_primitive_linear_call, q6k_primitive_linear_call
 from tinygrad.llm.model_route_plan import (ModelRoutePlan, build_model_route_plan,
-  decode_epilogue_fusion_promoted, decode_q4k_epilogue_fusion_promoted)
+  decode_epilogue_fusion_promoted, decode_q4k_epilogue_fusion_promoted, decode_q4k_w1w3_fusion_promoted)
 from tinygrad.llm.qk_layout import Q4_K, Q6_K, QuantFormat
 
 def _qk_generated_policy_entry(policy:dict|None, typ:int, rows:int, cols:int, name:str|None=None) -> dict|None:
@@ -81,11 +81,15 @@ class QKPrimitiveRouteAdmission:
   `q4k_epilogue_fusion_promoted` is the L1 M4 q4k GEMV epilogue answer (closed default,
   model_route_plan.decode_q4k_epilogue_fusion_promoted, m4-q4k-epilogue-measurement-record-20260802.md):
   a SEPARATE record from M2's, so the measured non-landing q4k variants stay off while the Q6K in-kernel
-  merge stays promoted."""
+  merge stays promoted.
+  `q4k_w1w3_fusion_promoted` is the fused w1+w3 (gate/up) decode GEMV answer (closed default,
+  model_route_plan.decode_q4k_w1w3_fusion_promoted): the fused kernel needs BOTH linears admitted on the
+  target and its own measured record (q4k-w1w3-fused-qv-implementation-record-20260803.md)."""
   capability: QKPrimitiveCapability = QKPrimitiveCapability()
   target_promoted: bool = True
   epilogue_fusion_promoted: bool = False
   q4k_epilogue_fusion_promoted: bool = False
+  q4k_w1w3_fusion_promoted: bool = False
 
   @property
   def admitted(self) -> bool: return self.capability.satisfied and self.target_promoted
@@ -95,6 +99,9 @@ class QKPrimitiveRouteAdmission:
 
   @property
   def q4k_epilogue_fusion_admitted(self) -> bool: return self.admitted and self.q4k_epilogue_fusion_promoted
+
+  @property
+  def w1w3_fusion_admitted(self) -> bool: return self.admitted and self.q4k_w1w3_fusion_promoted
 
 def _model_parameter_alias(source:Tensor|None, derived:Tensor) -> Tensor:
   """Attach model ownership to derived storage which already aliases a backing."""
@@ -381,7 +388,8 @@ def _install_qk_primitives(model, gguf:pathlib.Path, meta:dict, spec:_QKInstallS
   target_promoted = _qk_target_promoted(route_plan, (capability.backend, capability.architecture))
   route_admission = QKPrimitiveRouteAdmission(capability, target_promoted,
                                               decode_epilogue_fusion_promoted((capability.backend, capability.architecture)),
-                                              decode_q4k_epilogue_fusion_promoted((capability.backend, capability.architecture)))
+                                              decode_q4k_epilogue_fusion_promoted((capability.backend, capability.architecture)),
+                                              decode_q4k_w1w3_fusion_promoted((capability.backend, capability.architecture)))
   for name, dims, typ, off in meta["tensor_infos"]:
     if typ != spec.ggml_type: skipped[spec.not_kind_counter] += 1; continue
     if len(dims) != 2: skipped["not_2d"] += 1; continue

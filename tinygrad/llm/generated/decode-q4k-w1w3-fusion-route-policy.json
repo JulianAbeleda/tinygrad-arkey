@@ -1,0 +1,11 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_q4k_w1w3_fusion",
+  "description": "Fused w1+w3 (gate/up) decode GEMV promotion record. ONE 12288-row kernel computes z = silu(dot(gate_row, x)) * dot(up_row, x) from two Q4_K weight buffers, replacing the gate GEMV + silu + up GEMV + mul chain (72 -> 36 kernels/token). LANDED shape is the scalar load style (q4k-w1w3-fused-qv-implementation-record-20260803.md): same-session d512 census 39.4 us in-loop vs pair 41.7 us, +1.7-2% wall tok/s, pins 3/3. The quad u128 load style is measured NO-GO in-loop (49.2 us, -5% wall) despite being the standalone optimum (22.2 us). NV-only admission; AMD/Metal need their own measured record plus pg3 hash parity before admission.",
+  "promoted_targets": [
+    {
+      "backend": "NV",
+      "architecture": "sm_120"
+    }
+  ]
+}

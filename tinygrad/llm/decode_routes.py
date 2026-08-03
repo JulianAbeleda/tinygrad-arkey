@@ -135,6 +135,30 @@ def q4k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], 
   if binding is None: return fallback(x)
   return Q4K_DECODE_CANDIDATE.execute(linear, x, binding, epilogue_inputs=epilogue_inputs or {})
 
+def q4k_gate_up_primitive_linear_call(gate:Any, up:Any, x:Tensor, fallback:Callable[[], Tensor]) -> Tensor:
+  """Fused w1+w3 decode GEMV: ONE kernel computes z = silu(gate(x)) * up(x) from two Q4_K weight buffers
+  (q4k-w1w3-fused-qv-implementation-record-20260803.md). Admitted only when BOTH linears bind the legacy
+  decode GEMV shape AND both carry `w1w3_fusion_admitted` (their own QKPrimitiveRouteAdmission field,
+  resolved from the closed-default decode-q4k-w1w3-fusion-route-policy.json record). Any mismatch (one
+  linear not Q4K, bias, K/N inequality, multi-token, off-target, shape outside the quad geometry) falls
+  back to the caller's legacy graph -- the fused route never changes what the legacy chain computes."""
+  g_bind = Q4K_DECODE_CANDIDATE.bind(gate, x, getattr(getattr(gate, "route_admission", None), "admitted", False))
+  u_bind = Q4K_DECODE_CANDIDATE.bind(up, x, getattr(getattr(up, "route_admission", None), "admitted", False))
+  if g_bind is None or u_bind is None: return fallback()
+  if g_bind.T != 1 or u_bind.T != 1: return fallback()
+  if g_bind.K != u_bind.K or g_bind.N != u_bind.N: return fallback()
+  if not (getattr(getattr(gate, "route_admission", None), "w1w3_fusion_admitted", False) and
+          getattr(getattr(up, "route_admission", None), "w1w3_fusion_admitted", False)): return fallback()
+  from tinygrad.llm.decode_kernels import q4k_g3_lanemap_gemv_w1w3_kernel
+  gw = gate.q4k_storage.words.to(x.device).contiguous() if gate.q4k_storage.mode == "q4_ondemand" else gate.q4k_storage.words.to(x.device)
+  uw = up.q4k_storage.words.to(x.device).contiguous() if up.q4k_storage.mode == "q4_ondemand" else up.q4k_storage.words.to(x.device)
+  xv = x[:, 0, :].reshape(g_bind.K).cast(dtypes.float16).contiguous()
+  program = KernelProgram(g_bind.route_id, f"{g_bind.candidate_id}.w1w3_fused",
+    KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
+    q4k_g3_lanemap_gemv_w1w3_kernel(g_bind.N, g_bind.K, load_style="scalar"),
+    output_spec=OutputSpec((g_bind.N,), dtypes.float32))
+  return execute_promoted_program(None, gw, uw, xv, program=program).reshape(1, 1, g_bind.N)
+
 @dataclass(frozen=True)
 class _Q6KDecodeCandidate:
   candidate_id: str = "quant_linear_decode.q6k_generated_coop"

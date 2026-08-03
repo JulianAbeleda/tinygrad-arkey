@@ -203,6 +203,152 @@ def q4k_g3_lanemap_gemv_kernel(rows:int, k:int, lanes:int=WARP, epilogue:Q4KGEMV
   return kernel
 
 
+def _q4k_group_params_from_words(w0:UOp, w1:UOp, w2:UOp, w3:UOp, grp:int) -> tuple[UOp, UOp, UOp, UOp]:
+  """Header-words variant of `_q4k_group_params`: the four header words are already materialized
+  (e.g. lanes of one uint4 header load), so no re-load of the block header is needed per group."""
+  d, dmin = _f16_word(w0, False), _f16_word(w0, True)
+  def scale_byte(word:UOp, idx:int) -> UOp: return word.rshift(idx % 4 * 8).bitwise_and(0xff)
+  if grp < 4:
+    sc, mn = scale_byte(w1, grp).bitwise_and(63), scale_byte(w2, grp).bitwise_and(63)
+  else:
+    high = scale_byte(w3, grp - 4)
+    sc = high.bitwise_and(0xf).bitwise_or(scale_byte(w1, grp - 4).rshift(6).lshift(4))
+    mn = high.rshift(4).bitwise_or(scale_byte(w2, grp - 4).rshift(6).lshift(4))
+  return d, dmin, sc, mn
+
+
+def _f16x4_lane(xidx:UOp, nib:int) -> UOp:
+  """Project one fp32 lane of a half.vec(4) shared-memory read. GEP on float vector loads is
+  spec-illegal (only int-typed vector loads may be lane-extracted), so the projection rides the
+  CUSTOMI inline-op mechanism (the same family as the fdot2/exp2f providers): the rendered text is
+  a 16-byte `half4` load plus a register sub-access, which nvcc folds into one LDS and costs no
+  extra instruction. The source is the pointer INDEX (ptr=True, so the add-loads pass leaves it
+  alone); the CUSTOMI itself carries the scalar shape."""
+  return UOp(Ops.CUSTOMI, dtypes.float32, (xidx,), arg=f"float((*((half4*){{0}})).{'xyzw'[nib]})")
+
+
+def q4k_g3_lanemap_gemv_w1w3_kernel(rows:int, k:int, load_style:str = "scalar"):
+  """Fused gate/up (w1+w3) decode GEMV: ONE 12288-row kernel computes
+  `out[r] = silu(dot(gate_row_r, x)) * dot(up_row_r, x)` from two weight buffers, replacing the
+  gate GEMV + silu elementwise + up GEMV + mul elementwise chain (72 -> 36 kernels/token).
+  Silu uses `_silu_uop`, the exact Tensor.silu lowering, so the fused prelude is bit-identical to
+  the legacy graph's silu kernels when the per-row dot totals are bit-identical (the `scalar` style
+  reproduces the installed per-lane accumulation order; `quad` does not).
+
+  `load_style="scalar"` is the MC3 probe shape (mc3-w1w3-fusion-measurement-record-20260803.md): the
+  installed 32-lane/1-row-per-block map with the installed per-lane accumulation order, token-safe by
+  construction. This is the LANDED in-loop shape (q4k-w1w3-fused-qv-implementation-record-20260803.md):
+  same-session d512 census 39.36-39.4 us in-loop vs the pair's 2 x 20.83 = 41.7 us, +1.7-2% wall tok/s.
+  `load_style="quad"` is the MC2 measured load pattern (mc2-load-pattern-measurement-record-20260803.md
+  section 7): 768 blocks x 128 threads at 12288x4096 (16 rows/block, 8 lanes/row), each lane owns the
+  wc-quad `(lane&1)*4` in group-of-2 `lane>>1`, weights load as pure uint4 (5 LDG.128 per block per
+  projection), x is staged to shared memory once per launch (8 KB, outside the reduce loop) and read
+  in-loop as uint4, and the cross-lane reduce is the 3-step XOR ladder 4/2/1 over the 8 row lanes.
+  The quad style is the standalone optimum (22.2 us vs scalar 23.2 us) but REGRESSES in-loop (49.2 us
+  census, -5% wall): measured NO-GO for the real loop, kept only for standalone/occupancy study.
+  Both styles share the two-accumulator loop pattern proven in production by the flash decode kernel
+  (one init chain, first update `.after()` without `.end`, last update ends the range; distinct REG
+  slots 20/21 and distinct shuffle staging bases 90-94/95-99)."""
+  lm = Q4KGateUpLaneMap(k=k, n=rows)
+  lm.validate()
+  if load_style == "quad":
+    rows_per_block, lanes_per_row = 16, 8
+    if rows % rows_per_block != 0:
+      raise ValueError(f"quad w1w3 style requires rows % {rows_per_block} == 0, got rows={rows}")
+    if lm.blocks_per_group != 4:
+      raise ValueError(f"quad w1w3 style requires blocks_per_group == 4 (k_blocks % 4 == 0), got {lm.blocks_per_group}")
+    name = f"q4k_g3_lanemap_gemv_w1w3qv_{rows}_{k}"
+  elif load_style == "scalar":
+    rows_per_block, lanes_per_row = 1, WARP
+    name = f"q4k_g3_lanemap_gemv_w1w3fused_{rows}_{k}"
+  else:
+    raise ValueError(f"unknown w1w3 load style {load_style!r}")
+  blocks, threads = rows // rows_per_block, rows_per_block * lanes_per_row
+
+  if load_style == "quad":
+    def kernel(out:UOp, gate_words:UOp, up_words:UOp, x:UOp) -> UOp:
+      block = UOp.special(blocks, "gidx0")
+      lane = UOp.special(threads, "lidx0")
+      lane8 = lane.bitwise_and(UOp.const(dtypes.weakint, 7))
+      row_local = lane.rshift(UOp.const(dtypes.weakint, 3))
+      row = block.mul(UOp.const(dtypes.weakint, rows_per_block)) + row_local
+      bg = lane8.rshift(UOp.const(dtypes.weakint, 1))
+      # wc-quad offset in words; MUL form is loadable as one 16B-aligned uint4 (the devectorizer
+      # keeps vector loads only when the offset provably divides the fold width).
+      wc0 = lane8.bitwise_and(UOp.const(dtypes.weakint, 1)).mul(UOp.const(dtypes.weakint, 4))
+      # x staged once per launch: 8 KB of fp16 halves in shared memory (LOCAL half4 loads/stores
+      # keep the 8-byte fold; the in-loop reads bitcast to u32 pairs so GEP lane extraction stays
+      # spec-legal without ever GEP'ing a float vector load).
+      xsh = UOp.placeholder((k,), dtypes.float16, 22, addrspace=AddrSpace.LOCAL)
+      stage = UOp.range(k // (threads * 4), 0, axis_type=AxisType.REDUCE)
+      xoff = (stage.mul(UOp.const(dtypes.weakint, threads)) + lane).mul(UOp.const(dtypes.weakint, 4))
+      xvec = x.index(xoff).load(dtype=dtypes.float16.vec(4))
+      xstore = xsh.index(xoff).store(xvec)
+      barrier = UOp.barrier(UOp.group(xstore.end(stage)))
+
+      acc_g = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG)
+      acc_u = UOp.placeholder((1,), dtypes.float32, 21, addrspace=AddrSpace.REG)
+      init = acc_g[0].store(0.0)
+      init = acc_u.after(init)[0].store(0.0)
+      acc_g, acc_u = acc_g.after(init), acc_u.after(init)
+      b0 = UOp.range(lm.blocks_per_group, 1, axis_type=AxisType.REDUCE)
+      blk = bg.mul(UOp.const(dtypes.weakint, 4)) + b0
+      base_g = (row.mul(UOp.const(dtypes.weakint, lm.k_blocks)) + blk).mul(UOp.const(dtypes.weakint, Q4K_WORDS_PER_BLOCK))
+      base_u = (row.mul(UOp.const(dtypes.weakint, lm.k_blocks)) + blk).mul(UOp.const(dtypes.weakint, Q4K_WORDS_PER_BLOCK))
+      hdr_g = gate_words.index(base_g).load(dtype=dtypes.uint32.vec(4))
+      hdr_u = up_words.index(base_u).load(dtype=dtypes.uint32.vec(4))
+      contrib_g = UOp.const(dtypes.float32, 0.0)
+      contrib_u = UOp.const(dtypes.float32, 0.0)
+      for g2 in range(4):
+        qg = gate_words.index(base_g + UOp.const(dtypes.weakint, 4 + g2 * 8) + wc0).load(dtype=dtypes.uint32.vec(4))
+        qu = up_words.index(base_u + UOp.const(dtypes.weakint, 4 + g2 * 8) + wc0).load(dtype=dtypes.uint32.vec(4))
+        for gp in range(2):
+          grp = 2 * g2 + gp
+          dg, dming, scg, mng = _q4k_group_params_from_words(hdr_g.gep(0), hdr_g.gep(1), hdr_g.gep(2), hdr_g.gep(3), grp)
+          du, dminu, scu, mnu = _q4k_group_params_from_words(hdr_u.gep(0), hdr_u.gep(1), hdr_u.gep(2), hdr_u.gep(3), grp)
+          # 16 halves per group as four half4 smem reads (x read once, shared by both projections).
+          xbase = blk.mul(UOp.const(dtypes.weakint, Q4_K_BLOCK_ELEMS)) + UOp.const(dtypes.weakint, grp * 32) + \
+            lane8.bitwise_and(UOp.const(dtypes.weakint, 1)).mul(UOp.const(dtypes.weakint, 16))
+          for wc in range(4):
+            qpack_g = qg.gep(wc).rshift((grp % 2) * 4).bitwise_and(0x0F0F0F0F)
+            qpack_u = qu.gep(wc).rshift((grp % 2) * 4).bitwise_and(0x0F0F0F0F)
+            for nib in range(4):
+              qv_g = qpack_g.rshift(nib * 8).bitwise_and(0xf)
+              qv_u = qpack_u.rshift(nib * 8).bitwise_and(0xf)
+              weight_g = dg * scg.cast(dtypes.float32) * qv_g.cast(dtypes.float32) - dming * mng.cast(dtypes.float32)
+              weight_u = du * scu.cast(dtypes.float32) * qv_u.cast(dtypes.float32) - dminu * mnu.cast(dtypes.float32)
+              xvv = _f16x4_lane(xsh.after(barrier).index(xbase + UOp.const(dtypes.weakint, wc * 4), ptr=True), nib)
+              contrib_g = contrib_g + weight_g * xvv
+              contrib_u = contrib_u + weight_u * xvv
+      upd_g = acc_g[0].store(acc_g.after(b0)[0] + contrib_g)
+      upd_u = acc_u.after(upd_g)[0].store(acc_u.after(b0)[0] + contrib_u).end(b0)
+      total_g = _warp_reduce_sum_staged(acc_g.after(upd_u)[0], lane8, lanes_per_row, 90)
+      total_u = _warp_reduce_sum_staged(acc_u.after(upd_u)[0], lane8, lanes_per_row, 95)
+      return out[row].store(_silu_uop(total_g) * total_u, lane8.eq(0)).sink(arg=KernelInfo(name=name, opts_to_apply=()))
+    return kernel
+
+  def kernel(out:UOp, gate_words:UOp, up_words:UOp, x:UOp) -> UOp:
+    row, lane = UOp.special(rows, "gidx0"), UOp.special(WARP, "lidx0")
+    part = LanePartition(lane, lane_extent=lm.lane_extent, words_per_group=lm.words_per_group)
+    lblk = UOp.range(lm.blocks_per_group, 0, axis_type=AxisType.REDUCE)
+    blk = part.block_group * lm.blocks_per_group + lblk
+    base_g = (row * lm.k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    base_u = (row * lm.k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    contrib_g = _q4k_block_dot_packed_load(gate_words, x, base_g, blk, part.word_col)
+    contrib_u = _q4k_block_dot_packed_load(up_words, x, base_u, blk, part.word_col)
+    acc_g = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG)
+    acc_u = UOp.placeholder((1,), dtypes.float32, 21, addrspace=AddrSpace.REG)
+    init = acc_g[0].store(0.0)
+    init = acc_u.after(init)[0].store(0.0)
+    acc_g, acc_u = acc_g.after(init), acc_u.after(init)
+    upd_g = acc_g[0].store(acc_g.after(lblk)[0] + contrib_g)
+    upd_u = acc_u.after(upd_g)[0].store(acc_u.after(lblk)[0] + contrib_u).end(lblk)
+    total_g = _warp_reduce_sum_staged(acc_g.after(upd_u)[0], part.lane, part.lane_extent, 90)
+    total_u = _warp_reduce_sum_staged(acc_u.after(upd_u)[0], part.lane, part.lane_extent, 95)
+    return out[row].store(_silu_uop(total_g) * total_u).sink(arg=KernelInfo(name=name, opts_to_apply=()))
+  return kernel
+
+
 # Q6_K selected spec-driven lowering and shared decode quant grammar.
 Q6K_POS_EXTENT = 16
 Q6K_VOCAB_SCALAR_REDUCE_MIN_ROWS = 131072

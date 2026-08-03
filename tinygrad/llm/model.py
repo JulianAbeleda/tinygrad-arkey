@@ -15,6 +15,7 @@ from tinygrad.llm.device_facts import scan_device_facts
 from tinygrad.llm.gguf import MODEL_PARAMETER_ALLOCATION_OWNER, gguf_load, gguf_load_metadata, gguf_load_with_metadata
 from tinygrad.llm.gguf_memory_scan import RuntimeGeometry, selected_gguf_backing_bytes
 from tinygrad.llm.decode_routes import (FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_CANDIDATE, flash_decode_attention_route,
+                                        q4k_gate_up_primitive_linear_call,
                                         should_use_flash_decode as _route_should_use_flash_decode)
 from tinygrad.llm.decode_kernels import DecodeRMSNormSpec, emit_decode_rmsnorm_kernel
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
@@ -42,7 +43,7 @@ from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OU
                                            runtime_input, runtime_output,
                                            runtime_persistent, runtime_scratch)
 from tinygrad.llm.model_route_plan import (build_model_route_plan, decode_norm_fusion_promoted,
-  decode_q4k_epilogue_fusion_promoted, decode_rmsnorm_native_lowering_promoted)
+  decode_q4k_epilogue_fusion_promoted, decode_q4k_w1w3_fusion_promoted, decode_rmsnorm_native_lowering_promoted)
 from tinygrad.llm.prefill_candidate_runtime import decode_prefill_graph_candidate_set, automatic_promoted_prefill_graph_policy
 from tinygrad.llm.physical_memory_ledger import AllocationOwner, bind_allocation_owner
 from tinygrad.uop.ops import Ops, resolve
@@ -521,6 +522,15 @@ class FFNBlock:
     if hasattr(self, "ffn_gateup"):  # B1 fused gate/up
       gate, up = self.ffn_gateup(x)
       return self.ffn_down(_prefill_semantic(_prefill, prefill_activation, gate.silu().contiguous()) * up)
+    if not _prefill and getattr(self, "_decode_q4k_w1w3_fusion_promoted", False):
+      _fg, _fu = getattr(self, "ffn_gate", None), getattr(self, "ffn_up", None)
+      if isinstance(_fg, Q4KPrimitiveLinear) and isinstance(_fu, Q4KPrimitiveLinear):
+        # Fused w1+w3 decode GEMV (q4k-w1w3-fused-qv-implementation-record-20260803.md): ONE kernel
+        # computes silu(gate(x)) * up(x); the fallback lambda reproduces the legacy chain's z exactly,
+        # so an off-target/off-shape admission changes nothing about what ffn_down consumes.
+        z = q4k_gate_up_primitive_linear_call(_fg, _fu, x,
+          fallback=lambda: _prefill_semantic(_prefill, prefill_activation, _fg(x).silu().contiguous()) * _fu(x))
+        return self.ffn_down(z)
     gated = _prefill_semantic(_prefill, prefill_activation, self.ffn_gate(x).silu().contiguous())
     return self.ffn_down(gated * self.ffn_up(x))
 
@@ -1399,6 +1409,13 @@ class Transformer:
     _q4k_epi_promoted = decode_q4k_epilogue_fusion_promoted((_norm_cap.backend, _norm_cap.architecture))
     model._decode_q4k_epilogue_fusion_promoted = _q4k_epi_promoted
     for _b in model.blk: _b._decode_q4k_epilogue_fusion_promoted = _q4k_epi_promoted
+    # Fused w1+w3 (gate/up) decode GEMV gate. CLOSED default (decode-q4k-w1w3-fusion-route-policy.json,
+    # NV sm_120 promoted, q4k-w1w3-fused-qv-implementation-record-20260803.md). Same resolve-once
+    # pattern as the M4 gate; the fused call additionally requires BOTH ffn_gate and ffn_up to be
+    # admitted Q4K primitives, so the model flag alone never changes the legacy chain.
+    _w1w3_promoted = decode_q4k_w1w3_fusion_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_q4k_w1w3_fusion_promoted = _w1w3_promoted
+    for _b in model.blk: _b._decode_q4k_w1w3_fusion_promoted = _w1w3_promoted
     # Path 3 semantic RMSNorm: per-norm marker flag resolved ONCE from the same
     # load-entry facts. CLOSED default (decode-rmsnorm-native-lowering-route-
     # policy.json, empty promoted_targets); nn.RMSNorm.__call__ reads the flag
