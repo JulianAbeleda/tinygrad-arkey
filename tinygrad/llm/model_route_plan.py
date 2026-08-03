@@ -190,6 +190,29 @@ def decode_q4k_epilogue_fusion_promoted(target:Target) -> bool:
   """Policy authority for the L1 M4 q4k GEMV epilogue-fusion route (closed default, see the loader above)."""
   return target in _DECODE_Q4K_EPILOGUE_FUSION_PROMOTED_TARGETS
 
+def load_decode_flash_combine_fusion_promotion(path:str) -> frozenset[Target]:
+  """Read the L1 M5 flash-decode combine fp16 absorption promotion record (boltbeam.route_policy.v1, same
+  schema family as `load_decode_epilogue_fusion_promotion`). CLOSED default; deliberately a SEPARATE record
+  from M2's `decode_epilogue_fusion` (which stays NV-promoted for the Q6K in-kernel merge only): the fp16
+  combine variant (flash_fused_gmax_combine_f16_*) absorbs the post-combine E_32_32_4_0a5e fp32->fp16 cast
+  and must not fire under the M2 record or on any target until a measured record opts it in
+  (m5-flash-combine-normalization-measurement-record-20260802.md). A document without `promoted_targets`
+  -- or with an empty list -- promotes nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_FLASH_COMBINE_FUSION_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-flash-combine-route-policy.json"
+_DECODE_FLASH_COMBINE_FUSION_PROMOTED_TARGETS: frozenset[Target] = load_decode_flash_combine_fusion_promotion(_DECODE_FLASH_COMBINE_FUSION_PROMOTION_RECORD)
+
+def decode_flash_combine_fusion_promoted(target:Target) -> bool:
+  """Policy authority for the L1 M5 flash-decode combine fp16 absorption route (closed default, see the
+  loader above)."""
+  return target in _DECODE_FLASH_COMBINE_FUSION_PROMOTED_TARGETS
+
 def load_decode_norm_fusion_promotion(path:str) -> frozenset[Target]:
   """Read the L1 M3 fused decode RMSNorm promotion record (boltbeam.route_policy.v1, same schema family
   as `load_decode_epilogue_fusion_promotion`). CLOSED default with the same semantics: a document without

@@ -10,7 +10,7 @@ from tinygrad.llm.decode_kernels import (Q6K_VOCAB_SCALAR_REDUCE_MIN_ROWS, emit_
 from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeCapability, FlashDecodeRouteConfig,
   flash_decode_capability_from_renderer, flash_decode_live_split_block_tile, flash_decode_target_promoted)
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
-from tinygrad.llm.model_route_plan import decode_epilogue_fusion_promoted
+from tinygrad.llm.model_route_plan import decode_epilogue_fusion_promoted, decode_flash_combine_fusion_promoted
 from tinygrad.llm.qk_layout import Q4_K, Q6_K, QuantFormat
 from tinygrad.llm.route_selection import parse_route_mode
 
@@ -203,6 +203,7 @@ class _FlashDecodeBinding:
   query_group_size: int | None
   staging: str
   stage_width: int
+  combine_fusion: bool = False
 
 _RESOLVED_FLASH_DECODE_CAPABILITY: dict[str, tuple[FlashDecodeCapability, tuple[str|None, str|None]]] = {}
 
@@ -264,13 +265,15 @@ class _FlashDecodeCandidate:
     else:
       target = (device.split(":", 1)[0].upper() if device else None, None)
     admission = self.route.evaluate(B, Hq, Hkv, Hd, capability, flash_decode_target_promoted(route_plan, target),
-                                    decode_epilogue_fusion_promoted(target))
+                                    decode_epilogue_fusion_promoted(target),
+                                    decode_flash_combine_fusion_promoted(target))
     if getenv("FLASH_DECODE_ADMISSION_DEBUG"):
       print(f"FLASH_DECODE_ADMISSION_DEBUG candidate={self.candidate_id} device={device} "
             f"admitted={admission.admitted} reason={admission.reason}")
     if not admission.admitted: return None
     return _FlashDecodeBinding(self.candidate_id, self.route_id, self.target, B, Hq, Hkv, Hd,
-                               self.split_size, self.query_group_size, self.staging, self.stage_width)
+                               self.split_size, self.query_group_size, self.staging, self.stage_width,
+                               admission.combine_fusion_admitted)
 
 # Public compatibility aliases. Their sole route authority is owned beside the
 # flash executor, so selection cannot drift from execution configuration.
@@ -305,4 +308,4 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
   return flash_decode_live_split_block_tile(q.reshape(binding.Hq, binding.Hd), assigned_kv, _tc,
     binding.Hd, binding.Hq, binding.Hkv, MAXC, binding.split_size, staging=binding.staging,
     fused_combine=True, kv_scale=kv_scale, freqs=freqs, query_group_size=binding.query_group_size,
-    stage_width=binding.stage_width)
+    stage_width=binding.stage_width, combine_fp16=binding.combine_fusion)

@@ -202,7 +202,7 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
   return kernel
 
 
-def flash_fused_gmax_combine_kernel(Hd:int, Hq:int, S:int, stride:int|None=None):
+def flash_fused_gmax_combine_kernel(Hd:int, Hq:int, S:int, stride:int|None=None, output_fp16:bool=False):
   W, L_COL, M_COL, LANES, R = Hd + 2, Hd, Hd + 1, 32, Hd // 32
   if Hd % LANES != 0: raise ValueError(f"fused combine needs Hd%{LANES}==0, got {Hd}")
   NW, stride = _ceildiv(S, LANES), S if stride is None else stride
@@ -240,8 +240,11 @@ def flash_fused_gmax_combine_kernel(Hd:int, Hq:int, S:int, stride:int|None=None)
     final_acc, final_den = acc.after(den_update), den.after(den_update)[0]
     output_axis = UOp.range(R, 7)
     output_dim = lane * R + output_axis
-    return out[head * Hd + output_dim].store(final_acc[output_axis] / final_den).end(output_axis).end(head, lane).sink(
-      arg=KernelInfo(name=f"flash_fused_gmax_combine_{Hq}_{Hd}", opts_to_apply=()))
+    value = final_acc[output_axis] / final_den
+    if output_fp16: value = value.cast(dtypes.float16)
+    combine_name = f"flash_fused_gmax_combine_f16_{Hq}_{Hd}" if output_fp16 else f"flash_fused_gmax_combine_{Hq}_{Hd}"
+    return out[head * Hd + output_dim].store(value).end(output_axis).end(head, lane).sink(
+      arg=KernelInfo(name=combine_name, opts_to_apply=()))
   return kernel
 
 
@@ -327,14 +330,17 @@ class FlashCombineSpec:
   Hq: int
   split_count: int
   stride: int|None = None
+  output_fp16: bool = False
 
   def validate(self) -> None:
     if min(self.Hd, self.Hq, self.split_count) <= 0: raise ValueError("Hd, Hq and split_count must be positive")
     if self.stride is not None and self.stride < 1: raise ValueError(f"stride must be >= 1, got {self.stride}")
 
   @property
-  def kernel_name(self) -> str: return f"flash_fused_gmax_combine_{self.Hq}_{self.Hd}"
-  def emit(self): self.validate(); return flash_fused_gmax_combine_kernel(self.Hd, self.Hq, self.split_count, self.stride)
+  def kernel_name(self) -> str:
+    prefix = "flash_fused_gmax_combine_f16" if self.output_fp16 else "flash_fused_gmax_combine"
+    return f"{prefix}_{self.Hq}_{self.Hd}"
+  def emit(self): self.validate(); return flash_fused_gmax_combine_kernel(self.Hd, self.Hq, self.split_count, self.stride, self.output_fp16)
 
 
 @dataclass(frozen=True)
@@ -358,11 +364,11 @@ class FlashDecodeAttentionSpec:
 def describe_flash_decode_attention(Hq:int, Hd:int, Hkv:int, MAXC:int, S:int, *, staging:str="KV_BOTH",
                                     fused_combine:bool=True, quant:bool=False, rope:bool=False,
                                     combine_stride:int|None=None, query_group_size:int|None=None,
-                                    stage_width:int=1) -> FlashDecodeAttentionSpec:
+                                    stage_width:int=1, combine_fp16:bool=False) -> FlashDecodeAttentionSpec:
   return FlashDecodeAttentionSpec(
     FlashDecodeTileSpec(Hq, Hd, Hkv, MAXC, S, staging, quant, rope, query_group_size=query_group_size,
                         stage_width=stage_width),
-    FlashCombineSpec(Hd, Hq, S, combine_stride) if fused_combine else None)
+    FlashCombineSpec(Hd, Hq, S, combine_stride, output_fp16=combine_fp16) if fused_combine else None)
 
 
 def emit_flash_decode_tile(spec:FlashDecodeAttentionSpec, Tc:UOp): return spec.emit_tile(Tc)
@@ -433,11 +439,16 @@ class FlashDecodeAdmission:
   a distinct, observable label instead of the pre-TG7 silent `device == "AMD"` fallback.
   `epilogue_fusion_promoted` is the L1 decode epilogue-fusion answer (closed default, resolved by
   decode_routes.py bind from model_route_plan.decode_epilogue_fusion_promoted; it gates the fused combine/
-  epilogue variants only -- the legacy `admitted` route is unchanged by it)."""
+  epilogue variants only -- the legacy `admitted` route is unchanged by it). `combine_fusion_promoted` is the
+  L1 M5 flash-combine fp16 absorption answer (closed default, resolved by decode_routes.py bind from
+  model_route_plan.decode_flash_combine_fusion_promoted; it gates the fp16 combine variant
+  flash_fused_gmax_combine_f16_* only -- deliberately SEPARATE from M2's epilogue-fusion record, and the
+  legacy fp32 combine is unchanged by it)."""
   shape_ok: bool
   capability: FlashDecodeCapability
   target_promoted: bool
   epilogue_fusion_promoted: bool = False
+  combine_fusion_promoted: bool = False
 
   @property
   def admitted(self) -> bool:
@@ -445,6 +456,9 @@ class FlashDecodeAdmission:
 
   @property
   def fusion_admitted(self) -> bool: return self.admitted and self.epilogue_fusion_promoted
+
+  @property
+  def combine_fusion_admitted(self) -> bool: return self.admitted and self.combine_fusion_promoted
 
   @property
   def reason(self) -> str | None:
@@ -473,8 +487,9 @@ class FlashDecodeRouteConfig:
     return (B, Hq, Hkv, Hd) == (1, self.query_heads, self.kv_heads, self.head_dim)
 
   def evaluate(self, B:int, Hq:int, Hkv:int, Hd:int, capability:FlashDecodeCapability, target_promoted:bool,
-               epilogue_fusion_promoted:bool=False) -> FlashDecodeAdmission:
-    return FlashDecodeAdmission(self.shape_ok(B, Hq, Hkv, Hd), capability, target_promoted, epilogue_fusion_promoted)
+               epilogue_fusion_promoted:bool=False, combine_fusion_promoted:bool=False) -> FlashDecodeAdmission:
+    return FlashDecodeAdmission(self.shape_ok(B, Hq, Hkv, Hd), capability, target_promoted,
+                                epilogue_fusion_promoted, combine_fusion_promoted)
 
 
 FLASH_DECODE_G4 = FlashDecodeRouteConfig("attention_decode.flash_live_split", "decode_flash_live_split_g4_kvboth",
@@ -485,7 +500,8 @@ FLASH_DECODE_G5 = FlashDecodeRouteConfig("attention_decode.flash_live_split_g5",
 
 def flash_decode_live_split_block_tile(q:Tensor, cache_kv:Tensor, Tc:UOp, Hd:int, Hq:int, Hkv:int, MAXC:int, S:int,
                                        staging:str="KV_BOTH", fused_combine:bool=True, kv_scale:Tensor|None=None,
-                                       freqs:Tensor|None=None, query_group_size:int|None=None, stage_width:int=1) -> Tensor:
+                                       freqs:Tensor|None=None, query_group_size:int|None=None, stage_width:int=1,
+                                       combine_fp16:bool=False) -> Tensor:
   """Execute the selected live-split flash decode and return ``[Hq, Hd]``."""
   if not fused_combine: raise ValueError("fused_combine=False is no longer supported for decode live-split routes")
   # TG7: this is a pure shape-based route SELECTION (which of G4/G5 matches, to label the emitted
@@ -501,13 +517,14 @@ def flash_decode_live_split_block_tile(q:Tensor, cache_kv:Tensor, Tc:UOp, Hd:int
   quant, rope = kv_scale is not None, freqs is not None
   inputs = (q.reshape(Hq * Hd), cache_kv) + ((kv_scale,) if quant else ()) + ((freqs,) if rope else ())
   spec = describe_flash_decode_attention(Hq, Hd, Hkv, MAXC, S, staging=staging, quant=quant, rope=rope,
-                                         query_group_size=query_group_size, stage_width=stage_width)
+                                         query_group_size=query_group_size, stage_width=stage_width,
+                                         combine_fp16=combine_fp16)
   tile_program = KernelProgram(route.route_id, f"{route.candidate_id}.tile",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED, spec.emit_tile(Tc),
     output_spec=OutputSpec((Hq * S * (Hd + 2),), dtypes.float32))
   partial = execute_promoted_program(None, *inputs, program=tile_program)
   combine_program = KernelProgram(route.route_id, f"{route.candidate_id}.combine",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED, spec.emit_combine(),
-    output_spec=OutputSpec((Hq * Hd,), dtypes.float32))
+    output_spec=OutputSpec((Hq * Hd,), dtypes.float16 if combine_fp16 else dtypes.float32))
   out = execute_promoted_program(None, partial, program=combine_program)
   return out.reshape(Hq, Hd)

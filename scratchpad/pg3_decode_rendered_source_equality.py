@@ -117,6 +117,16 @@ def _flash_combine_ast() -> UOp:
   return spec.emit_combine()(out, pout)
 
 
+def _flash_combine_f16_ast() -> UOp:
+  """L1 M5: fp16 combine variant (flash_fused_gmax_combine_f16_*). The store carries the same
+  RNE fp32->fp16 cast the absorbed E_32_32_4_0a5e kernel performed, so token bytes are identical."""
+  spec = describe_flash_decode_attention(32, 128, 8, MAXC, 48, fused_combine=True,
+                                          query_group_size=None, stage_width=1, combine_fp16=True)
+  out = UOp.placeholder((32 * 128,), dtypes.float16, 0)
+  pout = UOp.placeholder((32 * 48 * (128 + 2),), dtypes.float32, 1)
+  return spec.emit_combine()(out, pout)
+
+
 def _rmsnorm_ast(rows: int, dim: int, *, warps: int, out_dtype) -> UOp:
   spec = DecodeRMSNormSpec(rows=rows, dim=dim, eps=1e-6, warps_per_row=warps,
                            weight_dtype=dtypes.float16, out_dtype=out_dtype)
@@ -145,6 +155,8 @@ KERNELS = [
   ("q6k_vocab_scalar_reduce_151936_4096", "vocab", _q6k_vocab_reduce_ast),
   ("flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128", "G4", _flash_tile_ast),
   ("flash_fused_gmax_combine_32_128", "G4", _flash_combine_ast),
+  # L1 M5: fp16 combine absorption (section 6.5). New kernel name so the legacy hash above is untouched.
+  ("flash_fused_gmax_combine_f16_32_128", "G4", _flash_combine_f16_ast),
   ("decode_rmsnorm_1_4096", "norm", lambda: _rmsnorm_ast(1, 4096, warps=16, out_dtype=dtypes.float16)),
   ("decode_rmsnorm_32_128", "norm", lambda: _rmsnorm_ast(32, 128, warps=1, out_dtype=dtypes.float32)),
   ("decode_rmsnorm_8_128", "norm", lambda: _rmsnorm_ast(8, 128, warps=1, out_dtype=dtypes.float32)),

@@ -1,0 +1,6 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_flash_combine_fusion",
+  "description": "L1 M5 flash-decode combine fp16 absorption promotion record (l1-decode-plumbing-fusion-design-20260802.md section 6.5, row E_32_32_4_0a5e; m5-flash-combine-normalization-measurement-record-20260802.md). The fp16 combine variant (flash_fused_gmax_combine_f16_*) writes the combine result as fp16 in-kernel, absorbing the post-combine E_32_32_4_0a5e fp32->fp16 view-materializing cast (36x/token) so the attn_output Q4K GEMV reads the combine output directly. Promotes nothing by default; the legacy flash_fused_gmax_combine_* kernel is byte-identical and untouched. Deliberately SEPARATE from M2's decode_epilogue_fusion record, which stays NV-promoted for the Q6K in-kernel merge only.",
+  "promoted_targets": []
+}
