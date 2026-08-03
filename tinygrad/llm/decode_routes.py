@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Callable, Any
 
 from tinygrad import Device, Tensor, UOp, dtypes, getenv
-from tinygrad.llm.decode_kernels import (Q6K_VOCAB_SCALAR_REDUCE_MIN_ROWS, emit_q6k_gemv_kernel,
+from tinygrad.llm.decode_kernels import (Q6K_POS_EXTENT, emit_q6k_gemv_kernel,
   emit_q6k_vocab_scalar_reduce_kernel, q4k_g3_lanemap_gemv_kernel, q6k_coop_row_tile_for_target,
   q6k_spec_for_role, q6k_vocab_scalar_reduce_eligible)
 from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeCapability, FlashDecodeRouteConfig,
@@ -172,13 +172,15 @@ class _Q6KDecodeCandidate:
       else self.target
     # L1 M2 (l1-decode-plumbing-fusion-design-20260802.md section 6, classes 9/10): the in-kernel merge is
     # admitted only through the closed-default epilogue-fusion promotion record; the legacy external_sum
-    # route (generic partial.sum(axis=1) merge chain) is untouched and remains the default. The vocab head
-    # keeps the scalar-reduce path: its chain is L4's substrate boundary, not L2's (design section 6, Q9).
+    # route (generic partial.sum(axis=1) merge chain) is untouched and remains the default.
     fusion_admitted = bool(getattr(getattr(linear, "route_admission", None), "fusion_admitted", False))
-    is_vocab = binding.use_coop and binding.N >= Q6K_VOCAB_SCALAR_REDUCE_MIN_ROWS
-    # The in-kernel merge is implemented for the coop family only (single-warp constraint); the
-    # partial family's in-kernel variant was measured and abandoned (M2 non-landing, design section 6).
-    reduction = "in_kernel" if fusion_admitted and not is_vocab and binding.use_coop else "external_sum"
+    # L4 vocab substrate fusion: the vocab head may select the coop in-kernel merge when the single-warp
+    # constraint holds (row_tile * pos lanes <= 32, Q6KGEMVRouteSpec.validate). NV sm_120 row_tile=2 is
+    # legal (2*16=32); AMD row_tile=4 (4*16=64) and Metal (no fusion admission) stay external_sum, so their
+    # vocab scalar-reduce + scatter chain remains the default. The in-kernel merge exists for the coop
+    # family only; the partial family's variant was measured and abandoned (M2 non-landing, design section 6).
+    reduction = ("in_kernel" if fusion_admitted and binding.use_coop and binding.row_tile * Q6K_POS_EXTENT <= 32
+                 else "external_sum")
     spec = q6k_spec_for_role(binding.N, binding.K, parts=binding.parts, row_tile=binding.row_tile,
                             use_coop=binding.use_coop, opts=linear.opts, target=target, reduction=reduction)
     gemv_program = KernelProgram(binding.route_id, f"{binding.candidate_id}.gemv",
