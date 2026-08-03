@@ -64,3 +64,18 @@ next wall-time lever is L4 decode GEMV efficiency, not another norm fusion.
 - This record replaces the one-sided decode table in
   `docs/nv-prefill-decode-diagnosis-20260801.md` (which had llama only at d512) as the
   campaign-tail reference.
+
+---
+
+## Amendment (2026-08-03, per `nv-campaign-forward-review-amendment-20260803.md` section 2.5)
+
+Reproducible promotion state corrected: M2's `decode_epilogue_fusion` record is OPEN for
+`NV:sm_120` (Q6K down-coop in-kernel merge); M3 norm, M4 Q4K epilogue, M5 combine, and
+Path 3 semantic RMSNorm are CLOSED. The baseline this record compares against is the
+M2-on state, and the rows above were measured on that M2-open default runtime. The
+status line, protocol, and "What the decode-norm campaign moved" section are amended to
+match; the wall numbers, sha pins, and census rows are unchanged by this correction.
+
+The "next wall-time lever is decode GEMV efficiency" verdict stands as written, per the
+amendment's section 4.1 item 5: the decode GEMV-efficiency work named here continues and
+is not parked behind the withdrawn L1 forecast.

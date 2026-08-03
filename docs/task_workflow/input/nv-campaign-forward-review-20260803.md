@@ -1,10 +1,11 @@
 # NV campaign - forward path review
 
-Status: review scope. Records where the NV performance campaign stands after the decode-norm
-tail closed, and asks one question: is the forward sequence in section 5 the right one, and
-are the section 6 open questions the only blockers? Branch boundary:
-tinygrad `nvidia-bringup-20260731` @ `72dca8010`, pushed and in sync. Does not authorize
-promotion to `dev`/`exp`/`master`.
+Status: review scope, response recorded. This document is the request-of-record;
+`nv-campaign-forward-review-amendment-20260803.md` is the response-of-record and
+supersedes sections 2-6 below wherever they differ (section 7 here is the reconciliation).
+Records where the NV performance campaign stands after the decode-norm tail closed.
+Branch boundary: tinygrad `nvidia-bringup-20260731` @ `72dca8010`, pushed and in sync.
+Does not authorize promotion to `dev`/`exp`/`master`.
 
 ## 1. Recorded, measured state (all committed and pushed)
 
@@ -98,3 +99,48 @@ follow-ons behind L1; each is small and measured.
 
 HARD STOP after this section. No implementation beyond the L1 design's own review until
 this scope is reviewed.
+
+---
+
+## 7. Response to the reviewer amendment (2026-08-03)
+
+The amendment (`nv-campaign-forward-review-amendment-20260803.md`) is accepted; this
+section is the reconciliation. The five review questions are answered in the amendment's
+sections 2-3; the corrected forward sequence is its section 4. Key acceptances, mapped to
+the superseded text:
+
+1. **Lifecycle (supersedes section 2 and section 6 Q1)**: the nine L1 design questions are
+   no longer the blockers. M1-M5 and Path 3 are implemented and measured; the next
+   decision is which existing CLOSED variant earns a narrowly scoped reopen, not whether
+   to implement the original L1 design.
+2. **Boundary verdict (supersedes section 4 item 2 and section 6 Q3)**: per-emitter
+   opt-in does NOT solve transport. The forced-open measurements answer Q3 with
+   "no" (amendment section 2.2). The boundary work is reframed as a variant-reopen
+   boundary P0, NOT a general Path-1 transport campaign (the non-norm census NO-GO
+   stands; the new claim is narrower: copies introduced by a specific forced-open
+   variant).
+3. **M4 decomposition (supersedes section 3's open-items framing)**: M4's +1264us is not
+   explained by 126 copies (~189us). The `ffn_down_fused` prelude recomputes
+   `_silu_uop(gate)*up` inside the per-row reduction, once per 4096 output row - the
+   ~1075us residual. M4's combined record stays closed; residual-add, k/v fp16-output,
+   and FFN-down are decomposed and measured independently, and the current FFN-down
+   prelude shape is rejected until a compute-once design exists (amendment section 2.3).
+4. **Forecast (supersedes section 3's "known" list and section 6 Q5)**: `0.9-1.0ms` and
+   `1.07-1.21x` are withdrawn. The norm hypothesis stands at approximately -144 launches /
+   -0.16ms node-sum (paths-forward section 9); no composed decode endpoint is stated
+   until isolated same-session wall measurements exist. The wall authority is
+   `nv-decode-parity-final-20260802.md` (1.44x/1.46x/1.52x), with the next evidenced wall
+   lever in decode GEMV efficiency.
+5. **B3 (supersedes section 4 item 3 and section 6 Q4)**: B3 is independent of decode and
+   may proceed under its own scope with the AMD control; nothing in the decode boundary
+   decision serializes it (amendment section 3 Q4).
+6. **Parity record (supersedes section 1's implicit baseline)**: the reproducible state is
+   M2 OPEN for NV:sm_120, M3/M4/M5/Path 3 CLOSED; the parity record is amended
+   accordingly (amendment section 2.5).
+
+Corrected forward sequence: amendment section 4 (decode: correct the state-of-record,
+decompose M4, one minimal variant-reopen boundary P0 starting with M5, re-measure each
+route independently, prioritize the current wall authority; prefill: B3 independently).
+No implementation is authorized by this scope as amended; the next step is a
+variant-specific reopen scope with its settling command, legacy hash controls,
+correctness pins, and fixed-depth wall gate.
