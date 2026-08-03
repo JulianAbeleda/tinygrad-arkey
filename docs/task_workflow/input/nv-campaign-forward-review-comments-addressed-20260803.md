@@ -5,7 +5,8 @@ Status: response record. This document records that every forward-path item in
 `nv-campaign-forward-review-amendment-20260803.md` section 4 is now addressed by a
 committed, verified deliverable. It responds to the reviewer amendment (the
 response-of-record); it supersedes nothing and authorizes no implementation. Branch
-boundary: tinygrad `nvidia-bringup-20260731`, pushed and in sync at `09cfb4c26`.
+boundary: tinygrad `nvidia-bringup-20260731`, pushed and in sync at `bbd825f3e`;
+the review corrections are recorded in section 6 and its follow-up commit.
 
 ## 1. What was asked (amendment section 4, condensed)
 
@@ -19,19 +20,20 @@ Prefill: (1) keep the measured pp512+ parity record as baseline, (2) scope B3
 independently with the required AMD control, (3) measure the polling change against both
 NV and AMD before landing, without using decode progress as its gate.
 
-## 2. What landed
+## 2. What was delivered
 
 | amendment item | deliverable | commit | verification |
 | --- | --- | --- | --- |
 | Decode 1 - state-of-record | parity record amended: M2 open for NV:sm_120, M3/M4/M5/Path 3 closed | `fcf3774f9` | parity doc now names the reproducible baseline |
 | Decode 2 - decompose M4 | isolated per-variant census/wall rows; FFN-down recompute defect confirmed | `09cfb4c26` | controls reproduce the parity baseline; defect is measured, not inferred |
-| Decode 3 - M5 boundary P0 | typed output-layout/view-preservation contract, closed-default, consumer-specific | `7a4acdece` | exact UOp chain and all pinned hashes verified against HEAD |
-| Decode 5 - GEMV-efficiency scopes | L2/L4/flash substrate items ranked by measured wall opportunity | `d3a748450` | every evidence number and hash verified against the source records |
-| Prefill 2 - scope B3 | independent prefill runtime lever scope with AMD control requirement | `54749a342` | wait-path mechanism and all campaign numbers verified against code |
+| Decode 3 - M5 boundary P0 | typed output-layout/view-preservation contract, closed-default, consumer-specific | `7a4acdece` | exact UOp chain and all pinned hashes verified against HEAD; infrastructure may land closed, route opens only with measured benefit |
+| Decode 5 - GEMV-efficiency scopes | L2/L4/flash substrate items scoped; wall ranking pending (node-sum upper bounds, not newly measured wall opportunity) | `d3a748450` | every evidence number and hash verified against the source records |
+| Prefill 2 - scope B3 | independent prefill runtime lever scope with AMD control requirement | `54749a342` | re-characterized on the tuned schedule; pre-tuning polling figures withdrawn; same-run cause measurement required before naming the cause |
 | Decode 4, 6 and Prefill 1, 3 | recorded as gates, not done | n/a | no implementation, no record change, no forecast published |
 
 All four commits are on `nvidia-bringup-20260731` only, pushed
-`fcf3774f9..09cfb4c26`, branch in sync with origin. No commit touched
+`fcf3774f9..09cfb4c26`, branch in sync with origin; the corrections revision follows
+as its own commit. No commit touched
 `master`/`dev`/`exp`. The untracked user-owned files
 (`extra/llm_research/microbench/dp4a_peak_cuda*`,
 `scratchpad/t6_metal_admission_probe.py`) were left untouched.
@@ -65,17 +67,23 @@ Q4K GEMV (`attn_qo`) opts in via a typed input ABI so its
 (`decode_flash_combine_fusion` stays closed), fail-closed validator, `custom_kernel`'s
 default flat-buffer contract untouched.
 
-**Decode 5.** `d3a748450` ranks the decode GEMV-efficiency work by measured wall
-opportunity: A L2 Q6K partial single-pass (~0.25 ms), B L4 vocab substrate fusion
-(~0.14-0.24 ms), C flash score tile structure (~0.16 ms), D like-for-like cap discipline
-(quantize-excluded 0.92 ms bounds the combined claims). Separate scopes, no composed
-forecast, the landed `row_tile=2` values row explicitly kept.
+**Decode 5.** `d3a748450` scopes the decode GEMV-efficiency work; the wall ranking is
+PENDING. Its A-D item order uses node-sum upper bounds only (A L2 Q6K partial
+single-pass ~0.25 ms, B L4 vocab substrate fusion ~0.14-0.24 ms, C flash score tile
+structure ~0.16 ms, D like-for-like cap discipline), and the scope itself requires an
+isolated same-session d512 wall measurement per item before any ranking claim or
+composition. Separate scopes, no composed forecast, the landed `row_tile=2` values row
+explicitly kept.
 
 **Prefill 2.** `54749a342` scopes B3 independently: measured evidence (44-46 ms warm
 wall, 24.1 ms busy, 23.7-23.8 ms `wait()` CPU, 1.9x wall/busy vs llama's 1.15-1.35x
 envelope), three ranked fix shapes (a) cache the signal view, (b) real blocking wait,
 (c) whole-schedule graph replay, the AMD runtime control requirement, and a closed-
-default gate.
+default gate. Per review, the cause is re-characterized on the tuned schedule: the
+historical 1.35M `to_mv` / ~2.5 us-per-poll figures came from the pre-tuning 4.39 s run
+and are withdrawn; same-run poll count, exclusive polling cost, submission latency, and
+wall-minus-busy residual must be measured before any cause is named (B3 scope section
+1.1).
 
 ## 4. Verification performed
 
@@ -105,14 +113,37 @@ resolves to that commit's object and subject in the local object database.
   correctness pins, and fixed-depth wall gate.
 - No wall re-measurement of any reopened variant, and no composed decode endpoint. M5's
   section 5 gate (d512/d2048/d4096 wall, all shas, pg3 re-derive) must pass before the
-  `decode_flash_combine_fusion` record may change; M4 reopens only under its own scope
-  with the FFN-down compute-once redesign.
+  `decode_flash_combine_fusion` record may change, and the route opens only with measured
+  benefit - copy removal alone is not an opening criterion; M4 reopens only under its own
+  scope with the FFN-down compute-once redesign.
 - The AMD leg of B3 has not run: the polling change must be measured NV+AMD same-session
   before landing, and no AMD GPU exists on this machine.
 - The ffn-down residual-only epilogue probe is not implemented (the current spec fuses
   prelude and residual); it does not share the prelude verdict by force.
 
-## 6. References
+## 6. Corrections applied (Codex review, 2026-08-03)
+
+Review verdict: NO-GO until recorded; M4 decomposition and M5 scoping otherwise pass.
+All four corrections are recorded here and in the amended source documents:
+
+1. **Decode 5 marked "scoped; wall ranking pending".** Its item order uses node-sum
+   upper bounds, not newly measured wall opportunity; the ranking claim is removed
+   (sections 2-3; `decode-gemv-efficiency-forward-scope-20260803.md` keeps its
+   endpoint discipline).
+2. **B3 re-characterized on the tuned schedule.** The 1.35M polls / ~2.5 us figures from
+   the old 4.39 s run are withdrawn; the cause is not named. Same-run poll count,
+   exclusive polling cost, submission latency, and wall-minus-busy residual are new
+   mandatory instruments before any cause claim (sections 2-3;
+   `b3-prefill-host-overhead-scope-20260803.md` section 1.1 and 4.1).
+3. **M4 wording corrected.** The isolated rows are diagnostic, not an arithmetic
+   decomposition of the combined record; the "decomposes cleanly / offset" claim is
+   replaced (section 3; `m4-decomposition-measurement-record-20260803.md` section 4).
+4. **Response doc fixed.** "What was delivered" replaces "What landed"; the branch
+   boundary is `bbd825f3e`; M5 infrastructure may land closed but the
+   `decode_flash_combine_fusion` route opens only with measured benefit (section 5;
+   `m5-variant-reopen-boundary-p0-scope-20260803.md` section 8).
+
+## 7. References
 
 - `nv-campaign-forward-review-amendment-20260803.md` (the comments being answered)
 - `m4-decomposition-measurement-record-20260803.md`
