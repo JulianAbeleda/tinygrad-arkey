@@ -9,7 +9,8 @@ from tinygrad.llm.decode_kernels import (Q6K_VOCAB_SCALAR_REDUCE_MIN_ROWS, emit_
   q6k_spec_for_role, q6k_vocab_scalar_reduce_eligible)
 from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeCapability, FlashDecodeRouteConfig,
   flash_decode_capability_from_renderer, flash_decode_live_split_block_tile, flash_decode_target_promoted)
-from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
+from tinygrad.llm.kernel_program import (KernelProgram, KernelProgramProvenance, OutputSpec, TypedViewRequest,
+                                         execute_promoted_program)
 from tinygrad.llm.model_route_plan import decode_epilogue_fusion_promoted, decode_flash_combine_fusion_promoted
 from tinygrad.llm.qk_layout import Q4_K, Q6_K, QuantFormat
 from tinygrad.llm.route_selection import parse_route_mode
@@ -105,10 +106,21 @@ class _Q4KDecodeCandidate:
       prog_inputs.append(_xv)
 
     out_dtype = dtypes.float16 if (epi_spec is not None and epi_spec.kind == "fp16_cast") else dtypes.float32
+    # M5 typed boundary (m5-variant-reopen-boundary-p0-scope-20260803.md section 3.2): the o-proj
+    # attn_qo Q4K GEMV opts in to the typed input ABI so its activation prelude
+    # x[:, 0, :].reshape(K).cast(fp16).contiguous() folds to a view of the fp16 combine AFTER.
+    # The opt-in is specific to route_role attn_qo; ffn_down, attn_kv, and every other route keep
+    # the generic flat-buffer input ABI. The validator (kernel_program.py) is fail-closed: unless
+    # the producer declared an exact-matching layout and both gates are open, the request is
+    # rejected and the flat-buffer ABI (with its materializing copy) is used unchanged.
+    typed_input_views = (
+      (TypedViewRequest(slot=1, dtype=dtypes.float16, flat_shape=(binding.K,), route_role="attn_qo"),)
+      if route_role == "attn_qo" else ())
     program = KernelProgram(binding.route_id, f"{binding.candidate_id}.gemv",
       KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
       q4k_g3_lanemap_gemv_kernel(binding.N, binding.K, epilogue=epi_spec),
-      output_spec=OutputSpec((binding.N,), out_dtype))
+      output_spec=OutputSpec((binding.N,), out_dtype),
+      typed_input_views=typed_input_views)
     return execute_promoted_program(None, *prog_inputs, program=program).reshape(1, 1, binding.N)
 
 # This is a statically promoted result of offline machine search, not an online

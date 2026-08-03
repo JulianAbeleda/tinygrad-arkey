@@ -13,7 +13,8 @@ from tinygrad import Tensor, dtypes
 from tinygrad.dtype import AddrSpace
 from tinygrad.helpers import getenv
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
-from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
+from tinygrad.llm.kernel_program import (DeclaredTypedOutput, KernelProgram, KernelProgramProvenance, OutputSpec,
+                                         TypedLayout, execute_promoted_program)
 
 _LOG2E = 1.4426950408889634
 _F32 = dtypes.float32
@@ -523,8 +524,19 @@ def flash_decode_live_split_block_tile(q:Tensor, cache_kv:Tensor, Tc:UOp, Hd:int
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED, spec.emit_tile(Tc),
     output_spec=OutputSpec((Hq * S * (Hd + 2),), dtypes.float32))
   partial = execute_promoted_program(None, *inputs, program=tile_program)
+  # M5 typed boundary (m5-variant-reopen-boundary-p0-scope-20260803.md section 3.1): the fp16
+  # combine declares its typed output layout -- fp16 (Hq*Hd,) row-major, viewable as (Hq, Hd),
+  # no permutation/stride/padding. The emitted kernel is unchanged; only the boundary's declared
+  # output ABI gains the layout/view metadata. combine_fp16 is set by the only call site from
+  # FlashDecodeAdmission.combine_fusion_admitted (decode_routes.py), so recording it here IS the
+  # producer-side combine-fusion gate state the consumer validator requires (scope 4(d)).
+  combine_typed = None
+  if combine_fp16:
+    combine_typed = DeclaredTypedOutput(TypedLayout(dtypes.float16, (Hq * Hd,), (Hq, Hd)),
+                                        combine_fusion_admitted=combine_fp16)
   combine_program = KernelProgram(route.route_id, f"{route.candidate_id}.combine",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED, spec.emit_combine(),
-    output_spec=OutputSpec((Hq * Hd,), dtypes.float16 if combine_fp16 else dtypes.float32))
+    output_spec=OutputSpec((Hq * Hd,), dtypes.float16 if combine_fp16 else dtypes.float32,
+                           typed_output=combine_typed))
   out = execute_promoted_program(None, partial, program=combine_program)
   return out.reshape(Hq, Hd)
