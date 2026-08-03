@@ -7,11 +7,14 @@ invariant, the anti-re-sprawl rule) lives here so the scaffold stays copyable.
 
 ## Authored LOC Budget
 
-The authored-source cap is 40,000 lines. The additional headroom admits maintained cross-vendor runtime surfaces and the integration contracts
-needed to qualify them without forcing unrelated production code out of the repository. Generated bindings remain derived and unbudgeted only
-when they carry a generated marker and are reproducible; the larger cap is not permission to retain dead probes, duplicate route authority, or
-superseded compatibility paths. A 30,000-line core remains the long-term consolidation target, but lowering the enforced cap is a separate,
-explicit policy decision after the retained production surface is measured.
+The authored-source cap is 40,000 lines on production branches (dev/master). The exp route deliberately carries
+100,000 lines as implementation headroom for the cross-vendor bringup campaign: the additional headroom admits
+maintained cross-vendor runtime surfaces and the integration contracts needed to qualify them without forcing
+unrelated production code out of the repository. Generated bindings remain derived and unbudgeted only when they
+carry a generated marker and are reproducible; the larger cap is not permission to retain dead probes, duplicate
+route authority, or superseded compatibility paths. A 30,000-line core remains the long-term consolidation target,
+but changing the enforced cap requires an explicit policy decision. Promotion from exp to dev must re-decide the
+number against what the campaign actually leaves behind rather than inheriting 100,000 by default.
 
 ## Commit Prefixes
 
