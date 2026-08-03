@@ -43,9 +43,11 @@ us/poll) come from the PRE-TUNING 4.39 s run (`/tmp/nv_exec_profile.log`) and mu
 reused to size or name the cause on the 44-46 ms schedule (correction, section 1.1).
 
 Structure of the wall: `wait()` CPU time (23.7 ms) tracks GPU busy (24.1 ms), so the waits
-are mostly overlapped with execution; the **non-overlapped host submit cost is wall - busy =
-~20-22 ms across 10 submits (~2 ms each)** (campaign doc section 11.2). The split of that
-residual between submit latency and unmeasured polling cost is not yet established.
+are mostly overlapped with execution; the **wall-minus-busy residual is ~20-22 ms across 10
+submits** (campaign doc section 11.2). This residual is OBSERVED arithmetic, not a named
+cause: its split between submit latency, polling cost, and overlap is NOT instrumented on
+the tuned schedule (section 1.1 instrument (d)). Any sentence elsewhere that calls this
+residual "submit cost" is superseded by this scope.
 
 Why B3 is the last prefill lever: the fp16-path busy ceiling is **512/24.1 ms = 21.2k tok/s,
 above llama's 14,250** (same-session P5: 14,468.4). The promoted prefill path already reaches
@@ -87,18 +89,19 @@ In order of size:
    an NV-specific path.
 3. **(c) Graph replay of the whole schedule.** Already active at the group level (the warm
    pass is 8 replayed groups). Extending replay to the whole schedule removes submits, which
-   is where the ~20-22 ms non-overlapped cost lives. This is the endgame shape.
+   is the candidate target of the ~20-22 ms non-overlapped residual (cause split pending
+   instrument (d)). This is the endgame shape.
 
 Two facts decide the shape (campaign doc section 11.3): wait time (23.7 ms) approximately
 equals GPU busy (24.1 ms), so **(a)/(b) alone may not cut single-pass wall** - they remove
-the constant factor, but the ~20-22 ms non-overlapped submit is the real target; and the
-submit path is shared HCQ code that also serves AMD, so a blind change without an AMD control
-risks the shared target.
+the constant factor, but the ~20-22 ms non-overlapped residual is the real target (its
+submit-vs-polling split is pending instrument (d)); and the submit path is shared HCQ code
+that also serves AMD, so a blind change without an AMD control risks the shared target.
 
 Recommended ordering: (a) is the smallest first probe (closed-default, measurable on both
 targets, and it buys the AMD runtime row cheaply); (c) is the endgame that can actually land
 the envelope. (b) is the riskiest shape and should only be opened if (a)'s measured wait-time
-collapse proves insufficient because the remaining wall is the non-overlapped submit.
+collapse proves insufficient because the remaining wall is the non-overlapped residual.
 
 ## 3. AMD control requirement
 

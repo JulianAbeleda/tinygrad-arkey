@@ -1,12 +1,14 @@
 # NV campaign forward-path amendment - comments addressed
 
 Date: 2026-08-03
-Status: response record. This document records that every forward-path item in
-`nv-campaign-forward-review-amendment-20260803.md` section 4 is now addressed by a
-committed, verified deliverable. It responds to the reviewer amendment (the
-response-of-record); it supersedes nothing and authorizes no implementation. Branch
-boundary: tinygrad `nvidia-bringup-20260731`, pushed and in sync at `bbd825f3e`;
-the review corrections are recorded in section 6 and its follow-up commit.
+Status: response record. This document records the DISPOSITION of every forward-path
+item in `nv-campaign-forward-review-amendment-20260803.md` section 4, each with an
+explicit lifecycle state: delivered items are committed and verified; gate items are
+recorded as UNRESOLVED, and "recorded" does not mean "complete". It responds to the
+reviewer amendment (the response-of-record); it supersedes nothing and authorizes no
+implementation. Branch boundary: tinygrad `nvidia-bringup-20260731`, pushed and in sync
+at `bbd825f3e`; the review corrections are recorded in section 6 and its follow-up
+commit.
 
 ## 1. What was asked (amendment section 4, condensed)
 
@@ -22,14 +24,14 @@ NV and AMD before landing, without using decode progress as its gate.
 
 ## 2. What was delivered
 
-| amendment item | deliverable | commit | verification |
-| --- | --- | --- | --- |
-| Decode 1 - state-of-record | parity record amended: M2 open for NV:sm_120, M3/M4/M5/Path 3 closed | `fcf3774f9` | parity doc now names the reproducible baseline |
-| Decode 2 - decompose M4 | isolated per-variant census/wall rows; FFN-down recompute defect confirmed | `09cfb4c26` | controls reproduce the parity baseline; defect is measured, not inferred |
-| Decode 3 - M5 boundary P0 | typed output-layout/view-preservation contract, closed-default, consumer-specific | `7a4acdece` | exact UOp chain and all pinned hashes verified against HEAD; infrastructure may land closed, route opens only with measured benefit |
-| Decode 5 - GEMV-efficiency scopes | L2/L4/flash substrate items scoped; wall ranking pending (node-sum upper bounds, not newly measured wall opportunity) | `d3a748450` | every evidence number and hash verified against the source records |
-| Prefill 2 - scope B3 | independent prefill runtime lever scope with AMD control requirement | `54749a342` | re-characterized on the tuned schedule; pre-tuning polling figures withdrawn; same-run cause measurement required before naming the cause |
-| Decode 4, 6 and Prefill 1, 3 | recorded as gates, not done | n/a | no implementation, no record change, no forecast published |
+| amendment item | state | deliverable | commit | verification |
+| --- | --- | --- | --- | --- |
+| Decode 1 - state-of-record | LANDED | parity record amended: M2 open for NV:sm_120, M3/M4/M5/Path 3 closed | `fcf3774f9` | parity doc now names the reproducible baseline |
+| Decode 2 - decompose M4 | MEASURED | isolated per-variant census/wall rows; FFN-down recompute defect confirmed | `09cfb4c26` | controls reproduce the parity baseline; defect is measured, not inferred |
+| Decode 3 - M5 boundary P0 | SCOPED | typed output-layout/view-preservation contract, closed-default, consumer-specific | `7a4acdece` | exact UOp chain and all pinned hashes verified against HEAD; infrastructure may land closed, route opens only with measured benefit |
+| Decode 5 - GEMV-efficiency scopes | SCOPED (wall ranking PENDING) | L2/L4/flash substrate items ordered by node-sum upper bounds, not newly measured wall opportunity | `d3a748450` | every evidence number and hash verified against the source records |
+| Prefill 2 - scope B3 | SCOPED | independent prefill runtime lever scope with AMD control requirement | `54749a342` | re-characterized on the tuned schedule; pre-tuning polling figures withdrawn; same-run cause measurement required before naming the cause |
+| Decode 4, 6 and Prefill 1, 3 | UNRESOLVED (gates) | recorded as gates, not done | n/a | no implementation, no record change, no forecast published; the AMD control leg has not run |
 
 All four commits are on `nvidia-bringup-20260731` only, pushed
 `fcf3774f9..09cfb4c26`, branch in sync with origin; the corrections revision follows
@@ -52,6 +54,13 @@ a time on Qwen3-8B-Q4_K_M, d512 and d4096, nmeas=20, reps=3:
 | residual_add (o-proj) | +69 us, +36 kernels | -1.15% | clean; boundary P0 eligible |
 | fp16_cast (k/v) | +14 us, 0 net kernels | -0.13% | run noise; overlaps M5 |
 | ffn_down_fused | +1321 us, +18 kernels | -18.2% | rejected; recompute defect |
+
+Evidence class for every row: MEASURED 2026-08-03, NV sm_120, Qwen3-8B-Q4_K_M,
+max_context 4608, nmeas=20 reps=3, DEBUG=2 one-token census, probe
+`/tmp/m4_decomp_probe.py`; source `m4-decomposition-measurement-record-20260803.md`.
+The deltas are per-variant vs the same-session all-closed control (6181.6 us / 172.835
+tok/s at d512) and are DIAGNOSTIC, not an arithmetic decomposition of the combined
+record's +1264 us.
 
 The FFN-down defect claim from amendment section 2.3 is now directly confirmed: fused
 `q4k_g3_lanemap_gemv_epi_ffndown_4096_12288` is 98.16 us at d512 / 98.56 us at d4096 vs
@@ -142,6 +151,18 @@ All four corrections are recorded here and in the amended source documents:
    boundary is `bbd825f3e`; M5 infrastructure may land closed but the
    `decode_flash_combine_fusion` route opens only with measured benefit (section 5;
    `m5-variant-reopen-boundary-p0-scope-20260803.md` section 8).
+
+Global consistency pass (same day, after the four corrections): the superseded claims
+were removed from their CANONICAL SOURCES, not just qualified here. Rewritten in place:
+`decode-gemv-efficiency-forward-scope-20260803.md` (title, sections 1-2: item order is
+node-sum, wall ranking PENDING), `b3-prefill-host-overhead-scope-20260803.md` (section 1:
+wall-minus-busy is an OBSERVED residual, not "submit cost"), `nv-performance-campaign-scope-20260801.md`
+(section 8.5 provenance note; sections 11.2-11.3: residual split not instrumented, old
+poll figures labeled pre-tuning), `nv-campaign-forward-review-20260803.md` (sections 1 and
+7: B3 cause INFERRED pending instrumentation; M4 residual now MEASURED),
+`decode-parity-endgame-design-20260803.md` (section 5), `decode-norm-fusion-paths-forward-20260802.md`
+(section 8.1), and `m4-q4k-epilogue-measurement-record-20260802.md` (root-cause sentence
+corrected: the dominant mechanism is the FFN-down recompute, not the boundary copies).
 
 ## 7. References
 

@@ -49,9 +49,14 @@ kernel absorbs 36 E_128_32_3 silu kernels and 72 E_32_32_4 residual/h+ffn_out ke
 total), but adds 72 E_32_32_4_86a2 copies for gate_out/up_out/normed_h inputs. Net +126
 copy kernels vs -54 residual-add + -108 ffn elementwise = +72 E_ (matches observed).
 
-The root cause is the same as M3: the `uop_program` boundary realizes each extra input
-as a separate buffer, creating a per-input copy kernel. This is not fixable in M4's scope
-(paths 1/2/3 in `decode-norm-fusion-paths-forward-20260802.md` are prerequisites).
+The boundary mechanism is the same as M3: the `uop_program` boundary realizes each extra
+input as a separate buffer, creating a per-input copy kernel. This is not fixable in M4's
+scope (paths 1/2/3 in `decode-norm-fusion-paths-forward-20260802.md` are prerequisites).
+CORRECTION (2026-08-03): the 2026-08-03 decomposition
+(`m4-decomposition-measurement-record-20260803.md`) shows the boundary copies are the
+mechanism for the +126 copy class only; the DOMINANT regression mechanism is the
+`ffn_down_fused` SiLU recompute (+1295 us/token, 3.74x per kernel), which the combined
+record's "root cause" sentence did not isolate. This record stays closed either way.
 
 ## Wall tok/s (d512, 5 reps median, first token)
 

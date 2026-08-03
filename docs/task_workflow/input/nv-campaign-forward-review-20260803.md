@@ -13,8 +13,10 @@ Prefill: P1 gate MET (warm pp512 11.2-11.6k tok/s from ~110, GPU busy 961->98.8m
 4.3s->44-46ms). P2 resolved by P1's mechanism (all 252 linears on the fp16 overlay path,
 no build). P5 full sweep: pp1024/2048/4096 at 0.97x/1.05x/0.99x of llama (pp2048 measured
 above llama). Remaining prefill lever: host overhead B3 (1.9x wall/busy vs llama's
-1.15-1.35x envelope), sized (23.7ms polling in 44-46ms wall), root cause named
-(`HcqView` memoryview-per-poll, `hcq.py:285`), requires an AMD control before landing.
+1.15-1.35x envelope; wait() CPU 23.7-23.8ms MEASURED on the tuned schedule). The
+per-poll mechanism (fresh memoryview + cast per poll, `hcq.py:262`) is code-verified, but
+its tuned-schedule cost is INFERRED pending same-run instrumentation (B3 scope section
+1.1); the cause is NOT named. Requires an AMD control before landing.
 
 Decode: final same-session parity rows (2026-08-03, `nv-decode-parity-final-20260802.md`):
 d512 172.8 vs 248.2 (1.44x), d2048 161.5 vs 235.1 (1.46x), d4096 149.0 vs 226.0 (1.52x).
@@ -122,9 +124,12 @@ the superseded text:
 3. **M4 decomposition (supersedes section 3's open-items framing)**: M4's +1264us is not
    explained by 126 copies (~189us). The `ffn_down_fused` prelude recomputes
    `_silu_uop(gate)*up` inside the per-row reduction, once per 4096 output row - the
-   ~1075us residual. M4's combined record stays closed; residual-add, k/v fp16-output,
-   and FFN-down are decomposed and measured independently, and the current FFN-down
-   prelude shape is rejected until a compute-once design exists (amendment section 2.3).
+   ~1075us arithmetic residual. This is now MEASURED, not estimated:
+   `m4-decomposition-measurement-record-20260803.md` shows the fused kernel at 98.16us
+   (d512) / 98.56us (d4096) vs legacy 26.23 / 26.34us (3.74x), with +1295us recompute
+   mass. M4's combined record stays closed; residual-add, k/v fp16-output, and FFN-down
+   are decomposed and measured independently, and the current FFN-down prelude shape is
+   rejected until a compute-once design exists (amendment section 2.3).
 4. **Forecast (supersedes section 3's "known" list and section 6 Q5)**: `0.9-1.0ms` and
    `1.07-1.21x` are withdrawn. The norm hypothesis stands at approximately -144 launches /
    -0.16ms node-sum (paths-forward section 9); no composed decode endpoint is stated

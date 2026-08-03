@@ -415,7 +415,14 @@ withdrawn 92% single number. Ours today: 4.3s wall vs 961 ms busy = 4.5x.
 
 ### 8.5 The ~675 to_mv calls per kernel are named (P3's characterization step)
 
-`/tmp/nv_exec_profile.log` (cProfile, warm run): 1,352,164 `to_mv` calls, all reached from
+PROVENANCE NOTE (2026-08-03): all figures in this section are from the PRE-TUNING 4.39 s
+run (`/tmp/nv_exec_profile.log`), before the tuned 44-46 ms schedule existed. They are
+internally consistent for that run but must NOT be reused to size or name the cause on the
+tuned schedule; the B3 scope (`b3-prefill-host-overhead-scope-20260803.md` section 1.1)
+requires same-run poll count, exclusive polling cost, submission latency, and
+wall-minus-busy residual before any cause claim there.
+
+`/tmp/nv_exec_profile.log` (cProfile, pre-tuning warm run): 1,352,164 `to_mv` calls, all reached from
 `hcq.py:285 wait()` via `HCQSignal.value` -> `cpu_view().view()` -> `HcqView.__init__` ->
 `to_mv(addr, nbytes).cast(fmt)`. 71 waits, ~19k polls each: **one fresh memoryview + cast per
 poll iteration of the `wait()` spin loop**, not per-buffer copies in dispatch. NV never sleeps
@@ -566,13 +573,13 @@ supersedes it.
 ### 11.2 Structure of the 44-46ms wall
 
 wait() CPU time (23.7ms) tracks GPU busy (24.1ms): the host polls while the GPU runs, so the
-waits are mostly overlapped with execution. The non-overlapped host submit cost is therefore
-wall - busy = ~20-22ms across 10 submits (~2ms each). The named cause is unchanged from
-section 8.5: `HCQSignal.wait` polls `self.value`, and the `value` property builds a fresh
-`cpu_view().view(0, 8, 'Q')[0]` memoryview+cast on every poll (~2.5us/poll,
-`tinygrad/runtime/support/hcq.py`), while `NVSignal._sleep` is the base no-op stub (it only
-sleeps after 200ms elapsed). With 8 graph groups and 10 waits per pass, ~23.7ms of wall is
-Python-speed polling.
+waits are mostly overlapped with execution. The wall-minus-busy residual is ~20-22ms across
+10 submits. Its internal split - submit latency vs polling vs overlap - is NOT instrumented
+on the tuned schedule. The ~2.5 us/poll attribution and the "~23.7ms of wall is Python-speed
+polling" sentence from section 8.5 belong to the PRE-TUNING 4.39s run and are superseded
+here by `b3-prefill-host-overhead-scope-20260803.md` section 1.1: the mechanism
+(fresh `to_mv` + cast per poll, `tinygrad/runtime/support/hcq.py:262`) is code-verified,
+its tuned-schedule cost is INFERRED pending same-run measurement.
 
 ### 11.3 Options and recommendation
 
@@ -581,14 +588,16 @@ plain memory read; (b) use a real blocking wait on the NV uvm semaphore instead 
 stub; (c) graph replay of the whole schedule - already active at the group level (the warm pass
 is 8 replayed groups). Two facts decide the shape: wait time (23.7ms) approximately equals GPU
 busy (24.1ms), so (a)/(b) alone may not cut single-pass wall - they remove the constant factor
-but the ~20-22ms non-overlapped submit is the real target; and that submit path is shared HCQ
-code that also serves AMD, so a blind change without an AMD control risks the shared target.
+but the ~20-22ms non-overlapped residual is the real target (its submit-vs-polling split is
+pending instrument (d) in the B3 scope); and that submit path is shared HCQ code that also
+serves AMD, so a blind change without an AMD control risks the shared target.
 
 Recommendation: record this analysis and leave B3 open as a runtime build requiring an AMD
 control. The current warm wall is 44-46ms = 11.2-11.6k tok/s (P1 gate MET), the fp16-path busy
-ceiling is 512/24.1ms = 21.2k tok/s - above llama's 14,250 - so the entire remaining prefill
-gap vs llama is this host factor. P3 is therefore the last prefill lever, and it is a
-host-side runtime build, not a kernel.
+ceiling is 512/24.1ms = 21.2k tok/s - above llama's 14,250 - so the remaining prefill gap vs
+llama is host-side (wall/busy 1.9x vs llama's 1.15-1.35x envelope); its internal cause split
+is pending the B3 same-run instrumentation. P3 is therefore the last prefill lever, and it is
+a host-side runtime build, not a kernel.
 
 ## 12. P4 results - decode gap measured, kernel-bound, tuning left open (2026-08-02)
 

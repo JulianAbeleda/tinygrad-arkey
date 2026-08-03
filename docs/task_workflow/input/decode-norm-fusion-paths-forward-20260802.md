@@ -142,9 +142,10 @@ where they disagree.
 Decode is 95% GPU-busy (5.83ms busy of 6.12ms wall at d512) and the flash-decode rollout is
 already graph-replayed into 6 batches (`batched 32/64/128/256/512/29` = 1021 programs/token) -
 the B3 replay mechanism is in place for decode. The per-kernel host-cost ceiling for decode is
-therefore ~5%, not the "order +10-20%" stated in section 3. The 840x per-kernel / 1.9x
-wall-busy evidence is the PREFILL prime path (24.1ms busy / 44-46ms wall, 1.35M to_mv calls),
-where B3 remains open. Path 2 stays a live lever for prefill; it is demoted for decode.
+therefore ~5%, not the "order +10-20%" stated in section 3. The 1.9x wall-busy evidence is
+the PREFILL prime path (24.1ms busy / 44-46ms wall on the tuned schedule; the 1.35M to_mv
+calls are from the pre-tuning 4.39s run and do not transfer - B3 scope section 1.1), where B3
+remains open. Path 2 stays a live lever for prefill; it is demoted for decode.
 
 ### 8.2 llama's shape argues for Path 3 (generic norm), not Path 1
 

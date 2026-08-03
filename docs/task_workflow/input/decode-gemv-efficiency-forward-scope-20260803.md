@@ -1,4 +1,4 @@
-# Decode GEMV-efficiency forward scope - L2 partial / L4 vocab / flash substrate (ranked)
+# Decode GEMV-efficiency forward scope - L2 partial / L4 vocab / flash substrate (ordered; wall ranking pending)
 
 Date: 2026-08-03
 
@@ -53,18 +53,23 @@ by amendment section 2.4 and is not restated here.
 verdicts this scope builds on: L3 flash = SUBSTRATE (section 10), L4 values row landed
 (section 10), L5 q4k lanemap = SUBSTRATE (section 11), L2 partial = SUBSTRATE
 (section 11), M2 partial in-kernel merge non-landing (section 12). This document turns
-those verdicts into separate named scope items, ranked by measured wall opportunity.
+those verdicts into separate named scope items. The item order is PROVISIONAL: it is a
+node-sum upper-bound ordering, NOT a measured wall ranking. The wall ranking is PENDING
+until each item gets its isolated same-session d512 wall measurement (section 7); the
+amendment's "ranked by newly measured wall opportunity" requirement is therefore not yet
+met by this document.
 
 ---
 
-## 2. The ranked scope list
+## 2. The scope list (provisional order, wall ranking pending)
 
-Ranking is by the measured wall opportunity behind each item: the node-sum recovery
-upper bound per the current evidence, read as an upper bound only (section 7). Ordering
-matches amendment section 4.1 item 5. The like-for-like cap discipline is item D: a
-bounding rule for the GEMV-class claims, not a recovery item.
+Order is by the node-sum recovery upper bound per the current evidence, read as an upper
+bound only (section 7). No item is ranked by wall opportunity yet: that requires the
+isolated same-session d512 wall measurement each item carries in its own implementation
+scope. Ordering matches amendment section 4.1 item 5's item set; the like-for-like cap
+discipline is item D: a bounding rule for the GEMV-class claims, not a recovery item.
 
-| rank | scope | class | node-sum recovery (upper bound) |
+| order | scope | class | node-sum recovery (upper bound) |
 | --- | --- | --- | ---: |
 | A | L2 Q6K partial single-pass | SUBSTRATE | ~0.25 ms |
 | B | L4 vocab substrate fusion | SUBSTRATE | ~0.14-0.24 ms |

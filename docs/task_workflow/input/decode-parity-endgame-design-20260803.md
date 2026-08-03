@@ -146,10 +146,11 @@ faster at raw GEMM rate than the fp16-mma ceiling this campaign can reach). Beyo
 parity lives in two places:
 
 - Prefill pp512: the measured busy ceiling is 512/24.1ms = 21.2k tok/s - ABOVE llama's
-  14,250. The entire remaining prefill gap is the host factor (B3: 23.7ms polling in a
-  44-46ms wall, `HcqView` memoryview-per-poll at `hcq.py:285`, three ranked fix shapes).
-  Landing B3 pushes prefill past llama. It requires the AMD control run before landing
-  (the submit path is shared HCQ code).
+  14,250. The remaining prefill gap is host-side: wait() CPU 23.7-23.8ms is MEASURED on
+  the tuned schedule, and the per-poll memoryview mechanism (`hcq.py:262`) is
+  code-verified, but its tuned-schedule cost is INFERRED pending same-run instrumentation
+  (B3 scope section 1.1). Landing B3 pushes prefill past llama. It requires the AMD
+  control run before landing (the submit path is shared HCQ code).
 - Decode beyond parity: L2 single-pass partial, L4 vocab substrate fusion, and the flash
   tile structure are substrate-parked with measured masses; each is a separate scope
   after L1 lands, not part of this design.
