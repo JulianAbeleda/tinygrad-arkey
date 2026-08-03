@@ -41,7 +41,8 @@ from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OU
                                            prefill_activation, prefill_output, prefill_scratch, runtime_activation,
                                            runtime_input, runtime_output,
                                            runtime_persistent, runtime_scratch)
-from tinygrad.llm.model_route_plan import build_model_route_plan, decode_epilogue_fusion_promoted, decode_norm_fusion_promoted
+from tinygrad.llm.model_route_plan import (build_model_route_plan, decode_norm_fusion_promoted,
+  decode_q4k_epilogue_fusion_promoted)
 from tinygrad.llm.prefill_candidate_runtime import decode_prefill_graph_candidate_set, automatic_promoted_prefill_graph_policy
 from tinygrad.llm.physical_memory_ledger import AllocationOwner, bind_allocation_owner
 from tinygrad.uop.ops import Ops, resolve
@@ -528,7 +529,7 @@ class FFNBlock:
   # return writes that reset this block's state after a cache mismatch
   def _state_reset_ops(self) -> list[Tensor]: return []
   def _init_state(self, x:Tensor): raise NotImplementedError
-  def _attention(self, x:Tensor, start_pos:int|UOp, ring_freqs=None) -> Tensor: raise NotImplementedError
+  def _attention(self, x:Tensor, start_pos:int|UOp, ring_freqs=None, residual_for_output:Tensor|None=None) -> Tensor: raise NotImplementedError
 
   def __call__(self, x: Tensor, start_pos: int|UOp):
     self._init_state(x)
@@ -540,17 +541,43 @@ class FFNBlock:
     def _run(x:Tensor, start_pos:int|UOp, ring_freqs):
       _prefill = getattr(self, "_is_prefill", False)
       _fused_norm = not _prefill and getattr(self, "_decode_norm_fusion_promoted", False)
+      _epi_fused = not _prefill and getattr(self, "_decode_q4k_epilogue_fusion_promoted", False)
       with role_metadata("rms_norm"):
         _nx = _decode_rmsnorm(self.attn_norm, x, _fused_norm, dtypes.float16)
         normed_x = _prefill_semantic(_prefill, prefill_scratch, _nx if _nx is not None else self.attn_norm(x))
-      attn_out = self._attention(normed_x, start_pos, ring_freqs)
-      with role_metadata("residual"): h = _prefill_semantic(_prefill, prefill_activation, x + attn_out)
+      # L1 M4: o-proj residual-add epilogue absorption. When the gate is open, the attn_output
+      # GEMV adds the block input x as an in-kernel epilogue, saving the generic E_32_32_4
+      # elementwise add kernel. The residual is handed to _attention only when THIS block's
+      # attn_output is an admitted Q4K primitive -- the absorption signal, not the promotion record
+      # (MLA/GatedDeltaNet blocks and nn.Linear attn_output cannot absorb; dropping x there corrupts h).
+      _attn_linear = getattr(self, "attn_output", None)
+      _epi_residual = (_epi_fused and isinstance(_attn_linear, Q4KPrimitiveLinear) and
+        getattr(getattr(_attn_linear, "route_admission", None), "q4k_epilogue_fusion_admitted", False))
+      attn_out = self._attention(normed_x, start_pos, ring_freqs, residual_for_output=(x if _epi_residual else None))
+      with role_metadata("residual"):
+        h = _prefill_semantic(_prefill, prefill_activation,
+          attn_out if _epi_residual else x + attn_out)
       with role_metadata("rms_norm"):
         _nh = _decode_rmsnorm(self.ffn_norm, h, _fused_norm, dtypes.float16)
         normed_h = _prefill_semantic(_prefill, prefill_scratch, _nh if _nh is not None else self.ffn_norm(h))
-      ffn_out = self._feed_forward(normed_h)
+      # L1 M4: ffn_down silu*mul prelude + residual epilogue absorption. When the gate is open,
+      # the down GEMV reads gate_out and up_out directly and computes silu(gate)*up inline (no
+      # E_128_32_3 elementwise kernel), then adds h as an in-kernel epilogue (no E_32_32_4
+      # residual-add kernel). The h add is absorbed only when THIS block's ffn_down is an admitted
+      # Q4K primitive -- again the absorption signal, never the record alone.
+      _ffn_absorbed = False
+      _ffn_down_linear = getattr(self, "ffn_down", None)
+      if (_epi_fused and isinstance(_ffn_down_linear, Q4KPrimitiveLinear) and
+          getattr(getattr(_ffn_down_linear, "route_admission", None), "q4k_epilogue_fusion_admitted", False)):
+        gate_out = self.ffn_gate(normed_h)
+        up_out = self.ffn_up(normed_h)
+        ffn_out = self.ffn_down(gate_out, gate_out=gate_out, up_out=up_out, normed_h=h)
+        _ffn_absorbed = True
+      else:
+        ffn_out = self._feed_forward(normed_h)
       with role_metadata("residual"):
-        return _prefill_semantic(_prefill, prefill_activation, (h + ffn_out).contiguous())
+        return _prefill_semantic(_prefill, prefill_activation,
+          (ffn_out if _ffn_absorbed else h + ffn_out).contiguous())
     # @function wraps the traced return in a call/gettuple node. Mark that concrete block-output boundary as well as
     # its residual creation site so callification cannot hide the allocation identity from the manifest.
     return _prefill_semantic(getattr(self, "_is_prefill", False), prefill_activation, _run(x, start_pos, _rf).contiguous())
@@ -569,7 +596,7 @@ class TransformerBlock(FFNBlock):
     self.attn_output = nn.Linear(config.head_dim * config.n_heads, config.dim, bias=False)
     if config.qk_norm: self.attn_q_norm, self.attn_k_norm = nn.RMSNorm(config.qk_norm, config.norm_eps), nn.RMSNorm(config.qk_norm, config.norm_eps)
 
-  def _attention(self, x:Tensor, start_pos:int|UOp, ring_freqs=None) -> Tensor:
+  def _attention(self, x:Tensor, start_pos:int|UOp, ring_freqs=None, residual_for_output:Tensor|None=None) -> Tensor:
     _prefill = getattr(self, "_is_prefill", False)
     if getattr(self, '_prefill_v2', False) and not hasattr(self, "attn_qkv"):  # prefill v2: fp16 isolated q/k/v
       q, k, v = (_prefill_semantic(_prefill, prefill_scratch, _pf16(lin, x).contiguous())
@@ -740,8 +767,16 @@ class TransformerBlock(FFNBlock):
                                q.scaled_dot_product_attention(k, v, attn_mask=mask, enable_gqa=True))  # (B,H,T,Hd)
     attn = attn.transpose(1, 2).reshape(B, T, -1)                                    # back to (B,T,D)
     out_in = attn if not self.config.attn_output_gate else (attn * gate.sigmoid())
+    # L1 M4: when residual_for_output is set (q4k epilogue gate open AND this block's attn_output is an
+    # admitted Q4K primitive), the attn_output GEMV adds the residual in-kernel instead of as a separate
+    # elementwise kernel. The isinstance guard keeps an nn.Linear attn_output from seeing the kwarg.
+    _has_residual = residual_for_output is not None and isinstance(self.attn_output, Q4KPrimitiveLinear)
     if getattr(self, '_prefill_v2', False):
-      return _prefill_semantic(_prefill, prefill_activation, _pf16(self.attn_output, out_in).contiguous())
+      out = _pf16(self.attn_output, out_in)
+      return _prefill_semantic(_prefill, prefill_activation, out.contiguous())
+    if _has_residual:
+      return _prefill_semantic(_prefill, prefill_activation,
+        self.attn_output(out_in, residual=residual_for_output))
     return _prefill_semantic(_prefill, prefill_activation, self.attn_output(out_in))
 
   def _init_state(self, x:Tensor):
@@ -800,7 +835,7 @@ class MLATransformerBlock(FFNBlock):
     self.attn_v_b = {"weight": Tensor.zeros(config.n_heads, config.v_head_dim, config.kv_lora_rank)}
     self.attn_output = nn.Linear(config.n_heads * config.v_head_dim, config.dim, bias=False)
 
-  def _attention(self, x:Tensor, start_pos:int|UOp, ring_freqs=None) -> Tensor:
+  def _attention(self, x:Tensor, start_pos:int|UOp, ring_freqs=None, residual_for_output:Tensor|None=None) -> Tensor:
     _prefill = getattr(self, "_is_prefill", False)
     mark_scratch = lambda value: _prefill_semantic(_prefill, prefill_scratch, value)
     B, T, _ = x.shape
@@ -855,7 +890,7 @@ class GatedDeltaNetBlock(FFNBlock):
     self.ssm_a = Tensor.zeros(self.num_v_heads)
     self.ssm_norm, self.ssm_out = nn.RMSNorm(self.head_v_dim, config.norm_eps), nn.Linear(ssm.inner_size, config.dim, bias=False)
 
-  def _attention(self, x:Tensor, start_pos:int|UOp, ring_freqs=None) -> Tensor:
+  def _attention(self, x:Tensor, start_pos:int|UOp, ring_freqs=None, residual_for_output:Tensor|None=None) -> Tensor:
     _prefill = getattr(self, "_is_prefill", False)
     mark_scratch = lambda value: _prefill_semantic(_prefill, prefill_scratch, value)
     B, T, _ = x.shape
@@ -1357,6 +1392,13 @@ class Transformer:
     _norm_promoted = decode_norm_fusion_promoted((_norm_cap.backend, _norm_cap.architecture))
     model._decode_norm_fusion_promoted = _norm_promoted
     for _b in model.blk: _b._decode_norm_fusion_promoted = _norm_promoted
+    # L1 M4: q4k GEMV epilogue fusion gate. CLOSED default (decode-q4k-epilogue-fusion-route-policy.json,
+    # measured non-landing, m4-q4k-epilogue-measurement-record-20260802.md); M2's Q6K in-kernel merge
+    # keeps its own separate record (decode-epilogue-fusion-route-policy.json, NV sm_120). Same
+    # resolve-once pattern as M3 -- blocks carry their own copy so the traced call sites need no back-ref.
+    _q4k_epi_promoted = decode_q4k_epilogue_fusion_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_q4k_epilogue_fusion_promoted = _q4k_epi_promoted
+    for _b in model.blk: _b._decode_q4k_epilogue_fusion_promoted = _q4k_epi_promoted
     nn.state.load_state_dict(model, state_dict, verbose=False, consume=True, realize=False)  # NOTE: rope_freqs.weight (32,) is unused
     if _norm_promoted:
       # Materialize the packed norm weights once at load (~600KB total fp16) so the fused decode

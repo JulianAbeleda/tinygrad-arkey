@@ -170,6 +170,26 @@ def decode_epilogue_fusion_promoted(target:Target) -> bool:
   """Policy authority for the L1 decode epilogue-fusion route (closed default, see the loader above)."""
   return target in _DECODE_EPILOGUE_FUSION_PROMOTED_TARGETS
 
+def load_decode_q4k_epilogue_fusion_promotion(path:str) -> frozenset[Target]:
+  """Read the L1 M4 q4k GEMV epilogue-fusion promotion record (boltbeam.route_policy.v1, same schema
+  family as `load_decode_epilogue_fusion_promotion`). CLOSED default; deliberately a SEPARATE record from
+  M2's `decode_epilogue_fusion` so the measured Q6K in-kernel merge stays NV-promoted while the measured
+  non-landing q4k epilogue variants stay off on every target (m4-q4k-epilogue-measurement-record-20260802.md).
+  A document without `promoted_targets` -- or with an empty list -- promotes nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_Q4K_EPILOGUE_FUSION_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-q4k-epilogue-fusion-route-policy.json"
+_DECODE_Q4K_EPILOGUE_FUSION_PROMOTED_TARGETS: frozenset[Target] = load_decode_q4k_epilogue_fusion_promotion(_DECODE_Q4K_EPILOGUE_FUSION_PROMOTION_RECORD)
+
+def decode_q4k_epilogue_fusion_promoted(target:Target) -> bool:
+  """Policy authority for the L1 M4 q4k GEMV epilogue-fusion route (closed default, see the loader above)."""
+  return target in _DECODE_Q4K_EPILOGUE_FUSION_PROMOTED_TARGETS
+
 def load_decode_norm_fusion_promotion(path:str) -> frozenset[Target]:
   """Read the L1 M3 fused decode RMSNorm promotion record (boltbeam.route_policy.v1, same schema family
   as `load_decode_epilogue_fusion_promotion`). CLOSED default with the same semantics: a document without

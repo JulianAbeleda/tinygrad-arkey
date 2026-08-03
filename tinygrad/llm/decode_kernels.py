@@ -6,6 +6,7 @@ lowerings used for inference.  Keep this module independent of ``extra``.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -107,11 +108,79 @@ def _q4k_block_dot_packed_load(words:UOp, x:UOp, base:UOp, x_block:UOp, lane4:UO
   return contrib
 
 
-def q4k_g3_lanemap_gemv_kernel(rows:int, k:int, lanes:int=WARP):
-  """Lower the search-selected G3 lane map without changing its UOps or name."""
+def _silu_uop(val):
+  """SiLU in the exact lowering Tensor.silu uses (tinygrad/mixin/elementwise.py:786):
+  self * (1 + (self * (-1/math.log(2))).exp2()).reciprocal(). Mirroring the expression
+  op-for-op (including Ops.RECIPROCAL) keeps the fused prelude bit-identical to the
+  legacy graph's silu kernels, so the decode sha256 cannot move from rounding deltas."""
+  one = UOp.const(dtypes.float32, 1.0)
+  log2e_neg = UOp.const(dtypes.float32, -1.0 / math.log(2))
+  return val * (one + (val * log2e_neg).exp2()).reciprocal()
+
+
+@dataclass(frozen=True)
+class Q4KGEMVEpilogue:
+  """Optional epilogue fused into a Q4_K G3 GEMV kernel (l1-decode-plumbing-fusion-design-20260802.md
+  section 2.1). Default kind="" means the legacy kernel (byte-identical UOps). Fused variants get NEW
+  kernel names so legacy hashes are untouched. The three variants match the design doc's census
+  absorbable classes: (a) o-proj residual add, (b) ffn_down silu(gate)*up prelude + h+ffn_out
+  residual epilogue, (c) k/v fp16 cast write."""
+  kind: str = ""  # "", "residual_add", "ffn_down_fused", "fp16_cast"
+
+  @property
+  def kernel_suffix(self) -> str:
+    if self.kind == "": return ""
+    if self.kind == "residual_add": return "_epi_resadd"
+    if self.kind == "ffn_down_fused": return "_epi_ffndown"
+    if self.kind == "fp16_cast": return "_epi_f16cast"
+    raise ValueError(f"unknown Q4K GEMV epilogue kind {self.kind!r}")
+
+  def validate(self, rows: int, k: int) -> None:
+    if self.kind == "": return
+    if self.kind not in ("residual_add", "ffn_down_fused", "fp16_cast"):
+      raise ValueError(f"unsupported Q4K GEMV epilogue kind {self.kind!r}")
+    if self.kind == "ffn_down_fused" and rows != 4096:
+      raise ValueError(f"ffn_down_fused epilogue requires rows=4096, got rows={rows}")
+
+
+def q4k_g3_lanemap_gemv_kernel(rows:int, k:int, lanes:int=WARP, epilogue:Q4KGEMVEpilogue|None=None):
+  """Lower the search-selected G3 lane map. When epilogue is None, the emitted UOps are byte-identical
+  to the legacy kernel. Fused variants get NEW kernel names (e.g. q4k_g3_lanemap_gemv_epi_resadd_...)
+  so legacy hashes are untouched (pg3 guarantee)."""
+  epi = epilogue or Q4KGEMVEpilogue()
+  epi.validate(rows, k)
   lm = Q4KGateUpLaneMap(k=k, n=rows, lane_extent=lanes)
   lm.validate()
-  def kernel(out:UOp, words:UOp, x:UOp) -> UOp:
+  name = f"q4k_g3_lanemap_gemv{epi.kernel_suffix}_{rows}_{k}"
+
+  if epi.kind == "ffn_down_fused":
+    def kernel(out:UOp, words:UOp, gate_out:UOp, up_out:UOp, normed_h:UOp) -> UOp:
+      row, lane = UOp.special(rows, "gidx0"), UOp.special(lanes, "lidx0")
+      part = LanePartition(lane, lane_extent=lm.lane_extent, words_per_group=lm.words_per_group)
+      lblk = UOp.range(lm.blocks_per_group, 0, axis_type=AxisType.REDUCE)
+      blk = part.block_group * lm.blocks_per_group + lblk
+      base = (row * lm.k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+      contrib = UOp.const(dtypes.float32, 0.0)
+      for grp in range(8):
+        d, dmin, sc, mn = _q4k_group_params(words, base, grp)
+        qpack = words[base + 4 + (grp//2)*8 + part.word_col].rshift((grp%2)*4).bitwise_and(0x0F0F0F0F)
+        for nib in range(4):
+          pos = part.word_col * 4 + nib
+          q = qpack.rshift(nib*8).bitwise_and(0xf)
+          weight = d * sc.cast(dtypes.float32) * q.cast(dtypes.float32) - dmin * mn.cast(dtypes.float32)
+          idx = blk*Q4_K_BLOCK_ELEMS + grp*32 + pos
+          g = gate_out[idx].cast(dtypes.float32)
+          u = up_out[idx].cast(dtypes.float32)
+          activation = _silu_uop(g) * u
+          contrib = contrib + weight * activation
+      acc = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG)
+      acc = acc.after(acc[0].store(0.0))
+      acc = acc.after(acc[0].store(acc.after(lblk)[0] + contrib).end(lblk))
+      total = _lane_partition_reduce_sum(acc[0], part)
+      return out[row].store(total + normed_h[row].cast(dtypes.float32)).sink(arg=KernelInfo(name=name, opts_to_apply=()))
+    return kernel
+
+  def kernel(out:UOp, words:UOp, x:UOp, *extra:UOp) -> UOp:
     row, lane = UOp.special(rows, "gidx0"), UOp.special(lanes, "lidx0")
     part = LanePartition(lane, lane_extent=lm.lane_extent, words_per_group=lm.words_per_group)
     lblk = UOp.range(lm.blocks_per_group, 0, axis_type=AxisType.REDUCE)
@@ -122,7 +191,15 @@ def q4k_g3_lanemap_gemv_kernel(rows:int, k:int, lanes:int=WARP):
     acc = acc.after(acc[0].store(0.0))
     acc = acc.after(acc[0].store(acc.after(lblk)[0] + contrib).end(lblk))
     total = _lane_partition_reduce_sum(acc[0], part)
-    return out[row].store(total).sink(arg=KernelInfo(name=f"q4k_g3_lanemap_gemv_{rows}_{k}", opts_to_apply=()))
+
+    if epi.kind == "residual_add":
+      result = total + extra[0][row].cast(dtypes.float32)
+    elif epi.kind == "fp16_cast":
+      result = total.cast(dtypes.float16)
+    else:
+      result = total
+
+    return out[row].store(result).sink(arg=KernelInfo(name=name, opts_to_apply=()))
   return kernel
 
 

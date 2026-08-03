@@ -8,7 +8,8 @@ from tinygrad.llm.gguf import MODEL_PARAMETER_ALLOCATION_OWNER
 from tinygrad.llm.memory_semantics import MODEL_PARAMETER, memory_semantic_owner, model_parameter
 from tinygrad.llm.physical_memory_ledger import allocation_owner, bind_allocation_owner
 from tinygrad.llm.decode_routes import q4k_primitive_linear_call, q6k_primitive_linear_call
-from tinygrad.llm.model_route_plan import ModelRoutePlan, build_model_route_plan, decode_epilogue_fusion_promoted
+from tinygrad.llm.model_route_plan import (ModelRoutePlan, build_model_route_plan,
+  decode_epilogue_fusion_promoted, decode_q4k_epilogue_fusion_promoted)
 from tinygrad.llm.qk_layout import Q4_K, Q6_K, QuantFormat
 
 def _qk_generated_policy_entry(policy:dict|None, typ:int, rows:int, cols:int, name:str|None=None) -> dict|None:
@@ -76,16 +77,24 @@ class QKPrimitiveRouteAdmission:
   into one hardcoded target-string boolean is exactly the pre-TG3 bug this scope package removes.
   `epilogue_fusion_promoted` is the L1 decode epilogue-fusion answer (closed default,
   model_route_plan.decode_epilogue_fusion_promoted, l1-decode-plumbing-fusion-design-20260802.md section 5):
-  it gates the fused route variants only -- the legacy `admitted` route is unchanged by it."""
+  it gates the fused route variants only -- the legacy `admitted` route is unchanged by it.
+  `q4k_epilogue_fusion_promoted` is the L1 M4 q4k GEMV epilogue answer (closed default,
+  model_route_plan.decode_q4k_epilogue_fusion_promoted, m4-q4k-epilogue-measurement-record-20260802.md):
+  a SEPARATE record from M2's, so the measured non-landing q4k variants stay off while the Q6K in-kernel
+  merge stays promoted."""
   capability: QKPrimitiveCapability = QKPrimitiveCapability()
   target_promoted: bool = True
   epilogue_fusion_promoted: bool = False
+  q4k_epilogue_fusion_promoted: bool = False
 
   @property
   def admitted(self) -> bool: return self.capability.satisfied and self.target_promoted
 
   @property
   def fusion_admitted(self) -> bool: return self.admitted and self.epilogue_fusion_promoted
+
+  @property
+  def q4k_epilogue_fusion_admitted(self) -> bool: return self.admitted and self.q4k_epilogue_fusion_promoted
 
 def _model_parameter_alias(source:Tensor|None, derived:Tensor) -> Tensor:
   """Attach model ownership to derived storage which already aliases a backing."""
@@ -196,8 +205,12 @@ class Q4KPrimitiveLinear(_QKPrimitiveLinear):
       Q4KPrimitiveStorage(words, source_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes), route_role, route_admission)
     self.kernel_mode = kernel_mode
 
-  def __call__(self, x:Tensor) -> Tensor:
-    return self._call_with_program_facts(lambda: q4k_primitive_linear_call(self, x, self._fallback, self.route_admission.admitted))
+  def __call__(self, x:Tensor, **epilogue_inputs) -> Tensor:
+    """Decode GEMV call. epilogue_inputs are threaded only when the fusion gate
+    (decode_q4k_epilogue_fusion_promoted, closed default) is open and this linear is eligible; otherwise
+    they are silently ignored and the legacy route is used -- the gate-off fallback
+    stays live."""
+    return self._call_with_program_facts(lambda: q4k_primitive_linear_call(self, x, self._fallback, self.route_admission.admitted, epilogue_inputs=epilogue_inputs))
 
 class Q6KPrimitiveLinear(_QKPrimitiveLinear):
   _storage_attr, _prefill_attr, _ggml_type = "q6k_storage", "_prefill_q6k_halfs", 14
@@ -367,7 +380,8 @@ def _install_qk_primitives(model, gguf:pathlib.Path, meta:dict, spec:_QKInstallS
   capability = qk_primitive_capability_from_device_facts(device_facts)
   target_promoted = _qk_target_promoted(route_plan, (capability.backend, capability.architecture))
   route_admission = QKPrimitiveRouteAdmission(capability, target_promoted,
-                                              decode_epilogue_fusion_promoted((capability.backend, capability.architecture)))
+                                              decode_epilogue_fusion_promoted((capability.backend, capability.architecture)),
+                                              decode_q4k_epilogue_fusion_promoted((capability.backend, capability.architecture)))
   for name, dims, typ, off in meta["tensor_infos"]:
     if typ != spec.ggml_type: skipped[spec.not_kind_counter] += 1; continue
     if len(dims) != 2: skipped["not_2d"] += 1; continue

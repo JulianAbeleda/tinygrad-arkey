@@ -1,0 +1,6 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_q4k_epilogue_fusion",
+  "description": "L1 M4 q4k GEMV epilogue absorption promotion record (m4-q4k-epilogue-measurement-record-20260802.md). Measured NON-LANDING on NV sm_120: 1075 kernels / 7533us per token vs the M2 decode baseline 1021 / 6179us, and -18.8% wall tok/s at d512, despite byte-identical tokens (sha 9d6b3787...). The opaque custom-kernel boundary materializes per-input copies (E_32_32_4_86a2 x108+) and the fused ffn_down silu prelude costs ~4x the legacy down kernel (98-108us vs 26.5us). Promotes nothing. Reopens only when a target has a measured copy-free or launch-overhead-equivalent number behind it (decode-norm-fusion-paths-forward-20260802.md paths 1/2/3). M2's Q6K in-kernel merge keeps its own record (decode-epilogue-fusion-route-policy.json, NV sm_120).",
+  "promoted_targets": []
+}

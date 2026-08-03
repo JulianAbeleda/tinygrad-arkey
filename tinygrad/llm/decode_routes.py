@@ -68,23 +68,60 @@ class _Q4KDecodeCandidate:
     return _LinearDecodeBinding(self.candidate_id, self.route_id, self.quant, self.target, self.batch, self.tokens,
                                 linear.in_features, linear.out_features)
 
-  def execute(self, linear:Any, x:Tensor, binding:_LinearDecodeBinding) -> Tensor:
+  def execute(self, linear:Any, x:Tensor, binding:_LinearDecodeBinding,
+              epilogue_inputs:dict[str, Tensor]|None=None) -> Tensor:
     _w = linear.q4k_storage.words.to(x.device).contiguous() if linear.q4k_storage.mode == "q4_ondemand" else linear.q4k_storage.words.to(x.device)
-    _xv = x[:, 0, :].reshape(binding.K).cast(dtypes.float16).contiguous()
+    # L1 M4: q4k GEMV epilogue absorption is gated by its own closed record
+    # (decode-q4k-epilogue-fusion-route-policy.json, measured non-landing) -- NOT M2's
+    # decode_epilogue_fusion record, which stays NV-promoted for the Q6K in-kernel merge only.
+    q4k_epi_admitted = bool(getattr(getattr(linear, "route_admission", None), "q4k_epilogue_fusion_admitted", False))
+    route_role = getattr(linear, "route_role", "")
+    epi_inputs = epilogue_inputs or {}
+    epi_spec = None
+    prog_inputs = [_w]
+
+    if q4k_epi_admitted and route_role:
+
+      if route_role == "attn_qo" and "residual" in epi_inputs:
+        from tinygrad.llm.decode_kernels import Q4KGEMVEpilogue
+        epi_spec = Q4KGEMVEpilogue("residual_add")
+        _xv = x[:, 0, :].reshape(binding.K).cast(dtypes.float16).contiguous()
+        prog_inputs.append(_xv)
+        prog_inputs.append(epi_inputs["residual"][:, 0, :].reshape(binding.N).cast(dtypes.float32))
+      elif route_role == "ffn_down" and all(k in epi_inputs for k in ("gate_out", "up_out", "normed_h")):
+        from tinygrad.llm.decode_kernels import Q4KGEMVEpilogue
+        epi_spec = Q4KGEMVEpilogue("ffn_down_fused")
+        prog_inputs.append(epi_inputs["gate_out"][:, 0, :].reshape(binding.K).cast(dtypes.float32))
+        prog_inputs.append(epi_inputs["up_out"][:, 0, :].reshape(binding.K).cast(dtypes.float32))
+        prog_inputs.append(epi_inputs["normed_h"][:, 0, :].reshape(binding.N).cast(dtypes.float32))
+      elif route_role == "attn_kv" and not epi_inputs:
+        from tinygrad.llm.decode_kernels import Q4KGEMVEpilogue
+        epi_spec = Q4KGEMVEpilogue("fp16_cast")
+        _xv = x[:, 0, :].reshape(binding.K).cast(dtypes.float16).contiguous()
+        prog_inputs.append(_xv)
+
+    if epi_spec is None:
+      _xv = x[:, 0, :].reshape(binding.K).cast(dtypes.float16).contiguous()
+      prog_inputs.append(_xv)
+
+    out_dtype = dtypes.float16 if (epi_spec is not None and epi_spec.kind == "fp16_cast") else dtypes.float32
     program = KernelProgram(binding.route_id, f"{binding.candidate_id}.gemv",
-      KernelProgramProvenance.MACHINE_SEARCH_GENERATED, q4k_g3_lanemap_gemv_kernel(binding.N, binding.K),
-      output_spec=OutputSpec((binding.N,), dtypes.float32))
-    return execute_promoted_program(None, _w, _xv, program=program).reshape(1, 1, binding.N)
+      KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
+      q4k_g3_lanemap_gemv_kernel(binding.N, binding.K, epilogue=epi_spec),
+      output_spec=OutputSpec((binding.N,), out_dtype))
+    return execute_promoted_program(None, *prog_inputs, program=program).reshape(1, 1, binding.N)
 
 # This is a statically promoted result of offline machine search, not an online
 # autotuner. See README.md#why-this-is-machine-search-even-though-the-runtime-is-static.
 Q4K_DECODE_CANDIDATE = _Q4KDecodeCandidate()
 
-def q4k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], Tensor], arch_ok:bool) -> Tensor:
+def q4k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], Tensor], arch_ok:bool,
+                              epilogue_inputs:dict[str, Tensor]|None=None) -> Tensor:
   # Decode GEMV (1 token) or batched verify/prefill GEMM (K tokens). Unsupported bias/shape -> normal graph.
+  # epilogue_inputs are threaded to the fused variant only when the fusion gate is open; the legacy route ignores them.
   binding = Q4K_DECODE_CANDIDATE.bind(linear, x, arch_ok)
   if binding is None: return fallback(x)
-  return Q4K_DECODE_CANDIDATE.execute(linear, x, binding)
+  return Q4K_DECODE_CANDIDATE.execute(linear, x, binding, epilogue_inputs=epilogue_inputs or {})
 
 @dataclass(frozen=True)
 class _Q6KDecodeCandidate:

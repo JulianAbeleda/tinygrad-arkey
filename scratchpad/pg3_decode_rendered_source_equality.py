@@ -63,6 +63,24 @@ def _q4k_ast(rows: int, k: int) -> UOp:
   return q4k_g3_lanemap_gemv_kernel(rows, k)(out, words, x)
 
 
+def _q4k_fused_ast(rows: int, k: int, kind: str) -> UOp:
+  """L1 M4: render a fused Q4K GEMV variant through the epilogue spec."""
+  from tinygrad.llm.decode_kernels import Q4KGEMVEpilogue
+  epi = Q4KGEMVEpilogue(kind)
+  kernel = q4k_g3_lanemap_gemv_kernel(rows, k, epilogue=epi)
+  out = UOp.placeholder((rows,), dtypes.float32, 0)
+  words = UOp.placeholder((rows * (k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK,), dtypes.uint32, 1)
+  if kind == "ffn_down_fused":
+    return kernel(out, words,
+                  UOp.placeholder((k,), dtypes.float32, 2),
+                  UOp.placeholder((k,), dtypes.float32, 3),
+                  UOp.placeholder((rows,), dtypes.float32, 4))
+  x = UOp.placeholder((k,), dtypes.float16, 2)
+  if kind == "residual_add":
+    return kernel(out, words, x, UOp.placeholder((rows,), dtypes.float32, 3))
+  return kernel(out, words, x)
+
+
 def _q6k_gemv_ast(rows: int, k: int, *, parts: int = 1, use_coop: bool = True,
                   reduction: str = "external_sum", row_tile: int = 4) -> UOp:
   spec = q6k_spec_for_role(rows, k, parts=parts, row_tile=row_tile, use_coop=use_coop, reduction=reduction)
@@ -116,6 +134,10 @@ KERNELS = [
   ("q4k_g3_lanemap_gemv_4096_4096", "q/o", lambda: _q4k_ast(4096, 4096)),
   ("q4k_g3_lanemap_gemv_4096_12288", "down", lambda: _q4k_ast(4096, 12288)),
   ("q4k_g3_lanemap_gemv_1024_4096", "k/v", lambda: _q4k_ast(1024, 4096)),
+  # L1 M4: q4k GEMV epilogue absorption (section 2.1). New kernel names so legacy hashes untouched.
+  ("q4k_g3_lanemap_gemv_epi_resadd_4096_4096", "o-proj", lambda: _q4k_fused_ast(4096, 4096, "residual_add")),
+  ("q4k_g3_lanemap_gemv_epi_ffndown_4096_12288", "ffn_down", lambda: _q4k_fused_ast(4096, 12288, "ffn_down_fused")),
+  ("q4k_g3_lanemap_gemv_epi_f16cast_1024_4096", "k/v", lambda: _q4k_fused_ast(1024, 4096, "fp16_cast")),
   ("q6k_gen_coop_4096_12288", "down", lambda: _q6k_gemv_ast(4096, 12288)),
   ("q6k_gen_coop_151936_4096", "vocab", lambda: _q6k_gemv_ast(151936, 4096)),
   ("q6k_gen_partial_1024_4096_4", "k/v", lambda: _q6k_gemv_ast(1024, 4096, parts=4, use_coop=False)),
