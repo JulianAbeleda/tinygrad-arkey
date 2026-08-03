@@ -45,10 +45,19 @@ pp128/pp256 remain the separately scoped short-prompt cliff and are not covered 
 promoted pp512+ path. Provenance: 2026-08-02, RTX 5090 / sm_120, Qwen3-8B-Q4_K_M, warm
 steady-state passes, llama-bench same-session rows.
 
-B3 authority on the tuned pp512 schedule is limited to: 44-46 ms warm wall, 24.1 ms GPU
-busy, 23.7-23.8 ms elapsed inside `wait()`, and a ~20-22 ms wall-minus-busy residual.
-The residual's submit/poll/overlap split is UNRESOLVED pending the same-run
-instrumentation in `b3-prefill-host-overhead-scope-20260803.md` section 1.1.
+B3 authority on the tuned pp512 schedule: the historical fused-ON rows (44-46 ms warm
+wall, 24.1 ms GPU busy, 23.7-23.8 ms elapsed inside `wait()`, ~20-22 ms wall-minus-busy
+residual, 8 graph groups) are UNREPRODUCIBLE in this environment. The fused prefill path
+fails deterministically at both HEAD and the pinned tree `04e500079` with
+`Ops.PACKED_FRAGMENT_LOAD` UOp verification
+(`native_abi='nv_sm120_packed_fragment_hd128_loop_v1'`; the pinned tree with `SPEC=0`
+additionally emits the AMD gfx1100 ABI on NV). They are retained as history, not current
+exact authority (`b3-tuned-schedule-characterization-record-20260803.md`, commit
+`c627d0000`). The measured baseline is the fused-OFF tuned pp512 schedule (same record):
+160.70 ms warm wall, 138.0 ms busy, 6 graph groups. Its wall-minus-busy residual split
+on NV is RESOLVED by the same-run instruments: submit 0.17 ms (0.7%, OBSERVED),
+non-overlapped poll 0.00 ms (0.0%, OBSERVED), other 22.53 ms (99.3%, INFERRED by
+subtraction). The AMD leg of the split remains UNRESOLVED (no AMD GPU, section 7).
 
 ### 2.2 Decode (same-session M2-open rows, `nv-decode-parity-final-20260802.md`)
 
@@ -78,13 +87,15 @@ every depth: token sha `9d6b3787...` 3/3, first token `151936` 3/3; decode sha
 - CLOSED: measured non-landing or rejected mechanism.
 - UNRESOLVED: required evidence or external control does not exist.
 
-## 4. Current work (SCOPED; may proceed now, each under its own gate)
+## 4. Work items and lifecycle status (each under its own gate)
 
 | item | state | gate |
 | --- | --- | --- |
-| Decode GEMV characterization (L2 partial, L4 vocab substrate, flash structure) | SCOPED; A-C order is a provisional node-sum upper-bound order; wall ranking PENDING | isolated same-session d512 measurement per item before any ranking claim |
-| M5 typed-boundary P0 | SCOPED; infrastructure may land closed | route opens only with isolated measured wall benefit, fixed-depth correctness, legacy hash controls |
-| B3 characterization | SCOPED; cause split UNRESOLVED | tuned-schedule same-run poll count, exclusive polling cost, submission latency, residual overlap; AMD runtime leg before any shared change lands |
+| Decode GEMV characterization: L2 partial (Scope A) | CLOSED; measured NO-GO (best standalone 7.38 us vs the 3.3 us llama-class floor; `l2-q6k-partial-singlepass-measurement-record-20260803.md`, 8628ce970/db511334c) | no new additive route row warranted; any fix stays deeper substrate |
+| Decode GEMV characterization: L4 vocab substrate (Scope B) | SCOPED; sole GO as a landing warrant, NOT a wall ranking: fused shape measured 315.9 us vs llama 303.75 us, bit-identical (Stage 2, `l4-vocab-substrate-fusion-measurement-record-20260803.md`, 05b1e9774); wall ranking PENDING (isolated same-session d512 wall measurement not yet run) | landing under its own implementation scope (emitter change, admission, settling, legacy-hash + fixed-depth wall gate); no ranking, composition, or landing before the isolated d512 wall measurement |
+| Decode GEMV characterization: flash score tile structure (Scope C) | CLOSED; measured NO-GO (best zero-load 5.311 us vs the 3.2 us floor; `flash-score-tile-structure-measurement-record-20260803.md`, 9ad8455ec/2f2c5a6b5) | tile structure confirmed SUBSTRATE; any structural change requires a new scope |
+| M5 typed-boundary P0 | LANDED closed; infra committed under a closed default (`m5-typed-boundary-p0-implementation-record-20260803.md`, 1d3ef5d6b/781ba1b5a/858effd46) | `decode_flash_combine_fusion` route stays CLOSED; opens only with isolated measured wall benefit, fixed-depth correctness, legacy hash controls |
+| B3 characterization | SCOPED; NV cause split RESOLVED (c627d0000: submit 0.17 ms OBSERVED, non-overlapped poll 0.00 ms OBSERVED, other 22.53 ms INFERRED); AMD leg UNRESOLVED | fix shape chosen from the measured split; AMD runtime leg before any shared change lands |
 | Short-prompt prefill (pp128/256) | SCOPED, independent | its own scope; inherits no pp512+ qualification |
 
 No item is sequenced by another. L1-first ordering is withdrawn (section 8).
@@ -121,19 +132,27 @@ must demonstrate additional isolated wall benefit before composition.
 
 No beyond endpoint is published from hardware busy ceilings, class deltas, node-sum
 recovery, or unlanded candidates. In particular: the `18-21k tok/s` figure is a
-busy-ceiling bound derived from 512/24.1 ms, not an outcome; "landing B3 pushes prefill
-past llama" is not licensed; and "decode beyond parity" is not an active state while all
+busy-ceiling bound derived from the fused-ON 24.1 ms busy reading, which is
+UNREPRODUCIBLE (section 2.1), and is not an outcome; "landing B3 pushes prefill past
+llama" is not licensed; and "decode beyond parity" is not an active state while all
 measured decode depths remain below parity.
 
-## 7. UNRESOLVED (explicitly, per amendment section 2 and 6.5)
+## 7. UNRESOLVED and CLOSED items (explicitly, per amendment section 2 and 6.5)
 
-- Decode wall ranking: PENDING isolated same-session d512 measurements for L2/L4/flash.
-- B3 cause decomposition: the wall-minus-busy residual's submit/poll/overlap split is
-  UNRESOLVED pending the section 1.1 instruments.
+- Decode wall ranking: L2 partial and flash tile structure are CLOSED measured NO-GO
+  with records (L2: 8628ce970/db511334c; flash: 9ad8455ec/2f2c5a6b5), so no wall ranking
+  applies to them. L4 vocab fusion is the sole GO as a landing warrant (fused shape
+  measured 315.9 us vs llama 303.75 us, bit-identical; 05b1e9774), not a wall ranking;
+  wall ranking PENDING - its isolated same-session d512 wall measurement is not yet run,
+  and L4 is not ranked or landed.
+- B3 cause decomposition: RESOLVED on NV on pp512 fused-OFF (c627d0000) - submit 0.17 ms
+  (0.7%, OBSERVED), non-overlapped poll 0.00 ms (0.0%, OBSERVED), other 22.53 ms (99.3%,
+  INFERRED by subtraction). The AMD leg of the split remains UNRESOLVED (below).
 - AMD leg: no AMD GPU exists on this machine; the runtime control required before any
   shared runtime change lands has not run.
 - Route openings: `decode_flash_combine_fusion`, `decode_q4k_epilogue_fusion`, the norm
-  family, and Path 3 all stay CLOSED until their own measured gates pass.
+  family, and Path 3 all stay CLOSED until their own measured gates pass (M5 infra is
+  LANDED closed; it does not open `decode_flash_combine_fusion`).
 - Any composed endpoint: none exists; none is published from this document.
 
 ## 8. Supersession map and status updates applied
@@ -146,9 +165,15 @@ measured decode depths remain below parity.
 | `nv-campaign-forward-review-20260803.md` (+ amendment) | review history | forward sequencing authority (header names this document) |
 | `nv-campaign-forward-review-comments-addressed-20260803.md` | disposition record for the earlier amendment | sequencing authority |
 | variant-specific scopes (GEMV, M5, B3, short-prompt) | unchanged | nothing |
+| `b3-tuned-schedule-characterization-record-20260803.md` (c627d0000) | measured fused-OFF tuned-pp512 baseline (160.70 ms wall / 138.0 ms busy / 6 groups) and the NV cause split (submit 0.17 ms OBSERVED, non-overlapped poll 0.00 ms OBSERVED, other 22.53 ms INFERRED) | the fused-ON pins (44-46 ms wall / 24.1 ms busy) as current exact authority; UNREPRODUCIBLE (section 2.1) |
+| `l2-q6k-partial-singlepass-measurement-record-20260803.md` (8628ce970/db511334c) | Scope A go/no-go evidence (9-decomposition sweep; 466.6 us anomaly explained) | Scope A as open work; CLOSED measured NO-GO (best 7.38 us vs the 3.3 us floor) |
+| `flash-score-tile-structure-measurement-record-20260803.md` (9ad8455ec/2f2c5a6b5) | Scope C structural sweep; tile structure = SUBSTRATE verdict | Scope C as open work; CLOSED measured NO-GO (best zero-load 5.311 us vs the 3.2 us floor) |
+| `l4-vocab-substrate-fusion-measurement-record-20260803.md` (097f22e6c/05b1e9774) | Stage 2 GO landing warrant: fused shape 315.9 us vs llama 303.75 us, bit-identical | any wall ranking or landing claim; isolated same-session d512 wall still PENDING |
+| `m5-typed-boundary-p0-implementation-record-20260803.md` (1d3ef5d6b/781ba1b5a/858effd46) | P0 infra landed closed (census/wall gates PASS, +0.378 tok/s isolated probe) | `decode_flash_combine_fusion` route opening; the route stays CLOSED |
 
-Status headers of the above documents were updated in the same commit as this document
-where their live-forward framing could mislead a reader.
+Status headers of the superseded documents were updated in the same commit as this
+document where their live-forward framing could mislead a reader. The measurement
+records above were committed with their record status in their own headers.
 
 ## 9. Adversarial consistency report (search of every withdrawn claim)
 
@@ -184,11 +209,13 @@ historical records named in section 8.
    item run is the one whose isolated d512 measurement shows the largest same-session
    wall recovery within its own scope and controls; the measured result replaces the
    provisional node-sum order.
-3. **B3 one scope or split**: B3 remains one scope until the section 1.1 instruments
-   produce the poll/submit/overlap split. If the split shows independent mechanisms, the
-   evidence then splits into polling, submission, and whole-schedule sub-scopes, each
-   with its own gate. The decision is deferred to characterization; this document does
-   not pre-split it.
+3. **B3 one scope or split**: B3 remains one scope; the section 1.1 instruments have run
+   on NV and produced the split (c627d0000: submit 0.17 ms OBSERVED, non-overlapped poll
+   0.00 ms OBSERVED, other 22.53 ms INFERRED), which refutes the "submit cost" reading
+   and points at host work outside `wait()`/`submit()`. A split into polling,
+   submission, and whole-schedule sub-scopes, each with its own gate, is deferred to
+   characterization; the AMD leg stays UNRESOLVED and this document does not pre-split
+   it.
 4. **Decode matrix before campaign-wide phrasing**: every depth in the claimed matrix,
    minimum d512/d2048/d4096, must be individually PARITY-QUALIFIED before any
    campaign-wide "decode parity" phrase is allowed; a single-depth win qualifies that
