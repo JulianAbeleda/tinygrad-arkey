@@ -40,6 +40,28 @@ graph; and what overlap our own CUDA graphs realize.
 
 ## 2. Protocol (one flocked GPU session, RTX 5090 / driver 595.84)
 
+### B0.0 Test-enabling device-facts shims (CUDA-side only, closed-default)
+
+The first harness attempt (B0.2) failed before model load with
+`RuntimeError: qwen3: selected-GGUF backing allocation is unknown from the
+selected path and scanned allocation granularity`. Cause (OBSERVED): the
+memory-plan admission path consumes `allocator.allocation_granularity`
+(`device_facts.py:243` -> `gguf_memory_scan.py:109`); `NVAllocator` defines
+it (`ops_nv.py:354`, 2 MiB) but `CUDAAllocator` (an `LRUAllocator`) does
+not, so `global_allocation_granularity` is None and the GGUF backing size
+is unknown. A second seam is `memory_stats` (`device_facts.py:314-320`):
+only AMD/Metal allocators publish it, so CUDA's memory probe would fall
+through to `_allocator_memory_probe` and error.
+
+Authorized (B0.0): add `allocation_granularity` (2 MiB, matching the NV
+large-tier value) and `memory_stats` (`cuMemGetInfo_v2`) to
+`CUDAAllocator`, and route the default memory probe for CUDA through
+`nvidia-smi` (an NVIDIA device; rocm-smi exists on this box but returns
+None-valued rows, so the allocator fallback never runs). CUDA-side only,
+properties with no behavior change unless consumed by device-facts
+scanning; no decode-route, graph, or NV changes. These shims exist to make
+the viability test runnable; they are not the Route B implementation.
+
 ### B0.1 CUDA backend smoke
 
 `DEV=CUDA python3 -c "..."` with elementwise + matmul + a TinyJit replay
