@@ -1,0 +1,601 @@
+{
+  "schema": "tinygrad.nv_multi_queue_probe.driver.v1",
+  "device": "NV sm_120 RTX 5090",
+  "n": 33554432,
+  "matmul": 2048,
+  "engines": [
+    0,
+    0
+  ],
+  "grid_div": 1,
+  "per_arm_timeout_s": 900,
+  "arms": [
+    {
+      "mode": "shared",
+      "exit_code": 0,
+      "timed_out": false,
+      "rm_ops": [
+        {
+          "op": "CHANNEL_ALLOC",
+          "kind": "NVA06F",
+          "group": 3404726277,
+          "channel": 3404726293,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "CHANNEL_ALLOC",
+          "kind": "NVA06F",
+          "group": 3404726277,
+          "channel": 3404726296,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "NVA06C_GPFIFO_SCHEDULE",
+          "kind": "NVA06C",
+          "group": 3404726277,
+          "channel": null,
+          "engine_type": null,
+          "status": "ok",
+          "error": null
+        }
+      ],
+      "experiments": [
+        {
+          "name": "R1",
+          "status": "pass",
+          "check": "cross-gpfifo semaphore dep (hash + max-error contract)",
+          "timestamps_us": [
+            [
+              1785843539563360.0,
+              1785843539563366.0
+            ],
+            [
+              1785843539563369.5,
+              1785843539563375.2
+            ]
+          ],
+          "span_us": 15.25,
+          "node_sum_us": 11.75,
+          "overlap": -0.2978723404255319,
+          "arm": {
+            "mode": "shared",
+            "exit_code": 0,
+            "timed_out": false
+          },
+          "hashes": {
+            "out_c": "051845608e897c46158d7acf999fc47c46b8b2428dbe4beebfccf330f9d7da12",
+            "out_e": "aab778badc2bc2b9ce200e3c4a85fceccb0801d494ae3e03a24eae5e92dd33f6",
+            "ref_c": "051845608e897c46158d7acf999fc47c46b8b2428dbe4beebfccf330f9d7da12",
+            "ref_e": "aab778badc2bc2b9ce200e3c4a85fceccb0801d494ae3e03a24eae5e92dd33f6"
+          },
+          "max_err_c": 0.0,
+          "max_err_e": 0.0,
+          "error_bound": 0.001,
+          "ref_abs_max_c": 2097150.0,
+          "ref_abs_max_e": 2097151.0
+        },
+        {
+          "name": "R2",
+          "status": "pass",
+          "check": "serial calibration (span vs node-sum timestamp tolerance)",
+          "timestamps_us": [
+            [
+              1785843540033023.2,
+              1785843540033247.2
+            ],
+            [
+              1785843540033249.2,
+              1785843540033500.8
+            ]
+          ],
+          "span_us": 477.5,
+          "node_sum_us": 475.5,
+          "overlap": -0.004206098843322818,
+          "arm": {
+            "mode": "shared",
+            "exit_code": 0,
+            "timed_out": false
+          },
+          "abs_delta_us": 2.0,
+          "pct_delta": 0.4206098843322818,
+          "timestamp_tol_pct": 2.0,
+          "timestamp_tol_abs_us": 10.0
+        },
+        {
+          "name": "R3",
+          "status": "FAIL",
+          "check": "2-queue elementwise overlap",
+          "timestamps_us": [
+            [
+              1785843540615263.0,
+              1785843540615507.5
+            ],
+            [
+              1785843540615508.0,
+              1785843540615761.8
+            ]
+          ],
+          "span_us": 498.75,
+          "node_sum_us": 498.25,
+          "overlap": -0.0010035122930255895,
+          "arm": {
+            "mode": "shared",
+            "exit_code": 0,
+            "timed_out": false
+          },
+          "grid_div": 1,
+          "hashes": {
+            "out": [
+              "10b4129404049877185282f6322223d4d1178722549d62440823ffa74a49a9a6",
+              "e9fb04f7e765a5f7bd18ce3dbd57876291e43ee7ac3964c91644500bae082ec1"
+            ],
+            "ref": [
+              "10b4129404049877185282f6322223d4d1178722549d62440823ffa74a49a9a6",
+              "e9fb04f7e765a5f7bd18ce3dbd57876291e43ee7ac3964c91644500bae082ec1"
+            ]
+          },
+          "max_errs": [
+            0.0,
+            0.0
+          ],
+          "error_bound": 0.001,
+          "ref_abs_maxes": [
+            2.0,
+            4.0
+          ],
+          "hash_match": [
+            true,
+            true
+          ],
+          "numeric_ok": true
+        },
+        {
+          "name": "R4",
+          "status": "FAIL",
+          "check": "3-queue elementwise overlap",
+          "timestamps_us": [
+            [
+              1785843543608065.0,
+              1785843543608300.5
+            ],
+            [
+              1785843543608300.8,
+              1785843543608554.5
+            ],
+            [
+              1785843543608555.2,
+              1785843543608810.2
+            ]
+          ],
+          "span_us": 745.25,
+          "node_sum_us": 744.25,
+          "overlap": -0.0013436345314074571,
+          "arm": {
+            "mode": "shared",
+            "exit_code": 0,
+            "timed_out": false
+          },
+          "grid_div": 1,
+          "hashes": {
+            "out": [
+              "10b4129404049877185282f6322223d4d1178722549d62440823ffa74a49a9a6",
+              "e9fb04f7e765a5f7bd18ce3dbd57876291e43ee7ac3964c91644500bae082ec1",
+              "5d9e8be1ce6d1d0d1f98ec9f2060265e41b6353f38b5e48c6643d85ec772fc0f"
+            ],
+            "ref": [
+              "10b4129404049877185282f6322223d4d1178722549d62440823ffa74a49a9a6",
+              "e9fb04f7e765a5f7bd18ce3dbd57876291e43ee7ac3964c91644500bae082ec1",
+              "5d9e8be1ce6d1d0d1f98ec9f2060265e41b6353f38b5e48c6643d85ec772fc0f"
+            ]
+          },
+          "max_errs": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "error_bound": 0.001,
+          "ref_abs_maxes": [
+            2.0,
+            4.0,
+            6.0
+          ],
+          "hash_match": [
+            true,
+            true,
+            true
+          ],
+          "numeric_ok": true
+        },
+        {
+          "name": "R5",
+          "status": "FAIL",
+          "check": "2-queue matmul overlap + correctness",
+          "timestamps_us": [
+            [
+              1785843546580021.5,
+              1785843546582701.8
+            ],
+            [
+              1785843546582702.0,
+              1785843546585337.5
+            ]
+          ],
+          "span_us": 5316.0,
+          "node_sum_us": 5315.75,
+          "overlap": -4.7030052203357944e-05,
+          "arm": {
+            "mode": "shared",
+            "exit_code": 0,
+            "timed_out": false
+          },
+          "M": 2048,
+          "hashes": {
+            "out": [
+              "3122bf9f8288775454bc64e19bac9b27c58de07e0c9a5f9f6c80c24214faa62e",
+              "5084bae3990e72d69baff8c4107e91794aeb7f5c29d363fc67950afb05940f13"
+            ],
+            "ref": [
+              "3122bf9f8288775454bc64e19bac9b27c58de07e0c9a5f9f6c80c24214faa62e",
+              "7758797b8a98d8639faf775a4c258228ff82326084a695b984e079e6a4d35308"
+            ]
+          },
+          "max_errs": [
+            0.0,
+            1.1920928955078125e-07
+          ],
+          "error_bound": 0.01,
+          "ref_abs_maxes": [
+            1.0,
+            2.0
+          ],
+          "hash_match": [
+            true,
+            false
+          ],
+          "numeric_ok": true
+        }
+      ],
+      "errors": []
+    },
+    {
+      "mode": "ctxshare",
+      "exit_code": 0,
+      "timed_out": false,
+      "rm_ops": [
+        {
+          "op": "CTXSHARE_ALLOC",
+          "kind": "FERMI_CONTEXT_SHARE_A",
+          "group": 3404726277,
+          "channel": null,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "CHANNEL_ALLOC",
+          "kind": "NVA06F",
+          "group": 3404726277,
+          "channel": 3404726294,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "NVA06F_BIND",
+          "kind": "NVA06F",
+          "group": 3404726277,
+          "channel": 3404726294,
+          "engine_type": 0,
+          "status": "error",
+          "error": "rm_control returned 31: NV_ERR_INVALID_ARGUMENT"
+        },
+        {
+          "op": "CTXSHARE_ALLOC",
+          "kind": "FERMI_CONTEXT_SHARE_A",
+          "group": 3404726277,
+          "channel": null,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "CHANNEL_ALLOC",
+          "kind": "NVA06F",
+          "group": 3404726277,
+          "channel": 3404726298,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "NVA06F_BIND",
+          "kind": "NVA06F",
+          "group": 3404726277,
+          "channel": 3404726298,
+          "engine_type": 0,
+          "status": "error",
+          "error": "rm_control returned 31: NV_ERR_INVALID_ARGUMENT"
+        }
+      ],
+      "experiments": [
+        {
+          "name": "R1",
+          "status": "skipped",
+          "check": "cross-gpfifo semaphore dep (hash + max-error contract)",
+          "error": "need >= 2 compute gpfifos, got 1",
+          "timestamps_us": [],
+          "span_us": null,
+          "node_sum_us": null,
+          "overlap": null,
+          "arm": {
+            "mode": "ctxshare",
+            "exit_code": 0,
+            "timed_out": false
+          }
+        },
+        {
+          "name": "R2",
+          "status": "pass",
+          "check": "serial calibration (span vs node-sum timestamp tolerance)",
+          "timestamps_us": [
+            [
+              1785843547919592.5,
+              1785843547919807.8
+            ],
+            [
+              1785843547919810.5,
+              1785843547920064.0
+            ]
+          ],
+          "span_us": 471.5,
+          "node_sum_us": 468.75,
+          "overlap": -0.005866666666666667,
+          "arm": {
+            "mode": "ctxshare",
+            "exit_code": 0,
+            "timed_out": false
+          },
+          "abs_delta_us": 2.75,
+          "pct_delta": 0.5866666666666667,
+          "timestamp_tol_pct": 2.0,
+          "timestamp_tol_abs_us": 10.0
+        },
+        {
+          "name": "R3",
+          "status": "skipped",
+          "check": "2-queue elementwise overlap",
+          "error": "need >= 2 compute gpfifos, got 1",
+          "timestamps_us": [],
+          "span_us": null,
+          "node_sum_us": null,
+          "overlap": null,
+          "arm": {
+            "mode": "ctxshare",
+            "exit_code": 0,
+            "timed_out": false
+          }
+        },
+        {
+          "name": "R4",
+          "status": "skipped",
+          "check": "3-queue elementwise overlap",
+          "error": "need >= 3 compute gpfifos, got 1",
+          "timestamps_us": [],
+          "span_us": null,
+          "node_sum_us": null,
+          "overlap": null,
+          "arm": {
+            "mode": "ctxshare",
+            "exit_code": 0,
+            "timed_out": false
+          }
+        },
+        {
+          "name": "R5",
+          "status": "skipped",
+          "check": "2-queue matmul overlap + correctness",
+          "error": "need >= 2 compute gpfifos, got 1",
+          "timestamps_us": [],
+          "span_us": null,
+          "node_sum_us": null,
+          "overlap": null,
+          "arm": {
+            "mode": "ctxshare",
+            "exit_code": 0,
+            "timed_out": false
+          }
+        }
+      ],
+      "errors": [
+        "construction NVA06F_BIND engine 0: rm_control returned 31: NV_ERR_INVALID_ARGUMENT",
+        "construction NVA06F_BIND engine 1: rm_control returned 31: NV_ERR_INVALID_ARGUMENT",
+        "R1 skipped: need >= 2 compute gpfifos, got 1",
+        "R3 skipped: need >= 2 compute gpfifos, got 1",
+        "R4 skipped: need >= 3 compute gpfifos, got 1",
+        "R5 skipped: need >= 2 compute gpfifos, got 1"
+      ]
+    },
+    {
+      "mode": "group",
+      "exit_code": 0,
+      "timed_out": false,
+      "rm_ops": [
+        {
+          "op": "CHANNEL_GROUP_ALLOC",
+          "kind": "KEPLER_CHANNEL_GROUP_A",
+          "group": 3404726292,
+          "channel": null,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "CTXSHARE_ALLOC",
+          "kind": "FERMI_CONTEXT_SHARE_A",
+          "group": 3404726292,
+          "channel": null,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "CHANNEL_ALLOC",
+          "kind": "NVA06F",
+          "group": 3404726292,
+          "channel": 3404726296,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "NVA06F_BIND",
+          "kind": "NVA06F",
+          "group": 3404726292,
+          "channel": 3404726296,
+          "engine_type": 0,
+          "status": "error",
+          "error": "rm_control returned 31: NV_ERR_INVALID_ARGUMENT"
+        },
+        {
+          "op": "CHANNEL_GROUP_ALLOC",
+          "kind": "KEPLER_CHANNEL_GROUP_A",
+          "group": 3404726298,
+          "channel": null,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "CTXSHARE_ALLOC",
+          "kind": "FERMI_CONTEXT_SHARE_A",
+          "group": 3404726298,
+          "channel": null,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "CHANNEL_ALLOC",
+          "kind": "NVA06F",
+          "group": 3404726298,
+          "channel": 3404726302,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "NVA06F_BIND",
+          "kind": "NVA06F",
+          "group": 3404726298,
+          "channel": 3404726302,
+          "engine_type": 0,
+          "status": "error",
+          "error": "rm_control returned 31: NV_ERR_INVALID_ARGUMENT"
+        }
+      ],
+      "experiments": [
+        {
+          "name": "R1",
+          "status": "skipped",
+          "check": "cross-gpfifo semaphore dep (hash + max-error contract)",
+          "error": "need >= 2 compute gpfifos, got 1",
+          "timestamps_us": [],
+          "span_us": null,
+          "node_sum_us": null,
+          "overlap": null,
+          "arm": {
+            "mode": "group",
+            "exit_code": 0,
+            "timed_out": false
+          }
+        },
+        {
+          "name": "R2",
+          "status": "pass",
+          "check": "serial calibration (span vs node-sum timestamp tolerance)",
+          "timestamps_us": [
+            [
+              1785843549098635.5,
+              1785843549098857.5
+            ],
+            [
+              1785843549098859.5,
+              1785843549099112.5
+            ]
+          ],
+          "span_us": 477.0,
+          "node_sum_us": 475.0,
+          "overlap": -0.004210526315789474,
+          "arm": {
+            "mode": "group",
+            "exit_code": 0,
+            "timed_out": false
+          },
+          "abs_delta_us": 2.0,
+          "pct_delta": 0.42105263157894735,
+          "timestamp_tol_pct": 2.0,
+          "timestamp_tol_abs_us": 10.0
+        },
+        {
+          "name": "R3",
+          "status": "skipped",
+          "check": "2-queue elementwise overlap",
+          "error": "need >= 2 compute gpfifos, got 1",
+          "timestamps_us": [],
+          "span_us": null,
+          "node_sum_us": null,
+          "overlap": null,
+          "arm": {
+            "mode": "group",
+            "exit_code": 0,
+            "timed_out": false
+          }
+        },
+        {
+          "name": "R4",
+          "status": "skipped",
+          "check": "3-queue elementwise overlap",
+          "error": "need >= 3 compute gpfifos, got 1",
+          "timestamps_us": [],
+          "span_us": null,
+          "node_sum_us": null,
+          "overlap": null,
+          "arm": {
+            "mode": "group",
+            "exit_code": 0,
+            "timed_out": false
+          }
+        },
+        {
+          "name": "R5",
+          "status": "skipped",
+          "check": "2-queue matmul overlap + correctness",
+          "error": "need >= 2 compute gpfifos, got 1",
+          "timestamps_us": [],
+          "span_us": null,
+          "node_sum_us": null,
+          "overlap": null,
+          "arm": {
+            "mode": "group",
+            "exit_code": 0,
+            "timed_out": false
+          }
+        }
+      ],
+      "errors": [
+        "construction NVA06F_BIND engine 0: rm_control returned 31: NV_ERR_INVALID_ARGUMENT",
+        "construction NVA06F_BIND engine 1: rm_control returned 31: NV_ERR_INVALID_ARGUMENT",
+        "R1 skipped: need >= 2 compute gpfifos, got 1",
+        "R3 skipped: need >= 2 compute gpfifos, got 1",
+        "R4 skipped: need >= 3 compute gpfifos, got 1",
+        "R5 skipped: need >= 2 compute gpfifos, got 1"
+      ]
+    }
+  ],
+  "verdict": "NO_OVERLAP",
+  "verdict_basis": "R1 passed in arm(s) ['shared'] but every R3-R5 row in every arm is below 5% (per-arm max overlap {'shared': -4.7030052203357944e-05, 'ctxshare': 0.0, 'group': 0.0})"
+}
