@@ -1,0 +1,258 @@
+{
+ "depth": 512,
+ "census_prefill_overlay_promotion": "candidate_set:sha256:1b8ea95d50bb55962474721cf013a6c3a704038916856353c65281112a166c7f",
+ "kernels_per_token": 948,
+ "all_kernel_us_total": 5923,
+ "gemv_class_count": 216,
+ "gemv_class_us_sum": 3774,
+ "gemv_class_ms_sum": 3.774,
+ "per_kernel_us": {
+  "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346": {
+   "count": 1,
+   "median_us": 1.54,
+   "total_us": 1.54,
+   "min_us": 1.54,
+   "max_us": 1.54
+  },
+  "E_2_c8a3207cf1b8954ec08b9564cce9b00f69be9c09493c58ea1abd46b3664424e7": {
+   "count": 1,
+   "median_us": 2.78,
+   "total_us": 2.78,
+   "min_us": 2.78,
+   "max_us": 2.78
+  },
+  "E_16_4_2_8_16_2_4_4_35a6fe556c331254f920c4212fdc0c33244d8269d7c93cb1897349f36a254aee": {
+   "count": 1,
+   "median_us": 3.3,
+   "total_us": 3.3,
+   "min_us": 3.3,
+   "max_us": 3.3
+  },
+  "E_1187_32_4_76d37a73a646ec3a4b5e32ab783e0ace496f5855bbba7492c8c7fe87bbff5f1f": {
+   "count": 1,
+   "median_us": 2.75,
+   "total_us": 2.75,
+   "min_us": 2.75,
+   "max_us": 2.75
+  },
+  "r_32_32_4_32_4_b7c5eeb3ced63845c64b323fd8e5e923a69c1e162de001a94b565dcd96e9293f": {
+   "count": 1,
+   "median_us": 4.61,
+   "total_us": 4.61,
+   "min_us": 4.61,
+   "max_us": 4.61
+  },
+  "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc": {
+   "count": 73,
+   "median_us": 3.84,
+   "total_us": 282.86,
+   "min_us": 3.58,
+   "max_us": 4.22
+  },
+  "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077": {
+   "count": 72,
+   "median_us": 2.11,
+   "total_us": 147.6,
+   "min_us": 1.76,
+   "max_us": 2.4
+  },
+  "q4k_g3_lanemap_gemv_4096_4096": {
+   "count": 72,
+   "median_us": 9.35,
+   "total_us": 680.3,
+   "min_us": 8.86,
+   "max_us": 12.22
+  },
+  "q4k_g3_lanemap_gemv_1024_4096": {
+   "count": 54,
+   "median_us": 4.83,
+   "total_us": 262.3,
+   "min_us": 4.61,
+   "max_us": 5.38
+  },
+  "q6k_gen_partial_1024_4096_4": {
+   "count": 18,
+   "median_us": 17.84,
+   "total_us": 324.2,
+   "min_us": 17.5,
+   "max_us": 19.94
+  },
+  "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c": {
+   "count": 36,
+   "median_us": 1.66,
+   "total_us": 60.35,
+   "min_us": 1.54,
+   "max_us": 1.79
+  },
+  "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20": {
+   "count": 36,
+   "median_us": 1.63,
+   "total_us": 59.01,
+   "min_us": 1.54,
+   "max_us": 1.76
+  },
+  "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e": {
+   "count": 36,
+   "median_us": 2.75,
+   "total_us": 98.59,
+   "min_us": 1.95,
+   "max_us": 2.91
+  },
+  "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e": {
+   "count": 36,
+   "median_us": 2.11,
+   "total_us": 79.37,
+   "min_us": 1.6,
+   "max_us": 2.5
+  },
+  "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815": {
+   "count": 36,
+   "median_us": 2.2,
+   "total_us": 79.07,
+   "min_us": 2.11,
+   "max_us": 2.3
+  },
+  "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63": {
+   "count": 36,
+   "median_us": 1.82,
+   "total_us": 66.36,
+   "min_us": 1.66,
+   "max_us": 2.08
+  },
+  "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2": {
+   "count": 36,
+   "median_us": 2.17,
+   "total_us": 85.47,
+   "min_us": 1.89,
+   "max_us": 2.98
+  },
+  "r_8_8_16_2_4_da68eeaa95084da816923e4165d65f2f6394390f4667676de3ed7e4f2a2c17c8": {
+   "count": 18,
+   "median_us": 2.05,
+   "total_us": 36.26,
+   "min_us": 1.6,
+   "max_us": 2.18
+  },
+  "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": {
+   "count": 36,
+   "median_us": 6.53,
+   "total_us": 239.82,
+   "min_us": 5.98,
+   "max_us": 7.42
+  },
+  "flash_fused_gmax_combine_32_128": {
+   "count": 36,
+   "median_us": 3.42,
+   "total_us": 125.21,
+   "min_us": 3.33,
+   "max_us": 4.29
+  },
+  "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4": {
+   "count": 36,
+   "median_us": 1.61,
+   "total_us": 59.13,
+   "min_us": 1.57,
+   "max_us": 2.18
+  },
+  "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5": {
+   "count": 72,
+   "median_us": 1.68,
+   "total_us": 122.36,
+   "min_us": 1.47,
+   "max_us": 1.98
+  },
+  "q4k_g3_lanemap_gemv_w1w3fused_12288_4096": {
+   "count": 36,
+   "median_us": 39.26,
+   "total_us": 1418.59,
+   "min_us": 38.66,
+   "max_us": 42.91
+  },
+  "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b": {
+   "count": 36,
+   "median_us": 1.63,
+   "total_us": 58.78,
+   "min_us": 1.47,
+   "max_us": 1.73
+  },
+  "q6k_gen_coop_4096_12288_inkernel": {
+   "count": 18,
+   "median_us": 34.89,
+   "total_us": 635.36,
+   "min_us": 33.95,
+   "max_us": 41.95
+  },
+  "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b": {
+   "count": 72,
+   "median_us": 1.71,
+   "total_us": 129.71,
+   "min_us": 1.54,
+   "max_us": 3.14
+  },
+  "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b": {
+   "count": 18,
+   "median_us": 2.34,
+   "total_us": 41.52,
+   "min_us": 1.98,
+   "max_us": 2.75
+  },
+  "q4k_g3_lanemap_gemv_4096_12288": {
+   "count": 18,
+   "median_us": 26.55,
+   "total_us": 485.67,
+   "min_us": 26.08,
+   "max_us": 34.21
+  },
+  "E_32_32_4_c6fef3561a9fbeaff7b7cbdb3bebc148b857f3d21ebffbe74f25607423ae7719": {
+   "count": 1,
+   "median_us": 2.18,
+   "total_us": 2.18,
+   "min_us": 2.18,
+   "max_us": 2.18
+  },
+  "q6k_gen_coop_151936_4096_inkernel": {
+   "count": 1,
+   "median_us": 329.22,
+   "total_us": 329.22,
+   "min_us": 329.22,
+   "max_us": 329.22
+  },
+  "E_1187_32_4_e1ccc42612aa8f28b20a61db46f51dbe08ce7e41f6c77f3966e2be8e85e1f10e": {
+   "count": 1,
+   "median_us": 4.13,
+   "total_us": 4.13,
+   "min_us": 4.13,
+   "max_us": 4.13
+  },
+  "r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f": {
+   "count": 1,
+   "median_us": 38.46,
+   "total_us": 38.46,
+   "min_us": 38.46,
+   "max_us": 38.46
+  },
+  "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5": {
+   "count": 1,
+   "median_us": 11.14,
+   "total_us": 11.14,
+   "min_us": 11.14,
+   "max_us": 11.14
+  },
+  "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c": {
+   "count": 1,
+   "median_us": 1.76,
+   "total_us": 1.76,
+   "min_us": 1.76,
+   "max_us": 1.76
+  }
+ },
+ "tok_s_median": 177.923,
+ "token_sha_reps": [
+  "13cb9c480fba287939e74663336233941a23c27c5fbbd3954daeb9c69e0875fd",
+  "13cb9c480fba287939e74663336233941a23c27c5fbbd3954daeb9c69e0875fd"
+ ],
+ "first_token_reps": [
+  151936,
+  151936
+ ]
+}
