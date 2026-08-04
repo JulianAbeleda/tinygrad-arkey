@@ -212,6 +212,28 @@ def decode_q4k_w1w3_fusion_promoted(target:Target) -> bool:
   """Policy authority for the fused w1+w3 gate/up decode GEMV route (closed default, see the loader above)."""
   return target in _DECODE_Q4K_W1W3_FUSION_PROMOTED_TARGETS
 
+def load_decode_kv_store_fusion_promotion(path:str) -> frozenset[Target]:
+  """Read the decode kv-store chain fusion promotion record (boltbeam.route_policy.v1, same schema
+  family as `load_decode_q4k_w1w3_fusion_promotion`). CLOSED default; deliberately a SEPARATE record
+  from every other decode record: the fused kv-store kernel replaces the k-rope + k-cast + v-cast +
+  Tensor.stack(k, v) + cache store chain (5 kernels/layer, decode-kv-store-chain-fusion-scope-
+  20260803.md), and must not fire on any target until a measured same-session record opts it in
+  (nv-decode-gap-decomposition-record-20260803.md section 5, lever 1). A document without
+  `promoted_targets` -- or with an empty list -- promotes nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_KV_STORE_FUSION_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-kv-store-fusion-route-policy.json"
+_DECODE_KV_STORE_FUSION_PROMOTED_TARGETS: frozenset[Target] = load_decode_kv_store_fusion_promotion(_DECODE_KV_STORE_FUSION_PROMOTION_RECORD)
+
+def decode_kv_store_fusion_promoted(target:Target) -> bool:
+  """Policy authority for the fused decode kv-store route (closed default, see the loader above)."""
+  return target in _DECODE_KV_STORE_FUSION_PROMOTED_TARGETS
+
 def load_decode_flash_combine_fusion_promotion(path:str) -> frozenset[Target]:
   """Read the L1 M5 flash-decode combine fp16 absorption promotion record (boltbeam.route_policy.v1, same
   schema family as `load_decode_epilogue_fusion_promotion`). CLOSED default; deliberately a SEPARATE record

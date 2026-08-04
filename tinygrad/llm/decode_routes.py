@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from typing import Callable, Any
 
 from tinygrad import Device, Tensor, UOp, dtypes, getenv
-from tinygrad.llm.decode_kernels import (Q6K_POS_EXTENT, emit_q6k_gemv_kernel,
-  emit_q6k_vocab_scalar_reduce_kernel, q4k_g3_lanemap_gemv_kernel, q6k_coop_row_tile_for_target,
-  q6k_spec_for_role, q6k_vocab_scalar_reduce_eligible)
+from tinygrad.llm.decode_kernels import (Q6K_POS_EXTENT, decode_kv_rope_store_kernel,
+  emit_q6k_gemv_kernel, emit_q6k_vocab_scalar_reduce_kernel, q4k_g3_lanemap_gemv_kernel,
+  q6k_coop_row_tile_for_target, q6k_spec_for_role, q6k_vocab_scalar_reduce_eligible)
 from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeCapability, FlashDecodeRouteConfig,
   flash_decode_capability_from_renderer, flash_decode_live_split_block_tile, flash_decode_target_promoted)
 from tinygrad.llm.kernel_program import (KernelProgram, KernelProgramProvenance, OutputSpec, TypedViewRequest,
@@ -14,6 +14,7 @@ from tinygrad.llm.kernel_program import (KernelProgram, KernelProgramProvenance,
 from tinygrad.llm.model_route_plan import decode_epilogue_fusion_promoted, decode_flash_combine_fusion_promoted
 from tinygrad.llm.qk_layout import Q4_K, Q6_K, QuantFormat
 from tinygrad.llm.route_selection import parse_route_mode
+from tinygrad.uop.ops import Ops
 
 def decode_route_mode(getenv_fn=getenv) -> str:
   canonical = str(getenv_fn("TINYGRAD_DECODE_ROUTE", "")).strip()
@@ -158,6 +159,49 @@ def q4k_gate_up_primitive_linear_call(gate:Any, up:Any, x:Tensor, fallback:Calla
     q4k_g3_lanemap_gemv_w1w3_kernel(g_bind.N, g_bind.K, load_style="scalar"),
     output_spec=OutputSpec((g_bind.N,), dtypes.float32))
   return execute_promoted_program(None, gw, uw, xv, program=program).reshape(1, 1, g_bind.N)
+
+
+def _kv_store_parts_view(v:Tensor) -> tuple[Tensor, int]:
+  """Resolve the decode v capture to its raw GEMV parts view when the graph reduces one.
+
+  The q4k decode GEMV emits VPART fp32 partials per row (NV: 4) and the model's v is their
+  `sum(axis=1)`. The fused store kernel absorbs that reduce when it receives the PARTS view
+  (shape (rows, VPART), AFTER-marked) instead of the reduced value: the walk skips the
+  MEMORY_SEMANTIC/RESHAPE wrappers and, on an ADD-over-axis-1 reduce of an AFTER with int
+  extent > 1, returns (Tensor(reduce.src[0]), extent). Any other graph returns (v, 1) and the
+  reduce materializes as before (legacy behaviour). When there is NO parts reduce, the walk still
+  unwraps a pure MEMORY_SEMANTIC/RESHAPE view chain to its producer AFTER (the q4k GEMV's output
+  buffer): `custom_kernel` keeps an AFTER argument as a concrete buffer (no contiguous copy), so
+  the fused kernel reads the GEMV output directly instead of materializing a 1024-element copy
+  per layer."""
+  u = v.uop
+  while u.op in (Ops.MEMORY_SEMANTIC, Ops.RESHAPE): u = u.src[0]
+  if u.op is Ops.REDUCE and u.arg == (Ops.ADD, (1,)) and u.src[0].op is Ops.AFTER:
+    parts = u.src[0].shape[-1]
+    if isinstance(parts, int) and parts > 1: return Tensor(u.src[0]), parts
+  if u.op is Ops.AFTER: return Tensor(u), 1
+  return v, 1
+
+
+def decode_kv_store_route(cache:Tensor, k:Tensor, v:Tensor, freqs:Tensor, Hkv:int, Hd:int, MAXC:int,
+                          vparts:int=1) -> Tensor:
+  """Fused decode kv-store (decode-kv-store-chain-fusion-scope-20260803.md, Option A): ONE kernel
+  ropes k in-kernel (fp32, the exact `apply_rope` arithmetic), casts k/v to the cache's own dtype
+  (fp16 when the target can express fp16 and the validated shape holds, else default fp32), and writes both
+  into `cache` at slot `start_pos`. The receiver (slot 0)
+  IS the cache; the returned tensor is the cache AFTER the store, which is what the flash route
+  reads (same contract as the legacy `cache_kv.uop.after(store)` chain it replaces). Called only when
+  the model's gate is open (decode T==1, B==1, fp16/fp32 cache, full-head rope, no rope-at-read,
+  promotion record for the target); any miss keeps the legacy chain byte-for-byte. `vparts` is the
+  q4k GEMV parts extent (see `_kv_store_parts_view`); with vparts>1 the kernel sums the raw parts
+  in-register instead of consuming the reduced v."""
+  if vparts > 1 and tuple(v.shape) != (Hkv * Hd, vparts):
+    raise ValueError(f"decode_kv_store_route vparts={vparts} requires v shape {(Hkv*Hd, vparts)}, got {tuple(v.shape)}")
+  if vparts == 1 and tuple(v.shape) != (Hkv * Hd,): v = v.reshape(Hkv * Hd)
+  program = KernelProgram("decode_kv_store_fusion", "decode_kv_rope_store",
+    KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
+    decode_kv_rope_store_kernel(Hkv, Hd, MAXC, VPART=vparts), output_spec=None)
+  return execute_promoted_program(cache, k.reshape(Hkv * Hd), v, freqs, program=program)
 
 @dataclass(frozen=True)
 class _Q6KDecodeCandidate:

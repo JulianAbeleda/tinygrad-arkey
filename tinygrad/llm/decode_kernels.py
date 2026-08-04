@@ -626,3 +626,61 @@ def _emit_q6k_partial(spec:Q6KGEMVRouteSpec):
     acc = partials[row, part].set(acc.after(blk_part, pos)[row, part] + contrib, end=pos)
     return acc.end(row, part, blk_part).sink(arg=KernelInfo(name=name, opts_to_apply=opts))
   return kernel
+
+
+def decode_kv_rope_store_kernel(Hkv:int, Hd:int, MAXC:int, VPART:int=1):
+  """Fused decode kv-store kernel (decode-kv-store-chain-fusion-scope-20260803.md, Option A):
+  ONE kernel ropes k in fp32 (the exact `apply_rope` arithmetic, full-head rope), casts k and v
+  to the CACHE's own dtype (fp16 when the target can express fp16 and the validated 8B shape holds,
+  otherwise the default fp32 -- the dtype is capability-resolved by `kv_cache_fp16_eligible`, never a
+  backend/architecture string), and writes both into `cache_kv` at slot `start_pos`. Writing cache.dtype
+  reproduces the legacy cache bytes bit-for-bit for BOTH cache dtypes. Replaces the k-rope + k-cast + v-cast +
+  `Tensor.stack(k, v)` + cache store chain (5 kernels/layer). Elementwise only: no reductions, no
+  shared memory, no cross-lane communication -- target-agnostic by construction (no WMMA / shuffle /
+  vendor intrinsic), so it renders identically for NV/AMD/Metal.
+
+  VPART absorbs the q4k decode GEMV's v-parts reduce (NV emits 4 fp32 partials per row; the model's
+  v is their axis-1 sum). With VPART>1 the v argument is the RAW parts view, shape (Hkv*Hd, VPART),
+  and the kernel sums the partials in-register in the legacy left-to-right fp32 order
+  `((p0+p1)+p2)+p3` (verified against the cached legacy store source), so the stored bytes are
+  bit-identical for both cache dtypes. VPART=1 keeps the reduced flat v and the exact verified
+  single-load path.
+
+  Slot 0 is the cache buffer itself (writable receiver); the returned tensor is the cache AFTER
+  the store, which is what the flash route reads. `start_pos` binds from the decode graph's
+  same-named variable (identical mechanism to the flash tile's Tc)."""
+  if Hkv < 1: raise ValueError(f"decode_kv_rope_store requires Hkv>=1, got {Hkv}")
+  if Hd < 2 or Hd % 2 != 0: raise ValueError(f"decode_kv_rope_store requires even Hd>=2, got {Hd}")
+  if VPART < 1: raise ValueError(f"decode_kv_rope_store requires VPART>=1, got {VPART}")
+  half = Hd // 2
+  name = f"decode_kv_rope_store_{Hkv}_{Hd}" + (f"_v{VPART}" if VPART > 1 else "")
+
+  def kernel(cache:UOp, k:UOp, v:UOp, freqs:UOp) -> UOp:
+    sp = UOp.variable("start_pos", 0, MAXC - 1)
+    kvh = UOp.range(Hkv, 0, axis_type=AxisType.GLOBAL)
+    elem = UOp.range(Hd, 1, axis_type=AxisType.GLOBAL)
+    low = elem < half
+    rot = low.where(elem, elem - half)
+    # apply_rope replication: y1 = x1*cos - x2*sin (low half), y2 = x2*cos + x1*sin (high half),
+    # with freqs laid out [MAXC, Hd] as cos in [:half] and sin in [half:] (precompute_freqs_cis).
+    k1 = k[kvh * Hd + rot].cast(dtypes.float32)
+    k2 = k[kvh * Hd + rot + half].cast(dtypes.float32)
+    cos = freqs[sp, rot].cast(dtypes.float32)
+    sin = freqs[sp, half + rot].cast(dtypes.float32)
+    # The store writes the CACHE's own dtype (capability-resolved: fp16 when the target expresses it and
+    # the validated shape holds, else default fp32). Writing cache.dtype reproduces the legacy cache bytes
+    # bit-for-bit for BOTH cache dtypes (fp32: no rounding, identical fp32 arithmetic; fp16: one single
+    # fp32->fp16 round, the same single round the legacy store performed).
+    kout = low.where(k1 * cos - k2 * sin, k2 * cos + k1 * sin).cast(cache.dtype)
+    if VPART == 1:
+      vout = v[kvh * Hd + elem].cast(cache.dtype)
+    else:
+      # Sum the raw partials left-to-right in fp32, then the single store cast -- the exact legacy
+      # `(val8.x+val8.y+val8.z+val8.w)` expression, so the cache bytes match bit-for-bit.
+      vsum = v[kvh * Hd + elem, 0].cast(dtypes.float32)
+      for _r in range(1, VPART): vsum = vsum + v[kvh * Hd + elem, _r].cast(dtypes.float32)
+      vout = vsum.cast(cache.dtype)
+    kst = cache[0, 0, kvh, sp, elem].store(kout)
+    vst = cache.after(kst)[1, 0, kvh, sp, elem].store(vout)
+    return vst.end(kvh, elem).sink(arg=KernelInfo(name=name, opts_to_apply=()))
+  return kernel

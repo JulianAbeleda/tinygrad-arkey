@@ -17,29 +17,19 @@ def _qk_generated_policy_entry(policy:dict|None, typ:int, rows:int, cols:int, na
   if name is not None and (entry:=policy.get("by_tensor", {}).get((name, typ, rows, cols))) is not None: return entry
   return policy.get("by_shape", {}).get((typ, rows, cols))
 
-@dataclass(frozen=True)
-class QKPrimitiveEligibility:
-  """Structural target facts retained by an installed AMD gfx1100 primitive.
+def kv_cache_fp16_eligible(device_facts:object|None) -> bool:
+  """Capability answer for fp16 K/V cache storage: is fp16 EXPRESSIBLE on the resolved target?
 
-  NOTE: this pre-TG3 type is retained, unchanged, only for the unrelated generated-decode-attention KV-dtype
-  probe at model.py's `_generated_decode_shape_supported` (a different gate than the one this scope package
-  splits -- see docs/task_workflow/input/target-capability-policy-decoupling-scope-20260730.md TG7-TG10).
-  The Q4_K/Q6_K primitive gate this file installs now uses `QKPrimitiveCapability` /
-  `QKPrimitiveRouteAdmission` below instead; do not wire this type into new decisions."""
-  backend: str|None = None
-  architecture: str|None = None
-  wave_size: int|None = None
-
-  @property
-  def eligible(self) -> bool:
-    return (self.backend, self.architecture, self.wave_size) == ("AMD", "gfx1100", 32)
-
-def qk_primitive_eligibility_from_device_facts(device_facts:object|None) -> QKPrimitiveEligibility:
-  """Copy only immutable candidate-relevant fields from the load-entry DeviceFacts scan."""
-  if device_facts is None: return QKPrimitiveEligibility()
+  Read from `DeviceCapabilities.supports_fp16`, which the load-entry device-facts scan copies verbatim from
+  the opened renderer's `supported_dtypes()` (tinygrad/llm/device_facts.py) -- never from a backend or
+  architecture string. This is the same capability authority the fp16 prefill overlay admission uses
+  (`v2_on`, model.py) and it replaces the pre-TG3 AMD-gfx1100 string equality that previously decided the
+  cache dtype (removed: see decode-kv-store-chain-fusion-scope-20260803.md revision record). An absent or
+  unreported fact (None) must never be treated as True: strict equality against a known fact, matching the
+  `QKPrimitiveCapability.satisfied` convention."""
+  if device_facts is None: return False
   capabilities = getattr(device_facts, "capabilities", None)
-  return QKPrimitiveEligibility(getattr(device_facts, "backend", None), getattr(device_facts, "architecture", None),
-                                getattr(capabilities, "wave_size", None))
+  return getattr(capabilities, "supports_fp16", None) is True
 
 @dataclass(frozen=True)
 class QKPrimitiveCapability:

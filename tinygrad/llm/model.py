@@ -14,9 +14,9 @@ from tinygrad.llm.admission import (
 from tinygrad.llm.device_facts import scan_device_facts
 from tinygrad.llm.gguf import MODEL_PARAMETER_ALLOCATION_OWNER, gguf_load, gguf_load_metadata, gguf_load_with_metadata
 from tinygrad.llm.gguf_memory_scan import RuntimeGeometry, selected_gguf_backing_bytes
-from tinygrad.llm.decode_routes import (FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_CANDIDATE, flash_decode_attention_route,
-                                        q4k_gate_up_primitive_linear_call,
-                                        should_use_flash_decode as _route_should_use_flash_decode)
+from tinygrad.llm.decode_routes import (FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_CANDIDATE, _kv_store_parts_view,
+                                        decode_kv_store_route, flash_decode_attention_route,
+                                        q4k_gate_up_primitive_linear_call, should_use_flash_decode as _route_should_use_flash_decode)
 from tinygrad.llm.decode_kernels import DecodeRMSNormSpec, emit_decode_rmsnorm_kernel
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
 from tinygrad.llm.prefill_routes import direct_packed_prefill_policy, is_direct_packed_prefill_linear, route_prefill_linear, validate_prefill_route_mode
@@ -26,7 +26,7 @@ from tinygrad.llm.prefill_route_observer import prefill_route_scope, notify_pref
 from tinygrad.llm.qk_primitives import (
   QKConfig, QKPrimitiveBudget, Q4KPrimitiveLinear, Q4KPrimitiveRegistry, Q6KPrimitiveLinear,
   _install_q4k_primitives, _install_q6k_primitives, _qk_storage_summary,
-  qk_primitive_capability_from_device_facts, qk_primitive_eligibility_from_device_facts, _module_at,
+  qk_primitive_capability_from_device_facts, kv_cache_fp16_eligible, _module_at,
 )
 from tinygrad.llm.model_facts import (
   PREFILL_OVERLAY_LINEAR_NAMES, attach_program_identity_metadata, bind_gguf_program_tensor_facts,
@@ -43,7 +43,8 @@ from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OU
                                            runtime_input, runtime_output,
                                            runtime_persistent, runtime_scratch)
 from tinygrad.llm.model_route_plan import (build_model_route_plan, decode_norm_fusion_promoted,
-  decode_q4k_epilogue_fusion_promoted, decode_q4k_w1w3_fusion_promoted, decode_rmsnorm_native_lowering_promoted)
+  decode_q4k_epilogue_fusion_promoted, decode_q4k_w1w3_fusion_promoted, decode_kv_store_fusion_promoted,
+  decode_rmsnorm_native_lowering_promoted)
 from tinygrad.llm.prefill_candidate_runtime import decode_prefill_graph_candidate_set, automatic_promoted_prefill_graph_policy
 from tinygrad.llm.physical_memory_ledger import AllocationOwner, bind_allocation_owner
 from tinygrad.uop.ops import Ops, resolve
@@ -614,6 +615,19 @@ class TransformerBlock(FFNBlock):
     elif hasattr(self, "attn_qkv"): q, k, v = self.attn_qkv(x)  # B1 fused q/k/v
     else: q, k, v = self.attn_q(x), self.attn_k(x), self.attn_v(x)
     q, k, v = (_prefill_semantic(_prefill, prefill_scratch, value) for value in (q, k, v))
+    # Decode kv-store fusion (decode-kv-store-chain-fusion-scope-20260803.md, Option A): capture the flat
+    # k/v GEMV outputs BEFORE reshape/transpose so the fused store kernel can consume them as [kvh*Hd+elem]
+    # views. v is never normed, so the pre-transpose capture is final; k is rebound below after the
+    # qk_norm==head_dim norm (Qwen3-8B: qk_norm==128==head_dim) so the kernel receives POST-NORM k, exactly
+    # what the legacy apply_rope+store chain would have roped and stored.
+    _kv_store_flat = [k, v] if (not _prefill and getattr(self, "_decode_kv_store_fusion_promoted", False)) else None
+    _kv_vparts = 1
+    if _kv_store_flat is not None:
+      # Absorb the q4k GEMV's v-parts reduce into the fused store kernel (decode-kv-store-chain-fusion-
+      # scope-20260803.md revision): hand the route the raw parts view (Hkv*Hd, VPART) plus its extent so
+      # the kernel sums the partials in-register. A graph without the parts reduce keeps (v, 1) and the
+      # reduce materializes as before.
+      _kv_store_flat[1], _kv_vparts = _kv_store_parts_view(_kv_store_flat[1])
     _fused_norm = not _prefill and getattr(self, "_decode_norm_fusion_promoted", False)
     if self.config.qk_norm and self.config.qk_norm != self.config.head_dim:
       with role_metadata("rms_norm"):
@@ -635,6 +649,10 @@ class TransformerBlock(FFNBlock):
         _nk = _decode_rmsnorm(self.attn_k_norm, k, _fused_norm)
         q = _prefill_semantic(_prefill, prefill_scratch, _nq if _nq is not None else self.attn_q_norm(q))
         k = _prefill_semantic(_prefill, prefill_scratch, _nk if _nk is not None else self.attn_k_norm(k))
+      if _kv_store_flat is not None:
+        # Post-norm k is a fresh contiguous (B,Hkv,T,Hd) buffer, so the flat (B,T,Hkv*Hd) reshape is a pure
+        # view (no copy) with the same [kvh*Hd+elem] linear layout as the pre-transpose capture.
+        _kv_store_flat[0] = k.reshape(B, T, self.config.n_kv_heads * self.config.head_dim)
 
     # rope-at-read (DECODE_ROPE_AT_READ, opt-in; requires full-head rope): store UN-roped K and rotate at read -- the
     # prerequisite for the StreamingLLM ring's position re-basing. Q is never cached, so it is always roped here.
@@ -645,6 +663,16 @@ class TransformerBlock(FFNBlock):
     # (covers PREFILL, which must ALSO store un-roped K so the ring decode reads it consistently).
     _rope_read = (_ring_freqs is not None or getattr(self, "_ring_active", False)) \
                  and self.config.rope_dim == self.config.head_dim
+    # Decode kv-store fusion admission (decode-kv-store-chain-fusion-scope-20260803.md section 6): gate is
+    # the promotion record AND concrete decode shape (T==1,B==1; the kernel stores exactly one token slot
+    # at `start_pos`, so a batched or chunked trace must keep the legacy chain) AND full-head rope AND
+    # qk_norm in (0, head_dim) (the kernel consumes post-norm k via _kv_store_flat) AND no rope-at-read
+    # (store roped K, which the ring path must NOT do) AND an fp16/fp32 cache (the kernel writes the
+    # cache's own dtype -- fp32 on NV, fp16 on AMD -- so the stored bytes match the legacy chain; a
+    # quant/other cache keeps legacy).
+    _kv_store_fused = _kv_store_flat is not None and isinstance(T, int) and T == 1 and B == 1 and not _rope_read and \
+      self.config.rope_dim == self.config.head_dim and self.config.qk_norm in (0, self.config.head_dim) and \
+      self.cache_kv.dtype in (dtypes.float16, dtypes.float32)
     _fr = _ring_freqs if _ring_freqs is not None else self.freqs_cis
     # full-ring (ctx>=N): the buffer is full and the write slot wraps, so the live read length is the WHOLE buffer N
     # (all slots valid), not start_pos+T (start_pos is the wrapped write slot, not a length). Selects [0:N] reads + Tc=N.
@@ -655,7 +683,7 @@ class TransformerBlock(FFNBlock):
     # with the K positions. In fill / non-ring, _fr == freqs_cis and start_pos is the absolute position (unchanged).
     q = _prefill_semantic(_prefill, prefill_scratch,
                           apply_rope(q[..., :self.config.rope_dim], _fr[start_pos:start_pos+T]).cat(q[..., self.config.rope_dim:], dim=-1))
-    if not _rope_read:
+    if not _rope_read and not _kv_store_fused:
       k = _prefill_semantic(_prefill, prefill_scratch,
                             apply_rope(k[..., :self.config.rope_dim], self.freqs_cis[start_pos:start_pos+T]).cat(k[..., self.config.rope_dim:], dim=-1))
 
@@ -682,7 +710,16 @@ class TransformerBlock(FFNBlock):
       v = _prefill_semantic(_prefill, prefill_scratch, assigned_kv[1, :, :, 0:start_pos+T, :].cast(dtypes.float16) * _vsc)
     else:
       assigned_scale = None
-      assigned_kv = Tensor(self.cache_kv.uop.after(self.cache_kv[:, :, :, start_pos:start_pos+T, :].uop.store(Tensor.stack(k, v).uop)))
+      if _kv_store_fused:
+        # Option A: ONE kernel ropes k in-kernel (exact apply_rope arithmetic, fp32), casts k/v to the
+        # cache's own dtype, and stores both at slot start_pos -- replacing the k-rope + k-cast + v-cast +
+        # Tensor.stack(k,v) + cache store chain. `assigned_kv` is the cache AFTER the store, same contract
+        # as the legacy chain (flash route reads assigned_kv directly; the SDPA reads below are DCE'd).
+        assigned_kv = decode_kv_store_route(self.cache_kv, _kv_store_flat[0], _kv_store_flat[1], self.freqs_cis,
+                                            self.config.n_kv_heads, self.config.head_dim, self.config.max_context,
+                                            vparts=_kv_vparts)
+      else:
+        assigned_kv = Tensor(self.cache_kv.uop.after(self.cache_kv[:, :, :, start_pos:start_pos+T, :].uop.store(Tensor.stack(k, v).uop)))
       _kfull = assigned_kv[0]
       if _rope_read:
         # rope-at-read for the NON-flash (SDPA/prefill) consumers: K is stored un-roped. Rotate the FULL concrete-MAXC
@@ -791,11 +828,15 @@ class TransformerBlock(FFNBlock):
 
   def _init_state(self, x:Tensor):
     if not hasattr(self, "cache_kv"):
-      # The promoted generated decode-attention shape was validated with fp16 K/V cache storage (TG-P14 KV_BOTH parity
-      # and roofline closeout). Keep that fact-defined shape on fp16 so the generated tile reads the same cache dtype
-      # the promotion measured; other shapes keep the default dtype.
-      _generated_decode_shape_supported = qk_primitive_eligibility_from_device_facts( \
-        getattr(self.config, "prefill_device_facts", None)).eligible and x.shape[0] == 1 and self.config.n_heads == 32 \
+      # KV cache dtype decision (decode-kv-store-chain-fusion-scope-20260803.md revision): fp16 storage is
+      # byte-identical to fp32 for the decode tile because the tile casts the cache to fp16 on read
+      # (flash_decode_attention.py::make_kv_element_loader), and it halves KV bytes. Whether fp16 is
+      # EXPRESSIBLE is a device capability (DeviceCapabilities.supports_fp16 from the opened renderer's
+      # supported_dtypes() -- never a backend/architecture string; the pre-TG3 AMD gfx1100 eligibility was
+      # removed). The validated-shape gate (batch 1, 32 heads, 8 kv heads, 128 head dim) keeps the measured
+      # promotion scope; other shapes keep the default dtype.
+      _generated_decode_shape_supported = kv_cache_fp16_eligible( \
+        getattr(self.config, "prefill_device_facts", None)) and x.shape[0] == 1 and self.config.n_heads == 32 \
         and self.config.n_kv_heads == 8 and self.config.head_dim == 128
       _kv_dtype = dtypes.float16 if _generated_decode_shape_supported else None
       # Admission guardrail (B5): assert the ACTUAL cache_kv bytes (with the real dtype) fit the admitted VRAM budget
@@ -1416,6 +1457,15 @@ class Transformer:
     _w1w3_promoted = decode_q4k_w1w3_fusion_promoted((_norm_cap.backend, _norm_cap.architecture))
     model._decode_q4k_w1w3_fusion_promoted = _w1w3_promoted
     for _b in model.blk: _b._decode_q4k_w1w3_fusion_promoted = _w1w3_promoted
+    # Decode kv-store chain fusion gate (decode-kv-store-chain-fusion-scope-20260803.md). CLOSED default
+    # (decode-kv-store-fusion-route-policy.json, empty promoted_targets until a same-session A/B record
+    # lands). Same resolve-once pattern as the w1w3 gate; blocks carry their own copy so the traced
+    # _attention call sites need no transformer back-reference. The _attention gate additionally
+    # requires decode shape (T==1,B==1), full-head rope, qk_norm in (0, head_dim), no rope-at-read, and
+    # an fp16 cache, so the model flag alone never changes the legacy chain.
+    _kv_store_promoted = decode_kv_store_fusion_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_kv_store_fusion_promoted = _kv_store_promoted
+    for _b in model.blk: _b._decode_kv_store_fusion_promoted = _kv_store_promoted
     # Path 3 semantic RMSNorm: per-norm marker flag resolved ONCE from the same
     # load-entry facts. CLOSED default (decode-rmsnorm-native-lowering-route-
     # policy.json, empty promoted_targets); nn.RMSNorm.__call__ reads the flag

@@ -1,0 +1,6 @@
+{
+ "schema": "boltbeam.route_policy.v1",
+ "route": "decode_kv_store_fusion",
+ "description": "Fused decode kv-store promotion record (decode-kv-store-chain-fusion-scope-20260803.md). ONE kernel ropes k in-kernel (fp32), casts k/v to the cache's own dtype, and writes both into cache_kv at start_pos, replacing the k-rope + k-cast + v-cast + Tensor.stack(k, v) + cache store chain (~180 kernels / ~380 us per token, measured chain in nv-decode-gap-decomposition-record-20260803.md section 4). CLOSED default: promotes nothing until a same-session interleaved A/B record lands (wall + pins 3/3) and opts in the measured target only. AMD/Metal need their own measured record plus pg3 render parity before admission.",
+ "promoted_targets": []
+}
