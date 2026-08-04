@@ -130,6 +130,18 @@ already banked.
 | 4 | Depth-side KV read scaling (context growth) | flash score kernel grows 7.78 -> 32.4 us/median d512 -> d4096; ours -14.2% tok/s vs llama -9.3% over that range; fp16 cache dtype is already landed capability-based (`model.py:838-841`, `kv_cache_fp16_eligible`) | the depth-penalty delta (-14.2% vs -9.3%) | same-session d4096 wall run on the fp16-cache route vs fp32 control |
 | 5 | Prefill host-side replay (B3) | warm pp512 wall 44-46 ms vs busy 24.1 ms = 1.9x vs llama's 1.15-1.35x envelope; wall-minus-busy residual ~20-22 ms across 10 submits (OBSERVED arithmetic, cause pending instrumentation) | pp512 gap to llama (ours 0.77-1.05x at pp512-4096 today) | B3's same-run poll/submit instrumentation, then whole-schedule graph replay A/B |
 
+Ranking basis: the order is **expected wall impact** (measured ceiling weighted by
+conversion confidence), not measured ceiling alone, because the ceilings are not on
+one scale. Lever 1's ceiling is genuinely unknown until P0 (llama's 22% is a
+reference; the decomposition explicitly says our overlap opportunity is limited
+because the non-GEMV classes are a sequential tail). Levers 2-3 are node-sum upper
+bounds whose wall conversion is unproven (the kv-store precedent: kernel-sum savings
+were wall-neutral). Lever 4 is context-side; lever 5 is a different regime (prefill).
+A strict ceiling-only order would put fusion (lever 3) ahead of overlap (lever 1) -
+the sequential tail is ~1.2 ms of the 1.67 ms gap - but overlap leads here because P0
+is cheap and decisive and it is this scope's deliverable. If P0 reports no overlap,
+levers 1 and 3 swap in a revision.
+
 Lever 1 is this scope's deliverable; levers 2-4 are existing or adjacent scopes
 (GEMV efficiency scope, fusion scopes, fp16-cache landed); lever 5 is the B3 scope.
 They are additive: the GEMV delta and the sequential tail are separate wall pieces, so
