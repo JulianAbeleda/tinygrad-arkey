@@ -11,6 +11,12 @@ adversarial review of that hypothesis and the forward plan (B3) before we
 spend more GPU time. Every number below is OBSERVED unless marked INFERRED;
 part of the review is checking that the labels are earned.
 
+> **Authority amendment (2026-08-04):**
+> `nv-decode-overlap-route-b3-external-review-amendment-20260804.md`
+> records the external-review disposition and supersedes the root-cause wording,
+> route-mismatched ceiling, census decision rule, CPU-only label, and B3 gates in
+> this brief. This file remains the pre-review record.
+
 ---
 
 ## 1. The ask (read this first)
