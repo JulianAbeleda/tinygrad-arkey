@@ -1,11 +1,18 @@
 # NV decode parity - external review scope (self-contained brief for a fresh-eyes agent)
 
 Date: 2026-08-03
-Status: review scope, docs only. Authorizes no code change, no GPU use, no
-promotion to `dev`/`exp`/`master`. Purpose: explain the current design approach
-and measured state so an external agent with no repo history can run an
-adversarial review. The specific ask: identify the clear reason we are failing
-to reach decode parity that we cannot see.
+Status: review scope, docs only. SUPERSEDED IN PART by
+`nv-decode-parity-external-review-amendment-20260803.md` (2026-08-03): the
+amendment corrects the blocker classification, reconciles the gap arithmetic on
+matched GPU spans, adds the `GGML_CUDA_GRAPH_OPT` provenance requirement,
+returns verdicts on assumptions 1-8, corrects evidence classes, replaces
+assumption 6, and replaces the decisive experiments with E1-E3. The original
+text below remains the request-of-record and is unchanged; read the amendment
+first. Authorizes no code change, no GPU use, no promotion to
+`dev`/`exp`/`master`. Purpose: explain the current design approach and measured
+state so an external agent with no repo history can run an adversarial review.
+The specific ask: identify the clear reason we are failing to reach decode
+parity that we cannot see.
 Branch boundary: tinygrad `nvidia-bringup-20260731` @ `b2d7550e2`. Supersedes
 nothing. Grounding records listed in section 9; every number below is OBSERVED
 unless marked INFERRED.
