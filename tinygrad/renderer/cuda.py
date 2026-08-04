@@ -89,7 +89,11 @@ class CUDARenderer(CStyleLanguage):
   def render_kernel(self, function_name, kernel, bufs, uops, prefix=None):
     prefix = ["#define INFINITY (__int_as_float(0x7f800000))", "#define NAN (__int_as_float(0x7fffffff))",
               "template <class T, class F> __device__ __forceinline__ T tg_bitcast(F v) { union U { F f; T t; }; U u; u.f = v; return u.t; }"]
-    used_dtypes = uops_to_dtypes(uops)
+    # Buffer-argument dtypes count too: a kernel whose ONLY fp16/fp8/bf16 element is a `half*` parameter
+    # (e.g. an fp16 KV cache stored from fp32 values) previously missed the header include and rendered
+    # `half` undefined in the signature (NVRTC compile error). Body uops drive vector-prefix emission, so
+    # keep that list first and append the param dtypes; scalar params are no-ops for both loops below.
+    used_dtypes = [*uops_to_dtypes(uops), *[u.dtype for _, (u, _) in bufs]]
     if any(dt.scalar() in dtypes.fp8s for dt in used_dtypes): prefix.append("#include <cuda_fp8.h>")
     if any(dt.scalar() == dtypes.half for dt in used_dtypes): prefix.append("#include <cuda_fp16.h>")
     if any(dt.scalar() == dtypes.bfloat16 for dt in used_dtypes): prefix.append("#include <cuda_bf16.h>")
