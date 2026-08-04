@@ -64,6 +64,19 @@ class CUDAProgram:
     return cu_time_execution(lambda: check(cuda.cuLaunchKernel(self.prg, *global_size, *local_size, self.smem, None, None, self.vargs)), enable=wait)
 
 class CUDAAllocator(LRUAllocator['CUDADevice']):
+  @property
+  def allocation_granularity(self) -> int:
+    # Same large-tier value as NVAllocator (ops_nv.py): whole-file GGUF backing
+    # allocations are always in the large tier, and device-facts consumers
+    # (gguf_memory_scan) need a known alignment to size the backing buffer.
+    return 2 << 20
+
+  def memory_stats(self) -> tuple[int, int] | None:
+    check(cuda.cuCtxSetCurrent(self.dev.context))
+    free, total = ctypes.c_uint64(0), ctypes.c_uint64(0)
+    check(cuda.cuMemGetInfo_v2(ctypes.byref(free), ctypes.byref(total)))
+    return int(total.value), int(free.value)
+
   def _alloc(self, size, options:BufferSpec):
     check(cuda.cuCtxSetCurrent(self.dev.context))
     if options.external_ptr: return cuda.CUdeviceptr_v2(options.external_ptr)
