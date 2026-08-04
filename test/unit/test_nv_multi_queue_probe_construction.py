@@ -74,6 +74,13 @@ def collect(fake, mode, engines):
   return fifos, errors, rm_ops
 
 
+def collect_bind_policy(fake, mode, engines, bind_policy):
+  rm_ops = []
+  fifos, errors = probe.extra_gpfifos(fake, engines, mode=mode, on_rm_op=rm_ops.append,
+                                      bind_policy=bind_policy)
+  return fifos, errors, rm_ops
+
+
 def test_nva06f_controls_target_raw_channel_handle_never_gpfifo_wrapper():
   fake = FakeRM()
   fifos, errors, rm_ops = collect(fake, "ctxshare", [0, 4])
@@ -112,6 +119,64 @@ def test_ctxshare_mode_op_order():
                                          "NVA06F_GPFIFO_SCHEDULE", "NVA06C_GPFIFO_SCHEDULE"]
   assert rm_ops[0]["group"] == fake.channel_group
   assert rm_ops[-1]["group"] == fake.channel_group
+
+
+def test_ctxshare_mode_skip_bind_omits_nva06f_bind():
+  fake = FakeRM()
+  fifos, errors, rm_ops = collect_bind_policy(fake, "ctxshare", [0, 0], "skip")
+  assert len(fifos) == 2 and not errors
+  assert [op["op"] for op in rm_ops] == ["CTXSHARE_ALLOC", "CHANNEL_ALLOC", "NVA06F_GPFIFO_SCHEDULE",
+                                         "NVA06C_GPFIFO_SCHEDULE"] * 2
+  assert not [op for op in rm_ops if op["op"] == "NVA06F_BIND"]
+
+
+def test_group_mode_skip_bind_keeps_fresh_group_schedule_only():
+  fake = FakeRM()
+  fifos, errors, rm_ops = collect_bind_policy(fake, "group", [0, 0], "skip")
+  assert len(fifos) == 2 and not errors
+  assert not [op for op in rm_ops if op["op"] == "NVA06F_BIND"]
+  nva06c = [op for op in rm_ops if op["op"] == "NVA06C_GPFIFO_SCHEDULE"]
+  assert len(nva06c) == 2
+  assert all(op["group"] != fake.channel_group for op in nva06c)
+  assert all(obj != fake.channel_group for obj, _, _ in fake.control_calls)
+
+
+def test_g1_shared_control_alone_is_construction_blocked_not_no_overlap():
+  def arm(mode, r1="pass", r3_overlap=-0.001):
+    exps = [{"name": "R1", "status": r1},
+            {"name": "R3", "overlap": r3_overlap, "status": "FAIL"},
+            {"name": "R4", "overlap": r3_overlap, "status": "FAIL"},
+            {"name": "R5", "overlap": r3_overlap, "status": "FAIL"}]
+    return {"mode": mode, "experiments": exps}
+  verdict, basis = probe.g1_verdict([arm("shared", r3_overlap=0.0)])
+  assert verdict == "CONSTRUCTION_BLOCKED"
+  assert "control" in basis
+  verdict, basis = probe.g1_verdict([arm("shared", r3_overlap=0.0), arm("ctxshare", r1="skipped", r3_overlap=None)])
+  assert verdict == "CONSTRUCTION_BLOCKED"
+  assert "no corrected mode" in basis
+
+
+def test_g1_no_overlap_requires_corrected_mode_executed():
+  def arm(mode, r1="pass", ov=-0.001):
+    rows = [{"name": "R1", "status": r1}]
+    for name in ("R3", "R4", "R5"):
+      rows.append({"name": name, "overlap": ov, "status": "FAIL"})
+    return {"mode": mode, "experiments": rows}
+  verdict, basis = probe.g1_verdict([arm("shared", ov=0.0), arm("ctxshare", ov=0.0)])
+  assert verdict == "NO_OVERLAP"
+  assert "corrected modes executed: ['ctxshare']" in basis
+  verdict, basis = probe.g1_verdict([arm("shared", ov=0.0), arm("ctxshare", ov=0.0), arm("group", ov=0.0)])
+  assert verdict == "NO_OVERLAP"
+
+
+def test_g1_pass_requires_r1_contract_and_overlap_row():
+  def arm(mode, r1="pass", ov=0.5):
+    rows = [{"name": "R1", "status": r1}]
+    for name in ("R3", "R4", "R5"):
+      rows.append({"name": name, "overlap": ov, "status": "pass"})
+    return {"mode": mode, "experiments": rows}
+  assert probe.g1_verdict([arm("group")])[0] == "PASS"
+  assert probe.g1_verdict([arm("shared", r1="FAIL"), arm("group", r1="FAIL", ov=0.5)])[0] == "CONSTRUCTION_BLOCKED"
 
 
 def test_shared_mode_matches_control_arm_construction():

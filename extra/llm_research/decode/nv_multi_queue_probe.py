@@ -218,7 +218,7 @@ BOOT_GROUP = "boot_group"
 BOOT_CTXSHARE = "boot_ctxshare"
 
 
-def build_construction_plan(mode: str, engine_types: list[int]) -> list[dict]:
+def build_construction_plan(mode: str, engine_types: list[int], bind_policy: str = "required") -> list[dict]:
   """Ordered RM construction op plan for one arm (pure, no device needed).
 
   Group/ctxshare/channel refs are symbolic: BOOT_GROUP is dev.channel_group,
@@ -226,7 +226,12 @@ def build_construction_plan(mode: str, engine_types: list[int]) -> list[dict]:
   are the objects created for engine i. Ops tagged requires_channel (resp.
   requires_any_channel) are skipped by the executor when that channel (resp. every
   channel) failed construction, so the failing step is the last record for it.
+  bind_policy="required" issues NVA06F_CTRL_CMD_BIND per channel (amendment H1/H3
+  sequence); "skip" omits it. RM evidence on driver 595.84 rejects BIND for
+  group-allocated compute channels with NV_ERR_INVALID_ARGUMENT, so "skip" tests
+  whether per-channel GPFIFO_SCHEDULE + group-level schedule alone co-schedules.
   """
+  assert bind_policy in ("required", "skip"), bind_policy
   plan: list[dict] = []
   for i, engine_type in enumerate(engine_types):
     if mode == "shared":
@@ -238,8 +243,11 @@ def build_construction_plan(mode: str, engine_types: list[int]) -> list[dict]:
          "engine_index": i, "engine_type": engine_type},
         {"op": "CHANNEL_ALLOC", "kind": "NVA06F", "group": BOOT_GROUP, "ctxshare": f"ctxshare:{i}", "channel": f"channel:{i}",
          "engine_index": i, "engine_type": engine_type},
-        {"op": "NVA06F_BIND", "kind": "NVA06F", "group": BOOT_GROUP, "channel": f"channel:{i}",
-         "engine_index": i, "engine_type": engine_type, "requires_channel": i},
+      ]
+      if bind_policy == "required":
+        plan += [{"op": "NVA06F_BIND", "kind": "NVA06F", "group": BOOT_GROUP, "channel": f"channel:{i}",
+                  "engine_index": i, "engine_type": engine_type, "requires_channel": i}]
+      plan += [
         {"op": "NVA06F_GPFIFO_SCHEDULE", "kind": "NVA06F", "group": BOOT_GROUP, "channel": f"channel:{i}",
          "engine_index": i, "engine_type": engine_type, "requires_channel": i},
         {"op": "NVA06C_GPFIFO_SCHEDULE", "kind": "NVA06C", "group": BOOT_GROUP,
@@ -253,8 +261,11 @@ def build_construction_plan(mode: str, engine_types: list[int]) -> list[dict]:
          "engine_index": i, "engine_type": engine_type},
         {"op": "CHANNEL_ALLOC", "kind": "NVA06F", "group": f"group:{i}", "ctxshare": f"ctxshare:{i}", "channel": f"channel:{i}",
          "engine_index": i, "engine_type": engine_type},
-        {"op": "NVA06F_BIND", "kind": "NVA06F", "group": f"group:{i}", "channel": f"channel:{i}",
-         "engine_index": i, "engine_type": engine_type, "requires_channel": i},
+      ]
+      if bind_policy == "required":
+        plan += [{"op": "NVA06F_BIND", "kind": "NVA06F", "group": f"group:{i}", "channel": f"channel:{i}",
+                  "engine_index": i, "engine_type": engine_type, "requires_channel": i}]
+      plan += [
         {"op": "NVA06F_GPFIFO_SCHEDULE", "kind": "NVA06F", "group": f"group:{i}", "channel": f"channel:{i}",
          "engine_index": i, "engine_type": engine_type, "requires_channel": i},
         {"op": "NVA06C_GPFIFO_SCHEDULE", "kind": "NVA06C", "group": f"group:{i}",
@@ -289,7 +300,7 @@ def _resolve_channel(ref, handles):
   return None if ref is None else handles.get(ref)
 
 
-def extra_gpfifos(dev, engine_types, mode="shared", on_rm_op=None):
+def extra_gpfifos(dev, engine_types, mode="shared", on_rm_op=None, bind_policy="required"):
   """One additional compute GPFifo per engineType under the selected construction mode.
 
   Executes build_construction_plan against `dev` (a live NVDevice or an RM/GPU-free
@@ -303,7 +314,7 @@ def extra_gpfifos(dev, engine_types, mode="shared", on_rm_op=None):
   """
   if not engine_types: return [], []
   on_rm_op = on_rm_op or (lambda rec: None)
-  plan = build_construction_plan(mode, engine_types)
+  plan = build_construction_plan(mode, engine_types, bind_policy=bind_policy)
   area = dev.iface.alloc(0x200000 * len(engine_types), contiguous=True, cpu_access=True, force_devmem=True,
                          map_flags=(ops_nv.nv_gpu.NVOS33_FLAGS_CACHING_TYPE_WRITECOMBINED << 23))
   handles: dict[str, object] = {}
@@ -580,7 +591,8 @@ def run_arm(args) -> None:
     flush()
 
   try:
-    extra, construction_errors = extra_gpfifos(dev, engines, mode=args.mode, on_rm_op=on_rm_op)
+    extra, construction_errors = extra_gpfifos(dev, engines, mode=args.mode, on_rm_op=on_rm_op,
+                                               bind_policy=args.bind_policy)
   except (RuntimeError, MemoryError) as e:
     construction_errors = [{"op": "CONSTRUCTION_ABORTED", "engine_index": None, "engine_type": None, "error": str(e)}]
     extra = []
@@ -601,9 +613,12 @@ def g1_verdict(arms):
 
   PASS: R1's hash/error contract passes in at least one successfully constructed
         arm AND at least one R3-R5 row in any arm shows overlap >= 5%.
-  NO_OVERLAP: R1 passes somewhere but every R3-R5 row in every arm is below 5%.
-  CONSTRUCTION_BLOCKED: R1 never passed; every arm either failed construction, timed
-        out before R1, or (recorded in the basis) executed R1 but failed its contract.
+  NO_OVERLAP: R1 passes somewhere, at least one corrected mode (ctxshare/group)
+        successfully constructed (its R3-R5 rows executed rather than skipped),
+        and every R3-R5 row in every arm is below 5%. The shared arm alone never
+        earns NO_OVERLAP: it is the known-serialized control.
+  CONSTRUCTION_BLOCKED: any other non-PASS shape - in particular, corrected modes
+        rejected by an RM step or timing out before R1, or R1 failing its contract.
   Any non-PASS basis names the exact arm/operation boundary.
   """
   r1_pass_modes = [a["mode"] for a in arms if any(e["name"] == "R1" and e["status"] == "pass" for e in a["experiments"])]
@@ -612,16 +627,22 @@ def g1_verdict(arms):
   per_arm_max_overlap = {a["mode"]: max((e["overlap"] for e in a["experiments"]
                                          if e["name"] in ("R3", "R4", "R5") and isinstance(e.get("overlap"), (int, float))),
                                         default=0.0) for a in arms}
+  corrected_executed = [a["mode"] for a in arms if a["mode"] in ("ctxshare", "group")
+                        and any(e["name"] in ("R3", "R4", "R5") and e.get("overlap") is not None for e in a["experiments"])]
   if r1_pass_modes and overlap_rows:
     return "PASS", (f"R1 hash/error contract passed in arm(s) {r1_pass_modes}; "
                     f"R3-R5 overlap >= 5% in {[(m, n, round(o, 4)) for m, n, o in overlap_rows]}")
-  if r1_pass_modes:
+  if r1_pass_modes and corrected_executed:
     return "NO_OVERLAP", (f"R1 passed in arm(s) {r1_pass_modes} but every R3-R5 row in every arm is below 5% "
-                          f"(per-arm max overlap {per_arm_max_overlap})")
+                          f"(per-arm max overlap {per_arm_max_overlap}; corrected modes executed: {corrected_executed})")
   r1_fail_modes = [a["mode"] for a in arms if any(e["name"] == "R1" and e["status"] == "FAIL" for e in a["experiments"])]
   if r1_fail_modes:
     return "CONSTRUCTION_BLOCKED", (f"R1 executed but failed its hash/error contract in arm(s) {r1_fail_modes}; "
                                     f"no arm has a passing R1, so this is a blocked construction, not a no-overlap result")
+  if r1_pass_modes and not corrected_executed:
+    return "CONSTRUCTION_BLOCKED", (f"R1 passed in control arm(s) {r1_pass_modes} but no corrected mode (ctxshare/group) "
+                                    f"successfully constructed and executed R3-R5 (per-arm max overlap {per_arm_max_overlap}); "
+                                    f"the shared arm is the known-serialized control and cannot earn NO_OVERLAP alone")
   r1_states = {a["mode"]: [e.get("error", e.get("status")) for e in a["experiments"] if e["name"] == "R1"] for a in arms}
   return "CONSTRUCTION_BLOCKED", (f"R1 never ran in any arm: per-arm R1 states {r1_states}; "
                                   f"every arm failed construction or timed out before R1")
@@ -636,7 +657,7 @@ def run_all_driver(args) -> None:
     arm_out = f"{args.out}.arm.{mode}.json"
     cmd = [sys.executable, script, "--mode", mode, "--out", arm_out, "--engines", args.engines,
            "--n", str(args.n), "--matmul", str(args.matmul), "--stop-after", str(args.stop_after),
-           "--grid-div", str(args.grid_div)]
+           "--grid-div", str(args.grid_div), "--bind-policy", args.bind_policy]
     try:
       cp = subprocess.run(cmd, timeout=args.timeout, capture_output=True, text=True)
       exit_code, timed_out = cp.returncode, False
@@ -683,6 +704,9 @@ def main() -> None:
   ap.add_argument("--grid-div", type=int, default=1,
                   help="divide the R3/R4 elementwise grid by this factor; partial-SM kernels make "
                        "overlap physically possible (full-grid kernels saturate every SM either way)")
+  ap.add_argument("--bind-policy", type=str, choices=["required", "skip"], default="required",
+                  help="issue per-channel NVA06F_CTRL_CMD_BIND (required) or omit it (skip); "
+                       "driver 595.84 rejects BIND for group-allocated compute channels")
   args = ap.parse_args()
   if args.run_all: run_all_driver(args)
   else: run_arm(args)
