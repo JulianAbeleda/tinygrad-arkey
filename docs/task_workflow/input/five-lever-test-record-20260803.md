@@ -24,14 +24,24 @@ INFERRED.
 - Model routes: flash decode, w1w3 scalar fused QV landed, kv-store fusion
   closed-default, fp16 KV cache capability-enabled on NV.
 
-## 1. Lever 1 (overlap): P0 nsys node trace BLOCKED; fallback signal ~6%
+## 1. Lever 1 (overlap): P0 status
+
+P0 status: **Nsight CUDA node tracing is inapplicable to the executing DEV=NV
+backend. Native HCQ timestamp/dependency tracing is available; the current
+implementation uses one compute queue/GPFIFO.**
 
 The scope's P0 protocol is `nsys --cuda-graph-trace=node` on our decode replay.
-Three capture attempts were made on this host (the harness at d512, nmeas 5
-reps 1, plus a variant with fused decode gates off). All three completed with a
-`.nsys-rep` but no GPU trace data: `nsys stats` reports "does not contain GPU
-trace data" and every `cuda_gpu_trace` export is empty. Tooling, not the
-harness, is the blocker on this host.
+Three capture attempts on this host produced `.nsys-rep` files with no GPU
+trace data (`nsys stats`: "does not contain GPU trace data"). The cause is a
+profiler/backend mismatch, not missing tooling: Nsight Systems 2026.1.3 is
+installed and functional (a native CUDA smoke test records API calls and kernel
+events; existing llama reports carry CUDA graph/node data), but the DEV=NV
+route never calls the CUDA launch API. `NVDevice` (`ops_nv.py:598`) drives the
+hardware through native NVIDIA ioctls, QMD command construction, and direct
+GPFIFO submission, so CUPTI sees nothing to trace. The native counterpart works:
+`HCQ_GRAPH_PROFILE_JSON` exported per-node timestamps and dependencies
+(`/tmp/hcq_graph_smoke.json`, anchored at
+`docs/five-lever-test-20260803-hcq-graph-smoke.json`).
 
 Fallback signal, same session family, d512 (OBSERVED arithmetic, since
 corrected): the DEBUG=2 kernel-sum 5.981 ms exceeds the W wall 5.63 ms, which
@@ -52,8 +62,15 @@ timestamps via the HCQ profile path: replay overlap is 0.0% at d512 and d4096
 is per-kernel launch/sync overhead in the DEBUG=2 tm values (~0.65 us x 948
 kernels), not GPU concurrency. llama's 22% overlap reference
 (`nv-decode-gap-decomposition-record-20260803.md` section 3) is structurally
-unreachable today: HCQGraph serializes every kernel on one per-device compute
-queue, so lever 1 requires multi-queue graph execution, not batching.
+unreachable today: HCQGraph creates one compute queue per device
+(`hcq.py:68`), assigns every kernel to it (`hcq.py:134`), and the NV queue
+submits to a single compute GPFIFO (`ops_nv.py:205`, `ops_nv.py:633`).
+`JIT_BATCH_SIZE=0` only removes graph-group boundaries; it produces one larger
+command sequence on the same channel and cannot create compute-compute
+overlap. Lever 1 therefore requires either multiple native NV compute
+channels/GPFIFOs with semaphore dependencies, or routing through DEV=CUDA and
+the existing CUDAGraph lowerer; the missing layer is native multi-compute-queue
+execution, not executable-graph replay.
 
 ## 2. Lever 2 (GEMV per-kernel efficiency): microbenches reproduce
 
@@ -131,6 +148,8 @@ section 6 already states this. The busy probe reads 0.0 ms under graph replay
 ## 6. Verdict
 
 Four levers have runnable tests and all reproduce their recorded numbers. Lever
-1's P0 is blocked by nsys tooling on this host, and its fallback signal (~6%
-overlap vs llama 22%) is the D2-shaped opportunity the follow-up probe and
-scope build on. No implementation changed in this record.
+1's P0 is answered by the follow-up probe: nsys CUDA tracing is inapplicable to
+DEV=NV, and native HCQ timestamps show 0.0% replay overlap (llama's 22% is
+structurally unreachable on the single compute queue/GPFIFO). The lever-1
+implementation path is native multi-compute-queue execution or a DEV=CUDA
+route. No implementation changed in this record.
