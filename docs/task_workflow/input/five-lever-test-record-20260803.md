@@ -33,7 +33,9 @@ reps 1, plus a variant with fused decode gates off). All three completed with a
 trace data" and every `cuda_gpu_trace` export is empty. Tooling, not the
 harness, is the blocker on this host.
 
-Fallback signal, same session family, d512 (OBSERVED arithmetic):
+Fallback signal, same session family, d512 (OBSERVED arithmetic, since
+corrected): the DEBUG=2 kernel-sum 5.981 ms exceeds the W wall 5.63 ms, which
+initially read as ~6% overlap.
 
 | quantity | value | source |
 | --- | ---: | --- |
@@ -42,11 +44,16 @@ Fallback signal, same session family, d512 (OBSERVED arithmetic):
 | W wall (production, no sync) | 5.63 ms | `five-lever-test-20260803-l4-fp16.json` |
 | D wall (with final sync) | 7.19 ms | same file |
 
-W < node-sum by 0.35 ms (5.9%), so the replayed decode graphs already overlap
-independent nodes by roughly 6% (INFERRED by arithmetic; llama's reference is
-22% below its node-sum, `nv-decode-gap-decomposition-record-20260803.md`
-section 3). This is the signal the follow-up overlap probe quantifies
-(`decode-replay-overlap-measurement-record-20260803.md`).
+**Correction (same session, follow-up record):** this fallback is refuted.
+`decode-replay-overlap-measurement-record-20260803.md` measures real GPU
+timestamps via the HCQ profile path: replay overlap is 0.0% at d512 and d4096
+(per-group span equals node-sum to the microsecond; artifacts
+`five-lever-test-20260803-overlap-d512.json` / `-d4096.json`). The 0.35 ms gap
+is per-kernel launch/sync overhead in the DEBUG=2 tm values (~0.65 us x 948
+kernels), not GPU concurrency. llama's 22% overlap reference
+(`nv-decode-gap-decomposition-record-20260803.md` section 3) is structurally
+unreachable today: HCQGraph serializes every kernel on one per-device compute
+queue, so lever 1 requires multi-queue graph execution, not batching.
 
 ## 2. Lever 2 (GEMV per-kernel efficiency): microbenches reproduce
 
