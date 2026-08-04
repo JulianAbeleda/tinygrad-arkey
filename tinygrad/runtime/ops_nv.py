@@ -379,6 +379,7 @@ class GPFifo:
   gpput: MMIOInterface
   entries_count: int
   token: int
+  handle: int  # raw RM channel handle (NvHandle) returned by rm_alloc, so NVA06F/NVA06C controls can target the channel
   put_value: int = 0
 
 class NVKIface:
@@ -682,6 +683,7 @@ class NVDevice(HCQCompiled[NVSignal]):
     if ctxshare != 0: self.iface.setup_gpfifo_vm(gpfifo)
 
     return GPFifo(ring=gpfifo_area.cpu_view().view(offset, entries*8, fmt='Q'), entries_count=entries, token=ws_token_params.workSubmitToken,
+                  handle=gpfifo,
                   gpput=gpfifo_area.cpu_view().view(offset + entries*8 + getattr(nv_gpu.AmpereAControlGPFifo, 'GPPut').offset, fmt='I'))
 
   def _query_gpu_info(self, *reqs):

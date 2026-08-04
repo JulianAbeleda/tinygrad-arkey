@@ -1,31 +1,53 @@
 #!/usr/bin/env python3
 """Native NV multi-compute-GPFIFO probe: can two compute channels run kernels concurrently?
 
-Device-level P0 for the multi-compute-queue execution scope
-(docs/task_workflow/input/nv-multi-compute-queue-execution-scope-20260803.md).
+Device-level Phase 0 for the NV decode overlap implementation scope
+(docs/task_workflow/input/nv-decode-overlap-implementation-scope-20260803.md).
 Creates extra compute GPFIFOs on the live NVDevice (closed-default slice:
 persisted vaspace/ctxshare + `_new_gpu_fifo(debugger=)`), lowers kernels from
 Tensor expressions, and executes them on hand-rolled ProbeComputeQueue instances
 (NVComputeQueue with a per-instance GPFifo target). Timing uses HCQ timestamp
 signals, the same primitive as the decode overlap measurement.
 
+Construction modes (see build_construction_plan):
+  shared   control arm: all extra channels under dev.ctxshare in dev.channel_group,
+           exactly the E1-E5 construction, with every RM operation recorded.
+  ctxshare H1/H2: fresh FERMI_CONTEXT_SHARE_A per channel under dev.channel_group,
+           then per-channel NVA06F bind/schedule, then a group-level NVA06C schedule
+           on dev.channel_group.
+  group    H3: fresh KEPLER_CHANNEL_GROUP_A per channel on dev.nvdevice with its own
+           ctxshare, per-channel NVA06F bind/schedule, and the group-level NVA06C
+           schedule on that fresh group (never dev.channel_group).
+
+Every RM operation is recorded in an ordered rm_ops list ({op, kind, group, channel,
+engine_type, status, error}) and the partial JSON payload is rewritten to --out after
+each one, so a timed-out or failed arm still leaves an anchored record.
+
 Answers, on this host (GB202, driver 595.84):
-  E1: do cross-GPFIFO memory-semaphore dependencies work (numeric check)?
-  E2: serial calibration (span must equal node-sum on one queue).
-  E3/E4: do independent kernels on two/three compute channels overlap?
-  E5: compute-heavy (matmul) flavor, to separate engine co-scheduling from DRAM
+  R1: do cross-GPFIFO memory-semaphore dependencies work (anchored sha256 hash +
+      max-error contract, not np.allclose)?
+  R2: serial calibration (span must equal node-sum on one queue inside a declared
+      timestamp tolerance).
+  R3/R4: do independent kernels on two/three compute channels overlap (elementwise;
+      full and partial-SM grids via --grid-div)?
+  R5: compute-heavy (matmul 2048) flavor, to separate engine co-scheduling from DRAM
       contention on the elementwise flavor.
 
 Usage:
-  PYTHONPATH=/home/ubuntu/tinygrad-arkey python3 \
-    extra/llm_research/decode/nv_multi_queue_probe.py [--out X.json] \
-    [--engines 0,0] [--n 33554432]
+  single arm (debugging):
+    PYTHONPATH=/home/ubuntu/tinygrad-arkey python3 \
+      extra/llm_research/decode/nv_multi_queue_probe.py --mode {shared,ctxshare,group} \
+      [--out X.json] [--engines 0,0] [--n 33554432] [--grid-div 4] [--stop-after 5]
+  driver (all three arms, each in a fresh subprocess with a hard timeout):
+    PYTHONPATH=/home/ubuntu/tinygrad-arkey python3 \
+      extra/llm_research/decode/nv_multi_queue_probe.py --run-all --out X.json \
+      [--timeout 600] [--engines 0,0] [--grid-div 4]
 
 Sequential GPU session required (house rule). No graph, no JIT, no model.
 """
 from __future__ import annotations
 
-import argparse, json, math, sys, time
+import argparse, hashlib, json, math, os, subprocess, sys, time
 sys.path.insert(0, "/home/ubuntu/tinygrad-arkey")
 
 import numpy as np
@@ -35,7 +57,7 @@ from tinygrad.codegen import to_program
 from tinygrad.device import BufferSpec, Device
 from tinygrad.engine.realize import get_runtime
 from tinygrad.runtime import ops_nv
-from tinygrad.runtime.ops_nv import NVComputeQueue
+from tinygrad.runtime.ops_nv import GPFifo, NVComputeQueue
 from tinygrad.uop.ops import Ops, UOp
 
 
@@ -173,68 +195,197 @@ def copyout(dev, buf, n):
   return np.frombuffer(blob, dtype=np.float32).copy()
 
 
-def extra_gpfifos(dev, engine_types, separate_ctxshare=False):
-  """Create one additional compute GPFifo per engineType; returns (fifos, errors).
+def f32_sha(arr):
+  return hashlib.sha256(np.ascontiguousarray(arr, dtype=np.float32).tobytes()).hexdigest()
 
-  With separate_ctxshare, each extra channel gets its own FERMI_CONTEXT_SHARE_A
-  (same vaspace). Channels inside one ctxshare may be serialized by the RM to
-  preserve context state; separate context shares exercise the per-context
-  parallel path CUDA uses for stream concurrency.
+
+def r1_contract_pass(actual_hashes, ref_hashes, max_errs, ref_abs_maxes, tol=1e-3):
+  """R1 'exact' verdict: anchored output hashes must equal the CPU reference hashes
+  AND every output's max absolute error must be within tol * max(1, max|ref|).
+  The verdict is never np.allclose."""
+  if tuple(actual_hashes) != tuple(ref_hashes): return False
+  return all(me <= tol * max(1.0, ra) for me, ra in zip(max_errs, ref_abs_maxes))
+
+
+def serial_contract_ok(span_us, node_sum_us, max_pct=2.0, max_abs_us=10.0):
+  """R2 serial-calibration verdict: span equals node-sum inside a declared timestamp
+  tolerance (|pct_delta| <= max_pct OR abs_delta <= max_abs_us); never float equality."""
+  pct = (abs(span_us - node_sum_us) / node_sum_us * 100.0) if node_sum_us else float("inf")
+  return pct <= max_pct or abs(span_us - node_sum_us) <= max_abs_us
+
+
+BOOT_GROUP = "boot_group"
+BOOT_CTXSHARE = "boot_ctxshare"
+
+
+def build_construction_plan(mode: str, engine_types: list[int]) -> list[dict]:
+  """Ordered RM construction op plan for one arm (pure, no device needed).
+
+  Group/ctxshare/channel refs are symbolic: BOOT_GROUP is dev.channel_group,
+  BOOT_CTXSHARE is dev.ctxshare, and 'group:<i>' / 'ctxshare:<i>' / 'channel:<i>'
+  are the objects created for engine i. Ops tagged requires_channel (resp.
+  requires_any_channel) are skipped by the executor when that channel (resp. every
+  channel) failed construction, so the failing step is the last record for it.
   """
-  n = len(engine_types)
-  if n == 0: return [], []
-  area = dev.iface.alloc(0x200000 * n, contiguous=True, cpu_access=True, force_devmem=True,
-                         map_flags=(ops_nv.nv_gpu.NVOS33_FLAGS_CACHING_TYPE_WRITECOMBINED << 23))
-  fifos, errors = [], []
+  plan: list[dict] = []
   for i, engine_type in enumerate(engine_types):
+    if mode == "shared":
+      plan.append({"op": "CHANNEL_ALLOC", "kind": "NVA06F", "group": BOOT_GROUP, "ctxshare": BOOT_CTXSHARE,
+                   "channel": f"channel:{i}", "engine_index": i, "engine_type": engine_type})
+    elif mode == "ctxshare":
+      plan += [
+        {"op": "CTXSHARE_ALLOC", "kind": "FERMI_CONTEXT_SHARE_A", "group": BOOT_GROUP, "ctxshare": f"ctxshare:{i}",
+         "engine_index": i, "engine_type": engine_type},
+        {"op": "CHANNEL_ALLOC", "kind": "NVA06F", "group": BOOT_GROUP, "ctxshare": f"ctxshare:{i}", "channel": f"channel:{i}",
+         "engine_index": i, "engine_type": engine_type},
+        {"op": "NVA06F_BIND", "kind": "NVA06F", "group": BOOT_GROUP, "channel": f"channel:{i}",
+         "engine_index": i, "engine_type": engine_type, "requires_channel": i},
+        {"op": "NVA06F_GPFIFO_SCHEDULE", "kind": "NVA06F", "group": BOOT_GROUP, "channel": f"channel:{i}",
+         "engine_index": i, "engine_type": engine_type, "requires_channel": i},
+        {"op": "NVA06C_GPFIFO_SCHEDULE", "kind": "NVA06C", "group": BOOT_GROUP,
+         "engine_index": i, "engine_type": engine_type, "requires_channel": i},
+      ]
+    elif mode == "group":
+      plan += [
+        {"op": "CHANNEL_GROUP_ALLOC", "kind": "KEPLER_CHANNEL_GROUP_A", "group": f"group:{i}", "parent": "nvdevice",
+         "engine_index": i, "engine_type": engine_type},
+        {"op": "CTXSHARE_ALLOC", "kind": "FERMI_CONTEXT_SHARE_A", "group": f"group:{i}", "ctxshare": f"ctxshare:{i}",
+         "engine_index": i, "engine_type": engine_type},
+        {"op": "CHANNEL_ALLOC", "kind": "NVA06F", "group": f"group:{i}", "ctxshare": f"ctxshare:{i}", "channel": f"channel:{i}",
+         "engine_index": i, "engine_type": engine_type},
+        {"op": "NVA06F_BIND", "kind": "NVA06F", "group": f"group:{i}", "channel": f"channel:{i}",
+         "engine_index": i, "engine_type": engine_type, "requires_channel": i},
+        {"op": "NVA06F_GPFIFO_SCHEDULE", "kind": "NVA06F", "group": f"group:{i}", "channel": f"channel:{i}",
+         "engine_index": i, "engine_type": engine_type, "requires_channel": i},
+        {"op": "NVA06C_GPFIFO_SCHEDULE", "kind": "NVA06C", "group": f"group:{i}",
+         "engine_index": i, "engine_type": engine_type, "requires_channel": i},
+      ]
+    else:
+      raise ValueError(f"unknown mode {mode!r}")
+  if mode == "shared" and engine_types:
+    # Group-level re-schedule, exactly like the E1-E5 probe: only when at least one
+    # extra channel was actually created.
+    plan.append({"op": "NVA06C_GPFIFO_SCHEDULE", "kind": "NVA06C", "group": BOOT_GROUP,
+                 "engine_index": None, "engine_type": None, "requires_any_channel": True})
+  return plan
+
+
+def _j(v):
+  return int(v) if v is not None else None
+
+
+def _resolve_group(ref, dev, handles):
+  if ref is None: return None
+  if ref == BOOT_GROUP: return dev.channel_group
+  if ref == BOOT_CTXSHARE: return dev.ctxshare
+  # .get: a CHANNEL_GROUP_ALLOC op resolves its own (not yet created) ref to None;
+  # the record for that op is emitted with the new handle explicitly.
+  return handles.get(ref)
+
+
+def _resolve_channel(ref, handles):
+  # .get: a CHANNEL_ALLOC op resolves its own (not yet created) ref to None; the
+  # record for that op is emitted with the new handle explicitly.
+  return None if ref is None else handles.get(ref)
+
+
+def extra_gpfifos(dev, engine_types, mode="shared", on_rm_op=None):
+  """One additional compute GPFifo per engineType under the selected construction mode.
+
+  Executes build_construction_plan against `dev` (a live NVDevice or an RM/GPU-free
+  fake with the same surface: iface.alloc/rm_alloc/rm_control + _new_gpu_fifo).
+  Every RM operation is reported to on_rm_op immediately as
+  {op, kind, group, channel, engine_type, status, error}; the caller flushes after
+  each one. Returns (fifos, errors) where fifos holds only channels whose full
+  per-channel plan completed without error; a failing step is recorded in errors.
+  All NVA06F/NVA06C controls target raw RM channel/group handles, never a GPFifo
+  wrapper (rm_control(GPFifo(...), ...) is forbidden).
+  """
+  if not engine_types: return [], []
+  on_rm_op = on_rm_op or (lambda rec: None)
+  plan = build_construction_plan(mode, engine_types)
+  area = dev.iface.alloc(0x200000 * len(engine_types), contiguous=True, cpu_access=True, force_devmem=True,
+                         map_flags=(ops_nv.nv_gpu.NVOS33_FLAGS_CACHING_TYPE_WRITECOMBINED << 23))
+  handles: dict[str, object] = {}
+  ok_channels: set[int] = set()
+  fifos_by_channel: dict[int, GPFifo] = {}
+  errors: list[dict] = []
+
+  def record(op, group, channel, status, error=None):
+    on_rm_op({"op": op["op"], "kind": op.get("kind"), "group": _j(group), "channel": _j(channel),
+              "engine_type": op.get("engine_type"), "status": status, "error": error})
+
+  for op in plan:
+    group = _resolve_group(op.get("group"), dev, handles)
+    channel = _resolve_channel(op.get("channel"), handles)
+    if op.get("requires_channel") is not None and op["requires_channel"] not in ok_channels: continue
+    if op.get("requires_any_channel") and not ok_channels: continue
     try:
-      ctxshare = dev.ctxshare
-      if separate_ctxshare:
-        ctxshare_params = ops_nv.nv_gpu.NV_CTXSHARE_ALLOCATION_PARAMETERS(
-          hVASpace=dev.vaspace, flags=ops_nv.nv_gpu.NV_CTXSHARE_ALLOCATION_FLAGS_SUBCONTEXT_ASYNC)
-        ctxshare = dev.iface.rm_alloc(dev.channel_group, ops_nv.nv_gpu.FERMI_CONTEXT_SHARE_A, ctxshare_params)
-      fifos.append(dev._new_gpu_fifo(area, ctxshare, dev.channel_group, offset=0x100000 * i,
-                                     entries=0x4000, compute=True, debugger=False,
-                                     engine_type=engine_type))
-    except RuntimeError as e:
-      errors.append({"engine_type": engine_type, "error": str(e)})
-  if fifos:
-    # The group-level GPFIFO schedule was issued at device init, before these
-    # channels existed. Re-issue it so newly created channels (especially with
-    # separate ctxshares) are actually scheduled onto the runlist.
-    dev.iface.rm_control(dev.channel_group, ops_nv.nv_gpu.NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
-                         ops_nv.nv_gpu.NVA06C_CTRL_GPFIFO_SCHEDULE_PARAMS(bEnable=1))
-  return fifos, errors
+      record_channel = channel
+      if op["op"] == "CHANNEL_GROUP_ALLOC":
+        params = ops_nv.nv_gpu.NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS(engineType=ops_nv.nv_gpu.NV2080_ENGINE_TYPE_GRAPHICS)
+        group = dev.iface.rm_alloc(dev.nvdevice, ops_nv.nv_gpu.KEPLER_CHANNEL_GROUP_A, params)
+        handles[op["group"]] = group
+        record_channel = None
+      elif op["op"] == "CTXSHARE_ALLOC":
+        params = ops_nv.nv_gpu.NV_CTXSHARE_ALLOCATION_PARAMETERS(hVASpace=dev.vaspace,
+          flags=ops_nv.nv_gpu.NV_CTXSHARE_ALLOCATION_FLAGS_SUBCONTEXT_ASYNC)
+        handles[op["ctxshare"]] = dev.iface.rm_alloc(group, ops_nv.nv_gpu.FERMI_CONTEXT_SHARE_A, params)
+        record_channel = None
+      elif op["op"] == "CHANNEL_ALLOC":
+        i = op["engine_index"]
+        fifo = dev._new_gpu_fifo(area, _resolve_group(op.get("ctxshare"), dev, handles), group,
+                                 offset=0x100000 * i, entries=0x4000, compute=True, debugger=False,
+                                 engine_type=op["engine_type"])
+        handles[op["channel"]] = fifo.handle
+        fifos_by_channel[i] = fifo
+        ok_channels.add(i)
+        record_channel = fifo.handle
+      elif op["op"] == "NVA06F_BIND":
+        dev.iface.rm_control(channel, ops_nv.nv_gpu.NVA06F_CTRL_CMD_BIND,
+                             ops_nv.nv_gpu.NVA06F_CTRL_BIND_PARAMS(engineType=op["engine_type"]))
+      elif op["op"] == "NVA06F_GPFIFO_SCHEDULE":
+        dev.iface.rm_control(channel, ops_nv.nv_gpu.NVA06F_CTRL_CMD_GPFIFO_SCHEDULE,
+                             ops_nv.nv_gpu.NVA06F_CTRL_GPFIFO_SCHEDULE_PARAMS(bEnable=1))
+      elif op["op"] == "NVA06C_GPFIFO_SCHEDULE":
+        dev.iface.rm_control(group, ops_nv.nv_gpu.NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
+                             ops_nv.nv_gpu.NVA06C_CTRL_GPFIFO_SCHEDULE_PARAMS(bEnable=1))
+        record_channel = None
+      else:
+        raise AssertionError(f"unhandled plan op {op['op']!r}")
+      record(op, group, record_channel, "ok")
+    except (RuntimeError, MemoryError) as e:
+      record(op, group, channel, "error", str(e))
+      errors.append({"op": op["op"], "engine_index": op.get("engine_index"), "engine_type": op.get("engine_type"), "error": str(e)})
+      if op.get("engine_index") is not None:
+        ok_channels.discard(op["engine_index"])
+        fifos_by_channel.pop(op["engine_index"], None)
+  return [fifos_by_channel[i] for i in sorted(fifos_by_channel)], errors
 
 
-def main() -> None:
-  ap = argparse.ArgumentParser()
-  ap.add_argument("--out", type=str, default=None)
-  ap.add_argument("--engines", type=str, default="0,0", help="comma list of engineType per extra GPFifo")
-  ap.add_argument("--n", type=int, default=1 << 25, help="elementwise vector length")
-  ap.add_argument("--matmul", type=int, default=2048, help="matmul NxNxN for the compute-heavy flavor")
-  ap.add_argument("--stop-after", type=int, default=5, help="stop after experiment N (1-5)")
-  ap.add_argument("--grid-div", type=int, default=1,
-                  help="divide the E3/E4 elementwise grid by this factor; partial-SM kernels make "
-                       "overlap physically possible (full-grid kernels saturate every SM either way)")
-  ap.add_argument("--separate-ctxshare", action="store_true",
-                  help="give every extra channel its own context share instead of sharing the device's")
-  args = ap.parse_args()
+def arm_payload_schema(mode, engines, n, matmul, grid_div, device="NV sm_120 RTX 5090"):
+  """Fresh single-arm payload skeleton (pure; the driver merges these per arm)."""
+  return {"schema": "tinygrad.nv_multi_queue_probe.v2", "mode": mode, "device": device,
+          "n": n, "matmul": matmul, "engines": list(engines), "grid_div": grid_div,
+          "gpfifo_engine_types": [0, *engines], "rm_ops": [], "construction_errors": [],
+          "errors": [], "experiments": [], "arm": {"mode": mode, "exit_code": 0, "timed_out": False}}
 
-  t0 = time.perf_counter()
-  dev = Device["NV"]
-  dev.synchronize()
-  engines = [int(x) for x in args.engines.split(",") if x != ""]
-  extra, fifo_errors = extra_gpfifos(dev, engines, separate_ctxshare=args.separate_ctxshare)
-  gpfifos = [dev.compute_gpfifo, *extra]
-  qs = make_queues(dev, gpfifos)
-  print(f"device ready {time.perf_counter()-t0:.2f}s, compute gpfifos={len(gpfifos)} "
-        f"engineTypes={[0, *engines]} errors={fifo_errors}", file=sys.stderr, flush=True)
 
-  results = []
-  N = args.n
+def experiment_row(name, check, ts, arm):
+  """Per-kernel HCQ timestamps, span, node-sum, overlap fraction, and arm state."""
+  durs = durations(ts)
+  node_sum = sum(durs)
+  sp = span(ts)
+  return {"name": name, "status": "pending", "check": check,
+          "timestamps_us": [[st, en] for st, en in ts],
+          "span_us": sp, "node_sum_us": node_sum,
+          "overlap": (node_sum - sp) / node_sum if node_sum else 0.0,
+          "arm": dict(arm)}
 
-  # --- E1: cross-GPFIFO semaphore dependency correctness ---------------------
+
+def run_r1(args, dev, qs, arm):
+  """Cross-GPFIFO semaphore dependency: kernel on queue 1 waits on a signal released
+  by queue 0. Exact = anchored sha256 hash match AND max-error contract; never np.allclose."""
   a = Tensor.empty(1 << 20, device="NV"); b = Tensor.empty(1 << 20, device="NV")
   c = a * b
   mul_prg, mul_ast, mul_args = lower(dev, c)
@@ -246,7 +397,7 @@ def main() -> None:
   copyin(dev, bufs[b.uop], np.linspace(0.5, 2.0, 1 << 20, dtype=np.float32))
   copyin(dev, bufs[b2.uop], np.full(1 << 20, 1.0, dtype=np.float32))
   out_sig = dev.new_signal(value=0)
-  e1_ts = run_jobs(dev, [
+  ts = run_jobs(dev, [
     Job(qs[0], mul_prg, [bufs[u] for u in mul_args], mul_ast, signals=((out_sig, 1),)),
     Job(qs[1], add_prg, [bufs[u] for u in add_args], add_ast, waits=((out_sig, 1),)),
   ])
@@ -254,14 +405,23 @@ def main() -> None:
   out_e = copyout(dev, bufs[out_uop(add_ast, add_args)], 1 << 20)
   exp_c = np.arange(1 << 20, dtype=np.float32) * np.linspace(0.5, 2.0, 1 << 20, dtype=np.float32)
   exp_e = exp_c + 1.0
-  e1_ok = np.allclose(out_c, exp_c, rtol=1e-3) and np.allclose(out_e, exp_e, rtol=1e-3)
-  results.append({"name": "E1", "status": "pass" if e1_ok else "FAIL", "check": "cross-gpfifo semaphore dep",
-                  "max_err_c": float(np.abs(out_c - exp_c).max()), "max_err_e": float(np.abs(out_e - exp_e).max())})
-  print(f"E1 {'PASS' if e1_ok else 'FAIL'} cross-gpfifo dep (max err {float(np.abs(out_c-exp_c).max()):.2e}, "
-        f"{float(np.abs(out_e-exp_e).max()):.2e})", file=sys.stderr, flush=True)
-  if args.stop_after == 1: sys.exit(0)
+  h = {"out_c": f32_sha(out_c), "out_e": f32_sha(out_e), "ref_c": f32_sha(exp_c), "ref_e": f32_sha(exp_e)}
+  me_c, me_e = float(np.abs(out_c - exp_c).max()), float(np.abs(out_e - exp_e).max())
+  tol = 1e-3
+  row = experiment_row("R1", "cross-gpfifo semaphore dep (hash + max-error contract)", ts, arm)
+  row.update({"hashes": h, "max_err_c": me_c, "max_err_e": me_e, "error_bound": tol,
+              "ref_abs_max_c": float(np.abs(exp_c).max()), "ref_abs_max_e": float(np.abs(exp_e).max())})
+  row["status"] = "pass" if r1_contract_pass((h["out_c"], h["out_e"]), (h["ref_c"], h["ref_e"]),
+                                             (me_c, me_e), (row["ref_abs_max_c"], row["ref_abs_max_e"]), tol) else "FAIL"
+  print(f"R1 {'PASS' if row['status'] == 'pass' else 'FAIL'} cross-gpfifo dep "
+        f"hashes={h} max_err=({me_c:.2e}, {me_e:.2e})", file=sys.stderr, flush=True)
+  return row
 
-  # --- E2: serial calibration (dependent chain, one queue) -------------------
+
+def run_r2(args, dev, qs, arm):
+  """Serial calibration on one fifo: span must equal node-sum inside a timestamp
+  tolerance, never by float equality."""
+  N = args.n
   x1 = Tensor.empty(N, device="NV"); x2 = Tensor.empty(N, device="NV")
   y = x1 * x2
   s_prg, s_ast, s_args = lower(dev, y)
@@ -272,67 +432,57 @@ def main() -> None:
   copyin(dev, s_bufs[x1.uop], np.full(N, 2.0, dtype=np.float32))
   copyin(dev, s_bufs[x2.uop], np.full(N, 3.0, dtype=np.float32))
   copyin(dev, s_bufs[y2.uop], np.full(N, 1.0, dtype=np.float32))
-  e2_ts = run_jobs(dev, [
+  ts = run_jobs(dev, [
     Job(qs[0], s_prg, [s_bufs[u] for u in s_args], s_ast),
     Job(qs[0], s2_prg, [s_bufs[u] for u in s2_args], s2_ast),
   ])
-  d2 = durations(e2_ts); e2_span = span(e2_ts); e2_sum = sum(d2)
-  e2_overlap = (e2_sum - e2_span) / e2_sum if e2_sum else 0.0
-  results.append({"name": "E2", "status": "pass" if e2_overlap < 0.05 else "FAIL", "check": "serial calibration",
-                  "dur_us": d2, "span_us": e2_span, "node_sum_us": e2_sum, "overlap": e2_overlap})
-  print(f"E2 serial span={e2_span:.1f}us sum={e2_sum:.1f}us overlap={e2_overlap*100:.1f}% "
-        f"durs={[f'{d:.1f}' for d in d2]}", file=sys.stderr, flush=True)
-  if args.stop_after == 2: sys.exit(0)
+  row = experiment_row("R2", "serial calibration (span vs node-sum timestamp tolerance)", ts, arm)
+  abs_delta = abs(row["span_us"] - row["node_sum_us"])
+  pct_delta = (abs_delta / row["node_sum_us"] * 100.0) if row["node_sum_us"] else float("inf")
+  row.update({"abs_delta_us": abs_delta, "pct_delta": pct_delta, "timestamp_tol_pct": 2.0, "timestamp_tol_abs_us": 10.0})
+  row["status"] = "pass" if serial_contract_ok(row["span_us"], row["node_sum_us"]) else "FAIL"
+  print(f"R2 serial span={row['span_us']:.1f}us sum={row['node_sum_us']:.1f}us "
+        f"abs_delta={abs_delta:.3f}us pct_delta={pct_delta:.3f}%", file=sys.stderr, flush=True)
+  return row
 
-  # --- E3: two independent elementwise kernels on two queues -----------------
-  jobs3, q3_bufs = [], {}
-  for qi in (0, 1):
+
+def run_elementwise_row(args, dev, qs, arm, name, n_queues):
+  """n_queues independent elementwise kernels on n_queues fifos (R3: 2, R4: 3)."""
+  N = args.n
+  jobs, asts, argss, bufs = [], [], [], []
+  for qi in range(n_queues):
     ta = Tensor.empty(N, device="NV"); tb = Tensor.empty(N, device="NV")
     tc = ta * tb
     p, ast, uops = lower(dev, tc)
     bb = alloc_buffers(dev, uops)
     copyin(dev, bb[ta.uop], np.full(N, float(qi + 1), dtype=np.float32))
     copyin(dev, bb[tb.uop], np.full(N, 2.0, dtype=np.float32))
-    q3_bufs[qi] = bb
-    g3, _ = ast.arg.launch_dims({})
-    jobs3.append(Job(qs[qi], p, [bb[u] for u in uops], ast,
-                     grid=(g3[0] // args.grid_div, g3[1], g3[2]) if args.grid_div > 1 else None))
-  e3_ts = run_jobs(dev, jobs3)
-  d3 = durations(e3_ts); e3_span = span(e3_ts); e3_sum = sum(d3)
-  e3_overlap = (e3_sum - e3_span) / e3_sum if e3_sum else 0.0
-  results.append({"name": "E3", "status": "pass" if e3_overlap >= 0.05 else "FAIL", "check": "2-queue elementwise overlap",
-                  "dur_us": d3, "span_us": e3_span, "node_sum_us": e3_sum, "overlap": e3_overlap})
-  print(f"E3 2-queue span={e3_span:.1f}us sum={e3_sum:.1f}us overlap={e3_overlap*100:.1f}% "
-        f"durs={[f'{d:.1f}' for d in d3]}", file=sys.stderr, flush=True)
-  if args.stop_after == 3: sys.exit(0)
+    g, _ = ast.arg.launch_dims({})
+    jobs.append(Job(qs[qi], p, [bb[u] for u in uops], ast,
+                    grid=(g[0] // args.grid_div, g[1], g[2]) if args.grid_div > 1 else None))
+    asts.append(ast); argss.append(uops); bufs.append(bb)
+  ts = run_jobs(dev, jobs)
+  refs = [np.full(N, float(qi + 1) * 2.0, dtype=np.float32) for qi in range(n_queues)]
+  outs = [copyout(dev, bufs[qi][out_uop(asts[qi], argss[qi])], N) for qi in range(n_queues)]
+  row = experiment_row(name, f"{n_queues}-queue elementwise overlap", ts, arm)
+  tol = 1e-3
+  row.update({"grid_div": args.grid_div,
+              "hashes": {"out": [f32_sha(o) for o in outs], "ref": [f32_sha(r) for r in refs]},
+              "max_errs": [float(np.abs(o - r).max()) for o, r in zip(outs, refs)],
+              "error_bound": tol, "ref_abs_maxes": [float(np.abs(r).max()) for r in refs],
+              "hash_match": [f32_sha(o) == f32_sha(r) for o, r in zip(outs, refs)]})
+  numeric_ok = all(me <= tol * max(1.0, ra) for me, ra in zip(row["max_errs"], row["ref_abs_maxes"]))
+  row["numeric_ok"] = bool(numeric_ok)
+  row["status"] = "pass" if (row["overlap"] >= 0.05 and numeric_ok) else "FAIL"
+  print(f"{name} {n_queues}-queue span={row['span_us']:.1f}us sum={row['node_sum_us']:.1f}us "
+        f"overlap={row['overlap'] * 100:.1f}% numeric_ok={numeric_ok}", file=sys.stderr, flush=True)
+  return row
 
-  # --- E4: three independent kernels on three queues -------------------------
-  if len(qs) >= 3:
-    jobs4 = []
-    for qi in (0, 1, 2):
-      ta = Tensor.empty(N, device="NV"); tb = Tensor.empty(N, device="NV")
-      tc = ta * tb
-      p, ast, uops = lower(dev, tc)
-      bb = alloc_buffers(dev, uops)
-      copyin(dev, bb[ta.uop], np.full(N, float(qi + 1), dtype=np.float32))
-      copyin(dev, bb[tb.uop], np.full(N, 2.0, dtype=np.float32))
-      g4, _ = ast.arg.launch_dims({})
-      jobs4.append(Job(qs[qi], p, [bb[u] for u in uops], ast,
-                       grid=(g4[0] // args.grid_div, g4[1], g4[2]) if args.grid_div > 1 else None))
-    e4_ts = run_jobs(dev, jobs4)
-    d4 = durations(e4_ts); e4_span = span(e4_ts); e4_sum = sum(d4)
-    e4_overlap = (e4_sum - e4_span) / e4_sum if e4_sum else 0.0
-    results.append({"name": "E4", "status": "pass" if e4_overlap >= 0.05 else "FAIL", "check": "3-queue elementwise overlap",
-                    "dur_us": d4, "span_us": e4_span, "node_sum_us": e4_sum, "overlap": e4_overlap})
-    print(f"E4 3-queue span={e4_span:.1f}us sum={e4_sum:.1f}us overlap={e4_overlap*100:.1f}% "
-          f"durs={[f'{d:.1f}' for d in d4]}", file=sys.stderr, flush=True)
-    if args.stop_after == 4: sys.exit(0)
-  else:
-    results.append({"name": "E4", "status": "skipped", "check": "need 3 gpfifos"})
 
-  # --- E5: compute-heavy (matmul) chains on two queues -----------------------
+def run_r5(args, dev, qs, arm):
+  """Compute-heavy (matmul 2048) flavor on two fifos, sqrt(k)*I input pin kept."""
   M = args.matmul
-  jobs5, m_bufs, m_asts, m_argss = [], {}, {}, {}
+  jobs, asts, argss, bufs = [], [], [], []
   for qi in (0, 1):
     ma = Tensor.empty(M, M, device="NV"); mb = Tensor.empty(M, M, device="NV")
     mc = ma @ mb
@@ -348,29 +498,194 @@ def main() -> None:
     # inputs get sqrt(k)*I; A*B == k*I for any input order, which pins the check.
     for slot in m_ast.arg.ins:
       copyin(dev, bb[m_args[slot]], np.eye(M, dtype=np.float32) * math.sqrt(float(qi + 1)))
-    m_bufs[qi], m_asts[qi], m_argss[qi] = bb, m_ast, m_args
-    jobs5.append(Job(qs[qi], m_prg, [bb[u] for u in m_args], m_ast))
-  e5_ts = run_jobs(dev, jobs5)
-  d5 = durations(e5_ts); e5_span = span(e5_ts); e5_sum = sum(d5)
-  e5_overlap = (e5_sum - e5_span) / e5_sum if e5_sum else 0.0
-  out5 = [copyout(dev, m_bufs[qi][out_uop(m_asts[qi], m_argss[qi])], (M, M)) for qi in (0, 1)]
-  e5_ok = all(np.allclose(out5[qi].reshape(M, M), np.eye(M, dtype=np.float32) * float(qi + 1), rtol=1e-2) for qi in (0, 1))
-  results.append({"name": "E5", "status": "pass" if (e5_overlap >= 0.05 and e5_ok) else "FAIL",
-                  "check": "2-queue matmul overlap + correctness", "M": M,
-                  "dur_us": d5, "span_us": e5_span, "node_sum_us": e5_sum, "overlap": e5_overlap, "numeric_ok": e5_ok})
-  print(f"E5 2-queue matmul span={e5_span:.1f}us sum={e5_sum:.1f}us overlap={e5_overlap*100:.1f}% "
-        f"durs={[f'{d:.1f}' for d in d5]} numeric_ok={e5_ok}", file=sys.stderr, flush=True)
+    jobs.append(Job(qs[qi], m_prg, [bb[u] for u in m_args], m_ast))
+    asts.append(m_ast); argss.append(m_args); bufs.append(bb)
+  ts = run_jobs(dev, jobs)
+  outs = [copyout(dev, bufs[qi][out_uop(asts[qi], argss[qi])], (M, M)).reshape(M, M) for qi in (0, 1)]
+  refs = [np.eye(M, dtype=np.float32) * float(qi + 1) for qi in (0, 1)]
+  row = experiment_row("R5", "2-queue matmul overlap + correctness", ts, arm)
+  tol = 1e-2
+  row.update({"M": M, "hashes": {"out": [f32_sha(o) for o in outs], "ref": [f32_sha(r) for r in refs]},
+              "max_errs": [float(np.abs(o - r).max()) for o, r in zip(outs, refs)],
+              "error_bound": tol, "ref_abs_maxes": [float(np.abs(r).max()) for r in refs],
+              "hash_match": [f32_sha(o) == f32_sha(r) for o, r in zip(outs, refs)]})
+  numeric_ok = all(me <= tol * max(1.0, ra) for me, ra in zip(row["max_errs"], row["ref_abs_maxes"]))
+  row["numeric_ok"] = bool(numeric_ok)
+  row["status"] = "pass" if (row["overlap"] >= 0.05 and numeric_ok) else "FAIL"
+  print(f"R5 2-queue matmul span={row['span_us']:.1f}us sum={row['node_sum_us']:.1f}us "
+        f"overlap={row['overlap'] * 100:.1f}% numeric_ok={numeric_ok}", file=sys.stderr, flush=True)
+  return row
 
-  payload = {
-    "schema": "tinygrad.nv_multi_queue_probe.v1",
-    "device": "NV sm_120 RTX 5090", "n": N, "matmul": M,
-    "gpfifo_engine_types": [0, *engines], "gpfifo_creation_errors": fifo_errors,
-    "verdict": "PASS" if all(r.get("status") in ("pass", "skipped") for r in results) else "FAIL",
-    "experiments": results,
-  }
-  if args.out:
-    with open(args.out, "w", encoding="utf-8") as f: json.dump(payload, f, indent=2)
+
+def run_experiments(args, dev, qs, payload, flush):
+  """Run R1-R5, appending each row to payload['experiments'] and flushing after each."""
+  arm = payload["arm"]
+  results = payload["experiments"]
+
+  def skipped(name, check, reason):
+    results.append({"name": name, "status": "skipped", "check": check, "error": reason,
+                    "timestamps_us": [], "span_us": None, "node_sum_us": None, "overlap": None, "arm": dict(arm)})
+    payload["errors"].append(f"{name} skipped: {reason}")
+    flush()
+
+  def done(name, fn):
+    try:
+      results.append(fn())
+    except (RuntimeError, MemoryError) as e:
+      results.append({"name": name, "status": "FAIL", "check": "execution error", "error": str(e),
+                      "timestamps_us": [], "span_us": None, "node_sum_us": None, "overlap": None, "arm": dict(arm)})
+      payload["errors"].append(f"{name} execution error: {e}")
+    flush()
+
+  if len(qs) < 2:
+    skipped("R1", "cross-gpfifo semaphore dep (hash + max-error contract)", f"need >= 2 compute gpfifos, got {len(qs)}")
+  else:
+    done("R1", lambda: run_r1(args, dev, qs, arm))
+  if args.stop_after == 1: sys.exit(0)
+
+  done("R2", lambda: run_r2(args, dev, qs, arm))
+  if args.stop_after == 2: sys.exit(0)
+
+  if len(qs) < 2:
+    skipped("R3", "2-queue elementwise overlap", f"need >= 2 compute gpfifos, got {len(qs)}")
+  else:
+    done("R3", lambda: run_elementwise_row(args, dev, qs, arm, "R3", 2))
+  if args.stop_after == 3: sys.exit(0)
+
+  if len(qs) < 3:
+    skipped("R4", "3-queue elementwise overlap", f"need >= 3 compute gpfifos, got {len(qs)}")
+  else:
+    done("R4", lambda: run_elementwise_row(args, dev, qs, arm, "R4", 3))
+  if args.stop_after == 4: sys.exit(0)
+
+  if len(qs) < 2:
+    skipped("R5", "2-queue matmul overlap + correctness", f"need >= 2 compute gpfifos, got {len(qs)}")
+  else:
+    done("R5", lambda: run_r5(args, dev, qs, arm))
+
+
+def run_arm(args) -> None:
+  t0 = time.perf_counter()
+  dev = Device["NV"]
+  dev.synchronize()
+  engines = [int(x) for x in args.engines.split(",") if x != ""]
+  payload = arm_payload_schema(args.mode, engines, args.n, args.matmul, args.grid_div)
+
+  def flush():
+    if args.out:
+      with open(args.out, "w", encoding="utf-8") as f: json.dump(payload, f, indent=2)
+
+  def on_rm_op(rec):
+    payload["rm_ops"].append(rec)
+    flush()
+
+  try:
+    extra, construction_errors = extra_gpfifos(dev, engines, mode=args.mode, on_rm_op=on_rm_op)
+  except (RuntimeError, MemoryError) as e:
+    construction_errors = [{"op": "CONSTRUCTION_ABORTED", "engine_index": None, "engine_type": None, "error": str(e)}]
+    extra = []
+  payload["construction_errors"] = construction_errors
+  payload["errors"] += [f"construction {e['op']} engine {e['engine_index']}: {e['error']}" for e in construction_errors]
+  gpfifos = [dev.compute_gpfifo, *extra]
+  qs = make_queues(dev, gpfifos)
+  print(f"device ready {time.perf_counter() - t0:.2f}s, compute gpfifos={len(gpfifos)} mode={args.mode} "
+        f"engineTypes={[0, *engines]} errors={construction_errors}", file=sys.stderr, flush=True)
+  flush()
+  run_experiments(args, dev, qs, payload, flush)
+  flush()
   print(json.dumps(payload, indent=2))
+
+
+def g1_verdict(arms):
+  """Gate G1 (belief-flip) classification over merged per-arm payloads.
+
+  PASS: R1's hash/error contract passes in at least one successfully constructed
+        arm AND at least one R3-R5 row in any arm shows overlap >= 5%.
+  NO_OVERLAP: R1 passes somewhere but every R3-R5 row in every arm is below 5%.
+  CONSTRUCTION_BLOCKED: R1 never passed; every arm either failed construction, timed
+        out before R1, or (recorded in the basis) executed R1 but failed its contract.
+  Any non-PASS basis names the exact arm/operation boundary.
+  """
+  r1_pass_modes = [a["mode"] for a in arms if any(e["name"] == "R1" and e["status"] == "pass" for e in a["experiments"])]
+  overlap_rows = [(a["mode"], e["name"], e["overlap"]) for a in arms for e in a["experiments"]
+                  if e["name"] in ("R3", "R4", "R5") and isinstance(e.get("overlap"), (int, float)) and e["overlap"] >= 0.05]
+  per_arm_max_overlap = {a["mode"]: max((e["overlap"] for e in a["experiments"]
+                                         if e["name"] in ("R3", "R4", "R5") and isinstance(e.get("overlap"), (int, float))),
+                                        default=0.0) for a in arms}
+  if r1_pass_modes and overlap_rows:
+    return "PASS", (f"R1 hash/error contract passed in arm(s) {r1_pass_modes}; "
+                    f"R3-R5 overlap >= 5% in {[(m, n, round(o, 4)) for m, n, o in overlap_rows]}")
+  if r1_pass_modes:
+    return "NO_OVERLAP", (f"R1 passed in arm(s) {r1_pass_modes} but every R3-R5 row in every arm is below 5% "
+                          f"(per-arm max overlap {per_arm_max_overlap})")
+  r1_fail_modes = [a["mode"] for a in arms if any(e["name"] == "R1" and e["status"] == "FAIL" for e in a["experiments"])]
+  if r1_fail_modes:
+    return "CONSTRUCTION_BLOCKED", (f"R1 executed but failed its hash/error contract in arm(s) {r1_fail_modes}; "
+                                    f"no arm has a passing R1, so this is a blocked construction, not a no-overlap result")
+  r1_states = {a["mode"]: [e.get("error", e.get("status")) for e in a["experiments"] if e["name"] == "R1"] for a in arms}
+  return "CONSTRUCTION_BLOCKED", (f"R1 never ran in any arm: per-arm R1 states {r1_states}; "
+                                  f"every arm failed construction or timed out before R1")
+
+
+def run_all_driver(args) -> None:
+  if not args.out: raise SystemExit("--run-all requires --out")
+  script = os.path.abspath(__file__)
+  engines = [int(x) for x in args.engines.split(",") if x != ""]
+  arms = []
+  for mode in ("shared", "ctxshare", "group"):
+    arm_out = f"{args.out}.arm.{mode}.json"
+    cmd = [sys.executable, script, "--mode", mode, "--out", arm_out, "--engines", args.engines,
+           "--n", str(args.n), "--matmul", str(args.matmul), "--stop-after", str(args.stop_after),
+           "--grid-div", str(args.grid_div)]
+    try:
+      cp = subprocess.run(cmd, timeout=args.timeout, capture_output=True, text=True)
+      exit_code, timed_out = cp.returncode, False
+    except subprocess.TimeoutExpired:
+      exit_code, timed_out = None, True
+    arm = {"mode": mode, "exit_code": exit_code, "timed_out": timed_out, "rm_ops": [], "experiments": [], "errors": []}
+    try:
+      with open(arm_out, "r", encoding="utf-8") as f: sub_payload = json.load(f)
+    except (OSError, json.JSONDecodeError):
+      sub_payload = None
+    if sub_payload is None:
+      arm["errors"].append("arm produced no JSON payload (failed before the first flush)")
+    else:
+      arm["rm_ops"] = sub_payload.get("rm_ops", [])
+      arm["experiments"] = sub_payload.get("experiments", [])
+      arm["errors"] = list(sub_payload.get("errors", []))
+    if timed_out: arm["errors"].append(f"timed out after {args.timeout}s")
+    elif exit_code != 0: arm["errors"].append(f"arm exited with code {exit_code}")
+    for row in arm["experiments"]:
+      row["arm"] = {"mode": mode, "exit_code": exit_code, "timed_out": timed_out}
+    arms.append(arm)
+    print(f"arm {mode}: exit_code={exit_code} timed_out={timed_out} experiments={len(arm['experiments'])} "
+          f"rm_ops={len(arm['rm_ops'])} errors={arm['errors']}", file=sys.stderr, flush=True)
+  verdict, basis = g1_verdict(arms)
+  payload = {"schema": "tinygrad.nv_multi_queue_probe.driver.v1", "device": "NV sm_120 RTX 5090",
+             "n": args.n, "matmul": args.matmul, "engines": engines, "grid_div": args.grid_div,
+             "per_arm_timeout_s": args.timeout, "arms": arms, "verdict": verdict, "verdict_basis": basis}
+  with open(args.out, "w", encoding="utf-8") as f: json.dump(payload, f, indent=2)
+  print(json.dumps(payload, indent=2))
+
+
+def main() -> None:
+  ap = argparse.ArgumentParser()
+  ap.add_argument("--mode", type=str, choices=["shared", "ctxshare", "group"], default="shared",
+                  help="construction mode for the extra GPFifos (default shared = E1-E5 control arm)")
+  ap.add_argument("--run-all", action="store_true",
+                  help="driver: run all three modes in fresh subprocesses with a hard timeout and merge the arms")
+  ap.add_argument("--timeout", type=int, default=600, help="per-arm hard timeout in seconds (--run-all)")
+  ap.add_argument("--out", type=str, default=None, help="incremental JSON output path")
+  ap.add_argument("--engines", type=str, default="0,0", help="comma list of engineType per extra GPFifo")
+  ap.add_argument("--n", type=int, default=1 << 25, help="elementwise vector length")
+  ap.add_argument("--matmul", type=int, default=2048, help="matmul NxNxN for the compute-heavy flavor")
+  ap.add_argument("--stop-after", type=int, default=5, help="stop after experiment N (1-5)")
+  ap.add_argument("--grid-div", type=int, default=1,
+                  help="divide the R3/R4 elementwise grid by this factor; partial-SM kernels make "
+                       "overlap physically possible (full-grid kernels saturate every SM either way)")
+  args = ap.parse_args()
+  if args.run_all: run_all_driver(args)
+  else: run_arm(args)
 
 
 if __name__ == "__main__":
