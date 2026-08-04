@@ -9,8 +9,8 @@ from tinygrad.llm.model_facts import model_facts_from_gguf_metadata
 from tinygrad.llm.model_route_plan import build_model_route_plan, primitive_route_entry_for_tensor
 from tinygrad.llm.qk_primitives import (
   _install_q4k_primitives, _install_q6k_primitives, Q4KPrimitiveLinear, Q6KPrimitiveLinear,
-  QKConfig, QKPrimitiveBudget, QKPrimitiveEligibility, qk_primitive_eligibility_from_device_facts,
-  QKPrimitiveCapability, QKPrimitiveRouteAdmission, qk_primitive_capability_from_device_facts,
+  QKConfig, QKPrimitiveBudget, kv_cache_fp16_eligible, QKPrimitiveCapability, QKPrimitiveRouteAdmission,
+  qk_primitive_capability_from_device_facts,
 )
 from tinygrad.llm import qk_primitives
 
@@ -119,18 +119,25 @@ def _install_model():
   )])
 
 
-def _device_facts(*, backend="AMD", architecture="gfx1100", wave_size=32, supports_warp_shfl_xor=True):
+def _device_facts(*, backend="AMD", architecture="gfx1100", wave_size=32, supports_warp_shfl_xor=True,
+                  supports_fp16=None):
   probe = ProbeRecord("test", "2026-07-15T00:00:00+00:00")
   return DeviceFacts("AMD:0", backend, architecture, None, None,
-                     DeviceCapabilities(wave_size=wave_size, supports_warp_shfl_xor=supports_warp_shfl_xor), probe, probe)
+                     DeviceCapabilities(wave_size=wave_size, supports_warp_shfl_xor=supports_warp_shfl_xor,
+                                        supports_fp16=supports_fp16), probe, probe)
 
 
-def test_qk_eligibility_requires_exact_structural_device_facts_match():
-  assert qk_primitive_eligibility_from_device_facts(_device_facts()).eligible
-  assert not qk_primitive_eligibility_from_device_facts(_device_facts(backend="amd")).eligible
-  assert not qk_primitive_eligibility_from_device_facts(_device_facts(architecture="gfx1100:sramecc+")).eligible
-  assert not qk_primitive_eligibility_from_device_facts(_device_facts(wave_size=64)).eligible
-  assert not qk_primitive_eligibility_from_device_facts(None).eligible
+def test_kv_cache_fp16_eligible_is_capability_based_not_target_gated():
+  """The fp16 KV-cache decision reads DeviceCapabilities.supports_fp16 (renderer supported_dtypes scan),
+  never a backend/architecture/wave_size string -- the pre-TG3 AMD gfx1100 eligibility was removed."""
+  assert kv_cache_fp16_eligible(_device_facts(supports_fp16=True))
+  assert not kv_cache_fp16_eligible(_device_facts(supports_fp16=False))
+  assert not kv_cache_fp16_eligible(_device_facts())
+  assert not kv_cache_fp16_eligible(None)
+  # Anti-regression: the old AMD-gfx1100-wave-32 triple must NOT grant eligibility -- only the capability does.
+  assert not kv_cache_fp16_eligible(_device_facts(supports_fp16=False))
+  # Capability wins regardless of which backend/architecture reports it.
+  assert kv_cache_fp16_eligible(_device_facts(backend="NV", architecture="sm_120", supports_fp16=True))
 
 
 def test_isolated_qk_construction_accepts_structural_route_admission_fixture():
