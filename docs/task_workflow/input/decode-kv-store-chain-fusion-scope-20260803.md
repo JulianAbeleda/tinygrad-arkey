@@ -6,6 +6,49 @@ Status: implementation scope, authorized by `nv-decode-gap-decomposition-record-
 promotion to `exp`/`dev`/`master` and no composed performance endpoint.
 Branch: tinygrad `nvidia-bringup-20260731`, HEAD `894c08c48`.
 
+Revision 2026-08-03 (review correction, applied before implementation lands): the
+original draft claimed the fused store requires an "fp16 cache dtype". That claim was
+factually wrong for the measured NV target: the NV cache is fp32 because the cache
+dtype decision at `model.py` `_init_state` was gated by the pre-TG3
+`QKPrimitiveEligibility` AMD-gfx1100 string equality (since removed). The corrected
+contract: the kernel writes the CACHE's OWN dtype (fp16 or fp32), and the cache dtype
+decision itself is now capability-based (`DeviceCapabilities.supports_fp16` from the
+renderer's `supported_dtypes()` scan, via `kv_cache_fp16_eligible`) plus the validated
+8B shape gate -- never a backend/architecture string. The flash tile consumes the
+cache by casting it to fp16 on read (`flash_decode_attention.py::make_kv_element_loader`),
+so fp16 and fp32 storage are byte-identical for the tile; the store-side cast is the
+same single rounding the legacy chain performs.
+
+Revision 2026-08-03b (implementation record, after the A/B): the scope's "~180
+kernels / +5-7%" expectation was based on the UNFUSED decomposition of the legacy
+chain (k-rope, k-cast, v-cast, stack, store as 5 kernels/layer). The measured legacy
+chain is ALREADY elementwise-fused into one store kernel per layer, so the realistic
+best case is a 1:1 replacement, NOT a 5:1. The A/B confirms: active arm = 948
+kernels/token, EXACTLY the closed arm's 948, pins 3/3 HOLD with the identical token
+sha. The lever is wall-NEUTRAL (177.8 vs 178.4 tok/s, within run noise), so the
+promotion gate stays CLOSED and the fused route lands closed-default with its tests.
+
+Two findings surfaced by the implementation:
+
+- NV cache dtype flip: making the cache-dtype decision capability-based flips the NV
+  cache fp32 -> fp16, which exposed a renderer bug (`tinygrad/renderer/cuda.py`):
+  `used_dtypes` omitted buffer-ARGUMENT dtypes, so a kernel whose only fp16 element
+  is a `half*` cache parameter rendered without `#include <cuda_fp16.h>` and failed
+  NVRTC compilation. Fixed by including the buf dtypes in `used_dtypes`; it only
+  enables previously-broken compiles (no existing kernel source changes). The fused
+  store writes the cache's own dtype, so the fp16 cache bytes are identical to the
+  legacy fp16 store bytes.
+- v-parts reduce absorption: the q6k decode GEMV emits 4 fp32 partials per row (NV)
+  and the model's v is their axis-1 sum. The legacy store kernel absorbs that reduce
+  in-kernel (`(val8.x+val8.y+val8.z+val8.w)`, verified from the cached pinned source);
+  the fused kernel now does the same: the route receives the raw parts view
+  `(Hkv*Hd, VPART)` and sums the partials left-to-right in fp32 before the single
+  store cast, byte-identical to the legacy expression. Without this, the reduce
+  materialized as 18 extra kernels/token (one per q6k-v layer); with it, the active
+  arm matches the closed arm kernel-for-kernel. The q4k layers' already-reduced v is
+  bound as its producer AFTER (no contiguous copy), which removed a second class of
+  18 extra copy kernels.
+
 ## 1. Evidence (OBSERVED, same session as this scope)
 
 The decode kv-store chain (`model.py:640-700`) materializes 270 kernels / 568 us per
@@ -24,9 +67,9 @@ llama; 948 kernels / 6021 us; GEMV-class 3.775 ms; pins token sha
 New kernel `decode_kv_rope_store_kernel` (emitted by `decode_kernels.py`, route
 selection in `decode_routes.py` / `model.py` kv path): inputs are the fp32 k and v
 GEMV outputs (1024,) plus the freqs table and start_pos; the kernel applies k-rope
-in-kernel (fp32, same `apply_rope` arithmetic), casts k and v to fp16, and writes
-both directly into `cache_kv` at slot `start_pos`. It replaces the k-rope + k-cast +
-v-cast + `Tensor.stack(k, v)` + store chain per layer.
+in-kernel (fp32, same `apply_rope` arithmetic), casts k and v to the cache's own
+dtype, and writes both directly into `cache_kv` at slot `start_pos`. It replaces the
+k-rope + k-cast + v-cast + `Tensor.stack(k, v)` + store chain per layer.
 
 Why this shape:
 
@@ -47,9 +90,9 @@ that is an expectation to be MEASURED, not claimed.
 - Inputs: `k` fp32 (B*Hkv*Hd = 1024,), `v` fp32 (1024,), `freqs` fp32
   (rope_dim, MAXC) precomputed table, `start_pos` (runtime scalar via the decode
   graph's `start_pos` variable).
-- Output: writes `cache_kv[0, :, :, start_pos, :]` (roped k, fp16) and
-  `cache_kv[1, :, :, start_pos, :]` (v, fp16); returns the cache tensor AFTER the
-  store so the flash route reads the written bytes.
+- Output: writes `cache_kv[0, :, :, start_pos, :]` (roped k, cache dtype) and
+  `cache_kv[1, :, :, start_pos, :]` (v, cache dtype); returns the cache tensor AFTER
+  the store so the flash route reads the written bytes.
 - The store is issued through the existing custom-kernel boundary
   (`Tensor.uop_program` / `UOp.custom_kernel`) exactly like the w1w3 fused GEMV;
   the fused program's output is the cache slice (slot 0), inputs are k, v, freqs.
@@ -67,9 +110,10 @@ that is an expectation to be MEASURED, not claimed.
   `frozenset()`.
 - The model resolves the flag ONCE at load (same pattern as
   `_decode_q4k_w1w3_fusion_promoted`, `model.py:1412`); blocks read their own copy.
-- The fused store fires only when ALL hold: decode (T==1), B==1, fp16 cache dtype,
-  not kv_quant, not rope-at-read (ring), and the route record promotes the target.
-  Any miss falls back to the legacy chain byte-for-byte.
+- The fused store fires only when ALL hold: decode (T==1), B==1, cache dtype fp16 or
+  fp32 (the kernel writes the cache's own dtype, so the fused bytes equal the legacy
+  bytes for either), not kv_quant, not rope-at-read (ring), and the route record
+  promotes the target. Any miss falls back to the legacy chain byte-for-byte.
 
 ## 3. Files touched
 
