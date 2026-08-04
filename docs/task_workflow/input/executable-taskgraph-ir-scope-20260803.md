@@ -1,6 +1,6 @@
-# ExecutableTaskGraph IR - explicit DAG substrate for replay and decode overlap (AMD control required)
+# ExecutableTaskGraph IR - NVIDIA decode-first replay/overlap substrate (AMD/Metal lowering seams)
 
-Date: 2026-08-03
+Date: 2026-08-03 (revised 2026-08-03: NVIDIA-first reframe + parity verdict)
 
 Status: scoped, not implemented. This is a design/analysis pass responding to the
 proposal to introduce an abstraction "like an ExecutableTaskGraph, not a CUDAGraph"
@@ -8,6 +8,12 @@ proposal to introduce an abstraction "like an ExecutableTaskGraph, not a CUDAGra
 shape/signature, lowered per backend). Branch boundary: tinygrad
 `nvidia-bringup-20260731` at `f2270480c`. This document does not authorize
 implementation, promotion to `dev`/`exp`/`master`, or any code change.
+
+This revision is NVIDIA-first by decision: the measured parity gap lives on NV decode
+(sm_120), so the scope's P0 and the only speed deliverable (D2) target NVIDIA. AMD and
+Metal are kept as lowering seams only: the IR design must not block them, but no AMD
+or Metal lowering work is in scope. Shared runtime changes still require an AMD control
+(house rule).
 
 Bans for this scope: no code changes; no GPU use in this doc-only pass; never touch
 `extra/llm_research/microbench/dp4a_peak_cuda*` or `scratchpad/t6_metal_admission_probe.py`;
@@ -52,14 +58,15 @@ The genuinely new work is therefore narrow and specific:
 - **D2 - dependency-driven batching beyond consecutive calls.** `graph_split_rewrite`
   (`jit.py:236`) only batches *consecutive* admissible calls; it flushes on mixed
   device, unsupported op, batch-size limit, or explicit barrier. Independent kernels
-  separated by unrelated work never share a graph. llama's overlap (below) is exactly
-  this: independent nodes inside one graph.
+  separated by unrelated work never share a graph. llama's overlap (section 2) is
+  exactly this: independent nodes inside one graph.
 - **D3 - overlap semantics.** Whether our replayed graphs run independent nodes
   concurrently is unmeasured (section 4). This is the load-bearing unknown; it decides
   how much of D2 is worth building.
 - **D4 - signature/reuse rules.** When is a captured graph reusable vs re-instantiated?
   The machinery exists; the rules are not written down or censused.
-- **D5 - Vulkan/OpenCL lowerers.** Not in this fork; out of scope (section 6).
+- **D5 - non-NV lowerers.** AMD (`HCQGraph`) and Metal (`MetalGraph`) lowerers exist and
+  stay as seams; Vulkan/OpenCL are not in this fork (section 6).
 
 The proposal's value is not the abstraction itself, it is what the abstraction
 unlocks: a dependency-ordered schedule we can reason about, census, and batch
@@ -73,8 +80,9 @@ Decode is already graph-replayed and is NOT host-bound:
   32/64/128/256/512/29` = 1021 programs/token, `DEBUG=2` trace); GPU busy is
   5.83 ms of the 6.12 ms wall = **95% busy**.
   (`nv-performance-campaign-scope-20260801.md:624-626`)
-- The decode gap is 1.50-1.58x behind llama with 46% of measured memory bandwidth used
-  (`nv-performance-campaign-scope-20260801.md:630,713`).
+- The decode gap is 1.44-1.52x behind llama at d512-d4096 with 46% of measured memory
+  bandwidth used (824 GB/s of 1792 GB/s).
+  (`nv-decode-parity-final-20260802.md`; `nv-performance-campaign-scope-20260801.md:630`)
 
 llama's graph overlaps independent nodes:
 
@@ -94,27 +102,40 @@ Prefill is a second consumer of the same substrate:
 So the substrate question for decode is not "do we replay?" (we do) but "**does our
 replay overlap independent nodes like llama's does?**" That is P0 below.
 
-## 3. Why "true dependency edges" is the right vocabulary but the wrong lever by itself
+## 3. Will this take us to parity? No, not alone - the verdict and the five evidenced levers
 
-The proposal says the IR should carry true dependency edges, and tinygrad already
-computes them (`DepsTracker`). Edges are necessary but not sufficient for overlap: CUDA
-graph scheduling can run independent nodes concurrently only when the graph is built
-with dependency edges *and* the nodes are siblings in the DAG. Today our builder
-produces a **consecutive chain** per group (each node depends on its predecessor via
-the shared output buffer), so even with correct edges, the topology we construct may
-serialize.
+Honest verdict: **this scope does not take decode to parity by itself.** D1/D4 are
+substrate (maintainability + census, zero speed). D2 is the only speed claim, and it
+attacks one piece of a four-piece gap. Decode is 95% GPU busy, so the wall is kernel
+execution; the d512 wall gap of 1.67 ms/token decomposes (INFERRED from OBSERVED rows,
+`nv-decode-gap-decomposition-record-20260803.md:24-32`) into a GEMV like-for-like
+delta (~0.50 ms, near its ~0.6 ms cap) and a sequential non-GEMV tail (~1.2 ms).
+llama closes its version of the tail by overlap (22% of node-sum hidden); our
+opportunity there is limited because our non-GEMV classes are a stream-serialized
+tail with real dependencies.
 
-Expected outcome per design choice:
+Parity requires the five levers below, in evidence order. Each row carries its
+OBSERVED basis, its ceiling, and the isolated same-session A/B that proves the wall
+conversion (the kv-store fusion already proved that kernel-sum savings do NOT
+automatically convert to wall: 948 -> 948 kernels, wall-neutral 177.8 vs 178.4 tok/s,
+`decode-kv-store-chain-fusion-scope-20260803.md`). "Proven" here means: measured
+ceiling exists and the conversion experiment is defined, not that the wall win is
+already banked.
 
-| choice | expected outcome |
-| --- | --- |
-| Keep consecutive-only batching (today) | correct, replayable, ~95% GPU busy decode; no topology-level overlap gain; llama's 22% overlap stays unavailable |
-| Add dependency-driven grouping (D2) | independent kernels separated by unrelated work join a shared graph; potential to reclaim overlap if P0 shows we serialize; risk is ordering bugs on WAR/WAW, which range-aware edges already prevent |
-| Explicit IR only, no batching change (D1) | maintainability + census value only; no speed change; safe first step |
-| Signature/reuse rules only (D4) | protects against re-instantiation regressions (the 1.9 s prefill first-replay cost); no speed change on its own |
+| # | lever | evidence (OBSERVED) | ceiling | proof experiment |
+| --- | --- | --- | --- | --- |
+| 1 | Graph-level overlap of independent nodes (this scope's D2) | llama runs 22% below node-sum (5.006 ms sum vs ~3.89 ms replay span); mechanism is inside its CUDA graph | overlap-able fraction of our 6.02 ms decode node-sum; llama's 22% is the upper reference | P0 nsys `--cuda-graph-trace=node` on our replay, then DAG-grouping A/B at d512 |
+| 2 | GEMV per-kernel efficiency (dp4a-class achieved bandwidth) | parity record's verdict: residual 1.4-1.5x is per-kernel GEMV efficiency (llama `mul_mat_vec_q` vs our q4k/q6k family); ours 824 GB/s = 46% of 1792 GB/s | like-for-like ~0.5 ms of the 1.67 ms gap (near its 0.6 ms cap); substrate items L2 Q6K partial ~0.25 ms, L4 vocab ~0.14-0.24 ms, flash tile ~0.16 ms (node-sum upper bounds) | per-item diagnostic microbench + isolated d512 wall A/B (`decode-gemv-efficiency-forward-scope-20260803.md`) |
+| 3 | Decode kernel-count parity (1021 vs llama's 762; llama has zero add/residual kernels) | kv-chain remainder q-rope+q-cast ~2.5 kernels/layer (~90 kernels); rmsnorm 145 kernels / 431 us at 2/layer vs llama's 1; residual add + ffn 144 kernels / 252 us; vocab scatter 5 kernels / 383 us | ~380 us kernel-sum across the listed classes | one fusion per class, each with the same-session d512 A/B; kv-store precedent says expect wall-neutral until proven otherwise |
+| 4 | Depth-side KV read scaling (context growth) | flash score kernel grows 7.78 -> 32.4 us/median d512 -> d4096; ours -14.2% tok/s vs llama -9.3% over that range; fp16 cache dtype is already landed capability-based (`model.py:838-841`, `kv_cache_fp16_eligible`) | the depth-penalty delta (-14.2% vs -9.3%) | same-session d4096 wall run on the fp16-cache route vs fp32 control |
+| 5 | Prefill host-side replay (B3) | warm pp512 wall 44-46 ms vs busy 24.1 ms = 1.9x vs llama's 1.15-1.35x envelope; wall-minus-busy residual ~20-22 ms across 10 submits (OBSERVED arithmetic, cause pending instrumentation) | pp512 gap to llama (ours 0.77-1.05x at pp512-4096 today) | B3's same-run poll/submit instrumentation, then whole-schedule graph replay A/B |
 
-The lever order is P0 -> D1/D4 (safe, substrate) -> D2 (the only one with a direct
-decode speed claim), and D2 is contingent on P0's answer.
+Lever 1 is this scope's deliverable; levers 2-4 are existing or adjacent scopes
+(GEMV efficiency scope, fusion scopes, fp16-cache landed); lever 5 is the B3 scope.
+They are additive: the GEMV delta and the sequential tail are separate wall pieces, so
+closing only one cannot reach parity. This scope must not absorb levers 2-5; it must
+produce the topology facts (edges, census, P0 overlap) that make each of their A/Bs
+cheaper to size.
 
 ## 4. P0 characterization - does our decode replay overlap? (HARD prerequisite)
 
@@ -160,6 +181,10 @@ by per-backend executors:
 - signature: the reuse key - semantic facts (role, shapes/dtypes, device, target),
   symbolic var_vals, and buffer identities as slots, not concrete allocations
 
+The IR itself is backend-agnostic (nodes/edges/signature carry no backend types), so
+AMD and Metal lowerers can consume it later without design change; this scope only
+builds and exercises the NV lowering.
+
 ### 5.2 Builder and census stay
 
 `graph_split_rewrite` + the typed admission census (`GraphAdmissionObservation`,
@@ -174,8 +199,8 @@ answerable from a file instead of a profiler.
 One executor per backend over the same IR. The serialized fallback becomes an executor
 too (`run_linear` semantics), so "fallback" is a lowering choice, not a separate code
 path. CUDAGraph keeps its per-node param update (`cuGraphExecKernelNodeSetParams`) as
-the reuse mechanism; HCQGraph keeps its queue/signal schedule; MetalGraph keeps its ICB
-replay. No existing backend is replaced in this scope.
+the reuse mechanism. HCQGraph (queue/signal schedule) and MetalGraph (ICB replay) are
+**not touched** in this scope; they remain compatible seams by construction (5.1).
 
 ### 5.4 Design constraints
 
@@ -184,18 +209,19 @@ replay. No existing backend is replaced in this scope.
 - Byte-identity on replay: no reordering that changes outputs; range-aware edges are
   mandatory, whole-buffer edges are banned.
 - No kernel changes, no dtype changes, no host-launch work (separate scopes).
-- Shared runtime changes require an AMD control (house rule, same as B3).
+- NVIDIA-first: AMD/Metal lowerers are seams, not deliverables; shared runtime changes
+  still require an AMD control (house rule, same as B3).
 
-## 6. Backend lowerer table - proposal vs in-fork reality
+## 6. Backend lowering table - proposal vs in-fork reality (NV in scope, rest seams)
 
-| proposed lowering | in-fork reality | delta |
+| proposed lowering | in-fork reality | status in this scope |
 | --- | --- | --- |
-| CUDA -> `cudaGraphExec` | `CUDAGraph` (`runtime/graph/cuda.py:10`): cuGraphCreate/AddKernelNode/AddMemcpyNode/Instantiate/Launch; deps from `DepsTracker` (`cuda.py:44`); per-replay `setParams` (`cuda.py:67-68`) | exists; no fundamental gap |
-| HIP -> `hipGraphExec` | `HCQGraph` (`runtime/graph/hcq.py:26`): queue-based with kickoff/timeline signals, multi-queue copies, RDMA, PMC capture - **not** hipGraphExec | exists and is AMD's native path; scope decision: whether hipGraphExec is wanted at all is a question for review, default is NO (HCQ is the canonical AMD lowering in this fork) |
-| Vulkan -> command buffers | no Vulkan backend in this fork (`mesa` appears only as an autogen import in `ops_nv.py:13`) | out of scope; the typed admission census is the extension seam when/if a backend lands |
-| Metal -> indirect/reusable commands | `MetalGraph` (`runtime/graph/metal.py:52`): MTLIndirectCommandBuffer, ICB offset admission, hybrid replay | exists |
-| OpenCL -> command buffer + sync | no OpenCL backend in this fork | out of scope |
-| fallback -> serialized | `run_linear` (`realize.py:264`); `graph_cache` miss (`realize.py:119-123`) | exists; formalize as an executor over the IR |
+| CUDA -> `cudaGraphExec` | `CUDAGraph` (`runtime/graph/cuda.py:10`): cuGraphCreate/AddKernelNode/AddMemcpyNode/Instantiate/Launch; deps from `DepsTracker` (`cuda.py:44`); per-replay `setParams` (`cuda.py:67-68`) | in scope (the D2 target) |
+| HIP -> `hipGraphExec` | `HCQGraph` (`runtime/graph/hcq.py:26`): queue-based with kickoff/timeline signals, multi-queue copies, RDMA, PMC capture - **not** hipGraphExec | seam, out of scope; default is NO hipGraphExec (HCQ is the canonical AMD lowering in this fork) |
+| Metal -> indirect/reusable commands | `MetalGraph` (`runtime/graph/metal.py:52`): MTLIndirectCommandBuffer, ICB offset admission, hybrid replay | seam, out of scope |
+| Vulkan -> command buffers | no Vulkan backend in this fork (`mesa` appears only as an autogen import in `ops_nv.py:13`) | future; the typed admission census is the extension seam |
+| OpenCL -> command buffer + sync | no OpenCL backend in this fork | future |
+| fallback -> serialized | `run_linear` (`realize.py:264`); `graph_cache` miss (`realize.py:119-123`) | formalize as an executor over the IR (in scope, low risk) |
 
 ## 7. Signature and reuse semantics (D4)
 
@@ -219,7 +245,7 @@ Open question for review: how shape change is classified (symbolic var update vs
 structural re-capture) for the prefill schedule, where concrete shapes dominate and
 llama-style dynamic shapes are the exception.
 
-## 8. Dependency-driven batching (D2, post-P0)
+## 8. Dependency-driven batching (D2, post-P0, NVIDIA-first)
 
 `graph_split_rewrite` flushes on: mixed device, unsupported call op, batch-size limit
 (`JIT_BATCH_SIZE` default 32, `helpers.py:240`), and explicit graph barriers
@@ -229,7 +255,8 @@ The proposed shape: a DAG scheduler over the IR that collects all calls, compute
 range-aware edges, and groups maximal independent admissible subgraphs into shared
 graphs, preserving the census and the existing admission gates. This is the only piece
 of the proposal that can capture llama's ~22% overlap, and only if P0 shows our replay
-serializes.
+serializes. It is exercised on NV (CUDAGraph) first; the scheduler itself is
+backend-agnostic so HCQGraph/MetalGraph can adopt it later without rework.
 
 Design questions for review (not answered here):
 
@@ -244,9 +271,10 @@ Design questions for review (not answered here):
 - No code changes from this document; implementation requires a separate scope after
   review and after P0.
 - Never commit to `master`/`dev`/`exp`; branch `nvidia-bringup-20260731` only.
-- AMD control required for any shared runtime change (jit/graph layer).
-- Keep B3 (host overhead) and GEMV efficiency (kernel side) scopes untouched; do not
-  fold their levers into this one.
+- AMD control required for any shared runtime change (jit/graph layer), even under the
+  NVIDIA-first framing.
+- Keep B3 (host overhead), GEMV efficiency (kernel side), and fusion scopes untouched;
+  do not fold their levers into this one. Lever 1 is this scope's only deliverable.
 - Evidence classes only: OBSERVED / INFERRED / SCOPED; P0 numbers carry session,
   commit, and config. Do not name a cause from an accounting residual.
 - `git diff --check` clean on any future commit.
@@ -260,5 +288,5 @@ on `nvidia-bringup-20260731`. No push unless requested. HARD STOP here for revie
 
 Formalize the existing GraphRunner/DepsTracker/backend lowerers into an explicit
 ExecutableTaskGraph IR whose dependency edges and reuse signature are first-class
-data, after measuring (P0) whether our decode graphs already overlap independent
-nodes.
+data, after measuring (P0) whether our NVIDIA decode graphs already overlap
+independent nodes.
