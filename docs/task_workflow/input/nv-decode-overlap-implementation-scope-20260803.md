@@ -1,7 +1,7 @@
 # NV decode overlap - exhaustive implementation scope (primitive route)
 
 Date: 2026-08-04
-Status: active implementation scope, gated phase by phase. Authorizes the
+Status: active amended implementation scope, gated phase by phase. Authorizes the
 native multi-compute-queue construction fix, the D3 multi-GPFIFO compute
 substrate, the D2 dependency-driven HCQGraph compute scheduling, the decode
 wall A/B, and (gated) the D4 signature/reuse work. Route B (DEV=CUDA +
@@ -37,6 +37,18 @@ The amendment's HARD STOPs remain in force for this document: no declaring
 native overlap impossible, no composing a parity endpoint, no promoting a
 route.
 
+### 0.1 Review amendment incorporated here
+
+This revision closes five implementation ambiguities found by direct source
+review: (1) merged E2 rows lacked cross-group dependency evidence and are now
+hypotheses; (2) Phase 0 owns the raw RM channel handle and schedules the actual
+owning group; (3) multi-queue completion uses one explicit join and replicated
+mutable channel state; (4) HCQGraph builds a frozen DAG before scheduling and
+uses queue-local monotonic ordinals; and (5) Phase 4 full-token dependency
+reconstruction is no longer blocked by the deliberately limited intra-group
+wall result. These corrections are normative over older wording in the E2
+record or superseded scope.
+
 ## 1. Measured foundation (what E1-E3 settled)
 
 All rows OBSERVED, same RTX 5090 box, driver 595.84, one flocked GPU session
@@ -48,10 +60,9 @@ per record.
 | llama replay span vs node-sum, opt=0 | 3.889 ms vs 5.013 ms = 22.4% below node-sum | E1 |
 | llama replay span vs node-sum, opt=1 | 3.687 ms vs 4.859 ms = 24.0% | E1 |
 | tinygrad d512 serialized node-sum | 5366.1 us, 948 nodes, 5 groups, 0.0% overlap | E2 |
-| E2 unlimited-resource critical path | 2539.9 us = 52.7% saving | E2 |
-| E2 2-queue list schedule | 3310.5 us = 38.3% saving (2.06 ms) | E2 |
-| E2 3-queue list schedule | 2786.3 us = 48.1% saving (2.58 ms) | E2 |
-| E2 reopen threshold | 0.8-1.1 ms; both schedules exceed it ~2x | E2 scope |
+| E2 intra-group critical-path sum | 4757.4 us = 608.8 us / 11.35% saving ceiling | E2 per-group rows |
+| E2 merged 2-queue hypothesis | 3310.5 us = 38.3% saving (2.06 ms), cross-group edges absent from capture | E2 |
+| E2 merged 3-queue hypothesis | 2786.3 us = 48.1% saving (2.58 ms), cross-group edges absent from capture | E2 |
 | CUDA 2-stream elementwise | 48.1% overlap, numerics ok | E3 |
 | CUDA 3-stream elementwise | 65.1% overlap, numerics ok | E3 |
 | CUDA 2-stream matmul 2048 | 48.4% overlap, numerics ok | E3 |
@@ -60,16 +71,28 @@ per record.
 | correctness pins | token sha `9d6b3787...`, first token `151936`, decode sha `0721c16f...` | forward scope |
 
 What is settled: (1) llama's overlap is base CUDA graph node scheduling, not
-the gated QKV stream fan-out; (2) tinygrad's own DAG carries parity-scale
-scheduleable parallelism; (3) the device co-schedules independent kernels when
-reached through CUDA streams; (4) the native shared-context construction
-serializes; (5) the separately-ctxshared native construction never executed,
-so the native RM path is unproven, not disproven.
+the gated QKV stream fan-out; (2) tinygrad's captured *intra-group* DAG carries
+608.8 us / 11.35% of scheduleable saving before resource contention; (3) the
+device co-schedules independent kernels when reached through CUDA streams;
+(4) the native shared-context construction serializes; (5) the separately-
+ctxshared native construction never executed, so the native RM path is
+unproven, not disproven.
+
+The E2 merged 2/3-queue rows are a cross-group hypothesis, not a legal-schedule
+measurement. `HCQ_GRAPH_PROFILE_JSON` emitted one record per HCQGraph and the
+simulator can remap dependencies only inside each record; therefore
+`cross_group_edges=0` means "not recorded", never "proven absent". The current
+five HCQGraph calls retain full timeline barriers. No phase may quote the
+2.06/2.58 ms merged savings as available until a pre-split full-token
+range-aware dependency capture proves the cross-group edges and a grouping
+change is separately gated.
 
 What remains open: how CUDA's stream concurrency is represented by RM channel
 groups, context shares/subcontexts, runlists, and scheduling controls on this
-driver; whether a corrected native construction co-schedules at all; and how
-much of the E2 simulation survives DRAM-bandwidth sharing at wall.
+driver; whether a corrected native construction co-schedules at all; how much
+of the 608.8 us intra-group ceiling survives DRAM-bandwidth sharing at wall;
+and what the legal cross-group DAG and schedule are once captured before
+`graph_split_rewrite` inserts the five execution barriers.
 
 ## 2. Route choice
 
@@ -143,8 +166,10 @@ The fix hypotheses, to be resolved by Phase 0 experiments:
 
 ## 4. Exhaustive work breakdown
 
-Each phase has a gate; no phase starts before the previous gate passes. All
-GPU work is one flocked session at a time (`flock /tmp/nv_gpu.lock`).
+Each phase starts only after its stated prerequisites pass. Phase 4 requires
+the Phase 3 record but does not require G4's >=10% classification, because the
+existing group boundaries cap the Phase 2 experiment. All GPU work is one
+flocked session at a time (`flock /tmp/nv_gpu.lock`).
 
 ### 4.1 Phase 0 - corrected native construction + R1-R5 probe (device-level)
 
@@ -153,66 +178,86 @@ closed-default device slice that supports the probe.
 
 Work items:
 
-1. `extra_gpfifos` gains a `per_channel_bind` mode that, for every extra
+1. Preserve the raw RM channel handle. `_new_gpu_fifo` currently returns a
+   `GPFifo` wrapper containing only ring/gpput/count/token, so a caller cannot
+   legally issue a later `NVA06F` control. Add `handle: int` to `GPFifo` (index
+   0 keeps otherwise identical construction), or make `_new_gpu_fifo` accept
+   an explicit closed-default bind/schedule option and issue the controls
+   before wrapping the handle. No `rm_control(GPFifo(...), ...)` call is
+   permitted.
+2. `extra_gpfifos` gains a `per_channel_bind` mode that, for every extra
    channel, issues in order: ctxshare alloc (per-channel when
-   `separate_ctxshare`) -> `_new_gpu_fifo` -> `NVA06F_CTRL_CMD_BIND` ->
-   `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` -> group-level `NVA06C` re-schedule.
-   The per-channel control sequence runs on the channel's own ctxshare handle
-   semantics; record every RM error per step (not just per channel) so the
-   failing step is identified.
-2. H3 variant: `group_per_channel` mode allocating a fresh
+   `separate_ctxshare`) -> raw channel allocation ->
+   `NVA06F_CTRL_CMD_BIND(channel_handle)` ->
+   `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE(channel_handle)` ->
+   `NVA06C_CTRL_CMD_GPFIFO_SCHEDULE(owning_group)`. Record every RM error per
+   operation, handle kind, group, channel, and mode so the failing step is
+   identified.
+3. H3 variant: `group_per_channel` mode allocating a fresh
    `KEPLER_CHANNEL_GROUP_A` per extra channel (same device), with its own
-   ctxshare and fifo, plus per-channel bind/schedule. This mirrors CUDA's
-   per-context channel ownership most directly.
-3. Keep the existing shared-ctxshare path as a control arm in the same
-   session.
+   ctxshare and fifo, plus per-channel bind/schedule. The final group-level
+   schedule targets that fresh group, never `dev.channel_group`. This mirrors
+   CUDA's per-context channel ownership most directly.
+4. Keep the existing shared-ctxshare path as a control arm under the same
+   flock, but execute every construction mode in a fresh subprocess with a
+   hard timeout. Flush partial JSON after every RM operation. An execution
+   timeout or failed construction poisons only that subprocess; later arms do
+   not reuse its RM objects or context.
 
 Pseudocode:
 
 ```python
 def fix_channel(dev, engine_type, mode):
   if mode == "ctxshare":            # H1/H2: extra ctxshare in boot group
-    cs = rm_alloc(dev.channel_group, FERMI_CONTEXT_SHARE_A,
+    group = dev.channel_group
+    cs = rm_alloc(group, FERMI_CONTEXT_SHARE_A,
                   params(hVASpace=dev.vaspace, flags=SUBCONTEXT_ASYNC))
-    fifo = dev._new_gpu_fifo(area, cs, dev.channel_group, compute=True,
-                             debugger=False, engine_type=engine_type)
-    rm_control(fifo, NVA06F_CTRL_CMD_BIND, BIND_PARAMS(engineType=engine_type))
-    rm_control(fifo, NVA06F_CTRL_CMD_GPFIFO_SCHEDULE, SCHED_PARAMS(bEnable=1))
+    channel, fifo = dev._new_gpu_fifo_with_handle(area, cs, group, compute=True,
+                                                  debugger=False, engine_type=engine_type)
   elif mode == "group":             # H3: fresh channel group per channel
-    grp = rm_alloc(dev.nvdevice, KEPLER_CHANNEL_GROUP_A,
-                   CHANNEL_GROUP_ALLOC_PARAMS(engineType=ENGINE_TYPE_GRAPHICS))
-    cs = rm_alloc(grp, FERMI_CONTEXT_SHARE_A, ...)
-    fifo = dev._new_gpu_fifo(area, cs, grp, compute=True, engine_type=engine_type)
-    rm_control(fifo, NVA06F_CTRL_CMD_BIND, BIND_PARAMS(engineType=engine_type))
-    rm_control(fifo, NVA06F_CTRL_CMD_GPFIFO_SCHEDULE, SCHED_PARAMS(bEnable=1))
-  rm_control(dev.channel_group, NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, bEnable=1)  # H2
+    group = rm_alloc(dev.nvdevice, KEPLER_CHANNEL_GROUP_A,
+                     CHANNEL_GROUP_ALLOC_PARAMS(engineType=ENGINE_TYPE_GRAPHICS))
+    cs = rm_alloc(group, FERMI_CONTEXT_SHARE_A, ...)
+    channel, fifo = dev._new_gpu_fifo_with_handle(area, cs, group, compute=True,
+                                                  debugger=False, engine_type=engine_type)
+  rm_control(channel, NVA06F_CTRL_CMD_BIND, BIND_PARAMS(engineType=engine_type))
+  rm_control(channel, NVA06F_CTRL_CMD_GPFIFO_SCHEDULE, SCHED_PARAMS(bEnable=1))
+  rm_control(group, NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, bEnable=1)
   return fifo
 ```
 
 Experiments R1-R5 (same span/node-sum criterion as the old E1-E5 probe):
 
 - R1 cross-GPFIFO semaphore dependency: kernel on queue 1 waits on a signal
-  released by queue 0; numeric check vs CPU. Must pass exactly (probe E1
-  precedent).
-- R2 serial calibration on one fifo: span == node-sum.
+  released by queue 0; numeric check vs CPU. "Exact" means the anchored output
+  hash and maximum-error contract recorded by the probe both match; do not
+  describe `np.allclose` alone as exact.
+- R2 serial calibration on one fifo: absolute `span - node_sum` and percentage
+  delta are recorded; calibration passes inside a declared timestamp tolerance,
+  never by floating-point equality.
 - R3 two independent fifos, elementwise, full and partial-SM (grid-div 4)
   grids.
 - R4 three fifos, elementwise.
 - R5 two fifos, matmul 2048.
 
 Each R row records per-kernel HCQ timestamps, span, node-sum, overlap
-fraction, and RM error list, anchored as JSON.
+fraction, output hash/error, subprocess exit/timeout state, and the ordered RM
+operation/error list, anchored as incrementally flushed JSON.
 
-Gate G1 (belief-flip): PASS = R1 numeric-exact AND at least one of R3-R5 shows
-overlap >= 5%. FAIL = R1 correct but zero overlap across all flavors and both
-construction modes. A FAIL records the exact failing RM step and closes
-Phase 1-4 of Route A; it is NOT a hardware no-concurrency verdict (amendment
-HARD STOP) and it routes forward work to the Route B analysis (4.5).
+Gate G1 (belief-flip): PASS = R1 satisfies its hash/error contract AND at least
+one of R3-R5 shows overlap >= 5%. `NO_OVERLAP` = R1 correct but overlap below
+5% across all flavors and both successfully constructed modes.
+`CONSTRUCTION_BLOCKED` = an RM step rejects, a queue does not execute, or an
+arm times out before R1. Any non-PASS result records the exact operation or
+execution boundary and closes Phase 1-4 of Route A; neither result is a
+hardware no-concurrency verdict (amendment HARD STOP). Route B remains
+analysis-only under 4.5.
 
 ### 4.2 Phase 1 - D3 substrate: multi-GPFIFO compute queues (closed default)
 
-Gate: G1 passed. Scope: `ops_nv.py` + `graph/hcq.py` seam only; behavior at
-`HCQ_NUM_COMPUTE=1` byte-identical; no scheduling policy yet.
+Gate: G1 passed. Scope: `ops_nv.py` + `graph/hcq.py` seam only; at
+`HCQ_NUM_COMPUTE=1` the selected fifo, encoded command stream, signal order,
+and observable behavior remain identical; no scheduling policy yet.
 
 Work items:
 
@@ -232,7 +277,10 @@ Work items:
    from Phase 0. `_setup_gpfifos` boot sequence (`ops_nv.py:704-718`) runs the
    setup submit (compute class + shader/local-mem windows) per compute queue,
    or lazily on first factory call; choose per boot-cost measurement (each
-   fifo carries a 48 MiB uncached errnotifier, `ops_nv.py:660`).
+   fifo carries a 48 MiB uncached errnotifier, `ops_nv.py:660`). Setup
+   completion uses the same join invariant required below: private per-queue
+   completion followed by one timeline release, never independent writes of
+   the same timeline value.
 4. Env knob `HCQ_NUM_COMPUTE` (default 1) in `graph/hcq.py`, same shape as
    `HCQ_NUM_SDMA` (`:71`). `comp_queues: dict[dev] -> list[HWQueue]` of length
    N; at N=1 every existing reference (`:98`, `:135`, `:151`, `:195`, `:233`,
@@ -242,11 +290,22 @@ Work items:
    one factory on AMD at `HCQ_NUM_COMPUTE=1`, and the AMD backend must not be
    touched by Phase 1. No AMD GPU on this box: control = identical code path
    at default + review.
+6. Replicate mutable compute-channel state. `_ensure_has_local_memory`
+   (`ops_nv.py:725-727`) currently updates only `compute_gpfifo`; any later
+   scratch/local-memory window update must be submitted to every compute fifo
+   that can run a kernel and joined before the device timeline advances.
+   Initial `_setup_gpfifos` setup alone is insufficient.
+7. Add mock/CPU tests for factory count/indexing, RM handle/control order,
+   selected-group scheduling, N=1 encoded-command equivalence, multi-fifo
+   setup join, and local-memory-state replication. The live device probe does
+   not replace these contracts.
 
 Gate G2: at `HCQ_NUM_COMPUTE=1`, a d512 decode run reproduces the wall
 authority within measurement noise (< 1%) and the correctness pins (section
-7) pass 3/3. At `HCQ_NUM_COMPUTE=2/3`, a device-level probe (R3/R4 shape)
-still passes through the new factories before any scheduler exists.
+7) pass 3/3; an encoded-queue regression test proves the N=1 command/signal
+sequence. At `HCQ_NUM_COMPUTE=2/3`, a device-level probe (R3/R4 shape) still
+passes through the new factories before any scheduler exists, including one
+kernel that requires the replicated local-memory state.
 
 ### 4.3 Phase 2 - D2 dependency-driven compute scheduling in HCQGraph
 
@@ -256,46 +315,81 @@ unchanged (`graph_split_rewrite`, `jit.py:236`, `JIT_BATCH_SIZE`,
 
 Work items:
 
-1. Assignment: replace the single-queue selection at `graph/hcq.py:135` with a
-   deterministic picker over `comp_queues[enqueue_dev]`. Correctness
-   invariant: any assignment is correct, because `_resolve_deps`
-   (`hcq.py:262-267`) already encodes cross-queue edges (per-queue `last_j`
-   chains, per-queue `out_signal`s, demand-driven signal emission); the
-   picker shapes concurrency only.
-2. Picker v1: static priority by longest-remaining-tail (from the E2
-   simulator's rule), assign each node to the earliest-available queue
-   (tracked by its `last_j` completion estimate), tie-break round-robin. No
-   preemption; no reordering of dependent nodes; deterministic across
-   replays.
-3. Semantics per queue: `signals`, `last_j`, `queue_signals_to_reset`
-   (`hcq.py:260`) become per compute queue; the kickoff wait
-   (`:195`), the inter-device/copy waits (`:254-256`), the final per-device
-   timeline signal (every compute queue signals before the device
-   timeline advances), and the replay submit loop (`:331`) iterate the queue
-   list. Replay cost stays O(1) per queue per token; total ring traffic is
-   unchanged (one put per queue, same aggregate).
-4. No change to `JIT_BATCH_SIZE`, graph group boundaries, or kernel content.
-   Cross-group non-consecutive batching is Phase 4.
+1. Build then schedule; do not assign while discovering hazards. Pass A walks
+   calls in original order with a fresh range-aware `DepsTracker` whose
+   dependency payload is the producer node index, producing an immutable
+   predecessor/successor DAG. Pass B computes static tails and a deterministic
+   ready-set list schedule. Pass C assigns queue-local sequence values and
+   encodes commands/waits/signals. `_resolve_deps` consumes the frozen
+   predecessor list in Pass C; it is not the source of a partially discovered
+   graph during assignment.
+2. Picker v1: ready node with longest remaining tail, then lowest original
+   node index; assign it to the queue minimizing
+   `max(queue_free[q], max(pred_end))`, then lowest queue index. The live v1
+   cost proxy is `max(1, concrete KernelInfo.estimates.mem)` bytes (copy cost
+   is copy bytes), with `ops`, `lds`, and node index used only as deterministic
+   zero/equal-memory ties. This is intentionally a decode-memory proxy, not a
+   device-time model. Record predicted order and costs. Hardcoded E2 timings
+   or program-name timing tables are banned; a later learned/target cost model
+   requires its own measured A/B.
+3. Queue signal values are queue-local monotonically increasing ordinals,
+   independent of original node `j`. Producer node -> `(queue, ordinal)` is
+   retained separately for profile dependency export. Any schedule that would
+   encode decreasing releases on one queue is rejected before submission.
+4. Semantics per queue: `signals`, `last_j`, `queue_signals_to_reset`
+   (`hcq.py:260`) become per compute queue; the kickoff wait (`:195`),
+   inter-device/copy waits (`:254-256`), and replay submit loop (`:331`) cover
+   all active queues.
+5. Exactly one designated join queue advances the device timeline. Every
+   other active compute queue releases a private completion ordinal after its
+   terminal command; the join queue waits those ordinals, waits required copy
+   completions, then emits the sole per-device timeline release. Inactive
+   queues neither submit nor participate. Independent writes of the same
+   timeline value from multiple queues are banned.
+6. Replay submission cost is O(active queues) per HCQGraph and ring
+   submissions/doorbells increase from one to the active-queue count. Kernel
+   command payload remains approximately the same; the scope does not call
+   aggregate ring traffic unchanged.
+7. Add hermetic tests for DAG construction, ready-set scheduling,
+   deterministic ties, dependency preservation, queue-local monotonic
+   ordinals, signal elision, the all-active-queues join, an empty queue, and
+   N=1 schedule/command equivalence.
+8. No change to `JIT_BATCH_SIZE`, graph group boundaries, or kernel content.
+   Cross-group dependency reconstruction and regrouping are Phase 4.
 
 Pseudocode (picker + schedule loop):
 
 ```python
-# per node j with enqueue_dev d:
-queue = argmin(comp_queues[d], key=lambda q: q.est_finish)   # longest-tail order
-est_finish[queue] = node_sum_estimate(j)                     # per-node duration
-edge(j, queue):  _resolve_deps(bufs, outs, queue, d, out_signal, j, ...)
-                 # existing range-aware RAW/WAR/WAW + per-queue last_j chain
+# Pass A: original-order hazard discovery.
+preds = build_range_aware_dag(calls)
+
+# Pass B: ready-set schedule using concrete static costs.
+while ready:
+  j = max(ready, key=lambda j: (remaining_tail[j], -j))
+  pred_finish = max((end[p] for p in preds[j]), default=0)
+  q = min(queues, key=lambda q: (max(queue_free[q], pred_finish), q.index))
+  start[j] = max(queue_free[q], pred_finish)
+  end[j] = start[j] + cost[j]
+  queue_free[q] = end[j]
+
+# Pass C: encode queue-local monotonic ordinals and one final join.
+encode(j, q, waits=[producer_ordinal[p] for p in preds[j]])
 ```
 
-Gate G3 (structure): one d512 token under `PROFILE=1
-HCQ_GRAPH_PROFILE_JSON` with `HCQ_NUM_COMPUTE=2` shows replay span < node-sum
-by >= 20% (llama's base-graph level), 3 queues >= 25%, versus 0.0% today;
-correctness pins 3/3; per-class overlap matches the E2 sim's class pairs
-(GEMV behind GEMV, norm behind GEMV, residual behind GEMV).
+Gate G3 has two separately recorded outcomes. G3-C (correctness) passes when
+one d512 token under `PROFILE=1 HCQ_GRAPH_PROFILE_JSON` with
+`HCQ_NUM_COMPUTE=2/3` has correctness pins 3/3, monotonic queue signals, and
+all active queues joined before the sole timeline advance. G3-O (observed
+structure value) passes at >=5% intra-group span saving versus 0.0% today.
+Report both against the 608.8 us / 11.35% per-group no-contention ceiling. The
+former 20%/25% thresholds are targets for a future proven full-token schedule,
+not gates on this grouping-preserving phase. Phase 3 runs after G3-C even if
+G3-O misses; wall measurement is cheap and records whether the correct
+substrate has value.
 
 ### 4.4 Phase 3 - decode wall A/B (the parity question)
 
-Gate: G3 passed. Scope: measurement only; no code beyond the G3 state.
+Gate: G3-C passed. Scope: measurement only; no code beyond the G3 state.
 
 Protocol (one flocked session, same model Qwen3-8B-Q4_K_M, llama control
 from the E1 arm-0 command family):
@@ -306,19 +400,22 @@ from the E1 arm-0 command family):
    representative token per arm for span/node-sum.
 2. llama same-session control at d512 (246.32 tok/s opt=0 authority) and at
    d2048/d4096 as the E1 scope's arm-0 command with matching depth.
-3. Bandwidth caveat reported with the rows: the E2 simulator is an
-   unbounded-resource upper bound (2-queue 2.06 ms, 3-queue 2.58 ms). Decode
-   GEMVs are DRAM-bound at ~46-50% of 1792 GB/s (INFERRED accounting), so
-   three concurrent GEMVs approach bandwidth saturation; the expected wall
-   conversion is below the sim saving. The sequential tail
-   (rmsnorm/residual/vocab chain) will not overlap regardless of queue count;
-   measure per-class overlap to confirm the sim's class pairs.
+3. Bandwidth and grouping caveats reported with the rows: Phase 2 can use
+   only the 608.8 us / 11.35% summed intra-group no-contention ceiling. The
+   merged 2.06/2.58 ms rows are Phase 4 hypotheses until a full-token DAG is
+   captured. Decode GEMVs are DRAM-bound at ~46-50% of 1792 GB/s (INFERRED
+   accounting), so concurrent GEMVs approach bandwidth saturation; the
+   expected wall conversion is below the intra-group ceiling. The sequential
+   tail (rmsnorm/residual/vocab chain) will not overlap regardless of queue
+   count; measure per-class overlap to confirm the sim's class pairs.
 
 Gates:
 
-- G4 (wall value): median tok/s improvement at d512 >= 10% (~0.55 ms/token)
-  with correctness pins 3/3. Below 10% the mechanism is implemented but not
-  parity-scale at wall; the record says so explicitly (no promotion).
+- G4 (wall value classification): median tok/s improvement at d512 >= 10%
+  (~0.55 ms/token) with correctness pins 3/3 is `PARITY_SCALE_INTRA_GROUP`.
+  Below 10% the mechanism is implemented but not parity-scale at wall; the
+  record says so explicitly (no promotion). G4 is not a gate on the Phase 4
+  dependency reconstruction because the current graph boundaries cap Phase 2.
 - G5 (parity direction): ratio vs the same-session llama row improves toward
   >= 1.00; PARITY-QUALIFIED only with a same-session row >= 1.00 at that
   depth (forward scope section 5; d2048/d4096 each need their own rows).
@@ -347,23 +444,33 @@ Kept for completeness and for the G1-fail fallback. No code, no GPU sessions.
   any Route B implementation requires a separate scope under the amendment's
   HARD STOPs (no route promotion from this document).
 
-### 4.6 Phase 4 - D4 signature/reuse + census + non-consecutive batching (gated)
+### 4.6 Phase 4 - full-token DAG + D4 signature/reuse + regrouping (gated)
 
-Gate: G3 and G4 passed (overlap is real and wall-positive). Scope:
+Gate: G1, G2, and G3-C passed. G3-O and G4 are recorded inputs, not blockers:
+the current graph boundaries are the suspected cap. Scope:
 `executable-taskgraph-ir-scope` D4 section 7, plus the D2 extension section
 8 (non-consecutive batching). Work items:
 
-1. Write the reuse rule: same signature (semantic facts + symbolic var_vals +
+1. Before changing grouping, capture the full token's dependency DAG from the
+   original linear calls before `graph_split_rewrite`. Use one range-aware
+   `DepsTracker` across all 948 calls and retain every RAW/WAR/WAW edge that
+   crosses a current 32/64/128/256/468 boundary. Validate that restricting
+   this DAG back to each existing group reproduces the E2 per-group edges.
+   Missing exporter edges are `UNKNOWN`, never independent. Publish the
+   corrected critical path and 2/3-queue schedules before authorizing a
+   regrouping candidate.
+2. Write the reuse rule: same signature (semantic facts + symbolic var_vals +
    buffer slot identities) -> per-replay param update; changed signature ->
    re-instantiate; census records reuse hit/miss per replay so a
    re-instantiation regression is a test failure, not a mystery slowdown.
-2. Audit the 5 decode graph groups (32/64/128/256/468) against
+3. Audit the 5 decode graph groups (32/64/128/256/468) against
    `JIT_BATCH_SIZE` and the admission census; record which nodes are
    consecutive-chain members vs siblings with no true dependency.
-3. Candidate: dependency-driven grouping of non-consecutive independent calls
-   (scheduler over the captured linear, range-aware edges from
-   `DepsTracker`), each candidate with its own d512 wall A/B. Cross-group
-   barriers preserved.
+4. Candidate: dependency-driven grouping of non-consecutive independent calls
+   over the proven full-token DAG, each candidate with its own d512 wall A/B.
+   All true cross-group edges are preserved; only artificial group-wide
+   timeline barriers may be removed. The merged E2 schedule is not reused as
+   an assignment unless the corrected DAG independently reproduces it.
 
 ## 5. Open RM questions (answer in Phase 0, record each answer)
 
@@ -395,11 +502,23 @@ Gate: G3 and G4 passed (overlap is real and wall-positive). Scope:
 
 - G1 fail on both construction modes: Route A phases close; Route B analysis
   becomes the only forward; not a hardware verdict (HARD STOP).
-- Bandwidth wall: E2 sim is an upper bound; concurrent GEMVs approach DRAM
-  saturation at ~50% of peak; expect wall conversion well below span saving.
+- Missing cross-group evidence: the merged E2 schedules assumed absent edges
+  because the exporter could not record them. Only the 608.8 us intra-group
+  ceiling governs Phase 2; Phase 4 must capture the pre-split full-token DAG.
+- Bandwidth wall: even the corrected DAG simulation is a no-contention upper
+  bound; concurrent GEMVs approach DRAM saturation at ~50% of peak; expect
+  wall conversion below simulated span saving.
 - Serialization regression: any shared hcq.py change must be byte-identical
-  at `HCQ_NUM_COMPUTE=1`; AMD has no GPU here, so control = default code path
+  in selected fifo and encoded command/signal sequence at
+  `HCQ_NUM_COMPUTE=1`; AMD has no GPU here, so control = default code path
   identity + review (house rule).
+- Premature completion: multiple queues writing the device timeline can let
+  the host recycle buffers while work remains. One join queue owns the sole
+  final timeline release; this is a tested invariant, not an implementation
+  suggestion.
+- Queue-state skew: dynamic scratch/local-memory setup on queue 0 alone can
+  fault or corrupt work dispatched to extra fifos; mutable compute state is
+  replicated and joined.
 - Boot cost: per-fifo 48 MiB errnotifier + setup submit; keep extra fifo
   creation lazy or boot-time per measured cost.
 - Wrap semantics: `_submit_to_gpfifo` (`ops_nv.py:114-139`) preserves the
@@ -407,8 +526,9 @@ Gate: G3 and G4 passed (overlap is real and wall-positive). Scope:
   `System.memory_barrier()` before each poke and the per-fifo `put_value`
   accounting.
 - Hang diagnostics: extra fifos are created `debugger=False`;
-  `on_device_hang` inspects only `debug_channel`; Phase 0 keeps R1-style
-  numeric checks to detect silent mis-execution before any decode work.
+  `on_device_hang` inspects only `debug_channel`; each Phase 0 arm is an
+  isolated timed subprocess with incrementally flushed RM records, and R1
+  detects silent mis-execution before any decode work.
 - Correctness: no reordering that changes outputs; range-aware edges only
   (whole-buffer edges banned); every phase re-pins the decode sha.
 
@@ -433,11 +553,11 @@ Gate: G3 and G4 passed (overlap is real and wall-positive). Scope:
 
 | phase | artifacts | commit |
 | --- | --- | --- |
-| 0 | corrected `nv_multi_queue_probe.py` construction modes; measurement record with anchored JSON (R1-R5 rows, RM errors per step); G1 verdict | `[test]` + `[docs]` |
-| 1 | `ops_nv.py` compute_gpfifos + queue_idx + hw_compute_queues(N); `HCQ_NUM_COMPUTE`; G2 record (N=1 identity + decode pins) | `[runtime]` + `[docs]` |
-| 2 | `graph/hcq.py` queue list + picker + per-queue signal semantics; G3 record (span vs node-sum, class pairs) | `[runtime]` + `[docs]` |
+| 0 | corrected `nv_multi_queue_probe.py` handle-owning construction modes; isolated/timeout measurement record with anchored JSON (R1-R5 rows, RM operations/errors per step); G1 verdict | `[test]` + `[docs]` |
+| 1 | `ops_nv.py` compute_gpfifos + queue_idx + hw_compute_queues(N); replicated mutable state + setup join; `HCQ_NUM_COMPUTE`; mock tests; G2 record (N=1 encoded identity + decode pins) | `[runtime]` + `[test]` + `[docs]` |
+| 2 | `graph/hcq.py` three-pass DAG/scheduler/encoder, queue-local ordinals, single timeline join; hermetic tests; G3-C/G3-O record | `[runtime]` + `[test]` + `[docs]` |
 | 3 | wall A/B record d512/d2048/d4096 vs llama, per-class overlap, bandwidth caveat; G4/G5 verdict | `[docs]` |
-| 4 | D4 reuse rules + census record; non-consecutive batching candidate + A/B if gated | `[runtime]` + `[docs]` |
+| 4 | pre-split full-token dependency capture + corrected simulation; D4 reuse rules + census; non-consecutive regrouping candidate + A/B if gated | `[runtime]` + `[test]` + `[docs]` |
 | 4.5 | Route B analysis note (if G1 fails) | `[docs]` |
 
 ## 9. Bans and HARD STOPs
@@ -450,7 +570,8 @@ Gate: G3 and G4 passed (overlap is real and wall-positive). Scope:
   `extra/llm_research/microbench/*` binaries (including the untracked
   `cuda_stream_overlap_probe` binary), `scratchpad/t6_metal_admission_probe.py`.
 - No `master`/`dev`/`exp` commits; no concurrent GPU sessions.
-- `HCQ_NUM_COMPUTE=1` must be byte-identical; AMD control for shared changes.
+- `HCQ_NUM_COMPUTE=1` must preserve the selected fifo and encoded
+  command/signal stream; AMD control for shared changes.
 - No kernel/dtype changes, no fusion folds, no host-launch work (separate
   scopes), no whole-buffer dependency edges, no grouping changes before
   Phase 4.
@@ -459,15 +580,17 @@ Gate: G3 and G4 passed (overlap is real and wall-positive). Scope:
 
 | phase | work | gate | note |
 | --- | --- | --- | --- |
-| 0 | construction fix + R1-R5 | G1 >= 5% overlap, R1 exact | Route B analysis if fail |
-| 1 | D3 substrate | G2 N=1 identity + pins | closed default |
-| 2 | D2 scheduler | G3 >= 20% span saving | grouping unchanged |
-| 3 | wall A/B | G4 >= 10% wall; G5 parity rows | llama same-session |
-| 4 | D4 + batching | G3 + G4 | gated candidate |
+| 0 | construction fix + R1-R5 | G1 >= 5% overlap + R1 hash/error contract | isolated arms; classify blocked vs no-overlap |
+| 1 | D3 substrate | G2 N=1 encoded identity + pins | closed default; state replication |
+| 2 | D2 intra-group scheduler | G3-C correctness; G3-O >=5% reported separately | 608.8 us ceiling; grouping unchanged |
+| 3 | wall A/B | after G3-C; G4 >=10% classification; G5 parity rows | llama same-session |
+| 4 | full-token DAG + D4 + regrouping | G1 + G2 + G3-C | independent of G3-O/G4 value |
 
 ## 11. One-line job
 
 Make the native RM co-schedule independent compute GPFIFOs like CUDA streams
-do (corrected per-channel bind/schedule, then N compute queues in HCQGraph
-with signal-based cross-queue deps), and prove it at d512 wall against the
-E2 simulation upper bound and the same-session llama row.
+do (handle-correct per-channel bind/schedule, replicated channel state, then N
+compute queues in HCQGraph with a frozen dependency DAG, queue-local signals,
+and one final join); prove the intra-group result at d512 wall against its
+608.8 us ceiling, then capture the pre-split full-token DAG before claiming or
+implementing the larger cross-group opportunity.
