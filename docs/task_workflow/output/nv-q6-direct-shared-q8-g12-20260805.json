@@ -1,0 +1,8 @@
+{
+  "schema": "tinygrad.nv.q6_direct_shared_q8_g12.v1",
+  "verdict": "WALL_NO_GO",
+  "semantic": {"g1_relative_l2": 0.00038991391784130673, "g4_relative_l2": 0.00054033640091787, "g8_relative_l2": 0.0005297697509884841, "g12_relative_l2": 0.0005734151049342458, "tokens_argmax_top10_exact": true},
+  "wall_ms_per_token": {"partial_a": 5.39537171875, "direct_b": 5.40454515625, "partial_a2": 5.39970040625, "partial_midpoint": 5.3975360625, "direct_minus_partial_us": 7.009093750000636},
+  "promotion": false,
+  "ledger_credit_us": 0
+}

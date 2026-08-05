@@ -4,7 +4,7 @@ from dataclasses import replace
 import itertools
 from tinygrad.helpers import DISABLE_FAST_IDIV, TRANSCENDENTAL, SPEC, DEBUG, VIZ, IMAGE, NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, getenv
 from tinygrad.helpers import ALLOW_TF32, TracingKey, Context, panic
-from tinygrad.uop.ops import PatternMatcher, graph_rewrite, UOp, pm_lower_index_dtype, Ops, UPat, track_rewrites, KernelInfo, ProgramInfo, GroupOp
+from tinygrad.uop.ops import PatternMatcher, graph_rewrite, UOp, pm_lower_index_dtype, Ops, UPat, track_rewrites, KernelInfo, ProgramInfo, GroupOp, PostBarrierRegion
 from tinygrad.uop.ops import AttentionWMMARole, WMMARoleLedger, FinalLinearMetadata, get_attention_wmma_role, set_attention_wmma_role
 from tinygrad.uop.ops import ParamArg
 from tinygrad.uop.render import pyrender
@@ -323,12 +323,37 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
 
 # inject IF/ENDIF. only needed if device doesn't support gated stores
 pm_linearize_cleanups = PatternMatcher([
-  # if statements are not allowed in the graph
-  (UPat((Ops.IF, Ops.ENDIF)), lambda: panic(RuntimeError, "if not allowed in graph")),
+  # Only typed, validated post-barrier regions may originate in a graph.
+  # Untagged IF/ENDIF remain reserved for the gated-store lowering below.
+  (UPat((Ops.IF, Ops.ENDIF), name="x"),
+   lambda x: None if isinstance(x.arg, PostBarrierRegion) else panic(RuntimeError, "if not allowed in graph")),
   # gated STORE becomes IF-STORE-ENDIF. this is the only use of IF-ENDIF
   (UPat(Ops.STORE, name="u", src=(UPat((Ops.INDEX, Ops.SHRINK)).or_casted(), UPat(), UPat(name="gate", dtype=dtypes.bool))),
    lambda u, gate: ((st:=u.replace(src=u.src[0:2])), [mif:=UOp(Ops.IF, src=(gate, u.src[0])), st, UOp(Ops.ENDIF, src=(mif,))]))
 ])
+
+def validate_post_barrier_regions(lst:list[UOp], ren:Renderer) -> None:
+  """Validate lexical and synchronization safety before rendering regions."""
+  stack:list[tuple[UOp, int]] = []
+  positions = {u:i for i,u in enumerate(lst)}
+  for i,u in enumerate(lst):
+    if u.op is Ops.IF and isinstance(u.arg, PostBarrierRegion):
+      if not ren.supports_post_barrier_regions:
+        raise RuntimeError(f"{ren.__class__.__name__} does not support graph-authored post-barrier regions")
+      if len(u.src) != 2 or u.src[0].dtype is not dtypes.bool or u.src[1].op is not Ops.BARRIER:
+        raise RuntimeError("post-barrier region IF must have <bool gate, barrier> sources")
+      if positions.get(u.src[1], i) >= i: raise RuntimeError("post-barrier region must follow its anchor barrier")
+      stack.append((u, i))
+    elif u.op is Ops.ENDIF and isinstance(u.arg, PostBarrierRegion):
+      if not stack: raise RuntimeError("post-barrier region ENDIF has no open IF")
+      mif,start = stack.pop()
+      if u.arg != mif.arg or len(u.src) < 2 or u.src[0] is not mif:
+        raise RuntimeError("post-barrier region ENDIF must reference its IF and at least one body root")
+      if any(mif not in root.backward_slice_with_self for root in u.src[1:]):
+        raise RuntimeError("every post-barrier region body root must depend on its IF")
+      if any(x.op is Ops.BARRIER for x in lst[start+1:i]):
+        raise RuntimeError("workgroup barriers are forbidden inside a predicated post-barrier region")
+  if stack: raise RuntimeError("post-barrier region IF has no matching ENDIF")
 
 # requires lst be toposorted. like graph rewrite, but for lines
 def line_rewrite(lst:list[UOp], pm:PatternMatcher, ctx=None) -> list[UOp]:
@@ -374,6 +399,7 @@ def do_linearize(ctx:Renderer, prg:UOp, sink:UOp) -> UOp:
   expected_roles = prg.arg.wmma_role_expectation if isinstance(prg.arg, ProgramInfo) else ()
   if getenv("V_DOT2_LOWERING") and ctx.target.device == "AMD":
     lst = line_lower_fdot2(lst)
+  validate_post_barrier_regions(lst, ctx)
   lst = line_rewrite(lst, pm_linearize_cleanups)
   # isa renderers need to allocate registers
   selection_proof = sink.tag if isinstance(sink.tag, CompilerCaptureProof) else None

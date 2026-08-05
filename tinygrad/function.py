@@ -73,13 +73,6 @@ class _function(Generic[ReturnType]):
         buf_strs = '\n  '.join(f"{i}: dtype={b.dtype}, size={b.arg}, device={b.device}" for i,b in enumerate(implicit_buffers))
         raise RuntimeError(f"function {name} has {len(implicit_buffers)} implicit buffer(s), but allow_implicit=False\n  {buf_strs}")
 
-    # assign output
-    #pbuffer = uret.param_like(len(call_uops))
-    #assigned = pbuffer.assign(uret).sink()
-    #buffer = UOp.new_buffer(pbuffer.device, pbuffer.size, pbuffer.dtype).reshape(uret.shape)
-    #call = assigned.call(*call_uops, buffer, name=name)
-    #ret = buffer.after(call)
-
     fret = uret.call(*call_uops, grad_fxn=self.grad_fxn, name=name, precompile=self.precompile,
                      precompile_backward=self.precompile_backward)
 

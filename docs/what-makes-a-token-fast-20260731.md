@@ -1,40 +1,73 @@
 # What makes a token fast
 
 Date: 2026-07-31
+Updated: 2026-08-03 (industry synthesis, quantized decode theory, graph-reuse theory, and generator contract)
 
 This is a principles document. It is not organised around beating any particular competitor —
 llama.cpp appears only as an external datapoint that validates the frame. The principles below are
 irreducible: they follow from how the hardware works, and they hold on any target.
+
+This is the canonical repo answer to **"what makes a kernel/token fast?"**
+`docs/beating-llama-first-principles-20260731.md` applies an earlier version of these principles to one
+campaign; `docs/pure-machine-search.md` defines authorship and promotion provenance. Neither replaces this
+document. New performance theory belongs here first, then campaign scopes may cite it without restating it.
 
 Every number is cited. Numbers that are **measured** and numbers that are **projected** are marked as
 such, because this codebase has repeatedly been misled by projections presented as facts (§9).
 
 ---
 
-## 1. A token's speed is set by two lower bounds, and by which one binds
+## 1. A token's bulk-work speed is set by two lower bounds, and the route adds boundaries
 
-A token cannot be produced faster than the larger of:
+A token cannot be produced faster than the larger of the route's bulk-work bounds:
 
 ```
-T_bytes = B / BW          bytes of weight that must move, over achievable bandwidth
-T_flops = 2·M·P / R       multiply-accumulates required, over the achievable rate
-                          of whichever execution unit performs them
+T_bytes,route = B_route / BW   bytes moved by the selected route, over achievable bandwidth
+T_flops       = F / R          required operations, over the achievable rate of the unit
+                              that performs them; for a dense transformer F ~= 2·M·P
 ```
 
-`M` is the batch (tokens processed together), `P` the parameter count, `B` the bytes of weight touched,
-`BW` achievable bandwidth, `R` the achievable rate of the multiply unit.
+`M` is the batch (tokens processed together), `P` the parameter count, `BW` achievable bandwidth, and
+`R` the achievable rate of the relevant execution unit. Two byte quantities must not be conflated:
 
-**Token time ≥ max(T_bytes, T_flops).** You are at roofline when you touch the larger one.
+```
+B_min    compulsory bytes across the binding memory tier under an ideal legal schedule
+B_route  bytes actually moved across that tier by the selected route: weights, activations, materialized
+         intermediates, spills, repeated reads, and output traffic
+```
 
-Everything else — tiling, occupancy, LDS layout, warmstart recipes, instruction mix — is a means of
-approaching one of these bounds, or of choosing which one binds. That is the whole subject.
+For weight-dominated decode, `B_min` is approximately the packed weights touched by the token. A fused
+route may leave those compulsory weight bytes unchanged while reducing `B_route` by sharing activation
+loads, keeping an epilogue resident, or deleting an intermediate write/read.
+
+The bulk-work lower bound is:
+
+```
+T_bulk >= max(T_bytes,route, T_flops)
+```
+
+The complete route also has dependency boundaries that cannot always overlap with bulk work:
+
+```
+T_token >= T_bulk + T_boundary,critical
+```
+
+`T_boundary,critical` includes only launch, synchronization, dispatch, conversion, and dependency gaps on
+the token's non-overlapped critical path. It is not a license to add every launch cost to a Roofline
+projection; graph capture and asynchronous execution can overlap or remove some boundaries, so this term
+must be measured.
+
+Tiling, occupancy, LDS layout, instruction mapping, representation, graph topology, and boundary placement
+are means of reducing `B_route`, increasing achieved `R` or `BW`, or shrinking the non-overlapped critical
+path. A fast isolated kernel is therefore necessary but not sufficient for a fast token route.
 
 ---
 
 ## 2. The regime crossover, and why model size does not appear in it
 
-Set the two bounds equal to find the batch size where the binding constraint flips. With weights stored
-at `w` bits each, `B = P·w/8`:
+Set the two bulk-work bounds equal to find the batch size where the binding constraint flips. In the
+weight-dominated idealization used for this crossover, weights stored at `w` bits each contribute
+`B_min,weights = P·w/8`:
 
 ```
 2·M·P / R  =  P·w / (8·BW)
@@ -56,12 +89,247 @@ Computing `M*` for a target requires measured `R` and `BW` for that target. On A
 (§5). **On Metal, `R` is now measured (§10, 2026-07-31): ≈3.78 TFLOPS.** `BW` is still unmeasured
 for Metal, so `M*` there is reported as a function of `BW` rather than a single number (§10).
 
+## 2A. What the industry actually composes into a fast kernel
+
+There is no single "fast GPU kernel" paper and no single optimization from which the rest follows.
+Production kernels compose several independent theories. Volkov's lower-occupancy argument explains one
+execution layer; it does not explain the representation, the IO lower bound, the arithmetic transformation,
+or whole-route performance.
+
+| Layer | Governing principle | What production systems do | Consequence for this repo |
+| --- | --- | --- | --- |
+| Workload geometry | GEMV and GEMM have different reuse | Dispatch different kernel families by `M/N/K`, batch and quant type | Decode and prefill must not share an undifferentiated search family |
+| Lower bound | Roofline / arithmetic intensity | First decide whether bytes or execution throughput bind | Attribute the gap before opening a search |
+| Representation | Block/scalar/affine quantization | Store low-bit weights with block metadata; sometimes quantize activations | Representation and metadata placement are part of the kernel design |
+| Algebra | Distribute scales/zero-point corrections around the dot product | Accumulate integer dots and block sums; apply scales outside the element loop | Do not materialize dequantized decode weights |
+| Instruction mapping | Match the encoded dot to native hardware | Use packed integer dot, MMA/WMMA, vector loads and native conversion forms | ISA availability and achieved rate are candidate facts, not GPU-name guesses |
+| Memory hierarchy | Hierarchical tiling and IO-aware algorithms | Reuse through registers/shared memory; coalesce global transactions | Search legal tiles and layouts under measured resource limits |
+| Latency hiding | Balance ILP and TLP; occupancy is not the objective | Unroll, prefetch, pipeline and hold independent accumulators in registers | Search NACC/unroll/warps while rejecting spills and resource cliffs |
+| Reduction/writeback | Parallel reduction and cooperative layout conversion | Warp/tree reductions and coalesced epilogues | A fast inner dot with a serialized reduction is not a fast kernel |
+| Graph topology and reuse | Shared producers, sole consumers and immediate reductions change the legal IO schedule | Compute compatible reductions together, retain producer state into epilogues, fold indexed outputs into their consumer reduction | Describe candidates by graph facts and account for eliminated traffic versus added live state |
+| Boundary fusion | Eliminate materialization and launches where producer/consumer schedules are compatible | Fuse dequant, bias, activation, gate, normalization or attention epilogues | Rank fusion by eliminated wall/bytes, including any occupancy regression |
+| Specialization | No one schedule wins every shape/device | Maintain finite variants or generate and autotune them on real hardware | Search by stable shape/quant/device facts and promote measured winners |
+| End-to-end economics | Amdahl's law | Optimize the selected route, including setup, quantize, fixup and epilogue | Isolated kernel speed is diagnostic; same-run endpoint time is authoritative |
+
+These layers are visible in current public implementations:
+
+- NVIDIA CUTLASS maps GEMM through hierarchical threadblock/warp/instruction tiles, register/shared-memory
+  reuse, software pipelining, and a cooperative/fused epilogue. Its own documentation explicitly notes
+  that these kernels may accept lower occupancy because register tiling and double buffering provide the
+  required concurrency: [CUTLASS efficient GEMM](https://docs.nvidia.com/cutlass/latest/media/docs/cpp/efficient_gemm.html).
+- FlashAttention changes the algorithm's IO complexity by tiling exact attention so intermediates remain
+  on-chip rather than being materialized to HBM: [FlashAttention](https://arxiv.org/abs/2205.14135).
+- TensorRT uses weight-only INT4 kernels that read compressed weights and dequantize them in the compute
+  path, and TensorRT-LLM performs post-load fusion of quantized linears, MoE, normalization, activation and
+  RoPE patterns: [TensorRT weight-only quantization](https://docs.nvidia.com/deeplearning/tensorrt/10.x.x/inference-library/work-quantized-types.html),
+  [TensorRT-LLM fusion](https://nvidia.github.io/TensorRT-LLM/features/auto_deploy/transforms/post_load_fusion.html).
+- Triton exposes tile sizes, group order, stages and warp count as shape-keyed autotune parameters, while
+  keeping the accumulator resident for a fused activation:
+  [Triton matrix multiplication](https://triton-lang.org/main/getting-started/tutorials/03-matrix-multiplication.html).
+- TVM Ansor/MetaSchedule construct or explore schedules and measure them on real hardware rather than
+  treating a hand-selected tile as universal: [Ansor](https://www.usenix.org/system/files/osdi20-zheng.pdf),
+  [MetaSchedule](https://tvm.apache.org/docs/deep_dive/tensor_ir/tutorials/meta_schedule.html).
+
+This industry comparison does **not** imply that this repo should copy any one implementation. It says the
+same constraints recur across independent systems: control bytes, map to native instructions, create enough
+legal concurrency, avoid unnecessary boundaries, and measure the complete selected route.
+
+### 2A.1 Graph topology is a performance input, not a model name
+
+Roofline analysis of one contraction does not determine the best schedule for a chain of contractions. The
+producer/consumer graph can expose reuse and remove legal external traffic even when the underlying matmul
+primitive is unchanged. Three recurring motifs are:
+
+```
+shared-input multi-reduction
+    a = reduce(Wa, x)
+    b = reduce(Wb, x)             -> load/stage x once, carry two accumulator sets
+
+producer with a sole pointwise consumer
+    a = reduce(W, x)
+    y = epilogue(a)               -> apply the epilogue before writing a
+
+indexed producers with an immediate reduction
+    z[e] = reduce(W[e], x[e])
+    y = sum_selected(z[e])        -> accumulate selected producer outputs directly into y
+```
+
+The portable opportunity is identified by graph facts: common inputs, consumer count, indexed axes,
+selection cardinality, reduction algebra, and legal reduction order. `w1+w3`, `top_k=6`, a particular
+quant type, or a model name are specialization facts, not the principle itself.
+
+One semantic transformation may still require different schedule families:
+
+- Decode may use a paired GEMV with a fused activation, followed by a direct small-`top_k` down reduction.
+- Prefill may group token/expert pairs by expert, use a tiled paired GEMM, and select a different segmented
+  reduction strategy.
+- A large batch or wide accumulator set may make separate vendor GEMMs faster because fusion loses
+  occupancy, spills, duplicates work, or prevents the best matrix-unit tile.
+
+The profitability test is therefore not "fewer kernels." A dimensionally valid first-pass ledger converts
+each claimed saving or cost to time at the relevant measured ceiling:
+
+```
+benefit_time ~= saved_binding-tier_bytes / BW
+              + saved_operations / R
+              + saved_non-overlapped_boundary_time
+
+cost_time    ~= added_binding-tier-bytes / BW
+              + added_operations / R
+              + resource/occupancy/primitive-throughput penalty
+```
+
+These terms are a candidate-ranking ledger, not an additive runtime predictor: compute, memory and boundaries
+may overlap, and register/LDS pressure changes achieved `BW` and `R`. Both sides therefore require measurement
+in the selected route. The current NV Q4_K `w1+w3` decode result is a useful
+bounded example: the fused semantic pattern is valid, but the measured scalar schedule improves whole-token
+wall time by only 1.7-2%, while a wider standalone-optimal load style regresses in-loop by 5%
+(`docs/task_workflow/input/q4k-w1w3-fused-qv-implementation-record-20260803.md`). The graph transformation
+transfers; the winning schedule does not transfer automatically.
+
+DwarfStar demonstrates the same separation at a larger scope. Its CUDA prefill substrate vendors
+llama.cpp's MMQ/MMVQ kernels, while its DeepSeek routes specialize the graph around those primitives with
+paired gate/up epilogues, expert grouping, and direct selected-expert down reductions:
+[vendored-kernel record](https://github.com/antirez/ds4/blob/main/cuda/mmq/VENDOR.md),
+[CUDA routed-MoE paths](https://github.com/antirez/ds4/blob/main/ds4_cuda.cu), and
+[Metal paired/SwiGLU and sum kernels](https://github.com/antirez/ds4/blob/main/metal/moe.metal).
+This is evidence that primitive quality and route quality are distinct, composable layers; it is not
+evidence that one model-specific handwritten kernel should become the abstraction.
+
+### 2A.2 The theory stack demonstrated by llama.cpp `mul_mat_vec_q`
+
+llama.cpp's decode GEMV is a useful concrete decomposition because all of the layers are visible without a
+large GEMM framework.
+
+For one output vector,
+
+```
+y = W x
+work         ~= 2*N*K
+weight bytes ~= (b/8)*N*K
+intensity    ~= 16/b operations per byte
+```
+
+At an effective `b ~= 4.5` bits/weight, the lower-bound intensity is only about `3.56 operations/byte`.
+That is far below the compute-to-bandwidth ratio of a modern discrete GPU, so reading the weights is the
+first-order cost. This is the Roofline result, not a claim about occupancy.
+
+The Q4_K/Q8_1 dot then uses block-affine algebra. In schematic form,
+
+```
+w_i ~= d_w*q_i - m_w
+x_i ~= d_x*a_i
+
+sum(w_i*x_i)
+  ~= d_w*d_x*sum(q_i*a_i) - m_w*d_x*sum(a_i)
+```
+
+The hot loop therefore needs an integer dot and, for affine blocks, an activation sum. It does not need to
+construct an fp16 weight vector. llama.cpp quantizes each fp32 activation block to 32 int8 values and stores
+its scale and sum in Q8_1; its Q4_K/Q6_K dot helpers unpack weights into byte lanes, use packed dot products,
+and apply block scales/corrections outside the individual multiply:
+
+- [`quantize_q8_1`](https://github.com/ggml-org/llama.cpp/blob/ac4cddeb0dbd778f650bf568f6f08344a06abe3a/ggml/src/ggml-cuda/quantize.cu)
+- [quantized dot implementations](https://github.com/ggml-org/llama.cpp/blob/ac4cddeb0dbd778f650bf568f6f08344a06abe3a/ggml/src/ggml-cuda/vecdotq.cuh)
+- [`mul_mat_vec_q`](https://github.com/ggml-org/llama.cpp/blob/ac4cddeb0dbd778f650bf568f6f08344a06abe3a/ggml/src/ggml-cuda/mmvq.cu)
+
+On NVIDIA, `dp4a` performs four packed byte multiplies and an int32 accumulation per instruction
+([PTX ISA](https://docs.nvidia.com/cuda/archive/12.5.1/pdf/ptx_isa_8.5.pdf)). That is instruction-set
+matching: the representation is arranged so useful mathematical work maps onto a native packed operation.
+The same principle may map to a different instruction or even a direct fp16 route on another target; the
+portable fact is the match, not the opcode name.
+
+Activation quantization is an amortization decision:
+
+```
+activation quantization = O(K)
+matrix-vector use       = O(N*K)
+relative setup          = O(1/N)
+```
+
+It may be profitable when one quantized activation is reused across thousands of output rows. It is not
+free: the quantize kernel, boundary, and any reuse failure belong in the route time. Our direct-fp16
+activation route can beat llama's complete path if it reaches comparable raw GEMV efficiency without paying
+that setup; it cannot claim the win from omission alone.
+
+### 2A.3 What is specifically Volkov, and what is not
+
+Volkov's result is that occupancy is a means of supplying concurrency, not the goal. Little's-law reasoning
+requires enough independent work to cover latency:
+
+```
+required concurrency ~= latency * throughput
+```
+
+That concurrency can come from thread-level parallelism (more resident warps) or instruction-level
+parallelism (independent loads and accumulators within each thread). Register blocking, unrolling,
+prefetching, multiple output accumulators and accepting lower occupancy when they improve useful throughput
+are the Volkov layer: [Better Performance at Lower Occupancy](https://www.nvidia.com/content/gtc-2010/pdfs/2238_gtc2010.pdf).
+
+In `mul_mat_vec_q`, the Volkov-shaped mechanisms are the unrolled per-thread `tmp` accumulator array,
+multiple rows/columns per block, prefetched fusion operands, compile-time warp counts and launch bounds.
+Warp partitioning of K and tree reduction are parallel-algorithm structure; Q8_1 and the correction term are
+quantization algebra; `dp4a` is hardware mapping; keeping Q4_K packed is Roofline/IO reasoning. Calling the
+whole kernel "Volkov" erases the actual design decisions.
+
+### 2A.4 Contract for generated kernels in this repo
+
+Theory should constrain the search; measurement should select within it.
+
+**Candidate invariants (reject before timing):**
+
+1. State the operation shape and reuse regime (`M/N/K`, quant type, role, batch/depth class), plus the
+   semantic graph motif when the candidate crosses an operator boundary: shared producers, consumer counts,
+   indexed/selection axes, reduction axes, and required reduction order.
+2. State the predicted binding resource from measured `BW` and relevant instruction-rate ceilings.
+3. In bandwidth-bound decode, read packed weights once and never materialize an expanded weight tensor.
+4. Express dequantization as register-local unpack/scale/correction or prove why another representation wins.
+5. Use coalesced/aligned global transactions and a native useful dot/MMA/vector instruction where the target
+   provides one; verify the emitted ISA rather than inferring it from source.
+6. Use a cooperative reduction/writeback with no serialized or duplicate full-K work.
+7. Reject spills, illegal resource use, incomplete coverage, hidden fallback and incorrect numerics.
+8. Include quantization, routing/grouping, fixup, boundary copies, reductions and epilogues in the candidate's
+   route cost.
+9. State before/after `B_route`, materialized intermediates, launch count, and reuse cardinality, with each
+   quantity labeled measured, statically counted, projected, or unavailable. Do not claim a byte win when
+   compulsory weight traffic is unchanged; name the activation, intermediate or boundary traffic actually
+   removed.
+10. Keep semantic legality separate from schedule profitability. Compare against the best unfused primitive
+    route, and require independent schedule selection for decode, prefill, quant and target regimes.
+
+**Search dimensions (measure, do not derive once):**
+
+- direct-fp16 activation versus activation quantization plus integer dot;
+- lane/warp ownership of K and output rows;
+- rows or columns accumulated per thread/block;
+- vector load width, alignment contract and packed-weight lane layout;
+- tile sizes, warps/waves, stages, unroll and independent-accumulator count;
+- register versus shared/LDS staging, prefetch distance and double buffering;
+- warp/tree/cooperative reduction shape;
+- fusion set, materialization boundaries, and number of coupled outputs/accumulator sets;
+- indexed-work organization: direct selected slots versus sort/group/permute by weight identity;
+- selected-output reduction arity and placement: materialize then reduce, atomic/segmented reduce, or direct
+  accumulation into the final destination;
+- activation transform/quantization reuse scope across projections, experts and heads;
+- split-K/stream-K/fixup strategy;
+- separate schedule families by stable shape, quant and measured target capabilities.
+
+**Promotion order:** correctness and coverage → emitted-ISA proof → resource/spill facts → isolated kernel and
+component-wall measurement → same-session selected-route measurement → whole-model endpoint. Node-sum
+projections may rank experiments only after their provenance is stated; they never promote a route.
+
+The practical objective is therefore not "generate arbitrary kernels and hope search rediscovers CUDA
+folklore." It is:
+
+> Generate legal compositions of reusable compiler primitives that already respect IO and algebraic lower
+> bounds; search the target-dependent schedule and route choices; promote only measured endpoint winners.
+
 ---
 
 ## 3. Decode is bandwidth-bound: minimise bytes
 
 At `M=1` every weight byte is read exactly once and used once. There is no second consumer of a byte
-after it is loaded, so `T_bytes` dominates and ALU headroom is close to free
+after it is loaded, so `T_bytes,route` dominates and ALU headroom is close to free
 (`docs/HANDOFF_14b_decode_depth_decay_20260726.md:22-24`).
 
 **What follows:** keep the weights in their smallest representation and unpack them in registers.

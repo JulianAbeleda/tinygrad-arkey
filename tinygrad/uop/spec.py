@@ -1,6 +1,6 @@
 import math
 from typing import cast, Any
-from tinygrad.uop.ops import PatternMatcher, UPat, GroupOp, Ops, UOp, AxisType, KernelInfo, ParamArg, ScheduleHints, StateHandle, CompositeReduceTag, native_attention_abi
+from tinygrad.uop.ops import PatternMatcher, UPat, GroupOp, Ops, UOp, AxisType, KernelInfo, ParamArg, ScheduleHints, StateHandle, CompositeReduceTag, PostBarrierRegion, native_attention_abi
 from tinygrad.uop.render import print_uops, pyrender
 from tinygrad.dtype import DType, ImageDType, dtypes, PtrDType, AddrSpace, Invalid, ConstFloat
 from tinygrad.helpers import DEBUG, Context, prod, SPEC, Metadata, panic, CHECK_OOB, all_same
@@ -218,6 +218,14 @@ spec_shared = PatternMatcher([
 
   # BARRIER (on any length). TODO: this should only be in spec_program
   (UPat(Ops.BARRIER, dtypes.void), lambda: True),
+
+  # Typed graph-level structured control.  This is safe at tensor and program
+  # stages because the barrier is outside the predicated region and ENDIF owns
+  # the body roots, preserving lexical order through graph rewrites.
+  (UPat(Ops.IF, dtype=dtypes.void, src=(UPat(dtype=dtypes.bool), UPat(Ops.BARRIER)), name="x"),
+   lambda x: isinstance(x.arg, PostBarrierRegion)),
+  (UPat(Ops.ENDIF, dtype=dtypes.void, src=(UPat(Ops.IF, name="mif"), UPat()), allow_any_len=True, name="x"),
+   lambda x,mif: isinstance(x.arg, PostBarrierRegion) and x.arg == mif.arg and len(x.src) >= 2),
 
   # WAIT carries a backend-owned typed payload (for example compiler_policies.WaitCount or a
   # logical dependency that a later backend resolves).  Keep the UOp layer decoupled from
@@ -502,7 +510,8 @@ spec_program = PatternMatcher([
   (UPat(Ops.STACK, name="x"), lambda x: len(x.src)>1 or len(x.src) == 0),
   (UPat(Ops.GEP, src=(UPat.var("src"),), name="gep"), lambda gep,src: gep.dtype == src.dtype.scalar()),
 
-  # if has a <gate, index_for_dedup>
+  # Lowered gated-store IF has <gate, index_for_dedup>. Typed graph-authored
+  # regions are admitted by spec_shared above.
   (UPat(Ops.IF, dtype=dtypes.void, src=(UPat(dtype=dtypes.bool), UPat((Ops.CAST, Ops.INDEX, Ops.SHRINK)))), lambda: True),
   (UPat(Ops.ENDIF, dtype=dtypes.void, src=(UPat(Ops.IF),)), lambda: True),
 ])+spec_shared

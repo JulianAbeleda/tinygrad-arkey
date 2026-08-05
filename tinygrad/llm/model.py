@@ -16,7 +16,8 @@ from tinygrad.llm.gguf import MODEL_PARAMETER_ALLOCATION_OWNER, gguf_load, gguf_
 from tinygrad.llm.gguf_memory_scan import RuntimeGeometry, selected_gguf_backing_bytes
 from tinygrad.llm.decode_routes import (FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_CANDIDATE, _kv_store_parts_view,
                                         decode_kv_store_route, flash_decode_attention_route,
-                                        q4k_gate_up_primitive_linear_call, should_use_flash_decode as _route_should_use_flash_decode)
+                                        q4k_gate_up_primitive_linear_call, q4k_gate_up_rms_affine_qualification_call,
+                                        should_use_flash_decode as _route_should_use_flash_decode)
 from tinygrad.llm.decode_kernels import DecodeRMSNormSpec, emit_decode_rmsnorm_kernel
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
 from tinygrad.llm.shared_q8_attention import SharedQ8AttentionAdmission, shared_q8_attention_call
@@ -639,7 +640,16 @@ class FFNBlock:
         ffn_out = self.ffn_down(gate_out, gate_out=gate_out, up_out=up_out, normed_h=h)
         _ffn_absorbed = True
       else:
-        ffn_out = self._feed_forward(normed_h)
+        # Research-only, explicit lease: retain raw h across the FFN norm
+        # boundary and apply its scalar RMS scale plus affine weight at each
+        # Q4 packed load.  No loader policy creates this attribute.
+        _rms_affine_weight=getattr(self,"_rms_affine_gateup_norm_weight",None)
+        if (not _prefill and _rms_affine_weight is not None and isinstance(getattr(self,"ffn_gate",None),Q4KPrimitiveLinear)
+            and isinstance(getattr(self,"ffn_up",None),Q4KPrimitiveLinear)):
+          z=q4k_gate_up_rms_affine_qualification_call(self.ffn_gate,self.ffn_up,h,_rms_affine_weight,self.ffn_norm.eps,
+            fallback=lambda:None)
+          ffn_out=self._feed_forward(normed_h) if z is None else self.ffn_down(z)
+        else: ffn_out = self._feed_forward(normed_h)
       with role_metadata("residual"):
         return _prefill_semantic(_prefill, prefill_activation,
           (ffn_out if _ffn_absorbed else h + ffn_out).contiguous())

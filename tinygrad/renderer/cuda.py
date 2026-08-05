@@ -7,6 +7,7 @@ from tinygrad.uop.ops import Ops, PatternMatcher, UPat, UOp
 _nms = list("xyzwabcdefghijkl") + [f'v{i}' for i in range(16, 32)]
 
 class CUDARenderer(CStyleLanguage):
+  supports_post_barrier_regions = True
   global_max = (2147483647, 65535, 65535)
   local_max = (1024, 1024, 64)
   shared_max = 49152

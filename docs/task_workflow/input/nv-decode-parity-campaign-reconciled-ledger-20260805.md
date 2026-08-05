@@ -8,17 +8,20 @@ Method: reconciliation of qualified campaign records plus a final composed same-
 
 The fixed authority remains **5.612310 ms/token native NV** versus
 **3.966140 ms/token llama.cpp**, an authority gap of **1646.170000 us/token**.
-Four recoveries are now admitted, with one important interaction: the
+Five recoveries are now admitted, with one important interaction: the
 ping-pong result is measured *on top of* the generic callify redirect, so it
 must not be combined with its larger redirect-off isolated result.
 
 ```text
-fixed authority gap                                  1646.1700000 us/token
-- P1 JIT descriptor + reusable input-shadow              66.6620940
-- P2 generic callify precompiled-output redirect          75.0307500
-- P5 ping-pong, incremental in redirect-on composition    91.6365625
-- Q4 cooperative/shared-Q8 g12, incremental composed      24.6764063
-= strict accounted counterfactual remainder             1388.1641872 us/token
+P1 JIT descriptor + reusable input-shadow                 66.6620940 us/token
+P2 generic callify precompiled-output redirect            75.0307500
+P5 ping-pong, incremental in redirect-on composition      91.6365625
+Q4 cooperative/shared-Q8 g12, incremental composed        24.6764063
+Q4 precision-budget max17 subset beyond g12, incremental  12.4620469
+= strict booked total                                   270.467859625 us/token
+fixed authority gap                                    1646.1700000 us/token
+- strict booked total                                   270.467859625
+= strict accounted counterfactual remainder            1375.702140375 us/token
 ```
 
 The arithmetic above remains a **counterfactual causal ledger** tied to the
@@ -40,6 +43,7 @@ The older 69.1655-us diagnostic predispatch result is superseded by P1. Its
 | P2 generic precompiled-output/callify redirect | Exact full-logit SHA-256 `71c0a2...ae0f0`; OFF median 5.551528500, ON median 5.476497750 ms/token; 946 -> 875 programs | Independent accepted change, remains closed-default pending normal promotion | **75.030750 us** |
 | P5 two-capture sampler-feedback ping-pong | Redirect-on exact tokens/full logits; control midpoint 5.466153875 and ping-pong midpoint 5.3745173125 ms/token | Incremental **only in the redirect-on composition**; retain its 91.6365625-us midpoint, do not add redirect-off ~104-us result | **91.6365625 us** |
 | Q4 cooperative/shared-Q8 g12 | On top of P1/P2/P5: exact 160-token streams; d512 semantic relative L2 `8.36963e-4`; settled control midpoint 5.347317250 and candidate 5.322640844 ms/token | Incremental composed g12 result only; do not add g1/g4 or the isolated primitive result | **24.67640625 us** |
+| Q4 precision-budget max17 subset (blocks 14--18) | On top of g12: exact block identities and semantics; g12 / subset / g12 settled bracket | Incremental beyond the booked g12 row only; do not add the 28.864734-us cumulative row | **12.462046875 us** |
 
 The P5 implementation removes the 4-byte pre-graph alias-firewall copy by
 alternating two captures with distinct fixed return buffers. It leaves the
@@ -83,7 +87,16 @@ recoverable savings. The reconciliation bridges are not optimization targets.
 | Prior six-name native multi-queue support split | Correctness passes but 24--55 us slower. | **NO-GO**, **0** credit. |
 | Q4 vector-carrier spelling | PTX/lane analysis: vector spelling compiles identically to current scalar FP32 recurrence. | **Closed spelling variant**, **0** credit; a real route must change representation, lane ownership, or schedule. |
 | Q4 four-warp/shared-Q8 progression | Distinct runtime-loop mapping passes isolated cost and real-token g1/g4/g8/g12 semantics. Settled g12 wall is **-24.676 us/token**; g18 exact tokens/top-10 but relative L2 `1.27144e-3 > 1e-3`. | **g12 bounded PASS / g18 SEMANTIC STOP**. g12 is booked once above; no g35/default flip. |
-| Q6 flat four-warp Q8+DP4A partial | Included native Gate 1 is 66.74259 -> 66.92764 us, **+0.18505 us**. | **NO-GO for exact construction**, **0** credit. |
+| Q4 precision-budget blocks 19--35 | All 17 singleton additions were measured; 13 pass semantics. The nearest four-tail boundary `{23,24,27,33}` and top-ranked triple `{23,24,33}` fail fresh real-model relative L2 (`1.05305e-3` and `1.06455e-3`). Best passing singleton block 25 regresses settled incremental wall by **+12.917031 us/token**. | **TAIL EXPANSION NO-GO**, **0** new credit. The existing 17-block lease remains the maximum booked subset; additive final-logit ranking is direction-only and closed for promotion. |
+| Q4 FFN subset | Exact production-shape Q8+DP4A wins the isolated included-cost gate; 16/18 singleton semantic arms pass. The first passing production singleton, layer 8, regresses settled wall by **+6.204734 us/token**. | **WALL NO-GO**, **0** credit; do not advance the predicted pair or combine it with attention-Q4 bookings. |
+| Exact Q4 native four-warp / factorized substrate | Pinned live d512 llama is `mmvq.cu::mul_mat_vec_q<Q4_K,1,...>`: Q8_1 + DP4A / four warps, not MMQ/MMA. Exact four-warp is +2.868498 us; factorized follow-up is -0.207540 us (noise-scale). | **NO-GO / wall-neutral**, **0** credit; a reopen needs a third physical representation. |
+| Q6 exact warp32 and integer-MMA premise | Exact warp32 is +56.363037 us; the observed live d512 path is Q8+DP4A, not an integer-MMA causal path. | **NO-GO / substrate unavailable**, **0** credit. |
+| Q6 post-barrier stage | Faithful stage is +0.18535 us versus the flat Q8+DP4A control. | **NO-GO**, **0** credit; does not displace the flat primitive. |
+| Q6 direct shared-Q8 consumer | g1/g4/g8/g12 semantic rows pass; exact g12 settled wall delta is **+7.00909375 us/token**. | **WALL NO-GO**, **0** credit. |
+| Native concurrency construction | Two native GPFIFOs, exact dependencies, and 9.7056% light-kernel overlap pass construction. The prior decode support split remains wall-negative because queue/wait economics dominate. | **CONSTRUCTION PASS / TOKEN-SCHEDULE ECONOMICS NO-GO**, **0** credit; do not call this a generic decode-overlap recovery. |
+| P2a RMSNorm boundary-free producer | Fresh production census admits zero routes (875 programs); the late selector cannot reach the real wrapper. | **NO-GO**, **0** credit. |
+| P2b owned invocation-input support | Generic rule removes 35 copies (874 -> 841), but leaves 35 new per-fused-block copies and misses the <=804 topology gate. | **TOPOLOGY NO-GO**, **0** credit; second lifetime class remains unproven. |
+| Scale-only RMSNorm -> Q4 gate/up | Isolated exact-scale consumer saves 6.42915 us, but block-0 full logits pass and settled model A/B/A is **+8.3694375 us/token**. | **WALL NO-GO**, **0** credit; no lease expansion. |
 | Packed greedy argmax | Included primitive 71.874 -> 142.647 us. | **NO-GO**, **0** credit. |
 | Attention-O custom epilogue and FFN-down residual composition | Three post-callify censuses reproduce 876 programs, 71 `E_86a2` copies (70 new), 35 fused-O calls and the correct token. FFN-down route recomputes activation. | **Topology NO-GO**, **0** credit; exact copy ownership remains unproven because the gate already failed. |
 | KV-store fusion / gate-up adapters / existing route swaps | KV chain already effectively one store per layer; native gate/up already fused; tested adapters regress or are wall-neutral. | **Closed exact constructions**, **0** credit. |
@@ -96,10 +109,9 @@ test can rule in/out a construction without another broad route search.
 
 | Rank | Work | Why now | Next decisive gate |
 | ---: | --- | --- | --- |
-| 1 | A distinct exact native Q4/Q6 GEMV substrate | Q6 flat-four-warp, Q4 vector spelling, and Q8-cooperative expansion are now bounded. The remaining parity-scale quant direction must avoid g12's weak marginal scaling and g18's approximation stop while changing physical ownership/instruction mapping. | Identical-shape included-cost primitive using the production representation, independent oracle, final PTX/resources, and a material win before one real family. |
-| 2 | Native independently scheduled RM/HCQ work | CUDA proves the device can co-schedule, but native extra-channel construction remains blocked and every dependency-coherent cut on the current single queue lost. This is still the only route to llama's hidden support tail if the RM construction becomes expressible. | Exact accepted RM sequence, then two independent 2--5 us kernels with >=5% interval saving before token scheduling. |
-| 3 | Reopen graph overlap only after a new coarse region exists | No current d512 cut survives heavy-MMQ DRAM contention plus wait cost. | CPU DAG forecast excluding competing MMQs and predicting >=50 us net after measured edge costs. |
-| 4 | Residual sampler/vocab/RoPE/KV tails | Small remaining ownership; P1/P5 already consume the descriptor and feedback parts. | A distinct topology/body mechanism with explicit P1/P5 interaction exclusion before GPU time. |
+| 1 | A distinct exact native Q4/Q6 DP4A substrate | Live d512 causality is MMVQ/DP4A, not MMQ/MMA. Exact four-warp, factorized Q4, exact Q6 warp32, post-barrier, attention-tail and FFN-subset variants are now bounded. | A third physical representation with an independent oracle, PTX/resources, and material included-cost win before one real family. |
+| 2 | Native independently scheduled RM/HCQ work | Native construction now passes light-kernel overlap, but current decode queue/wait economics are negative. | A wait-adjusted decode forecast with a positive margin before another token schedule arm. |
+| 3 | Residual sampler/vocab/RoPE/KV tails | Small remaining ownership; P1/P5 already consume descriptor and feedback parts. | A distinct topology/body mechanism with explicit P1/P5 interaction exclusion before GPU time. |
 
 ## Claims that remain unsupported
 
@@ -111,8 +123,9 @@ test can rule in/out a construction without another broad route search.
 - Do not add fusion/body and overlap ownership, CUDA substitutions, profiler
   node sums, Shapley allocations, simulated critical paths, or synthetic
   shared-Q8 microgates as recovery.
-- Do not claim flash-body parity or generic native hardware overlap from the
-  rejected current cuts.
+- Do not call the live d512 path MMQ/MMA: its pinned llama implementation is
+  MMVQ/Q8_1+DP4A. Do not extrapolate the native light-kernel concurrency PASS
+  into a decode scheduling recovery while waits remain wall-negative.
 - Do not reopen RMSNorm by weakening the parent-chain predicate. The exact
   break is now located and both bounded construction attempts are closed.
 
@@ -125,7 +138,7 @@ The final composed same-session row is now measured: steady llama A/C midpoint
 instead gives 0.76444x and a 1.254189-ms gap; both are recorded in
 `nv-decode-final-composed-same-session-record-20260805.md`.
 
-The strict fixed-authority booked total is **258.00581275 us/token** and its
-counterfactual remainder is **1388.16418725 us/token**. Those fixed-authority
+The strict fixed-authority booked total is **270.467859625 us/token** and its
+counterfactual remainder is **1375.702140375 us/token**. Those fixed-authority
 numbers remain causal accounting; the same-session row is the current absolute
 measurement. No current construction is parity-qualified.

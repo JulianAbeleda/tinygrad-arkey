@@ -1,0 +1,21 @@
+{
+  "schema": "tinygrad.nv_shared_q8_subset_incremental_timing.v1",
+  "mode": "subset-incremental-timing-reverse-bracket",
+  "reference_indices": [1,2,3,4,5,6,7,8,9,10,11,12],
+  "candidate_indices": [1,2,3,4,5,6,7,8,9,10,11,12,14,15,16,17,18],
+  "settled_continuous": true,
+  "all_token_hashes_equal": true,
+  "arms": [
+    {"name":"g12-a", "median_ms_per_token":5.396238125, "samples":[5.3915389375,5.38958746875,5.396238125,5.39719678125,5.39825565625], "rejected":[]},
+    {"name":"maximal-subset", "median_ms_per_token":5.3878273125, "samples":[5.383701125,5.38697571875,5.38887146875,5.3878273125,5.3923029375], "rejected":[]},
+    {"name":"g12-c", "median_ms_per_token":5.40434059375, "samples":[5.4014633125,5.4041455625,5.40434059375,5.40572034375,5.40730584375], "rejected":[]}
+  ],
+  "reference_bracket_median_ms": 5.400289359375,
+  "candidate_ms": 5.3878273125,
+  "candidate_minus_reference_ms": -0.012462046875,
+  "candidate_speedup_pct": 0.23130004271085802,
+  "timed_tokens_per_arm": 160,
+  "token_stream_sha256": "f25083e5d0a754131283b40c03f52e688fee9f175bea7ae106805e7d628d7905",
+  "credit_rule": "incremental beyond g12 only; do not double-book cumulative and incremental rows",
+  "default_enabled": false
+}

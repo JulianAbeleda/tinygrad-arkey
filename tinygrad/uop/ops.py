@@ -22,6 +22,16 @@ class AxisType(Enum):
   THREAD = auto(); PLACEHOLDER = auto() # noqa: E702
 
 @dataclass(frozen=True, order=True)
+class PostBarrierRegion:
+  """Typed contract for a divergent region entered after a workgroup barrier.
+
+  The barrier is deliberately outside the region, so every workitem reaches
+  it.  The region may then predicate arbitrary non-barrier work (for example a
+  single consumer warp loading lane partials produced by sibling warps).
+  """
+  version: int = 1
+
+@dataclass(frozen=True, order=True)
 class ParamArg:
   slot: int
   vmin_vmax: tuple[PyConst, PyConst]|None = None
@@ -625,6 +635,15 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
   def end(self, *src:UOp): return UOp(Ops.END, src=(self,)+src) if len(src) else self
   def after(self, *src:UOp, **kwargs): return UOp(Ops.AFTER, self.dtype, (self,)+src, **kwargs) if len(src) else self
   def barrier(self, *src:UOp): return UOp(Ops.BARRIER, src=(self,)+src)
+  def post_barrier_region(self, gate:UOp) -> UOp:
+    if self.op is not Ops.BARRIER: raise ValueError("post_barrier_region must be anchored by an Ops.BARRIER")
+    if gate.dtype is not dtypes.bool: raise ValueError(f"post_barrier_region gate must be bool, got {gate.dtype}")
+    return UOp(Ops.IF, dtypes.void, (gate, self), arg=PostBarrierRegion())
+  def end_region(self, *body_roots:UOp) -> UOp:
+    if self.op is not Ops.IF or not isinstance(self.arg, PostBarrierRegion):
+      raise ValueError("end_region requires an IF created by post_barrier_region")
+    if not body_roots: raise ValueError("post_barrier_region requires at least one ordered body root")
+    return UOp(Ops.ENDIF, dtypes.void, (self, *body_roots), arg=self.arg)
   def ins(self, arg, **kwargs): return UOp(Ops.INS, kwargs.pop("dtype", self.dtype), kwargs.pop("src", self.src), arg, kwargs.pop("tag", self.tag))
   def contract(self, *rngs:UOp):
     assert all(x.arg[-1] == AxisType.UPCAST for x in rngs), "all contract ranges must be upcast"

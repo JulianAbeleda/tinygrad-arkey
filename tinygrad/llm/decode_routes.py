@@ -10,7 +10,7 @@ from tinygrad.llm.decode_kernels import (Q6K_POS_EXTENT, decode_kv_rope_store_ke
 from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeCapability, FlashDecodeRouteConfig,
   flash_decode_capability_from_renderer, flash_decode_live_split_block_tile, flash_decode_target_promoted)
 from tinygrad.llm.kernel_program import (KernelProgram, KernelProgramProvenance, OutputSpec, TypedViewRequest,
-                                         execute_promoted_program)
+                                         execute_promoted_program, execute_research_program)
 from tinygrad.llm.model_route_plan import decode_epilogue_fusion_promoted, decode_flash_combine_fusion_promoted
 from tinygrad.llm.qk_layout import Q4_K, Q6_K, QuantFormat
 from tinygrad.llm.route_selection import parse_route_mode
@@ -73,6 +73,14 @@ class _Q4KDecodeCandidate:
   def execute(self, linear:Any, x:Tensor, binding:_LinearDecodeBinding,
               epilogue_inputs:dict[str, Tensor]|None=None) -> Tensor:
     _w = linear.q4k_storage.words.to(x.device).contiguous() if linear.q4k_storage.mode == "q4_ondemand" else linear.q4k_storage.words.to(x.device)
+    # Closed-default Q4_K FFN-down MMVQ qualification route. Normal model
+    # loads have no admission object, so this returns None before constructing
+    # any graph. A research harness may lease exact blocks; the candidate owns
+    # its Q8 provider and direct consumer and never changes W1/W3 production.
+    if (ffn_down_mmvq_admission := getattr(linear,"_q4k_ffn_down_mmvq_admission",None)) is not None:
+      from tinygrad.llm.q4k_ffn_down_mmvq import q4k_ffn_down_mmvq_call
+      if (mmvq := q4k_ffn_down_mmvq_call(ffn_down_mmvq_admission,linear,x,binding,epilogue_inputs or {})) is not None:
+        return mmvq
     # L1 M4: q4k GEMV epilogue absorption is gated by its own closed record
     # (decode-q4k-epilogue-fusion-route-policy.json, measured non-landing) -- NOT M2's
     # decode_epilogue_fusion record, which stays NV-promoted for the Q6K in-kernel merge only.
@@ -159,6 +167,27 @@ def q4k_gate_up_primitive_linear_call(gate:Any, up:Any, x:Tensor, fallback:Calla
     q4k_g3_lanemap_gemv_w1w3_kernel(g_bind.N, g_bind.K, load_style="scalar"),
     output_spec=OutputSpec((g_bind.N,), dtypes.float32))
   return execute_promoted_program(None, gw, uw, xv, program=program).reshape(1, 1, g_bind.N)
+
+def q4k_gate_up_rms_affine_qualification_call(gate:Any, up:Any, raw_x:Tensor, norm_weight:Tensor, eps:float,
+                                               fallback:Callable[[], Tensor]) -> Tensor:
+  """One-block, default-off RMS scale + Q4 gate/up qualification boundary.
+
+  There is deliberately no policy bit here: callers must hold an explicit
+  harness-installed lease.  Every shape/type miss is an ordinary fallback.
+  """
+  g_bind=Q4K_DECODE_CANDIDATE.bind(gate,raw_x,getattr(getattr(gate,"route_admission",None),"admitted",False))
+  u_bind=Q4K_DECODE_CANDIDATE.bind(up,raw_x,getattr(getattr(up,"route_admission",None),"admitted",False))
+  if g_bind is None or u_bind is None or (g_bind.T,g_bind.K,g_bind.N)!=(1,4096,12288) or (u_bind.T,u_bind.K,u_bind.N)!=(1,4096,12288): return fallback()
+  if norm_weight.shape != (4096,) or norm_weight.dtype != dtypes.float16: return fallback()
+  from tinygrad.llm.decode_kernels import q4k_g3_lanemap_gemv_w1w3_rms_affine_kernel
+  from tinygrad.llm.kernel_program import execute_research_program
+  gw=gate.q4k_storage.words.to(raw_x.device).contiguous() if gate.q4k_storage.mode == "q4_ondemand" else gate.q4k_storage.words.to(raw_x.device)
+  uw=up.q4k_storage.words.to(raw_x.device).contiguous() if up.q4k_storage.mode == "q4_ondemand" else up.q4k_storage.words.to(raw_x.device)
+  xv=raw_x[:,0,:].reshape(4096).cast(dtypes.float16).contiguous()
+  scale=((xv.cast(dtypes.float32)*xv.cast(dtypes.float32)).sum()/4096+eps).sqrt().reciprocal().reshape(1)
+  program=KernelProgram(g_bind.route_id,f"{g_bind.candidate_id}.rms_affine_qualification",KernelProgramProvenance.RESEARCH_ONLY,
+    q4k_g3_lanemap_gemv_w1w3_rms_affine_kernel(12288,4096),output_spec=OutputSpec((12288,),dtypes.float32))
+  return execute_research_program(None,gw,uw,xv,norm_weight.to(raw_x.device),scale,program=program).reshape(1,1,12288)
 
 
 def _kv_store_parts_view(v:Tensor) -> tuple[Tensor, int]:

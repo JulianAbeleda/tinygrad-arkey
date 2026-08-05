@@ -4,6 +4,7 @@ import numpy as np
 
 from extra.llm_research.decode.nv_shared_q8_progressive_qualification import (
   FUSED_GROUP_STEPS, SEMANTIC_CONTRACT, _child_command, _primitive_oracle, _semantic_comparison,
+  _normalize_fused_indices,
   _settled_context_required, _settled_continuous_windows, _settled_high_side_filter, _timing_hash_authority,
   _validate_run_extent)
 
@@ -44,6 +45,16 @@ def test_timing_child_command_propagates_settled_composed_cooperative_flags(tmp_
     cooperative_q4=True,composed=True,settled_continuous=True)
   cmd=_child_command(args,0,tmp_path/"row.json",4,mode="timing-child")
   assert all(flag in cmd for flag in ("--cooperative-q4","--composed","--settled-continuous"))
+
+def test_explicit_subset_is_strict_and_propagates_to_child(tmp_path):
+  import pytest
+  subset=_normalize_fused_indices("1,2,12,14,15,16,17,18")
+  args=SimpleNamespace(model="model.gguf",depth=512,count=8,max_context=1024,reps=3,fused_indices=subset)
+  cmd=_child_command(args,0,tmp_path/"row.json",0,mode="child")
+  assert cmd[cmd.index("--fused-indices")+1] == "1,2,12,14,15,16,17,18"
+  with pytest.raises(ValueError,match="increasing"): _normalize_fused_indices("1,14,12")
+  with pytest.raises(ValueError,match="unique"): _normalize_fused_indices("1,12,12")
+  with pytest.raises(ValueError,match="exclude block 0"): _normalize_fused_indices("0,1")
 
 class _Sync:
   def __init__(self): self.calls=0

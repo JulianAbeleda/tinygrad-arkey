@@ -1,0 +1,42 @@
+{
+  "schema": "tinygrad.nv_q6k_exact_warp32_and_int_mma_gate.v1",
+  "commit": "a1a51c349d1b8c55a6373631913ea7845e99cc8d",
+  "shape": {"rows": 1024, "k": 4096, "role": "d512 attn_kv"},
+  "observed_llama_d512": {
+    "route": "MMVQ mul_mat_vec_q<type14,ncols=1>",
+    "source": "ggml-cuda/mmvq.cu + vecdotq.cuh",
+    "launch": {"grid": [1024,1,1], "block": [32,4,1], "registers_per_thread": 48, "static_smem_bytes": 384},
+    "sass": {"instructions": 295, "IDP.4A.S8.S8": 6, "SHFL.BFLY": 5, "LDS": 3, "LDG.E.U16.CONSTANT": 21},
+    "matched_q8_plus_q6_median_us": 4.098559856414795
+  },
+  "installed_tinygrad": {
+    "graph": ["q6k_gen_partial_1024_4096_4", "external_sum"],
+    "q6_kernel": {"registers": 69, "ptx_instructions": 268, "sass_instructions": 279, "global_loads_ptx": 37},
+    "sum_kernel": {"registers": 26, "ptx_instructions": 33, "sass_instructions": 48}
+  },
+  "candidate": {
+    "id": "q6k_exact_warp32_1024_4096",
+    "mapping": "one warp/output; lanes 0..15 even Q6 group, 16..31 adjacent odd group; original fp16 activation",
+    "correctness": {"pass": true, "candidate_max_abs_cpu_reference": 1.8596649169921875e-05, "atol": 0.02},
+    "resources": {"registers": 50, "ptx_instructions": 174, "sass_instructions": 175, "global_loads_ptx": 23, "shuffles": 5},
+    "timing_us": {"control_midpoint_median": 67.166065, "candidate_median": 123.529102, "delta": 56.36303699999999},
+    "verdict": "NO_GO"
+  },
+  "cuda_int_mma_substrate": {
+    "sm120_nvrtc_signature": "mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32",
+    "hardware_compiler_pass": true,
+    "fragment_registers": {"a_b32": 4, "b_b32": 2, "acc_s32": 4},
+    "tinygrad_cuda_descriptor_present": false,
+    "tinygrad_ptx_renderer_admits": false,
+    "tinygrad_render_probe": "KeyError: dtypes.int",
+    "localized_blocker": "generic tinygrad CUDA TensorCore descriptor, fragment lane map, and PTX integer WMMA lowering"
+  },
+  "admissibility": {
+    "status": "OPEN_AS_SUBSTRATE_EXPERIMENT_NOT_PROVEN_D512_CAUSE",
+    "required_model_gate": "exact tokens, argmax and top10; relative_l2 <= 1e-3; perturbation below minimum margin",
+    "precedent": "shared-Q8 g12 passed at relative_l2 0.0008369634170055909",
+    "warning": "the observed d512 llama Q6 kernel is MMVQ/IDP.4A, not the MMQ integer-MMA path"
+  },
+  "raw": {"path": "/tmp/q6k_exact_warp32_full.json", "sha256": "67dbe0432303aeb31e7da30dd4001dfd3e0c53a8d3b1329a0960ae7b5c2365a0"},
+  "verdict": "exact warp32 is falsified; integer MMA is a real missing generic substrate but current trace does not establish it as the d512 Q6 parity cause"
+}

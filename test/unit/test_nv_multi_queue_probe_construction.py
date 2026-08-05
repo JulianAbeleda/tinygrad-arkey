@@ -18,7 +18,7 @@ The live GPU question (whether the corrected construction co-schedules) is not
 testable here; it is answered by the probe arms themselves, which are isolated
 timed subprocesses.
 """
-import importlib.util, json, pathlib
+import importlib.util, inspect, json, pathlib
 
 from tinygrad.runtime import ops_nv
 
@@ -187,6 +187,24 @@ def test_g1_bootstrap_cuda_is_a_corrected_construction_arm():
   verdict, basis = probe.g1_verdict([arm])
   assert verdict == "PASS"
   assert "bootstrap_cuda" in basis
+
+
+def test_bootstrap_runtime_builds_all_children_before_the_only_group_schedule():
+  """Pin the load-bearing CUDA-mirror order in the real native constructor."""
+  src = inspect.getsource(ops_nv.NVDevice.__init__)
+  group = src.index("self.channel_group = self.iface.rm_alloc")
+  ctxshare = src.index("self.ctxshare = ctxshare")
+  computes = src.index("self.compute_gpfifos = [self._new_gpu_fifo")
+  dma = src.index("self.dma_gpfifo = self._new_gpu_fifo")
+  schedule = src.index("self.iface.rm_control(self.channel_group, nv_gpu.NVA06C_CTRL_CMD_GPFIFO_SCHEDULE")
+  assert group < ctxshare < computes < dma < schedule
+  assert src.count("NVA06C_CTRL_CMD_GPFIFO_SCHEDULE") == 1
+  assert 'flags=(0x10 if i % 2 else 0)' in src
+  assert 'boot_compute_channels = min(2, max(1, getenv("HCQ_NUM_COMPUTE", 1)))' in src
+
+  new_fifo = inspect.getsource(ops_nv.NVDevice._new_gpu_fifo)
+  assert "if channel_group == self.nvdevice:" in new_fifo
+  assert new_fifo.index("if channel_group == self.nvdevice:") < new_fifo.index("NVA06F_CTRL_CMD_BIND")
 
 
 def test_shared_mode_matches_control_arm_construction():

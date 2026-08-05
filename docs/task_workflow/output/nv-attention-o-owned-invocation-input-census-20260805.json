@@ -1,0 +1,41 @@
+{
+  "arm": "attention_o",
+  "mode": "bounded_topology_census",
+  "depth": 512,
+  "callify_owned_precompiled_output_redirect": 1,
+  "programs": 841,
+  "elementwise_programs": 385,
+  "adapter_86a2": 36,
+  "residual_adds": 1,
+  "fused_attention_o": 35,
+  "generated_token": 38835,
+  "included_kernel_us": 5862.06,
+  "control_reference": {
+    "programs": 874,
+    "adapter_86a2": 71,
+    "residual_adds": 1,
+    "fused_attention_o": 35
+  },
+  "delta": {
+    "programs": -33,
+    "adapter_86a2": -35
+  },
+  "required_gate": {
+    "programs_at_most": 804,
+    "adapter_86a2": 1,
+    "passed": false
+  },
+  "copy_kernel_86a2": {
+    "dtype": "float32",
+    "elements": 4096,
+    "bytes": 16384,
+    "operation": "identity memcpy (float4 load/store)"
+  },
+  "attribution": {
+    "status": "UNRESOLVED",
+    "first_observer_stopped_seconds": 180,
+    "final_observer_timeout_seconds": 150,
+    "final_observer_exit_code": 124
+  },
+  "verdict": "TOPOLOGY_NO_GO"
+}

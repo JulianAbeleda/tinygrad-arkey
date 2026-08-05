@@ -54,7 +54,10 @@ def post_callify_copy_trace(linear, copy_name_fragment:str="86a2") -> list[dict]
   names/slots, shapes and dtypes rather than unstable object ids.
   """
   from tinygrad.uop.ops import Ops
-  calls = [u for u in linear.toposort() if u.op is Ops.CALL]
+  # A LINEAR's direct sources are its ordered calls. Recursing through every
+  # rendered PROGRAM body visits hundreds of thousands of instruction UOps
+  # and made the real-model observer slower than execution by minutes.
+  calls = [u for u in (linear.src if linear.op is Ops.LINEAR else linear.toposort()) if u.op is Ops.CALL]
   writes = {call: _param_slots_written(call) for call in calls}
   writer, consumers = {}, {}
   def key(arg):
@@ -200,7 +203,7 @@ def logits(arm:str, model_path:str, depth:int, count:int, max_context:int) -> tu
           "shape": list(stacked.shape), "dtype": str(stacked.dtype), "logits_sha256": digest}, stacked
 
 
-def census(arm:str, model_path:str, depth:int, max_context:int) -> dict:
+def census(arm:str, model_path:str, depth:int, max_context:int, trace_copies:bool=True) -> dict:
   from tinygrad import Tensor
   from tinygrad.helpers import Context
   from tinygrad.uop.ops import Ops
@@ -242,7 +245,9 @@ def census(arm:str, model_path:str, depth:int, max_context:int) -> dict:
     observed = capture_owner._linears[capture_count:] if capture_owner is not None else (linear,)
     for scheduled in observed: copy_traces.extend(post_callify_copy_trace(scheduled))
     return linear, var_vals
-  Tensor.linear_with_vars = traced_linear
+  # The pre-compile hooks above remain useful for CPU construction tests, but
+  # the real decode authority is the eager compiled LINEAR below. Attaching to
+  # every prefill schedule made an ownership census observer-bound.
   # The first decode after prefill is TinyJit's cnt==0 eager arm. It has no
   # retained CapturedJit yet, and DEBUG observes exactly that eager execution.
   # Observe the compiled eager LINEAR at the compilation boundary as well.
@@ -251,10 +256,20 @@ def census(arm:str, model_path:str, depth:int, max_context:int) -> dict:
   original_realize_compile, original_jit_compile = realize_module.compile_linear, jit_module.compile_linear
   def traced_compile(linear, *args, **kwargs):
     compiled = original_realize_compile(linear, *args, **kwargs)
-    copy_traces.extend(post_callify_copy_trace(compiled))
+    # Recursive compilation also visits one-program LINEARs. The complete
+    # decode graph is the only useful attribution authority and is already a
+    # large flat LINEAR; reject small fragments before inspecting names.
+    if compiled.op is not Ops.LINEAR or len(compiled.src) < 500: return compiled
+    names = {_call_name(u) for u in compiled.src if u.op is Ops.CALL}
+    # Trace only the one fully rendered decode graph containing both ends of
+    # the ownership question. Prefill and single-program recursive compiles
+    # cannot attribute an E_86a2 writer to the fused-O consumer.
+    if any("86a2" in name for name in names) and any("epi_resadd_4096_4096" in name for name in names):
+      copy_traces.extend(post_callify_copy_trace(compiled))
     return compiled
-  realize_module.compile_linear = traced_compile
-  jit_module.compile_linear = traced_compile
+  if trace_copies:
+    realize_module.compile_linear = traced_compile
+    jit_module.compile_linear = traced_compile
   gen = model.generate(_prompt(model_path, depth), chunk_size=32, temperature=0.0)
   with Context(DEBUG=0): next(gen)
   capture = io.StringIO()
@@ -263,9 +278,11 @@ def census(arm:str, model_path:str, depth:int, max_context:int) -> dict:
   # TinyJit retains the compiled, memory-planned graph that DEBUG just ran.
   # This is later than the per-Tensor schedule hook and therefore carries both
   # rendered E hashes and ProgramInfo output slots.
-  copy_traces.extend(captured_decode_copy_trace(model))
-  gen.close(); routes.execute_promoted_program = original_execute; Tensor.linear_with_vars = original_linear
-  realize_module.compile_linear, jit_module.compile_linear = original_realize_compile, original_jit_compile
+  # The measured token is TinyJit's eager arm; retained captures do not yet
+  # exist and are not an attribution authority for this census.
+  gen.close(); routes.execute_promoted_program = original_execute
+  if trace_copies:
+    realize_module.compile_linear, jit_module.compile_linear = original_realize_compile, original_jit_compile
   rows = []
   for line in capture.getvalue().splitlines():
     if (match := TM_RE.match(line)):
@@ -309,9 +326,11 @@ def main() -> int:
   ap.add_argument("--model", default=DEFAULT_MODEL); ap.add_argument("--depth", type=int, default=512)
   ap.add_argument("--count", type=int, default=8); ap.add_argument("--reps", type=int, default=3)
   ap.add_argument("--max-context", type=int, default=1024); ap.add_argument("--out", required=True)
+  ap.add_argument("--skip-copy-trace", action="store_true",
+                  help="bounded topology census: count rendered copy programs without the ownership observer")
   args = ap.parse_args(); path = pathlib.Path(args.out)
   if args.mode == "logits": result, array = logits(args.arm, args.model, args.depth, args.count, args.max_context); np.savez_compressed(path.with_suffix(".npz"), logits=array)
-  elif args.mode == "census": result = census(args.arm, args.model, args.depth, args.max_context)
+  elif args.mode == "census": result = census(args.arm, args.model, args.depth, args.max_context, not args.skip_copy_trace)
   else: result = timing(args.arm, args.model, args.depth, args.count, args.reps, args.max_context)
   path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n"); print(json.dumps(result, sort_keys=True)); return 0
 

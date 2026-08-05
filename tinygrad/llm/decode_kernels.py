@@ -107,6 +107,43 @@ def _q4k_block_dot_packed_load(words:UOp, x:UOp, base:UOp, x_block:UOp, lane4:UO
   for grp in range(8): contrib = contrib + _q4k_group_dot_packed_load(words, x, base, x_block, grp, lane4)
   return contrib
 
+def _q4k_block_dot_rms_affine(words:UOp, x:UOp, norm_weight:UOp, scale:UOp, base:UOp, x_block:UOp, lane4:UOp) -> UOp:
+  """Packed Q4 dot with the ordinary RMSNorm fp16 round points at each load."""
+  contrib=UOp.const(dtypes.float32,0.0)
+  for grp in range(8):
+    d,dmin,sc,mn=_q4k_group_params(words,base,grp)
+    qpack=words[base+4+(grp//2)*8+lane4].rshift((grp%2)*4).bitwise_and(0x0F0F0F0F)
+    for nib in range(4):
+      pos=lane4*4+nib; idx=x_block*Q4_K_BLOCK_ELEMS+grp*32+pos
+      q=qpack.rshift(nib*8).bitwise_and(0xf)
+      qw=d*sc.cast(dtypes.float32)*q.cast(dtypes.float32)-dmin*mn.cast(dtypes.float32)
+      # nn.RMSNorm: fp16(x*scale), then fp16(*weight), before the GEMV dot.
+      xv=((x[idx].cast(dtypes.float32)*scale[0]).cast(dtypes.float16)*norm_weight[idx].cast(dtypes.float16)).cast(dtypes.float32)
+      contrib=contrib+qw*xv
+  return contrib
+
+def q4k_g3_lanemap_gemv_w1w3_rms_affine_kernel(rows:int,k:int):
+  """Research-only raw-x RMS scale/affine fused Q4 gate/up consumer."""
+  # This is deliberately not a general RMSNorm lowering.  Its only admitted
+  # lease has the exact NVIDIA decode FFN shape; widening it would silently
+  # turn a measured experiment into a route selector.
+  if (rows,k) != (12288,4096): raise ValueError(f"rms-affine gate/up requires (12288,4096), got ({rows},{k})")
+  lm=Q4KGateUpLaneMap(k=k,n=rows); lm.validate()
+  def kernel(out:UOp,gate_words:UOp,up_words:UOp,x:UOp,norm_weight:UOp,scale:UOp) -> UOp:
+    row,lane=UOp.special(rows,"gidx0"),UOp.special(WARP,"lidx0")
+    part=LanePartition(lane,lane_extent=lm.lane_extent,words_per_group=lm.words_per_group)
+    lblk=UOp.range(lm.blocks_per_group,0,axis_type=AxisType.REDUCE); blk=part.block_group*lm.blocks_per_group+lblk
+    bg=(row*lm.k_blocks+blk)*Q4K_WORDS_PER_BLOCK
+    cg=_q4k_block_dot_rms_affine(gate_words,x,norm_weight,scale,bg,blk,part.word_col)
+    cu=_q4k_block_dot_rms_affine(up_words,x,norm_weight,scale,bg,blk,part.word_col)
+    ag=UOp.placeholder((1,),dtypes.float32,20,addrspace=AddrSpace.REG); au=UOp.placeholder((1,),dtypes.float32,21,addrspace=AddrSpace.REG)
+    init=ag[0].store(0.0); init=au.after(init)[0].store(0.0); ag,au=ag.after(init),au.after(init)
+    ug=ag[0].store(ag.after(lblk)[0]+cg); uu=au.after(ug)[0].store(au.after(lblk)[0]+cu).end(lblk)
+    return out[row].store(_silu_uop(_warp_reduce_sum_staged(ag.after(uu)[0],part.lane,part.lane_extent,90))*
+                          _warp_reduce_sum_staged(au.after(uu)[0],part.lane,part.lane_extent,95)).sink(
+      arg=KernelInfo(name=f"q4k_g3_lanemap_w1w3_rms_affine_{rows}_{k}",opts_to_apply=()))
+  return kernel
+
 
 def _silu_uop(val):
   """SiLU in the exact lowering Tensor.silu uses (tinygrad/mixin/elementwise.py:786):

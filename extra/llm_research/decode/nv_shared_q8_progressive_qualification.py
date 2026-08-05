@@ -45,32 +45,53 @@ def _install_leases(model, groups:int) -> list[int]:
       block.attn_norm.weight.cast(dtypes.float16).contiguous()).realize()
   return list(range(groups))
 
-def _install_fused_norm_leases(model, groups:int, cooperative_q4:bool=False) -> list[int]:
+def _install_fused_norm_leases(model, groups:int, cooperative_q4:bool=False, q6_direct_output:bool=False) -> list[int]:
   """Lease blocks 1..groups, excluding block 0's non-REDUCE_OUTPUT provenance."""
-  from tinygrad import Tensor, dtypes
   allowed=COOPERATIVE_GROUP_STEPS if cooperative_q4 else FUSED_GROUP_STEPS
   if groups not in allowed or groups >= len(model.blk):
     raise ValueError(f"fused groups must be one of {allowed} and leave block 0 unleased")
+  return _install_fused_norm_lease_indices(model,range(1,groups+1),cooperative_q4,q6_direct_output)
+
+def _normalize_fused_indices(spec:str) -> tuple[int,...]:
+  if not spec.strip(): return ()
+  try: values=tuple(int(x) for x in spec.split(","))
+  except ValueError as exc: raise ValueError("--fused-indices must be comma-separated integers") from exc
+  if any(x <= 0 for x in values): raise ValueError("fused indices must exclude block 0")
+  if len(set(values)) != len(values): raise ValueError("fused indices must be unique")
+  if tuple(sorted(values)) != values: raise ValueError("fused indices must be strictly increasing")
+  return values
+
+def _install_fused_norm_lease_indices(model, indices, cooperative_q4:bool=False, q6_direct_output:bool=False) -> list[int]:
+  """Install an explicit default-off block subset for precision-budget search."""
+  from tinygrad import Tensor, dtypes
+  indices=list(indices)
+  if not indices or any(not isinstance(x,int) or isinstance(x,bool) or x <= 0 or x >= len(model.blk) for x in indices):
+    raise ValueError("explicit fused lease indices must be nonempty valid block indices excluding block 0")
+  if indices != sorted(set(indices)): raise ValueError("explicit fused lease indices must be unique and increasing")
   for block in model.blk:
     for name in ("_shared_q8_attention_admission", "_shared_q8_attention_norm_weight",
                  "_decode_reduce_output_attn_rmsnorm_promoted"):
       if hasattr(block,name): delattr(block,name)
-  for block_index in range(1,groups+1):
+  for block_index in indices:
     block=model.blk[block_index]
-    block._shared_q8_attention_admission=SharedQ8AttentionAdmission(block_index,cooperative_q4=cooperative_q4)
+    block._shared_q8_attention_admission=SharedQ8AttentionAdmission(block_index,cooperative_q4=cooperative_q4,
+                                                                       q6_direct_output=q6_direct_output)
     block._decode_reduce_output_attn_rmsnorm_promoted=True
     block._shared_q8_attention_norm_weight=Tensor.empty(4096,dtype=dtypes.float16,device=block.attn_norm.weight.device).assign(
       block.attn_norm.weight.cast(dtypes.float16).contiguous()).realize()
-  return list(range(1,groups+1))
+  return indices
 
 def child(model_path:str, depth:int, count:int, max_context:int, groups:int, fused_groups:int=0,
-          cooperative_q4:bool=False, composed:bool=False) -> tuple[dict, np.ndarray]:
+          cooperative_q4:bool=False, composed:bool=False, fused_indices:tuple[int,...]=(),
+          q6_direct_output:bool=False) -> tuple[dict, np.ndarray]:
   from tinygrad import Tensor, UOp
   from tinygrad.engine.jit import GraphAdmissionCensus, observe_graph_admissions
   from tinygrad.helpers import Context
   model = _load(model_path, max_context)
-  if groups and fused_groups: raise ValueError("ordinary and fused leases are mutually exclusive")
-  leases = _install_fused_norm_leases(model,fused_groups,cooperative_q4) if fused_groups else _install_leases(model,groups)
+  if sum(bool(x) for x in (groups,fused_groups,fused_indices)) > 1:
+    raise ValueError("ordinary, cumulative fused, and explicit fused leases are mutually exclusive")
+  leases = _install_fused_norm_lease_indices(model,fused_indices,cooperative_q4,q6_direct_output) if fused_indices else \
+    _install_fused_norm_leases(model,fused_groups,cooperative_q4,q6_direct_output) if fused_groups else _install_leases(model,groups)
   model._decode_direct_greedy_promoted=composed
   model._decode_feedback_pingpong_promoted=composed
   gen = model.generate(_prompt(model_path, depth), chunk_size=32, temperature=0.0)
@@ -106,19 +127,30 @@ def child(model_path:str, depth:int, count:int, max_context:int, groups:int, fus
   ordinary_provider_count=programs.count("q8_1_llama_provider_4096")
   provider_count=fused_provider_count+ordinary_provider_count
   coop_q4_count=sum(p.startswith("q4k_warp_coop_q8_dp4a_partial_") for p in programs)
+  q6_direct_count=sum(p.startswith("q6k_q8_warp_direct_") for p in programs)
   legacy_q4_count=sum(p.startswith("q4k_q8_dp4a_") for p in programs)
   capture_factor=2 if composed else 1; expected_providers=len(leases)*capture_factor
-  if fused_groups and fused_provider_count != expected_providers:
+  expected_q6_direct=0
+  if q6_direct_output:
+    from tinygrad.llm.qk_primitives import Q6KPrimitiveLinear
+    expected_q6_direct=sum(isinstance(model.blk[index].attn_v,Q6KPrimitiveLinear) for index in leases)*capture_factor
+  if (fused_groups or fused_indices) and fused_provider_count != expected_providers:
     raise RuntimeError(f"fused qualification expected {expected_providers} RMSNorm/Q8 providers, observed {fused_provider_count}")
   if cooperative_q4 and (provider_count != expected_providers or coop_q4_count < 2*expected_providers or legacy_q4_count):
     raise RuntimeError(f"cooperative census failed providers={provider_count}/{expected_providers} coop_q4={coop_q4_count} legacy_q4={legacy_q4_count}")
+  # Qwen has mixed Q4/Q4/Q4 and Q4/Q4/Q6 attention groups. Count only actual
+  # Q6 V leases; a Q4 V is intentionally untouched by this Q6-only route.
+  if q6_direct_output and q6_direct_count != expected_q6_direct:
+    raise RuntimeError(f"Q6 direct census expected {expected_q6_direct} Q6-V consumers, observed {q6_direct_count}")
   return ({"schema":"tinygrad.nv_shared_q8_progressive_qualification.v1", "groups":groups,
-    "fused_groups":fused_groups, "leases":leases,"cooperative_q4":cooperative_q4,"composed":composed,
+    "fused_groups":fused_groups, "leases":leases,"cooperative_q4":cooperative_q4,"q6_direct_output":q6_direct_output,"composed":composed,
+    "fused_indices":list(fused_indices),
     "depth":depth, "count":count, "prelude_token":prelude, "tokens":tokens, "tokens_sha256":hashlib.sha256(
       ",".join(map(str,tokens)).encode()).hexdigest(), "logits_sha256":_digest(arr), "shape":list(arr.shape),
     "finite":True, "program_count":len(programs), "shared_q8_program_count":sum(
-      p.startswith(("q4k_q8_dp4a_", "q4k_warp_coop_q8_dp4a_partial_", "q6k_q8_dp4a_")) for p in programs),
+      p.startswith(("q4k_q8_dp4a_", "q4k_warp_coop_q8_dp4a_partial_", "q6k_q8_dp4a_", "q6k_q8_warp_direct_")) for p in programs),
     "capture_factor":capture_factor,"q8_provider_count":provider_count,"cooperative_q4_consumer_count":coop_q4_count,
+    "q6_direct_consumer_count":q6_direct_count,"q6_direct_expected_count":expected_q6_direct,
     "legacy_q4_shared_consumer_count":legacy_q4_count,
     "fused_rmsnorm_q8_provider_count":fused_provider_count,
     "program_names":programs, "graph_census":[census.to_dict() for census in censuses]}, arr)
@@ -128,8 +160,10 @@ def _child_command(args, groups:int, out:pathlib.Path, fused_groups:int=0, mode:
           "--depth", str(args.depth), "--count", str(args.count), "--max-context", str(args.max_context),
           "--groups", str(groups), "--fused-groups", str(fused_groups), "--reps",str(args.reps),"--out", str(out)]
   if getattr(args,"cooperative_q4",False): cmd.append("--cooperative-q4")
+  if getattr(args,"q6_direct_output",False): cmd.append("--q6-direct-output")
   if getattr(args,"composed",False): cmd.append("--composed")
   if getattr(args,"settled_continuous",False): cmd.append("--settled-continuous")
+  if getattr(args,"fused_indices",()): cmd += ["--fused-indices",",".join(map(str,args.fused_indices))]
   return cmd
 
 def _settled_context_required(depth:int,count:int,reps:int) -> int:
@@ -230,6 +264,7 @@ def _semantic_comparison(baseline:np.ndarray, candidate:np.ndarray, baseline_row
   return out
 
 def qualify_fused(args) -> dict:
+  if args.fused_indices: raise ValueError("fused-qualify owns cumulative groups; use child for explicit subsets")
   root=pathlib.Path(args.out).with_suffix(""); root.mkdir(parents=True,exist_ok=True)
   oracle=_primitive_oracle(args.primitive_oracle)
   if not oracle["bitwise_exact"]: raise RuntimeError(f"primitive oracle is not bitwise exact: {oracle}")
@@ -260,10 +295,13 @@ def qualify_fused(args) -> dict:
           "note":"intentional llama-Q8 semantic qualification; historical max-abs remains reported but is not the authority gate"}
 
 def timing_child(model_path:str,depth:int,count:int,max_context:int,reps:int,fused_groups:int,
-                 cooperative_q4:bool=False,composed:bool=False,settled_continuous:bool=False) -> dict:
+                 cooperative_q4:bool=False,composed:bool=False,settled_continuous:bool=False,
+                 fused_indices:tuple[int,...]=(),q6_direct_output:bool=False) -> dict:
   from tinygrad import Device
   model=_load(model_path,max_context)
-  leases=_install_fused_norm_leases(model,fused_groups,cooperative_q4) if fused_groups else []
+  if fused_groups and fused_indices: raise ValueError("cumulative and explicit fused leases are mutually exclusive")
+  leases=_install_fused_norm_lease_indices(model,fused_indices,cooperative_q4,q6_direct_output) if fused_indices else \
+    _install_fused_norm_leases(model,fused_groups,cooperative_q4,q6_direct_output) if fused_groups else []
   model._decode_direct_greedy_promoted=composed; model._decode_feedback_pingpong_promoted=composed
   prompt,dev=_prompt(model_path,depth),Device[Device.DEFAULT]
   samples,hashes=[],[]
@@ -280,7 +318,8 @@ def timing_child(model_path:str,depth:int,count:int,max_context:int,reps:int,fus
       settled=_settled_continuous_windows(gen,dev,count,reps)
     finally: gen.close()
     return {"schema":"tinygrad.nv_shared_q8_progressive_timing.v1","arm":f"fused-g{fused_groups}",
-      "fused_groups":fused_groups,"leases":leases,"included_cost":True,"cooperative_q4":cooperative_q4,"composed":composed,
+      "fused_groups":fused_groups,"leases":leases,"included_cost":True,"cooperative_q4":cooperative_q4,"q6_direct_output":q6_direct_output,"composed":composed,
+      "fused_indices":list(fused_indices),
       "settled_continuous":True,"warmup_decode_calls":6,"reps":reps,"tokens_per_rep":count,**settled}
   warm=model.generate(prompt.copy(),chunk_size=32,temperature=0.0)
   try:
@@ -296,12 +335,14 @@ def timing_child(model_path:str,depth:int,count:int,max_context:int,reps:int,fus
     finally: gen.close()
     hashes.append(hashlib.sha256(",".join(map(str,tokens)).encode()).hexdigest())
   return {"schema":"tinygrad.nv_shared_q8_progressive_timing.v1","arm":f"fused-g{fused_groups}",
-    "fused_groups":fused_groups,"leases":leases,"included_cost":True,"cooperative_q4":cooperative_q4,"composed":composed,
+    "fused_groups":fused_groups,"leases":leases,"included_cost":True,"cooperative_q4":cooperative_q4,"q6_direct_output":q6_direct_output,"composed":composed,
+    "fused_indices":list(fused_indices),
     "reps":reps,"tokens_per_rep":count,
     "samples_ms_per_token":samples,"median_ms_per_token":statistics.median(samples),
     "token_hashes":hashes,"tokens_identical_within_arm":len(set(hashes))==1}
 
 def qualify_fused_timing(args) -> dict:
+  if args.fused_indices: raise ValueError("fused-timing owns cumulative groups; use subset-timing")
   allowed=COOPERATIVE_GROUP_STEPS if args.cooperative_q4 else FUSED_GROUP_STEPS
   if args.fused_groups not in allowed: raise ValueError(f"--fused-groups must be one of {allowed}")
   root=pathlib.Path(args.out).with_suffix(""); root.mkdir(parents=True,exist_ok=True)
@@ -325,20 +366,72 @@ def qualify_fused_timing(args) -> dict:
     "settled_continuous":args.settled_continuous,
     "note":"included-cost native wall evidence only; qualification/promotion requires a separately passing semantic gate"}
 
+def qualify_subset_timing(args) -> dict:
+  if args.fused_groups or not args.fused_indices:
+    raise ValueError("subset-timing requires --fused-indices and --fused-groups 0")
+  root=pathlib.Path(args.out).with_suffix(""); root.mkdir(parents=True,exist_ok=True)
+  rows=[]
+  for sequence,indices in enumerate(((),args.fused_indices,())):
+    label=f"{'control' if not indices else 'candidate'}-{sequence}"
+    out=root/f"{label}.json"
+    child_args=argparse.Namespace(**vars(args)); child_args.fused_indices=indices
+    cmd=["timeout",f"{args.timeout}s","flock","-w",str(args.lock_wait),args.lock,
+         *_child_command(child_args,0,out,0,mode="timing-child")]
+    run=subprocess.run(cmd,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    if run.returncode: raise RuntimeError(f"{label} child failed rc={run.returncode}: {run.stderr[-4000:]}")
+    rows.append(json.loads(out.read_text()))
+  hashes=_timing_hash_authority(rows,args.settled_continuous)
+  control_median=statistics.median((rows[0]["median_ms_per_token"],rows[2]["median_ms_per_token"]))
+  candidate=rows[1]["median_ms_per_token"]
+  return {"schema":"tinygrad.nv_shared_q8_subset_timing.v1","mode":"subset-timing-reverse-bracket",
+    "fused_indices":list(args.fused_indices),"arms":rows,"all_token_hashes_equal":len(hashes)==1,
+    "control_bracket_median_ms":control_median,"candidate_ms":candidate,"candidate_minus_control_ms":candidate-control_median,
+    "candidate_speedup_pct":(control_median/candidate-1)*100,"settled_continuous":args.settled_continuous,
+    "note":"explicit default-off subset; semantic authority is a separate child comparison"}
+
+def qualify_subset_incremental_timing(args) -> dict:
+  if args.fused_groups or not args.fused_indices or not args.reference_indices:
+    raise ValueError("subset-incremental-timing requires explicit candidate and reference indices")
+  if not set(args.reference_indices) < set(args.fused_indices):
+    raise ValueError("reference indices must be a strict subset of candidate indices")
+  root=pathlib.Path(args.out).with_suffix(""); root.mkdir(parents=True,exist_ok=True)
+  rows=[]
+  for sequence,indices in enumerate((args.reference_indices,args.fused_indices,args.reference_indices)):
+    label=f"{'reference' if sequence != 1 else 'candidate'}-{sequence}"
+    out=root/f"{label}.json"
+    child_args=argparse.Namespace(**vars(args)); child_args.fused_indices=indices
+    cmd=["timeout",f"{args.timeout}s","flock","-w",str(args.lock_wait),args.lock,
+         *_child_command(child_args,0,out,0,mode="timing-child")]
+    run=subprocess.run(cmd,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    if run.returncode: raise RuntimeError(f"{label} child failed rc={run.returncode}: {run.stderr[-4000:]}")
+    rows.append(json.loads(out.read_text()))
+  hashes=_timing_hash_authority(rows,args.settled_continuous)
+  reference=statistics.median((rows[0]["median_ms_per_token"],rows[2]["median_ms_per_token"]))
+  candidate=rows[1]["median_ms_per_token"]
+  return {"schema":"tinygrad.nv_shared_q8_subset_incremental_timing.v1","mode":"subset-incremental-timing-reverse-bracket",
+    "reference_indices":list(args.reference_indices),"candidate_indices":list(args.fused_indices),"arms":rows,
+    "all_token_hashes_equal":len(hashes)==1,"reference_bracket_median_ms":reference,"candidate_ms":candidate,
+    "candidate_minus_reference_ms":candidate-reference,"candidate_speedup_pct":(reference/candidate-1)*100,
+    "settled_continuous":args.settled_continuous,"note":"incremental credit only; do not add cumulative and incremental rows"}
+
 def main() -> int:
-  ap=argparse.ArgumentParser(); ap.add_argument("--mode",choices=("child","qualify","fused-qualify","timing-child","fused-timing"),required=True)
+  ap=argparse.ArgumentParser(); ap.add_argument("--mode",choices=("child","qualify","fused-qualify","timing-child","fused-timing","subset-timing","subset-incremental-timing"),required=True)
   ap.add_argument("--model",default=os.environ.get("QK_MODEL","/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf")); ap.add_argument("--depth",type=int,default=512)
   ap.add_argument("--count",type=int,default=8); ap.add_argument("--max-context",type=int,default=1024); ap.add_argument("--groups",type=int,default=0)
   ap.add_argument("--fused-groups",type=int,default=0); ap.add_argument("--reps",type=int,default=3)
+  ap.add_argument("--fused-indices",default="",help="research-only explicit increasing block-index subset")
+  ap.add_argument("--reference-indices",default="",help="strict-subset reference for incremental settled timing")
   ap.add_argument("--out",required=True); ap.add_argument("--timeout",type=int,default=600); ap.add_argument("--lock-wait",type=int,default=90); ap.add_argument("--lock",default="/tmp/gpu-bench.lock")
   ap.add_argument("--atol",type=float,default=0.01)
   ap.add_argument("--primitive-oracle",default=DEFAULT_PRIMITIVE_ORACLE)
-  ap.add_argument("--cooperative-q4",action="store_true"); ap.add_argument("--composed",action="store_true")
+  ap.add_argument("--cooperative-q4",action="store_true"); ap.add_argument("--q6-direct-output",action="store_true"); ap.add_argument("--composed",action="store_true")
   ap.add_argument("--settled-continuous",action="store_true")
   a=ap.parse_args()
+  a.fused_indices=_normalize_fused_indices(a.fused_indices)
+  a.reference_indices=_normalize_fused_indices(a.reference_indices)
   _validate_run_extent(a.depth,a.count,a.max_context,a.reps,a.settled_continuous)
   if a.mode == "child":
-    row, logits = child(a.model,a.depth,a.count,a.max_context,a.groups,a.fused_groups,a.cooperative_q4,a.composed); out=pathlib.Path(a.out); out.parent.mkdir(parents=True,exist_ok=True)
+    row, logits = child(a.model,a.depth,a.count,a.max_context,a.groups,a.fused_groups,a.cooperative_q4,a.composed,a.fused_indices,a.q6_direct_output); out=pathlib.Path(a.out); out.parent.mkdir(parents=True,exist_ok=True)
     # Native NV can retain driver/runtime objects during interpreter teardown.
     # Publish both artifacts atomically, flush the machine-readable stdout row,
     # then bypass teardown. A parent may therefore trust only final paths and
@@ -351,15 +444,19 @@ def main() -> int:
     os.replace(npz_tmp,npz_out); os.replace(json_tmp,out)
     print(json.dumps(row,sort_keys=True),flush=True); sys.stdout.flush(); sys.stderr.flush(); os._exit(0)
   elif a.mode == "timing-child":
-    result=timing_child(a.model,a.depth,a.count,a.max_context,a.reps,a.fused_groups,a.cooperative_q4,a.composed,a.settled_continuous)
+    result=timing_child(a.model,a.depth,a.count,a.max_context,a.reps,a.fused_groups,a.cooperative_q4,a.composed,a.settled_continuous,a.fused_indices,a.q6_direct_output)
     out=pathlib.Path(a.out); out.parent.mkdir(parents=True,exist_ok=True); out.write_text(json.dumps(result,indent=2,sort_keys=True)+"\n")
     print(json.dumps(result,sort_keys=True),flush=True); sys.stdout.flush(); sys.stderr.flush(); os._exit(0)
   elif a.mode == "qualify":
     result=qualify(a); pathlib.Path(a.out).write_text(json.dumps(result,indent=2,sort_keys=True)+"\n"); print(json.dumps(result,sort_keys=True))
   elif a.mode == "fused-qualify":
     result=qualify_fused(a); pathlib.Path(a.out).write_text(json.dumps(result,indent=2,sort_keys=True)+"\n"); print(json.dumps(result,sort_keys=True))
-  else:
+  elif a.mode == "fused-timing":
     result=qualify_fused_timing(a); pathlib.Path(a.out).write_text(json.dumps(result,indent=2,sort_keys=True)+"\n"); print(json.dumps(result,sort_keys=True))
+  elif a.mode == "subset-timing":
+    result=qualify_subset_timing(a); pathlib.Path(a.out).write_text(json.dumps(result,indent=2,sort_keys=True)+"\n"); print(json.dumps(result,sort_keys=True))
+  else:
+    result=qualify_subset_incremental_timing(a); pathlib.Path(a.out).write_text(json.dumps(result,indent=2,sort_keys=True)+"\n"); print(json.dumps(result,sort_keys=True))
   return 0
 
 if __name__ == "__main__": raise SystemExit(main())

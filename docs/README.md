@@ -11,6 +11,9 @@ they are refuted — see `prefill-current-state.md`.)
 ## Start Here
 
 - `../README.md` - repo purpose, current performance snapshot, and run commands.
+- `what-makes-a-token-fast-20260731.md` - **canonical performance-principles authority**: Roofline regimes,
+  industry kernel design stack, quantized decode algebra, generator constraints/search dimensions, and measurement gates.
+- `bringing-up-a-new-target-20260731.md` - target-onboarding companion that applies those principles to a new device.
 - `prefill-current-state.md` - **authority for shipped 8B prefill state and 8B pp512 tok/s** (pinned 3561.32 @ `8045efcef`).
 - `pure-machine-search.md` / `pure-machine-search-roadmap.md` - search classification contract and promotion gates.
 - `prefill-lessons-ledger.md` - distilled verdicts of closed scopes (qualitative lessons; defers all live numbers to authorities).

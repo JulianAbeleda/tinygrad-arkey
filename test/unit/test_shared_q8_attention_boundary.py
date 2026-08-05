@@ -87,6 +87,23 @@ def test_cooperative_q4_lease_reuses_one_provider_and_substitutes_every_q4(monke
   assert all(not any(u.op is Ops.BIND for u in ast.toposort()) for ast in emitted)
   assert all([u.arg for u in ast.toposort() if u.op is Ops.DEFINE_VAR]==[("start_pos",0,1023)] for ast in emitted)
 
+def test_q6_direct_lease_changes_only_q6_v_consumer_and_keeps_the_provider_shared(monkeypatch):
+  import tinygrad.llm.shared_q8_attention as route
+  seen=[]
+  def fake_execute(_output,*inputs,program):
+    seen.append((inputs,program)); return Tensor.empty(*program.output_spec.shape,dtype=program.output_spec.dtype)
+  monkeypatch.setattr(route,"execute_promoted_program",fake_execute)
+  out=shared_q8_attention_call(SharedQ8AttentionAdmission(3,q6_direct_output=True),_q4(4096),_q4(1024),_q6(1024),
+    Tensor.empty(1,1,4096))
+  assert tuple(x.shape for x in out)==((1,1,4096),(1,1,1024),(1,1,1024))
+  assert len(seen)==4 and sum("q6_direct" in p.program_id for _i,p in seen)==1
+  direct=seen[-1][1]
+  assert direct.output_spec.shape == (1024,)
+  ast=direct.emitter(UOp.placeholder((1024,),dtypes.float32,0),UOp.placeholder((1024*16*210,),dtypes.uint16,1),
+                     UOp.placeholder((1152,),dtypes.uint32,2))
+  assert ast.arg.name == "q6k_q8_warp_direct_1024_4096"
+  assert len({id(inputs[1].uop) for inputs,_p in seen[1:]})==1
+
 
 def test_shared_q8_consumes_only_explicit_reduce_output_marker_sources(monkeypatch):
   import tinygrad.llm.shared_q8_attention as route
@@ -123,13 +140,14 @@ def test_shared_q8_lease_cannot_widen_target_or_block_scope():
   with pytest.raises(ValueError): SharedQ8AttentionAdmission(-1)
   with pytest.raises(ValueError): SharedQ8AttentionAdmission(0, ("AMD", "gfx1100"))
   with pytest.raises(ValueError): SharedQ8AttentionAdmission(0, cooperative_q4=1)
+  with pytest.raises(ValueError): SharedQ8AttentionAdmission(0, q6_direct_output=1)
 
 
 def test_shared_q8_emitters_keep_the_authoritative_source_identity():
   # KernelInfo feeds generated NV source.  These names are the source-hash
   # identity from the isolated real-payload PASS, so this is a hermetic guard
   # against source-only drift at the promoted boundary.
-  from tinygrad.llm.shared_q8_attention import _emit_q4, _emit_q6
+  from tinygrad.llm.shared_q8_attention import _emit_q4, _emit_q6, _emit_q6_warp_direct
   out = UOp.placeholder((4096,), dtypes.float32, 0)
   q4 = _emit_q4(4096)(out, UOp.placeholder((4096*16*144,), dtypes.uint32, 1),
                       UOp.placeholder((1152,), dtypes.uint32, 2))
@@ -137,6 +155,9 @@ def test_shared_q8_emitters_keep_the_authoritative_source_identity():
                       UOp.placeholder((1152,), dtypes.uint32, 6))
   assert q4.arg.name == "q4k_q8_dp4a_4096_4096"
   assert q6.arg.name == "q6k_q8_dp4a_1024_4096"
+  direct=_emit_q6_warp_direct(1024)(UOp.placeholder((1024,),dtypes.float32,7),UOp.placeholder((1024*16*210,),dtypes.uint16,8),
+                                  UOp.placeholder((1152,),dtypes.uint32,9))
+  assert direct.arg.name == "q6k_q8_warp_direct_1024_4096"
 
 def test_fused_rmsnorm_q8_provider_passes_final_nv_program_spec():
   from tinygrad.codegen import full_rewrite_to_sink
@@ -152,3 +173,13 @@ def test_fused_rmsnorm_q8_provider_passes_final_nv_program_spec():
     with Context(SPEC=1):
       lowered=full_rewrite_to_sink(sink,CUDARenderer(Target("NV",arch="sm_120"),use_nvcc=True))
     assert lowered.op is Ops.SINK and all(not (u.op is Ops.CONST and u.arg is Invalid) for u in lowered.toposort())
+
+def test_q6_direct_consumer_passes_final_nv_program_spec():
+  from tinygrad.codegen import full_rewrite_to_sink
+  from tinygrad.helpers import Context, Target
+  from tinygrad.renderer.cuda import CUDARenderer
+  from tinygrad.llm.shared_q8_attention import _emit_q6_warp_direct
+  sink=_emit_q6_warp_direct(1024)(UOp.placeholder((1024,),dtypes.float32,0),
+    UOp.placeholder((1024*16*210,),dtypes.uint16,1),UOp.placeholder((1152,),dtypes.uint32,2))
+  with Context(SPEC=1): lowered=full_rewrite_to_sink(sink,CUDARenderer(Target("NV",arch="sm_120"),use_nvcc=True))
+  assert lowered.op is Ops.SINK and all(not (u.op is Ops.CONST and u.arg is Invalid) for u in lowered.toposort())

@@ -1,0 +1,19 @@
+{
+  "schema": "tinygrad.nv_shared_q8_subset_timing.v1",
+  "mode": "subset-timing-reverse-bracket",
+  "fused_indices": [1,2,3,4,5,6,7,8,9,10,11,12,14,15,16,17,18],
+  "settled_continuous": true,
+  "all_token_hashes_equal": true,
+  "arms": [
+    {"name":"control-a", "median_ms_per_token":5.415914625, "samples":[5.4158028125,5.41531534375,5.415914625,5.417605,5.4202515], "rejected":[]},
+    {"name":"candidate", "median_ms_per_token":5.393325, "samples":[5.38810928125,5.3860673125,5.39370825,5.393325,5.39463875], "rejected":[]},
+    {"name":"control-c", "median_ms_per_token":5.42846484375, "samples":[5.419581625,5.42746265625,5.4303956875,5.42846484375,5.43071878125], "rejected":[]}
+  ],
+  "control_bracket_median_ms": 5.422189734375,
+  "candidate_ms": 5.393325,
+  "candidate_minus_control_ms": -0.028864734375,
+  "candidate_speedup_pct": 0.535193676906176,
+  "timed_tokens_per_arm": 160,
+  "token_stream_sha256": "f25083e5d0a754131283b40c03f52e688fee9f175bea7ae106805e7d628d7905",
+  "default_enabled": false
+}

@@ -2,6 +2,11 @@
 
 Date: 2026-07-31
 
+> **Authority note (2026-08-03):** `docs/what-makes-a-token-fast-20260731.md` is now the canonical
+> performance-principles authority. This document is retained as the AMD/Metal campaign application and
+> evidence history. Where a generalized theory statement here conflicts with that document—especially the
+> §1 execution-unit claim, the quantized-decode stack, or generator/search rules—the canonical document wins.
+
 Purpose: this is not a history of the campaign. It is the transferable method, extracted from two GPUs
 (AMD RX 7900 XTX / gfx1100, Apple M4 10-core / Metal), two models (Qwen3-8B, Qwen3-14B), and the refuted
 theories that cost each investigation a full session. Every number is anchored to a file, commit, or

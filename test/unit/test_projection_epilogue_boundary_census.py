@@ -190,6 +190,59 @@ def test_synthetic_composed_fp16_combine_and_plain_call_output_has_no_adapter():
   assert names == ["flash_fused_gmax_combine_f16_32_128", "test", "q4k_g3_lanemap_gemv_epi_resadd_4096_4096"]
 
 
+def test_owned_output_stays_direct_through_precompiled_consumer_opaque_call():
+  """Reproduce the real block-output -> next block -> attention-O topology.
+
+  The consumer FUNCTION's invocation normalization and its nested opaque CALL
+  used to emit two identical fp32 copies per block.  The prior synthetic case
+  connected the producer directly to the epilogue and therefore missed this
+  cross-FUNCTION input boundary.
+  """
+  from tinygrad.engine.realize import compile_linear
+  n = k = 4096
+  words, activation = _words(n, k), Tensor.empty(k, dtype=dtypes.float16)
+  epi = _program(n, k, Q4KGEMVEpilogue("residual_add"))
+  @function(precompile=True, allow_implicit=True)
+  def producer(v): return runtime_activation((runtime_activation(v) + 1).contiguous())
+  @function(precompile=True, allow_implicit=True)
+  def consumer(residual):
+    out = execute_promoted_program(None, words, activation, residual.reshape(n), program=epi)
+    return runtime_activation(out.reshape(1, 1, n).contiguous())
+  residual = runtime_activation(producer(Tensor.empty(1, 1, n)).contiguous()).reshape(1, 1, n)
+  out = consumer(residual)
+  names = [getattr(u.src[0].arg, "name", "") for u in compile_linear(out.linear_with_vars()[0]).toposort() if u.op is Ops.CALL]
+  assert "E_32_32_4_86a23e1a5cd1cbd6101066fd85449138b653e9ecbb53d1d704f32aa470cd6f2b" not in names
+  assert names[1] == "q4k_g3_lanemap_gemv_epi_resadd_4096_4096"
+
+
+def test_owned_output_consumer_input_contract_has_exact_default_rollback():
+  from tinygrad.engine.realize import compile_linear
+  n = k = 4096
+  with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=0):
+    words, activation = _words(n, k), Tensor.empty(k, dtype=dtypes.float16)
+    epi = _program(n, k, Q4KGEMVEpilogue("residual_add"))
+    @function(precompile=True, allow_implicit=True)
+    def producer(v): return runtime_activation((runtime_activation(v) + 1).contiguous())
+    @function(precompile=True, allow_implicit=True)
+    def consumer(residual):
+      out = execute_promoted_program(None, words, activation, residual.reshape(n), program=epi)
+      return runtime_activation(out.reshape(1, 1, n).contiguous())
+    residual = runtime_activation(producer(Tensor.empty(1, 1, n)).contiguous()).reshape(1, 1, n)
+    names = [getattr(u.src[0].arg, "name", "") for u in compile_linear(consumer(residual).linear_with_vars()[0]).toposort()
+             if u.op is Ops.CALL]
+  copy = "E_32_32_4_86a23e1a5cd1cbd6101066fd85449138b653e9ecbb53d1d704f32aa470cd6f2b"
+  assert names.count(copy) == 2
+
+
+def test_owned_invocation_input_matcher_rejects_movement_and_offset():
+  from tinygrad.callify import _exact_invocation_param_contiguous
+  param = UOp.param(3, dtypes.float32, (4096,), "NV")
+  def requested(x): return UOp(Ops.CONTIGUOUS, x.dtype, (x,))
+  assert _exact_invocation_param_contiguous(requested(param.reshape(64, 64).reshape(4096))) == 3
+  assert _exact_invocation_param_contiguous(requested(param.reshape(64, 64).permute((1, 0)))) is None
+  assert _exact_invocation_param_contiguous(requested(param.shrink(((1, 4096),)))) is None
+
+
 def test_real_nested_memory_semantic_call_output_is_direct_and_shape_preserved():
   n = k = 4096
   @function(precompile=True, allow_implicit=True)

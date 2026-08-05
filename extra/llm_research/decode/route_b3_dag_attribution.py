@@ -72,6 +72,21 @@ class CallRecord:
   identity: dict[str, Any] = field(default_factory=dict)
   unknown: bool = False
 
+def attach_compiled_descriptors(calls:list[CallRecord], descriptors:dict[int,dict[str,Any]]) -> list[dict[str,Any]]:
+  """Observational occurrence join; rejects missing/extra/partial descriptors."""
+  required={"binary_sha256","grid","block","registers_per_thread","static_smem_bytes","dynamic_smem_bytes","local_mem_bytes"}
+  ids={c.index for c in calls}
+  if set(descriptors) != ids: raise B3AttributionError("compiled descriptor occurrence set does not exactly match calls")
+  out=[]
+  for c in calls:
+    d=descriptors[c.index]
+    if set(d) != required or not isinstance(d["binary_sha256"],str) or len(d["binary_sha256"]) != 64:
+      raise B3AttributionError(f"call {c.index}: malformed compiled descriptor")
+    if not all(isinstance(d[k],list) and len(d[k]) == 3 for k in ("grid","block")) or not all(isinstance(d[k],int) and d[k] >= 0 for k in required-{"binary_sha256","grid","block"}):
+      raise B3AttributionError(f"call {c.index}: incomplete compiled resource tuple")
+    out.append({"index":c.index,"name":c.name,"identity":c.identity,"descriptor":d})
+  return out
+
 
 # ---------------------------------------------------------------------------
 # Planner manifest collection (live seam; exercised hermetically)

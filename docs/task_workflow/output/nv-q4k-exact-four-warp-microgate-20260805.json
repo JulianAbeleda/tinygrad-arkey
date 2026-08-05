@@ -1,0 +1,32 @@
+{
+  "schema": "tinygrad.q4k_exact_four_warp_microgate.v1",
+  "git_commit": "a1a51c349d1b8c55a6373631913ea7845e99cc8d",
+  "shape": {"rows": 4096, "k": 4096, "local": 128, "runtime_blocks": 4},
+  "representation": {"weights": "production packed Q4_K uint32", "activation": "production fp16", "approximation": false},
+  "payload": {
+    "q4_sha256": "0c5996b36037f8e2647351d57ce039a6bd64beee94a71e9d8969c24b93bdb7cc",
+    "x_sha256": "33e43ba5fd77a479233633ed2299ce25fcf412eb292ad34044cfd93df75a5c05"
+  },
+  "census": {"control_programs_per_replay": 1, "candidate_programs_per_replay": 1},
+  "correctness": {
+    "pass": true,
+    "oracle_rows": [0, 1, 17, 255, 1023, 2047, 3071, 4095],
+    "oracle_max_abs": 1.1920928955078125e-7,
+    "oracle_tol": 0.03123414754867554,
+    "candidate_vs_installed_max_abs": 2.384185791015625e-6,
+    "candidate_vs_installed_relative_l2": 2.3983088154335974e-7,
+    "full_logit_status": "not run; primitive is default-off and cannot be promoted from this gate"
+  },
+  "timing": {
+    "unit": "us_per_kernel", "replays": 200, "reps": 7,
+    "control_a": [118.41143, 119.178525, 118.88507, 118.27863, 118.59978, 118.24572, 118.196125],
+    "candidate_b": [121.574075, 121.44734, 122.02432, 121.314135, 121.43857, 121.772595, 121.26925],
+    "control_c": [119.204975, 118.09684, 118.746255, 118.87415, 118.60454, 119.27335, 118.4748],
+    "control_midpoint_median": 118.5788425,
+    "candidate_median": 121.44734,
+    "ratio": 1.0241906350199024,
+    "delta": 2.8684975,
+    "gate": "FAIL",
+    "material_win_threshold": "candidate <= 0.95 * control midpoint"
+  }
+}
