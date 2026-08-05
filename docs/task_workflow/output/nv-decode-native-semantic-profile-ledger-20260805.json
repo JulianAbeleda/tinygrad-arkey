@@ -1,0 +1,249 @@
+{
+  "calibration_scale": 0.9842737159149754,
+  "captures": [
+    {
+      "counts": {
+        "non_quantized/elementwise": 492,
+        "non_quantized/flash_combine": 36,
+        "non_quantized/flash_score": 36,
+        "non_quantized/reduction": 167,
+        "quantized_core/attn_k": 36,
+        "quantized_core/attn_o": 36,
+        "quantized_core/attn_q": 36,
+        "quantized_core/attn_v": 36,
+        "quantized_core/ffn_down": 36,
+        "quantized_core/ffn_gate_up": 36,
+        "quantized_core/vocab": 1
+      },
+      "path": "/tmp/nv_native_semantic_profile_20260805.jsonl",
+      "raw_total_us": 5327.392,
+      "raw_us": {
+        "non_quantized/elementwise": 664.1599999999995,
+        "non_quantized/flash_combine": 99.51999999999995,
+        "non_quantized/flash_score": 205.69599999999997,
+        "non_quantized/reduction": 425.0880000000002,
+        "quantized_core/attn_k": 153.472,
+        "quantized_core/attn_o": 309.5040000000001,
+        "quantized_core/attn_q": 315.808,
+        "quantized_core/attn_v": 388.22399999999993,
+        "quantized_core/ffn_down": 1069.632,
+        "quantized_core/ffn_gate_up": 1379.456,
+        "quantized_core/vocab": 316.832
+      },
+      "sha256": "b98e9995e9e29400d4f669cc90da54ecd2710aed26c19169adf9ca6042655004"
+    },
+    {
+      "counts": {
+        "non_quantized/elementwise": 492,
+        "non_quantized/flash_combine": 36,
+        "non_quantized/flash_score": 36,
+        "non_quantized/reduction": 167,
+        "quantized_core/attn_k": 36,
+        "quantized_core/attn_o": 36,
+        "quantized_core/attn_q": 36,
+        "quantized_core/attn_v": 36,
+        "quantized_core/ffn_down": 36,
+        "quantized_core/ffn_gate_up": 36,
+        "quantized_core/vocab": 1
+      },
+      "path": "/tmp/nv_native_semantic_profile_v2_20260805.jsonl",
+      "raw_total_us": 5375.968000000002,
+      "raw_us": {
+        "non_quantized/elementwise": 664.4480000000011,
+        "non_quantized/flash_combine": 102.49600000000002,
+        "non_quantized/flash_score": 207.96800000000002,
+        "non_quantized/reduction": 456.4160000000001,
+        "quantized_core/attn_k": 154.816,
+        "quantized_core/attn_o": 316.76800000000003,
+        "quantized_core/attn_q": 321.2800000000001,
+        "quantized_core/attn_v": 388.576,
+        "quantized_core/ffn_down": 1061.792,
+        "quantized_core/ffn_gate_up": 1381.9520000000002,
+        "quantized_core/vocab": 319.456
+      },
+      "sha256": "a256c65b5f6d383aaf440781766423696793eac45f37a95b4c444e6cc13f3299"
+    },
+    {
+      "counts": {
+        "non_quantized/elementwise": 492,
+        "non_quantized/flash_combine": 36,
+        "non_quantized/flash_score": 36,
+        "non_quantized/reduction": 167,
+        "quantized_core/attn_k": 36,
+        "quantized_core/attn_o": 36,
+        "quantized_core/attn_q": 36,
+        "quantized_core/attn_v": 36,
+        "quantized_core/ffn_down": 36,
+        "quantized_core/ffn_gate_up": 36,
+        "quantized_core/vocab": 1
+      },
+      "path": "/tmp/nv_native_semantic_profile_v3_20260805.jsonl",
+      "raw_total_us": 5377.312000000001,
+      "raw_us": {
+        "non_quantized/elementwise": 666.3040000000002,
+        "non_quantized/flash_combine": 102.30400000000003,
+        "non_quantized/flash_score": 207.96800000000002,
+        "non_quantized/reduction": 455.1999999999998,
+        "quantized_core/attn_k": 154.52799999999996,
+        "quantized_core/attn_o": 316.09600000000006,
+        "quantized_core/attn_q": 321.56800000000015,
+        "quantized_core/attn_v": 387.55200000000013,
+        "quantized_core/ffn_down": 1061.216,
+        "quantized_core/ffn_gate_up": 1384.0000000000002,
+        "quantized_core/vocab": 320.576
+      },
+      "sha256": "f3baf0a407f746d81e09efd6658218cf2c667664ca90a91d7535999626d7e756"
+    }
+  ],
+  "equation": {
+    "pass": true,
+    "profiled_terms_delta_us": 1402.759,
+    "residual_us": 1.143,
+    "tolerance_us": 50.0,
+    "unprofiled_authority_delta_us": 1401.616
+  },
+  "llama": {
+    "profiled_internal_gap_us": 8.111,
+    "profiled_mmq_union_us": 3579.816,
+    "profiled_non_mmq_exposed_union_us": 300.736,
+    "unprofiled_graph_span_us": 3889.808
+  },
+  "method": {
+    "llama_rule": "MMQ union and aggregate non-MMQ exposure are disjoint; individual class exposures are non-additive",
+    "profile_use": "composition_only; median-total replicate scaled to marker-light native device window",
+    "wall_rule": "node sums are never used as wall without native-window calibration"
+  },
+  "native": {
+    "calibrated_class_us": {
+      "non_quantized/elementwise": 653.999,
+      "non_quantized/flash_combine": 100.884,
+      "non_quantized/flash_score": 204.697,
+      "non_quantized/reduction": 449.238,
+      "quantized_core/attn_k": 152.381,
+      "quantized_core/attn_o": 311.786,
+      "quantized_core/attn_q": 316.227,
+      "quantized_core/attn_v": 382.465,
+      "quantized_core/ffn_down": 1045.094,
+      "quantized_core/ffn_gate_up": 1360.219,
+      "quantized_core/vocab": 314.432
+    },
+    "device_window_us": 5291.424,
+    "non_quantized_us": 1408.818,
+    "quantized_core_calibrated_range_us": [
+      3882.517,
+      3906.375
+    ],
+    "quantized_core_us": 3882.604,
+    "reconciliation_us": 0.002
+  },
+  "provenance": {
+    "llama_timeline": {
+      "path": "docs/task_workflow/output/nv-decode-llama-d512-timeline-ledger-20260804.json",
+      "sha256": "6af6fdc86e2d6ccf1b6e33d51ce64650a88ebedb97cdf47d9e79da1e0ca4382d"
+    },
+    "semantic_dag": {
+      "path": "/tmp/nv_native_semantic_dag_v2_20260805.json",
+      "sha256": "64112980bae438cd6565344060a01a1115ba8919b6bc78020fd2bec795459b0a"
+    }
+  },
+  "quantized_role_diagnostic": {
+    "rows": [
+      {
+        "delta_us": 217.412,
+        "llama_role": "attn_v",
+        "llama_us": 165.053,
+        "native_role": "attn_v",
+        "native_us": 382.465
+      },
+      {
+        "delta_us": 178.018,
+        "llama_role": "ffn_down",
+        "llama_us": 867.076,
+        "native_role": "ffn_down",
+        "native_us": 1045.094
+      },
+      {
+        "delta_us": 35.005,
+        "llama_role": "attn_k",
+        "llama_us": 117.376,
+        "native_role": "attn_k",
+        "native_us": 152.381
+      },
+      {
+        "delta_us": 10.814,
+        "llama_role": "vocab",
+        "llama_us": 303.618,
+        "native_role": "vocab",
+        "native_us": 314.432
+      },
+      {
+        "delta_us": -3.819,
+        "llama_role": "ffn_gate_up",
+        "llama_us": 1364.038,
+        "native_role": "ffn_gate_up",
+        "native_us": 1360.219
+      },
+      {
+        "delta_us": -26.654,
+        "llama_role": "attn_q",
+        "llama_us": 342.881,
+        "native_role": "attn_q",
+        "native_us": 316.227
+      },
+      {
+        "delta_us": -106.615,
+        "llama_role": "attn_o",
+        "llama_us": 418.401,
+        "native_role": "attn_o",
+        "native_us": 311.786
+      }
+    ],
+    "sources": {
+      "manifest": {
+        "path": "docs/task_workflow/output/nv-decode-llama-tinygrad-semantic-call-manifest-20260804.json",
+        "sha256": "cc629b5ba78b5dfe00c65c0392eeeaeb88ffbfdc2829881dae87aa1339e2a973"
+      },
+      "trace": {
+        "path": "/tmp/llama_nsys_d512.sqlite",
+        "sha256": "a3f990c5301f98a6cdee4e9a4f1abf11974d45e1c1a210443a827201974dac41"
+      }
+    },
+    "warning": "independently medianed role rows need not sum to aggregate MMQ union; roles are exact for the pinned Qwen3 graph: its intentional expansion order is Q, V, K"
+  },
+  "ranked_disjoint_device_delta_populations": [
+    {
+      "device_delta_us": 1108.082,
+      "llama_us": 300.736,
+      "native_us": 1408.818,
+      "population": "non_quantized_exposed",
+      "rank": 1
+    },
+    {
+      "device_delta_us": 302.788,
+      "llama_us": 3579.816,
+      "native_us": 3882.604,
+      "population": "quantized_core",
+      "rank": 2
+    },
+    {
+      "device_delta_us": -8.111,
+      "llama_us": 8.111,
+      "native_us": 0.0,
+      "population": "llama_internal_gaps",
+      "rank": 3
+    }
+  ],
+  "representative_capture": "/tmp/nv_native_semantic_profile_v2_20260805.jsonl",
+  "schema": "tinygrad.nv_decode.native_semantic_profile_ledger.v1",
+  "status": "PASS",
+  "topology": {
+    "groups": [
+      32,
+      64,
+      128,
+      256,
+      468
+    ],
+    "programs": 948
+  }
+}

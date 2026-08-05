@@ -570,13 +570,36 @@ def _call_metadata(call: Any) -> list[dict] | None:
   return out or None
 
 
-def _build_full_token_dag(linear: Any, input_uops: tuple[Any, ...], group_map: dict[int, Any]) -> dict:
+def _admission_metadata(records: list[Any]) -> dict[int, list[dict]]:
+  """Serialize semantic metadata already observed at graph admission.
+
+  The lowered CALL does not retain metadata in ``call.arg`` on every route,
+  while ``GraphAdmissionObservation`` does.  This is attribution-only: the
+  observer is already present and does not alter graph construction.
+  """
+  out: dict[int, list[dict]] = {}
+  for record in records:
+    rows = []
+    for item in getattr(record, "metadata", ()):
+      row = {field:getattr(item, field) for field in ("name", "caller", "backward") if hasattr(item, field)}
+      for field in ("phase", "tensor_name", "module_path", "role", "logical_m", "logical_n", "logical_k",
+                    "source_quant_storage", "source_layout", "module_representation", "input_dtype", "output_dtype",
+                    "accumulator_dtype"):
+        if hasattr(item, field): row[field] = getattr(item, field)
+      if row: rows.append(row)
+    if rows: out[int(record.call_index)] = rows
+  return out
+
+
+def _build_full_token_dag(linear: Any, input_uops: tuple[Any, ...], group_map: dict[int, Any],
+                          admission_records: list[Any] | None = None) -> dict:
   """Walk the pre-split linear with ONE range-aware DepsTracker across all calls."""
   from tinygrad.engine.realize import (get_call_arg_uops, get_call_outs_ins, unwrap_multi, resolve_params)
   from tinygrad.uop.ops import Ops
   tracker = RecordingDepsTracker()
   nodes: list[dict] = []
   unknown_nodes: list[int] = []
+  observed_metadata = _admission_metadata(admission_records or [])
   for call_index, call in enumerate(linear.src):
     node_id = call_index
     group_id = group_map.get(call_index)
@@ -600,7 +623,7 @@ def _build_full_token_dag(linear: Any, input_uops: tuple[Any, ...], group_map: d
       metadata["group_status"] = "unassigned"
     if dep_unknown:
       metadata["deps_status"] = UNKNOWN
-    meta = _call_metadata(call)
+    meta = observed_metadata.get(call_index) or _call_metadata(call)
     if meta is not None:
       metadata["semantic"] = meta
     nodes.append({"id": node_id, "name": _call_name(call), "duration_us": 0.0,
@@ -690,7 +713,7 @@ def capture_full_token_dag(harness: Callable[[], Any], dag_path: str | None = No
     rec = _RecordingObserver(observer)
     result = orig_split(linear, max_batch_size=max_batch_size, observer=rec)
     group_map = _group_map(rec.records)
-    state["dags"].append(_build_full_token_dag(linear, state["input_uops"] or (), group_map))
+    state["dags"].append(_build_full_token_dag(linear, state["input_uops"] or (), group_map, rec.records))
     state["captures"] += 1
     return result
 

@@ -27,6 +27,7 @@ from tinygrad.codegen.late.recurrence import unroll_recurrence
 from tinygrad.codegen.late.fdot2 import pm_fdot2, line_lower_fdot2
 from tinygrad.codegen.late.warp_reduce import pm_warp_reduce, pm_lower_warp_shfl_xor, pm_lower_warp_bpermute
 from tinygrad.codegen.late.flash_decode_intrinsics import pm_lower_flash_decode_intrinsics
+from tinygrad.codegen.late.int8_dot import pm_lower_int8x4_dot
 from tinygrad.codegen.plan import PLAN_GATES, observed_gate_values  # noqa: F401  (PLAN_GATES re-exported for callers)
 from tinygrad.codegen.opt.postrange import apply_opts
 from tinygrad.codegen.late.gater import pm_move_gates_from_index
@@ -97,6 +98,7 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   # Same TG7 seam for flash-decode's fdot2/exp2f (codegen/late/flash_decode_intrinsics.py) -- resolved at the
   # identical pipeline position the old inline AMD strings occupied.
   ast = graph_rewrite(ast, pm_lower_flash_decode_intrinsics, ctx=ren, name="lower flash_decode intrinsics")
+  ast = graph_rewrite(ast, pm_lower_int8x4_dot, ctx=ren, name="lower int8x4 dot")
   if (_u:=getenv("SCHED_UNROLL")) > 1 and ren.target.device == "AMD":
     # recurrence-aware loop-unroll primitive (default-off codegen scheduling capability)
     ast = unroll_recurrence(ast, _u)
@@ -299,7 +301,7 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   extra_matcher = ren.extra_matcher if ren.extra_matcher is not None else PatternMatcher([])
   # Safety net: any warp_shfl_xor tag that reached this point unresolved (e.g. a future call site) still gets
   # caught here, before final string rendering, rather than crashing inside the generic CUSTOMI arg formatter.
-  pm_final_rewrite = pm_decomp+pm_render+extra_matcher+pm_lower_warp_shfl_xor+pm_lower_warp_bpermute+pm_lower_flash_decode_intrinsics+pm_split_ends
+  pm_final_rewrite = pm_decomp+pm_render+extra_matcher+pm_lower_warp_shfl_xor+pm_lower_warp_bpermute+pm_lower_flash_decode_intrinsics+pm_lower_int8x4_dot+pm_split_ends
   sink = graph_rewrite(sink, pm_final_rewrite, ctx=ren, name="final rewrite")
   if getenv("V_DOT2_LOWERING") and ren.target.device == "AMD":
     sink = graph_rewrite(sink, pm_fdot2, name="fdot2 final lowering")

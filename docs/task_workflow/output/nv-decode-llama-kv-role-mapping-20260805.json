@@ -1,0 +1,39 @@
+{
+  "schema": "tinygrad.nv_decode.llama_qwen3_kv_role_mapping.v1",
+  "status": "PASS",
+  "scope": {
+    "model": "Qwen3-8B-Q4_K_M",
+    "decode_depth": 512,
+    "layers": 36,
+    "llama_commit": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a"
+  },
+  "mapping": {
+    "qkv_construction_order": ["attn_q", "attn_k", "attn_v"],
+    "graph_expansion_order": ["attn_q", "attn_v", "attn_k"],
+    "captured_equal_shape_1024_mmvq_order": ["attn_v", "attn_k"],
+    "first_1024_role": "attn_v",
+    "second_1024_role": "attn_k",
+    "per_role_count": 36
+  },
+  "diagnostic_us": {
+    "attn_v": {"native": 382.465, "llama": 165.053, "delta": 217.412},
+    "attn_k": {"native": 152.381, "llama": 117.376, "delta": 35.005},
+    "aggregate_quantized_core_delta": 302.788
+  },
+  "proof": {
+    "qwen3_source": "src/models/qwen3.cpp: build_qkv result Qcur,Kcur,Vcur is passed to build_attn inside every layer loop",
+    "graph_source": "src/llama-graph.cpp: build_qkv constructs Q/K/V; build_attn intentionally expands Q/V/K and says these nodes are not reordered",
+    "ggml_source": "ggml/src/ggml.c: ggml_build_forward_expand recursively appends newly visited dependencies",
+    "layer_0_mmvq_node_ids": {"attn_q": 8589934594, "attn_v": 8589934598, "attn_k": 8589934600},
+    "layer_35_mmvq_node_ids": {"attn_q": 8589935329, "attn_v": 8589935333, "attn_k": 8589935335}
+  },
+  "provenance": {
+    "llama_graph_cpp_sha256": "58a2a740834ac4093c9e54332f13de9ebe0efd33b37f9767d76504d74adcb6c6",
+    "qwen3_cpp_sha256": "b268858c43bb0f446a79da71531ab5f56ca360709599a89c24ad0be6c96ff729",
+    "manifest_sha256": "cc629b5ba78b5dfe00c65c0392eeeaeb88ffbfdc2829881dae87aa1339e2a973"
+  },
+  "limits": [
+    "Role rows are independently medianed diagnostics and are not additive wall terms.",
+    "Runtime pointer identity, strides, and buffer allocation remain outside this proof."
+  ]
+}

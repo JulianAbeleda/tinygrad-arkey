@@ -1,0 +1,808 @@
+{
+  "alignment": {
+    "aligned": true,
+    "detail": null,
+    "reason": null
+  },
+  "arms": {
+    "logical": {
+      "edges": [
+        {
+          "crosses_group": false,
+          "from": 0,
+          "kind": "RAW",
+          "to": 1
+        },
+        {
+          "crosses_group": false,
+          "from": 1,
+          "kind": "RAW",
+          "to": 2
+        },
+        {
+          "crosses_group": false,
+          "from": 3,
+          "kind": "RAW",
+          "to": 4
+        },
+        {
+          "crosses_group": false,
+          "from": 4,
+          "kind": "RAW",
+          "to": 5
+        },
+        {
+          "crosses_group": false,
+          "from": 5,
+          "kind": "RAW",
+          "to": 6
+        },
+        {
+          "crosses_group": false,
+          "from": 6,
+          "kind": "RAW",
+          "to": 7
+        }
+      ],
+      "nodes": [
+        {
+          "duration_us": 10.0,
+          "group_id": 0,
+          "id": 0,
+          "metadata": {
+            "identity_sha256": "1dfe1e5df69456524302a4b3a1c7f30421f7a3ffa5f1906750e92506860719a2"
+          },
+          "name": "a_w0"
+        },
+        {
+          "duration_us": 20.0,
+          "group_id": 0,
+          "id": 1,
+          "metadata": {
+            "identity_sha256": "582f1881cf442f5cbf69df784bb87af5b23b4783b6f0cee0f40705002c7d4610"
+          },
+          "name": "a_r1"
+        },
+        {
+          "duration_us": 5.0,
+          "group_id": 0,
+          "id": 2,
+          "metadata": {
+            "identity_sha256": "c268e3028aa2d6671447e8d44df5b0f6007535a42a869773e2680c45f2da490c"
+          },
+          "name": "a_w2"
+        },
+        {
+          "duration_us": 8.0,
+          "group_id": 1,
+          "id": 3,
+          "metadata": {
+            "identity_sha256": "fcabcb58d2fcf70b6201c24454a3a6d3b96e35e3cf706bab0b88dd63b3c509b9"
+          },
+          "name": "b_w3"
+        },
+        {
+          "duration_us": 12.0,
+          "group_id": 1,
+          "id": 4,
+          "metadata": {
+            "identity_sha256": "2c0d7fdfb98073177a0dbb1754fe8781421019bd4b1bdc4afe35b43061781746"
+          },
+          "name": "b_r4"
+        },
+        {
+          "duration_us": 6.0,
+          "group_id": 1,
+          "id": 5,
+          "metadata": {
+            "identity_sha256": "740d8a9852b0035e04b04776aec0c9e804ebad9b7a46d251e4a9ae3b65b98e07"
+          },
+          "name": "b_w5"
+        },
+        {
+          "duration_us": 4.0,
+          "group_id": 1,
+          "id": 6,
+          "metadata": {
+            "identity_sha256": "5a2b31b80fe6524df6f5b337c5bbc87ee9db537da913567559ebb28d61e99e94"
+          },
+          "name": "b_r6"
+        },
+        {
+          "duration_us": 3.0,
+          "group_id": 1,
+          "id": 7,
+          "metadata": {
+            "identity_sha256": "d195add300cfce7bdce263b5ebd07876f83e2d9868a0c99a748c959c612e008f"
+          },
+          "name": "b_r7"
+        }
+      ],
+      "schema": "tinygrad.full_token_dag.v1",
+      "summary": {
+        "critical_path_us": 35.0,
+        "cross_group_edge_count": 0,
+        "edge_count": 6,
+        "independence_assumption": false,
+        "node_count": 8,
+        "per_group": {
+          "0": {
+            "critical_path_us": 35.0,
+            "n": 3,
+            "serialized_us": 35.0
+          },
+          "1": {
+            "critical_path_us": 33.0,
+            "n": 5,
+            "serialized_us": 33.0
+          }
+        },
+        "schedules": {
+          "queues_2": {
+            "saving_us": 33.0,
+            "span_us": 35.0
+          },
+          "queues_3": {
+            "saving_us": 33.0,
+            "span_us": 35.0
+          }
+        },
+        "serialized_us": 68.0,
+        "unknown_dep_node_count": 0
+      }
+    },
+    "physical": {
+      "edges": [
+        {
+          "crosses_group": false,
+          "from": 0,
+          "kind": "RAW",
+          "to": 1
+        },
+        {
+          "crosses_group": false,
+          "from": 1,
+          "kind": "RAW",
+          "to": 2
+        },
+        {
+          "crosses_group": true,
+          "from": 0,
+          "kind": "WAW",
+          "to": 3
+        },
+        {
+          "crosses_group": true,
+          "from": 1,
+          "kind": "WAR",
+          "to": 3
+        },
+        {
+          "crosses_group": true,
+          "from": 0,
+          "kind": "RAW",
+          "to": 4
+        },
+        {
+          "crosses_group": false,
+          "from": 3,
+          "kind": "RAW",
+          "to": 4
+        },
+        {
+          "crosses_group": true,
+          "from": 1,
+          "kind": "WAW",
+          "to": 4
+        },
+        {
+          "crosses_group": true,
+          "from": 2,
+          "kind": "WAR",
+          "to": 4
+        },
+        {
+          "crosses_group": true,
+          "from": 1,
+          "kind": "RAW",
+          "to": 5
+        },
+        {
+          "crosses_group": false,
+          "from": 4,
+          "kind": "RAW",
+          "to": 5
+        },
+        {
+          "crosses_group": true,
+          "from": 2,
+          "kind": "WAW",
+          "to": 5
+        },
+        {
+          "crosses_group": true,
+          "from": 2,
+          "kind": "RAW",
+          "to": 6
+        },
+        {
+          "crosses_group": false,
+          "from": 5,
+          "kind": "RAW",
+          "to": 6
+        },
+        {
+          "crosses_group": false,
+          "from": 6,
+          "kind": "RAW",
+          "to": 7
+        }
+      ],
+      "nodes": [
+        {
+          "duration_us": 10.0,
+          "group_id": 0,
+          "id": 0,
+          "metadata": {
+            "identity_sha256": "1dfe1e5df69456524302a4b3a1c7f30421f7a3ffa5f1906750e92506860719a2"
+          },
+          "name": "a_w0"
+        },
+        {
+          "duration_us": 20.0,
+          "group_id": 0,
+          "id": 1,
+          "metadata": {
+            "identity_sha256": "582f1881cf442f5cbf69df784bb87af5b23b4783b6f0cee0f40705002c7d4610"
+          },
+          "name": "a_r1"
+        },
+        {
+          "duration_us": 5.0,
+          "group_id": 0,
+          "id": 2,
+          "metadata": {
+            "identity_sha256": "c268e3028aa2d6671447e8d44df5b0f6007535a42a869773e2680c45f2da490c"
+          },
+          "name": "a_w2"
+        },
+        {
+          "duration_us": 8.0,
+          "group_id": 1,
+          "id": 3,
+          "metadata": {
+            "identity_sha256": "fcabcb58d2fcf70b6201c24454a3a6d3b96e35e3cf706bab0b88dd63b3c509b9"
+          },
+          "name": "b_w3"
+        },
+        {
+          "duration_us": 12.0,
+          "group_id": 1,
+          "id": 4,
+          "metadata": {
+            "identity_sha256": "2c0d7fdfb98073177a0dbb1754fe8781421019bd4b1bdc4afe35b43061781746"
+          },
+          "name": "b_r4"
+        },
+        {
+          "duration_us": 6.0,
+          "group_id": 1,
+          "id": 5,
+          "metadata": {
+            "identity_sha256": "740d8a9852b0035e04b04776aec0c9e804ebad9b7a46d251e4a9ae3b65b98e07"
+          },
+          "name": "b_w5"
+        },
+        {
+          "duration_us": 4.0,
+          "group_id": 1,
+          "id": 6,
+          "metadata": {
+            "identity_sha256": "5a2b31b80fe6524df6f5b337c5bbc87ee9db537da913567559ebb28d61e99e94"
+          },
+          "name": "b_r6"
+        },
+        {
+          "duration_us": 3.0,
+          "group_id": 1,
+          "id": 7,
+          "metadata": {
+            "identity_sha256": "d195add300cfce7bdce263b5ebd07876f83e2d9868a0c99a748c959c612e008f"
+          },
+          "name": "b_r7"
+        }
+      ],
+      "schema": "tinygrad.full_token_dag.v1",
+      "summary": {
+        "critical_path_us": 63.0,
+        "cross_group_edge_count": 8,
+        "edge_count": 14,
+        "independence_assumption": false,
+        "node_count": 8,
+        "per_group": {
+          "0": {
+            "critical_path_us": 35.0,
+            "n": 3,
+            "serialized_us": 35.0
+          },
+          "1": {
+            "critical_path_us": 33.0,
+            "n": 5,
+            "serialized_us": 33.0
+          }
+        },
+        "schedules": {
+          "queues_2": {
+            "saving_us": 5.0,
+            "span_us": 63.0
+          },
+          "queues_3": {
+            "saving_us": 5.0,
+            "span_us": 63.0
+          }
+        },
+        "serialized_us": 68.0,
+        "unknown_dep_node_count": 0
+      }
+    }
+  },
+  "attributed_edges": [
+    {
+      "arena": "arena:0",
+      "crosses_group": false,
+      "from": 0,
+      "kind": "RAW",
+      "logical_buffer_ids": [
+        "A"
+      ],
+      "logical_kind": "RAW",
+      "range": [
+        0,
+        4096
+      ],
+      "source": "SEMANTIC",
+      "to": 1
+    },
+    {
+      "arena": "arena:0",
+      "crosses_group": false,
+      "from": 1,
+      "kind": "RAW",
+      "logical_buffer_ids": [
+        "X"
+      ],
+      "logical_kind": "RAW",
+      "range": [
+        4096,
+        4608
+      ],
+      "source": "SEMANTIC",
+      "to": 2
+    },
+    {
+      "arena": "arena:0",
+      "crosses_group": true,
+      "from": 0,
+      "kind": "WAW",
+      "logical_buffer_ids": [
+        "A",
+        "B"
+      ],
+      "logical_kind": null,
+      "range": [
+        0,
+        4096
+      ],
+      "source": "PLANNER_ALIAS",
+      "to": 3
+    },
+    {
+      "arena": "arena:0",
+      "crosses_group": true,
+      "from": 1,
+      "kind": "WAR",
+      "logical_buffer_ids": [
+        "A",
+        "B"
+      ],
+      "logical_kind": null,
+      "range": [
+        0,
+        4096
+      ],
+      "source": "PLANNER_ALIAS",
+      "to": 3
+    },
+    {
+      "arena": "arena:0",
+      "crosses_group": true,
+      "from": 0,
+      "kind": "RAW",
+      "logical_buffer_ids": [
+        "A",
+        "B"
+      ],
+      "logical_kind": null,
+      "range": [
+        0,
+        4096
+      ],
+      "source": "PLANNER_ALIAS",
+      "to": 4
+    },
+    {
+      "arena": "arena:0",
+      "crosses_group": false,
+      "from": 3,
+      "kind": "RAW",
+      "logical_buffer_ids": [
+        "B"
+      ],
+      "logical_kind": "RAW",
+      "range": [
+        0,
+        4096
+      ],
+      "source": "SEMANTIC",
+      "to": 4
+    },
+    {
+      "arena": "arena:0",
+      "crosses_group": true,
+      "from": 1,
+      "kind": "WAW",
+      "logical_buffer_ids": [
+        "C",
+        "X"
+      ],
+      "logical_kind": null,
+      "range": [
+        4096,
+        4608
+      ],
+      "source": "PLANNER_ALIAS",
+      "to": 4
+    },
+    {
+      "arena": "arena:0",
+      "crosses_group": true,
+      "from": 2,
+      "kind": "WAR",
+      "logical_buffer_ids": [
+        "C",
+        "X"
+      ],
+      "logical_kind": null,
+      "range": [
+        4096,
+        4608
+      ],
+      "source": "PLANNER_ALIAS",
+      "to": 4
+    },
+    {
+      "arena": "arena:0",
+      "crosses_group": true,
+      "from": 1,
+      "kind": "RAW",
+      "logical_buffer_ids": [
+        "C",
+        "X"
+      ],
+      "logical_kind": null,
+      "range": [
+        4096,
+        4608
+      ],
+      "source": "PLANNER_ALIAS",
+      "to": 5
+    },
+    {
+      "arena": "arena:0",
+      "crosses_group": false,
+      "from": 4,
+      "kind": "RAW",
+      "logical_buffer_ids": [
+        "C"
+      ],
+      "logical_kind": "RAW",
+      "range": [
+        4096,
+        4608
+      ],
+      "source": "SEMANTIC",
+      "to": 5
+    },
+    {
+      "arena": "arena:0",
+      "crosses_group": true,
+      "from": 2,
+      "kind": "WAW",
+      "logical_buffer_ids": [
+        "D",
+        "Y"
+      ],
+      "logical_kind": null,
+      "range": [
+        4608,
+        5120
+      ],
+      "source": "PLANNER_ALIAS",
+      "to": 5
+    },
+    {
+      "arena": "arena:0",
+      "crosses_group": true,
+      "from": 2,
+      "kind": "RAW",
+      "logical_buffer_ids": [
+        "D",
+        "Y"
+      ],
+      "logical_kind": null,
+      "range": [
+        4608,
+        5120
+      ],
+      "source": "PLANNER_ALIAS",
+      "to": 6
+    },
+    {
+      "arena": "arena:0",
+      "crosses_group": false,
+      "from": 5,
+      "kind": "RAW",
+      "logical_buffer_ids": [
+        "D"
+      ],
+      "logical_kind": "RAW",
+      "range": [
+        4608,
+        5120
+      ],
+      "source": "SEMANTIC",
+      "to": 6
+    },
+    {
+      "arena": "arena:0",
+      "crosses_group": false,
+      "from": 6,
+      "kind": "RAW",
+      "logical_buffer_ids": [
+        "E"
+      ],
+      "logical_kind": "RAW",
+      "range": [
+        5120,
+        6144
+      ],
+      "source": "SEMANTIC",
+      "to": 7
+    }
+  ],
+  "schema": "tinygrad.route_b3.dag_attribution.v1",
+  "summary": {
+    "edge_count": 14,
+    "edges_by_kind_source": {
+      "RAW/PLANNER_ALIAS": 3,
+      "RAW/SEMANTIC": 6,
+      "WAR/PLANNER_ALIAS": 2,
+      "WAW/PLANNER_ALIAS": 3
+    },
+    "logical_critical_path_us": 35.0,
+    "logical_schedules": {
+      "queues_2": {
+        "saving_us": 33.0,
+        "span_us": 35.0
+      },
+      "queues_3": {
+        "saving_us": 33.0,
+        "span_us": 35.0
+      }
+    },
+    "logical_serialized_us": 68.0,
+    "node_count": 8,
+    "per_group": {
+      "0": {
+        "critical_path_us": 35.0,
+        "n": 3,
+        "serialized_us": 35.0
+      },
+      "1": {
+        "critical_path_us": 33.0,
+        "n": 5,
+        "serialized_us": 33.0
+      }
+    },
+    "physical_critical_path_us": 63.0,
+    "physical_schedules": {
+      "queues_2": {
+        "saving_us": 5.0,
+        "span_us": 63.0
+      },
+      "queues_3": {
+        "saving_us": 5.0,
+        "span_us": 63.0
+      }
+    },
+    "physical_serialized_us": 68.0,
+    "planner_delta_cp_pct": 80.0,
+    "planner_delta_cp_us": 28.0,
+    "resource_pairs": {
+      "other/other": 14
+    },
+    "top_planner_edges": [
+      {
+        "arena": "arena:0",
+        "cp_impact_us": 3.0,
+        "crosses_group": true,
+        "from": 1,
+        "kind": "WAR",
+        "logical_buffer_ids": [
+          "A",
+          "B"
+        ],
+        "logical_kind": null,
+        "range": [
+          0,
+          4096
+        ],
+        "source": "PLANNER_ALIAS",
+        "to": 3
+      },
+      {
+        "arena": "arena:0",
+        "cp_impact_us": 0.0,
+        "crosses_group": true,
+        "from": 0,
+        "kind": "WAW",
+        "logical_buffer_ids": [
+          "A",
+          "B"
+        ],
+        "logical_kind": null,
+        "range": [
+          0,
+          4096
+        ],
+        "source": "PLANNER_ALIAS",
+        "to": 3
+      },
+      {
+        "arena": "arena:0",
+        "cp_impact_us": 0.0,
+        "crosses_group": true,
+        "from": 0,
+        "kind": "RAW",
+        "logical_buffer_ids": [
+          "A",
+          "B"
+        ],
+        "logical_kind": null,
+        "range": [
+          0,
+          4096
+        ],
+        "source": "PLANNER_ALIAS",
+        "to": 4
+      },
+      {
+        "arena": "arena:0",
+        "cp_impact_us": 0.0,
+        "crosses_group": true,
+        "from": 1,
+        "kind": "WAW",
+        "logical_buffer_ids": [
+          "C",
+          "X"
+        ],
+        "logical_kind": null,
+        "range": [
+          4096,
+          4608
+        ],
+        "source": "PLANNER_ALIAS",
+        "to": 4
+      },
+      {
+        "arena": "arena:0",
+        "cp_impact_us": 0.0,
+        "crosses_group": true,
+        "from": 2,
+        "kind": "WAR",
+        "logical_buffer_ids": [
+          "C",
+          "X"
+        ],
+        "logical_kind": null,
+        "range": [
+          4096,
+          4608
+        ],
+        "source": "PLANNER_ALIAS",
+        "to": 4
+      },
+      {
+        "arena": "arena:0",
+        "cp_impact_us": 0.0,
+        "crosses_group": true,
+        "from": 1,
+        "kind": "RAW",
+        "logical_buffer_ids": [
+          "C",
+          "X"
+        ],
+        "logical_kind": null,
+        "range": [
+          4096,
+          4608
+        ],
+        "source": "PLANNER_ALIAS",
+        "to": 5
+      },
+      {
+        "arena": "arena:0",
+        "cp_impact_us": 0.0,
+        "crosses_group": true,
+        "from": 2,
+        "kind": "WAW",
+        "logical_buffer_ids": [
+          "D",
+          "Y"
+        ],
+        "logical_kind": null,
+        "range": [
+          4608,
+          5120
+        ],
+        "source": "PLANNER_ALIAS",
+        "to": 5
+      },
+      {
+        "arena": "arena:0",
+        "cp_impact_us": 0.0,
+        "crosses_group": true,
+        "from": 2,
+        "kind": "RAW",
+        "logical_buffer_ids": [
+          "D",
+          "Y"
+        ],
+        "logical_kind": null,
+        "range": [
+          4608,
+          5120
+        ],
+        "source": "PLANNER_ALIAS",
+        "to": 6
+      }
+    ],
+    "top_recoverable_buffers": [
+      {
+        "buf": "A",
+        "overlap_bytes": 12288
+      },
+      {
+        "buf": "B",
+        "overlap_bytes": 12288
+      },
+      {
+        "buf": "C",
+        "overlap_bytes": 1536
+      },
+      {
+        "buf": "X",
+        "overlap_bytes": 1536
+      },
+      {
+        "buf": "D",
+        "overlap_bytes": 1024
+      },
+      {
+        "buf": "Y",
+        "overlap_bytes": 1024
+      }
+    ],
+    "unknown_dep_node_count": 0
+  }
+}

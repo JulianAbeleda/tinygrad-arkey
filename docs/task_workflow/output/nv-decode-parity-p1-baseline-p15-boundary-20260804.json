@@ -1,0 +1,124 @@
+{
+  "schema": "tinygrad.nv_decode_parity.p1_baseline_p15_boundary.v1",
+  "date": "2026-08-04",
+  "evidence_class": "OBSERVED unless marked DERIVED",
+  "authority": "docs/task_workflow/input/nv-decode-parity-causal-trace-execution-scope-20260804.md",
+  "route": {
+    "branch": "nvidia-bringup-20260731",
+    "tinygrad_commit": "1084270bcede2516b61c7f078a8e45fc2e7c5cc8",
+    "llama_commit": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a",
+    "gpu": "NVIDIA GeForce RTX 5090",
+    "driver": "595.84",
+    "depth": 512,
+    "model_path": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "model_size_bytes": 5027783488,
+    "model_sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+    "llama_binary": "/home/ubuntu/env/llama.cpp/build-cuda/bin/llama-bench",
+    "llama_binary_sha256": "947eb29052871f151719762c2fc265024e14f833b98df7801af9eb09da1625a8",
+    "llama_cuda_library_sha256": "d0f6580892fc5940321a3dfd9af3b3febd13c01102861da9c155ae4cda86ac49",
+    "llama_graph_opt": 0,
+    "llama_command_suffix": ["-ngl", "99", "-fa", "1", "-p", "0", "-n", "10", "-d", "512", "-r", "7", "-o", "json"],
+    "tinygrad_command_suffix": ["--ckpts", "512", "--max-context", "4608", "--nmeas", "10", "--reps", "5", "--warmup-decode", "3", "--chunk-size", "32", "--skip-dispatch-diagnostic"]
+  },
+  "reverse_bracket": {
+    "order": ["llama_a", "tinygrad_cuda_s1", "tinygrad_native_nv", "llama_b"],
+    "one_lock_acquisition": true,
+    "llama_a": {
+      "samples_tok_s": [223.511, 252.231, 252.164, 252.052, 252.182, 250.442, 252.13],
+      "median_tok_s": 252.13,
+      "median_ms_token": 3.966207909,
+      "p5_tok_s": 231.5903,
+      "p95_tok_s": 252.2163,
+      "mad_tok_s": 0.078
+    },
+    "tinygrad_cuda_s1": {
+      "samples_tok_s": [177.658511611, 176.805833395, 178.150449806, 178.449261327, 178.334536322],
+      "median_tok_s": 178.150449806,
+      "median_ms_token": 5.613233091,
+      "p5_tok_s": 176.976369038,
+      "p95_tok_s": 178.426316326,
+      "mad_tok_s": 0.298811521,
+      "generated_sha256": "317cec68399bbba606b7a6e5645d326e5d8734167672d24e63a750b95c909a09",
+      "generated_ids": [38835, 34208, 13, 279, 3974, 13876, 38835, 34208, 13, 279],
+      "repetitions_identical": true
+    },
+    "tinygrad_native_nv": {
+      "samples_tok_s": [177.211064371, 178.279419732, 178.669329796, 177.603675064, 178.179843363],
+      "median_tok_s": 178.179843363,
+      "median_ms_token": 5.6123071,
+      "p5_tok_s": 177.289586509,
+      "p95_tok_s": 178.591347783,
+      "mad_tok_s": 0.489486433,
+      "generated_sha256": "13cb9c480fba287939e74663336233941a23c27c5fbbd3954daeb9c69e0875fd",
+      "generated_ids": [151936, 151936, 151936, 151936, 151936, 151936, 151936, 151936, 151936, 151936],
+      "repetitions_identical": true,
+      "setup_override": "established fused-prefill-attention-off wrapper; measured decode route remains sdpa"
+    },
+    "llama_b": {
+      "samples_tok_s": [223.49, 252.08, 252.209, 252.35, 252.139, 252.165, 252.107],
+      "median_tok_s": 252.139,
+      "median_ms_token": 3.966066336,
+      "p5_tok_s": 232.067,
+      "p95_tok_s": 252.3077,
+      "mad_tok_s": 0.059
+    },
+    "derived": {
+      "llama_bracket_midpoint_tok_s": 252.1345,
+      "llama_bracket_drift_pct": 0.003569523,
+      "native_over_llama": 0.706685691,
+      "cuda_over_llama": 0.706569112,
+      "native_gap_ms_token": 1.646169979,
+      "cuda_gap_ms_token": 1.64709597,
+      "cuda_minus_native_ms_token": 0.000925991,
+      "native_over_cuda_tok_s_pct": 0.016499289
+    }
+  },
+  "correctness": {
+    "prompt_sha256_shared_between_tinygrad_arms": "e536e95f0307d714bc77b286f8ee4a6f7f38dc5ebc3c7321eda2170149308c49",
+    "within_arm_determinism": "PASS",
+    "native_vs_cuda_generated_tokens": "NATIVE_POST_LOGITS_SAMPLING_FAILURE_LOCALIZED",
+    "llama_identical_input_probe": "ARGMAX_PASS_STRICT_FULL_LOGIT_ATOL_FAIL",
+    "p1_gate": "BLOCKED_CORRECTNESS",
+    "note": "P1-B finds bitwise-identical native-NV/CUDA full logits and llama argmax identity at 13876, but native production sampling returns invalid sentinel 151936 and the predeclared llama full-logit atol=0.01 gate fails"
+  },
+  "single_graph_ab": {
+    "control": {
+      "groups": 6,
+      "group_sizes": [32, 64, 128, 256, 512, 29],
+      "kernels": 1021,
+      "median_tok_s": 178.150449806,
+      "median_ms_token": 5.613233091
+    },
+    "candidate": {
+      "env": {"JIT_BATCH_SIZE": "0", "CUDA_GRAPH_STREAMS": "1", "DEV": "CUDA"},
+      "groups": 1,
+      "group_sizes": [1021],
+      "kernels": 1021,
+      "samples_tok_s": [166.465473336, 168.126367449, 167.681717329, 165.968971951, 165.628704587],
+      "median_tok_s": 166.465473336,
+      "median_ms_token": 6.007251714,
+      "generated_sha256": "317cec68399bbba606b7a6e5645d326e5d8734167672d24e63a750b95c909a09",
+      "runtime_debug_proof": "JIT GRAPHing batch with 1021 kernels"
+    },
+    "derived": {
+      "candidate_tok_s_delta_pct": -6.297658699,
+      "candidate_ms_token_delta": 0.37831621
+    },
+    "verdict": "SINGLE_GRAPH_NO_GO"
+  },
+  "blockers": [
+    "native and CUDA disagree on generated tokens for the identical tinygrad prompt",
+    "canonical llama wrapper default points to a HIP build with no GPU; explicit pinned build-cuda binary was required",
+    "native default setup hits known PACKED_FRAGMENT_LOAD verification failure; established fused-prefill-off setup wrapper was required",
+    "canonical graph-admission export fails its second-warmup assertion on JIT_BATCH_SIZE=0",
+    "untracked aligned-census helper fails on one-group topology with 'unhashable type'"
+  ],
+  "raw_artifacts": {
+    "/tmp/nv_parity_p1v_llama_a_20260804.json": "17779c2165bc593e6f5f039bf8f1b06257e4af61780663a21e71fa41cd708468",
+    "/tmp/nv_parity_p1v_cuda_s1_20260804.json": "f44d3892712dd0e6c6087cba39957be9113205b0efe5b17bba5c284662180b47",
+    "/tmp/nv_parity_p1v_native_nv_20260804.json": "13f0ab282b8e436066720a46ad4b0bc9567f8a909e9be9063a39ad2c7e22c9c0",
+    "/tmp/nv_parity_p1v_llama_b_20260804.json": "2d94eb8f1431e43c42af18c38818e08801e8d69666230be700ce4a06a2765996",
+    "/tmp/nv_parity_p15_cuda_single_graph_20260804.json": "a8399d077d3e7ea49e4abe9128a381c23f1942376111674cd58e464b1a0e3487",
+    "/tmp/nv_parity_p15_cuda_single_graph_debug_20260804.stdout": "c3b1468225d77c06b0cd0f3a6e3a53ca1166de2f8331b40b73aab7d3ad05542e"
+  }
+}

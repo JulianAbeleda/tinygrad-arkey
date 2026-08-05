@@ -1,0 +1,69 @@
+{
+  "contract": {
+    "boundary_materialization_in_scope": false,
+    "eps": 1e-06,
+    "realized_inputs": true,
+    "shape": [
+      1,
+      4096
+    ],
+    "weight_dtype": "float16",
+    "x_dtype": "float16"
+  },
+  "correctness": {
+    "atol": 0.003,
+    "max_abs": 0.0,
+    "pass": true
+  },
+  "device": "NV",
+  "git_commit": "8f40797e3d2ce41c79ea2a4e3e4a5aa60df8316e",
+  "payload": {
+    "weight_sha256": "e4ab22bb11e0aa77f0a3186d682169bc6a327a576a5a11ed7116ef977409b017",
+    "x_sha256": "b859acf14292c4299bdbb2fe826389dbf62ae589355801b44dc67ee34d5ccc3f"
+  },
+  "schema": "tinygrad.nv_rmsnorm_native_microgate.v1",
+  "timing": {
+    "candidate_b": [
+      154.579242,
+      154.191942,
+      153.45856400000002,
+      152.68389000000002,
+      152.04167800000002,
+      152.405914,
+      152.61930999999998
+    ],
+    "candidate_median": 152.68389000000002,
+    "control_a": [
+      92.68139,
+      91.38036,
+      91.494734,
+      91.839834,
+      91.800244,
+      91.9916,
+      91.713904
+    ],
+    "control_c": [
+      92.48651799999999,
+      92.10096,
+      91.964448,
+      91.72203999999999,
+      92.183916,
+      91.952428,
+      91.804114
+    ],
+    "control_midpoint_median": 91.88234600000001,
+    "delta": 60.80154400000001,
+    "replays": 500,
+    "reps": 7,
+    "unit": "us_per_graph_replay"
+  },
+  "topology": {
+    "baseline": [
+      "test",
+      "test"
+    ],
+    "candidate": [
+      "rmsnorm_native_1_4096"
+    ]
+  }
+}

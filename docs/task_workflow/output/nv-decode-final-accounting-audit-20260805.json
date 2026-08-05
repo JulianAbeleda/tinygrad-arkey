@@ -1,0 +1,47 @@
+{
+  "schema": "tinygrad.nv_decode.final_accounting_audit.v1",
+  "date": "2026-08-05",
+  "verdict": "LOCATION_PASS_CAUSAL_RECOVERY_FAIL",
+  "tolerance_us": 50.0,
+  "equation_us": {
+    "authority_wall_gap": 1646.17,
+    "support_exposure_delta": 1108.082,
+    "quantized_core_delta": 302.788,
+    "llama_internal_gaps_credit": -8.111,
+    "profile_to_unprofiled_device_reconciliation": -1.143,
+    "device_delta": 1401.616,
+    "outside_window_delta": 239.804933,
+    "outer_reconciliation": 4.749067,
+    "reconciled_wall_gap": 1646.17,
+    "closure_error": 0.0
+  },
+  "material_findings": [
+    {
+      "id": "A1",
+      "magnitude_us": 69.1655,
+      "finding": "A valid token-stream native predispatch combined A/B exists but is omitted from accepted-native-recovery booking.",
+      "required_resolution": "Either provisionally book only the combined arm with its token-stream contract, or explicitly require full logits and label it unbooked."
+    },
+    {
+      "id": "A2",
+      "magnitude_us": 1108.082,
+      "finding": "Shapley support-work rows are additive ownership, not independent causal recovery budgets.",
+      "required_resolution": "Use fusion/dataflow-and-exposure wording; book only exact native real-token A/Bs."
+    },
+    {
+      "id": "A3",
+      "magnitude_us": 247.989,
+      "finding": "Flash interval comparison proves overlap is sufficient, not flash-body parity.",
+      "required_resolution": "Narrow the conclusion and retain zero recovery credit without native token A/B."
+    }
+  ],
+  "provisional_engineering_remainder_if_token_contract_is_accepted_us": 1577.0045,
+  "post_audit_master_disposition": {
+    "predispatch_signal_labeled_unbooked_for_full_logits": true,
+    "provisional_engineering_remainder_recorded": true,
+    "fusion_dataflow_attribution_wording_applied": true,
+    "flash_claim_narrowed_to_overlap_sufficiency": true,
+    "dp4a_gate1_failure_recorded": true
+  },
+  "not_a_missing_time_bucket": true
+}

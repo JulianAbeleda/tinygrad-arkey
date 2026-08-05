@@ -43,7 +43,11 @@ def memory_plan_rewrite(linear:UOp, held_bufs:set[UOp]|None=None) -> UOp:
     peaks[key(buf)] = (max(peaks[key(buf)][0], offsets[buf] + buf.arg*buf.dtype.itemsize), peaks[key(buf)][1])
   arena_sizes = {k:round_up(peak, block_size) for k,(peak,_) in peaks.items()}
   arenas = {} if NO_MEMORY_PLANNER else {k:UOp.new_buffer(k[0], sz, dtypes.int8) for k,sz in arena_sizes.items()}
-  for collect in collectors: collect(linear, held_bufs, arenas if not NO_MEMORY_PLANNER else None)
+  # Collectors receive the placement evidence (arena, offset, aligned size,
+  # lifetime) so observers can attribute planner-added WAR/WAW edges to exact
+  # physical ranges. The call is a no-op when no collector is installed.
+  for collect in collectors:
+    collect(linear, held_bufs, arenas if not NO_MEMORY_PLANNER else None, offsets, nbytes, first, last)
   if NO_MEMORY_PLANNER or not offsets: return linear
   replace_map = {b:UOp(Ops.SLICE, b.dtype, (arenas[key(b)], UOp.const(dtypes.weakint, offset)), b.arg) for b,offset in offsets.items()}
   if DEBUG >= 1 and (omem:=sum(nbytes.values())/1e6) != (nmem:=sum(arena_sizes.values())/1e6):

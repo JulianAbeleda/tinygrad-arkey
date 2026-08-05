@@ -1,0 +1,28 @@
+{
+  "schema": "tinygrad.nv_q6k_int8x4_provider_microgate.v1",
+  "date": "2026-08-05",
+  "provider": {
+    "verdict": "PASS",
+    "contract": "acc_i32 + dot(s8x4(a_u32_bits), s8x4(b_u32_bits))",
+    "cuda_source": "__dp4a((int){1}, (int){2}, {0})",
+    "sm_120_ptx": "dp4a.s32.s32",
+    "hermetic_tests_passed": 4
+  },
+  "gate1": {
+    "verdict": "FAIL",
+    "baseline": "q6k_gen_partial_1024_4096_4 + sum(axis=1).contiguous",
+    "candidate": "tinygrad Q8 producer + q6k_q8_dp4a_1024_4096_rt2",
+    "correctness": {
+      "candidate_max_abs_ref": 0.17308998107910156,
+      "baseline_max_abs_ref": 0.00002956390380859375,
+      "atol": 0.4677861213684082,
+      "pass": true
+    },
+    "runs": [
+      {"control_midpoint_us": 86.959316, "candidate_us": 88.311304, "delta_us": 1.351988},
+      {"control_midpoint_us": 86.896474, "candidate_us": 88.068506, "delta_us": 1.172032}
+    ],
+    "native_residual_credit_ms_per_token": 0.0,
+    "next_phase_run": false
+  }
+}

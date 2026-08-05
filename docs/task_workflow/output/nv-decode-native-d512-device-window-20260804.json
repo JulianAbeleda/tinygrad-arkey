@@ -1,0 +1,28 @@
+{
+  "schema": "tinygrad.nv_decode_native_d512_device_window.v1",
+  "date": "2026-08-04",
+  "route": "DEV=NV",
+  "depth": 512,
+  "evidence": "OBSERVATIONAL_NATIVE_QUEUE_TIMESTAMPS",
+  "correctness": {"token": 330, "all_arms_identical": true},
+  "topology": {"groups": 5, "program_counts": [32, 64, 128, 256, 468], "total_programs": 948},
+  "native_us": {
+    "marker_off_wall": 5613.207933,
+    "marker_on_wall": 5642.483942,
+    "device_window": 5291.424,
+    "marker_on_outside_window": 347.914982,
+    "marker_overhead": 29.276009,
+    "derived_marker_free_outside_window": 321.783933
+  },
+  "llama_us": {"device_window": 3889.808, "outside_window": 81.979, "wall": 3971.787},
+  "gap_reconciliation_us": {
+    "device": 1401.616,
+    "outside_window": 239.804933,
+    "sum": 1641.420933,
+    "authority": 1646.17,
+    "residual": 4.749067
+  },
+  "gap_reconciliation_percent": {"device": 85.144, "outside_window": 14.567, "residual": 0.288},
+  "verdict": "OUTER_GAP_RECONCILED_WITHIN_MAX_50US_OR_2PCT_SEMANTIC_DEVICE_PARTITION_OPEN",
+  "raw_payload": "/tmp/nv_decode_group_window_ledger_20260804.json"
+}

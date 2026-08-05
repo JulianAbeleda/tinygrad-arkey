@@ -47,6 +47,8 @@ class CUDARenderer(CStyleLanguage):
   exp2f = staticmethod(lambda x: UOp(Ops.CUSTOMI, x.dtype, (x,), arg="exp2f({0})"))
   fdot2 = staticmethod(lambda acc, a, b: UOp(Ops.CUSTOMI, dtypes.float32, (acc, a, b),
     arg="({0}) + float({1}.x) * float({2}.x) + float({1}.y) * float({2}.y)"))
+  int8x4_dot = staticmethod(lambda acc, a, b: UOp(Ops.CUSTOMI, dtypes.int32, (acc, a, b),
+    arg="__dp4a((int){1}, (int){2}, {0})"))
   code_for_op = { **CStyleLanguage.code_for_op,
     Ops.TRUNC: lambda x,dtype: f"htrunc({x})" if dtype in (dtypes.half, dtypes.bfloat16) else f"trunc({x})",
     Ops.SIN: lambda x,dtype: f"hsin({x})" if dtype in (dtypes.half, dtypes.bfloat16) else f"sin({x})",

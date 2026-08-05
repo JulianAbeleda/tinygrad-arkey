@@ -1,0 +1,29 @@
+{
+  "schema": "tinygrad.q6k_native_nv_direct_microgate_summary.v1",
+  "date": "2026-08-05",
+  "device": "NV",
+  "candidate_family": "ordinary tinygrad UOps cooperative Q6_K direct output",
+  "payload": {
+    "q6_sha256": "653c9331685e40d02af27d1a2cc60747ca5b7c9a00b0135caed9f31573b03881",
+    "x_sha256": "b859acf14292c4299bdbb2fe826389dbf62ae589355801b44dc67ee34d5ccc3f"
+  },
+  "arms": [
+    {
+      "candidate": "q6k_1024x4096_native_nv_direct_rt2_v1",
+      "correctness": {"atol": 0.02, "max_abs_ref": 1.6689300537109375e-05, "pass": true},
+      "timing_us": {"control_midpoint_median": 113.33811333333333, "candidate_median": 153.31250333333332, "delta": 39.97439},
+      "raw_artifact": "/tmp/q6k_native_nv_direct_microgate.json",
+      "raw_sha256": "23c5c8e405cfb07c7d93d70a320a55befc8b30bb6886f3a7276ffe5d9ab2a1c7"
+    },
+    {
+      "candidate": "q6k_1024x4096_native_nv_direct_rt1_v1",
+      "correctness": {"atol": 0.02, "max_abs_ref": 1.6689300537109375e-05, "pass": true},
+      "timing_us": {"control_midpoint_median": 89.364542, "candidate_median": 150.76607, "delta": 61.401528},
+      "raw_artifact": "/tmp/q6k_native_nv_direct_rt1_microgate.json",
+      "raw_sha256": "66acc3888e8d6183995eaf7d9ab31ae9fa916972748468b4205cafcfe5d035ea"
+    }
+  ],
+  "render_audit": {"source_bytes": 8762, "shfl_xor_calls": 4, "dp4a_calls": 0, "classification": "scalar fp16/dequant mapping; intended packed integer dot did not materialize"},
+  "verdict": "REFUTED_AT_GATE_1",
+  "native_residual_credit_ms_per_token": 0.0
+}

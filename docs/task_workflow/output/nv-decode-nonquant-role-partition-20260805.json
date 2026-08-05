@@ -1,0 +1,4599 @@
+{
+  "llama": {
+    "exposed_total_us": 300.736,
+    "hidden_total_us": 445.954,
+    "method": "symmetric Shapley interval ownership; median replay shares normalized to aggregate union authorities",
+    "replays": 27,
+    "roles": [
+      {
+        "exposed_shapley_us": 0.44277095395708826,
+        "hidden_shapley_us": 0.21333189821739168,
+        "median_order_bounds_us": {
+          "exposed_lower_us": 0,
+          "exposed_upper_us": 1.2160000000000002,
+          "hidden_lower_us": 0,
+          "hidden_upper_us": 0.64
+        },
+        "role": "elementwise"
+      },
+      {
+        "exposed_shapley_us": 21.16231776322614,
+        "hidden_shapley_us": 52.10631613959789,
+        "median_order_bounds_us": {
+          "exposed_lower_us": 0,
+          "exposed_upper_us": 53.15299999999999,
+          "hidden_lower_us": 0,
+          "hidden_upper_us": 137.08999999999995
+        },
+        "role": "flash_combine"
+      },
+      {
+        "exposed_shapley_us": 36.42991379003559,
+        "hidden_shapley_us": 32.853112325478314,
+        "median_order_bounds_us": {
+          "exposed_lower_us": 8.928000000000004,
+          "exposed_upper_us": 74.81699999999992,
+          "hidden_lower_us": 0,
+          "hidden_upper_us": 98.56000000000002
+        },
+        "role": "flash_score"
+      },
+      {
+        "exposed_shapley_us": 1.2589631943840103,
+        "hidden_shapley_us": 0.0,
+        "median_order_bounds_us": {
+          "exposed_lower_us": 0.8,
+          "exposed_upper_us": 2.048,
+          "hidden_lower_us": 0,
+          "hidden_upper_us": 0
+        },
+        "role": "get_rows"
+      },
+      {
+        "exposed_shapley_us": 41.10834905052192,
+        "hidden_shapley_us": 0.0,
+        "median_order_bounds_us": {
+          "exposed_lower_us": 12.320000000000006,
+          "exposed_upper_us": 75.42399999999991,
+          "hidden_lower_us": 0,
+          "hidden_upper_us": 0
+        },
+        "role": "kv_set_rows"
+      },
+      {
+        "exposed_shapley_us": 59.63871356786147,
+        "hidden_shapley_us": 265.87854472815394,
+        "median_order_bounds_us": {
+          "exposed_lower_us": 28.928000000000022,
+          "exposed_upper_us": 106.1769999999998,
+          "hidden_lower_us": 119.5839999999997,
+          "hidden_upper_us": 445.9540000000008
+        },
+        "role": "quantize_q8_1"
+      },
+      {
+        "exposed_shapley_us": 98.5565466790021,
+        "hidden_shapley_us": 79.32413304122744,
+        "median_order_bounds_us": {
+          "exposed_lower_us": 58.335999999999906,
+          "exposed_upper_us": 149.6019999999994,
+          "hidden_lower_us": 0,
+          "hidden_upper_us": 160.16199999999995
+        },
+        "role": "rms_norm"
+      },
+      {
+        "exposed_shapley_us": 42.13842500101167,
+        "hidden_shapley_us": 15.578561867325035,
+        "median_order_bounds_us": {
+          "exposed_lower_us": 0,
+          "exposed_upper_us": 94.72099999999983,
+          "hidden_lower_us": 0,
+          "hidden_upper_us": 32.225000000000016
+        },
+        "role": "rope"
+      }
+    ]
+  },
+  "native": {
+    "node_count": 731,
+    "nodes": [
+      {
+        "name": "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346",
+        "node": 0,
+        "role": "token_feedback",
+        "us": 2.99219209664
+      },
+      {
+        "name": "E_2_c8a3207cf1b8954ec08b9564cce9b00f69be9c09493c58ea1abd46b3664424e7",
+        "node": 1,
+        "role": "token_feedback",
+        "us": 2.393753677312
+      },
+      {
+        "name": "E_16_4_2_8_16_2_4_4_35a6fe556c331254f920c4212fdc0c33244d8269d7c93cb1897349f36a254aee",
+        "node": 2,
+        "role": "vocab_sampler",
+        "us": 3.338656444672
+      },
+      {
+        "name": "E_1187_32_4_76d37a73a646ec3a4b5e32ab783e0ace496f5855bbba7492c8c7fe87bbff5f1f",
+        "node": 3,
+        "role": "vocab_sampler",
+        "us": 2.83470830208
+      },
+      {
+        "name": "r_32_32_4_32_4_b7c5eeb3ced63845c64b323fd8e5e923a69c1e162de001a94b565dcd96e9293f",
+        "node": 4,
+        "role": "vocab_sampler",
+        "us": 5.291455497216001
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 5,
+        "role": "initial_rmsnorm",
+        "us": 3.811107828352
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 6,
+        "role": "initial_rmsnorm",
+        "us": 1.952799052544
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 10,
+        "role": "q_norm",
+        "us": 1.25987035648
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 11,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 12,
+        "role": "q_norm",
+        "us": 1.73232174016
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 13,
+        "role": "k_norm",
+        "us": 1.6378314634239999
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 14,
+        "role": "q_norm",
+        "us": 1.763818499072
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 15,
+        "role": "k_norm",
+        "us": 1.385857392128
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 16,
+        "role": "rope_q",
+        "us": 2.3622569184
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 18,
+        "role": "flash_score",
+        "us": 6.236358264576
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 19,
+        "role": "flash_combine",
+        "us": 2.897701819904
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 20,
+        "role": "attention_cast",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 22,
+        "role": "attention_residual_add",
+        "us": 1.5118444277760001
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 23,
+        "role": "ffn_rmsnorm",
+        "us": 3.370153203584
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 24,
+        "role": "ffn_rmsnorm",
+        "us": 1.700824981248
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 26,
+        "role": "ffn_activation_cast",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 28,
+        "role": "ffn_down_cast",
+        "us": 1.448850909952
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 29,
+        "role": "ffn_residual_add",
+        "us": 1.543341186688
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 30,
+        "role": "block_output_contiguous",
+        "us": 1.070889803008
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 31,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.401649962496
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 32,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.370153203584
+      },
+      {
+        "name": "r_8_8_16_2_4_da68eeaa95084da816923e4165d65f2f6394390f4667676de3ed7e4f2a2c17c8",
+        "node": 17,
+        "role": "kv_store_k_rope_cast_with_q6_partial_reduce",
+        "us": 1.606334704512
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 36,
+        "role": "q_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 37,
+        "role": "k_norm",
+        "us": 1.3228638743040002
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 38,
+        "role": "q_norm",
+        "us": 2.2677666416639997
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 39,
+        "role": "k_norm",
+        "us": 2.236269882752
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 40,
+        "role": "q_norm",
+        "us": 1.763818499072
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 41,
+        "role": "k_norm",
+        "us": 1.3543606332159999
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 42,
+        "role": "rope_q",
+        "us": 2.2677666416639997
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 44,
+        "role": "flash_score",
+        "us": 6.425338818048
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 45,
+        "role": "flash_combine",
+        "us": 2.866205060992
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 46,
+        "role": "attention_cast",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 48,
+        "role": "attention_residual_add",
+        "us": 1.5118444277760001
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 49,
+        "role": "ffn_rmsnorm",
+        "us": 3.716617551616
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 50,
+        "role": "ffn_rmsnorm",
+        "us": 1.73232174016
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 52,
+        "role": "ffn_activation_cast",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 54,
+        "role": "ffn_down_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 55,
+        "role": "ffn_residual_add",
+        "us": 1.543341186688
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 56,
+        "role": "block_output_contiguous",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 57,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 58,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3543606332159999
+      },
+      {
+        "name": "r_8_8_16_2_4_da68eeaa95084da816923e4165d65f2f6394390f4667676de3ed7e4f2a2c17c8",
+        "node": 43,
+        "role": "kv_store_k_rope_cast_with_q6_partial_reduce",
+        "us": 1.606334704512
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 62,
+        "role": "q_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 63,
+        "role": "k_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 64,
+        "role": "q_norm",
+        "us": 1.858308775808
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 65,
+        "role": "k_norm",
+        "us": 1.196876838656
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 66,
+        "role": "q_norm",
+        "us": 1.763818499072
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 67,
+        "role": "k_norm",
+        "us": 1.25987035648
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 68,
+        "role": "rope_q",
+        "us": 1.480347668864
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 70,
+        "role": "flash_score",
+        "us": 5.35444901504
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 71,
+        "role": "flash_combine",
+        "us": 2.7087212664319997
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 72,
+        "role": "attention_cast",
+        "us": 1.070889803008
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 74,
+        "role": "attention_residual_add",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 75,
+        "role": "ffn_rmsnorm",
+        "us": 3.338656444672
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 76,
+        "role": "ffn_rmsnorm",
+        "us": 1.700824981248
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 78,
+        "role": "ffn_activation_cast",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 80,
+        "role": "ffn_down_cast",
+        "us": 1.007896285184
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 81,
+        "role": "ffn_residual_add",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 82,
+        "role": "block_output_contiguous",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 83,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.2756629268479998
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 84,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3543606332159999
+      },
+      {
+        "name": "r_8_8_16_2_4_da68eeaa95084da816923e4165d65f2f6394390f4667676de3ed7e4f2a2c17c8",
+        "node": 69,
+        "role": "kv_store_k_rope_cast_with_q6_partial_reduce",
+        "us": 1.448850909952
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 88,
+        "role": "q_norm",
+        "us": 1.070889803008
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 89,
+        "role": "k_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 90,
+        "role": "q_norm",
+        "us": 1.826812016896
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 91,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 92,
+        "role": "q_norm",
+        "us": 1.700824981248
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 93,
+        "role": "k_norm",
+        "us": 1.25987035648
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 94,
+        "role": "rope_q",
+        "us": 1.73232174016
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 96,
+        "role": "flash_score",
+        "us": 7.212757790848
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 97,
+        "role": "flash_combine",
+        "us": 3.244166167936
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 98,
+        "role": "attention_cast",
+        "us": 1.25987035648
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 100,
+        "role": "attention_residual_add",
+        "us": 1.3228638743040002
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 101,
+        "role": "ffn_rmsnorm",
+        "us": 4.472539765504
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 102,
+        "role": "ffn_rmsnorm",
+        "us": 1.984295811456
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 104,
+        "role": "ffn_activation_cast",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 106,
+        "role": "ffn_down_cast",
+        "us": 1.3543606332159999
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 107,
+        "role": "ffn_residual_add",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 108,
+        "role": "block_output_contiguous",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 109,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.338656444672
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 110,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.385857392128
+      },
+      {
+        "name": "r_8_8_16_2_4_da68eeaa95084da816923e4165d65f2f6394390f4667676de3ed7e4f2a2c17c8",
+        "node": 95,
+        "role": "kv_store_k_rope_cast_with_q6_partial_reduce",
+        "us": 1.480347668864
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 114,
+        "role": "q_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 115,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 116,
+        "role": "q_norm",
+        "us": 2.2992634005759998
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 117,
+        "role": "k_norm",
+        "us": 1.858308775808
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 118,
+        "role": "q_norm",
+        "us": 1.7953152579840002
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 119,
+        "role": "k_norm",
+        "us": 1.385857392128
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 120,
+        "role": "rope_q",
+        "us": 1.669328222336
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 122,
+        "role": "flash_score",
+        "us": 5.637919845248
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 123,
+        "role": "flash_combine",
+        "us": 2.6457277486080004
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 124,
+        "role": "attention_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 126,
+        "role": "attention_residual_add",
+        "us": 1.196876838656
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 127,
+        "role": "ffn_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 128,
+        "role": "ffn_rmsnorm",
+        "us": 1.700824981248
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 130,
+        "role": "ffn_activation_cast",
+        "us": 1.070889803008
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 132,
+        "role": "ffn_down_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 133,
+        "role": "ffn_residual_add",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 134,
+        "role": "block_output_contiguous",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 135,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.2756629268479998
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 136,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3228638743040002
+      },
+      {
+        "name": "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b",
+        "node": 121,
+        "role": "kv_store_k_rope_cast",
+        "us": 2.110282847104
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 140,
+        "role": "q_norm",
+        "us": 1.070889803008
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 141,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 142,
+        "role": "q_norm",
+        "us": 1.7953152579840002
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 143,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 144,
+        "role": "q_norm",
+        "us": 1.7953152579840002
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 145,
+        "role": "k_norm",
+        "us": 1.25987035648
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 146,
+        "role": "rope_q",
+        "us": 1.5748379456000001
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 148,
+        "role": "flash_score",
+        "us": 5.606423086336
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 149,
+        "role": "flash_combine",
+        "us": 2.740218025344
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 150,
+        "role": "attention_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 152,
+        "role": "attention_residual_add",
+        "us": 1.165380079744
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 153,
+        "role": "ffn_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 154,
+        "role": "ffn_rmsnorm",
+        "us": 1.763818499072
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 156,
+        "role": "ffn_activation_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 158,
+        "role": "ffn_down_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 159,
+        "role": "ffn_residual_add",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 160,
+        "role": "block_output_contiguous",
+        "us": 1.007896285184
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 161,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.2756629268479998
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 162,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.41735415104
+      },
+      {
+        "name": "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b",
+        "node": 147,
+        "role": "kv_store_k_rope_cast",
+        "us": 1.6378314634239999
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 166,
+        "role": "q_norm",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 167,
+        "role": "k_norm",
+        "us": 1.196876838656
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 168,
+        "role": "q_norm",
+        "us": 1.7953152579840002
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 169,
+        "role": "k_norm",
+        "us": 1.25987035648
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 170,
+        "role": "q_norm",
+        "us": 1.73232174016
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 171,
+        "role": "k_norm",
+        "us": 1.25987035648
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 172,
+        "role": "rope_q",
+        "us": 1.448850909952
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 174,
+        "role": "flash_score",
+        "us": 5.637919845248
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 175,
+        "role": "flash_combine",
+        "us": 2.929198578816
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 176,
+        "role": "attention_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 178,
+        "role": "attention_residual_add",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 179,
+        "role": "ffn_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 180,
+        "role": "ffn_rmsnorm",
+        "us": 1.763818499072
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 182,
+        "role": "ffn_activation_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 184,
+        "role": "ffn_down_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 185,
+        "role": "ffn_residual_add",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 186,
+        "role": "block_output_contiguous",
+        "us": 1.070889803008
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 187,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 188,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.5118444277760001
+      },
+      {
+        "name": "r_8_8_16_2_4_da68eeaa95084da816923e4165d65f2f6394390f4667676de3ed7e4f2a2c17c8",
+        "node": 173,
+        "role": "kv_store_k_rope_cast_with_q6_partial_reduce",
+        "us": 1.6378314634239999
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 192,
+        "role": "q_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 193,
+        "role": "k_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 194,
+        "role": "q_norm",
+        "us": 1.7953152579840002
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 195,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 196,
+        "role": "q_norm",
+        "us": 1.6378314634239999
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 197,
+        "role": "k_norm",
+        "us": 1.3543606332159999
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 198,
+        "role": "rope_q",
+        "us": 1.5118444277760001
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 200,
+        "role": "flash_score",
+        "us": 5.763906880896
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 201,
+        "role": "flash_combine",
+        "us": 2.7087212664319997
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 202,
+        "role": "attention_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 204,
+        "role": "attention_residual_add",
+        "us": 1.070889803008
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 205,
+        "role": "ffn_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 206,
+        "role": "ffn_rmsnorm",
+        "us": 1.700824981248
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 208,
+        "role": "ffn_activation_cast",
+        "us": 1.070889803008
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 210,
+        "role": "ffn_down_cast",
+        "us": 1.007896285184
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 211,
+        "role": "ffn_residual_add",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 212,
+        "role": "block_output_contiguous",
+        "us": 1.007896285184
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 213,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 214,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3543606332159999
+      },
+      {
+        "name": "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b",
+        "node": 199,
+        "role": "kv_store_k_rope_cast",
+        "us": 1.606334704512
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 218,
+        "role": "q_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 219,
+        "role": "k_norm",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 220,
+        "role": "q_norm",
+        "us": 1.826812016896
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 221,
+        "role": "k_norm",
+        "us": 1.196876838656
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 222,
+        "role": "q_norm",
+        "us": 1.763818499072
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 223,
+        "role": "k_norm",
+        "us": 1.5748379456000001
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 224,
+        "role": "rope_q",
+        "us": 2.4567471951360003
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 226,
+        "role": "flash_score",
+        "us": 6.61431937152
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 227,
+        "role": "flash_combine",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 228,
+        "role": "attention_cast",
+        "us": 1.25987035648
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 230,
+        "role": "attention_residual_add",
+        "us": 1.448850909952
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 231,
+        "role": "ffn_rmsnorm",
+        "us": 4.252062453120001
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 232,
+        "role": "ffn_rmsnorm",
+        "us": 1.921302293632
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 234,
+        "role": "ffn_activation_cast",
+        "us": 1.196876838656
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 236,
+        "role": "ffn_down_cast",
+        "us": 1.070889803008
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 237,
+        "role": "ffn_residual_add",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 238,
+        "role": "block_output_contiguous",
+        "us": 1.007896285184
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 239,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.338656444672
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 240,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3543606332159999
+      },
+      {
+        "name": "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b",
+        "node": 225,
+        "role": "kv_store_k_rope_cast",
+        "us": 1.700824981248
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 244,
+        "role": "q_norm",
+        "us": 1.291367115392
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 245,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 246,
+        "role": "q_norm",
+        "us": 2.2677666416639997
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 247,
+        "role": "k_norm",
+        "us": 1.88980553472
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 248,
+        "role": "q_norm",
+        "us": 1.763818499072
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 249,
+        "role": "k_norm",
+        "us": 1.3228638743040002
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 250,
+        "role": "rope_q",
+        "us": 1.669328222336
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 252,
+        "role": "flash_score",
+        "us": 5.763906880896
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 253,
+        "role": "flash_combine",
+        "us": 2.83470830208
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 254,
+        "role": "attention_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 256,
+        "role": "attention_residual_add",
+        "us": 1.196876838656
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 257,
+        "role": "ffn_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 258,
+        "role": "ffn_rmsnorm",
+        "us": 1.73232174016
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 260,
+        "role": "ffn_activation_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 262,
+        "role": "ffn_down_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 263,
+        "role": "ffn_residual_add",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 264,
+        "role": "block_output_contiguous",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 265,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.2756629268479998
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 266,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3543606332159999
+      },
+      {
+        "name": "r_8_8_16_2_4_da68eeaa95084da816923e4165d65f2f6394390f4667676de3ed7e4f2a2c17c8",
+        "node": 251,
+        "role": "kv_store_k_rope_cast_with_q6_partial_reduce",
+        "us": 1.606334704512
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 270,
+        "role": "q_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 271,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 272,
+        "role": "q_norm",
+        "us": 1.858308775808
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 273,
+        "role": "k_norm",
+        "us": 1.25987035648
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 274,
+        "role": "q_norm",
+        "us": 1.669328222336
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 275,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 276,
+        "role": "rope_q",
+        "us": 1.5118444277760001
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 278,
+        "role": "flash_score",
+        "us": 5.385945773952001
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 279,
+        "role": "flash_combine",
+        "us": 2.7087212664319997
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 280,
+        "role": "attention_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 282,
+        "role": "attention_residual_add",
+        "us": 1.165380079744
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 283,
+        "role": "ffn_rmsnorm",
+        "us": 3.338656444672
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 284,
+        "role": "ffn_rmsnorm",
+        "us": 1.669328222336
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 286,
+        "role": "ffn_activation_cast",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 288,
+        "role": "ffn_down_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 289,
+        "role": "ffn_residual_add",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 290,
+        "role": "block_output_contiguous",
+        "us": 1.007896285184
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 291,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.2756629268479998
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 292,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.385857392128
+      },
+      {
+        "name": "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b",
+        "node": 277,
+        "role": "kv_store_k_rope_cast",
+        "us": 1.606334704512
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 296,
+        "role": "q_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 297,
+        "role": "k_norm",
+        "us": 1.070889803008
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 298,
+        "role": "q_norm",
+        "us": 1.858308775808
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 299,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 300,
+        "role": "q_norm",
+        "us": 1.6378314634239999
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 301,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 302,
+        "role": "rope_q",
+        "us": 1.669328222336
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 304,
+        "role": "flash_score",
+        "us": 5.5119328096
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 305,
+        "role": "flash_combine",
+        "us": 2.7087212664319997
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 306,
+        "role": "attention_cast",
+        "us": 1.070889803008
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 308,
+        "role": "attention_residual_add",
+        "us": 1.007896285184
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 309,
+        "role": "ffn_rmsnorm",
+        "us": 3.559133757056
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 310,
+        "role": "ffn_rmsnorm",
+        "us": 1.700824981248
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 312,
+        "role": "ffn_activation_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 314,
+        "role": "ffn_down_cast",
+        "us": 0.976399526272
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 315,
+        "role": "ffn_residual_add",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 316,
+        "role": "block_output_contiguous",
+        "us": 1.007896285184
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 317,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 318,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3543606332159999
+      },
+      {
+        "name": "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b",
+        "node": 303,
+        "role": "kv_store_k_rope_cast",
+        "us": 1.6378314634239999
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 322,
+        "role": "q_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 323,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 324,
+        "role": "q_norm",
+        "us": 1.858308775808
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 325,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 326,
+        "role": "q_norm",
+        "us": 1.763818499072
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 327,
+        "role": "k_norm",
+        "us": 1.3543606332159999
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 328,
+        "role": "rope_q",
+        "us": 1.5748379456000001
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 330,
+        "role": "flash_score",
+        "us": 5.4174425328639995
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 331,
+        "role": "flash_combine",
+        "us": 2.771714784256
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 332,
+        "role": "attention_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 334,
+        "role": "attention_residual_add",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 335,
+        "role": "ffn_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 336,
+        "role": "ffn_rmsnorm",
+        "us": 1.669328222336
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 338,
+        "role": "ffn_activation_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 340,
+        "role": "ffn_down_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 341,
+        "role": "ffn_residual_add",
+        "us": 1.196876838656
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 342,
+        "role": "block_output_contiguous",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 343,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 344,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3228638743040002
+      },
+      {
+        "name": "r_8_8_16_2_4_da68eeaa95084da816923e4165d65f2f6394390f4667676de3ed7e4f2a2c17c8",
+        "node": 329,
+        "role": "kv_store_k_rope_cast_with_q6_partial_reduce",
+        "us": 1.5118444277760001
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 348,
+        "role": "q_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 349,
+        "role": "k_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 350,
+        "role": "q_norm",
+        "us": 1.858308775808
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 351,
+        "role": "k_norm",
+        "us": 1.196876838656
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 352,
+        "role": "q_norm",
+        "us": 1.7953152579840002
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 353,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 354,
+        "role": "rope_q",
+        "us": 1.480347668864
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 356,
+        "role": "flash_score",
+        "us": 5.5119328096
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 357,
+        "role": "flash_combine",
+        "us": 2.740218025344
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 358,
+        "role": "attention_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 360,
+        "role": "attention_residual_add",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 361,
+        "role": "ffn_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 362,
+        "role": "ffn_rmsnorm",
+        "us": 1.700824981248
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 364,
+        "role": "ffn_activation_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 366,
+        "role": "ffn_down_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 367,
+        "role": "ffn_residual_add",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 368,
+        "role": "block_output_contiguous",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 369,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.2756629268479998
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 370,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3543606332159999
+      },
+      {
+        "name": "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b",
+        "node": 355,
+        "role": "kv_store_k_rope_cast",
+        "us": 1.88980553472
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 374,
+        "role": "q_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 375,
+        "role": "k_norm",
+        "us": 1.070889803008
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 376,
+        "role": "q_norm",
+        "us": 1.858308775808
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 377,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 378,
+        "role": "q_norm",
+        "us": 1.763818499072
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 379,
+        "role": "k_norm",
+        "us": 1.196876838656
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 380,
+        "role": "rope_q",
+        "us": 1.606334704512
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 382,
+        "role": "flash_score",
+        "us": 5.35444901504
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 383,
+        "role": "flash_combine",
+        "us": 2.740218025344
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 384,
+        "role": "attention_cast",
+        "us": 1.007896285184
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 386,
+        "role": "attention_residual_add",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 387,
+        "role": "ffn_rmsnorm",
+        "us": 3.338656444672
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 388,
+        "role": "ffn_rmsnorm",
+        "us": 1.858308775808
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 390,
+        "role": "ffn_activation_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 392,
+        "role": "ffn_down_cast",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 393,
+        "role": "ffn_residual_add",
+        "us": 1.196876838656
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 394,
+        "role": "block_output_contiguous",
+        "us": 1.007896285184
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 395,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.370153203584
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 396,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3543606332159999
+      },
+      {
+        "name": "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b",
+        "node": 381,
+        "role": "kv_store_k_rope_cast",
+        "us": 1.5118444277760001
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 400,
+        "role": "q_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 401,
+        "role": "k_norm",
+        "us": 1.070889803008
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 402,
+        "role": "q_norm",
+        "us": 1.952799052544
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 403,
+        "role": "k_norm",
+        "us": 1.25987035648
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 404,
+        "role": "q_norm",
+        "us": 1.88980553472
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 405,
+        "role": "k_norm",
+        "us": 1.291367115392
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 406,
+        "role": "rope_q",
+        "us": 1.5118444277760001
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 408,
+        "role": "flash_score",
+        "us": 5.385945773952001
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 409,
+        "role": "flash_combine",
+        "us": 2.83470830208
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 410,
+        "role": "attention_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 412,
+        "role": "attention_residual_add",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 413,
+        "role": "ffn_rmsnorm",
+        "us": 3.2756629268479998
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 414,
+        "role": "ffn_rmsnorm",
+        "us": 1.858308775808
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 416,
+        "role": "ffn_activation_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 418,
+        "role": "ffn_down_cast",
+        "us": 1.291367115392
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 419,
+        "role": "ffn_residual_add",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 420,
+        "role": "block_output_contiguous",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 421,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.2756629268479998
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 422,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.669328222336
+      },
+      {
+        "name": "r_8_8_16_2_4_da68eeaa95084da816923e4165d65f2f6394390f4667676de3ed7e4f2a2c17c8",
+        "node": 407,
+        "role": "kv_store_k_rope_cast_with_q6_partial_reduce",
+        "us": 1.5748379456000001
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 426,
+        "role": "q_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 427,
+        "role": "k_norm",
+        "us": 1.070889803008
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 428,
+        "role": "q_norm",
+        "us": 1.826812016896
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 429,
+        "role": "k_norm",
+        "us": 1.25987035648
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 430,
+        "role": "q_norm",
+        "us": 1.700824981248
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 431,
+        "role": "k_norm",
+        "us": 1.385857392128
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 432,
+        "role": "rope_q",
+        "us": 1.480347668864
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 434,
+        "role": "flash_score",
+        "us": 5.259958738304
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 435,
+        "role": "flash_combine",
+        "us": 2.960695337728
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 436,
+        "role": "attention_cast",
+        "us": 1.007896285184
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 438,
+        "role": "attention_residual_add",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 439,
+        "role": "ffn_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 440,
+        "role": "ffn_rmsnorm",
+        "us": 1.858308775808
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 442,
+        "role": "ffn_activation_cast",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 444,
+        "role": "ffn_down_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 445,
+        "role": "ffn_residual_add",
+        "us": 1.196876838656
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 446,
+        "role": "block_output_contiguous",
+        "us": 1.007896285184
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 447,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.244166167936
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 448,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3228638743040002
+      },
+      {
+        "name": "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b",
+        "node": 433,
+        "role": "kv_store_k_rope_cast",
+        "us": 1.5118444277760001
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 452,
+        "role": "q_norm",
+        "us": 1.070889803008
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 453,
+        "role": "k_norm",
+        "us": 1.070889803008
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 454,
+        "role": "q_norm",
+        "us": 1.826812016896
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 455,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 456,
+        "role": "q_norm",
+        "us": 1.826812016896
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 457,
+        "role": "k_norm",
+        "us": 1.41735415104
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 458,
+        "role": "rope_q",
+        "us": 1.543341186688
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 460,
+        "role": "flash_score",
+        "us": 5.606423086336
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 461,
+        "role": "flash_combine",
+        "us": 2.67722450752
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 462,
+        "role": "attention_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 464,
+        "role": "attention_residual_add",
+        "us": 1.070889803008
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 465,
+        "role": "ffn_rmsnorm",
+        "us": 3.338656444672
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 466,
+        "role": "ffn_rmsnorm",
+        "us": 1.669328222336
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 468,
+        "role": "ffn_activation_cast",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 470,
+        "role": "ffn_down_cast",
+        "us": 1.007896285184
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 471,
+        "role": "ffn_residual_add",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 472,
+        "role": "block_output_contiguous",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 473,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.2756629268479998
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 474,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3543606332159999
+      },
+      {
+        "name": "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b",
+        "node": 459,
+        "role": "kv_store_k_rope_cast",
+        "us": 1.5748379456000001
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 478,
+        "role": "q_norm",
+        "us": 1.448850909952
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 479,
+        "role": "k_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 480,
+        "role": "q_norm",
+        "us": 4.409546247680001
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 481,
+        "role": "k_norm",
+        "us": 2.1732763649280002
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 482,
+        "role": "q_norm",
+        "us": 2.078786088192
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 483,
+        "role": "k_norm",
+        "us": 1.669328222336
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 484,
+        "role": "rope_q",
+        "us": 2.488243954048
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 486,
+        "role": "flash_score",
+        "us": 7.118267514112
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 487,
+        "role": "flash_combine",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 488,
+        "role": "attention_cast",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 490,
+        "role": "attention_residual_add",
+        "us": 1.543341186688
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 491,
+        "role": "ffn_rmsnorm",
+        "us": 3.874101346176
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 492,
+        "role": "ffn_rmsnorm",
+        "us": 1.826812016896
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 494,
+        "role": "ffn_activation_cast",
+        "us": 1.291367115392
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 496,
+        "role": "ffn_down_cast",
+        "us": 1.291367115392
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 497,
+        "role": "ffn_residual_add",
+        "us": 1.5748379456000001
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 498,
+        "role": "block_output_contiguous",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 499,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 500,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3543606332159999
+      },
+      {
+        "name": "r_8_8_16_2_4_da68eeaa95084da816923e4165d65f2f6394390f4667676de3ed7e4f2a2c17c8",
+        "node": 485,
+        "role": "kv_store_k_rope_cast_with_q6_partial_reduce",
+        "us": 1.700824981248
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 504,
+        "role": "q_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 505,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 506,
+        "role": "q_norm",
+        "us": 1.858308775808
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 507,
+        "role": "k_norm",
+        "us": 1.196876838656
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 508,
+        "role": "q_norm",
+        "us": 1.7953152579840002
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 509,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 510,
+        "role": "rope_q",
+        "us": 1.543341186688
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 512,
+        "role": "flash_score",
+        "us": 5.4174425328639995
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 513,
+        "role": "flash_combine",
+        "us": 2.7087212664319997
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 514,
+        "role": "attention_cast",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 516,
+        "role": "attention_residual_add",
+        "us": 1.196876838656
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 517,
+        "role": "ffn_rmsnorm",
+        "us": 3.370153203584
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 518,
+        "role": "ffn_rmsnorm",
+        "us": 1.73232174016
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 520,
+        "role": "ffn_activation_cast",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 522,
+        "role": "ffn_down_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 523,
+        "role": "ffn_residual_add",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 524,
+        "role": "block_output_contiguous",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 525,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.2756629268479998
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 526,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3228638743040002
+      },
+      {
+        "name": "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b",
+        "node": 511,
+        "role": "kv_store_k_rope_cast",
+        "us": 1.921302293632
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 530,
+        "role": "q_norm",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 531,
+        "role": "k_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 532,
+        "role": "q_norm",
+        "us": 1.826812016896
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 533,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 534,
+        "role": "q_norm",
+        "us": 1.6378314634239999
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 535,
+        "role": "k_norm",
+        "us": 1.3543606332159999
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 536,
+        "role": "rope_q",
+        "us": 1.480347668864
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 538,
+        "role": "flash_score",
+        "us": 5.3229522561280005
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 539,
+        "role": "flash_combine",
+        "us": 2.740218025344
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 540,
+        "role": "attention_cast",
+        "us": 1.196876838656
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 542,
+        "role": "attention_residual_add",
+        "us": 1.070889803008
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 543,
+        "role": "ffn_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 544,
+        "role": "ffn_rmsnorm",
+        "us": 1.669328222336
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 546,
+        "role": "ffn_activation_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 548,
+        "role": "ffn_down_cast",
+        "us": 1.070889803008
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 549,
+        "role": "ffn_residual_add",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 550,
+        "role": "block_output_contiguous",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 551,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.2756629268479998
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 552,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3228638743040002
+      },
+      {
+        "name": "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b",
+        "node": 537,
+        "role": "kv_store_k_rope_cast",
+        "us": 1.669328222336
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 556,
+        "role": "q_norm",
+        "us": 1.070889803008
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 557,
+        "role": "k_norm",
+        "us": 1.291367115392
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 558,
+        "role": "q_norm",
+        "us": 1.858308775808
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 559,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 560,
+        "role": "q_norm",
+        "us": 1.7953152579840002
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 561,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 562,
+        "role": "rope_q",
+        "us": 1.5748379456000001
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 564,
+        "role": "flash_score",
+        "us": 5.66941660416
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 565,
+        "role": "flash_combine",
+        "us": 2.740218025344
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 566,
+        "role": "attention_cast",
+        "us": 1.007896285184
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 568,
+        "role": "attention_residual_add",
+        "us": 1.070889803008
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 569,
+        "role": "ffn_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 570,
+        "role": "ffn_rmsnorm",
+        "us": 1.7953152579840002
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 572,
+        "role": "ffn_activation_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 574,
+        "role": "ffn_down_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 575,
+        "role": "ffn_residual_add",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 576,
+        "role": "block_output_contiguous",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 577,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.2756629268479998
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 578,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3228638743040002
+      },
+      {
+        "name": "r_8_8_16_2_4_da68eeaa95084da816923e4165d65f2f6394390f4667676de3ed7e4f2a2c17c8",
+        "node": 563,
+        "role": "kv_store_k_rope_cast_with_q6_partial_reduce",
+        "us": 1.5748379456000001
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 582,
+        "role": "q_norm",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 583,
+        "role": "k_norm",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 584,
+        "role": "q_norm",
+        "us": 1.7953152579840002
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 585,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 586,
+        "role": "q_norm",
+        "us": 1.606334704512
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 587,
+        "role": "k_norm",
+        "us": 1.25987035648
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 588,
+        "role": "rope_q",
+        "us": 1.5118444277760001
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 590,
+        "role": "flash_score",
+        "us": 5.5119328096
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 591,
+        "role": "flash_combine",
+        "us": 2.740218025344
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 592,
+        "role": "attention_cast",
+        "us": 1.007896285184
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 594,
+        "role": "attention_residual_add",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 595,
+        "role": "ffn_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 596,
+        "role": "ffn_rmsnorm",
+        "us": 1.700824981248
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 598,
+        "role": "ffn_activation_cast",
+        "us": 1.196876838656
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 600,
+        "role": "ffn_down_cast",
+        "us": 1.007896285184
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 601,
+        "role": "ffn_residual_add",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 602,
+        "role": "block_output_contiguous",
+        "us": 1.007896285184
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 603,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 604,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3543606332159999
+      },
+      {
+        "name": "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b",
+        "node": 589,
+        "role": "kv_store_k_rope_cast",
+        "us": 1.5748379456000001
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 608,
+        "role": "q_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 609,
+        "role": "k_norm",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 610,
+        "role": "q_norm",
+        "us": 1.826812016896
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 611,
+        "role": "k_norm",
+        "us": 1.196876838656
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 612,
+        "role": "q_norm",
+        "us": 1.73232174016
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 613,
+        "role": "k_norm",
+        "us": 1.25987035648
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 614,
+        "role": "rope_q",
+        "us": 1.543341186688
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 616,
+        "role": "flash_score",
+        "us": 5.637919845248
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 617,
+        "role": "flash_combine",
+        "us": 2.803211543168
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 618,
+        "role": "attention_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 620,
+        "role": "attention_residual_add",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 621,
+        "role": "ffn_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 622,
+        "role": "ffn_rmsnorm",
+        "us": 1.700824981248
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 624,
+        "role": "ffn_activation_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 626,
+        "role": "ffn_down_cast",
+        "us": 1.070889803008
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 627,
+        "role": "ffn_residual_add",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 628,
+        "role": "block_output_contiguous",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 629,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 630,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3543606332159999
+      },
+      {
+        "name": "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b",
+        "node": 615,
+        "role": "kv_store_k_rope_cast",
+        "us": 1.5748379456000001
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 634,
+        "role": "q_norm",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 635,
+        "role": "k_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 636,
+        "role": "q_norm",
+        "us": 1.858308775808
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 637,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 638,
+        "role": "q_norm",
+        "us": 1.763818499072
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 639,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 640,
+        "role": "rope_q",
+        "us": 1.5118444277760001
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 642,
+        "role": "flash_score",
+        "us": 5.637919845248
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 643,
+        "role": "flash_combine",
+        "us": 2.740218025344
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 644,
+        "role": "attention_cast",
+        "us": 1.070889803008
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 646,
+        "role": "attention_residual_add",
+        "us": 1.070889803008
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 647,
+        "role": "ffn_rmsnorm",
+        "us": 3.370153203584
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 648,
+        "role": "ffn_rmsnorm",
+        "us": 1.826812016896
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 650,
+        "role": "ffn_activation_cast",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 652,
+        "role": "ffn_down_cast",
+        "us": 1.25987035648
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 653,
+        "role": "ffn_residual_add",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 654,
+        "role": "block_output_contiguous",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 655,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 656,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3228638743040002
+      },
+      {
+        "name": "r_8_8_16_2_4_da68eeaa95084da816923e4165d65f2f6394390f4667676de3ed7e4f2a2c17c8",
+        "node": 641,
+        "role": "kv_store_k_rope_cast_with_q6_partial_reduce",
+        "us": 1.480347668864
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 660,
+        "role": "q_norm",
+        "us": 1.070889803008
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 661,
+        "role": "k_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 662,
+        "role": "q_norm",
+        "us": 1.7953152579840002
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 663,
+        "role": "k_norm",
+        "us": 1.196876838656
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 664,
+        "role": "q_norm",
+        "us": 1.6378314634239999
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 665,
+        "role": "k_norm",
+        "us": 1.25987035648
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 666,
+        "role": "rope_q",
+        "us": 1.543341186688
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 668,
+        "role": "flash_score",
+        "us": 5.637919845248
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 669,
+        "role": "flash_combine",
+        "us": 2.7087212664319997
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 670,
+        "role": "attention_cast",
+        "us": 1.007896285184
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 672,
+        "role": "attention_residual_add",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 673,
+        "role": "ffn_rmsnorm",
+        "us": 3.370153203584
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 674,
+        "role": "ffn_rmsnorm",
+        "us": 1.700824981248
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 676,
+        "role": "ffn_activation_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 678,
+        "role": "ffn_down_cast",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 679,
+        "role": "ffn_residual_add",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 680,
+        "role": "block_output_contiguous",
+        "us": 1.007896285184
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 681,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.2756629268479998
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 682,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3543606332159999
+      },
+      {
+        "name": "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b",
+        "node": 667,
+        "role": "kv_store_k_rope_cast",
+        "us": 1.5748379456000001
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 686,
+        "role": "q_norm",
+        "us": 1.070889803008
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 687,
+        "role": "k_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 688,
+        "role": "q_norm",
+        "us": 1.826812016896
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 689,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 690,
+        "role": "q_norm",
+        "us": 1.88980553472
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 691,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 692,
+        "role": "rope_q",
+        "us": 1.6378314634239999
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 694,
+        "role": "flash_score",
+        "us": 5.5119328096
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 695,
+        "role": "flash_combine",
+        "us": 2.7087212664319997
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 696,
+        "role": "attention_cast",
+        "us": 1.007896285184
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 698,
+        "role": "attention_residual_add",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 699,
+        "role": "ffn_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 700,
+        "role": "ffn_rmsnorm",
+        "us": 1.700824981248
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 702,
+        "role": "ffn_activation_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 704,
+        "role": "ffn_down_cast",
+        "us": 1.070889803008
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 705,
+        "role": "ffn_residual_add",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 706,
+        "role": "block_output_contiguous",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 707,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.338656444672
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 708,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.41735415104
+      },
+      {
+        "name": "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b",
+        "node": 693,
+        "role": "kv_store_k_rope_cast",
+        "us": 1.606334704512
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 712,
+        "role": "q_norm",
+        "us": 1.070889803008
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 713,
+        "role": "k_norm",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 714,
+        "role": "q_norm",
+        "us": 1.858308775808
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 715,
+        "role": "k_norm",
+        "us": 1.196876838656
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 716,
+        "role": "q_norm",
+        "us": 1.7953152579840002
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 717,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 718,
+        "role": "rope_q",
+        "us": 1.480347668864
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 720,
+        "role": "flash_score",
+        "us": 5.795403639808
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 721,
+        "role": "flash_combine",
+        "us": 2.740218025344
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 722,
+        "role": "attention_cast",
+        "us": 1.070889803008
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 724,
+        "role": "attention_residual_add",
+        "us": 1.070889803008
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 725,
+        "role": "ffn_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 726,
+        "role": "ffn_rmsnorm",
+        "us": 1.7953152579840002
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 728,
+        "role": "ffn_activation_cast",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 730,
+        "role": "ffn_down_cast",
+        "us": 1.3228638743040002
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 731,
+        "role": "ffn_residual_add",
+        "us": 1.291367115392
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 732,
+        "role": "block_output_contiguous",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 733,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.244166167936
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 734,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3228638743040002
+      },
+      {
+        "name": "r_8_8_16_2_4_da68eeaa95084da816923e4165d65f2f6394390f4667676de3ed7e4f2a2c17c8",
+        "node": 719,
+        "role": "kv_store_k_rope_cast_with_q6_partial_reduce",
+        "us": 1.5118444277760001
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 738,
+        "role": "q_norm",
+        "us": 1.070889803008
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 739,
+        "role": "k_norm",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 740,
+        "role": "q_norm",
+        "us": 1.826812016896
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 741,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 742,
+        "role": "q_norm",
+        "us": 1.6378314634239999
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 743,
+        "role": "k_norm",
+        "us": 1.291367115392
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 744,
+        "role": "rope_q",
+        "us": 1.5118444277760001
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 746,
+        "role": "flash_score",
+        "us": 5.480436050688
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 747,
+        "role": "flash_combine",
+        "us": 2.7087212664319997
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 748,
+        "role": "attention_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 750,
+        "role": "attention_residual_add",
+        "us": 1.070889803008
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 751,
+        "role": "ffn_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 752,
+        "role": "ffn_rmsnorm",
+        "us": 1.73232174016
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 754,
+        "role": "ffn_activation_cast",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 756,
+        "role": "ffn_down_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 757,
+        "role": "ffn_residual_add",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 758,
+        "role": "block_output_contiguous",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 759,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.2756629268479998
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 760,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3228638743040002
+      },
+      {
+        "name": "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b",
+        "node": 745,
+        "role": "kv_store_k_rope_cast",
+        "us": 1.5748379456000001
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 764,
+        "role": "q_norm",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 765,
+        "role": "k_norm",
+        "us": 1.070889803008
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 766,
+        "role": "q_norm",
+        "us": 1.858308775808
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 767,
+        "role": "k_norm",
+        "us": 1.196876838656
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 768,
+        "role": "q_norm",
+        "us": 1.73232174016
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 769,
+        "role": "k_norm",
+        "us": 1.3228638743040002
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 770,
+        "role": "rope_q",
+        "us": 1.543341186688
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 772,
+        "role": "flash_score",
+        "us": 5.5119328096
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 773,
+        "role": "flash_combine",
+        "us": 2.7087212664319997
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 774,
+        "role": "attention_cast",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 776,
+        "role": "attention_residual_add",
+        "us": 1.165380079744
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 777,
+        "role": "ffn_rmsnorm",
+        "us": 3.30715968576
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 778,
+        "role": "ffn_rmsnorm",
+        "us": 1.858308775808
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 780,
+        "role": "ffn_activation_cast",
+        "us": 1.196876838656
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 782,
+        "role": "ffn_down_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 783,
+        "role": "ffn_residual_add",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 784,
+        "role": "block_output_contiguous",
+        "us": 1.007896285184
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 785,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.244166167936
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 786,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3228638743040002
+      },
+      {
+        "name": "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b",
+        "node": 771,
+        "role": "kv_store_k_rope_cast",
+        "us": 1.6378314634239999
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 790,
+        "role": "q_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 791,
+        "role": "k_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 792,
+        "role": "q_norm",
+        "us": 1.88980553472
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 793,
+        "role": "k_norm",
+        "us": 1.196876838656
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 794,
+        "role": "q_norm",
+        "us": 1.669328222336
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 795,
+        "role": "k_norm",
+        "us": 1.25987035648
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 796,
+        "role": "rope_q",
+        "us": 1.5748379456000001
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 798,
+        "role": "flash_score",
+        "us": 5.259958738304
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 799,
+        "role": "flash_combine",
+        "us": 2.740218025344
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 800,
+        "role": "attention_cast",
+        "us": 1.007896285184
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 802,
+        "role": "attention_residual_add",
+        "us": 1.007896285184
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 803,
+        "role": "ffn_rmsnorm",
+        "us": 3.6221272748800004
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 804,
+        "role": "ffn_rmsnorm",
+        "us": 1.73232174016
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 806,
+        "role": "ffn_activation_cast",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 808,
+        "role": "ffn_down_cast",
+        "us": 1.291367115392
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 809,
+        "role": "ffn_residual_add",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 810,
+        "role": "block_output_contiguous",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 811,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.2756629268479998
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 812,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.291367115392
+      },
+      {
+        "name": "r_8_8_16_2_4_da68eeaa95084da816923e4165d65f2f6394390f4667676de3ed7e4f2a2c17c8",
+        "node": 797,
+        "role": "kv_store_k_rope_cast_with_q6_partial_reduce",
+        "us": 1.385857392128
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 816,
+        "role": "q_norm",
+        "us": 1.070889803008
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 817,
+        "role": "k_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 818,
+        "role": "q_norm",
+        "us": 1.88980553472
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 819,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 820,
+        "role": "q_norm",
+        "us": 1.6378314634239999
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 821,
+        "role": "k_norm",
+        "us": 1.25987035648
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 822,
+        "role": "rope_q",
+        "us": 1.5748379456000001
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 824,
+        "role": "flash_score",
+        "us": 5.700913363072
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 825,
+        "role": "flash_combine",
+        "us": 2.740218025344
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 826,
+        "role": "attention_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 828,
+        "role": "attention_residual_add",
+        "us": 1.070889803008
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 829,
+        "role": "ffn_rmsnorm",
+        "us": 3.559133757056
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 830,
+        "role": "ffn_rmsnorm",
+        "us": 1.763818499072
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 832,
+        "role": "ffn_activation_cast",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 834,
+        "role": "ffn_down_cast",
+        "us": 1.480347668864
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 835,
+        "role": "ffn_residual_add",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 836,
+        "role": "block_output_contiguous",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 837,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.401649962496
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 838,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.41735415104
+      },
+      {
+        "name": "r_8_8_16_2_4_da68eeaa95084da816923e4165d65f2f6394390f4667676de3ed7e4f2a2c17c8",
+        "node": 823,
+        "role": "kv_store_k_rope_cast_with_q6_partial_reduce",
+        "us": 1.41735415104
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 842,
+        "role": "q_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 843,
+        "role": "k_norm",
+        "us": 1.070889803008
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 844,
+        "role": "q_norm",
+        "us": 1.7953152579840002
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 845,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 846,
+        "role": "q_norm",
+        "us": 1.669328222336
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 847,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 848,
+        "role": "rope_q",
+        "us": 1.7953152579840002
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 850,
+        "role": "flash_score",
+        "us": 5.19696522048
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 851,
+        "role": "flash_combine",
+        "us": 2.740218025344
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 852,
+        "role": "attention_cast",
+        "us": 1.007896285184
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 854,
+        "role": "attention_residual_add",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 855,
+        "role": "ffn_rmsnorm",
+        "us": 3.5906305159680003
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 856,
+        "role": "ffn_rmsnorm",
+        "us": 1.700824981248
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 858,
+        "role": "ffn_activation_cast",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 860,
+        "role": "ffn_down_cast",
+        "us": 1.291367115392
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 861,
+        "role": "ffn_residual_add",
+        "us": 1.196876838656
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 862,
+        "role": "block_output_contiguous",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 863,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.244166167936
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 864,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.385857392128
+      },
+      {
+        "name": "r_8_8_16_2_4_da68eeaa95084da816923e4165d65f2f6394390f4667676de3ed7e4f2a2c17c8",
+        "node": 849,
+        "role": "kv_store_k_rope_cast_with_q6_partial_reduce",
+        "us": 1.480347668864
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 868,
+        "role": "q_norm",
+        "us": 1.070889803008
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 869,
+        "role": "k_norm",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 870,
+        "role": "q_norm",
+        "us": 1.7953152579840002
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 871,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 872,
+        "role": "q_norm",
+        "us": 1.606334704512
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 873,
+        "role": "k_norm",
+        "us": 1.25987035648
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 874,
+        "role": "rope_q",
+        "us": 1.480347668864
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 876,
+        "role": "flash_score",
+        "us": 5.732410121984
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 877,
+        "role": "flash_combine",
+        "us": 2.771714784256
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 878,
+        "role": "attention_cast",
+        "us": 1.070889803008
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 880,
+        "role": "attention_residual_add",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 881,
+        "role": "ffn_rmsnorm",
+        "us": 3.5906305159680003
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 882,
+        "role": "ffn_rmsnorm",
+        "us": 1.826812016896
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 884,
+        "role": "ffn_activation_cast",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 886,
+        "role": "ffn_down_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 887,
+        "role": "ffn_residual_add",
+        "us": 1.25987035648
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 888,
+        "role": "block_output_contiguous",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 889,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.244166167936
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 890,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.3228638743040002
+      },
+      {
+        "name": "r_8_8_16_2_4_da68eeaa95084da816923e4165d65f2f6394390f4667676de3ed7e4f2a2c17c8",
+        "node": 875,
+        "role": "kv_store_k_rope_cast_with_q6_partial_reduce",
+        "us": 1.448850909952
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 894,
+        "role": "q_norm",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 895,
+        "role": "k_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 896,
+        "role": "q_norm",
+        "us": 1.7953152579840002
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 897,
+        "role": "k_norm",
+        "us": 1.2283735975680001
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 898,
+        "role": "q_norm",
+        "us": 1.6378314634239999
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 899,
+        "role": "k_norm",
+        "us": 1.25987035648
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 900,
+        "role": "rope_q",
+        "us": 1.5748379456000001
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 902,
+        "role": "flash_score",
+        "us": 5.4174425328639995
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 903,
+        "role": "flash_combine",
+        "us": 2.771714784256
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 904,
+        "role": "attention_cast",
+        "us": 1.039393044096
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 906,
+        "role": "attention_residual_add",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 907,
+        "role": "ffn_rmsnorm",
+        "us": 3.6221272748800004
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 908,
+        "role": "ffn_rmsnorm",
+        "us": 1.858308775808
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 910,
+        "role": "ffn_activation_cast",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 912,
+        "role": "ffn_down_cast",
+        "us": 1.291367115392
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 913,
+        "role": "ffn_residual_add",
+        "us": 1.165380079744
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 914,
+        "role": "block_output_contiguous",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 915,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.2756629268479998
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 916,
+        "role": "next_or_final_rmsnorm",
+        "us": 1.385857392128
+      },
+      {
+        "name": "r_8_8_16_2_4_da68eeaa95084da816923e4165d65f2f6394390f4667676de3ed7e4f2a2c17c8",
+        "node": 901,
+        "role": "kv_store_k_rope_cast_with_q6_partial_reduce",
+        "us": 1.448850909952
+      },
+      {
+        "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+        "node": 920,
+        "role": "q_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+        "node": 921,
+        "role": "k_norm",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+        "node": 922,
+        "role": "q_norm",
+        "us": 1.921302293632
+      },
+      {
+        "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+        "node": 923,
+        "role": "k_norm",
+        "us": 1.25987035648
+      },
+      {
+        "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+        "node": 924,
+        "role": "q_norm",
+        "us": 1.669328222336
+      },
+      {
+        "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+        "node": 925,
+        "role": "k_norm",
+        "us": 1.25987035648
+      },
+      {
+        "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+        "node": 926,
+        "role": "rope_q",
+        "us": 1.543341186688
+      },
+      {
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "node": 928,
+        "role": "flash_score",
+        "us": 5.448939291776
+      },
+      {
+        "name": "flash_fused_gmax_combine_32_128",
+        "node": 929,
+        "role": "flash_combine",
+        "us": 2.740218025344
+      },
+      {
+        "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+        "node": 930,
+        "role": "attention_cast",
+        "us": 1.007896285184
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 932,
+        "role": "attention_residual_add",
+        "us": 1.1023865619200002
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 933,
+        "role": "ffn_rmsnorm",
+        "us": 3.5906305159680003
+      },
+      {
+        "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "node": 934,
+        "role": "ffn_rmsnorm",
+        "us": 1.73232174016
+      },
+      {
+        "name": "E_128_32_3_580aa0aa9999c3d8a1832b525104064beb4d6cb6c60af8e4c4a44c217a895c0b",
+        "node": 936,
+        "role": "ffn_activation_cast",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+        "node": 938,
+        "role": "ffn_down_cast",
+        "us": 1.291367115392
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 939,
+        "role": "ffn_residual_add",
+        "us": 1.1338833208319998
+      },
+      {
+        "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+        "node": 940,
+        "role": "block_output_contiguous",
+        "us": 1.039393044096
+      },
+      {
+        "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "node": 941,
+        "role": "next_or_final_rmsnorm",
+        "us": 3.244166167936
+      },
+      {
+        "name": "E_32_32_4_c6fef3561a9fbeaff7b7cbdb3bebc148b857f3d21ebffbe74f25607423ae7719",
+        "node": 942,
+        "role": "next_or_final_rmsnorm",
+        "us": 2.551237471872
+      },
+      {
+        "name": "r_8_8_16_2_4_da68eeaa95084da816923e4165d65f2f6394390f4667676de3ed7e4f2a2c17c8",
+        "node": 927,
+        "role": "kv_store_k_rope_cast_with_q6_partial_reduce",
+        "us": 1.480347668864
+      },
+      {
+        "name": "E_1187_32_4_e1ccc42612aa8f28b20a61db46f51dbe08ce7e41f6c77f3966e2be8e85e1f10e",
+        "node": 944,
+        "role": "vocab_sampler",
+        "us": 3.716617551616
+      },
+      {
+        "name": "r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f",
+        "node": 945,
+        "role": "vocab_sampler",
+        "us": 38.898497256320006
+      },
+      {
+        "name": "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5",
+        "node": 946,
+        "role": "vocab_sampler",
+        "us": 11.370329967232
+      },
+      {
+        "name": "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c",
+        "node": 947,
+        "role": "vocab_sampler",
+        "us": 1.6378314634239999
+      }
+    ],
+    "roles_us": {
+      "attention_cast": 38.458,
+      "attention_residual_add": 40.725,
+      "block_output_contiguous": 37.513,
+      "ffn_activation_cast": 40.253,
+      "ffn_down_cast": 40.662,
+      "ffn_residual_add": 43.151,
+      "ffn_rmsnorm": 187.815,
+      "flash_combine": 100.884,
+      "flash_score": 204.697,
+      "initial_rmsnorm": 5.764,
+      "k_norm": 135.625,
+      "kv_store_k_rope_cast": 29.922,
+      "kv_store_k_rope_cast_with_q6_partial_reduce": 27.402,
+      "next_or_final_rmsnorm": 170.901,
+      "q_norm": 173.106,
+      "rope_q": 59.466,
+      "token_feedback": 5.386,
+      "vocab_sampler": 67.088
+    },
+    "total_us": 1408.819
+  },
+  "provenance": {
+    "llama_trace": {
+      "path": "/tmp/llama_nsys_d512.sqlite",
+      "sha256": "a3f990c5301f98a6cdee4e9a4f1abf11974d45e1c1a210443a827201974dac41"
+    },
+    "native_dag": {
+      "path": "/tmp/nv_native_semantic_dag_v2_20260805.json",
+      "sha256": "64112980bae438cd6565344060a01a1115ba8919b6bc78020fd2bec795459b0a"
+    },
+    "native_profile": {
+      "path": "/tmp/nv_native_semantic_profile_v2_20260805.jsonl",
+      "sha256": "a256c65b5f6d383aaf440781766423696793eac45f37a95b4c444e6cc13f3299"
+    }
+  },
+  "ranked_disjoint_family_deltas": [
+    {
+      "delta_us": 574.654,
+      "family": "norms",
+      "fusion_dataflow_and_body_attribution_us": 495.33,
+      "hidden_overlap_delta_us": 79.324,
+      "llama_exposed_shapley_us": 98.557,
+      "llama_hidden_shapley_us": 79.324,
+      "llama_total_shapley_us": 177.881,
+      "native_us": 673.211
+    },
+    {
+      "delta_us": 247.989,
+      "family": "flash",
+      "fusion_dataflow_and_body_attribution_us": 163.029,
+      "hidden_overlap_delta_us": 84.959,
+      "llama_exposed_shapley_us": 57.592,
+      "llama_hidden_shapley_us": 84.959,
+      "llama_total_shapley_us": 142.552,
+      "native_us": 305.581
+    },
+    {
+      "delta_us": 240.319,
+      "family": "residuals_casts_and_contiguous",
+      "fusion_dataflow_and_body_attribution_us": 240.106,
+      "hidden_overlap_delta_us": 0.213,
+      "llama_exposed_shapley_us": 0.443,
+      "llama_hidden_shapley_us": 0.213,
+      "llama_total_shapley_us": 0.656,
+      "native_us": 240.762
+    },
+    {
+      "delta_us": 71.215,
+      "family": "vocab_sampler_and_token_feedback",
+      "fusion_dataflow_and_body_attribution_us": 71.215,
+      "hidden_overlap_delta_us": 0.0,
+      "llama_exposed_shapley_us": 1.259,
+      "llama_hidden_shapley_us": 0.0,
+      "llama_total_shapley_us": 1.259,
+      "native_us": 72.474
+    },
+    {
+      "delta_us": 33.543,
+      "family": "rope_and_kv_store",
+      "fusion_dataflow_and_body_attribution_us": 17.965,
+      "hidden_overlap_delta_us": 15.579,
+      "llama_exposed_shapley_us": 83.247,
+      "llama_hidden_shapley_us": 15.579,
+      "llama_total_shapley_us": 98.825,
+      "native_us": 116.79
+    },
+    {
+      "delta_us": -59.639,
+      "family": "llama_projection_input_quantization",
+      "fusion_dataflow_and_body_attribution_us": -325.517,
+      "hidden_overlap_delta_us": 265.879,
+      "llama_exposed_shapley_us": 59.639,
+      "llama_hidden_shapley_us": 265.879,
+      "llama_total_shapley_us": 325.517,
+      "native_us": 0.0
+    }
+  ],
+  "reconciliation": {
+    "llama_exposed_authority_us": 300.736,
+    "llama_exposed_residual_us": 0.0,
+    "native_authority_us": 1408.818,
+    "native_residual_us": 0.001
+  },
+  "schema": "tinygrad.nv_decode.nonquant_role_partition.v1",
+  "status": "PASS",
+  "support_gap_mechanism_split": {
+    "fusion_dataflow_and_body_attribution_us": 662.128,
+    "llama_hidden_overlap_us": 445.954,
+    "total_nonquantized_delta_us": 1108.082
+  }
+}

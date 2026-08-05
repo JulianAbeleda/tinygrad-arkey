@@ -295,6 +295,8 @@ class CStyleLanguage(Renderer):
   # fdot2(acc, a, b) -> acc + a.x*b.x + a.y*b.y for packed-half2 a/b, fp32 accumulate (see the AMD provider's
   # semantics note on HIPRenderer below). exp2f(x) -> 2**x, the opt-in DECODE_FAST_EXP2 fast path.
   fdot2: Callable[[UOp, UOp, UOp], UOp]|None = None
+  # acc + dot(s8x4(a), s8x4(b)); a/b are uint32 bit containers.
+  int8x4_dot: Callable[[UOp, UOp, UOp], UOp]|None = None
   exp2f: Callable[[UOp], UOp]|None = None
   extra_args: list[str] = []
   float4: str|None = None
@@ -700,6 +702,8 @@ class HIPRenderer(CStyleLanguage):
   # while the UOp puts acc first (src[0]) so CUSTOMI carries a scalar shape -- {1}/{2}/{0} thread that through.
   fdot2 = staticmethod(lambda acc, a, b: UOp(Ops.CUSTOMI, dtypes.float32, (acc, a, b),
     arg="__builtin_amdgcn_fdot2({1}, {2}, {0}, false)"))
+  int8x4_dot = staticmethod(lambda acc, a, b: UOp(Ops.CUSTOMI, dtypes.int32, (acc, a, b),
+    arg="__builtin_amdgcn_sdot4({1}, {2}, {0}, false)"))
   exp2f = staticmethod(lambda x: UOp(Ops.CUSTOMI, x.dtype, (x,), arg="__builtin_amdgcn_exp2f({0})"))
   code_for_op = {**CStyleLanguage.code_for_op, Ops.TRUNC: _ocml("trunc"), Ops.SIN: _ocml("sin"),
                  Ops.LOG2: _ocml("log2"), Ops.EXP2: _ocml("exp2"), Ops.SQRT: _ocml("sqrt")}

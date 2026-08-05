@@ -1,0 +1,376 @@
+{
+  "schema": "tinygrad.cuda_decode_group_span_ledger.v1",
+  "evidence": "OBSERVATIONAL_EVENT_MARKERS",
+  "commit": "8f40797e3d2ce41c79ea2a4e3e4a5aa60df8316e",
+  "route": "DEV=CUDA CUDA_GRAPH_STREAMS=1",
+  "depth": 512,
+  "reps": 5,
+  "marker_off": [
+    {
+      "token": 330,
+      "wall_us": 5742.763984017074
+    },
+    {
+      "token": 330,
+      "wall_us": 5634.82497818768
+    },
+    {
+      "token": 330,
+      "wall_us": 5633.604014292359
+    },
+    {
+      "token": 330,
+      "wall_us": 5636.462010443211
+    },
+    {
+      "token": 330,
+      "wall_us": 5626.84703618288
+    }
+  ],
+  "marker_on": [
+    {
+      "groups": 6,
+      "group_span_sum_us": 5377.888,
+      "inter_group_gap_sum_us": 2.4,
+      "device_window_us": 5380.288,
+      "event_reconciliation_error_us": 0.000253,
+      "gaps_us": [
+        0.992,
+        0.352,
+        0.352,
+        0.352,
+        0.352
+      ],
+      "token": 330,
+      "wall_us": 5652.74606924504,
+      "outside_device_window_us": 272.45806924504086,
+      "rows": [
+        {
+          "group": 0,
+          "kernels": 32,
+          "name_sha256": "1048faaf98f8aac54652dae87987b4eb4f86688236089c22084b64015bce1c1c",
+          "start_us": 0.0,
+          "end_us": 187.58399784564972,
+          "span_us": 187.58399784564972
+        },
+        {
+          "group": 1,
+          "kernels": 64,
+          "name_sha256": "8973ca9e2956b7a0861a03cb4bd176969c4e765ca5f30374741031e7f9b5ed44",
+          "start_us": 188.57599794864655,
+          "end_us": 529.6000242233276,
+          "span_us": 341.0240113735199
+        },
+        {
+          "group": 2,
+          "kernels": 128,
+          "name_sha256": "784fa97e9c7a6d152047bc7737dc777a8471ebdc8f6c905dd186d24f9144e27c",
+          "start_us": 529.9519896507263,
+          "end_us": 1120.0000047683716,
+          "span_us": 590.0480151176453
+        },
+        {
+          "group": 3,
+          "kernels": 256,
+          "name_sha256": "ea3a29033550d05ea1cbd75fb951019a9b2893552902c13a970c117baf26a0b6",
+          "start_us": 1120.352029800415,
+          "end_us": 2297.0240116119385,
+          "span_us": 1176.6719818115234
+        },
+        {
+          "group": 4,
+          "kernels": 512,
+          "name_sha256": "f1efdbde9ffb817e2af4729d30914907edb1a652b2b179add70bb084426e4795",
+          "start_us": 2297.3759174346924,
+          "end_us": 4735.167980194092,
+          "span_us": 2437.7920627593994
+        },
+        {
+          "group": 5,
+          "kernels": 29,
+          "name_sha256": "5c0fa614aeb08c36e5988ff9b28500fe1566483b6471f32f0009ba0abf03e593",
+          "start_us": 4735.519886016846,
+          "end_us": 5380.288124084473,
+          "span_us": 644.7679996490479
+        }
+      ]
+    },
+    {
+      "groups": 6,
+      "group_span_sum_us": 5376.32,
+      "inter_group_gap_sum_us": 2.368,
+      "device_window_us": 5378.688,
+      "event_reconciliation_error_us": -0.000253,
+      "gaps_us": [
+        0.96,
+        0.352,
+        0.352,
+        0.352,
+        0.352
+      ],
+      "token": 330,
+      "wall_us": 5637.179012410343,
+      "outside_device_window_us": 258.4910124103426,
+      "rows": [
+        {
+          "group": 0,
+          "kernels": 32,
+          "name_sha256": "1048faaf98f8aac54652dae87987b4eb4f86688236089c22084b64015bce1c1c",
+          "start_us": 0.0,
+          "end_us": 185.98400056362152,
+          "span_us": 185.98400056362152
+        },
+        {
+          "group": 1,
+          "kernels": 64,
+          "name_sha256": "8973ca9e2956b7a0861a03cb4bd176969c4e765ca5f30374741031e7f9b5ed44",
+          "start_us": 186.94399297237396,
+          "end_us": 525.9519815444946,
+          "span_us": 339.00800347328186
+        },
+        {
+          "group": 2,
+          "kernels": 128,
+          "name_sha256": "784fa97e9c7a6d152047bc7737dc777a8471ebdc8f6c905dd186d24f9144e27c",
+          "start_us": 526.3040065765381,
+          "end_us": 1118.399977684021,
+          "span_us": 592.0959711074829
+        },
+        {
+          "group": 3,
+          "kernels": 256,
+          "name_sha256": "ea3a29033550d05ea1cbd75fb951019a9b2893552902c13a970c117baf26a0b6",
+          "start_us": 1118.7520027160645,
+          "end_us": 2293.3759689331055,
+          "span_us": 1174.623966217041
+        },
+        {
+          "group": 4,
+          "kernels": 512,
+          "name_sha256": "f1efdbde9ffb817e2af4729d30914907edb1a652b2b179add70bb084426e4795",
+          "start_us": 2293.7281131744385,
+          "end_us": 4731.520175933838,
+          "span_us": 2437.7920627593994
+        },
+        {
+          "group": 5,
+          "kernels": 29,
+          "name_sha256": "5c0fa614aeb08c36e5988ff9b28500fe1566483b6471f32f0009ba0abf03e593",
+          "start_us": 4731.872081756592,
+          "end_us": 5378.687858581543,
+          "span_us": 646.8160152435303
+        }
+      ]
+    },
+    {
+      "groups": 6,
+      "group_span_sum_us": 5370.112,
+      "inter_group_gap_sum_us": 2.496,
+      "device_window_us": 5372.608,
+      "event_reconciliation_error_us": 0.000238,
+      "gaps_us": [
+        1.088,
+        0.352,
+        0.352,
+        0.352,
+        0.352
+      ],
+      "token": 330,
+      "wall_us": 5635.679000988603,
+      "outside_device_window_us": 263.07100098860246,
+      "rows": [
+        {
+          "group": 0,
+          "kernels": 32,
+          "name_sha256": "1048faaf98f8aac54652dae87987b4eb4f86688236089c22084b64015bce1c1c",
+          "start_us": 0.0,
+          "end_us": 186.0480010509491,
+          "span_us": 186.0480010509491
+        },
+        {
+          "group": 1,
+          "kernels": 64,
+          "name_sha256": "8973ca9e2956b7a0861a03cb4bd176969c4e765ca5f30374741031e7f9b5ed44",
+          "start_us": 187.1359944343567,
+          "end_us": 526.0159969329834,
+          "span_us": 338.8800024986267
+        },
+        {
+          "group": 2,
+          "kernels": 128,
+          "name_sha256": "784fa97e9c7a6d152047bc7737dc777a8471ebdc8f6c905dd186d24f9144e27c",
+          "start_us": 526.3680219650269,
+          "end_us": 1116.6080236434937,
+          "span_us": 590.2400016784668
+        },
+        {
+          "group": 3,
+          "kernels": 256,
+          "name_sha256": "ea3a29033550d05ea1cbd75fb951019a9b2893552902c13a970c117baf26a0b6",
+          "start_us": 1116.960048675537,
+          "end_us": 2291.3920879364014,
+          "span_us": 1174.4320392608643
+        },
+        {
+          "group": 4,
+          "kernels": 512,
+          "name_sha256": "f1efdbde9ffb817e2af4729d30914907edb1a652b2b179add70bb084426e4795",
+          "start_us": 2291.7439937591553,
+          "end_us": 4727.488040924072,
+          "span_us": 2435.744047164917
+        },
+        {
+          "group": 5,
+          "kernels": 29,
+          "name_sha256": "5c0fa614aeb08c36e5988ff9b28500fe1566483b6471f32f0009ba0abf03e593",
+          "start_us": 4727.839946746826,
+          "end_us": 5372.608184814453,
+          "span_us": 644.7679996490479
+        }
+      ]
+    },
+    {
+      "groups": 6,
+      "group_span_sum_us": 5372.608,
+      "inter_group_gap_sum_us": 3.456,
+      "device_window_us": 5376.064,
+      "event_reconciliation_error_us": -0.000313,
+      "gaps_us": [
+        1.088,
+        0.352,
+        1.312,
+        0.352,
+        0.352
+      ],
+      "token": 330,
+      "wall_us": 5638.025933876634,
+      "outside_device_window_us": 261.96193387663334,
+      "rows": [
+        {
+          "group": 0,
+          "kernels": 32,
+          "name_sha256": "1048faaf98f8aac54652dae87987b4eb4f86688236089c22084b64015bce1c1c",
+          "start_us": 0.0,
+          "end_us": 187.48800456523895,
+          "span_us": 187.48800456523895
+        },
+        {
+          "group": 1,
+          "kernels": 64,
+          "name_sha256": "8973ca9e2956b7a0861a03cb4bd176969c4e765ca5f30374741031e7f9b5ed44",
+          "start_us": 188.57599794864655,
+          "end_us": 527.4559855461121,
+          "span_us": 338.8800024986267
+        },
+        {
+          "group": 2,
+          "kernels": 128,
+          "name_sha256": "784fa97e9c7a6d152047bc7737dc777a8471ebdc8f6c905dd186d24f9144e27c",
+          "start_us": 527.8080105781555,
+          "end_us": 1117.2800064086914,
+          "span_us": 589.4719958305359
+        },
+        {
+          "group": 3,
+          "kernels": 256,
+          "name_sha256": "ea3a29033550d05ea1cbd75fb951019a9b2893552902c13a970c117baf26a0b6",
+          "start_us": 1118.5920238494873,
+          "end_us": 2292.8318977355957,
+          "span_us": 1174.239993095398
+        },
+        {
+          "group": 4,
+          "kernels": 512,
+          "name_sha256": "f1efdbde9ffb817e2af4729d30914907edb1a652b2b179add70bb084426e4795",
+          "start_us": 2293.1840419769287,
+          "end_us": 4730.976104736328,
+          "span_us": 2437.7920627593994
+        },
+        {
+          "group": 5,
+          "kernels": 29,
+          "name_sha256": "5c0fa614aeb08c36e5988ff9b28500fe1566483b6471f32f0009ba0abf03e593",
+          "start_us": 4731.328010559082,
+          "end_us": 5376.063823699951,
+          "span_us": 644.7359919548035
+        }
+      ]
+    },
+    {
+      "groups": 6,
+      "group_span_sum_us": 5380.992,
+      "inter_group_gap_sum_us": 2.4,
+      "device_window_us": 5383.392,
+      "event_reconciliation_error_us": -0.000224,
+      "gaps_us": [
+        0.992,
+        0.352,
+        0.352,
+        0.352,
+        0.352
+      ],
+      "token": 330,
+      "wall_us": 5650.350940413773,
+      "outside_device_window_us": 266.95894041377323,
+      "rows": [
+        {
+          "group": 0,
+          "kernels": 32,
+          "name_sha256": "1048faaf98f8aac54652dae87987b4eb4f86688236089c22084b64015bce1c1c",
+          "start_us": 0.0,
+          "end_us": 186.5919977426529,
+          "span_us": 186.5919977426529
+        },
+        {
+          "group": 1,
+          "kernels": 64,
+          "name_sha256": "8973ca9e2956b7a0861a03cb4bd176969c4e765ca5f30374741031e7f9b5ed44",
+          "start_us": 187.58399784564972,
+          "end_us": 526.5600085258484,
+          "span_us": 338.9759957790375
+        },
+        {
+          "group": 2,
+          "kernels": 128,
+          "name_sha256": "784fa97e9c7a6d152047bc7737dc777a8471ebdc8f6c905dd186d24f9144e27c",
+          "start_us": 526.9119739532471,
+          "end_us": 1119.00794506073,
+          "span_us": 592.0959711074829
+        },
+        {
+          "group": 3,
+          "kernels": 256,
+          "name_sha256": "ea3a29033550d05ea1cbd75fb951019a9b2893552902c13a970c117baf26a0b6",
+          "start_us": 1119.3599700927734,
+          "end_us": 2296.031951904297,
+          "span_us": 1176.6719818115234
+        },
+        {
+          "group": 4,
+          "kernels": 512,
+          "name_sha256": "f1efdbde9ffb817e2af4729d30914907edb1a652b2b179add70bb084426e4795",
+          "start_us": 2296.38409614563,
+          "end_us": 4736.224174499512,
+          "span_us": 2439.840078353882
+        },
+        {
+          "group": 5,
+          "kernels": 29,
+          "name_sha256": "5c0fa614aeb08c36e5988ff9b28500fe1566483b6471f32f0009ba0abf03e593",
+          "start_us": 4736.576080322266,
+          "end_us": 5383.391857147217,
+          "span_us": 646.8160152435303
+        }
+      ]
+    }
+  ],
+  "median": {
+    "marker_off_wall_us": 5634.82497818768,
+    "marker_on_wall_us": 5638.025933876634,
+    "device_window_us": 5378.688,
+    "group_span_sum_us": 5376.32,
+    "gap_sum_us": 2.4,
+    "outside_window_us": 263.07100098860246,
+    "marker_overhead_us": 3.2009556889533997
+  }
+}

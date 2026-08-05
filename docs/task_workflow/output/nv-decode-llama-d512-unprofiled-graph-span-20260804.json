@@ -1,0 +1,70 @@
+{
+  "schema": "arkey.nv_decode.llama_unprofiled_graph_span.v1",
+  "date": "2026-08-04",
+  "status": "PASS",
+  "evidence_class": "OBSERVED_DIAGNOSTIC_UNPROFILED",
+  "authority": {
+    "llama_commit": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a",
+    "patch_sha256": "c91ae9bfbabd20155120f64d2e7b1e76b71fdf60117d392c9f71f6482bdef2ce",
+    "patch_path": "/tmp/llama-p4-span.patch",
+    "model_sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+    "model_bytes": 5027783488,
+    "diagnostic_binary_sha256": "22ddbfb5d610d4ec9879bf22af5ed561d65a00c43b5dbbfa4a35efa0f28d1c96",
+    "diagnostic_libggml_cuda_sha256": "ee93517378db0fdac3ae8e3b36061143f80ed075053aeac921718cef63d30410",
+    "same_build_unpatched_libggml_cuda_sha256": "7e6f4e97130734c1137b7bf5fc53088303a6afb4629912b967af4d4d4f5b5568",
+    "patched_fatbin_sha256": "23759674d7794b386ef991cdee72b0b21a8a69e3a2146f658526ac6e59bbe131",
+    "same_build_unpatched_fatbin_sha256": "23759674d7794b386ef991cdee72b0b21a8a69e3a2146f658526ac6e59bbe131",
+    "fatbin_byte_identical": true,
+    "graph_nodes_all_sampled_replays": 762,
+    "argv": "llama-bench -m /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf -ngl 99 -fa 1 -p 0 -n 10 -d 512 -r 7 -o json",
+    "warmup_rule": "discard samples_ns[0] and graph launch indices 0 through 8",
+    "gpu": "NVIDIA GeForce RTX 5090 sm_120",
+    "gpu_uuid": "GPU-c800ade9-21ea-2e55-f75c-6d7a458fb186",
+    "driver": "595.84",
+    "cuda_compiler": "13.2.86",
+    "host_compiler": "g++ 13.3.0",
+    "cmake": "3.28.3"
+  },
+  "protocol": {
+    "lock": "/tmp/gpu-bench.lock",
+    "order": ["off_a", "density1_a", "density2_even", "density2_odd", "density1_b", "off_b"],
+    "events": "CUDA timing events immediately before cudaGraphLaunch and immediately after it on the launch stream; stop event synchronized on the host",
+    "graph_topology_effect": "events are outside capture; every sampled graph reports 762 nodes",
+    "raw_artifact_hash_manifest": "/tmp/p4_artifact_sha256.txt"
+  },
+  "wall_ms_per_token_post_warmup": {
+    "off_a": {"n": 6, "median": 3.97191805, "mad": 0.00088770, "p5": 3.970688725, "p95": 3.97576395},
+    "density1_a": {"n": 6, "median": 3.98208460, "mad": 0.00169870, "p5": 3.980192575, "p95": 3.98759640},
+    "density2_even": {"n": 6, "median": 3.97788280, "mad": 0.00236145, "p5": 3.97515335, "p95": 3.989426675},
+    "density2_odd": {"n": 6, "median": 3.97479210, "mad": 0.00103145, "p5": 3.97275075, "p95": 3.97656820},
+    "density1_b": {"n": 6, "median": 3.98458850, "mad": 0.00478940, "p5": 3.97970240, "p95": 4.000601975},
+    "off_b": {"n": 6, "median": 3.97107280, "mad": 0.00057360, "p5": 3.97004365, "p95": 3.972243475},
+    "pooled_off_median": 3.97178695,
+    "off_bracket_drift_percent": 0.021283
+  },
+  "graph_span_ms_post_warmup": {
+    "density1_a": {"n": 60, "median": 3.88891208, "mad": 0.00228810, "p5": 3.885263893, "p95": 3.89583209},
+    "density2_even": {"n": 30, "median": 3.88988805, "mad": 0.00199998, "p5": 3.883755183, "p95": 3.893683210},
+    "density2_odd": {"n": 30, "median": 3.889312025, "mad": 0.00207997, "p5": 3.885468865, "p95": 3.894033603},
+    "density1_b": {"n": 60, "median": 3.89011192, "mad": 0.00270403, "p5": 3.884872043, "p95": 3.898691275},
+    "pooled_density1_median": 3.88980794,
+    "density1_repeat_median_difference_ms": 0.00119984
+  },
+  "instrumentation_controls": {
+    "density1_a_wall_delta_percent_vs_pooled_off": 0.259270,
+    "density2_even_wall_delta_percent_vs_pooled_off": 0.153479,
+    "density2_odd_wall_delta_percent_vs_pooled_off": 0.075662,
+    "density1_b_wall_delta_percent_vs_pooled_off": 0.322312,
+    "maximum_absolute_wall_delta_percent": 0.322312,
+    "gate_percent": 1.0,
+    "gate_pass": true
+  },
+  "result": {
+    "unprofiled_marker_free_wall_ms_per_token": 3.97178695,
+    "unprofiled_cuda_graph_replay_span_ms": 3.88980794,
+    "derived_outside_graph_remainder_ms_per_token": 0.08197901,
+    "derived_outside_graph_remainder_percent_of_wall": 2.063,
+    "interpretation": "The point remainder is wall minus replay span across bracketed diagnostic arms. It includes benchmark and runtime work outside the graph and is not a host-launch-cost measurement.",
+    "p4_gate": "PASS"
+  }
+}
