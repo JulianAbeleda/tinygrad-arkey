@@ -1,5 +1,5 @@
 from __future__ import annotations
-import collections, time, json, os, pathlib
+import collections, hashlib, time, json, os, pathlib
 from typing import Any, cast
 from tinygrad.helpers import round_up, PROFILE, ALL2ALL, merge_dicts, getenv, suppress_finalizing, TracingKey, unwrap
 
@@ -11,6 +11,55 @@ from tinygrad.helpers import round_up, PROFILE, ALL2ALL, merge_dicts, getenv, su
 # occupancy/VALU/memory-busy metrics are not yet produced. Off by default until that is resolved.
 PMC_GRAPH = getenv("PMC_GRAPH", 0)
 GRAPH_PROFILE_JSON = os.environ.get("HCQ_GRAPH_PROFILE_JSON", "")
+MULTI_QUEUE_CENSUS_JSON = os.environ.get("HCQ_MULTI_QUEUE_CENSUS_JSON", "")
+# Empty is closed-default.  A bring-up owner supplies exact support-kernel
+# names (or explicit `prefix:` entries) from a captured DAG; quantized/MMQ
+# kernels are intentionally never inferred eligible here.
+NV_MULTI_QUEUE_PROGRAMS = frozenset(x for x in os.environ.get("HCQ_NV_MULTI_QUEUE_PROGRAMS", "").split(",") if x)
+
+def _parse_nv_multi_queue_indices(spec:str) -> frozenset[int]:
+  """Parse an opt-in exact graph-index selector (for example ``11-17,37``).
+
+  This is intentionally an experiment-only complement to the program-name
+  selector.  It permits dependency-coherent occurrences to move together
+  without admitting every occurrence of the same generated program.
+  """
+  out:set[int] = set()
+  for item in filter(None, (x.strip() for x in spec.split(","))):
+    lo, sep, hi = item.partition("-")
+    if not lo.isdecimal() or (sep and not hi.isdecimal()): raise ValueError(f"invalid HCQ_NV_MULTI_QUEUE_INDICES item: {item!r}")
+    a, b = int(lo), int(hi) if sep else int(lo)
+    if b < a: raise ValueError(f"descending HCQ_NV_MULTI_QUEUE_INDICES range: {item!r}")
+    out.update(range(a, b+1))
+  return frozenset(out)
+
+NV_MULTI_QUEUE_INDICES = _parse_nv_multi_queue_indices(os.environ.get("HCQ_NV_MULTI_QUEUE_INDICES", ""))
+NV_MULTI_QUEUE_CUT_POLICY = os.environ.get("HCQ_NV_MULTI_QUEUE_CUT_POLICY", "")
+
+def _load_nv_multi_queue_cut_policy(path:str) -> list[dict[str, Any]]:
+  if not path: return []
+  with open(path, encoding="utf-8") as f: payload = json.load(f)
+  if payload.get("schema") != "tinygrad.nv_multi_queue_cut_policy.v1": raise ValueError("invalid NV multi-queue cut policy schema")
+  return payload["graphs"]
+
+def _nv_program_identity(name:str) -> str:
+  stem, sep, suffix = name.rpartition("_")
+  return stem if sep and len(suffix) == 64 and all(c in "0123456789abcdef" for c in suffix) else name
+
+def _match_nv_multi_queue_cut_policy(names:list[str], rows:list[dict[str, Any]]) -> frozenset[int]:
+  matches = []
+  for row in rows:
+    count = int(row["prefix_count"])
+    if len(names) < count: continue
+    identities = [_nv_program_identity(x) for x in names[:count]]
+    digest = hashlib.sha256("\n".join(identities).encode()).hexdigest()
+    if digest != row["prefix_name_digest"]: continue
+    selected = row["selected"]
+    if any(int(x["index"]) >= count or _nv_program_identity(names[int(x["index"])]) != x["identity"] for x in selected):
+      raise ValueError("NV multi-queue cut policy selected-name mismatch")
+    matches.append(frozenset(int(x["index"]) for x in selected))
+  if len(matches) > 1: raise ValueError("ambiguous NV multi-queue cut policy")
+  return matches[0] if matches else frozenset()
 
 def graph_profile_payload(entries, deps, sigs):
   rows = [{"device": ent.device, "name": str(ent.name), "metadata": ent.metadata, "start": str(sigs[ent.st_id]),
@@ -65,7 +114,16 @@ class HCQGraph(MultiGraphRunner):
     # compute queue to ensure exclusive access. The compute queue signals the completion of the graph, synchronizing with the device's copy queue.
     self.ji_schedule: dict[int, tuple[HCQCompiled, HWQueue, list, list, HCQSignal, int|None]] = {}
 
-    self.comp_queues: dict[HCQCompiled, HWQueue] = {dev: unwrap(dev.hw_compute_queue_t)() for dev in self.devices}
+    self.compute_queues: dict[HCQCompiled, list[HWQueue]] = {
+      dev: [factory() for _, factory in dev.hw_compute_queues()] for dev in self.devices}
+    self.comp_queues: dict[HCQCompiled, HWQueue] = {dev: queues[0] for dev, queues in self.compute_queues.items() if queues}
+    self.compute_queue_load: dict[HWQueue, int] = collections.defaultdict(int)
+    self.nv_multi_queue_indices = _match_nv_multi_queue_cut_policy(
+      [rt.name if rt is not None else "<non-program>" for rt in self.runtimes], _load_nv_multi_queue_cut_policy(NV_MULTI_QUEUE_CUT_POLICY))
+    # Opt-in construction census.  This is deliberately produced before any
+    # submission and contains no timing information; it proves whether a
+    # name-pinned multi-queue experiment actually changed graph placement.
+    self.multi_queue_assignments: list[dict[str, Any]] = []
     self.copy_queues: dict[tuple[HCQCompiled, int], HWQueue] = {} # lazy allocation, keyed by (device, queue_idx)
     self.rdma_queues: dict[tuple[HCQCompiled, HCQCompiled], Any] = {} # disabled in this fork; kept for explicit unsupported-path checks
     self.num_copy_queues: int = getenv("HCQ_NUM_SDMA", min(len(self.devices), 8) if ALL2ALL >= 1 else 1)
@@ -95,7 +153,8 @@ class HCQGraph(MultiGraphRunner):
     self.queue_access: dict[HWQueue, dict[HWQueue, int|None]] = collections.defaultdict(lambda: collections.defaultdict(lambda: None))
     self.dev_access: dict[HWQueue, set[HCQCompiled]] = collections.defaultdict(set)
 
-    for dev, queue in self.comp_queues.items(): self.dev_access[queue].add(dev)
+    for dev, queues in self.compute_queues.items():
+      for queue in queues: self.dev_access[queue].add(dev)
 
     # Per-graph PMC capture: one buffer slot per program dispatch on each pmc-enabled device.
     self.pmc_prog_js: dict[Any, list[int]] = {}
@@ -132,7 +191,7 @@ class HCQGraph(MultiGraphRunner):
       if runtime is not None: self.device_vars[enqueue_dev] = merge_dicts([self.device_vars[enqueue_dev], {k: 0 for k in ast.arg.runtimevars}])
 
       if runtime is not None:
-        enqueue_queue = self.comp_queues[enqueue_dev]
+        enqueue_queue = self._pick_compute_queue(enqueue_dev, runtime, j)
       elif is_rdma:
         raise RuntimeError("RDMA peer-copy path was removed from this fork; use same-peer copies.")
       else:
@@ -159,6 +218,11 @@ class HCQGraph(MultiGraphRunner):
           enqueue_dev, out_signal, j, is_copy=is_xfer)
 
       self.ji_schedule[j] = (enqueue_dev, enqueue_queue, sync_signals, opt_deps[::-1], out_signal, None if runtime is not None else (j + 1))
+      if runtime is not None:
+        self.compute_queue_load[enqueue_queue] += 1
+        if MULTI_QUEUE_CENSUS_JSON and enqueue_dev.device.split(":", 1)[0] == "NV":
+          self.multi_queue_assignments.append({"graph_idx": j, "name": runtime.name,
+                                                "queue": self.compute_queues[enqueue_dev].index(enqueue_queue)})
 
       # Collect profile information if profiling is enabled.
       if PROFILE:
@@ -180,6 +244,21 @@ class HCQGraph(MultiGraphRunner):
 
       self.last_j[enqueue_queue] = j
 
+    # An auxiliary queue may end in a result with no later consumer.  Give its
+    # final dispatch an explicit completion signal so the primary queue can
+    # join it before publishing the device timeline.  This must happen before
+    # hardware command encoding below.
+    for dev, queues in self.compute_queues.items():
+      for queue in queues[1:]:
+        if (last := self.last_j[queue]) is not None:
+          self.ji_schedule[last] = self.ji_schedule[last][:5] + (last + 1,)
+
+    if MULTI_QUEUE_CENSUS_JSON:
+      queue_counts = dict(collections.Counter(x["queue"] for x in self.multi_queue_assignments))
+      payload = {"schema": "tinygrad.hcq_multi_queue_census.v1", "calls": len(self.multi_queue_assignments),
+                 "queue_counts": queue_counts, "aux_calls": queue_counts.get(1, 0), "assignments": self.multi_queue_assignments}
+      with open(MULTI_QUEUE_CENSUS_JSON, "a") as f: f.write(json.dumps(payload, sort_keys=True) + "\n")
+
     # Check which signals are used in the profile graph.
     self.prof_signal_is_used: set[int] = {sid for ent in self.prof_graph_entries for sid in (ent.st_id, ent.en_id)}
 
@@ -192,8 +271,9 @@ class HCQGraph(MultiGraphRunner):
     self.virt_timeline_signals = {dev: unwrap(dev.signal_t)(HCQBuffer(timeline_sigaddrs[dev], 16),owner=dev,is_timeline=True) for dev in self.devices}
 
     for dev in self.devices:
-      self.comp_queues[dev].memory_barrier().wait(self.virt_timeline_signals[dev], self.virt_timeline_vals[dev]) \
-                           .wait(self.kick_signals[dev.peer_group], self.kickoff_var).signal(self.signals[dev], self.kickoff_var)
+      for queue in self.compute_queues[dev]:
+        queue.memory_barrier().wait(self.virt_timeline_signals[dev], self.virt_timeline_vals[dev]) \
+             .wait(self.kick_signals[dev.peer_group], self.kickoff_var).signal(self.signals[dev], self.kickoff_var)
 
     for j, ((dev_idx, ast, bufs, _), runtime) in enumerate(zip(self.calls, self.runtimes)):
       enqueue_dev, enqueue_queue, sync_signals, deps, signal, signal_val = self.ji_schedule[j]
@@ -253,11 +333,32 @@ class HCQGraph(MultiGraphRunner):
         for copy_q in self._dev_copy_queues(dep_dev):
           if copy_q in self.signals: self.comp_queues[dev].wait(self.signals[copy_q], cast(int, self.last_j[copy_q]) + 1)
 
+      # The primary queue owns the device timeline.  It joins every used
+      # auxiliary compute queue first, preserving the old one monotonic
+      # timeline contract for copies, graph replay, and synchronize().
+      for queue in self.compute_queues[dev][1:]:
+        if queue in self.signals and self.last_j[queue] is not None:
+          self.comp_queues[dev].wait(self.signals[queue], cast(int, self.last_j[queue]) + 1)
       self.comp_queues[dev].signal(self.virt_timeline_signals[dev], self.virt_timeline_vals[dev] + 1).bind(dev)
+      for queue in self.compute_queues[dev][1:]: queue.bind(dev)
       for copy_q in self._dev_copy_queues(dev): copy_q.bind(dev)
 
     self.last_timeline: dict[HCQCompiled, tuple[HCQSignal, int]] = {dev: (dev.timeline_signal, 0) for dev in self.devices}
-    self.queue_signals_to_reset = [self.signals[q] for q in list(self.comp_queues.values()) + list(self.copy_queues.values()) if q in self.signals]
+    self.queue_signals_to_reset = [self.signals[q] for q in [q for qs in self.compute_queues.values() for q in qs] + list(self.copy_queues.values()) if q in self.signals]
+
+  def _pick_compute_queue(self, dev:HCQCompiled, runtime, graph_idx:int=-1) -> HWQueue:
+    queues = self.compute_queues[dev]
+    # Native NV admission is deliberately name-pinned to the independently
+    # captured support tail.  All other backends and every unlisted program
+    # retain byte-identical primary-queue scheduling.
+    if dev.device.split(":", 1)[0] != "NV" or len(queues) == 1: return queues[0]
+    # An occurrence cut denotes queue 1 exactly; it must not depend on the
+    # incidental number of earlier calls on either queue.
+    if graph_idx in (getattr(self, "nv_multi_queue_indices", frozenset()) or NV_MULTI_QUEUE_INDICES): return queues[1]
+    admitted = runtime.name in NV_MULTI_QUEUE_PROGRAMS or any(
+      rule.startswith("prefix:") and runtime.name.startswith(rule.removeprefix("prefix:")) for rule in NV_MULTI_QUEUE_PROGRAMS)
+    if not admitted: return queues[0]
+    return min(queues, key=lambda q: self.compute_queue_load[q])
 
   def _resolve_deps(self, bufs, outs, enqueue_queue, enqueue_dev, out_signal, j, is_copy, rdma_qp=None):
     rdeps = self._access_resources(bufs, outs, (enqueue_queue, j + 1)) #type:ignore
@@ -328,7 +429,8 @@ class HCQGraph(MultiGraphRunner):
     for q in self.rdma_queues.values(): q.submit(q.dev, hcq_var_vals)
 
     for dev in self.devices:
-      self.comp_queues[dev].submit(dev, hcq_var_vals_local:=hcq_var_vals|self.device_vars.get(dev, {}))
+      hcq_var_vals_local = hcq_var_vals|self.device_vars.get(dev, {})
+      for compute_queue in self.compute_queues[dev]: compute_queue.submit(dev, hcq_var_vals_local)
       for copy_queue in self._dev_copy_queues(dev): copy_queue.submit(dev, hcq_var_vals_local)
       self.last_timeline[dev] = (dev.timeline_signal, dev.next_timeline())
 

@@ -1,9 +1,19 @@
 from dataclasses import dataclass, field, replace
 from tinygrad.dtype import dtypes, AddrSpace, PtrDType, ImageDType
-from tinygrad.uop.ops import (AxisType, UOp, UPat, PatternMatcher, Ops, GroupOp, ScheduleHints, bind_memory_semantic_owner,
-                             memory_semantic_owner, propagate_memory_semantic, graph_rewrite, track_rewrites)
-from tinygrad.uop import MemorySemanticOwner
-from tinygrad.helpers import VIZ, pluralize, all_int
+from tinygrad.uop.ops import (AxisType, UOp, UPat, PatternMatcher, Ops, GroupOp, ScheduleHints, ParamArg, ReduceOutputSpec, CallInfo,
+                             bind_memory_semantic_owner, memory_semantic_owner, propagate_memory_semantic, graph_rewrite, track_rewrites)
+from tinygrad.uop import MemorySemanticOwner, MemorySemanticClass
+from tinygrad.helpers import VIZ, ContextVar, pluralize, all_int
+
+# Candidate callify contract. It remains closed by default until the independent
+# substrate census, logits, and reverse wall gates qualify it. Setting this to
+# zero is an exact rollback to the legacy materialization behavior.
+CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT = ContextVar("CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT", 0)
+
+# A separate, closed gate for turning one typed semantic value which is about
+# to become an opaque CALL input into its own precompiled producer.  This is
+# deliberately not implied by output redirect: it changes the call graph.
+CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER = ContextVar("CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER", 0)
 
 @dataclass
 class AllocCtx:
@@ -119,19 +129,178 @@ def contiguous_mops_to_view(c:UOp, src:UOp):
 
 def _precompiled_output_redirect(s:UOp, t:UOp) -> UOp|None:
   # how output s lands in the caller's buffer t, or None if it must be copied into t
+  # An owned contiguous result is the same allocation contract with an explicit
+  # semantic carrier. Materialize its source directly into this invocation's
+  # resolved output slot and retain ownership on the dependency-bearing AFTER.
+  # This is intentionally exact: no movement/view may sit between the owner and
+  # CONTIGUOUS, and dtype/span must match the allocated slot.
+  if CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT and s.op is Ops.MEMORY_SEMANTIC and len(s.src) == 1 and s.src[0].op is Ops.CONTIGUOUS:
+    contig = s.src[0]
+    if s.dtype != t.dtype or s.shape != t.shape: return None
+    placed = t.after(t.store(contig.src[0]))
+    if (owner := memory_semantic_owner(s)) is not None: bind_memory_semantic_owner(placed, owner)
+    return placed
   # materialize straight into t
   if s.op is Ops.CONTIGUOUS: return t.after(t.store(s.src[0]))
   # rebind output storage to t
   if s.op in {Ops.BUFFER, Ops.MULTI} and s.has_buffer_identity(): return t
   return None
 
+def _exact_precompiled_output_argument(x:UOp) -> bool:
+  """Prove one concrete invocation argument is exactly a prior precompiled output."""
+  original, expected = x, x.numel()
+  # transform_precompiled_call normalizes a non-AFTER argument with one outer
+  # transport CONTIGUOUS before a parent consumer is revisited.
+  if (x.op is Ops.CONTIGUOUS and len(x.src) == 1 and x.src[0].op is Ops.MEMORY_SEMANTIC and
+      memory_semantic_owner(x.src[0]) is not None): x = x.src[0]
+  # Top-down callify can visit the consumer before transforming the producer.
+  # Accept the same exact owned pre-call spelling; GETTUPLE(FUNCTION) is the
+  # producer's fresh output-allocation contract and no movement is stripped.
+  if x.op is Ops.MEMORY_SEMANTIC and len(x.src) == 1 and memory_semantic_owner(x) is not None:
+    x = x.src[0]
+    if x.op is not Ops.CONTIGUOUS or x.numel() != expected or x.dtype != original.dtype: return False
+    if x.src[0].has_precompiled_output_identity(): return True
+    # If the producer was already transformed, the same owned spelling now
+    # encloses its exact dependency-bearing AFTER.
+    x = x.src[0]
+  while x.op is Ops.RESHAPE and len(x.src):
+    if x.src[0].numel() != expected: return False
+    x = x.src[0]
+  if x.op is not Ops.AFTER or len(x.src) != 2: return False
+  base, call = x.src
+  if base.dtype != original.dtype or call.op is not Ops.CALL or not call.arg.precompile: return False
+  try: base_buf = base.buf_uop
+  except RuntimeError: return False
+  matches = []
+  for slot,arg in enumerate(call.src[1:]):
+    try:
+      if arg.buf_uop is base_buf: matches.append(slot)
+    except RuntimeError: pass
+  return len(matches) == 1 and matches[0] in call.arg.precompiled_output_slots
+
+def _candidate_param_slot(x:UOp) -> int|None:
+  """Return only an equal-span invocation PARAM below the marker input."""
+  expected = x.numel()
+  while x.op is Ops.RESHAPE and len(x.src):
+    if x.src[0].numel() != expected: return None
+    x = x.src[0]
+  return x.arg.slot if x.op is Ops.PARAM and isinstance(x.arg, ParamArg) else None
+
+def _bind_reduce_output_invocation_inputs(srcs:tuple[UOp, ...], args:tuple[UOp, ...]) -> tuple[UOp, ...]:
+  """Carry an outer invocation proof into an exact candidate PARAM marker.
+
+  Function input substitution intentionally removes the caller's AFTER from
+  the body. This records only the slot whose concrete argument still carries
+  that dependency; rangeify must match the same PARAM before admitting it.
+  """
+  if not CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT: return srcs
+  replacements:dict[UOp,UOp] = {}
+  for marker in UOp.sink(*srcs).toposort():
+    if marker.op is not Ops.REDUCE_OUTPUT or not isinstance(marker.arg, ReduceOutputSpec): continue
+    if not marker.arg.owned_contiguous_candidate or marker.arg.invocation_input_slot is not None: continue
+    slot = _candidate_param_slot(marker.src[1])
+    if slot is None or slot >= len(args) or not _exact_precompiled_output_argument(args[slot]): continue
+    replacements[marker] = marker.replace(arg=marker.arg._replace(invocation_input_slot=slot))
+  return tuple(src.substitute(replacements) for src in srcs) if replacements else srcs
+
+def _trace_reduce_output_markers(srcs:tuple[UOp, ...], stage:str) -> None:
+  """Count marker reachability at a callify boundary, without affecting IR."""
+  from tinygrad.llm.reduce_output_trace import trace_reduce_output
+  for u in UOp.sink(*srcs).toposort():
+    if u.op is Ops.REDUCE_OUTPUT and isinstance(u.arg, ReduceOutputSpec):
+      trace_reduce_output(stage, "candidate" if u.arg.owned_contiguous_candidate else "ordinary")
+
+def bind_precompiled_call_reduce_output_inputs(c:UOp) -> UOp|None:
+  """Revisit the proof after nested producer FUNCTIONs become concrete CALLs."""
+  if not c.arg.precompile or c.src[0].op is not Ops.SINK: return None
+  srcs = _bind_reduce_output_invocation_inputs(c.src[0].src, c.src[1:])
+  if srcs == c.src[0].src: return None
+  return c.replace(src=(c.src[0].replace(src=srcs), *c.src[1:]))
+
+def _typed_semantic_reduce_output_input(x:UOp) -> tuple[UOp, MemorySemanticOwner]|None:
+  """Recognize the one production spelling which cannot reach STORE lowering.
+
+  This is intentionally a spelling matcher, not a transparent-wrapper helper:
+  ``CONTIGUOUS(RESHAPE(MEMORY_SEMANTIC(REDUCE_OUTPUT)))`` with one
+  RUNTIME_SCRATCH owner, equal span/dtype throughout, and no other movement.
+  The producer is only safe to isolate if its two executable inputs are exact
+  PARAM identity views; that makes its ABI concrete in the enclosing CALL.
+  """
+  original, expected = x, x.numel()
+  if x.op is not Ops.CONTIGUOUS or len(x.src) != 1: return None
+  x = x.src[0]
+  # RESHAPE carries its shape descriptor as a second source in UOp IR.
+  if x.op is not Ops.RESHAPE or not x.src or x.numel() != expected: return None
+  x = x.src[0]
+  if x.op is not Ops.MEMORY_SEMANTIC or len(x.src) != 1 or x.numel() != expected: return None
+  owner = memory_semantic_owner(x)
+  if owner is None or owner.semantic_class is not MemorySemanticClass.RUNTIME_SCRATCH: return None
+  marker = x.src[0]
+  if marker.op is not Ops.REDUCE_OUTPUT or not isinstance(marker.arg, ReduceOutputSpec): return None
+  if marker.dtype != original.dtype or marker.numel() != expected or marker.shape != x.shape: return None
+  # No views, aliases, or inferred captures are allowed at this first generic
+  # boundary.  A later widening must prove its own ABI separately.
+  if len(marker.src) != 3 or _candidate_param_slot(marker.src[1]) is None or _candidate_param_slot(marker.src[2]) is None: return None
+  if marker.src[1] is marker.src[2]: return None
+  return marker, owner
+
+def _precompiled_typed_semantic_producer(marker:UOp, owner:MemorySemanticOwner, output_shape:tuple[int, ...]) -> UOp|None:
+  """Build an opaque producer CALL with a concrete output slot and AFTER edge.
+
+  The body keeps the typed semantic producer intact, so normal late lowering
+  owns its implementation.  Its only external values are the exact two PARAM
+  input views checked above.  This preserves output dtype/span and leaves the
+  enclosing consumer with an ordinary dependency-bearing invocation result.
+  """
+  inputs = (marker.src[1], marker.src[2])
+  # Param slots in a parent function need not be dense or ordered.  Make this
+  # producer's ABI local and immutable rather than borrowing those slot ids.
+  params = tuple(arg.param_like(i) for i,arg in enumerate(inputs))
+  body_marker = marker.substitute(dict(zip(inputs, params)))
+  body = UOp.maketuple(body_marker)
+  producer = UOp(Ops.FUNCTION, dtypes.void, (body, *inputs),
+                 CallInfo(name="typed_semantic_reduce_output_producer", precompile=True))
+  produced = transform_precompiled_call(producer)
+  if produced is None or produced.op is not Ops.TUPLE or len(produced.src) != 1: return None
+  ret = produced.src[0]
+  if ret.dtype != marker.dtype or ret.numel() != marker.numel(): return None
+  # This producer always has two proven inputs followed by its one allocated
+  # result.  Record that output contract even when the independent redirect
+  # feature is off: downstream identity validation must not infer it.
+  if ret.op is not Ops.AFTER or len(ret.src) != 2 or ret.src[1].op is not Ops.CALL: return None
+  call = ret.src[1].replace(arg=replace(ret.src[1].arg, precompiled_output_slots=(len(inputs),)))
+  ret = ret.replace(src=(ret.src[0], call))
+  # RESHAPE is the only admitted output adaptation and has already been
+  # proven equal-span by the spelling matcher.  Ownership moves to the
+  # concrete invocation output, never to a normalized body PARAM.
+  ret = ret.reshape(output_shape)
+  bind_memory_semantic_owner(ret, owner)
+  return ret
+
+def callify_typed_semantic_call_inputs(c:UOp) -> UOp|None:
+  """Isolate one exact typed producer immediately before an opaque CALL."""
+  if not CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER or c.op is not Ops.CALL: return None
+  replacements:dict[UOp,UOp] = {}
+  for arg in c.src[1:]:
+    matched = _typed_semantic_reduce_output_input(arg)
+    if matched is None: continue
+    marker, owner = matched
+    if (producer := _precompiled_typed_semantic_producer(marker, owner, arg.shape)) is None: continue
+    replacements[arg] = producer
+  return c.replace(src=(c.src[0], *(replacements.get(arg, arg) for arg in c.src[1:]))) if replacements else None
+
 def transform_precompiled_call(c:UOp) -> UOp|None:
   if not c.arg.precompile: return None
   assert c.src[0].op is Ops.TUPLE, f"expected TUPLE body for precompiled FUNCTION, got {c.src[0].op}"
+  # At this point FUNCTION inputs have already been substituted with PARAMs.
+  _trace_reduce_output_markers(c.src[0].src, "after_function_substitution")
   input_buffers = tuple(x.contiguous() if x.op not in {Ops.AFTER, Ops.BIND} else x for x in c.src[1:])
 
   # add the outputs to the call
-  srcs = c.src[0].src
+  # Qualify against the original invocation arguments. input_buffers may add
+  # transport CONTIGUOUS nodes after the exact owned caller spelling, while
+  # preserving the same positional slot.
+  srcs = _bind_reduce_output_invocation_inputs(c.src[0].src, c.src[1:])
   resolved = [c.gettuple(i) for i in range(len(srcs))]
   outs = tuple(r.empty_like() for r in resolved)
   targets = [o.param_like(len(c.src)-1+i).shrink_to(s.shape) for i,(o,s) in enumerate(zip(outs, srcs))]
@@ -149,16 +318,51 @@ def transform_precompiled_call(c:UOp) -> UOp|None:
     else:
       items.append(t.after(t.store(s), *after_deps))
   fxn = UOp.sink(*(x.substitute(subs) for x in items))
+  _trace_reduce_output_markers(fxn.src, "after_callify")
 
   # body switches from TUPLE to SINK, so the node becomes an opaque CALL (not FUNCTION)
-  new_call = UOp(Ops.CALL, c.dtype, (fxn, *input_buffers, *outs), c.arg)
+  output_slots = tuple(range(len(input_buffers), len(input_buffers)+len(outs))) if CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT else ()
+  new_call = UOp(Ops.CALL, c.dtype, (fxn, *input_buffers, *outs), replace(c.arg, precompiled_output_slots=output_slots))
   rets = tuple(o.after(new_call) for o in outs)
+  # Output ownership is invocation side data. Keep the executable result as a
+  # bare AFTER so ownership cannot trigger a second materialization; never bind
+  # normalized PARAMs in the function body.
+  for source, ret in zip(srcs, rets):
+    if (owner := memory_semantic_owner(source)) is not None: bind_memory_semantic_owner(ret, owner)
 
   # if the CALL has symbolic shapes, shrink the max-sized output to the actual symbolic shape
   # NOTE: must use resolved shapes from the FUNCTION (which substitutes PARAMs with external args), not raw body shapes
   rets = tuple(r.shrink_to(rs.shape) for r,rs in zip(rets, resolved))
 
   return UOp.maketuple(*rets)
+
+def collapse_owned_precompiled_output_contiguous(c:UOp) -> UOp|None:
+  """Remove one caller materialization around an exact precompiled output.
+
+  Admitted spelling: CONTIGUOUS((RESHAPE|MEMORY_SEMANTIC)*,
+  CONTIGUOUS(AFTER(output_buffer, precompiled CALL))). Only zero-offset,
+  equal-span reshapes are present; every other movement fails closed.
+  """
+  if not CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT: return None
+  owner = memory_semantic_owner(c.src[0])
+  if owner is None: return None
+  x = c.src[0]
+  while x.op in {Ops.RESHAPE, Ops.MEMORY_SEMANTIC}: x = x.src[0]
+  after = x.src[0] if x.op is Ops.CONTIGUOUS and x.src[0].op is Ops.AFTER else x if x.op is Ops.AFTER else None
+  if after is None: return None
+  if len(after.src) != 2 or after.src[1].op is not Ops.CALL or not after.src[1].arg.precompile: return None
+  try:
+    base, call = after.src[0].buf_uop, after.src[1]
+    if sum(arg.buf_uop is base for arg in call.src[1:]) != 1: return None
+    if c.dtype != after.dtype or c.numel() != after.numel(): return None
+  except (RuntimeError, ValueError): return None
+  # Rebuild only the requested flat shape. The skipped chain contains no
+  # movement other than RESHAPE, so this is the identical zero-offset view.
+  # The requested contiguous tag is satisfied by the invocation output itself;
+  # retaining it would re-materialize the same value (or cycle this rewrite).
+  view = after.reshape(c.shape).rtag(None)
+  bind_memory_semantic_owner(view, owner)
+  return view
 
 # NOTE: adding rules to here is bad. these all need to run before the schedule cache
 pm_early_transform_tensor_graph = PatternMatcher([
@@ -167,6 +371,14 @@ pm_early_transform_tensor_graph = PatternMatcher([
 
   # resolve TUPLE+GETTUPLE (for precompiled calls)
   (UPat(Ops.GETTUPLE, src=(UPat(Ops.TUPLE, name="t"),), name="g"), lambda g,t: t.src[g.arg]),
+
+  # Exact owned caller view of a precompiled invocation output. This runs only
+  # after FUNCTION->CALL exposes the concrete output buffer and dependency.
+  (UPat(Ops.CONTIGUOUS, name="c"), collapse_owned_precompiled_output_contiguous),
+
+  # A consumer FUNCTION may be transformed before its nested producer. Rebind
+  # candidate PARAM proof once the producer output is a concrete AFTER(CALL).
+  (UPat(Ops.CALL, name="c"), bind_precompiled_call_reduce_output_inputs),
 
   # CONTIGUOUS(MOPS(BUFFER/SLICE)) → CONTIGUOUS(SLICE) when movement ops collapse to contiguous range
   (UPat(Ops.CONTIGUOUS, src=(UPat(GroupOp.Movement, name="src"),), name="c"), contiguous_mops_to_view),
@@ -183,6 +395,21 @@ pm_early_transform_tensor_graph = PatternMatcher([
   (UPat(Ops.CONTIGUOUS, name="u"), replace_contig_with_store_after),
   # remove DETACH/CONTIGUOUS_BACKWARD (allows more contiguous removal)
   (UPat((Ops.DETACH, Ops.CONTIGUOUS_BACKWARD), name="x"), lambda x: x.src[0]),
+])
+
+# This must run top-down, before the ordinary early pass visits and
+# materializes the CONTIGUOUS child.  At that point the parent CALL relation is
+# no longer visible and the structural contract would be impossible to prove.
+pm_typed_semantic_call_input = PatternMatcher([
+  (UPat(Ops.CALL, name="c", allow_any_len=True), callify_typed_semantic_call_inputs),
+])
+
+# The parent relation is initially a precompiled FUNCTION.  Expose that outer
+# CALL top-down under the typed gate, then inspect its inputs before the normal
+# bottom-up early pass reaches their CONTIGUOUS children.
+pm_precompile_function_boundary = PatternMatcher([
+  (UPat(Ops.FUNCTION, name="c"), transform_precompiled_call),
+  (UPat(Ops.GETTUPLE, src=(UPat(Ops.TUPLE, name="t"),), name="g"), lambda g,t: t.src[g.arg]),
 ])
 
 def finalize_after(ctx:AllocCtx, x:UOp):
@@ -253,6 +480,23 @@ def _semantic_after_materialization(m:UOp, a:UOp) -> UOp|None:
 
 def _semantic_contiguous_materialization(m:UOp, c:UOp) -> UOp|None:
   """Materialize an explicitly owned CONTIGUOUS result without annotating its value path."""
+  # Defer an exact precompiled result until the early FUNCTION->CALL rewrite
+  # exposes its concrete output AFTER. Materializing here would create the
+  # redundant caller-side adapter before that identity is knowable.
+  if c.src[0].op is Ops.GETTUPLE and c.src[0].src[0].op is Ops.FUNCTION and c.src[0].src[0].arg.precompile:
+    return None
+  # A precompiled invocation already owns this exact contiguous output. Bind
+  # the semantic owner to that invocation result instead of allocating and
+  # copying it a second time.
+  if c.src[0].op is Ops.AFTER:
+    after = c.src[0]
+    if len(after.src) == 2 and after.src[1].op is Ops.CALL and after.src[1].arg.precompile:
+      try:
+        base = after.src[0].buf_uop
+        if c.dtype == after.dtype and c.shape == after.shape and sum(arg.buf_uop is base for arg in after.src[1].src[1:]) == 1:
+          bind_memory_semantic_owner(after, m.arg)
+          return after
+      except (RuntimeError, ValueError): pass
   if c.device is None: return None
   try: shape = c._shape
   except RuntimeError: return None
@@ -299,6 +543,9 @@ def transform_to_call(big_sink:UOp) -> tuple[UOp, dict[UOp, UOp]]:
   big_sink = graph_rewrite(big_sink, add_tags, ctx=ctx, bottom_up=True, name="number the uops")
 
   # here we can break the tensor graph. this is the only place you need to maintain numbered tags
+  if CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER:
+    big_sink = graph_rewrite(big_sink, pm_precompile_function_boundary, bottom_up=False, name="typed semantic function boundary")
+    big_sink = graph_rewrite(big_sink, pm_typed_semantic_call_input, bottom_up=False, name="typed semantic call input")
   big_sink = graph_rewrite(big_sink, pm_early_transform_tensor_graph, name="early transform tensor graph")
 
   # here we construct the final buffer_map. this is everything that will go into the tensor map

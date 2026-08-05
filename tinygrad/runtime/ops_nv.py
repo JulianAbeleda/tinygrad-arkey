@@ -139,6 +139,10 @@ class NVCommandQueue(HWQueue[HCQSignal, 'NVDevice', 'NVProgram', 'NVArgsState'])
     gpfifo.put_value += 1
 
 class NVComputeQueue(NVCommandQueue):
+  def __init__(self, queue_idx=0):
+    self.queue_idx = queue_idx
+    super().__init__()
+
   def memory_barrier(self):
     self.nvm(1, nv_gpu.NVC6C0_INVALIDATE_SHADER_CACHES_NO_WFI,
              nv_flags("NVC6C0_INVALIDATE_SHADER_CACHES_NO_WFI", instruction="true", global_data="true", constant="true"))
@@ -202,7 +206,7 @@ class NVComputeQueue(NVCommandQueue):
     self.active_qmd = None
     return self
 
-  def _submit(self, dev:NVDevice): self._submit_to_gpfifo(dev, dev.compute_gpfifo)
+  def _submit(self, dev:NVDevice): self._submit_to_gpfifo(dev, dev.compute_gpfifos[self.queue_idx])
 
 class NVCopyQueue(NVCommandQueue):
   def __init__(self, queue_idx=0):
@@ -473,8 +477,11 @@ class NVKIface:
       except RuntimeError as e: raise RuntimeError(f"{e}. Make sure GPUs #{self.gpu_minor} & #{dev.iface.gpu_minor} have P2P enabled.") from e
 
   def setup_gpfifo_vm(self, gpfifo):
+    self.setup_gpfifo_vm_at(gpfifo, self._alloc_gpu_vaddr(0x4000000, force_low=True), 0x4000000)
+
+  def setup_gpfifo_vm_at(self, gpfifo, base, length):
     self.uvm(nv_gpu.UVM_REGISTER_CHANNEL, nv_gpu.UVM_REGISTER_CHANNEL_PARAMS(gpuUuid=self.gpu_uuid, rmCtrlFd=self.fd_ctl.fd, hClient=self.root,
-      hChannel=gpfifo, base=self._alloc_gpu_vaddr(0x4000000, force_low=True), length=0x4000000))
+      hChannel=gpfifo, base=base, length=length))
 
   def _new_gpu_fd(self):
     fd_dev = FileIOInterface(f"/dev/nvidia{NVKIface.gpus_info[self.device_id].minor_number}", os.O_RDWR | os.O_CLOEXEC)
@@ -633,8 +640,26 @@ class NVDevice(HCQCompiled[NVSignal]):
     ctxshare = self.iface.rm_alloc(self.channel_group, nv_gpu.FERMI_CONTEXT_SHARE_A, ctxshare_params)
     self.ctxshare = ctxshare
 
-    self.compute_gpfifo = self._new_gpu_fifo(self.gpfifo_area, ctxshare, self.channel_group, offset=0, entries=0x10000, compute=True)
-    self.dma_gpfifo = self._new_gpu_fifo(self.gpfifo_area, ctxshare, self.channel_group, offset=0x100000, entries=0x10000, compute=False)
+    # This is normally a single compute channel.  The two environment knobs are
+    # deliberately construction-only: the native multi-channel probe needs to
+    # ask whether channels which exist *before* the first group schedule behave
+    # like CUDA's bootstrap group.  They are read before the group schedule and
+    # have no effect unless explicitly set by that isolated probe.
+    # Two is the only native concurrent construction qualified so far.  Fail
+    # closed above it instead of silently creating a topology we have not
+    # measured.  The default remains one and preserves the old construction.
+    boot_compute_channels = min(2, max(1, getenv("HCQ_NUM_COMPUTE", 1)))
+    self.compute_gpfifos = [self._new_gpu_fifo(self.gpfifo_area, ctxshare, self.channel_group,
+                                                offset=0x100000*i, entries=0x10000, compute=True,
+                                                debugger=(i == 0), flags=(0x10 if i % 2 else 0))
+                            for i in range(boot_compute_channels)]
+    # CUDA's first graphics group binds both compute and copy objects to some
+    # stream channels.  Keep this probe-only until execution and overlap pass.
+    if getenv("NV_BOOT_COMPUTE_CHANNEL_DMA", 0):
+      for fifo in self.compute_gpfifos: self.iface.rm_alloc(fifo.handle, self.iface.dma_class)
+    self.compute_gpfifo = self.compute_gpfifos[0]
+    self.dma_gpfifo = self._new_gpu_fifo(self.gpfifo_area, ctxshare, self.channel_group,
+                                         offset=0x100000*boot_compute_channels, entries=0x10000, compute=False)
     self.iface.rm_control(self.channel_group, nv_gpu.NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, nv_gpu.NVA06C_CTRL_GPFIFO_SCHEDULE_PARAMS(bEnable=1))
 
     self.cmdq_page:HCQBuffer = self.iface.alloc(0x200000, cpu_access=True)
@@ -656,13 +681,18 @@ class NVDevice(HCQCompiled[NVSignal]):
 
     self._setup_gpfifos()
 
+  def hw_compute_queues(self):
+    return [(None if i == 0 else f"COMPUTE:{i}", functools.partial(NVComputeQueue, queue_idx=i))
+            for i in range(len(self.compute_gpfifos))]
+
   def _new_gpu_fifo(self, gpfifo_area, ctxshare, channel_group, offset=0, entries=0x400, compute=False, video=False,
-                    debugger: bool = True, engine_type: int|None = None) -> GPFifo:
-    notifier = self.iface.alloc(48 << 20, uncached=True)
+                    debugger: bool = True, engine_type: int|None = None, flags: int = 0, register_vm: bool = True,
+                    error_notifier_size: int = 48 << 20) -> GPFifo:
+    notifier = self.iface.alloc(error_notifier_size, uncached=True)
     params = nv_gpu.NV_CHANNELGPFIFO_ALLOCATION_PARAMETERS(gpFifoOffset=gpfifo_area.va_addr+offset, gpFifoEntries=entries, hContextShare=ctxshare,
       hObjectError=notifier.meta.hMemory, hObjectBuffer=self.virtmem if video else gpfifo_area.meta.hMemory,
       hUserdMemory=(ctypes.c_uint32*8)(gpfifo_area.meta.hMemory), userdOffset=(ctypes.c_uint64*8)(entries*8+offset),
-      engineType=engine_type if engine_type is not None else (19 if video else 0))
+      engineType=engine_type if engine_type is not None else (19 if video else 0), flags=flags)
     gpfifo = self.iface.rm_alloc(channel_group, self.iface.gpfifo_class, params)
 
     if compute:
@@ -680,7 +710,7 @@ class NVDevice(HCQCompiled[NVSignal]):
 
     ws_token_params = self.iface.rm_control(gpfifo, nv_gpu.NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN,
       nv_gpu.NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN_PARAMS(workSubmitToken=-1))
-    if ctxshare != 0: self.iface.setup_gpfifo_vm(gpfifo)
+    if ctxshare != 0 and register_vm: self.iface.setup_gpfifo_vm(gpfifo)
 
     return GPFifo(ring=gpfifo_area.cpu_view().view(offset, entries*8, fmt='Q'), entries_count=entries, token=ws_token_params.workSubmitToken,
                   handle=gpfifo,

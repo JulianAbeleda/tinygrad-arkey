@@ -1,0 +1,29 @@
+{
+  "schema": "tinygrad.nv_decode_final_composed_same_session.v1",
+  "date": "2026-08-05",
+  "depth": 512,
+  "composition": ["p1_descriptor_shadow", "callify_redirect", "direct_greedy", "feedback_pingpong", "cooperative_q4_g12"],
+  "llama": {
+    "a_avg_ts": 245.632319,
+    "c_avg_ts": 245.761535,
+    "a_steady_median_ms_per_token": 4.0055832,
+    "c_steady_median_ms_per_token": 4.0057704,
+    "steady_midpoint_ms_per_token": 4.0056768,
+    "reported_average_midpoint_ms_per_token": 4.070055256112232
+  },
+  "native": {
+    "samples_ms_per_token": [5.321380875, 5.31744909375, 5.32424403125, 5.32842003125, 5.3291298125],
+    "median_ms_per_token": 5.32424403125,
+    "token_stream_sha256": "f25083e5d0a754131283b40c03f52e688fee9f175bea7ae106805e7d628d7905"
+  },
+  "steady_comparison": {
+    "native_over_llama_throughput": 0.7523465822545264,
+    "gap_ms_per_token": 1.31856723125,
+    "parity": false
+  },
+  "reported_average_comparison": {
+    "native_over_llama_throughput": 0.7644381497586399,
+    "gap_ms_per_token": 1.2541887751377683,
+    "parity": false
+  }
+}

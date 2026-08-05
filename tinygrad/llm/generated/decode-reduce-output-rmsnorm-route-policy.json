@@ -1,0 +1,5 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_reduce_output_rmsnorm",
+  "promoted_targets": []
+}

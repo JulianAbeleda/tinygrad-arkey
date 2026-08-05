@@ -249,6 +249,117 @@ def flash_fused_gmax_combine_kernel(Hd:int, Hq:int, S:int, stride:int|None=None,
   return kernel
 
 
+def flash_single_stage_d512_kernel(Hd:int, Hq:int, Hkv:int, L:int, Tc, *, output_fp16:bool=True):
+  """Closed-default construction candidate: S=4 split score/PV + ordered combine in one workgroup.
+
+  This emitter is deliberately not wired into any route.  Its fixed ownership is one warp per
+  (split, GQA-head) pair and exists to qualify whether ordinary UOps can carry the communication
+  boundary without a global partial buffer.
+  """
+  S, LANES, TK = 4, 32, 16
+  if (Hd, Hq, Hkv) != (128, 32, 8): raise ValueError("single-stage d512 candidate is fixed to Hd=128,Hq=32,Hkv=8")
+  G, WARPS, THREADS, R, RP, NB = Hq // Hkv, S * (Hq // Hkv), S * (Hq // Hkv) * LANES, Hd // LANES, Hd // 64, _ceildiv(L, TK)
+  W, scale = Hd + 2, 1.0 / (Hd ** 0.5)
+
+  def kernel(out:UOp, q:UOp, cache:UOp) -> UOp:
+    from tinygrad.codegen.late.warp_reduce import _warp_reduce_sum_staged
+    from tinygrad.codegen.late.flash_decode_intrinsics import fdot2 as _lower_fdot2
+    kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
+    lane = UOp.range(LANES, 10, AxisType.LOCAL)
+    warp = UOp.range(WARPS, 11, AxisType.LOCAL)
+    owner_split, grouped_head = warp // G, warp % G
+    head, tid = kvh * G + grouped_head, warp * LANES + lane
+    ksh = UOp.placeholder((S * TK * Hd,), dtypes.float16, 250, addrspace=AddrSpace.LOCAL)
+    vsh = UOp.placeholder((S * TK * Hd,), dtypes.float16, 251, addrspace=AddrSpace.LOCAL)
+    partial = UOp.placeholder((WARPS * W,), _F32, 252, addrspace=AddrSpace.LOCAL)
+    acc = UOp.placeholder((R,), _F32, 253, addrspace=AddrSpace.REG)
+    den = UOp.placeholder((1,), _F32, 254, addrspace=AddrSpace.REG)
+    mx = UOp.placeholder((1,), _F32, 255, addrspace=AddrSpace.REG)
+    za = UOp.range(R, 2)
+    init = acc.after(kvh)[za].store(0.0).end(za)
+    init = den.after(init)[0].store(0.0)
+    init = mx.after(init)[0].store(-float("inf"))
+    acc, den, mx = acc.after(init), den.after(init), mx.after(init)
+    block = UOp.range(NB, 3, AxisType.REDUCE)
+
+    # All 512 threads cooperatively stage one K/V tile for each split. The staging loop and
+    # barriers are uniform; only arithmetic ownership is warp-specific.
+    stage = UOp.range(_ceildiv(S * TK * Hd, THREADS), 4, AxisType.REDUCE)
+    idx = stage * THREADS + tid
+    stage_split, split_elem = idx // (TK * Hd), idx % (TK * Hd)
+    token_stage, elem = split_elem // Hd, split_elem % Hd
+    token = stage_split * L + block * TK + token_stage
+    valid = (stage_split < S) & (token_stage < TK) & (token < Tc)
+    safe_token = valid.where(token, token.const_like(0))
+    kstore = ksh[idx].store(cache[0, 0, kvh, safe_token, elem].cast(dtypes.float16), idx < (S * TK * Hd))
+    vstore = vsh.after(kstore)[idx].store(cache[1, 0, kvh, safe_token, elem].cast(dtypes.float16), idx < (S * TK * Hd))
+    barrier = UOp.barrier(UOp.group(vstore.end(stage)))
+
+    token_in_tile = UOp.range(TK, 5, AxisType.REDUCE)
+    owned_token = owner_split * L + block * TK + token_in_tile
+    in_range = owned_token < Tc
+    dot = UOp.placeholder((1,), _F32, 256, addrspace=AddrSpace.REG)
+    dot_init = dot.after(block, token_in_tile)[0].store(0.0)
+    pair_axis = UOp.range(RP, 6, AxisType.REDUCE)
+    qelem = pair_axis * 64 + lane * 2
+    tile_base = owner_split * TK * Hd + token_in_tile * Hd + qelem
+    qpair = UOp(Ops.STACK, dtypes.float16.vec(2), (q[head * Hd + qelem].cast(dtypes.float16), q[head * Hd + qelem + 1].cast(dtypes.float16)))
+    kpair = UOp(Ops.STACK, dtypes.float16.vec(2), (ksh.after(barrier)[tile_base], ksh.after(barrier)[tile_base + 1]))
+    dot_update = dot.after(dot_init)[0].store(_lower_fdot2(dot.after(pair_axis)[0], qpair, kpair)).end(pair_axis)
+    score = in_range.where(_warp_reduce_sum_staged(dot.after(dot_update)[0], lane, LANES) * scale, _fc(-float("inf")))
+    old_max = mx.after(token_in_tile)[0]
+    new_max = old_max.maximum(score)
+    correction = in_range.where(_fexp(old_max - new_max), _fc(1.0))
+    probability = in_range.where(_fexp(score - new_max), _fc(0.0))
+    da = UOp.range(R, 7)
+    dim = lane * R + da
+    value = vsh.after(barrier)[owner_split * TK * Hd + token_in_tile * Hd + dim].cast(_F32)
+    au = acc[da].store(acc.after(token_in_tile)[da] * correction + probability * value).end(da)
+    du = den.after(au)[0].store(den.after(token_in_tile)[0] * correction + probability)
+    mu = mx.after(du)[0].store(new_max).end(token_in_tile)
+    tile_done = UOp.barrier(UOp.group(mu)).end(block)
+
+    # Preserve the legacy ABI internally, but exchange it through LOCAL rather than global memory.
+    pa = UOp.range(R, 8)
+    pdim = lane * R + pa
+    pbase = warp * W
+    ps = partial.after(tile_done)[pbase + pdim].store(acc.after(tile_done)[pa]).end(pa)
+    ps = partial.after(ps)[pbase + Hd].store(den.after(tile_done)[0], lane.eq(0))
+    ps = partial.after(ps)[pbase + Hd + 1].store(mx.after(tile_done)[0], lane.eq(0))
+    pbar = UOp.barrier(UOp.group(ps))
+
+    # Only the split-0 owner warp for each grouped head performs the legacy ordered combine.
+    active = warp < G
+    output_head = active.where(head, head.const_like(0))
+    gm = UOp.placeholder((1,), _F32, 257, addrspace=AddrSpace.REG)
+    si = UOp.range(S, 12, AxisType.REDUCE)
+    split_warp = si * G + grouped_head
+    ginit = gm.after(pbar)[0].store(-1e30)
+    gupdate = gm.after(ginit)[0].store(gm.after(si)[0].maximum(partial.after(pbar)[split_warp * W + Hd + 1])).end(si)
+    maximum = gm.after(gupdate)[0]
+    ca = UOp.placeholder((R,), _F32, 258, addrspace=AddrSpace.REG)
+    cd = UOp.placeholder((1,), _F32, 259, addrspace=AddrSpace.REG)
+    cia = UOp.range(R, 14)
+    ci = ca.after(gupdate)[cia].store(0.0).end(cia)
+    ci = cd.after(ci)[0].store(0.0)
+    ca, cd = ca.after(ci), cd.after(ci)
+    sr = UOp.range(S, 13, AxisType.REDUCE)
+    sw = sr * G + grouped_head
+    weight = _fexp(partial.after(pbar)[sw * W + Hd + 1] - maximum)
+    cra = UOp.range(R, 15)
+    rdim = lane * R + cra
+    cua = ca[cra].store(ca.after(sr)[cra] + weight * partial.after(pbar)[sw * W + rdim]).end(cra)
+    cud = cd.after(cua)[0].store(cd.after(sr)[0] + weight * partial.after(pbar)[sw * W + Hd]).end(sr)
+    coa = UOp.range(R, 16)
+    odim = lane * R + coa
+    result = ca.after(cud)[coa] / cd.after(cud)[0]
+    if output_fp16: result = result.cast(dtypes.float16)
+    store = out[output_head * Hd + odim].store(result, active).end(coa)
+    suffix = "f16" if output_fp16 else "f32"
+    return store.end(kvh, lane, warp).sink(arg=_kernel_info(f"flash_single_stage_d512_{suffix}_{Hq}_{Hd}"))
+  return kernel
+
+
 @dataclass(frozen=True)
 class LiveSplitGeometrySpec:
   split_count: int

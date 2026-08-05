@@ -118,7 +118,13 @@ def run_jobs(dev, jobs):
   for j in jobs:
     q = j.q
     qid = id(q)
-    if qid not in q_sig: q_sig[qid] = dev.new_signal(value=0)
+    if qid not in q_sig:
+      # The probe queues persist across R1-R5 whereas every input copyin advances
+      # the device timeline.  Their setup-time wait alone only guards timeline 0;
+      # add the current frontier before this batch so an independent row cannot
+      # read a still-in-flight DMA copy.  This is outside the timestamps.
+      q.wait(dev.timeline_signal, dev.timeline_value - 1)
+      q_sig[qid] = dev.new_signal(value=0)
     if (lt := last_target.get(qid)) is not None: q.wait(q_sig[qid], lt)
     for sig, val in j.waits: q.wait(sig, val)
     st, en = dev.new_signal(), dev.new_signal()
@@ -232,9 +238,25 @@ def build_construction_plan(mode: str, engine_types: list[int], bind_policy: str
   whether per-channel GPFIFO_SCHEDULE + group-level schedule alone co-schedules.
   """
   assert bind_policy in ("required", "skip"), bind_policy
+  if mode in ("fresh_cuda_group", "fresh_cuda_group_ctxbuf", "fresh_cuda_group_cuda_params", "fresh_cuda_group_cuda_params_notifier4k"):
+    # Exact topology of CUDA's first graphics group: one fresh group (graphics
+    # engine), one fresh async ctxshare, all child GPFIFOs, then one schedule.
+    plan = [
+      {"op": "CHANNEL_GROUP_ALLOC", "kind": "KEPLER_CHANNEL_GROUP_A", "group": "cuda_group", "parent": "nvdevice",
+       "engine_index": None, "engine_type": None},
+      {"op": "CTXSHARE_ALLOC", "kind": "FERMI_CONTEXT_SHARE_A", "group": "cuda_group", "ctxshare": "cuda_ctxshare",
+       "engine_index": None, "engine_type": None},
+    ]
+    for i, engine_type in enumerate(engine_types):
+      plan.append({"op": "CHANNEL_ALLOC", "kind": "NVA06F", "group": "cuda_group", "ctxshare": "cuda_ctxshare",
+                   "channel": f"channel:{i}", "engine_index": i, "engine_type": engine_type, "flags": 0x10 if i % 2 else 0})
+    if engine_types:
+      plan.append({"op": "NVA06C_GPFIFO_SCHEDULE", "kind": "NVA06C", "group": "cuda_group", "engine_index": None,
+                   "engine_type": None, "requires_any_channel": True})
+    return plan
   plan: list[dict] = []
   for i, engine_type in enumerate(engine_types):
-    if mode == "shared":
+    if mode in ("shared", "cuda_mirror"):
       plan.append({"op": "CHANNEL_ALLOC", "kind": "NVA06F", "group": BOOT_GROUP, "ctxshare": BOOT_CTXSHARE,
                    "channel": f"channel:{i}", "engine_index": i, "engine_type": engine_type})
     elif mode == "ctxshare":
@@ -273,7 +295,18 @@ def build_construction_plan(mode: str, engine_types: list[int], bind_policy: str
       ]
     else:
       raise ValueError(f"unknown mode {mode!r}")
-  if mode == "shared" and engine_types:
+  if mode == "cuda_mirror":
+    # CUDA's first observed graphics group is constructed as one async ctxshare,
+    # then all GPFIFOs are allocated before its one group schedule. Its stream
+    # channels alternate the GROUP_CHANNEL_RUNQUEUE bit (0x10). The existing
+    # native device has already created/scheduled bootstrap channels, so this
+    # arm first disables the group and recreates that schedule boundary in a
+    # fresh subprocess. It is deliberately probe-only and default-off.
+    plan.insert(0, {"op": "NVA06C_GPFIFO_UNSCHEDULE", "kind": "NVA06C", "group": BOOT_GROUP,
+                    "engine_index": None, "engine_type": None})
+    for i, op in enumerate(p for p in plan if p["op"] == "CHANNEL_ALLOC"):
+      op["flags"] = 0x10 if i % 2 else 0
+  if mode in ("shared", "cuda_mirror") and engine_types:
     # Group-level re-schedule, exactly like the E1-E5 probe: only when at least one
     # extra channel was actually created.
     plan.append({"op": "NVA06C_GPFIFO_SCHEDULE", "kind": "NVA06C", "group": BOOT_GROUP,
@@ -300,7 +333,7 @@ def _resolve_channel(ref, handles):
   return None if ref is None else handles.get(ref)
 
 
-def extra_gpfifos(dev, engine_types, mode="shared", on_rm_op=None, bind_policy="required"):
+def extra_gpfifos(dev, engine_types, mode="shared", on_rm_op=None, bind_policy="required", channel_flags=None):
   """One additional compute GPFifo per engineType under the selected construction mode.
 
   Executes build_construction_plan against `dev` (a live NVDevice or an RM/GPU-free
@@ -315,12 +348,19 @@ def extra_gpfifos(dev, engine_types, mode="shared", on_rm_op=None, bind_policy="
   if not engine_types: return [], []
   on_rm_op = on_rm_op or (lambda rec: None)
   plan = build_construction_plan(mode, engine_types, bind_policy=bind_policy)
+  cuda_ctxbuf = mode in ("fresh_cuda_group_ctxbuf", "fresh_cuda_group_cuda_params", "fresh_cuda_group_cuda_params_notifier4k")
+  cuda_subctx = mode in ("fresh_cuda_group_cuda_params", "fresh_cuda_group_cuda_params_notifier4k")
+  cuda_notifier4k = mode == "fresh_cuda_group_cuda_params_notifier4k"
+  if channel_flags is not None:
+    if len(channel_flags) != len(engine_types): raise ValueError("--channel-flags count must equal --engines count")
+    for op, flags in zip((p for p in plan if p["op"] == "CHANNEL_ALLOC"), channel_flags): op["flags"] = flags
   area = dev.iface.alloc(0x200000 * len(engine_types), contiguous=True, cpu_access=True, force_devmem=True,
                          map_flags=(ops_nv.nv_gpu.NVOS33_FLAGS_CACHING_TYPE_WRITECOMBINED << 23))
   handles: dict[str, object] = {}
   ok_channels: set[int] = set()
   fifos_by_channel: dict[int, GPFifo] = {}
   errors: list[dict] = []
+  deferred_schedule = None
 
   def record(op, group, channel, status, error=None):
     on_rm_op({"op": op["op"], "kind": op.get("kind"), "group": _j(group), "channel": _j(channel),
@@ -331,6 +371,10 @@ def extra_gpfifos(dev, engine_types, mode="shared", on_rm_op=None, bind_policy="
     channel = _resolve_channel(op.get("channel"), handles)
     if op.get("requires_channel") is not None and op["requires_channel"] not in ok_channels: continue
     if op.get("requires_any_channel") and not ok_channels: continue
+    if cuda_ctxbuf and op["op"] == "NVA06C_GPFIFO_SCHEDULE":
+      # CUDA queries/registers every child context before its one group schedule.
+      deferred_schedule = (op, group)
+      continue
     try:
       record_channel = channel
       if op["op"] == "CHANNEL_GROUP_ALLOC":
@@ -340,14 +384,16 @@ def extra_gpfifos(dev, engine_types, mode="shared", on_rm_op=None, bind_policy="
         record_channel = None
       elif op["op"] == "CTXSHARE_ALLOC":
         params = ops_nv.nv_gpu.NV_CTXSHARE_ALLOCATION_PARAMETERS(hVASpace=dev.vaspace,
-          flags=ops_nv.nv_gpu.NV_CTXSHARE_ALLOCATION_FLAGS_SUBCONTEXT_ASYNC)
+          flags=ops_nv.nv_gpu.NV_CTXSHARE_ALLOCATION_FLAGS_SUBCONTEXT_ASYNC,
+          **({"subctxId": 63} if cuda_subctx else {}))
         handles[op["ctxshare"]] = dev.iface.rm_alloc(group, ops_nv.nv_gpu.FERMI_CONTEXT_SHARE_A, params)
         record_channel = None
       elif op["op"] == "CHANNEL_ALLOC":
         i = op["engine_index"]
         fifo = dev._new_gpu_fifo(area, _resolve_group(op.get("ctxshare"), dev, handles), group,
                                  offset=0x100000 * i, entries=0x4000, compute=True, debugger=False,
-                                 engine_type=op["engine_type"])
+                                 engine_type=op["engine_type"], flags=op.get("flags", 0), register_vm=not cuda_ctxbuf,
+                                 error_notifier_size=4096 if cuda_notifier4k else 48 << 20)
         handles[op["channel"]] = fifo.handle
         fifos_by_channel[i] = fifo
         ok_channels.add(i)
@@ -362,6 +408,10 @@ def extra_gpfifos(dev, engine_types, mode="shared", on_rm_op=None, bind_policy="
         dev.iface.rm_control(group, ops_nv.nv_gpu.NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
                              ops_nv.nv_gpu.NVA06C_CTRL_GPFIFO_SCHEDULE_PARAMS(bEnable=1))
         record_channel = None
+      elif op["op"] == "NVA06C_GPFIFO_UNSCHEDULE":
+        dev.iface.rm_control(group, ops_nv.nv_gpu.NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
+                             ops_nv.nv_gpu.NVA06C_CTRL_GPFIFO_SCHEDULE_PARAMS(bEnable=0))
+        record_channel = None
       else:
         raise AssertionError(f"unhandled plan op {op['op']!r}")
       record(op, group, record_channel, "ok")
@@ -371,6 +421,35 @@ def extra_gpfifos(dev, engine_types, mode="shared", on_rm_op=None, bind_policy="
       if op.get("engine_index") is not None:
         ok_channels.discard(op["engine_index"])
         fifos_by_channel.pop(op["engine_index"], None)
+  if cuda_ctxbuf and fifos_by_channel:
+    sizes = []
+    for i, fifo in fifos_by_channel.items():
+      try:
+        p = dev.iface.rm_control(dev.subdevice, ops_nv.nv_gpu.NV2080_CTRL_CMD_GR_GET_CTX_BUFFER_SIZE,
+          ops_nv.nv_gpu.NV2080_CTRL_GR_GET_CTX_BUFFER_SIZE_PARAMS(hChannel=fifo.handle))
+        sizes.append(int(p.totalBufferSize))
+        on_rm_op({"op": "GR_GET_CTX_BUFFER_SIZE", "kind": "NV2080", "group": None, "channel": fifo.handle,
+                  "engine_type": engine_types[i], "status": "ok", "error": None, "ctx_size": int(p.totalBufferSize)})
+      except RuntimeError as e:
+        errors.append({"op": "GR_GET_CTX_BUFFER_SIZE", "engine_index": i, "engine_type": engine_types[i], "error": str(e)})
+    if sizes and len(sizes) == len(fifos_by_channel) and len(set(sizes)) == 1:
+      base, length = dev.iface._alloc_gpu_vaddr(sizes[0], force_low=True), sizes[0]
+      for i, fifo in fifos_by_channel.items():
+        try:
+          dev.iface.setup_gpfifo_vm_at(fifo.handle, base, length)
+          on_rm_op({"op": "UVM_REGISTER_CHANNEL_SHARED_CTX", "kind": "UVM", "group": None, "channel": fifo.handle,
+                    "engine_type": engine_types[i], "status": "ok", "error": None, "ctx_base": base, "ctx_size": length})
+        except RuntimeError as e:
+          errors.append({"op": "UVM_REGISTER_CHANNEL_SHARED_CTX", "engine_index": i, "engine_type": engine_types[i], "error": str(e)})
+  if deferred_schedule is not None and not errors:
+    op, group = deferred_schedule
+    try:
+      dev.iface.rm_control(group, ops_nv.nv_gpu.NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
+                           ops_nv.nv_gpu.NVA06C_CTRL_GPFIFO_SCHEDULE_PARAMS(bEnable=1))
+      on_rm_op({"op": op["op"], "kind": op["kind"], "group": _j(group), "channel": None,
+                "engine_type": None, "status": "ok", "error": None})
+    except RuntimeError as e:
+      errors.append({"op": op["op"], "engine_index": None, "engine_type": None, "error": str(e)})
   return [fifos_by_channel[i] for i in sorted(fifos_by_channel)], errors
 
 
@@ -459,25 +538,29 @@ def run_r2(args, dev, qs, arm):
 
 def run_elementwise_row(args, dev, qs, arm, name, n_queues):
   """n_queues independent elementwise kernels on n_queues fifos (R3: 2, R4: 3)."""
-  N = args.n
+  # A reduced launch grid leaves most of the logical output undefined, which
+  # made the old --grid-div=4 row fail its own full-array correctness contract.
+  # Reduce the *fully computed* vector size instead: it still gives a
+  # partial-SM workload while retaining an exact output oracle.
+  N = args.n // args.grid_div
+  assert N > 0
   jobs, asts, argss, bufs = [], [], [], []
-  for qi in range(n_queues):
-    ta = Tensor.empty(N, device="NV"); tb = Tensor.empty(N, device="NV")
-    tc = ta * tb
-    p, ast, uops = lower(dev, tc)
-    bb = alloc_buffers(dev, uops)
-    copyin(dev, bb[ta.uop], np.full(N, float(qi + 1), dtype=np.float32))
-    copyin(dev, bb[tb.uop], np.full(N, 2.0, dtype=np.float32))
-    g, _ = ast.arg.launch_dims({})
-    jobs.append(Job(qs[qi], p, [bb[u] for u in uops], ast,
-                    grid=(g[0] // args.grid_div, g[1], g[2]) if args.grid_div > 1 else None))
-    asts.append(ast); argss.append(uops); bufs.append(bb)
+  for replay in range(args.replays):
+    for qi in range(n_queues):
+      ta = Tensor.empty(N, device="NV"); tb = Tensor.empty(N, device="NV")
+      tc = ta * tb
+      p, ast, uops = lower(dev, tc)
+      bb = alloc_buffers(dev, uops)
+      copyin(dev, bb[ta.uop], np.full(N, float(qi + 1), dtype=np.float32))
+      copyin(dev, bb[tb.uop], np.full(N, 2.0, dtype=np.float32))
+      jobs.append(Job(qs[qi], p, [bb[u] for u in uops], ast))
+      asts.append(ast); argss.append(uops); bufs.append(bb)
   ts = run_jobs(dev, jobs)
-  refs = [np.full(N, float(qi + 1) * 2.0, dtype=np.float32) for qi in range(n_queues)]
-  outs = [copyout(dev, bufs[qi][out_uop(asts[qi], argss[qi])], N) for qi in range(n_queues)]
+  refs = [np.full(N, float((i % n_queues) + 1) * 2.0, dtype=np.float32) for i in range(len(jobs))]
+  outs = [copyout(dev, bb[out_uop(ast, uops)], N) for ast, uops, bb in zip(asts, argss, bufs)]
   row = experiment_row(name, f"{n_queues}-queue elementwise overlap", ts, arm)
   tol = 1e-3
-  row.update({"grid_div": args.grid_div,
+  row.update({"grid_div": args.grid_div, "replays_per_queue": args.replays,
               "hashes": {"out": [f32_sha(o) for o in outs], "ref": [f32_sha(r) for r in refs]},
               "max_errs": [float(np.abs(o - r).max()) for o, r in zip(outs, refs)],
               "error_bound": tol, "ref_abs_maxes": [float(np.abs(r).max()) for r in refs],
@@ -577,6 +660,13 @@ def run_experiments(args, dev, qs, payload, flush):
 
 def run_arm(args) -> None:
   t0 = time.perf_counter()
+  # The historical arms attached extra channels after tinygrad had already
+  # scheduled its bootstrap group.  CUDA instead creates its stream channels
+  # before that first group schedule.  This construction-only arm asks that
+  # remaining question without changing the default one-channel runtime.
+  if args.mode == "bootstrap_cuda":
+    os.environ["HCQ_NUM_COMPUTE"] = "2"
+    if args.bootstrap_dma: os.environ["NV_BOOT_COMPUTE_CHANNEL_DMA"] = "1"
   dev = Device["NV"]
   dev.synchronize()
   engines = [int(x) for x in args.engines.split(",") if x != ""]
@@ -591,14 +681,21 @@ def run_arm(args) -> None:
     flush()
 
   try:
-    extra, construction_errors = extra_gpfifos(dev, engines, mode=args.mode, on_rm_op=on_rm_op,
-                                               bind_policy=args.bind_policy)
+    flags = None if args.channel_flags == "" else [int(x, 0) for x in args.channel_flags.split(",")]
+    if args.mode == "bootstrap_cuda":
+      extra, construction_errors = [], []
+      on_rm_op({"op": "BOOTSTRAP_GROUP_BEFORE_SCHEDULE", "kind": "NVA06C", "group": int(dev.channel_group),
+                "channel": None, "engine_type": 0, "status": "ok", "error": None,
+                "compute_channels": len(dev.compute_gpfifos), "channel_dma": bool(args.bootstrap_dma)})
+    else:
+      extra, construction_errors = extra_gpfifos(dev, engines, mode=args.mode, on_rm_op=on_rm_op,
+                                                 bind_policy=args.bind_policy, channel_flags=flags)
   except (RuntimeError, MemoryError) as e:
     construction_errors = [{"op": "CONSTRUCTION_ABORTED", "engine_index": None, "engine_type": None, "error": str(e)}]
     extra = []
   payload["construction_errors"] = construction_errors
   payload["errors"] += [f"construction {e['op']} engine {e['engine_index']}: {e['error']}" for e in construction_errors]
-  gpfifos = [dev.compute_gpfifo, *extra]
+  gpfifos = list(dev.compute_gpfifos) if args.mode == "bootstrap_cuda" else [dev.compute_gpfifo, *extra]
   qs = make_queues(dev, gpfifos)
   print(f"device ready {time.perf_counter() - t0:.2f}s, compute gpfifos={len(gpfifos)} mode={args.mode} "
         f"engineTypes={[0, *engines]} errors={construction_errors}", file=sys.stderr, flush=True)
@@ -627,7 +724,7 @@ def g1_verdict(arms):
   per_arm_max_overlap = {a["mode"]: max((e["overlap"] for e in a["experiments"]
                                          if e["name"] in ("R3", "R4", "R5") and isinstance(e.get("overlap"), (int, float))),
                                         default=0.0) for a in arms}
-  corrected_executed = [a["mode"] for a in arms if a["mode"] in ("ctxshare", "group")
+  corrected_executed = [a["mode"] for a in arms if a["mode"] in ("ctxshare", "group", "cuda_mirror", "bootstrap_cuda", "fresh_cuda_group", "fresh_cuda_group_ctxbuf", "fresh_cuda_group_cuda_params", "fresh_cuda_group_cuda_params_notifier4k")
                         and any(e["name"] in ("R3", "R4", "R5") and e.get("overlap") is not None for e in a["experiments"])]
   if r1_pass_modes and overlap_rows:
     return "PASS", (f"R1 hash/error contract passed in arm(s) {r1_pass_modes}; "
@@ -653,7 +750,7 @@ def run_all_driver(args) -> None:
   script = os.path.abspath(__file__)
   engines = [int(x) for x in args.engines.split(",") if x != ""]
   arms = []
-  for mode in ("shared", "ctxshare", "group"):
+  for mode in ("shared", "ctxshare", "group", "cuda_mirror", "fresh_cuda_group", "fresh_cuda_group_ctxbuf", "fresh_cuda_group_cuda_params", "fresh_cuda_group_cuda_params_notifier4k"):
     arm_out = f"{args.out}.arm.{mode}.json"
     cmd = [sys.executable, script, "--mode", mode, "--out", arm_out, "--engines", args.engines,
            "--n", str(args.n), "--matmul", str(args.matmul), "--stop-after", str(args.stop_after),
@@ -691,7 +788,7 @@ def run_all_driver(args) -> None:
 
 def main() -> None:
   ap = argparse.ArgumentParser()
-  ap.add_argument("--mode", type=str, choices=["shared", "ctxshare", "group"], default="shared",
+  ap.add_argument("--mode", type=str, choices=["shared", "ctxshare", "group", "cuda_mirror", "bootstrap_cuda", "fresh_cuda_group", "fresh_cuda_group_ctxbuf", "fresh_cuda_group_cuda_params", "fresh_cuda_group_cuda_params_notifier4k"], default="shared",
                   help="construction mode for the extra GPFifos (default shared = E1-E5 control arm)")
   ap.add_argument("--run-all", action="store_true",
                   help="driver: run all three modes in fresh subprocesses with a hard timeout and merge the arms")
@@ -702,11 +799,17 @@ def main() -> None:
   ap.add_argument("--matmul", type=int, default=2048, help="matmul NxNxN for the compute-heavy flavor")
   ap.add_argument("--stop-after", type=int, default=5, help="stop after experiment N (1-5)")
   ap.add_argument("--grid-div", type=int, default=1,
-                  help="divide the R3/R4 elementwise grid by this factor; partial-SM kernels make "
-                       "overlap physically possible (full-grid kernels saturate every SM either way)")
+                  help="divide the R3/R4 fully-computed vector size by this factor; this preserves the "
+                       "exact output oracle while making a partial-SM workload possible")
+  ap.add_argument("--replays", type=int, default=1,
+                  help="independent R3/R4 kernels per queue, interleaved by queue (default 1)")
   ap.add_argument("--bind-policy", type=str, choices=["required", "skip"], default="required",
                   help="issue per-channel NVA06F_CTRL_CMD_BIND (required) or omit it (skip); "
                        "driver 595.84 rejects BIND for group-allocated compute channels")
+  ap.add_argument("--channel-flags", type=str, default="",
+                  help="comma-separated raw GPFIFO allocation flags (probe-only); empty uses the mode default")
+  ap.add_argument("--bootstrap-dma", action="store_true",
+                  help="bootstrap_cuda only: attach CUDA-like DMA objects to the two compute channels before scheduling")
   args = ap.parse_args()
   if args.run_all: run_all_driver(args)
   else: run_arm(args)

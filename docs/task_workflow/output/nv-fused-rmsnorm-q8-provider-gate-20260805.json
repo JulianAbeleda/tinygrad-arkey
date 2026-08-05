@@ -1,0 +1,31 @@
+{
+  "cases": [
+    {
+      "bitwise_equal": true,
+      "case": "normal",
+      "first_mismatch": null,
+      "fused_sha256": "1ed4c9d034b65d5633a3f64f46bd4307dab563505437261eda55d9744e127f67",
+      "mismatch_count": 0,
+      "ordinary_sha256": "1ed4c9d034b65d5633a3f64f46bd4307dab563505437261eda55d9744e127f67"
+    },
+    {
+      "bitwise_equal": true,
+      "case": "all_zero",
+      "first_mismatch": null,
+      "fused_sha256": "606f558e014930f9c1669f03c71c28945c4631568e39cd308c6c7f4077c7bfb9",
+      "mismatch_count": 0,
+      "ordinary_sha256": "606f558e014930f9c1669f03c71c28945c4631568e39cd308c6c7f4077c7bfb9"
+    },
+    {
+      "bitwise_equal": true,
+      "case": "dynamic_range",
+      "first_mismatch": null,
+      "fused_sha256": "ea72c44d6de113e10711280fa190b73140eaea600b1f879acb3efef1d56145dd",
+      "mismatch_count": 0,
+      "ordinary_sha256": "ea72c44d6de113e10711280fa190b73140eaea600b1f879acb3efef1d56145dd"
+    }
+  ],
+  "device": "NV",
+  "gate": "PASS",
+  "schema": "tinygrad.nv_fused_rmsnorm_q8_provider_gate.v1"
+}

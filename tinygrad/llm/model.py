@@ -19,6 +19,8 @@ from tinygrad.llm.decode_routes import (FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_
                                         q4k_gate_up_primitive_linear_call, should_use_flash_decode as _route_should_use_flash_decode)
 from tinygrad.llm.decode_kernels import DecodeRMSNormSpec, emit_decode_rmsnorm_kernel
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
+from tinygrad.llm.shared_q8_attention import SharedQ8AttentionAdmission, shared_q8_attention_call
+from tinygrad.llm.packed_argmax import packed_argmax_finite_fp32
 from tinygrad.llm.prefill_routes import direct_packed_prefill_policy, is_direct_packed_prefill_linear, route_prefill_linear, validate_prefill_route_mode
 from tinygrad.llm.prefill_memory_plan import Strategy
 from tinygrad.llm.prefill_attachments import attach_selected_prefill_inventory
@@ -44,7 +46,7 @@ from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OU
                                            runtime_persistent, runtime_scratch)
 from tinygrad.llm.model_route_plan import (build_model_route_plan, decode_norm_fusion_promoted,
   decode_q4k_epilogue_fusion_promoted, decode_q4k_w1w3_fusion_promoted, decode_kv_store_fusion_promoted,
-  decode_rmsnorm_native_lowering_promoted)
+  decode_rmsnorm_native_lowering_promoted, decode_reduce_output_rmsnorm_promoted)
 from tinygrad.llm.prefill_candidate_runtime import decode_prefill_graph_candidate_set, automatic_promoted_prefill_graph_policy
 from tinygrad.llm.physical_memory_ledger import AllocationOwner, bind_allocation_owner
 from tinygrad.uop.ops import Ops, resolve
@@ -66,6 +68,19 @@ def generic_llm_control():
 
 def _should_use_flash_attention(ring_freqs:Tensor|None, start_pos:int|UOp, T:int|UOp, use_flash:bool) -> bool:
   return ring_freqs is not None or _route_should_use_flash_decode(start_pos, T, use_flash)
+
+def prefill_v2_target_admitted(device_facts:object|None) -> bool:
+  """Whether the concrete fp16 prefill-v2 route is admissible on this load target.
+
+  NV sm_120 is deliberately closed: its Q projection was observed to produce
+  all-NaN output at the d512 authority shape, before KV storage.  Keeping the
+  ordinary prefill path on that exact target preserves persistent-KV
+  correctness while the fp16 route receives an independent finite-output
+  qualification.  This is a narrow, removable target admission gate; it does
+  not alter other targets or a caller that already disables prefill-v2.
+  """
+  return not (getattr(device_facts, "backend", None) == "NV" and
+              getattr(device_facts, "architecture", None) == "sm_120")
 
 # TG8 (docs/task_workflow/input/target-capability-policy-decoupling-scope-20260730.md): the pre-TG8 gate
 # ANDed a shape allowlist with a hardcoded `backend == "AMD" and arch == "gfx1100"` target-string equality.
@@ -374,6 +389,38 @@ def _decode_rmsnorm(norm, x:Tensor, promoted:bool, out_dtype=dtypes.float32) -> 
   out = execute_promoted_program(None, x_in, w, program=program)
   return out.reshape(x.shape)
 
+def _decode_reduce_output_rmsnorm(norm, x:Tensor, promoted:bool) -> Tensor:
+  """Attach the ordinary-UOp cooperative RMSNorm marker at an explicit decode call site.
+
+  Unlike a flag on ``nn.RMSNorm``, this helper cannot leak the experimental marker into
+  prefill: every model call site passes a ``not _prefill``-gated promotion decision.  The
+  complete ordinary RMSNorm remains source zero and therefore remains the fallback whenever
+  late concrete-view admission declines the one-program lowering.
+  """
+  out = norm(x)
+  if not promoted or norm.weight is None: return out
+  return out._semantic_reduce_output_rmsnorm(x, out, norm.weight, norm.eps)
+
+def _decode_reduce_output_rmsnorm_fp16_consumer(norm, x:Tensor, promoted:bool) -> Tensor:
+  """Closed-default typed RMSNorm boundary for Q4 decode consumers only.
+
+  Block attention/FFN Q4 consumers already use this fp16 cast as their input
+  ABI.  Mark that exact fallback value, rather than piercing its cast later.
+  Q/K and output norms retain fp32-output semantics and never use this helper.
+  """
+  out = norm(x)
+  if not promoted or norm.weight is None: return out
+  typed_out = out.cast(dtypes.float16)
+  return typed_out._semantic_reduce_output_rmsnorm(x, typed_out, norm.weight, norm.eps)
+
+def _decode_reduce_output_norm_flags(block, prefill:bool) -> tuple[bool,bool]:
+  """Return (attention, FFN) REDUCE_OUTPUT decisions for one block trace."""
+  if prefill: return False,False
+  global_route=bool(getattr(block,"_decode_reduce_output_rmsnorm_promoted",False))
+  shared_lease=isinstance(getattr(block,"_shared_q8_attention_admission",None),SharedQ8AttentionAdmission)
+  fused_attn_lease=shared_lease and bool(getattr(block,"_decode_reduce_output_attn_rmsnorm_promoted",False))
+  return global_route or fused_attn_lease,global_route
+
 
 def _generation_input_slice(tokens:Tensor, start_pos:int|UOp, token_extent:UOp, bound_extent:int) -> Tensor:
   """Retain the lazy symbolic slice used by decode and chunked prefill JITs."""
@@ -552,10 +599,16 @@ class FFNBlock:
     def _run(x:Tensor, start_pos:int|UOp, ring_freqs):
       _prefill = getattr(self, "_is_prefill", False)
       _fused_norm = not _prefill and getattr(self, "_decode_norm_fusion_promoted", False)
+      # A bounded shared-Q8 lease owns an independent REDUCE_OUTPUT marker only
+      # for this block's attention norm. The fused provider consumes its
+      # explicit (fallback, x, weight) sources; every miss retains the ordinary
+      # fallback and the global reduce-output policy remains closed.
+      _reduce_output_attn_norm,_reduce_output_norm=_decode_reduce_output_norm_flags(self,_prefill)
       _epi_fused = not _prefill and getattr(self, "_decode_q4k_epilogue_fusion_promoted", False)
       with role_metadata("rms_norm"):
         _nx = _decode_rmsnorm(self.attn_norm, x, _fused_norm, dtypes.float16)
-        normed_x = _prefill_semantic(_prefill, prefill_scratch, _nx if _nx is not None else self.attn_norm(x))
+        normed_x = _prefill_semantic(_prefill, prefill_scratch,
+          _nx if _nx is not None else _decode_reduce_output_rmsnorm_fp16_consumer(self.attn_norm, x, _reduce_output_attn_norm))
       # L1 M4: o-proj residual-add epilogue absorption. When the gate is open, the attn_output
       # GEMV adds the block input x as an in-kernel epilogue, saving the generic E_32_32_4
       # elementwise add kernel. The residual is handed to _attention only when THIS block's
@@ -570,7 +623,8 @@ class FFNBlock:
           attn_out if _epi_residual else x + attn_out)
       with role_metadata("rms_norm"):
         _nh = _decode_rmsnorm(self.ffn_norm, h, _fused_norm, dtypes.float16)
-        normed_h = _prefill_semantic(_prefill, prefill_scratch, _nh if _nh is not None else self.ffn_norm(h))
+        normed_h = _prefill_semantic(_prefill, prefill_scratch,
+          _nh if _nh is not None else _decode_reduce_output_rmsnorm_fp16_consumer(self.ffn_norm, h, _reduce_output_norm))
       # L1 M4: ffn_down silu*mul prelude + residual epilogue absorption. When the gate is open,
       # the down GEMV reads gate_out and up_out directly and computes silu(gate)*up inline (no
       # E_128_32_3 elementwise kernel), then adds h as an in-kernel epilogue (no E_32_32_4
@@ -613,7 +667,15 @@ class TransformerBlock(FFNBlock):
       q, k, v = (_prefill_semantic(_prefill, prefill_scratch, _pf16(lin, x).contiguous())
                  for lin in (self.attn_q, self.attn_k, self.attn_v))
     elif hasattr(self, "attn_qkv"): q, k, v = self.attn_qkv(x)  # B1 fused q/k/v
-    else: q, k, v = self.attn_q(x), self.attn_k(x), self.attn_v(x)
+    else:
+      # P3a qualification hook: this is CLOSED by construction.  The loader
+      # never installs ``_shared_q8_attention_admission``; a harness may lease
+      # one exact block and the callee revalidates the real Q4/Q4/{Q4,Q6} tuple.
+      # A miss preserves the three ordinary primitive calls verbatim.
+      _shared_q8 = shared_q8_attention_call(getattr(self, "_shared_q8_attention_admission", None),
+                                             self.attn_q, self.attn_k, self.attn_v, x, start_pos,
+                                             getattr(self, "_shared_q8_attention_norm_weight", None))
+      q, k, v = _shared_q8 if _shared_q8 is not None else (self.attn_q(x), self.attn_k(x), self.attn_v(x))
     q, k, v = (_prefill_semantic(_prefill, prefill_scratch, value) for value in (q, k, v))
     # Decode kv-store fusion (decode-kv-store-chain-fusion-scope-20260803.md, Option A): capture the flat
     # k/v GEMV outputs BEFORE reshape/transpose so the fused store kernel can consume them as [kvh*Hd+elem]
@@ -629,12 +691,15 @@ class TransformerBlock(FFNBlock):
       # reduce materializes as before.
       _kv_store_flat[1], _kv_vparts = _kv_store_parts_view(_kv_store_flat[1])
     _fused_norm = not _prefill and getattr(self, "_decode_norm_fusion_promoted", False)
+    _reduce_output_norm = not _prefill and getattr(self, "_decode_reduce_output_rmsnorm_promoted", False)
     if self.config.qk_norm and self.config.qk_norm != self.config.head_dim:
       with role_metadata("rms_norm"):
         _nq = _decode_rmsnorm(self.attn_q_norm, q, _fused_norm)
         _nk = _decode_rmsnorm(self.attn_k_norm, k, _fused_norm)
-        q = _prefill_semantic(_prefill, prefill_scratch, _nq if _nq is not None else self.attn_q_norm(q))
-        k = _prefill_semantic(_prefill, prefill_scratch, _nk if _nk is not None else self.attn_k_norm(k))
+        q = _prefill_semantic(_prefill, prefill_scratch,
+          _nq if _nq is not None else _decode_reduce_output_rmsnorm(self.attn_q_norm, q, _reduce_output_norm))
+        k = _prefill_semantic(_prefill, prefill_scratch,
+          _nk if _nk is not None else _decode_reduce_output_rmsnorm(self.attn_k_norm, k, _reduce_output_norm))
 
     B, T, _ = x.shape
     if self.config.attn_output_gate:
@@ -647,8 +712,10 @@ class TransformerBlock(FFNBlock):
       with role_metadata("rms_norm"):
         _nq = _decode_rmsnorm(self.attn_q_norm, q, _fused_norm)
         _nk = _decode_rmsnorm(self.attn_k_norm, k, _fused_norm)
-        q = _prefill_semantic(_prefill, prefill_scratch, _nq if _nq is not None else self.attn_q_norm(q))
-        k = _prefill_semantic(_prefill, prefill_scratch, _nk if _nk is not None else self.attn_k_norm(k))
+        q = _prefill_semantic(_prefill, prefill_scratch,
+          _nq if _nq is not None else _decode_reduce_output_rmsnorm(self.attn_q_norm, q, _reduce_output_norm))
+        k = _prefill_semantic(_prefill, prefill_scratch,
+          _nk if _nk is not None else _decode_reduce_output_rmsnorm(self.attn_k_norm, k, _reduce_output_norm))
       if _kv_store_flat is not None:
         # Post-norm k is a fresh contiguous (B,Hkv,T,Hd) buffer, so the flat (B,T,Hkv*Hd) reshape is a pure
         # view (no copy) with the same [kvh*Hd+elem] linear layout as the pre-transpose capture.
@@ -1010,6 +1077,25 @@ class Transformer:
     self.prefill_jit = TinyJit(self.forward)
     self.rollout_jit = TinyJit(self.forward)
     self.rollout_jit_flash = TinyJit(self.forward)
+    self.prefill_greedy_jit = TinyJit(self.forward_greedy)
+    self.prefill_v2_greedy_jit = TinyJit(self.forward_greedy)
+    self.rollout_greedy_jit = TinyJit(self.forward_greedy)
+    self.rollout_greedy_jit_flash = TinyJit(self.forward_greedy)
+    # Closed-default P5 experiment: two captures can form an alias-free
+    # device-resident feedback ring.  A harness must explicitly promote the
+    # route and provide the alternating slot; ordinary callers retain the
+    # single-capture path and CapturedJit's generic written-input firewall.
+    self.rollout_greedy_pingpong_jits = tuple(TinyJit(self.forward_greedy) for _ in range(2))
+    self.rollout_greedy_pingpong_jits_flash = tuple(TinyJit(self.forward_greedy) for _ in range(2))
+    # Diagnostic-only captures return the already-computed decode logits beside
+    # the sampled token. They are separate so the production sampled graph's
+    # return/lifetime contract remains byte-for-byte unchanged.
+    self.rollout_logits_jit = TinyJit(self.forward_with_logits)
+    self.rollout_logits_jit_flash = TinyJit(self.forward_with_logits)
+    self.rollout_greedy_logits_jit = TinyJit(self.forward_greedy_with_logits)
+    self.rollout_greedy_logits_jit_flash = TinyJit(self.forward_greedy_with_logits)
+    self.rollout_greedy_logits_pingpong_jits = tuple(TinyJit(self.forward_greedy_with_logits) for _ in range(2))
+    self.rollout_greedy_logits_pingpong_jits_flash = tuple(TinyJit(self.forward_greedy_with_logits) for _ in range(2))
     self.rollout_jit_ring = TinyJit(self.forward_ring)        # ring FILL phase (ctx<N): read [0:start_pos+T], identity freqs
     self.rollout_jit_ring_full = TinyJit(self.forward_ring)   # ring FULL phase (ctx>=N): read [0:N], wrapped write slot + gathered freqs
     # The selected prefill candidate gets a separate concrete-M capture.
@@ -1124,7 +1210,7 @@ class Transformer:
     # tax to load time, so every generation -- including the first -- is warm. Bounded: ceil(max_context/UBATCH)
     # jits. Safe to leave the dummy KV behind: a fresh model's first generation starts at start_pos=0 and
     # overwrites the cache in chunk order before any position is read.
-    if not (self.config.prefill_v2 and self.config.prefill_concrete_kv): return 0
+    if not (self.config.prefill_v2 and prefill_v2_target_admitted(self.config.prefill_device_facts) and self.config.prefill_concrete_kv): return 0
     ubatch = self.config.prefill_ubatch
     temp = materialize_runtime_input(Tensor([0.0]).contiguous())
     dummy = materialize_runtime_input(Tensor.zeros(1, ubatch, dtype="int32").contiguous())
@@ -1143,14 +1229,17 @@ class Transformer:
     _prefill = resolve(tokens.shape[1] != 1)
     x = _prefill_semantic(_prefill, prefill_activation, self.token_embd(tokens).float())  # (B, T, D)
     for block in self.blk: x = block(x, start_pos)
-    with role_metadata("rms_norm"): x = _prefill_semantic(_prefill, prefill_scratch, self.output_norm(x))
+    _reduce_output_norm = not _prefill and getattr(self, "_decode_reduce_output_rmsnorm_promoted", False)
+    with role_metadata("rms_norm"):
+      x = _prefill_semantic(_prefill, prefill_scratch,
+        _decode_reduce_output_rmsnorm(self.output_norm, x, _reduce_output_norm))
     if self._lm_head_wants_pf16(): return _prefill_semantic(_prefill, prefill_output, _pf16(self.output, x).contiguous())
     # The lazy LM head is still the selected output tensor's actual runtime invocation.  Record it before Tensor's
     # downstream final-token pruning; the prefill-forward context prevents the same call during decode from counting.
     notify_prefill_route(self.output)
     return _prefill_semantic(_prefill, prefill_output, self.output(x))
 
-  def forward(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> Tensor:
+  def _forward_sampled(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, with_logits:bool) -> Tensor|tuple[Tensor, Tensor]:
     # This runs inside the TinyJit body: feedback's lazy clone/store is captured in the decode schedule instead of
     # being realized by JIT input preparation as a separate per-token copy and synchronization.
     tokens = _runtime_input_boundary(tokens)
@@ -1158,7 +1247,35 @@ class Transformer:
     # Gumbel-max trick: argmax(logits/temp - log(-log(uniform))) is equivalent to sampling from softmax(logits/temp)
     sampled = (logits / temperature.maximum(1e-12) -
                (Tensor.rand_like(logits).maximum(1e-12).log().neg()).log()).argmax(-1, keepdim=True)
+    sampled = _prefill_semantic(resolve(tokens.shape[1] != 1), prefill_output, sampled)
+    # The diagnostic return must own a fresh replay-written allocation.  The
+    # sampling path reads ``logits`` in-place, while a view of that internal
+    # producer can be reused by the JIT memory plan after argmax has consumed
+    # it.  Keep production byte-identical and return a held copy only for the
+    # full-logit oracle.
+    return (sampled, logits.clone()) if with_logits else sampled
+
+  def forward(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> Tensor:
+    return self._forward_sampled(tokens, start_pos, temperature, False)  # type: ignore[return-value]
+
+  def forward_greedy(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> Tensor:
+    tokens = _runtime_input_boundary(tokens)
+    logits = self.logits(tokens, start_pos)[:, -1, :]
+    sampled = packed_argmax_finite_fp32(logits, -1, keepdim=True) if getattr(self, "_decode_packed_argmax_promoted", False) \
+      else logits.argmax(-1, keepdim=True)
     return _prefill_semantic(resolve(tokens.shape[1] != 1), prefill_output, sampled)
+
+  def forward_greedy_with_logits(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> tuple[Tensor, Tensor]:
+    tokens = _runtime_input_boundary(tokens)
+    logits = self.logits(tokens, start_pos)[:, -1, :]
+    sampled = packed_argmax_finite_fp32(logits, -1, keepdim=True) if getattr(self, "_decode_packed_argmax_promoted", False) \
+      else logits.argmax(-1, keepdim=True)
+    sampled = _prefill_semantic(resolve(tokens.shape[1] != 1), prefill_output, sampled)
+    return sampled, logits.clone()
+
+  def forward_with_logits(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> tuple[Tensor, Tensor]:
+    """Diagnostic decode tap.  The logits already feed sampling; this only retains them as a JIT return."""
+    return self._forward_sampled(tokens, start_pos, temperature, True)  # type: ignore[return-value]
 
   def forward_ring(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, freqs:Tensor) -> Tensor:
     # StreamingLLM ring decode: `freqs` is a per-step JIT INPUT (the slot-relative pre-gathered cos|sin table). Set it
@@ -1166,13 +1283,36 @@ class Transformer:
     for block in self.blk: block._ring_freqs = freqs
     return self.forward(tokens, start_pos, temperature)
 
+  def decode_with_logits(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, use_flash:bool=False,
+                         feedback_slot:int|None=None) -> tuple[Tensor, Tensor]:
+    """Closed-surface diagnostic tap for a normal (non-ring) one-token decode.
+
+    It deliberately rejects prefill and ring inputs rather than silently
+    capturing a different production route.  Normal ``__call__`` remains the
+    sole production entry point.
+    """
+    if resolve(tokens.shape[1] != 1): raise ValueError("decode_with_logits only supports one-token decode")
+    if _GENERIC_LLM_CONTROL.get(): raise ValueError("decode_with_logits does not support generic-control routing")
+    for q4k_linear in self._q4k_linears.linears: q4k_linear.decode_enabled = True
+    for block in self.blk:
+      block._use_flash, block._prefill_v2, block._is_prefill, block._ring_freqs, block._ring_full = use_flash, False, False, None, False
+    if feedback_slot not in (None, 0, 1): raise ValueError("feedback_slot must be None, 0, or 1")
+    pingpong = bool(getattr(self, "_decode_feedback_pingpong_promoted", False)) and feedback_slot is not None
+    greedy_jit = ((self.rollout_greedy_logits_pingpong_jits_flash if use_flash else self.rollout_greedy_logits_pingpong_jits)[feedback_slot]
+                  if pingpong else (self.rollout_greedy_logits_jit_flash if use_flash else self.rollout_greedy_logits_jit))
+    direct_greedy = bool(getattr(self, "_decode_direct_greedy_promoted", False))
+    jit = greedy_jit if direct_greedy and float(temperature.item()) == 0.0 else \
+          (self.rollout_logits_jit_flash if use_flash else self.rollout_logits_jit)
+    with prefill_route_scope(False): return jit(tokens, start_pos, temperature)
+
   def __call__(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, use_flash:bool=False,
-               ring_freqs:Tensor|None=None, ring_full:bool=False) -> Tensor:
+               ring_freqs:Tensor|None=None, ring_full:bool=False, greedy:bool=False, feedback_slot:int|None=None) -> Tensor:
     is_prefill = resolve(tokens.shape[1] != 1)
     generic_control = _GENERIC_LLM_CONTROL.get()
     # prefill v2: only when opt-in AND this is a CONCRETE-batch prefill chunk. Normal prefill passes a symbolic
     # v_toks (tokens.shape[1] is a UOp -> not int), so the two paths never collide; decode is T==1.
-    is_prefill_v2 = self.config.prefill_v2 and is_prefill and isinstance(tokens.shape[1], int) and not generic_control
+    is_prefill_v2 = self.config.prefill_v2 and prefill_v2_target_admitted(self.config.prefill_device_facts) and \
+      is_prefill and isinstance(tokens.shape[1], int) and not generic_control
     for q4k_linear in self._q4k_linears.linears:
       q4k_linear.decode_enabled = not is_prefill and not generic_control
     # context-aware flash: each block reads _use_flash at trace time; rollout_jit (SDPA) and
@@ -1184,15 +1324,20 @@ class Transformer:
     # StreamingLLM ring decode: distinct captured graphs with `freqs` as a per-step JIT input (rebound each token). The
     # FULL-phase graph (ring_full, ctx>=N) reads the whole [0:N] cache and writes at the wrapped slot; the FILL-phase
     # graph reads [0:start_pos+T] like normal decode. block._ring_full (baked bool) selects the read mode in _attention.
+    if feedback_slot not in (None, 0, 1): raise ValueError("feedback_slot must be None, 0, or 1")
     if ring_freqs is not None and not is_prefill:
       _rjit = self.rollout_jit_ring_full if ring_full else self.rollout_jit_ring
       return _rjit(tokens, start_pos, temperature, ring_freqs)
     # concrete-KV: a CONCRETE int start_pos (KV concrete -> attention TC fires) gets a per-start_pos jit.
     if is_prefill_v2 and isinstance(start_pos, int):
-      jit = self.prefill_v2_jits.setdefault(start_pos, TinyJit(self.forward))
+      jit = self.prefill_v2_jits.setdefault((start_pos, greedy), TinyJit(self.forward_greedy if greedy else self.forward))
     else:
-      jit = (self.prefill_v2_jit if is_prefill_v2 else self.prefill_jit) if is_prefill else \
-            (self.rollout_jit_flash if use_flash else self.rollout_jit)
+      pingpong = bool(getattr(self, "_decode_feedback_pingpong_promoted", False)) and feedback_slot is not None
+      rollout_greedy = ((self.rollout_greedy_pingpong_jits_flash if use_flash else self.rollout_greedy_pingpong_jits)[feedback_slot]
+                        if pingpong else (self.rollout_greedy_jit_flash if use_flash else self.rollout_greedy_jit))
+      jit = ((self.prefill_v2_greedy_jit if greedy else self.prefill_v2_jit) if is_prefill_v2 else (self.prefill_greedy_jit if greedy else self.prefill_jit)) if is_prefill else \
+            (rollout_greedy if greedy else
+             (self.rollout_jit_flash if use_flash else self.rollout_jit))
     if not is_prefill_v2:
       with prefill_route_scope(is_prefill): return jit(tokens, start_pos, temperature)
     # contain the ambient codegen power: install the warmstart table ONLY around the prefill-v2 forward (it's
@@ -1477,6 +1622,12 @@ class Transformer:
         _norm = getattr(_b, _name, None)
         if _norm is not None: _norm._rmsnorm_native_promoted = _rmsnorm_native_promoted
     model.output_norm._rmsnorm_native_promoted = _rmsnorm_native_promoted
+    # Cooperative ordinary-CALL reduce/output route.  Promotion lives on the
+    # model/block call sites, never nn.RMSNorm: the call sites gate the marker
+    # on ``not _prefill`` before late concrete-view admission runs.
+    _reduce_output_promoted = decode_reduce_output_rmsnorm_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_reduce_output_rmsnorm_promoted = _reduce_output_promoted
+    for _b in model.blk: _b._decode_reduce_output_rmsnorm_promoted = _reduce_output_promoted
     nn.state.load_state_dict(model, state_dict, verbose=False, consume=True, realize=False)  # NOTE: rope_freqs.weight (32,) is unused
     if _norm_promoted:
       # Materialize the packed norm weights once at load (~600KB total fp16) so the fused decode
@@ -1617,7 +1768,7 @@ class Transformer:
       try: self(dummy, v_sp.bind(ctx), temp, use_flash=True).realize()
       except Exception: return
 
-  def generate(self, tokens:list[int], chunk_size:int=32, temperature:float=0.0):
+  def generate(self, tokens:list[int], chunk_size:int=32, temperature:float=0.0, diagnostic_full_logits:bool=False):
     if self.has_recurrent_block: chunk_size = 1
     _ring = self.config.ring and self.config.rope_dim == self.config.head_dim
     if _ring and len(tokens) > self.max_context:
@@ -1642,10 +1793,11 @@ class Transformer:
     if start_pos < len(self._cached_tokens) and (resets := [r for b in self.blk for r in b._state_reset_ops()]): Tensor.realize(*resets)
     # flash-decode selection is centralized in should_use_flash_decode (default FLASH_DECODE=auto, threshold
     # 512): generate passes no use_flash override and lets that single authority decide per captured graph.
-    out, prompt_len = None, len(tokens)
+    out, prompt_len, decode_feedback_phase = None, len(tokens), 0
+    direct_greedy = temperature == 0.0 and bool(getattr(self, "_decode_direct_greedy_promoted", False))
     while _ring or len(tokens) < self.max_context:   # ring: unbounded logical context (caller controls when to stop)
       ubatch = self.config.prefill_ubatch
-      if self.config.prefill_v2 and (prompt_len - start_pos) >= ubatch:
+      if self.config.prefill_v2 and prefill_v2_target_admitted(self.config.prefill_device_facts) and (prompt_len - start_pos) >= ubatch:
         # prefill v2: a CONCRETE-T chunk of all-real prompt tokens (start_pos still symbolic; only the token
         # dim must be concrete for tensor cores). remaining>=UBATCH => start_pos<prompt_len so we slice from t.
         # concrete start_pos -> KV=start_pos+T concrete -> attention TC fires (the validated 1.24x, byte-identical).
@@ -1655,17 +1807,18 @@ class Transformer:
         # per-start_pos jit compiles lazily on first use and is cached on the model instance thereafter.
         use_concrete = (start_pos == 0) or self.config.prefill_concrete_kv
         sp, ntv = (start_pos if use_concrete else v_start_pos.bind(start_pos)), ubatch
-        out = self(t[:, sp:sp+ubatch], sp, temp, use_flash=False).realize()
-      elif self.config.prefill_v2 and start_pos < prompt_len and prompt_len >= ubatch:
+        out = self(t[:, sp:sp+ubatch], sp, temp, use_flash=False, greedy=direct_greedy).realize()
+      elif self.config.prefill_v2 and prefill_v2_target_admitted(self.config.prefill_device_facts) and start_pos < prompt_len and prompt_len >= ubatch:
         # Phase-3 fix: a sub-UBATCH PROMPT remainder would otherwise fall to many slow 32-token symbolic calls
         # (the fallback trap). Instead process the LAST PREFILL_UBATCH tokens as ONE prefill-v2 chunk by shifting
         # the window back so it ENDS exactly at prompt_len -> all-real tokens (no padding), last position is
         # prompt_len-1 so out.item() is the next token. Re-processes the small overlap with the prior chunk (same
         # tokens -> same KV) -> correct. Symbolic start_pos reuses the one prefill_v2_jit (no per-remainder compile).
         sp = v_start_pos.bind(prompt_len - ubatch)   # symbolic offset -> matches the prefill_v2_jit signature
-        out = self(t[:, sp:sp+ubatch], sp, temp, use_flash=False).realize()
+        out = self(t[:, sp:sp+ubatch], sp, temp, use_flash=False, greedy=direct_greedy).realize()
         ntv = prompt_len - start_pos                      # advance straight to end of prompt
       elif _ring and start_pos >= prompt_len and out is not None:
+        if diagnostic_full_logits: raise ValueError("diagnostic_full_logits does not support ring decode")
         # StreamingLLM ring decode (T=1, past the prompt). Bind the WRAPPED write slot (always in [0,N-1] -> never trips
         # Variable.bind's vmax assert even as the logical position grows unboundedly); feed the per-step pre-gathered
         # freqs (identity while filling -> token-identical; slot-relative once full); ring_full switches to the [0:N]
@@ -1674,7 +1827,7 @@ class Transformer:
         sp = v_start_pos.bind(self._ring_slot(start_pos, _N, _sinks)); ntv = 1
         _rf = self._ring_gather_freqs(next(b.freqs_cis for b in self.blk if hasattr(b, "freqs_cis")),
                                       start_pos, _N, _sinks)
-        out = self(out, sp, temp, use_flash=True, ring_freqs=_rf, ring_full=(start_pos >= _N)).realize()
+        out = self(out, sp, temp, use_flash=True, ring_freqs=_rf, ring_full=(start_pos >= _N), greedy=direct_greedy).realize()
       else:
         sp, nt = v_start_pos.bind(start_pos), v_toks.bind(min(chunk_size, len(tokens) - start_pos))
         ntv = nt.val
@@ -1683,11 +1836,35 @@ class Transformer:
         # decode graph is baked SDPA at the start ctx and never switches -> short-prompt decode SDPA-degrades the
         # whole way (e.g. 85->54 tok/s by ctx512). should_use_flash_decode returns False for ntv!=1 (prefill chunks).
         _uf = self.config.flash_decode and _route_should_use_flash_decode(sp, ntv)
-        out = self(_generation_input_slice(t, sp, nt, ntv) if start_pos < prompt_len or out is None else out, sp, temp,
-                   use_flash=_uf).realize()
+        decode_input = _generation_input_slice(t, sp, nt, ntv) if start_pos < prompt_len or out is None else \
+                       (out[0] if diagnostic_full_logits and isinstance(out, tuple) else out)
+        feedback_slot = (decode_feedback_phase & 1) if start_pos >= prompt_len and \
+          bool(getattr(self, "_decode_feedback_pingpong_promoted", False)) else None
+        out = (self.decode_with_logits(decode_input, sp, temp, use_flash=_uf, feedback_slot=feedback_slot)
+               if diagnostic_full_logits and ntv == 1 and start_pos >= prompt_len else
+               self(decode_input, sp, temp, use_flash=_uf, greedy=direct_greedy, feedback_slot=feedback_slot))
+        if feedback_slot is not None: decode_feedback_phase += 1
+        if isinstance(out, tuple):
+          out = (out[0].realize(), out[1].realize())
+        else: out = out.realize()
+        if feedback_slot is not None:
+          pair = self.rollout_greedy_logits_pingpong_jits_flash if diagnostic_full_logits and _uf else \
+                 self.rollout_greedy_logits_pingpong_jits if diagnostic_full_logits else \
+                 self.rollout_greedy_pingpong_jits_flash if _uf else self.rollout_greedy_pingpong_jits
+          if all(getattr(jit, "captured", None) is not None for jit in pair):
+            from tinygrad.llm.feedback_pingpong import pingpong_capture_contract
+            if not pingpong_capture_contract(pair)["admitted"]:
+              # Keep the generic alias-safe path as the automatic fallback;
+              # the harness records the exact failed contract separately.
+              self._decode_feedback_pingpong_promoted = False
+              decode_feedback_phase = 0
       start_pos += ntv
       # chunked prefill: keep processing until all prompt tokens are consumed
       if start_pos < len(tokens): continue
-      tokens.append(int(out.item()))
+      sampled, logits = out if diagnostic_full_logits and isinstance(out, tuple) else (out, None)
+      tokens.append(int(sampled.item()))
       self._cached_tokens = tokens[:-1]
-      yield tokens[-1]
+      # Prompt/prefill produces the first sampled token through the normal
+      # prefill graph, so its diagnostic logit is explicitly ``None`` rather
+      # than a silently different full-sequence route.
+      yield (tokens[-1], logits) if diagnostic_full_logits else tokens[-1]

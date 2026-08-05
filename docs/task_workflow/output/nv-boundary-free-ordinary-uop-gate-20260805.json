@@ -1,0 +1,15 @@
+{
+  "schema": "tinygrad.nv_boundary_free_ordinary_uop_gate.v1",
+  "contract": {
+    "shape": [1, 4096],
+    "candidate_must_be_ordinary_uop": true,
+    "candidate_must_not_materialize_lazy_input": true,
+    "candidate_must_be_replay_profile_visible": true
+  },
+  "baseline": {
+    "realized": {"program_count": 2, "contains_custom_kernel": false, "contains_contiguous": false},
+    "lazy_add": {"program_count": 2, "contains_custom_kernel": false, "contains_contiguous": false}
+  },
+  "verdict": "CONSTRUCTION_GAP",
+  "reason": "ordinary RMSNorm has a global reduction result consumed by a separate epilogue program; existing scheduler lowering has no generic cooperative reduction-to-output primitive"
+}

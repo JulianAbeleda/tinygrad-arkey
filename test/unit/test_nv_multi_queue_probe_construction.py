@@ -60,10 +60,10 @@ class FakeRM:
     return params
 
   def _new_gpu_fifo(self, area, ctxshare, group, offset=0, entries=0x400, compute=False, video=False,
-                    debugger=True, engine_type=None):
+                    debugger=True, engine_type=None, flags=0, register_vm=True, error_notifier_size=48 << 20):
     h = self.next_handle
     self.next_handle += 1
-    self.channel_alloc_calls.append((ctxshare, group, engine_type))
+    self.channel_alloc_calls.append((ctxshare, group, engine_type, flags))
     # A real GPFifo wrapper, so tests prove controls take .handle, never the wrapper.
     return ops_nv.GPFifo(ring=None, gpput=None, entries_count=entries, token=0x1234, handle=h)
 
@@ -179,6 +179,16 @@ def test_g1_pass_requires_r1_contract_and_overlap_row():
   assert probe.g1_verdict([arm("shared", r1="FAIL"), arm("group", r1="FAIL", ov=0.5)])[0] == "CONSTRUCTION_BLOCKED"
 
 
+def test_g1_bootstrap_cuda_is_a_corrected_construction_arm():
+  arm = {"mode": "bootstrap_cuda", "experiments": [
+    {"name": "R1", "status": "pass"},
+    {"name": "R3", "status": "pass", "overlap": 0.07},
+  ]}
+  verdict, basis = probe.g1_verdict([arm])
+  assert verdict == "PASS"
+  assert "bootstrap_cuda" in basis
+
+
 def test_shared_mode_matches_control_arm_construction():
   fake = FakeRM()
   fifos, errors, rm_ops = collect(fake, "shared", [0, 0])
@@ -186,6 +196,34 @@ def test_shared_mode_matches_control_arm_construction():
   assert [op["op"] for op in rm_ops] == ["CHANNEL_ALLOC", "CHANNEL_ALLOC", "NVA06C_GPFIFO_SCHEDULE"]
   assert rm_ops[-1]["group"] == fake.channel_group
   assert all(op["group"] == fake.channel_group for op in rm_ops)
+
+
+def test_cuda_mirror_reopens_group_schedule_and_uses_cuda_runqueue_flags():
+  fake = FakeRM()
+  fifos, errors, rm_ops = collect(fake, "cuda_mirror", [0, 0])
+  assert len(fifos) == 2 and not errors
+  assert [op["op"] for op in rm_ops] == ["NVA06C_GPFIFO_UNSCHEDULE", "CHANNEL_ALLOC", "CHANNEL_ALLOC", "NVA06C_GPFIFO_SCHEDULE"]
+  assert [call[-1] for call in fake.channel_alloc_calls] == [0, 0x10]
+  schedule = [params.bEnable for _, cmd, params in fake.control_calls if cmd == ops_nv.nv_gpu.NVA06C_CTRL_CMD_GPFIFO_SCHEDULE]
+  assert schedule == [0, 1]
+
+
+def test_explicit_channel_flags_override_cuda_mirror_default():
+  fake = FakeRM()
+  fifos, errors = probe.extra_gpfifos(fake, [0, 0], mode="cuda_mirror", channel_flags=[0x10, 0x10])
+  assert len(fifos) == 2 and not errors
+  assert [call[-1] for call in fake.channel_alloc_calls] == [0x10, 0x10]
+
+
+def test_fresh_cuda_group_is_one_group_one_ctxshare_then_all_children_then_schedule():
+  fake = FakeRM()
+  fifos, errors, rm_ops = collect(fake, "fresh_cuda_group", [0, 0])
+  assert len(fifos) == 2 and not errors
+  assert [op["op"] for op in rm_ops] == ["CHANNEL_GROUP_ALLOC", "CTXSHARE_ALLOC", "CHANNEL_ALLOC", "CHANNEL_ALLOC",
+                                         "NVA06C_GPFIFO_SCHEDULE"]
+  group = rm_ops[0]["group"]
+  assert all(op["group"] == group for op in rm_ops[1:])
+  assert [call[-1] for call in fake.channel_alloc_calls] == [0, 0x10]
 
 
 def test_failed_channel_step_is_recorded_and_channel_excluded():

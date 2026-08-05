@@ -2,7 +2,7 @@ from dataclasses import dataclass, field, replace
 import itertools
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace, Invalid
 from tinygrad.uop.ops import PatternMatcher, UPat, Ops, UOp, resolve, GroupOp, _substitute, KernelInfo, ParamArg, ScheduleHints, NativeAttentionRequest
-from tinygrad.uop.ops import graph_rewrite, sint, AxisType, BottomUpGate, profile_matches, identity_element, AccumulatorSlot, CompositeReduce, CompositeInputSpec, CompositeTileCarrier, AttentionSpec, RMSNormSpec, NativeRowSoftmaxRepackSpec, composite_reduce_provenance
+from tinygrad.uop.ops import graph_rewrite, sint, AxisType, BottomUpGate, profile_matches, identity_element, memory_semantic_owner, AccumulatorSlot, CompositeReduce, CompositeInputSpec, CompositeTileCarrier, AttentionSpec, RMSNormSpec, ReduceOutputSpec, NativeRowSoftmaxRepackSpec, composite_reduce_provenance
 from tinygrad.uop.symbolic import symbolic
 from tinygrad.helpers import prod, all_same, getenv, dedup, all_int, DEBUG, SPLIT_REDUCEOP, DEBUG_RANGEIFY, VIZ, MAX_KERNEL_BUFFERS
 from tinygrad.helpers import PCONTIG, FLOAT16, OPENPILOT_HACKS, Context, argsort, partition, get_single_element
@@ -235,6 +235,143 @@ def lower_rmsnorm_semantic(att:UOp) -> UOp:
 
 pm_rmsnorm_semantic = PatternMatcher([
   (UPat(Ops.RMSNORM, name="att"), lower_rmsnorm_semantic),
+])
+
+def _plain_identity_buffer_view(x:UOp) -> UOp|None:
+  """Return the exact PARAM/BUFFER below equal-span reshapes, if any."""
+  expected = x.numel()
+  while x.op is Ops.RESHAPE and len(x.src):
+    if x.src[0].numel() != expected: return None
+    x = x.src[0]
+  return x if x.op in (Ops.PARAM, Ops.BUFFER) and x.numel() == expected else None
+
+def _precompiled_output_after_view(x:UOp) -> UOp|None:
+  """Validate and retain one invocation-owned precompiled function output.
+
+  Callify turns an exact GETTUPLE(precompiled FUNCTION) into
+  AFTER(output_buffer, CALL).  The dependency is load-bearing: validation may
+  inspect its physical buffer, but a downstream ordinary CALL must consume the
+  original AFTER/view.  This bounded first contract accepts only the final call
+  argument and proves the body stores through the PARAM for that same slot.
+  """
+  original, expected = x, x.numel()
+  while x.op is Ops.RESHAPE and len(x.src):
+    if x.src[0].numel() != expected: return None
+    x = x.src[0]
+  if x.op is not Ops.AFTER or len(x.src) != 2: return None
+  base, call = x.src
+  base_buf = _plain_identity_buffer_view(base)
+  if base_buf is None or base_buf.dtype != original.dtype or call.op is not Ops.CALL or not bool(getattr(call.arg, "precompile", False)): return None
+  # Alias rejection is load-bearing: the same physical argument appearing as
+  # both an input and output is not an invocation-owned output identity.
+  matches = [slot for slot,arg in enumerate(call.src[1:]) if _plain_identity_buffer_view(arg) is base_buf]
+  if len(matches) != 1: return None
+  output_slot = matches[0]
+  def store_targets_slot(store:UOp) -> bool:
+    if store.op is not Ops.STORE: return False
+    target = _plain_identity_buffer_view(store.src[0])
+    return target is not None and target.op is Ops.PARAM and isinstance(target.arg, ParamArg) and target.arg.slot == output_slot
+  # Retain the original body proof while it is visible. Once recursive
+  # scheduling makes the body LINEAR, the immutable callify slot contract is
+  # the authority; inner scheduled PARAM numbering is a different scope.
+  if call.src[0].op is Ops.SINK:
+    if not any(store_targets_slot(u) for u in call.src[0].toposort()): return None
+  elif call.src[0].op is Ops.LINEAR:
+    if output_slot not in getattr(call.arg, "precompiled_output_slots", ()): return None
+  else: return None
+  return original
+
+def _identity_buffer_view(x:UOp) -> UOp|None:
+  """Accept a plain identity buffer or an exact dependency-bearing call output.
+
+  PERMUTE/SHRINK/EXPAND and MEMORY_SEMANTIC remain rejected; their physical
+  offset/span cannot be inferred here.  Arbitrary AFTER is also rejected.
+  """
+  plain = _plain_identity_buffer_view(x)
+  return plain if plain is not None else _precompiled_output_after_view(x)
+
+def _owned_precompiled_output_after_view(x:UOp) -> UOp|None:
+  """Validate an early owned-contiguous candidate without upgrading it to identity."""
+  original, expected = x, x.numel()
+  while x.op is Ops.RESHAPE and len(x.src):
+    if x.src[0].numel() != expected: return None
+    x = x.src[0]
+  if x.op is not Ops.MEMORY_SEMANTIC or len(x.src) != 1 or memory_semantic_owner(x) is None: return None
+  return original if _precompiled_output_after_view(x.src[0]) is not None else None
+
+def _proven_invocation_input_view(x:UOp, slot:int) -> UOp|None:
+  """Match only the PARAM whose concrete call argument callify proved."""
+  original, expected = x, x.numel()
+  while x.op is Ops.RESHAPE and len(x.src):
+    if x.src[0].numel() != expected: return None
+    x = x.src[0]
+  return original if x.op is Ops.PARAM and isinstance(x.arg, ParamArg) and x.arg.slot == slot else None
+
+def lower_reduce_output_store(store:UOp, carrier:UOp|None=None) -> UOp|None:
+  """Lower the exact direct marker, or one owner-preserving production carrier.
+
+  ``MEMORY_SEMANTIC`` is not generally transparent here.  The second form is
+  deliberately only the spelling observed in the decode trace: one direct
+  semantic carrier around one REDUCE_OUTPUT value.  It neither walks through
+  another carrier nor accepts a movement view.  The carrier's owner is moved
+  to the emitted call's output argument so the normal split-store ownership
+  handoff records it on the same concrete output slot.
+  """
+  marker = carrier.src[0] if carrier is not None else store.src[1]
+  if marker.op is not Ops.REDUCE_OUTPUT or not isinstance(marker.arg, ReduceOutputSpec): return None
+  if carrier is not None:
+    # This is a typed semantic wrapper, not an identity/movement proof.  Keep
+    # exact logical geometry and reject any unexpected wrapper shape/dtype.
+    from tinygrad.uop import MemorySemanticOwner
+    if len(carrier.src) != 1 or not isinstance(carrier.arg, MemorySemanticOwner): return None
+    if carrier.dtype != marker.dtype or carrier.shape != marker.shape or carrier.numel() != marker.numel(): return None
+  from tinygrad.llm.reduce_output_trace import trace_reduce_output, trace_reduce_output_detail
+  trace_reduce_output("selector", "entry")
+  def reject(reason:str) -> None:
+    trace_reduce_output("selector", reason)
+  spec = marker.arg
+  if not (spec.input_identity_at_marker or spec.owned_contiguous_candidate): reject("marker_not_eligible"); return None
+  target, x, weight = store.src[0], marker.src[1], marker.src[2]
+  out_buf, w_buf = _identity_buffer_view(target), _identity_buffer_view(weight)
+  # The early owned-contiguous bit is deliberately weaker than identity. It
+  # may only advance through the durable invocation-output proof; an ordinary
+  # buffer produced by a movement or non-call materialization is insufficient.
+  x_buf = _identity_buffer_view(x) if spec.input_identity_at_marker else (
+    _proven_invocation_input_view(x, spec.invocation_input_slot) if spec.invocation_input_slot is not None else
+    _owned_precompiled_output_after_view(x))
+  # Fail closed for lazy/movement inputs. Returning None lets the marker
+  # fallback rewrite below preserve the exact ordinary graph.
+  if out_buf is None: reject("output_not_identity"); return None
+  if x_buf is None: reject("input_proof_missing"); return None
+  if w_buf is None: reject("weight_not_identity"); return None
+  device = x_buf.device
+  if not isinstance(device, str) or not device.startswith(("NV", "CUDA")): reject("unsupported_device"); return None
+  try:
+    from tinygrad.codegen.late.reduce_output import emit_reduce_output_rmsnorm
+    out_ph = UOp.placeholder((spec.rows*spec.dim,), spec.out_dtype, 0)
+    x_ph = UOp.placeholder((spec.rows*spec.dim,), x.dtype, 1)
+    w_ph = UOp.placeholder((spec.dim,), weight.dtype, 2)
+    body = emit_reduce_output_rmsnorm(spec, x.dtype, weight.dtype)(out_ph, x_ph, w_ph)
+  except ValueError:
+    reject("emitter_rejected"); return None
+  trace_reduce_output("selector", "accepted")
+  # A semantic carrier around a CALL argument is consumed while that CALL is
+  # formed, before split_store can see it.  Carry the exact same vocabulary
+  # owner on this emitted body's known output slot instead.  Slot zero is
+  # fixed by this emitter's (out, x, w) ABI; no inference from a later graph
+  # is involved.
+  if carrier is not None:
+    if not isinstance(body.arg, KernelInfo): return None
+    body = body.replace(arg=replace(body.arg, memory_semantic_slots=((0, carrier.arg),)))
+  return body.call(out_buf, x_buf, w_buf)
+
+pm_reduce_output_store = PatternMatcher([
+  (UPat(Ops.STORE, src=(UPat(), UPat(Ops.REDUCE_OUTPUT)), name="store"), lower_reduce_output_store),
+  (UPat(Ops.STORE, src=(UPat(), UPat(Ops.MEMORY_SEMANTIC, src=(UPat(Ops.REDUCE_OUTPUT),), name="carrier")), name="store"),
+   lambda store,carrier: lower_reduce_output_store(store, carrier)),
+])
+pm_reduce_output_fallback = PatternMatcher([
+  (UPat(Ops.REDUCE_OUTPUT, name="marker"), lambda marker: marker.src[0]),
 ])
 
 def lower_scoped_value_semantic(value:UOp) -> UOp:
@@ -1062,6 +1199,38 @@ def _get_kernel_graph(sink:UOp) -> UOp:
   tsink = graph_rewrite(tsink, pm_native_row_softmax_repack, ctx=itertools.count(1000),
                        bottom_up=False, name="native row softmax repack")
   tsink = graph_rewrite(tsink, pm_syntactic_sugar+pm_mops+earliest_rewrites, bottom_up=True, name="earliest rewrites")
+
+  # This is the last point at which REDUCE_OUTPUT is still visible before the
+  # STORE selector/fallback pair. Count only; do not retain a graph reference.
+  from tinygrad.llm.reduce_output_trace import trace_reduce_output, trace_reduce_output_detail
+  _trace_nodes = tsink.toposort()
+  _trace_users:dict[UOp, list[UOp]] = {}
+  for _parent in _trace_nodes:
+    for _child in _parent.src: _trace_users.setdefault(_child, []).append(_parent)
+  for _u in _trace_nodes:
+    if _u.op is Ops.REDUCE_OUTPUT and isinstance(_u.arg, ReduceOutputSpec):
+      trace_reduce_output("before_rangeify_store", "candidate" if _u.arg.owned_contiguous_candidate else "ordinary")
+      for _parent in _trace_users.get(_u, ()): trace_reduce_output("before_rangeify_parent", _parent.op.name)
+      # The selector may only follow an exact production spelling.  Record up
+      # to four consumer edges as inert strings so a census can distinguish a
+      # direct STORE value from a carrier later consumed by another op.
+      def _node_label(node:UOp) -> str:
+        owner = memory_semantic_owner(node)
+        return f"{node.op.name}(shape={node._shape},dtype={node.dtype},owner={owner!r})"
+      def _trace_parent_chains(node:UOp, chain:tuple[str,...], depth:int) -> None:
+        parents = _trace_users.get(node, ())
+        if depth == 4 or not parents:
+          trace_reduce_output_detail("before_rangeify_parent_chain", " -> ".join(chain))
+          return
+        for parent in parents:
+          _trace_parent_chains(parent, chain+(_node_label(parent),), depth+1)
+      _trace_parent_chains(_u, (_node_label(_u),), 0)
+
+  # REDUCE_OUTPUT is selected only at the concrete STORE, after callify has
+  # exposed exact buffer/view ownership. Top-down is load-bearing: selecting
+  # the STORE must happen before the child fallback rule erases the marker.
+  tsink = graph_rewrite(tsink, pm_reduce_output_store, bottom_up=False, name="reduce output store")
+  tsink = graph_rewrite(tsink, pm_reduce_output_fallback, name="reduce output fallback")
 
   # Attention may only be lowered from its explicit semantic marker. The
   # previous broad ADD-REDUCE matcher was unsound: ordinary reductions must

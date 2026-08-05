@@ -320,6 +320,8 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
         # src[0] is the ordinary fallback result; the remaining sources are
         # the explicit x and optional affine weight inputs.
         return self.src[0]._shape if len(self.src) else None
+      case Ops.REDUCE_OUTPUT:
+        return self.src[0]._shape if len(self.src) else None
       case Ops.STACK:
         if len(self.src) == 0: return ()
         if isinstance(self.dtype, PtrDType):
@@ -1002,6 +1004,15 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     if self.op is Ops.GETTUPLE and self.src[0].op is Ops.TUPLE: return self.src[0].src[self.arg].has_buffer_identity()
     return self.op in {Ops.BUFFER, Ops.SLICE, Ops.PARAM}
 
+  def has_precompiled_output_identity(self):
+    """An exact result of a precompiled function receives a fresh contiguous output
+    buffer during callify. Before callify it is a GETTUPLE, so opaque consumers must
+    preserve this invocation rather than inserting a redundant contiguous adapter.
+    Movement/offset views are intentionally excluded; only the returned slot itself
+    has the output-buffer contract."""
+    if self.op in {Ops.RESHAPE, Ops.MEMORY_SEMANTIC}: return self.src[0].has_precompiled_output_identity()
+    return self.op is Ops.GETTUPLE and self.src[0].op is Ops.FUNCTION and bool(self.src[0].arg.precompile)
+
   def _base_buffer_is_realized(self) -> bool:
     """Walk through AFTER chain to find if the underlying buffer is realized (has allocated memory)."""
     u = self.base
@@ -1265,7 +1276,8 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     # MEMORY_SEMANTIC is transparent to physical layout. Preserve an already
     # concrete buffer/view argument so ownership metadata does not force a
     # redundant materialization before an opaque kernel.
-    contig_srcs = tuple(x if x.op is Ops.AFTER or (x.op is Ops.MEMORY_SEMANTIC and x.src[0].has_buffer_identity())
+    contig_srcs = tuple(x if x.op is Ops.AFTER or x.has_precompiled_output_identity() or
+                         (x.op is Ops.MEMORY_SEMANTIC and x.src[0].has_buffer_identity())
                         else x.contiguous() for x in srcs)
     placeholders = [UOp.placeholder_like(s, slot=i) for i,s in enumerate(contig_srcs)]
     kernel = fxn(*placeholders).call(*contig_srcs, grad_fxn=grad_fxn)
@@ -2086,6 +2098,33 @@ class RMSNormSpec(NamedTuple):
   out_dtype: Any
   affine: bool = True
 
+class ReduceOutputSpec(NamedTuple):
+  """A bounded cooperative reduction followed by an output-wide epilogue.
+
+  The first implementation is deliberately one semantic recipe: sum of
+  squares, rsqrt(eps), intermediate input-dtype rounding, affine multiply.
+  The carrier remains generic in ownership: fallback and every logical input
+  are source-visible, while lowering is target/layout fail-closed.
+  """
+  rows: int
+  dim: int
+  eps: float
+  out_dtype: Any
+  affine: bool = True
+  recipe: str = "sumsq_rsqrt_affine"
+  # Proven at marker creation, before callify can turn a lazy expression into
+  # an invocation PARAM. Late lowering may never infer this from PARAM shape.
+  input_identity_at_marker: bool = False
+  # An exact owned MEMORY_SEMANTIC(CONTIGUOUS(...)) production spelling is a
+  # candidate, not identity. Late lowering must still prove the invocation's
+  # durable output slot, AFTER dependency, and physical buffer contract.
+  owned_contiguous_candidate: bool = False
+  # Callify may bind the candidate to one exact invocation input PARAM after
+  # proving that the corresponding concrete argument is a dependency-bearing
+  # precompiled output. A bare PARAM without this invocation-local proof is
+  # never sufficient.
+  invocation_input_slot: int|None = None
+
 
 @dataclass(frozen=True)
 class KernelInfo:
@@ -2181,12 +2220,18 @@ class CallInfo:
   precompile: bool = False
   precompile_backward: bool = False
   memory_semantic_slots: tuple[tuple[int, Any], ...] = ()
+  # Invocation argument slots that callify proved are direct outputs of a
+  # precompiled FUNCTION. This survives SINK -> LINEAR recursive scheduling;
+  # consumers must still prove exact argument identity and dependency.
+  precompiled_output_slots: tuple[int, ...] = ()
   # grad_fxn can't be pickled, but metadata can
   def __reduce__(self):
-    return (CallInfo, (None, self.metadata, self.name, self.precompile, self.precompile_backward, self.memory_semantic_slots))
+    return (CallInfo, (None, self.metadata, self.name, self.precompile, self.precompile_backward,
+                       self.memory_semantic_slots, self.precompiled_output_slots))
   def __repr__(self):
     gf = id(self.grad_fxn) if self.grad_fxn else None
-    return f"CallInfo({gf}, {self.metadata}, {repr(self.name)}, {self.precompile}, {self.precompile_backward}, {self.memory_semantic_slots})"
+    return (f"CallInfo({gf}, {self.metadata}, {repr(self.name)}, {self.precompile}, {self.precompile_backward}, "
+            f"{self.memory_semantic_slots}, {self.precompiled_output_slots})")
 
 
 DIAGNOSTIC_LAUNCH_AUTHORITY = "tinygrad.research_only.call_global_size.v1"
@@ -2200,7 +2245,8 @@ class DiagnosticCallInfo(CallInfo):
   def __reduce__(self):
     return (DiagnosticCallInfo, (
       None, self.metadata, self.name, self.precompile, self.precompile_backward,
-      self.memory_semantic_slots, self.diagnostic_global_size, self.diagnostic_launch_authority))
+      self.memory_semantic_slots, self.precompiled_output_slots,
+      self.diagnostic_global_size, self.diagnostic_launch_authority))
   def __repr__(self):
     return (f"DiagnosticCallInfo({super().__repr__()}, {self.diagnostic_global_size}, "
             f"{repr(self.diagnostic_launch_authority)})")

@@ -2,7 +2,12 @@
 import ctypes, ctypes.util, struct, platform, pathlib, re, time, os, signal
 from tinygrad.helpers import from_mv, to_mv, getenv
 from tinygrad.runtime.support.c import init_c_struct_t
-from hexdump import hexdump
+try:
+  from hexdump import hexdump
+except ImportError:
+  # Keep the ioctl tracer usable in minimal development environments. The
+  # optional dependency only affects the presentation of verbose/PMA dumps.
+  def hexdump(data): print(bytes(data).hex(" "))
 start = time.perf_counter()
 
 # *** ioctl lib ***
@@ -197,6 +202,7 @@ def ioctl(fd, request, argp):
       if s.pAllocParms is not None:
         if s.hClass == nv_gpu.NV01_DEVICE_0: dump_struct(get_struct(s.pAllocParms, nv_gpu.NV0080_ALLOC_PARAMETERS))
         if s.hClass == nv_gpu.FERMI_VASPACE_A: dump_struct(get_struct(s.pAllocParms, nv_gpu.NV_VASPACE_ALLOCATION_PARAMETERS))
+        if s.hClass == nv_gpu.FERMI_CONTEXT_SHARE_A: dump_struct(get_struct(s.pAllocParms, nv_gpu.NV_CTXSHARE_ALLOCATION_PARAMETERS))
         if s.hClass == nv_gpu.NV50_MEMORY_VIRTUAL: dump_struct(get_struct(s.pAllocParms, nv_gpu.NV_MEMORY_ALLOCATION_PARAMS))
         if s.hClass == nv_gpu.NV1_MEMORY_USER: dump_struct(get_struct(s.pAllocParms, nv_gpu.NV_MEMORY_ALLOCATION_PARAMS))
         if s.hClass == nv_gpu.NV1_MEMORY_SYSTEM: dump_struct(get_struct(s.pAllocParms, nv_gpu.NV_MEMORY_ALLOCATION_PARAMS))

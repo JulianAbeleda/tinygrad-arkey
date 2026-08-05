@@ -1272,6 +1272,30 @@ class Tensor(RandMixin):
     src = (out.uop, x.uop, weight.uop)
     return Tensor(UOp(Ops.RMSNORM, out.dtype, src=src, arg=spec), device=out.device)
 
+  def _semantic_reduce_output_rmsnorm(self, x:Tensor, out:Tensor, weight:Tensor, eps:float) -> Tensor:
+    """Default-off cooperative reduction/output marker with an exact fallback."""
+    from tinygrad.uop.ops import ReduceOutputSpec, memory_semantic_owner
+    if not all_int(x.shape) or len(x.shape) == 0: return out
+    dim = x.shape[-1]
+    rows = prod(x.shape[:-1])
+    if not isinstance(dim, int) or not isinstance(rows, int) or rows != 1 or dim < 32 or dim % 32: return out
+    if x.dtype not in (dtypes.float16, dtypes.float32) or out.dtype not in (dtypes.float16, dtypes.float32): return out
+    # In production a block result is explicitly CONTIGUOUS before its semantic
+    # role wrapper.  Accept only that one promised materialization when its
+    # source is itself an exact precompiled function result.  This is not
+    # generic movement stripping: ADD/CAST/PERMUTE and arbitrary CONTIGUOUS
+    # values remain ineligible.
+    identity_uop = x.uop
+    while identity_uop.op in {Ops.RESHAPE, Ops.MEMORY_SEMANTIC}: identity_uop = identity_uop.src[0]
+    precompiled_contiguous = identity_uop.op is Ops.CONTIGUOUS and identity_uop.src[0].has_precompiled_output_identity()
+    owned_contiguous_candidate = (x.uop.op is Ops.MEMORY_SEMANTIC and len(x.uop.src) == 1 and
+                                  x.uop.src[0].op is Ops.CONTIGUOUS and memory_semantic_owner(x.uop) is not None)
+    identity = not owned_contiguous_candidate and (x.uop.has_buffer_identity() or
+      x.uop.has_precompiled_output_identity() or precompiled_contiguous)
+    return Tensor(UOp(Ops.REDUCE_OUTPUT, out.dtype, (out.uop, x.uop, weight.uop),
+                      ReduceOutputSpec(rows, dim, eps, out.dtype, input_identity_at_marker=identity,
+                                       owned_contiguous_candidate=owned_contiguous_candidate)), device=out.device)
+
   def _online_attention_primitive(self, key:Tensor, value:Tensor, attn_mask:Tensor|None,
                                   scale:float, acc_dtype:DType, out_dtype:DType) -> Tensor|None:
     """Bounded-score reference lowering for a semantic attention marker.

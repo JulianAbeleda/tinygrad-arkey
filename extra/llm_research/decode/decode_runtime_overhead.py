@@ -103,7 +103,7 @@ def _warm_depth(model, prompt:list[int], chunk_size:int, warmup_decode:int) -> N
 
 
 def capture_decode_graph(model, prompt:list[int], chunk_size:int, warmup_decode:int):
-  """Capture the second SDPA rollout and retain its runtime-only call bindings."""
+  """Capture the second greedy SDPA rollout and retain its runtime-only call bindings."""
   from tinygrad.engine.jit import observe_graph_admissions
   from tinygrad.helpers import Context
   _reset(model)
@@ -115,8 +115,17 @@ def capture_decode_graph(model, prompt:list[int], chunk_size:int, warmup_decode:
         with Context(TRACEMETA=1), observe_graph_admissions() as census: next(gen)
       else: next(gen)
   finally: gen.close()
-  if census is None or getattr(model.rollout_jit, "captured", None) is None:
-    raise RuntimeError("second SDPA rollout warmup did not capture rollout_jit")
+  # temperature=0 is explicitly routed through the deterministic greedy JIT,
+  # and the exact d512 boundary selects flash.  Inspect the same route generate
+  # selected instead of hard-coding either the stochastic or SDPA graph.
+  from tinygrad import UOp
+  use_flash = _route(model, UOp.variable("capture_start_pos", 0, model.max_context - 1).bind(len(prompt)), 1)
+  selected = model.rollout_greedy_jit_flash if use_flash else model.rollout_greedy_jit
+  if census is None or getattr(selected, "captured", None) is None:
+    states = {name:{"cnt":getattr(jit, "cnt", None), "captured":getattr(jit, "captured", None) is not None}
+              for name in ("rollout_jit", "rollout_jit_flash", "rollout_greedy_jit", "rollout_greedy_jit_flash")
+              if (jit:=getattr(model, name, None)) is not None}
+    raise RuntimeError(f"second greedy {'flash' if use_flash else 'sdpa'} rollout warmup did not capture selected JIT; {states=}")
   return census
 
 
@@ -124,8 +133,10 @@ def _warm_depth_with_graph_census(model, prompt:list[int], chunk_size:int, warmu
   """Serialize exactly the second SDPA rollout capture; prefill remains unobserved."""
   census = capture_decode_graph(model, prompt, chunk_size, warmup_decode)
   payload = census.to_dict()
-  payload["capture"] = {"phase": "decode", "route": "sdpa", "warmup_index": 2,
-                        "jit": "rollout_jit", "captured": True}
+  from tinygrad import UOp
+  use_flash = _route(model, UOp.variable("capture_start_pos", 0, model.max_context - 1).bind(len(prompt)), 1)
+  payload["capture"] = {"phase": "decode", "route": "flash" if use_flash else "sdpa", "warmup_index": 2,
+                        "jit": "rollout_greedy_jit_flash" if use_flash else "rollout_greedy_jit", "captured": True}
   return payload
 
 
@@ -211,7 +222,9 @@ def main(argv:list[str] | None=None) -> int:
       w_reps.append({"rep": rep, "elapsed_s": w_elapsed, "tok_s": profile.nmeas / w_elapsed,
                      "per_token_ms": [x * 1e3 for x in per_token]})
       if args.skip_dispatch_diagnostic:
-        routes = ["flash" if _route(model, len(prompt), 1) else "sdpa"]
+        from tinygrad import UOp
+        route_sp = UOp.variable("reported_start_pos", 0, profile.max_context - 1).bind(len(prompt))
+        routes = ["flash" if _route(model, route_sp, 1) else "sdpa"]
       else:
         d_elapsed, routes, final_token = _measure_d(model, dev, prompt, args.chunk_size, profile.nmeas, profile.max_context)
         d_reps.append({"rep": rep, "elapsed_s": d_elapsed, "tok_s": profile.nmeas / d_elapsed,
@@ -225,7 +238,7 @@ def main(argv:list[str] | None=None) -> int:
     w_ms = 1e3 / statistics.median(w_tok_s)
     d_ms = 1e3 / statistics.median(d_tok_s) if d_tok_s else None
     route_set = sorted({route for routes in route_reps for route in routes})
-    jits = [model.rollout_jit_flash if route == "flash" else model.rollout_jit for route in route_set]
+    jits = [model.rollout_greedy_jit_flash if route == "flash" else model.rollout_greedy_jit for route in route_set]
     programs = {route: _captured_program_count(jit) for route, jit in zip(route_set, jits)}
     host_ms, host_pct = _host_residual(w_ms, d_ms) if d_ms is not None else (None, None)
     row = {"ctx": depth, "fixed_depth": depth, "decode_tokens": profile.nmeas, "reps": args.reps,

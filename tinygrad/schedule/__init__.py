@@ -87,7 +87,10 @@ def create_schedule(sched_sink:UOp) -> UOp:
         # Ownership is invocation metadata, not an executable value-path UOp.
         # Concrete call arguments stay byte-for-byte identical to an unmarked
         # schedule so ownership cannot perturb fusion, graphing, or dispatch.
-        call = function.call(*buf_uops, metadata=k.arg.metadata)
+        call = function.call(*buf_uops, metadata=k.arg.metadata, name=k.arg.name,
+                             precompile=k.arg.precompile, precompile_backward=k.arg.precompile_backward)
+        if k.arg.precompiled_output_slots:
+          call = call.replace(arg=replace(call.arg, precompiled_output_slots=k.arg.precompiled_output_slots))
         if isinstance(k.arg, DiagnosticCallInfo):
           if k.arg.diagnostic_launch_authority != DIAGNOSTIC_LAUNCH_AUTHORITY:
             raise ValueError("diagnostic CALL global size lacks explicit research-only authority")

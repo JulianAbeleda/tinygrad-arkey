@@ -158,6 +158,11 @@ class Ops(FastEnum):
   # semantic RMSNorm boundary. Same contract as ATTENTION: src[0] is the
   # ordinary fallback graph and rangeify lowers the marker fail-closed.
   RMSNORM = auto()
+  # Default-off cooperative reduction/output boundary. src[0] is the ordinary
+  # fallback, src[1:] are explicit logical inputs. A scheduler may replace the
+  # enclosing STORE with one ordinary CALL only when every input is already a
+  # concrete index-preserving buffer view.
+  REDUCE_OUTPUT = auto()
 
   # multi-output reduce slot access: REDUCE_SLOT(composite_reduce, i) returns slot i
   REDUCE_SLOT = auto()

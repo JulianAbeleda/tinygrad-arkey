@@ -65,6 +65,23 @@ def test_generate_jit_replay_matches_full_prefix_greedy_oracle():
       assert got == expected
 
 
+def test_decode_with_logits_is_a_closed_diagnostic_tap():
+  with Context(DEV="CPU", JIT=1):
+    _, model, state = _models_with_shared_weights()
+    reference = Transformer(_config())
+    nn.state.load_state_dict(reference, state, verbose=False)
+    token, temp = Tensor([[1]], dtype="int32"), Tensor([0.0])
+    # Three calls cover ignore/capture/replay.  Position zero is deliberately
+    # repeated here: the assertion is about the returned full-logit value and
+    # the tap's route contract, not generation-cache semantics.
+    for _ in range(3): sampled, logits = model.decode_with_logits(token, 0, temp)
+    expected = reference.logits(token, 0)[:, -1, :].realize().numpy()
+    np.testing.assert_allclose(logits.realize().numpy(), expected, rtol=1e-5, atol=1e-5)
+    assert sampled.shape == (1, 1)
+    with pytest.raises(ValueError, match="one-token"):
+      model.decode_with_logits(Tensor([[1, 2]], dtype="int32"), 0, temp)
+
+
 def test_model_benchmark_decode_correctness_qualification_passes():
   evidence = qualify_decode_correctness()
   assert evidence["passed"] is True

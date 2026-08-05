@@ -299,6 +299,19 @@ def decode_rmsnorm_native_lowering_promoted(target:Target) -> bool:
   """Policy authority for the Path 3 semantic RMSNorm native-lowering route (closed default)."""
   return target in _DECODE_RMSNORM_NATIVE_LOWERING_PROMOTED_TARGETS
 
+def load_decode_reduce_output_rmsnorm_promotion(path:str) -> frozenset[Target]:
+  """Closed-default policy for the ordinary-CALL cooperative RMSNorm route."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  return frozenset((t.get("backend"), t.get("architecture")) for t in (data.get("promoted_targets") or ()))
+
+_DECODE_REDUCE_OUTPUT_RMSNORM_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-reduce-output-rmsnorm-route-policy.json"
+_DECODE_REDUCE_OUTPUT_RMSNORM_TARGETS = load_decode_reduce_output_rmsnorm_promotion(_DECODE_REDUCE_OUTPUT_RMSNORM_RECORD)
+
+def decode_reduce_output_rmsnorm_promoted(target:Target) -> bool:
+  return target in _DECODE_REDUCE_OUTPUT_RMSNORM_TARGETS
+
 @dataclass(frozen=True)
 class PrimitiveRouteEntry:
   name:str; module_path:str; quant_label:str; rows:int; cols:int; role:str; parts:int; opts:tuple[str, ...]; family:str

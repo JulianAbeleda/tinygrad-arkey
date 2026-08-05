@@ -337,6 +337,31 @@ def jit_lower(linear:UOp, held_bufs:set[UOp], input_uops:list[UOp]) -> UOp:
 class GraphException(Exception): pass
 class JitError(Exception): pass
 
+# The input contract of a captured JIT has two distinct parts.  Concrete
+# buffers and variable values are invocation-owned, while the view graph used
+# to describe their shape/device contract is normally stable across decode
+# tokens.  Keep a deliberately small *identity* cache for the latter.  This
+# is not structural memoization: a new UOp, even one which happens to compare
+# equal, takes the conservative full path.
+_JIT_INPUT_DESCRIPTOR_CACHE: collections.OrderedDict[tuple[int, ...], tuple[tuple[UOp, ...], tuple]] = collections.OrderedDict()
+_JIT_INPUT_DESCRIPTOR_CACHE_LIMIT = 64
+
+def _jit_input_descriptors(input_uops:list[UOp]) -> tuple:
+  if not getenv("JIT_INPUT_DESCRIPTOR_CACHE", 1):
+    return tuple((*(graph_rewrite(u.substitute({u.base:UOp(Ops.NOOP)}, extra_pm=mop_cleanup), pm_jit_input_metadata).unbind_all()),
+                  u.dtype, u.device) for u in input_uops)
+  key = tuple(id(u) for u in input_uops)
+  cached = _JIT_INPUT_DESCRIPTOR_CACHE.get(key)
+  if cached is not None and len(cached[0]) == len(input_uops) and all(a is b for a,b in zip(cached[0], input_uops)):
+    _JIT_INPUT_DESCRIPTOR_CACHE.move_to_end(key)
+    return cached[1]
+  descriptors = tuple((*(graph_rewrite(u.substitute({u.base:UOp(Ops.NOOP)}, extra_pm=mop_cleanup), pm_jit_input_metadata).unbind_all()),
+                       u.dtype, u.device) for u in input_uops)
+  _JIT_INPUT_DESCRIPTOR_CACHE[key] = (tuple(input_uops), descriptors)
+  _JIT_INPUT_DESCRIPTOR_CACHE.move_to_end(key)
+  while len(_JIT_INPUT_DESCRIPTOR_CACHE) > _JIT_INPUT_DESCRIPTOR_CACHE_LIMIT: _JIT_INPUT_DESCRIPTOR_CACHE.popitem(last=False)
+  return descriptors
+
 pm_jit_input_metadata = PatternMatcher([
   (UPat(Ops.MEMORY_SEMANTIC, src=(UPat(),), name="m"), lambda m: m.src[0]),
 ])
@@ -468,6 +493,10 @@ class CapturedJit(Generic[ReturnType]):
   expected_names: list[int|str]
   expected_input_info: list[tuple[UOp, tuple[Variable, ...], DType, str]]  # (view, variables, dtype, device) per input
 
+  # Kept out of the constructor and pickle contract: shadows are concrete
+  # runtime allocations, valid only for this captured linear and input slot.
+  _written_input_shadows: dict[int, UOp] = field(default_factory=dict, init=False, repr=False, compare=False)
+
   def __reduce__(self): return self.__class__, (self.ret, self.linear, self.expected_names, self.expected_input_info)
 
   @functools.cached_property
@@ -481,7 +510,26 @@ class CapturedJit(Generic[ReturnType]):
     return out
 
   def __call__(self, input_uops:list[UOp], var_vals:dict[str, int]) -> ReturnType:
-    concrete = tuple(_copy_input(u) if u in self._written_uops else u for u in input_uops)
+    if not getenv("JIT_REUSE_WRITTEN_INPUT_SHADOWS", 1):
+      concrete = tuple(_copy_input(u) if u in self._written_uops else u for u in input_uops)
+    else:
+      concrete = []
+      for index, u in enumerate(input_uops):
+        if u not in self._written_uops:
+          concrete.append(u)
+          continue
+        shadow = self._written_input_shadows.get(index)
+        # A shadow is an alias firewall, not a conversion route.  If the
+        # captured slot's concrete contract ever changes, fail closed instead
+        # of reusing storage with an ambiguous layout or device binding.
+        if shadow is None:
+          shadow = UOp.new_buffer(u.device, u.arg, u.dtype)
+          self._written_input_shadows[index] = shadow
+        elif shadow.device != u.device or shadow.dtype != u.dtype or shadow.arg != u.arg:
+          raise JitError(f"written JIT input contract changed at slot {index}")
+        run_linear(UOp(Ops.LINEAR, src=(u.copy_to_device(u.device).call(shadow, u, metadata=()),)))
+        concrete.append(shadow)
+      concrete = tuple(concrete)
     if DEBUG >= 1 and len(self.linear.src) >= 10: print(f"jit execs {len(self.linear.src)} calls")
     if (observer:=_GRAPH_ADMISSION_OBSERVER.get()) is not None and hasattr(observer, "bind_execution"):
       observer.bind_execution(self.linear, concrete, var_vals)
@@ -522,8 +570,7 @@ def _prepare_jit_inputs(args, kwargs):
   # the shape/device contract used to reuse compiled JIT programs. Keep the real
   # input UOps above for call binding, but erase the tensor-only carrier from the
   # structural signature just like the substituted buffer identity.
-  inputs = [(*(graph_rewrite(u.substitute({u.base:UOp(Ops.NOOP)}, extra_pm=mop_cleanup), pm_jit_input_metadata).unbind_all()), u.dtype, u.device)
-            for u in input_uops]
+  inputs = _jit_input_descriptors(input_uops)
   _var_vals = merge_dicts([x[1] for x in inputs] + [dict(v.unbind() for v in (args + tuple(kwargs.values())) if isinstance(v, UOp))])
   var_vals = {k.expr:v for k,v in _var_vals.items()}
   expected_input_info = [(x[0], tuple(sorted(x[1].keys(), key=lambda v: v.expr)), x[2], x[3]) for x in inputs]

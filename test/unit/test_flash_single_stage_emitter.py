@@ -1,0 +1,51 @@
+from tinygrad import dtypes
+from tinygrad.codegen import full_rewrite_to_sink, line_rewrite, pm_linearize_cleanups
+from tinygrad.codegen.late.linearizer import linearize
+from tinygrad.dtype import AddrSpace
+from tinygrad.helpers import Target
+from tinygrad.llm.flash_decode_attention import flash_single_stage_d512_kernel
+from tinygrad.renderer.cstyle import HIPRenderer
+from tinygrad.renderer.cuda import CUDARenderer
+from tinygrad.uop.ops import Ops, UOp
+
+
+def _ast(output_fp16=True):
+  out = UOp.placeholder((32*128,), dtypes.float16 if output_fp16 else dtypes.float32, 0)
+  q = UOp.placeholder((32*128,), dtypes.float16, 1)
+  cache = UOp.placeholder((2,1,8,4608,128), dtypes.float16, 2)
+  return flash_single_stage_d512_kernel(128, 32, 8, 128, UOp.const(dtypes.int, 513), output_fp16=output_fp16)(out, q, cache)
+
+
+def _render(ast, renderer):
+  sink = full_rewrite_to_sink(ast, renderer)
+  return renderer.render(line_rewrite(linearize(sink), pm_linearize_cleanups))
+
+
+def test_single_stage_ast_has_no_global_partial_abi_and_fixed_local_resources():
+  ast = _ast()
+  assert ast.arg.name == "flash_single_stage_d512_f16_32_128"
+  params = [u for u in ast.toposort() if u.op is Ops.PARAM]
+  assert len(params) == 3  # out, q, cache: no pout argument
+  locals_ = [u for u in ast.toposort() if u.op is Ops.DEFINE_LOCAL]
+  assert all(u.dtype.addrspace is AddrSpace.LOCAL for u in locals_)
+  assert sorted(u.dtype.size for u in locals_) == [2080, 8192, 8192]
+
+
+def test_single_stage_cuda_and_hip_render_topology():
+  cuda = _render(_ast(), CUDARenderer(Target("NV", arch="sm_120"), use_nvcc=True))
+  hip = _render(_ast(), HIPRenderer(Target.parse("AMD:HIP:gfx1100")))
+  for src in (cuda, hip):
+    assert "flash_single_stage_d512_f16_32_128" in src
+    assert src.count("syncthreads") >= 3 or src.count("barrier") >= 3
+    assert "buf2[8192]" in src and "buf3[8192]" in src and "buf7[2080]" in src
+  assert "__launch_bounds__(512)" in cuda
+  assert "threadIdx.z; /* 4 */" in cuda and "threadIdx.y; /* 4 */" in cuda and "threadIdx.x; /* 32 */" in cuda
+
+
+def test_single_stage_shape_is_closed_to_exact_candidate():
+  try:
+    flash_single_stage_d512_kernel(128, 40, 8, 128, UOp.const(dtypes.int, 513))
+  except ValueError as e:
+    assert "fixed" in str(e)
+  else:
+    raise AssertionError("non-candidate shape must fail closed")

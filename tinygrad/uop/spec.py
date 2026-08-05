@@ -403,6 +403,11 @@ spec_tensor = PatternMatcher([
    lambda x: hasattr(x.arg, 'dim') and len(x.src) == (3 if x.arg.affine else 2)
    and x.dtype == x.src[0].dtype == x.arg.out_dtype),
 
+  (UPat(Ops.REDUCE_OUTPUT, name="x"),
+   lambda x: hasattr(x.arg, 'recipe') and x.arg.recipe == "sumsq_rsqrt_affine"
+   and len(x.src) == (3 if x.arg.affine else 2)
+   and x.dtype == x.src[0].dtype == x.arg.out_dtype),
+
   # COPY. TODO: this should not have allow_any_len, but something is adding ranges
   (UPat(Ops.COPY, name="copy", src=(UPat.var("x"), UPat(Ops.DEVICE)), allow_any_len=True, arg=None), lambda copy,x: copy.dtype == x.dtype),
   (UPat(Ops.ALLREDUCE, name="red", src=(UPat.var("x"), UPat(Ops.DEVICE))), lambda red,x: red.dtype == x.dtype and isinstance(red.arg, Ops)),

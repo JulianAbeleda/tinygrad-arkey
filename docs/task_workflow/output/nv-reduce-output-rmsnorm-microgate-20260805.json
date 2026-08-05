@@ -1,0 +1,82 @@
+{
+  "schema": "tinygrad.nv_reduce_output_rmsnorm_microgate.v1",
+  "device": "NV",
+  "contract": {
+    "shape": [1, 4096],
+    "realized_inputs": true,
+    "ordinary_call": true,
+    "custom_kernel": false,
+    "singleton_graph_for_fair_replay": true
+  },
+  "correctness": {"bitwise": true, "max_abs": 0.0},
+  "topology": {
+    "baseline": ["test", "test"],
+    "candidate": ["reduce_output_rmsnorm_1_4096"]
+  },
+  "timing": {
+    "unit": "us_per_graph_replay",
+    "replays": 1000,
+    "reps": 7,
+    "control_midpoint_median": 55.3737035,
+    "candidate_median": 54.120625,
+    "delta": -1.2530785
+  },
+  "production_qualification": {
+    "full_logits": {
+      "depth": 512,
+      "count": 2,
+      "shape": [2, 1, 151936],
+      "dtype": "float32",
+      "finite": true,
+      "token_range_valid": true,
+      "tokens": [64461, 4710],
+      "bitwise_equal": true,
+      "mismatch_count": 0,
+      "max_abs": 0.0,
+      "sha256": "506ee637c17af7d8c62f4785fc870870bb4b851bd0e8d9483d93a73a421f609b"
+    },
+    "wall_aba_ms_per_token": {
+      "control_a": 5.560499252169393,
+      "candidate_b": 5.588061598245986,
+      "control_a2": 5.5622113577555865,
+      "candidate_vs_control_midpoint_pct": 0.4802119594780274
+    },
+    "programs_per_token": {"control": 946, "candidate": 946},
+    "reduce_output_programs_per_token": {"control": 0, "candidate": 0},
+    "programs_removed": 0,
+    "production_norms_admitted": 0
+  },
+  "historical_unsafe_attempt": {
+    "xid": 31,
+    "invalid_candidate_token": 151936,
+    "vocabulary_extent": 151936,
+    "cause": "late_view_ownership_unsound_and_marker_leaked_into_prefill"
+  },
+  "shared_precompiled_output_followup": {
+    "hermetic_tests_passed": 17,
+    "production_graph_calls": 946,
+    "reduce_output_calls": 0,
+    "promoted_marker_inputs": 290,
+    "input_histogram": {
+      "MEMORY_SEMANTIC_CONTIGUOUS_1x1x4096": 72,
+      "MEMORY_SEMANTIC_ADD_1x1x4096": 72,
+      "MEMORY_SEMANTIC_CAST_1x1x4096": 2,
+      "PERMUTE_AFTER_1x32x1x128": 72,
+      "PERMUTE_AFTER_1x8x1x128": 72
+    },
+    "all_identity_predicates_false": true
+  },
+  "realization_stage_closure": {
+    "deduplicated_markers": 7,
+    "identity_true_markers": 3,
+    "late_store_selector_invocations": 0,
+    "realization_map_invocations": 0,
+    "forced_contiguous_graph_calls": 982,
+    "control_graph_calls": 946,
+    "extra_generic_calls": 36,
+    "forced_contiguous_reduce_output_calls": 0,
+    "failed_constructions_reverted": true
+  },
+  "remaining_blocker": "post_bufferization_selector_or_consumer_owned_fusion",
+  "verdict": "ISOLATED_GATE_PASS_PRODUCTION_NO_GO_ZERO_ADMISSIONS_POLICY_CLOSED"
+}
