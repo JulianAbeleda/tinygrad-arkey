@@ -1270,6 +1270,9 @@ def _get_kernel_graph(sink:UOp) -> UOp:
       # TODO: this is probably broken for MSELECT/MSTACK
       if s.op not in {Ops.BUFFER, Ops.PARAM} or s is u.buf_uop or (a:=kernel_assign.get(s)) is None: continue
       if a.src[1] is u.src[1]: continue  # same kernel (multi-output custom kernels)
+      # The reader already depends on the writer's AFTER (precompiled-output identity): the read
+      # is ordered after the write, so the WAR edge is redundant and would be a false cycle.
+      if any(x.op is Ops.AFTER and x.buf_uop is s for x in u.backward_slice): continue
       if any(x.op is Ops.AFTER and x.buf_uop is s for x in kernel_assign[u.buf_uop].backward_slice):
         raise RuntimeError(f"cycle detected in assign graph, buffers {s} and {u.buf_uop} have circular dependency")
       assign_rep[a] = kernel_assign[s] = a.replace(src=a.src+(u,))

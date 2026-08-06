@@ -145,7 +145,7 @@ def convert_reduce_to_reduce_with_ranges(ctx:IndexingContext, x:UOp):
   return ret
 
 def remove_movement_op_after_rangeify(ctx:IndexingContext, x:UOp):
-  if x in ctx.range_map or x.src[0].op is Ops.INDEX: return x.src[0]
+  if x in ctx.range_map or x.src[0].op in (Ops.INDEX, Ops.REDUCE): return x.src[0]
 
 pm_apply_rangeify = PatternMatcher([
   # REDUCE(op, axis) -> REDUCE(op) with ranges
