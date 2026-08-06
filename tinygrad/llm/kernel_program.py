@@ -24,7 +24,7 @@ from typing import Callable
 
 from tinygrad import Tensor
 from tinygrad.dtype import DType, dtypes
-from tinygrad.helpers import getenv
+from tinygrad.helpers import getenv, prod
 from tinygrad.uop import GroupOp, Ops
 from tinygrad.uop.ops import UOp, graph_rewrite
 
@@ -128,6 +128,34 @@ class TypedViewRequest:
 
 
 @dataclass(frozen=True)
+class ResidualViewRequest:
+  """M4 residual-slot typed-input opt-in (m4-resadd-landing-scope-20260806.md section 2.2): accept a
+  zero-copy view of the ORDINARY block-output producer for the o-proj residual_add slot instead of the
+  materialized flat-buffer copy. Deliberately distinct from TypedViewRequest so the M5 combine ABI is
+  untouched: the residual producer is an ordinary precompiled-function output (or a buffer), not an
+  opaque AFTER with a declared typed output. Closed default: only the attn_qo residual_add branch of
+  decode_routes.py ever issues one."""
+  slot: int
+  dtype: DType
+  flat_shape: tuple[int, ...]
+  route_role: str
+  kind: str = "residual_add"
+
+  def __post_init__(self):
+    if not isinstance(self.slot, int) or self.slot < 0:
+      raise ValueError("residual view request slot must be a non-negative int")
+    if not isinstance(self.dtype, DType):
+      raise ValueError("residual view request dtype must be a DType")
+    if not isinstance(self.flat_shape, tuple) or not self.flat_shape or not all(
+        isinstance(dim, int) and dim > 0 for dim in self.flat_shape):
+      raise ValueError("residual view request flat_shape must be a non-empty tuple of positive ints")
+    if not isinstance(self.route_role, str) or not self.route_role:
+      raise ValueError("residual view request route_role must be a non-empty string")
+    if not isinstance(self.kind, str) or not self.kind:
+      raise ValueError("residual view request kind must be a non-empty string")
+
+
+@dataclass(frozen=True)
 class KernelProgram:
   route_id: str
   program_id: str
@@ -135,6 +163,7 @@ class KernelProgram:
   emitter: Callable
   output_spec: OutputSpec | None = None
   typed_input_views: tuple[TypedViewRequest, ...] = ()
+  residual_input_views: tuple[ResidualViewRequest, ...] = ()
 
   def __post_init__(self):
     for name, value in (("route_id", self.route_id), ("program_id", self.program_id)):
@@ -151,6 +180,14 @@ class KernelProgram:
     slots = tuple(request.slot for request in self.typed_input_views)
     if len(slots) != len(set(slots)):
       raise ValueError("kernel program typed_input_views slots must be unique")
+    if not isinstance(self.residual_input_views, tuple) or not all(
+        isinstance(request, ResidualViewRequest) for request in self.residual_input_views):
+      raise ValueError("kernel program residual_input_views must be a tuple of ResidualViewRequest")
+    rslots = tuple(request.slot for request in self.residual_input_views)
+    if len(rslots) != len(set(rslots)):
+      raise ValueError("kernel program residual_input_views slots must be unique")
+    if set(rslots) & set(slots):
+      raise ValueError("kernel program typed and residual input view slots must not overlap")
 
   def to_dict(self) -> dict[str, str]:
     return {"route_id": self.route_id, "program_id": self.program_id, "provenance": self.provenance.value}
@@ -251,6 +288,84 @@ def _fold_typed_input_views(inputs: tuple[Tensor, ...], program: KernelProgram) 
   return tuple(new_inputs)
 
 
+# Ops that never move data by themselves: CONTIGUOUS over a pure view is an identity physical
+# layout, MEMORY_SEMANTIC is a role marker. Both are transparent to the residual fold proof.
+_RESIDUAL_TRANSPARENT = frozenset((Ops.CONTIGUOUS, Ops.MEMORY_SEMANTIC))
+_RESIDUAL_MOVEMENT = frozenset((Ops.RESHAPE, Ops.SLICE, Ops.PERMUTE, Ops.EXPAND))
+
+
+def _is_pure_residual_view(chain: UOp) -> bool:
+  """Probe purity proof (m4_residual_boundary_fold_probe): every leg from the request down to the
+  producer base must be a pure view. RESHAPE is identity on the flat index by construction; SLICE
+  must be offset-0; PERMUTE and EXPAND must be identity; CONTIGUOUS and MEMORY_SEMANTIC are
+  transparent physical/role markers. dtype is preserved through every leg. This is intentionally
+  structural: the M5 rewrite cannot see through the precompiled GETTUPLE boundary, so a rewrite-only
+  proof would wrongly reject the real chain."""
+  cur = chain
+  while cur.op in _RESIDUAL_TRANSPARENT | _RESIDUAL_MOVEMENT:
+    if cur.op is Ops.SLICE:
+      offsets, _ = cur.arg
+      if any(o != 0 for o in offsets): return False
+    if cur.op is Ops.PERMUTE and tuple(cur.arg) != tuple(range(len(cur.shape))): return False
+    if cur.op is Ops.EXPAND and tuple(cur.arg) != tuple(cur.shape): return False
+    if cur.dtype is not chain.dtype: return False
+    cur = cur.src[0]
+  return True
+
+
+def _residual_producer_identity(base: UOp) -> bool:
+  """The residual contract's base rule: an ordinary producer with a concrete buffer identity
+  (BUFFER/SLICE/PARAM, or a precompiled function output - the real block boundary), or an AFTER
+  with a declared typed output (the M5 path, kept intact)."""
+  if base.op is Ops.AFTER:
+    return _DECLARED_TYPED_OUTPUTS.get(base) is not None
+  if base.op is Ops.CONTIGUOUS:
+    return base.src[0].has_precompiled_output_identity() or base.src[0].has_buffer_identity() or base.src[0].op is Ops.AFTER
+  return base.has_buffer_identity() or base.has_precompiled_output_identity()
+
+
+def _validated_residual_view(uop: UOp, request: ResidualViewRequest, program: KernelProgram) -> tuple[UOp | None, str]:
+  """M4 residual-slot fail-closed validator (m4-resadd-landing-scope section 2.2, probe-1 contract).
+  Returns ``(base_uop, "ok")`` when the residual chain is a pure offset-0 view of an ordinary
+  producer and the residual_add opt-in is exact; else ``(None, reason)``. Every failure keeps the
+  generic flat-buffer ABI (the boundary copy)."""
+  # (a) residual-slot opt-in: slot 2, attn_qo, residual_add, q4k GEMV consumer
+  if request.slot != 2: return None, "not the residual slot"
+  if request.route_role != "attn_qo": return None, f"wrong consumer route_role {request.route_role!r}"
+  if request.kind != "residual_add": return None, f"wrong epilogue kind {request.kind!r}"
+  if not program.route_id.startswith("decode_q4k") or not program.program_id.endswith(".gemv"):
+    return None, "program is not a q4k GEMV consumer"
+  # (b) request chain is a movement-only view: dtype/numel preserved through every leg
+  chain = uop.src[0] if uop.op is Ops.CONTIGUOUS else uop
+  if chain.dtype is not request.dtype: return None, "request dtype mismatch"
+  if chain.numel() != prod(request.flat_shape): return None, "request numel mismatch"
+  if chain.dtype is not uop.dtype: return None, "view dtype is not preserved through the request chain"
+  # (c) purity: offset-0 row-major identity view (transparent legs stripped, structural proof)
+  if not _is_pure_residual_view(chain): return None, "view is not a contiguous offset-0 reshape"
+  # (d) producer: ordinary producer with buffer identity (or declared typed output)
+  base = chain.base
+  if not _residual_producer_identity(base): return None, "producer has no buffer/precompiled-output identity"
+  return base, "ok"
+
+
+def _fold_residual_input_views(inputs: tuple[Tensor, ...], program: KernelProgram) -> tuple[Tensor, ...]:
+  """Apply the residual-slot typed-input opt-ins. Each accepted request substitutes the validated
+  producer base (a zero-copy view) for the materialized request; a rejection leaves the generic
+  flat-buffer input untouched."""
+  if not program.residual_input_views: return inputs
+  new_inputs = list(inputs)
+  for request in program.residual_input_views:
+    if not 0 <= request.slot < len(inputs):
+      continue
+    view, reason = _validated_residual_view(inputs[request.slot].uop, request, program)
+    if view is not None:
+      new_inputs[request.slot] = Tensor(view)
+    elif getenv("M4_RESADD_BOUNDARY_DEBUG"):
+      print(f"M4_RESADD_BOUNDARY_DEBUG {program.route_id}/{program.program_id} "
+            f"slot={request.slot} rejected: {reason}")
+  return tuple(new_inputs)
+
+
 def _execute_outputs(output: Tensor | None, inputs: tuple[Tensor, ...], program: KernelProgram,
                      allowed: frozenset[KernelProgramProvenance], boundary: str) -> tuple[Tensor, ...]:
   if program.provenance not in allowed:
@@ -263,6 +378,7 @@ def _execute_outputs(output: Tensor | None, inputs: tuple[Tensor, ...], program:
       raise ValueError(f"{boundary} cannot allocate program output without inputs")
     output = Tensor.empty(*program.output_spec.shape, dtype=program.output_spec.dtype, device=inputs[0].device)
   inputs = _fold_typed_input_views(inputs, program)
+  inputs = _fold_residual_input_views(inputs, program)
   results = output.uop_program(*inputs, fxn=program.emitter)
   # record the producer's typed output declaration against the AFTER the program produced, so a
   # later consumer's validator can prove the declared layout (scope section 3.1/4(a)).
@@ -296,5 +412,5 @@ def execute_research_program_outputs(output: Tensor, *inputs: Tensor, program: K
 
 
 __all__ = ["DeclaredTypedOutput", "KernelProgram", "KernelProgramProvenance", "OutputSpec", "TypedLayout",
-           "TypedViewRequest", "execute_oracle_program", "execute_promoted_program", "execute_research_program",
-           "execute_research_program_outputs"]
+           "TypedViewRequest", "ResidualViewRequest", "execute_oracle_program", "execute_promoted_program",
+           "execute_research_program", "execute_research_program_outputs"]

@@ -46,8 +46,8 @@ from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OU
                                            runtime_input, runtime_output,
                                            runtime_persistent, runtime_scratch)
 from tinygrad.llm.model_route_plan import (build_model_route_plan, decode_norm_fusion_promoted,
-  decode_q4k_epilogue_fusion_promoted, decode_q4k_w1w3_fusion_promoted, decode_kv_store_fusion_promoted,
-  decode_rmsnorm_native_lowering_promoted, decode_reduce_output_rmsnorm_promoted)
+  decode_q4k_epilogue_fusion_promoted, decode_q4k_epilogue_resadd_promoted, decode_q4k_w1w3_fusion_promoted,
+  decode_kv_store_fusion_promoted, decode_rmsnorm_native_lowering_promoted, decode_reduce_output_rmsnorm_promoted)
 from tinygrad.llm.prefill_candidate_runtime import decode_prefill_graph_candidate_set, automatic_promoted_prefill_graph_policy
 from tinygrad.llm.physical_memory_ledger import AllocationOwner, bind_allocation_owner
 from tinygrad.uop.ops import Ops, resolve
@@ -616,8 +616,13 @@ class FFNBlock:
       # attn_output is an admitted Q4K primitive -- the absorption signal, not the promotion record
       # (MLA/GatedDeltaNet blocks and nn.Linear attn_output cannot absorb; dropping x there corrupts h).
       _attn_linear = getattr(self, "attn_output", None)
-      _epi_residual = (_epi_fused and isinstance(_attn_linear, Q4KPrimitiveLinear) and
-        getattr(getattr(_attn_linear, "route_admission", None), "q4k_epilogue_fusion_admitted", False))
+      # The residual_add variant has its OWN per-variant record
+      # (decode-q4k-epilogue-resadd-route-policy.json, m4-resadd-landing-scope-20260806.md); the
+      # combined M4 flag stays closed so the ffn_down prelude and fp16_cast cannot fire.
+      _epi_resadd = not _prefill and getattr(self, "_decode_q4k_epilogue_resadd_promoted", False)
+      _epi_residual = (isinstance(_attn_linear, Q4KPrimitiveLinear) and (
+        (_epi_fused and getattr(getattr(_attn_linear, "route_admission", None), "q4k_epilogue_fusion_admitted", False)) or
+        (_epi_resadd and getattr(getattr(_attn_linear, "route_admission", None), "q4k_epilogue_resadd_admitted", False))))
       attn_out = self._attention(normed_x, start_pos, ring_freqs, residual_for_output=(x if _epi_residual else None))
       with role_metadata("residual"):
         h = _prefill_semantic(_prefill, prefill_activation,
@@ -1605,6 +1610,12 @@ class Transformer:
     _q4k_epi_promoted = decode_q4k_epilogue_fusion_promoted((_norm_cap.backend, _norm_cap.architecture))
     model._decode_q4k_epilogue_fusion_promoted = _q4k_epi_promoted
     for _b in model.blk: _b._decode_q4k_epilogue_fusion_promoted = _q4k_epi_promoted
+    # L1 M4 o-proj residual_add variant gate. CLOSED default (decode-q4k-epilogue-resadd-route-policy.json,
+    # m4-resadd-landing-scope-20260806.md); separate from the combined M4 record so this one measured
+    # copy-free variant can promote alone. Same resolve-once pattern as the M4 combined gate.
+    _q4k_resadd_promoted = decode_q4k_epilogue_resadd_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_q4k_epilogue_resadd_promoted = _q4k_resadd_promoted
+    for _b in model.blk: _b._decode_q4k_epilogue_resadd_promoted = _q4k_resadd_promoted
     # Fused w1+w3 (gate/up) decode GEMV gate. CLOSED default (decode-q4k-w1w3-fusion-route-policy.json,
     # NV sm_120 promoted, q4k-w1w3-fused-qv-implementation-record-20260803.md). Same resolve-once
     # pattern as the M4 gate; the fused call additionally requires BOTH ffn_gate and ffn_up to be

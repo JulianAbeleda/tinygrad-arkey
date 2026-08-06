@@ -1,0 +1,6 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_q4k_epilogue_resadd",
+  "description": "o-proj residual_add q4k GEMV epilogue variant promotion record (m4-resadd-landing-scope-20260806.md). ONE variant of the M4 q4k epilogue family: the attn_qo GEMV adds the block input x as an in-kernel epilogue (no E_32_32_4 residual-add kernel per layer) AND the residual slot folds to a zero-copy view of the ordinary block-output producer under the extended typed-view contract (m4-residual-boundary-fold-probe-record-20260806.md, PASS). Isolated kernel microgate PASS: fused median at parity with legacy, copy-free ceiling +100us/token (m4-resadd-kernel-microgate-record-20260806.md). CLOSED default: promotes nothing until the section-6 full gate (fixed-depth wall vs M2-on baseline, census assertions, re-derived pins 3/3) passes. The combined decode_q4k_epilogue_fusion record stays closed; the ffn_down prelude (activation recompute) and fp16_cast variant stay rejected.",
+  "promoted_targets": []
+}

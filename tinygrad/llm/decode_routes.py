@@ -9,8 +9,8 @@ from tinygrad.llm.decode_kernels import (Q6K_POS_EXTENT, decode_kv_rope_store_ke
   q6k_coop_row_tile_for_target, q6k_spec_for_role, q6k_vocab_scalar_reduce_eligible)
 from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeCapability, FlashDecodeRouteConfig,
   flash_decode_capability_from_renderer, flash_decode_live_split_block_tile, flash_decode_target_promoted)
-from tinygrad.llm.kernel_program import (KernelProgram, KernelProgramProvenance, OutputSpec, TypedViewRequest,
-                                         execute_promoted_program, execute_research_program)
+from tinygrad.llm.kernel_program import (KernelProgram, KernelProgramProvenance, OutputSpec, ResidualViewRequest,
+                                         TypedViewRequest, execute_promoted_program, execute_research_program)
 from tinygrad.llm.model_route_plan import decode_epilogue_fusion_promoted, decode_flash_combine_fusion_promoted
 from tinygrad.llm.qk_layout import Q4_K, Q6_K, QuantFormat
 from tinygrad.llm.route_selection import parse_route_mode
@@ -84,27 +84,31 @@ class _Q4KDecodeCandidate:
     # L1 M4: q4k GEMV epilogue absorption is gated by its own closed record
     # (decode-q4k-epilogue-fusion-route-policy.json, measured non-landing) -- NOT M2's
     # decode_epilogue_fusion record, which stays NV-promoted for the Q6K in-kernel merge only.
+    # The o-proj residual_add variant has its OWN per-variant record
+    # (decode-q4k-epilogue-resadd-route-policy.json, m4-resadd-landing-scope-20260806.md) so it can
+    # promote alone while the combined M4 record (ffn_down prelude, fp16_cast) stays closed.
     q4k_epi_admitted = bool(getattr(getattr(linear, "route_admission", None), "q4k_epilogue_fusion_admitted", False))
+    q4k_resadd_admitted = bool(getattr(getattr(linear, "route_admission", None), "q4k_epilogue_resadd_admitted", False))
     route_role = getattr(linear, "route_role", "")
     epi_inputs = epilogue_inputs or {}
     epi_spec = None
     prog_inputs = [_w]
 
-    if q4k_epi_admitted and route_role:
+    if (q4k_epi_admitted or q4k_resadd_admitted) and route_role:
 
-      if route_role == "attn_qo" and "residual" in epi_inputs:
+      if route_role == "attn_qo" and "residual" in epi_inputs and q4k_resadd_admitted:
         from tinygrad.llm.decode_kernels import Q4KGEMVEpilogue
         epi_spec = Q4KGEMVEpilogue("residual_add")
         _xv = x[:, 0, :].reshape(binding.K).cast(dtypes.float16).contiguous()
         prog_inputs.append(_xv)
         prog_inputs.append(epi_inputs["residual"][:, 0, :].reshape(binding.N).cast(dtypes.float32))
-      elif route_role == "ffn_down" and all(k in epi_inputs for k in ("gate_out", "up_out", "normed_h")):
+      elif route_role == "ffn_down" and all(k in epi_inputs for k in ("gate_out", "up_out", "normed_h")) and q4k_epi_admitted:
         from tinygrad.llm.decode_kernels import Q4KGEMVEpilogue
         epi_spec = Q4KGEMVEpilogue("ffn_down_fused")
         prog_inputs.append(epi_inputs["gate_out"][:, 0, :].reshape(binding.K).cast(dtypes.float32))
         prog_inputs.append(epi_inputs["up_out"][:, 0, :].reshape(binding.K).cast(dtypes.float32))
         prog_inputs.append(epi_inputs["normed_h"][:, 0, :].reshape(binding.N).cast(dtypes.float32))
-      elif route_role == "attn_kv" and not epi_inputs:
+      elif route_role == "attn_kv" and not epi_inputs and q4k_epi_admitted:
         from tinygrad.llm.decode_kernels import Q4KGEMVEpilogue
         epi_spec = Q4KGEMVEpilogue("fp16_cast")
         _xv = x[:, 0, :].reshape(binding.K).cast(dtypes.float16).contiguous()
@@ -125,11 +129,19 @@ class _Q4KDecodeCandidate:
     typed_input_views = (
       (TypedViewRequest(slot=1, dtype=dtypes.float16, flat_shape=(binding.K,), route_role="attn_qo"),)
       if route_role == "attn_qo" else ())
+    # M4 residual_add typed input (m4-resadd-landing-scope section 2.2): the residual slot folds to
+    # a zero-copy view of the ordinary block-output producer under the extended validator
+    # (kernel_program._validated_residual_view). Fail-closed: any mismatch keeps the boundary copy.
+    residual_input_views = (
+      (ResidualViewRequest(slot=2, dtype=dtypes.float32, flat_shape=(binding.N,), route_role="attn_qo",
+                           kind="residual_add"),)
+      if (route_role == "attn_qo" and epi_spec is not None and epi_spec.kind == "residual_add") else ())
     program = KernelProgram(binding.route_id, f"{binding.candidate_id}.gemv",
       KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
       q4k_g3_lanemap_gemv_kernel(binding.N, binding.K, epilogue=epi_spec),
       output_spec=OutputSpec((binding.N,), out_dtype),
-      typed_input_views=typed_input_views)
+      typed_input_views=typed_input_views,
+      residual_input_views=residual_input_views)
     return execute_promoted_program(None, *prog_inputs, program=program).reshape(1, 1, binding.N)
 
 # This is a statically promoted result of offline machine search, not an online

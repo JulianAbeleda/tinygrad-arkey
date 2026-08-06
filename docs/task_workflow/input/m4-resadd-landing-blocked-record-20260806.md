@@ -1,0 +1,116 @@
+# M4 residual_add landing BLOCKED record
+
+Date: 2026-08-06
+Status: **BLOCKED. The section-6 gate's OPEN arms crash at schedule time on the flash-decode
+graph** (`ValueError: bad reshape: () -> (1, 1, 4096)` in `schedule/rangeify.py`
+`cleanup_dead_axes`, second decode token, both d512 and d2048). The production residual fold
+is **not realizable in the current runtime**; the per-variant resadd record
+(`decode-q4k-epilogue-resadd-route-policy.json`) stays **CLOSED** (`promoted_targets: []`),
+and **0 credit** is booked. This is a real landing bug, not environmental: probe-2 passed
+because it ran the epi_resadd kernel WITHOUT the fold (boundary copies present); the
+production fold was never GPU-exercised until the section-6 gate.
+
+## Protocol
+
+Same-session, lock-held (`flock -w 600 /tmp/gpu-bench.lock`), Qwen3-8B-Q4_K_M, nmeas 20,
+reps 3, median tok/s, fused prefill attention disabled. Open mode = the per-variant record
+forced open for NV sm_120 (`mrp._DECODE_Q4K_EPILOGUE_RESADD_PROMOTED_TARGETS =
+frozenset({("NV","sm_120")})`) with the **production fold ACTIVE** (no admission surgery);
+closed mode = default records (fold dormant). Each arm runs as a fresh subprocess. The
+runner is `extra/llm_research/decode/m4_resadd_section6_gate.py` (patched this session:
+`--arm record` mode, per-leg error tolerance instead of abort, full run continues past
+failed legs).
+
+## Gate results
+
+| arm | d512 | d2048 | d4096 |
+| --- | --- | --- | --- |
+| closed | median **180.694 tok/s** (reps `[6.549, 180.709, 180.694]`), sha `227ad3ce...` 3/3, first `271` 3/3, census 948 kernels/token, epi 0, legacy 72, copy class 1, resadd 72 | median **169.990 tok/s** (reps `[2.591, 169.990, 170.169]`), sha `aca13ac6...` 3/3, first `271` 3/3 | **pre-existing hang** (HCQ wait timeout; see below) |
+| open (production fold ACTIVE) | **CRASH at schedule time**, second decode token: `ValueError: bad reshape: () -> (1, 1, 4096)` | **same crash** | not reached (closed arm hang blocks the depth; the decode-graph crash is depth-independent) |
+| record (checked-in policy) | not run | not run | not run |
+
+The closed arms are **exact probe-2 control reproductions**: same wall, same census shape,
+same pins - no regression from the landing code (dormant wiring). The open arms crash on
+the second decode token in BOTH depths, at schedule time (before any kernel executes),
+with the identical bad reshape. The section-6 gate therefore FAILS at item 1 before any
+wall can be measured, and the census/pin items are unattainable in open mode.
+
+## Root cause (traced to the node)
+
+`create_bufferize_and_index_based_on_ranges` (`tinygrad/schedule/indexing.py:56`, created
+at the `x.replace(src=tns)` return, line ~88) produces, for the folded residual read:
+
+```text
+RESHAPE(
+  INDEX(
+    AFTER(
+      <epi_resadd GEMV output PARAM>,
+      CALL q4k_g3_lanemap_gemv_epi_resadd_4096_4096
+    ),
+    SPECIAL gidx0
+  ),
+  (1, 1, 4096)
+)
+```
+
+The emitter reads the residual slot as `extra[0][row]` with `row = UOp.special(rows,
+"gidx0")` (`tinygrad/llm/decode_kernels.py:133`, `:233`). `INDEX(ptr, SPECIAL)` has shape
+`()` because SPECIAL contributes no shape; reshaping `()` to the `(1,1,4096)` block-output
+buffer shape is illegal (`prod 1 != 4096`), and `rangeify.cleanup_dead_axes` raises
+`ValueError: bad reshape: () -> (1, 1, 4096)`.
+
+The M5 typed fold works only because its producer AFTER is already FLAT (`(Hq*Hd,)`). The
+runtime cannot express a zero-copy flat (SPECIAL-indexed) kernel read of the non-flat
+`(1,1,4096)` opaque block-output boundary. The closed arm avoids it by materializing the
+flat boundary copy (`E_32_32_4_86a2`, 72/token) - exactly the copy the fold was meant to
+remove.
+
+## Fix candidates tried (all fail identically)
+
+Three substitution strategies for the folded residual input were verified in the real
+decode graph; all produce the same schedule-time crash:
+
+| Candidate | Substitution | Result |
+| --- | --- | --- |
+| raw base | `CONTIGUOUS(GETTUPLE(FUNCTION))` directly | same crash |
+| flat view | `Tensor(view).reshape(N)` over the validated view | same crash |
+| flat GETTUPLE | `Tensor(GETTUPLE).reshape(N)` (`has_precompiled_output_identity()==True`) | same crash |
+
+The crash also reproduces with the M5 combine-fusion record closed (`/tmp/m4_fold_m5off.py`),
+so it is not an M5 interaction. Hermetic repro/evidence: `/tmp/m4_fold_repro.py`,
+`/tmp/m4_fold_trace.py` (bad-node dump), `/tmp/m4_fold_scan.py`, `/tmp/m4_fold_fix2_test.py`,
+`/tmp/m4_fold_repro.log`, `/tmp/m4_fold_trace.log`, `/tmp/m4_open_d512_debug.log`,
+`/tmp/m4_open_d2048.log`.
+
+## Verdict and decision point
+
+The zero-copy M4 fold is **not realizable in the current runtime** without either (a) a
+scheduler/rangeify change to support flat SPECIAL reads of non-flat opaque buffers, or (b)
+flattening the model's `(1,1,4096)` h representation. The epi_resadd route must **stay
+CLOSED**: opening it currently crashes; opening it without the fold is a measured **-0.88%
+wall regression** (probe-2, copies present). Book **0 recovery**.
+
+Reopen conditions (any one): the rangeify substrate that lets a kernel read a flat,
+SPECIAL-indexed view of a non-flat opaque output (new scope, touches `schedule/indexing.py`
+and `schedule/rangeify.py`), or flattening the block-output h boundary to `(N,)` so the
+fold re-proves against a flat producer, or abandoning the route.
+
+## d4096 pre-existing hang (not caused by the landing)
+
+d4096 remains blocked by a **pre-existing prefill hang**: kernels slow to 4-5s at large KV,
+HCQ `Wait timeout: 30000 ms` (timeline 1-5 signals behind), reproduced on pristine HEAD
+(`/tmp/m4_pristine_d4096.log`) and on the landing tree (`/tmp/m4_d4096_hang_probe.log`,
+`/tmp/m4_d4096_retry.log`). The campaign previously dodged it with resident-zero-KV gates.
+The d4096 closed-arm failure in the gate artifact is this hang, not the fold.
+
+## Files
+
+- Gate runner: `extra/llm_research/decode/m4_resadd_section6_gate.py`
+- Gate artifact: `/tmp/m4_resadd_section6_gate_out.json` (closed d512/d2048 only)
+- Landing wiring (dormant while record closed): `tinygrad/llm/model_route_plan.py`,
+  `tinygrad/llm/qk_primitives.py`, `tinygrad/llm/kernel_program.py`,
+  `tinygrad/llm/decode_routes.py`, `tinygrad/llm/model.py`
+- Unit tests: `test/unit/test_m4_resadd_landing.py`
+- Record: `tinygrad/llm/generated/decode-q4k-epilogue-resadd-route-policy.json`
+  (`promoted_targets: []`, stays closed)
+- Scope: `m4-resadd-landing-scope-20260806.md` (section 6 gate authority)

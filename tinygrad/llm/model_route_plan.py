@@ -190,6 +190,29 @@ def decode_q4k_epilogue_fusion_promoted(target:Target) -> bool:
   """Policy authority for the L1 M4 q4k GEMV epilogue-fusion route (closed default, see the loader above)."""
   return target in _DECODE_Q4K_EPILOGUE_FUSION_PROMOTED_TARGETS
 
+def load_decode_q4k_epilogue_resadd_promotion(path:str) -> frozenset[Target]:
+  """Read the o-proj residual_add variant promotion record (boltbeam.route_policy.v1, same schema
+  family as `load_decode_q4k_epilogue_fusion_promotion`). CLOSED default; deliberately a SEPARATE
+  record from the combined M4 record (which stays closed: the ffn_down prelude recomputes the
+  activation per row and fp16_cast overlaps M5's output-layout problem). This one variant is the
+  only M4 half with a measured copy-free recovery (m4-variant-reopen-boundary-p0-scope-20260806.md
+  probes 1+2, PASS). A document without `promoted_targets` -- or with an empty list -- promotes
+  nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_Q4K_EPILOGUE_RESADD_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-q4k-epilogue-resadd-route-policy.json"
+_DECODE_Q4K_EPILOGUE_RESADD_PROMOTED_TARGETS: frozenset[Target] = load_decode_q4k_epilogue_resadd_promotion(_DECODE_Q4K_EPILOGUE_RESADD_PROMOTION_RECORD)
+
+def decode_q4k_epilogue_resadd_promoted(target:Target) -> bool:
+  """Policy authority for the o-proj residual_add epilogue variant (closed default; separate
+  from the combined M4 record so the ffn_down prelude and fp16_cast stay closed)."""
+  return target in _DECODE_Q4K_EPILOGUE_RESADD_PROMOTED_TARGETS
+
 def load_decode_q4k_w1w3_fusion_promotion(path:str) -> frozenset[Target]:
   """Read the w1+w3 fused gate/up decode GEMV promotion record (boltbeam.route_policy.v1, same schema
   family as `load_decode_q4k_epilogue_fusion_promotion`). CLOSED default; deliberately a SEPARATE record

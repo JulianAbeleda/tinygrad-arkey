@@ -9,7 +9,8 @@ from tinygrad.llm.memory_semantics import MODEL_PARAMETER, memory_semantic_owner
 from tinygrad.llm.physical_memory_ledger import allocation_owner, bind_allocation_owner
 from tinygrad.llm.decode_routes import q4k_primitive_linear_call, q6k_primitive_linear_call
 from tinygrad.llm.model_route_plan import (ModelRoutePlan, build_model_route_plan,
-  decode_epilogue_fusion_promoted, decode_q4k_epilogue_fusion_promoted, decode_q4k_w1w3_fusion_promoted)
+  decode_epilogue_fusion_promoted, decode_q4k_epilogue_fusion_promoted, decode_q4k_epilogue_resadd_promoted,
+  decode_q4k_w1w3_fusion_promoted)
 from tinygrad.llm.qk_layout import Q4_K, Q6_K, QuantFormat
 
 def _qk_generated_policy_entry(policy:dict|None, typ:int, rows:int, cols:int, name:str|None=None) -> dict|None:
@@ -72,6 +73,10 @@ class QKPrimitiveRouteAdmission:
   model_route_plan.decode_q4k_epilogue_fusion_promoted, m4-q4k-epilogue-measurement-record-20260802.md):
   a SEPARATE record from M2's, so the measured non-landing q4k variants stay off while the Q6K in-kernel
   merge stays promoted.
+  `q4k_epilogue_resadd_promoted` is the o-proj residual_add variant answer (closed default,
+  model_route_plan.decode_q4k_epilogue_resadd_promoted, m4-resadd-landing-scope-20260806.md):
+  a SEPARATE record from the combined M4 answer so the residual_add variant can promote alone while
+  the ffn_down prelude and fp16_cast stay off the combined record.
   `q4k_w1w3_fusion_promoted` is the fused w1+w3 (gate/up) decode GEMV answer (closed default,
   model_route_plan.decode_q4k_w1w3_fusion_promoted): the fused kernel needs BOTH linears admitted on the
   target and its own measured record (q4k-w1w3-fused-qv-implementation-record-20260803.md)."""
@@ -79,6 +84,7 @@ class QKPrimitiveRouteAdmission:
   target_promoted: bool = True
   epilogue_fusion_promoted: bool = False
   q4k_epilogue_fusion_promoted: bool = False
+  q4k_epilogue_resadd_promoted: bool = False
   q4k_w1w3_fusion_promoted: bool = False
 
   @property
@@ -89,6 +95,9 @@ class QKPrimitiveRouteAdmission:
 
   @property
   def q4k_epilogue_fusion_admitted(self) -> bool: return self.admitted and self.q4k_epilogue_fusion_promoted
+
+  @property
+  def q4k_epilogue_resadd_admitted(self) -> bool: return self.admitted and self.q4k_epilogue_resadd_promoted
 
   @property
   def w1w3_fusion_admitted(self) -> bool: return self.admitted and self.q4k_w1w3_fusion_promoted
@@ -379,6 +388,7 @@ def _install_qk_primitives(model, gguf:pathlib.Path, meta:dict, spec:_QKInstallS
   route_admission = QKPrimitiveRouteAdmission(capability, target_promoted,
                                               decode_epilogue_fusion_promoted((capability.backend, capability.architecture)),
                                               decode_q4k_epilogue_fusion_promoted((capability.backend, capability.architecture)),
+                                              decode_q4k_epilogue_resadd_promoted((capability.backend, capability.architecture)),
                                               decode_q4k_w1w3_fusion_promoted((capability.backend, capability.architecture)))
   for name, dims, typ, off in meta["tensor_infos"]:
     if typ != spec.ggml_type: skipped[spec.not_kind_counter] += 1; continue
