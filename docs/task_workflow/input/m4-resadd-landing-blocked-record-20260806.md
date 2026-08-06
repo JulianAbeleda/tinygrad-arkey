@@ -114,3 +114,35 @@ The d4096 closed-arm failure in the gate artifact is this hang, not the fold.
 - Record: `tinygrad/llm/generated/decode-q4k-epilogue-resadd-route-policy.json`
   (`promoted_targets: []`, stays closed)
 - Scope: `m4-resadd-landing-scope-20260806.md` (section 6 gate authority)
+
+## Update 2026-08-06 (rangeify substrate, S1-S3 landed)
+
+Reopen condition (a) is now satisfied by the rangeify substrate scope
+(`m4-resadd-rangeify-substrate-scope-20260806.md`), landed on
+`nvidia-bringup-20260731`:
+
+- S1: scheduler deltas D1 (`remove_movement_op_after_rangeify` REDUCE arm) and D2
+  (`fix_assign` WAR AFTER skip) land the open-resadd flash-decode graph end to end on CPU:
+  `SCHEDULE OK 1620 kernels` open vs 953 closed, crossunder raise preserved.
+- S2: unit locks (`test_rangeify_movement_reduce_view.py`,
+  `test_rangeify_war_after_dependency.py`) plus the hermetic schedule gate
+  (`extra/llm_research/decode/m4_resadd_substrate_schedule_gate.py`, `--arm both`):
+  open 1620 / epi_resadd 36 / legacy `4096_4096` 36 / copy_class 150; closed 953 / legacy
+  72 / copy_class 150. This also resolves the record's 71-vs-36 census question: 71 is the
+  toposort-unique count (precompiled PARAM-form bodies), the schedule EXECUTES exactly 36
+  epi_resadd GEMVs (one per block).
+- S3: the folded epi_resadd subgraph EXECUTES on CPU with the residual read through a flat
+  row index, bitwise-equal to the copy-ABI variant (host proof + unit locks). This required
+  a new shared-codegen finding: `UOp.placeholder_like` reshapes non-flat custom-kernel args,
+  so the folded `CONTIGUOUS(1,1,4096)` residual reached the body as
+  `RESHAPE(PARAM, shape-STACK)` and crashed render (no codegen pass consumes the shape
+  STACK, no renderer has a RESHAPE rule). `pm_index_is_shrink` now folds shaped GLOBAL-ptr
+  PARAM views to the flat PARAM and loads scalar pointer-typed INDEX value reads (explicit
+  `.cast()` spelling); flat-placeholder ABI was rejected (breaks q6k multi-dim indexing).
+  This codegen fix must land before any S4 GPU gate run.
+
+Status remains **BLOCKED for promotion**: the section-6 gate has not yet re-run on GPU in
+open mode with the substrate landed. Promotion of
+`decode-q4k-epilogue-resadd-route-policy.json` requires the S4 gate (lock-held, census
+assertions re-derived per the substrate scope: epi 36, copy-class 150, layer-0 copy count 1)
+to pass; 0 credit remains booked until then.

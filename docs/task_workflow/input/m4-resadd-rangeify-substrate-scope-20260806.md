@@ -2,11 +2,13 @@
 
 Date: 2026-08-06
 Branch boundary: tinygrad `nvidia-bringup-20260731`, HEAD `6f1abd047`
-Status: **implementation scope. Viability PROVEN at the CPU hermetic gate this session: the
-open-resadd flash-decode graph, with the PRODUCTION residual fold ACTIVE, schedules end to end
-(1620 kernels) after two 5-line scheduler deltas. This scope authorizes: landing the deltas,
-their unit coverage, the CPU execution (host) proof, the GPU section-6 gate re-run, and the
-reopen/promotion decision of `decode-q4k-epilogue-resadd-route-policy.json`. Everything else
+Status: **implementation scope. S1-S3 DONE on `nvidia-bringup-20260731` (commits `3fa55377c`,
+`2794d6772`, plus the S3 codegen fold): the open-resadd flash-decode graph, with the PRODUCTION
+residual fold ACTIVE, schedules end to end (1620 kernels) after two 5-line scheduler deltas, and
+the folded epi_resadd subgraph now EXECUTES on CPU with the residual read through a flat row
+index (host proof, bitwise-equal to the copy-ABI variant). S4 (GPU section-6 gate, lock-held)
+is the next step, gated on the S3 codegen finding below landing first; the reopen/promotion
+decision of `decode-q4k-epilogue-resadd-route-policy.json` stays pending S4. Everything else
 stays closed.**
 
 ## 1. Why this scope exists
@@ -133,6 +135,31 @@ Fallback if full-CPU execution is impractical (custom lane-map kernels may be sl
 execute a single-block folded epi_resadd subgraph on CPU with the residual as the block-
 output AFTER and assert numeric equality against the copy-ABI variant.
 
+**S3 result (DONE, fallback arm).** The single-block host proof is landed and green:
+`extra/llm_research/decode/m4_resadd_substrate_host_exec.py` + unit locks
+(`test/unit/test_m4_resadd_substrate_host_exec.py`,
+`test/unit/test_custom_kernel_shaped_param_fold.py`). Fold fires on the real
+`CONTIGUOUS(1,1,N)` block-output chain and fails closed at layer 0; folded vs copy-ABI are
+bitwise equal (sha `8991b4eb458eb34e` both arms), and the zero-dot folded kernel reads the
+producer buffer directly.
+
+**S3 finding (must land before S4): shared-codegen shaped-PARAM render crash.** Executing the
+folded kernel exposed a NEW render blocker that the schedule-only gates could not see:
+`UOp.custom_kernel` builds kernel-body placeholders via `UOp.placeholder_like`, which reshapes
+when `len(shape) > 1`; the folded residual `CONTIGUOUS(1,1,4096)` arg therefore reaches the
+body as `RESHAPE(PARAM, shape-STACK)`. No codegen pass consumes the shape STACK
+(`pm_remove_vec_dtypes` scalarizes `weakint.vec(3)` -> `type_verify` "weakint is not
+allowed") and no renderer has a RESHAPE rule, so the folded kernel crashed at render (this
+would have hit NV at S4). Fix: two rules in `pm_index_is_shrink`
+(`tinygrad/codegen/__init__.py`): fold shaped GLOBAL-ptr PARAM views (RESHAPE/EXPAND over the
+flat PARAM or a CONST) to the PARAM, and load scalar pointer-typed INDEX value reads in the
+explicit `.cast(dtype)` spelling. Image buffers and multi-index (3+ src) INDEX bases are
+untouched. Kernel bodies must read shaped args as explicit value reads
+(`extra[0][row].cast(dtypes.float32)`, the production epi_resadd spelling); a bare `buf[i]`
+in ALU is a pointer and was never renderable on CPU. The flat-placeholder alternative
+(`UOp.placeholder((prod(...),), ...)` in `custom_kernel`) was rejected: it broke production
+q6k kernels (`partials[row, pos]` multi-dim indexing) and the S2 gate's open arm.
+
 ### S4 - GPU section-6 gate re-run (lock-held, after S3)
 
 Re-run `extra/llm_research/decode/m4_resadd_section6_gate.py` per the landing scope
@@ -162,9 +189,11 @@ section 3, with the deltas landed:
 
 ## 5. Open questions and risks
 
-- **71 vs 36 epi census**: the open schedule contains ~2x36-1 epi_resadd calls with mixed
-  folded/materialized residual args. Identify the second call site per block before the S4
-  census assertions are finalized; do not promote on an unexplained census shape.
+- **71 vs 36 epi census (RESOLVED)**: the 71 is the toposort-unique count (precompiled block
+  bodies' PARAM-form kernels); the schedule EXECUTES exactly 36 epi_resadd GEMVs (one per
+  block), asserted by the S2 gate (`EXPECTED_EPI_RESADD = 36`). S4 census baselines:
+  open 1620 kernels / copy_class 150 / epi_resadd 36 / legacy `4096_4096` 36; closed 953
+  kernels / copy_class 150 / legacy `4096_4096` 72.
 - **CPU execution cost**: the 1620-kernel schedule on CPU may be slow (custom lane-map
   bodies). S3 has a single-block fallback that still exercises the folded AFTER-arg host
   path.
@@ -180,9 +209,10 @@ section 3, with the deltas landed:
 ## 6. Sequencing
 
 S1 (land) -> S2 (unit + CPU schedule gate) -> S3 (CPU execution/host proof) -> S4 (GPU
-section-6 gate) -> S5 (records + promotion decision). S2 is required before S3; S3 is
-required before S4; S4 is required before promotion. Each step is independently
-revertible; the deltas are 5 lines and D2 is isolated by the S2 crossunder test.
+section-6 gate) -> S5 (records + promotion decision). **S1, S2, S3 are DONE**; S4 is next.
+S2 is required before S3; S3 is required before S4; S4 is required before promotion. Each
+step is independently revertible; the deltas are 5 lines and D2 is isolated by the S2
+crossunder test.
 
 ## 7. HARD STOP
 

@@ -55,6 +55,24 @@ register_pipe_symbolic = symbolic_simple + PatternMatcher([
 ])
 
 pm_index_is_shrink = PatternMatcher([
+  # Custom-kernel placeholders keep a non-flat arg's shape as RESHAPE/EXPAND over the flat
+  # PARAM (UOp.placeholder reshapes when len(shape) > 1). The RESHAPE is pure metadata for a
+  # flat global buffer: fold it to the PARAM so a kernel body can read the arg with a flat
+  # index, and drop the shape STACK (nothing consumes it, and no renderer has a RESHAPE rule).
+  # EXPAND over a CONST is a scalar broadcast; folding it keeps the value scalar. Image
+  # buffers keep their shape (coordinates carry meaning), and multi-index (3+ src) INDEX
+  # bases are left untouched (their strides were built against the shaped view).
+  (UPat((Ops.RESHAPE, Ops.EXPAND), src=(UPat.var("buf"), UPat()), name="x"),
+   lambda x, buf: buf if (buf.op is Ops.CONST or
+                          (isinstance(buf.dtype, PtrDType) and not isinstance(buf.dtype, ImageDType)
+                           and buf.addrspace is AddrSpace.GLOBAL)) else None),
+  # A scalar pointer-typed INDEX read as a VALUE (the shaped-arg flat read spelling
+  # `extra[row].cast(dtype)`) needs its LOAD; the vector pointer casts the expander creates
+  # for real loads/stores (and any other pointer-typed cast, i.e. a store address) keep
+  # their existing SHRINK path below.
+  (UPat(Ops.CAST, src=(UPat(Ops.INDEX, name="idx")), name="c"),
+   lambda c, idx: c.replace(src=(idx.load(),)) if isinstance(idx.dtype, PtrDType) and idx.dtype.v == 1
+                  and not isinstance(c.dtype, PtrDType) else None),
   # rewrite non-image INDEX to SHRINK
   (UPat(Ops.INDEX, src=(UPat.var("buf"), UPat.var("idx"))).cast(name="x"), lambda buf,idx,x:
     UOp(Ops.SHRINK, dtype=buf.dtype.base, src=(buf, idx, UOp.const(dtypes.int, x.dtype.count))) if isinstance(buf.dtype, PtrDType) else None),
