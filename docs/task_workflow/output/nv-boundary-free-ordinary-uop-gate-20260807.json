@@ -1,0 +1,209 @@
+{
+  "capture": {
+    "construction_count": 8,
+    "dag_edge_count": 4080,
+    "dag_name_digest": "49838b8ab2e7118d0c384fb93d2b4c3085b3732f1fe8d5abc69d51d232a6b413",
+    "dag_node_count": 875
+  },
+  "populations": {
+    "flash": {
+      "baseline": {
+        "lazy_add": {
+          "contains_contiguous": false,
+          "contains_custom_kernel": false,
+          "program_count": 3,
+          "programs": [
+            "test",
+            "test",
+            "test"
+          ]
+        },
+        "realized": {
+          "contains_contiguous": false,
+          "contains_custom_kernel": false,
+          "program_count": 3,
+          "programs": [
+            "test",
+            "test",
+            "test"
+          ]
+        }
+      },
+      "contract_shape": [
+        32,
+        128
+      ],
+      "reason": "construction not expressible as one ordinary program: split into [3] programs (reduction + dependent epilogue)",
+      "verdict": "CONSTRUCTION_GAP"
+    },
+    "llama_q8_pack": {
+      "baseline": {
+        "lazy_add": {
+          "contains_contiguous": false,
+          "contains_custom_kernel": false,
+          "program_count": 1,
+          "programs": [
+            "test"
+          ]
+        },
+        "realized": {
+          "contains_contiguous": false,
+          "contains_custom_kernel": false,
+          "program_count": 1,
+          "programs": [
+            "test"
+          ]
+        }
+      },
+      "contract_shape": [
+        1,
+        4096
+      ],
+      "reason": "one replayable ordinary program; no custom-program boundary, no CONTIGUOUS",
+      "verdict": "PASS"
+    },
+    "norms": {
+      "baseline": {
+        "lazy_add": {
+          "contains_contiguous": false,
+          "contains_custom_kernel": false,
+          "program_count": 2,
+          "programs": [
+            "test",
+            "test"
+          ]
+        },
+        "realized": {
+          "contains_contiguous": false,
+          "contains_custom_kernel": false,
+          "program_count": 2,
+          "programs": [
+            "test",
+            "test"
+          ]
+        }
+      },
+      "contract_shape": [
+        1,
+        4096
+      ],
+      "reason": "construction not expressible as one ordinary program: split into [2] programs (reduction + dependent epilogue)",
+      "verdict": "CONSTRUCTION_GAP"
+    },
+    "other": {
+      "baseline": {
+        "lazy_add": null,
+        "realized": null
+      },
+      "contract_shape": [],
+      "reason": "unclassified fallback population; no construction defined",
+      "verdict": "NO_CONSTRUCTION"
+    },
+    "quant_core": {
+      "baseline": {
+        "lazy_add": {
+          "contains_contiguous": false,
+          "contains_custom_kernel": false,
+          "program_count": 1,
+          "programs": [
+            "test"
+          ]
+        },
+        "realized": {
+          "contains_contiguous": false,
+          "contains_custom_kernel": false,
+          "program_count": 1,
+          "programs": [
+            "test"
+          ]
+        }
+      },
+      "contract_shape": [
+        1,
+        4096
+      ],
+      "reason": "one replayable ordinary program; no custom-program boundary, no CONTIGUOUS",
+      "verdict": "PASS"
+    },
+    "residual_cast_contiguous": {
+      "baseline": {
+        "lazy_add": {
+          "contains_contiguous": false,
+          "contains_custom_kernel": false,
+          "program_count": 1,
+          "programs": [
+            "test"
+          ]
+        },
+        "realized": {
+          "contains_contiguous": false,
+          "contains_custom_kernel": false,
+          "program_count": 1,
+          "programs": [
+            "test"
+          ]
+        }
+      },
+      "contract_shape": [
+        1,
+        1,
+        4096
+      ],
+      "reason": "one replayable ordinary program; no custom-program boundary, no CONTIGUOUS",
+      "verdict": "PASS"
+    },
+    "rope_kv": {
+      "baseline": {
+        "lazy_add": {
+          "contains_contiguous": false,
+          "contains_custom_kernel": false,
+          "program_count": 1,
+          "programs": [
+            "test"
+          ]
+        },
+        "realized": {
+          "contains_contiguous": false,
+          "contains_custom_kernel": false,
+          "program_count": 1,
+          "programs": [
+            "test"
+          ]
+        }
+      },
+      "contract_shape": [
+        1,
+        128
+      ],
+      "reason": "one replayable ordinary program; no custom-program boundary, no CONTIGUOUS",
+      "verdict": "PASS"
+    },
+    "vocab_feedback": {
+      "baseline": {
+        "lazy_add": {
+          "contains_contiguous": false,
+          "contains_custom_kernel": false,
+          "program_count": 1,
+          "programs": [
+            "test"
+          ]
+        },
+        "realized": {
+          "contains_contiguous": false,
+          "contains_custom_kernel": false,
+          "program_count": 1,
+          "programs": [
+            "test"
+          ]
+        }
+      },
+      "contract_shape": [
+        1,
+        1187
+      ],
+      "reason": "one replayable ordinary program; no custom-program boundary, no CONTIGUOUS",
+      "verdict": "PASS"
+    }
+  },
+  "schema": "tinygrad.nv_boundary_free_ordinary_uop_gate.v2"
+}
