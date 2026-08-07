@@ -114,3 +114,14 @@ linux-*dense*.log
 linux-*audit*.log
 
 .claude/
+
+# Profiling artifacts: nsys/CUPTI captures embed the process environment,
+# which has leaked a credential into git history before (2026-08-07).
+# This covers both the raw capture and its exports - `nsys export --type sqlite`
+# carries the same environment blob as the .nsys-rep it came from.
+# Keep them out of the repo; quarantine locally instead.
+*.nsys-rep
+*.qdrep
+*.ncu-rep
+*.qdstrm
+*.sqlite
