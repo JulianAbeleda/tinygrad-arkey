@@ -138,6 +138,15 @@ pm_bind_resolved_call_ownership = PatternMatcher([
   (UPat(Ops.CALL, name="call", allow_any_len=True), _bind_resolved_call_ownership),
 ])
 
+# Nested precompile CALL bodies are concrete after callify: the resolved LINEAR
+# is a pure function of (body, concrete args), so materialize each unique
+# invocation once instead of once per enclosing composite (the flash-decode
+# capture embeds one resadd chain per composite; per-composite re-instantiation
+# previously interning the whole body per composite and wedged host RSS).
+_resolve_precompile_cache: dict[tuple[bytes, ...], UOp] = {}
+_RESOLVE_PRECOMPILE_CACHE_LIMIT = 4096
+_resolve_diag = {"n": 0, "hit": 0, "precompile": 0, "big": 0, "top_n": []}
+
 def _resolve_linear_call(linear_call:UOp) -> UOp:
   """Resolve one cached LINEAR invocation and retain its output ownership.
 
@@ -147,6 +156,24 @@ def _resolve_linear_call(linear_call:UOp) -> UOp:
   The transfer remains invocation-local and never annotates normalized PARAMs
   or executable argument UOps.
   """
+  _is_precompile = getattr(linear_call.arg, "precompile", False)
+  if _is_precompile:
+    key = (linear_call.src[0].key, *(a.key for a in linear_call.src[1:]))
+    if (cached := _resolve_precompile_cache.get(key)) is not None:
+      _resolve_diag["hit"] += 1
+      return cached
+  _resolve_diag["n"] += 1
+  if _is_precompile: _resolve_diag["precompile"] += 1
+  if getenv("M4_RESOLVE_DIAG", 0) and (_resolve_diag["n"] <= 6 or (_is_precompile and _resolve_diag["precompile"] <= 5)
+                                       or (not _is_precompile and len(linear_call.src)-1 > 8 and _resolve_diag["big"] < 4)
+                                       or _resolve_diag["big"] > 3):
+    body = linear_call.src[0]
+    if not _is_precompile and len(linear_call.src)-1 > 8: _resolve_diag["big"] += 1
+    items = [x.src[0].op for x in body.src[:6]] if body.op is Ops.LINEAR else [body.op]
+    nodes = len(body.toposort())
+    _resolve_diag["top_n"].append((len(linear_call.src)-1, len(body.src) if body.op is Ops.LINEAR else -1, nodes, _is_precompile, items))
+    print(f"RESOLVE n={_resolve_diag['n']} pre={_is_precompile} args={len(linear_call.src)-1} "
+          f"body_items={len(body.src) if body.op is Ops.LINEAR else 'na'} body_nodes={nodes} item0_ops={items}", flush=True)
   resolved = graph_rewrite(linear_call.src[0], pm_post_sched_cache, ctx=({}, linear_call.src[1:]),
                            walk=True, name="params to buffers")
   outer_slots = dict(getattr(linear_call.src[0].arg, "memory_semantic_slots", ()))
@@ -169,10 +196,16 @@ def _resolve_linear_call(linear_call:UOp) -> UOp:
     if base in owned_bases and owned_bases[base] != owner:
       raise ValueError(f"conflicting semantic owners for resolved LINEAR argument slot {slot}")
     owned_bases[base] = owner
-  if not owned_bases: return resolved
+  if not owned_bases:
+    if getattr(linear_call.arg, "precompile", False) and len(_resolve_precompile_cache) < _RESOLVE_PRECOMPILE_CACHE_LIMIT:
+      _resolve_precompile_cache[key] = resolved
+    return resolved
 
-  return graph_rewrite(resolved, pm_bind_resolved_call_ownership, ctx=owned_bases,
-                       name="bind resolved call ownership")
+  resolved = graph_rewrite(resolved, pm_bind_resolved_call_ownership, ctx=owned_bases,
+                           name="bind resolved call ownership")
+  if getattr(linear_call.arg, "precompile", False) and len(_resolve_precompile_cache) < _RESOLVE_PRECOMPILE_CACHE_LIMIT:
+    _resolve_precompile_cache[key] = resolved
+  return resolved
 
 pm_resolve_linear_call = PatternMatcher([
   # call LINEAR is resolved here
@@ -216,6 +249,9 @@ def create_linear_with_vars(big_sink:UOp) -> tuple[UOp, dict[str, int]]:
 
   # this recursively resolves the linear_call and allocates buffers
   linear = graph_rewrite(linear_call, pm_resolve_linear_call, name="resolve linear call")
+  if getenv("M4_RESOLVE_DIAG", 0):
+    print(f"resolve diag: n={_resolve_diag['n']} precompile={_resolve_diag['precompile']} hits={_resolve_diag['hit']} cache={len(_resolve_precompile_cache)}", flush=True)
+    for e in _resolve_diag["top_n"]: print("  resolve:", e, flush=True)
 
   # vars used in the schedule
   used_vars = set().union(*[{v.expr for v in si.src[0].variables()} for si in linear.src])
