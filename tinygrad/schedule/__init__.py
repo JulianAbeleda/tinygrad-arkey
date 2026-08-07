@@ -149,6 +149,14 @@ _resolve_precompile_base: dict[bytes, UOp] = {}
 _resolve_precompile_body_key: dict[UOp, bytes] = {}
 _RESOLVE_PRECOMPILE_BASE_LIMIT = 4096
 _m4_last_own_t = 0.0
+_m4_resolve_depth = 0
+_M4_RESOLVE_DEPTH_LIMIT = 64
+# Memo for nested composite resolution: keyed by (body id, args ids, slots) so the
+# resadd chain's shared (body, args) pairs are bound (and memory-semantic marks
+# transferred) once.  The resolved kernel list itself is context-dependent (the
+# shared per-invocation seen-set decides how much of the sub-chain is re-emitted),
+# so the cache stores the bound body, not a resolved output.
+_resolve_nested_cache: dict[tuple, UOp] = {}
 
 pm_precompile_local_buffers = PatternMatcher([
   # create new BUFFERs for LUNIQUE BUFFERs from rangeify, once per precompile body
@@ -189,6 +197,92 @@ def _precompile_body_bind(base:UOp, args:tuple[UOp, ...]) -> UOp:
     new_items.append(it.replace(src=(it.src[0], *new_args)) if any(n is not a for n, a in zip(new_args, old_args)) else it)
   return base.replace(src=tuple(new_items)) if any(n is not it for n, it in zip(new_items, base.src)) else base
 
+def _resolve_nested_items(body:UOp, cache:dict, seen:set|None=None) -> UOp:
+  """Resolve nested composite CALL items of a bound body and inline their kernels.
+
+  The resadd chain embeds composite CALLs as items of later composites, so a bound
+  body is not terminal.  The outer resolve walk must not re-walk every resolved body
+  (that churn is the flash-decode host RSS wedge), so nested composites are resolved
+  here per invocation and memoized by (body, args, owned-bases) identity: the chain
+  reuses the same (body, args) pairs across composites and steps, so each pair is
+  bound once and the per-invocation cost stays O(original body items).
+
+  Only each composite's own kernel items are inlined: a composite's body already
+  lists every earlier chain composite as a direct item, so splicing the fully
+  flattened sub-body of each would re-emit the whole chain per occurrence (the
+  flash-decode resadd chain doubles the flattened output per level and OOMs host
+  RSS).  The resolved output is therefore the union of reachable kernels, each
+  (body, args) pair contributing its own kernels exactly once per invocation.
+  """
+  global _m4_resolve_depth
+  _trace = getenv("M4_RESOLVE_TRACE", 0)
+  _t_start = time.perf_counter() if _trace else 0.0
+  if _trace and len(body.src) >= 10:
+    _nested_targets = [(id(it.src[0])%100000, len(it.src[0].src), len(it.src)-1) for it in body.src
+                       if it.op is Ops.CALL and it.src[0].op is Ops.LINEAR]
+    print(f"TRACE nested enter items={len(body.src)} nested={len(_nested_targets)} "
+          f"targets={_nested_targets[:6]} cache={len(cache)}", flush=True)
+  _m4_resolve_depth += 1
+  try:
+    if _m4_resolve_depth > _M4_RESOLVE_DEPTH_LIMIT:
+      raise RuntimeError(f"precompile body nesting exceeds {_M4_RESOLVE_DEPTH_LIMIT}")
+    if seen is None: seen = set()
+    out: list[UOp] = []
+    changed = False
+    _n = 0
+    _nested = 0
+    _misses = 0
+    for it in body.src:
+      if it.op is Ops.CALL and it.src[0].op is Ops.LINEAR:
+        _n += 1
+        args = it.src[1:]
+        # The resolved flat body depends on the invocation args and on the
+        # memory-semantic marks this composite carries, so both go into the key.
+        slots_key = tuple(sorted((s, id(o)) for s, o in dict(getattr(it.arg, "memory_semantic_slots", ())).items()))
+        key = (id(it.src[0]), tuple(map(id, args)), slots_key)
+        if key in seen:
+          if _trace: print(f"TRACE nested skip depth={_m4_resolve_depth}", flush=True)
+          continue
+        seen.add(key)
+        if (nested := cache.get(key, None)) is None:
+          _misses += 1
+          nested = _precompile_body_bind(_precompile_body_base(it.src[0]), args)
+          # Transfer the nested composite's own memory-semantic slots onto its bound
+          # kernels (concrete args are shared buffers, so match by buf identity).
+          slots = dict(getattr(it.arg, "memory_semantic_slots", ()))
+          if slots:
+            owned: dict[UOp, object] = {}
+            for slot, owner in slots.items():
+              if slot >= len(args): continue
+              try: owned[_unwrap_src(args[slot]).buf_uop] = owner
+              except RuntimeError: continue
+            if owned:
+              new_items: list[UOp] = []
+              for c in nested.src:
+                if c.op is Ops.CALL and (nc := _bind_resolved_call_ownership(owned, c)) is not None:
+                  new_items.append(nc)
+                else:
+                  new_items.append(c)
+              if any(n is not c for n, c in zip(new_items, nested.src)):
+                nested = nested.replace(src=tuple(new_items))
+          cache[key] = nested
+        _nested += 1
+        # the recursion returns the nested composite's own kernels plus the union
+        # of everything below it; the seen-set ensures each (body, args) pair
+        # contributes once per invocation (the resadd chain shares subtrees)
+        _sub = _resolve_nested_items(nested, cache, seen).src
+        out.extend(_sub)
+        changed = True
+      else:
+        out.append(it)
+    ret = body.replace(src=tuple(out)) if changed else body
+    if _trace:
+      print(f"TRACE nested exit items={len(body.src)} nested={_nested} misses={_misses} "
+            f"out_items={len(ret.src)} cache={len(cache)} dt={time.perf_counter()-_t_start:.3f}s", flush=True)
+    return ret
+  finally:
+    _m4_resolve_depth -= 1
+
 def _resolve_linear_call(linear_call:UOp) -> UOp:
   """Resolve one cached LINEAR invocation and retain its output ownership.
 
@@ -212,12 +306,25 @@ def _resolve_linear_call(linear_call:UOp) -> UOp:
           f"gap={_t0-_m4_last_own_t:6.3f}s call={id(linear_call)%100000} body={id(_body)%100000} "
           f"basehit={_bkey is not None and _bkey in _resolve_precompile_base}", flush=True)
   _is_precompile = getattr(linear_call.arg, "precompile", False)
-  if _is_precompile:
-    # body-keyed scratch conversion + leaf-level PARAM binding (see above)
-    resolved = _precompile_body_bind(_precompile_body_base(linear_call.src[0]), linear_call.src[1:])
-  else:
-    resolved = graph_rewrite(linear_call.src[0], pm_post_sched_cache, ctx=({}, linear_call.src[1:]),
-                             walk=True, name="params to buffers")
+  if _trace and len(linear_call.src)-1 > 500:
+    _body = linear_call.src[0]
+    _kinds: dict[str, int] = {}
+    _nested: list[tuple[int, int, int]] = []
+    for it in _body.src:
+      _k = str(it.src[0].op)
+      _kinds[_k] = _kinds.get(_k, 0) + 1
+      if it.src[0].op is Ops.LINEAR:
+        _nested.append((len(it.src[0].src), len(it.src)-1, len(it.src[0].toposort())))
+    print(f"TRACE struct nargs={len(linear_call.src)-1} items={len(_body.src)} kinds={_kinds} "
+          f"nested_n={len(_nested)} nested_items={_nested[:8]}", flush=True)
+  # Body-keyed scratch conversion + leaf-level PARAM binding for every cached LINEAR
+  # invocation (see _precompile_body_base/_precompile_body_bind): the base conversion
+  # also resolves nested composites once per unique body, so the per-invocation bind
+  # only substitutes leaf PARAMs on an already-flat kernel list.  Non-precompile calls
+  # share this path: pm_post_sched_cache is exactly LUNIQUE-buffer conversion + PARAM
+  # substitution, and its per-invocation full-body re-walk is what re-blew up RSS on
+  # the 16k-node bodies at flash-decode scale.
+  resolved = _precompile_body_bind(_precompile_body_base(linear_call.src[0]), linear_call.src[1:])
   if _trace:
     _t1 = time.perf_counter()
     with open("/proc/self/status") as _f:
@@ -244,26 +351,30 @@ def _resolve_linear_call(linear_call:UOp) -> UOp:
     if base in owned_bases and owned_bases[base] != owner:
       raise ValueError(f"conflicting semantic owners for resolved LINEAR argument slot {slot}")
     owned_bases[base] = owner
-  if not owned_bases: return resolved
+  if owned_bases:
+    if _is_precompile:
+      # The resolved precompile body's CALLs are exactly its items (scheduled kernels;
+      # nested CALL bodies were resolved by their own _resolve_linear_call invocations and
+      # their argument PARAMs are not concrete buffers, so they can never bind ownership
+      # here).  Bind the item leaves directly instead of re-walking the whole body: the
+      # full-body rewrite churned transient allocations per composite on the growing
+      # resadd-chain bodies (~8k nodes late), which is the remaining flat-ucache RSS wedge.
+      new_items: list[UOp] = []
+      for it in resolved.src:
+        if it.op is Ops.CALL and (new_it := _bind_resolved_call_ownership(owned_bases, it)) is not None:
+          new_items.append(new_it)
+        else:
+          new_items.append(it)
+      if any(n is not it for n, it in zip(new_items, resolved.src)):
+        resolved = resolved.replace(src=tuple(new_items))
+    else:
+      resolved = graph_rewrite(resolved, pm_bind_resolved_call_ownership, ctx=owned_bases,
+                               name="bind resolved call ownership", walk=True)
 
-  if _is_precompile:
-    # The resolved precompile body's CALLs are exactly its items (scheduled kernels;
-    # nested CALL bodies were resolved by their own _resolve_linear_call invocations and
-    # their argument PARAMs are not concrete buffers, so they can never bind ownership
-    # here).  Bind the item leaves directly instead of re-walking the whole body: the
-    # full-body rewrite churned transient allocations per composite on the growing
-    # resadd-chain bodies (~8k nodes late), which is the remaining flat-ucache RSS wedge.
-    new_items: list[UOp] = []
-    for it in resolved.src:
-      if it.op is Ops.CALL and (new_it := _bind_resolved_call_ownership(owned_bases, it)) is not None:
-        new_items.append(new_it)
-      else:
-        new_items.append(it)
-    if any(n is not it for n, it in zip(new_items, resolved.src)):
-      resolved = resolved.replace(src=tuple(new_items))
-  else:
-    resolved = graph_rewrite(resolved, pm_bind_resolved_call_ownership, ctx=owned_bases,
-                             name="bind resolved call ownership", walk=True)
+  # The bound body may still embed composite CALLs (the resadd chain nests them).
+  # Resolve those here, memoized, so the outer single-pass walk sees a flat body.
+  resolved = _resolve_nested_items(resolved, _resolve_nested_cache)
+
   if _trace:
     _t2 = time.perf_counter()
     _m4_last_own_t = _t2
