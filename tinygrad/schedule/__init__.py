@@ -148,6 +148,7 @@ pm_bind_resolved_call_ownership = PatternMatcher([
 _resolve_precompile_base: dict[bytes, UOp] = {}
 _resolve_precompile_body_key: dict[UOp, bytes] = {}
 _RESOLVE_PRECOMPILE_BASE_LIMIT = 4096
+_m4_last_own_t = 0.0
 
 pm_precompile_local_buffers = PatternMatcher([
   # create new BUFFERs for LUNIQUE BUFFERs from rangeify, once per precompile body
@@ -197,14 +198,19 @@ def _resolve_linear_call(linear_call:UOp) -> UOp:
   The transfer remains invocation-local and never annotates normalized PARAMs
   or executable argument UOps.
   """
+  global _m4_last_own_t
   _trace = getenv("M4_RESOLVE_TRACE", 0)
   if _trace:
     _t0 = time.perf_counter()
     with open("/proc/self/status") as _f:
       _rss = next(int(l.split()[1])*1024 for l in _f if l.startswith("VmRSS:"))
+    _body = linear_call.src[0]
+    _bkey = _resolve_precompile_body_key.get(_body)
     print(f"TRACE resolve rss={_rss/1e9:.2f}G ucache={len(UOpMetaClass.ucache)} base={len(_resolve_precompile_base)} "
           f"pre={getattr(linear_call.arg, 'precompile', False)} nargs={len(linear_call.src)-1} "
-          f"body_items={len(linear_call.src[0].src)} body_nodes={len(linear_call.src[0].toposort())}", flush=True)
+          f"body_items={len(_body.src)} body_nodes={len(_body.toposort())} "
+          f"gap={_t0-_m4_last_own_t:6.3f}s call={id(linear_call)%100000} body={id(_body)%100000} "
+          f"basehit={_bkey is not None and _bkey in _resolve_precompile_base}", flush=True)
   _is_precompile = getattr(linear_call.arg, "precompile", False)
   if _is_precompile:
     # body-keyed scratch conversion + leaf-level PARAM binding (see above)
@@ -212,6 +218,12 @@ def _resolve_linear_call(linear_call:UOp) -> UOp:
   else:
     resolved = graph_rewrite(linear_call.src[0], pm_post_sched_cache, ctx=({}, linear_call.src[1:]),
                              walk=True, name="params to buffers")
+  if _trace:
+    _t1 = time.perf_counter()
+    with open("/proc/self/status") as _f:
+      _rss1 = next(int(l.split()[1])*1024 for l in _f if l.startswith("VmRSS:"))
+    print(f"TRACE bind rss={_rss1/1e9:.2f}G dRSS={(_rss1-_rss)/1e6:7.1f}MB dt={_t1-_t0:6.3f}s "
+          f"items={len(resolved.src)} nodes={len(resolved.toposort())}", flush=True)
   outer_slots = dict(getattr(linear_call.src[0].arg, "memory_semantic_slots", ()))
   outer_slots.update(getattr(linear_call.arg, "memory_semantic_slots", ()))
   owned_bases:dict[UOp, object] = {}
@@ -234,8 +246,31 @@ def _resolve_linear_call(linear_call:UOp) -> UOp:
     owned_bases[base] = owner
   if not owned_bases: return resolved
 
-  resolved = graph_rewrite(resolved, pm_bind_resolved_call_ownership, ctx=owned_bases,
-                           name="bind resolved call ownership")
+  if _is_precompile:
+    # The resolved precompile body's CALLs are exactly its items (scheduled kernels;
+    # nested CALL bodies were resolved by their own _resolve_linear_call invocations and
+    # their argument PARAMs are not concrete buffers, so they can never bind ownership
+    # here).  Bind the item leaves directly instead of re-walking the whole body: the
+    # full-body rewrite churned transient allocations per composite on the growing
+    # resadd-chain bodies (~8k nodes late), which is the remaining flat-ucache RSS wedge.
+    new_items: list[UOp] = []
+    for it in resolved.src:
+      if it.op is Ops.CALL and (new_it := _bind_resolved_call_ownership(owned_bases, it)) is not None:
+        new_items.append(new_it)
+      else:
+        new_items.append(it)
+    if any(n is not it for n, it in zip(new_items, resolved.src)):
+      resolved = resolved.replace(src=tuple(new_items))
+  else:
+    resolved = graph_rewrite(resolved, pm_bind_resolved_call_ownership, ctx=owned_bases,
+                             name="bind resolved call ownership")
+  if _trace:
+    _t2 = time.perf_counter()
+    _m4_last_own_t = _t2
+    with open("/proc/self/status") as _f:
+      _rss2 = next(int(l.split()[1])*1024 for l in _f if l.startswith("VmRSS:"))
+    print(f"TRACE own  rss={_rss2/1e9:.2f}G dRSS={(_rss2-_rss1)/1e6:7.1f}MB dt={_t2-_t1:6.3f}s "
+          f"owned={len(owned_bases)}", flush=True)
   return resolved
 
 pm_resolve_linear_call = PatternMatcher([
