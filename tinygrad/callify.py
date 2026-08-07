@@ -624,13 +624,6 @@ def transform_to_call(big_sink:UOp) -> tuple[UOp, dict[UOp, UOp]]:
   # see its concrete invocation arguments.  A bottom-up pass materializes the
   # nested producer's caller CONTIGUOUS first and loses that relation.  Expose
   # precompiled consumers top-down for either gated input-boundary contract.
-  # A precompiled body may itself call another precompiled FUNCTION (the resadd fold's
-  # block-output chain). enter_calls=False rewrites never see those nested FUNCTIONs and
-  # rangeify.resolve_function deliberately skips precompile bodies, so they would land raw
-  # in every composite and crash the NV render (weakint SPECIAL inside the embedded body).
-  # Resolve nested precompile FUNCTIONs bottom-up with body entry before the early pass.
-  big_sink = graph_rewrite(big_sink, pm_precompile_function_boundary, name="nested precompile boundary",
-                           bottom_up=True, enter_calls=True)
   if CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT or CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER:
     big_sink = graph_rewrite(big_sink, pm_precompile_function_boundary, bottom_up=False, name="typed semantic function boundary")
   if CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER:
