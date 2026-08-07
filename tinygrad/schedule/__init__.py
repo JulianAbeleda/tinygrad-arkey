@@ -263,7 +263,7 @@ def _resolve_linear_call(linear_call:UOp) -> UOp:
       resolved = resolved.replace(src=tuple(new_items))
   else:
     resolved = graph_rewrite(resolved, pm_bind_resolved_call_ownership, ctx=owned_bases,
-                             name="bind resolved call ownership")
+                             name="bind resolved call ownership", walk=True)
   if _trace:
     _t2 = time.perf_counter()
     _m4_last_own_t = _t2
@@ -317,7 +317,15 @@ def create_linear_with_vars(big_sink:UOp) -> tuple[UOp, dict[str, int]]:
   _t1 = time.perf_counter()
 
   # this recursively resolves the linear_call and allocates buffers
-  linear = graph_rewrite(linear_call, pm_resolve_linear_call, name="resolve linear call")
+  # Single-pass resolve: each composite's body is already fully resolved by its own
+  # _resolve_linear_call (body-keyed base conversion + leaf PARAM binding, llama-style
+  # fixed graph with per-step rebinding), so re-walking the returned body from the outer
+  # unified_rewrite pass only churns the growing linear (waitlist/rebuild machinery,
+  # O(items) tuple construction per composite; the flash-decode resadd chain doubles the
+  # outer walk per resolution and wedges host RSS ~50MB/s).  walk_rewrite visits each
+  # node once and uses rewrite results as-is, so resolution + one flatten at the root
+  # stays linear in the final schedule size.
+  linear = graph_rewrite(linear_call, pm_resolve_linear_call, name="resolve linear call", walk=True)
   _t2 = time.perf_counter()
   if _trace:
     with open("/proc/self/status") as _f:
