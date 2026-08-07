@@ -16,6 +16,22 @@ from tinygrad.schedule.allreduce import create_allreduce_function
 import sys
 sys.setrecursionlimit(10000)
 
+def _has_after_for_buf(x:UOp, buf:UOp) -> bool:
+  """Whether an AFTER with buf_uop `buf` appears in x's backward slice, without caching.
+
+  backward_slice is a cached_property holding a full toposort dict on the node; the WAR
+  check runs per AFTER on composite kernel graphs whose embedded precompile bodies grow
+  per composite, and the retained dicts would be O(body) per node at flash-decode scale.
+  """
+  stack, seen = [x], set()
+  while stack:
+    n = stack.pop()
+    if n.op is Ops.AFTER and n.buf_uop is buf: return True
+    if n in seen: continue
+    seen.add(n)
+    stack.extend(n.src)
+  return False
+
 def lower_attention_semantic(att:UOp) -> UOp:
   """Fail-closed semantic attention lowering.
 
@@ -1272,8 +1288,8 @@ def _get_kernel_graph(sink:UOp) -> UOp:
       if a.src[1] is u.src[1]: continue  # same kernel (multi-output custom kernels)
       # The reader already depends on the writer's AFTER (precompiled-output identity): the read
       # is ordered after the write, so the WAR edge is redundant and would be a false cycle.
-      if any(x.op is Ops.AFTER and x.buf_uop is s for x in u.backward_slice): continue
-      if any(x.op is Ops.AFTER and x.buf_uop is s for x in kernel_assign[u.buf_uop].backward_slice):
+      if _has_after_for_buf(u, s): continue
+      if _has_after_for_buf(kernel_assign[u.buf_uop], s):
         raise RuntimeError(f"cycle detected in assign graph, buffers {s} and {u.buf_uop} have circular dependency")
       assign_rep[a] = kernel_assign[s] = a.replace(src=a.src+(u,))
   if assign_rep: tsink = graph_rewrite(tsink, _substitute, ctx=assign_rep, bottom_up=True, name="fix_assign")

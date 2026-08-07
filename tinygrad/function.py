@@ -10,6 +10,29 @@ def add_to_ctx(ctx, x:UOp):
   ctx[0].append(x)
   return ret
 
+def _ancestor_kinds(x:UOp, *ops:Ops) -> tuple[bool, ...]:
+  """Whether each listed op appears in x's backward slice, computed without caching.
+
+  op_in_backward_slice_with_self stores a full toposort dict on every node it touches.
+  Precompile bodies grow per composite (the resadd fold admits the previous block output),
+  so that cached_property retention is O(body) per matched AFTER/CONTIGUOUS and wedges
+  host RSS at flash-decode scale.  This scan is semantically identical and retains nothing.
+  """
+  found = [False]*len(ops)
+  stack, seen = [x], set()
+  while stack:
+    n = stack.pop()
+    for i, op in enumerate(ops):
+      if n.op is op: found[i] = True
+    if all(found) or n in seen: continue
+    seen.add(n)
+    stack.extend(n.src)
+  return tuple(found)
+
+def _maybe_add_to_ctx(ctx, x:UOp):
+  has_param, has_buffer = _ancestor_kinds(x, Ops.PARAM, Ops.BUFFER)
+  return add_to_ctx(ctx, x) if not has_param and has_buffer else None
+
 pm_transform_unique_const = PatternMatcher([
   # transform unique consts to LUNIQUE
   (UPat(Ops.CONST, src=(UPat(Ops.UNIQUE), UPat(Ops.DEVICE)), name="x"),
@@ -19,7 +42,7 @@ pm_transform_unique_const = PatternMatcher([
 pm_ctx = PatternMatcher([
   (UPat((Ops.BUFFER, Ops.BIND), name="x"), add_to_ctx),
   (UPat((Ops.AFTER, Ops.CONTIGUOUS), name="x"),
-   lambda ctx,x: add_to_ctx(ctx,x) if not x.op_in_backward_slice_with_self(Ops.PARAM) and x.op_in_backward_slice_with_self(Ops.BUFFER) else None),
+   _maybe_add_to_ctx),
 ])+pm_transform_unique_const
 
 ReturnType = TypeVar('ReturnType')

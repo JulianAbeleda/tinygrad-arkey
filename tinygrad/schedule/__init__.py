@@ -175,6 +175,14 @@ def _resolve_linear_call(linear_call:UOp) -> UOp:
   The transfer remains invocation-local and never annotates normalized PARAMs
   or executable argument UOps.
   """
+  _trace = getenv("M4_RESOLVE_TRACE", 0)
+  if _trace:
+    _t0 = time.perf_counter()
+    with open("/proc/self/status") as _f:
+      _rss = next(int(l.split()[1])*1024 for l in _f if l.startswith("VmRSS:"))
+    print(f"TRACE resolve rss={_rss/1e9:.2f}G ucache={len(UOpMetaClass.ucache)} base={len(_resolve_precompile_base)} "
+          f"pre={getattr(linear_call.arg, 'precompile', False)} nargs={len(linear_call.src)-1} "
+          f"body_items={len(linear_call.src[0].src)} body_nodes={len(linear_call.src[0].toposort())}", flush=True)
   _is_precompile = getattr(linear_call.arg, "precompile", False)
   if _is_precompile:
     # body-keyed scratch conversion + per-invocation PARAM binding (see above)
