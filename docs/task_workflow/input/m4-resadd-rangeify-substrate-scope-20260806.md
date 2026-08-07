@@ -11,6 +11,19 @@ is the next step, gated on the S3 codegen finding below landing first; the reope
 decision of `decode-q4k-epilogue-resadd-route-policy.json` stays pending S4. Everything else
 stays closed.**
 
+**Status update 2026-08-06 (S4 executed): S4 FAILED with a NEW render-time blocker.** S1-S3
+remain DONE and green (hermetic unit gate on this tree: 68 passed incl.
+`test_m5_typed_boundary` 27/27). The GPU section-6 gate was run lock-held; the open arms now
+pass schedule time but crash at render in the precompile-kernels walk:
+`UOp verification failed at 31 on Ops.SPECIAL dtypes.weakint 1 [(Ops.CONST, dtypes.weakint,
+4096)] gidx0` (`type_verify`, `codegen/__init__.py:337`). `spec_program` bans weakint
+`SPECIAL` via the catch-all at `spec.py:490`; the permissive `SPECIAL` rule at `spec.py:237`
+is ordered after it in the concatenated matcher. The closed/record arms pass d512 with the
+re-derived pins (`227ad3ce...`, first `271`) and reproduce the pre-existing d4096 (and this
+session d2048) HCQ hang. The record stays CLOSED, 0 credit; a follow-on scope is required to
+make weakint `SPECIAL` renderable on NV. Full run record:
+`m4-resadd-s4-gate-run-record-20260806.md`. The substrate deltas are NOT reverted.
+
 ## 1. Why this scope exists
 
 The blocked record (`m4-resadd-landing-blocked-record-20260806.md`) lists three reopen
@@ -164,6 +177,14 @@ q6k kernels (`partials[row, pos]` multi-dim indexing) and the S2 gate's open arm
 
 Re-run `extra/llm_research/decode/m4_resadd_section6_gate.py` per the landing scope
 section 3, with the deltas landed:
+
+**S4 result (2026-08-06): FAIL.** Open d512 and d2048 crash deterministically at render
+time (weakint `SPECIAL gidx0`, `type_verify` in the precompile walk); open d4096 compiles
+and runs kernels then hits the known pre-existing HCQ hang. Closed/record d512 pass with
+pin sha `227ad3ce...` and first token 271. See the S4 run record for the full table.
+The S3 codegen fold landed (renders shaped PARAM views) but the folded residual path still
+emits a weakint `SPECIAL` that `spec_program` rejects; fixing that is a follow-on scope,
+not authorized here.
 
 1. d512/d2048/d4096 wall, open mode, vs the M2-on baseline; positive delta attributable to
    copy-free residual_add.

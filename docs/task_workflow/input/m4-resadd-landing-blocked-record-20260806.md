@@ -146,3 +146,49 @@ open mode with the substrate landed. Promotion of
 `decode-q4k-epilogue-resadd-route-policy.json` requires the S4 gate (lock-held, census
 assertions re-derived per the substrate scope: epi 36, copy-class 150, layer-0 copy count 1)
 to pass; 0 credit remains booked until then.
+
+## Update 2026-08-06 (S4 gate re-run: NEW render-time blocker, record stays CLOSED)
+
+The S4 gate was executed on the GPU with the S1-S3 deltas landed (same-session,
+lock-held, Qwen3-8B-Q4_K_M, nmeas 20, reps 3, median tok/s, per-arm fresh subprocesses,
+runner `extra/llm_research/decode/m4_resadd_section6_gate.py`). Results:
+
+| arm | d512 | d2048 | d4096 |
+| --- | --- | --- | --- |
+| closed | **PASS** median 180.982 tok/s (reps `[6.538, 181.019, 180.982]`), sha `227ad3ce...` 3/3, first `271` 3/3, census 948 kernels/token, epi 0, legacy 72, copy class 1, resadd 72 | **pre-existing HCQ hang** (`Wait timeout: 30000 ms!` in `runtime/support/hcq.py`, "NV synchronization failed before finalizing") | **pre-existing HCQ hang** (same) |
+| record (checked-in policy) | **PASS** median 180.376 tok/s, sha `227ad3ce...` 3/3, first `271` 3/3, census 948 / epi 0 / legacy 72 / copy 1 / resadd 72 (record == closed behavior, as designed) | **pre-existing HCQ hang** | not run (d4096 capped by the known hang; record already proven == closed at d512) |
+| open (production fold ACTIVE) | **FAIL: NEW render-time crash** (below), deterministic (2/2 runs) | **FAIL: same render-time crash** | compiled and ran kernels on GPU, then hit the pre-existing HCQ hang |
+
+**NEW blocker (distinct from the old `bad reshape` schedule crash, which is fixed).** The
+open arms now crash at render time in the precompile-kernels walk:
+
+```text
+RuntimeError: UOp verification failed at 31 on Ops.SPECIAL dtypes.weakint 1
+[(Ops.CONST, dtypes.weakint, 4096)] gidx0
+```
+
+raised at `tinygrad/uop/spec.py:69` (`type_verify`), reached from
+`tinygrad/codegen/__init__.py:337` (`if SPEC: type_verify(sink, spec_program)`) inside
+`_full_rewrite_to_sink`, i.e. AFTER schedule-time succeeds. The failing node is a
+weakint-typed `SPECIAL gidx0` whose src is `CONST weakint 4096`. `spec_program` bans it:
+the weakint catch-all `(UPat(GroupOp.All, dtypes.weakint), lambda: False)` at
+`spec.py:490` matches, while the permissive `SPECIAL` rule at `spec.py:237` lives in
+`spec_shared`, which is appended after the catch-all in the concatenated matcher and
+never saves weakint `SPECIAL`s. This is exactly the class of finding S3's CPU-only proof
+could not see (the CPU render path has no gpudims/`SPECIAL`); it would have hit NV at S4.
+
+The d4096 HCQ hang remains the documented pre-existing environmental hang (reproduces on
+closed and record arms too) and caps measurable depths. The section-6 gate therefore FAILS:
+the open arm cannot render on NV at any depth, so no wall/census/pins are attainable in
+open mode. **No promotion.** `decode-q4k-epilogue-resadd-route-policy.json` stays CLOSED
+(`promoted_targets: []`), 0 credit booked. The substrate deltas (D1/D2) are NOT reverted;
+they are correct and unit-locked (68 passed incl. `test_m5_typed_boundary` 27/27). A
+follow-on scope is required to make weakint `SPECIAL` renderable on NV before S4 can pass.
+
+Evidence: `/tmp/m4_gate_closed_d512.json`, `/tmp/m4_gate_closed_d2048.json`,
+`/tmp/m4_gate_closed_d4096.json`, `/tmp/m4_gate_open_d512.json`,
+`/tmp/m4_gate_open_d2048.json`, `/tmp/m4_gate_open_d4096.json`,
+`/tmp/m4_gate_record_d512.json`, `/tmp/m4_gate_record_d2048.json`, and tracebacks in
+`/tmp/m4_gate_open_d512.err`, `/tmp/m4_gate_open_d2048.err`,
+`/tmp/m4_gate_open_d4096.err`. Full run record:
+`m4-resadd-s4-gate-run-record-20260806.md`.
