@@ -1,7 +1,7 @@
 # M4 residual_add S4 gate run record - GPU section-6 gate, substrate landed
 
 Date: 2026-08-06
-Branch: tinygrad `nvidia-bringup-20260731`, HEAD `c594799c1` (S1-S3 deltas landed, tree
+Branch: tinygrad `nvidia-bringup-20260731`, HEAD `4f3a84858` (S1-S3 deltas landed, tree
 clean)
 Status: **gate run record, FAIL. The open arm (production residual fold ACTIVE) crashes at
 render time on NV with a weakint `SPECIAL` `type_verify` failure; the section-6 gate cannot

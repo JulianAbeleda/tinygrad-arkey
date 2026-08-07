@@ -3,7 +3,7 @@
 Date: 2026-08-06
 Status: **probe record, PASS at the CPU-only hermetic gate. Authorizes no
 implementation, no route-record change, no promotion.** Branch boundary:
-tinygrad `nvidia-bringup-20260731`, HEAD `3f0784e7b`. Authority:
+tinygrad `nvidia-bringup-20260731`, HEAD `ebce16af4`. Authority:
 `m4-variant-reopen-boundary-p0-scope-20260806.md` section 4, probe 1 (HARD STOP
 section 7 applies: probes only).
 

@@ -1,9 +1,9 @@
 # M4 residual_add rangeify substrate scope - flat SPECIAL reads of non-flat opaque outputs
 
 Date: 2026-08-06
-Branch boundary: tinygrad `nvidia-bringup-20260731`, HEAD `6f1abd047`
-Status: **implementation scope. S1-S3 DONE on `nvidia-bringup-20260731` (commits `3fa55377c`,
-`2794d6772`, plus the S3 codegen fold): the open-resadd flash-decode graph, with the PRODUCTION
+Branch boundary: tinygrad `nvidia-bringup-20260731`, HEAD `6d5efd2f0`
+Status: **implementation scope. S1-S3 DONE on `nvidia-bringup-20260731` (commits `48dea86b0`,
+`51efe0ec5`, plus the S3 codegen fold): the open-resadd flash-decode graph, with the PRODUCTION
 residual fold ACTIVE, schedules end to end (1620 kernels) after two 5-line scheduler deltas, and
 the folded epi_resadd subgraph now EXECUTES on CPU with the residual read through a flat row
 index (host proof, bitwise-equal to the copy-ABI variant). S4 (GPU section-6 gate, lock-held)

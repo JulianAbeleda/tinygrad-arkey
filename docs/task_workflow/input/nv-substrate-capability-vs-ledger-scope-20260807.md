@@ -1,7 +1,7 @@
 # NV substrate capability vs measured ledger - exhaustive cross-reference scope
 
 Date: 2026-08-07
-Branch: tinygrad `nvidia-bringup-20260731`, HEAD `e2ea330a6`
+Branch: tinygrad `nvidia-bringup-20260731`, HEAD `ee1e30ea8`
 Frame: Qwen3-8B-Q4_K_M, d512, RTX 5090 / driver 595.84, native `DEV=NV`
 Status: **scope. Contains no new measurement: every microsecond is carried from an existing
 record and cited. Authorizes no implementation and changes no policy artifact. Its one
@@ -130,7 +130,7 @@ opaque block-output boundary needs the extended contract.
 **Named by:** `m4-resadd-landing-blocked-record-20260806.md`,
 `ValueError: bad reshape: () -> (1,1,4096)`.
 
-**Status:** **FIXED.** Two 5-line deltas (`3fa55377c`, `2794d6772`, `afbe8fbfa`). Open fold
+**Status:** **FIXED.** Two 5-line deltas (`48dea86b0`, `51efe0ec5`, `233f1fed8`). Open fold
 schedules end to end (1620 kernels); folded subgraph executes on CPU bitwise-equal to the
 copy ABI. Unit-locked; hermetic gate 68 green incl. `test_m5_typed_boundary` 27/27.
 
@@ -267,7 +267,7 @@ population. The `flash` and `vocab` constructions are the real work; `norms` alr
 
 ## 8. Amendment 2026-08-07 - build item implemented, two corrections
 
-The section 5 build item landed (`3f58c3400`, then the v3 delta below). The generated
+The section 5 build item landed (`99fc7f40f`, then the v3 delta below). The generated
 artifact supersedes section 4A, and it corrects this scope twice.
 
 ### 8.1 Correction 1 - C1 gates flash as well as norms

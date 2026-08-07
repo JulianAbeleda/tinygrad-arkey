@@ -3,8 +3,18 @@
 Date: 2026-08-06
 Branch: `nvidia-bringup-20260731`
 Status: **provenance record. Documents the commit-attribution conventions used across
-this campaign and normalizes them going forward. No history rewritten; no commit hashes
-changed; every hash cited elsewhere in `docs/` remains valid.**
+this campaign and normalizes them going forward.**
+
+> **Superseded in part, 2026-08-07.** This record originally stated "No history rewritten;
+> no commit hashes changed; every hash cited elsewhere in `docs/` remains valid." That is
+> no longer true for `nvidia-bringup-20260731`: all 17 then-unpushed commits were rewritten
+> to purge two profiling captures that embedded a credential, and the 7 commits authored by
+> `Julian Abeleda` had their author/committer email changed to the GitHub noreply address to
+> clear push protection GH007. **The conventions in this record are unchanged** - the author
+> field still means "accountable human", and the name on those 7 commits is untouched, so
+> `git shortlog` and `git log --author` resolve exactly as described below. Only the mailbox
+> and the hashes changed. Hash citations across `docs/` were retargeted in the same pass;
+> pre-rewrite hashes appear only in this note and resolve nowhere.
 
 ## 1. Why this record exists
 
@@ -18,7 +28,7 @@ This record states what actually happened so the log is decodable without it.
 
 ## 2. Measured state as of 2026-08-06
 
-Counts are over all branches, `git log --all`, at HEAD `afbe8fbfa`.
+Counts are over all branches, `git log --all`, at HEAD `233f1fed8`.
 
 ### 2.1 Claude - attributed via `Co-Authored-By` trailer
 
@@ -77,7 +87,7 @@ not be read as a productivity measure.
 
 **No history rewrite.** `git filter-repo` on the 678 Codex-authored commits would change
 every hash from 2026-07-23 forward. This repository's methodology cites commit hashes as
-authority across `docs/` (for example `6f1abd047`, `3f0784e7b`, `3fa55377c`, `2794d6772`),
+authority across `docs/` (for example `6d5efd2f0`, `ebce16af4`, `48dea86b0`, `51efe0ec5`),
 so rewriting would invalidate the provenance chain the citations exist to provide. The
 inconsistency is dated and documented here instead; that is strictly cheaper and loses no
 information.

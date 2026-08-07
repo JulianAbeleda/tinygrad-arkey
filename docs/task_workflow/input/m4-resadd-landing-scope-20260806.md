@@ -1,7 +1,7 @@
 # M4 residual_add landing scope - fold the residual slot, promote one variant, book the recovery
 
 Date: 2026-08-06
-Branch boundary: tinygrad `nvidia-bringup-20260731`, HEAD `3f0784e7b`
+Branch boundary: tinygrad `nvidia-bringup-20260731`, HEAD `ebce16af4`
 Status: **implementation scope. The two P0 probes PASSED; this scope authorizes the
 production fold, the per-variant promotion record, and the section-6 full gate. The
 ffn_down prelude stays rejected; the combined M4 record stays closed; M3/M5/Path 3 stay

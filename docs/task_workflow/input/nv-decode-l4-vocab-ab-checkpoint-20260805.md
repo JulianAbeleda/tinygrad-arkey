@@ -3,7 +3,7 @@
 Date: 2026-08-05
 Status: session checkpoint, HALT. User requested the state be saved in a doc and work
 stopped; no GPU runs and no push until unpaused. Branch boundary: tinygrad
-`nvidia-bringup-20260731` at `e3e96cb73` (tracked tree clean except the new harness in
+`nvidia-bringup-20260731` at `ffc4464fb` (tracked tree clean except the new harness in
 section 8).
 
 ## 1. Where this sits in the campaign
@@ -84,7 +84,7 @@ the divergence is between load-time admission facts and trace-time selection.
 2. The vocab head linear consulted at trace time is not the object that was toggled.
 3. `binding.row_tile` resolved to 4 (capability architecture not `sm_120` at trace time),
    making `in_kernel` illegal regardless of fusion admission.
-4. Something in the 47 commits between `499bf4f5f` and `e3e96cb73` changed
+4. Something in the 47 commits between `499bf4f5f` and `ffc4464fb` changed
    install/selection (the `qk_primitives.py` diff removes `QKPrimitiveEligibility` etc.);
    check `QKPrimitiveCapability.satisfied` and the route-admission construction paths.
 
@@ -101,7 +101,7 @@ the divergence is between load-time admission facts and trace-time selection.
 
 - Harness (untracked): `scratchpad/nv_decode_l4_vocab_fusion_ab.py`
 - Run output: `/tmp/nv_decode_l4_vocab_fusion_ab_20260805.json`
-- HEAD: `e3e96cb73`, branch `nvidia-bringup-20260731`, clean tracked tree except the
+- HEAD: `ffc4464fb`, branch `nvidia-bringup-20260731`, clean tracked tree except the
   harness above.
 - References: `nv-parity-and-beyond-forward-scope-20260803.md`,
   `l4-vocab-substrate-fusion-implementation-scope-20260803.md`,

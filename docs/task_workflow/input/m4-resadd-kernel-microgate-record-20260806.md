@@ -2,7 +2,7 @@
 
 Date: 2026-08-06
 Target: Qwen3-8B-Q4_K_M, d512, RTX 5090 / native `DEV=NV`, branch
-`nvidia-bringup-20260731`, HEAD `3f0784e7b`
+`nvidia-bringup-20260731`, HEAD `ebce16af4`
 Status: **probe record, PASS. Fused epi_resadd per-kernel economics are at
 parity; the copy-free ceiling is strongly positive. Authorizes no
 implementation, no route-record change, no promotion.** Authority:
