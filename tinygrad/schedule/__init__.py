@@ -174,6 +174,42 @@ def _resolve_linear_call(linear_call:UOp) -> UOp:
     _resolve_diag["top_n"].append((len(linear_call.src)-1, len(body.src) if body.op is Ops.LINEAR else -1, nodes, _is_precompile, items))
     print(f"RESOLVE n={_resolve_diag['n']} pre={_is_precompile} args={len(linear_call.src)-1} "
           f"body_items={len(body.src) if body.op is Ops.LINEAR else 'na'} body_nodes={nodes} item0_ops={items}", flush=True)
+    if nodes > 10000 and body.op is Ops.LINEAR:
+      # structural dump: what do the item args look like, and how dense are the
+      # pm_post_sched_cache matches (PARAM / BUFFER(LUNIQUE)) inside their chains?
+      lbuf = pbuf = 0
+      nested: dict[tuple[bytes, ...], int] = {}
+      n_nested = 0
+      for it in body.src[:4]:
+        seen: set[int] = set()
+        stack = [(a, 0) for a in it.src[1:]]
+        while stack:
+          n, d = stack.pop()
+          if id(n) in seen or d > 8: continue
+          seen.add(id(n))
+          if n.op is Ops.BUFFER and len(n.src) and n.src[0].op is Ops.LUNIQUE: lbuf += 1
+          if n.op is Ops.PARAM: pbuf += 1
+          for s in n.src: stack.append((s, d+1))
+      for it in body.src:
+        if it.op is Ops.CALL and it.src[0].op is Ops.LINEAR:
+          n_nested += 1
+          key = (it.src[0].key, *(a.key for a in it.src[1:]))
+          nested[key] = nested.get(key, 0) + 1
+      nested_arg_ops = []
+      for it in body.src:
+        if it.op is Ops.CALL and it.src[0].op is Ops.LINEAR:
+          nested_arg_ops.append(tuple(a.op for a in it.src[1:]))
+          if len(nested_arg_ops) >= 3: break
+      first_args = [(a.op, len(a.src)) for a in body.src[0].src[1:6]]
+      print(f"  STRUCT body: lunique_buffers={lbuf} params={pbuf} (first 4 items, depth<=8) first_args={first_args} "
+            f"nested_calls={n_nested} nested_unique={len(nested)} nested_max_repeat={max(nested.values()) if nested else 0} "
+            f"nested_arg_ops={nested_arg_ops}", flush=True)
+    if _is_precompile and _resolve_diag["precompile"] <= 2 and body.op is Ops.LINEAR:
+      # what do the items of a precompile body look like (PARAM vs LUNIQUE BUFFER args)?
+      item_arg_ops = []
+      for it in body.src[:4]:
+        item_arg_ops.append((it.src[0].op, tuple(a.op for a in it.src[1:])))
+      print(f"  PRECOMPILE BODY item_arg_ops={item_arg_ops}", flush=True)
   resolved = graph_rewrite(linear_call.src[0], pm_post_sched_cache, ctx=({}, linear_call.src[1:]),
                            walk=True, name="params to buffers")
   outer_slots = dict(getattr(linear_call.src[0].arg, "memory_semantic_slots", ()))
