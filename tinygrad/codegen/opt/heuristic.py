@@ -1,10 +1,23 @@
 import itertools
 from tinygrad.codegen.opt import Opt, OptOps, KernelOptError
 from tinygrad.helpers import getenv, DEBUG, prod, NOLOCALS, TC_OPT, TC_SELECT, USE_TC, IMAGE
-from tinygrad.dtype import PtrDType, ImageDType
+from tinygrad.dtype import PtrDType, ImageDType, dtypes
 from tinygrad.uop.ops import Ops, resolve, AxisType, GroupOp
 from tinygrad.codegen.opt.postrange import Scheduler
 from tinygrad.codegen.opt.kernel_pipeline import validate_scheduler_tile_loop_pressure
+
+
+def _buf_idx(b):
+  """Index expression of a buffer for index-structure heuristics. Non-weakint indexes are
+  legal for rendering (e.g. custom-kernel q6k byte reads build int32 index arithmetic) but
+  do not participate in the weakint index-structure heuristics, so they return None."""
+  return b.src[1].get_idx() if b.src[1].dtype.scalar() is dtypes.weakint else None
+
+def _is_composite_landing(k:Scheduler) -> bool:
+  """Scheduler-boundary landing kernels (multi-CALL composites with dozens of output dims
+  and hundreds of buffers) arrive fully scheduled; the local/upcast heuristics assume
+  small elementwise/reduce shapes and corrupt them. Leave those schedules untouched."""
+  return len(k.bufs) > 128 or len(k.full_shape) > 16
 
 # Expanded accumulator lanes are not the whole live set: indexing, input
 # fragments, masks and writeback need short-lived carriers too.  Keep that
@@ -45,6 +58,8 @@ def bounded_reduction_unroll(upcast_lanes:int, reduction_size:int, choices:tuple
   return None
 
 def hand_coded_optimizations(k:Scheduler) -> Scheduler:
+  if _is_composite_landing(k): return k
+
   # first try the tensor cores
   """ Attempts to apply a tensor core optimization to the kernel. If one exists and applies properly, return true, otherwise return false.
   Tensor cores are optimized instructions that matrix multiply-accumulate across a wave of threads: D(M, N) = A(M, K) * B(K, N) + C(M, N).
@@ -107,8 +122,9 @@ def hand_coded_optimizations(k:Scheduler) -> Scheduler:
     for buf_index,buf in enumerate(k.bufs):
       if isinstance(buf.src[0].dtype, PtrDType) and ImageDType.valid_dims(buf.src[0].dtype, k.ren.target.arch):
         # part of is_expanded
-        unit_stride_axes_mul_4 = [k.rngs.index(c) for c in k.bufs[buf_index].src[1].get_idx().split_uop(Ops.ADD) if
-          c.op is Ops.RANGE and (c.vmax+1)%4 == 0]
+        buf_idx = _buf_idx(k.bufs[buf_index])
+        unit_stride_axes_mul_4 = [k.rngs.index(c) for c in buf_idx.split_uop(Ops.ADD) if
+          c.op is Ops.RANGE and (c.vmax+1)%4 == 0] if buf_idx is not None else []
         if len(unit_stride_axes_mul_4):
           if (axis:=unit_stride_axes_mul_4[0]) in k.upcastable_dims:
             k.apply_opt(Opt(OptOps.UPCAST, axis, 4))
@@ -120,8 +136,8 @@ def hand_coded_optimizations(k:Scheduler) -> Scheduler:
   if k.ren.has_local and getenv("MV",1) != 0 and (MV_BLOCKSIZE > 1 or MV_THREADS_PER_ROW > 1 or MV_ROWS_PER_THREAD > 1) and  \
     k.reduceop is not None and k.reduceop.arg[0] is Ops.ADD and len(k.full_shape) >= 2 and k.ren.has_shared and \
     (mulop:=k.reduceop.src[0]).op is Ops.MUL and mulop.src[0].op is Ops.INDEX and mulop.src[1].op is Ops.INDEX:
-    idx0, idx1 = mulop.src[0].src[1].get_idx(), mulop.src[1].src[1].get_idx()
-    if k.ranges_of(AxisType.REDUCE):
+    idx0, idx1 = _buf_idx(mulop.src[0]), _buf_idx(mulop.src[1])
+    if idx0 is not None and idx1 is not None and k.ranges_of(AxisType.REDUCE):
       first_reduce_rng = k.ranges_of(AxisType.REDUCE)[0]
       if any(u is first_reduce_rng for u in idx0.split_uop(Ops.ADD)) and all(r in idx1.ranges for r in idx0.ranges):
         for global_idx in k.axes_of(AxisType.GLOBAL):
@@ -198,18 +214,19 @@ def hand_coded_optimizations(k:Scheduler) -> Scheduler:
   # potentially do more upcasts of non reduce axes based on a heuristic
   is_dsp = k.ren is not None and k.ren.target.device == "DSP"
   upcasted_axis: set[int] = set()
-  while resolve(prod(k.output_shape[i] for i in k.upcastable_dims) >= 1024) and (k.upcast_size() < 32):
+  while len(k.bufs) <= 64 and resolve(prod(k.output_shape[i] for i in k.upcastable_dims) >= 1024) and (k.upcast_size() < 32):
     xb_choices = []
     # consider all upcastable axes with 3 or 4 upcast (128 on the DSP)
     for axis, upcast_amount in itertools.product(k.upcastable_dims, ([128] if not len(upcasted_axis) else []) if is_dsp else [3,4]):
       # if we haven't upcasted it, it mods, and buffer has stride 0 on axis while having no stride 0 in the upcasted axis already
       if axis in upcasted_axis or k.full_shape[axis]%upcast_amount != 0: continue
       rng = k.rngs[axis]
-      if any(rng not in b.src[1].get_idx().backward_slice and all(r2 in b.src[1].get_idx().backward_slice
+      if any((idx:=_buf_idx(b)) is not None and rng not in idx.backward_slice and all(r2 in idx.backward_slice
           for r2 in k.ranges_of(AxisType.UPCAST, AxisType.UNROLL)) for b in k.bufs):
         num_strides, sum_strides = 0, 0
         for b in k.bufs:
-          idx = b.src[1].get_idx()
+          idx = _buf_idx(b)
+          if idx is None: continue
           if rng in idx.backward_slice: num_strides += 1
           for c in idx.split_uop(Ops.ADD):
             if c is rng: sum_strides += 1
@@ -258,7 +275,7 @@ def hand_coded_optimizations(k:Scheduler) -> Scheduler:
       k.apply_opt(Opt(OptOps.NOLOCALS))
     else:
       # prioritize making expand axes local
-      local_axis_ranking = [(any(k.rngs[axis] not in b.src[1].get_idx().backward_slice for b in k.bufs), axis) \
+      local_axis_ranking = [(any((idx:=_buf_idx(b)) is not None and k.rngs[axis] not in idx.backward_slice for b in k.bufs), axis) \
                               for axis in k.axes_of(AxisType.GLOBAL, AxisType.LOOP) if k.rngs[axis].src[0].op is Ops.CONST]
       to_local: list[tuple[int, int]] = []
       for _, axis in sorted(local_axis_ranking, key=lambda x: (-x[0], -x[1])):
