@@ -146,6 +146,7 @@ pm_bind_resolved_call_ownership = PatternMatcher([
 # wedged host RSS at ~2.9M uops).  Convert the scratch once per unique body key,
 # then bind only the PARAM slots per invocation.
 _resolve_precompile_base: dict[bytes, UOp] = {}
+_resolve_precompile_body_key: dict[UOp, bytes] = {}
 _RESOLVE_PRECOMPILE_BASE_LIMIT = 4096
 
 pm_precompile_local_buffers = PatternMatcher([
@@ -155,11 +156,17 @@ pm_precompile_local_buffers = PatternMatcher([
 
 def _precompile_body_base(body:UOp) -> UOp:
   """Convert a precompile body's BUFFER(LUNIQUE) scratch once per unique body."""
-  if (base := _resolve_precompile_base.get(body.key)) is None:
+  if (key := _resolve_precompile_body_key.get(body)) is None:
+    # UOp.key re-hashes the whole body recursively on every access; the same body object
+    # is looked up once per composite (schedule_cache shares it), so pin the key by
+    # identity.  Without this the sha256 churn for growing bodies (resadd chain, ~8k
+    # nodes) dominated host RSS at flash-decode scale.
+    key = _resolve_precompile_body_key[body] = body.key
+  if (base := _resolve_precompile_base.get(key)) is None:
     base = graph_rewrite(body, pm_precompile_local_buffers, ctx=({},),
                          walk=True, name="precompile local buffers")
     if len(_resolve_precompile_base) < _RESOLVE_PRECOMPILE_BASE_LIMIT:
-      _resolve_precompile_base[body.key] = base
+      _resolve_precompile_base[key] = base
   return base
 
 def _precompile_body_bind(base:UOp, args:tuple[UOp, ...]) -> UOp:
