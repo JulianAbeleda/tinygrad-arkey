@@ -81,3 +81,41 @@ landing wiring is dormant-correct and the tree itself is sound.
 `/tmp/m4_gate_open_d512.err`, `/tmp/m4_gate_open_d2048.err`,
 `/tmp/m4_gate_open_d4096.err`. Missing arm: record d4096 (not run; record mode proven ==
 closed at d512, d4096 capped by the known hang).
+
+## 7. Follow-on investigation 2026-08-07: the blocker is the precompile bodies, not weakint SPECIAL
+
+A full open-arm scan (no early break; fake NV sm_120 facts, CPU, Qwen3-8B-Q4_K_M,
+`/tmp/m4_s5_scan.py` + `/tmp/m4_s5_diag*.py`) established the real shape of the blocker.
+
+**The weakint SPECIAL was the first failure, not the root.** The open-arm schedule embeds
+raw precompile artifacts in every composite landing kernel, not only 8: ~630 of the 1620
+open kernels fail at render, all with the same weakint `SPECIAL` `type_verify` crash. Each
+composite's SINK is a small shell over:
+
+1. `GETTUPLE(FUNCTION(FFNBlock._run, precompile=True), 0)` - the whole FFN precompile body
+   (3733+ nodes, 23-245 args) spelled raw, because `rangeify.resolve_function` skips
+   precompile functions (`schedule/rangeify.py:576`).
+2. `AFTER(buf, CALL)` dependency markers (8-44 per kernel) whose CALL bodies are raw
+   custom-kernel ASTs (`q4k_g3_lanemap_gemv_*`, `flash_*`, `q6k_gen_*`). All embedded CALL
+   bodies render standalone (verified 44/44) and have structurally matching standalone
+   schedule items (35-36/36, 18/18 by node/store census), so they are redundant in-body
+   spellings of standalone kernels.
+3. `MEMORY_SEMANTIC` role markers on the inlined values.
+
+**A codegen-side resolution pass was tried and is insufficient.** A pass at the top of
+`_full_rewrite_to_sink` that inlines the precompile GETTUPLE (substituting body PARAMs for
+function args), resolves `AFTER(buf, CALL)` to `buf`, and strips `MEMORY_SEMANTIC` clears
+the weakint `type_verify` failure and renders the pure-shell composites. But the inlined
+precompile bodies also carry `AFTER(PARAM, CALL)` **as 4096-wide vector values** (dtype
+`float`, shape `(4096,)`, consumed by `RESHAPE(..., (1,1,4096))` then `ADD`), and there is
+no codegen lowering for a value AFTER: rendering fails with
+`float4096* alu0 = (data2_4096+data679_4096)` (pointer-typed ADD), and the natural load
+spelling `RESHAPE(INDEX(buf, RANGE(4096)), (1,1,4096))` is rejected by UOp shape validation
+(`bad reshape: () -> (1, 1, 4096)`). The value-AFTER read is tensor-level semantics that
+only rangeify's buffer/load machinery can lower.
+
+**Conclusion:** the fix belongs in the scheduler, not codegen: when the resadd fold admits
+a precompile function output into a composite, the precompile FUNCTION body must be resolved
+at rangeify time (so `handle_after`/INDEX lowering see the value AFTERs), or the emitter
+must spell the reads with explicit flat loads. The S4 gate stays FAIL, the record stays
+CLOSED, 0 credit. No tree change landed (the codegen pass was reverted; worktree clean).
