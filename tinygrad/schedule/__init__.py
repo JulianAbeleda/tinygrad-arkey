@@ -153,10 +153,6 @@ pm_precompile_local_buffers = PatternMatcher([
   (UPat(Ops.BUFFER, src=(UPat(Ops.LUNIQUE), UPat(Ops.DEVICE)), name="b"), create_new_buffer),
 ])
 
-pm_precompile_resolve_params = PatternMatcher([
-  (UPat(Ops.PARAM, name="x"), lambda ctx,x: ctx[1][x.arg.slot]),
-])
-
 def _precompile_body_base(body:UOp) -> UOp:
   """Convert a precompile body's BUFFER(LUNIQUE) scratch once per unique body."""
   if (base := _resolve_precompile_base.get(body.key)) is None:
@@ -165,6 +161,25 @@ def _precompile_body_base(body:UOp) -> UOp:
     if len(_resolve_precompile_base) < _RESOLVE_PRECOMPILE_BASE_LIMIT:
       _resolve_precompile_base[body.key] = base
   return base
+
+def _precompile_body_bind(base:UOp, args:tuple[UOp, ...]) -> UOp:
+  """Bind a precompile body's direct PARAM item args for one invocation.
+
+  The converted base is shared across composites (fixed graph, llama.cpp-style: kernels
+  are compiled once and each step only rebinds inputs).  Only the item-arg PARAM slots
+  change per invocation, so substitute those leaves directly instead of re-walking the
+  whole body: the full-body walk churned tens of MB of transient allocations per
+  composite at flash-decode scale (bodies grow with the resadd chain, ~8k nodes late).
+  """
+  new_items: list[UOp] = []
+  for it in base.src:
+    old_args = it.src[1:]
+    if not any(a.op is Ops.PARAM for a in old_args):
+      new_items.append(it)
+      continue
+    new_args = tuple(args[a.arg.slot] if a.op is Ops.PARAM else a for a in old_args)
+    new_items.append(it.replace(src=(it.src[0], *new_args)) if any(n is not a for n, a in zip(new_args, old_args)) else it)
+  return base.replace(src=tuple(new_items)) if any(n is not it for n, it in zip(new_items, base.src)) else base
 
 def _resolve_linear_call(linear_call:UOp) -> UOp:
   """Resolve one cached LINEAR invocation and retain its output ownership.
@@ -185,9 +200,8 @@ def _resolve_linear_call(linear_call:UOp) -> UOp:
           f"body_items={len(linear_call.src[0].src)} body_nodes={len(linear_call.src[0].toposort())}", flush=True)
   _is_precompile = getattr(linear_call.arg, "precompile", False)
   if _is_precompile:
-    # body-keyed scratch conversion + per-invocation PARAM binding (see above)
-    resolved = graph_rewrite(_precompile_body_base(linear_call.src[0]), pm_precompile_resolve_params,
-                             ctx=({}, linear_call.src[1:]), walk=True, name="precompile params")
+    # body-keyed scratch conversion + leaf-level PARAM binding (see above)
+    resolved = _precompile_body_bind(_precompile_body_base(linear_call.src[0]), linear_call.src[1:])
   else:
     resolved = graph_rewrite(linear_call.src[0], pm_post_sched_cache, ctx=({}, linear_call.src[1:]),
                              walk=True, name="params to buffers")
@@ -255,10 +269,20 @@ pm_schedule = PatternMatcher([
 @track_rewrites(lambda _,ret: f"Schedule {pluralize('Kernel', len(ret[0].src))}")
 def create_linear_with_vars(big_sink:UOp) -> tuple[UOp, dict[str, int]]:
   # big_sink srcs are all the Tensors
+  _trace = getenv("M4_RESOLVE_TRACE", 0)
+  _t0 = time.perf_counter()
   linear_call = graph_rewrite(big_sink, pm_schedule, name="schedule to linear", enter_calls=True)
+  _t1 = time.perf_counter()
 
   # this recursively resolves the linear_call and allocates buffers
   linear = graph_rewrite(linear_call, pm_resolve_linear_call, name="resolve linear call")
+  _t2 = time.perf_counter()
+  if _trace:
+    with open("/proc/self/status") as _f:
+      _rss = next(int(l.split()[1])*1024 for l in _f if l.startswith("VmRSS:"))
+    print(f"TRACE phases sched={_t1-_t0:.2f}s resolve={_t2-_t1:.2f}s rss={_rss/1e9:.2f}G "
+          f"ucache={len(UOpMetaClass.ucache)} sched_nodes={len(linear_call.toposort())} "
+          f"linear_items={len(linear.src)}", flush=True)
 
   # vars used in the schedule
   used_vars = set().union(*[{v.expr for v in si.src[0].variables()} for si in linear.src])
