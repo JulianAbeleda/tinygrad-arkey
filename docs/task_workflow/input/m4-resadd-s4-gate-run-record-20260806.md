@@ -119,3 +119,30 @@ a precompile function output into a composite, the precompile FUNCTION body must
 at rangeify time (so `handle_after`/INDEX lowering see the value AFTERs), or the emitter
 must spell the reads with explicit flat loads. The S4 gate stays FAIL, the record stays
 CLOSED, 0 credit. No tree change landed (the codegen pass was reverted; worktree clean).
+
+## 2026-08-07 reruns: session OOM wedge, `ec6c0d8a4` reverted
+
+The 09:33 and 10:20 open-arm reruns on `ec6c0d8a4` ("resolve nested precompile bodies at
+callify time") died after the admission line. `systemd-oomd` killed the whole user session
+(user@1000.service, 50% pressure/20s policy) with the gate process at ~29.5GB host **anon**
+RSS (kernel OOM dumps: 27.8-29.2GB anon on earlier boots too; VRAM was never the problem).
+
+Phase probe under a 20G cgroup cap (`/tmp/m4_mem_probe.py`, same Qwen3-8B-Q4_K_M, NV:sm_120,
+open-arm overrides) showed the load itself is light (~0.3GB host RSS: the 5GB whole-file
+disk->NV copy streams through the 64MB staging pool and `load_state_dict(realize=False)` is
+lazy; q4k install is shared-view, no copy; `realize_prefill_v2_weights` adds ~14GB VRAM, not
+host). The wedge starts at the first flash-decode graph capture (ctx 512->513 crossing the
+flash threshold): 100% CPU, host RSS grows linearly ~50MB/s until OOM, stack pinned in
+`create_linear_with_vars -> pm_resolve_linear_call -> _resolve_linear_call ->
+graph_rewrite(pm_post_sched_cache)`. The `enter_calls=True` rewrite from `ec6c0d8a4` turns
+nested precompile FUNCTION bodies into CALLs that the schedule/resolve pipeline then
+re-walks/re-rewrites per enclosing composite, and every new UOp is interned in the
+process-global ucache (retained forever) - unbounded host RSS.
+
+A/B on the parent (`0ce0525c1`): identical probe fails fast (~60s) at the same capture with
+the weakint render blocker above, RSS flat at ~0.66GB, no wedge. `ec6c0d8a4` is therefore
+the regression; it was reverted in `1b392fe39` with the full evidence in the commit message.
+Reverted tree re-verified: fast clean failure, flat RSS, 12/12 adjacent unit tests pass.
+The S4 render blocker (this record's conclusion) remains the open item; the follow-up fix
+must make the nested-body resolve path cache-hitting or opaque at flash-decode scale, and
+needs a test at that scale, not just the small synthetic graph from `ec6c0d8a4`.
