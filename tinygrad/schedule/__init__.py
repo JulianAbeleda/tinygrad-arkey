@@ -138,14 +138,33 @@ pm_bind_resolved_call_ownership = PatternMatcher([
   (UPat(Ops.CALL, name="call", allow_any_len=True), _bind_resolved_call_ownership),
 ])
 
-# Nested precompile CALL bodies are concrete after callify: the resolved LINEAR
-# is a pure function of (body, concrete args), so materialize each unique
-# invocation once instead of once per enclosing composite (the flash-decode
+# Nested precompile CALL bodies are concrete after callify: each body's items are
+# scheduled kernels whose only scheduler-side values are the invocation's own PARAM
+# slots and per-invocation BUFFER(LUNIQUE) scratch.  The full pm_post_sched_cache
+# walk re-interns the whole body for every enclosing composite (the flash-decode
 # capture embeds one resadd chain per composite; per-composite re-instantiation
-# previously interning the whole body per composite and wedged host RSS).
-_resolve_precompile_cache: dict[tuple[bytes, ...], UOp] = {}
-_RESOLVE_PRECOMPILE_CACHE_LIMIT = 4096
-_resolve_diag = {"n": 0, "hit": 0, "precompile": 0, "big": 0, "top_n": []}
+# wedged host RSS at ~2.9M uops).  Convert the scratch once per unique body key,
+# then bind only the PARAM slots per invocation.
+_resolve_precompile_base: dict[bytes, UOp] = {}
+_RESOLVE_PRECOMPILE_BASE_LIMIT = 4096
+
+pm_precompile_local_buffers = PatternMatcher([
+  # create new BUFFERs for LUNIQUE BUFFERs from rangeify, once per precompile body
+  (UPat(Ops.BUFFER, src=(UPat(Ops.LUNIQUE), UPat(Ops.DEVICE)), name="b"), create_new_buffer),
+])
+
+pm_precompile_resolve_params = PatternMatcher([
+  (UPat(Ops.PARAM, name="x"), lambda ctx,x: ctx[1][x.arg.slot]),
+])
+
+def _precompile_body_base(body:UOp) -> UOp:
+  """Convert a precompile body's BUFFER(LUNIQUE) scratch once per unique body."""
+  if (base := _resolve_precompile_base.get(body.key)) is None:
+    base = graph_rewrite(body, pm_precompile_local_buffers, ctx=({},),
+                         walk=True, name="precompile local buffers")
+    if len(_resolve_precompile_base) < _RESOLVE_PRECOMPILE_BASE_LIMIT:
+      _resolve_precompile_base[body.key] = base
+  return base
 
 def _resolve_linear_call(linear_call:UOp) -> UOp:
   """Resolve one cached LINEAR invocation and retain its output ownership.
@@ -158,60 +177,12 @@ def _resolve_linear_call(linear_call:UOp) -> UOp:
   """
   _is_precompile = getattr(linear_call.arg, "precompile", False)
   if _is_precompile:
-    key = (linear_call.src[0].key, *(a.key for a in linear_call.src[1:]))
-    if (cached := _resolve_precompile_cache.get(key)) is not None:
-      _resolve_diag["hit"] += 1
-      return cached
-  _resolve_diag["n"] += 1
-  if _is_precompile: _resolve_diag["precompile"] += 1
-  if getenv("M4_RESOLVE_DIAG", 0) and (_resolve_diag["n"] <= 6 or (_is_precompile and _resolve_diag["precompile"] <= 5)
-                                       or (not _is_precompile and len(linear_call.src)-1 > 8 and _resolve_diag["big"] < 4)
-                                       or _resolve_diag["big"] > 3):
-    body = linear_call.src[0]
-    if not _is_precompile and len(linear_call.src)-1 > 8: _resolve_diag["big"] += 1
-    items = [x.src[0].op for x in body.src[:6]] if body.op is Ops.LINEAR else [body.op]
-    nodes = len(body.toposort())
-    _resolve_diag["top_n"].append((len(linear_call.src)-1, len(body.src) if body.op is Ops.LINEAR else -1, nodes, _is_precompile, items))
-    print(f"RESOLVE n={_resolve_diag['n']} pre={_is_precompile} args={len(linear_call.src)-1} "
-          f"body_items={len(body.src) if body.op is Ops.LINEAR else 'na'} body_nodes={nodes} item0_ops={items}", flush=True)
-    if nodes > 10000 and body.op is Ops.LINEAR:
-      # structural dump: what do the item args look like, and how dense are the
-      # pm_post_sched_cache matches (PARAM / BUFFER(LUNIQUE)) inside their chains?
-      lbuf = pbuf = 0
-      nested: dict[tuple[bytes, ...], int] = {}
-      n_nested = 0
-      for it in body.src[:4]:
-        seen: set[int] = set()
-        stack = [(a, 0) for a in it.src[1:]]
-        while stack:
-          n, d = stack.pop()
-          if id(n) in seen or d > 8: continue
-          seen.add(id(n))
-          if n.op is Ops.BUFFER and len(n.src) and n.src[0].op is Ops.LUNIQUE: lbuf += 1
-          if n.op is Ops.PARAM: pbuf += 1
-          for s in n.src: stack.append((s, d+1))
-      for it in body.src:
-        if it.op is Ops.CALL and it.src[0].op is Ops.LINEAR:
-          n_nested += 1
-          key = (it.src[0].key, *(a.key for a in it.src[1:]))
-          nested[key] = nested.get(key, 0) + 1
-      nested_arg_ops = []
-      for it in body.src:
-        if it.op is Ops.CALL and it.src[0].op is Ops.LINEAR:
-          nested_arg_ops.append(tuple(a.op for a in it.src[1:]))
-          if len(nested_arg_ops) >= 3: break
-      first_args = [(a.op, len(a.src)) for a in body.src[0].src[1:6]]
-      print(f"  STRUCT body: lunique_buffers={lbuf} params={pbuf} (first 4 items, depth<=8) first_args={first_args} "
-            f"nested_calls={n_nested} nested_unique={len(nested)} nested_max_repeat={max(nested.values()) if nested else 0} "
-            f"nested_arg_ops={nested_arg_ops}", flush=True)
-    if _is_precompile and _resolve_diag["precompile"] <= 2 and body.op is Ops.LINEAR:
-      # what do the items of a precompile body look like (PARAM vs LUNIQUE BUFFER args)?
-      item_arg_ops = []
-      for it in body.src[:4]:
-        item_arg_ops.append((it.src[0].op, tuple(a.op for a in it.src[1:])))
-      print(f"  PRECOMPILE BODY item_arg_ops={item_arg_ops}", flush=True)
-  resolved = graph_rewrite(linear_call.src[0], pm_post_sched_cache, ctx=({}, linear_call.src[1:]),
-                           walk=True, name="params to buffers")
+    # body-keyed scratch conversion + per-invocation PARAM binding (see above)
+    resolved = graph_rewrite(_precompile_body_base(linear_call.src[0]), pm_precompile_resolve_params,
+                             ctx=({}, linear_call.src[1:]), walk=True, name="precompile params")
+  else:
+    resolved = graph_rewrite(linear_call.src[0], pm_post_sched_cache, ctx=({}, linear_call.src[1:]),
+                             walk=True, name="params to buffers")
   outer_slots = dict(getattr(linear_call.src[0].arg, "memory_semantic_slots", ()))
   outer_slots.update(getattr(linear_call.arg, "memory_semantic_slots", ()))
   owned_bases:dict[UOp, object] = {}
@@ -232,15 +203,10 @@ def _resolve_linear_call(linear_call:UOp) -> UOp:
     if base in owned_bases and owned_bases[base] != owner:
       raise ValueError(f"conflicting semantic owners for resolved LINEAR argument slot {slot}")
     owned_bases[base] = owner
-  if not owned_bases:
-    if getattr(linear_call.arg, "precompile", False) and len(_resolve_precompile_cache) < _RESOLVE_PRECOMPILE_CACHE_LIMIT:
-      _resolve_precompile_cache[key] = resolved
-    return resolved
+  if not owned_bases: return resolved
 
   resolved = graph_rewrite(resolved, pm_bind_resolved_call_ownership, ctx=owned_bases,
                            name="bind resolved call ownership")
-  if getattr(linear_call.arg, "precompile", False) and len(_resolve_precompile_cache) < _RESOLVE_PRECOMPILE_CACHE_LIMIT:
-    _resolve_precompile_cache[key] = resolved
   return resolved
 
 pm_resolve_linear_call = PatternMatcher([
@@ -285,9 +251,6 @@ def create_linear_with_vars(big_sink:UOp) -> tuple[UOp, dict[str, int]]:
 
   # this recursively resolves the linear_call and allocates buffers
   linear = graph_rewrite(linear_call, pm_resolve_linear_call, name="resolve linear call")
-  if getenv("M4_RESOLVE_DIAG", 0):
-    print(f"resolve diag: n={_resolve_diag['n']} precompile={_resolve_diag['precompile']} hits={_resolve_diag['hit']} cache={len(_resolve_precompile_cache)}", flush=True)
-    for e in _resolve_diag["top_n"]: print("  resolve:", e, flush=True)
 
   # vars used in the schedule
   used_vars = set().union(*[{v.expr for v in si.src[0].variables()} for si in linear.src])

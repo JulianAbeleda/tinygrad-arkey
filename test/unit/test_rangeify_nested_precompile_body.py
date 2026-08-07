@@ -58,17 +58,6 @@ def _raw_precompile_nodes(big_sink: UOp) -> list[UOp]:
              (x.op is Ops.GETTUPLE and x.src[0].op is Ops.FUNCTION)]
 
 
-_RESOLVE_MISS_COUNTS: dict[tuple[bytes, ...], int] = {}
-
-def _traced_resolve_linear_call(linear_call: UOp) -> UOp:
-  if getattr(linear_call.arg, "precompile", False):
-    from tinygrad.schedule import _resolve_precompile_cache
-    key = (linear_call.src[0].key, *(a.key for a in linear_call.src[1:]))
-    if key not in _resolve_precompile_cache: _RESOLVE_MISS_COUNTS[key] = _RESOLVE_MISS_COUNTS.get(key, 0) + 1
-  from tinygrad.schedule import _resolve_linear_call
-  return _resolve_linear_call(linear_call)
-
-
 def test_nested_precompile_functions_resolve_at_callify():
   """No raw precompile FUNCTION/GETTUPLE may survive callify, including inside the
   transformed CALL bodies (toposort enters bodies by default)."""
@@ -98,33 +87,48 @@ def test_nested_precompile_composites_render():
     to_program(ast, ren)  # must not raise (was: weakint SPECIAL type_verify)
 
 
+_BASE_CONVERT_COUNTS: dict[bytes, int] = {}
+
+def _traced_resolve_linear_call(linear_call: UOp) -> UOp:
+  from tinygrad.schedule import _resolve_linear_call, _resolve_precompile_base
+  if getattr(linear_call.arg, "precompile", False):
+    key = linear_call.src[0].key
+    if key not in _resolve_precompile_base: _BASE_CONVERT_COUNTS[key] = _BASE_CONVERT_COUNTS.get(key, 0) + 1
+  return _resolve_linear_call(linear_call)
+
+
 def test_nested_precompile_resolve_is_shared_across_composites():
   """Scale regression: the JIT concatenates per-composite linears that all embed the same
   nested precompile chain, so one chain CALL appears once per composite in the flattened
-  linear.  The resolve must materialize each precompile body once per unique invocation
-  (body, concrete args) instead of once per enclosing composite."""
+  linear.  The BUFFER(LUNIQUE) scratch conversion that re-interns a precompile body must
+  run once per unique body and be shared, never once per enclosing composite (the M4
+  flash-decode capture wedged host RSS at ~2.9M uops from per-composite re-instantiation)."""
   from tinygrad.callify import transform_to_call
   from tinygrad.engine.realize import pm_flatten_linear
-  from tinygrad.schedule import pm_resolve_linear_call, pm_schedule
+  from tinygrad.schedule import pm_schedule
   from tinygrad.tensor import _apply_map_to_tensors
   from tinygrad.uop.ops import PatternMatcher, UPat, graph_rewrite
-  import tinygrad.schedule as sched
 
-  w_raw = Tensor.empty(N, dtype=dtypes.float32).contiguous()
-  chain_out = _wrapper(w_raw)
-  big_sink, becomes = transform_to_call(UOp.sink(chain_out.uop))
-  _apply_map_to_tensors(becomes, name="buffers")
-  linear = graph_rewrite(big_sink, pm_schedule, name="composite schedule", enter_calls=True).src[0]
+  from tinygrad.schedule import _resolve_precompile_base
+  _resolve_precompile_base.clear()  # cold capture: no body converted yet
+  # Distinct invocations (fresh per-composite args) sharing one cached precompile body,
+  # like the JIT capture's concatenated per-composite linears.
+  composite_linears = []
+  for _ in range(4):
+    w_raw = Tensor.empty(N, dtype=dtypes.float32).contiguous()
+    big_sink, becomes = transform_to_call(UOp.sink(_wrapper(w_raw).uop))
+    _apply_map_to_tensors(becomes, name="buffers")
+    composite_linears.append(graph_rewrite(big_sink, pm_schedule, name="composite schedule", enter_calls=True).src[0])
   # JIT flattening concatenates the composite's linears; each carries the chain CALLs.
-  big = UOp(Ops.LINEAR, src=tuple(item for lin in (linear, linear, linear, linear) for item in lin.src))
+  big = UOp(Ops.LINEAR, src=tuple(item for lin in composite_linears for item in lin.src))
 
-  _RESOLVE_MISS_COUNTS.clear()
-  sched.pm_resolve_linear_call = PatternMatcher([
+  _BASE_CONVERT_COUNTS.clear()
+  traced = PatternMatcher([
     (UPat(Ops.CALL, src=(UPat(Ops.LINEAR),), name="linear_call", allow_any_len=True), _traced_resolve_linear_call),
   ]) + pm_flatten_linear
-  resolved = graph_rewrite(big, sched.pm_resolve_linear_call, name="resolve linear call")
+  resolved = graph_rewrite(big, traced, name="resolve linear call")
   assert len(resolved.src) >= 1
-  # The nested precompile body is shared, so no (body, args) invocation is re-resolved.
-  assert _RESOLVE_MISS_COUNTS, "expected nested precompile CALLs to be resolved"
-  assert max(_RESOLVE_MISS_COUNTS.values()) <= 1, \
-    f"precompile body re-resolved per composite: {_RESOLVE_MISS_COUNTS}"
+  # The nested precompile bodies are converted once per unique body, not per composite.
+  assert _BASE_CONVERT_COUNTS, "expected nested precompile bodies to hit the body-keyed base"
+  assert max(_BASE_CONVERT_COUNTS.values()) <= 1, \
+    f"precompile body re-converted per composite: {_BASE_CONVERT_COUNTS}"
