@@ -33,7 +33,10 @@
         32,
         128
       ],
+      "ordinary_reason": "construction not expressible as one ordinary program: split into [3] programs (reduction + dependent epilogue)",
+      "ordinary_verdict": "CONSTRUCTION_GAP",
       "reason": "construction not expressible as one ordinary program: split into [3] programs (reduction + dependent epilogue)",
+      "scope": "ordinary arms only. ORDINARY_PASS does NOT clear custom-kernel-consumer or opaque-producer blockers; this population has no assessed opaque production producer (absence means not assessed, not plain).",
       "verdict": "CONSTRUCTION_GAP"
     },
     "llama_q8_pack": {
@@ -59,8 +62,11 @@
         1,
         4096
       ],
+      "ordinary_reason": "one replayable ordinary program; no custom-program boundary, no CONTIGUOUS",
+      "ordinary_verdict": "ORDINARY_PASS",
       "reason": "one replayable ordinary program; no custom-program boundary, no CONTIGUOUS",
-      "verdict": "PASS"
+      "scope": "ordinary arms only. ORDINARY_PASS does NOT clear custom-kernel-consumer or opaque-producer blockers; this population has no assessed opaque production producer (absence means not assessed, not plain).",
+      "verdict": "ORDINARY_PASS"
     },
     "norms": {
       "baseline": {
@@ -87,7 +93,10 @@
         1,
         4096
       ],
+      "ordinary_reason": "construction not expressible as one ordinary program: split into [2] programs (reduction + dependent epilogue)",
+      "ordinary_verdict": "CONSTRUCTION_GAP",
       "reason": "construction not expressible as one ordinary program: split into [2] programs (reduction + dependent epilogue)",
+      "scope": "ordinary arms only. ORDINARY_PASS does NOT clear custom-kernel-consumer or opaque-producer blockers; this population has no assessed opaque production producer (absence means not assessed, not plain).",
       "verdict": "CONSTRUCTION_GAP"
     },
     "other": {
@@ -97,6 +106,7 @@
       },
       "contract_shape": [],
       "reason": "unclassified fallback population; no construction defined",
+      "scope": "no construction defined; this population is the ledger's unclassified fallback",
       "verdict": "NO_CONSTRUCTION"
     },
     "quant_core": {
@@ -122,8 +132,11 @@
         1,
         4096
       ],
+      "ordinary_reason": "one replayable ordinary program; no custom-program boundary, no CONTIGUOUS",
+      "ordinary_verdict": "ORDINARY_PASS",
       "reason": "one replayable ordinary program; no custom-program boundary, no CONTIGUOUS",
-      "verdict": "PASS"
+      "scope": "ordinary arms only. ORDINARY_PASS does NOT clear custom-kernel-consumer or opaque-producer blockers; this population has no assessed opaque production producer (absence means not assessed, not plain).",
+      "verdict": "ORDINARY_PASS"
     },
     "residual_cast_contiguous": {
       "baseline": {
@@ -149,8 +162,23 @@
         1,
         4096
       ],
-      "reason": "one replayable ordinary program; no custom-program boundary, no CONTIGUOUS",
-      "verdict": "PASS"
+      "opaque_producer": {
+        "contains_contiguous": false,
+        "contains_custom_kernel": false,
+        "program_count": 3,
+        "programs": [
+          "test",
+          "test",
+          "test"
+        ]
+      },
+      "opaque_producer_reason": "construction not expressible as one ordinary program: split into [3] programs (precompiled FUNCTION producer boundary)",
+      "opaque_producer_verdict": "CONSTRUCTION_GAP",
+      "ordinary_reason": "one replayable ordinary program; no custom-program boundary, no CONTIGUOUS",
+      "ordinary_verdict": "ORDINARY_PASS",
+      "reason": "ordinary stand-in is boundary-free, but the real production producer (block_output: MS(CONTIGUOUS(GETTUPLE(FUNCTION)))) is not: construction not expressible as one ordinary program: split into [3] programs (precompiled FUNCTION producer boundary)",
+      "scope": "ordinary arms plus an opaque_producer arm using the M4 probe's real block_output producer form. Still does NOT instantiate the custom q4k consumer, so C2/C5-class blockers remain out of scope.",
+      "verdict": "OPAQUE_PRODUCER_GAP"
     },
     "rope_kv": {
       "baseline": {
@@ -175,8 +203,11 @@
         1,
         128
       ],
+      "ordinary_reason": "one replayable ordinary program; no custom-program boundary, no CONTIGUOUS",
+      "ordinary_verdict": "ORDINARY_PASS",
       "reason": "one replayable ordinary program; no custom-program boundary, no CONTIGUOUS",
-      "verdict": "PASS"
+      "scope": "ordinary arms only. ORDINARY_PASS does NOT clear custom-kernel-consumer or opaque-producer blockers; this population has no assessed opaque production producer (absence means not assessed, not plain).",
+      "verdict": "ORDINARY_PASS"
     },
     "vocab_feedback": {
       "baseline": {
@@ -201,9 +232,12 @@
         1,
         1187
       ],
+      "ordinary_reason": "one replayable ordinary program; no custom-program boundary, no CONTIGUOUS",
+      "ordinary_verdict": "ORDINARY_PASS",
       "reason": "one replayable ordinary program; no custom-program boundary, no CONTIGUOUS",
-      "verdict": "PASS"
+      "scope": "ordinary arms only. ORDINARY_PASS does NOT clear custom-kernel-consumer or opaque-producer blockers; this population has no assessed opaque production producer (absence means not assessed, not plain).",
+      "verdict": "ORDINARY_PASS"
     }
   },
-  "schema": "tinygrad.nv_boundary_free_ordinary_uop_gate.v2"
+  "schema": "tinygrad.nv_boundary_free_ordinary_uop_gate.v3"
 }

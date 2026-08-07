@@ -11,9 +11,17 @@ The population keys are the ledger's ``POP_*`` constants
 (``nv_fusion_population_ledger.py``), so a gate ``--out`` joins onto a ledger
 ``--out`` on the population key to produce the capability column mechanically.
 
-Schema: ``tinygrad.nv_boundary_free_ordinary_uop_gate.v2`` (same family as v1;
-the v1 top-level ``{contract, baseline, verdict, reason}`` envelope moved
-per-population).
+SOUNDNESS, one direction only.  ``CONSTRUCTION_GAP`` is a valid LOWER bound: if the
+ordinary stand-in cannot be one program, the real construction cannot either.
+``ORDINARY_PASS`` is NOT an upper bound - it means only that an *ordinary* stand-in for
+the population is boundary-free.  For a population whose production form involves a
+custom kernel or an opaque precompiled producer it does not clear that blocker, because
+the ordinary arms instantiate neither (``contains_custom_kernel`` is false in every
+ordinary arm by construction).  Populations with a known opaque production producer
+therefore also run an ``opaque_producer`` arm; see ``OPAQUE_ARMS``.
+
+Schema: ``tinygrad.nv_boundary_free_ordinary_uop_gate.v3`` (v2 renamed ``PASS`` ->
+``ORDINARY_PASS``, added per-population ``scope`` and the ``opaque_producer`` arm).
 """
 from __future__ import annotations
 
@@ -23,13 +31,18 @@ from typing import Callable
 from tinygrad import Tensor, dtypes, nn
 from tinygrad.uop.ops import Ops
 
+# Reused verbatim from the M4 residual boundary probe: the three production producer
+# forms (block_output / layer0_embedding / plain_buffer) it already discriminates.
+# m4-residual-boundary-fold-probe-record-20260806.md establishes block_output as the
+# real residual producer: MS(CONTIGUOUS(GETTUPLE(FUNCTION(precompile=True)))).
+from extra.llm_research.decode.m4_residual_boundary_fold_probe import _fresh as _producer_form
 from extra.llm_research.decode.nv_fusion_population_ledger import (
   POP_FLASH, POP_NORMS, POP_OTHER, POP_Q8PACK, POP_QUANT, POP_RESIDUAL, POP_ROPE_KV,
   POP_VOCAB, load as load_dag,
 )
 
 DIM = 4096
-SCHEMA = "tinygrad.nv_boundary_free_ordinary_uop_gate.v2"
+SCHEMA = "tinygrad.nv_boundary_free_ordinary_uop_gate.v3"
 
 
 def _programs(out: Tensor) -> list[str]:
@@ -88,6 +101,22 @@ def _q8pack(x: Tensor) -> Tensor:
   return (x * 127.0).cast(dtypes.int8)
 
 
+def _residual_opaque(x: Tensor) -> Tensor:
+  # Same construction as _residual, but the residual operand is the REAL production
+  # producer instead of a plain realized buffer: the previous block's output across the
+  # @function(precompile=True) boundary.  This is the form the M4 S4 gate blocks on; the
+  # plain-buffer form is the probe's documented control case and folds trivially.
+  return (x.reshape(1, 1, DIM) + _producer_form("block_output").reshape(1, 1, DIM)).contiguous()
+
+
+# Populations whose PRODUCTION producer is an opaque precompiled boundary rather than a
+# plain realized buffer.  Only listed where a record establishes the real chain; absence
+# means "not assessed", not "plain".
+OPAQUE_ARMS: dict[str, Callable[[Tensor], Tensor]] = {
+  POP_RESIDUAL: _residual_opaque,
+}
+
+
 # population -> (construction, contract_shape, realized base shape); None
 # construction means the population has no defined construction.
 CONSTRUCTIONS: dict[str, tuple[Callable[[Tensor], Tensor] | None, list[int], tuple[int, ...]]] = {
@@ -106,17 +135,21 @@ def _contains_op(x: Tensor, op: Ops) -> bool:
   return any(u.op is op for u in x.uop.toposort())
 
 
-def _verdict(rows: dict[str, dict]) -> tuple[str, str]:
+def _verdict(rows: dict[str, dict], cause: str = "") -> tuple[str, str]:
+  """``cause`` names the mechanism forcing a split, when known.  It is NOT inferred: an
+  ordinary reduce-then-consume construction and a precompiled FUNCTION boundary both
+  produce >1 program and must not be reported as the same blocker."""
   any_custom = any(r["contains_custom_kernel"] for r in rows.values())
   any_contig = any(r["contains_contiguous"] for r in rows.values())
   counts = sorted({r["program_count"] for r in rows.values()})
   if counts == [1] and not any_custom and not any_contig:
-    return "PASS", "one replayable ordinary program; no custom-program boundary, no CONTIGUOUS"
+    return "ORDINARY_PASS", "one replayable ordinary program; no custom-program boundary, no CONTIGUOUS"
   blockers = []
   if any_custom: blockers.append("custom-program boundary")
   if any_contig: blockers.append("CONTIGUOUS materialization")
-  if counts != [1]: blockers.append(f"split into {counts} programs (reduction + dependent epilogue)")
-  return "CONSTRUCTION_GAP", "construction not expressible as one ordinary program: " + "; ".join(blockers)
+  if counts != [1]: blockers.append(f"split into {counts} programs")
+  detail = "; ".join(blockers) + (f" ({cause})" if cause else "")
+  return "CONSTRUCTION_GAP", "construction not expressible as one ordinary program: " + detail
 
 
 def run(population: str | None = None, dag: dict | None = None) -> dict:
@@ -142,8 +175,43 @@ def run(population: str | None = None, dag: dict | None = None) -> dict:
     if fxn is None:
       entry["verdict"] = "NO_CONSTRUCTION"
       entry["reason"] = "unclassified fallback population; no construction defined"
+      entry["scope"] = "no construction defined; this population is the ledger's unclassified fallback"
+      populations[pop] = entry
+      continue
+
+    ord_verdict, ord_reason = _verdict(rows, "reduction + dependent epilogue")
+    entry["ordinary_verdict"], entry["ordinary_reason"] = ord_verdict, ord_reason
+
+    opaque = OPAQUE_ARMS.get(pop)
+    if opaque is None:
+      entry["verdict"], entry["reason"] = ord_verdict, ord_reason
+      entry["scope"] = ("ordinary arms only. ORDINARY_PASS does NOT clear custom-kernel-consumer or "
+                        "opaque-producer blockers; this population has no assessed opaque production "
+                        "producer (absence means not assessed, not plain).")
     else:
-      entry["verdict"], entry["reason"] = _verdict(rows)
+      out = opaque(base)
+      programs = _programs(out)
+      op_row = {
+        "programs": programs,
+        "program_count": len(programs),
+        "contains_custom_kernel": _contains_op(out, Ops.CUSTOM),
+        "contains_contiguous": _contains_op(out, Ops.CONTIGUOUS),
+      }
+      entry["opaque_producer"] = op_row
+      op_verdict, op_reason = _verdict({"opaque_producer": op_row}, "precompiled FUNCTION producer boundary")
+      entry["opaque_producer_verdict"], entry["opaque_producer_reason"] = op_verdict, op_reason
+      # The capability answer is the worst arm that ran.
+      if ord_verdict == "ORDINARY_PASS" and op_verdict != "ORDINARY_PASS":
+        entry["verdict"] = "OPAQUE_PRODUCER_GAP"
+        entry["reason"] = ("ordinary stand-in is boundary-free, but the real production producer "
+                           "(block_output: MS(CONTIGUOUS(GETTUPLE(FUNCTION)))) is not: " + op_reason)
+      elif ord_verdict != "ORDINARY_PASS":
+        entry["verdict"], entry["reason"] = ord_verdict, ord_reason
+      else:
+        entry["verdict"], entry["reason"] = ord_verdict, ord_reason
+      entry["scope"] = ("ordinary arms plus an opaque_producer arm using the M4 probe's real "
+                        "block_output producer form. Still does NOT instantiate the custom q4k "
+                        "consumer, so C2/C5-class blockers remain out of scope.")
     populations[pop] = entry
   capture: dict = {"construction_count": len(pops)}
   if dag is not None:

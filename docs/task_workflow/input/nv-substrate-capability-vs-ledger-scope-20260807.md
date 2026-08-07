@@ -173,7 +173,7 @@ blockers: C1 on the boundary-free construction, C6 on the wrapper construction.
 35 fused-O calls. Ledger notes ownership *"remains unproven because the gate already
 failed."* **Status:** OPEN, never isolated.
 
-## 4A. Cross-reference (hand-derived placeholder - superseded by section 5)
+## 4A. Cross-reference (hand-derived - SUPERSEDED by section 8's generated artifact)
 
 **This table is provisional.** It was assembled by reading records, which is exactly the
 hand-derivation section 5 exists to replace. Treat it as the shape of the artifact, not as
@@ -263,3 +263,91 @@ population. The `flash` and `vocab` constructions are the real work; `norms` alr
 - Does not reopen the overlap bucket or reorder the campaign's stated
   overlap-first / fusion-second / host-last sequence.
 - No policy artifact changes. `decode-q4k-epilogue-resadd-route-policy.json` stays CLOSED.
+
+
+## 8. Amendment 2026-08-07 - build item implemented, two corrections
+
+The section 5 build item landed (`3f58c3400`, then the v3 delta below). The generated
+artifact supersedes section 4A, and it corrects this scope twice.
+
+### 8.1 Correction 1 - C1 gates flash as well as norms
+
+The gate returns `CONSTRUCTION_GAP` for **both** norms and flash, with the same mechanism:
+
+| population | programs | cause |
+| --- | ---: | --- |
+| norms | 2 | reduction + dependent epilogue |
+| flash | 3 | reduction + dependent epilogue |
+
+Section 4A listed flash as **unclassified** and speculated it was schedule-blocked because
+the single-stage NO-GO was resource/underfill (+82.505 us). Both are true: the custom-kernel
+route lost on resources *and* the ordinary route is not expressible.
+
+```text
+norms  495.330
+flash  163.029
+     = 658.359 us  capability-blocked by C1
+fusion/dataflow bucket 662.128 - remainder 3.769
+```
+
+**99.4% of the fusion bucket is gated by one missing primitive.** The workstream collapses
+to a single build item; C1 is not merely the largest item, it is very nearly the only one.
+
+### 8.2 Correction 2 - this scope under-specified the constructions (v2 false PASS)
+
+v2 reported `residual_cast_contiguous: PASS`, contradicting the S4 GPU gate, which crashes
+the residual fold at render one day earlier. Both statements were in the repo simultaneously.
+
+Cause: this scope said "one construction per population" and never required the construction
+to instantiate the **real** producer or consumer. `_residual` used
+`Tensor.randn(...).realize()` - a plain realized buffer, which
+`m4-residual-boundary-fold-probe-record-20260806.md` documents as the trivially-folding
+*control* case. The blocked form is `block_output`:
+`MS(CONTIGUOUS(GETTUPLE(FUNCTION(precompile=True))))`. The gate was testing the control.
+
+This is a scope defect, not an implementation defect. The v3 delta:
+
+1. **`PASS` -> `ORDINARY_PASS`.** The gate is sound in one direction only.
+   `CONSTRUCTION_GAP` is a valid lower bound; a pass is not an upper bound, because no
+   ordinary arm instantiates a custom kernel (`contains_custom_kernel` false throughout).
+2. **Per-population `scope` field**, stating what the verdict covers. Populations with no
+   opaque arm state "absence means not assessed, not plain."
+3. **`opaque_producer` arm**, reusing the M4 probe's `_fresh("block_output")` producer form
+   rather than reimplementing it. Populations opt in via `OPAQUE_ARMS`; only `POP_RESIDUAL`
+   is listed, because only it has a record establishing the real chain.
+4. **Split-cause attribution.** A lowered reduce and a precompiled FUNCTION boundary both
+   raise the program count; reporting both as "reduction + dependent epilogue" would merge
+   C1 with the M4 blocker. The cause is now passed in, never inferred.
+
+Result: `residual_cast_contiguous: OPAQUE_PRODUCER_GAP` - ordinary arm boundary-free,
+production producer splits into 3 programs at the precompiled boundary. **The gate now
+independently reproduces on CPU what S4 found on GPU**, which is the self-validation the v2
+artifact lacked.
+
+### 8.3 Generated capability column (supersedes 4A)
+
+`docs/task_workflow/output/nv-boundary-free-ordinary-uop-gate-20260807.json`, schema
+`tinygrad.nv_boundary_free_ordinary_uop_gate.v3`, DAG digest `49838b8a...` (875/4080).
+
+| population | verdict | blocker |
+| --- | --- | --- |
+| norms | CONSTRUCTION_GAP | C1 |
+| flash | CONSTRUCTION_GAP | C1 |
+| residual_cast_contiguous | OPAQUE_PRODUCER_GAP | C2/C3/C5 |
+| quant_core | ORDINARY_PASS | **not meaningful** - the construction is a dense fp16 matmul, not the Q4_K packed GEMV; the real population *is* a custom kernel |
+| vocab_feedback | ORDINARY_PASS | ordinary arms only |
+| rope_kv | ORDINARY_PASS | ordinary arms only |
+| llama_q8_pack | ORDINARY_PASS | attribution credit, not a tinygrad population |
+| other | NO_CONSTRUCTION | ledger fallback |
+
+### 8.4 Still out of scope after v3
+
+The opaque arm closes the *producer* side. It does not instantiate the custom q4k
+**consumer**, so C2 (opaque consumer blocks in-core epilogue) and C5 (weakint SPECIAL
+render) remain undetectable by this gate. `quant_core`'s pass is the clearest evidence of
+that limit and is annotated as such above. Closing it means an arm that builds the real
+`q4k_g3_lanemap_gemv_*` program - a larger delta, and not authorized here.
+
+Test coverage: `test/unit/test_nv_boundary_free_ordinary_uop_gate.py`, 8 tests, including a
+named regression test for the v2 false PASS. 62 passed across gate / ledger / M4 probe /
+M4 landing / M5 typed boundary on this tree.
