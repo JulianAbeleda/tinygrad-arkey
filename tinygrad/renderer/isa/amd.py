@@ -1092,7 +1092,7 @@ def isel_packed_fragment(ctx:IselContext,x:UOp, base:int|None=None) -> UOp:
     if not isinstance(x.arg,tuple) or len(x.arg) not in {3,4}: raise ValueError("invalid opaque gfx1100 packed fragment")
     abi,role,tile,*block=x.arg; hd_block=block[0] if block else 0
     if len(x.src)!=3: raise ValueError("invalid opaque gfx1100 packed fragment")
-    owner,lane,col=x.src; rng=None
+    owner,lane,col=x.src; rng=None; wave_id=None
   if abi not in {"amd_gfx1100_packed_fragment_v1","amd_gfx1100_packed_fragment_hd128_v1","amd_gfx1100_packed_fragment_hd128_loop_v1"} or \
      role not in {"Q","K","V"} or tile not in {0,1} or not isinstance(hd_block,int) or not 0 <= hd_block < 8:
     raise ValueError("invalid opaque gfx1100 packed fragment")
