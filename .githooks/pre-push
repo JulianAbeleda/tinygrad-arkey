@@ -1,0 +1,27 @@
+#!/bin/sh
+# Working-agreement Rule 1 tripwire: the fast regression-critical suite must be
+# green (DEV=CPU) before anything is pushed. Branches that do not carry the
+# tripwire tests skip the run; the full default suite remains a pre-gate
+# requirement, not a per-push one (agreement sections 3.1 and 5.2).
+# Bypass with: git push --no-verify
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+tripwire=""
+for f in \
+  test/unit/test_attention_semantic.py \
+  test/unit/test_nested_composite_reduce.py \
+  test/unit/test_shared_q8_attention_landing.py \
+  test/unit/test_m4_resadd_landing.py \
+  test/unit/test_target_capability_facts.py; do
+  [ -f "$f" ] && tripwire="$tripwire $f"
+done
+if [ -z "$tripwire" ]; then
+  echo "pre-push: no tripwire tests on this branch; skipping"
+  exit 0
+fi
+
+DEV=CPU python3 -m pytest $tripwire -q --no-header > /tmp/arkey-tripwire.log 2>&1 || {
+  echo "pre-push: tripwire suite FAILED (working agreement Rule 1)" >&2
+  tail -30 /tmp/arkey-tripwire.log >&2
+  exit 1
+}
