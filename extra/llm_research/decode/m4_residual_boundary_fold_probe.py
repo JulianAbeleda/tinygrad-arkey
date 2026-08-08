@@ -178,8 +178,11 @@ def _schedule(producer: Tensor, words: Tensor, xv: Tensor, folded: bool, request
           and getattr(getattr(u.src[0], "arg", None), "name", None) == EPI_RESADD]
   residual_buf = None
   if gemv:
-    bufs = [s.buf_uop for s in gemv[0].src[1:]]
-    if len(bufs) >= 4: residual_buf = {"shape": list(bufs[3].shape), "dtype": str(bufs[3].dtype)}
+    args = gemv[0].src[1:]
+    if len(args) >= 4:
+      # Report the residual slot's view (what the GEMV consumes), not the storage buffer:
+      # after the transport elision the slot binds the producer's storage through a view.
+      residual_buf = {"shape": list(args[3].shape), "dtype": str(args[3].dtype)}
   return {"verdict": verdict, "names": names, "copies": _copy_calls(linear),
           "gemv_residual_buf": residual_buf}
 

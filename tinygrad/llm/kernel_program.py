@@ -345,6 +345,14 @@ def _validated_residual_view(uop: UOp, request: ResidualViewRequest, program: Ke
   # (d) producer: ordinary producer with buffer identity (or declared typed output)
   base = chain.base
   if not _residual_producer_identity(base): return None, "producer has no buffer/precompiled-output identity"
+  # The block-output transport contiguous is identity by construction (the producer's own
+  # .contiguous() spelling; the precompile-output identity contract guarantees row-major).
+  # Fold through it so the precompile binds the composite output buffer directly instead of
+  # materializing the transport as a boundary copy kernel in every enclosing body.  A
+  # CONTIGUOUS over a plain buffer stays (that transport is a real movement for strided
+  # buffers and keeps the generic materialization).
+  if base.op is Ops.CONTIGUOUS and (base.src[0].has_precompiled_output_identity() or base.src[0].op is Ops.AFTER):
+    base = base.src[0]
   return base, "ok"
 
 

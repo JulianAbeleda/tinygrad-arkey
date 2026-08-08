@@ -40,11 +40,10 @@ def test_extended_validator_folds_the_real_residual_chain():
 
 def test_fold_removes_copy_class_with_zero_materialization():
   row = evaluate_producer_form("block_output", _block_output_producer())
-  # Without the ABI the generic flat-buffer boundary materializes the E_32_32_4_86a2 copy.
-  assert len(row["without_abi"]["copies"]) == 1
-  assert row["without_abi"]["copies"][0]["shape"] == [4096]
-  assert row["without_abi"]["copies"][0]["dtype"] == "dtypes.float"
-  # With the extended fold the copy is gone and the GEMV binds the producer's flat buffer.
+  # The exact precompiled-output identity preserves the block-output chain through the
+  # transport contiguous, so the generic ABI is already copy-free for this producer form.
+  assert row["without_abi"]["copies"] == []
+  # With the extended fold the GEMV binds the producer's flat buffer.
   assert row["with_fold"]["copies"] == []
   assert row["with_fold"]["gemv_residual_buf"] == {"shape": [4096], "dtype": "dtypes.float"}
   assert row["validator"]["fold"] is True
@@ -66,6 +65,10 @@ def test_layer0_embedding_producer_fails_closed():
   assert "producer has no buffer/precompiled-output identity" in reason
   row = evaluate_producer_form("layer0_embedding", producer)
   assert row["validator"]["fold"] is False
+  # Fail-closed ABI: the layer-0 chain (CAST/REDUCE, no identity) keeps its materializing
+  # kernel before the GEMV instead of folding to a view of the producer.
+  assert row["without_abi"]["names"] == ["test", EPI_RESADD]
+  assert EPI_RESADD in row["without_abi"]["names"]
 
 
 def test_plain_buffer_producer_folds():

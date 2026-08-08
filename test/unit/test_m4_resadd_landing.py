@@ -48,7 +48,7 @@ def _schedule(opt_in: bool, producer=None, request: ResidualViewRequest | None =
   inside execute_promoted_program (_fold_residual_input_views); without it, the generic
   flat-buffer ABI materializes the boundary copy."""
   from tinygrad.llm.kernel_program import _validated_residual_view
-  producer = producer or _block_output_producer()
+  producer = producer if producer is not None else _block_output_producer()
   resid = residual_chain(producer)
   program = _gemv_program(opt_in)
   verdict = {"fold": False, "reason": "no residual request supplied"}
@@ -63,8 +63,11 @@ def _schedule(opt_in: bool, producer=None, request: ResidualViewRequest | None =
           and getattr(getattr(u.src[0], "arg", None), "name", None) == EPI_RESADD]
   residual_buf = None
   if gemv:
-    bufs = [s.buf_uop for s in gemv[0].src[1:]]
-    if len(bufs) >= 4: residual_buf = {"shape": list(bufs[3].shape), "dtype": str(bufs[3].dtype)}
+    args = gemv[0].src[1:]
+    if len(args) >= 4:
+      # The residual slot's view (what the GEMV consumes); the underlying storage buffer
+      # may be the producer's byte allocation after the transport elision.
+      residual_buf = {"shape": list(args[3].shape), "dtype": str(args[3].dtype)}
   return {"verdict": verdict, "copies": _copy_calls(linear), "gemv_residual_buf": residual_buf,
           "names": [getattr(getattr(u.src[0], "arg", None), "name", None)
                     for u in linear.toposort() if u.op is Ops.CALL]}
@@ -99,7 +102,8 @@ def test_validator_fires_on_real_block_output_chain():
   view, reason = _validated_residual_view(resid.uop, ResidualViewRequest(
     slot=2, dtype=dtypes.float32, flat_shape=(N,), route_role="attn_qo"), _gemv_program())
   assert view is not None and reason == "ok"
-  assert view.op is Ops.CONTIGUOUS
+  # The transport contiguous folds through to the precompiled block-output base.
+  assert view.op is Ops.GETTUPLE
 
 
 def test_validator_fails_closed_on_wrong_opt_in():
@@ -134,9 +138,23 @@ def test_fold_removes_the_boundary_copy_with_zero_materialization():
   assert with_fold["gemv_residual_buf"] == {"shape": [N], "dtype": "dtypes.float"}
 
 
-def test_without_residual_request_the_copy_stays():
+def test_fail_closed_without_identity_keeps_the_copy():
+  # The generic flat-buffer ABI keeps its materializing kernel for a residual chain without
+  # precompiled-output identity (the layer-0 embedding producer: CAST/REDUCE base). The
+  # precompiled block-output transport is elided by the exact-output contract, so this lock
+  # uses the layer-0 form and asserts the materializing kernel, not the E_32_32_4 copy class.
+  from extra.llm_research.decode.m4_residual_boundary_fold_probe import _layer0_producer
+  without = _schedule(False, producer=_layer0_producer())
+  assert without["verdict"]["fold"] is False
+  assert without["names"] == ["test", EPI_RESADD]
+  assert EPI_RESADD in without["names"]
+
+
+def test_precompiled_residual_transport_is_elided_without_request():
+  # An exact precompiled-output chain preserves the invocation instead of inserting the
+  # redundant contiguous adapter, so the generic ABI is already copy-free for it.
   without = _schedule(False)
-  assert len(without["copies"]) == 1
+  assert len(without["copies"]) == 0
   assert EPI_RESADD in without["names"]
 
 

@@ -522,6 +522,119 @@ def _drop_dead_schedule_items(linear:UOp, call_args:tuple[UOp, ...]) -> UOp:
     print(f"TRACE dead-drop items={len(linear.src)} live={len(live)} dropped={dict(Counter(dropped))}", flush=True)
   return linear.replace(src=tuple(it for i, it in enumerate(linear.src) if i in live))
 
+_elide_transport_unwrap = (Ops.SLICE, Ops.RESHAPE, Ops.MEMORY_SEMANTIC, Ops.CAST, Ops.CONTIGUOUS,
+                           Ops.INDEX, Ops.SHRINK, Ops.PERMUTE, Ops.EXPAND, Ops.PAD, Ops.MULTI, Ops.BIND)
+_elide_transport_body_cache: dict[int, bool] = {}
+
+def _elide_residual_transports(linear:UOp) -> UOp:
+  """Drop scheduler-materialized identity transports of residual_add kernel outputs.
+
+  The epi_resadd attn GEMV absorbs h = x + attn_out in-kernel, so its output is an
+  opaque kernel output; the scheduler still materializes an identity copy of it
+  (the E_32_32_4_86a2... block_output_contiguous transport) for the consumers
+  (ffn_norm reduce, epilogue, block-output add).  A transport whose producer is an
+  epi_resadd GEMV, or whose every consumer is one, is a pure elementwise copy of a
+  dense kernel output: redirecting the consumers to the producer's buffer and
+  dropping the copy is value-identical.  The final block-output transport feeding
+  the final norm, and every baseline copy class, do not match and stay untouched.
+  """
+  if linear.op is not Ops.LINEAR or len(linear.src) < 2: return linear
+  unwrap = _elide_transport_unwrap
+  def buf_id(a:UOp) -> int|None:
+    while a.op in unwrap: a = a.src[0]
+    return id(a) if a.op is Ops.BUFFER else None
+  items = linear.src
+  producers: dict[int, int] = {}
+  for i, it in enumerate(items):
+    if len(it.src) >= 2 and (b := buf_id(it.src[1])) is not None: producers[b] = i
+  consumers: dict[int, list[int]] = {}
+  for i, it in enumerate(items):
+    f = it.src[0]
+    for s in range(1, len(it.src)):
+      if s == 1 and f.op in (Ops.SINK, Ops.COPY): continue  # own write slot, not a read
+      if (b := buf_id(it.src[s])) is not None: consumers.setdefault(b, []).append(i)
+  def resadd_item(i:int) -> bool:
+    return getattr(items[i].src[0].arg, "name", "").startswith("q4k_g3_lanemap_gemv_epi_resadd_")
+  def is_identity_transport(f:UOp, out:UOp, inn:UOp) -> bool:
+    # SINK bodies are interned per unique key, so the verdict is cached per body.
+    if (v := _elide_transport_body_cache.get(id(f))) is not None: return v
+    v = False
+    ts = list(f.toposort())
+    stores = [u for u in ts if u.op is Ops.STORE]
+    ranges = [u for u in ts if u.op is Ops.RANGE]
+    # One scalar STORE in one full-extent loop over the buffer, with no control flow:
+    # the elementwise copy covers the whole output, so redirecting consumers to the
+    # producer's buffer is value-identical.
+    if len(stores) == 1 and len(ranges) == 1 and \
+       not any(u.op in (Ops.IF, Ops.ENDIF, Ops.UNROLL) for u in ts):
+      st = stores[0]
+      d, val = st.src[0], st.src[1]
+      ok = True
+      while d.op in unwrap:
+        if d.op is Ops.CAST and d.dtype is not d.src[0].dtype: ok = False; break
+        d = d.src[0]
+      while ok and val.op in unwrap:
+        if val.op is Ops.CAST and val.dtype is not val.src[0].dtype: ok = False; break
+        val = val.src[0]
+      rng = ranges[0].src[0]
+      v = ok and d.op is Ops.PARAM and d.arg.slot == 0 and val.op is Ops.PARAM and val.arg.slot == 1 \
+          and st.src[0].dtype.base is out.dtype and st.src[1].dtype.base is inn.dtype \
+          and rng.op is Ops.CONST and rng.arg == out.numel()
+    if len(_elide_transport_body_cache) < _RESOLVE_PRECOMPILE_BASE_LIMIT:
+      _elide_transport_body_cache[id(f)] = v
+    return v
+  redirect: dict[int, UOp] = {}
+  elide: set[int] = set()
+  for i, it in enumerate(items):
+    f = it.src[0]
+    if f.op is not Ops.SINK or len(it.src) != 3: continue
+    out_id, in_id = buf_id(it.src[1]), buf_id(it.src[2])
+    if out_id is None or in_id is None or out_id == in_id: continue
+    if tuple(it.src[1].shape) != tuple(it.src[2].shape) or it.src[1].dtype is not it.src[2].dtype: continue
+    if not is_identity_transport(f, it.src[1], it.src[2]): continue
+    p = producers.get(in_id)
+    producer_resadd = p is not None and resadd_item(p)
+    cons = [j for j in consumers.get(out_id, []) if j != i]
+    cons_resadd = bool(cons) and all(resadd_item(j) for j in cons)
+    if producer_resadd or cons_resadd:
+      elide.add(i)
+      redirect[out_id] = it.src[2]
+  if not elide: return linear
+  # Chase chained transports (an elided transport fed by another elided transport).
+  for k, v in redirect.items():
+    while (bid := buf_id(v)) in redirect: v = redirect[bid]
+    redirect[k] = v
+  def rebind(a:UOp) -> UOp:
+    # Only pure unwrap chains over a redirected buffer are rebuilt; anything else
+    # (AFTER, composite wrappers) stays untouched and fails the exhaustiveness check.
+    if (b := buf_id(a)) is None or b not in redirect: return a
+    if a.op is Ops.BUFFER: return redirect[b]
+    ns = tuple(rebind(s) for s in a.src)
+    return a if all(n is s for n, s in zip(ns, a.src)) else a.replace(src=ns)
+  new_items = []
+  for i, it in enumerate(items):
+    if i in elide: continue
+    new_args = tuple(rebind(a) for a in it.src[1:])
+    if any(n is not a for n, a in zip(new_args, it.src[1:])): it = it.replace(src=(it.src[0], *new_args))
+    new_items.append(it)
+  # Fail-safe: any remaining reader of an elided buffer (through any subgraph node,
+  # e.g. the second branch of a MULTI) means an unmodelled chain; keep the original
+  # schedule (elision is a pure optimization, never a rewrite).
+  for it in new_items:
+    for a in it.src[1:]:
+      seen: set[int] = set()
+      stack = [a]
+      while stack:
+        u = stack.pop()
+        if id(u) in seen: continue
+        seen.add(id(u))
+        if u.op is Ops.BUFFER and id(u) in redirect: return linear
+        if u.op in (Ops.PARAM, Ops.CONST, Ops.DEVICE): continue
+        stack.extend(u.src)
+  if getenv("M4_RESOLVE_TRACE", 0):
+    print(f"TRACE elide-transports dropped={len(elide)} kept={len(new_items)}", flush=True)
+  return linear.replace(src=tuple(new_items))
+
 pm_resolve_linear_call = PatternMatcher([
   # call LINEAR is resolved here
   (UPat(Ops.CALL, src=(UPat(Ops.LINEAR),), name="linear_call", allow_any_len=True), _resolve_linear_call),
@@ -576,6 +689,7 @@ def create_linear_with_vars(big_sink:UOp) -> tuple[UOp, dict[str, int]]:
   # stays linear in the final schedule size.
   linear = graph_rewrite(linear_call, pm_resolve_linear_call, name="resolve linear call", walk=True)
   linear = _drop_dead_schedule_items(linear, linear_call.src[1:])
+  linear = _elide_residual_transports(linear)
   _t2 = time.perf_counter()
   if _trace:
     with open("/proc/self/status") as _f:
