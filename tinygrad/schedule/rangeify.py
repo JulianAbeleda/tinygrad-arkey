@@ -135,7 +135,7 @@ def lower_attention_semantic(att:UOp) -> UOp:
         input_specs=(CompositeInputSpec("logical", (0, 1, 3, 4), primary_repeated=True,
                                         lane_axis=4, lane_group=hd if state_combine == "online_softmax_state" else 1),),
         tile_carrier=tile_carrier,
-        slot_shapes=((b, h, q_len), (b, h, q_len), (b, h, q_len, hd)),
+        slot_shapes=((b, h, q_len), (b, h, q_len), (b, h, q_len, hd)) if state_combine == "online_softmax_state" else (),
         lane_shapes=((), (), (hd,)) if state_combine == "online_softmax_state" else (), attention_grid=grid if grid_shape else None,
         attention_causal=(att.arg.causal or context_causal) if grid_shape else False,
         attention_context=att.arg.attention_context if grid_shape else None)
@@ -160,11 +160,11 @@ def lower_attention_semantic(att:UOp) -> UOp:
         # kernel root or survive to spec_program.
         out = UOp(Ops.DEFERRED_REDUCE_SLOT, att.arg.qk_dtype, (red,), DeferredReduceSlot(2, normalize_by=1))
         expected = b*h*q_len*hd
-        if out.shape is None or prod(out.shape) != expected: return None
+        if out.shape is None or prod(out.shape) != expected: return att.src[0]
         return out.reshape(b, h, q_len, hd).cast(att.arg.output_dtype)
       else:
-        acc = Tensor(red.composite_reduce_slot(2, dtype=att.arg.qk_dtype))
-        den = Tensor(red.composite_reduce_slot(1, dtype=att.arg.qk_dtype))
+        acc = Tensor(UOp(Ops.REDUCE_SLOT, att.arg.qk_dtype, (red,), 2))
+        den = Tensor(UOp(Ops.REDUCE_SLOT, att.arg.qk_dtype, (red,), 1))
       # Both state and legacy composite reducers carry the accumulator with
       # an explicit logical Hd axis while m/l remain scalar per query.  Use
       # the shape-aware helper so division never relies on left-aligned
@@ -174,7 +174,7 @@ def lower_attention_semantic(att:UOp) -> UOp:
       out = normalize_online_softmax_state(acc, den)
       expected = b*h*q_len*hd
       if out.shape is None or prod(out.shape) != expected:
-        return None
+        return att.src[0]
       return out.reshape(b, h, q_len, hd).cast(att.arg.output_dtype).uop
   return att.src[0]
 
