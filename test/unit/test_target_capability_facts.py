@@ -8,18 +8,22 @@ constructing the real `HIPRenderer`/`AMDLLVMRenderer` class and reading its decl
 that real renderer through the existing `device_facts` probe with a faked `Device[...]` lookup -- never by
 executing an AMD kernel.
 """
+import sys
 from types import SimpleNamespace
+
+import pytest
 
 from tinygrad.helpers import Target
 from tinygrad.renderer.cstyle import ClangRenderer, HIPRenderer, MetalRenderer
 from tinygrad.renderer.cuda import CUDARenderer
 from tinygrad.codegen.late.warp_reduce import WARP_SHFL_XOR_TAG  # noqa: F401  (sanity: TG1 tag still lives here)
 from tinygrad.llm.device_facts import _tinygrad_target_probe
-from tinygrad.runtime.graph.metal import METAL_ICB_OFFSET_MAX
 
 
 def _amd(arch="gfx1100"): return HIPRenderer(Target.parse(f"AMD:HIP:{arch}"))
-def _metal(): return MetalRenderer(Target.parse("METAL:METAL:Apple9"))
+def _metal():
+  if sys.platform != "darwin": pytest.skip("MetalRenderer construction imports the macOS objc runtime")
+  return MetalRenderer(Target.parse("METAL:METAL:Apple9"))
 def _cpu(): return ClangRenderer(Target.parse("CPU:CLANG:x86_64,znver2"))
 
 
@@ -113,7 +117,9 @@ def test_metal_wave_size_flows_through_the_probe(monkeypatch):
 
 # ---- Fact 3: max_indirect_buffer_offset, reusing METAL_ICB_OFFSET_MAX, not restating the literal -----------
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="Metal runtime constant is only importable on macOS")
 def test_metal_icb_offset_limit_equals_the_existing_constant():
+  from tinygrad.runtime.graph.metal import METAL_ICB_OFFSET_MAX
   assert _metal().max_indirect_buffer_offset == METAL_ICB_OFFSET_MAX == 0xFFFFFFFF
 
 
