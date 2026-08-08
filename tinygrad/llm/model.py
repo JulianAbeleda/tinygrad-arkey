@@ -47,7 +47,8 @@ from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OU
                                            runtime_persistent, runtime_scratch)
 from tinygrad.llm.model_route_plan import (build_model_route_plan, decode_norm_fusion_promoted,
   decode_q4k_epilogue_fusion_promoted, decode_q4k_epilogue_resadd_promoted, decode_q4k_w1w3_fusion_promoted,
-  decode_kv_store_fusion_promoted, decode_rmsnorm_native_lowering_promoted, decode_reduce_output_rmsnorm_promoted)
+  decode_kv_store_fusion_promoted, decode_rmsnorm_native_lowering_promoted, decode_reduce_output_rmsnorm_promoted,
+  decode_shared_q8_attention_promoted)
 from tinygrad.llm.prefill_candidate_runtime import decode_prefill_graph_candidate_set, automatic_promoted_prefill_graph_policy
 from tinygrad.llm.physical_memory_ledger import AllocationOwner, bind_allocation_owner
 from tinygrad.uop.ops import Ops, resolve
@@ -1616,6 +1617,14 @@ class Transformer:
     _q4k_resadd_promoted = decode_q4k_epilogue_resadd_promoted((_norm_cap.backend, _norm_cap.architecture))
     model._decode_q4k_epilogue_resadd_promoted = _q4k_resadd_promoted
     for _b in model.blk: _b._decode_q4k_epilogue_resadd_promoted = _q4k_resadd_promoted
+    # L1 GEMV substrate: decode shared-Q8 attention group. CLOSED default
+    # (decode-shared-q8-attention-route-policy.json, empty promoted_targets until the
+    # section-6 full gate passes, nv-gemv-substrate-landing-scope-20260808.md). Same
+    # resolve-once pattern as the M4 gate; the loader installs the booked max17
+    # cooperative lease (blocks 1-12 and 14-18) only when the record promotes NV sm_120.
+    _shared_q8_promoted = decode_shared_q8_attention_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_shared_q8_attention_promoted = _shared_q8_promoted
+    for _b in model.blk: _b._decode_shared_q8_attention_promoted = _shared_q8_promoted
     # Fused w1+w3 (gate/up) decode GEMV gate. CLOSED default (decode-q4k-w1w3-fusion-route-policy.json,
     # NV sm_120 promoted, q4k-w1w3-fused-qv-implementation-record-20260803.md). Same resolve-once
     # pattern as the M4 gate; the fused call additionally requires BOTH ffn_gate and ffn_up to be
@@ -1699,6 +1708,27 @@ class Transformer:
       # modules retain their original paths/state ownership.
       attachments = attach_program_identity_metadata(model, model_facts.tensors, primitive_linears=primitive_linears, module_at=_module_at)
       model._program_identity_linears = [linear for _path, linear in attachments]
+      # L1 GEMV substrate lease install: when the record promotes NV sm_120, install the
+      # booked max17 cooperative lease (blocks 1-12 and 14-18; block 0 embedding boundary and
+      # block 13 precision boundary stay ordinary, tail expansion NO-GO) exactly like the
+      # qualification harness does. The admission is a trace-time opt-in:
+      # shared_q8_attention_call revalidates the real Q4/Q4/{Q4,Q6} tuple and REDUCE_OUTPUT
+      # norm marker, returning None to the ordinary primitives on any miss.
+      if model._decode_shared_q8_attention_promoted:
+        _SHARED_Q8_LEASE = tuple(range(1, 13)) + tuple(range(14, 19))
+        for _idx in _SHARED_Q8_LEASE:
+          if _idx >= len(model.blk): break
+          _b = model.blk[_idx]
+          _norm = getattr(_b, "attn_norm", None)
+          if _norm is None or getattr(_norm, "weight", None) is None: continue
+          _b._shared_q8_attention_admission = SharedQ8AttentionAdmission(_idx, cooperative_q4=True)
+          _b._decode_reduce_output_attn_rmsnorm_promoted = True
+          try:
+            _b._shared_q8_attention_norm_weight = Tensor.empty(4096, dtype=dtypes.float16,
+              device=_norm.weight.device).assign(_norm.weight.cast(dtypes.float16).contiguous()).realize()
+          except Exception:
+            # A failed norm copy declines the fused provider for that block (legacy graph).
+            _b._shared_q8_attention_norm_weight = None
     if _runtime_inventory is not None:
       attach_selected_prefill_inventory(model, _runtime_inventory, _runtime_policy, _device_facts,
                                         direct_packed_policy=direct_packed_prefill_policy(config.n_heads, config.n_kv_heads))

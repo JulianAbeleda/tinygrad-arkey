@@ -1,0 +1,6 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_shared_q8_attention",
+  "description": "Decode shared-Q8 attention group promotion record (nv-gemv-substrate-landing-scope-20260808.md). The llama MMVQ package - Q8_1 packed activation provider + DP4A + four-warp per-row ownership - replaces the three ordinary Q4_K/Q6_K attention projections on the booked max17 lease (blocks 1-12 and 14-18; block 0 embedding boundary and block 13 precision boundary stay ordinary, blocks 19-35 tail expansion NO-GO). Isolated included-cost re-verified at HEAD fb522cd17: Q4 cooperative -56.28 us/replay (-45.6%), Q6 flat four-warp -0.81 to -0.94 us/replay. CLOSED default: promotes nothing until the section-6 full gate (wall vs M2-on baseline, census at the max17 oracle, semantic contract, pins, pg3 legacy sha) passes. The Q6 direct-output lease and FFN-down arms stay closed.",
+  "promoted_targets": []
+}

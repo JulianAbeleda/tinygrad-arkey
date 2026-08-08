@@ -213,6 +213,27 @@ def decode_q4k_epilogue_resadd_promoted(target:Target) -> bool:
   from the combined M4 record so the ffn_down prelude and fp16_cast stay closed)."""
   return target in _DECODE_Q4K_EPILOGUE_RESADD_PROMOTED_TARGETS
 
+def load_decode_shared_q8_attention_promotion(path:str) -> frozenset[Target]:
+  """Read the decode shared-Q8 attention group promotion record (boltbeam.route_policy.v1,
+  same schema family as `load_decode_q4k_epilogue_resadd_promotion`). CLOSED default: the
+  cooperative Q8_1 + DP4A four-warp attention lease is the GEMV substrate half of the old
+  rejected Attention-O composition, and gains `NV sm_120` ONLY after the section-6 full gate
+  passes (nv-gemv-substrate-landing-scope-20260808.md). A document without `promoted_targets`
+  -- or with an empty list -- promotes nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_SHARED_Q8_ATTENTION_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-shared-q8-attention-route-policy.json"
+_DECODE_SHARED_Q8_ATTENTION_PROMOTED_TARGETS: frozenset[Target] = load_decode_shared_q8_attention_promotion(_DECODE_SHARED_Q8_ATTENTION_PROMOTION_RECORD)
+
+def decode_shared_q8_attention_promoted(target:Target) -> bool:
+  """Policy authority for the decode shared-Q8 attention group lease (closed default, see the loader above)."""
+  return target in _DECODE_SHARED_Q8_ATTENTION_PROMOTED_TARGETS
+
 def load_decode_q4k_w1w3_fusion_promotion(path:str) -> frozenset[Target]:
   """Read the w1+w3 fused gate/up decode GEMV promotion record (boltbeam.route_policy.v1, same schema
   family as `load_decode_q4k_epilogue_fusion_promotion`). CLOSED default; deliberately a SEPARATE record
