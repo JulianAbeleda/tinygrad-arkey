@@ -148,6 +148,7 @@ pm_bind_resolved_call_ownership = PatternMatcher([
 _resolve_precompile_base: dict[bytes, UOp] = {}
 _resolve_precompile_body_key: dict[UOp, bytes] = {}
 _RESOLVE_PRECOMPILE_BASE_LIMIT = 4096
+_sink_io_cache: dict[int, tuple[frozenset[int], frozenset[int]]] = {}
 _m4_last_own_t = 0.0
 _m4_resolve_depth = 0
 _M4_RESOLVE_DEPTH_LIMIT = 64
@@ -417,6 +418,110 @@ def _resolve_linear_call(linear_call:UOp) -> UOp:
           f"owned={len(owned_bases)}", flush=True)
   return resolved
 
+def _sink_param_io(sink:UOp) -> tuple[set[int], set[int]]:
+  """PARAM-slot read/write analysis for one compiled kernel (SINK body)."""
+  # SINK bodies are interned and shared across steps (fixed llama-style graph), so the
+  # per-kernel analysis is computed once per unique body and reused every step.
+  if (cached := _sink_io_cache.get(id(sink))) is not None: return cached
+  ts = list(sink.toposort())
+  # A slot is written when its PARAM is the base of a STORE address chain.  The chain
+  # reaches the PARAM through view ops (INDEX, and RESHAPE for the epi_resadd block
+  # store); unwrap it so such kernels are provable outputs instead of fail-safe keeps.
+  store_bases: set[int] = set()
+  for u in ts:
+    if u.op is not Ops.STORE: continue
+    a = u.src[0]
+    while a.op in (Ops.INDEX, Ops.SHRINK, Ops.RESHAPE, Ops.SLICE, Ops.CAST, Ops.CONTIGUOUS,
+                   Ops.PERMUTE, Ops.EXPAND, Ops.PAD, Ops.MULTI, Ops.BIND):
+      a = a.src[0]
+    if a.op is Ops.PARAM: store_bases.add(id(a))
+  # Everything else that touches a PARAM is a read, including residual views that reach
+  # the PARAM through RESHAPE instead of INDEX (the epi_resadd residual slot) and
+  # read-modify-write kernels.  Dropping a writer whose read is invisible here is what
+  # broke the open-arm token stream, so err on the side of marking reads.
+  outs: set[int] = set()
+  ins: set[int] = set()
+  for u in ts:
+    if u.op is Ops.PARAM: continue
+    for s in u.src:
+      if s.op is not Ops.PARAM: continue
+      if id(s) in store_bases: outs.add(s.arg.slot)
+      else: ins.add(s.arg.slot)
+  cached = (frozenset(outs), frozenset(ins))
+  if len(_sink_io_cache) < _RESOLVE_PRECOMPILE_BASE_LIMIT: _sink_io_cache[id(sink)] = cached
+  return cached
+
+def _item_buf_id(a:UOp) -> int|None:
+  while a.op in (Ops.SLICE, Ops.RESHAPE, Ops.MEMORY_SEMANTIC, Ops.CAST, Ops.CONTIGUOUS, Ops.INDEX,
+                 Ops.SHRINK, Ops.PERMUTE, Ops.EXPAND, Ops.PAD):
+    a = a.src[0]
+  if a.op is Ops.BUFFER: return id(a)
+  return None
+
+def _drop_dead_schedule_items(linear:UOp, call_args:tuple[UOp, ...]) -> UOp:
+  """Backward buffer-liveness over a resolved schedule: keep exactly the items whose
+  outputs (transitively) feed a step output buffer, dropping provably-dead work.
+
+  The union-resolve dedupes the flash-decode composite chain by (body, middle-args),
+  which removes the per-parent re-emissions but leaves the composite-internal copy
+  chains (1ade/c55d) whose outputs feed only skipped embedded calls.  Those copies are
+  scheduled but never read; this pass removes them and anything else whose outputs are
+  never consumed.  Semantics-preserving by construction: only writers of unread buffers
+  are dropped, and every step-output buffer's writer chain is retained.
+  """
+  if linear.op is not Ops.LINEAR: return linear
+  writes: dict[int, list[int]] = {}
+  order: list[tuple[set[int], set[int]]] = []
+  keep_all: list[int] = []
+  for i, it in enumerate(linear.src):
+    f = it.src[0]
+    if f.op is Ops.SINK:
+      outs, ins = _sink_param_io(f)
+    elif f.op in (Ops.COPY, Ops.SLICE):
+      outs, ins = {0}, {1}
+    else:
+      # Unknown item kind: keep it (fail-safe, never dropped by liveness alone).
+      keep_all.append(i)
+      order.append((set(), set()))
+      continue
+    o_ids = {b for s in outs if s < len(it.src)-1 and (b := _item_buf_id(it.src[s+1])) is not None}
+    i_ids = {b for s in ins if s < len(it.src)-1 and (b := _item_buf_id(it.src[s+1])) is not None}
+    if not outs:
+      # Composite-wrapped precompile calls (GETTUPLE(FUNCTION)) store through a nested
+      # FUNCTION whose address is not a PARAM INDEX, so the sink analysis cannot prove
+      # their outputs.  Keep such items (their inputs still pull producers live);
+      # only writers with provable outputs are ever dropped.
+      keep_all.append(i)
+    order.append((o_ids, i_ids))
+    for b in o_ids: writes.setdefault(b, []).append(i)
+  if not writes: return linear
+  outputs = {id(a) for a in call_args if a.op is Ops.BUFFER and id(a) in writes}
+  live: set[int] = set()
+  # Every kept item's producers must be walked too: marking a fail-safe item live
+  # without pushing it loses its input edges (the composite-wrapped kernels would
+  # silently orphan their producer chains, e.g. the residual-add kernels feeding
+  # the block-output store).
+  stack = [writes[b][-1] for b in outputs if writes.get(b)] + keep_all
+  while stack:
+    k = stack.pop()
+    if k in live: continue
+    live.add(k)
+    for b in order[k][1]:
+      ws = writes.get(b)
+      if not ws: continue
+      lo, hi = 0, len(ws)
+      while lo < hi:
+        mid = (lo + hi) // 2
+        if ws[mid] < k: lo = mid + 1
+        else: hi = mid
+      if lo > 0 and ws[lo - 1] not in live: stack.append(ws[lo - 1])
+  if len(live) == len(linear.src): return linear
+  if getenv("M4_RESOLVE_TRACE", 0):
+    dropped = [getattr(it.src[0].arg, "name", "?") for i, it in enumerate(linear.src) if i not in live]
+    from collections import Counter
+    print(f"TRACE dead-drop items={len(linear.src)} live={len(live)} dropped={dict(Counter(dropped))}", flush=True)
+  return linear.replace(src=tuple(it for i, it in enumerate(linear.src) if i in live))
+
 pm_resolve_linear_call = PatternMatcher([
   # call LINEAR is resolved here
   (UPat(Ops.CALL, src=(UPat(Ops.LINEAR),), name="linear_call", allow_any_len=True), _resolve_linear_call),
@@ -470,6 +575,7 @@ def create_linear_with_vars(big_sink:UOp) -> tuple[UOp, dict[str, int]]:
   # node once and uses rewrite results as-is, so resolution + one flatten at the root
   # stays linear in the final schedule size.
   linear = graph_rewrite(linear_call, pm_resolve_linear_call, name="resolve linear call", walk=True)
+  linear = _drop_dead_schedule_items(linear, linear_call.src[1:])
   _t2 = time.perf_counter()
   if _trace:
     with open("/proc/self/status") as _f:
