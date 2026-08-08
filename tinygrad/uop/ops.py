@@ -1028,9 +1028,18 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     buffer during callify. Before callify it is a GETTUPLE, so opaque consumers must
     preserve this invocation rather than inserting a redundant contiguous adapter.
     Movement/offset views are intentionally excluded; only the returned slot itself
-    has the output-buffer contract."""
+    has the output-buffer contract.  The schedule resolve spells a nested precompile
+    call as GETTUPLE(FUNCTION(src0=FUNCTION precompile=True)): a composite wrapper
+    whose body is the precompile call, which aliases the same fresh output slot."""
     if self.op in {Ops.RESHAPE, Ops.MEMORY_SEMANTIC}: return self.src[0].has_precompiled_output_identity()
-    return self.op is Ops.GETTUPLE and self.src[0].op is Ops.FUNCTION and bool(self.src[0].arg.precompile)
+    if self.op is not Ops.GETTUPLE or self.src[0].op is not Ops.FUNCTION: return False
+    fn = self.src[0]
+    if bool(fn.arg.precompile): return True
+    # composite wrapper: unwrap FUNCTION-of-FUNCTION until the body bottoms out at a
+    # precompile call (or a non-FUNCTION body, which has no output-buffer contract)
+    while fn.src[0].op is Ops.FUNCTION and not bool(fn.arg.precompile):
+      fn = fn.src[0]
+    return bool(fn.arg.precompile)
 
   def _base_buffer_is_realized(self) -> bool:
     """Walk through AFTER chain to find if the underlying buffer is realized (has allocated memory)."""
