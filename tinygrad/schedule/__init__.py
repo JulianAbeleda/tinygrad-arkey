@@ -213,6 +213,17 @@ def _resolve_nested_items(body:UOp, cache:dict, seen:set|None=None) -> UOp:
   flash-decode resadd chain doubles the flattened output per level and OOMs host
   RSS).  The resolved output is therefore the union of reachable kernels, each
   (body, args) pair contributing its own kernels exactly once per invocation.
+
+  The same composite body is called from many enclosing parents with per-parent
+  arg bindings (slot 0 and the last slot are per-parent-only: parent scratch and
+  the parent's residual/real buffer), so keying the seen-set on the raw args
+  re-emitted the whole shared chain once per parent (~18.5x census inflation at
+  flash-decode scale).  Those two positions are normalized out of the seen-set
+  key: the sub-chain kernels do not reference them, and the first parent's
+  bindings carry the union.  The memo cache stays keyed by the full
+  (body, args, slots) identity so every distinct binding is still bound exactly
+  once.  A skipped CALL item (target already inlined) is dropped from the output,
+  never left raw in the resolved body.
   """
   global _m4_resolve_depth
   _trace = getenv("M4_RESOLVE_TRACE", 0)
@@ -229,22 +240,31 @@ def _resolve_nested_items(body:UOp, cache:dict, seen:set|None=None) -> UOp:
     if seen is None: seen = set()
     out: list[UOp] = []
     changed = False
+    had_call = False
     _n = 0
     _nested = 0
     _misses = 0
     for it in body.src:
       if it.op is Ops.CALL and it.src[0].op is Ops.LINEAR:
         _n += 1
+        had_call = True
         args = it.src[1:]
         # The resolved flat body depends on the invocation args and on the
         # memory-semantic marks this composite carries, so both go into the key.
         slots_key = tuple(sorted((s, id(o)) for s, o in dict(getattr(it.arg, "memory_semantic_slots", ())).items()))
-        key = (id(it.src[0]), tuple(map(id, args)), slots_key)
-        if key in seen:
+        # Per-parent-only arg positions (slot 0, last slot) do not split the union:
+        # the nested kernels' bindings do not reference them, and keying on them
+        # re-emits the shared chain per parent (~18.5x census inflation).
+        nargs = len(args)
+        seen_key = (id(it.src[0]),
+                    tuple("X" if i in (0, nargs-1) else id(args[i]) for i in range(nargs)),
+                    slots_key)
+        if seen_key in seen:
           if _trace: print(f"TRACE nested skip depth={_m4_resolve_depth}", flush=True)
           continue
-        seen.add(key)
-        if (nested := cache.get(key, None)) is None:
+        seen.add(seen_key)
+        full_key = (id(it.src[0]), tuple(map(id, args)), slots_key)
+        if (nested := cache.get(full_key, None)) is None:
           _misses += 1
           nested = _precompile_body_bind(_precompile_body_base(it.src[0]), args)
           # Transfer the nested composite's own memory-semantic slots onto its bound
@@ -265,7 +285,7 @@ def _resolve_nested_items(body:UOp, cache:dict, seen:set|None=None) -> UOp:
                   new_items.append(c)
               if any(n is not c for n, c in zip(new_items, nested.src)):
                 nested = nested.replace(src=tuple(new_items))
-          cache[key] = nested
+          cache[full_key] = nested
         _nested += 1
         # the recursion returns the nested composite's own kernels plus the union
         # of everything below it; the seen-set ensures each (body, args) pair
@@ -275,7 +295,9 @@ def _resolve_nested_items(body:UOp, cache:dict, seen:set|None=None) -> UOp:
         changed = True
       else:
         out.append(it)
-    ret = body.replace(src=tuple(out)) if changed else body
+    # Rebuild even when every CALL item was skipped (already inlined): the raw CALL
+    # items must not leak into the resolved output.
+    ret = body.replace(src=tuple(out)) if (changed or had_call) else body
     if _trace:
       print(f"TRACE nested exit items={len(body.src)} nested={_nested} misses={_misses} "
             f"out_items={len(ret.src)} cache={len(cache)} dt={time.perf_counter()-_t_start:.3f}s", flush=True)
