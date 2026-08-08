@@ -197,7 +197,7 @@ def _precompile_body_bind(base:UOp, args:tuple[UOp, ...]) -> UOp:
     new_items.append(it.replace(src=(it.src[0], *new_args)) if any(n is not a for n, a in zip(new_args, old_args)) else it)
   return base.replace(src=tuple(new_items)) if any(n is not it for n, it in zip(new_items, base.src)) else base
 
-def _resolve_nested_items(body:UOp, cache:dict, seen:set|None=None) -> UOp:
+def _resolve_nested_items(body:UOp, cache:dict, seen:set|None=None, first_out:dict|None=None) -> UOp:
   """Resolve nested composite CALL items of a bound body and inline their kernels.
 
   The resadd chain embeds composite CALLs as items of later composites, so a bound
@@ -213,6 +213,19 @@ def _resolve_nested_items(body:UOp, cache:dict, seen:set|None=None) -> UOp:
   flash-decode resadd chain doubles the flattened output per level and OOMs host
   RSS).  The resolved output is therefore the union of reachable kernels, each
   (body, args) pair contributing its own kernels exactly once per invocation.
+
+  The union key covers the middle args only.  A composite call's slot 0 is the
+  per-parent scratch and the last slot is its output, both parent-specific; the
+  sub-chain kernels reference the shared middle weight buffers, so two calls with
+  the same middle bindings compute identical values regardless of which parent
+  supplied the scratch/output buffers.  Keying on all args would re-emit the whole
+  shared chain per parent (the open-arm census bloat); keying on none would merge
+  live parent bindings.  A skipped duplicate records a redirect from its
+  (never-written) output buffer to the first occurrence's output, and after the
+  item loop only this frame's own appended items (composite kernels and inter-call
+  copies) have their args rewritten by exact object identity.  Nested-resolution
+  items and other frames' items are never touched, so every live parent binding
+  keeps its own output buffer.
   """
   global _m4_resolve_depth
   _trace = getenv("M4_RESOLVE_TRACE", 0)
@@ -227,7 +240,13 @@ def _resolve_nested_items(body:UOp, cache:dict, seen:set|None=None) -> UOp:
     if _m4_resolve_depth > _M4_RESOLVE_DEPTH_LIMIT:
       raise RuntimeError(f"precompile body nesting exceeds {_M4_RESOLVE_DEPTH_LIMIT}")
     if seen is None: seen = set()
+    if first_out is None: first_out = {}
+    # Redirects are frame-local: a skip's consumers are always own items of the same
+    # body (the copies follow the embedded call), so the rewrite below can never touch
+    # another frame's items even when the shared body graphs reference the same UOps.
+    redirects: dict[UOp, UOp] = {}
     out: list[UOp] = []
+    own_idx: list[int] = []
     changed = False
     _n = 0
     _nested = 0
@@ -239,11 +258,17 @@ def _resolve_nested_items(body:UOp, cache:dict, seen:set|None=None) -> UOp:
         # The resolved flat body depends on the invocation args and on the
         # memory-semantic marks this composite carries, so both go into the key.
         slots_key = tuple(sorted((s, id(o)) for s, o in dict(getattr(it.arg, "memory_semantic_slots", ())).items()))
-        key = (id(it.src[0]), tuple(map(id, args)), slots_key)
+        mid = args[1:-1] if len(args) >= 3 else args
+        key = (id(it.src[0]), tuple(map(id, mid)), slots_key)
         if key in seen:
-          if _trace: print(f"TRACE nested skip depth={_m4_resolve_depth}", flush=True)
+          # Same middle bindings as a live emission: the skipped chain would write
+          # identical values, so its consumers read the retained output instead.
+          redirects[args[-1]] = first_out[key]
+          if _trace: print(f"TRACE nested skip depth={_m4_resolve_depth} "
+                           f"redirect={id(args[-1])%100000}->{id(first_out[key])%100000}", flush=True)
           continue
         seen.add(key)
+        first_out[key] = args[-1]
         if (nested := cache.get(key, None)) is None:
           _misses += 1
           nested = _precompile_body_bind(_precompile_body_base(it.src[0]), args)
@@ -270,11 +295,19 @@ def _resolve_nested_items(body:UOp, cache:dict, seen:set|None=None) -> UOp:
         # the recursion returns the nested composite's own kernels plus the union
         # of everything below it; the seen-set ensures each (body, args) pair
         # contributes once per invocation (the resadd chain shares subtrees)
-        _sub = _resolve_nested_items(nested, cache, seen).src
+        _sub = _resolve_nested_items(nested, cache, seen, first_out).src
         out.extend(_sub)
         changed = True
       else:
+        own_idx.append(len(out))
         out.append(it)
+    if redirects:
+      for i in own_idx:
+        it = out[i]
+        new_args = tuple(redirects.get(a, a) for a in it.src[1:])
+        if any(n is not a for n, a in zip(new_args, it.src[1:])):
+          out[i] = it.replace(src=(it.src[0], *new_args))
+          changed = True
     ret = body.replace(src=tuple(out)) if changed else body
     if _trace:
       print(f"TRACE nested exit items={len(body.src)} nested={_nested} misses={_misses} "
