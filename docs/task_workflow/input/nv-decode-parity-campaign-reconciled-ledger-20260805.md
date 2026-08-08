@@ -8,9 +8,11 @@ Method: reconciliation of qualified campaign records plus a final composed same-
 
 The fixed authority remains **5.612310 ms/token native NV** versus
 **3.966140 ms/token llama.cpp**, an authority gap of **1646.170000 us/token**.
-Five recoveries are now admitted, with one important interaction: the
+Six recoveries are now admitted, with one important interaction: the
 ping-pong result is measured *on top of* the generic callify redirect, so it
-must not be combined with its larger redirect-off isolated result.
+must not be combined with its larger redirect-off isolated result. The M4
+residual_add fold is booked as a fresh same-session section-6 delta, never
+composed with the rejected Attention-O/FFN-down row.
 
 ```text
 P1 JIT descriptor + reusable input-shadow                 66.6620940 us/token
@@ -18,10 +20,11 @@ P2 generic callify precompiled-output redirect            75.0307500
 P5 ping-pong, incremental in redirect-on composition      91.6365625
 Q4 cooperative/shared-Q8 g12, incremental composed        24.6764063
 Q4 precision-budget max17 subset beyond g12, incremental  12.4620469
-= strict booked total                                   270.467859625 us/token
+M4 residual_add fold, same-session section-6 delta        32.6100000
+= strict booked total                                   303.077859625 us/token
 fixed authority gap                                    1646.1700000 us/token
-- strict booked total                                   270.467859625
-= strict accounted counterfactual remainder            1375.702140375 us/token
+- strict booked total                                   303.077859625
+= strict accounted counterfactual remainder            1343.092140375 us/token
 ```
 
 The arithmetic above remains a **counterfactual causal ledger** tied to the
@@ -44,6 +47,7 @@ The older 69.1655-us diagnostic predispatch result is superseded by P1. Its
 | P5 two-capture sampler-feedback ping-pong | Redirect-on exact tokens/full logits; control midpoint 5.466153875 and ping-pong midpoint 5.3745173125 ms/token | Incremental **only in the redirect-on composition**; retain its 91.6365625-us midpoint, do not add redirect-off ~104-us result | **91.6365625 us** |
 | Q4 cooperative/shared-Q8 g12 | On top of P1/P2/P5: exact 160-token streams; d512 semantic relative L2 `8.36963e-4`; settled control midpoint 5.347317250 and candidate 5.322640844 ms/token | Incremental composed g12 result only; do not add g1/g4 or the isolated primitive result | **24.67640625 us** |
 | Q4 precision-budget max17 subset (blocks 14--18) | On top of g12: exact block identities and semantics; g12 / subset / g12 settled bracket | Incremental beyond the booked g12 row only; do not add the 28.864734-us cumulative row | **12.462046875 us** |
+| M4 residual_add fold (o-proj q4k GEMV epilogue, `decode-q4k-epilogue-resadd-route-policy.json`) | Section-6 gate rerun PASS 2026-08-08 (`m4-resadd-s4-gate-rerun-record-20260807.md`): same-session open vs closed d512 183.032 vs 181.946 tok/s and d2048 172.506 vs 170.982; census 912/36/36/1/36 at the gate oracle; pins 3/3 both arms; pg3 legacy sha `27857cb8ca03` unmoved | Fresh same-session section-6 delta only; do not compose with the rejected Attention-O/FFN-down row or the probe-2 ceiling (+100.1 us) | **32.61 us** |
 
 The P5 implementation removes the 4-byte pre-graph alias-firewall copy by
 alternating two captures with distinct fixed return buffers. It leaves the
@@ -99,7 +103,7 @@ recoverable savings. The reconciliation bridges are not optimization targets.
 | Scale-only RMSNorm -> Q4 gate/up | Isolated exact-scale consumer saves 6.42915 us, but block-0 full logits pass and settled model A/B/A is **+8.3694375 us/token**. | **WALL NO-GO**, **0** credit; no lease expansion. |
 | Packed greedy argmax | Included primitive 71.874 -> 142.647 us. | **NO-GO**, **0** credit. |
 | Attention-O custom epilogue and FFN-down residual composition | Three post-callify censuses reproduce 876 programs, 71 `E_86a2` copies (70 new), 35 fused-O calls and the correct token. FFN-down route recomputes activation. | **Topology NO-GO**, **0** credit; exact copy ownership remains unproven because the gate already failed. |
-| M4 residual_add fold (o-proj epilogue variant, `decode-q4k-epilogue-resadd-route-policy.json`) | Probes PASS (hermetic fold graph, epi_resadd kernel GPU microgate) but the **production fold crashes the flash-decode schedule**: `ValueError: bad reshape: () -> (1, 1, 4096)` in `rangeify.cleanup_dead_axes`, second decode token, open mode at d512 and d2048. The runtime cannot express a zero-copy flat SPECIAL-indexed kernel read of the non-flat `(1,1,4096)` opaque block-output boundary; three substitution strategies fail identically. Closed arms are probe-2 control reproductions (d512 180.694, d2048 169.99 tok/s, pins 3/3). d4096 remains blocked by a pre-existing prefill hang (HCQ timeout, reproduced on pristine HEAD). | **PRECISELY BLOCKED at the scheduler/rangeify substrate**, **0** credit. Record stays closed; reopen needs flat-SPECIAL-read-of-non-flat-opaque support or a flattened `(N,)` h boundary (see `m4-resadd-landing-blocked-record-20260806.md`). |
+| M4 residual_add fold (o-proj epilogue variant, `decode-q4k-epilogue-resadd-route-policy.json`) | **PROMOTED 2026-08-08** after the S4 gate rerun PASS; booked +32.61 us/token in the accepted table above (see `m4-resadd-s4-gate-rerun-record-20260807.md`). Prior blocker history: the 08-06 production fold crashed the flash-decode schedule at `rangeify.cleanup_dead_axes`; that blocker was cleared by the census-fix stack (`a7944410e`, `123ea1b4c`, `c855309fc`). The combined Attention-O/FFN-down composition above stays NO-GO at 0 credit. | **LANDED**, **32.61 us** booked; the residual-slot copy elision also proves exact copy ownership for this half (copy class 1 = control only). |
 | KV-store fusion / gate-up adapters / existing route swaps | KV chain already effectively one store per layer; native gate/up already fused; tested adapters regress or are wall-neutral. | **Closed exact constructions**, **0** credit. |
 | CUDA substitutions | Q6 attention and Q4 FFN-down substitutions are useful causal direction only. | Cross-backend evidence, **not native recovery**. |
 
@@ -139,7 +143,8 @@ The final composed same-session row is now measured: steady llama A/C midpoint
 instead gives 0.76444x and a 1.254189-ms gap; both are recorded in
 `nv-decode-final-composed-same-session-record-20260805.md`.
 
-The strict fixed-authority booked total is **270.467859625 us/token** and its
-counterfactual remainder is **1375.702140375 us/token**. Those fixed-authority
+The strict fixed-authority booked total is **303.077859625 us/token** and its
+counterfactual remainder is **1343.092140375 us/token** after the M4
+residual_add fold booking (+32.61 us/token, 2026-08-08). Those fixed-authority
 numbers remain causal accounting; the same-session row is the current absolute
 measurement. No current construction is parity-qualified.
