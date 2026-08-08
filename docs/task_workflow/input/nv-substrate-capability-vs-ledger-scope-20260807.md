@@ -351,3 +351,43 @@ that limit and is annotated as such above. Closing it means an arm that builds t
 Test coverage: `test/unit/test_nv_boundary_free_ordinary_uop_gate.py`, 8 tests, including a
 named regression test for the v2 false PASS. 62 passed across gate / ledger / M4 probe /
 M4 landing / M5 typed boundary on this tree.
+
+## 9. Amendment 2026-08-07 - C5 cleared as a render blocker (committed evidence)
+
+C5 (weakint SPECIAL is not renderable on NV) is **cleared as a render blocker** as of
+commit `45f74e36f` ("union-resolve nested composites with per-invocation seen-set",
+2026-08-07). The flash-decode host-RSS wedge that sat on this gate is gone: the open arm
+(production resadd fold active) now renders on NV sm_120 with flat host RSS. Probe
+verdict, quoted from the commit message:
+
+```text
+Open-arm probe (20G cgroup cap, Qwen3-8B Q4_K_M, NV:sm_120):
+  VERDICT PASS 0.53G peak RSS, 8/8 nexts, rc=0, ucache flat ~124k
+  (was: 13.6G anon RSS and rc=137 at the same capture point)
+  TRACE nested skip=14280, 806-arg body out_items=40046 (was 234M),
+  resolve dt=1.1s, no per-step growth.
+  Tokens bitwise-exact vs closed arm (sha 3635a91e3da8..., first 271).
+```
+
+The 234M-item flatten is gone (`out_items=40046` on the 806-arg body), resolve dt is
+1.1s, and the token stream is bitwise-exact vs the closed arm (sha `3635a91e3da8...`,
+first 271). Closed-arm gate oracle unchanged (sha `3635a91e3da8...` 1/1, first 271,
+kernels/token 948, pg3 `27857cb8ca03`); unit tests 33/33.
+
+### 9.1 No promotion
+
+`decode-q4k-epilogue-resadd-route-policy.json` remains CLOSED - `promoted_targets: []` -
+and section 7's non-claim stands unchanged: this amendment changes no policy artifact.
+Clearing a blocker makes a construction expressible; the wall win is the landing gate's
+question, not this amendment's. The record gains `NV sm_120` only after the section-6
+full gate (`m4-resadd-landing-scope-20260806.md` section 3) passes.
+
+### 9.2 Remaining open-arm blocker
+
+The census over-emission is still open and is now the only open-arm blocker: the open arm
+over-emits ~18.5x (32.9k kernels/token vs the gate expectation of 912) because the same
+composite body is called from many enclosing parents with per-parent slot-0 args, so the
+per-invocation seen-set keys differ and the union re-emits per parent. This is
+scheduled-work inflation, not a wedge - memory is flat and tokens are exact. It is
+tracked by the landing gate (`m4-resadd-landing-scope-20260806.md` section 3, census
+assertions) and is being fixed by a parallel agent.
