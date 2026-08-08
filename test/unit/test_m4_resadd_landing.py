@@ -167,9 +167,10 @@ def test_fold_substitutes_the_producer_buffer_into_the_gemv():
 
 # ── record + admission gating ─────────────────────────────────────────────
 
-def test_resadd_record_is_closed_default():
+def test_resadd_record_promotes_only_the_measured_nv_target():
   import tinygrad.llm.model_route_plan as mrp
-  assert mrp.decode_q4k_epilogue_resadd_promoted(("NV", "sm_120")) is False
+  assert mrp.decode_q4k_epilogue_resadd_promoted(("NV", "sm_120")) is True
+  assert mrp.decode_q4k_epilogue_resadd_promoted(("AMD", "gfx1100")) is False
   assert mrp.decode_q4k_epilogue_resadd_promoted(("NV", "gfx1100")) is False
 
 
