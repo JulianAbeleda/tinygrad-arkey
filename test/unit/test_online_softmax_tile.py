@@ -1,3 +1,4 @@
+import os
 import pytest
 from tinygrad.dtype import dtypes
 from tinygrad.uop.ops import Ops, UOp
@@ -536,6 +537,7 @@ def test_gfx1100_pv_c_lane_projection_owns_exact_row_mapping():
   with pytest.raises(ValueError, match=r"\[0,8\)"):
     amd_gfx1100_pv_c_lane(acc, 8)
 
+@pytest.mark.skipif(not os.path.exists("/dev/kfd"), reason="AMD KFD is unavailable")
 def test_gfx1100_pv_c_lane_lowers_after_tensor_spec_to_legal_scalar_program():
   import numpy as np
   from tinygrad import Tensor
@@ -661,6 +663,7 @@ def test_gfx1100_acc_slice_v2_drain_rejects_invalid_output_block_base():
   with pytest.raises(ValueError,match="exact gfx1100"):
     AttentionOutputDrainSpec(native_abi="amd_gfx1100_attention_output_drain_acc_slice_v2",blocks=4,output_block_base=2).validate()
 
+@pytest.mark.skipif(not os.path.exists("/dev/kfd"), reason="AMD KFD is unavailable")
 def test_gfx1100_acc_slice_v2_two_launch_causal_diagnostic():
   """Test-only split-output diagnostic: two independent QK/softmax launches own Hd[0:64]/Hd[64:128]."""
   import numpy as np
@@ -716,6 +719,7 @@ def test_gfx1100_acc_slice_v2_two_launch_causal_diagnostic():
   for base in range(0,8,2): assembled=assembled.uop_program(tq,tk,tv,fxn=two_kernel(base))[0].realize()
   np.testing.assert_allclose(assembled.numpy().reshape(q.shape).astype(np.float32),ref,rtol=.02,atol=4e-3)
 
+@pytest.mark.skipif(not os.path.exists("/dev/kfd"), reason="AMD KFD is unavailable")
 def test_gfx1100_split_score_state_pv_slice_direct_diagnostic():
   import numpy as np
   from tinygrad import Tensor
@@ -779,6 +783,7 @@ def _gfx1100_lds_rotating_pv_pressure_ast():
   proof_stores=UOp.group(*(proof.after(prev).index(lane*UOp.const(dtypes.weakint,8)+UOp.const(dtypes.weakint,e)).store(values[e]) for e in range(8)))
   return ast.replace(src=ast.src+(prev,proof_stores))
 
+@pytest.mark.skipif(not os.path.exists("/dev/kfd"), reason="AMD KFD is unavailable")
 def test_gfx1100_lds_rotating_pv_pressure_compile_microgate():
   from tinygrad.codegen import to_program
   from tinygrad.helpers import Target
@@ -804,6 +809,7 @@ def test_gfx1100_lds_rotating_pv_pressure_compile_microgate():
   assert sum(x.startswith("s_waitcnt") for x in instructions)>=9 and not any(x.startswith("s_barrier") for x in instructions)
   assert resources["vgpr"] <= 192  # phase-owned m/l state removes the prior VGPR-pressure failure
 
+@pytest.mark.skipif(not os.path.exists("/dev/kfd"), reason="AMD KFD is unavailable")
 def test_gfx1100_q16_kv32_hd128_numeric():
   import numpy as np
   from tinygrad import Tensor
@@ -859,6 +865,7 @@ def test_gfx1100_q16_kv64_hd128_loop_reaches_bounded_final_isa():
   branches=[u for u in linear.src if isinstance(u.arg,tuple) and u.arg[:1]==("branch",)]
   assert len(labels)==2 and len(branches)==2
 
+@pytest.mark.skipif(not os.path.exists("/dev/kfd"), reason="AMD KFD is unavailable")
 def test_gfx1100_q16_kv64_hd128_loop_numeric():
   import numpy as np
   from tinygrad import Tensor
@@ -875,6 +882,7 @@ def test_gfx1100_q16_kv64_hd128_loop_numeric():
   np.testing.assert_allclose(got,probs@v.astype(np.float32),rtol=.02,atol=4e-3)
 
 @pytest.mark.parametrize("valid_kv,query_start",[(64,None),(61,None),(64,-16)])
+@pytest.mark.skipif(not os.path.exists("/dev/kfd"), reason="AMD KFD is unavailable")
 def test_gfx1100_q16_kv64_hd128_loop_causal_tail_numeric(valid_kv,query_start):
   import numpy as np
   from tinygrad import Tensor
@@ -908,6 +916,7 @@ def test_gfx1100_q32_hq4_hkv2_kv64_hd128_grid_loop_contract():
   drain=next(u for u in topo if u.op is Ops.ATTENTION_OUTPUT_DRAIN)
   assert drain.src[1] is group and drain.arg.grid == AttentionGridSpec()
 
+@pytest.mark.skipif(not os.path.exists("/dev/kfd"), reason="AMD KFD is unavailable")
 def test_gfx1100_q32_hq4_hkv2_kv64_hd128_grid_loop_numeric():
   import numpy as np
   from tinygrad import Tensor
@@ -976,6 +985,7 @@ def test_gfx1100_q16_kv32_reaches_final_isa_program():
   mn=[str(u.arg).split("(",1)[0] for u in linear.src if not isinstance(u.arg,tuple)]
   assert mn.count("v_wmma_f32_16x16x16_f16")==4 and mn.count("s_barrier")==2
 
+@pytest.mark.skipif(not os.path.exists("/dev/kfd"), reason="AMD KFD is unavailable")
 def test_gfx1100_q16_kv32_numeric_two_tile_transition():
   import numpy as np
   from tinygrad import Tensor
@@ -997,6 +1007,7 @@ def test_gfx1100_q16_kv32_numeric_two_tile_transition():
   np.testing.assert_allclose(got,ref,rtol=.01,atol=2e-3)
 
 @pytest.mark.parametrize("valid_kv,query_start",[(16,0),(13,0),(13,-16)])
+@pytest.mark.skipif(not os.path.exists("/dev/kfd"), reason="AMD KFD is unavailable")
 def test_gfx1100_q16_causal_tail_numeric(valid_kv,query_start):
   import numpy as np
   from tinygrad import Tensor
@@ -1127,6 +1138,7 @@ def test_gfx1100_grid_causal_mask_is_fused_without_bool_or_infinity_vgprs():
   assert max((int(x) for x in re.findall(r"(?<![a-zA-Z0-9_])v(?:\[(\d+)|([0-9]+))",text) for x in x if x),default=-1)<256
 
 @pytest.mark.parametrize("valid_kv,query_start",((64,32),(61,29),(0,-32)))
+@pytest.mark.skipif(not os.path.exists("/dev/kfd"), reason="AMD KFD is unavailable")
 def test_gfx1100_grid_fused_causal_mask_numeric_tail_and_fully_masked(valid_kv,query_start):
   import numpy as np
   from tinygrad import Tensor
@@ -1149,6 +1161,7 @@ def test_gfx1100_grid_fused_causal_mask_numeric_tail_and_fully_masked(valid_kv,q
   if valid_kv==0: assert np.array_equal(got,np.zeros_like(got))
 
 @pytest.mark.parametrize("hq,hkv",[(8,2),(10,2)])
+@pytest.mark.skipif(not os.path.exists("/dev/kfd"), reason="AMD KFD is unavailable")
 def test_gfx1100_model_grid_causal_mask_uses_runtime_q_tile(hq,hkv):
   import numpy as np
   from tinygrad import Tensor
@@ -1168,6 +1181,7 @@ def test_gfx1100_model_grid_causal_mask_uses_runtime_q_tile(hq,hkv):
   np.testing.assert_allclose(got,ref,rtol=.02,atol=4e-3)
 
 @pytest.mark.parametrize("hq,hkv,kv,query_start", ((32,8,512,0),(40,8,1024,512)))
+@pytest.mark.skipif(not os.path.exists("/dev/kfd"), reason="AMD KFD is unavailable")
 def test_gfx1100_model_profile_grid_numeric_first_and_prefix(hq,hkv,kv,query_start):
   import numpy as np
   from tinygrad import Tensor
