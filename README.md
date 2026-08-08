@@ -82,6 +82,20 @@ The retained pre-migration comparison points on RX 7900 XTX/gfx1100 are:
 These are historical comparison points, not claims about a new checkout. Publish new numbers only with the exact
 commit, model hash, target, selected identities, warmups, sample count, and clean device-health record.
 
+## Repository checks
+
+Activate the repository's production hooks and verify the authored-line budget before publishing changes:
+
+```sh
+git config core.hooksPath .githooks
+test "$(git config --get core.hooksPath)" = .githooks
+python3 sz.py
+```
+
+The hooks enforce the working agreement (`docs/task_workflow/input/nv-decode-working-agreement-20260808.md`):
+the pre-commit hook rejects code changes without a test change and enforces the `sz.py` line budget; the
+pre-push hook runs the regression-critical tripwire suite (DEV=CPU) when the branch carries it.
+
 ## License
 
 MIT, inherited from tinygrad. See [LICENSE](LICENSE).

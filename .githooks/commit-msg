@@ -1,0 +1,8 @@
+#!/bin/sh
+first_line=$(head -n 1 "$1")
+case "$first_line" in
+  Merge\ *|Revert\ *) exit 0 ;;
+esac
+printf '%s' "$first_line" | grep -qE '^(\[[A-Za-z0-9_.-]+\])+( NFC -)? ' && exit 0
+echo "commit-msg: need bracketed prefix, e.g. [docs] update note or [codegen][wmma] add gate" >&2
+exit 1
