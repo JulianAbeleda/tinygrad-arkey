@@ -231,11 +231,14 @@ class Tensor(RandMixin):
     return linear
 
   @disable_gc()
-  def realize(self, *lst:Tensor, do_update_stats=True) -> Tensor:
+  def realize(self, *lst:Tensor, do_update_stats=True, var_vals:dict[str, int]|None=None) -> Tensor:
     """Triggers the computation needed to create these Tensor(s)."""
     if len(to_realize:=[x for x in (self,)+lst if x.uop.device is not None and not x.uop.has_buffer_identity()]):
-      linear, var_vals = Tensor.linear_with_vars(*to_realize)
-      run_linear(linear, var_vals, update_stats=do_update_stats)
+      linear, graph_var_vals = Tensor.linear_with_vars(*to_realize)
+      # A position-invariant decode graph references the UNBOUND start_pos variable;
+      # the JIT supplies the concrete value from its input args (llama.cpp style:
+      # fixed graph, positions are launch-time data, never graph structure).
+      run_linear(linear, graph_var_vals if var_vals is None else var_vals, update_stats=do_update_stats)
     return self
 
   def replace(self, x:Tensor) -> Tensor:
@@ -1238,7 +1241,20 @@ class Tensor(RandMixin):
     # Softmax keeps a broadcasted reduction view. Materialize it before the
     # PV contraction: consuming that view directly as a matmul operand can
     # alias its reduction-axis indexing and produce incorrect results.
-    out = qk.cast(self.dtype).softmax(-1).contiguous().dropout(dropout_p) @ fallback_value
+    qk_cast = qk.cast(self.dtype)
+    if not all_int(qk.shape):
+      # Symbolic prefill (KV extent is a variable): materialize each reduce output at its
+      # reduced shape. Otherwise the scheduler re-fuses max/sum into the elementwise
+      # consumers with KV in the grid, lowering softmax to two full KV loops per output
+      # element (O(KV^2), observed 50ms at KV=4096). This decomposition is arithmetic-
+      # identical to softmax(); the contiguous() points only force kernel boundaries.
+      qk_max = qk_cast.max(-1, keepdim=True).detach().contiguous()
+      qk_exp = (qk_cast - qk_max).exp()
+      qk_sum = qk_exp.sum(-1, keepdim=True).contiguous()
+      softmaxed = (qk_exp * qk_sum.reciprocal()).contiguous()
+    else:
+      softmaxed = qk_cast.softmax(-1).contiguous()
+    out = softmaxed.dropout(dropout_p) @ fallback_value
     # Dropout is stochastic and intentionally remains on the ordinary path.
     if dropout_p != 0: return out
     primitive = self._online_attention_primitive(fallback_key, fallback_value, attn_mask, scale, qk_dtype, out.dtype)

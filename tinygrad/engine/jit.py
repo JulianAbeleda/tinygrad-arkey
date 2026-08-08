@@ -603,7 +603,7 @@ class TinyJit(Generic[ReturnType]):
       # jit ignore
       assert self.fxn is not None
       ret = self.fxn(*args, **kwargs)
-      if len(params:=get_parameters(ret)): Tensor.realize(*params)
+      if len(params:=get_parameters(ret)): Tensor.realize(*params, var_vals=var_vals)
     elif self.cnt == 1:
       # jit capture
       assert self.fxn is not None

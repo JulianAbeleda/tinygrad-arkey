@@ -737,6 +737,15 @@ class TransformerBlock(FFNBlock):
         # view (no copy) with the same [kvh*Hd+elem] linear layout as the pre-transpose capture.
         _kv_store_flat[0] = k.reshape(B, T, self.config.n_kv_heads * self.config.head_dim)
 
+    # Position-invariant decode graph (llama.cpp reference): every structural slice (KV
+    # store slot, rope read, KV read extent) indexes the cache by the UNBOUND start_pos
+    # variable, so the captured graph key cannot depend on the concrete token position.
+    # The bound UOp remains the JIT input carrier; exec supplies the value as var_vals.
+    # Same twin pattern as flash_decode_attention_route / decode_kv_store_route /
+    # shared_q8_attention_call; unbind() yields the generator's DEFINE_VAR node itself.
+    _graph_pos = start_pos.src[0] if (isinstance(start_pos, UOp) and start_pos.op is Ops.BIND and
+                                      len(start_pos.src) == 2 and start_pos.src[0].op is Ops.DEFINE_VAR) else start_pos
+
     # rope-at-read (DECODE_ROPE_AT_READ, opt-in; requires full-head rope): store UN-roped K and rotate at read -- the
     # prerequisite for the StreamingLLM ring's position re-basing. Q is never cached, so it is always roped here.
     # The ring supplies a per-step PRE-GATHERED freqs table via the JIT-input attribute _ring_freqs (slot-relative
@@ -760,15 +769,15 @@ class TransformerBlock(FFNBlock):
     # full-ring (ctx>=N): the buffer is full and the write slot wraps, so the live read length is the WHOLE buffer N
     # (all slots valid), not start_pos+T (start_pos is the wrapped write slot, not a length). Selects [0:N] reads + Tc=N.
     _ring_full = getattr(self, "_ring_full", False)
-    _rl = self.config.max_context if _ring_full else (start_pos + T)
+    _rl = self.config.max_context if _ring_full else (_graph_pos + T)
     # Q is roped via _fr (the gathered ring table when ring, else freqs_cis) indexed by start_pos: in the full ring
     # start_pos is the write slot wp, and _fr[wp] = freqs[pos_of(wp)] = the query's (newest) position -> consistent
     # with the K positions. In fill / non-ring, _fr == freqs_cis and start_pos is the absolute position (unchanged).
     q = _prefill_semantic(_prefill, prefill_scratch,
-                          apply_rope(q[..., :self.config.rope_dim], _fr[start_pos:start_pos+T]).cat(q[..., self.config.rope_dim:], dim=-1))
+                          apply_rope(q[..., :self.config.rope_dim], _fr[_graph_pos:_graph_pos+T]).cat(q[..., self.config.rope_dim:], dim=-1))
     if not _rope_read and not _kv_store_fused:
       k = _prefill_semantic(_prefill, prefill_scratch,
-                            apply_rope(k[..., :self.config.rope_dim], self.freqs_cis[start_pos:start_pos+T]).cat(k[..., self.config.rope_dim:], dim=-1))
+                            apply_rope(k[..., :self.config.rope_dim], self.freqs_cis[_graph_pos:_graph_pos+T]).cat(k[..., self.config.rope_dim:], dim=-1))
 
     # NOTE: we don't want to change self.cache_kv, the function API doesn't support this well
     if self.config.kv_quant and _rope_read:
@@ -783,14 +792,14 @@ class TransformerBlock(FFNBlock):
       _sc = _prefill_semantic(_prefill, prefill_scratch, (_kv.abs().max(axis=-1, keepdim=True) / 127.0).maximum(1e-8))
       _kvq = _prefill_semantic(_prefill, prefill_scratch, (_kv / _sc).round().cast(dtypes.int8))
       _sch = _prefill_semantic(_prefill, prefill_scratch, _sc.reshape(2, B, _Hkv, T).cast(dtypes.float16))
-      _st_kv = self.cache_kv[:, :, :, start_pos:start_pos+T, :].uop.store(_kvq.uop)
-      _st_sc = self.cache_kv_scale[:, :, :, start_pos:start_pos+T].uop.store(_sch.uop)
+      _st_kv = self.cache_kv[:, :, :, _graph_pos:_graph_pos+T, :].uop.store(_kvq.uop)
+      _st_sc = self.cache_kv_scale[:, :, :, _graph_pos:_graph_pos+T].uop.store(_sch.uop)
       assigned_kv = Tensor(self.cache_kv.uop.after(_st_kv))
       assigned_scale = Tensor(self.cache_kv_scale.uop.after(_st_sc))
-      _ksc = assigned_scale[0, :, :, 0:start_pos+T].reshape(B, _Hkv, start_pos+T, 1)
-      _vsc = assigned_scale[1, :, :, 0:start_pos+T].reshape(B, _Hkv, start_pos+T, 1)
-      k = _prefill_semantic(_prefill, prefill_scratch, assigned_kv[0, :, :, 0:start_pos+T, :].cast(dtypes.float16) * _ksc)
-      v = _prefill_semantic(_prefill, prefill_scratch, assigned_kv[1, :, :, 0:start_pos+T, :].cast(dtypes.float16) * _vsc)
+      _ksc = assigned_scale[0, :, :, 0:_graph_pos+T].reshape(B, _Hkv, _graph_pos+T, 1)
+      _vsc = assigned_scale[1, :, :, 0:_graph_pos+T].reshape(B, _Hkv, _graph_pos+T, 1)
+      k = _prefill_semantic(_prefill, prefill_scratch, assigned_kv[0, :, :, 0:_graph_pos+T, :].cast(dtypes.float16) * _ksc)
+      v = _prefill_semantic(_prefill, prefill_scratch, assigned_kv[1, :, :, 0:_graph_pos+T, :].cast(dtypes.float16) * _vsc)
     else:
       assigned_scale = None
       if _kv_store_fused:
@@ -802,7 +811,7 @@ class TransformerBlock(FFNBlock):
                                             self.config.n_kv_heads, self.config.head_dim, self.config.max_context,
                                             vparts=_kv_vparts)
       else:
-        assigned_kv = Tensor(self.cache_kv.uop.after(self.cache_kv[:, :, :, start_pos:start_pos+T, :].uop.store(Tensor.stack(k, v).uop)))
+        assigned_kv = Tensor(self.cache_kv.uop.after(self.cache_kv[:, :, :, _graph_pos:_graph_pos+T, :].uop.store(Tensor.stack(k, v).uop)))
       _kfull = assigned_kv[0]
       if _rope_read:
         # rope-at-read for the NON-flash (SDPA/prefill) consumers: K is stored un-roped. Rotate the FULL concrete-MAXC
@@ -822,9 +831,17 @@ class TransformerBlock(FFNBlock):
     #v = self.cache_kv[1, :, :, 0:start_pos+T, :]
 
     # NOTE: this mask is causal_lower_right, not the causal_upper_left generated by is_casual = True
-    # TODO: this if statement should be removed and it shouldn't generate extra kernels
-    mask = Tensor.full((1, 1, T, start_pos+T), float("-inf"), dtype=x.dtype, buffer=False).triu(start_pos+1) \
-      if resolve(T != 1) else None
+    # Materialize on CONCRETE extents (max T rows, max_context cols) then slice to the symbolic
+    # (T, start_pos+T) view: triu over a symbolic extent lowers arange through a cumsum into a
+    # quadratic kernel (two full KV loops per output element), which wedges symbolic prefill at
+    # deep context (observed 794ms QK^T epilogue at KV=4096). The concrete mask renders as two
+    # linear E kernels and QK^T reads the sliced buffer as data3 with no fused loops.
+    # The diagonal/extent index the UNBOUND position variable (_graph_pos), so the mask is
+    # position data, not graph structure: it matches the unbound KV read extents symbolically
+    # and resolves per-position at exec through var_vals.
+    _mask_rows = T.simplify().vmax if isinstance(T, UOp) else T
+    mask = Tensor.full((1, 1, _mask_rows, self.config.max_context), float("-inf"), dtype=x.dtype, buffer=True) \
+      .triu(_graph_pos+1)[:, :, :T, :_graph_pos+T] if resolve(T != 1) else None
     # The model owns two separately captured decode graphs. The immutable
     # candidate binding selects the flash graph upstream; ring decode always
     # uses it because its wrapped write slot is not a logical context length.
@@ -981,20 +998,25 @@ class MLATransformerBlock(FFNBlock):
     else: q_proj = mark_scratch(self.attn_q(x))
     q = mark_scratch(q_proj.reshape(B, T, self.config.n_heads, self.config.head_dim).transpose(1, 2))
     q_nope, q_rope = q[..., :q_nope_head_dim], q[..., q_nope_head_dim:]
-    q = (q_nope @ self.attn_k_b["weight"].transpose(-1, -2)).cat(apply_rope(q_rope, self.freqs_cis[start_pos:start_pos+T]), dim=-1)
+    # Position-invariant graph structure: index rope reads and the KV store slot by the
+    # UNBOUND start_pos variable (see TransformerBlock._attention for the full rationale).
+    _graph_pos = start_pos.src[0] if (isinstance(start_pos, UOp) and start_pos.op is Ops.BIND and
+                                      len(start_pos.src) == 2 and start_pos.src[0].op is Ops.DEFINE_VAR) else start_pos
+    q = (q_nope @ self.attn_k_b["weight"].transpose(-1, -2)).cat(apply_rope(q_rope, self.freqs_cis[_graph_pos:_graph_pos+T]), dim=-1)
 
     kv_a = mark_scratch(self.attn_kv_a_mqa(x))
     with role_metadata("rms_norm"): c_kv = self.attn_kv_a_norm(kv_a[..., :self.config.kv_lora_rank])
     k_rope = apply_rope(
       kv_a[..., self.config.kv_lora_rank:].reshape(B, T, 1, self.config.rope_dim).transpose(1, 2),
-      self.freqs_cis[start_pos:start_pos+T])
+      self.freqs_cis[_graph_pos:_graph_pos+T])
 
     k_store = mark_scratch(c_kv.reshape(B, 1, T, self.config.kv_lora_rank).cat(k_rope.reshape(B, 1, T, self.config.rope_dim), dim=-1))
-    k = Tensor(self.cache_k.uop.after(self.cache_k[:, :, start_pos:start_pos+T, :].uop.store(k_store.uop)))[:, :, 0:start_pos+T, :]
+    k = Tensor(self.cache_k.uop.after(self.cache_k[:, :, _graph_pos:_graph_pos+T, :].uop.store(k_store.uop)))[:, :, 0:_graph_pos+T, :]
     v = k[..., :self.config.kv_lora_rank]
 
-    mask = Tensor.full((1, 1, T, start_pos+T), float("-inf"), dtype=x.dtype, buffer=False).triu(start_pos+1) \
-      if resolve(T != 1) else None
+    _mask_rows = T.simplify().vmax if isinstance(T, UOp) else T
+    mask = Tensor.full((1, 1, _mask_rows, self.config.max_context), float("-inf"), dtype=x.dtype, buffer=True) \
+      .triu(_graph_pos+1)[:, :, :T, :_graph_pos+T] if resolve(T != 1) else None
     with role_metadata("attn_score"): attn = q @ k.transpose(-1, -2) * (1.0 / self.config.head_dim ** 0.5)
     if mask is not None:
       with role_metadata("attn_mask"): attn = attn + mask
