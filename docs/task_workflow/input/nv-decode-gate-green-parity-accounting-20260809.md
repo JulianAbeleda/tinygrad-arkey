@@ -79,11 +79,21 @@ residual_add 32.610 = 303.078 us/token strict booked.
 
 The section-6 gate above is the qualifying evidence for the shared-Q8 GEMV
 substrate landing scope. Per its booking rule, the fresh same-session
-section-6 delta is bookable as a new ledger row incremental on the composed
+section-6 delta is booked as a new ledger row incremental on the composed
 P1/P2/P5/Q4-g12/max17 baseline, cited to this record and its gate artifact.
 The isolated primitive wins (-56.28 us/replay Q4 cooperative, -0.81 to -0.94
 us/replay Q6 flat four-warp) are NOT independently bookable and are not
 booked here.
+
+**Booked row (2026-08-09).** Shared-Q8 attention lease section-6 delta:
+49.62 us/token at d512 (same-session open 184.949 vs closed 183.267 tok/s,
+reps 3, median). Depth validation rows, same protocol: d2048 61.32 us,
+d4096 81.10 us. The lease was PROMOTED to NV sm_120 (commit `b762bb67`,
+`decode-shared-q8-attention-route-policy.json`), and the post-promotion
+record-vs-open equality re-run passed at all three depths: record arm shas
+`227ad3ce` / `aca13ac6` / `d9f1700a` 3/3, first tokens 271/271/374, d512
+record census 34 fused / 86 coop, identical to the forced-open arm. The
+record-open state equals the forced-open state.
 
 Remaining path to parity, with the authority's scoped marginal contributions
 (estimates from `nv-decode-exhaustive-forward-scope-20260805.md`, not booked
@@ -114,11 +124,13 @@ recoveries):
 
 ## 6. Next actions
 
-1. Land the shared-Q8 lease: promotion record gains `NV sm_120`, loader
-   admission, equality re-run, book the section-6 delta row.
-2. Three bounded reopen arms from the landing scope: Q6 V direct-output
-   lease, Q4 FFN-down singleton re-bracket, block-13 precision localization
-   (CPU-only).
+1. DONE (2026-08-09): promotion record gains `NV sm_120` (`b762bb67`),
+   loader-installed 17-block admission, post-promotion record-vs-open
+   equality re-run PASS at all three depths, section-6 delta row booked
+   (49.62 us at d512).
+2. In flight: three bounded reopen arms from the landing scope - Q6 V
+   direct-output lease (GPU bracket), Q4 FFN-down singleton re-bracket (GPU
+   bracket), block-13 precision localization (CPU-only).
 3. Norms, host, and overlap remain attribution with their own HARD STOPs; no
    GPU arm without a CPU-verified forecast or an exact-output correctness
    contract.
