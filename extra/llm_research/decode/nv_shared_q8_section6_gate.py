@@ -271,10 +271,10 @@ def gate_verdict(closed: dict, opened: dict, semantic: dict) -> dict:
     issues.append(f"semantic/census gate failed: pass={semantic.get('semantic_pass')} "
                   f"oracle={semantic.get('census_oracle')}")
 
-  if opened["pg3_legacy_render"]["sha256"] != LEGACY_PG3_SHA:
-    issues.append(f"pg3 legacy sha (open) {opened['pg3_legacy_render']['sha256']} != pinned {LEGACY_PG3_SHA}")
-  if closed["pg3_legacy_render"]["sha256"] != LEGACY_PG3_SHA:
-    issues.append(f"pg3 legacy sha (closed) {closed['pg3_legacy_render']['sha256']} != pinned {LEGACY_PG3_SHA}")
+  # render_legacy_pg3 is arm/depth-independent, so the d512 slot stands for the run.
+  for arm, label in ((opened, "open"), (closed, "closed")):
+    if arm["d512"]["pg3_legacy_render"]["sha256"] != LEGACY_PG3_SHA:
+      issues.append(f"pg3 legacy sha ({label}) {arm['d512']['pg3_legacy_render']['sha256']} != pinned {LEGACY_PG3_SHA}")
 
   return {"verdict": "PASS" if not issues else "FAIL", "issues": issues}
 
