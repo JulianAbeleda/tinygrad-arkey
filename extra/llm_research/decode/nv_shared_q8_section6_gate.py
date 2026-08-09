@@ -30,7 +30,7 @@ checked-in policy JSON. Each arm runs as a fresh subprocess. Run under
 """
 from __future__ import annotations
 
-import argparse, contextlib, gc, hashlib, io, json, re, statistics, subprocess, sys, time
+import argparse, contextlib, gc, hashlib, io, json, os, re, statistics, subprocess, sys, time
 sys.path.insert(0, "/home/ubuntu/tinygrad-arkey")
 from tinygrad import Device, Tensor, dtypes
 from tinygrad.helpers import Context, Target
@@ -208,7 +208,8 @@ def run_harness_child(indices: str, out: str, cooperative: bool) -> dict:
          "--count", "8", "--max-context", "1024", "--out", out, "--composed"]
   if indices: cmd += ["--fused-indices", indices]
   if cooperative: cmd.append("--cooperative-q4")
-  run = subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+  run = subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                       env={**os.environ, "PYTHONPATH": "/home/ubuntu/tinygrad-arkey"})
   if run.returncode:
     raise RuntimeError(f"harness child failed rc={run.returncode}: {run.stderr[-4000:]}")
   with open(out) as f:
