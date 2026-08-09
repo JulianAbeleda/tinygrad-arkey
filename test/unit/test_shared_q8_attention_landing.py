@@ -1,8 +1,8 @@
 """Decode shared-Q8 attention landing unit tests
 (docs/task_workflow/input/nv-gemv-substrate-landing-scope-20260808.md section 3):
-the closed-default route-policy record, the model_route_plan loader predicate, and the
-loader-side max17 cooperative lease install. The lease is a trace-time opt-in; every
-mismatch returns the three ordinary primitive calls verbatim."""
+the NV sm_120-promoted route-policy record, the model_route_plan loader predicate,
+and the loader-side max17 cooperative lease install. The lease is a trace-time
+opt-in; every mismatch returns the three ordinary primitive calls verbatim."""
 from types import SimpleNamespace
 
 import pytest
@@ -15,12 +15,12 @@ def _policy_path() -> str:
   return str(mrp._DECODE_SHARED_Q8_ATTENTION_PROMOTION_RECORD)
 
 
-def test_shared_q8_policy_record_is_closed_default():
-  assert mrp.decode_shared_q8_attention_promoted(("NV", "sm_120")) is False
+def test_shared_q8_policy_record_promotes_nv_sm120():
+  assert mrp.decode_shared_q8_attention_promoted(("NV", "sm_120")) is True
   assert mrp.decode_shared_q8_attention_promoted(("AMD", "gfx1100")) is False
   data = __import__("json").loads(__import__("pathlib").Path(_policy_path()).read_text())
   assert data["schema"] == "boltbeam.route_policy.v1"
-  assert data["promoted_targets"] == []
+  assert data["promoted_targets"] == [{"backend": "NV", "architecture": "sm_120"}]
 
 
 def test_shared_q8_loader_rejects_wrong_schema(tmp_path):
