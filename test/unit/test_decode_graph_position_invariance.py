@@ -8,6 +8,7 @@ import contextlib
 import io
 import pathlib
 
+import numpy as np
 import pytest
 
 import tinygrad.llm.model_route_plan as mrp
@@ -97,3 +98,21 @@ def test_symbolic_prefill_mask_builds_position_invariant_extents(decode_model):
     assert len(skeys) >= 1, f"sp={sp}: expected schedule lines"
     assert out.numpy().shape == (1, 1)
     assert all(v == v for v in out.numpy().flat), f"sp={sp}: prefill output contains NaN"
+
+
+def test_eager_full_logits_realize_honors_bound_position(decode_model):
+  """Harness pattern (JIT=0): forward_with_logits under a bound start_pos UOp, then .numpy().
+  Regression: once the BIND node stopped leaking into the decode graph (position-invariant
+  capture), eager realize lost the position value and raised KeyError('start_pos'); the
+  model now carries the bound value on the returned tensors and realize merges it."""
+  v_sp = UOp.variable("start_pos", 0, MAXC - 1)
+  token = Tensor([[7]], dtype="int32")
+  temp = Tensor([0.0])
+  outs = []
+  with Context(JIT=0):
+    for sp in (16, 32):
+      _, eager = decode_model.forward_with_logits(token, v_sp.bind(sp), temp)
+      outs.append(eager.numpy())
+  assert outs[0].shape == outs[1].shape == (1, 151936)
+  assert all(np.isfinite(o).all() for o in outs), "eager full logits contain NaN"
+  assert not np.allclose(outs[0], outs[1]), "eager logits did not advance with start_pos"

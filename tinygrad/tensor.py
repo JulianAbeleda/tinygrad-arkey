@@ -222,7 +222,20 @@ class Tensor(RandMixin):
     sink = UOp.sink(*[x.uop for x in (self,)+lst])
     big_sink, becomes_map = transform_to_call(sink)
     _apply_map_to_tensors(becomes_map, name="buffers")
-    return create_linear_with_vars(big_sink)
+    linear, var_vals = create_linear_with_vars(big_sink)
+    # Position-invariant decode graphs reference the UNBOUND position variable while the
+    # bound value lives with the eager caller (llama.cpp: positions are launch-time data,
+    # never graph structure). The JIT supplies var_vals from its own input args; eager
+    # realize merges the per-tensor carrier, but only for variables the schedule uses.
+    carrier: dict[str, int] = {}
+    for t in (self,)+lst:
+      for nm, val in (getattr(t, "_var_vals", None) or {}).items():
+        if nm in carrier and carrier[nm] != val: raise RuntimeError(f"bind mismatch on {nm}, {carrier[nm]} != {val}")
+        carrier[nm] = val
+    if carrier:
+      used_vars = {v.expr for v in linear.variables()}
+      var_vals = {**{nm: val for nm, val in carrier.items() if nm in used_vars}, **var_vals}
+    return linear, var_vals
 
   def schedule_linear(self, *lst:Tensor) -> UOp:
     """Creates the schedule needed to realize these Tensor(s)."""
@@ -286,6 +299,8 @@ class Tensor(RandMixin):
       raise JitError("cannot access tensor data during JIT capture, the value will be baked in")
     x = self.cast(self.dtype.base).contiguous()
     if self.uop.device is None or isinstance(self.device, tuple): x = x.clone("CPU")
+    # carry the position var_vals carrier through the data-access view chain (cast/contiguous/clone)
+    if (vv := getattr(self, "_var_vals", None)): x._var_vals = vv
     return cast(Buffer, x.realize().uop.buffer).ensure_allocated()
   def _data(self) -> memoryview: return self._buffer().as_memoryview()
 

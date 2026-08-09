@@ -1263,24 +1263,43 @@ class Transformer:
     return (self.config.lm_head_route != "lazy" and bool(self.blk) and
             getattr(self.blk[0], '_prefill_v2', False) and is_direct_packed_prefill_linear(self.output))
 
+  @staticmethod
+  def _bound_position_var_vals(start_pos: int|UOp) -> dict[str, int]:
+    """Value of a bound position UOp, keyed by its unbound variable name. Position-invariant
+    decode graphs reference the UNBOUND variable (llama.cpp: positions are launch-time data,
+    never graph structure), so the BIND node is pruned from the schedule; eager realize needs
+    this carrier to resolve the variable. The JIT supplies the same value from its input args."""
+    if isinstance(start_pos, UOp) and start_pos.op is Ops.BIND and len(start_pos.src) == 2 and \
+       start_pos.src[1].op is Ops.CONST:
+      return {start_pos.src[0].expr: start_pos.src[1].arg}
+    return {}
+
+  @staticmethod
+  def _stamp_position_var_vals(t: Tensor, vv: dict[str, int]) -> Tensor:
+    if vv: t._var_vals = vv
+    return t
+
   def logits(self, tokens:Tensor, start_pos:int|UOp) -> Tensor:
     _prefill = resolve(tokens.shape[1] != 1)
+    _vv = Transformer._bound_position_var_vals(start_pos)
     x = _prefill_semantic(_prefill, prefill_activation, self.token_embd(tokens).float())  # (B, T, D)
     for block in self.blk: x = block(x, start_pos)
     _reduce_output_norm = not _prefill and getattr(self, "_decode_reduce_output_rmsnorm_promoted", False)
     with role_metadata("rms_norm"):
       x = _prefill_semantic(_prefill, prefill_scratch,
         _decode_reduce_output_rmsnorm(self.output_norm, x, _reduce_output_norm))
-    if self._lm_head_wants_pf16(): return _prefill_semantic(_prefill, prefill_output, _pf16(self.output, x).contiguous())
+    if self._lm_head_wants_pf16():
+      return Transformer._stamp_position_var_vals(_prefill_semantic(_prefill, prefill_output, _pf16(self.output, x).contiguous()), _vv)
     # The lazy LM head is still the selected output tensor's actual runtime invocation.  Record it before Tensor's
     # downstream final-token pruning; the prefill-forward context prevents the same call during decode from counting.
     notify_prefill_route(self.output)
-    return _prefill_semantic(_prefill, prefill_output, self.output(x))
+    return Transformer._stamp_position_var_vals(_prefill_semantic(_prefill, prefill_output, self.output(x)), _vv)
 
   def _forward_sampled(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, with_logits:bool) -> Tensor|tuple[Tensor, Tensor]:
     # This runs inside the TinyJit body: feedback's lazy clone/store is captured in the decode schedule instead of
     # being realized by JIT input preparation as a separate per-token copy and synchronization.
     tokens = _runtime_input_boundary(tokens)
+    _vv = Transformer._bound_position_var_vals(start_pos)
     logits = self.logits(tokens, start_pos)[:, -1, :]
     # Gumbel-max trick: argmax(logits/temp - log(-log(uniform))) is equivalent to sampling from softmax(logits/temp)
     sampled = (logits / temperature.maximum(1e-12) -
@@ -1291,7 +1310,8 @@ class Transformer:
     # producer can be reused by the JIT memory plan after argmax has consumed
     # it.  Keep production byte-identical and return a held copy only for the
     # full-logit oracle.
-    return (sampled, logits.clone()) if with_logits else sampled
+    sampled = Transformer._stamp_position_var_vals(sampled, _vv)
+    return (sampled, Transformer._stamp_position_var_vals(logits.clone(), _vv)) if with_logits else sampled
 
   def forward(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> Tensor:
     return self._forward_sampled(tokens, start_pos, temperature, False)  # type: ignore[return-value]
@@ -1301,7 +1321,8 @@ class Transformer:
     logits = self.logits(tokens, start_pos)[:, -1, :]
     sampled = packed_argmax_finite_fp32(logits, -1, keepdim=True) if getattr(self, "_decode_packed_argmax_promoted", False) \
       else logits.argmax(-1, keepdim=True)
-    return _prefill_semantic(resolve(tokens.shape[1] != 1), prefill_output, sampled)
+    return Transformer._stamp_position_var_vals(_prefill_semantic(resolve(tokens.shape[1] != 1), prefill_output, sampled),
+                                                Transformer._bound_position_var_vals(start_pos))
 
   def forward_greedy_with_logits(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> tuple[Tensor, Tensor]:
     tokens = _runtime_input_boundary(tokens)
@@ -1309,7 +1330,8 @@ class Transformer:
     sampled = packed_argmax_finite_fp32(logits, -1, keepdim=True) if getattr(self, "_decode_packed_argmax_promoted", False) \
       else logits.argmax(-1, keepdim=True)
     sampled = _prefill_semantic(resolve(tokens.shape[1] != 1), prefill_output, sampled)
-    return sampled, logits.clone()
+    _vv = Transformer._bound_position_var_vals(start_pos)
+    return Transformer._stamp_position_var_vals(sampled, _vv), Transformer._stamp_position_var_vals(logits.clone(), _vv)
 
   def forward_with_logits(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> tuple[Tensor, Tensor]:
     """Diagnostic decode tap.  The logits already feed sampling; this only retains them as a JIT return."""
