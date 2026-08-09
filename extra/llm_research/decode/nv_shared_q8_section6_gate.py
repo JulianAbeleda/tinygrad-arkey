@@ -84,13 +84,28 @@ def parse_census_log(text: str) -> dict[str, list[float]]:
   return per
 
 
-def census_once(gen, depth: int) -> dict[str, list[float]]:
-  """One token capture (DEBUG=2). Two captures are summed by the caller for the oracle."""
-  with Context(DEBUG=0): next(gen)
+def census_once(gen, depth: int, warmup: bool = True) -> dict[str, list[float]]:
+  """One token census (DEBUG=2). With warmup, first advance one token at DEBUG=0. The first
+  decode token runs TinyJit's ignore (cnt==0) branch EAGERLY, so its kernels print individually;
+  capture and replay tokens print only batched graphs. Two eager tokens are summed by the caller."""
+  if warmup:
+    with Context(DEBUG=0): next(gen)
   buf = io.StringIO()
   with contextlib.redirect_stdout(buf):
     with Context(DEBUG=2): next(gen)
   return parse_census_log(buf.getvalue())
+
+
+def reset_decode_jits(model) -> None:
+  """Reset every decode TinyJit on the model. The position-invariant decode graph captures
+  ONCE per generate and replays as batched graphs, so a second census_once would otherwise
+  observe zero provider kernels; the oracle is per two real captures."""
+  from tinygrad.engine.jit import TinyJit
+  for attr in vars(model).values():
+    if isinstance(attr, TinyJit): attr.reset()
+    elif isinstance(attr, tuple):
+      for j in attr:
+        if isinstance(j, TinyJit): j.reset()
 
 
 def wall_once(model, prompt: list[int], nmeas: int, reps: int) -> tuple[list[float], list[str], list[int]]:
@@ -158,8 +173,12 @@ def run_arm(arm: str, depth: int, nmeas: int, reps: int) -> dict:
   gen = model.generate(prompt.copy(), chunk_size=32, temperature=0.0)
   census = None
   if depth == 512:
-    # Two captures (the max17 oracle is per two captures), summed below.
-    c1, c2 = census_once(gen, depth), census_once(gen, depth)
+    # Two captures (the max17 oracle is per two captures), summed below. The position-invariant
+    # decode graph captures once per generate and replays as batched graphs, so the second eager
+    # token requires a jit reset (next call is ignore/cnt==0 again and runs eagerly).
+    c1 = census_once(gen, depth)
+    reset_decode_jits(model)
+    c2 = census_once(gen, depth, warmup=False)
     census = {}
     for name, times in c1.items(): census.setdefault(name, []).extend(times)
     for name, times in c2.items(): census.setdefault(name, []).extend(times)
