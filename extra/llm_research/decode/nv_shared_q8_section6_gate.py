@@ -192,7 +192,6 @@ def run_arm(arm: str, depth: int, nmeas: int, reps: int) -> dict:
     }
   out["result"] = row
   out["pg3_legacy_render"] = render_legacy_pg3()
-  print(json.dumps(out, indent=1), flush=True)
   try:
     free_model(model, kv)
   except Exception as e:
@@ -292,7 +291,7 @@ def main():
     if args.arm == "record":
       print(json.dumps(run_arm_record(args.depth or 512, args.nmeas, args.reps), indent=1), flush=True)
     else:
-      run_arm(args.arm, args.depth or 512, args.nmeas, args.reps)
+      print(json.dumps(run_arm(args.arm, args.depth or 512, args.nmeas, args.reps), indent=1), flush=True)
     return
 
   def run_one(arm: str, depth: int) -> dict:
