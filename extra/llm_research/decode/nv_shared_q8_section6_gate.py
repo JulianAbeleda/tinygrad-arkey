@@ -16,7 +16,8 @@ Gate items:
      argmax, ordered top-10 sets, aggregate relative L2 <= 1e-3,
      2*max_abs/min_top1_margin < 1.0, all finite.
   4. Pins 3/3 at every depth, both modes: d512 sha `227ad3ce...` first `271`, d2048 sha
-     `aca13ac6...`; open and closed streams identical at every depth.
+     `aca13ac6...` (also first `271`), d4096 sha `d9f1700a...` (first `374`); open and
+     closed streams identical at every depth.
   5. Unit tests green (run separately).
   6. pg3 legacy sha `27857cb8ca03` for `q4k_g3_lanemap_gemv_4096_4096` unmoved.
 
@@ -57,8 +58,12 @@ LEASE_BLOCKS = 17
 DEPTHS = (512, 2048, 4096)
 BASELINE = {512: 172.80, 2048: 161.50, 4096: 149.00}
 PIN_SHA = {512: "227ad3ce9621f2c382cc722a3c2f1677637d3e3f2bfbf37d6ca652f98880eb4e",
-           2048: "aca13ac6d085808f43111945d9353a7491ecb45b261beb55acf11aaeaec8ea1d"}
+           2048: "aca13ac6d085808f43111945d9353a7491ecb45b261beb55acf11aaeaec8ea1d",
+           4096: "d9f1700aac269e5b5f9667c280ba0e744b6516566d7a2ba666712aef3f4dd9e1"}
 PIN_FIRST = 271
+# The first-token pin was validated for the shallow depths only; d4096 deterministically
+# samples `374` (identical across closed/open arms and every rep, pre- and post-fix).
+PIN_FIRST_DEPTHS = frozenset({512, 2048})
 LEGACY_PG3_SHA = "27857cb8ca03"
 
 # Max17 record oracle, per two captures (composed harness protocol).
@@ -250,7 +255,7 @@ def gate_verdict(closed: dict, opened: dict, semantic: dict) -> dict:
       issues.append(f"d{depth}: open sha != closed sha (bitwise-exactness broken)")
     if depth in PIN_SHA and c["token_sha_reps"][0] != PIN_SHA[depth]:
       issues.append(f"d{depth}: closed sha != pin {PIN_SHA[depth][:12]}...")
-    if set(c["first_token_reps"]) != {PIN_FIRST}:
+    if depth in PIN_FIRST_DEPTHS and set(c["first_token_reps"]) != {PIN_FIRST}:
       issues.append(f"d{depth}: closed first token != pin {PIN_FIRST}")
 
   cen = opened["d512"]["result"]["census"]
