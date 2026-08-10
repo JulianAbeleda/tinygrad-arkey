@@ -6,9 +6,11 @@ generic cooperative reduction-to-output primitive.  The candidate arm
 reproduces the production census conditions exactly
 (``_decode_reduce_output_rmsnorm_promoted = True`` on the model and every
 block, plus ``CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT = 1`` and
-``CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER = 1``); the control arm is the closed
-production graph (no promotion flags, no callify Context flags) and fails
-closed if any promoted route is observed.
+``CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER = 1``).  Both arms reproduce the
+census's production-qualified decode route (``_decode_direct_greedy_promoted =
+True``, direct greedy flash); the control arm is otherwise the closed
+production graph (no reduce-output promotion flags, no callify Context flags)
+and fails closed if any promoted reduce-output route is observed.
 
 There is no construction-gate phase in this campaign: the CPU capability gate
 already proved construction (docs/task_workflow/input/nv-generic-reduce-output-primitive-record-20260809.md).
@@ -112,7 +114,11 @@ def _require_candidate_callify_flags() -> None:
 
 def _configure(model, arm: str) -> None:
   """Set the candidate promotion conditions on a fresh model; the control arm
-  stays the closed production graph."""
+  stays the closed production graph.  Both arms set the production-qualified
+  direct greedy flash route exactly like the committed census
+  (scratchpad/nv_reduce_output_rmsnorm_census.py), so the only inter-arm delta
+  is the reduce-output promotion plus its callify Context flags."""
+  model._decode_direct_greedy_promoted = True
   if arm == "candidate":
     _require_candidate_callify_flags()
     model._decode_reduce_output_rmsnorm_promoted = True
@@ -125,6 +131,7 @@ def _configure(model, arm: str) -> None:
 def _gates(model) -> dict:
   """Report the loaded model's reduce-output promotion state."""
   return {
+    "decode_direct_greedy_promoted": bool(getattr(model, "_decode_direct_greedy_promoted", False)),
     "reduce_output_rmsnorm_promoted": bool(getattr(model, "_decode_reduce_output_rmsnorm_promoted", False)),
     "block_reduce_output_rmsnorm_promoted": [
       bool(getattr(block, "_decode_reduce_output_rmsnorm_promoted", False)) for block in model.blk
@@ -172,17 +179,33 @@ def smoke(arm: str, model_path: str, depth: int, max_context: int) -> dict:
     raise ValueError("smoke requires the candidate arm; the fused body does not exist under the closed control graph")
   from tinygrad import Device
   from tinygrad.engine.jit import GraphAdmissionCensus, observe_graph_admissions
+  from tinygrad.helpers import Context
   with _arm_context(arm):
     model, gates = _model(arm, model_path, max_context)
+    # Mirror capture_decode_graph exactly: consume the prelude token
+    # unobserved, then observe the second decode token (index 1 of 3).  The
+    # committed census (108 admissions / 54 fused bodies) is defined over that
+    # window; observing the first token would capture the prefill graph where
+    # the fused decode body never appears.
+    model.reset_generation_state()
     gen = model.generate(_prompt(model_path, depth), chunk_size=32, temperature=0.0)
     admission = GraphAdmissionCensus()
     try:
-      with observe_graph_admissions(admission):
-        token = int(next(gen))
+      prelude = int(next(gen))
+      token = None
+      for index in range(3):
+        if index == 1:
+          with Context(TRACEMETA=1), observe_graph_admissions(admission):
+            token = int(next(gen))
+        else:
+          next(gen)
+      if token is None: raise RuntimeError("smoke observation window did not run")
       Device[Device.DEFAULT].synchronize()
       programs = [record.program_name for record in admission.records if record.program_name]
       return {"schema": SMOKE_SCHEMA, "arm": arm, "mode": "smoke", "gates": gates,
-              "device": str(Device[Device.DEFAULT]), "survive": True, "token": token,
+              "device": str(Device[Device.DEFAULT]), "survive": True,
+              "prelude_token": prelude, "token": token,
+              "decode_observation": "second decode token after the prelude (index 1 of 3), mirroring capture_decode_graph",
               "fused_body_present": bool(any("reduce_output_rmsnorm" in name for name in programs)),
               "program_count": len(programs), "program_names": programs}
     finally:

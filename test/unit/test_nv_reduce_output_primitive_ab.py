@@ -31,6 +31,20 @@ def test_candidate_arm_fails_closed_without_callify_flags():
     _configure(model, "candidate")
   assert model._decode_reduce_output_rmsnorm_promoted is True
   assert all(block._decode_reduce_output_rmsnorm_promoted is True for block in model.blk)
+  # Census-matching decode route is set on the candidate arm.
+  assert model._decode_direct_greedy_promoted is True
+
+
+def test_control_arm_sets_census_direct_greedy_route_only():
+  model = _FakeModel()
+  _configure(model, "control")
+  # The control arm keeps the closed reduce-output graph but runs the same
+  # production-qualified direct greedy flash route as the committed census, so
+  # the bracket measures only the reduce-output inter-arm delta.
+  assert model._decode_direct_greedy_promoted is True
+  assert not hasattr(model, "_decode_reduce_output_rmsnorm_promoted")
+  assert not any(hasattr(block, "_decode_reduce_output_rmsnorm_promoted") for block in model.blk)
+  assert _gates(model)["decode_direct_greedy_promoted"] is True
 
 
 def test_candidate_arm_requires_both_callify_flags():
