@@ -253,6 +253,49 @@ def test_callify_flags_leave_non_reduce_output_precompiled_functions_untouched()
     call = next(u for u in root.toposort() if u.op is Ops.CALL and bool(getattr(u.arg, "precompile", False)))
     assert call.arg.precompiled_output_slots == ()
 
+
+def test_non_terminal_marker_producer_keeps_closed_graph_spelling():
+  """The production per-block ``_run`` chain feeds one block's output into the
+  next block's marker INPUT, but the marker is consumed INSIDE that body (the
+  result is the residual stream).  Such a producer is on the route (ro_route)
+  but NOT on the marker's output boundary, so its output redirect and direct
+  input view must not fire: under the candidate flags it transforms
+  byte-identically to the closed control graph, or the census's residual
+  E_32_32_4 kernel identities shift.  The route sets are computed exactly as
+  transform_to_call does; only precompiled_output_slots (route metadata, not a
+  graph spelling change) is normalized between the arms."""
+  from dataclasses import replace
+  from tinygrad.callify import (_ACTIVE_REDUCE_OUTPUT_ROUTE_FUNCTIONS, _ACTIVE_REDUCE_OUTPUT_OUT_ROUTE_FUNCTIONS,
+                                CallInfo, _reduce_output_route_function_ids, pm_early_transform_tensor_graph)
+  from tinygrad.function import function
+  from tinygrad.helpers import Context
+  from tinygrad.llm.memory_semantics import runtime_activation
+  from tinygrad.uop.ops import Ops, UOp, graph_rewrite
+  x = Tensor.empty(1,1,4096,dtype=dtypes.float32,device="NV")
+  w = Tensor.empty(4096,dtype=dtypes.float16,device="NV")
+  norm = _norm(w)
+  @function(precompile=True,allow_implicit=True)
+  def prev_block(v): return runtime_activation((v + 1).contiguous())
+  @function(precompile=True,allow_implicit=True)
+  def block_run(v):
+    marked = _apply(norm, v)
+    return runtime_activation((marked + v).contiguous())
+  value = block_run(runtime_activation(prev_block(x).contiguous()))
+  route_ids, out_route_ids = _reduce_output_route_function_ids(value.uop)
+  assert route_ids and not out_route_ids, "route scan must see the producer without a terminal marker"
+  control = graph_rewrite(value.uop, pm_early_transform_tensor_graph, name="control nonterminal callify")
+  with Context(_ACTIVE_REDUCE_OUTPUT_ROUTE_FUNCTIONS=route_ids,
+               _ACTIVE_REDUCE_OUTPUT_OUT_ROUTE_FUNCTIONS=out_route_ids,
+               CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
+    candidate = graph_rewrite(value.uop, pm_early_transform_tensor_graph, name="candidate nonterminal callify")
+  assert control is not None and candidate is not None
+  def structural(u:UOp):
+    if u.op is Ops.UNIQUE: return ("UNIQUE",)
+    arg = u.arg if not isinstance(u.arg, CallInfo) else replace(u.arg, precompiled_output_slots=())
+    return (u.op, tuple(structural(s) for s in u.src), arg)
+  assert structural(control) == structural(candidate)
+
+
 def test_precompiled_output_slot_contract_is_closed_with_redirect_default():
   from tinygrad.function import function
   from tinygrad.helpers import Context

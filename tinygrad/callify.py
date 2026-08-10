@@ -147,18 +147,31 @@ def _body_has_reduce_output_candidate(srcs:tuple[UOp, ...]) -> bool:
 # marker's input proof survives to rangeify.
 _ACTIVE_REDUCE_OUTPUT_ROUTE_FUNCTIONS = ContextVar("_ACTIVE_REDUCE_OUTPUT_ROUTE_FUNCTIONS", frozenset())
 
+# The narrower output-boundary set: precompiled FUNCTIONs whose RESULT chain
+# is the marker (terminal consumers) or whose output feeds a terminal marker's
+# input (their producers).  Only these keep the output redirect and the
+# direct invocation-input view; marker-bearing bodies whose result is ordinary
+# (the production per-block ``_run`` residual stream) keep the closed-graph
+# spelling so their residual kernel identities cannot shift.
+_ACTIVE_REDUCE_OUTPUT_OUT_ROUTE_FUNCTIONS = ContextVar("_ACTIVE_REDUCE_OUTPUT_OUT_ROUTE_FUNCTIONS", frozenset())
 
-def _reduce_output_route_function_ids(sink:UOp) -> frozenset[int]:
-  """Ids of precompiled FUNCTIONs whose output feeds a REDUCE_OUTPUT marker input.
 
-  Walk every eligible marker's input chain downward through transparent
-  carriers (CONTIGUOUS, RESHAPE, MEMORY_SEMANTIC) and GETTUPLE, crossing
-  FUNCTION boundaries (an invocation argument feeds the matching body PARAM),
-  and collect every precompiled FUNCTION whose output participates.  This is
-  the producer side of the route: those outputs must keep the owned redirect
-  so the marker input proof (owned precompiled output AFTER / exact
-  invocation slot) survives to rangeify.  Functions whose bodies carry the
-  marker need no entry here; the body scan covers them.
+def _reduce_output_route_function_ids(sink:UOp) -> tuple[frozenset[int], frozenset[int]]:
+  """Ids of precompiled FUNCTIONs on the reduce-output route.
+
+  Returns (route_ids, out_route_ids).  Walk every eligible marker's input
+  chain downward through transparent carriers (CONTIGUOUS, RESHAPE,
+  MEMORY_SEMANTIC) and GETTUPLE, crossing FUNCTION boundaries (an invocation
+  argument feeds the matching body PARAM), and collect every precompiled
+  FUNCTION whose output participates (route_ids).  Functions whose bodies
+  carry the marker need no entry here; the body scan covers them.
+
+  out_route_ids is the subset whose participation is on the marker's OUTPUT
+  boundary: the marker's own result must reach a FUNCTION body result or the
+  top-level sink through transparent legs.  A marker consumed inside a body
+  (the production per-block norm, whose result feeds attention/FFN) is not
+  terminal, so the producers feeding it keep the closed-graph output/input
+  spelling and their residual kernel identities cannot shift.
   """
   nodes = sink.toposort()
   # PARAM nodes are interned across functions, so scope the slot lookup to the
@@ -172,27 +185,49 @@ def _reduce_output_route_function_ids(sink:UOp) -> frozenset[int]:
       if u.op is Ops.PARAM and isinstance(u.arg, ParamArg): slots.setdefault(u.arg.slot, u)
       if u.op is Ops.REDUCE_OUTPUT and isinstance(u.arg, ReduceOutputSpec): marker_owner.setdefault(id(u), f)
     if slots: body_params[id(f)] = slots
+  # Terminal markers: reachable from a body result or the sink through the
+  # same transparent legs the redirect itself admits.
+  transparent = {Ops.CONTIGUOUS, Ops.RESHAPE, Ops.MEMORY_SEMANTIC}
+  terminal: set[int] = set()
+  def _collect_terminal(u:UOp) -> None:
+    stack = [u]
+    while stack:
+      x = stack.pop()
+      if x.op is Ops.REDUCE_OUTPUT and isinstance(x.arg, ReduceOutputSpec):
+        terminal.add(id(x)); continue
+      if x.op in transparent and len(x.src) == 1: stack.append(x.src[0])
+  for f in nodes:
+    if f.op is not Ops.FUNCTION or f.src[0].op is not Ops.TUPLE: continue
+    for r in f.src[0].src: _collect_terminal(r)
+  for r in sink.src: _collect_terminal(r)
   route: set[int] = set()
+  out_route: set[int] = set()
   for m in nodes:
     if m.op is not Ops.REDUCE_OUTPUT or not isinstance(m.arg, ReduceOutputSpec): continue
     if not (m.arg.owned_contiguous_candidate or m.arg.input_identity_at_marker): continue
+    terminal_marker = id(m) in terminal
     stack: list[tuple[UOp, UOp|None]] = [(m.src[1], marker_owner.get(id(m)))]
     seen: set[int] = set()
     while stack:
       x, owner = stack.pop()
       if id(x) in seen: continue
       seen.add(id(x))
-      if x.op is Ops.FUNCTION and x.arg.precompile: route.add(id(x)); continue
+      if x.op is Ops.FUNCTION and x.arg.precompile:
+        route.add(id(x))
+        if terminal_marker: out_route.add(id(x))
+        continue
       if x.op is Ops.GETTUPLE and len(x.src) == 1 and x.src[0].op is Ops.FUNCTION:
-        route.add(id(x.src[0])); continue
+        route.add(id(x.src[0]))
+        if terminal_marker: out_route.add(id(x.src[0]))
+        continue
       if x.op is Ops.PARAM and isinstance(x.arg, ParamArg):
         # Cross the function boundary: this body PARAM is fed by the owner's
         # invocation argument at the same slot.
         if owner is None or x.arg.slot >= len(owner.src) - 1: continue
         stack.append((owner.src[1 + x.arg.slot], None)); continue
-      if x.op in {Ops.CONTIGUOUS, Ops.MEMORY_SEMANTIC, Ops.RESHAPE} and len(x.src) == 1:
+      if x.op in transparent and len(x.src) == 1:
         stack.append((x.src[0], owner)); continue
-  return frozenset(route)
+  return frozenset(route), frozenset(out_route)
 
 
 def _is_reduce_output_route_function(c:UOp) -> bool:
@@ -202,6 +237,25 @@ def _is_reduce_output_route_function(c:UOp) -> bool:
   if _body_has_reduce_output_candidate(c.src[0].src): return True
   active = _ACTIVE_REDUCE_OUTPUT_ROUTE_FUNCTIONS.value
   return bool(active and id(c) in active)
+
+
+def _body_output_carries_reduce_output_marker(srcs:tuple[UOp, ...]) -> bool:
+  """Whether one body RESULT is the reduce-output marker's C6 output chain.
+
+  The redirect and direct-input-view behaviors change how the function's
+  output is stored and how its invocation arguments are bound; they are only
+  load-bearing when the marker sits on this function's OUTPUT boundary (the
+  caller materializes the marked value).  A function whose body merely
+  CONTAINS a marker as an intermediate (the production per-block ``_run``,
+  whose result is the residual stream) must keep the closed-graph output
+  spelling, or the residual E_32_32_4 kernel identities shift.
+  """
+  for item in srcs:
+    x = item
+    while x.op in {Ops.CONTIGUOUS, Ops.RESHAPE, Ops.MEMORY_SEMANTIC} and len(x.src) == 1:
+      x = x.src[0]
+    if x.op is Ops.REDUCE_OUTPUT and isinstance(x.arg, ReduceOutputSpec): return True
+  return False
 
 
 def _precompiled_output_redirect(s:UOp, t:UOp, redirect:bool) -> UOp|None:
@@ -445,12 +499,21 @@ def transform_precompiled_call(c:UOp) -> UOp|None:
   # actually carry the reduce-output route; every other precompiled family
   # transforms exactly like the closed control graph.
   ro_route = _is_reduce_output_route_function(c)
+  # The output-boundary behaviors are narrower: only a function whose RESULT
+  # carries the marker redirects its output and strips caller materialization
+  # from its inputs, plus the producers feeding such a terminal marker (their
+  # exact output must survive as the marker's invocation input).  Marker-
+  # bearing producers with an ordinary output (the production per-block
+  # decode function) keep the closed-graph spelling.
+  out_active = _ACTIVE_REDUCE_OUTPUT_OUT_ROUTE_FUNCTIONS.value
+  out_route = CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT and (
+    _body_output_carries_reduce_output_marker(c.src[0].src) or bool(out_active and id(c) in out_active))
   # An exact prior precompiled output already has a fresh contiguous output
   # allocation.  Retain its invocation spelling so the nested producer can
   # become AFTER(output, CALL); adding another transport CONTIGUOUS here would
   # create the first of two identity copies at a consumer FUNCTION boundary.
   input_buffers = tuple(_direct_owned_precompiled_input_view(x) if
-                        ro_route and _exact_precompiled_output_argument(x)
+                        out_route and _exact_precompiled_output_argument(x)
                         else x if x.op in {Ops.AFTER, Ops.BIND} else x.contiguous() for x in c.src[1:])
 
   # add the outputs to the call
@@ -470,7 +533,7 @@ def transform_precompiled_call(c:UOp) -> UOp|None:
     while s.op is Ops.AFTER:
       after_deps.extend(s.src[1:])
       s = s.src[0]
-    if (placed := _precompiled_output_redirect(s, t, ro_route)) is not None and s not in subs:
+    if (placed := _precompiled_output_redirect(s, t, out_route)) is not None and s not in subs:
       subs[s] = placed
       items.append(s.after(*after_deps) if after_deps else s)
     else:
@@ -697,8 +760,9 @@ def transform_to_call(big_sink:UOp) -> tuple[UOp, dict[UOp, UOp]]:
   # semantic materialization rewrites the marker's input chain.  The callify
   # passes below consult it so only route functions take the owned-redirect
   # contract; every other precompiled family transforms byte-identically.
-  route_ids = _reduce_output_route_function_ids(big_sink)
-  with Context(_ACTIVE_REDUCE_OUTPUT_ROUTE_FUNCTIONS=route_ids):
+  route_ids, out_route_ids = _reduce_output_route_function_ids(big_sink)
+  with Context(_ACTIVE_REDUCE_OUTPUT_ROUTE_FUNCTIONS=route_ids,
+               _ACTIVE_REDUCE_OUTPUT_OUT_ROUTE_FUNCTIONS=out_route_ids):
     big_sink = graph_rewrite(big_sink, pm_semantic_materialization, name="semantic materialization boundary")
     rewritten_outputs = big_sink.src
     # uop list is a list in the original_sink graph and we can map to the tags later
