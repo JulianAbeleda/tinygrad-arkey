@@ -51,22 +51,28 @@ LOGITS_SCHEMA = "tinygrad.nv_reduce_output_fp32_qk_ab.logits.v1"
 CENSUS_SCHEMA = "tinygrad.nv_reduce_output_fp32_qk_ab.census.v1"
 TIMING_SCHEMA = "tinygrad.nv_reduce_output_fp32_qk_ab.timing.v1"
 
-PROMOTION_US = 50.0
-# Committed census expectations for the fp32 route
+# Committed census expectations for the fp32 route, updated to the
+# production-observed contract (logits-verified at adcb2fead): per census
+# token only the AFTER-carrier q/k markers admit (19 q + 19 k); the
+# CONTIGUOUS/REDUCE-derived carriers (17 q + 17 k per token) stay ordinary by
+# design.  The C6 route fuses 19 bodies: 18 block norms plus the final norm
+# (its epilogue is the separate final_rmsnorm_epilogue role, 1 -> 0).  Each
+# ordinary q/k norm renders TWO epilogue kernels, so the epilogue drop is
+# 2 x the fused body count.
 # (docs/task_workflow/input/nv-reduce-output-fp32-qk-route-scope-20260810.md).
 CENSUS_REFERENCE = {
-  "fused_bodies_total": 90,
-  "fused_bodies_c6": 18,   # reduce_output_rmsnorm_1_4096 (unchanged C6 route)
-  "fused_bodies_q": 36,    # reduce_output_rmsnorm_32_128
-  "fused_bodies_k": 36,    # reduce_output_rmsnorm_8_128
-  "q_norm_reduce": [36, 0],
-  "k_norm_reduce": [36, 0],
-  "q_norm_epilogue": [72, 36],
-  "k_norm_epilogue": [72, 36],
-  "rmsnorm_reduce": [56, 38],      # C6 only, unchanged
-  "rmsnorm_epilogue": [55, 37],    # C6 only, unchanged
-  "final_rmsnorm_epilogue": [1, 1],
-  "net_norms_kernels_delta": -90,
+  "fused_bodies_total": 57,
+  "fused_bodies_c6": 19,   # reduce_output_rmsnorm_1_4096 (18 blocks + final norm)
+  "fused_bodies_q": 19,    # reduce_output_rmsnorm_32_128 (AFTER-carrier q markers only)
+  "fused_bodies_k": 19,    # reduce_output_rmsnorm_8_128 (AFTER-carrier k markers only)
+  "q_norm_reduce": [36, 17],
+  "k_norm_reduce": [36, 17],
+  "q_norm_epilogue": [72, 34],   # two epilogue kernels per ordinary q norm
+  "k_norm_epilogue": [72, 34],   # two epilogue kernels per ordinary k norm
+  "rmsnorm_reduce": [56, 37],    # C6 bodies (18 blocks + final norm reduce)
+  "rmsnorm_epilogue": [55, 37],  # 18 block epilogues; the final norm epilogue is the separate role
+  "final_rmsnorm_epilogue": [1, 0],  # final norm fuses into a C6 body
+  "net_norms_kernels_delta": -152,
   "artifact": "docs/task_workflow/input/nv-reduce-output-fp32-qk-route-scope-20260810.md",
 }
 
@@ -75,7 +81,7 @@ CONSTRUCTION = {
   "population": "norms",
   "mechanism": "fp32 cooperative reduce-output bodies for the q/k norms: one reduce_output_rmsnorm_32_128 body per q norm and one reduce_output_rmsnorm_8_128 body per k norm replace the ordinary single-kernel q/k reduces (r_2_8_4_4_16 / r_8_16_8) plus their elementwise epilogues; the C6 4096-dim route stays at 18 reduce_output_rmsnorm_1_4096 bodies",
   "codegen_path": "candidate sets _decode_reduce_output_rmsnorm_promoted=True on the model and every block and decodes under CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1 plus CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1; the fp32 marker rows (8/32 x 128) admit through the PERMUTE-view carrier",
-  "census_target": "90 fused bodies (18 C6 + 36 q + 36 k); q/k reduce roles 36 -> 0 each; q/k epilogue roles 72 -> 36 each; C6 rmsnorm roles unchanged (reduce 56 -> 38, epilogue 55 -> 37, final epilogue 1)",
+  "census_target": "57 fused bodies (19 C6 incl. final norm + 19 q + 19 k); q/k reduce roles 36 -> 17 each; q/k epilogue roles 72 -> 34 each (2 epilogue kernels per ordinary norm); C6 rmsnorm roles reduce 56 -> 37, epilogue 55 -> 37, final epilogue 1 -> 0; the CONTIGUOUS/REDUCE-derived q/k carriers (17 per family per token) stay ordinary by design",
   "correctness_contract": {
     "full_logit_fp32_sha256": "bitwise identical to control over the stacked rows",
     "token_stream": "identical to control",
@@ -257,13 +263,17 @@ def validate_logits_gate(control: dict, candidate: dict) -> dict:
 
 def validate_census(control: dict, candidate: dict) -> dict:
   """fp32 q/k census gate.  Fused bodies are counted by the
-  ``reduce_output_rmsnorm`` name prefix; the q/k reduce role drops and the q/k
-  epilogue role drops must be consistent with the q/k body counts.  The C6
-  route is unchanged, so the rmsnorm reduce/epilogue drops must match the C6
-  body count and the final epilogue must stay at 1.  If the q/k bodies do not
-  appear (selector still rejects the fp32 route) the gate FAILS CLOSED with a
-  clear message and never silently passes.  Non-norms family shifts are
-  reported with the exact program names, not hidden."""
+  ``reduce_output_rmsnorm`` name prefix; the q/k reduce role drops must equal
+  the q/k body counts.  Each ordinary q/k norm renders TWO epilogue kernels,
+  so the q/k epilogue drop must equal 2 x the q/k body counts.  The C6 route
+  fuses 18 block norms plus the final norm, so the rmsnorm reduce drop must
+  match the C6 body count, the rmsnorm epilogue drop must be C6 bodies - 1
+  (the final norm epilogue is the separate role and fuses to 0).  Observed
+  body counts must match the committed reference (a drift in admission flips
+  the gate and forces a reference update).  If the q/k bodies do not appear
+  (selector still rejects the fp32 route) the gate FAILS CLOSED with a clear
+  message and never silently passes.  Non-norms family shifts are reported
+  with the exact program names, not hidden."""
   for label, row in (("control", control), ("candidate", candidate)):
     if row.get("schema") != CENSUS_SCHEMA:
       raise ValueError(f"{label} census row requires schema {CENSUS_SCHEMA!r}, got {row.get('schema')!r}")
@@ -285,12 +295,14 @@ def validate_census(control: dict, candidate: dict) -> dict:
     "qk_bodies_present": q_bodies > 0 and k_bodies > 0,
     "q_reduce_drop_consistent": q_reduce_drop > 0 and q_reduce_drop == q_bodies,
     "k_reduce_drop_consistent": k_reduce_drop > 0 and k_reduce_drop == k_bodies,
-    "q_epilogue_drop_consistent": q_epilogue_drop > 0 and q_epilogue_drop == q_bodies,
-    "k_epilogue_drop_consistent": k_epilogue_drop > 0 and k_epilogue_drop == k_bodies,
+    "q_epilogue_drop_consistent": q_epilogue_drop > 0 and q_epilogue_drop == 2 * q_bodies,
+    "k_epilogue_drop_consistent": k_epilogue_drop > 0 and k_epilogue_drop == 2 * k_bodies,
     "c6_bodies_present": c6_bodies > 0,
     "rmsnorm_reduce_drop_consistent": rmsnorm_reduce_drop > 0 and rmsnorm_reduce_drop == c6_bodies,
-    "rmsnorm_epilogue_drop_consistent": rmsnorm_epilogue_drop > 0 and rmsnorm_epilogue_drop == c6_bodies,
-    "final_epilogue_unchanged": final_control == 1 and final_candidate == 1,
+    "rmsnorm_epilogue_drop_consistent": rmsnorm_epilogue_drop > 0 and rmsnorm_epilogue_drop == c6_bodies - 1,
+    "final_epilogue_fused_consistent": final_control == 1 and final_candidate == 0,
+    "body_counts_match_reference": (q_bodies, k_bodies, c6_bodies) == (
+      CENSUS_REFERENCE["fused_bodies_q"], CENSUS_REFERENCE["fused_bodies_k"], CENSUS_REFERENCE["fused_bodies_c6"]),
   }
   honest_net_program_delta = int(candidate.get("kernels", 0)) - int(control.get("kernels", 0))
   control_programs = control.get("program_counts") or {}
@@ -350,7 +362,7 @@ def validate_census(control: dict, candidate: dict) -> dict:
           "norms_role_deltas": norms_role_deltas, "unexpected_norms_roles": unexpected_roles,
           "conditions": conditions, "fail_closed": fail_closed, "reference": reference,
           "callify_redirect_side_effects": side_effects, "non_norms_population_deltas": population_deltas,
-          "note": "fused bodies counted by reduce_output_rmsnorm name prefix; q/k reduce/epilogue drops checked against body counts; C6 route unchanged; non-norms shifts reported, not hidden",
+          "note": "fused bodies counted by reduce_output_rmsnorm name prefix; q/k reduce drops equal body counts and epilogue drops equal 2x body counts; C6 19 bodies (18 blocks + final norm, final epilogue role fuses); non-norms shifts reported, not hidden",
           "gate_pass": bool(all(conditions.values())) and not fail_closed}
 
 
@@ -380,7 +392,7 @@ HARD_STOP_NOTES = [
   "Every GPU arm runs as a fresh process under `timeout ... flock -w 90 /tmp/gpu-bench.lock`; no arm holds the lock across a wall-bracket step.",
   "Phase 0 (NV render smoke) must survive on sm_120 (no Xid 31 MMU fault) with the fused q/k bodies (reduce_output_rmsnorm_32_128 / reduce_output_rmsnorm_8_128) in the compiled program set.",
   "The exact full-logit gate (fp32 SHA-256 over the stacked rows, token stream, shape, per-row argmax == sampled token) must pass before any census or bracket arm runs.",
-  "The census gate FAILS CLOSED if the q/k fused bodies do not appear (selector still rejects the fp32 route); q/k reduce and epilogue drops must be consistent with body counts; non-norms family shifts are reported with exact program names.",
+  "The census gate FAILS CLOSED if the q/k fused bodies do not appear (selector still rejects the fp32 route); q/k reduce drops equal body counts, q/k epilogue drops equal 2x body counts (two epilogue kernels per ordinary norm), C6 is 19 bodies (18 blocks + final norm) with the final epilogue role fusing to 0, and observed body counts must match the committed reference; non-norms family shifts are reported with exact program names.",
   "The wall bracket requires identical token-stream hashes and a candidate median at least +50 us/token faster than BOTH bracketing controls.",
   "No policy promotion: decode-reduce-output-rmsnorm-route-policy.json stays promoted_targets: []; no model wiring change; no default flip.",
 ]
@@ -417,7 +429,7 @@ def no_go_record(model: str = DEFAULT_MODEL, depth: int = 512) -> dict:
     },
     "census": {
       "run": False, "result": "NOT_AUTHORIZED", "reason": "campaign stopped before the fp32 census arm",
-      "contract": "fused reduce-output bodies counted by name prefix; q/k reduce roles 36 -> 0 and epilogue roles 72 -> 36 each; C6 roles unchanged; FAIL CLOSED if the q/k bodies do not appear; honest net program delta and non-norms side effects reported",
+      "contract": "fused reduce-output bodies counted by name prefix; q/k reduce roles 36 -> 17 each and epilogue roles 72 -> 34 each; C6 19 bodies (18 blocks + final norm, final epilogue role 1 -> 0); FAIL CLOSED if the q/k bodies do not appear; body counts must match the committed reference; honest net program delta and non-norms side effects reported",
     },
     "wall_bracket": {
       "run": False, "result": "NOT_AUTHORIZED", "reason": "campaign stopped before the reverse control/candidate/control wall bracket",

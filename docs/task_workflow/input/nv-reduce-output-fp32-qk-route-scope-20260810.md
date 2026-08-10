@@ -96,18 +96,26 @@ sibling fp32 harness) with:
    compiled set.
 2. Phase 1 exact full-logit gate: fp32 SHA-256 identical to control, token
    stream identical, per-row argmax == sampled token.
-3. Phase 2 census: fused bodies 72 (36 q + 36 k); q/k reduce roles 72 -> 0;
-   q/k epilogue roles 144 -> 72; attn/ffn/output C6 bodies unchanged at 18;
-   honest net program delta reported with exact families.
+3. Phase 2 census: fused bodies 57 (19 q + 19 k + 19 C6); q/k reduce roles
+   36 -> 17 each; q/k epilogue roles 72 -> 34 each (two epilogue kernels per
+   ordinary norm, so the drop is 2 x the body count); C6 fuses 18 block norms
+   plus the final norm (rmsnorm reduce 56 -> 37, epilogue 55 -> 37, final
+   epilogue role 1 -> 0); honest net program delta reported with exact
+   families.
 4. Phase 3 reverse control/candidate/control wall bracket under the shared
    GPU bench lock, +50 us/token bar vs BOTH controls, token-stream hash
    identical across arms.  Promotion books the q/k share of the norms row;
    the +495.330 us row books only when the full row (C6 + q/k + output
    norm) promotes.
 
-Expected census shape if everything is admitted: 36 q + 36 k fused bodies
-replace 72 reduces + 72 epilogues (72 kernels -> 72 bodies, net -72
-kernels) and the attn/ffn/output route stays at 18 bodies.
+Expected census shape (production-observed, logits-verified at
+`adcb2fead`): per decode token the AFTER-carrier q/k markers admit (19 q +
+19 k fused bodies) while the CONTIGUOUS/REDUCE-derived q/k carriers (17 q +
+17 k per token, input chain `CONTIGUOUS(RESHAPE(REDUCE(...)))` over a
+non-precompiled buffer) stay ordinary by design; the C6 route fuses 19
+bodies (18 block norms + the final norm).  The remaining 17 q/k norms per
+family per token are the follow-on scope for admitting the REDUCE-derived
+carrier; the +495.330 us row books in full only when that admission lands.
 
 ## Risks and open questions
 
