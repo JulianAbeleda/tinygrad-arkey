@@ -382,8 +382,12 @@ def _lower_c6_call_input(call:UOp) -> UOp|None:
   for arg in call.src[1:]:
     marker = _c6_marker(arg)
     if marker is None: continue
-    out_buf = arg.buf_uop
-    if out_buf is None or out_buf.op not in (Ops.BUFFER, Ops.PARAM): continue
+    # `arg.buf_uop` walks the carrier down to the marker's input base (the C6
+    # carrier is a lazy materialization, not a concrete buffer), so reusing it
+    # as the fused body's output would write the norm IN PLACE over the input
+    # and corrupt every other consumer of that buffer.  Bind the body to a
+    # fresh output buffer; the consumer reads it through the AFTER dependency.
+    out_buf = UOp.new_buffer(arg.device, arg.numel(), arg.dtype)
     fused = lower_reduce_output_store(None, arg, marker, target=out_buf)
     if fused is None: continue
     replacements[arg] = out_buf.after(fused)

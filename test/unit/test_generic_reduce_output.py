@@ -248,6 +248,45 @@ def test_c6_chain_rejects_movement_and_bare_inputs():
   assert lower_reduce_output_store(target.store(direct), direct) is not None
 
 
+def test_c6_call_input_fused_body_never_aliases_its_input():
+  """The C6 CALL-input fusion must write a FRESH output buffer.
+
+  The carrier is a lazy materialization, so ``arg.buf_uop`` resolves down to
+  the marker's input base; reusing it as the fused body's output would write
+  the norm in place over the input and corrupt the input's other consumers
+  (the decode block residual).  Regression for the NV wall bracket's
+  all-NaN exact-logits gate failure under
+  ``CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT``.
+  """
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  from tinygrad.schedule.rangeify import pm_reduce_output_store
+  from tinygrad.uop.ops import graph_rewrite
+  x = UOp.param(0, dtypes.float16, (1, 4096), "CPU")
+  w = UOp.param(1, dtypes.float16, (4096,), "CPU")
+  out = UOp.new_buffer("CPU", 4096, dtypes.float16).reshape(1, 4096)
+  marker = UOp(Ops.REDUCE_OUTPUT, dtypes.float16, (out, x, w),
+                ReduceOutputSpec(1, 4096, 1e-6, dtypes.float16, owned_contiguous_candidate=True,
+                                 invocation_input_slot=0))
+  chain = runtime_scratch(marker).reshape(4096).contiguous()
+  # A consumer CALL whose input is the production C6 chain.
+  consumer = UOp(Ops.CALL, dtypes.void, (UOp.sink(chain), chain))
+  sink = graph_rewrite(UOp.sink(consumer), pm_reduce_output_store, bottom_up=False, name="test c6 call input")
+  rewritten = sink.src[0]
+  assert rewritten.op is Ops.CALL
+  # The consumer's first argument is the fresh output AFTER the fused body.
+  replaced = rewritten.src[1]
+  assert replaced.op is Ops.AFTER and len(replaced.src) == 2
+  out_buf, fused = replaced.src
+  assert out_buf.op is Ops.BUFFER and out_buf.numel() == 4096
+  assert fused.op in (Ops.FUNCTION, Ops.CALL)
+  assert fused.src[0].arg.name == "reduce_output_rmsnorm_1_4096"
+  # The fused body's output slot is the fresh buffer; its input slot is the
+  # original input param.  They must never alias.
+  assert fused.src[1] is out_buf
+  assert fused.src[2] is x
+  assert out_buf is not x
+
+
 def test_m4_style_view_proof_admits_declared_typed_output():
   from tinygrad.llm.kernel_program import DeclaredTypedOutput, TypedLayout, _DECLARED_TYPED_OUTPUTS
   from tinygrad.schedule.rangeify import _reduce_output_m4_input_view
