@@ -401,7 +401,9 @@ def _decode_reduce_output_rmsnorm(norm, x:Tensor, promoted:bool) -> Tensor:
   """
   out = norm(x)
   if not promoted or norm.weight is None: return out
-  return out._semantic_reduce_output_rmsnorm(x, out, norm.weight, norm.eps)
+  weight = getattr(norm, "_decode_reduce_output_weight", None)
+  if weight is None: weight = norm.weight
+  return out._semantic_reduce_output_rmsnorm(x, out, weight, norm.eps)
 
 def _decode_reduce_output_rmsnorm_fp16_consumer(norm, x:Tensor, promoted:bool) -> Tensor:
   """Closed-default typed RMSNorm boundary for Q4 decode consumers only.
@@ -412,8 +414,10 @@ def _decode_reduce_output_rmsnorm_fp16_consumer(norm, x:Tensor, promoted:bool) -
   """
   out = norm(x)
   if not promoted or norm.weight is None: return out
+  weight = getattr(norm, "_decode_reduce_output_weight", None)
+  if weight is None: weight = norm.weight
   typed_out = out.cast(dtypes.float16)
-  return typed_out._semantic_reduce_output_rmsnorm(x, typed_out, norm.weight, norm.eps)
+  return typed_out._semantic_reduce_output_rmsnorm(x, typed_out, weight, norm.eps)
 
 def _decode_reduce_output_norm_flags(block, prefill:bool) -> tuple[bool,bool]:
   """Return (attention, FFN) REDUCE_OUTPUT decisions for one block trace."""
@@ -1716,6 +1720,30 @@ class Transformer:
               _norm.weight.cast(dtypes.float16).contiguous()).realize()
           except Exception:
             _norm._decode_fused_weight = None
+    # The reduce-output route needs the same identity contract for its marker
+    # weight: the selector admits an identity buffer directly, while a lazy
+    # fp16 cast would need one fresh weight materialization per fused body
+    # (the measured 8eeb0be1 overhead in the phase-6 bracket).  Materialize
+    # once at load, mirroring _decode_fused_weight above.  This is small
+    # (~1.4MB fp16 total) and harmless when the route stays closed.
+    for _b in model.blk:
+      for _name in ("attn_norm", "ffn_norm", "attn_q_norm", "attn_k_norm"):
+        _norm = getattr(_b, _name, None)
+        if _norm is None or getattr(_norm, "weight", None) is None: continue
+        try:
+          _norm._decode_reduce_output_weight = Tensor.empty(_norm.weight.shape[-1], dtype=dtypes.float16,
+                                                            device=_norm.weight.device).assign(
+            _norm.weight.cast(dtypes.float16).contiguous()).realize()
+        except Exception:
+          _norm._decode_reduce_output_weight = None
+    _out_norm = getattr(model, "output_norm", None)
+    if _out_norm is not None and getattr(_out_norm, "weight", None) is not None:
+      try:
+        _out_norm._decode_reduce_output_weight = Tensor.empty(_out_norm.weight.shape[-1], dtype=dtypes.float16,
+                                                              device=_out_norm.weight.device).assign(
+          _out_norm.weight.cast(dtypes.float16).contiguous()).realize()
+      except Exception:
+        _out_norm._decode_reduce_output_weight = None
     if q4k_meta is not None:
       model_facts = model_facts_from_gguf_metadata(kv, q4k_meta)
       route_plan = build_model_route_plan(q4k_meta, model_facts)

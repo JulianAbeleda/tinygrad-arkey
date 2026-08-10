@@ -510,6 +510,38 @@ def test_fp16_cooperative_body_stays_within_model_numeric_envelope():
   assert np.max(np.abs(got-ref)) <= .01
   assert np.linalg.norm(got-ref) / np.linalg.norm(ref) <= 1e-5
 
+def test_reduce_output_helpers_bind_materialized_identity_weight():
+  """Production norm weights are lazy fp16 casts over quantized storage; a
+  marker on a lazy weight makes the selector emit one fresh weight
+  materialization per fused body (the phase-6 8eeb0be1 overhead).  The
+  load-time ``_decode_reduce_output_weight`` gives the marker an identity
+  buffer, so the selector binds it directly and no fresh store is scheduled."""
+  from tinygrad.llm.model import _decode_reduce_output_rmsnorm, _decode_reduce_output_rmsnorm_fp16_consumer
+  from tinygrad.schedule.rangeify import _identity_buffer_view
+  x = Tensor.randn(1, 4096, dtype=dtypes.float32).realize()
+  lazy = Tensor.randn(4096, dtype=dtypes.float32).realize().cast(dtypes.float16)  # lazy cast, no identity
+  assert not lazy.uop.has_buffer_identity()
+  n = _norm(lazy)
+  n._decode_reduce_output_weight = lazy.contiguous().realize()
+  plain = _decode_reduce_output_rmsnorm(n, x, True)
+  typed = _decode_reduce_output_rmsnorm_fp16_consumer(n, x, True)
+  assert plain.uop.op is Ops.REDUCE_OUTPUT and plain.uop.src[2].has_buffer_identity()
+  assert typed.uop.op is Ops.REDUCE_OUTPUT and typed.uop.src[2].has_buffer_identity()
+  assert plain.uop.src[2] is n._decode_reduce_output_weight.uop
+  assert typed.uop.src[2] is n._decode_reduce_output_weight.uop
+  for marked in (plain, typed):
+    linear, _ = marked.linear_with_vars()
+    fused = [call for call in linear.src if call.src[0].arg.name == "reduce_output_rmsnorm_1_4096"]
+    assert len(fused) == 1
+    assert _identity_buffer_view(fused[0].src[3]) is n._decode_reduce_output_weight.uop
+  # Without the load-time materialization the marker keeps the lazy weight
+  # (the pre-fix spelling: the selector then emits the fresh-store weight
+  # materialization, which is the phase-6 8eeb0be1 overhead).
+  n._decode_reduce_output_weight = None
+  declined = _decode_reduce_output_rmsnorm(n, x, True)
+  assert declined.uop.op is Ops.REDUCE_OUTPUT
+  assert declined.uop.src[2] is lazy.uop
+
 def test_shared_q8_fused_lease_marks_attention_only_and_never_prefill():
   from types import SimpleNamespace
   from tinygrad.llm.model import _decode_reduce_output_norm_flags
