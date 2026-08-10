@@ -254,6 +254,7 @@ def test_no_go_record_shape():
   assert record["census_reference"]["fused_bodies"] == 54
   assert record["census_reference"]["net_call_delta_vs_ordinary"] == 1
   assert record["hard_stop_notes"]
+  assert record["isolation_notes"]
   assert record["citations"]
   assert any("nv-reduce-output-wall-bracket-scope-20260809.md" in c for c in record["citations"])
   assert any("nv-generic-reduce-output-census-20260809.json" in c for c in record["citations"])

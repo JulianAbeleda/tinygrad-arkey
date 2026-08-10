@@ -228,8 +228,15 @@ def logits(arm: str, model_path: str, depth: int, count: int, max_context: int) 
     for idx in range(count):
       sample, full = model.decode_with_logits(token, start_pos.bind(depth + 1 + idx), temp)
       row, sid = full.numpy(), int(sample.item())
-      if not np.isfinite(row).all() or sid != int(row.argmax(axis=-1).item()):
-        raise RuntimeError(f"invalid diagnostic output at row {idx}")
+      finite = bool(np.isfinite(row).all())
+      argmax = int(row.argmax(axis=-1).item())
+      if not finite or sid != argmax:
+        nonfinite = int((~np.isfinite(row)).sum()) if not finite else 0
+        raise RuntimeError(
+          f"invalid diagnostic output at row {idx}: finite={finite} non_finite_count={nonfinite} "
+          f"sid={sid} argmax={argmax} sid_equals_argmax={sid == argmax} "
+          f"row_min={float(row.min())} row_max={float(row.max())} "
+          f"row_sha256={_digest(row)[:16]}")
       samples.append(sid); rows.append(row)
     stacked = np.stack(rows)
     return {"schema": LOGITS_SCHEMA, "arm": arm, "mode": "logits", "gates": gates,
@@ -407,6 +414,12 @@ HARD_STOP_NOTES = [
   "No policy promotion: decode-reduce-output-rmsnorm-route-policy.json stays promoted_targets: []; no model wiring change; no default flip.",
 ]
 
+ISOLATION_NOTES = [
+  "Isolation matrix (fresh process per arm, RTX 5090, d512): control (no flags) and callify-only and promo-only all return finite logits with real sampled tokens; callify-only and promo-only logits are byte-identical (same row SHA).",
+  "Candidate (callify flags + reduce-output promotion) renders and survives with the 54 fused bodies in the decode graph, but the JIT-captured decode logits tap returns all-NaN (151936 non-finite entries, sampled-token scalar = sentinel 151936, argmax 0) while the eager JIT=0 path is finite and correct.",
+  "Conclusion: the fused primitive numerics are exact (CPU hermetic gate + eager path), but NV JIT capture of the callify precompiled-output redirect leaves the decode logits output binding uninitialized. The exact-logits gate fails closed; the norms row is not booked and no wall bracket runs.",
+]
+
 CITATIONS = [
   "docs/task_workflow/input/nv-reduce-output-wall-bracket-scope-20260809.md",
   "docs/task_workflow/input/nv-generic-reduce-output-primitive-record-20260809.md",
@@ -443,6 +456,7 @@ def no_go_record(model: str = DEFAULT_MODEL, depth: int = 512) -> dict:
       "contract": "all three token-stream hashes identical; candidate median at least +50 us/token faster than both bracketing controls",
     },
     "hard_stop_notes": list(HARD_STOP_NOTES),
+    "isolation_notes": list(ISOLATION_NOTES),
     "citations": CITATIONS,
   }
 
