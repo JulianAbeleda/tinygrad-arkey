@@ -2,11 +2,13 @@
 
 Structural CPU-only tests: the rangeify selector admits the fp32 q/k marker
 through the production PERMUTE-view spelling (``PERMUTE(RESHAPE(precompiled
-AFTER))``), the PERMUTE-carrier pass lowers ONE fused body per marker with the
-row-aware name, every consumer reads the same dependency-bearing fused output
-buffer, and the fp32 route binds ``norm.weight`` directly (no fp16 load-time
-materialization, no owned cast).  Every unexpected view stays fail-closed on
-the ordinary graph.  The cooperative body itself cannot compile on the CPU
+AFTER))``) and through the warp-coop partials spelling
+(``PERMUTE(...CONTIGUOUS(RESHAPE(REDUCE(RESHAPE(AFTER)))))``), the
+PERMUTE-carrier pass lowers ONE fused body per marker with the row-aware name,
+every consumer reads the same dependency-bearing fused output buffer, and the
+fp32 route binds the load-time fp16 identity weight buffer (no per-token
+weight cast, no owned cast).  Every unexpected view stays fail-closed on the
+ordinary graph.  The cooperative body itself cannot compile on the CPU
 renderer (pre-existing: ``test_native_value_matches_ordinary``), so these
 tests are structural and never execute the fused kernel.
 """
@@ -127,9 +129,10 @@ def test_two_markers_lower_to_two_distinct_bodies():
   assert bodies[0].src[1].arg != bodies[1].src[1].arg  # disjoint offsets
 
 
-def test_fp32_route_binds_fp32_weight_directly():
-  """The multi-row fp32 q/k marker binds norm.weight (fp32), never the fp16
-  load-time materialization, and owns no cast."""
+def test_fp32_route_binds_materialized_fp16_identity_weight():
+  """The multi-row fp32 q/k marker binds the load-time fp16 identity buffer so
+  the fused body never materializes a per-token weight cast; the ordinary fp32
+  epilogue rounds through fp16 in-kernel, so the halves are bitwise identical."""
   from tinygrad.llm.model import _decode_reduce_output_rmsnorm
   n = _norm(128)
   fp16_materialized = Tensor.ones(128, dtype=dtypes.float16).contiguous().realize()
@@ -138,15 +141,14 @@ def test_fp32_route_binds_fp32_weight_directly():
   marked = _decode_reduce_output_rmsnorm(n, q, True)
   assert marked.uop.op is Ops.REDUCE_OUTPUT
   assert marked.dtype is dtypes.float32
-  assert marked.uop.src[0].op is not Ops.CAST
-  assert marked.uop.src[2] is n.weight.uop
-  assert marked.uop.src[2].dtype is dtypes.float32
-  assert marked.uop.src[2] is not fp16_materialized.uop
+  assert marked.uop.src[2] is fp16_materialized.uop
+  assert marked.uop.src[2].dtype is dtypes.float16
+  assert marked.uop.src[2] is not n.weight.uop
 
 
 def test_single_row_c6_route_keeps_materialized_identity_weight():
   """The C6 norms (rows 1) keep the existing materialized fp16 identity weight
-  behavior; only the multi-row fp32 route switches to norm.weight."""
+  behavior; the multi-row fp32 route now binds the same identity buffer."""
   from tinygrad.llm.model import _decode_reduce_output_rmsnorm
   n = _norm(4096)
   fp16_materialized = Tensor.ones(4096, dtype=dtypes.float16).contiguous().realize()
@@ -155,6 +157,69 @@ def test_single_row_c6_route_keeps_materialized_identity_weight():
   marked = _decode_reduce_output_rmsnorm(n, x, True)
   assert marked.uop.op is Ops.REDUCE_OUTPUT
   assert marked.uop.src[2] is fp16_materialized.uop
+
+
+def _warp_coop_qk_graph(rows, promoted=True):
+  """Production spelling for the warp-coop q/k family: an opaque custom
+  kernel publishes (rows*128*4,) partials, the ordinary chain reduces them
+  (``sum(axis=1).contiguous()``), the flat value is runtime-scratch marked,
+  then reshaped/transposed into the marker input.  Everything lives inside a
+  function body exactly like the production per-block trace, so callify keeps
+  the REDUCE chain visible at rangeify."""
+  from tinygrad.function import function
+  from tinygrad.llm.model import _decode_reduce_output_rmsnorm
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  from tinygrad.uop.ops import KernelInfo
+  src = Tensor.empty(rows * 128 * 4, dtype=dtypes.float32, device="CPU")
+  w = Tensor.ones(128, dtype=dtypes.float32)
+  @function(precompile=False, allow_implicit=True)
+  def block(src, w):
+    output = Tensor.empty(rows * 128 * 4, dtype=dtypes.float32, device="CPU")
+    def fxn(out, x):
+      return out.store(x).sink(arg=KernelInfo(name="partials_probe", opts_to_apply=()))
+    partials = output.uop_program(src, fxn=fxn)[0]
+    q_flat = partials.reshape(rows * 128, 4).sum(axis=1).reshape(rows * 128).contiguous().reshape(1, 1, rows * 128)
+    q_flat = runtime_scratch(q_flat)
+    q = q_flat.reshape(1, 1, rows, 128).transpose(1, 2)
+    norm = _norm(128)
+    norm.weight = w
+    q_m = runtime_scratch(_decode_reduce_output_rmsnorm(norm, q, promoted))
+    return _attention(_rope(q_m, rows, 128))
+  return block(src, w)
+
+
+def test_reduce_derived_carrier_admits_warp_coop_partials_through_rangeify():
+  """A marker input spelled ``PERMUTE(...CONTIGUOUS(RESHAPE(REDUCE(
+  RESHAPE(AFTER)))))`` (the warp-coop partials carrier) is a bounded
+  kernel-output identity: the selector materializes the exact REDUCE into a
+  fresh buffer and lowers one fused body per marker."""
+  from tinygrad.helpers import Context
+  rows = 32
+  out = _warp_coop_qk_graph(rows)
+  with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
+    linear, _ = out.linear_with_vars()
+  names = [c.src[0].arg.name for c in linear.src]
+  assert "reduce_output_rmsnorm_32_128" in names, names
+
+
+def test_reduce_derived_carrier_marks_reduce_input_at_marker():
+  """Marker creation records ``reduce_input_at_marker`` for the warp-coop
+  partials spelling and leaves it false for the direct-AFTER spelling."""
+  from tinygrad.llm.model import _decode_reduce_output_rmsnorm
+  rows = 32
+  src = Tensor.empty(rows * 128 * 4, dtype=dtypes.float32, device="CPU")
+  output = Tensor.empty(rows * 128 * 4, dtype=dtypes.float32, device="CPU")
+  from tinygrad.uop.ops import KernelInfo
+  def fxn(out, x):
+    return out.store(x).sink(arg=KernelInfo(name="partials_probe", opts_to_apply=()))
+  partials = output.uop_program(src, fxn=fxn)[0]
+  q = partials.reshape(rows * 128, 4).sum(axis=1).reshape(rows * 128).contiguous().reshape(1, 1, rows, 128).transpose(1, 2)
+  marked = _decode_reduce_output_rmsnorm(_norm(128), q, True)
+  assert marked.uop.arg.reduce_input_at_marker is True
+  assert marked.uop.arg.input_identity_at_marker is True
+  direct = _precompiled_producer()(Tensor.empty(1, 1, rows * 128, dtype=dtypes.float32, device="CPU")).reshape(1, 1, rows, 128).transpose(1, 2)
+  marked_direct = _decode_reduce_output_rmsnorm(_norm(128), direct, True)
+  assert marked_direct.uop.arg.reduce_input_at_marker is False
 
 
 def test_identity_view_admits_pure_permute_of_precompiled_output():

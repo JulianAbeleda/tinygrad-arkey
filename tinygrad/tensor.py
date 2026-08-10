@@ -71,6 +71,27 @@ def _bounded_after_output_identity(after: UOp) -> bool:
     if target.op is Ops.PARAM and isinstance(target.arg, ParamArg) and target.arg.slot == output_slot: return True
   return False
 
+def _bounded_reduce_output_identity(x: UOp) -> bool:
+  """Accept ``CONTIGUOUS(RESHAPE(REDUCE(RESHAPE(AFTER(...)))))`` as a bounded
+  kernel-output identity.
+
+  The warp-coop q4k GEMV publishes four partials per row; the ordinary q/k
+  chain reduces them (REDUCE over the trailing axis) before the norm.  The
+  REDUCE is itself a kernel output, and its input carries the same bounded
+  invocation proof as the direct-AFTER spelling (a precompile GETTUPLE before
+  callify, an AFTER at rangeify).  Equal-span RESHAPE legs are transparent;
+  every unexpected leg fails closed.
+  """
+  if x.op is not Ops.CONTIGUOUS or len(x.src) != 1: return False
+  u = x.src[0]
+  expected = u.numel()
+  while u.op is Ops.RESHAPE and len(u.src) and u.src[0].numel() == expected: u = u.src[0]
+  if u.op is not Ops.REDUCE or len(u.src) != 1: return False
+  expected = u.src[0].numel()
+  u = u.src[0]
+  while u.op is Ops.RESHAPE and len(u.src) and u.src[0].numel() == expected: u = u.src[0]
+  return _bounded_after_output_identity(u) or u.has_precompiled_output_identity()
+
 def _get_winograd_matcols(mat, dims:int, shp:tuple[sint, ...], dtype:DType) -> list[list[Tensor]]:
   return [[Tensor.cat(*[Tensor.full(shp[:dim] + (1,) + shp[dim+1:], float(m[k]), dtype=dtype, buffer=False) for m in mat], dim=dim)
            for k in range(len(mat[0]))] for dim in range(dims)]
@@ -1370,13 +1391,15 @@ class Tensor(RandMixin):
       identity_uop = identity_uop.src[0]
     precompiled_contiguous = identity_uop.op is Ops.CONTIGUOUS and identity_uop.src[0].has_precompiled_output_identity()
     after_identity = _bounded_after_output_identity(identity_uop)
+    reduce_identity = _bounded_reduce_output_identity(identity_uop)
     owned_contiguous_candidate = (x.uop.op is Ops.MEMORY_SEMANTIC and len(x.uop.src) == 1 and
                                   x.uop.src[0].op is Ops.CONTIGUOUS and memory_semantic_owner(x.uop) is not None)
     identity = not owned_contiguous_candidate and (identity_uop.has_buffer_identity() or
-      identity_uop.has_precompiled_output_identity() or precompiled_contiguous or after_identity)
+      identity_uop.has_precompiled_output_identity() or precompiled_contiguous or after_identity or reduce_identity)
     return Tensor(UOp(Ops.REDUCE_OUTPUT, out.dtype, (out.uop, x.uop, weight.uop),
                       ReduceOutputSpec(rows, dim, eps, out.dtype, input_identity_at_marker=identity,
                                        owned_contiguous_candidate=owned_contiguous_candidate,
+                                       reduce_input_at_marker=reduce_identity,
                                        warps=warps, lanes=32, per_lane=per_lane)), device=out.device)
 
   def _online_attention_primitive(self, key:Tensor, value:Tensor, attn_mask:Tensor|None,

@@ -401,12 +401,12 @@ def _decode_reduce_output_rmsnorm(norm, x:Tensor, promoted:bool) -> Tensor:
   """
   out = norm(x)
   if not promoted or norm.weight is None: return out
-  # The fp32 q/k route (multi-row 8/32 x 128) binds norm.weight directly: the
-  # load-time fp16 materialization would round the weight and break bitwise
-  # equality with the ordinary fp32 epilogue (llama rms_norm_f32 contract).
-  # Single-row C6 norms keep the materialized identity weight.
-  rows = prod(x.shape[:-1])
-  weight = norm.weight if rows in (8, 32) else getattr(norm, "_decode_reduce_output_weight", None)
+  # Bind the load-time fp16 identity buffer for every row count.  The ordinary
+  # fp32 epilogue already rounds through fp16 in-kernel, so the pre-rounded
+  # buffer carries the same half values (r2 logits gate passed bitwise), and
+  # binding it keeps the fused body from materializing one fresh weight cast
+  # kernel per q/k body per token (the measured 0fd8e427 overhead).
+  weight = getattr(norm, "_decode_reduce_output_weight", None)
   if weight is None: weight = norm.weight
   return out._semantic_reduce_output_rmsnorm(x, out, weight, norm.eps)
 

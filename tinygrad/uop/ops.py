@@ -2175,6 +2175,14 @@ class ReduceOutputSpec(NamedTuple):
   # precompiled output. A bare PARAM without this invocation-local proof is
   # never sufficient.
   invocation_input_slot: int|None = None
+  # The warp-coop carrier chain
+  # ``CONTIGUOUS(RESHAPE(REDUCE(RESHAPE(AFTER(...)))))`` is a bounded
+  # kernel-output identity proven at marker creation: the REDUCE reads an
+  # invocation-owned AFTER and is itself a kernel output.  Lowering
+  # materializes that exact REDUCE into a fresh buffer so the fused body
+  # reads the reduced input (bitwise the same kernel the ordinary spelling
+  # runs), never the raw partials.
+  reduce_input_at_marker: bool = False
 
 
 @dataclass(frozen=True)

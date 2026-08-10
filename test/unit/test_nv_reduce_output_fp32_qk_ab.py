@@ -79,27 +79,26 @@ def _control_census():
 
 
 def _candidate_census():
-  return {"schema": CENSUS_SCHEMA, "kernels": 846,
-          "norms_roles": {"q_norm_reduce": 0, "k_norm_reduce": 0, "q_norm_epilogue": 36,
-                          "k_norm_epilogue": 36, "rmsnorm_reduce": 38, "rmsnorm_epilogue": 37,
-                          "final_rmsnorm_epilogue": 1},
-          "population_counts": {"norms": 238, "quant_core": 217, "flash": 20,
+  return {"schema": CENSUS_SCHEMA, "kernels": 716,
+          "norms_roles": {"q_norm_reduce": 17, "k_norm_reduce": 17, "q_norm_epilogue": 0,
+                          "k_norm_epilogue": 0, "rmsnorm_reduce": 37, "rmsnorm_epilogue": 37,
+                          "final_rmsnorm_epilogue": 0},
+          "population_counts": {"norms": 108, "quant_core": 217, "flash": 20,
                                 "residual_cast_contiguous": 9, "other": 6},
           "program_counts": {"reduce_output_rmsnorm_32_128": 36, "reduce_output_rmsnorm_8_128": 36,
-                             "reduce_output_rmsnorm_1_4096": 18,
-                             "E_2_8_16_4_4_qe": 18, "E_4_2_8_16_4_qe": 18,
-                             "E_2_8_16_4_ke": 18, "E_8_2_16_4_ke": 18,
-                             "r_16_256_r": 38, "E_32_32_4_f14a5cc0d0ed4c90e": 37,
-                             "E_32_32_4_c6fef3561a9fbeaff": 1,
+                             "reduce_output_rmsnorm_1_4096": 19,
+                             "r_2_8_4_4_16_q": 17, "r_8_16_8_k": 17,
+                             "r_16_256_r": 37, "E_32_32_4_f14a5cc0d0ed4c90e": 37,
+                             "E_32_32_4_c6fef3561a9fbeaff": 0,
                              "q4k_g3_lanemap_gemv_x": 217, "flash_block_tiled_y": 20,
                              "E_32_32_4_fab82d40f922cf5fz": 9, "E_2_tok": 6}}
 
 
 def test_fused_body_families_counts_by_prefix():
-  counts = {"reduce_output_rmsnorm_1_4096": 18, "reduce_output_rmsnorm_32_128": 36,
+  counts = {"reduce_output_rmsnorm_1_4096": 19, "reduce_output_rmsnorm_32_128": 36,
             "reduce_output_rmsnorm_8_128": 36, "q4k_g3_lanemap_gemv_x": 217}
   bodies = _fused_body_families({"program_counts": counts})
-  assert bodies == {"c6": 18, "q": 36, "k": 36, "total": 90}
+  assert bodies == {"c6": 19, "q": 36, "k": 36, "total": 91}
 
 
 def test_fused_body_families_handles_hash_suffixed_names():
@@ -111,19 +110,21 @@ def test_fused_body_families_handles_hash_suffixed_names():
 def test_validate_census_gate_passes_on_expected_fp32_shape():
   result = validate_census(_control_census(), _candidate_census())
   assert result["gate_pass"] is True
-  assert result["fused_bodies_candidate"] == 90
-  assert result["fused_bodies_c6_candidate"] == 18
+  assert result["fused_bodies_candidate"] == 91
+  assert result["fused_bodies_c6_candidate"] == 19
   assert result["fused_bodies_q_candidate"] == 36
   assert result["fused_bodies_k_candidate"] == 36
-  assert result["q_norm_reduce_drop"] == 36
-  assert result["k_norm_reduce_drop"] == 36
-  assert result["q_norm_epilogue_drop"] == 36
-  assert result["k_norm_epilogue_drop"] == 36
-  assert result["rmsnorm_reduce_drop"] == 18
+  assert result["q_norm_reduce_drop"] == 19
+  assert result["k_norm_reduce_drop"] == 19
+  assert result["q_norm_epilogue_drop"] == 72
+  assert result["k_norm_epilogue_drop"] == 72
+  assert result["rmsnorm_reduce_drop"] == 19
   assert result["rmsnorm_epilogue_drop"] == 18
   assert result["conditions"]["qk_bodies_present"] is True
-  assert result["conditions"]["final_epilogue_unchanged"] is True
-  assert result["honest_net_program_delta"] == -90
+  assert result["conditions"]["final_epilogue_fused_consistent"] is True
+  assert result["conditions"]["q_reduce_remaining_matches_reference"] is True
+  assert result["conditions"]["k_reduce_remaining_matches_reference"] is True
+  assert result["honest_net_program_delta"] == -220
 
 
 def test_validate_census_fails_closed_when_q_bodies_absent():
@@ -168,10 +169,19 @@ def test_validate_census_fails_closed_when_both_qk_bodies_absent():
 
 def test_validate_census_fails_on_q_reduce_drop_inconsistent_with_bodies():
   candidate = _candidate_census()
-  candidate["norms_roles"]["q_norm_reduce"] = 18  # only half the reduces dropped
+  candidate["norms_roles"]["q_norm_reduce"] = 36  # no q reduce dropped at all
   result = validate_census(_control_census(), candidate)
   assert result["gate_pass"] is False
   assert result["conditions"]["q_reduce_drop_consistent"] is False
+
+
+def test_validate_census_fails_when_warp_coop_reduce_remaining_mismatches_reference():
+  candidate = _candidate_census()
+  candidate["norms_roles"]["q_norm_reduce"] = 18  # 18 materializing reduces, reference says 17
+  result = validate_census(_control_census(), candidate)
+  assert result["gate_pass"] is False
+  assert result["conditions"]["q_reduce_remaining_matches_reference"] is False
+  assert result["conditions"]["q_reduce_drop_consistent"] is True  # drop 18 == 36 - 18
 
 
 def test_validate_census_fails_on_k_epilogue_drop_inconsistent_with_bodies():
@@ -192,10 +202,10 @@ def test_validate_census_fails_on_c6_route_change():
 
 def test_validate_census_fails_if_final_epilogue_moves():
   candidate = _candidate_census()
-  candidate["norms_roles"]["final_rmsnorm_epilogue"] = 0
+  candidate["norms_roles"]["final_rmsnorm_epilogue"] = 1  # final norm epilogue did not fuse
   result = validate_census(_control_census(), candidate)
   assert result["gate_pass"] is False
-  assert result["conditions"]["final_epilogue_unchanged"] is False
+  assert result["conditions"]["final_epilogue_fused_consistent"] is False
 
 
 def test_validate_census_fails_closed_if_control_has_bodies():
@@ -224,8 +234,8 @@ def test_validate_census_reports_non_norms_shifts_with_exact_names():
 
 def test_validate_census_honest_net_program_delta_and_reference():
   result = validate_census(_control_census(), _candidate_census())
-  assert result["honest_net_program_delta"] == -90
-  assert result["reference"]["observed_total"] == CENSUS_REFERENCE["fused_bodies_total"] == 90
+  assert result["honest_net_program_delta"] == -220
+  assert result["reference"]["observed_total"] == CENSUS_REFERENCE["fused_bodies_total"] == 91
   assert result["reference"]["observed_q"] == CENSUS_REFERENCE["fused_bodies_q"] == 36
 
 
@@ -321,7 +331,7 @@ def test_no_go_record_shape():
   assert record["construction"]["population"] == "norms"
   for phase in ("smoke", "logits_gate", "census", "wall_bracket"):
     assert record[phase]["run"] is False and record[phase]["result"] == "NOT_AUTHORIZED"
-  assert record["census_reference"]["fused_bodies_total"] == 90
+  assert record["census_reference"]["fused_bodies_total"] == 91
   assert record["wall_bracket"]["promotion_us"] == 50.0
   assert record["hard_stop_notes"]
   assert record["isolation_notes"]

@@ -387,6 +387,36 @@ def _reduce_output_m4_input_view(x:UOp) -> UOp|None:
   from tinygrad.llm.kernel_program import _residual_producer_identity
   return original if _residual_producer_identity(x) else None
 
+def _reduce_derived_materialized_view(x:UOp) -> UOp|None:
+  """Materialize the warp-coop REDUCE carrier into a fresh output buffer.
+
+  The marker input spelling is
+  ``PERMUTE(RESHAPE(MS(RESHAPE(CONTIGUOUS(RESHAPE(REDUCE(RESHAPE(AFTER(...)))))))))``.
+  Strip the transparent PERMUTE/RESHAPE/MS legs, walk the CONTIGUOUS to the
+  REDUCE, and re-prove the REDUCE's input AFTER with the same bounded
+  invocation proof the marker used.  The returned binding is the REDUCE's own
+  output AFTER (fresh buffer plus its store kernel): the exact reduce kernel
+  the ordinary spelling runs, so the fused body sees bitwise-identical
+  reduced values while the contiguous materialization and the ordinary norm
+  chain vanish.
+  """
+  original, expected = x, x.numel()
+  while x.op in {Ops.PERMUTE, Ops.MEMORY_SEMANTIC} or (x.op is Ops.RESHAPE and len(x.src) and x.src[0].numel() == expected):
+    if not len(x.src) or x.numel() != expected: return None
+    x = x.src[0]
+  if x.op is not Ops.CONTIGUOUS or len(x.src) != 1 or x.numel() != expected: return None
+  expected = x.numel()
+  u = x.src[0]
+  while u.op is Ops.RESHAPE and len(u.src) and u.src[0].numel() == expected: u = u.src[0]
+  if u.op is not Ops.REDUCE or len(u.src) != 1: return None
+  expected = u.src[0].numel()
+  red_in = u.src[0]
+  while red_in.op is Ops.RESHAPE and len(red_in.src) and red_in.src[0].numel() == expected: red_in = red_in.src[0]
+  from tinygrad.tensor import _bounded_after_output_identity
+  if not _bounded_after_output_identity(red_in): return None
+  red_buf = UOp.new_buffer(u.device, u.numel(), u.dtype)
+  return red_buf.after(red_buf.store(u))
+
 def _c6_marker(carrier:UOp) -> UOp|None:
   """Validate the C6 chain ``CONTIGUOUS(RESHAPE(MS(...)))`` and return its marker.
 
@@ -568,7 +598,7 @@ def lower_reduce_output_store(store:UOp, carrier:UOp|None=None, marker:UOp|None=
     trace_reduce_output("selector", reason)
     trace_reduce_output_association(assoc, reason)
   spec = marker.arg
-  if not (spec.input_identity_at_marker or spec.owned_contiguous_candidate): reject("marker_not_eligible"); return None
+  if not (spec.input_identity_at_marker or spec.owned_contiguous_candidate or spec.reduce_input_at_marker): reject("marker_not_eligible"); return None
   x, weight = marker.src[1], marker.src[2]
   out_buf, w_buf = _identity_buffer_view(target), _identity_buffer_view(weight)
   # The early owned-contiguous bit is deliberately weaker than identity. It
@@ -579,6 +609,7 @@ def lower_reduce_output_store(store:UOp, carrier:UOp|None=None, marker:UOp|None=
   if x_buf is None and spec.invocation_input_slot is not None: x_buf = _proven_invocation_input_view(x, spec.invocation_input_slot)
   if x_buf is None and spec.owned_contiguous_candidate: x_buf = _owned_precompiled_output_after_view(x)
   if x_buf is None and (spec.input_identity_at_marker or spec.owned_contiguous_candidate): x_buf = _reduce_output_m4_input_view(x)
+  if x_buf is None and spec.reduce_input_at_marker: x_buf = _reduce_derived_materialized_view(x)
   # Fail closed for lazy/movement inputs. Returning None lets the marker
   # fallback rewrite below preserve the exact ordinary graph.
   if out_buf is None: reject("output_not_identity"); return None
