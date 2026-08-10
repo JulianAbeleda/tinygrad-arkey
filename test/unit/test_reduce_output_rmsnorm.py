@@ -474,6 +474,32 @@ def test_fp16_consumer_marker_owns_existing_cast_and_is_closed_default():
   # to pierce CAST in the later scheduler graph.
   assert _names(typed) == ["reduce_output_rmsnorm_1_4096"]
 
+def test_fp32_end_to_end_marker_owns_no_cast_and_body_has_no_fp16_round_points():
+  """llama-parity fp32 norm contract (nv-reduce-output-phase6 analysis,
+  2026-08-10): llama's rms_norm_f32 reads the fp32 residual, computes sumsq
+  and the affine epilogue in fp32, and only the q8_1 quantize rounds to half.
+  The typed fp16 consumer route owns its cast by design (the test above); the
+  fp32 route must own NONE, so the consumer can round in-kernel and the graph
+  carries no cast or materialization between residual and consumer."""
+  rng = np.random.default_rng(20260810)
+  x = Tensor(rng.normal(0, .2, (1, 4096)).astype(np.float32)).realize()
+  w = Tensor(rng.normal(1, .05, (4096,)).astype(np.float32)).realize()
+  marked = _apply(_norm(w), x)
+  assert marked.dtype is dtypes.float32
+  assert marked.uop.op is Ops.REDUCE_OUTPUT
+  assert marked.uop.src[0].op is not Ops.CAST
+  assert _names(marked) == ["reduce_output_rmsnorm_1_4096"]
+  # The bitwise NV tripwire for the fp32 x / fp16 w and fp32 x / fp32 w mixes
+  # is test_native_value_matches_ordinary; this CPU test is structural only.
+  from tinygrad.codegen.late.reduce_output import emit_reduce_output
+  from tinygrad.uop.ops import ReduceOutputSpec, UOp
+  spec = ReduceOutputSpec(1, 4096, 1e-6, dtypes.float32)
+  out, xx, ww = (UOp.placeholder((4096,), dtypes.float32, i) for i in range(3))
+  body = emit_reduce_output(spec, dtypes.float32, dtypes.float32)(out, xx, ww)
+  topo = body.toposort()
+  assert not any(u.op is Ops.CAST and u.dtype is dtypes.float16 for u in topo)
+  assert not any(u.dtype is dtypes.float16 for u in topo)
+
 def test_fp16_cooperative_body_stays_within_model_numeric_envelope():
   from tinygrad.llm.model import _decode_reduce_output_rmsnorm_fp16_consumer
   x = Tensor(np.random.default_rng(20260805).normal(0,.2,(1,4096)).astype(np.float32),dtype=dtypes.float).realize()
