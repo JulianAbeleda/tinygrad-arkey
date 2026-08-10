@@ -2132,16 +2132,19 @@ class ReduceOutputSpec(NamedTuple):
   """A bounded cooperative reduction followed by an output-wide epilogue.
 
   The body is derived entirely from this record: the reduction reproduces the
-  ordinary reduce association bitwise (each warp serially sums ``per_lane *
-  lanes`` CONTIGUOUS elements, lane 0 publishes the per-warp partial, and the
-  partials are combined in a serial chain, exactly like the ordinary
-  r_16_256 kernel), and the recipe string selects the per-lane accumulation
-  and epilogue (``sumsq_rsqrt_affine`` is the shipped legacy RMSNorm recipe;
-  ``max_affine`` is the MAX-reduce affine variant).  The epilogue keeps all
-  lanes busy (``per_lane`` elements per lane), so the fused launch stays wide
-  while the reduction is bitwise-equal to the ordinary program.  The carrier
-  remains generic in ownership: fallback and every logical input are
-  source-visible, while lowering is target/layout fail-closed.
+  ordinary reduce association bitwise.  Single-row shapes mirror the ordinary
+  r_16_256 kernel (each warp serially sums ``per_lane * lanes`` CONTIGUOUS
+  elements, lane 0 publishes the per-warp partial, and the partials are
+  combined in a serial chain); the multi-row q/k shapes (rows 8/32 x dim 128)
+  mirror the ordinary r_8_16_8 / r_2_8_4_4_16 tiling (P partial chains of S
+  strided elements plus a serial combine in t order).  The recipe string
+  selects the per-lane accumulation and epilogue (``sumsq_rsqrt_affine`` is
+  the shipped legacy RMSNorm recipe; ``max_affine`` is the MAX-reduce affine
+  variant).  The epilogue keeps all lanes busy (``per_lane`` elements per
+  lane), so the fused launch stays wide while the reduction is bitwise-equal
+  to the ordinary program.  The carrier remains generic in ownership: fallback
+  and every logical input are source-visible, while lowering is
+  target/layout fail-closed.
   """
   rows: int
   dim: int

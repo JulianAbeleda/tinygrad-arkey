@@ -3,6 +3,11 @@ import numpy as np
 from tinygrad import Tensor, dtypes, nn
 from tinygrad.uop.ops import Ops
 
+# NV ordinary reduce tiling for the fp32 q/k shapes, mirrored by the emitter:
+# (P, S, t_stride, s_stride) partial-chain association (r_2_8_4_4_16 for q,
+# r_8_16_8 for k).
+_NV_ASSOC = {(32, 128): (8, 16, 1, 8), (8, 128): (16, 8, 8, 1)}
+
 def _norm(weight, enabled=True):
   n = nn.RMSNorm(4096, eps=1e-6)
   n.weight = weight
@@ -585,10 +590,16 @@ def _fma(a: float, b: float, c: float) -> np.float32:
   return np.float32(np.longdouble(a) * np.longdouble(b) + np.longdouble(c))
 
 
+def _expr_tree(u):
+  yield u
+  for s in u.src: yield from _expr_tree(s)
+
+
 def _multi_row_body_association(rows, dim, eps, x_dtype, w_dtype):
   """Emit the cooperative body and extract the association it actually encodes:
-  the per-warp reduce chain extent and base, the epilogue weight index, and the
-  cross-warp combine shape.  The reconstruction below is driven by these, so a
+  the per-lane partial-chain (P, S, t_stride, s_stride) and row stride, the
+  block-wide partial slot layout (rows x P), and the serial combine chain over
+  the row's own P partials.  The reconstruction below is driven by these, so a
   drift in the emitter changes the extracted chain and breaks the bitwise gate.
   """
   from tinygrad.codegen.late.reduce_output import emit_reduce_output
@@ -599,37 +610,88 @@ def _multi_row_body_association(rows, dim, eps, x_dtype, w_dtype):
   w = UOp.placeholder((dim,), w_dtype, 2)
   body = emit_reduce_output(spec, x_dtype, w_dtype)(out, x, w)
   topo = body.toposort()
-  # Per-warp serial reduce chain: the x read whose index is warp*red_base + red.
+  lane_range = next(u for u in topo if u.op is Ops.RANGE and u.arg == (0, AxisType.LOCAL))
+  warp_range = next(u for u in topo if u.op is Ops.RANGE and u.arg == (1, AxisType.LOCAL))
+  # Per-warp partial-chain reduce: the x read whose index tree contains the
+  # REDUCE range, with the (P, S, t_stride, s_stride) association in its MULs.
   x_idx = [u for u in topo if u.op is Ops.INDEX and u.src[0] is x]
-  red_chain = [u for u in x_idx if len(u.src[1].src) == 2 and u.src[1].src[1].op is Ops.RANGE and
-               u.src[1].src[1].arg == (2, AxisType.REDUCE)]
-  assert len(red_chain) == 1, "reduce body must contain exactly one per-warp serial x chain"
-  idx = red_chain[0].src[1]
-  assert idx.op is Ops.ADD and idx.src[0].op is Ops.MUL and idx.src[1].op is Ops.RANGE, f"unexpected chain index {idx.op}"
-  red = idx.src[1]
-  red_base = red.src[0].arg
-  red_extent = idx.src[0].src[1].arg  # warp * CONST(red_base)
+  red_x = [u for u in x_idx if any(v.op is Ops.RANGE and v.arg == (2, AxisType.REDUCE) for v in _expr_tree(u.src[1]))]
+  assert len(red_x) == 1, "reduce body must contain exactly one per-row partial-chain x read"
+  tree = list(_expr_tree(red_x[0].src[1]))
+  red = next(u for u in tree if u.op is Ops.RANGE and u.arg == (2, AxisType.REDUCE))
+  S = red.src[0].arg
+  s_mul = [u for u in tree if u.op is Ops.MUL and red in u.src]
+  assert len(s_mul) == 1, "partial chain must stride the reduce index"
+  s_stride = next(u.arg for u in s_mul[0].src if u.op is Ops.CONST)
+  mods = [u for u in tree if u.op in (Ops.CMOD, Ops.FLOORMOD)]
+  assert len(mods) == 1 and mods[0].src[0] is lane_range, "partial lane must be laneid % P"
+  P = next(u.arg for u in mods[0].src if u.op is Ops.CONST)
+  t_mul = [u for u in tree if u.op is Ops.MUL and mods[0] in u.src]
+  assert len(t_mul) == 1, "partial lane must scale the element stride"
+  t_stride = next(u.arg for u in t_mul[0].src if u.op is Ops.CONST)
+  warp_mul = [u for u in tree if u.op is Ops.MUL and warp_range in u.src]
+  assert len(warp_mul) == 1 and next(u.arg for u in warp_mul[0].src if u.op is Ops.CONST) == dim
   # Epilogue weight index must be the row-local element (multi-row shares a (dim,) weight).
   w_idx = [u for u in topo if u.op is Ops.INDEX and u.src[0] is w]
   assert len(w_idx) == 1
   widx = w_idx[0].src[1]
   assert (widx.op is Ops.ADD and widx.src[0].op is Ops.RANGE and widx.src[1].op is Ops.MUL and
           widx.src[1].src[0].op is Ops.RANGE), "multi-row weight index must be row-local laneid + epi*lane"
-  # No cross-warp serial combine: exactly one smem-after read, no ADD chain over it.
+  # Block-wide partial slots: rows x P, published at warp*P + t and read back
+  # as a serial ADD chain in t order (per-row isolation, no cross-row combine).
   smem_after = [u for u in topo if u.op is Ops.AFTER and len(u.src) == 2 and u.src[0].op is Ops.DEFINE_LOCAL]
   assert len(smem_after) == 1
+  smem = smem_after[0].src[0]
+  assert smem.shape == (rows * P,), f"partial slots must be rows x P, got {smem.shape}"
   reads = [u for u in topo if u.op is Ops.INDEX and len(u.src) == 2 and u.src[0] is smem_after[0]]
-  assert len(reads) == 1 and not any(u.op is Ops.ADD and reads[0] in u.src for u in topo)
+  assert len(reads) == P, "combine must read exactly the row's P partials"
+  read_t = []
+  for rd in reads:
+    ridx = rd.src[1]
+    assert ridx.op is Ops.ADD and ridx.src[0].op is Ops.MUL and ridx.src[0].src[0] is warp_range
+    assert ridx.src[0].src[1].arg == P and ridx.src[1].op is Ops.CONST
+    read_t.append(ridx.src[1].arg)
+  assert sorted(read_t) == list(range(P)), "combine must read partials 0..P-1 in order"
+  add_chain = [u for u in topo if u.op is Ops.ADD and any(rd in u.src for rd in reads)]
+  assert len(add_chain) == P, "combine must be a serial chain over the P partials"
   assert body.arg.name == f"reduce_output_rmsnorm_{rows}_{dim}"
-  return dict(red_extent=red_extent, red_base=red_base, dim=dim, eps=eps, x_dtype=x_dtype, w_dtype=w_dtype)
+  return dict(P=P, S=S, t_stride=t_stride, s_stride=s_stride, dim=dim, eps=eps, x_dtype=x_dtype, w_dtype=w_dtype)
 
 
 def _multi_row_fused_output(x_np, w_np, assoc):
-  """Reconstruct the fused body output bitwise: per-row plain ``dim``-contiguous
-  serial FMA sumsq chain (the row total), per-row scale, ``(x*scale)*w``
-  epilogue.  Rows are independent in row-mode (no cross-row combine)."""
+  """Reconstruct the fused body output bitwise from the extracted NV ordinary
+  association: per row P partial chains of S elements at (t*t_stride +
+  r*s_stride), a serial combine over the P partials in t order, per-row scale,
+  and the (x*scale)*w epilogue.  Rows are independent in row-mode."""
   rows, dim, eps = x_np.shape[0], assoc["dim"], assoc["eps"]
-  assert assoc["red_extent"] == assoc["red_base"] == dim
+  P, S, t_stride, s_stride = assoc["P"], assoc["S"], assoc["t_stride"], assoc["s_stride"]
+  partials = np.zeros((rows, P), dtype=np.float32)
+  for r in range(rows):
+    for t in range(P):
+      acc = np.float32(0.0)
+      for s in range(S):
+        v = np.float32(x_np[r, t * t_stride + s * s_stride])
+        acc = _fma(v, v, acc)
+      partials[r, t] = acc
+  totals = np.zeros((rows,), dtype=np.float32)
+  for r in range(rows):
+    total = np.float32(0.0)
+    for t in range(P): total = np.float32(total + partials[r, t])
+    totals[r] = total
+  scale = np.zeros((rows,), dtype=np.float32)
+  for r in range(rows):
+    scale[r] = np.float32(1.0 / np.sqrt(np.float32(np.float32(totals[r] / dim) + eps)))
+  out = np.empty_like(x_np, dtype=np.float32)
+  for r in range(rows):
+    out[r] = (x_np[r] * scale[r]).astype(np.float32) * w_np
+  return out
+
+
+def _plain_serial_output(x_np, w_np, assoc):
+  """The CPU ordinary reduce association (a plain per-row serial chain): the
+  reference the fused body must NOT follow on NV, where the ordinary tiling is
+  the P-partial chain (last-ulp difference in the fp32 sumsq)."""
+  rows, dim, eps = x_np.shape[0], assoc["dim"], assoc["eps"]
   scale = np.zeros((rows,), dtype=np.float32)
   for r in range(rows):
     acc = np.float32(0.0)
@@ -643,9 +705,15 @@ def _multi_row_fused_output(x_np, w_np, assoc):
 
 def test_multi_row_fused_body_matches_ordinary_bitwise():
   """The row-mode q/k gate: for (rows, dim) in {(32,128),(8,128)} the emitted
-  cooperative body is bitwise-equal to the ordinary CPU RMSNorm for the fp32 x /
-  fp32 w and fp32 x / fp16 w mixes.  This is the exact-logits tripwire: a 1-ulp
-  drift in the reduce association (or a cross-row combine) flips it red."""
+  cooperative body encodes the NV ordinary partial-chain association and stays
+  numerically equal to the ordinary CPU RMSNorm.  The CPU ordinary reduce is a
+  plain serial chain, so the NV association must differ from it (last ulp);
+  the fused body follows the NV order, not the CPU order.  This is the
+  exact-logits tripwire: a 1-ulp drift in the reduce association (or a
+  cross-row combine) flips it red.  (The CPU renderer cannot execute
+  cooperative LOCAL-range bodies yet; the structural extraction plus the
+  bitwise-vs-plain-serial countercheck below are the proxy for the NV
+  full-logit gate.)"""
   rng = np.random.default_rng(20260810)
   for rows in (32, 8):
     dim = 128
@@ -659,15 +727,25 @@ def test_multi_row_fused_body_matches_ordinary_bitwise():
       norm.weight = w
       ordinary = norm(x).numpy()
       assoc = _multi_row_body_association(rows, dim, 1e-6, dtypes.float32, wdt)
+      assert (assoc["P"], assoc["S"], assoc["t_stride"], assoc["s_stride"]) == _NV_ASSOC[(rows, dim)]
       fused = _multi_row_fused_output(x_np, w_eff, assoc)
-      np.testing.assert_array_equal(fused, ordinary)
+      # Numerically equal to the ordinary CPU graph (same values, different
+      # last-ulp association order).
+      np.testing.assert_allclose(fused, ordinary, rtol=1e-5, atol=1e-6)
+      # Anti-regression: the plain serial chain (the old fused body, and the
+      # CPU ordinary order) must differ from the NV association, or the NV
+      # full-logit gate cannot pass.
+      plain = _plain_serial_output(x_np, w_eff, assoc)
+      assert not np.array_equal(fused, plain), "NV partial-chain association must differ from the plain serial chain"
 
 
 def test_multi_row_scale_isolation_no_cross_row_combine():
   """Row-mode must never combine rows: each warp's scale depends only on its own
   row.  Rows span wildly different magnitudes (10**row), so a serial cross-row
   partial chain (the single-row combine pattern) cannot reproduce the ordinary
-  per-row result while the isolated per-row body must, bitwise."""
+  per-row result while the isolated per-row body must, within fp32 association
+  tolerance (the NV partial-chain order differs from the CPU plain chain in the
+  last ulp)."""
   rows, dim = 32, 128
   rng = np.random.default_rng(20260811)
   x_np = (rng.normal(0, 0.2, (rows, dim)) * (10.0 ** np.arange(rows)[:, None])).astype(np.float32)
@@ -679,7 +757,7 @@ def test_multi_row_scale_isolation_no_cross_row_combine():
   ordinary = norm(x).numpy()
   assoc = _multi_row_body_association(rows, dim, 1e-6, dtypes.float32, dtypes.float32)
   fused = _multi_row_fused_output(x_np, w_np, assoc)
-  np.testing.assert_array_equal(fused, ordinary)
+  np.testing.assert_allclose(fused, ordinary, rtol=1e-5, atol=1e-6)
   # Countercheck: a cross-row serial combine must NOT match ordinary.  Chain the
   # row sumsq partials across rows (the single-row combine pattern applied to
   # rows), which corrupts every row after the first by the row-magnitude spread.
@@ -691,19 +769,23 @@ def test_multi_row_scale_isolation_no_cross_row_combine():
     running = np.float32(running + acc)
     scale = np.float32(1.0 / np.sqrt(np.float32(np.float32(running / dim) + 1e-6)))
     corrupted[r] = (x_np[r] * scale).astype(np.float32) * w_np
-  assert not np.array_equal(corrupted, ordinary), "cross-row combine must not match ordinary"
-  # The structural isolation contract the body must keep: one smem-after read,
-  # no serial ADD chain over the published partials.
+  assert not np.allclose(corrupted, ordinary, rtol=1e-3, atol=1e-4), "cross-row combine must not match ordinary"
+  # The structural isolation contract the body must keep: rows*P partial slots,
+  # exactly P reads of the row's own partials, and a serial combine chain only
+  # over those reads (no cross-row partials).
   from tinygrad.codegen.late.reduce_output import emit_reduce_output
   from tinygrad.uop.ops import ReduceOutputSpec, UOp, AxisType
+  P = _NV_ASSOC[(rows, dim)][0]
   spec = ReduceOutputSpec(rows, dim, 1e-6, dtypes.float32, warps=rows, lanes=32, per_lane=4)
   out, xp, wp = (UOp.placeholder((rows * dim,), dtypes.float32, i) for i in range(3))
   body = emit_reduce_output(spec, dtypes.float32, dtypes.float32)(out, xp, wp)
   topo = body.toposort()
   smem_after = [u for u in topo if u.op is Ops.AFTER and len(u.src) == 2 and u.src[0].op is Ops.DEFINE_LOCAL]
   assert len(smem_after) == 1
+  assert smem_after[0].src[0].shape == (rows * P,)
   reads = [u for u in topo if u.op is Ops.INDEX and len(u.src) == 2 and u.src[0] is smem_after[0]]
-  assert len(reads) == 1 and not any(u.op is Ops.ADD and reads[0] in u.src for u in topo)
+  assert len(reads) == P and sorted(u.src[1].src[1].arg for u in reads) == list(range(P))
+  assert len([u for u in topo if u.op is Ops.ADD and any(rd in u.src for rd in reads)]) == P
 
 
 def test_multi_row_marker_lowers_to_fused_call_name():

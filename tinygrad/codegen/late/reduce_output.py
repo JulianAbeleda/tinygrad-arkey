@@ -5,20 +5,22 @@ custom-kernel Tensor transport are used.  Admission is owned by rangeify,
 which binds only concrete identity-preserving views into the ordinary CALL.
 
 The body is fully spec-driven and reproduces the ORDINARY reduce association
-bitwise: the ordinary r_16_256 kernel is 16 threads, each serially summing 256
-CONTIGUOUS elements, then a serial chain over the 16 partials.  The fused body
-mirrors that exact order: every lane computes the same per-warp serial chain
-over ``per_lane * lane`` contiguous elements (the reduce index is
-lane-independent), lane 0 publishes the per-warp partial, and the serial
-cross-warp chain plus the elementwise epilogue follow.  The epilogue still
-uses all lanes (``per_lane`` elements per lane), so the launch stays at the
-full 512-thread width while the reduction is bitwise-equal to the ordinary
-program for every dtype mix.  The recipe string selects the per-lane
-accumulation and epilogue (``sumsq_rsqrt_affine`` is the shipped legacy
-RMSNorm recipe; ``max_affine`` is the MAX-reduce affine variant).  Any
-shape/recipe the builder cannot express exactly fails closed with ValueError,
-which the rangeify selector maps to the same reject path as the legacy
-emitter.
+bitwise.  The single-row shapes mirror the ordinary r_16_256 kernel: 16
+threads, each serially summing 256 CONTIGUOUS elements, then a serial chain
+over the 16 partials.  The multi-row q/k shapes (rows 8/32 x dim 128) mirror
+the ordinary r_8_16_8 / r_2_8_4_4_16 tiling instead: per row P lanes each
+serially sum S elements at ``(t*t_stride + r*s_stride)``, then a serial chain
+combines the P partials in t order (see ``_NV_MULTI_ROW_ASSOC``).  That exact
+fp32 summation order is what makes the fused logits bitwise-equal on NV; a
+plain per-row serial chain differs in the last ulp and flips the full-logit
+SHA.  The epilogue keeps all lanes busy (``per_lane`` elements per lane), so
+the launch stays at the full 512-thread width while the reduction is
+bitwise-equal to the ordinary program for every dtype mix.  The recipe string
+selects the per-lane accumulation and epilogue (``sumsq_rsqrt_affine`` is the
+shipped legacy RMSNorm recipe; ``max_affine`` is the MAX-reduce affine
+variant).  Any shape/recipe the builder cannot express exactly fails closed
+with ValueError, which the rangeify selector maps to the same reject path as
+the legacy emitter.
 """
 from math import prod
 from tinygrad.dtype import dtypes, AddrSpace
@@ -28,6 +30,12 @@ from tinygrad.codegen.late.warp_reduce import _LADDER
 # recipe -> program-name stem.  The legacy RMSNorm recipe keeps its historical
 # name so the 08-05 body pin (reduce_output_rmsnorm_*) does not move.
 _RECIPE_STEMS = {"sumsq_rsqrt_affine": "rmsnorm", "max_affine": "max"}
+
+# NV ordinary reduce tiling for the fp32 q/k shapes: (P, S, t_stride,
+# s_stride).  r_2_8_4_4_16 (q, 32 rows) uses 8 lanes x 16 serial stride-8
+# elements; r_8_16_8 (k, 8 rows) uses 16 lanes x 8 serial contiguous elements.
+# Both combine the P partials in a serial chain in t order.
+_NV_MULTI_ROW_ASSOC = {(32, 128): (8, 16, 1, 8), (8, 128): (16, 8, 8, 1)}
 
 def reduce_output_association(shape: tuple[int, ...], lanes: int = 32) -> tuple[int, int, int]:
   """Derive (warps, lanes, per_lane) from an ordinary reduce loop nest.
@@ -63,37 +71,64 @@ def emit_reduce_output(spec:ReduceOutputSpec, x_dtype, weight_dtype):
   if x_dtype not in (dtypes.float16, dtypes.float32) or weight_dtype not in (dtypes.float16, dtypes.float32):
     raise ValueError("reduce-output requires fp16/fp32 inputs")
   dim, lane, warps, per_lane, sumsq = spec.dim, lane, warps, per_lane, spec.recipe == "sumsq_rsqrt_affine"
+  nv_assoc = _NV_MULTI_ROW_ASSOC.get((spec.rows, spec.dim)) if spec.rows > 1 else None
   def kernel(out:UOp, x:UOp, weight:UOp) -> UOp:
     laneid = UOp.range(lane, 0, AxisType.LOCAL)
     warp = UOp.range(warps, 1, AxisType.LOCAL)
-    # Ordinary r_16_256 association: each thread serially sums per_lane*lane
-    # CONTIGUOUS elements, then a serial chain combines the per-warp partials.
-    # The reduce index is lane-independent so every lane of a warp computes the
-    # identical serial chain; only lane 0 publishes it.  This is bitwise-equal
-    # to the ordinary kernel, unlike a strided per-lane split with a shuffle
-    # ladder, whose fp32 association differs in the last ulp.
-    red = UOp.range(per_lane * lane, 2, AxisType.REDUCE)
-    base = warp * (per_lane * lane) + red
-    xv = x[base].cast(dtypes.float32)
-    acc = UOp.placeholder((1,), dtypes.float32, 20, AddrSpace.REG)
-    acc = acc.after(acc[0].store(0.0))
-    if sumsq:
-      acc = acc.after(acc[0].store(acc.after(red)[0] + xv*xv).end(red))
-    else:
-      acc = acc.after(acc[0].store(acc.after(red)[0].maximum(xv.abs())).end(red))
-    # Every lane holds the same serial-chain value; no cross-lane ladder.
-    warp_total = acc[0]
-    smem = UOp.placeholder((warps,), dtypes.float32, 230, AddrSpace.LOCAL)
-    published = smem[warp].store(warp_total, laneid.eq(0))
-    ready = UOp.barrier(UOp.group(published))
-    if spec.rows == 1:
+    if nv_assoc is not None:
+      # NV ordinary partial-chain association for this row shape.  P lanes
+      # each serially sum S elements at (t*t_stride + r*s_stride); idle lanes
+      # (laneid >= P) compute an in-bounds duplicate partial and never publish.
+      P, S, t_stride, s_stride = nv_assoc
+      partial_lane = laneid % P
+      red = UOp.range(S, 2, AxisType.REDUCE)
+      base = warp * dim + partial_lane * t_stride + red * s_stride
+      xv = x[base].cast(dtypes.float32)
+      acc = UOp.placeholder((1,), dtypes.float32, 20, AddrSpace.REG)
+      acc = acc.after(acc[0].store(0.0))
+      if sumsq:
+        acc = acc.after(acc[0].store(acc.after(red)[0] + xv*xv).end(red))
+      else:
+        acc = acc.after(acc[0].store(acc.after(red)[0].maximum(xv.abs())).end(red))
+      # One slot per (warp, partial): the block-wide smem must keep rows from
+      # clobbering each other's partials.
+      smem = UOp.placeholder((warps * P,), dtypes.float32, 230, AddrSpace.LOCAL)
+      published = smem[warp * P + partial_lane].store(acc[0], laneid < P)
+      ready = UOp.barrier(UOp.group(published))
+      # Serial combine in t order, exactly like the ordinary kernel's partial
+      # chain; every lane of the warp computes the same total.
       total = UOp.const(dtypes.float32, 0.0)
-      for wi in range(warps):
-        total = (total + smem.after(ready)[wi]) if sumsq else total.maximum(smem.after(ready)[wi])
+      for ti in range(P):
+        total = (total + smem.after(ready)[warp * P + ti]) if sumsq else total.maximum(smem.after(ready)[warp * P + ti])
     else:
-      # Row-mode: warp w owns row w; each warp reads back ONLY its own published
-      # row total.  There is no cross-warp serial combine; rows are independent.
-      total = smem.after(ready)[warp]
+      # Ordinary r_16_256 association: each thread serially sums per_lane*lane
+      # CONTIGUOUS elements, then a serial chain combines the per-warp partials.
+      # The reduce index is lane-independent so every lane of a warp computes the
+      # identical serial chain; only lane 0 publishes it.  This is bitwise-equal
+      # to the ordinary kernel, unlike a strided per-lane split with a shuffle
+      # ladder, whose fp32 association differs in the last ulp.
+      red = UOp.range(per_lane * lane, 2, AxisType.REDUCE)
+      base = warp * (per_lane * lane) + red
+      xv = x[base].cast(dtypes.float32)
+      acc = UOp.placeholder((1,), dtypes.float32, 20, AddrSpace.REG)
+      acc = acc.after(acc[0].store(0.0))
+      if sumsq:
+        acc = acc.after(acc[0].store(acc.after(red)[0] + xv*xv).end(red))
+      else:
+        acc = acc.after(acc[0].store(acc.after(red)[0].maximum(xv.abs())).end(red))
+      # Every lane holds the same serial-chain value; no cross-lane ladder.
+      warp_total = acc[0]
+      smem = UOp.placeholder((warps,), dtypes.float32, 230, AddrSpace.LOCAL)
+      published = smem[warp].store(warp_total, laneid.eq(0))
+      ready = UOp.barrier(UOp.group(published))
+      if spec.rows == 1:
+        total = UOp.const(dtypes.float32, 0.0)
+        for wi in range(warps):
+          total = (total + smem.after(ready)[wi]) if sumsq else total.maximum(smem.after(ready)[wi])
+      else:
+        # Row-mode: warp w owns row w; each warp reads back ONLY its own published
+        # row total.  There is no cross-warp serial combine; rows are independent.
+        total = smem.after(ready)[warp]
     if sumsq:
       scale = (total / UOp.const(dtypes.float32, float(dim)) + UOp.const(dtypes.float32, spec.eps)).sqrt().reciprocal()
     else:
