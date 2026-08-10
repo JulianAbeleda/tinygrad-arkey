@@ -450,7 +450,7 @@ def _run_child(cmd: list[str], out: pathlib.Path) -> dict:
 def wall_bracket(args) -> dict:
   """Serialized reverse control/candidate/control timing, each child a fresh
   process under ``timeout ... flock -w`` on the shared GPU bench lock."""
-  root = pathlib.Path(args.out).with_suffix("") + ".timing"
+  root = _child_root(pathlib.Path(args.out), ".timing")
   root.mkdir(parents=True, exist_ok=True)
   rows = []
   for sequence, arm in enumerate(("control", "candidate", "control")):
@@ -466,11 +466,17 @@ def _write_record(record: dict, out: pathlib.Path) -> dict:
   return record
 
 
+def _child_root(out: pathlib.Path, suffix: str) -> pathlib.Path:
+  """Derive the child-artifact directory for a record path (e.g.
+  ``/tmp/ro-ab-record.json`` -> ``/tmp/ro-ab-record.children``)."""
+  return pathlib.Path(str(out).removesuffix(out.suffix) + suffix)
+
+
 def ab(args) -> dict:
   """Campaign orchestrator: smoke -> exact logits -> census -> wall bracket.
   HARD STOP with a NO-GO record at the first failed gate; BOOKED only when
   every gate passes and the bracket promotes."""
-  root = pathlib.Path(args.out).with_suffix("") + ".children"
+  root = _child_root(pathlib.Path(args.out), ".children")
   root.mkdir(parents=True, exist_ok=True)
   record = no_go_record(args.model, args.depth)
   smoke_out = root / "smoke-candidate.json"

@@ -7,7 +7,7 @@ import pytest
 
 from extra.llm_research.decode.nv_reduce_output_primitive_ab import (
   POP_NORMS, SCHEMA, _assert_candidate_configured, _assert_control_closed,
-  _child_command, _configure, _gates, no_go_record, tok_per_s,
+  _child_command, _child_root, _configure, _gates, no_go_record, tok_per_s,
   validate_census, validate_logits_gate, validate_timing_bracket,
 )
 
@@ -248,3 +248,8 @@ def test_no_go_record_shape():
 def test_tok_per_s_conversion():
   assert tok_per_s(5.0) == pytest.approx(200.0)
   assert tok_per_s(4.95) == pytest.approx(202.020202, rel=1e-4)
+
+
+def test_child_root_derivation():
+  assert str(_child_root(pathlib.Path("/tmp/ro-ab-record.json"), ".children")) == "/tmp/ro-ab-record.children"
+  assert str(_child_root(pathlib.Path("/tmp/ro-ab-record.json"), ".timing")) == "/tmp/ro-ab-record.timing"
