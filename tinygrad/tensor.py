@@ -1309,26 +1309,42 @@ class Tensor(RandMixin):
     if not all_int(x.shape) or len(x.shape) == 0: return out
     dim = x.shape[-1]
     rows = prod(x.shape[:-1])
-    if not isinstance(dim, int) or not isinstance(rows, int) or rows != 1 or dim < 32 or dim % 32: return out
+    # Decode norm shapes are the admit set.  Single-row keeps the historical
+    # dim >= 32 general case; the fp32 q/k norms are multi-row (8/32 rows) at
+    # 128 or 4096 elements per row.  Everything else keeps the ordinary
+    # fallback (no marker).
+    if not isinstance(dim, int) or not isinstance(rows, int) or rows not in (1, 8, 32) or dim < 32 or dim % 32: return out
+    if rows != 1 and dim not in (128, 4096): return out
     if x.dtype not in (dtypes.float16, dtypes.float32) or out.dtype not in (dtypes.float16, dtypes.float32): return out
     # Warp/lane/per-lane association mirrors the ordinary reduce shape: one
-    # warp per 256 elements, 32 lanes per warp, the remainder per lane.  Any
+    # warp per row for the multi-row q/k norms (32 lanes per warp, the row
+    # split across lanes), and one warp per 256 elements for single-row.  Any
     # dim this cannot tile exactly keeps the ordinary fallback (no marker).
-    warps = max(1, min(16, dim // 256))
-    per_lane, rem = divmod(dim, warps * 32)
+    if rows == 1:
+      warps = max(1, min(16, dim // 256))
+      per_lane, rem = divmod(dim, warps * 32)
+    else:
+      warps = rows
+      per_lane, rem = divmod(dim, 32)
     if rem or per_lane < 1: return out
     # In production a block result is explicitly CONTIGUOUS before its semantic
     # role wrapper.  Accept only that one promised materialization when its
     # source is itself an exact precompiled function result.  This is not
-    # generic movement stripping: ADD/CAST/PERMUTE and arbitrary CONTIGUOUS
-    # values remain ineligible.
+    # generic movement stripping: ADD/CAST/SHRINK/EXPAND and arbitrary
+    # CONTIGUOUS values remain ineligible.
     identity_uop = x.uop
-    while identity_uop.op in {Ops.RESHAPE, Ops.MEMORY_SEMANTIC}: identity_uop = identity_uop.src[0]
+    # Pure RESHAPE / MEMORY_SEMANTIC / PERMUTE views are offset-0 and preserve
+    # the producer's identity.  PERMUTE is admitted only as a pure permutation
+    # of a single producer; the walk stays closed to SHRINK/EXPAND/ADD/CAST,
+    # so a non-trivial chain stops here and fails the identity checks below.
+    while identity_uop.op in {Ops.RESHAPE, Ops.MEMORY_SEMANTIC, Ops.PERMUTE}:
+      if identity_uop.op is Ops.PERMUTE and len(identity_uop.src) != 1: break
+      identity_uop = identity_uop.src[0]
     precompiled_contiguous = identity_uop.op is Ops.CONTIGUOUS and identity_uop.src[0].has_precompiled_output_identity()
     owned_contiguous_candidate = (x.uop.op is Ops.MEMORY_SEMANTIC and len(x.uop.src) == 1 and
                                   x.uop.src[0].op is Ops.CONTIGUOUS and memory_semantic_owner(x.uop) is not None)
-    identity = not owned_contiguous_candidate and (x.uop.has_buffer_identity() or
-      x.uop.has_precompiled_output_identity() or precompiled_contiguous)
+    identity = not owned_contiguous_candidate and (identity_uop.has_buffer_identity() or
+      identity_uop.has_precompiled_output_identity() or precompiled_contiguous)
     return Tensor(UOp(Ops.REDUCE_OUTPUT, out.dtype, (out.uop, x.uop, weight.uop),
                       ReduceOutputSpec(rows, dim, eps, out.dtype, input_identity_at_marker=identity,
                                        owned_contiguous_candidate=owned_contiguous_candidate,
