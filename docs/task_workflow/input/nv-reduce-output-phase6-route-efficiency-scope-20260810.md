@@ -3,14 +3,16 @@
 Date: 2026-08-10
 Branch: `nvidia-bringup-20260731`, HEAD `554cbd3f7` (post
 `25370bbad` emitter association fix and `554cbd3f7` NO-GO bracket record).
-Status: **implementation scope. Authorized by the Phase 6 gated follow-up in
-`nv-reduce-output-wall-bracket-scope-20260809.md` section 4 after the wall
-bracket completed NO-GO with an unpromoted candidate. The goal is to make the
-candidate arm's captured decode graph match the control graph EXCEPT for the
-norms row itself: 18 fused `reduce_output_rmsnorm_1_4096` bodies (one per
-norm, not 54), zero non-norms callify side effects, then re-run the exact
-campaign. No policy promotion, no model wiring change, no correctness
-contract weakening.**
+Status: **COMPLETE, campaign re-run NO-GO (2026-08-10, record
+`nv-reduce-output-phase6-wall-bracket-record-20260810.md`). Workstreams A and B
+landed (18 coalesced fused bodies, callify flags scoped to the reduce-output
+route, residual E_32_32_4 flag-leak shifts eliminated), and all three gates
+PASS (smoke, exact logits SHA identical to control, census with honest net
+-22 programs). The reverse wall bracket still does NOT promote: candidate
+5.420 vs control 5.401 ms/token median (-18.5 us, -0.63 tok/s). The fused
+route's own materialization penalty outweighs the saved launches, so the
++495.330 us norms row stays unbooked. No policy promotion, no model wiring
+change, no correctness contract weakening.**
 
 ## 1. Why this scope exists
 
@@ -187,4 +189,3 @@ stream hashes.
    no non-norms side effects, exact logits PASS).
 4. Full wall bracket campaign; record + artifacts committed and pushed
    (`[docs]`), verdict BOOKED or NO-GO with exact evidence.
-
