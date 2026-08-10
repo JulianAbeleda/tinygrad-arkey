@@ -3,7 +3,7 @@ from tinygrad.dtype import dtypes, AddrSpace, PtrDType, ImageDType
 from tinygrad.uop.ops import (AxisType, UOp, UPat, PatternMatcher, Ops, GroupOp, ScheduleHints, ParamArg, ReduceOutputSpec, CallInfo,
                              bind_memory_semantic_owner, memory_semantic_owner, propagate_memory_semantic, graph_rewrite, track_rewrites)
 from tinygrad.uop import MemorySemanticOwner, MemorySemanticClass
-from tinygrad.helpers import VIZ, ContextVar, pluralize, all_int
+from tinygrad.helpers import VIZ, Context, ContextVar, pluralize, all_int
 
 # Candidate callify contract. It remains closed by default until the independent
 # substrate census, logits, and reverse wall gates qualify it. Setting this to
@@ -127,14 +127,91 @@ def contiguous_mops_to_view(c:UOp, src:UOp):
 
   return None
 
-def _precompiled_output_redirect(s:UOp, t:UOp) -> UOp|None:
+def _body_has_reduce_output_candidate(srcs:tuple[UOp, ...]) -> bool:
+  """Whether a precompiled body participates in the reduce-output route.
+
+  The owned-redirect behaviors are only load-bearing for a FUNCTION whose
+  body carries a REDUCE_OUTPUT marker with the owned-contiguous candidate
+  proof.  Gating them on the body instead of the global ContextVar keeps
+  every other precompiled family (residual E_32_32_4 add/cast programs,
+  attention, FFN) byte-identical to the closed control graph.
+  """
+  return any(u.op is Ops.REDUCE_OUTPUT and isinstance(u.arg, ReduceOutputSpec) and u.arg.owned_contiguous_candidate
+             for u in UOp.sink(*srcs).toposort())
+
+
+# Set by transform_to_call for the duration of its callify passes: the ids of
+# precompiled FUNCTIONs whose outputs feed a REDUCE_OUTPUT marker input.
+# The marker itself lives in a different body, so the body scan above cannot
+# see these producers; their outputs must keep the owned redirect so the
+# marker's input proof survives to rangeify.
+_ACTIVE_REDUCE_OUTPUT_ROUTE_FUNCTIONS = ContextVar("_ACTIVE_REDUCE_OUTPUT_ROUTE_FUNCTIONS", frozenset())
+
+
+def _reduce_output_route_function_ids(sink:UOp) -> frozenset[int]:
+  """Ids of precompiled FUNCTIONs whose output feeds a REDUCE_OUTPUT marker input.
+
+  Walk every eligible marker's input chain downward through transparent
+  carriers (CONTIGUOUS, RESHAPE, MEMORY_SEMANTIC) and GETTUPLE, crossing
+  FUNCTION boundaries (an invocation argument feeds the matching body PARAM),
+  and collect every precompiled FUNCTION whose output participates.  This is
+  the producer side of the route: those outputs must keep the owned redirect
+  so the marker input proof (owned precompiled output AFTER / exact
+  invocation slot) survives to rangeify.  Functions whose bodies carry the
+  marker need no entry here; the body scan covers them.
+  """
+  nodes = sink.toposort()
+  # PARAM nodes are interned across functions, so scope the slot lookup to the
+  # exact function whose body contains them; also record each marker's owner.
+  body_params: dict[int, dict[int, UOp]] = {}
+  marker_owner: dict[int, UOp|None] = {}
+  for f in nodes:
+    if f.op is not Ops.FUNCTION or f.src[0].op is not Ops.TUPLE: continue
+    slots: dict[int, UOp] = {}
+    for u in UOp.sink(*f.src[0].src).toposort():
+      if u.op is Ops.PARAM and isinstance(u.arg, ParamArg): slots.setdefault(u.arg.slot, u)
+      if u.op is Ops.REDUCE_OUTPUT and isinstance(u.arg, ReduceOutputSpec): marker_owner.setdefault(id(u), f)
+    if slots: body_params[id(f)] = slots
+  route: set[int] = set()
+  for m in nodes:
+    if m.op is not Ops.REDUCE_OUTPUT or not isinstance(m.arg, ReduceOutputSpec): continue
+    if not (m.arg.owned_contiguous_candidate or m.arg.input_identity_at_marker): continue
+    stack: list[tuple[UOp, UOp|None]] = [(m.src[1], marker_owner.get(id(m)))]
+    seen: set[int] = set()
+    while stack:
+      x, owner = stack.pop()
+      if id(x) in seen: continue
+      seen.add(id(x))
+      if x.op is Ops.FUNCTION and x.arg.precompile: route.add(id(x)); continue
+      if x.op is Ops.GETTUPLE and len(x.src) == 1 and x.src[0].op is Ops.FUNCTION:
+        route.add(id(x.src[0])); continue
+      if x.op is Ops.PARAM and isinstance(x.arg, ParamArg):
+        # Cross the function boundary: this body PARAM is fed by the owner's
+        # invocation argument at the same slot.
+        if owner is None or x.arg.slot >= len(owner.src) - 1: continue
+        stack.append((owner.src[1 + x.arg.slot], None)); continue
+      if x.op in {Ops.CONTIGUOUS, Ops.MEMORY_SEMANTIC, Ops.RESHAPE} and len(x.src) == 1:
+        stack.append((x.src[0], owner)); continue
+  return frozenset(route)
+
+
+def _is_reduce_output_route_function(c:UOp) -> bool:
+  """A precompiled FUNCTION participates in the route when its body carries
+  the marker or its output feeds a marker input (producer side)."""
+  if not CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT: return False
+  if _body_has_reduce_output_candidate(c.src[0].src): return True
+  active = _ACTIVE_REDUCE_OUTPUT_ROUTE_FUNCTIONS.value
+  return bool(active and id(c) in active)
+
+
+def _precompiled_output_redirect(s:UOp, t:UOp, redirect:bool) -> UOp|None:
   # how output s lands in the caller's buffer t, or None if it must be copied into t
   # An owned contiguous result is the same allocation contract with an explicit
   # semantic carrier. Materialize its source directly into this invocation's
   # resolved output slot and retain ownership on the dependency-bearing AFTER.
   # This is intentionally exact: no movement/view may sit between the owner and
   # CONTIGUOUS, and dtype/span must match the allocated slot.
-  if CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT and s.op is Ops.MEMORY_SEMANTIC and len(s.src) == 1 and s.src[0].op is Ops.CONTIGUOUS:
+  if redirect and s.op is Ops.MEMORY_SEMANTIC and len(s.src) == 1 and s.src[0].op is Ops.CONTIGUOUS:
     contig = s.src[0]
     if s.dtype != t.dtype or s.shape != t.shape: return None
     placed = t.after(t.store(contig.src[0]))
@@ -364,20 +441,24 @@ def transform_precompiled_call(c:UOp) -> UOp|None:
   assert c.src[0].op is Ops.TUPLE, f"expected TUPLE body for precompiled FUNCTION, got {c.src[0].op}"
   # At this point FUNCTION inputs have already been substituted with PARAMs.
   _trace_reduce_output_markers(c.src[0].src, "after_function_substitution")
+  # The owned-redirect/typed-input behaviors are scoped to bodies that
+  # actually carry the reduce-output route; every other precompiled family
+  # transforms exactly like the closed control graph.
+  ro_route = _is_reduce_output_route_function(c)
   # An exact prior precompiled output already has a fresh contiguous output
   # allocation.  Retain its invocation spelling so the nested producer can
   # become AFTER(output, CALL); adding another transport CONTIGUOUS here would
   # create the first of two identity copies at a consumer FUNCTION boundary.
   input_buffers = tuple(_direct_owned_precompiled_input_view(x) if
-                        CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT and _exact_precompiled_output_argument(x)
+                        ro_route and _exact_precompiled_output_argument(x)
                         else x if x.op in {Ops.AFTER, Ops.BIND} else x.contiguous() for x in c.src[1:])
 
   # add the outputs to the call
   # Qualify against the original invocation arguments. input_buffers may add
   # transport CONTIGUOUS nodes after the exact owned caller spelling, while
   # preserving the same positional slot.
-  srcs = _bind_reduce_output_invocation_inputs(c.src[0].src, c.src[1:])
-  srcs = _collapse_owned_invocation_input_contiguous(srcs, c.src[1:])
+  srcs = _bind_reduce_output_invocation_inputs(c.src[0].src, c.src[1:]) if ro_route else c.src[0].src
+  srcs = _collapse_owned_invocation_input_contiguous(srcs, c.src[1:]) if ro_route else srcs
   resolved = [c.gettuple(i) for i in range(len(srcs))]
   outs = tuple(r.empty_like() for r in resolved)
   targets = [o.param_like(len(c.src)-1+i).shrink_to(s.shape) for i,(o,s) in enumerate(zip(outs, srcs))]
@@ -389,7 +470,7 @@ def transform_precompiled_call(c:UOp) -> UOp|None:
     while s.op is Ops.AFTER:
       after_deps.extend(s.src[1:])
       s = s.src[0]
-    if (placed := _precompiled_output_redirect(s, t)) is not None and s not in subs:
+    if (placed := _precompiled_output_redirect(s, t, ro_route)) is not None and s not in subs:
       subs[s] = placed
       items.append(s.after(*after_deps) if after_deps else s)
     else:
@@ -398,7 +479,7 @@ def transform_precompiled_call(c:UOp) -> UOp|None:
   _trace_reduce_output_markers(fxn.src, "after_callify")
 
   # body switches from TUPLE to SINK, so the node becomes an opaque CALL (not FUNCTION)
-  output_slots = tuple(range(len(input_buffers), len(input_buffers)+len(outs))) if CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT else ()
+  output_slots = tuple(range(len(input_buffers), len(input_buffers)+len(outs))) if ro_route else ()
   new_call = UOp(Ops.CALL, c.dtype, (fxn, *input_buffers, *outs), replace(c.arg, precompiled_output_slots=output_slots))
   rets = tuple(o.after(new_call) for o in outs)
   # Output ownership is invocation side data. Keep the executable result as a
@@ -418,7 +499,10 @@ def collapse_owned_precompiled_output_contiguous(c:UOp) -> UOp|None:
 
   Admitted spelling: CONTIGUOUS((RESHAPE|MEMORY_SEMANTIC)*,
   CONTIGUOUS(AFTER(output_buffer, precompiled CALL))). Only zero-offset,
-  equal-span reshapes are present; every other movement fails closed.
+  equal-span reshapes are present; every other movement fails closed.  This
+  collapse is scoped to the reduce-output route: the wrapped CALL must carry
+  a REDUCE_OUTPUT marker in its body, so non-norms precompiled families keep
+  their closed-graph materialization.
   """
   if not CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT: return None
   owner = memory_semantic_owner(c.src[0])
@@ -428,6 +512,7 @@ def collapse_owned_precompiled_output_contiguous(c:UOp) -> UOp|None:
   after = x.src[0] if x.op is Ops.CONTIGUOUS and x.src[0].op is Ops.AFTER else x if x.op is Ops.AFTER else None
   if after is None: return None
   if len(after.src) != 2 or after.src[1].op is not Ops.CALL or not after.src[1].arg.precompile: return None
+  if not _body_has_reduce_output_candidate(after.src[1].src[0].src): return None
   try:
     base, call = after.src[0].buf_uop, after.src[1]
     if sum(arg.buf_uop is base for arg in call.src[1:]) != 1: return None
@@ -608,34 +693,40 @@ def transform_to_call(big_sink:UOp) -> tuple[UOp, dict[UOp, UOp]]:
   # one-token LLM sample grew by 121 dispatches) despite being value-preserving.
   big_sink = big_sink.replace(src=tuple(output.src[0] if output.op is Ops.MEMORY_SEMANTIC else output
                                         for output in original_outputs))
-  big_sink = graph_rewrite(big_sink, pm_semantic_materialization, name="semantic materialization boundary")
-  rewritten_outputs = big_sink.src
-  # uop list is a list in the original_sink graph and we can map to the tags later
-  # here we build buffer map
-  dont_realize = {Ops.CONST, Ops.BUFFER, Ops.BIND, Ops.DEFINE_VAR, Ops.AFTER}
-  ctx = AllocCtx(bases=set([x.multibase for x in big_sink.src if x.base.op not in dont_realize]))
+  # Reduce-output route membership is computed on the RAW graph, before
+  # semantic materialization rewrites the marker's input chain.  The callify
+  # passes below consult it so only route functions take the owned-redirect
+  # contract; every other precompiled family transforms byte-identically.
+  route_ids = _reduce_output_route_function_ids(big_sink)
+  with Context(_ACTIVE_REDUCE_OUTPUT_ROUTE_FUNCTIONS=route_ids):
+    big_sink = graph_rewrite(big_sink, pm_semantic_materialization, name="semantic materialization boundary")
+    rewritten_outputs = big_sink.src
+    # uop list is a list in the original_sink graph and we can map to the tags later
+    # here we build buffer map
+    dont_realize = {Ops.CONST, Ops.BUFFER, Ops.BIND, Ops.DEFINE_VAR, Ops.AFTER}
+    ctx = AllocCtx(bases=set([x.multibase for x in big_sink.src if x.base.op not in dont_realize]))
 
-  # this rewrite is "read-only", it adds simple things to buffer_map and may sink things on big_sink, bottom_up
-  # this is the only one where we have to be careful to not break the tensor graph
-  big_sink = graph_rewrite(big_sink, add_tags, ctx=ctx, bottom_up=True, name="number the uops")
+    # this rewrite is "read-only", it adds simple things to buffer_map and may sink things on big_sink, bottom_up
+    # this is the only one where we have to be careful to not break the tensor graph
+    big_sink = graph_rewrite(big_sink, add_tags, ctx=ctx, bottom_up=True, name="number the uops")
 
-  # here we can break the tensor graph. this is the only place you need to maintain numbered tags
-  # Input ownership must be decided while the enclosing FUNCTION can still
-  # see its concrete invocation arguments.  A bottom-up pass materializes the
-  # nested producer's caller CONTIGUOUS first and loses that relation.  Expose
-  # precompiled consumers top-down for either gated input-boundary contract.
-  # A precompiled body may itself call another precompiled FUNCTION (the resadd fold's
-  # block-output chain). enter_calls=False rewrites never see those nested FUNCTIONs and
-  # rangeify.resolve_function deliberately skips precompile bodies, so they would land raw
-  # in every composite and crash the NV render (weakint SPECIAL inside the embedded body).
-  # Resolve nested precompile FUNCTIONs bottom-up with body entry before the early pass.
-  big_sink = graph_rewrite(big_sink, pm_precompile_function_boundary, name="nested precompile boundary",
-                           bottom_up=True, enter_calls=True)
-  if CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT or CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER:
-    big_sink = graph_rewrite(big_sink, pm_precompile_function_boundary, bottom_up=False, name="typed semantic function boundary")
-  if CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER:
-    big_sink = graph_rewrite(big_sink, pm_typed_semantic_call_input, bottom_up=False, name="typed semantic call input")
-  big_sink = graph_rewrite(big_sink, pm_early_transform_tensor_graph, name="early transform tensor graph")
+    # here we can break the tensor graph. this is the only place you need to maintain numbered tags
+    # Input ownership must be decided while the enclosing FUNCTION can still
+    # see its concrete invocation arguments.  A bottom-up pass materializes the
+    # nested producer's caller CONTIGUOUS first and loses that relation.  Expose
+    # precompiled consumers top-down for either gated input-boundary contract.
+    # A precompiled body may itself call another precompiled FUNCTION (the resadd fold's
+    # block-output chain). enter_calls=False rewrites never see those nested FUNCTIONs and
+    # rangeify.resolve_function deliberately skips precompile bodies, so they would land raw
+    # in every composite and crash the NV render (weakint SPECIAL inside the embedded body).
+    # Resolve nested precompile FUNCTIONs bottom-up with body entry before the early pass.
+    big_sink = graph_rewrite(big_sink, pm_precompile_function_boundary, name="nested precompile boundary",
+                             bottom_up=True, enter_calls=True)
+    if CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT or CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER:
+      big_sink = graph_rewrite(big_sink, pm_precompile_function_boundary, bottom_up=False, name="typed semantic function boundary")
+    if CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER:
+      big_sink = graph_rewrite(big_sink, pm_typed_semantic_call_input, bottom_up=False, name="typed semantic call input")
+    big_sink = graph_rewrite(big_sink, pm_early_transform_tensor_graph, name="early transform tensor graph")
 
   # here we construct the final buffer_map. this is everything that will go into the tensor map
   graph_rewrite(big_sink, pm_finalize_call, ctx=ctx, name="finalize call")

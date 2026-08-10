@@ -295,6 +295,35 @@ def test_c6_call_input_fused_body_never_aliases_its_input():
   assert out_buf is not x
 
 
+def test_c6_call_input_coalesces_one_body_per_marker_across_consumers():
+  """The production decode graph feeds one marked norm to several consumer
+  CALLs (q/k/v projections, FFN gate/up/down).  The per-argument rule emitted
+  one fused body plus one output buffer per consumer (the 54-vs-18 census
+  multiplicity); the graph-level pass must emit ONE body and ONE fresh output
+  buffer per unique marker, with every consumer reading the same AFTER."""
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  from tinygrad.schedule.rangeify import coalesce_c6_call_inputs
+  x = UOp.param(0, dtypes.float16, (1, 4096), "CPU")
+  w = UOp.param(1, dtypes.float16, (4096,), "CPU")
+  out = UOp.new_buffer("CPU", 4096, dtypes.float16).reshape(1, 4096)
+  marker = UOp(Ops.REDUCE_OUTPUT, dtypes.float16, (out, x, w),
+                ReduceOutputSpec(1, 4096, 1e-6, dtypes.float16, owned_contiguous_candidate=True,
+                                 invocation_input_slot=0))
+  chain = runtime_scratch(marker).reshape(4096).contiguous()
+  calls = tuple(UOp(Ops.CALL, dtypes.void, (UOp.sink(chain), chain), arg=None) for _ in range(3))
+  sink = coalesce_c6_call_inputs(UOp.sink(*calls))
+  assert sink is not None
+  bodies, buffers = set(), set()
+  for consumer in sink.src:
+    assert consumer.op is Ops.CALL
+    replaced = consumer.src[1]
+    assert replaced.op is Ops.AFTER and len(replaced.src) == 2
+    out_buf, fused = replaced.src
+    assert fused.src[0].arg.name == "reduce_output_rmsnorm_1_4096"
+    bodies.add(fused); buffers.add(out_buf)
+  assert len(bodies) == 1 and len(buffers) == 1
+
+
 def test_m4_style_view_proof_admits_declared_typed_output():
   from tinygrad.llm.kernel_program import DeclaredTypedOutput, TypedLayout, _DECLARED_TYPED_OUTPUTS
   from tinygrad.schedule.rangeify import _reduce_output_m4_input_view

@@ -393,6 +393,39 @@ def _lower_c6_call_input(call:UOp) -> UOp|None:
     replacements[arg] = out_buf.after(fused)
   return call.replace(src=(call.src[0], *(replacements.get(a, a) for a in call.src[1:]))) if replacements else None
 
+
+def coalesce_c6_call_inputs(tsink:UOp) -> UOp|None:
+  """Emit ONE fused reduce-output body per unique norm marker across all consumers.
+
+  The production decode DAG feeds the same marked norm value to several
+  consumer CALL arguments (q/k/v projections and FFN gate/up/down).  The
+  per-argument ``_lower_c6_call_input`` rule emitted one fused body plus one
+  weight materialization per consuming call argument, so one norm became 3
+  bodies (the 54-vs-18 census multiplicity) with 3x the launch overhead.  This
+  graph-level pass groups matching C6-chain arguments by marker identity and
+  lowers ONE body into ONE fresh output buffer; every consumer in the group
+  reads the same dependency-bearing AFTER.  Any group whose representative
+  fails the exact proof keeps the ordinary fallback for all of its members.
+  """
+  matches: list[tuple[UOp, UOp]] = []  # (call, c6-arg)
+  for node in tsink.toposort():
+    if node.op is not Ops.CALL or len(node.src) < 2: continue
+    for arg in node.src[1:]:
+      if _c6_marker(arg) is not None: matches.append((node, arg))
+  if not matches: return None
+  groups: dict[UOp, list[tuple[UOp, UOp]]] = {}
+  for call, arg in matches: groups.setdefault(_c6_marker(arg), []).append((call, arg))
+  replacements: dict[UOp, UOp] = {}
+  for marker, group in groups.items():
+    rep_call, rep_arg = group[0]
+    out_buf = UOp.new_buffer(rep_arg.device, rep_arg.numel(), rep_arg.dtype)
+    fused = lower_reduce_output_store(None, rep_arg, marker, target=out_buf)
+    if fused is None: continue
+    shared = out_buf.after(fused)
+    for _, arg in group: replacements[arg] = shared
+  if not replacements: return None
+  return tsink.substitute(replacements)
+
 def lower_reduce_output_store(store:UOp, carrier:UOp|None=None, marker:UOp|None=None, target:UOp|None=None) -> UOp|None:
   """Lower the exact direct marker, or one owner-preserving production carrier.
 
@@ -1355,6 +1388,8 @@ def _get_kernel_graph(sink:UOp) -> UOp:
   # REDUCE_OUTPUT is selected only at the concrete STORE, after callify has
   # exposed exact buffer/view ownership. Top-down is load-bearing: selecting
   # the STORE must happen before the child fallback rule erases the marker.
+  coalesced = coalesce_c6_call_inputs(tsink)
+  if coalesced is not None: tsink = coalesced
   tsink = graph_rewrite(tsink, pm_reduce_output_store, bottom_up=False, name="reduce output store")
   tsink = graph_rewrite(tsink, pm_reduce_output_fallback, name="reduce output fallback")
 

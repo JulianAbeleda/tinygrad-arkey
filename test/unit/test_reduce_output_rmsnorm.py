@@ -221,6 +221,38 @@ def test_nested_invocation_input_proof_rejects_default_off_noncall_and_movement(
     assert "reduce_output_rmsnorm_1_4096" not in _names(consumer(moved))
     assert "reduce_output_rmsnorm_1_4096" not in _names(consumer(noncall))
 
+
+def test_callify_flags_leave_non_reduce_output_precompiled_functions_untouched():
+  """The candidate callify flags must only alter reduce-output-bearing
+  functions.  A precompiled residual-family function (no REDUCE_OUTPUT marker)
+  must transform to the exact same graph under the candidate flags as under
+  the closed control graph; otherwise the census's E_32_32_4 residual side
+  effects (-36/+36/+54/-18/-71) return and the wall bracket regresses.  Each
+  callify transform allocates its output buffer, so the two arms are compared
+  structurally with allocation identity (UNIQUE ids) elided."""
+  from tinygrad.callify import pm_early_transform_tensor_graph
+  from tinygrad.function import function
+  from tinygrad.helpers import Context
+  from tinygrad.uop.ops import Ops, UOp, graph_rewrite
+  x = Tensor.empty(1,4096,dtype=dtypes.float16,device="NV")
+  @function(precompile=True)
+  def residual(v): return v + 1
+  value = residual(x).contiguous()
+  control = graph_rewrite(value.uop, pm_early_transform_tensor_graph, name="control residual callify")
+  with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
+    candidate = graph_rewrite(value.uop, pm_early_transform_tensor_graph, name="candidate residual callify")
+  assert control is not None and candidate is not None
+  def structural(u:UOp):
+    if u.op is Ops.UNIQUE: return ("UNIQUE",)
+    return (u.op, tuple(structural(s) for s in u.src), u.arg)
+  assert structural(control) == structural(candidate)
+  # No owned-redirect contract leaks onto a non-route function: the opaque
+  # CALL carries no output slots in either arm, so rangeify cannot admit the
+  # owned precompiled-output proof for it.
+  for root in (control, candidate):
+    call = next(u for u in root.toposort() if u.op is Ops.CALL and bool(getattr(u.arg, "precompile", False)))
+    assert call.arg.precompiled_output_slots == ()
+
 def test_precompiled_output_slot_contract_is_closed_with_redirect_default():
   from tinygrad.function import function
   from tinygrad.helpers import Context
