@@ -1311,6 +1311,12 @@ class Tensor(RandMixin):
     rows = prod(x.shape[:-1])
     if not isinstance(dim, int) or not isinstance(rows, int) or rows != 1 or dim < 32 or dim % 32: return out
     if x.dtype not in (dtypes.float16, dtypes.float32) or out.dtype not in (dtypes.float16, dtypes.float32): return out
+    # Warp/lane/per-lane association mirrors the ordinary reduce shape: one
+    # warp per 256 elements, 32 lanes per warp, the remainder per lane.  Any
+    # dim this cannot tile exactly keeps the ordinary fallback (no marker).
+    warps = max(1, min(16, dim // 256))
+    per_lane, rem = divmod(dim, warps * 32)
+    if rem or per_lane < 1: return out
     # In production a block result is explicitly CONTIGUOUS before its semantic
     # role wrapper.  Accept only that one promised materialization when its
     # source is itself an exact precompiled function result.  This is not
@@ -1325,7 +1331,8 @@ class Tensor(RandMixin):
       x.uop.has_precompiled_output_identity() or precompiled_contiguous)
     return Tensor(UOp(Ops.REDUCE_OUTPUT, out.dtype, (out.uop, x.uop, weight.uop),
                       ReduceOutputSpec(rows, dim, eps, out.dtype, input_identity_at_marker=identity,
-                                       owned_contiguous_candidate=owned_contiguous_candidate)), device=out.device)
+                                       owned_contiguous_candidate=owned_contiguous_candidate,
+                                       warps=warps, lanes=32, per_lane=per_lane)), device=out.device)
 
   def _online_attention_primitive(self, key:Tensor, value:Tensor, attn_mask:Tensor|None,
                                   scale:float, acc_dtype:DType, out_dtype:DType) -> Tensor|None:

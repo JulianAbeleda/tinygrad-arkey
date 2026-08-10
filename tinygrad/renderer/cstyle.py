@@ -472,6 +472,13 @@ class ClangRenderer(CStyleLanguage):
   global_max = (CPU_COUNT.value, 0, 0)
   infinity = "__builtin_inff()"
   nan = '__builtin_nanf("")'
+  # CPU is a single work item: the renderer serializes every LOCAL range into a
+  # loop, so a "warp" XOR shuffle is an identity register read.  This is the
+  # CPU decision for the decode cross-lane reduce ladder (warp_reduce.py) and
+  # keeps the cooperative REDUCE_OUTPUT body executable bitwise on DEV=CPU.
+  # The byte-address variant (warp_bpermute) stays unprovided so that class of
+  # cross-lane read still fails loudly on CPU.
+  warp_shfl_xor = staticmethod(lambda val, offset, lane: val)
 
   # language options
   buffer_suffix = " restrict"

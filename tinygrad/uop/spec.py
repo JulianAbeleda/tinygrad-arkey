@@ -7,6 +7,13 @@ from tinygrad.helpers import DEBUG, Context, prod, SPEC, Metadata, panic, CHECK_
 
 # ***** uop helpers *****
 
+def _reduce_output_recipe_supported(recipe: str) -> bool:
+  """Type verification mirrors the emitter's recipe vocabulary: a spec the body
+  builder can express passes, and anything else fails closed.  The vocabulary
+  is owned by the emitter (``_RECIPE_STEMS``), not duplicated here."""
+  from tinygrad.codegen.late.reduce_output import _RECIPE_STEMS
+  return recipe in _RECIPE_STEMS
+
 def validate_index(uidx:UOp, gate:UOp|None=None):
   if len(uidx.src) != 2: return True  # skip for non final index. TODO: check more complex index with shape
   buf,idx = uidx.src
@@ -412,7 +419,7 @@ spec_tensor = PatternMatcher([
    and x.dtype == x.src[0].dtype == x.arg.out_dtype),
 
   (UPat(Ops.REDUCE_OUTPUT, name="x"),
-   lambda x: hasattr(x.arg, 'recipe') and x.arg.recipe == "sumsq_rsqrt_affine"
+   lambda x: hasattr(x.arg, 'recipe') and _reduce_output_recipe_supported(x.arg.recipe)
    and len(x.src) == (3 if x.arg.affine else 2)
    and x.dtype == x.src[0].dtype == x.arg.out_dtype),
 
