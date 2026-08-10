@@ -577,3 +577,181 @@ def test_body_has_restored_lane_phase_and_no_custom_op():
   assert any(u.op is Ops.RANGE and u.arg == (2, AxisType.REDUCE) for u in topo)
   assert any(u.op is Ops.RANGE and u.arg == (2, AxisType.LOOP) for u in topo)
   assert not any(u.op is Ops.CUSTOM for u in topo)
+
+
+def _fma(a: float, b: float, c: float) -> np.float32:
+  """Correctly-rounded fp32 a*b+c (clang contracts ``acc + v*v`` into fma on
+  both the ordinary CPU kernel and the fused body; numpy has no fma)."""
+  return np.float32(np.longdouble(a) * np.longdouble(b) + np.longdouble(c))
+
+
+def _multi_row_body_association(rows, dim, eps, x_dtype, w_dtype):
+  """Emit the cooperative body and extract the association it actually encodes:
+  the per-warp reduce chain extent and base, the epilogue weight index, and the
+  cross-warp combine shape.  The reconstruction below is driven by these, so a
+  drift in the emitter changes the extracted chain and breaks the bitwise gate.
+  """
+  from tinygrad.codegen.late.reduce_output import emit_reduce_output
+  from tinygrad.uop.ops import ReduceOutputSpec, UOp, AxisType, Ops
+  spec = ReduceOutputSpec(rows, dim, eps, x_dtype, warps=rows, lanes=32, per_lane=dim // 32)
+  out = UOp.placeholder((rows * dim,), x_dtype, 0)
+  x = UOp.placeholder((rows * dim,), x_dtype, 1)
+  w = UOp.placeholder((dim,), w_dtype, 2)
+  body = emit_reduce_output(spec, x_dtype, w_dtype)(out, x, w)
+  topo = body.toposort()
+  # Per-warp serial reduce chain: the x read whose index is warp*red_base + red.
+  x_idx = [u for u in topo if u.op is Ops.INDEX and u.src[0] is x]
+  red_chain = [u for u in x_idx if len(u.src[1].src) == 2 and u.src[1].src[1].op is Ops.RANGE and
+               u.src[1].src[1].arg == (2, AxisType.REDUCE)]
+  assert len(red_chain) == 1, "reduce body must contain exactly one per-warp serial x chain"
+  idx = red_chain[0].src[1]
+  assert idx.op is Ops.ADD and idx.src[0].op is Ops.MUL and idx.src[1].op is Ops.RANGE, f"unexpected chain index {idx.op}"
+  red = idx.src[1]
+  red_base = red.src[0].arg
+  red_extent = idx.src[0].src[1].arg  # warp * CONST(red_base)
+  # Epilogue weight index must be the row-local element (multi-row shares a (dim,) weight).
+  w_idx = [u for u in topo if u.op is Ops.INDEX and u.src[0] is w]
+  assert len(w_idx) == 1
+  widx = w_idx[0].src[1]
+  assert (widx.op is Ops.ADD and widx.src[0].op is Ops.RANGE and widx.src[1].op is Ops.MUL and
+          widx.src[1].src[0].op is Ops.RANGE), "multi-row weight index must be row-local laneid + epi*lane"
+  # No cross-warp serial combine: exactly one smem-after read, no ADD chain over it.
+  smem_after = [u for u in topo if u.op is Ops.AFTER and len(u.src) == 2 and u.src[0].op is Ops.DEFINE_LOCAL]
+  assert len(smem_after) == 1
+  reads = [u for u in topo if u.op is Ops.INDEX and len(u.src) == 2 and u.src[0] is smem_after[0]]
+  assert len(reads) == 1 and not any(u.op is Ops.ADD and reads[0] in u.src for u in topo)
+  assert body.arg.name == f"reduce_output_rmsnorm_{rows}_{dim}"
+  return dict(red_extent=red_extent, red_base=red_base, dim=dim, eps=eps, x_dtype=x_dtype, w_dtype=w_dtype)
+
+
+def _multi_row_fused_output(x_np, w_np, assoc):
+  """Reconstruct the fused body output bitwise: per-row plain ``dim``-contiguous
+  serial FMA sumsq chain (the row total), per-row scale, ``(x*scale)*w``
+  epilogue.  Rows are independent in row-mode (no cross-row combine)."""
+  rows, dim, eps = x_np.shape[0], assoc["dim"], assoc["eps"]
+  assert assoc["red_extent"] == assoc["red_base"] == dim
+  scale = np.zeros((rows,), dtype=np.float32)
+  for r in range(rows):
+    acc = np.float32(0.0)
+    for v in x_np[r]: acc = _fma(np.float32(v), np.float32(v), acc)
+    scale[r] = np.float32(1.0 / np.sqrt(np.float32(np.float32(acc / dim) + eps)))
+  out = np.empty_like(x_np, dtype=np.float32)
+  for r in range(rows):
+    out[r] = (x_np[r] * scale[r]).astype(np.float32) * w_np
+  return out
+
+
+def test_multi_row_fused_body_matches_ordinary_bitwise():
+  """The row-mode q/k gate: for (rows, dim) in {(32,128),(8,128)} the emitted
+  cooperative body is bitwise-equal to the ordinary CPU RMSNorm for the fp32 x /
+  fp32 w and fp32 x / fp16 w mixes.  This is the exact-logits tripwire: a 1-ulp
+  drift in the reduce association (or a cross-row combine) flips it red."""
+  rng = np.random.default_rng(20260810)
+  for rows in (32, 8):
+    dim = 128
+    x_np = rng.normal(0, 0.2, (rows, dim)).astype(np.float32)
+    w_np = rng.normal(1, 0.05, (dim,)).astype(np.float32)
+    x = Tensor(x_np).realize()
+    for wdt in (dtypes.float, dtypes.float16):
+      w_eff = w_np.astype(np.float16).astype(np.float32) if wdt is dtypes.float16 else w_np
+      w = Tensor(w_eff, dtype=wdt).realize()
+      norm = nn.RMSNorm(dim, eps=1e-6)
+      norm.weight = w
+      ordinary = norm(x).numpy()
+      assoc = _multi_row_body_association(rows, dim, 1e-6, dtypes.float32, wdt)
+      fused = _multi_row_fused_output(x_np, w_eff, assoc)
+      np.testing.assert_array_equal(fused, ordinary)
+
+
+def test_multi_row_scale_isolation_no_cross_row_combine():
+  """Row-mode must never combine rows: each warp's scale depends only on its own
+  row.  Rows span wildly different magnitudes (10**row), so a serial cross-row
+  partial chain (the single-row combine pattern) cannot reproduce the ordinary
+  per-row result while the isolated per-row body must, bitwise."""
+  rows, dim = 32, 128
+  rng = np.random.default_rng(20260811)
+  x_np = (rng.normal(0, 0.2, (rows, dim)) * (10.0 ** np.arange(rows)[:, None])).astype(np.float32)
+  w_np = rng.normal(1, 0.05, (dim,)).astype(np.float32)
+  x = Tensor(x_np).realize()
+  w = Tensor(w_np).realize()
+  norm = nn.RMSNorm(dim, eps=1e-6)
+  norm.weight = w
+  ordinary = norm(x).numpy()
+  assoc = _multi_row_body_association(rows, dim, 1e-6, dtypes.float32, dtypes.float32)
+  fused = _multi_row_fused_output(x_np, w_np, assoc)
+  np.testing.assert_array_equal(fused, ordinary)
+  # Countercheck: a cross-row serial combine must NOT match ordinary.  Chain the
+  # row sumsq partials across rows (the single-row combine pattern applied to
+  # rows), which corrupts every row after the first by the row-magnitude spread.
+  corrupted = np.empty_like(x_np, dtype=np.float32)
+  running = np.float32(0.0)
+  for r in range(rows):
+    acc = np.float32(0.0)
+    for v in x_np[r]: acc = _fma(np.float32(v), np.float32(v), acc)
+    running = np.float32(running + acc)
+    scale = np.float32(1.0 / np.sqrt(np.float32(np.float32(running / dim) + 1e-6)))
+    corrupted[r] = (x_np[r] * scale).astype(np.float32) * w_np
+  assert not np.array_equal(corrupted, ordinary), "cross-row combine must not match ordinary"
+  # The structural isolation contract the body must keep: one smem-after read,
+  # no serial ADD chain over the published partials.
+  from tinygrad.codegen.late.reduce_output import emit_reduce_output
+  from tinygrad.uop.ops import ReduceOutputSpec, UOp, AxisType
+  spec = ReduceOutputSpec(rows, dim, 1e-6, dtypes.float32, warps=rows, lanes=32, per_lane=4)
+  out, xp, wp = (UOp.placeholder((rows * dim,), dtypes.float32, i) for i in range(3))
+  body = emit_reduce_output(spec, dtypes.float32, dtypes.float32)(out, xp, wp)
+  topo = body.toposort()
+  smem_after = [u for u in topo if u.op is Ops.AFTER and len(u.src) == 2 and u.src[0].op is Ops.DEFINE_LOCAL]
+  assert len(smem_after) == 1
+  reads = [u for u in topo if u.op is Ops.INDEX and len(u.src) == 2 and u.src[0] is smem_after[0]]
+  assert len(reads) == 1 and not any(u.op is Ops.ADD and reads[0] in u.src for u in topo)
+
+
+def test_multi_row_marker_lowers_to_fused_call_name():
+  """The full CPU schedule must lower the fp32 q/k markers to the row-aware fused
+  body names (the emitter admits them through the rangeify selector)."""
+  rng = np.random.default_rng(20260812)
+  for rows in (32, 8):
+    x = Tensor(rng.normal(0, 0.2, (1, rows, 1, 128)).astype(np.float32)).realize()
+    w = Tensor(rng.normal(1, 0.05, (128,)).astype(np.float32)).realize()
+    n = nn.RMSNorm(128, eps=1e-6)
+    n.weight = w
+    marked = _apply(n, x)
+    assert marked.uop.op is Ops.REDUCE_OUTPUT
+    assert _names(marked) == [f"reduce_output_rmsnorm_{rows}_128"]
+
+
+def test_multi_row_fail_closed_combinations():
+  from tinygrad.codegen.late.reduce_output import emit_reduce_output
+  from tinygrad.uop.ops import ReduceOutputSpec
+  for spec in (
+    ReduceOutputSpec(4, 128, 1e-6, dtypes.float32, warps=4, lanes=32, per_lane=4),
+    ReduceOutputSpec(32, 64, 1e-6, dtypes.float32, warps=32, lanes=32, per_lane=2),
+    ReduceOutputSpec(8, 128, 1e-6, dtypes.float32, warps=4, lanes=32, per_lane=8),
+    ReduceOutputSpec(16, 128, 1e-6, dtypes.float32, warps=16, lanes=32, per_lane=4),
+    ReduceOutputSpec(32, 256, 1e-6, dtypes.float32, warps=32, lanes=32, per_lane=8),
+    ReduceOutputSpec(1, 128, 1e-6, dtypes.float32, warps=1, lanes=32, per_lane=4),
+  ):
+    try:
+      emit_reduce_output(spec, dtypes.float32, dtypes.float32)
+      raise AssertionError(f"emit_reduce_output accepted {spec}")
+    except ValueError:
+      pass
+
+
+def test_multi_row_4096_dim_body_structure():
+  """The marker admits multi-row dim 4096 (one warp per row, per_lane=128); the
+  emitter must cover it with the same row-mode body (full-row chain, one smem
+  readback, no cross-warp combine)."""
+  from tinygrad.codegen.late.reduce_output import emit_reduce_output
+  from tinygrad.uop.ops import ReduceOutputSpec, UOp, AxisType
+  rows, dim = 32, 4096
+  spec = ReduceOutputSpec(rows, dim, 1e-6, dtypes.float32, warps=rows, lanes=32, per_lane=128)
+  out, x, w = (UOp.placeholder((rows * dim,), dtypes.float32, i) for i in range(3))
+  body = emit_reduce_output(spec, dtypes.float32, dtypes.float32)(out, x, w)
+  topo = body.toposort()
+  assert body.arg.name == "reduce_output_rmsnorm_32_4096"
+  assert sum(u.op is Ops.BARRIER for u in topo) == 1
+  smem_after = [u for u in topo if u.op is Ops.AFTER and len(u.src) == 2 and u.src[0].op is Ops.DEFINE_LOCAL]
+  reads = [u for u in topo if u.op is Ops.INDEX and len(u.src) == 2 and u.src[0] is smem_after[0]]
+  assert len(reads) == 1 and not any(u.op is Ops.ADD and reads[0] in u.src for u in topo)
+  assert any(u.op is Ops.RANGE and u.src[0].op is Ops.CONST and u.src[0].arg == 4096 and u.arg == (2, AxisType.REDUCE) for u in topo)

@@ -50,9 +50,16 @@ def emit_reduce_output(spec:ReduceOutputSpec, x_dtype, weight_dtype):
   """Generic cooperative reduction-to-output body derived entirely from ``spec``."""
   if spec.recipe not in _RECIPE_STEMS or not spec.affine: raise ValueError(f"unsupported reduce-output recipe {spec.recipe!r}")
   if spec.reduce_op not in _LADDER: raise ValueError(f"unsupported reduce-output op {spec.reduce_op}")
-  if spec.rows != 1 or spec.dim < 32 or spec.dim % 512: raise ValueError("reduce-output requires one row and dim divisible by 512")
+  if spec.rows not in (1, 8, 32): raise ValueError(f"reduce-output requires rows in (1, 8, 32), got {spec.rows}")
+  if spec.rows == 1:
+    # Legacy single-row path (byte-identical): one row, dim divisible by 512.
+    if spec.dim < 32 or spec.dim % 512: raise ValueError("reduce-output requires one row and dim divisible by 512")
+  else:
+    # Row-mode: warp w owns row w over the full dim-contiguous chain.
+    if spec.dim not in (128, 4096): raise ValueError(f"reduce-output multi-row requires dim 128 or 4096, got {spec.dim}")
+    if spec.warps != spec.rows: raise ValueError(f"reduce-output multi-row requires warps == rows, got warps {spec.warps} != rows {spec.rows}")
   lane, warps, per_lane = spec.lanes, spec.warps, spec.per_lane
-  if warps * lane * per_lane != spec.dim: raise ValueError(f"association {warps}x{lane}x{per_lane} does not cover dim {spec.dim}")
+  if warps * lane * per_lane != spec.rows * spec.dim: raise ValueError(f"association {warps}x{lane}x{per_lane} does not cover {spec.rows} rows x {spec.dim}")
   if x_dtype not in (dtypes.float16, dtypes.float32) or weight_dtype not in (dtypes.float16, dtypes.float32):
     raise ValueError("reduce-output requires fp16/fp32 inputs")
   dim, lane, warps, per_lane, sumsq = spec.dim, lane, warps, per_lane, spec.recipe == "sumsq_rsqrt_affine"
@@ -79,9 +86,14 @@ def emit_reduce_output(spec:ReduceOutputSpec, x_dtype, weight_dtype):
     smem = UOp.placeholder((warps,), dtypes.float32, 230, AddrSpace.LOCAL)
     published = smem[warp].store(warp_total, laneid.eq(0))
     ready = UOp.barrier(UOp.group(published))
-    total = UOp.const(dtypes.float32, 0.0)
-    for wi in range(warps):
-      total = (total + smem.after(ready)[wi]) if sumsq else total.maximum(smem.after(ready)[wi])
+    if spec.rows == 1:
+      total = UOp.const(dtypes.float32, 0.0)
+      for wi in range(warps):
+        total = (total + smem.after(ready)[wi]) if sumsq else total.maximum(smem.after(ready)[wi])
+    else:
+      # Row-mode: warp w owns row w; each warp reads back ONLY its own published
+      # row total.  There is no cross-warp serial combine; rows are independent.
+      total = smem.after(ready)[warp]
     if sumsq:
       scale = (total / UOp.const(dtypes.float32, float(dim)) + UOp.const(dtypes.float32, spec.eps)).sqrt().reciprocal()
     else:
@@ -93,7 +105,10 @@ def emit_reduce_output(spec:ReduceOutputSpec, x_dtype, weight_dtype):
     epi = UOp.range(per_lane, 2, AxisType.LOOP)
     obase = warp * (per_lane * lane) + laneid + epi * lane
     normed = (x[obase].cast(dtypes.float32) * scale).cast(x_dtype)
-    value = (normed * weight[obase].cast(x_dtype)).cast(spec.out_dtype)
+    # The weight is (dim,) and shared across rows; index the row-local element in
+    # row-mode (the single-row epilogue keeps the absolute obase).
+    wbase = obase if spec.rows == 1 else laneid + epi * lane
+    value = (normed * weight[wbase].cast(x_dtype)).cast(spec.out_dtype)
     return out[obase].store(value).end(laneid, warp, epi).sink(
       arg=KernelInfo(name=f"reduce_output_{_RECIPE_STEMS[spec.recipe]}_{spec.rows}_{dim}", opts_to_apply=()))
   return kernel

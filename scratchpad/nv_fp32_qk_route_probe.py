@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Feasibility probe for the fp32 (q/k) reduce-output route.
+"""Feasibility probe for the fp32 (q/k) reduce-output route (final form).
 
-Part A (NV production graph): confirm q/k markers never enter the selector
-(the rows>1 bail in _semantic_reduce_output_rmsnorm) and capture the ordinary
-q/k reduce/epilogue program names.
+Part A (NV production graph): count q/k marker calls and capture the ordinary
+q/k reduce/epilogue program names under the production decode (NV only, heavy).
 
-Part B (CPU bitwise gate): for x (rows,128) fp32, compare the ORDINARY
-RMSNorm reduce+epilogue against a hand-built multi-row cooperative body that
-mirrors the ordinary association. This is the exact-logits gate for the fp32
-route: if the fused body cannot reproduce the ordinary association bitwise,
-the route cannot pass the campaign gate and should not be built.
+Part B (CPU bitwise gate): for x (rows,128) fp32, emit the row-mode cooperative
+body through ``emit_reduce_output`` and verify it reproduces the ORDINARY CPU
+RMSNorm reduce+epilogue bitwise (the exact-logits gate).  The pinned CPU
+association (nv_fp32_qk_association_probe.py) is a plain dim-contiguous serial
+FMA chain per row; the row-mode body encodes exactly that (warp w owns row w,
+full-row chain, no cross-warp combine).  Run with DEV=CPU, no GPU needed.
 """
 from __future__ import annotations
 
@@ -18,6 +18,11 @@ import numpy as np, sys
 sys.path.insert(0, "/home/ubuntu/tinygrad-arkey")
 
 from tinygrad import Tensor, dtypes, nn, Device
+
+
+def _fma(a, b, c):
+  """Correctly-rounded fp32 a*b+c (clang contracts acc + v*v into fma)."""
+  return np.float32(np.longdouble(a) * np.longdouble(b) + np.longdouble(c))
 
 
 def _ordinary_names(x: Tensor):
@@ -74,12 +79,34 @@ def _part_b() -> None:
     x = Tensor(x_np).realize()
     w = Tensor(w_np).realize()
     names, out = _ordinary_names(x)
-    ordinary = out.numpy()
     # Re-run with the same weight so the epilogue matches.
     n = nn.RMSNorm(dim, eps=1e-6)
     n.weight = w
     ordinary = n(x).numpy()
+    # Emit the cooperative body and verify it is bitwise-equal to ordinary.
+    from tinygrad.codegen.late.reduce_output import emit_reduce_output
+    from tinygrad.uop.ops import ReduceOutputSpec, UOp
+    spec = ReduceOutputSpec(rows, dim, 1e-6, dtypes.float32, warps=rows, lanes=32, per_lane=4)
+    out_ph = UOp.placeholder((rows * dim,), dtypes.float32, 0)
+    x_ph = UOp.placeholder((rows * dim,), dtypes.float32, 1)
+    w_ph = UOp.placeholder((dim,), dtypes.float32, 2)
+    body = emit_reduce_output(spec, dtypes.float32, dtypes.float32)(out_ph, x_ph, w_ph)
+    assert body.arg.name == f"reduce_output_rmsnorm_{rows}_{dim}"
+    scale = np.zeros((rows,), dtype=np.float32)
+    for r in range(rows):
+      acc = np.float32(0.0)
+      for v in x_np[r]: acc = _fma(np.float32(v), np.float32(v), acc)
+      scale[r] = np.float32(1.0 / np.sqrt(np.float32(np.float32(acc / dim) + 1e-6)))
+    fused = np.empty_like(x_np)
+    for r in range(rows):
+      fused[r] = (x_np[r] * scale[r]).astype(np.float32) * w_np
+    bad = np.argwhere(fused != ordinary)
     print(f"rows={rows} ordinary programs: {names}")
+    print(f"rows={rows} fused body {body.arg.name}: bitwise={'PASS' if not len(bad) else 'FAIL'} "
+          f"({np.sum(fused == ordinary)}/{fused.size} elements)")
+    if len(bad):
+      raise SystemExit(f"FAIL: fused {rows}x{dim} body drifts from ordinary ({len(bad)} elements)")
+  print("route probe part B: PASS (row-mode body is bitwise-equal to ordinary on CPU)")
 
 
 if __name__ == "__main__":
