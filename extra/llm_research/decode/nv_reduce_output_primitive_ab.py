@@ -470,6 +470,18 @@ def _run_child(cmd: list[str], out: pathlib.Path) -> dict:
   return json.loads(pathlib.Path(out).read_text())
 
 
+def _guarded_child(record: dict, phase: str, cmd: list[str], out: pathlib.Path, fail_reason: str) -> dict | None:
+  """Run one campaign child; on failure record a NO-GO phase with the raw
+  child stderr instead of letting the orchestrator crash without evidence."""
+  try:
+    return _run_child(cmd, out)
+  except RuntimeError as exc:
+    record[phase] = {"run": True, "result": "NO-GO", "reason": fail_reason,
+                     "stderr": getattr(exc, "stderr", None) or str(exc)[-4000:]}
+    record["hard_stop_notes"] = HARD_STOP_NOTES + [f"HARD STOP at {phase}: {fail_reason}"]
+    return None
+
+
 def wall_bracket(args) -> dict:
   """Serialized reverse control/candidate/control timing, each child a fresh
   process under ``timeout ... flock -w`` on the shared GPU bench lock."""
@@ -503,40 +515,61 @@ def ab(args) -> dict:
   root.mkdir(parents=True, exist_ok=True)
   record = no_go_record(args.model, args.depth)
   smoke_out = root / "smoke-candidate.json"
-  try:
-    smoke_result = _run_child(_child_command(args, "smoke", "candidate", smoke_out, include_reps=False), smoke_out)
-  except RuntimeError as exc:
-    record["smoke"] = {"run": True, "result": "NO-GO",
-                       "reason": "NV render smoke child failed (Xid 31 class); raw child stderr captured below",
-                       "stderr": getattr(exc, "stderr", None) or str(exc)[-4000:]}
-    record["hard_stop_notes"] = HARD_STOP_NOTES + ["HARD STOP at Phase 0: the NV render smoke child failed; no logits/census/bracket arm ran."]
+  smoke_result = _guarded_child(record, "smoke",
+                                _child_command(args, "smoke", "candidate", smoke_out, include_reps=False),
+                                smoke_out,
+                                "NV render smoke child failed (Xid 31 class); raw child stderr captured below")
+  if smoke_result is None:
     return _write_record(record, pathlib.Path(args.out))
   smoke_gate = smoke_result.get("survive") is True and bool(smoke_result.get("fused_body_present"))
   record["smoke"] = {"run": True, "result": "PASS" if smoke_gate else "NO-GO", "evidence": smoke_result}
   if not smoke_gate:
     record["hard_stop_notes"] = HARD_STOP_NOTES + ["HARD STOP at Phase 0: smoke did not survive or the fused body was absent from the compiled program set."]
     return _write_record(record, pathlib.Path(args.out))
-  control_logits = _run_child(_child_command(args, "logits", "control", root / "control-logits.json", include_reps=False),
-                              root / "control-logits.json")
-  candidate_logits = _run_child(_child_command(args, "logits", "candidate", root / "candidate-logits.json", include_reps=False),
-                                root / "candidate-logits.json")
+  control_logits = _guarded_child(record, "logits_gate",
+                                  _child_command(args, "logits", "control", root / "control-logits.json", include_reps=False),
+                                  root / "control-logits.json",
+                                  "the control exact-logits child failed; raw child stderr captured below")
+  if control_logits is None:
+    return _write_record(record, pathlib.Path(args.out))
+  candidate_logits = _guarded_child(record, "logits_gate",
+                                    _child_command(args, "logits", "candidate", root / "candidate-logits.json", include_reps=False),
+                                    root / "candidate-logits.json",
+                                    "the candidate exact-logits child failed; raw child stderr captured below")
+  if candidate_logits is None:
+    return _write_record(record, pathlib.Path(args.out))
   logits_gate = validate_logits_gate(control_logits, candidate_logits)
   record["logits_gate"] = {"run": True, "result": "PASS" if logits_gate["gate_pass"] else "FAIL",
                            "control_evidence": control_logits, "candidate_evidence": candidate_logits, **logits_gate}
   if not logits_gate["gate_pass"]:
     record["hard_stop_notes"] = HARD_STOP_NOTES + ["HARD STOP at Phase 1: the exact full-logit gate failed; no census and no bracket arm ran."]
     return _write_record(record, pathlib.Path(args.out))
-  control_census = _run_child(_child_command(args, "census", "control", root / "control-census.json", include_reps=False),
-                              root / "control-census.json")
-  candidate_census = _run_child(_child_command(args, "census", "candidate", root / "candidate-census.json", include_reps=False),
-                                root / "candidate-census.json")
+  control_census = _guarded_child(record, "census",
+                                  _child_command(args, "census", "control", root / "control-census.json", include_reps=False),
+                                  root / "control-census.json",
+                                  "the control census child failed; raw child stderr captured below")
+  if control_census is None:
+    return _write_record(record, pathlib.Path(args.out))
+  candidate_census = _guarded_child(record, "census",
+                                    _child_command(args, "census", "candidate", root / "candidate-census.json", include_reps=False),
+                                    root / "candidate-census.json",
+                                    "the candidate census child failed; raw child stderr captured below")
+  if candidate_census is None:
+    return _write_record(record, pathlib.Path(args.out))
   census_gate = validate_census(control_census, candidate_census)
   record["census"] = {"run": True, "result": "PASS" if census_gate["gate_pass"] else "FAIL",
                       "control_evidence": control_census, "candidate_evidence": candidate_census, **census_gate}
   if not census_gate["gate_pass"]:
     record["hard_stop_notes"] = HARD_STOP_NOTES + ["HARD STOP at Phase 2: the census gate failed; no wall bracket ran."]
     return _write_record(record, pathlib.Path(args.out))
-  wall = wall_bracket(args)
+  try:
+    wall = wall_bracket(args)
+  except RuntimeError as exc:
+    record["wall_bracket"] = {"run": True, "result": "NO-GO",
+                              "reason": "a wall-bracket timing child failed; raw child stderr captured below",
+                              "stderr": getattr(exc, "stderr", None) or str(exc)[-4000:]}
+    record["hard_stop_notes"] = HARD_STOP_NOTES + ["HARD STOP at Phase 3: a wall-bracket timing child failed; no bracket result."]
+    return _write_record(record, pathlib.Path(args.out))
   record["wall_bracket"] = {"run": True, "result": "PROMOTED" if wall["promoted"] else "NOT_PROMOTED", **wall}
   record["tok_per_s"] = {
     "conversion": "tok/s = 1000 / median_ms_per_token",

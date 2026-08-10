@@ -7,8 +7,8 @@ import pytest
 
 from extra.llm_research.decode.nv_reduce_output_primitive_ab import (
   POP_NORMS, SCHEMA, _assert_candidate_configured, _assert_control_closed,
-  _child_command, _child_root, _configure, _gates, no_go_record, tok_per_s,
-  validate_census, validate_logits_gate, validate_timing_bracket,
+  _child_command, _child_root, _configure, _gates, _guarded_child, no_go_record,
+  tok_per_s, validate_census, validate_logits_gate, validate_timing_bracket,
 )
 
 
@@ -267,3 +267,63 @@ def test_tok_per_s_conversion():
 def test_child_root_derivation():
   assert str(_child_root(pathlib.Path("/tmp/ro-ab-record.json"), ".children")) == "/tmp/ro-ab-record.children"
   assert str(_child_root(pathlib.Path("/tmp/ro-ab-record.json"), ".timing")) == "/tmp/ro-ab-record.timing"
+
+
+def test_guarded_child_records_no_go_with_child_stderr(monkeypatch, tmp_path):
+  import extra.llm_research.decode.nv_reduce_output_primitive_ab as ab_module
+  from extra.llm_research.decode.nv_reduce_output_primitive_ab import ChildFailure, no_go_record
+
+  def _boom(cmd, out):
+    raise ChildFailure("child failed rc=1: kernel boom", "kernel boom stderr")
+  monkeypatch.setattr(ab_module, "_run_child", _boom)
+  record = no_go_record()
+  result = _guarded_child(record, "logits_gate", ["timeout"], pathlib.Path("/tmp/never.json"),
+                          "the candidate exact-logits child failed; raw child stderr captured below")
+  assert result is None
+  assert record["logits_gate"]["run"] is True
+  assert record["logits_gate"]["result"] == "NO-GO"
+  assert "kernel boom stderr" in record["logits_gate"]["stderr"]
+  assert any("HARD STOP at logits_gate" in note for note in record["hard_stop_notes"])
+
+
+def test_ab_writes_no_go_record_when_logits_child_fails(monkeypatch, tmp_path):
+  import argparse
+  import extra.llm_research.decode.nv_reduce_output_primitive_ab as ab_module
+  from extra.llm_research.decode.nv_reduce_output_primitive_ab import ChildFailure
+  calls = []
+
+  def _run_child(cmd, out):
+    mode = cmd[cmd.index("--mode") + 1]
+    arm = cmd[cmd.index("--arm") + 1]
+    calls.append((mode, arm))
+    if (mode, arm) == ("smoke", "candidate"):
+      pathlib.Path(out).write_text('{"survive": true, "fused_body_present": true, "program_count": 1}')
+      return json_parse(pathlib.Path(out).read_text())
+    if (mode, arm) == ("logits", "control"):
+      digest = "a" * 64
+      pathlib.Path(out).write_text(f'{{"tokens": [1], "logits_sha256": "{digest}", "shape": [1, 1, 151936]}}')
+      return json_parse(pathlib.Path(out).read_text())
+    if (mode, arm) == ("logits", "candidate"):
+      raise ChildFailure("child failed rc=1: invalid diagnostic output at row 0", "invalid diagnostic output at row 0")
+    raise AssertionError(f"unexpected child {mode}/{arm}")
+
+  monkeypatch.setattr(ab_module, "_run_child", _run_child)
+  record_path = tmp_path / "record.json"
+  args = argparse.Namespace(model="/m", depth=512, count=32, max_context=1024, reps=5,
+                            settled_continuous=True, timeout=600, lock_wait=90,
+                            lock="/tmp/gpu-bench.lock", out=str(record_path))
+  ab_module.ab(args)
+  record = json_parse(record_path.read_text())
+  assert record["verdict"] == "NO-GO"
+  assert record["smoke"]["result"] == "PASS"
+  assert record["logits_gate"]["run"] is True
+  assert record["logits_gate"]["result"] == "NO-GO"
+  assert "invalid diagnostic output at row 0" in record["logits_gate"]["stderr"]
+  assert record["census"]["result"] == "NOT_AUTHORIZED"
+  assert record["wall_bracket"]["result"] == "NOT_AUTHORIZED"
+  assert calls == [("smoke", "candidate"), ("logits", "control"), ("logits", "candidate")]
+
+
+def json_parse(text):
+  import json
+  return json.loads(text)
