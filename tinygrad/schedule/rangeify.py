@@ -297,14 +297,55 @@ def _precompiled_output_after_view(x:UOp) -> UOp|None:
   else: return None
   return original
 
-def _identity_buffer_view(x:UOp) -> UOp|None:
-  """Accept a plain identity buffer or an exact dependency-bearing call output.
+def _permuted_identity_buffer_view(x:UOp) -> UOp|None:
+  """Validate a pure-PERMUTE identity view (offset-0, permutation-only, single producer).
 
-  PERMUTE/SHRINK/EXPAND and MEMORY_SEMANTIC remain rejected; their physical
+  The fp32 q/k marker input is ``PERMUTE(RESHAPE(...))`` of the q4k GEMV
+  precompiled output; callify turns that into ``PERMUTE(RESHAPE(AFTER))``.
+  Equal-span RESHAPE legs and single-producer PERMUTE legs are walked down to
+  either a precompiled-output AFTER (the production spelling) or a concrete
+  BUFFER.  The AFTER is re-proven here in bounded form: its call is
+  precompiled and the base appears exactly once among the call's output
+  arguments.  The q4k GEMV is not a reduce-output route function, so it has
+  no ``precompiled_output_slots`` to assert; the marker's durable pre-callify
+  identity (``has_precompiled_output_identity``) already proved the same
+  invocation, and this walk only re-confirms the post-callify spelling.  The
+  strict invocation-slot contract stays on the bare-AFTER path.  A bare PARAM
+  terminal stays rejected (the exact slot-based proofs own that case), and
+  SHRINK/EXPAND/CAST or a multi-producer PERMUTE never enter the walk, so
+  every unexpected view fails closed.
+  """
+  original, expected = x, x.numel()
+  permutes = 0
+  while True:
+    if x.op is Ops.RESHAPE and len(x.src) and x.src[0].numel() == expected:
+      x = x.src[0]; continue
+    if x.op is Ops.PERMUTE and len(x.src) == 1 and x.src[0].numel() == expected:
+      permutes += 1; x = x.src[0]; continue
+    break
+  if permutes == 0: return None
+  if _precompiled_output_after_view(x) is not None: return original
+  if x.op is Ops.AFTER and len(x.src) == 2:
+    base, call = x.src
+    base_buf = _plain_identity_buffer_view(base)
+    if base_buf is None or base_buf.dtype != original.dtype or call.op is not Ops.CALL or \
+       not bool(getattr(call.arg, "precompile", False)): return None
+    if len([slot for slot, arg in enumerate(call.src[1:]) if _plain_identity_buffer_view(arg) is base_buf]) != 1: return None
+    return original
+  return original if x.op is Ops.BUFFER and x.numel() == expected else None
+
+def _identity_buffer_view(x:UOp) -> UOp|None:
+  """Accept a plain identity buffer, a pure-PERMUTE identity view, or an exact
+  dependency-bearing call output.
+
+  SHRINK/EXPAND and MEMORY_SEMANTIC remain rejected; their physical
   offset/span cannot be inferred here.  Arbitrary AFTER is also rejected.
   """
   plain = _plain_identity_buffer_view(x)
-  return plain if plain is not None else _precompiled_output_after_view(x)
+  if plain is not None: return plain
+  permuted = _permuted_identity_buffer_view(x)
+  if permuted is not None: return permuted
+  return _precompiled_output_after_view(x)
 
 def _owned_precompiled_output_after_view(x:UOp) -> UOp|None:
   """Validate an early owned-contiguous candidate without upgrading it to identity."""
@@ -423,6 +464,59 @@ def coalesce_c6_call_inputs(tsink:UOp) -> UOp|None:
     if fused is None: continue
     shared = out_buf.after(fused)
     for _, arg in group: replacements[arg] = shared
+  if not replacements: return None
+  return tsink.substitute(replacements)
+
+def _ms_reduce_output_carrier(carrier:UOp) -> UOp|None:
+  """Validate the fp32 q/k elementwise carrier ``MEMORY_SEMANTIC(REDUCE_OUTPUT)``."""
+  if carrier.op is not Ops.MEMORY_SEMANTIC or len(carrier.src) != 1: return None
+  marker = carrier.src[0]
+  if marker.op is not Ops.REDUCE_OUTPUT or not isinstance(marker.arg, ReduceOutputSpec): return None
+  if carrier.numel() != marker.numel() or carrier.dtype != marker.dtype: return None
+  return marker
+
+def coalesce_permute_carrier_reduce_outputs(tsink:UOp) -> UOp|None:
+  """Emit ONE fused reduce-output body per marker consumed by ordinary elementwise.
+
+  The production decode graph feeds the marked fp32 q/k norm value to
+  apply_rope (an ordinary elementwise) through the PERMUTE-view spelling:
+  the marker value is ``MEMORY_SEMANTIC(REDUCE_OUTPUT)`` consumed by ordinary
+  movement/elementwise ops, with no C6 ``CONTIGUOUS(RESHAPE(MS(...)))`` CALL
+  argument and no direct STORE of the carrier.  This pass groups every carrier
+  of one marker, lowers ONE body into ONE fresh output buffer through the
+  existing selector, and rebinds every carrier to the same dependency-bearing
+  AFTER view so every consumer reads the fused buffer.  Any marker with a C6
+  chain CALL argument or a direct STORE consumer is left to those existing
+  rules (fail-closed).
+  """
+  nodes = tsink.toposort()
+  users: dict[UOp, list[UOp]] = {}
+  for n in nodes:
+    for s in n.src: users.setdefault(s, []).append(n)
+  c6_markers = {m for n in nodes if n.op is Ops.CALL and len(n.src) >= 2
+                for a in n.src[1:] if (m := _c6_marker(a)) is not None}
+  carriers: dict[UOp, list[UOp]] = {}
+  store_consumed: set[UOp] = set()
+  for n in nodes:
+    marker = _ms_reduce_output_carrier(n)
+    if marker is None or marker in c6_markers: continue
+    carriers.setdefault(marker, []).append(n)
+    for u in users.get(n, ()):
+      if u.op is Ops.STORE and len(u.src) >= 2 and u.src[1] is n: store_consumed.add(marker)
+    for u in users.get(marker, ()):
+      if u.op is Ops.STORE and len(u.src) >= 2 and u.src[1] is marker: store_consumed.add(marker)
+  for marker in tuple(carriers):
+    if marker in store_consumed: carriers.pop(marker)
+  if not carriers: return None
+  replacements: dict[UOp, UOp] = {}
+  for marker, group in carriers.items():
+    rep = group[0]
+    if not isinstance(rep.device, str) or rep._shape is None: continue
+    out_buf = UOp.new_buffer(rep.device, rep.numel(), rep.dtype)
+    fused = lower_reduce_output_store(None, rep, marker, target=out_buf)
+    if fused is None: continue
+    shared = out_buf.after(fused).reshape(rep.shape)
+    for carrier in group: replacements[carrier] = shared
   if not replacements: return None
   return tsink.substitute(replacements)
 
@@ -1388,6 +1482,11 @@ def _get_kernel_graph(sink:UOp) -> UOp:
   # REDUCE_OUTPUT is selected only at the concrete STORE, after callify has
   # exposed exact buffer/view ownership. Top-down is load-bearing: selecting
   # the STORE must happen before the child fallback rule erases the marker.
+  # The PERMUTE-carrier route runs first and skips any marker with a C6 chain
+  # CALL argument or a direct STORE consumer, so the C6/STORE selectors below
+  # keep owning exactly their established spellings.
+  permuted = coalesce_permute_carrier_reduce_outputs(tsink)
+  if permuted is not None: tsink = permuted
   coalesced = coalesce_c6_call_inputs(tsink)
   if coalesced is not None: tsink = coalesced
   tsink = graph_rewrite(tsink, pm_reduce_output_store, bottom_up=False, name="reduce output store")
