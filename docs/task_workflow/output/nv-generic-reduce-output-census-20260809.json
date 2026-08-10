@@ -1,0 +1,219 @@
+{
+  "associations": {
+    "16x32x8": {
+      "accepted": 108,
+      "entry": 182,
+      "marker_not_eligible": 74
+    }
+  },
+  "authority_dag": {
+    "dag_edge_count": 4080,
+    "dag_name_digest": "49838b8ab2e7118d0c384fb93d2b4c3085b3732f1fe8d5abc69d51d232a6b413",
+    "dag_node_count": 875,
+    "note": "digest taken from docs/task_workflow/output/nv-boundary-free-ordinary-uop-gate-20260807.json capture block",
+    "reference": "/tmp/nv_p4_redirect_on_dag_20260805.json (ordinary authority DAG, shared input to ledger and scan, not regenerated)"
+  },
+  "capture": {
+    "callify_owned_redirect": 1,
+    "fixed_depth": 256,
+    "jit": "rollout_greedy_jit_flash",
+    "phase": "decode",
+    "typed_semantic_input_producer": 1
+  },
+  "date": "2026-08-09",
+  "device": "repo default (NV present); hermetic assertions run DEV=CPU in test/unit/test_generic_reduce_output.py",
+  "gate": "nv-generic-reduce-output-primitive-scope-20260809",
+  "honest_wall_note": "This census proves admission only. The CALL-input route emits one fused body per consuming call argument plus one weight materialization each, so the captured decode call count is not reduced (net +72 vs the typed baseline, +1 vs the ordinary baseline). No recovered wall is claimed. The hermetic single-consumer STORE/CALL form still fuses 2->1 in isolation.",
+  "norms_population": {
+    "admitted_selector_entries": 108,
+    "fused_bodies_in_captured_dag": 54,
+    "ordinary_reductions_in_baseline": 145,
+    "per_shape_reasons": {
+      "r_16_256 (dim 4096, 16 warps x 32 lanes x 8/lane)": {
+        "admitted": 108,
+        "markers_created": true,
+        "note": "attn/ffn/output norms at (1,1,4096) create markers; the CALL-input C6 spelling is admitted. Rejects carry the marker_not_eligible trace reason (no durable ownership at marker creation for that view).",
+        "rejected_marker_not_eligible": 74
+      },
+      "r_2_8_4_4_16 (q-norm, dim 4096 over (1,32,1,128) PERMUTE)": {
+        "admitted": 0,
+        "markers_created": false,
+        "reason": "q-norm calls the marker helper with a multi-row (1,32,1,128) PERMUTE view; rows=32 != 1 so _semantic_reduce_output_rmsnorm returns the ordinary fallback without creating a REDUCE_OUTPUT marker. The selector never sees this association."
+      },
+      "r_8_16_8 (k-norm, dim 1024 over (1,8,1,128) PERMUTE)": {
+        "admitted": 0,
+        "markers_created": false,
+        "reason": "k-norm calls the marker helper with a multi-row (1,8,1,128) PERMUTE view; rows=8 != 1 so no marker is created. The selector never sees this association."
+      }
+    }
+  },
+  "program_delta_vs_ordinary_baseline": {
+    "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5": {
+      "delta": -36,
+      "generalized": 0,
+      "ordinary_baseline": 36
+    },
+    "E_32_32_4_81c96a8e654e707fbd50dfe9e55a485b34b80bdb4d404119045b0f249e2a4a72": {
+      "delta": 36,
+      "generalized": 36,
+      "ordinary_baseline": 0
+    },
+    "E_32_32_4_8eeb0be1271d29e75036577a0f78604299ce04d3c87461b79b0e8e5b78f540f4": {
+      "delta": 54,
+      "generalized": 54,
+      "ordinary_baseline": 0
+    },
+    "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077": {
+      "delta": -18,
+      "generalized": 37,
+      "ordinary_baseline": 55
+    },
+    "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b": {
+      "delta": -71,
+      "generalized": 0,
+      "ordinary_baseline": 71
+    },
+    "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc": {
+      "delta": -18,
+      "generalized": 38,
+      "ordinary_baseline": 56
+    },
+    "reduce_output_rmsnorm_1_4096": {
+      "delta": 54,
+      "generalized": 54,
+      "ordinary_baseline": 0
+    }
+  },
+  "program_delta_vs_typed_baseline": {
+    "E_32_32_4_8eeb0be1271d29e75036577a0f78604299ce04d3c87461b79b0e8e5b78f540f4": {
+      "delta": 54,
+      "generalized": 54,
+      "ordinary_baseline": 0
+    },
+    "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077": {
+      "delta": -18,
+      "generalized": 37,
+      "ordinary_baseline": 55
+    },
+    "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc": {
+      "delta": -18,
+      "generalized": 38,
+      "ordinary_baseline": 56
+    },
+    "reduce_output_rmsnorm_1_4096": {
+      "delta": 54,
+      "generalized": 54,
+      "ordinary_baseline": 0
+    }
+  },
+  "programs_added": {
+    "by_program": {
+      "E_32_32_4_8eeb0be1271d29e75036577a0f78604299ce04d3c87461b79b0e8e5b78f540f4": {
+        "delta": 54,
+        "generalized": 54,
+        "ordinary_baseline": 0
+      },
+      "reduce_output_rmsnorm_1_4096": {
+        "delta": 54,
+        "generalized": 54,
+        "ordinary_baseline": 0
+      }
+    },
+    "count": 2
+  },
+  "programs_removed": {
+    "by_program": {
+      "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077": {
+        "delta": -18,
+        "generalized": 37,
+        "ordinary_baseline": 55
+      },
+      "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc": {
+        "delta": -18,
+        "generalized": 38,
+        "ordinary_baseline": 56
+      }
+    },
+    "count": 2
+  },
+  "reduce_output": {
+    "count": 54,
+    "fused_body_binary_sha256": [
+      "d125f7c7bece7693e22d2288b3a06feb35ecdf1b32b635798c76eed7caac6477"
+    ],
+    "fused_body_source_sha256": [
+      "a4462557aecbc1cb13cb4a6647f0467139c31d048eb5ea0eddcb978e23b3c095"
+    ],
+    "marker_input_count": 146,
+    "marker_input_histogram": {
+      "{\"base_op\": \"AFTER\", \"buffer_identity\": false, \"dtype\": \"dtypes.float\", \"op\": \"PERMUTE\", \"precompiled_output_identity\": false, \"shape\": [1, 32, 1, 128]}": 38,
+      "{\"base_op\": \"AFTER\", \"buffer_identity\": false, \"dtype\": \"dtypes.float\", \"op\": \"PERMUTE\", \"precompiled_output_identity\": false, \"shape\": [1, 8, 1, 128]}": 38,
+      "{\"base_op\": \"CONTIGUOUS\", \"buffer_identity\": false, \"dtype\": \"dtypes.float\", \"op\": \"MEMORY_SEMANTIC\", \"precompiled_output_identity\": true, \"shape\": [1, 1, 4096]}": 2,
+      "{\"base_op\": \"CONTIGUOUS\", \"buffer_identity\": false, \"dtype\": \"dtypes.float\", \"op\": \"PERMUTE\", \"precompiled_output_identity\": false, \"shape\": [1, 32, 1, 128]}": 34,
+      "{\"base_op\": \"CONTIGUOUS\", \"buffer_identity\": false, \"dtype\": \"dtypes.float\", \"op\": \"PERMUTE\", \"precompiled_output_identity\": false, \"shape\": [1, 8, 1, 128]}": 34
+    },
+    "net_call_delta_vs_ordinary": 1,
+    "net_call_delta_vs_typed": 72,
+    "ordinary_baseline_total_calls": 1008,
+    "program_names": [
+      "reduce_output_rmsnorm_1_4096"
+    ],
+    "total_calls": 1009,
+    "typed_baseline_total_calls": 937
+  },
+  "removed_ordinary_norm_programs": [
+    "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+    "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+    "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e"
+  ],
+  "selector": {
+    "accepted": 108,
+    "entry": 182,
+    "marker_not_eligible": 74
+  },
+  "stage_trace": {
+    "_details": {
+      "before_rangeify_parent_chain": [
+        "REDUCE_OUTPUT(shape=(1, 1, 4096),dtype=dtypes.float,owner=None) -> MEMORY_SEMANTIC(shape=(1, 1, 4096),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> RESHAPE(shape=(4096,),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> CAST(shape=(4096,),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> STORE(shape=(4096,),dtype=dtypes.void,owner=None) -> AFTER(shape=(4096,),dtype=dtypes.half,owner=None) -> CALL(shape=None,dtype=dtypes.void,owner=None) -> AFTER(shape=(151936,),dtype=dtypes.float,owner=None) -> RESHAPE(shape=(1, 1, 151936),dtype=dtypes.float,owner=None) -> MEMORY_SEMANTIC(shape=(1, 1, 151936),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_OUTPUT: 'runtime_output'>, candidate_id=None)) -> RESHAPE(shape=(1, 128, 1187),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_OUTPUT: 'runtime_output'>, candidate_id=None)) -> PERMUTE(shape=(1, 1187, 128),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_OUTPUT: 'runtime_output'>, candidate_id=None)) -> REDUCE(shape=(1, 1, 128),dtype=dtypes.float,owner=None)",
+        "REDUCE_OUTPUT(shape=(1, 1, 4096),dtype=dtypes.float,owner=None) -> MEMORY_SEMANTIC(shape=(1, 1, 4096),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> RESHAPE(shape=(4096,),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> CAST(shape=(4096,),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> STORE(shape=(4096,),dtype=dtypes.void,owner=None) -> AFTER(shape=(4096,),dtype=dtypes.half,owner=None) -> CALL(shape=None,dtype=dtypes.void,owner=None) -> AFTER(shape=(151936,),dtype=dtypes.float,owner=None) -> RESHAPE(shape=(1, 1, 151936),dtype=dtypes.float,owner=None) -> MEMORY_SEMANTIC(shape=(1, 1, 151936),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_OUTPUT: 'runtime_output'>, candidate_id=None)) -> RESHAPE(shape=(1, 151936),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_OUTPUT: 'runtime_output'>, candidate_id=None)) -> CMPNE(shape=(1, 151936),dtype=dtypes.bool,owner=None) -> CMPNE(shape=(1, 151936),dtype=dtypes.bool,owner=None)",
+        "REDUCE_OUTPUT(shape=(1, 1, 4096),dtype=dtypes.float,owner=None) -> MEMORY_SEMANTIC(shape=(1, 1, 4096),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> RESHAPE(shape=(4096,),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> CAST(shape=(4096,),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> STORE(shape=(4096,),dtype=dtypes.void,owner=None) -> AFTER(shape=(4096,),dtype=dtypes.half,owner=None) -> CALL(shape=None,dtype=dtypes.void,owner=None) -> AFTER(shape=(151936,),dtype=dtypes.float,owner=None) -> SINK(shape=None,dtype=dtypes.void,owner=None)",
+        "REDUCE_OUTPUT(shape=(1, 1, 4096),dtype=dtypes.float,owner=None) -> MEMORY_SEMANTIC(shape=(1, 1, 4096),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> RESHAPE(shape=(4096,),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> CAST(shape=(4096,),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> STORE(shape=(4096,),dtype=dtypes.void,owner=None) -> AFTER(shape=(4096,),dtype=dtypes.half,owner=None) -> SINK(shape=None,dtype=dtypes.void,owner=None)",
+        "REDUCE_OUTPUT(shape=(1, 1, 4096),dtype=dtypes.half,owner=None) -> MEMORY_SEMANTIC(shape=(1, 1, 4096),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> RESHAPE(shape=(4096,),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> CONTIGUOUS(shape=(4096,),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> CALL(shape=None,dtype=dtypes.void,owner=None) -> AFTER(shape=(1024,),dtype=dtypes.float,owner=None) -> RESHAPE(shape=(1, 1, 1024),dtype=dtypes.float,owner=None) -> MEMORY_SEMANTIC(shape=(1, 1, 1024),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> RESHAPE(shape=(1, 1, 8, 128),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> PERMUTE(shape=(1, 8, 1, 128),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> MUL(shape=(1, 8, 1, 128),dtype=dtypes.float,owner=None) -> MUL(shape=(1, 8, 1, 128),dtype=dtypes.float,owner=None) -> MEMORY_SEMANTIC(shape=(1, 8, 1, 128),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None))",
+        "REDUCE_OUTPUT(shape=(1, 1, 4096),dtype=dtypes.half,owner=None) -> MEMORY_SEMANTIC(shape=(1, 1, 4096),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> RESHAPE(shape=(4096,),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> CONTIGUOUS(shape=(4096,),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> CALL(shape=None,dtype=dtypes.void,owner=None) -> AFTER(shape=(1024,),dtype=dtypes.float,owner=None) -> RESHAPE(shape=(1, 1, 1024),dtype=dtypes.float,owner=None) -> MEMORY_SEMANTIC(shape=(1, 1, 1024),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> RESHAPE(shape=(1, 1, 8, 128),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> PERMUTE(shape=(1, 8, 1, 128),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> MUL(shape=(1, 8, 1, 128),dtype=dtypes.float,owner=None) -> REDUCE(shape=(1, 8, 1, 1),dtype=dtypes.float,owner=None) -> MUL(shape=(1, 8, 1, 1),dtype=dtypes.float,owner=None)",
+        "REDUCE_OUTPUT(shape=(1, 1, 4096),dtype=dtypes.half,owner=None) -> MEMORY_SEMANTIC(shape=(1, 1, 4096),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> RESHAPE(shape=(4096,),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> CONTIGUOUS(shape=(4096,),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> CALL(shape=None,dtype=dtypes.void,owner=None) -> AFTER(shape=(1024,),dtype=dtypes.float,owner=None) -> RESHAPE(shape=(1, 1, 1024),dtype=dtypes.float,owner=None) -> MEMORY_SEMANTIC(shape=(1, 1, 1024),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> RESHAPE(shape=(1, 1, 8, 128),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> PERMUTE(shape=(1, 8, 1, 128),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> RESHAPE(shape=(1, 1, 8, 1, 128),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> PAD(shape=(2, 1, 8, 1, 128),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> ADD(shape=(2, 1, 8, 1, 128),dtype=dtypes.float,owner=None)",
+        "REDUCE_OUTPUT(shape=(1, 1, 4096),dtype=dtypes.half,owner=None) -> MEMORY_SEMANTIC(shape=(1, 1, 4096),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> RESHAPE(shape=(4096,),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> CONTIGUOUS(shape=(4096,),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> CALL(shape=None,dtype=dtypes.void,owner=None) -> AFTER(shape=(12288,),dtype=dtypes.float,owner=None) -> RESHAPE(shape=(12288,),dtype=dtypes.float,owner=None) -> CAST(shape=(12288,),dtype=dtypes.half,owner=None) -> CONTIGUOUS(shape=(12288,),dtype=dtypes.half,owner=None) -> CALL(shape=None,dtype=dtypes.void,owner=None) -> AFTER(shape=(4096,),dtype=dtypes.float,owner=None) -> RESHAPE(shape=(1, 1, 4096),dtype=dtypes.float,owner=None) -> ADD(shape=(1, 1, 4096),dtype=dtypes.float,owner=None)",
+        "REDUCE_OUTPUT(shape=(1, 1, 4096),dtype=dtypes.half,owner=None) -> MEMORY_SEMANTIC(shape=(1, 1, 4096),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> RESHAPE(shape=(4096,),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> CONTIGUOUS(shape=(4096,),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> CALL(shape=None,dtype=dtypes.void,owner=None) -> AFTER(shape=(4096,),dtype=dtypes.float,owner=None) -> RESHAPE(shape=(1, 1, 4096),dtype=dtypes.float,owner=None) -> MEMORY_SEMANTIC(shape=(1, 1, 4096),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> RESHAPE(shape=(1, 1, 32, 128),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> PERMUTE(shape=(1, 32, 1, 128),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> MUL(shape=(1, 32, 1, 128),dtype=dtypes.float,owner=None) -> MUL(shape=(1, 32, 1, 128),dtype=dtypes.float,owner=None) -> MEMORY_SEMANTIC(shape=(1, 32, 1, 128),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None))",
+        "REDUCE_OUTPUT(shape=(1, 1, 4096),dtype=dtypes.half,owner=None) -> MEMORY_SEMANTIC(shape=(1, 1, 4096),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> RESHAPE(shape=(4096,),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> CONTIGUOUS(shape=(4096,),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> CALL(shape=None,dtype=dtypes.void,owner=None) -> AFTER(shape=(4096,),dtype=dtypes.float,owner=None) -> RESHAPE(shape=(1, 1, 4096),dtype=dtypes.float,owner=None) -> MEMORY_SEMANTIC(shape=(1, 1, 4096),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> RESHAPE(shape=(1, 1, 32, 128),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> PERMUTE(shape=(1, 32, 1, 128),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> MUL(shape=(1, 32, 1, 128),dtype=dtypes.float,owner=None) -> REDUCE(shape=(1, 32, 1, 1),dtype=dtypes.float,owner=None) -> MUL(shape=(1, 32, 1, 1),dtype=dtypes.float,owner=None)",
+        "REDUCE_OUTPUT(shape=(1, 1, 4096),dtype=dtypes.half,owner=None) -> MEMORY_SEMANTIC(shape=(1, 1, 4096),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> RESHAPE(shape=(4096,),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> CONTIGUOUS(shape=(4096,),dtype=dtypes.half,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> CALL(shape=None,dtype=dtypes.void,owner=None) -> AFTER(shape=(4096,),dtype=dtypes.float,owner=None) -> RESHAPE(shape=(1024, 4),dtype=dtypes.float,owner=None) -> REDUCE(shape=(1024, 1),dtype=dtypes.float,owner=None) -> RESHAPE(shape=(1, 1, 1024),dtype=dtypes.float,owner=None) -> MEMORY_SEMANTIC(shape=(1, 1, 1024),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> RESHAPE(shape=(1, 1, 8, 128),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> PERMUTE(shape=(1, 8, 1, 128),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None)) -> RESHAPE(shape=(1, 1, 8, 1, 128),dtype=dtypes.float,owner=MemorySemanticOwner(semantic_class=<MemorySemanticClass.RUNTIME_SCRATCH: 'runtime_scratch'>, candidate_id=None))"
+      ]
+    },
+    "after_callify": {
+      "candidate": 858,
+      "ordinary": 18204
+    },
+    "after_function_substitution": {
+      "candidate": 552,
+      "ordinary": 18204
+    },
+    "associations": {
+      "16x32x8": {
+        "accepted": 108,
+        "entry": 182,
+        "marker_not_eligible": 74
+      }
+    },
+    "before_rangeify_parent": {
+      "MEMORY_SEMANTIC": 110
+    },
+    "before_rangeify_store": {
+      "candidate": 38,
+      "ordinary": 72
+    },
+    "selector": {
+      "accepted": 108,
+      "entry": 182,
+      "marker_not_eligible": 74
+    }
+  },
+  "verdict": "ADMISSIONS_CONVERGED"
+}
