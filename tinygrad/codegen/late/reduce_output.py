@@ -4,14 +4,21 @@ These are normal UOp SINK programs.  No source strings, inline assembly, or
 custom-kernel Tensor transport are used.  Admission is owned by rangeify,
 which binds only concrete identity-preserving views into the ordinary CALL.
 
-The body is fully spec-driven: the reduce op composes with the warp/lane
-``_LADDER``, the warp/lane/per-lane association mirrors the ordinary reduce
-shape, and the recipe string selects the per-lane accumulation and epilogue.
-The 08-05 single-recipe body is the r_16_256 special case (ADD, 16 warps / 32
-lanes / 8 per lane, ``sumsq_rsqrt_affine``) and stays byte-identical: same
-program name and body digest.  Any shape/recipe the builder cannot express
-exactly fails closed with ValueError, which the rangeify selector maps to the
-same reject path as the legacy emitter.
+The body is fully spec-driven and reproduces the ORDINARY reduce association
+bitwise: the ordinary r_16_256 kernel is 16 threads, each serially summing 256
+CONTIGUOUS elements, then a serial chain over the 16 partials.  The fused body
+mirrors that exact order: every lane computes the same per-warp serial chain
+over ``per_lane * lane`` contiguous elements (the reduce index is
+lane-independent), lane 0 publishes the per-warp partial, and the serial
+cross-warp chain plus the elementwise epilogue follow.  The epilogue still
+uses all lanes (``per_lane`` elements per lane), so the launch stays at the
+full 512-thread width while the reduction is bitwise-equal to the ordinary
+program for every dtype mix.  The recipe string selects the per-lane
+accumulation and epilogue (``sumsq_rsqrt_affine`` is the shipped legacy
+RMSNorm recipe; ``max_affine`` is the MAX-reduce affine variant).  Any
+shape/recipe the builder cannot express exactly fails closed with ValueError,
+which the rangeify selector maps to the same reject path as the legacy
+emitter.
 """
 from math import prod
 from tinygrad.dtype import dtypes, AddrSpace
@@ -26,10 +33,13 @@ def reduce_output_association(shape: tuple[int, ...], lanes: int = 32) -> tuple[
   """Derive (warps, lanes, per_lane) from an ordinary reduce loop nest.
 
   The decode DAG's ordinary reduce programs (r_16_256, r_2_8_4_4_16, r_8_16_8)
-  tile one row's reduction as ``(warps, per_warp)``: the outermost loop is the
-  cooperative warp count and the remaining extent is distributed across
-  ``lanes`` lanes per warp.  The 08-05 fixed body (16 warps, 32 lanes, 8 per
-  lane) is exactly the derivation of r_16_256 for dim 4096.
+  tile one row's reduction as ``(warps, per_warp)``: the outermost extent is
+  the per-thread serial chain count and ``per_warp`` is the number of
+  CONTIGUOUS elements each thread sums serially (r_16_256 = 16 threads x 256
+  contiguous serial).  The fused body keeps that exact serial chain per warp
+  and uses ``lanes`` only to widen the epilogue, so the derivation is
+  (warps, lanes, per_lane = per_warp // lanes) with the reduce phase summing
+  ``per_warp`` contiguous elements serially.
   """
   if len(shape) < 2: raise ValueError(f"reduce-output association needs (warps, per_warp), got {shape!r}")
   warps, per_warp = shape[0], prod(shape[1:])
@@ -49,8 +59,14 @@ def emit_reduce_output(spec:ReduceOutputSpec, x_dtype, weight_dtype):
   def kernel(out:UOp, x:UOp, weight:UOp) -> UOp:
     laneid = UOp.range(lane, 0, AxisType.LOCAL)
     warp = UOp.range(warps, 1, AxisType.LOCAL)
-    red = UOp.range(per_lane, 2, AxisType.REDUCE)
-    base = warp * (per_lane * lane) + laneid + red * lane
+    # Ordinary r_16_256 association: each thread serially sums per_lane*lane
+    # CONTIGUOUS elements, then a serial chain combines the per-warp partials.
+    # The reduce index is lane-independent so every lane of a warp computes the
+    # identical serial chain; only lane 0 publishes it.  This is bitwise-equal
+    # to the ordinary kernel, unlike a strided per-lane split with a shuffle
+    # ladder, whose fp32 association differs in the last ulp.
+    red = UOp.range(per_lane * lane, 2, AxisType.REDUCE)
+    base = warp * (per_lane * lane) + red
     xv = x[base].cast(dtypes.float32)
     acc = UOp.placeholder((1,), dtypes.float32, 20, AddrSpace.REG)
     acc = acc.after(acc[0].store(0.0))
@@ -58,7 +74,8 @@ def emit_reduce_output(spec:ReduceOutputSpec, x_dtype, weight_dtype):
       acc = acc.after(acc[0].store(acc.after(red)[0] + xv*xv).end(red))
     else:
       acc = acc.after(acc[0].store(acc.after(red)[0].maximum(xv.abs())).end(red))
-    warp_total = _LADDER[spec.reduce_op](acc[0], laneid, lane, slot_base=90)
+    # Every lane holds the same serial-chain value; no cross-lane ladder.
+    warp_total = acc[0]
     smem = UOp.placeholder((warps,), dtypes.float32, 230, AddrSpace.LOCAL)
     published = smem[warp].store(warp_total, laneid.eq(0))
     ready = UOp.barrier(UOp.group(published))

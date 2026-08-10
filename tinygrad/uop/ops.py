@@ -2131,14 +2131,16 @@ class RMSNormSpec(NamedTuple):
 class ReduceOutputSpec(NamedTuple):
   """A bounded cooperative reduction followed by an output-wide epilogue.
 
-  The body is derived entirely from this record: the reduce op composes with
-  the warp/lane ``_LADDER`` (ADD -> staged XOR-sum, MAX -> staged XOR-max), the
-  warp/lane/per-lane association mirrors the ordinary reduce shape (the 08-05
-  fixed 16-warp / 32-lane / 8-per-lane body is exactly the r_16_256
-  derivation for dim 4096), and the recipe string selects the per-lane
-  accumulation and epilogue (``sumsq_rsqrt_affine`` is the shipped legacy
-  RMSNorm recipe; ``max_affine`` is the MAX-reduce affine variant).  The
-  carrier remains generic in ownership: fallback and every logical input are
+  The body is derived entirely from this record: the reduction reproduces the
+  ordinary reduce association bitwise (each warp serially sums ``per_lane *
+  lanes`` CONTIGUOUS elements, lane 0 publishes the per-warp partial, and the
+  partials are combined in a serial chain, exactly like the ordinary
+  r_16_256 kernel), and the recipe string selects the per-lane accumulation
+  and epilogue (``sumsq_rsqrt_affine`` is the shipped legacy RMSNorm recipe;
+  ``max_affine`` is the MAX-reduce affine variant).  The epilogue keeps all
+  lanes busy (``per_lane`` elements per lane), so the fused launch stays wide
+  while the reduction is bitwise-equal to the ordinary program.  The carrier
+  remains generic in ownership: fallback and every logical input are
   source-visible, while lowering is target/layout fail-closed.
   """
   rows: int
@@ -2147,13 +2149,14 @@ class ReduceOutputSpec(NamedTuple):
   out_dtype: Any
   affine: bool = True
   recipe: str = "sumsq_rsqrt_affine"
-  # Reduce op composed with the warp-reduce ladder.  Only ops with a proven
-  # staged ladder entry may be expressed; anything else fails closed at the
-  # emitter (same ValueError -> reject path as the legacy single-recipe body).
+  # Reduce op for the serial per-warp accumulation.  Only ADD/MAX may be
+  # expressed; anything else fails closed at the emitter (same ValueError ->
+  # reject path as the legacy single-recipe body).
   reduce_op: Ops = Ops.ADD
-  # Warp/lane/per-lane association, derived from the ordinary reduce shape.
-  # The legacy single-recipe body is the r_16_256 derivation: 16 warps, 32
-  # lanes, 8 elements per lane, covering exactly dim 4096.
+  # Warp/lane/per-lane association, derived from the ordinary reduce shape:
+  # each warp serially sums per_lane*lanes contiguous elements (the ordinary
+  # per-thread extent), the 16 partials combine in a serial chain, and the
+  # epilogue distributes per_lane elements per lane over lanes*warps threads.
   warps: int = 16
   lanes: int = 32
   per_lane: int = 8

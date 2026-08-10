@@ -28,7 +28,15 @@ ASSOCIATIONS = {
   "r_8_16_8": ((8, 16, 8), 1024, 8, 4),
 }
 
-LEGACY_BODY_DIGEST = "c82e25f5a4c7cb7758dc31fb8dd5bee72ee01bcff1eb08e26c030415b7a89337"
+# The 08-10 body pin: the correction from the 08-05 strided shuffle-tree
+# ladder to the ordinary serial-contiguous association.  The 08-05 body was
+# NOT bitwise-equal to the ordinary r_16_256 reduce for fp32 x + fp16 w
+# (1-ulp fp32 scale differences flipping downstream fp16 values at rounding
+# boundaries), which is exactly the NV exact-logits gate failure.  The 08-10
+# body mirrors the ordinary kernel's serial 256-contiguous per-thread chain
+# and serial 16-partial combine, so the fused output is bitwise equal for
+# every dtype mix (see test_native_value_matches_ordinary).
+LEGACY_BODY_DIGEST = "23264243d010bc91916ec4ed071a42c3e3ee4004d697b1f215d5482c7844afc8"
 
 
 def _rng():

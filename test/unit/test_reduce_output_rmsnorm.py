@@ -424,10 +424,14 @@ def test_shared_q8_fused_lease_marks_attention_only_and_never_prefill():
 
 def test_native_value_matches_ordinary():
   rng = np.random.default_rng(20260805)
-  x = Tensor(rng.normal(0, .2, (1,4096)).astype(np.float16), dtype=dtypes.float16).realize()
-  w = Tensor(rng.normal(1, .05, (4096,)).astype(np.float16), dtype=dtypes.float16).realize()
-  got, ref = _apply(_norm(w), x), _apply(_norm(w), x, False)
-  np.testing.assert_allclose(got.numpy(), ref.numpy(), rtol=0, atol=0)
+  # The model's real dtype mix is fp32 x + fp16 w; the fused body must be
+  # bitwise equal to the ordinary graph for every mix, not just all-fp16
+  # (the 08-05 ladder association differed in the fp32 last ulp for fp32 x).
+  for xdt, wdt in [(dtypes.float, dtypes.float16), (dtypes.float16, dtypes.float16), (dtypes.float, dtypes.float)]:
+    x = Tensor(rng.normal(0, .2, (1,4096)).astype(np.float32), dtype=xdt).realize()
+    w = Tensor(rng.normal(1, .05, (4096,)).astype(np.float32), dtype=wdt).realize()
+    got, ref = _apply(_norm(w), x), _apply(_norm(w), x, False)
+    np.testing.assert_allclose(got.numpy(), ref.numpy(), rtol=0, atol=0)
 
 def test_body_has_restored_lane_phase_and_no_custom_op():
   from tinygrad.codegen.late.reduce_output import emit_reduce_output_rmsnorm
