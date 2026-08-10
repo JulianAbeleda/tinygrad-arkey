@@ -1,0 +1,143 @@
+{
+  "census": {
+    "contract": "fused reduce_output_rmsnorm_1_4096 bodies > 0; rmsnorm_reduce drop consistent with body count; norms epilogues removed; q/k reduce roles untouched; honest net program delta and callify-redirect side effects reported",
+    "reason": "campaign stopped before the norms-confined census arm",
+    "result": "NOT_AUTHORIZED",
+    "run": false
+  },
+  "citations": [
+    "docs/task_workflow/input/nv-reduce-output-wall-bracket-scope-20260809.md",
+    "docs/task_workflow/input/nv-generic-reduce-output-primitive-record-20260809.md",
+    "docs/task_workflow/output/nv-generic-reduce-output-census-20260809.json",
+    "extra/llm_research/decode/nv_fusion_population_ledger.py",
+    "extra/llm_research/decode/nv_shared_q8_progressive_qualification.py",
+    "extra/llm_research/decode/nv_predispatch_full_logits_qualification.py",
+    "extra/llm_research/decode/nv_norms_fusion_ab.py",
+    "scratchpad/nv_reduce_output_rmsnorm_census.py"
+  ],
+  "date": "2026-08-09",
+  "hard_stop_notes": [
+    "HARD STOP at logits_gate: the candidate exact-logits child failed; raw child stderr captured below"
+  ],
+  "isolation_notes": [
+    "Isolation matrix (fresh process per arm, RTX 5090, d512): control (no flags) and callify-only and promo-only all return finite logits with real sampled tokens; callify-only and promo-only logits are byte-identical (same row SHA).",
+    "Candidate (callify flags + reduce-output promotion) renders and survives with the 54 fused bodies in the decode graph, but the JIT-captured decode logits tap returns all-NaN (151936 non-finite entries, sampled-token scalar = sentinel 151936, argmax 0) while the eager JIT=0 path is finite and correct.",
+    "Conclusion: the fused primitive numerics are exact (CPU hermetic gate + eager path), but NV JIT capture of the callify precompiled-output redirect leaves the decode logits output binding uninitialized. The exact-logits gate fails closed; the norms row is not booked and no wall bracket runs."
+  ],
+  "logits_gate": {
+    "child_stderr_last_line": "RuntimeError: invalid diagnostic output at row 0: finite=False non_finite_count=151936 sid=151936 argmax=0 sid_equals_argmax=False row_min=nan row_max=nan row_sha256=a6d89127557209cf",
+    "control_evidence": {
+      "dtype": "float32",
+      "gates": {
+        "block_reduce_output_rmsnorm_promoted": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "decode_direct_greedy_promoted": true,
+        "reduce_output_rmsnorm_promoted": false
+      },
+      "logits_sha256": "70838f5237ce2cf215e937caed807c4827daa1336e69c3d6c396b1aad4434819",
+      "prelude_token": 13876,
+      "shape": [
+        32,
+        1,
+        151936
+      ],
+      "tokens": [
+        64461,
+        4710,
+        64461,
+        1837,
+        64461,
+        1837,
+        64461,
+        64461,
+        64461,
+        3014,
+        64461,
+        1837,
+        64461,
+        1837,
+        1837,
+        3014,
+        64461,
+        3014,
+        64461,
+        64461,
+        15011,
+        3014,
+        3014,
+        3014,
+        3014,
+        3014,
+        3014,
+        3014,
+        3014,
+        3014,
+        3014,
+        3014
+      ]
+    },
+    "control_logits_sha256_prefix": "70838f5237ce2cf2",
+    "result": "NO-GO"
+  },
+  "mode": "ab",
+  "schema": "tinygrad.nv_reduce_output_primitive_ab.v1",
+  "smoke": {
+    "decode_observation": "second decode token after the prelude (index 1 of 3), mirroring capture_decode_graph",
+    "fused_body_count": 54,
+    "fused_body_present": true,
+    "program_count": 937,
+    "result": "PASS",
+    "survive": true
+  },
+  "target": {
+    "depth": 512,
+    "device": "NV sm_120",
+    "gpu": "RTX 5090",
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf"
+  },
+  "tok_per_s": "NOT_AUTHORIZED (exact-logits gate failed; no wall bracket ran)",
+  "verdict": "NO-GO",
+  "wall_bracket": {
+    "contract": "all three token-stream hashes identical; candidate median at least +50 us/token faster than both bracketing controls",
+    "promotion_us": 50.0,
+    "reason": "campaign stopped before the reverse control/candidate/control wall bracket",
+    "result": "NOT_AUTHORIZED",
+    "run": false
+  }
+}
