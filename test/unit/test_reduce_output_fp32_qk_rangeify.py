@@ -177,8 +177,14 @@ def test_identity_view_admits_pure_permute_of_precompiled_output():
   assert _identity_buffer_view(p.reshape(64, 64).permute((1, 0))) is None
   # SHRINK legs, non-precompiled AFTER, and multi-producer PERMUTE stay rejected.
   assert _identity_buffer_view(after.shrink(((0, 2048),))) is None
+  # A non-precompiled AFTER with the base as its unique output argument is the
+  # bounded opaque custom-kernel spelling (decode q4k GEMV, precompile=False)
+  # and IS admitted by the permuted view; an aliased output argument stays
+  # rejected.
   nonpre = UOp(Ops.CALL, dtypes.void, (body, base, out), CallInfo(name="gemv", precompile=False))
-  assert _identity_buffer_view(out.after(nonpre).reshape(1, 1, 32, 128).permute((0, 2, 1, 3))) is None
+  assert _identity_buffer_view(out.after(nonpre).reshape(1, 1, 32, 128).permute((0, 2, 1, 3))) is not None
+  aliased = UOp(Ops.CALL, dtypes.void, (body, out, out), CallInfo(name="gemv", precompile=False))
+  assert _identity_buffer_view(out.after(aliased).reshape(1, 1, 32, 128).permute((0, 2, 1, 3))) is None
 
 
 def test_permute_carrier_fails_closed_for_non_identity_marker_input():
@@ -228,3 +234,59 @@ def test_unpromoted_marker_keeps_ordinary_graph():
   out = _qk_graph(32, promoted=False)
   with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
     assert "reduce_output_rmsnorm_32_128" not in _names(out)
+
+
+def _opaque_gemv_after(numel, *, alias=False, store_slot=0, linear_body=False):
+  """Build the production q4k spelling: AFTER(BUFFER, CALL) with a non-precompile
+  SINK body whose stores target the placeholder for the given slot."""
+  from tinygrad.uop.ops import CallInfo, UOp
+  out = UOp.new_buffer("CPU", numel, dtypes.float32)
+  inp = UOp.new_buffer("CPU", numel, dtypes.float32)
+  w = UOp.new_buffer("CPU", numel, dtypes.float32)
+  out_p = UOp.placeholder((numel,), dtypes.float32, 0)
+  inp_p = UOp.placeholder((numel,), dtypes.float32, 1)
+  body = UOp.sink((out_p if store_slot == 0 else inp_p).store(inp_p))
+  if linear_body:
+    body = UOp(Ops.LINEAR, src=(body.call(out, inp, w),))
+  args = (out, inp, w) if not alias else (out, out, w)
+  call = UOp(Ops.CALL, dtypes.void, (body, *args), CallInfo(name="q4k_gemv", precompile=False))
+  return out.after(call)
+
+
+def _opaque_qk_marker(rows, dim=128, **kw):
+  """Marker over the opaque q4k spelling: PERMUTE(RESHAPE(MS(RESHAPE(AFTER))))."""
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  from tinygrad.llm.model import _decode_reduce_output_rmsnorm
+  after = _opaque_gemv_after(rows * dim, **kw)
+  ms = runtime_scratch(Tensor(after.reshape(1, 1, rows, dim), device="CPU"))
+  q = ms.reshape(1, 1, rows, dim).permute((0, 2, 1, 3))
+  return _decode_reduce_output_rmsnorm(_norm(dim), q, True)
+
+
+def test_opaque_q4k_after_marks_input_identity():
+  """The q4k GEMV AFTER (non-precompile, unique output slot, SINK store proof)
+  makes the fp32 q/k marker carry input_identity_at_marker=True through the
+  production MS spelling, for both row counts."""
+  for rows in (32, 8):
+    marked = _opaque_qk_marker(rows)
+    assert marked.uop.op is Ops.REDUCE_OUTPUT
+    assert marked.uop.arg.input_identity_at_marker is True
+
+
+def test_opaque_q4k_after_fails_closed():
+  """Aliased output argument, missing body store, and LINEAR bodies never get
+  the identity bit; the marker keeps the ordinary fallback."""
+  assert _opaque_qk_marker(32, alias=True).uop.arg.input_identity_at_marker is False
+  assert _opaque_qk_marker(32, store_slot=1).uop.arg.input_identity_at_marker is False
+  assert _opaque_qk_marker(32, linear_body=True).uop.arg.input_identity_at_marker is False
+
+
+def test_opaque_q4k_after_lowers_through_rangeify():
+  """The opaque q4k spelling (non-precompile AFTER) admits the marker through
+  the rangeify selector and lowers one row-aware body per marker."""
+  from tinygrad.helpers import Context
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  marked = _opaque_qk_marker(32)
+  out = _attention(_rope(runtime_scratch(marked), 32, 128))
+  with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
+    assert "reduce_output_rmsnorm_32_128" in _names(out)

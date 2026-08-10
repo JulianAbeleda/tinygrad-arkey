@@ -302,18 +302,19 @@ def _permuted_identity_buffer_view(x:UOp) -> UOp|None:
 
   The fp32 q/k marker input is ``PERMUTE(RESHAPE(...))`` of the q4k GEMV
   precompiled output; callify turns that into ``PERMUTE(RESHAPE(AFTER))``.
-  Equal-span RESHAPE legs and single-producer PERMUTE legs are walked down to
-  either a precompiled-output AFTER (the production spelling) or a concrete
-  BUFFER.  The AFTER is re-proven here in bounded form: its call is
-  precompiled and the base appears exactly once among the call's output
-  arguments.  The q4k GEMV is not a reduce-output route function, so it has
-  no ``precompiled_output_slots`` to assert; the marker's durable pre-callify
-  identity (``has_precompiled_output_identity``) already proved the same
-  invocation, and this walk only re-confirms the post-callify spelling.  The
-  strict invocation-slot contract stays on the bare-AFTER path.  A bare PARAM
-  terminal stays rejected (the exact slot-based proofs own that case), and
-  SHRINK/EXPAND/CAST or a multi-producer PERMUTE never enter the walk, so
-  every unexpected view fails closed.
+  Equal-span RESHAPE, single-producer PERMUTE, and dtype-preserving
+  MEMORY_SEMANTIC legs are walked down to either an invocation-owned AFTER
+  (the production spelling, precompiled or bounded opaque custom-kernel) or a
+  concrete BUFFER.  The AFTER is re-proven here in bounded form: the base
+  appears exactly once among the call's output arguments, regardless of the
+  precompile flag.  The marker's durable pre-callify identity
+  (``has_precompiled_output_identity`` or the bounded AFTER body proof at
+  marker creation) already proved the same invocation, and this walk only
+  re-confirms the post-callify spelling.  The strict invocation-slot contract
+  stays on the bare-AFTER path.  A bare PARAM terminal stays rejected (the
+  exact slot-based proofs own that case), and SHRINK/EXPAND/CAST or a
+  multi-producer PERMUTE never enter the walk, so every unexpected view fails
+  closed.
   """
   original, expected = x, x.numel()
   permutes = 0
@@ -322,14 +323,15 @@ def _permuted_identity_buffer_view(x:UOp) -> UOp|None:
       x = x.src[0]; continue
     if x.op is Ops.PERMUTE and len(x.src) == 1 and x.src[0].numel() == expected:
       permutes += 1; x = x.src[0]; continue
+    if x.op is Ops.MEMORY_SEMANTIC and len(x.src) == 1 and x.src[0].numel() == expected and x.dtype == original.dtype:
+      x = x.src[0]; continue
     break
   if permutes == 0: return None
   if _precompiled_output_after_view(x) is not None: return original
   if x.op is Ops.AFTER and len(x.src) == 2:
     base, call = x.src
     base_buf = _plain_identity_buffer_view(base)
-    if base_buf is None or base_buf.dtype != original.dtype or call.op is not Ops.CALL or \
-       not bool(getattr(call.arg, "precompile", False)): return None
+    if base_buf is None or base_buf.dtype != original.dtype or call.op is not Ops.CALL: return None
     if len([slot for slot, arg in enumerate(call.src[1:]) if _plain_identity_buffer_view(arg) is base_buf]) != 1: return None
     return original
   return original if x.op is Ops.BUFFER and x.numel() == expected else None

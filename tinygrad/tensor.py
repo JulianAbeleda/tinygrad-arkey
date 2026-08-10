@@ -43,6 +43,34 @@ def _fromnp(x: 'numpy.ndarray') -> UOp:
   ret.buffer.allocate(x)
   return ret.reshape(x.shape)
 
+def _bounded_after_output_identity(after: UOp) -> bool:
+  """Accept AFTER(BUFFER, CALL) as an invocation-owned output identity.
+
+  The decode q4k GEMV producer is an opaque custom-kernel CALL (precompile
+  False, no precompiled_output_slots), so the generic precompiled-output
+  proofs cannot see it.  This bounded proof accepts only an AFTER whose base
+  is a plain BUFFER/PARAM appearing exactly once among the call's arguments
+  (its output slot) and whose body provably stores through the PARAM for that
+  same slot.  Every other shape (movement legs on the base, aliased or
+  missing output argument, no body store proof) fails closed.
+  """
+  if after.op is not Ops.AFTER or len(after.src) != 2: return False
+  base, call = after.src
+  if base.op not in (Ops.BUFFER, Ops.PARAM) or base.numel() != after.numel() or base.dtype != after.dtype: return False
+  if call.op is not Ops.CALL or len(call.src) < 2: return False
+  matches = [slot for slot, arg in enumerate(call.src[1:]) if arg is base]
+  if len(matches) != 1: return False
+  output_slot = matches[0]
+  body = call.src[0]
+  if body.op is not Ops.SINK: return False
+  from tinygrad.uop.ops import ParamArg
+  for u in body.toposort():
+    if u.op is not Ops.STORE or not len(u.src): continue
+    target = u.src[0]
+    while target.op in (Ops.RESHAPE, Ops.INDEX) and len(target.src): target = target.src[0]
+    if target.op is Ops.PARAM and isinstance(target.arg, ParamArg) and target.arg.slot == output_slot: return True
+  return False
+
 def _get_winograd_matcols(mat, dims:int, shp:tuple[sint, ...], dtype:DType) -> list[list[Tensor]]:
   return [[Tensor.cat(*[Tensor.full(shp[:dim] + (1,) + shp[dim+1:], float(m[k]), dtype=dtype, buffer=False) for m in mat], dim=dim)
            for k in range(len(mat[0]))] for dim in range(dims)]
@@ -1341,10 +1369,11 @@ class Tensor(RandMixin):
       if identity_uop.op is Ops.PERMUTE and len(identity_uop.src) != 1: break
       identity_uop = identity_uop.src[0]
     precompiled_contiguous = identity_uop.op is Ops.CONTIGUOUS and identity_uop.src[0].has_precompiled_output_identity()
+    after_identity = _bounded_after_output_identity(identity_uop)
     owned_contiguous_candidate = (x.uop.op is Ops.MEMORY_SEMANTIC and len(x.uop.src) == 1 and
                                   x.uop.src[0].op is Ops.CONTIGUOUS and memory_semantic_owner(x.uop) is not None)
     identity = not owned_contiguous_candidate and (identity_uop.has_buffer_identity() or
-      identity_uop.has_precompiled_output_identity() or precompiled_contiguous)
+      identity_uop.has_precompiled_output_identity() or precompiled_contiguous or after_identity)
     return Tensor(UOp(Ops.REDUCE_OUTPUT, out.dtype, (out.uop, x.uop, weight.uop),
                       ReduceOutputSpec(rows, dim, eps, out.dtype, input_identity_at_marker=identity,
                                        owned_contiguous_candidate=owned_contiguous_candidate,
