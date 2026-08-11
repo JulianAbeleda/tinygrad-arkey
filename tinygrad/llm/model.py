@@ -587,8 +587,12 @@ class FFNBlock:
         # Fused w1+w3 decode GEMV (q4k-w1w3-fused-qv-implementation-record-20260803.md): ONE kernel
         # computes silu(gate(x)) * up(x); the fallback lambda reproduces the legacy chain's z exactly,
         # so an off-target/off-shape admission changes nothing about what ffn_down consumes.
+        # Research-only, explicit lease (no loader policy creates this attribute): the fused kernel
+        # stores fp16 directly, folding ffn_down's input cast (the ordinary E_128_32_3 epilogue).
+        _w1w3_fp16_store = not _prefill and getattr(self, "_q4k_w1w3_fp16_store_lease", False)
         z = q4k_gate_up_primitive_linear_call(_fg, _fu, x,
-          fallback=lambda: _prefill_semantic(_prefill, prefill_activation, _fg(x).silu().contiguous()) * _fu(x))
+          fallback=lambda: _prefill_semantic(_prefill, prefill_activation, _fg(x).silu().contiguous()) * _fu(x),
+          store_fp16=_w1w3_fp16_store)
         return self.ffn_down(z)
     gated = _prefill_semantic(_prefill, prefill_activation, self.ffn_gate(x).silu().contiguous())
     return self.ffn_down(gated * self.ffn_up(x))

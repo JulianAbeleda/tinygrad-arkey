@@ -264,7 +264,7 @@ def _f16x4_lane(xidx:UOp, nib:int) -> UOp:
   return UOp(Ops.CUSTOMI, dtypes.float32, (xidx,), arg=f"float((*((half4*){{0}})).{'xyzw'[nib]})")
 
 
-def q4k_g3_lanemap_gemv_w1w3_kernel(rows:int, k:int, load_style:str = "scalar"):
+def q4k_g3_lanemap_gemv_w1w3_kernel(rows:int, k:int, load_style:str = "scalar", store_fp16:bool = False):
   """Fused gate/up (w1+w3) decode GEMV: ONE 12288-row kernel computes
   `out[r] = silu(dot(gate_row_r, x)) * dot(up_row_r, x)` from two weight buffers, replacing the
   gate GEMV + silu elementwise + up GEMV + mul elementwise chain (72 -> 36 kernels/token).
@@ -285,10 +285,17 @@ def q4k_g3_lanemap_gemv_w1w3_kernel(rows:int, k:int, load_style:str = "scalar"):
   census, -5% wall): measured NO-GO for the real loop, kept only for standalone/occupancy study.
   Both styles share the two-accumulator loop pattern proven in production by the flash decode kernel
   (one init chain, first update `.after()` without `.end`, last update ends the range; distinct REG
-  slots 20/21 and distinct shuffle staging bases 90-94/95-99)."""
+  slots 20/21 and distinct shuffle staging bases 90-94/95-99).
+  `store_fp16=True` (scalar style only) stores the fused result already cast to fp16 under its own
+  `q4k_g3_lanemap_gemv_w1w3fused16_*` name, so a consumer's fp32->fp16 cast of the output (the
+  ordinary `E_128_32_3` ffn-activation cast) folds away. The in-kernel cast is the same
+  round-to-nearest-even fp32->fp16 conversion the separate cast kernel lowers, so the stored bytes
+  are bitwise-identical; the legacy fp32 name and hash are unchanged when `store_fp16=False`."""
   lm = Q4KGateUpLaneMap(k=k, n=rows)
   lm.validate()
   if load_style == "quad":
+    if store_fp16:
+      raise ValueError("quad w1w3 style does not support store_fp16")
     rows_per_block, lanes_per_row = 16, 8
     if rows % rows_per_block != 0:
       raise ValueError(f"quad w1w3 style requires rows % {rows_per_block} == 0, got rows={rows}")
@@ -297,7 +304,7 @@ def q4k_g3_lanemap_gemv_w1w3_kernel(rows:int, k:int, load_style:str = "scalar"):
     name = f"q4k_g3_lanemap_gemv_w1w3qv_{rows}_{k}"
   elif load_style == "scalar":
     rows_per_block, lanes_per_row = 1, WARP
-    name = f"q4k_g3_lanemap_gemv_w1w3fused_{rows}_{k}"
+    name = f"q4k_g3_lanemap_gemv_w1w3fused16_{rows}_{k}" if store_fp16 else f"q4k_g3_lanemap_gemv_w1w3fused_{rows}_{k}"
   else:
     raise ValueError(f"unknown w1w3 load style {load_style!r}")
   blocks, threads = rows // rows_per_block, rows_per_block * lanes_per_row
@@ -361,7 +368,9 @@ def q4k_g3_lanemap_gemv_w1w3_kernel(rows:int, k:int, load_style:str = "scalar"):
       upd_u = acc_u.after(upd_g)[0].store(acc_u.after(b0)[0] + contrib_u).end(b0)
       total_g = _warp_reduce_sum_staged(acc_g.after(upd_u)[0], lane8, lanes_per_row, 90)
       total_u = _warp_reduce_sum_staged(acc_u.after(upd_u)[0], lane8, lanes_per_row, 95)
-      return out[row].store(_silu_uop(total_g) * total_u, lane8.eq(0)).sink(arg=KernelInfo(name=name, opts_to_apply=()))
+      val = _silu_uop(total_g) * total_u
+      if store_fp16: val = val.cast(dtypes.float16)
+      return out[row].store(val, lane8.eq(0)).sink(arg=KernelInfo(name=name, opts_to_apply=()))
     return kernel
 
   def kernel(out:UOp, gate_words:UOp, up_words:UOp, x:UOp) -> UOp:
@@ -382,7 +391,9 @@ def q4k_g3_lanemap_gemv_w1w3_kernel(rows:int, k:int, load_style:str = "scalar"):
     upd_u = acc_u.after(upd_g)[0].store(acc_u.after(lblk)[0] + contrib_u).end(lblk)
     total_g = _warp_reduce_sum_staged(acc_g.after(upd_u)[0], part.lane, part.lane_extent, 90)
     total_u = _warp_reduce_sum_staged(acc_u.after(upd_u)[0], part.lane, part.lane_extent, 95)
-    return out[row].store(_silu_uop(total_g) * total_u).sink(arg=KernelInfo(name=name, opts_to_apply=()))
+    val = _silu_uop(total_g) * total_u
+    if store_fp16: val = val.cast(dtypes.float16)
+    return out[row].store(val).sink(arg=KernelInfo(name=name, opts_to_apply=()))
   return kernel
 
 
