@@ -93,12 +93,15 @@ class DeclaredTypedOutput:
   gate state recorded at production time. The consumer validator requires both (scope 4(d))."""
   layout: TypedLayout
   combine_fusion_admitted: bool
+  epilogue_absorption_admitted: bool = False
 
   def __post_init__(self):
     if not isinstance(self.layout, TypedLayout):
       raise TypeError("declared typed output layout must be a TypedLayout")
     if not isinstance(self.combine_fusion_admitted, bool):
       raise TypeError("declared typed output combine_fusion_admitted must be a bool")
+    if not isinstance(self.epilogue_absorption_admitted, bool):
+      raise TypeError("declared typed output epilogue_absorption_admitted must be a bool")
 
 
 @dataclass(frozen=True)
@@ -112,6 +115,7 @@ class TypedViewRequest:
   flat_shape: tuple[int, ...]
   route_role: str
   requires_combine_fusion: bool = True
+  requires_epilogue_absorption: bool = False
 
   def __post_init__(self):
     if not isinstance(self.slot, int) or self.slot < 0:
@@ -125,6 +129,10 @@ class TypedViewRequest:
       raise ValueError("typed view request route_role must be a non-empty string")
     if not isinstance(self.requires_combine_fusion, bool):
       raise TypeError("typed view request requires_combine_fusion must be a bool")
+    if not isinstance(self.requires_epilogue_absorption, bool):
+      raise TypeError("typed view request requires_epilogue_absorption must be a bool")
+    if self.requires_epilogue_absorption and self.requires_combine_fusion:
+      raise ValueError("typed view request cannot require both combine fusion and epilogue absorption")
 
 
 @dataclass(frozen=True)
@@ -257,6 +265,20 @@ def _validated_typed_view(uop: UOp, request: TypedViewRequest, program: KernelPr
   if declared.layout.dtype != request.dtype or declared.layout.flat_shape != request.flat_shape:
     return None, "producer declared layout does not exactly match the requested view"
   if not declared.layout.row_major: return None, "producer declared layout is not row-major"
+  # M2 epilogue-absorption boundary (nv-epilogue-absorption-route-scope-20260810.md): the fused
+  # w1+w3 GEMV declares its fp16 output layout under the harness-installed fp16-store lease; the
+  # ffn_down Q4K/Q6K GEMV consumer may then consume the producer AFTER directly instead of the
+  # materialized contiguous copy. The lease lives ONLY on the producer side: no declaration, no
+  # fold (the generic flat-buffer ABI with its copy is byte-identical, so control is unchanged).
+  if request.requires_epilogue_absorption:
+    if not declared.epilogue_absorption_admitted:
+      return None, "epilogue-absorption gate is closed"
+    if request.route_role != "ffn_down":
+      return None, f"wrong consumer route_role {request.route_role!r}"
+    if not (program.route_id.startswith("decode_q4k") or program.route_id.startswith("decode_q6k")) \
+        or not program.program_id.endswith(".gemv"):
+      return None, "program is not a q4k/q6k GEMV consumer"
+    return chain.base, "ok"
   if not declared.combine_fusion_admitted: return None, "combine-fusion gate is closed"
   # (d) typed-ABI gate: the consumer must explicitly require the M5 combine contract
   if not request.requires_combine_fusion: return None, "typed-ABI gate is closed"

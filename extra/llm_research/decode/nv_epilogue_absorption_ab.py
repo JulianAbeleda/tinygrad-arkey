@@ -36,10 +36,11 @@ import numpy as np
 
 from extra.llm_research.decode.nv_fusion_population_ledger import POP_NORMS, classify as _ledger_classify
 from extra.llm_research.decode.nv_predispatch_full_logits_qualification import DEFAULT_MODEL, _load, _prompt
+from extra.llm_research.decode.nv_reduce_output_primitive_ab import validate_logits_gate as _c6_validate_logits_gate
 from extra.llm_research.decode.nv_reduce_output_fp32_qk_ab import (
-  PROMOTION_US, TM_RE, _arm_context, _child_root, _digest, _require_candidate_callify_flags,
+  PROMOTION_US, TM_RE, _child_root, _digest, _require_candidate_callify_flags,
   _run_child, _settled_continuous_windows, _timing_hash_authority, _validate_run_extent,
-  _write_record, tok_per_s, validate_logits_gate,
+  _write_record, tok_per_s,
 )
 
 SCHEMA = "tinygrad.nv_epilogue_absorption_ab.v1"
@@ -120,6 +121,15 @@ def _assert_candidate_configured(gates: dict) -> None:
     raise RuntimeError(f"candidate arm requires {LEASE} on the model and every block: {missing}")
 
 
+def validate_logits_gate(control: dict, candidate: dict) -> dict:
+  """Exact-output gate with the M2 logits schema (mirror of the fp32 q/k gate:
+  the shared C6 child contract plus this campaign's own schema name)."""
+  for label, row in (("control", control), ("candidate", candidate)):
+    if row.get("schema") != LOGITS_SCHEMA:
+      raise ValueError(f"{label} logits row requires schema {LOGITS_SCHEMA!r}, got {row.get('schema')!r}")
+  return _c6_validate_logits_gate(control, candidate)
+
+
 def _model(arm: str, model_path: str, max_context: int):
   _require_candidate_callify_flags()
   model = _load(model_path, max_context)
@@ -128,6 +138,21 @@ def _model(arm: str, model_path: str, max_context: int):
   if arm == "control": _assert_control_closed(gates)
   else: _assert_candidate_configured(gates)
   return model, gates
+
+
+@contextlib.contextmanager
+def _m2_arm_context(arm: str):
+  """Both M2 arms run as the BOOKED fp32 q/k candidate: the callify Context
+  flags are live for control AND candidate (the M2 control is the booked
+  candidate WITHOUT the fp16-store lease), so the only census delta between
+  the arms is the cast drop.  Do not reuse the closed-graph control context
+  from the fp32 q/k campaign."""
+  if arm not in ("control", "candidate"):
+    raise ValueError(f"unknown arm {arm!r}")
+  from tinygrad.callify import CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER
+  from tinygrad.helpers import Context
+  with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
+    yield
 
 
 def smoke(arm: str, model_path: str, depth: int, max_context: int) -> dict:
@@ -140,7 +165,7 @@ def smoke(arm: str, model_path: str, depth: int, max_context: int) -> dict:
   from tinygrad import Device
   from tinygrad.engine.jit import GraphAdmissionCensus, observe_graph_admissions
   from tinygrad.helpers import Context
-  with _arm_context(arm):
+  with _m2_arm_context(arm):
     model, gates = _model(arm, model_path, max_context)
     model.reset_generation_state()
     gen = model.generate(_prompt(model_path, depth), chunk_size=32, temperature=0.0)
@@ -172,7 +197,7 @@ def smoke(arm: str, model_path: str, depth: int, max_context: int) -> dict:
 def logits(arm: str, model_path: str, depth: int, count: int, max_context: int) -> tuple[dict, np.ndarray]:
   from tinygrad import Tensor, UOp
   from tinygrad.helpers import Context
-  with _arm_context(arm):
+  with _m2_arm_context(arm):
     model, gates = _model(arm, model_path, max_context)
     gen = model.generate(_prompt(model_path, depth), chunk_size=32, temperature=0.0)
     try: prelude = int(next(gen))
@@ -205,7 +230,7 @@ def census(arm: str, model_path: str, depth: int, max_context: int) -> dict:
   """DEBUG kernel census of one decode token, classified through the population
   ledger; the M2 families (fused16 / fused / E_128_32_3) counted by exact name."""
   from tinygrad.helpers import Context
-  with _arm_context(arm):
+  with _m2_arm_context(arm):
     model, gates = _model(arm, model_path, max_context)
     gen = model.generate(_prompt(model_path, depth), chunk_size=32, temperature=0.0)
     with Context(DEBUG=0): next(gen)
@@ -247,7 +272,7 @@ def census(arm: str, model_path: str, depth: int, max_context: int) -> dict:
 def timing_child(arm: str, model_path: str, depth: int, count: int, max_context: int,
                  reps: int, settled_continuous: bool) -> dict:
   from tinygrad import Device
-  with _arm_context(arm):
+  with _m2_arm_context(arm):
     model, gates = _model(arm, model_path, max_context)
     prompt, dev = _prompt(model_path, depth), Device[Device.DEFAULT]
     if settled_continuous:

@@ -9,8 +9,9 @@ from tinygrad.llm.decode_kernels import (Q6K_POS_EXTENT, decode_kv_rope_store_ke
   q6k_coop_row_tile_for_target, q6k_spec_for_role, q6k_vocab_scalar_reduce_eligible)
 from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeCapability, FlashDecodeRouteConfig,
   flash_decode_capability_from_renderer, flash_decode_live_split_block_tile, flash_decode_target_promoted)
-from tinygrad.llm.kernel_program import (KernelProgram, KernelProgramProvenance, OutputSpec, ResidualViewRequest,
-                                         TypedViewRequest, execute_promoted_program, execute_research_program)
+from tinygrad.llm.kernel_program import (DeclaredTypedOutput, KernelProgram, KernelProgramProvenance,
+                                         OutputSpec, ResidualViewRequest, TypedLayout, TypedViewRequest,
+                                         execute_promoted_program, execute_research_program)
 from tinygrad.llm.model_route_plan import decode_epilogue_fusion_promoted, decode_flash_combine_fusion_promoted
 from tinygrad.llm.qk_layout import Q4_K, Q6_K, QuantFormat
 from tinygrad.llm.route_selection import parse_route_mode
@@ -128,7 +129,10 @@ class _Q4KDecodeCandidate:
     # rejected and the flat-buffer ABI (with its materializing copy) is used unchanged.
     typed_input_views = (
       (TypedViewRequest(slot=1, dtype=dtypes.float16, flat_shape=(binding.K,), route_role="attn_qo"),)
-      if route_role == "attn_qo" else ())
+      if route_role == "attn_qo" else
+      (TypedViewRequest(slot=1, dtype=dtypes.float16, flat_shape=(binding.K,), route_role="ffn_down",
+                        requires_combine_fusion=False, requires_epilogue_absorption=True),)
+      if route_role == "ffn_down" else ())
     # M4 residual_add typed input (m4-resadd-landing-scope section 2.2): the residual slot folds to
     # a zero-copy view of the ordinary block-output producer under the extended validator
     # (kernel_program._validated_residual_view). Fail-closed: any mismatch keeps the boundary copy.
@@ -179,10 +183,15 @@ def q4k_gate_up_primitive_linear_call(gate:Any, up:Any, x:Tensor, fallback:Calla
   gw = gate.q4k_storage.words.to(x.device).contiguous() if gate.q4k_storage.mode == "q4_ondemand" else gate.q4k_storage.words.to(x.device)
   uw = up.q4k_storage.words.to(x.device).contiguous() if up.q4k_storage.mode == "q4_ondemand" else up.q4k_storage.words.to(x.device)
   xv = x[:, 0, :].reshape(g_bind.K).cast(dtypes.float16).contiguous()
+  out_dtype = dtypes.float16 if store_fp16 else dtypes.float32
+  typed_output = (DeclaredTypedOutput(TypedLayout(out_dtype, (g_bind.N,), (1, 1, g_bind.N)),
+                                      combine_fusion_admitted=False,
+                                      epilogue_absorption_admitted=True)
+                  if store_fp16 else None)
   program = KernelProgram(g_bind.route_id, f"{g_bind.candidate_id}.w1w3_fused",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
     q4k_g3_lanemap_gemv_w1w3_kernel(g_bind.N, g_bind.K, load_style="scalar", store_fp16=store_fp16),
-    output_spec=OutputSpec((g_bind.N,), dtypes.float16 if store_fp16 else dtypes.float32))
+    output_spec=OutputSpec((g_bind.N,), out_dtype, typed_output=typed_output))
   return execute_promoted_program(None, gw, uw, xv, program=program).reshape(1, 1, g_bind.N)
 
 def q4k_gate_up_rms_affine_qualification_call(gate:Any, up:Any, raw_x:Tensor, norm_weight:Tensor, eps:float,
@@ -280,6 +289,7 @@ class _Q6KDecodeCandidate:
 
   def execute(self, linear:Any, x:Tensor, binding:_LinearDecodeBinding) -> Tensor:
     x_vec = x[:, 0, :].reshape(binding.K).cast(dtypes.float16).contiguous()
+    route_role = getattr(linear, "route_role", "")
     capability = getattr(getattr(linear, "route_admission", None), "capability", None)
     target = f"{capability.backend}:{capability.architecture}" if capability is not None and \
       getattr(capability, "backend", None) is not None and getattr(capability, "architecture", None) is not None \
@@ -297,9 +307,18 @@ class _Q6KDecodeCandidate:
                  else "external_sum")
     spec = q6k_spec_for_role(binding.N, binding.K, parts=binding.parts, row_tile=binding.row_tile,
                             use_coop=binding.use_coop, opts=linear.opts, target=target, reduction=reduction)
+    # M2 epilogue-absorption boundary (nv-epilogue-absorption-route-scope-20260810.md): the shared-block
+    # ffn_down Q6K GEMV consumes the fused w1+w3 fp16 store directly when the producer declared its
+    # fp16 layout under the harness-installed lease. Same fail-closed validator as Q4K: no declaration,
+    # no fold, generic flat-buffer ABI unchanged.
+    typed_input_views = (
+      (TypedViewRequest(slot=1, dtype=dtypes.float16, flat_shape=(binding.K,), route_role="ffn_down",
+                        requires_combine_fusion=False, requires_epilogue_absorption=True),)
+      if route_role == "ffn_down" else ())
     gemv_program = KernelProgram(binding.route_id, f"{binding.candidate_id}.gemv",
       KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emit_q6k_gemv_kernel(spec),
-      output_spec=OutputSpec((binding.N,) if reduction == "in_kernel" else (binding.N, spec.partial_axis_extent), dtypes.float32))
+      output_spec=OutputSpec((binding.N,) if reduction == "in_kernel" else (binding.N, spec.partial_axis_extent), dtypes.float32),
+      typed_input_views=typed_input_views)
     partial = execute_promoted_program(None, linear.q6k_storage.halfs.to(x.device), x_vec, program=gemv_program)
     if reduction == "in_kernel":
       return partial.reshape(1, 1, binding.N)
