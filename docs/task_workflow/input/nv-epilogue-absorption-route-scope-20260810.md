@@ -1,25 +1,25 @@
 # NV residual-family epilogue absorption scope (M2a fp16 store, then M2b/M2c, then M1)
 
 Date: 2026-08-10
-Branch: `nvidia-bringup-20260731`, HEAD `46df2cbf1` (M2a kernel variant +
-research lease + hermetic tests landed; NV gates pending).
-Status: **IN PROGRESS.** The residual/cast/contiguous row is the 194 tok/s
-lever (+240.106 us attribution, +8.87 tok/s ceiling, 196.69 tok/s composed
-against the booked 187.85 tok/s base). M2a (w1+w3 fused kernel stores fp16,
-folding the ffn-activation cast) is implemented closed-by-default and the
-hermetic CPU suite is green; the AB harness gates (smoke, exact-logits SHA,
-census, reverse wall bracket) are the booking authority. Nothing books until
-the bracket promotes +50 us/token against BOTH bracketing controls with
-identical token streams.
+Branch: `nvidia-bringup-20260731`. M2a BOOKED by the full AB: smoke PASS,
+exact-logits SHA PASS (bitwise), census PASS (E_128_32_3 36 -> 0, fused16
+x36, net -36, no unrelated shift), reverse wall bracket PROMOTED at
++57.2 us/token vs the control bracket median (56.2 vs A, 58.2 vs B).
+Status: **IN PROGRESS.** M2a books +57.2 us of the +240.106 us
+residual/cast/contiguous row (candidate 5.2723 ms/token = 189.67 tok/s vs
+control bracket 5.3295 ms = 187.64 tok/s). ~183 us of the row remain
+(M2b ffn_down fp16 store, M2c residual add in-kernel, then M1 norm
+epilogue). The M2b/M2c/M1 gate sequence stays the booking authority.
 
 ## 1. Ledger position (per token)
 
 | item | value |
 | --- | --- |
 | BOOKED candidate (fp32 q/k route, `68669d348`) | 5.3235 ms/token = 187.85 tok/s (+83.5 us vs control 5.4071) |
+| **M2a booked (this scope)** | **candidate 5.2723 ms/token = 189.67 tok/s, +57.2 us/token vs control bracket 5.3295 ms (census: 36 casts -> 0, net -36 kernels)** |
 | Target | ~194 tok/s = 5.1546 ms/token -> need ~-169 us wall |
 | norms row | +495.330 us attribution, mostly tapped: q/k bodies booked; remaining 37 chains (r_16_256 3.84 us + E_32_32_4_f14a5cc0 2.27 us each ~= 226 us census) |
-| **residual/cast/contiguous row** | **+240.106 us attribution, +8.87 tok/s ceiling (196.69 composed) - THE 194 lever, unbooked, all ordinary elementwise epilogues** |
+| **residual/cast/contiguous row** | **+240.106 us attribution, +8.87 tok/s ceiling; M2a books -57.2 us; ~183 us left for M2b/M2c/M1** |
 | quant GEMV | ~4050 us census (70%): q4k/q6k; 10% win ~= 203 tok/s (after 194) |
 
 The residual family is the clean win: per-row epilogue ops, no redundant
@@ -48,15 +48,37 @@ it in the census gate before booking any attention-side claim. `E_128_32_3`
 
 ## 3. Absorption plan (M2 = residual family; M1 = norm epilogue after)
 
-**M2a (implemented, hermetic green): w1w3fused stores fp16 -> kills
-E_128_32_3 (-57.6).** New kernel variant
-`q4k_g3_lanemap_gemv_w1w3fused16_{rows}_{k}` (scalar style only; the fp32
-name/hash is unchanged). The store is the same fp32 expression wrapped in
-one half cast, so the bytes are bitwise-identical to the separate cast
-kernel (cvt.rn.f16.f32). Wired under an explicit research lease
-(`_q4k_w1w3_fp16_store_lease` on model + blocks; no loader policy creates
-it). Route: `q4k_gate_up_primitive_linear_call(..., store_fp16=True)`
-picks the variant and an fp16 `OutputSpec`; ffn_down's input cast folds away.
+**M2a (BOOKED +57.2 us/token): w1w3fused stores fp16 -> kills E_128_32_3
+(-57.6).** New kernel variant `q4k_g3_lanemap_gemv_w1w3fused16_{rows}_{k}`
+(scalar style only; the fp32 name/hash is unchanged). The store is the same
+fp32 expression wrapped in one half cast, so the bytes are bitwise-identical
+to the separate cast kernel (cvt.rn.f16.f32). Wired under an explicit
+research lease (`_q4k_w1w3_fp16_store_lease` on model + blocks; no loader
+policy creates it). Route: `q4k_gate_up_primitive_linear_call(...,
+store_fp16=True)` picks the variant and an fp16 `OutputSpec`.
+
+**Root cause discovered during NV verification: the cast folds, the COPY
+does not.** The consumer prelude
+`x[:, 0, :].reshape(K).cast(fp16).contiguous()` cannot fold `contiguous()`
+over the opaque program CALL/AFTER boundary: the compiled candidate still
+contained one `E_128_32_3` per layer as a pure fp16->fp16 COPY
+(`half* data0, half* data1`) after the real fp32->fp16 cast folded. The
+absorption therefore needs a typed boundary, not just a store-dtype change.
+
+**M2a mechanism (landed, M5 boundary extension).** Producer side:
+`DeclaredTypedOutput` gains `epilogue_absorption_admitted`; the fused16
+w1+w3 program declares its fp16 layout when `store_fp16=True`
+(`combine_fusion_admitted=False`, producer-side lease only). Consumer side:
+`TypedViewRequest` gains `requires_epilogue_absorption` (mutually exclusive
+with `requires_combine_fusion`); the Q4K and Q6K ffn_down GEMV programs
+(`decode_q4k*`/`decode_q6k*` + `.gemv`) issue the request for their fp16
+K-vector slot when `route_role == "ffn_down"`. The M5 validator
+(`_validated_typed_view`) is fail-closed: no producer declaration, closed
+gate, wrong route role, or non-GEMV program identity -> the generic
+flat-buffer ABI (with its materializing copy) is used unchanged, so control
+is byte-identical. Hermetic tests cover the fold, the fail-closed rejections,
+and the Q6K request wiring; the NV probe confirmed zero `E_128_32_3` bodies
+under the lease.
 
 **M2b: ffn_down GEMVs store fp16 -> kills E_32_32_4_02a9738c (-61.7).** The
 q4k `q4k_g3_lanemap_gemv_kernel` already has an `fp16_cast` epilogue kind
@@ -102,6 +124,22 @@ The control arm is the booked fp32 q/k candidate conditions (callify flags +
 `_decode_direct_greedy_promoted`), WITHOUT the M2 lease. The candidate arm
 adds `_q4k_w1w3_fp16_store_lease` on the model and every block. Both arms
 run as fresh processes so JIT capture and allocator state cannot leak.
+
+Harness construction notes from the booking run: (1) BOTH arms must run with
+the callify Context flags live (`_m2_arm_context`), because the M2 control
+IS the booked fp32 q/k candidate -- reusing the fp32 q/k campaign's
+closed-graph control context made the control arm render the generic final
+norm chain (r_16_256 + per-layer copies) and the census failed closed with
+unrelated deltas; (2) the M2 logits gate wraps the shared C6 validator with
+the M2 schema name, so it must import `validate_logits_gate` from
+`nv_reduce_output_primitive_ab` (schema-agnostic), not the fp32 q/k wrapper;
+(3) children must run with `PYTHONPATH=<repo root>` (the harness spawns
+script-path children, which do not see the repo root on `sys.path`).
+Observed booking evidence: control bracket 5.3295 ms/token (median of
+5.3285 / 5.3305), candidate 5.2723 ms/token, +57.2 us/token; census
+cast_control 36 -> cast_candidate 0, fused16 0 -> 36, net -36, all other
+program counts identical; logits SHA-256 identical
+(`70838f52...4434819`) with identical token streams.
 
 ## 5. Risks and open questions
 
