@@ -96,12 +96,14 @@ sibling fp32 harness) with:
    compiled set.
 2. Phase 1 exact full-logit gate: fp32 SHA-256 identical to control, token
    stream identical, per-row argmax == sampled token.
-3. Phase 2 census: fused bodies 57 (19 q + 19 k + 19 C6); q/k reduce roles
-   36 -> 17 each; q/k epilogue roles 72 -> 34 each (two epilogue kernels per
-   ordinary norm, so the drop is 2 x the body count); C6 fuses 18 block norms
-   plus the final norm (rmsnorm reduce 56 -> 37, epilogue 55 -> 37, final
-   epilogue role 1 -> 0); honest net program delta reported with exact
-   families.
+3. Phase 2 census: fused bodies 91 (36 q + 36 k + 19 C6); q/k reduce ledger
+   roles 36 -> 0 each (the 17 q + 17 k warp-coop materialized reduces persist
+   as real kernels under their own `r_32_32_4_4_*` / `r_8_32_4_4_*` names and
+   are reported as exact side effects); q/k epilogue roles 72 -> 0 each (two
+   epilogue kernels per ordinary norm, so the drop is 2 x the body count); C6
+   fuses 18 block norms plus the final norm (rmsnorm reduce 56 -> 37,
+   epilogue 55 -> 37, final epilogue role 1 -> 0); net norms kernels
+   -254 (328 -> 74); honest net program delta reported with exact families.
 4. Phase 3 reverse control/candidate/control wall bracket under the shared
    GPU bench lock, +50 us/token bar vs BOTH controls, token-stream hash
    identical across arms.  Promotion books the q/k share of the norms row;
@@ -109,13 +111,17 @@ sibling fp32 harness) with:
    norm) promotes.
 
 Expected census shape (production-observed, logits-verified at
-`adcb2fead`): per decode token the AFTER-carrier q/k markers admit (19 q +
-19 k fused bodies) while the CONTIGUOUS/REDUCE-derived q/k carriers (17 q +
-17 k per token, input chain `CONTIGUOUS(RESHAPE(REDUCE(...)))` over a
-non-precompiled buffer) stay ordinary by design; the C6 route fuses 19
-bodies (18 block norms + the final norm).  The remaining 17 q/k norms per
-family per token are the follow-on scope for admitting the REDUCE-derived
-carrier; the +495.330 us row books in full only when that admission lands.
+`420c4afc2` + the reduce-collapse fix at `99d6e0fda`): per decode token every
+q/k marker admits (36 q + 36 k fused bodies).  The 17 q + 17 k warp-coop
+carriers keep their exact partials REDUCE as a materializing kernel, now
+rendered as a real reduce under its own `r_32_32_4_4_*` / `r_8_32_4_4_*`
+name (the pre-fix silent `E_*` copies are gone; values are bitwise-identical
+to control, full-logit SHA-256 gate PASS at `70838f52...`).  The ledger's
+q/k reduce roles count only the ordinary `r_2_8_4_4_16` / `r_8_16_8` names,
+so they drop 36 -> 0 with the materialized reduces reported as side effects.
+The C6 route fuses 19 bodies (18 block norms + the final norm).  Net norms
+kernels -254 (328 -> 74); the +495.330 us row books only when the full row
+(C6 + q/k + output norm) promotes under the reverse wall bracket.
 
 ## Risks and open questions
 

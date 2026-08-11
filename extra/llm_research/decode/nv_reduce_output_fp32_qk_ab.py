@@ -55,26 +55,29 @@ TIMING_SCHEMA = "tinygrad.nv_reduce_output_fp32_qk_ab.timing.v1"
 # production-observed contract (logits-verified at 420c4afc2 + fixes): every
 # q/k marker admits (36 q + 36 k) and lowers one fused body per marker.  The
 # warp-coop carriers (17 q + 17 k) keep their exact REDUCE as a materializing
-# kernel (same r_ name, bitwise-identical values), so the q/k reduce roles
-# drop by (bodies - remaining) and the epilogue roles drop to 0.  The C6 route
-# fuses 19 bodies: 18 block norms plus the final norm (its epilogue is the
-# separate final_rmsnorm_epilogue role, 1 -> 0).  Each ordinary q/k norm
-# renders TWO epilogue kernels, so the epilogue drop is 2 x the fused body
-# count.
+# kernel, now rendered as a real reduce under its own
+# ``r_32_32_4_4_*``/``r_8_32_4_4_*`` name (the pre-fix silent ``E_*`` copies
+# are gone), so the ledger's q/k reduce roles (which count only the ordinary
+# ``r_2_8_4_4_16``/``r_8_16_8`` names) drop 36 -> 0 and the 17+17
+# materialized reduces are reported as exact side effects.  The epilogue
+# roles drop to 0.  The C6 route fuses 19 bodies: 18 block norms plus the
+# final norm (its epilogue is the separate final_rmsnorm_epilogue role,
+# 1 -> 0).  Each ordinary q/k norm renders TWO epilogue kernels, so the
+# epilogue drop is 2 x the fused body count.
 # (docs/task_workflow/input/nv-reduce-output-fp32-qk-route-scope-20260810.md).
 CENSUS_REFERENCE = {
   "fused_bodies_total": 91,
   "fused_bodies_c6": 19,   # reduce_output_rmsnorm_1_4096 (18 blocks + final norm)
   "fused_bodies_q": 36,    # reduce_output_rmsnorm_32_128 (every q marker)
   "fused_bodies_k": 36,    # reduce_output_rmsnorm_8_128 (every k marker)
-  "q_norm_reduce": [36, 17],   # 17 warp-coop partials reduces stay as materializing kernels
-  "k_norm_reduce": [36, 17],
+  "q_norm_reduce": [36, 0],   # ledger roles; the 17 warp-coop materialized reduces render as new r_32_32_4_4_* kernels (side effect)
+  "k_norm_reduce": [36, 0],   # ledger roles; the 17 warp-coop materialized reduces render as new r_8_32_4_4_* kernels (side effect)
   "q_norm_epilogue": [72, 0],   # two epilogue kernels per ordinary q norm, all fused away
   "k_norm_epilogue": [72, 0],   # two epilogue kernels per ordinary k norm, all fused away
   "rmsnorm_reduce": [56, 37],    # C6 bodies (18 blocks + final norm reduce)
   "rmsnorm_epilogue": [55, 37],  # 18 block epilogues; the final norm epilogue is the separate role
   "final_rmsnorm_epilogue": [1, 0],  # final norm fuses into a C6 body
-  "net_norms_kernels_delta": -220,
+  "net_norms_kernels_delta": -254,  # 328 -> 74 (91 fused bodies counted separately by prefix)
   "artifact": "docs/task_workflow/input/nv-reduce-output-fp32-qk-route-scope-20260810.md",
 }
 
@@ -83,7 +86,7 @@ CONSTRUCTION = {
   "population": "norms",
   "mechanism": "fp32 cooperative reduce-output bodies for the q/k norms: one reduce_output_rmsnorm_32_128 body per q norm and one reduce_output_rmsnorm_8_128 body per k norm replace the ordinary single-kernel q/k reduces (r_2_8_4_4_16 / r_8_16_8) plus their elementwise epilogues; the warp-coop family keeps its exact partials REDUCE as a materializing kernel (bitwise-identical); the C6 4096-dim route stays at 18 reduce_output_rmsnorm_1_4096 bodies",
   "codegen_path": "candidate sets _decode_reduce_output_rmsnorm_promoted=True on the model and every block and decodes under CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1 plus CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1; the fp32 marker rows (8/32 x 128) admit through the PERMUTE-view carrier",
-  "census_target": "91 fused bodies (19 C6 incl. final norm + 36 q + 36 k); q/k reduce roles 36 -> 17 each (the 17 warp-coop partials reduces per family remain as materializing kernels); q/k epilogue roles 72 -> 0 (2 epilogue kernels per ordinary norm); C6 rmsnorm roles reduce 56 -> 37, epilogue 55 -> 37, final epilogue 1 -> 0; net norms kernels -220 (328 -> 108)",
+  "census_target": "91 fused bodies (19 C6 incl. final norm + 36 q + 36 k); q/k reduce ledger roles 36 -> 0 each, with the 17 q + 17 k warp-coop materialized reduces persisting as real kernels under their own r_32_32_4_4_*/r_8_32_4_4_* names (reported as exact side effects; bitwise-identical values); q/k epilogue roles 72 -> 0 (2 epilogue kernels per ordinary norm); C6 rmsnorm roles reduce 56 -> 37, epilogue 55 -> 37, final epilogue 1 -> 0; net norms kernels -254 (328 -> 74)",
   "correctness_contract": {
     "full_logit_fp32_sha256": "bitwise identical to control over the stacked rows",
     "token_stream": "identical to control",
@@ -267,16 +270,19 @@ def validate_census(control: dict, candidate: dict) -> dict:
   """fp32 q/k census gate.  Fused bodies are counted by the
   ``reduce_output_rmsnorm`` name prefix.  Every q/k marker admits, so the
   q/k epilogue drop must equal 2 x the q/k body counts; the q/k reduce drop
-  must equal bodies minus the remaining warp-coop materializing reduces (17
-  per family, same r_ names).  The C6 route fuses 18 block norms plus the
-  final norm, so the rmsnorm reduce drop must match the C6 body count, the
-  rmsnorm epilogue drop must be C6 bodies - 1 (the final norm epilogue is the
-  separate role and fuses to 0).  Observed body counts must match the
-  committed reference (a drift in admission flips the gate and forces a
-  reference update).  If the q/k bodies do not appear (selector still rejects
-  the fp32 route) the gate FAILS CLOSED with a clear message and never
-  silently passes.  Non-norms family shifts are reported with the exact
-  program names, not hidden."""
+  must equal the body counts (the ledger's q/k reduce roles count the
+  ordinary ``r_2_8_4_4_16``/``r_8_16_8`` names, all of which fuse; the 17+17
+  warp-coop materialized reduces persist as real kernels under their own
+  ``r_32_32_4_4_*``/``r_8_32_4_4_*`` names and are reported as exact side
+  effects).  The C6 route fuses 18 block norms plus the final norm, so the
+  rmsnorm reduce drop must match the C6 body count, the rmsnorm epilogue
+  drop must be C6 bodies - 1 (the final norm epilogue is the separate role
+  and fuses to 0).  Observed body counts must match the committed reference
+  (a drift in admission flips the gate and forces a reference update).  If
+  the q/k bodies do not appear (selector still rejects the fp32 route) the
+  gate FAILS CLOSED with a clear message and never silently passes.
+  Non-norms family shifts are reported with the exact program names, not
+  hidden."""
   for label, row in (("control", control), ("candidate", candidate)):
     if row.get("schema") != CENSUS_SCHEMA:
       raise ValueError(f"{label} census row requires schema {CENSUS_SCHEMA!r}, got {row.get('schema')!r}")

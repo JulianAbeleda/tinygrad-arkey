@@ -79,17 +79,16 @@ def _control_census():
 
 
 def _candidate_census():
-  return {"schema": CENSUS_SCHEMA, "kernels": 716,
-          "norms_roles": {"q_norm_reduce": 17, "k_norm_reduce": 17, "q_norm_epilogue": 0,
+  return {"schema": CENSUS_SCHEMA, "kernels": 751,
+          "norms_roles": {"q_norm_reduce": 0, "k_norm_reduce": 0, "q_norm_epilogue": 0,
                           "k_norm_epilogue": 0, "rmsnorm_reduce": 37, "rmsnorm_epilogue": 37,
                           "final_rmsnorm_epilogue": 0},
-          "population_counts": {"norms": 108, "quant_core": 217, "flash": 20,
+          "population_counts": {"norms": 74, "quant_core": 217, "flash": 20,
                                 "residual_cast_contiguous": 9, "other": 6},
           "program_counts": {"reduce_output_rmsnorm_32_128": 36, "reduce_output_rmsnorm_8_128": 36,
                              "reduce_output_rmsnorm_1_4096": 19,
-                             "r_2_8_4_4_16_q": 17, "r_8_16_8_k": 17,
+                             "r_32_32_4_4_b248195950c8b6f47": 17, "r_8_32_4_4_37811d44743bc147": 17,
                              "r_16_256_r": 37, "E_32_32_4_f14a5cc0d0ed4c90e": 37,
-                             "E_32_32_4_c6fef3561a9fbeaff": 0,
                              "q4k_g3_lanemap_gemv_x": 217, "flash_block_tiled_y": 20,
                              "E_32_32_4_fab82d40f922cf5fz": 9, "E_2_tok": 6}}
 
@@ -114,8 +113,8 @@ def test_validate_census_gate_passes_on_expected_fp32_shape():
   assert result["fused_bodies_c6_candidate"] == 19
   assert result["fused_bodies_q_candidate"] == 36
   assert result["fused_bodies_k_candidate"] == 36
-  assert result["q_norm_reduce_drop"] == 19
-  assert result["k_norm_reduce_drop"] == 19
+  assert result["q_norm_reduce_drop"] == 36
+  assert result["k_norm_reduce_drop"] == 36
   assert result["q_norm_epilogue_drop"] == 72
   assert result["k_norm_epilogue_drop"] == 72
   assert result["rmsnorm_reduce_drop"] == 19
@@ -124,7 +123,7 @@ def test_validate_census_gate_passes_on_expected_fp32_shape():
   assert result["conditions"]["final_epilogue_fused_consistent"] is True
   assert result["conditions"]["q_reduce_remaining_matches_reference"] is True
   assert result["conditions"]["k_reduce_remaining_matches_reference"] is True
-  assert result["honest_net_program_delta"] == -220
+  assert result["honest_net_program_delta"] == -185
 
 
 def test_validate_census_fails_closed_when_q_bodies_absent():
@@ -177,7 +176,7 @@ def test_validate_census_fails_on_q_reduce_drop_inconsistent_with_bodies():
 
 def test_validate_census_fails_when_warp_coop_reduce_remaining_mismatches_reference():
   candidate = _candidate_census()
-  candidate["norms_roles"]["q_norm_reduce"] = 18  # 18 materializing reduces, reference says 17
+  candidate["norms_roles"]["q_norm_reduce"] = 18  # 18 materializing reduces, reference says 0
   result = validate_census(_control_census(), candidate)
   assert result["gate_pass"] is False
   assert result["conditions"]["q_reduce_remaining_matches_reference"] is False
@@ -234,7 +233,7 @@ def test_validate_census_reports_non_norms_shifts_with_exact_names():
 
 def test_validate_census_honest_net_program_delta_and_reference():
   result = validate_census(_control_census(), _candidate_census())
-  assert result["honest_net_program_delta"] == -220
+  assert result["honest_net_program_delta"] == -185
   assert result["reference"]["observed_total"] == CENSUS_REFERENCE["fused_bodies_total"] == 91
   assert result["reference"]["observed_q"] == CENSUS_REFERENCE["fused_bodies_q"] == 36
 
