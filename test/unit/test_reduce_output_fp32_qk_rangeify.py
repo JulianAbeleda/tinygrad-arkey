@@ -161,23 +161,27 @@ def test_single_row_c6_route_keeps_materialized_identity_weight():
 
 def _warp_coop_qk_graph(rows, promoted=True):
   """Production spelling for the warp-coop q/k family: an opaque custom
-  kernel publishes (rows*128*4,) partials, the ordinary chain reduces them
-  (``sum(axis=1).contiguous()``), the flat value is runtime-scratch marked,
-  then reshaped/transposed into the marker input.  Everything lives inside a
-  function body exactly like the production per-block trace, so callify keeps
-  the REDUCE chain visible at rangeify."""
+  kernel publishes (rows*128, 4) partials through a RESHAPE view of its
+  scratch buffer (the bounded opaque AFTER spelling, precompile=False), the
+  ordinary chain reduces them (``sum(axis=1).contiguous()``), the flat value
+  is runtime-scratch marked, then reshaped/transposed into the marker input.
+  Everything lives inside a function body exactly like the production
+  per-block trace, so callify keeps the REDUCE chain visible at rangeify."""
   from tinygrad.function import function
   from tinygrad.llm.model import _decode_reduce_output_rmsnorm
   from tinygrad.llm.memory_semantics import runtime_scratch
-  from tinygrad.uop.ops import KernelInfo
+  from tinygrad.uop.ops import CallInfo, UOp
   src = Tensor.empty(rows * 128 * 4, dtype=dtypes.float32, device="CPU")
   w = Tensor.ones(128, dtype=dtypes.float32)
   @function(precompile=False, allow_implicit=True)
   def block(src, w):
-    output = Tensor.empty(rows * 128 * 4, dtype=dtypes.float32, device="CPU")
-    def fxn(out, x):
-      return out.store(x).sink(arg=KernelInfo(name="partials_probe", opts_to_apply=()))
-    partials = output.uop_program(src, fxn=fxn)[0]
+    base = UOp.new_buffer("CPU", rows * 128 * 4, dtypes.float32)
+    base_view = base.reshape(rows * 128, 4)
+    body_sink = UOp.sink(base_view.store(src.reshape(rows * 128, 4).uop))
+    body = UOp(Ops.LINEAR, src=(body_sink.call(base_view),))
+    call = UOp(Ops.CALL, dtypes.void, (body, base_view, src.reshape(rows * 128, 4).uop),
+               CallInfo(name="partials_probe", precompile=False))
+    partials = Tensor(base_view.after(call), device="CPU")
     q_flat = partials.reshape(rows * 128, 4).sum(axis=1).reshape(rows * 128).contiguous().reshape(1, 1, rows * 128)
     q_flat = runtime_scratch(q_flat)
     q = q_flat.reshape(1, 1, rows, 128).transpose(1, 2)
@@ -186,6 +190,22 @@ def _warp_coop_qk_graph(rows, promoted=True):
     q_m = runtime_scratch(_decode_reduce_output_rmsnorm(norm, q, promoted))
     return _attention(_rope(q_m, rows, 128))
   return block(src, w)
+
+
+def _opaque_partials_after(rows):
+  """UOp-level bounded opaque custom-kernel AFTER: a RESHAPE view of the
+  scratch buffer, appearing exactly once among the call arguments, with an
+  opaque (non-precompiled) SINK body.  Mirrors the production warp-coop
+  partials kernel spelling at marker creation."""
+  from tinygrad.uop.ops import CallInfo, UOp
+  base = UOp.new_buffer("CPU", rows * 128 * 4, dtypes.float32)
+  base_view = base.reshape(rows * 128, 4)
+  src = UOp.param(0, dtypes.float32, (rows * 128, 4), "CPU")
+  body_sink = UOp.sink(base_view.store(src))
+  body = UOp(Ops.LINEAR, src=(body_sink.call(base_view),))
+  call = UOp(Ops.CALL, dtypes.void, (body, base_view, src),
+             CallInfo(name="partials_probe", precompile=False))
+  return base_view.after(call)
 
 
 def test_reduce_derived_carrier_admits_warp_coop_partials_through_rangeify():
@@ -220,6 +240,43 @@ def test_reduce_derived_carrier_marks_reduce_input_at_marker():
   direct = _precompiled_producer()(Tensor.empty(1, 1, rows * 128, dtype=dtypes.float32, device="CPU")).reshape(1, 1, rows, 128).transpose(1, 2)
   marked_direct = _decode_reduce_output_rmsnorm(_norm(128), direct, True)
   assert marked_direct.uop.arg.reduce_input_at_marker is False
+
+
+def test_reduce_derived_carrier_production_spelling_lands_on_reduce():
+  """The production graph has NO explicit CONTIGUOUS before the norm: the
+  marker walk strips PERMUTE/RESHAPE/MS and lands directly on the REDUCE.
+  That spelling must admit exactly like the materialized CONTIGUOUS spelling
+  (callify inserts the CONTIGUOUS only after marker creation)."""
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  from tinygrad.llm.model import _decode_reduce_output_rmsnorm
+  from tinygrad.uop.ops import KernelInfo
+  rows = 32
+  src = Tensor.empty(rows * 128 * 4, dtype=dtypes.float32, device="CPU")
+  output = Tensor.empty(rows * 128 * 4, dtype=dtypes.float32, device="CPU")
+  def fxn(out, x):
+    return out.store(x).sink(arg=KernelInfo(name="partials_probe", opts_to_apply=()))
+  partials = output.uop_program(src, fxn=fxn)[0]
+  q = partials.reshape(rows * 128, 4).sum(axis=1).reshape(rows * 128).reshape(1, 1, rows * 128)
+  q = runtime_scratch(q)
+  q = q.reshape(1, 1, rows, 128).transpose(1, 2)
+  marked = _decode_reduce_output_rmsnorm(_norm(128), q, True)
+  assert marked.uop.arg.reduce_input_at_marker is True
+  assert marked.uop.arg.input_identity_at_marker is True
+
+
+def test_reduce_derived_carrier_opaque_partials_after_proof():
+  """The warp-coop partials AFTER is a bounded opaque custom-kernel output
+  (precompile=False, RESHAPE-viewed base appearing exactly once among the
+  call arguments); the REDUCE-derived marker admits it like the strict
+  PARAM-slot AFTER spelling."""
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  from tinygrad.llm.model import _decode_reduce_output_rmsnorm
+  rows = 32
+  q = Tensor(_opaque_partials_after(rows), device="CPU").sum(axis=1).reshape(rows * 128)
+  q = runtime_scratch(q.contiguous().reshape(1, 1, rows * 128)).reshape(1, 1, rows, 128).transpose(1, 2)
+  marked = _decode_reduce_output_rmsnorm(_norm(128), q, True)
+  assert marked.uop.arg.reduce_input_at_marker is True
+  assert marked.uop.arg.input_identity_at_marker is True
 
 
 def test_identity_view_admits_pure_permute_of_precompiled_output():

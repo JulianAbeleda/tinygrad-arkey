@@ -412,10 +412,13 @@ def _reduce_derived_materialized_view(x:UOp) -> UOp|None:
   expected = u.src[0].numel()
   red_in = u.src[0]
   while red_in.op is Ops.RESHAPE and len(red_in.src) and red_in.src[0].numel() == expected: red_in = red_in.src[0]
-  from tinygrad.tensor import _bounded_after_output_identity
-  if not _bounded_after_output_identity(red_in): return None
+  from tinygrad.tensor import _bounded_after_output_identity, _bounded_opaque_after_output_identity
+  if not (_bounded_after_output_identity(red_in) or _bounded_opaque_after_output_identity(red_in)): return None
   red_buf = UOp.new_buffer(u.device, u.numel(), u.dtype)
-  return red_buf.after(red_buf.store(u))
+  # Store through a RESHAPE leg so rangeify splits the store's single range
+  # into two input ranges on the REDUCE; a direct 1-D store leaves the reduce
+  # axis without a REDUCE range and pm_reduce_simplify erases it into a copy.
+  return red_buf.after(red_buf.store(u.reshape(red_buf.shape)))
 
 def _c6_marker(carrier:UOp) -> UOp|None:
   """Validate the C6 chain ``CONTIGUOUS(RESHAPE(MS(...)))`` and return its marker.

@@ -71,26 +71,59 @@ def _bounded_after_output_identity(after: UOp) -> bool:
     if target.op is Ops.PARAM and isinstance(target.arg, ParamArg) and target.arg.slot == output_slot: return True
   return False
 
+def _bounded_opaque_after_output_identity(after: UOp) -> bool:
+  """Accept a bounded opaque custom-kernel output (decode q4k GEMV and the
+  warp-coop partials kernels, precompile=False).
+
+  Opaque custom kernels have no precompiled-output slot contract and their
+  bodies store through registers, so the strict PARAM-slot proof cannot see
+  them.  The load-bearing bounded property is the alias structure: the
+  AFTER's base view (equal-span RESHAPE legs walked) appears exactly once
+  among the call's arguments, so it is the kernel's unique output buffer, and
+  an aliased input/output argument is rejected.  This mirrors the
+  PERMUTE-carrier re-proof used at lowering so marker creation and rangeify
+  agree on the same invocation.
+  """
+  if after.op is not Ops.AFTER or len(after.src) != 2: return False
+  base, call = after.src
+  if call.op is not Ops.CALL or len(call.src) < 2: return False
+  base_buf = base
+  while base_buf.op is Ops.RESHAPE and len(base_buf.src) and base_buf.src[0].numel() == base_buf.numel():
+    base_buf = base_buf.src[0]
+  if base_buf.op not in (Ops.BUFFER, Ops.PARAM) or base_buf.numel() != after.numel() or base_buf.dtype != after.dtype:
+    return False
+  matches = 0
+  for arg in call.src[1:]:
+    a = arg
+    while a.op is Ops.RESHAPE and len(a.src) and a.src[0].numel() == a.numel(): a = a.src[0]
+    if a is base_buf: matches += 1
+  return matches == 1
+
 def _bounded_reduce_output_identity(x: UOp) -> bool:
-  """Accept ``CONTIGUOUS(RESHAPE(REDUCE(RESHAPE(AFTER(...)))))`` as a bounded
-  kernel-output identity.
+  """Accept ``REDUCE(RESHAPE(AFTER(...)))`` as a bounded kernel-output identity.
 
   The warp-coop q4k GEMV publishes four partials per row; the ordinary q/k
-  chain reduces them (REDUCE over the trailing axis) before the norm.  The
-  REDUCE is itself a kernel output, and its input carries the same bounded
-  invocation proof as the direct-AFTER spelling (a precompile GETTUPLE before
-  callify, an AFTER at rangeify).  Equal-span RESHAPE legs are transparent;
-  every unexpected leg fails closed.
+  chain reduces them (REDUCE over the trailing axis) before the norm.  Two
+  spellings reach this proof: the production graph (the marker walk strips
+  PERMUTE/RESHAPE/MS legs and lands directly on the REDUCE) and the
+  materialized spelling ``CONTIGUOUS(RESHAPE(REDUCE(RESHAPE(AFTER(...)))))``
+  (callify inserts the CONTIGUOUS redirect, and the hermetic fixture spells
+  it explicitly).  The REDUCE is itself a kernel output, and its input
+  carries the same bounded invocation proof as the direct-AFTER spelling (a
+  precompile GETTUPLE before callify, an AFTER at rangeify).  Equal-span
+  RESHAPE legs are transparent; every unexpected leg fails closed.
   """
-  if x.op is not Ops.CONTIGUOUS or len(x.src) != 1: return False
+  if x.op is Ops.CONTIGUOUS:
+    if len(x.src) != 1: return False
+    x = x.src[0]
+  expected = x.numel()
+  while x.op is Ops.RESHAPE and len(x.src) and x.src[0].numel() == expected: x = x.src[0]
+  if x.op is not Ops.REDUCE or len(x.src) != 1: return False
+  expected = x.src[0].numel()
   u = x.src[0]
-  expected = u.numel()
   while u.op is Ops.RESHAPE and len(u.src) and u.src[0].numel() == expected: u = u.src[0]
-  if u.op is not Ops.REDUCE or len(u.src) != 1: return False
-  expected = u.src[0].numel()
-  u = u.src[0]
-  while u.op is Ops.RESHAPE and len(u.src) and u.src[0].numel() == expected: u = u.src[0]
-  return _bounded_after_output_identity(u) or u.has_precompiled_output_identity()
+  return (_bounded_after_output_identity(u) or u.has_precompiled_output_identity()
+          or _bounded_opaque_after_output_identity(u))
 
 def _get_winograd_matcols(mat, dims:int, shp:tuple[sint, ...], dtype:DType) -> list[list[Tensor]]:
   return [[Tensor.cat(*[Tensor.full(shp[:dim] + (1,) + shp[dim+1:], float(m[k]), dtype=dtype, buffer=False) for m in mat], dim=dim)
