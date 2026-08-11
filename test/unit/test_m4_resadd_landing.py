@@ -111,7 +111,9 @@ def test_validator_fails_closed_on_wrong_opt_in():
   resid = residual_chain(_block_output_producer()).uop
   base = ResidualViewRequest(slot=2, dtype=dtypes.float32, flat_shape=(N,), route_role="attn_qo")
   assert _validated_residual_view(resid, ResidualViewRequest(slot=1, dtype=dtypes.float32, flat_shape=(N,), route_role="attn_qo"), _gemv_program())[1] == "not the residual slot"
-  assert _validated_residual_view(resid, ResidualViewRequest(slot=2, dtype=dtypes.float32, flat_shape=(N,), route_role="ffn_down"), _gemv_program())[1].startswith("wrong consumer route_role")
+  # M2b: ffn_down is now a valid residual consumer on the q4k/q6k GEMV programs (the
+  # in-kernel residual add); only roles outside the allowed pair still fail closed.
+  assert _validated_residual_view(resid, ResidualViewRequest(slot=2, dtype=dtypes.float32, flat_shape=(N,), route_role="attn_kv"), _gemv_program())[1].startswith("wrong consumer route_role")
   assert _validated_residual_view(resid, ResidualViewRequest(slot=2, dtype=dtypes.float32, flat_shape=(N,), route_role="attn_qo", kind="ffn_down_fused"), _gemv_program())[1].startswith("wrong epilogue kind")
   assert _validated_residual_view(resid, ResidualViewRequest(slot=2, dtype=dtypes.float16, flat_shape=(N,), route_role="attn_qo"), _gemv_program())[1] == "request dtype mismatch"
   assert _validated_residual_view(resid, ResidualViewRequest(slot=2, dtype=dtypes.float32, flat_shape=(N // 2,), route_role="attn_qo"), _gemv_program())[1] == "request numel mismatch"
