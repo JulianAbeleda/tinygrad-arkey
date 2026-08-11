@@ -152,11 +152,27 @@ class _Q4KDecodeCandidate:
     residual_input_views = (
       (ResidualViewRequest(slot=2, dtype=dtypes.float32, flat_shape=(binding.N,), route_role="attn_qo",
                            kind="residual_add"),)
-      if (route_role == "attn_qo" and epi_spec is not None and epi_spec.kind == "residual_add") else ())
+      if (route_role == "attn_qo" and epi_spec is not None and epi_spec.kind == "residual_add")
+      else (ResidualViewRequest(slot=2, dtype=dtypes.float32, flat_shape=(binding.N,), route_role="ffn_down",
+                                kind="residual_add"),)
+      if (epi_spec is not None and epi_spec.kind == "ffn_down_resadd") else ())
+    # M2b block-output typed boundary (nv-epilogue-absorption-route-scope-20260810.md): when the
+    # ffn_down GEMV absorbs the h+ffn_out add in-kernel, its fp32 AFTER IS the concrete block
+    # output, so it declares the typed layout exactly like the w1w3fused16 producer. The next
+    # block's attention residual fold (_residual_producer_identity) then accepts the AFTER
+    # directly; without the declaration the generic flat-buffer ABI boundary copy renders after
+    # every block. The M4 attn_qo residual_add GEMV declares the same boundary: its fp32 AFTER is
+    # the concrete block intermediate h that the M2b ffn_down residual slot consumes, so the
+    # ffn_down residual fold must prove the declared layout before binding it zero-copy.
+    # Fail-closed: no declaration on any other epilogue/route spelling.
+    typed_output = (DeclaredTypedOutput(TypedLayout(dtypes.float32, (binding.N,), (1, 1, binding.N)),
+                                        combine_fusion_admitted=False,
+                                        epilogue_absorption_admitted=True)
+                    if epi_spec is not None and epi_spec.kind in ("ffn_down_resadd", "residual_add") else None)
     program = KernelProgram(binding.route_id, f"{binding.candidate_id}.gemv",
       KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
       q4k_g3_lanemap_gemv_kernel(binding.N, binding.K, epilogue=epi_spec),
-      output_spec=OutputSpec((binding.N,), out_dtype),
+      output_spec=OutputSpec((binding.N,), out_dtype, typed_output=typed_output),
       typed_input_views=typed_input_views,
       residual_input_views=residual_input_views)
     return execute_promoted_program(None, *prog_inputs, program=program).reshape(1, 1, binding.N)
@@ -345,10 +361,22 @@ class _Q6KDecodeCandidate:
       (TypedViewRequest(slot=1, dtype=dtypes.float16, flat_shape=(binding.K,), route_role="ffn_down",
                         requires_combine_fusion=False, requires_epilogue_absorption=True),)
       if route_role == "ffn_down" else ())
+    # M2b block-output typed boundary (same contract as the Q4K ffn_down branch above): the
+    # absorbing coop GEMV's fp32 AFTER is the concrete block output; declaring the typed layout
+    # lets the next block's attention residual fold bind it in place. Fail-closed: the
+    # declaration exists only for the ffn_down_resadd epilogue spelling (in_kernel reduction).
+    typed_output = (DeclaredTypedOutput(TypedLayout(dtypes.float32, (binding.N,), (1, 1, binding.N)),
+                                        combine_fusion_admitted=False,
+                                        epilogue_absorption_admitted=True)
+                    if epilogue == "ffn_down_resadd" else None)
     gemv_program = KernelProgram(binding.route_id, f"{binding.candidate_id}.gemv",
       KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emit_q6k_gemv_kernel(spec),
-      output_spec=OutputSpec((binding.N,) if reduction == "in_kernel" else (binding.N, spec.partial_axis_extent), dtypes.float32),
-      typed_input_views=typed_input_views)
+      output_spec=OutputSpec((binding.N,) if reduction == "in_kernel" else (binding.N, spec.partial_axis_extent),
+                             dtypes.float32, typed_output=typed_output),
+      typed_input_views=typed_input_views,
+      residual_input_views=((ResidualViewRequest(slot=2, dtype=dtypes.float32, flat_shape=(binding.N,),
+                                                 route_role="ffn_down", kind="residual_add"),)
+                           if epilogue == "ffn_down_resadd" else ()))
     if epilogue:
       h_vec = epi_inputs["normed_h"][:, 0, :].reshape(binding.N).cast(dtypes.float32)
       return execute_promoted_program(None, linear.q6k_storage.halfs.to(x.device), x_vec, h_vec,

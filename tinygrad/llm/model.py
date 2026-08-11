@@ -687,8 +687,12 @@ class FFNBlock:
             ffn_out=self._feed_forward(normed_h) if z is None else self.ffn_down(z)
           else: ffn_out = self._feed_forward(normed_h)
       with role_metadata("residual"):
+        # M2b absorbed block output: the ffn_down GEMV's AFTER is the concrete contiguous fp32
+        # block output, so forcing .contiguous() here would materialize an E_32_32_4 copy per
+        # block (same in-place pattern as the M4 attn_out residual above). The plain
+        # (h + ffn_out) path keeps its transport contiguous exactly as before.
         return _prefill_semantic(_prefill, prefill_activation,
-          (ffn_out if _ffn_absorbed else h + ffn_out).contiguous())
+          ffn_out if _ffn_absorbed else (h + ffn_out).contiguous())
     # @function wraps the traced return in a call/gettuple node. Mark that concrete block-output boundary as well as
     # its residual creation site so callification cannot hide the allocation identity from the manifest.
     return _prefill_semantic(getattr(self, "_is_prefill", False), prefill_activation, _run(x, start_pos, _rf).contiguous())

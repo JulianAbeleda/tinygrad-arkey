@@ -370,7 +370,24 @@ def validate_census(control: dict, candidate: dict) -> dict:
     name for name in side_effects
     if name.startswith(CAST_PREFIX) or name.startswith(FUSED16_PREFIX) or name.startswith(FUSED_PREFIX)
     or name.startswith(RESADD_PREFIX) or name.startswith(FFNRESADD_PREFIX) or name.endswith(FFNRESADD_SUFFIX)}
-  unrelated_deltas = {name: delta for name, delta in side_effects.items() if name not in allowed_side_effects}
+  # M2b swap families: the plain ffn_down GEMV whose epilogue absorbs the add becomes its
+  # *_epi_ffnresadd twin 1:1 (q4k_g3_lanemap_gemv_4096_12288 ->
+  # q4k_g3_lanemap_gemv_epi_ffnresadd_4096_12288; the q6k coop twin appends the suffix). A
+  # control-side negative delta is admitted only when the candidate renders the exact twin
+  # count, and every *_epi_ffnresadd body must be backed by that twin (fail-closed: no stray
+  # bodies without the plain family shrinking).
+  twin_counts: dict[str, int] = {}
+  for cname, ccount in candidate_counts.items():
+    if cname.startswith(FFNRESADD_PREFIX) or cname.endswith(FFNRESADD_SUFFIX):
+      twin_counts[cname.replace("_epi_ffnresadd", "")] = twin_counts.get(cname.replace("_epi_ffnresadd", ""), 0) + ccount
+  ffnresadd_swaps = {name: -delta for name, delta in side_effects.items()
+                     if delta < 0 and twin_counts.get(name, 0) == -delta}
+  ffnresadd_bodies = {name: delta for name, delta in side_effects.items()
+                      if delta > 0 and (name.startswith(FFNRESADD_PREFIX) or name.endswith(FFNRESADD_SUFFIX))}
+  swap_backed = all(ffnresadd_swaps.get(name.replace("_epi_ffnresadd", ""), 0) == delta
+                    for name, delta in ffnresadd_bodies.items())
+  unrelated_deltas = {name: delta for name, delta in side_effects.items()
+                      if name not in allowed_side_effects and name not in ffnresadd_swaps}
   control_pops = control.get("population_counts") or {}
   candidate_pops = candidate.get("population_counts") or {}
   population_deltas = {pop: int(candidate_pops.get(pop, 0)) - int(control_pops.get(pop, 0))
@@ -386,6 +403,7 @@ def validate_census(control: dict, candidate: dict) -> dict:
     "m2a_fp32_fused_identical": fused_candidate == fused_control == 0,
     "net_delta_matches_drop": net_delta == -resadd_control,
     "no_unrelated_program_shift": not unrelated_deltas,
+    "ffnresadd_swap_backed": swap_backed,
   }
   fail_closed = []
   if not conditions["control_has_residual_adds"]:
@@ -406,6 +424,8 @@ def validate_census(control: dict, candidate: dict) -> dict:
     fail_closed.append(f"FAIL CLOSED: net program delta {net_delta} != -{resadd_control}")
   if not conditions["no_unrelated_program_shift"]:
     fail_closed.append(f"FAIL CLOSED: unrelated program-count shifts: {unrelated_deltas}")
+  if not conditions["ffnresadd_swap_backed"]:
+    fail_closed.append(f"FAIL CLOSED: *_epi_ffnresadd bodies without their plain ffn_down GEMV twin: {ffnresadd_bodies}")
   return {"cast_control": cast_control, "cast_candidate": cast_candidate,
           "fused16_control": fused16_control, "fused16_candidate": fused16_candidate,
           "fused_control": fused_control, "fused_candidate": fused_candidate,
@@ -413,6 +433,7 @@ def validate_census(control: dict, candidate: dict) -> dict:
           "ffn_down_resadd_control": ffnresadd_control, "ffn_down_resadd_candidate": ffnresadd_candidate,
           "honest_net_program_delta": net_delta,
           "program_side_effects": side_effects, "unrelated_program_deltas": unrelated_deltas,
+          "ffnresadd_swaps": ffnresadd_swaps, "ffnresadd_bodies": ffnresadd_bodies,
           "non_norms_population_deltas": population_deltas,
           "conditions": conditions, "fail_closed": fail_closed,
           "note": "expected drop derived from the measured control arm; the *_epi_ffnresadd body is the same fp32 add expression fused into the GEMV epilogue (bitwise-identical bytes)",

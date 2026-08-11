@@ -347,16 +347,23 @@ def _residual_producer_identity(base: UOp) -> bool:
 
 
 def _validated_residual_view(uop: UOp, request: ResidualViewRequest, program: KernelProgram) -> tuple[UOp | None, str]:
-  """M4 residual-slot fail-closed validator (m4-resadd-landing-scope section 2.2, probe-1 contract).
+  """M4/M2b residual-slot fail-closed validator (m4-resadd-landing-scope section 2.2, probe-1
+  contract; M2b ffn_down in-kernel residual add).
   Returns ``(base_uop, "ok")`` when the residual chain is a pure offset-0 view of an ordinary
   producer and the residual_add opt-in is exact; else ``(None, reason)``. Every failure keeps the
-  generic flat-buffer ABI (the boundary copy)."""
-  # (a) residual-slot opt-in: slot 2, attn_qo, residual_add, q4k GEMV consumer
+  generic flat-buffer ABI (the boundary copy). The M2b ffn_down consumer additionally requires
+  the producer's declared typed output to admit epilogue absorption (fail-closed)."""
+  # (a) residual-slot opt-in: slot 2, residual_add, q4k/q6k GEMV consumer (M4 attn_qo and the
+  # M2b ffn_down residual-slot spelling share the same zero-copy producer contract)
   if request.slot != 2: return None, "not the residual slot"
-  if request.route_role != "attn_qo": return None, f"wrong consumer route_role {request.route_role!r}"
+  if request.route_role not in ("attn_qo", "ffn_down"): return None, f"wrong consumer route_role {request.route_role!r}"
   if request.kind != "residual_add": return None, f"wrong epilogue kind {request.kind!r}"
-  if not program.route_id.startswith("decode_q4k") or not program.program_id.endswith(".gemv"):
+  if request.route_role == "attn_qo" and not (program.route_id.startswith("decode_q4k") and program.program_id.endswith(".gemv")):
     return None, "program is not a q4k GEMV consumer"
+  if request.route_role == "ffn_down" and not ((program.route_id.startswith("decode_q4k") or
+                                                program.route_id.startswith("decode_q6k")) and
+                                               program.program_id.endswith(".gemv")):
+    return None, "program is not a q4k/q6k GEMV consumer"
   # (b) request chain is a movement-only view: dtype/numel preserved through every leg
   chain = uop.src[0] if uop.op is Ops.CONTIGUOUS else uop
   if chain.dtype is not request.dtype: return None, "request dtype mismatch"
@@ -367,6 +374,10 @@ def _validated_residual_view(uop: UOp, request: ResidualViewRequest, program: Ke
   # (d) producer: ordinary producer with buffer identity (or declared typed output)
   base = chain.base
   if not _residual_producer_identity(base): return None, "producer has no buffer/precompiled-output identity"
+  if request.route_role == "ffn_down" and base.op is Ops.AFTER:
+    declared = _DECLARED_TYPED_OUTPUTS.get(base)
+    if declared is None or not declared.epilogue_absorption_admitted:
+      return None, "ffn_down residual producer has no epilogue-absorbing typed output"
   # The block-output transport contiguous is identity by construction (the producer's own
   # .contiguous() spelling; the precompile-output identity contract guarantees row-major).
   # Fold through it so the precompile binds the composite output buffer directly instead of

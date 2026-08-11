@@ -89,14 +89,16 @@ def test_control_gate_fails_closed_if_m2b_lease_observed():
     _assert_control_closed(_gates(model))
 
 
-def _control_census(fused16=36, resadd=36):
+def _control_census(fused16=36, resadd=36, plain_ffn_down=36):
   return {"schema": CENSUS_SCHEMA, "kernels": 751, "ffn_activation_cast_count": 0,
           "w1w3_fused16_count": fused16, "w1w3_fused_count": 0,
           "ffn_residual_add_count": resadd, "ffn_down_resadd_count": 0,
           "program_counts": {f"q4k_g3_lanemap_gemv_w1w3fused16_12288_4096": fused16,
                              f"E_32_32_4_02a9738c": resadd, "r_16_256_r": 37,
-                             "q4k_g3_lanemap_gemv_x": 217},
-          "population_counts": {"norms": 74, "quant_core": 217 + fused16,
+                             "q4k_g3_lanemap_gemv_x": 217,
+                             "q4k_g3_lanemap_gemv_4096_12288": plain_ffn_down // 2,
+                             "q6k_gen_coop_4096_12288_inkernel": plain_ffn_down // 2},
+          "population_counts": {"norms": 74, "quant_core": 217 + fused16 + plain_ffn_down,
                                 "residual_cast_contiguous": resadd, "flash": 20, "other": 6}}
 
 
@@ -139,6 +141,14 @@ def test_census_gate_fails_closed_on_unrelated_shift():
   result = validate_census(_control_census(), candidate)
   assert result["gate_pass"] is False
   assert any("unrelated" in reason for reason in result["fail_closed"])
+
+
+def test_census_gate_fails_closed_when_ffnresadd_body_has_no_plain_twin():
+  # A *_epi_ffnresadd body must be backed 1:1 by its plain ffn_down GEMV twin in the
+  # control arm; 36 bodies backed by only 18 plain twins fails closed.
+  result = validate_census(_control_census(plain_ffn_down=18), _candidate_census(ffnresadd=36))
+  assert result["gate_pass"] is False
+  assert any("twin" in reason for reason in result["fail_closed"])
 
 
 def test_census_gate_fails_closed_when_m2a_families_shift():
