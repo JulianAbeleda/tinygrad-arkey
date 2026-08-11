@@ -1,33 +1,37 @@
 #!/usr/bin/env python3
-"""NV wall-bracket A/B for residual-family epilogue absorption (M2a: fp16 store).
+"""NV wall-bracket A/B for residual-family epilogue absorption (M2b: ffn_down in-kernel residual add).
 
 Sibling of ``extra/llm_research/decode/nv_reduce_output_fp32_qk_ab.py`` (the
 booked fp32 q/k norms route).  M2 attacks the unbooked +240.106 us
-residual/cast/contiguous row (the 194 tok/s lever): per decode token the fused
-w1+w3 GEMV stores its result in fp32 and the graph renders 36 ordinary
-``E_128_32_3`` ffn-activation casts (fp32 -> fp16, ~57.6 us) before the
-ffn_down GEMV consumes the value.  The candidate arm leases
-``_q4k_w1w3_fp16_store_lease`` on the model and every block, so the fused
-kernel renders its own ``q4k_g3_lanemap_gemv_w1w3fused16_*`` variant that
-stores the same value already cast to fp16 (the in-kernel cast is the same
-round-to-nearest-even conversion the separate cast kernel lowers, so the
-bytes are bitwise-identical) and the consumer cast folds away.
+residual/cast/contiguous row (the 194 tok/s lever): per decode token the
+ffn_down GEMVs (``q4k_g3_lanemap_gemv_4096_12288`` x18 +
+``q6k_gen_coop_4096_12288_inkernel`` x18) store fp32 and the graph renders 36
+ordinary ``E_32_32_4_02a9738c`` fp32 residual adds (``h + ffn_out``, ~61.7 us).
+The candidate arm leases ``_ffn_down_resadd_lease`` on the model, every block,
+and every ffn_down linear, so the ffn_down GEMVs render their own
+``*_epi_ffnresadd`` variants that add the hidden-state residual h in-kernel
+(``total + h[row]``, fp32 store -- the in-kernel add is the same fp32
+expression the separate add kernel lowers, so the bytes are bitwise-identical)
+and the standalone add folds away.  The fp16-store spelling of the original
+M2b premise is NOT bitwise-safe: the next block's attention residual consumes
+the fp32 block output, so storing fp16 would round the residual and break the
+exact-logits gate (see the scope doc, section 3 M2b).
 
-The control arm is the BOOKED fp32 q/k candidate conditions (callify flags +
-``_decode_reduce_output_rmsnorm_promoted`` on the model and every block plus
-``_decode_direct_greedy_promoted``), WITHOUT the M2 lease.  Both arms run as
-fresh processes under ``timeout ... flock -w`` on the shared GPU bench lock so
-JIT capture and allocator state cannot leak across arms.
+The control arm is the BOOKED M2a candidate conditions (callify flags +
+``_decode_reduce_output_rmsnorm_promoted`` + ``_decode_direct_greedy_promoted``
++ the M2a ``_q4k_w1w3_fp16_store_lease``), WITHOUT the M2b lease.  Both arms
+run as fresh processes under ``timeout ... flock -w`` on the shared GPU bench
+lock so JIT capture and allocator state cannot leak across arms.
 
 Gate order is fixed: NV render smoke (Xid 31 class) with the fused16 kernels
 in the compiled set, then the exact full-logit gate, then the M2 census, then
 the serialized reverse control/candidate/control wall bracket.  The census
-gate FAILS CLOSED if the cast remains (E_128_32_3 still rendered), if the
-fused16 variant is absent, or if any unrelated program count shifts; the
-expected drop is derived from the freshly measured control arm, never a stale
-constant.  Any gate failure writes a NO-GO record with the exact evidence;
-the residual row books only when every gate passes and the bracket promotes
-at +50 us/token against BOTH bracketing controls.
+gate FAILS CLOSED if the residual add remains (E_32_32_4_02a9738c still
+rendered), if the ``*_epi_ffnresadd`` variants are absent, or if any unrelated
+program count shifts; the expected drop is derived from the freshly measured
+control arm, never a stale constant.  Any gate failure writes a NO-GO record
+with the exact evidence; the residual row books only when every gate passes
+and the bracket promotes at +50 us/token against BOTH bracketing controls.
 """
 from __future__ import annotations
 
@@ -50,39 +54,50 @@ CENSUS_SCHEMA = "tinygrad.nv_epilogue_absorption_ab.census.v1"
 TIMING_SCHEMA = "tinygrad.nv_epilogue_absorption_ab.timing.v1"
 
 LEASE = "_q4k_w1w3_fp16_store_lease"
+LEASE2 = "_ffn_down_resadd_lease"
 FUSED16_PREFIX = "q4k_g3_lanemap_gemv_w1w3fused16_"
 FUSED_PREFIX = "q4k_g3_lanemap_gemv_w1w3fused_"
 CAST_PREFIX = "E_128_32_3"
+RESADD_PREFIX = "E_32_32_4_02a9738c"
+FFNRESADD_PREFIX = "q4k_g3_lanemap_gemv_epi_ffnresadd_"
+FFNRESADD_SUFFIX = "_epi_ffnresadd"
 
 CONSTRUCTION = {
-  "route": "residual-family epilogue absorption M2a (fp16 store)",
+  "route": "residual-family epilogue absorption M2b (ffn_down in-kernel residual add)",
   "population": "residual_cast_contiguous",
-  "mechanism": "the fused w1+w3 decode GEMV stores its result already cast to fp16 under its own q4k_g3_lanemap_gemv_w1w3fused16_* name; ffn_down's input cast (E_128_32_3, fp32->fp16) folds away; the in-kernel cast is the same round-to-nearest-even conversion the separate cast kernel lowers, so stored bytes are bitwise-identical",
-  "codegen_path": "candidate sets _q4k_w1w3_fp16_store_lease=True on the model and every block on top of the booked fp32 q/k candidate conditions (callify flags + _decode_reduce_output_rmsnorm_promoted + _decode_direct_greedy_promoted); the route call q4k_gate_up_primitive_linear_call(..., store_fp16=True) picks the fused16 kernel and an fp16 OutputSpec",
-  "census_target": "E_128_32_3 36 -> 0; q4k_g3_lanemap_gemv_w1w3fused16_12288_4096 x36; all other program counts byte-identical to control; honest net program delta -36",
+  "mechanism": "the ffn_down Q4K/Q6K decode GEMVs add the hidden-state residual h in-kernel (total + h[row], fp32 store) under their own *_epi_ffnresadd names; the standalone fp32 h+ffn_out add (E_32_32_4_02a9738c) folds away; the in-kernel add is the same fp32 expression the separate add kernel lowers, so stored bytes are bitwise-identical; the fp16-store spelling is not bitwise-safe (next-block attention residual consumes the fp32 block output)",
+  "codegen_path": "candidate sets _ffn_down_resadd_lease=True on the model, every block, and every ffn_down linear on top of the booked M2a candidate conditions (callify flags + _decode_reduce_output_rmsnorm_promoted + _decode_direct_greedy_promoted + _q4k_w1w3_fp16_store_lease); the block threads normed_h=h into ffn_down and skips its own h+ffn_out add; decode_routes picks the ffn_down_resadd epilogue (Q4K) or the q6k coop epilogue variant",
+  "census_target": "E_32_32_4_02a9738c 36 -> 0; q4k_g3_lanemap_gemv_epi_ffnresadd_4096_12288 x18 + q6k_gen_coop_4096_12288_inkernel_epi_ffnresadd x18; all other program counts byte-identical to control; honest net program delta -36",
   "correctness_contract": {
     "full_logit_fp32_sha256": "bitwise identical to control over the stacked rows",
     "token_stream": "identical to control",
     "per_row_argmax": "equals the sampled token",
     "promotion": "+50 us/token vs both bracketing controls (control / candidate / control)",
-    "census": "E_128_32_3 gone, fused16 bodies present 1:1 with the control cast count, no other program-count shift; FAIL CLOSED on any unrelated delta",
+    "census": "E_32_32_4_02a9738c gone, *_epi_ffnresadd bodies present 1:1 with the control add count, no other program-count shift; FAIL CLOSED on any unrelated delta",
   },
-  "question": "Does storing the fused w1+w3 result as fp16 in-kernel survive NV render (Xid 31 class), preserve exact full logits, remove exactly the E_128_32_3 cast programs with no other census shift, and book the residual-family share of the +240.106 us row under the reverse wall bracket?",
+  "question": "Does adding h+ffn_out in-kernel in the ffn_down GEMVs survive NV render (Xid 31 class), preserve exact full logits, remove exactly the E_32_32_4_02a9738c add programs with no other census shift, and book the residual-family share of the +240.106 us row under the reverse wall bracket?",
 }
 
 
 def _configure(model, arm: str) -> None:
-  """Both arms set the booked fp32 q/k candidate conditions (the M2 control is
-  the booked candidate); the candidate additionally installs the fp16-store
-  lease on the model and every block.  No loader policy creates the lease."""
+  """Both arms set the booked M2a candidate conditions (the M2b control IS the
+  booked M2a candidate); the candidate additionally installs the M2b
+  ffn-down residual-add lease on the model, every block, and every ffn_down
+  linear.  No loader policy creates either lease."""
   model._decode_direct_greedy_promoted = True
   _require_candidate_callify_flags()
   model._decode_reduce_output_rmsnorm_promoted = True
   for block in model.blk:
     block._decode_reduce_output_rmsnorm_promoted = True
+  # M2a fp16-store lease is the M2b CONTROL baseline (present in both arms).
+  setattr(model, LEASE, True)
+  for block in model.blk: setattr(block, LEASE, True)
   if arm == "candidate":
-    setattr(model, LEASE, True)
-    for block in model.blk: setattr(block, LEASE, True)
+    setattr(model, LEASE2, True)
+    for block in model.blk:
+      setattr(block, LEASE2, True)
+      ffn_down = getattr(block, "ffn_down", None)
+      if ffn_down is not None: setattr(ffn_down, LEASE2, True)
   elif arm != "control":
     raise ValueError(f"unknown arm {arm!r}")
 
@@ -98,27 +113,38 @@ def _gates(model) -> dict:
     "block_w1w3_fp16_store_lease": [
       bool(getattr(block, LEASE, False)) for block in model.blk
     ] if getattr(model, "blk", None) else None,
+    "ffn_down_resadd_lease": bool(getattr(model, LEASE2, False)),
+    "block_ffn_down_resadd_lease": [
+      bool(getattr(block, LEASE2, False)) for block in model.blk
+    ] if getattr(model, "blk", None) else None,
+    "ffn_down_linear_resadd_lease": [
+      bool(getattr(getattr(block, "ffn_down", None), LEASE2, False)) for block in model.blk
+    ] if getattr(model, "blk", None) else None,
   }
 
 
 def _assert_control_closed(gates: dict) -> None:
   leased = []
-  if gates.get("w1w3_fp16_store_lease"):
-    leased.append(f"model.{LEASE}")
-  for index, value in enumerate(gates.get("block_w1w3_fp16_store_lease") or []):
-    if value: leased.append(f"block[{index}].{LEASE}")
+  if gates.get("ffn_down_resadd_lease"):
+    leased.append(f"model.{LEASE2}")
+  for index, value in enumerate(gates.get("block_ffn_down_resadd_lease") or []):
+    if value: leased.append(f"block[{index}].{LEASE2}")
+  for index, value in enumerate(gates.get("ffn_down_linear_resadd_lease") or []):
+    if value: leased.append(f"block[{index}].ffn_down.{LEASE2}")
   if leased:
-    raise RuntimeError(f"control arm requires the closed production graph, observed fp16-store leases: {leased}")
+    raise RuntimeError(f"control arm requires the booked M2a candidate WITHOUT the M2b lease, observed: {leased}")
 
 
 def _assert_candidate_configured(gates: dict) -> None:
   missing = []
-  if not gates.get("w1w3_fp16_store_lease"):
-    missing.append(f"model.{LEASE}")
-  for index, value in enumerate(gates.get("block_w1w3_fp16_store_lease") or []):
-    if not value: missing.append(f"block[{index}].{LEASE}")
+  if not gates.get("ffn_down_resadd_lease"):
+    missing.append(f"model.{LEASE2}")
+  for index, value in enumerate(gates.get("block_ffn_down_resadd_lease") or []):
+    if not value: missing.append(f"block[{index}].{LEASE2}")
+  for index, value in enumerate(gates.get("ffn_down_linear_resadd_lease") or []):
+    if not value: missing.append(f"block[{index}].ffn_down.{LEASE2}")
   if missing:
-    raise RuntimeError(f"candidate arm requires {LEASE} on the model and every block: {missing}")
+    raise RuntimeError(f"candidate arm requires {LEASE2} on the model, every block, and every ffn_down linear: {missing}")
 
 
 def validate_logits_gate(control: dict, candidate: dict) -> dict:
@@ -158,10 +184,10 @@ def _m2_arm_context(arm: str):
 def smoke(arm: str, model_path: str, depth: int, max_context: int) -> dict:
   """Phase 0 NV render smoke: compile and run one decode token under the
   candidate conditions.  Success is survival (no Xid 31 MMU fault) with the
-  fused16 kernels (``q4k_g3_lanemap_gemv_w1w3fused16_*``) in the compiled
-  program set and no ``E_128_32_3`` cast program."""
+  ``*_epi_ffnresadd`` kernels in the compiled program set and no
+  ``E_32_32_4_02a9738c`` residual-add program."""
   if arm != "candidate":
-    raise ValueError("smoke requires the candidate arm; the fused16 kernels only exist under the candidate conditions")
+    raise ValueError("smoke requires the candidate arm; the ffn_down_resadd kernels only exist under the candidate conditions")
   from tinygrad import Device
   from tinygrad.engine.jit import GraphAdmissionCensus, observe_graph_admissions
   from tinygrad.helpers import Context
@@ -189,6 +215,8 @@ def smoke(arm: str, model_path: str, depth: int, max_context: int) -> dict:
               "fused16_body_present": bool(any(name.startswith(FUSED16_PREFIX) for name in programs)),
               "fused_body_present": bool(any(name.startswith(FUSED_PREFIX) for name in programs)),
               "cast_present": bool(any(name.startswith(CAST_PREFIX) for name in programs)),
+              "ffn_resadd_body_present": bool(any(name.startswith(FFNRESADD_PREFIX) or name.endswith(FFNRESADD_SUFFIX) for name in programs)),
+              "residual_add_present": bool(any(name.startswith(RESADD_PREFIX) for name in programs)),
               "program_count": len(programs), "program_names": programs}
     finally:
       gen.close()
@@ -228,7 +256,8 @@ def logits(arm: str, model_path: str, depth: int, count: int, max_context: int) 
 
 def census(arm: str, model_path: str, depth: int, max_context: int) -> dict:
   """DEBUG kernel census of one decode token, classified through the population
-  ledger; the M2 families (fused16 / fused / E_128_32_3) counted by exact name."""
+  ledger; the M2 families (fused16 / fused / E_128_32_3 / E_32_32_4_02a9738c /
+  *_epi_ffnresadd) counted by exact name."""
   from tinygrad.helpers import Context
   with _m2_arm_context(arm):
     model, gates = _model(arm, model_path, max_context)
@@ -256,6 +285,9 @@ def census(arm: str, model_path: str, depth: int, max_context: int) -> dict:
     cast_count = sum(count for name, count in program_counts.items() if name.startswith(CAST_PREFIX))
     fused16_count = sum(count for name, count in program_counts.items() if name.startswith(FUSED16_PREFIX))
     fused_count = sum(count for name, count in program_counts.items() if name.startswith(FUSED_PREFIX))
+    residual_add_count = sum(count for name, count in program_counts.items() if name.startswith(RESADD_PREFIX))
+    ffn_down_resadd_count = sum(count for name, count in program_counts.items()
+                                if name.startswith(FFNRESADD_PREFIX) or name.endswith(FFNRESADD_SUFFIX))
     return {"schema": CENSUS_SCHEMA, "arm": arm, "mode": "census", "gates": gates, "token": token,
             "kernels": len(rows), "kernel_us": round(sum(us for _, us in rows), 3),
             "norms_kernels": sum(1 for name, _ in rows if _ledger_classify(name)[0] == POP_NORMS),
@@ -265,6 +297,11 @@ def census(arm: str, model_path: str, depth: int, max_context: int) -> dict:
             "w1w3_fused_count": fused_count, "cast_us": round(sum(us for name, us in rows if name.startswith(CAST_PREFIX)), 3),
             "fused16_us": round(sum(us for name, us in rows if name.startswith(FUSED16_PREFIX)), 3),
             "fused_us": round(sum(us for name, us in rows if name.startswith(FUSED_PREFIX)), 3),
+            "ffn_residual_add_count": residual_add_count,
+            "ffn_down_resadd_count": ffn_down_resadd_count,
+            "ffn_residual_add_us": round(sum(us for name, us in rows if name.startswith(RESADD_PREFIX)), 3),
+            "ffn_down_resadd_us": round(sum(us for name, us in rows
+                                            if name.startswith(FFNRESADD_PREFIX) or name.endswith(FFNRESADD_SUFFIX)), 3),
             "histogram": sorted(((name, len(vals), statistics.median(vals)) for name, vals in hist.items()),
                                 key=lambda row: (-row[1], -row[2]))}
 
@@ -303,12 +340,13 @@ def timing_child(arm: str, model_path: str, depth: int, count: int, max_context:
 
 
 def validate_census(control: dict, candidate: dict) -> dict:
-  """M2 census gate.  The expected cast drop is derived from the freshly
-  measured control arm (never a stale constant): every E_128_32_3 cast must
-  vanish, exactly that many fused16 bodies must appear in its place, no fused
-  (fp32) w1w3 body may remain, the net program delta must equal the drop, and
-  no OTHER program count may shift.  FAIL CLOSED with the exact evidence on
-  any violation."""
+  """M2b census gate.  The expected add drop is derived from the freshly
+  measured control arm (never a stale constant): every E_32_32_4_02a9738c
+  residual-add program must vanish, exactly that many ``*_epi_ffnresadd``
+  bodies must appear in its place, the net program delta must equal the drop,
+  and no OTHER program count may shift (the M2a fused16/cast families must be
+  byte-identical between arms since both run the booked M2a candidate).
+  FAIL CLOSED with the exact evidence on any violation."""
   for label, row in (("control", control), ("candidate", candidate)):
     if row.get("schema") != CENSUS_SCHEMA:
       raise ValueError(f"{label} census row requires schema {CENSUS_SCHEMA!r}, got {row.get('schema')!r}")
@@ -320,13 +358,18 @@ def validate_census(control: dict, candidate: dict) -> dict:
   fused16_candidate = int(candidate.get("w1w3_fused16_count", 0))
   fused_control = int(control.get("w1w3_fused_count", 0))
   fused_candidate = int(candidate.get("w1w3_fused_count", 0))
+  resadd_control = int(control.get("ffn_residual_add_count", 0))
+  resadd_candidate = int(candidate.get("ffn_residual_add_count", 0))
+  ffnresadd_control = int(control.get("ffn_down_resadd_count", 0))
+  ffnresadd_candidate = int(candidate.get("ffn_down_resadd_count", 0))
   net_delta = int(candidate.get("kernels", 0)) - int(control.get("kernels", 0))
   side_effects = {name: int(candidate_counts.get(name, 0)) - int(control_counts.get(name, 0))
                   for name in sorted(set(control_counts) | set(candidate_counts))
                   if int(candidate_counts.get(name, 0)) != int(control_counts.get(name, 0))}
   allowed_side_effects = {
     name for name in side_effects
-    if name.startswith(CAST_PREFIX) or name.startswith(FUSED16_PREFIX) or name.startswith(FUSED_PREFIX)}
+    if name.startswith(CAST_PREFIX) or name.startswith(FUSED16_PREFIX) or name.startswith(FUSED_PREFIX)
+    or name.startswith(RESADD_PREFIX) or name.startswith(FFNRESADD_PREFIX) or name.endswith(FFNRESADD_SUFFIX)}
   unrelated_deltas = {name: delta for name, delta in side_effects.items() if name not in allowed_side_effects}
   control_pops = control.get("population_counts") or {}
   candidate_pops = candidate.get("population_counts") or {}
@@ -334,36 +377,45 @@ def validate_census(control: dict, candidate: dict) -> dict:
                        for pop in sorted(set(control_pops) | set(candidate_pops)) if pop != POP_NORMS
                        if int(candidate_pops.get(pop, 0)) != int(control_pops.get(pop, 0))}
   conditions = {
-    "control_has_casts": cast_control > 0,
-    "candidate_casts_gone": cast_candidate == 0,
-    "fused16_replaces_one_for_one": fused16_candidate == cast_control,
-    "control_has_no_fused16": fused16_control == 0,
-    "candidate_keeps_no_fp32_fused": fused_candidate == 0,
-    "control_fused_matches_casts": fused_control == cast_control,
-    "net_delta_matches_drop": net_delta == -cast_control,
+    "control_has_residual_adds": resadd_control > 0,
+    "candidate_residual_adds_gone": resadd_candidate == 0,
+    "ffnresadd_replaces_one_for_one": ffnresadd_candidate == resadd_control,
+    "control_has_no_ffnresadd": ffnresadd_control == 0,
+    "m2a_fused16_identical": fused16_candidate == fused16_control and fused16_control > 0,
+    "m2a_casts_identical": cast_candidate == cast_control == 0,
+    "m2a_fp32_fused_identical": fused_candidate == fused_control == 0,
+    "net_delta_matches_drop": net_delta == -resadd_control,
     "no_unrelated_program_shift": not unrelated_deltas,
   }
   fail_closed = []
-  if not conditions["control_has_casts"]:
-    fail_closed.append("FAIL CLOSED: the control census has no E_128_32_3 casts to absorb")
-  if not conditions["candidate_casts_gone"]:
-    fail_closed.append(f"FAIL CLOSED: candidate still renders {cast_candidate} E_128_32_3 cast programs (control had {cast_control})")
-  if not conditions["fused16_replaces_one_for_one"]:
-    fail_closed.append(f"FAIL CLOSED: fused16 bodies {fused16_candidate} do not replace the {cast_control} control casts 1:1")
-  if not conditions["candidate_keeps_no_fp32_fused"]:
-    fail_closed.append(f"FAIL CLOSED: candidate keeps {fused_candidate} fp32 w1w3 fused bodies (expected 0)")
+  if not conditions["control_has_residual_adds"]:
+    fail_closed.append("FAIL CLOSED: the control census has no E_32_32_4_02a9738c residual adds to absorb")
+  if not conditions["candidate_residual_adds_gone"]:
+    fail_closed.append(f"FAIL CLOSED: candidate still renders {resadd_candidate} E_32_32_4_02a9738c add programs (control had {resadd_control})")
+  if not conditions["ffnresadd_replaces_one_for_one"]:
+    fail_closed.append(f"FAIL CLOSED: *_epi_ffnresadd bodies {ffnresadd_candidate} do not replace the {resadd_control} control adds 1:1")
+  if not conditions["control_has_no_ffnresadd"]:
+    fail_closed.append(f"FAIL CLOSED: control renders {ffnresadd_control} *_epi_ffnresadd bodies (expected 0)")
+  if not conditions["m2a_fused16_identical"]:
+    fail_closed.append(f"FAIL CLOSED: M2a fused16 counts differ between arms ({fused16_control} -> {fused16_candidate})")
+  if not conditions["m2a_casts_identical"]:
+    fail_closed.append(f"FAIL CLOSED: M2a cast counts differ ({cast_control} -> {cast_candidate})")
+  if not conditions["m2a_fp32_fused_identical"]:
+    fail_closed.append(f"FAIL CLOSED: M2a fp32 fused counts differ ({fused_control} -> {fused_candidate})")
   if not conditions["net_delta_matches_drop"]:
-    fail_closed.append(f"FAIL CLOSED: net program delta {net_delta} != -{cast_control}")
+    fail_closed.append(f"FAIL CLOSED: net program delta {net_delta} != -{resadd_control}")
   if not conditions["no_unrelated_program_shift"]:
     fail_closed.append(f"FAIL CLOSED: unrelated program-count shifts: {unrelated_deltas}")
   return {"cast_control": cast_control, "cast_candidate": cast_candidate,
           "fused16_control": fused16_control, "fused16_candidate": fused16_candidate,
           "fused_control": fused_control, "fused_candidate": fused_candidate,
+          "ffn_residual_add_control": resadd_control, "ffn_residual_add_candidate": resadd_candidate,
+          "ffn_down_resadd_control": ffnresadd_control, "ffn_down_resadd_candidate": ffnresadd_candidate,
           "honest_net_program_delta": net_delta,
           "program_side_effects": side_effects, "unrelated_program_deltas": unrelated_deltas,
           "non_norms_population_deltas": population_deltas,
           "conditions": conditions, "fail_closed": fail_closed,
-          "note": "expected drop derived from the measured control arm; the fused16 body is the same store expression wrapped in one half cast (bitwise-identical bytes)",
+          "note": "expected drop derived from the measured control arm; the *_epi_ffnresadd body is the same fp32 add expression fused into the GEMV epilogue (bitwise-identical bytes)",
           "gate_pass": bool(all(conditions.values())) and not fail_closed}
 
 
@@ -391,15 +443,15 @@ def validate_timing_bracket(rows: list[dict], settled_continuous: bool = True) -
 
 HARD_STOP_NOTES = [
   "Every GPU arm runs as a fresh process under `timeout ... flock -w 90 /tmp/gpu-bench.lock`; no arm holds the lock across a wall-bracket step.",
-  "Phase 0 (NV render smoke) must survive on sm_120 (no Xid 31 MMU fault) with the fused16 kernels (q4k_g3_lanemap_gemv_w1w3fused16_*) in the compiled program set and no E_128_32_3 cast.",
+  "Phase 0 (NV render smoke) must survive on sm_120 (no Xid 31 MMU fault) with the *_epi_ffnresadd kernels (q4k_g3_lanemap_gemv_epi_ffnresadd_* and q6k_gen_coop_*_epi_ffnresadd) in the compiled program set and no E_32_32_4_02a9738c residual add.",
   "The exact full-logit gate (fp32 SHA-256 over the stacked rows, token stream, shape, per-row argmax == sampled token) must pass before any census or bracket arm runs.",
-  "The census gate FAILS CLOSED if the cast remains, if the fused16 bodies do not appear 1:1 with the control cast count, if any fp32 fused body remains, or if any unrelated program count shifts; expected counts derive from the measured control arm.",
+  "The census gate FAILS CLOSED if the residual add remains, if the *_epi_ffnresadd bodies do not appear 1:1 with the control add count, if the M2a fused16/cast families shift between arms, or if any unrelated program count shifts; expected counts derive from the measured control arm.",
   "The wall bracket requires identical token-stream hashes and a candidate median at least +50 us/token faster than BOTH bracketing controls.",
   "No policy promotion: no route-policy record changes; the lease attribute is harness-installed only.",
 ]
 
 ISOLATION_NOTES = [
-  "The M2 control arm is the BOOKED fp32 q/k candidate (same callify flags and reduce-output promotion), so the only inter-arm delta is the fp16-store lease.",
+  "The M2b control arm is the BOOKED M2a candidate (same callify flags, reduce-output promotion, and the M2a fp16-store lease), so the only inter-arm delta is the ffn_down residual-add lease.",
   "The exact-logits gate runs the eager JIT=0 finite check inside the child before comparing stacked-row SHAs, and any non-finite row fails closed.",
 ]
 
@@ -427,7 +479,7 @@ def no_go_record(model: str = DEFAULT_MODEL, depth: int = 512) -> dict:
     },
     "census": {
       "run": False, "result": "NOT_AUTHORIZED", "reason": "campaign stopped before the M2 census arm",
-      "contract": "E_128_32_3 gone; fused16 bodies 1:1 with the control cast count; no fp32 fused body remains; net program delta equals the cast drop; no unrelated program-count shift; FAIL CLOSED on any violation",
+      "contract": "E_32_32_4_02a9738c gone; *_epi_ffnresadd bodies 1:1 with the control add count; M2a fused16/cast families identical between arms; net program delta equals the add drop; no unrelated program-count shift; FAIL CLOSED on any violation",
     },
     "wall_bracket": {
       "run": False, "result": "NOT_AUTHORIZED", "reason": "campaign stopped before the reverse control/candidate/control wall bracket",
@@ -490,11 +542,13 @@ def ab(args) -> dict:
     return _write_record(record, pathlib.Path(args.out))
   smoke_gate = (smoke_result.get("survive") is True
                 and bool(smoke_result.get("fused16_body_present"))
-                and not bool(smoke_result.get("cast_present")))
+                and not bool(smoke_result.get("cast_present"))
+                and bool(smoke_result.get("ffn_resadd_body_present"))
+                and not bool(smoke_result.get("residual_add_present")))
   record["smoke"] = {"run": True, "result": "PASS" if smoke_gate else "NO-GO", "evidence": smoke_result}
   if not smoke_gate:
     record["hard_stop_notes"] = HARD_STOP_NOTES + [
-      "HARD STOP at Phase 0: smoke did not survive, the fused16 bodies were absent, or E_128_32_3 casts remained."]
+      "HARD STOP at Phase 0: smoke did not survive, the fused16 bodies were absent, E_128_32_3 casts remained, the *_epi_ffnresadd bodies were absent, or E_32_32_4_02a9738c residual adds remained."]
     return _write_record(record, pathlib.Path(args.out))
   control_logits = _guarded_child(record, "logits_gate",
                                   _child_command(args, "logits", "control", root / "control-logits.json", include_reps=False),
@@ -532,7 +586,7 @@ def ab(args) -> dict:
                       "control_evidence": control_census, "candidate_evidence": candidate_census, **census_gate}
   if not census_gate["gate_pass"]:
     record["hard_stop_notes"] = HARD_STOP_NOTES + [
-      "HARD STOP at Phase 2: M2 census gate FAIL (cast remained, fused16 absent/mismatched, or unrelated program shift)."]
+      "HARD STOP at Phase 2: M2b census gate FAIL (residual add remained, *_epi_ffnresadd absent/mismatched, M2a families shifted, or unrelated program shift)."]
     return _write_record(record, pathlib.Path(args.out))
   bracket = wall_bracket(args)
   record["wall_bracket"] = {"run": True, "result": "PROMOTED" if bracket["promoted"] else "NO-GO", **bracket}

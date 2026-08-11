@@ -1,4 +1,14 @@
-"""Hermetic CPU tests for the residual-family epilogue absorption AB harness."""
+"""Hermetic CPU tests for the M2b ffn_down in-kernel residual add AB harness.
+
+M2b extends the BOOKED M2a candidate conditions.  The control arm is the M2a
+candidate (callify flags + reduce-output promotion + the w1w3 fp16-store
+lease) WITHOUT the ffn_down residual-add lease; the candidate arm additionally
+installs ``_ffn_down_resadd_lease`` on the model, every block, and every
+ffn_down linear.  The census gate requires every ``E_32_32_4_02a9738c``
+residual add to fold into a ``*_epi_ffnresadd`` GEMV body 1:1 with no other
+program-count shift and the M2a fused16/cast families byte-identical between
+arms.
+"""
 import pytest
 
 from extra.llm_research.decode.nv_epilogue_absorption_ab import (
@@ -7,8 +17,13 @@ from extra.llm_research.decode.nv_epilogue_absorption_ab import (
 )
 
 
-class _FakeBlock:
+class _FakeFFNDown:
   pass
+
+
+class _FakeBlock:
+  def __init__(self):
+    self.ffn_down = _FakeFFNDown()
 
 
 class _FakeModel:
@@ -16,82 +31,105 @@ class _FakeModel:
     self.blk = [_FakeBlock() for _ in range(blocks)]
 
 
-def test_candidate_arm_installs_lease_on_model_and_every_block():
+def test_candidate_arm_installs_m2a_and_m2b_leases():
   from tinygrad.callify import CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER
   from tinygrad.helpers import Context
   model = _FakeModel()
   with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
     _configure(model, "candidate")
   gates = _gates(model)
+  # Both arms carry the booked M2a lease; the candidate adds the M2b lease.
   assert gates["w1w3_fp16_store_lease"] is True
   assert gates["block_w1w3_fp16_store_lease"] == [True, True, True]
+  assert gates["ffn_down_resadd_lease"] is True
+  assert gates["block_ffn_down_resadd_lease"] == [True, True, True]
+  assert gates["ffn_down_linear_resadd_lease"] == [True, True, True]
   _assert_candidate_configured(gates)
 
 
-def test_control_arm_keeps_lease_closed():
+def test_control_arm_keeps_m2a_lease_and_closes_m2b():
   from tinygrad.callify import CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER
   from tinygrad.helpers import Context
   model = _FakeModel()
   with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
     _configure(model, "control")
   gates = _gates(model)
-  assert gates["w1w3_fp16_store_lease"] is False
-  assert gates["block_w1w3_fp16_store_lease"] == [False, False, False]
+  assert gates["w1w3_fp16_store_lease"] is True
+  assert gates["block_w1w3_fp16_store_lease"] == [True, True, True]
+  assert gates["ffn_down_resadd_lease"] is False
+  assert gates["block_ffn_down_resadd_lease"] == [False, False, False]
+  assert gates["ffn_down_linear_resadd_lease"] == [False, False, False]
   _assert_control_closed(gates)
 
 
+def _m2_gates(ffn_down_lease=True, block_lease=True, linear_lease=True, m2a=True):
+  return {
+    "w1w3_fp16_store_lease": m2a, "block_w1w3_fp16_store_lease": [m2a, m2a, m2a],
+    "ffn_down_resadd_lease": ffn_down_lease,
+    "block_ffn_down_resadd_lease": [block_lease, block_lease, block_lease],
+    "ffn_down_linear_resadd_lease": [linear_lease, linear_lease, linear_lease],
+  }
+
+
 def test_candidate_gate_fails_closed_on_missing_lease():
-  _assert_candidate_configured({"w1w3_fp16_store_lease": True,
-                                "block_w1w3_fp16_store_lease": [True, True, True]})
+  _assert_candidate_configured(_m2_gates())
   with pytest.raises(RuntimeError, match=r"block\[1\]"):
-    _assert_candidate_configured({"w1w3_fp16_store_lease": True,
-                                  "block_w1w3_fp16_store_lease": [True, False, True]})
-  with pytest.raises(RuntimeError, match="model._q4k_w1w3_fp16_store_lease"):
-    _assert_candidate_configured({"w1w3_fp16_store_lease": False,
-                                  "block_w1w3_fp16_store_lease": [True, True, True]})
+    _assert_candidate_configured(_m2_gates(block_lease=False))
+  with pytest.raises(RuntimeError, match="model._ffn_down_resadd_lease"):
+    _assert_candidate_configured(_m2_gates(ffn_down_lease=False))
+  with pytest.raises(RuntimeError, match=r"block\[1\]\.ffn_down"):
+    _assert_candidate_configured(_m2_gates(linear_lease=False))
 
 
-def test_control_gate_fails_closed_if_lease_observed():
-  _assert_control_closed({"w1w3_fp16_store_lease": False,
-                          "block_w1w3_fp16_store_lease": [False, False, False]})
+def test_control_gate_fails_closed_if_m2b_lease_observed():
+  _assert_control_closed(_m2_gates(ffn_down_lease=False, block_lease=False, linear_lease=False))
   model = _FakeModel()
-  model._q4k_w1w3_fp16_store_lease = True
-  with pytest.raises(RuntimeError, match="model._q4k_w1w3_fp16_store_lease"):
+  model._ffn_down_resadd_lease = True
+  with pytest.raises(RuntimeError, match="model._ffn_down_resadd_lease"):
     _assert_control_closed(_gates(model))
 
 
-def _control_census(cast=36, fused=36):
-  return {"schema": CENSUS_SCHEMA, "kernels": 751, "ffn_activation_cast_count": cast,
-          "w1w3_fused16_count": 0, "w1w3_fused_count": fused,
-          "program_counts": {f"q4k_g3_lanemap_gemv_w1w3fused_12288_4096": fused,
-                             f"E_128_32_3": cast, "r_16_256_r": 37,
-                             "q4k_g3_lanemap_gemv_x": 217},
-          "population_counts": {"norms": 74, "quant_core": 217 + fused,
-                                "residual_cast_contiguous": cast, "flash": 20, "other": 6}}
-
-
-def _candidate_census(cast=0, fused16=36, fused=0):
-  return {"schema": CENSUS_SCHEMA, "kernels": 751 - 36, "ffn_activation_cast_count": cast,
-          "w1w3_fused16_count": fused16, "w1w3_fused_count": fused,
+def _control_census(fused16=36, resadd=36):
+  return {"schema": CENSUS_SCHEMA, "kernels": 751, "ffn_activation_cast_count": 0,
+          "w1w3_fused16_count": fused16, "w1w3_fused_count": 0,
+          "ffn_residual_add_count": resadd, "ffn_down_resadd_count": 0,
           "program_counts": {f"q4k_g3_lanemap_gemv_w1w3fused16_12288_4096": fused16,
-                             f"E_128_32_3": cast, "r_16_256_r": 37,
+                             f"E_32_32_4_02a9738c": resadd, "r_16_256_r": 37,
                              "q4k_g3_lanemap_gemv_x": 217},
           "population_counts": {"norms": 74, "quant_core": 217 + fused16,
-                                "residual_cast_contiguous": cast, "flash": 20, "other": 6}}
+                                "residual_cast_contiguous": resadd, "flash": 20, "other": 6}}
+
+
+def _candidate_census(fused16=36, resadd=0, ffnresadd=36, fused=0):
+  return {"schema": CENSUS_SCHEMA, "kernels": 751 - 36, "ffn_activation_cast_count": 0,
+          "w1w3_fused16_count": fused16, "w1w3_fused_count": fused,
+          "ffn_residual_add_count": resadd, "ffn_down_resadd_count": ffnresadd,
+          "program_counts": {f"q4k_g3_lanemap_gemv_w1w3fused16_12288_4096": fused16,
+                             "q4k_g3_lanemap_gemv_epi_ffnresadd_4096_12288": ffnresadd // 2,
+                             "q6k_gen_coop_4096_12288_inkernel_epi_ffnresadd": ffnresadd // 2,
+                             "r_16_256_r": 37, "q4k_g3_lanemap_gemv_x": 217},
+          "population_counts": {"norms": 74, "quant_core": 217 + fused16,
+                                "residual_cast_contiguous": resadd, "flash": 20, "other": 6}}
 
 
 def test_census_gate_passes_on_expected_absorption():
   result = validate_census(_control_census(), _candidate_census())
   assert result["gate_pass"] is True
-  assert result["cast_control"] == 36 and result["cast_candidate"] == 0
-  assert result["fused16_candidate"] == 36
+  assert result["ffn_residual_add_control"] == 36 and result["ffn_residual_add_candidate"] == 0
+  assert result["ffn_down_resadd_candidate"] == 36
   assert result["honest_net_program_delta"] == -36
 
 
-def test_census_gate_fails_closed_when_cast_remains():
-  result = validate_census(_control_census(), _candidate_census(cast=36, fused16=0, fused=36))
+def test_census_gate_fails_closed_when_residual_add_remains():
+  result = validate_census(_control_census(), _candidate_census(resadd=36, ffnresadd=0))
   assert result["gate_pass"] is False
   assert any("still renders" in reason for reason in result["fail_closed"])
+
+
+def test_census_gate_fails_closed_when_ffnresadd_not_one_for_one():
+  result = validate_census(_control_census(), _candidate_census(ffnresadd=18))
+  assert result["gate_pass"] is False
+  assert any("1:1" in reason for reason in result["fail_closed"])
 
 
 def test_census_gate_fails_closed_on_unrelated_shift():
@@ -103,10 +141,13 @@ def test_census_gate_fails_closed_on_unrelated_shift():
   assert any("unrelated" in reason for reason in result["fail_closed"])
 
 
-def test_census_gate_fails_closed_when_fp32_fused_remains():
-  result = validate_census(_control_census(), _candidate_census(fused16=36, fused=18))
+def test_census_gate_fails_closed_when_m2a_families_shift():
+  result = validate_census(_control_census(), _candidate_census(fused16=18))
   assert result["gate_pass"] is False
-  assert any("fp32 w1w3" in reason for reason in result["fail_closed"])
+  assert any("fused16" in reason for reason in result["fail_closed"])
+  result = validate_census(_control_census(), _candidate_census(fused=18))
+  assert result["gate_pass"] is False
+  assert any("fp32 fused" in reason for reason in result["fail_closed"])
 
 
 def _timing_row(ms):

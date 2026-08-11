@@ -161,23 +161,25 @@ class Q4KGEMVEpilogue:
   section 2.1). Default kind="" means the legacy kernel (byte-identical UOps). Fused variants get NEW
   kernel names so legacy hashes are untouched. The three variants match the design doc's census
   absorbable classes: (a) o-proj residual add, (b) ffn_down silu(gate)*up prelude + h+ffn_out
-  residual epilogue, (c) k/v fp16 cast write."""
-  kind: str = ""  # "", "residual_add", "ffn_down_fused", "fp16_cast"
+  residual epilogue, (c) k/v fp16 cast write, and the M2b ffn_down residual add alone
+  (``ffn_down_resadd``: total + h[row] stored fp32, absorbing the standalone h+ffn_out add)."""
+  kind: str = ""  # "", "residual_add", "ffn_down_fused", "ffn_down_resadd", "fp16_cast"
 
   @property
   def kernel_suffix(self) -> str:
     if self.kind == "": return ""
     if self.kind == "residual_add": return "_epi_resadd"
     if self.kind == "ffn_down_fused": return "_epi_ffndown"
+    if self.kind == "ffn_down_resadd": return "_epi_ffnresadd"
     if self.kind == "fp16_cast": return "_epi_f16cast"
     raise ValueError(f"unknown Q4K GEMV epilogue kind {self.kind!r}")
 
   def validate(self, rows: int, k: int) -> None:
     if self.kind == "": return
-    if self.kind not in ("residual_add", "ffn_down_fused", "fp16_cast"):
+    if self.kind not in ("residual_add", "ffn_down_fused", "ffn_down_resadd", "fp16_cast"):
       raise ValueError(f"unsupported Q4K GEMV epilogue kind {self.kind!r}")
-    if self.kind == "ffn_down_fused" and rows != 4096:
-      raise ValueError(f"ffn_down_fused epilogue requires rows=4096, got rows={rows}")
+    if self.kind in ("ffn_down_fused", "ffn_down_resadd") and rows != 4096:
+      raise ValueError(f"{self.kind} epilogue requires rows=4096, got rows={rows}")
 
 
 def q4k_g3_lanemap_gemv_kernel(rows:int, k:int, lanes:int=WARP, epilogue:Q4KGEMVEpilogue|None=None):
@@ -229,7 +231,7 @@ def q4k_g3_lanemap_gemv_kernel(rows:int, k:int, lanes:int=WARP, epilogue:Q4KGEMV
     acc = acc.after(acc[0].store(acc.after(lblk)[0] + contrib).end(lblk))
     total = _lane_partition_reduce_sum(acc[0], part)
 
-    if epi.kind == "residual_add":
+    if epi.kind in ("residual_add", "ffn_down_resadd"):
       result = total + extra[0][row].cast(dtypes.float32)
     elif epi.kind == "fp16_cast":
       result = total.cast(dtypes.float16)
@@ -567,6 +569,7 @@ class Q6KGEMVRouteSpec:
   pos_axis: str = "local"
   block_axis: str = "reduce"
   reduction: str = "external_sum"
+  epilogue: str = ""  # "", "ffn_down_resadd" (M2b: total + h[row] in-kernel, fp32 store)
   storage: str = "packed_u16"
   quant: QuantFormat = Q6_K
   opts: tuple = field(default_factory=tuple)
@@ -580,6 +583,7 @@ class Q6KGEMVRouteSpec:
   @property
   def kernel_name(self) -> str:
     suffix = "_inkernel" if self.reduction == "in_kernel" else ""
+    if self.epilogue == "ffn_down_resadd": suffix += "_epi_ffnresadd"
     return (f"q6k_gen_coop_{self.rows}_{self.k}" if self.route_family == "q6k_coop"
             else f"q6k_gen_partial_{self.rows}_{self.k}_{self.parts}") + suffix
 
@@ -587,9 +591,14 @@ class Q6KGEMVRouteSpec:
     if self.quant is not Q6_K: raise ValueError(f"Q6KGEMVRouteSpec quant must be Q6_K, got {self.quant!r}")
     if self.route_family not in ("q6k_coop", "q6k_partial"): raise ValueError(f"unknown route_family {self.route_family!r}")
     if self.reduction not in ("external_sum", "in_kernel"): raise ValueError(f"unsupported reduction {self.reduction!r}")
+    if self.epilogue not in ("", "ffn_down_resadd"):
+      raise ValueError(f"unsupported epilogue {self.epilogue!r}")
     if self.reduction == "in_kernel" and self.route_family == "q6k_partial":
       raise ValueError("in_kernel reduction is not implemented for the q6k_partial family (M2 non-landing, "
                        "l1-decode-plumbing-fusion-design-20260802.md section 6 class 9); use external_sum")
+    if self.epilogue == "ffn_down_resadd":
+      if self.reduction != "in_kernel": raise ValueError("ffn_down_resadd epilogue requires in_kernel reduction")
+      if self.rows != 4096: raise ValueError(f"ffn_down_resadd epilogue requires rows=4096, got rows={self.rows}")
     if self.storage != "packed_u16": raise ValueError(f"unsupported storage {self.storage!r}")
     if self.k % Q6_K_BLOCK_ELEMS != 0: raise ValueError(f"k={self.k} must be a multiple of {Q6_K_BLOCK_ELEMS}")
     if self.lane_extent != Q6K_POS_EXTENT: raise ValueError(f"lane_extent must be {Q6K_POS_EXTENT}, got {self.lane_extent}")
@@ -607,16 +616,18 @@ class Q6KGEMVRouteSpec:
   def to_json(self) -> dict[str, Any]:
     return {"quant": self.quant.name, "rows": self.rows, "k": self.k, "role": self.role, "route_family": self.route_family,
             "target": self.target, "row_tile": self.row_tile, "lane_extent": self.lane_extent, "parts": self.parts,
-            "pos_axis": self.pos_axis, "block_axis": self.block_axis, "reduction": self.reduction, "storage": self.storage}
+            "pos_axis": self.pos_axis, "block_axis": self.block_axis, "reduction": self.reduction,
+            "epilogue": self.epilogue, "storage": self.storage}
 
 
 def q6k_spec_for_role(rows:int, k:int, *, role:str="", parts:int=1, row_tile:int=4, use_coop:bool=True,
-                      target:str="amd_gfx1100", opts:tuple=(), reduction:str="external_sum") -> Q6KGEMVRouteSpec:
+                      target:str="amd_gfx1100", opts:tuple=(), reduction:str="external_sum",
+                      epilogue:str="") -> Q6KGEMVRouteSpec:
   if use_coop and parts == 1:
     return Q6KGEMVRouteSpec(rows=rows, k=k, role=role, route_family="q6k_coop", row_tile=row_tile,
-                            pos_axis="local", target=target, reduction=reduction)
+                            pos_axis="local", target=target, reduction=reduction, epilogue=epilogue)
   return Q6KGEMVRouteSpec(rows=rows, k=k, role=role, route_family="q6k_partial", parts=parts,
-                          pos_axis="reduce", target=target, opts=opts, reduction=reduction)
+                          pos_axis="reduce", target=target, opts=opts, reduction=reduction, epilogue=epilogue)
 
 
 def emit_q6k_gemv_kernel(spec:Q6KGEMVRouteSpec):
@@ -641,7 +652,7 @@ def emit_q6k_vocab_scalar_reduce_kernel(spec:Q6KGEMVRouteSpec):
 def _emit_q6k_coop(spec:Q6KGEMVRouteSpec):
   rows, row_tile, k_blocks, name = spec.rows, spec.row_tile, spec.k_blocks, spec.kernel_name
   in_kernel = spec.reduction == "in_kernel"
-  def kernel(partials:UOp, halfs:UOp, x:UOp) -> UOp:
+  def kernel(partials:UOp, halfs:UOp, x:UOp, h:UOp|None=None) -> UOp:
     row_o = UOp.range(cdiv(rows, row_tile), 0)
     row_i = UOp.range(row_tile, 1, axis_type=AxisType.LOCAL)
     pos = UOp.range(Q6K_POS_EXTENT, 2, axis_type=AxisType.LOCAL)
@@ -653,6 +664,12 @@ def _emit_q6k_coop(spec:Q6KGEMVRouteSpec):
       acc = acc.after(acc[0].store(0.0))
       acc = acc.after(acc[0].store(acc.after(blk)[0] + contrib).end(blk))
       total = _q6k_coop_pos_reduce_sum(acc[0], pos, row_tile)
+      # M2b ffn_down residual add (nv-epilogue-absorption-route-scope-20260810.md): the row's
+      # total plus the hidden-state residual h[row], stored fp32. The in-kernel fp32 add is
+      # bitwise-identical to the standalone h+ffn_out kernel (same values, fp32 add is
+      # commutative), so the separate E_32_32_4_02a9738c add folds away under the lease.
+      if spec.epilogue == "ffn_down_resadd":
+        total = total + h[row].cast(dtypes.float32)
       return partials[row].store(total).end(row_o, row_i, pos).sink(arg=KernelInfo(name=name, opts_to_apply=()))
     acc = partials[row, pos].set(0.0)
     acc = partials[row, pos].set(acc.after(blk)[row, pos] + contrib, end=blk)

@@ -227,8 +227,11 @@ class Q6KPrimitiveLinear(_QKPrimitiveLinear):
     self._init_common(weight, bias, halfs, out_features, in_features, parts, opts, name,
       Q6KPrimitiveStorage(halfs, source_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes), route_role, route_admission)
 
-  def __call__(self, x:Tensor) -> Tensor:
-    return self._call_with_program_facts(lambda: q6k_primitive_linear_call(self, x, self._fallback, self.route_admission.admitted))
+  def __call__(self, x:Tensor, **epilogue_inputs) -> Tensor:
+    """Decode GEMV call. epilogue_inputs are threaded to the fused variant only
+    when the fusion gate is open; the legacy route ignores them."""
+    return self._call_with_program_facts(lambda: q6k_primitive_linear_call(self, x, self._fallback, self.route_admission.admitted,
+                                                                           epilogue_inputs=epilogue_inputs))
 
 def _q6k_effective_storage_mode(requested_mode:str) -> str:
   # q4_ondemand is a Q4_K-only experiment. Q6_K stays persistent unless storage is shared.

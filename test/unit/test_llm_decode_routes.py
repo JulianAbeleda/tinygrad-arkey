@@ -282,7 +282,7 @@ def test_q6k_single_token_keeps_generated_path(monkeypatch):
   out = decode_routes.q6k_primitive_linear_call(linear, x, fallback, True)
   assert out == out_obj
   assert spec_calls == [{"parts": 1, "row_tile": 4, "use_coop": True, "opts": (),
-                         "target": "amd_gfx1100", "reduction": "external_sum"}]
+                         "target": "amd_gfx1100", "reduction": "external_sum", "epilogue": ""}]
   assert partials.kernel_calls
   assert callable(partials.kernel_calls[0][1]["fxn"])
 

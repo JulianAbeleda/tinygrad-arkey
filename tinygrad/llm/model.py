@@ -546,7 +546,10 @@ class FFNBlock:
       self.ffn_up      = nn.Linear(config.dim, config.hidden_dim, bias=False)
       self.ffn_down    = nn.Linear(config.hidden_dim, config.dim, bias=False)
 
-  def _feed_forward(self, x:Tensor) -> Tensor:
+  def _feed_forward(self, x:Tensor, residual:Tensor|None=None) -> Tensor:
+    """Dense decode callers may thread the block residual (h) so the ffn_down
+    GEMV absorbs the h+ffn_out add in-kernel (M2b, nv-epilogue-absorption-
+    route-scope-20260810.md). Prefill/MoE paths ignore the kwarg."""
     _prefill = getattr(self, "_is_prefill", False)
     if getattr(self, '_prefill_v2', False) and not hasattr(self, 'ffn_gate_exps') and not hasattr(self, 'ffn_gateup'):
       # prefill v2 (dense): fp16 + .contiguous()-isolated matmuls so each is a clean, warmstart-matchable TC
@@ -593,9 +596,10 @@ class FFNBlock:
         z = q4k_gate_up_primitive_linear_call(_fg, _fu, x,
           fallback=lambda: _prefill_semantic(_prefill, prefill_activation, _fg(x).silu().contiguous()) * _fu(x),
           store_fp16=_w1w3_fp16_store)
-        return self.ffn_down(z)
+        return self.ffn_down(z) if residual is None else self.ffn_down(z, normed_h=residual)
     gated = _prefill_semantic(_prefill, prefill_activation, self.ffn_gate(x).silu().contiguous())
-    return self.ffn_down(gated * self.ffn_up(x))
+    z = gated * self.ffn_up(x)
+    return self.ffn_down(z) if residual is None else self.ffn_down(z, normed_h=residual)
 
   # given the token-prefix match, return how much cached state this block can still reuse
   def _reusable_prefix_len(self, prefix_len:int, cached_len:int) -> int: return prefix_len
@@ -659,16 +663,29 @@ class FFNBlock:
         ffn_out = self.ffn_down(gate_out, gate_out=gate_out, up_out=up_out, normed_h=h)
         _ffn_absorbed = True
       else:
-        # Research-only, explicit lease: retain raw h across the FFN norm
-        # boundary and apply its scalar RMS scale plus affine weight at each
-        # Q4 packed load.  No loader policy creates this attribute.
-        _rms_affine_weight=getattr(self,"_rms_affine_gateup_norm_weight",None)
-        if (not _prefill and _rms_affine_weight is not None and isinstance(getattr(self,"ffn_gate",None),Q4KPrimitiveLinear)
-            and isinstance(getattr(self,"ffn_up",None),Q4KPrimitiveLinear)):
-          z=q4k_gate_up_rms_affine_qualification_call(self.ffn_gate,self.ffn_up,h,_rms_affine_weight,self.ffn_norm.eps,
-            fallback=lambda:None)
-          ffn_out=self._feed_forward(normed_h) if z is None else self.ffn_down(z)
-        else: ffn_out = self._feed_forward(normed_h)
+        # M2b ffn_down residual add (nv-epilogue-absorption-route-scope-20260810.md): under the
+        # harness-installed _ffn_down_resadd_lease the ffn_down Q4K/Q6K GEMV absorbs the h+ffn_out
+        # add in-kernel (total + h[row], fp32 store) and the block returns ffn_out directly. The
+        # lease is checked on the model, the block, AND the linear (the route re-checks it
+        # fail-closed), and "gate_out" absent keeps the M4 fused-prelude path closed/distinct.
+        if (not _prefill and getattr(self, "_ffn_down_resadd_lease", False)
+            and isinstance(_ffn_down_linear, (Q4KPrimitiveLinear, Q6KPrimitiveLinear))
+            and getattr(_ffn_down_linear, "_ffn_down_resadd_lease", False)
+            and getattr(_ffn_down_linear, "route_role", "") == "ffn_down"
+            and not hasattr(self, "ffn_gate_exps")):
+          ffn_out = self._feed_forward(normed_h, residual=h)
+          _ffn_absorbed = True
+        else:
+          # Research-only, explicit lease: retain raw h across the FFN norm
+          # boundary and apply its scalar RMS scale plus affine weight at each
+          # Q4 packed load.  No loader policy creates this attribute.
+          _rms_affine_weight=getattr(self,"_rms_affine_gateup_norm_weight",None)
+          if (not _prefill and _rms_affine_weight is not None and isinstance(getattr(self,"ffn_gate",None),Q4KPrimitiveLinear)
+              and isinstance(getattr(self,"ffn_up",None),Q4KPrimitiveLinear)):
+            z=q4k_gate_up_rms_affine_qualification_call(self.ffn_gate,self.ffn_up,h,_rms_affine_weight,self.ffn_norm.eps,
+              fallback=lambda:None)
+            ffn_out=self._feed_forward(normed_h) if z is None else self.ffn_down(z)
+          else: ffn_out = self._feed_forward(normed_h)
       with role_metadata("residual"):
         return _prefill_semantic(_prefill, prefill_activation,
           (ffn_out if _ffn_absorbed else h + ffn_out).contiguous())
