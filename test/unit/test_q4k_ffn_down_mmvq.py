@@ -125,6 +125,21 @@ def test_owned_boundary_route_has_no_materialize_and_single_use_lifetimes():
   assert loads["xv"] == 1 and loads["packed"] == 1
 
 
+def test_owned_boundary_strips_equal_span_reshapes_to_the_after_without_a_copy():
+  # Regression: passing the fused w1w3 output's RESHAPE view into the opaque
+  # provider made custom_kernel conservatively insert a fp32 materialize copy
+  # (net +2 graph calls). The owned branch must strip equal-span reshapes and
+  # hand the AFTER itself to the provider; any other shape fails closed.
+  fn=ast.parse(textwrap.dedent(inspect.getsource(q4k_ffn_down_mmvq_call))).body[0]
+  owned=[node for node in fn.body if isinstance(node,ast.If) and "owned_input_boundary" in ast.unparse(node.test)]
+  assert len(owned) == 1
+  body=ast.unparse(owned[0].body)
+  assert "Ops.RESHAPE" in body and "Ops.AFTER" in body and "Tensor(owned_uop)" in body
+  assert "owned_uop.src[0].numel() == owned_expected" in body
+  assert ".contiguous()" not in body and ".cast(" not in body
+  assert "owned_uop.op is not Ops.AFTER" in body and "owned_uop.shape != (K,)" in body and "owned_uop.dtype != x.dtype" in body
+
+
 def test_owned_boundary_is_an_exact_three_call_replacement_in_isolated_cpu_schedules():
   # Build each arm from a fresh graph. Scheduling mutates Tensor graphs into
   # concrete buffer identities, so sharing one producer across arm schedules

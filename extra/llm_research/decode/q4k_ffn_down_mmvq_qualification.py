@@ -22,7 +22,7 @@ def _normalize(spec:str) -> tuple[int,...]:
   return values
 
 
-def _install(model,indices:tuple[int,...]) -> list[int]:
+def _install(model,indices:tuple[int,...],owned_input_boundary:bool=False) -> list[int]:
   from tinygrad.llm.qk_primitives import Q4KPrimitiveLinear
   for block in model.blk:
     linear=getattr(block,"ffn_down",None)
@@ -32,21 +32,26 @@ def _install(model,indices:tuple[int,...]) -> list[int]:
     if not isinstance(linear,Q4KPrimitiveLinear) or linear.route_role != "ffn_down" or \
        (linear.out_features,linear.in_features) != (4096,12288):
       raise RuntimeError(f"block {index} is not the exact Q4_K FFN-down production role")
-    linear._q4k_ffn_down_mmvq_admission=Q4KFFNDownMMVQAdmission(index)
+    linear._q4k_ffn_down_mmvq_admission=Q4KFFNDownMMVQAdmission(index,owned_input_boundary=owned_input_boundary)
   return list(indices)
 
 
 def _digest(a:np.ndarray) -> str: return hashlib.sha256(np.ascontiguousarray(a).view(np.uint8)).hexdigest()
 
 
-def _exact_topology_delta(control:dict,candidate:dict,lease_count:int) -> dict:
+def _exact_topology_delta(control:dict,candidate:dict,lease_count:int,owned:bool=False) -> dict:
   factor=2 if candidate["composed"] else 1
   before,after=collections.Counter(control["program_names"]),collections.Counter(candidate["program_names"])
   changed={name:after[name]-before[name] for name in before.keys()|after.keys() if after[name]!=before[name]}
   expected={"q4k_g3_lanemap_gemv_4096_12288":-lease_count*factor,
     "q8_1_llama_provider_12288":lease_count*factor,"q4k_q8_mmvq_direct_4096_12288":lease_count*factor}
+  removed_materialize={name:delta for name,delta in changed.items() if name not in expected}
+  base_ok=all(changed.get(name)==delta for name,delta in expected.items()) and len(changed)==len(expected)+len(removed_materialize)
+  owned_ok=owned and len(removed_materialize)==1 and next(iter(removed_materialize.values()))==-lease_count*factor
+  closed_ok=not owned and not removed_materialize
+  pass_=base_ok and (owned_ok or closed_ok)
   return {"changed_program_counts":changed,"expected_changed_program_counts":expected,
-    "no_adapter_or_other_program_delta":changed==expected,"pass":changed==expected}
+    "removed_materialize_program":removed_materialize,"no_adapter_or_other_program_delta":pass_,"pass":pass_}
 
 
 def _install_accepted_attention_max17(model,enabled:bool) -> list[int]:
@@ -59,12 +64,12 @@ def _install_accepted_attention_max17(model,enabled:bool) -> list[int]:
 
 
 def child(model_path:str,depth:int,count:int,max_context:int,indices:tuple[int,...],composed:bool=False,compact:bool=False,
-          accepted_attention_max17:bool=False):
+          accepted_attention_max17:bool=False,owned_input_boundary:bool=False):
   from tinygrad import Tensor,UOp
   from tinygrad.callify import CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT
   from tinygrad.engine.jit import GraphAdmissionCensus,observe_graph_admissions
   from tinygrad.helpers import Context
-  model=_load(model_path,max_context); leases=_install(model,indices)
+  model=_load(model_path,max_context); leases=_install(model,indices,owned_input_boundary)
   attention_leases=_install_accepted_attention_max17(model,accepted_attention_max17)
   model._decode_direct_greedy_promoted=composed; model._decode_feedback_pingpong_promoted=composed
   gen=model.generate(_prompt(model_path,depth),chunk_size=32,temperature=0.0)
@@ -104,6 +109,7 @@ def child(model_path:str,depth:int,count:int,max_context:int,indices:tuple[int,.
     attention_topology["legacy_q4_consumer_count"]==0)
   if not attention_topology["pass"]: raise RuntimeError(f"accepted attention max17 topology failed: {attention_topology}")
   row={"schema":"tinygrad.q4k_ffn_down_mmvq_qualification.v1","indices":leases,"composed":composed,
+    "owned_input_boundary":owned_input_boundary,
     "callify_owned_precompiled_output_redirect":int(bool(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT)),
     "accepted_attention_max17":accepted_attention_max17,"attention_topology":attention_topology,
     "depth":depth,"count":count,"prelude_token":prelude,"tokens":tokens,
@@ -115,27 +121,29 @@ def child(model_path:str,depth:int,count:int,max_context:int,indices:tuple[int,.
 
 
 def timing_child(model_path:str,depth:int,count:int,max_context:int,reps:int,indices:tuple[int,...],composed:bool,
-                 accepted_attention_max17:bool=False):
+                 accepted_attention_max17:bool=False,owned_input_boundary:bool=False):
   from tinygrad import Device
   from tinygrad.callify import CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT
-  model=_load(model_path,max_context);leases=_install(model,indices)
+  model=_load(model_path,max_context);leases=_install(model,indices,owned_input_boundary)
   attention_leases=_install_accepted_attention_max17(model,accepted_attention_max17)
   model._decode_direct_greedy_promoted=composed;model._decode_feedback_pingpong_promoted=composed
   gen=model.generate(_prompt(model_path,depth),chunk_size=32,temperature=0.0)
   try: settled=_settled_continuous_windows(gen,Device[Device.DEFAULT],count,reps)
   finally: gen.close()
   return {"schema":"tinygrad.q4k_ffn_down_mmvq_timing.v1","indices":leases,"composed":composed,
+    "owned_input_boundary":owned_input_boundary,
     "callify_owned_precompiled_output_redirect":int(bool(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT)),
     "accepted_attention_max17":accepted_attention_max17,"attention_indices":attention_leases,
     "included_cost":True,"settled_continuous":True,"warmup_decode_calls":6,"reps":reps,"tokens_per_rep":count,**settled}
 
 
-def _cmd(args,mode,indices,out,accepted_attention_max17:bool|None=None):
+def _cmd(args,mode,indices,out,accepted_attention_max17:bool|None=None,owned:bool=False):
   cmd=[sys.executable,str(pathlib.Path(__file__).resolve()),"--mode",mode,"--model",args.model,"--depth",str(args.depth),
     "--count",str(args.count),"--max-context",str(args.max_context),"--reps",str(args.reps),"--indices",",".join(map(str,indices)),"--out",str(out)]
   if args.composed: cmd.append("--composed")
   if args.accepted_attention_max17 if accepted_attention_max17 is None else accepted_attention_max17:
     cmd.append("--accepted-attention-max17")
+  if owned or args.owned_input_boundary: cmd.append("--owned-input-boundary")
   cmd.append("--compact")
   return cmd
 
@@ -153,7 +161,8 @@ def qualify(args):
     if run.returncode: raise RuntimeError(f"{label} failed rc={run.returncode}: {run.stderr[-5000:]}")
     rows[label]=json.loads(out.read_text());arrays[label]=np.load(out.with_suffix(".npz"))["logits"]
   comparison=_semantic_comparison(arrays["control"],arrays["candidate"],rows["control"],rows["candidate"])
-  comparison["exact_topology_delta"]=_exact_topology_delta(rows["control"],rows["candidate"],len(args.indices))
+  comparison["exact_topology_delta"]=_exact_topology_delta(rows["control"],rows["candidate"],len(args.indices),
+    owned=args.owned_input_boundary)
   comparison["topology_pass"]=rows["candidate"]["topology"]["pass"] and comparison["exact_topology_delta"]["pass"]
   global_comparison=_semantic_comparison(arrays["baseline"],arrays["candidate"],rows["baseline"],rows["candidate"]) \
     if args.accepted_attention_max17 else comparison
@@ -207,7 +216,7 @@ def sweep(args):
       if run.returncode: raise RuntimeError(f"layer {index} failed rc={run.returncode}: {run.stderr[-5000:]}")
     row=json.loads(out.read_text());candidate=np.load(out.with_suffix(".npz"))["logits"]
     comparison=_semantic_comparison(control,candidate,control_row,row)
-    exact_topology=_exact_topology_delta(control_row,row,1)
+    exact_topology=_exact_topology_delta(control_row,row,1,owned=args.owned_input_boundary)
     comparison.update({"index":index,"exact_topology_delta":exact_topology,
       "topology_pass":row["topology"]["pass"] and exact_topology["pass"]})
     layer_rows[str(index)]=comparison;deltas.append((candidate-control).astype(np.float32))
@@ -247,16 +256,18 @@ def main():
   ap.add_argument("--indices",default="");ap.add_argument("--composed",action="store_true");ap.add_argument("--compact",action="store_true")
   ap.add_argument("--accepted-attention-max17",action="store_true",
     help="compose on the accepted blocks 1-12,14-18 cooperative shared-Q8 route; requires redirect=1")
+  ap.add_argument("--owned-input-boundary",action="store_true",
+    help="lease the Q4 FFN-down MMVQ with the owned fp32 input boundary (provider consumes fp32; no fp16 materialize)")
   ap.add_argument("--resume-existing",action="store_true",help="sweep only: reuse exact-matching complete control/layer artifacts")
   ap.add_argument("--out",required=True)
   ap.add_argument("--timeout",type=int,default=900);ap.add_argument("--lock-wait",type=int,default=120);ap.add_argument("--lock",default="/tmp/gpu-bench.lock")
   args=ap.parse_args();args.indices=_normalize(args.indices);_validate_run_extent(args.depth,args.count,args.max_context,args.reps,args.mode in ("timing","timing-child"))
   if args.mode=="child":
-    row,arr=child(args.model,args.depth,args.count,args.max_context,args.indices,args.composed,args.compact,args.accepted_attention_max17);out=pathlib.Path(args.out);out.parent.mkdir(parents=True,exist_ok=True)
+    row,arr=child(args.model,args.depth,args.count,args.max_context,args.indices,args.composed,args.compact,args.accepted_attention_max17,args.owned_input_boundary);out=pathlib.Path(args.out);out.parent.mkdir(parents=True,exist_ok=True)
     with out.with_suffix(".npz").open("wb") as f: np.savez_compressed(f,logits=arr)
     out.write_text(json.dumps(row,indent=2,sort_keys=True)+"\n");print(json.dumps({"status":"complete","out":str(out)}));os._exit(0)
   if args.mode=="timing-child":
-    row=timing_child(args.model,args.depth,args.count,args.max_context,args.reps,args.indices,args.composed,args.accepted_attention_max17);out=pathlib.Path(args.out);out.parent.mkdir(parents=True,exist_ok=True)
+    row=timing_child(args.model,args.depth,args.count,args.max_context,args.reps,args.indices,args.composed,args.accepted_attention_max17,args.owned_input_boundary);out=pathlib.Path(args.out);out.parent.mkdir(parents=True,exist_ok=True)
     out.write_text(json.dumps(row,indent=2,sort_keys=True)+"\n");print(json.dumps(row));os._exit(0)
   result=qualify(args) if args.mode=="qualify" else sweep(args) if args.mode=="sweep" else timing(args)
   pathlib.Path(args.out).write_text(json.dumps(result,indent=2,sort_keys=True)+"\n");print(json.dumps(result,indent=2))

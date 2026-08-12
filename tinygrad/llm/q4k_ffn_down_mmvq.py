@@ -17,7 +17,7 @@ from tinygrad.codegen.late.warp_reduce import _staged_shfl, _warp_reduce_sum_sta
 from tinygrad.dtype import AddrSpace
 from tinygrad.llm.decode_kernels import Q4K_WORDS_PER_BLOCK, _f16_word
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, execute_research_program
-from tinygrad.uop.ops import AxisType, KernelInfo, UOp
+from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
 
 ROWS, K, QK = 4096, 12288, 256
 WARP, WARPS_PER_ROW = 32, 4
@@ -144,7 +144,17 @@ def q4k_ffn_down_mmvq_call(admission:object, linear:Any, x:Tensor, binding:Any,
   words=linear.q4k_storage.words.to(x.device).contiguous() if linear.q4k_storage.mode == "q4_ondemand" else linear.q4k_storage.words.to(x.device)
   if admission.owned_input_boundary:
     if x.dtype != dtypes.float32: return None
-    xv=x[:,0,:].reshape(K)
+    # The owned boundary consumes the fused w1w3 output WITHOUT a materialize.
+    # ``x`` is the producer's exact result wrapped in equal-span reshapes; hand
+    # the opaque provider the AFTER itself so custom_kernel keeps it (an input
+    # that is only a view would be conservatively copied into a fp32 materialize,
+    # silently replacing the fp16 cast this route exists to remove).
+    owned_uop=x.uop
+    owned_expected=owned_uop.numel()
+    while owned_uop.op is Ops.RESHAPE and len(owned_uop.src) and owned_uop.src[0].numel()==owned_expected:
+      owned_uop=owned_uop.src[0]
+    if owned_uop.op is not Ops.AFTER or owned_uop.shape != (K,) or owned_uop.dtype != x.dtype: return None
+    xv=Tensor(owned_uop)
   else: xv=x[:,0,:].reshape(K).cast(dtypes.float16).contiguous()
   provider=KernelProgram("decode_q4k_ffn_down_mmvq",f"blk{admission.block_index}.q8_provider",
     KernelProgramProvenance.RESEARCH_ONLY,emit_q8_provider(dtypes.float32 if admission.owned_input_boundary else dtypes.float16))
