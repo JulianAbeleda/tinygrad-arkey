@@ -47,8 +47,8 @@ from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OU
                                            runtime_persistent, runtime_scratch)
 from tinygrad.llm.model_route_plan import (build_model_route_plan, decode_norm_fusion_promoted,
   decode_q4k_epilogue_fusion_promoted, decode_q4k_epilogue_resadd_promoted, decode_q4k_w1w3_fusion_promoted,
-  decode_q4k_w1w3_fp16_store_promoted, decode_kv_store_fusion_promoted, decode_rmsnorm_native_lowering_promoted,
-  decode_reduce_output_rmsnorm_promoted, decode_shared_q8_attention_promoted)
+  decode_q4k_w1w3_fp16_store_promoted, decode_ffn_down_resadd_promoted, decode_kv_store_fusion_promoted,
+  decode_rmsnorm_native_lowering_promoted, decode_reduce_output_rmsnorm_promoted, decode_shared_q8_attention_promoted)
 from tinygrad.llm.prefill_candidate_runtime import decode_prefill_graph_candidate_set, automatic_promoted_prefill_graph_policy
 from tinygrad.llm.physical_memory_ledger import AllocationOwner, bind_allocation_owner
 from tinygrad.uop.ops import Ops, resolve
@@ -663,10 +663,15 @@ class FFNBlock:
       # harness-installed _ffn_down_resadd_lease the ffn_down Q4K/Q6K GEMV absorbs the h+ffn_out
       # add in-kernel (total + h[row], fp32 store) and the block returns ffn_out directly. The
       # lease is checked on the model, the block, AND the linear (the route re-checks it
-      # fail-closed), and "gate_out" absent keeps the M4 fused-prelude path closed/distinct.
-      _ffn_resadd_lease = (not _prefill and getattr(self, "_ffn_down_resadd_lease", False)
+      # fail-closed), and "gate_out" absent keeps the M4 fused-prelude path closed/distinct. The
+      # loader record (_decode_ffn_down_resadd_promoted, decode-ffn-down-resadd-route-policy.json)
+      # promotes the same spelling for NV sm_120; the lease still forces it where the record is
+      # closed (research arms keep the same control/candidate contract).
+      _ffn_resadd_lease = (not _prefill
+                           and (getattr(self, "_ffn_down_resadd_lease", False) or getattr(self, "_decode_ffn_down_resadd_promoted", False))
                            and isinstance(_ffn_down_linear, (Q4KPrimitiveLinear, Q6KPrimitiveLinear))
-                           and getattr(_ffn_down_linear, "_ffn_down_resadd_lease", False)
+                           and (getattr(_ffn_down_linear, "_ffn_down_resadd_lease", False)
+                                or getattr(_ffn_down_linear, "_decode_ffn_down_resadd_promoted", False))
                            and getattr(_ffn_down_linear, "route_role", "") == "ffn_down"
                            and not hasattr(self, "ffn_gate_exps"))
       if (_epi_fused and isinstance(_ffn_down_linear, Q4KPrimitiveLinear) and
@@ -1417,7 +1422,24 @@ class Transformer:
     direct_greedy = bool(getattr(self, "_decode_direct_greedy_promoted", False))
     jit = greedy_jit if direct_greedy and float(temperature.item()) == 0.0 else \
           (self.rollout_logits_jit_flash if use_flash else self.rollout_logits_jit)
-    with prefill_route_scope(False): return jit(tokens, start_pos, temperature)
+    with prefill_route_scope(False), self._decode_callify_substrate():
+      return jit(tokens, start_pos, temperature)
+
+  @contextlib.contextmanager
+  def _decode_callify_substrate(self):
+    """M2c callify substrate: the block-output copy fold (and the reduce-output
+    route when its policy promotes) is gated on callify Context flags that
+    production decode normally leaves closed. When a promoted policy requires
+    them, decode graph capture runs under the Context so the booked graph
+    renders in production; closed policies keep the legacy closed-graph
+    spelling (no Context, byte-identical legacy graph)."""
+    if not getattr(self, "_decode_callify_substrate_promoted", False):
+      yield
+      return
+    from tinygrad.callify import CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER
+    from tinygrad.helpers import Context
+    with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
+      yield
 
   def __call__(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, use_flash:bool=False,
                ring_freqs:Tensor|None=None, ring_full:bool=False, greedy:bool=False, feedback_slot:int|None=None) -> Tensor:
@@ -1453,6 +1475,11 @@ class Transformer:
             (rollout_greedy if greedy else
              (self.rollout_jit_flash if use_flash else self.rollout_jit))
     if not is_prefill_v2:
+      if not is_prefill:
+        # Decode captures under the M2c callify substrate when a promoted policy
+        # requires it; prefill graphs always stay on the closed-graph spelling.
+        with prefill_route_scope(is_prefill), self._decode_callify_substrate():
+          return jit(tokens, start_pos, temperature)
       with prefill_route_scope(is_prefill): return jit(tokens, start_pos, temperature)
     # contain the ambient codegen power: install the warmstart table ONLY around the prefill-v2 forward (it's
     # consulted at kernel-compile time, i.e. this jit's first call), then restore -- decode/other paths never
@@ -1739,6 +1766,16 @@ class Transformer:
     _w1w3_fp16_promoted = _w1w3_promoted and decode_q4k_w1w3_fp16_store_promoted((_norm_cap.backend, _norm_cap.architecture))
     model._decode_q4k_w1w3_fp16_store_promoted = _w1w3_fp16_promoted
     for _b in model.blk: _b._decode_q4k_w1w3_fp16_store_promoted = _w1w3_fp16_promoted
+    # M2b+M2c ffn-down residual-add absorption gate (decode-ffn-down-resadd-route-policy.json,
+    # NV sm_120 promoted, nv-epilogue-absorption-m2c-ab-20260811.json BOOKED). M2b: the ffn_down
+    # Q4K/Q6K GEMV absorbs the h+ffn_out add in-kernel; M2c: the declared epilogue-absorbing block
+    # output gets its CALL rebound to the caller output slot so the identity copies fold. The flag
+    # is carried on the model and every block; the ffn_down linear copies are installed after the
+    # Q4K/Q6K primitive replacement below (the primitives are the objects that carry route_role).
+    # The harness lease _ffn_down_resadd_lease still forces the route where the record is closed.
+    _ffn_resadd_promoted = decode_ffn_down_resadd_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_ffn_down_resadd_promoted = _ffn_resadd_promoted
+    for _b in model.blk: _b._decode_ffn_down_resadd_promoted = _ffn_resadd_promoted
     # Decode kv-store chain fusion gate (decode-kv-store-chain-fusion-scope-20260803.md). CLOSED default
     # (decode-kv-store-fusion-route-policy.json, empty promoted_targets until a same-session A/B record
     # lands). Same resolve-once pattern as the w1w3 gate; blocks carry their own copy so the traced
@@ -1765,6 +1802,12 @@ class Transformer:
     _reduce_output_promoted = decode_reduce_output_rmsnorm_promoted((_norm_cap.backend, _norm_cap.architecture))
     model._decode_reduce_output_rmsnorm_promoted = _reduce_output_promoted
     for _b in model.blk: _b._decode_reduce_output_rmsnorm_promoted = _reduce_output_promoted
+    # M2c callify substrate: the block-output copy fold and the fp32 q/k reduce-output spelling are
+    # gated on the callify owned-precompiled-output-redirect / typed-semantic-input-producer Context
+    # flags, which production decode normally leaves closed. When a promoted policy requires them
+    # (M2b/M2c here; the reduce-output route when it promotes), the decode path runs under the
+    # Context so the booked graph renders in production (see _decode_callify_substrate below).
+    model._decode_callify_substrate_promoted = bool(_ffn_resadd_promoted or _reduce_output_promoted)
     nn.state.load_state_dict(model, state_dict, verbose=False, consume=True, realize=False)  # NOTE: rope_freqs.weight (32,) is unused
     if _norm_promoted:
       # Materialize the packed norm weights once at load (~600KB total fp16) so the fused decode
@@ -1816,6 +1859,14 @@ class Transformer:
         primitive_budget, q4_storage_mode, route_plan, device_facts=_device_facts)
       if use_q6k_primitive: primitive_linears += _install_q6k_primitives(model, pathlib.Path(gguf), q4k_meta, None,
         primitive_budget, q6_storage_mode, route_plan, device_facts=_device_facts)
+      # M2b/M2c linear copies of the resolve-once flag: the Q4K/Q6K primitive replacement above is
+      # what carries route_role on the ffn_down linears, so the promoted flag is installed HERE on
+      # the replacement objects (the model/block copies were set in the resolve-once block above).
+      if model._decode_ffn_down_resadd_promoted:
+        for _b in model.blk:
+          _ffn = getattr(_b, "ffn_down", None)
+          if _ffn is not None and isinstance(_ffn, (Q4KPrimitiveLinear, Q6KPrimitiveLinear)) and getattr(_ffn, "route_role", "") == "ffn_down":
+            _ffn._decode_ffn_down_resadd_promoted = True
       if qk_cfg.storage_debug:
         summary = _qk_storage_summary(primitive_linears)
         cap = -1 if primitive_budget.cap_bytes is None else primitive_budget.cap_bytes

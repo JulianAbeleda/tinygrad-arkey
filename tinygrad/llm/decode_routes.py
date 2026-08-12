@@ -98,10 +98,13 @@ class _Q4KDecodeCandidate:
     # M2b ffn_down residual add (nv-epilogue-absorption-route-scope-20260810.md): the ffn_down
     # Q4K GEMV absorbs the standalone h+ffn_out add in-kernel (total + h[row], fp32 store) when
     # the block threads normed_h=h under the harness-installed _ffn_down_resadd_lease. The lease
-    # is re-checked HERE on the linear (fail-closed); "gate_out" absent keeps the M4 fused-prelude
-    # path closed and distinct. The in-kernel fp32 add is bitwise-identical to the separate add.
+    # is re-checked HERE on the linear (fail-closed); the loader record's promoted flag
+    # (_decode_ffn_down_resadd_promoted, decode-ffn-down-resadd-route-policy.json) admits the same
+    # spelling. "gate_out" absent keeps the M4 fused-prelude path closed and distinct. The
+    # in-kernel fp32 add is bitwise-identical to the separate add.
     m2b_resadd = (route_role == "ffn_down" and "normed_h" in epi_inputs and "gate_out" not in epi_inputs
-                  and bool(getattr(linear, "_ffn_down_resadd_lease", False)))
+                  and (bool(getattr(linear, "_ffn_down_resadd_lease", False))
+                       or bool(getattr(linear, "_decode_ffn_down_resadd_promoted", False))))
     if m2b_resadd:
       from tinygrad.llm.decode_kernels import Q4KGEMVEpilogue
       epi_spec = Q4KGEMVEpilogue("ffn_down_resadd")
@@ -188,8 +191,10 @@ def q4k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], 
   binding = Q4K_DECODE_CANDIDATE.bind(linear, x, arch_ok)
   if binding is None:
     # M2b fail-closed fallback: the model skips its own h+ffn_out add when it threads normed_h=h
-    # under the lease, so a binding miss must reproduce the add to keep the graph unchanged.
-    if (epilogue_inputs or {}) and "normed_h" in (epilogue_inputs or {}) and getattr(linear, "_ffn_down_resadd_lease", False):
+    # under the lease or the promoted record, so a binding miss must reproduce the add to keep the
+    # graph unchanged.
+    if (epilogue_inputs or {}) and "normed_h" in (epilogue_inputs or {}) and (
+        getattr(linear, "_ffn_down_resadd_lease", False) or getattr(linear, "_decode_ffn_down_resadd_promoted", False)):
       return fallback(x) + (epilogue_inputs or {})["normed_h"]
     return fallback(x)
   return Q4K_DECODE_CANDIDATE.execute(linear, x, binding, epilogue_inputs=epilogue_inputs or {})
@@ -369,13 +374,14 @@ class _Q6KDecodeCandidate:
     reduction = ("in_kernel" if fusion_admitted and binding.use_coop and binding.row_tile * Q6K_POS_EXTENT <= 32
                  else "external_sum")
     # M2b ffn_down residual add: the shared-block coop GEMV absorbs h+ffn_out in-kernel under the
-    # harness-installed _ffn_down_resadd_lease (fail-closed: checked on the linear; "gate_out"
-    # absent keeps the M4 fused-prelude path distinct). The in-kernel fp32 add is bitwise-identical
-    # to the standalone E_32_32_4_02a9738c add, so the separate add folds away. When the coop
-    # reduction is external_sum the epilogue cannot fire in-kernel; the route reproduces the
-    # ordinary add over the reduced partials so the block graph stays unchanged.
+    # harness-installed _ffn_down_resadd_lease or the promoted record (fail-closed: checked on the
+    # linear; "gate_out" absent keeps the M4 fused-prelude path distinct). The in-kernel fp32 add
+    # is bitwise-identical to the standalone E_32_32_4_02a9738c add, so the separate add folds
+    # away. When the coop reduction is external_sum the epilogue cannot fire in-kernel; the route
+    # reproduces the ordinary add over the reduced partials so the block graph stays unchanged.
     m2b_resadd = (route_role == "ffn_down" and "normed_h" in epi_inputs and "gate_out" not in epi_inputs
-                  and bool(getattr(linear, "_ffn_down_resadd_lease", False)))
+                  and (bool(getattr(linear, "_ffn_down_resadd_lease", False))
+                       or bool(getattr(linear, "_decode_ffn_down_resadd_promoted", False))))
     epilogue = "ffn_down_resadd" if (m2b_resadd and reduction == "in_kernel") else ""
     spec = q6k_spec_for_role(binding.N, binding.K, parts=binding.parts, row_tile=binding.row_tile,
                             use_coop=binding.use_coop, opts=linear.opts, target=target, reduction=reduction,
@@ -429,7 +435,8 @@ def q6k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], 
   binding = Q6K_DECODE_CANDIDATE.bind(linear, x, arch_ok)
   if binding is None:
     # M2b fail-closed fallback: reproduce the ordinary h+ffn_out add (see the Q4K route).
-    if (epilogue_inputs or {}) and "normed_h" in (epilogue_inputs or {}) and getattr(linear, "_ffn_down_resadd_lease", False):
+    if (epilogue_inputs or {}) and "normed_h" in (epilogue_inputs or {}) and (
+        getattr(linear, "_ffn_down_resadd_lease", False) or getattr(linear, "_decode_ffn_down_resadd_promoted", False)):
       return fallback(x) + (epilogue_inputs or {})["normed_h"]
     return fallback(x)
   return Q6K_DECODE_CANDIDATE.execute(linear, x, binding, epilogue_inputs=epilogue_inputs or {})

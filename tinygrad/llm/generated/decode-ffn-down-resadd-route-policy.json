@@ -1,0 +1,8 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_ffn_down_resadd",
+  "description": "M2b+M2c ffn-down residual-add absorption promotion record (nv-epilogue-absorption-route-scope-20260810.md row M2b/M2c; nv-epilogue-absorption-m2c-ab-20260811.json BOOKED). M2b: the ffn_down Q4K/Q6K decode GEMVs add the hidden-state residual h in-kernel (total + h[row], fp32 store) under their own *_epi_ffnresadd names, so the standalone fp32 h+ffn_out add (E_32_32_4_02a9738c) folds away 36x/token; the in-kernel add is the same fp32 expression the separate add kernel lowers, so stored bytes are bitwise-identical. M2c: the declared epilogue-absorbing AFTER (fp32 block output) gets its nested CALL rebound to the caller output slot, so the E_32_32_4_fab82d40 identity copies (49 -> 0) fold away (requires the callify owned-precompiled-output-redirect substrate in the decode path, enabled by this promotion). NV sm_120 is promoted by the M2c wall bracket: all correctness gates PASS (exact logits SHA-256 identical to control, census net -85 kernels: E_32_32_4_02a9738c 36 -> 0 and E_32_32_4_fab82d40 49 -> 0 with all other program counts byte-identical), wall candidate 5.2031 ms/token = 192.19 tok/s vs control bracket 5.2757 ms = 189.55 tok/s, +72.6 us/token ABOVE the +50 us promotion bar. The harness lease _ffn_down_resadd_lease still forces the route where the record is closed (research arms keep the same control/candidate contract).",
+  "promoted_targets": [
+    {"backend": "NV", "architecture": "sm_120"}
+  ]
+}

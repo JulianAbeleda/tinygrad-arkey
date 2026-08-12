@@ -10,13 +10,19 @@ bitwise-identical.  The fp16-store spelling of the original M2b premise is NOT
 bitwise-safe: the next block's attention residual consumes the fp32 block
 output, so the block output dtype must not change (scope doc section 3 M2b).
 The legacy kernel names and routes are unchanged when the lease is absent.
+The loader promotion record (decode-ffn-down-resadd-route-policy.json) admits
+the same spelling for NV sm_120 (M2b+M2c BOOKED, nv-epilogue-absorption-m2c-ab-
+20260811.json), so the route also honors the promoted flag on the linear.
 """
+import json, pathlib
 import numpy as np
 import pytest
 
 from tinygrad import Tensor, dtypes
 from tinygrad.codegen import to_program
 from tinygrad.helpers import Target
+from tinygrad.llm.model_route_plan import (decode_ffn_down_resadd_promoted, load_decode_ffn_down_resadd_promotion,
+  _DECODE_FFN_DOWN_RESADD_PROMOTED_TARGETS)
 from tinygrad.llm.decode_kernels import (Q4KGEMVEpilogue, Q6KGEMVRouteSpec, emit_q6k_gemv_kernel,
   q4k_g3_lanemap_gemv_kernel, q6k_spec_for_role)
 from tinygrad.llm.decode_routes import q4k_primitive_linear_call, q6k_primitive_linear_call
@@ -108,7 +114,7 @@ def test_q6k_ffn_down_resadd_renders_h_input_through_cuda():
 
 
 class _FakeQ4KFFNDown:
-  def __init__(self, leased: bool):
+  def __init__(self, leased: bool = False, promoted: bool = False):
     self.route_admission = QKPrimitiveRouteAdmission(QKPrimitiveCapability("NV", "sm_120", 32, True), True)
     self.bias, self.decode_enabled = None, True
     self.out_features, self.in_features = 4096, 12288
@@ -116,6 +122,7 @@ class _FakeQ4KFFNDown:
     self.q4k_storage = type("S", (), {"mode": "sidecar",
                                       "words": Tensor.zeros(4096 * (12288 // 256) * 36, dtype=dtypes.uint32, device="CPU")} )()
     self._ffn_down_resadd_lease = leased
+    self._decode_ffn_down_resadd_promoted = promoted
 
 
 def _call_names(t: Tensor) -> list[str]:
@@ -142,6 +149,42 @@ def test_q4k_route_picks_ffn_down_resadd_only_under_the_lease():
   closed_names = _call_names(closed)
   assert "q4k_g3_lanemap_gemv_4096_12288" in closed_names
   assert not any("ffnresadd" in name for name in closed_names)
+
+
+def test_q4k_route_picks_ffn_down_resadd_under_the_promoted_flag():
+  # The loader promotion record admits the same spelling as the lease: the route must pick the
+  # *_epi_ffnresadd variant when the linear carries _decode_ffn_down_resadd_promoted alone.
+  x = Tensor.zeros((1, 1, 12288), dtype=dtypes.float16, device="CPU")
+  h = Tensor.zeros((1, 1, 4096), dtype=dtypes.float32, device="CPU")
+  promoted = q4k_primitive_linear_call(_FakeQ4KFFNDown(promoted=True), x, fallback=lambda _: x, arch_ok=True,
+                                       epilogue_inputs={"normed_h": h})
+  names = _call_names(promoted)
+  assert "q4k_g3_lanemap_gemv_epi_ffnresadd_4096_12288" in names
+  assert promoted.dtype == dtypes.float32
+
+
+def test_ffn_down_resadd_promotion_loader_closed_default(tmp_path):
+  for doc in ({"schema": "boltbeam.route_policy.v1", "route": "decode_ffn_down_resadd"},
+              {"schema": "boltbeam.route_policy.v1", "route": "decode_ffn_down_resadd", "promoted_targets": []}):
+    p = tmp_path / "policy.json"
+    p.write_text(json.dumps(doc))
+    assert load_decode_ffn_down_resadd_promotion(str(p)) == frozenset()
+
+
+def test_ffn_down_resadd_promotion_loader_names_explicit_targets_only(tmp_path):
+  p = tmp_path / "policy.json"
+  p.write_text(json.dumps({"schema": "boltbeam.route_policy.v1", "route": "decode_ffn_down_resadd",
+                           "promoted_targets": [{"backend": "NV", "architecture": "sm_120"}]}))
+  promoted = load_decode_ffn_down_resadd_promotion(str(p))
+  assert ("NV", "sm_120") in promoted
+  assert ("AMD", "gfx1100") not in promoted
+
+
+def test_ffn_down_resadd_checked_in_record_promotes_only_the_measured_nv_target():
+  assert _DECODE_FFN_DOWN_RESADD_PROMOTED_TARGETS == frozenset({("NV", "sm_120")})
+  assert decode_ffn_down_resadd_promoted(("NV", "sm_120"))
+  assert not decode_ffn_down_resadd_promoted(("AMD", "gfx1100"))
+  assert not decode_ffn_down_resadd_promoted((None, None))
 
 
 def test_q4k_route_fallback_reproduces_the_add_when_leased_but_unbound():

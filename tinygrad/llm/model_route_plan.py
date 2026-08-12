@@ -277,6 +277,29 @@ def decode_q4k_w1w3_fp16_store_promoted(target:Target) -> bool:
   """Policy authority for the w1+w3 fused fp16-store spelling (closed default, see the loader above)."""
   return target in _DECODE_Q4K_W1W3_FP16_STORE_PROMOTED_TARGETS
 
+def load_decode_ffn_down_resadd_promotion(path:str) -> frozenset[Target]:
+  """Read the ffn_down residual-add absorption promotion record (boltbeam.route_policy.v1, same schema
+  family as `load_decode_q4k_w1w3_fp16_store_promotion`). CLOSED default; deliberately a SEPARATE record
+  from M2's decode_epilogue_fusion and M4's q4k epilogue records: the ffn_down Q4K/Q6K GEMV absorbs the
+  standalone h+ffn_out fp32 add in-kernel (M2b, *_epi_ffnresadd names) and the declared epilogue-absorbing
+  block-output AFTER gets its nested CALL rebound to the caller output slot so the identity copies fold
+  away (M2c), and neither may fire on any target until a measured record opts it in
+  (nv-epilogue-absorption-m2c-ab-20260811.json, BOOKED). A document without `promoted_targets` -- or with
+  an empty list -- promotes nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_FFN_DOWN_RESADD_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-ffn-down-resadd-route-policy.json"
+_DECODE_FFN_DOWN_RESADD_PROMOTED_TARGETS: frozenset[Target] = load_decode_ffn_down_resadd_promotion(_DECODE_FFN_DOWN_RESADD_PROMOTION_RECORD)
+
+def decode_ffn_down_resadd_promoted(target:Target) -> bool:
+  """Policy authority for the ffn_down residual-add absorption route (closed default, see the loader above)."""
+  return target in _DECODE_FFN_DOWN_RESADD_PROMOTED_TARGETS
+
 def load_decode_kv_store_fusion_promotion(path:str) -> frozenset[Target]:
   """Read the decode kv-store chain fusion promotion record (boltbeam.route_policy.v1, same schema
   family as `load_decode_q4k_w1w3_fusion_promotion`). CLOSED default; deliberately a SEPARATE record
