@@ -499,7 +499,8 @@ FLASH_DECODE_G5_CANDIDATE = _FlashDecodeCandidate(FLASH_DECODE_G5)
 
 def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp, T:int|UOp, B:int,
                                  Hq:int, Hkv:int, Hd:int, max_context:int, kv_scale:Tensor|None=None,
-                                 freqs:Tensor|None=None, ring_full:bool=False) -> Tensor:
+                                 freqs:Tensor|None=None, ring_full:bool=False,
+                                 combine_fp16:bool|None=None) -> Tensor:
   MAXC = max_context
   vsp = UOp.variable("start_pos", 0, MAXC - 1)  # unbound twin of start_pos (for kernel ranges)
   # full-ring (ctx>=N): the ring buffer is full and start_pos is the wrapped WRITE slot, so the live read length is the
@@ -522,7 +523,12 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
     # (rather than silently emitting a deleted handwritten flash kernel); model.py gates flash vs SDPA upstream.
     raise RuntimeError(f"flash_decode_attention_route: shape B={B} Hd={Hd} Hkv={Hkv} Hq={Hq} is not served by "
                        "the generated live-split route, and all handwritten fallback flash routes were deleted.")
+  # M2d combine-fp16 lease override (nv-epilogue-absorption-route-scope-20260810.md): the policy
+  # record stays closed; a harness-installed `_flash_combine_fp16_lease` on the block forces the
+  # fp16 combine variant (flash_fused_gmax_combine_f16_*) so its in-kernel RNE store absorbs the
+  # E_32_32_4_0a5eb0ac attention cast. Without the lease, `binding.combine_fusion` is the policy
+  # answer (False) and the legacy fp32 combine renders byte-identical.
   return flash_decode_live_split_block_tile(q.reshape(binding.Hq, binding.Hd), assigned_kv, _tc,
     binding.Hd, binding.Hq, binding.Hkv, MAXC, binding.split_size, staging=binding.staging,
     fused_combine=True, kv_scale=kv_scale, freqs=freqs, query_group_size=binding.query_group_size,
-    stage_width=binding.stage_width, combine_fp16=binding.combine_fusion)
+    stage_width=binding.stage_width, combine_fp16=bool(binding.combine_fusion or combine_fp16))

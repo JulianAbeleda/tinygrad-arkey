@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NV wall-bracket A/B for residual-family epilogue absorption (M2b: ffn_down in-kernel residual add; M2c: fp32 block-output copy fold).
+"""NV wall-bracket A/B for residual-family epilogue absorption (M2b: ffn_down in-kernel residual add; M2c: fp32 block-output copy fold; M2d: fp16 flash-combine store absorbing the attention cast).
 
 Sibling of ``extra/llm_research/decode/nv_reduce_output_fp32_qk_ab.py`` (the
 booked fp32 q/k norms route).  M2 attacks the unbooked +240.106 us
@@ -25,6 +25,17 @@ copies (49 per decode token) fold away while the block output stays fp32
 bitwise-identical).  The M5-closed attention fp32->fp16 cast
 (``E_32_32_4_0a5eb0ac`` x36) must stay byte-identical between arms; the
 census gate fails closed if it shifts or if any fab82d40 copy remains.
+
+M2d adds the fp16 flash-combine store: the M5 combine-fp16 variant
+(``flash_fused_gmax_combine_f16_*``) casts the combine result to fp16
+in-kernel (the same RNE ``cvt.rn.f16.f32`` the standalone cast lowers), so
+the ``E_32_32_4_0a5eb0ac`` attention cast (x36) folds away AND the M5 typed
+boundary (producer declaration + attn_qo consumer request + lossless
+fp16->fp32->fp16 roundtrip cancel) prevents the opaque-boundary fp16 copy
+class (``E_32_32_4_3b0fcfbc``) that made the 2026-08-02 M5 measurement
+net-zero.  The candidate installs ``_flash_combine_fp16_lease`` on the model
+and every block; the control arm is the booked M2c candidate without it
+(fail-closed: any combine-f16 body in control is a gate failure).
 
 The control arm is the BOOKED M2a candidate conditions (callify flags +
 ``_decode_reduce_output_rmsnorm_promoted`` + ``_decode_direct_greedy_promoted``
@@ -64,6 +75,7 @@ TIMING_SCHEMA = "tinygrad.nv_epilogue_absorption_ab.timing.v1"
 
 LEASE = "_q4k_w1w3_fp16_store_lease"
 LEASE2 = "_ffn_down_resadd_lease"
+LEASE3 = "_flash_combine_fp16_lease"
 FUSED16_PREFIX = "q4k_g3_lanemap_gemv_w1w3fused16_"
 FUSED_PREFIX = "q4k_g3_lanemap_gemv_w1w3fused_"
 CAST_PREFIX = "E_128_32_3"
@@ -75,43 +87,55 @@ FFNRESADD_SUFFIX = "_epi_ffnresadd"
 # fp32->fp16 cast (0a5eb0ac, M5-closed: must stay byte-identical between arms).
 BLOCK_OUTPUT_COPY_PREFIX = "E_32_32_4_fab82d40"
 ATTENTION_CAST_PREFIX = "E_32_32_4_0a5eb0ac"
+# M2d families: the fp16 flash-combine store (folds the attention cast in-kernel with
+# bitwise-identical bytes) and the legacy fp32 combine it replaces 1:1; the
+# E_32_32_4_3b0fcfbc fp16->fp16 opaque-boundary copy class must stay at zero (the typed
+# boundary is what makes M2d net -36 where the 2026-08-02 M5 measurement was net-zero).
+COMBINE_F16_PREFIX = "flash_fused_gmax_combine_f16_"
+COMBINE_F32_PREFIX = "flash_fused_gmax_combine_"
+COMBINE_COPY_PREFIX = "E_32_32_4_3b0fcfbc"
 
 CONSTRUCTION = {
-  "route": "residual-family epilogue absorption M2b+M2c (ffn_down in-kernel residual add + fp32 block-output copy fold)",
+  "route": "residual-family epilogue absorption M2b+M2c+M2d (ffn_down in-kernel residual add + fp32 block-output copy fold + fp16 flash-combine store)",
   "population": "residual_cast_contiguous",
-  "mechanism": "M2b: the ffn_down Q4K/Q6K decode GEMVs add the hidden-state residual h in-kernel (total + h[row], fp32 store) under their own *_epi_ffnresadd names; the standalone fp32 h+ffn_out add (E_32_32_4_02a9738c) folds away; the in-kernel add is the same fp32 expression the separate add kernel lowers, so stored bytes are bitwise-identical. M2c: the declared epilogue-absorbing AFTER (fp32 block output) gets its nested CALL rebound to the caller output slot, so the E_32_32_4_fab82d40 identity copies (49 -> 0) fold away; the M5-closed attention fp32->fp16 cast (E_32_32_4_0a5eb0ac x36) stays byte-identical between arms.",
-  "codegen_path": "candidate sets _ffn_down_resadd_lease=True on the model, every block, and every ffn_down linear on top of the booked M2a candidate conditions (callify flags + _decode_reduce_output_rmsnorm_promoted + _decode_direct_greedy_promoted + _q4k_w1w3_fp16_store_lease); the block threads normed_h=h into ffn_down and skips its own h+ffn_out add; decode_routes picks the ffn_down_resadd epilogue (Q4K) or the q6k coop epilogue variant",
-  "census_target": "E_32_32_4_02a9738c 36 -> 0; q4k_g3_lanemap_gemv_epi_ffnresadd_4096_12288 x18 + q6k_gen_coop_4096_12288_inkernel_epi_ffnresadd x18; E_32_32_4_fab82d40 49 -> 0 (M2c copy fold); E_32_32_4_0a5eb0ac stays 36 == 36 (M5-closed); all other program counts byte-identical to control; honest net program delta -85",
+  "mechanism": "M2b: the ffn_down Q4K/Q6K decode GEMVs add the hidden-state residual h in-kernel (total + h[row], fp32 store) under their own *_epi_ffnresadd names; the standalone fp32 h+ffn_out add (E_32_32_4_02a9738c) folds away; the in-kernel add is the same fp32 expression the separate add kernel lowers, so stored bytes are bitwise-identical. M2c: the declared epilogue-absorbing AFTER (fp32 block output) gets its nested CALL rebound to the caller output slot, so the E_32_32_4_fab82d40 identity copies (49 -> 0) fold away. M2d: the M5 fp16 combine store (flash_fused_gmax_combine_f16_*) casts the combine result to fp16 in-kernel (same RNE cvt.rn.f16.f32 as the standalone cast), absorbing the E_32_32_4_0a5eb0ac attention cast x36; the M5 typed boundary prevents the opaque-boundary fp16 copy class (E_32_32_4_3b0fcfbc) that made the 2026-08-02 M5 measurement net-zero.",
+  "codegen_path": "both arms run the booked M2c candidate conditions (callify flags + _decode_reduce_output_rmsnorm_promoted + _decode_direct_greedy_promoted + _q4k_w1w3_fp16_store_lease + _ffn_down_resadd_lease on model/blocks/ffn_down linears); the candidate additionally installs _flash_combine_fp16_lease on the model and every block, which threads combine_fp16=True through flash_decode_attention_route -> flash_decode_live_split_block_tile; the fp16 combine declares its typed output (combine_fusion_admitted) and the attn_qo Q4K GEMV's TypedViewRequest (requires_combine_fusion default True) folds the activation prelude to a view of the AFTER via the lossless fp16->fp32->fp16 roundtrip cancel",
+  "census_target": "E_32_32_4_02a9738c 36 -> 0; q4k_g3_lanemap_gemv_epi_ffnresadd_4096_12288 x18 + q6k_gen_coop_4096_12288_inkernel_epi_ffnresadd x18; E_32_32_4_fab82d40 49 -> 0 (M2c copy fold); E_32_32_4_0a5eb0ac 36 -> 0 (M2d cast fold); flash_fused_gmax_combine_32_128 36 -> 0 swapped 1:1 with flash_fused_gmax_combine_f16_32_128 0 -> 36; E_32_32_4_3b0fcfbc stays 0 (no opaque copy); all other program counts byte-identical to control; honest net program delta -121",
   "correctness_contract": {
     "full_logit_fp32_sha256": "bitwise identical to control over the stacked rows",
     "token_stream": "identical to control",
     "per_row_argmax": "equals the sampled token",
     "promotion": "+50 us/token vs both bracketing controls (control / candidate / control)",
-    "census": "E_32_32_4_02a9738c gone, *_epi_ffnresadd bodies present 1:1 with the control add count, E_32_32_4_fab82d40 folded to zero with the drop equal to the control copy count, E_32_32_4_0a5eb0ac identical between arms, no other program-count shift; FAIL CLOSED on any unrelated delta",
+    "census": "E_32_32_4_02a9738c gone, *_epi_ffnresadd bodies present 1:1 with the control add count, E_32_32_4_fab82d40 folded to zero with the drop equal to the control copy count, E_32_32_4_0a5eb0ac folded to zero with the fp32 combine swapped 1:1 to the fp16 combine, E_32_32_4_3b0fcfbc at zero, no other program-count shift; FAIL CLOSED on any unrelated delta",
   },
-  "question": "Do the M2b in-kernel h+ffn_out add in the ffn_down GEMVs and the M2c fp32 block-output copy fold survive NV render (Xid 31 class), preserve exact full logits, remove exactly the E_32_32_4_02a9738c add programs and the E_32_32_4_fab82d40 copies with no other census shift, and book the residual-family share of the +240.106 us row under the reverse wall bracket?",
+  "question": "Do the M2b in-kernel h+ffn_out add, the M2c fp32 block-output copy fold, and the M2d fp16 combine store survive NV render (Xid 31 class), preserve exact full logits, remove exactly the E_32_32_4_02a9738c adds, the E_32_32_4_fab82d40 copies, and the E_32_32_4_0a5eb0ac casts with the fp32->fp16 combine swap and no other census shift, and book the residual-family share of the +240.106 us row under the reverse wall bracket?",
 }
 
 
 def _configure(model, arm: str) -> None:
-  """Both arms set the booked M2a candidate conditions (the M2b control IS the
-  booked M2a candidate); the candidate additionally installs the M2b
-  ffn-down residual-add lease on the model, every block, and every ffn_down
-  linear.  No loader policy creates either lease."""
+  """Both arms set the booked M2c candidate conditions (M2a fp16-store lease +
+  M2b ffn-down residual-add lease: the M2d control IS the booked M2c
+  candidate); the candidate additionally installs the M2d flash-combine
+  fp16-store lease on the model and every block.  No loader policy creates
+  any lease."""
   model._decode_direct_greedy_promoted = True
   _require_candidate_callify_flags()
   model._decode_reduce_output_rmsnorm_promoted = True
   for block in model.blk:
     block._decode_reduce_output_rmsnorm_promoted = True
-  # M2a fp16-store lease is the M2b CONTROL baseline (present in both arms).
+  # M2a fp16-store lease is present in both arms (booked M2a candidate).
   setattr(model, LEASE, True)
   for block in model.blk: setattr(block, LEASE, True)
+  # M2b ffn_down residual-add lease is present in both arms (booked M2c candidate).
+  setattr(model, LEASE2, True)
+  for block in model.blk:
+    setattr(block, LEASE2, True)
+    ffn_down = getattr(block, "ffn_down", None)
+    if ffn_down is not None: setattr(ffn_down, LEASE2, True)
   if arm == "candidate":
-    setattr(model, LEASE2, True)
-    for block in model.blk:
-      setattr(block, LEASE2, True)
-      ffn_down = getattr(block, "ffn_down", None)
-      if ffn_down is not None: setattr(ffn_down, LEASE2, True)
+    # M2d flash-combine fp16-store lease: candidate only.
+    setattr(model, LEASE3, True)
+    for block in model.blk: setattr(block, LEASE3, True)
   elif arm != "control":
     raise ValueError(f"unknown arm {arm!r}")
 
@@ -134,19 +158,29 @@ def _gates(model) -> dict:
     "ffn_down_linear_resadd_lease": [
       bool(getattr(getattr(block, "ffn_down", None), LEASE2, False)) for block in model.blk
     ] if getattr(model, "blk", None) else None,
+    "flash_combine_fp16_lease": bool(getattr(model, LEASE3, False)),
+    "block_flash_combine_fp16_lease": [
+      bool(getattr(block, LEASE3, False)) for block in model.blk
+    ] if getattr(model, "blk", None) else None,
   }
 
 
 def _assert_control_closed(gates: dict) -> None:
   leased = []
-  if gates.get("ffn_down_resadd_lease"):
+  # The M2d control arm IS the booked M2c candidate (LEASE + LEASE2 present);
+  # only the M2d combine-fp16 lease (LEASE3) must be closed.
+  if gates.get("flash_combine_fp16_lease"):
+    leased.append(f"model.{LEASE3}")
+  for index, value in enumerate(gates.get("block_flash_combine_fp16_lease") or []):
+    if value: leased.append(f"block[{index}].{LEASE3}")
+  if not gates.get("ffn_down_resadd_lease"):
     leased.append(f"model.{LEASE2}")
   for index, value in enumerate(gates.get("block_ffn_down_resadd_lease") or []):
-    if value: leased.append(f"block[{index}].{LEASE2}")
+    if not value: leased.append(f"block[{index}].{LEASE2}")
   for index, value in enumerate(gates.get("ffn_down_linear_resadd_lease") or []):
-    if value: leased.append(f"block[{index}].ffn_down.{LEASE2}")
+    if not value: leased.append(f"block[{index}].ffn_down.{LEASE2}")
   if leased:
-    raise RuntimeError(f"control arm requires the booked M2a candidate WITHOUT the M2b lease, observed: {leased}")
+    raise RuntimeError(f"control arm requires the booked M2c candidate (LEASE+LEASE2) WITHOUT the M2d {LEASE3} lease, observed: {leased}")
 
 
 def _assert_candidate_configured(gates: dict) -> None:
@@ -157,8 +191,12 @@ def _assert_candidate_configured(gates: dict) -> None:
     if not value: missing.append(f"block[{index}].{LEASE2}")
   for index, value in enumerate(gates.get("ffn_down_linear_resadd_lease") or []):
     if not value: missing.append(f"block[{index}].ffn_down.{LEASE2}")
+  if not gates.get("flash_combine_fp16_lease"):
+    missing.append(f"model.{LEASE3}")
+  for index, value in enumerate(gates.get("block_flash_combine_fp16_lease") or []):
+    if not value: missing.append(f"block[{index}].{LEASE3}")
   if missing:
-    raise RuntimeError(f"candidate arm requires {LEASE2} on the model, every block, and every ffn_down linear: {missing}")
+    raise RuntimeError(f"candidate arm requires {LEASE2} everywhere and {LEASE3} on the model and every block: {missing}")
 
 
 def validate_logits_gate(control: dict, candidate: dict) -> dict:
@@ -182,17 +220,45 @@ def _model(arm: str, model_path: str, max_context: int):
 
 @contextlib.contextmanager
 def _m2_arm_context(arm: str):
-  """Both M2 arms run as the BOOKED fp32 q/k candidate: the callify Context
-  flags are live for control AND candidate (the M2 control is the booked
-  candidate WITHOUT the fp16-store lease), so the only census delta between
-  the arms is the cast drop.  Do not reuse the closed-graph control context
-  from the fp32 q/k campaign."""
+  """Both M2d arms run as the BOOKED M2c candidate: the callify Context flags
+  are live for control AND candidate (the M2d control is the booked M2c
+  candidate WITHOUT the flash-combine fp16-store lease), so the only census
+  delta between the arms is the attention-cast fold plus the combine swap."""
   if arm not in ("control", "candidate"):
     raise ValueError(f"unknown arm {arm!r}")
   from tinygrad.callify import CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER
   from tinygrad.helpers import Context
   with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
     yield
+
+
+@contextlib.contextmanager
+def _without_flash_combine_fp16(model):
+  """Temporarily clear the M2d flash-combine fp16-store lease (model and every
+  block) and restore it afterwards.
+
+  The JIT=0 eager baseline forward (``forward_with_logits`` at position
+  ``depth``) renders a FRESH graph that does not go through the decode graph's
+  declared-AFTER typed boundary, so its fp32->fp16->fp32 attention roundtrip
+  cancels and the attention contract is full fp32.  Under the fp16-combine
+  lease that graph would round the combine output to fp16 (a lossy step the
+  fp32 contract never takes), making the cache written at ``depth`` differ
+  between arms and poisoning the exact-logits gate before the measured decode
+  rows ever run.  The fp16 combine is only bit-exact where the fp32->fp16
+  attention cast is materialized (the captured decode graph); the eager
+  baseline must therefore run with the fp32 combine in BOTH arms so the cache
+  is arm-invariant."""
+  saved = [(obj, getattr(obj, LEASE3, None)) for obj in (model, *model.blk)]
+  for obj, _ in saved:
+    if hasattr(obj, LEASE3): delattr(obj, LEASE3)
+  try:
+    yield
+  finally:
+    for obj, prior in saved:
+      if prior is None:
+        if hasattr(obj, LEASE3): delattr(obj, LEASE3)
+      else:
+        setattr(obj, LEASE3, prior)
 
 
 def smoke(arm: str, model_path: str, depth: int, max_context: int) -> dict:
@@ -232,6 +298,10 @@ def smoke(arm: str, model_path: str, depth: int, max_context: int) -> dict:
               "block_output_copy_present": bool(any(name.startswith(BLOCK_OUTPUT_COPY_PREFIX) for name in programs)),
               "ffn_resadd_body_present": bool(any(name.startswith(FFNRESADD_PREFIX) or name.endswith(FFNRESADD_SUFFIX) for name in programs)),
               "residual_add_present": bool(any(name.startswith(RESADD_PREFIX) for name in programs)),
+              "combine_f16_body_present": bool(any(name.startswith(COMBINE_F16_PREFIX) for name in programs)),
+              "combine_f32_body_present": bool(any(name.startswith(COMBINE_F32_PREFIX) and not name.startswith(COMBINE_F16_PREFIX) for name in programs)),
+              "attention_cast_present": bool(any(name.startswith(ATTENTION_CAST_PREFIX) for name in programs)),
+              "combine_copy_present": bool(any(name.startswith(COMBINE_COPY_PREFIX) for name in programs)),
               "program_count": len(programs), "program_names": programs}
     finally:
       gen.close()
@@ -247,7 +317,11 @@ def logits(arm: str, model_path: str, depth: int, count: int, max_context: int) 
     finally: gen.close()
     token, temp = Tensor([[1]], dtype="int32").contiguous(), Tensor([0.0])
     start_pos = UOp.variable("start_pos", 0, max_context - 1)
-    with Context(JIT=0): _, eager_logits = model.forward_with_logits(token, start_pos.bind(depth), temp)
+    # Eager baseline is arm-invariant: run it with the fp32 combine (see
+    # _without_flash_combine_fp16) so the cache written at `depth` matches
+    # between arms and the M2d exact-logits gate measures the decode graph.
+    with _without_flash_combine_fp16(model), Context(JIT=0):
+      _, eager_logits = model.forward_with_logits(token, start_pos.bind(depth), temp)
     if not np.isfinite(eager_logits.numpy()).all(): raise RuntimeError("non-finite eager logits")
     samples, rows = [], []
     for idx in range(count):
@@ -303,6 +377,10 @@ def census(arm: str, model_path: str, depth: int, max_context: int) -> dict:
     residual_add_count = sum(count for name, count in program_counts.items() if name.startswith(RESADD_PREFIX))
     block_output_copy_count = sum(count for name, count in program_counts.items() if name.startswith(BLOCK_OUTPUT_COPY_PREFIX))
     attention_cast_count = sum(count for name, count in program_counts.items() if name.startswith(ATTENTION_CAST_PREFIX))
+    combine_f16_count = sum(count for name, count in program_counts.items() if name.startswith(COMBINE_F16_PREFIX))
+    combine_f32_count = sum(count for name, count in program_counts.items()
+                            if name.startswith(COMBINE_F32_PREFIX) and not name.startswith(COMBINE_F16_PREFIX))
+    combine_copy_count = sum(count for name, count in program_counts.items() if name.startswith(COMBINE_COPY_PREFIX))
     ffn_down_resadd_count = sum(count for name, count in program_counts.items()
                                 if name.startswith(FFNRESADD_PREFIX) or name.endswith(FFNRESADD_SUFFIX))
     return {"schema": CENSUS_SCHEMA, "arm": arm, "mode": "census", "gates": gates, "token": token,
@@ -316,10 +394,16 @@ def census(arm: str, model_path: str, depth: int, max_context: int) -> dict:
             "fused_us": round(sum(us for name, us in rows if name.startswith(FUSED_PREFIX)), 3),
             "ffn_residual_add_count": residual_add_count,
             "block_output_copy_count": block_output_copy_count, "attention_cast_count": attention_cast_count,
+            "flash_combine_f16_count": combine_f16_count, "flash_combine_f32_count": combine_f32_count,
+            "combine_copy_count": combine_copy_count,
             "ffn_down_resadd_count": ffn_down_resadd_count,
             "ffn_residual_add_us": round(sum(us for name, us in rows if name.startswith(RESADD_PREFIX)), 3),
             "block_output_copy_us": round(sum(us for name, us in rows if name.startswith(BLOCK_OUTPUT_COPY_PREFIX)), 3),
             "attention_cast_us": round(sum(us for name, us in rows if name.startswith(ATTENTION_CAST_PREFIX)), 3),
+            "flash_combine_f16_us": round(sum(us for name, us in rows if name.startswith(COMBINE_F16_PREFIX)), 3),
+            "flash_combine_f32_us": round(sum(us for name, us in rows
+                                             if name.startswith(COMBINE_F32_PREFIX) and not name.startswith(COMBINE_F16_PREFIX)), 3),
+            "combine_copy_us": round(sum(us for name, us in rows if name.startswith(COMBINE_COPY_PREFIX)), 3),
             "ffn_down_resadd_us": round(sum(us for name, us in rows
                                             if name.startswith(FFNRESADD_PREFIX) or name.endswith(FFNRESADD_SUFFIX)), 3),
             "histogram": sorted(((name, len(vals), statistics.median(vals)) for name, vals in hist.items()),
@@ -388,6 +472,12 @@ def validate_census(control: dict, candidate: dict) -> dict:
   copy_candidate = int(candidate.get("block_output_copy_count", 0))
   attn_cast_control = int(control.get("attention_cast_count", 0))
   attn_cast_candidate = int(candidate.get("attention_cast_count", 0))
+  combine_f16_control = int(control.get("flash_combine_f16_count", 0))
+  combine_f16_candidate = int(candidate.get("flash_combine_f16_count", 0))
+  combine_f32_control = int(control.get("flash_combine_f32_count", 0))
+  combine_f32_candidate = int(candidate.get("flash_combine_f32_count", 0))
+  combine_copy_control = int(control.get("combine_copy_count", 0))
+  combine_copy_candidate = int(candidate.get("combine_copy_count", 0))
   net_delta = int(candidate.get("kernels", 0)) - int(control.get("kernels", 0))
   side_effects = {name: int(candidate_counts.get(name, 0)) - int(control_counts.get(name, 0))
                   for name in sorted(set(control_counts) | set(candidate_counts))
@@ -396,7 +486,7 @@ def validate_census(control: dict, candidate: dict) -> dict:
     name for name in side_effects
     if name.startswith(CAST_PREFIX) or name.startswith(FUSED16_PREFIX) or name.startswith(FUSED_PREFIX)
     or name.startswith(RESADD_PREFIX) or name.startswith(FFNRESADD_PREFIX) or name.endswith(FFNRESADD_SUFFIX)
-    or name.startswith(BLOCK_OUTPUT_COPY_PREFIX)}
+    or name.startswith(BLOCK_OUTPUT_COPY_PREFIX) or name.startswith(ATTENTION_CAST_PREFIX)}
   # M2b swap families: the plain ffn_down GEMV whose epilogue absorbs the add becomes its
   # *_epi_ffnresadd twin 1:1 (q4k_g3_lanemap_gemv_4096_12288 ->
   # q4k_g3_lanemap_gemv_epi_ffnresadd_4096_12288; the q6k coop twin appends the suffix). A
@@ -415,41 +505,54 @@ def validate_census(control: dict, candidate: dict) -> dict:
                     for name, delta in ffnresadd_bodies.items())
   unrelated_deltas = {name: delta for name, delta in side_effects.items()
                       if name not in allowed_side_effects and name not in ffnresadd_swaps}
+  # M2d combine swap family: the legacy fp32 combine (flash_fused_gmax_combine_*) swaps
+  # 1:1 with the fp16 combine twin (flash_fused_gmax_combine_f16_*). Fail-closed: no
+  # stray f16 bodies (f16 count must equal the control fp32 count), no leftover fp32
+  # combine, and no fp16 combine in control.
+  combine_swaps = {name: -delta for name, delta in side_effects.items()
+                   if delta < 0 and name.startswith(COMBINE_F32_PREFIX) and not name.startswith(COMBINE_F16_PREFIX)
+                   and combine_f16_candidate == combine_f32_control}
+  combine_bodies = {name: delta for name, delta in side_effects.items()
+                    if delta > 0 and name.startswith(COMBINE_F16_PREFIX)}
+  combine_swap_backed = (combine_f16_candidate == combine_f32_control and combine_f32_candidate == 0
+                         and combine_f16_control == 0 and len(combine_bodies) <= 1)
+  unrelated_deltas = {name: delta for name, delta in side_effects.items()
+                      if name not in allowed_side_effects and name not in ffnresadd_swaps
+                      and name not in combine_swaps and not name.startswith(COMBINE_F16_PREFIX)}
   control_pops = control.get("population_counts") or {}
   candidate_pops = candidate.get("population_counts") or {}
   population_deltas = {pop: int(candidate_pops.get(pop, 0)) - int(control_pops.get(pop, 0))
                        for pop in sorted(set(control_pops) | set(candidate_pops)) if pop != POP_NORMS
                        if int(candidate_pops.get(pop, 0)) != int(control_pops.get(pop, 0))}
   conditions = {
-    "control_has_residual_adds": resadd_control > 0,
+    "control_is_booked_m2c_candidate": resadd_control == 0 and copy_control == 0 and ffnresadd_control > 0,
     "candidate_residual_adds_gone": resadd_candidate == 0,
-    "ffnresadd_replaces_one_for_one": ffnresadd_candidate == resadd_control,
-    "control_has_no_ffnresadd": ffnresadd_control == 0,
-    "control_has_block_output_copies": copy_control > 0,
-    "candidate_block_output_copies_folded": copy_candidate == 0,
-    "m5_attention_cast_identical": attn_cast_candidate == attn_cast_control and attn_cast_control > 0,
+    "ffnresadd_unchanged": ffnresadd_candidate == ffnresadd_control,
+    "copies_stay_folded": copy_candidate == 0 and copy_control == 0,
+    "m2d_attention_cast_folded": attn_cast_candidate == 0 and attn_cast_control > 0,
+    "m2d_combine_swap_backed": combine_swap_backed,
+    "m2d_no_opaque_copy": combine_copy_candidate == 0 and combine_copy_control == 0,
     "m2a_fused16_identical": fused16_candidate == fused16_control and fused16_control > 0,
     "m2a_casts_identical": cast_candidate == cast_control == 0,
     "m2a_fp32_fused_identical": fused_candidate == fused_control == 0,
-    "net_delta_matches_drop": net_delta == -(resadd_control + copy_control),
+    "net_delta_matches_drop": net_delta == -attn_cast_control,
     "no_unrelated_program_shift": not unrelated_deltas,
-    "ffnresadd_swap_backed": swap_backed,
   }
   fail_closed = []
-  if not conditions["control_has_residual_adds"]:
-    fail_closed.append("FAIL CLOSED: the control census has no E_32_32_4_02a9738c residual adds to absorb")
+  if not conditions["control_is_booked_m2c_candidate"]:
+    fail_closed.append(f"FAIL CLOSED: control is not the booked M2c candidate (residual adds {resadd_control}, copies {copy_control}, ffnresadd bodies {ffnresadd_control}; expected 0/0/36)")
   if not conditions["candidate_residual_adds_gone"]:
-    fail_closed.append(f"FAIL CLOSED: candidate still renders {resadd_candidate} E_32_32_4_02a9738c add programs (control had {resadd_control})")
-  if not conditions["ffnresadd_replaces_one_for_one"]:
-    fail_closed.append(f"FAIL CLOSED: *_epi_ffnresadd bodies {ffnresadd_candidate} do not replace the {resadd_control} control adds 1:1")
-  if not conditions["control_has_no_ffnresadd"]:
-    fail_closed.append(f"FAIL CLOSED: control renders {ffnresadd_control} *_epi_ffnresadd bodies (expected 0)")
-  if not conditions["control_has_block_output_copies"]:
-    fail_closed.append("FAIL CLOSED: the control census has no E_32_32_4_fab82d40 block-output copies to fold")
-  if not conditions["candidate_block_output_copies_folded"]:
-    fail_closed.append(f"FAIL CLOSED: candidate still renders {copy_candidate} E_32_32_4_fab82d40 copies (control had {copy_control})")
-  if not conditions["m5_attention_cast_identical"]:
-    fail_closed.append(f"FAIL CLOSED: M5-closed attention cast counts differ ({attn_cast_control} -> {attn_cast_candidate})")
+    fail_closed.append(f"FAIL CLOSED: candidate still renders {resadd_candidate} E_32_32_4_02a9738c add programs")
+  if not conditions["ffnresadd_unchanged"]:
+    fail_closed.append(f"FAIL CLOSED: *_epi_ffnresadd bodies changed between arms ({ffnresadd_control} -> {ffnresadd_candidate}); expected identical")
+  if not conditions["copies_stay_folded"]:
+    fail_closed.append(f"FAIL CLOSED: E_32_32_4_fab82d40 copies present (control {copy_control} -> candidate {copy_candidate}); expected 0/0")
+  if not conditions["m2d_attention_cast_folded"]:
+    fail_closed.append(f"FAIL CLOSED: M2d attention cast must fold 36 -> 0 (control {attn_cast_control} -> candidate {attn_cast_candidate})")
+  if not conditions["m2d_combine_swap_backed"]:
+    fail_closed.append(f"FAIL CLOSED: fp32 combine {combine_f32_control} -> {combine_f32_candidate} and fp16 combine {combine_f16_control} -> {combine_f16_candidate} are not a 1:1 swap")
+  if not conditions["m2d_no_opaque_copy"]:
+    fail_closed.append(f"FAIL CLOSED: opaque-boundary fp16 combine copy class E_32_32_4_3b0fcfbc present (control {combine_copy_control} -> candidate {combine_copy_candidate}); expected 0/0")
   if not conditions["m2a_fused16_identical"]:
     fail_closed.append(f"FAIL CLOSED: M2a fused16 counts differ between arms ({fused16_control} -> {fused16_candidate})")
   if not conditions["m2a_casts_identical"]:
@@ -457,11 +560,9 @@ def validate_census(control: dict, candidate: dict) -> dict:
   if not conditions["m2a_fp32_fused_identical"]:
     fail_closed.append(f"FAIL CLOSED: M2a fp32 fused counts differ ({fused_control} -> {fused_candidate})")
   if not conditions["net_delta_matches_drop"]:
-    fail_closed.append(f"FAIL CLOSED: net program delta {net_delta} != -{resadd_control + copy_control} (residual-add drop {resadd_control} + block-output copy drop {copy_control})")
+    fail_closed.append(f"FAIL CLOSED: net program delta {net_delta} != -{attn_cast_control} (attention cast drop)")
   if not conditions["no_unrelated_program_shift"]:
     fail_closed.append(f"FAIL CLOSED: unrelated program-count shifts: {unrelated_deltas}")
-  if not conditions["ffnresadd_swap_backed"]:
-    fail_closed.append(f"FAIL CLOSED: *_epi_ffnresadd bodies without their plain ffn_down GEMV twin: {ffnresadd_bodies}")
   return {"cast_control": cast_control, "cast_candidate": cast_candidate,
           "fused16_control": fused16_control, "fused16_candidate": fused16_candidate,
           "fused_control": fused_control, "fused_candidate": fused_candidate,
@@ -469,12 +570,16 @@ def validate_census(control: dict, candidate: dict) -> dict:
           "ffn_down_resadd_control": ffnresadd_control, "ffn_down_resadd_candidate": ffnresadd_candidate,
           "block_output_copy_control": copy_control, "block_output_copy_candidate": copy_candidate,
           "attention_cast_control": attn_cast_control, "attention_cast_candidate": attn_cast_candidate,
+          "flash_combine_f16_control": combine_f16_control, "flash_combine_f16_candidate": combine_f16_candidate,
+          "flash_combine_f32_control": combine_f32_control, "flash_combine_f32_candidate": combine_f32_candidate,
+          "combine_copy_control": combine_copy_control, "combine_copy_candidate": combine_copy_candidate,
+          "combine_swaps": combine_swaps, "combine_bodies": combine_bodies,
           "honest_net_program_delta": net_delta,
           "program_side_effects": side_effects, "unrelated_program_deltas": unrelated_deltas,
           "ffnresadd_swaps": ffnresadd_swaps, "ffnresadd_bodies": ffnresadd_bodies,
           "non_norms_population_deltas": population_deltas,
           "conditions": conditions, "fail_closed": fail_closed,
-          "note": "expected drops derived from the measured control arm; the *_epi_ffnresadd body is the same fp32 add expression fused into the GEMV epilogue (bitwise-identical bytes); the fab82d40 fold is a pure fp32 identity-copy removal under the declared-AFTER output-slot rebind",
+          "note": "expected drops derived from the measured control arm; the *_epi_ffnresadd body is the same fp32 add expression fused into the GEMV epilogue (bitwise-identical bytes); the fab82d40 fold is a pure fp32 identity-copy removal under the declared-AFTER output-slot rebind; the 0a5eb0ac fold is the fp16 combine store (same RNE cvt.rn.f16.f32) with the M5 typed boundary preventing the 3b0fcfbc copy",
           "gate_pass": bool(all(conditions.values())) and not fail_closed}
 
 
@@ -502,16 +607,17 @@ def validate_timing_bracket(rows: list[dict], settled_continuous: bool = True) -
 
 HARD_STOP_NOTES = [
   "Every GPU arm runs as a fresh process under `timeout ... flock -w 90 /tmp/gpu-bench.lock`; no arm holds the lock across a wall-bracket step.",
-  "Phase 0 (NV render smoke) must survive on sm_120 (no Xid 31 MMU fault) with the *_epi_ffnresadd kernels (q4k_g3_lanemap_gemv_epi_ffnresadd_* and q6k_gen_coop_*_epi_ffnresadd) in the compiled program set, no E_32_32_4_02a9738c residual add, and no E_32_32_4_fab82d40 block-output copy.",
+  "Phase 0 (NV render smoke) must survive on sm_120 (no Xid 31 MMU fault) with the *_epi_ffnresadd kernels (q4k_g3_lanemap_gemv_epi_ffnresadd_* and q6k_gen_coop_*_epi_ffnresadd) and the fp16 combine (flash_fused_gmax_combine_f16_*) in the compiled program set, no E_32_32_4_02a9738c residual add, no E_32_32_4_fab82d40 block-output copy, no E_32_32_4_0a5eb0ac attention cast, no legacy fp32 combine, and no E_32_32_4_3b0fcfbc opaque copy.",
   "The exact full-logit gate (fp32 SHA-256 over the stacked rows, token stream, shape, per-row argmax == sampled token) must pass before any census or bracket arm runs.",
-  "The census gate FAILS CLOSED if the residual add remains, if the *_epi_ffnresadd bodies do not appear 1:1 with the control add count, if the E_32_32_4_fab82d40 copies do not fold to zero, if the M5-closed E_32_32_4_0a5eb0ac cast shifts between arms, if the M2a fused16/cast families shift between arms, or if any unrelated program count shifts; expected counts derive from the measured control arm.",
+  "The census gate FAILS CLOSED if the residual add remains, if the *_epi_ffnresadd bodies do not appear 1:1 with the control add count, if the E_32_32_4_fab82d40 copies do not fold to zero, if the E_32_32_4_0a5eb0ac cast does not fold to zero with the fp32->fp16 combine swap 1:1, if the E_32_32_4_3b0fcfbc opaque copy appears, if the M2a fused16/cast families shift between arms, or if any unrelated program count shifts; expected counts derive from the measured control arm.",
   "The wall bracket requires identical token-stream hashes and a candidate median at least +50 us/token faster than BOTH bracketing controls.",
   "No policy promotion: no route-policy record changes; the lease attribute is harness-installed only.",
 ]
 
 ISOLATION_NOTES = [
-  "The M2b control arm is the BOOKED M2a candidate (same callify flags, reduce-output promotion, and the M2a fp16-store lease), so the only inter-arm delta is the ffn_down residual-add lease.",
+  "The M2d control arm is the BOOKED M2c candidate (same callify flags, reduce-output promotion, the M2a fp16-store lease, and the M2b ffn_down residual-add lease), so the only inter-arm delta is the M2d flash-combine fp16-store lease.",
   "The exact-logits gate runs the eager JIT=0 finite check inside the child before comparing stacked-row SHAs, and any non-finite row fails closed.",
+  "The eager JIT=0 baseline runs with the fp16-combine lease cleared in BOTH arms (_without_flash_combine_fp16): its fresh graph cancels the attention fp32->fp16->fp32 roundtrip (full-fp32 contract), where the fp16 combine would round and diverge the cache at `depth`; the fp16 combine is only bit-exact on the captured decode graph (materialized cast), so the baseline is arm-invariant and the gate measures exactly the decode swap.",
 ]
 
 CITATIONS = [
@@ -538,7 +644,7 @@ def no_go_record(model: str = DEFAULT_MODEL, depth: int = 512) -> dict:
     },
     "census": {
       "run": False, "result": "NOT_AUTHORIZED", "reason": "campaign stopped before the M2 census arm",
-      "contract": "E_32_32_4_02a9738c gone; *_epi_ffnresadd bodies 1:1 with the control add count; E_32_32_4_fab82d40 folded to zero; E_32_32_4_0a5eb0ac identical between arms; M2a fused16/cast families identical between arms; net program delta equals the add drop plus the copy drop; no unrelated program-count shift; FAIL CLOSED on any violation",
+      "contract": "E_32_32_4_02a9738c gone; *_epi_ffnresadd bodies 1:1 with the control add count; E_32_32_4_fab82d40 folded to zero; E_32_32_4_0a5eb0ac folded to zero with the fp32 combine swapped 1:1 to the fp16 combine; E_32_32_4_3b0fcfbc at zero; M2a fused16/cast families identical between arms; net program delta equals the add drop plus the copy drop plus the attention-cast drop; no unrelated program-count shift; FAIL CLOSED on any violation",
     },
     "wall_bracket": {
       "run": False, "result": "NOT_AUTHORIZED", "reason": "campaign stopped before the reverse control/candidate/control wall bracket",
@@ -604,11 +710,15 @@ def ab(args) -> dict:
                 and not bool(smoke_result.get("cast_present"))
                 and not bool(smoke_result.get("block_output_copy_present"))
                 and bool(smoke_result.get("ffn_resadd_body_present"))
-                and not bool(smoke_result.get("residual_add_present")))
+                and not bool(smoke_result.get("residual_add_present"))
+                and bool(smoke_result.get("combine_f16_body_present"))
+                and not bool(smoke_result.get("combine_f32_body_present"))
+                and not bool(smoke_result.get("attention_cast_present"))
+                and not bool(smoke_result.get("combine_copy_present")))
   record["smoke"] = {"run": True, "result": "PASS" if smoke_gate else "NO-GO", "evidence": smoke_result}
   if not smoke_gate:
     record["hard_stop_notes"] = HARD_STOP_NOTES + [
-      "HARD STOP at Phase 0: smoke did not survive, the fused16 bodies were absent, E_128_32_3 casts remained, the *_epi_ffnresadd bodies were absent, or E_32_32_4_02a9738c residual adds remained."]
+      "HARD STOP at Phase 0: smoke did not survive, the fused16 bodies were absent, E_128_32_3 casts remained, the *_epi_ffnresadd bodies were absent, E_32_32_4_02a9738c residual adds remained, the fp16 combine was absent (or fp32 combine/cast/opaque copy remained)."]
     return _write_record(record, pathlib.Path(args.out))
   control_logits = _guarded_child(record, "logits_gate",
                                   _child_command(args, "logits", "control", root / "control-logits.json", include_reps=False),

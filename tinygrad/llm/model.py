@@ -881,9 +881,13 @@ class TransformerBlock(FFNBlock):
     # uses it because its wrapped write slot is not a logical context length.
     if _should_use_flash_attention(_ring_freqs, start_pos, T, getattr(self, "_use_flash", False)):
       Hq, Hkv, Hd = self.config.n_heads, self.config.n_kv_heads, self.config.head_dim
+      # M2d combine-fp16 lease (nv-epilogue-absorption-route-scope-20260810.md): harness-installed
+      # on the model and every block; fail-closed absent keeps the closed-default policy answer
+      # (fp32 combine, byte-identical legacy graph).
       out = flash_decode_attention_route(q, assigned_kv, start_pos, T, B, Hq, Hkv, Hd, self.config.max_context,
                                          kv_scale=assigned_scale, freqs=(_fr if _rope_read else None),
-                                         ring_full=_ring_full)
+                                         ring_full=_ring_full,
+                                         combine_fp16=bool(getattr(self, "_flash_combine_fp16_lease", False)))
       attn = out.reshape(B, Hq, T, Hd).cast(q.dtype)
     elif self.config.prefill_custom_kernel_attn and getattr(self, '_prefill_v2', False) and isinstance(start_pos, int) and resolve(T != 1):
       # P5b: the proven custom-kernel-injection route's OWN independent eligibility boundary
