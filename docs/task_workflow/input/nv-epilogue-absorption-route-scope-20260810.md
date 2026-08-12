@@ -11,15 +11,22 @@ measured candidate 5.2516 ms/token = ~190.4 tok/s at +27.5/+32.3 us
 (median +29.9 us) vs the control bracket, BELOW the +50 us promotion bar
 (verdict NO-GO). The absorbed GEMV bodies cost ~+14 us census over the
 plain GEMVs and the ffnresadd add is in-kernel, so the real wall win is
-~30 us, not the ~61.7 us census drop. Status: **M2a BOOKED; M2b complete
-but below the booking bar; M2c next.** M2a books +57.2 us of the
-+240.106 us residual/cast/contiguous row (candidate 5.2723 ms/token =
-189.67 tok/s vs control bracket 5.3295 ms = 187.64 tok/s). M2b eliminates
+~30 us, not the ~61.7 us census drop. M2c LANDED and BOOKED the combined
+M2b+M2c package: the declared-AFTER output-slot rebind folds the fp32
+block-output copy family `fab82d40` x49 (pure fp32 identity copies, so
+byte-identical), and the reverse wall bracket measured candidate
+5.2031 ms/token = ~192.2 tok/s at +66.2/+78.9 us (median +72.6 us) vs the
+control bracket, ABOVE the +50 us promotion bar. Status: **M2a BOOKED;
+M2b complete (absorbed into the M2c booking); M2c BOOKED; next: the
+attention cast `0a5eb0ac` x36, then M1 norm epilogue.** M2a books +57.2 us
+of the +240.106 us residual/cast/contiguous row (candidate 5.2723 ms/token
+= 189.67 tok/s vs control bracket 5.3295 ms = 187.64 tok/s). M2b eliminates
 the `E_32_32_4_02a9738c` residual-add family (36 x ~1.7 us = ~61.7 us
 census) AND the transport-copy family `E_32_32_4_86a23e1a` x36 (an M2c-row
-item) via the attn_qo typed-output declaration; ~121 us of the row remain
-(fp32 copies `fab82d40` x49 + attention cast `0a5eb0ac` x36 + norms), then
-M1 norm epilogue. The M2b/M2c/M1 gate sequence stays the booking authority.
+item) via the attn_qo typed-output declaration; M2c then folds `fab82d40`
+x49. What remains in the row: the attention cast `0a5eb0ac` x36 (~60 us),
+then M1 norm epilogue. The M2b/M2c/M1 gate sequence stays the booking
+authority.
 
 ## 1. Ledger position (per token)
 
@@ -28,9 +35,10 @@ M1 norm epilogue. The M2b/M2c/M1 gate sequence stays the booking authority.
 | BOOKED candidate (fp32 q/k route, `68669d348`) | 5.3235 ms/token = 187.85 tok/s (+83.5 us vs control 5.4071) |
 | **M2a booked (this scope)** | **candidate 5.2723 ms/token = 189.67 tok/s, +57.2 us/token vs control bracket 5.3295 ms (census: 36 casts -> 0, net -36 kernels)** |
 | **M2b (landed, NOT booked)** | **candidate 5.2516 ms/token = ~190.4 tok/s; wall +27.5 us (vs control A 5.2791) / +32.3 us (vs control B 5.2840), median +29.9 us < +50 us promotion bar (NO-GO); census PASS with swap-twin rule (36 `*_epi_ffnresadd` bodies 1:1, 0 residual adds, 0 `86a23e1a` transport copies); net -36 kernels** |
+| **M2c booked (M2b+M2c package, this scope)** | **candidate 5.2031 ms/token = ~192.2 tok/s; wall +66.2 us (vs control A 5.2693) / +78.9 us (vs control B 5.2820), median +72.6 us > +50 us promotion bar (PROMOTED); census PASS: `fab82d40` copies 49 -> 0, `02a9738c` adds 36 -> 0, `*_epi_ffnresadd` 0 -> 36, `0a5eb0ac` attention cast 36 == 36 (M5-closed), net -85 (715 -> 630 kernels); logits SHA-256 identical** |
 | Target | ~194 tok/s = 5.1546 ms/token -> need ~-169 us wall |
 | norms row | +495.330 us attribution, mostly tapped: q/k bodies booked; remaining 37 chains (r_16_256 3.84 us + E_32_32_4_f14a5cc0 2.27 us each ~= 226 us census) |
-| **residual/cast/contiguous row** | **+240.106 us attribution, +8.87 tok/s ceiling; M2a books -57.2 us; M2b measures -35..-40 us census (wall ~+30 us) and closes the transport-copy family (M2c sub-item); ~121 us left for M2c (`fab82d40` copies/cast) + M1** |
+| **residual/cast/contiguous row** | **+240.106 us attribution, +8.87 tok/s ceiling; M2a books -57.2 us; M2b+M2c books the combined package at -72.6 us wall (candidate 5.2031 ms = ~192.2 tok/s, census net -85: `02a9738c` adds + `fab82d40` copies + `86a23e1a` transport copies gone); remaining in-row: attention cast `0a5eb0ac` x36 (~60 us census) as the next item; M1 norm epilogue is its own row** |
 | quant GEMV | ~4050 us census (70%): q4k/q6k; 10% win ~= 203 tok/s (after 194) |
 
 The residual family is the clean win: per-row epilogue ops, no redundant
@@ -124,6 +132,19 @@ family, which only rendered because the attn_qo GEMV had no declared typed
 output (the M2b attn_qo declaration makes the ffn_down residual fold accept).
 ~121 us of the row remain after M2b.
 
+**M2c LANDED and BOOKED (the copy fold; the attention cast stays M5-closed
+for now).** `_declared_epilogue_absorption_after` /
+`_declared_after_output_slot_rebind` in `tinygrad/callify.py` prove, fail-closed,
+that the absorbed block's result bottoms at a producer-declared
+`epilogue_absorption_admitted` AFTER (`MEMORY_SEMANTIC(RESHAPE(AFTER(PARAM,
+CALL)))`), then rebind the nested CALL's output PARAM to a view of the caller
+output slot; `_precompiled_output_redirect` returns the bare AFTER (no STORE),
+so the CALL is the sole writer and no boundary copy can render. The fold is
+value-transparent (pure fp32 movement), so stored bytes stay bitwise-identical.
+The `0a5eb0ac` attention cast is deliberately left out of the M2c contract:
+the census gate asserts it stays 36 == 36 between arms (M5-closed) and it
+remains the next in-row item (~60 us census).
+
 **M1 (after M2): ffn-norm epilogue into w1w3fused via the existing research
 route `q4k_gate_up_rms_affine_qualification_call`.** CAUTION: its scale uses
 `.sum()` (association mismatch vs `r_16_256`) and its warp reduce differs
@@ -153,7 +174,11 @@ before). M1 is deferred until M2 books.
    `q6k_gen_coop_4096_12288_inkernel` x18 may swap 1:1 with their
    `*_epi_ffnresadd` twins as an allowed side effect, and the gate fails
    closed if an ffnresadd body has no plain twin.
-4. Phase 3 reverse control/candidate/control wall bracket under the shared
+4. Phase 2b (M2c) census extension: `E_32_32_4_fab82d40` 49 -> 0 with the
+   drop equal to the control copy count; `E_32_32_4_0a5eb0ac` stays
+   36 == 36 (M5-closed); net program delta -85 = -(add drop 36 + copy drop
+   49). FAIL CLOSED if any copy remains or the attention cast shifts.
+5. Phase 3 reverse control/candidate/control wall bracket under the shared
    GPU bench lock (`flock -w 60 /tmp/gpu-bench.lock`), +50 us/token bar vs
    BOTH controls, token-stream hash identical across arms.
 
@@ -182,7 +207,13 @@ program counts identical; logits SHA-256 identical
 candidate 5.2516 ms/token = ~190.4 tok/s, +27.5 us vs control A 5.2791 /
 +32.3 us vs control B 5.2840 (median +29.9 us), verdict NO-GO at the
 +50 us bar; census gate_pass true (adds 36 -> 0, ffnresadd 0 -> 36,
-`86a23e1a` 36 -> 0); logits SHA-256 identical.
+`86a23e1a` 36 -> 0); logits SHA-256 identical. M2c booking evidence
+(`docs/task_workflow/output/nv-epilogue-absorption-m2c-ab-20260811.json`):
+candidate 5.2031 ms/token = ~192.2 tok/s, +66.2 us vs control A 5.2693 /
++78.9 us vs control B 5.2820 (median +72.6 us), verdict PROMOTED at the
++50 us bar; census gate_pass true (adds 36 -> 0, ffnresadd 0 -> 36,
+copies 49 -> 0, attention cast 36 == 36, net -85, 715 -> 630 kernels);
+logits SHA-256 identical; all three bracket token-stream hashes equal.
 
 ## 5. Risks and open questions
 

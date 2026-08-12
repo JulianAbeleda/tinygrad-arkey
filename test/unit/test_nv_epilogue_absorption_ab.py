@@ -89,27 +89,33 @@ def test_control_gate_fails_closed_if_m2b_lease_observed():
     _assert_control_closed(_gates(model))
 
 
-def _control_census(fused16=36, resadd=36, plain_ffn_down=36):
-  return {"schema": CENSUS_SCHEMA, "kernels": 751, "ffn_activation_cast_count": 0,
+def _control_census(fused16=36, resadd=36, plain_ffn_down=36, block_output_copies=49, attention_casts=36):
+  return {"schema": CENSUS_SCHEMA, "kernels": 715, "ffn_activation_cast_count": 0,
           "w1w3_fused16_count": fused16, "w1w3_fused_count": 0,
           "ffn_residual_add_count": resadd, "ffn_down_resadd_count": 0,
+          "block_output_copy_count": block_output_copies, "attention_cast_count": attention_casts,
           "program_counts": {f"q4k_g3_lanemap_gemv_w1w3fused16_12288_4096": fused16,
                              f"E_32_32_4_02a9738c": resadd, "r_16_256_r": 37,
                              "q4k_g3_lanemap_gemv_x": 217,
                              "q4k_g3_lanemap_gemv_4096_12288": plain_ffn_down // 2,
-                             "q6k_gen_coop_4096_12288_inkernel": plain_ffn_down // 2},
+                             "q6k_gen_coop_4096_12288_inkernel": plain_ffn_down // 2,
+                             "E_32_32_4_fab82d40x": block_output_copies,
+                             "E_32_32_4_0a5eb0acx": attention_casts},
           "population_counts": {"norms": 74, "quant_core": 217 + fused16 + plain_ffn_down,
                                 "residual_cast_contiguous": resadd, "flash": 20, "other": 6}}
 
 
-def _candidate_census(fused16=36, resadd=0, ffnresadd=36, fused=0):
-  return {"schema": CENSUS_SCHEMA, "kernels": 751 - 36, "ffn_activation_cast_count": 0,
+def _candidate_census(fused16=36, resadd=0, ffnresadd=36, fused=0, block_output_copies=0, attention_casts=36):
+  return {"schema": CENSUS_SCHEMA, "kernels": 715 - 36 - 49 + block_output_copies, "ffn_activation_cast_count": 0,
           "w1w3_fused16_count": fused16, "w1w3_fused_count": fused,
           "ffn_residual_add_count": resadd, "ffn_down_resadd_count": ffnresadd,
+          "block_output_copy_count": block_output_copies, "attention_cast_count": attention_casts,
           "program_counts": {f"q4k_g3_lanemap_gemv_w1w3fused16_12288_4096": fused16,
                              "q4k_g3_lanemap_gemv_epi_ffnresadd_4096_12288": ffnresadd // 2,
                              "q6k_gen_coop_4096_12288_inkernel_epi_ffnresadd": ffnresadd // 2,
-                             "r_16_256_r": 37, "q4k_g3_lanemap_gemv_x": 217},
+                             "r_16_256_r": 37, "q4k_g3_lanemap_gemv_x": 217,
+                             "E_32_32_4_fab82d40x": block_output_copies,
+                             "E_32_32_4_0a5eb0acx": attention_casts},
           "population_counts": {"norms": 74, "quant_core": 217 + fused16,
                                 "residual_cast_contiguous": resadd, "flash": 20, "other": 6}}
 
@@ -119,7 +125,21 @@ def test_census_gate_passes_on_expected_absorption():
   assert result["gate_pass"] is True
   assert result["ffn_residual_add_control"] == 36 and result["ffn_residual_add_candidate"] == 0
   assert result["ffn_down_resadd_candidate"] == 36
-  assert result["honest_net_program_delta"] == -36
+  assert result["block_output_copy_control"] == 49 and result["block_output_copy_candidate"] == 0
+  assert result["attention_cast_control"] == result["attention_cast_candidate"] == 36
+  assert result["honest_net_program_delta"] == -85
+
+
+def test_census_gate_fails_closed_when_block_output_copy_remains():
+  result = validate_census(_control_census(), _candidate_census(block_output_copies=49))
+  assert result["gate_pass"] is False
+  assert any("fab82d40" in reason for reason in result["fail_closed"])
+
+
+def test_census_gate_fails_closed_when_m5_attention_cast_shifts():
+  result = validate_census(_control_census(), _candidate_census(attention_casts=0))
+  assert result["gate_pass"] is False
+  assert any("0a5eb0ac" in reason for reason in result["fail_closed"])
 
 
 def test_census_gate_fails_closed_when_residual_add_remains():

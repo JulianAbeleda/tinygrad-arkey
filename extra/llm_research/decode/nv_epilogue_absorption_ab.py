@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NV wall-bracket A/B for residual-family epilogue absorption (M2b: ffn_down in-kernel residual add).
+"""NV wall-bracket A/B for residual-family epilogue absorption (M2b: ffn_down in-kernel residual add; M2c: fp32 block-output copy fold).
 
 Sibling of ``extra/llm_research/decode/nv_reduce_output_fp32_qk_ab.py`` (the
 booked fp32 q/k norms route).  M2 attacks the unbooked +240.106 us
@@ -16,6 +16,15 @@ and the standalone add folds away.  The fp16-store spelling of the original
 M2b premise is NOT bitwise-safe: the next block's attention residual consumes
 the fp32 block output, so storing fp16 would round the residual and break the
 exact-logits gate (see the scope doc, section 3 M2b).
+
+M2c adds the declared-AFTER output-slot rebind: the ffn_down resadd GEMV's
+fp32 AFTER (declared ``epilogue_absorption_admitted``) gets its nested CALL
+rebound to the caller output slot, so the ``E_32_32_4_fab82d40`` identity
+copies (49 per decode token) fold away while the block output stays fp32
+(value-transparent: the copies are pure fp32 movement, so stored bytes are
+bitwise-identical).  The M5-closed attention fp32->fp16 cast
+(``E_32_32_4_0a5eb0ac`` x36) must stay byte-identical between arms; the
+census gate fails closed if it shifts or if any fab82d40 copy remains.
 
 The control arm is the BOOKED M2a candidate conditions (callify flags +
 ``_decode_reduce_output_rmsnorm_promoted`` + ``_decode_direct_greedy_promoted``
@@ -61,21 +70,26 @@ CAST_PREFIX = "E_128_32_3"
 RESADD_PREFIX = "E_32_32_4_02a9738c"
 FFNRESADD_PREFIX = "q4k_g3_lanemap_gemv_epi_ffnresadd_"
 FFNRESADD_SUFFIX = "_epi_ffnresadd"
+# M2c families: the fp32 block-output copy (fab82d40, folded by the declared-AFTER
+# output-slot rebind; pure removal, fail-closed if any remains) and the attention
+# fp32->fp16 cast (0a5eb0ac, M5-closed: must stay byte-identical between arms).
+BLOCK_OUTPUT_COPY_PREFIX = "E_32_32_4_fab82d40"
+ATTENTION_CAST_PREFIX = "E_32_32_4_0a5eb0ac"
 
 CONSTRUCTION = {
-  "route": "residual-family epilogue absorption M2b (ffn_down in-kernel residual add)",
+  "route": "residual-family epilogue absorption M2b+M2c (ffn_down in-kernel residual add + fp32 block-output copy fold)",
   "population": "residual_cast_contiguous",
-  "mechanism": "the ffn_down Q4K/Q6K decode GEMVs add the hidden-state residual h in-kernel (total + h[row], fp32 store) under their own *_epi_ffnresadd names; the standalone fp32 h+ffn_out add (E_32_32_4_02a9738c) folds away; the in-kernel add is the same fp32 expression the separate add kernel lowers, so stored bytes are bitwise-identical; the fp16-store spelling is not bitwise-safe (next-block attention residual consumes the fp32 block output)",
+  "mechanism": "M2b: the ffn_down Q4K/Q6K decode GEMVs add the hidden-state residual h in-kernel (total + h[row], fp32 store) under their own *_epi_ffnresadd names; the standalone fp32 h+ffn_out add (E_32_32_4_02a9738c) folds away; the in-kernel add is the same fp32 expression the separate add kernel lowers, so stored bytes are bitwise-identical. M2c: the declared epilogue-absorbing AFTER (fp32 block output) gets its nested CALL rebound to the caller output slot, so the E_32_32_4_fab82d40 identity copies (49 -> 0) fold away; the M5-closed attention fp32->fp16 cast (E_32_32_4_0a5eb0ac x36) stays byte-identical between arms.",
   "codegen_path": "candidate sets _ffn_down_resadd_lease=True on the model, every block, and every ffn_down linear on top of the booked M2a candidate conditions (callify flags + _decode_reduce_output_rmsnorm_promoted + _decode_direct_greedy_promoted + _q4k_w1w3_fp16_store_lease); the block threads normed_h=h into ffn_down and skips its own h+ffn_out add; decode_routes picks the ffn_down_resadd epilogue (Q4K) or the q6k coop epilogue variant",
-  "census_target": "E_32_32_4_02a9738c 36 -> 0; q4k_g3_lanemap_gemv_epi_ffnresadd_4096_12288 x18 + q6k_gen_coop_4096_12288_inkernel_epi_ffnresadd x18; all other program counts byte-identical to control; honest net program delta -36",
+  "census_target": "E_32_32_4_02a9738c 36 -> 0; q4k_g3_lanemap_gemv_epi_ffnresadd_4096_12288 x18 + q6k_gen_coop_4096_12288_inkernel_epi_ffnresadd x18; E_32_32_4_fab82d40 49 -> 0 (M2c copy fold); E_32_32_4_0a5eb0ac stays 36 == 36 (M5-closed); all other program counts byte-identical to control; honest net program delta -85",
   "correctness_contract": {
     "full_logit_fp32_sha256": "bitwise identical to control over the stacked rows",
     "token_stream": "identical to control",
     "per_row_argmax": "equals the sampled token",
     "promotion": "+50 us/token vs both bracketing controls (control / candidate / control)",
-    "census": "E_32_32_4_02a9738c gone, *_epi_ffnresadd bodies present 1:1 with the control add count, no other program-count shift; FAIL CLOSED on any unrelated delta",
+    "census": "E_32_32_4_02a9738c gone, *_epi_ffnresadd bodies present 1:1 with the control add count, E_32_32_4_fab82d40 folded to zero with the drop equal to the control copy count, E_32_32_4_0a5eb0ac identical between arms, no other program-count shift; FAIL CLOSED on any unrelated delta",
   },
-  "question": "Does adding h+ffn_out in-kernel in the ffn_down GEMVs survive NV render (Xid 31 class), preserve exact full logits, remove exactly the E_32_32_4_02a9738c add programs with no other census shift, and book the residual-family share of the +240.106 us row under the reverse wall bracket?",
+  "question": "Do the M2b in-kernel h+ffn_out add in the ffn_down GEMVs and the M2c fp32 block-output copy fold survive NV render (Xid 31 class), preserve exact full logits, remove exactly the E_32_32_4_02a9738c add programs and the E_32_32_4_fab82d40 copies with no other census shift, and book the residual-family share of the +240.106 us row under the reverse wall bracket?",
 }
 
 
@@ -215,6 +229,7 @@ def smoke(arm: str, model_path: str, depth: int, max_context: int) -> dict:
               "fused16_body_present": bool(any(name.startswith(FUSED16_PREFIX) for name in programs)),
               "fused_body_present": bool(any(name.startswith(FUSED_PREFIX) for name in programs)),
               "cast_present": bool(any(name.startswith(CAST_PREFIX) for name in programs)),
+              "block_output_copy_present": bool(any(name.startswith(BLOCK_OUTPUT_COPY_PREFIX) for name in programs)),
               "ffn_resadd_body_present": bool(any(name.startswith(FFNRESADD_PREFIX) or name.endswith(FFNRESADD_SUFFIX) for name in programs)),
               "residual_add_present": bool(any(name.startswith(RESADD_PREFIX) for name in programs)),
               "program_count": len(programs), "program_names": programs}
@@ -286,6 +301,8 @@ def census(arm: str, model_path: str, depth: int, max_context: int) -> dict:
     fused16_count = sum(count for name, count in program_counts.items() if name.startswith(FUSED16_PREFIX))
     fused_count = sum(count for name, count in program_counts.items() if name.startswith(FUSED_PREFIX))
     residual_add_count = sum(count for name, count in program_counts.items() if name.startswith(RESADD_PREFIX))
+    block_output_copy_count = sum(count for name, count in program_counts.items() if name.startswith(BLOCK_OUTPUT_COPY_PREFIX))
+    attention_cast_count = sum(count for name, count in program_counts.items() if name.startswith(ATTENTION_CAST_PREFIX))
     ffn_down_resadd_count = sum(count for name, count in program_counts.items()
                                 if name.startswith(FFNRESADD_PREFIX) or name.endswith(FFNRESADD_SUFFIX))
     return {"schema": CENSUS_SCHEMA, "arm": arm, "mode": "census", "gates": gates, "token": token,
@@ -298,8 +315,11 @@ def census(arm: str, model_path: str, depth: int, max_context: int) -> dict:
             "fused16_us": round(sum(us for name, us in rows if name.startswith(FUSED16_PREFIX)), 3),
             "fused_us": round(sum(us for name, us in rows if name.startswith(FUSED_PREFIX)), 3),
             "ffn_residual_add_count": residual_add_count,
+            "block_output_copy_count": block_output_copy_count, "attention_cast_count": attention_cast_count,
             "ffn_down_resadd_count": ffn_down_resadd_count,
             "ffn_residual_add_us": round(sum(us for name, us in rows if name.startswith(RESADD_PREFIX)), 3),
+            "block_output_copy_us": round(sum(us for name, us in rows if name.startswith(BLOCK_OUTPUT_COPY_PREFIX)), 3),
+            "attention_cast_us": round(sum(us for name, us in rows if name.startswith(ATTENTION_CAST_PREFIX)), 3),
             "ffn_down_resadd_us": round(sum(us for name, us in rows
                                             if name.startswith(FFNRESADD_PREFIX) or name.endswith(FFNRESADD_SUFFIX)), 3),
             "histogram": sorted(((name, len(vals), statistics.median(vals)) for name, vals in hist.items()),
@@ -340,12 +360,14 @@ def timing_child(arm: str, model_path: str, depth: int, count: int, max_context:
 
 
 def validate_census(control: dict, candidate: dict) -> dict:
-  """M2b census gate.  The expected add drop is derived from the freshly
-  measured control arm (never a stale constant): every E_32_32_4_02a9738c
+  """M2b+M2c census gate.  The expected drops are derived from the freshly
+  measured control arm (never stale constants): every E_32_32_4_02a9738c
   residual-add program must vanish, exactly that many ``*_epi_ffnresadd``
-  bodies must appear in its place, the net program delta must equal the drop,
-  and no OTHER program count may shift (the M2a fused16/cast families must be
-  byte-identical between arms since both run the booked M2a candidate).
+  bodies must appear in its place, the M2c fp32 block-output copies
+  (E_32_32_4_fab82d40) must fold to zero with no remaining copy, the net
+  program delta must equal the add drop plus the copy drop, and no OTHER
+  program count may shift (the M2a fused16/cast families and the M5-closed
+  attention cast E_32_32_4_0a5eb0ac must be byte-identical between arms).
   FAIL CLOSED with the exact evidence on any violation."""
   for label, row in (("control", control), ("candidate", candidate)):
     if row.get("schema") != CENSUS_SCHEMA:
@@ -362,6 +384,10 @@ def validate_census(control: dict, candidate: dict) -> dict:
   resadd_candidate = int(candidate.get("ffn_residual_add_count", 0))
   ffnresadd_control = int(control.get("ffn_down_resadd_count", 0))
   ffnresadd_candidate = int(candidate.get("ffn_down_resadd_count", 0))
+  copy_control = int(control.get("block_output_copy_count", 0))
+  copy_candidate = int(candidate.get("block_output_copy_count", 0))
+  attn_cast_control = int(control.get("attention_cast_count", 0))
+  attn_cast_candidate = int(candidate.get("attention_cast_count", 0))
   net_delta = int(candidate.get("kernels", 0)) - int(control.get("kernels", 0))
   side_effects = {name: int(candidate_counts.get(name, 0)) - int(control_counts.get(name, 0))
                   for name in sorted(set(control_counts) | set(candidate_counts))
@@ -369,7 +395,8 @@ def validate_census(control: dict, candidate: dict) -> dict:
   allowed_side_effects = {
     name for name in side_effects
     if name.startswith(CAST_PREFIX) or name.startswith(FUSED16_PREFIX) or name.startswith(FUSED_PREFIX)
-    or name.startswith(RESADD_PREFIX) or name.startswith(FFNRESADD_PREFIX) or name.endswith(FFNRESADD_SUFFIX)}
+    or name.startswith(RESADD_PREFIX) or name.startswith(FFNRESADD_PREFIX) or name.endswith(FFNRESADD_SUFFIX)
+    or name.startswith(BLOCK_OUTPUT_COPY_PREFIX)}
   # M2b swap families: the plain ffn_down GEMV whose epilogue absorbs the add becomes its
   # *_epi_ffnresadd twin 1:1 (q4k_g3_lanemap_gemv_4096_12288 ->
   # q4k_g3_lanemap_gemv_epi_ffnresadd_4096_12288; the q6k coop twin appends the suffix). A
@@ -398,10 +425,13 @@ def validate_census(control: dict, candidate: dict) -> dict:
     "candidate_residual_adds_gone": resadd_candidate == 0,
     "ffnresadd_replaces_one_for_one": ffnresadd_candidate == resadd_control,
     "control_has_no_ffnresadd": ffnresadd_control == 0,
+    "control_has_block_output_copies": copy_control > 0,
+    "candidate_block_output_copies_folded": copy_candidate == 0,
+    "m5_attention_cast_identical": attn_cast_candidate == attn_cast_control and attn_cast_control > 0,
     "m2a_fused16_identical": fused16_candidate == fused16_control and fused16_control > 0,
     "m2a_casts_identical": cast_candidate == cast_control == 0,
     "m2a_fp32_fused_identical": fused_candidate == fused_control == 0,
-    "net_delta_matches_drop": net_delta == -resadd_control,
+    "net_delta_matches_drop": net_delta == -(resadd_control + copy_control),
     "no_unrelated_program_shift": not unrelated_deltas,
     "ffnresadd_swap_backed": swap_backed,
   }
@@ -414,6 +444,12 @@ def validate_census(control: dict, candidate: dict) -> dict:
     fail_closed.append(f"FAIL CLOSED: *_epi_ffnresadd bodies {ffnresadd_candidate} do not replace the {resadd_control} control adds 1:1")
   if not conditions["control_has_no_ffnresadd"]:
     fail_closed.append(f"FAIL CLOSED: control renders {ffnresadd_control} *_epi_ffnresadd bodies (expected 0)")
+  if not conditions["control_has_block_output_copies"]:
+    fail_closed.append("FAIL CLOSED: the control census has no E_32_32_4_fab82d40 block-output copies to fold")
+  if not conditions["candidate_block_output_copies_folded"]:
+    fail_closed.append(f"FAIL CLOSED: candidate still renders {copy_candidate} E_32_32_4_fab82d40 copies (control had {copy_control})")
+  if not conditions["m5_attention_cast_identical"]:
+    fail_closed.append(f"FAIL CLOSED: M5-closed attention cast counts differ ({attn_cast_control} -> {attn_cast_candidate})")
   if not conditions["m2a_fused16_identical"]:
     fail_closed.append(f"FAIL CLOSED: M2a fused16 counts differ between arms ({fused16_control} -> {fused16_candidate})")
   if not conditions["m2a_casts_identical"]:
@@ -421,7 +457,7 @@ def validate_census(control: dict, candidate: dict) -> dict:
   if not conditions["m2a_fp32_fused_identical"]:
     fail_closed.append(f"FAIL CLOSED: M2a fp32 fused counts differ ({fused_control} -> {fused_candidate})")
   if not conditions["net_delta_matches_drop"]:
-    fail_closed.append(f"FAIL CLOSED: net program delta {net_delta} != -{resadd_control}")
+    fail_closed.append(f"FAIL CLOSED: net program delta {net_delta} != -{resadd_control + copy_control} (residual-add drop {resadd_control} + block-output copy drop {copy_control})")
   if not conditions["no_unrelated_program_shift"]:
     fail_closed.append(f"FAIL CLOSED: unrelated program-count shifts: {unrelated_deltas}")
   if not conditions["ffnresadd_swap_backed"]:
@@ -431,12 +467,14 @@ def validate_census(control: dict, candidate: dict) -> dict:
           "fused_control": fused_control, "fused_candidate": fused_candidate,
           "ffn_residual_add_control": resadd_control, "ffn_residual_add_candidate": resadd_candidate,
           "ffn_down_resadd_control": ffnresadd_control, "ffn_down_resadd_candidate": ffnresadd_candidate,
+          "block_output_copy_control": copy_control, "block_output_copy_candidate": copy_candidate,
+          "attention_cast_control": attn_cast_control, "attention_cast_candidate": attn_cast_candidate,
           "honest_net_program_delta": net_delta,
           "program_side_effects": side_effects, "unrelated_program_deltas": unrelated_deltas,
           "ffnresadd_swaps": ffnresadd_swaps, "ffnresadd_bodies": ffnresadd_bodies,
           "non_norms_population_deltas": population_deltas,
           "conditions": conditions, "fail_closed": fail_closed,
-          "note": "expected drop derived from the measured control arm; the *_epi_ffnresadd body is the same fp32 add expression fused into the GEMV epilogue (bitwise-identical bytes)",
+          "note": "expected drops derived from the measured control arm; the *_epi_ffnresadd body is the same fp32 add expression fused into the GEMV epilogue (bitwise-identical bytes); the fab82d40 fold is a pure fp32 identity-copy removal under the declared-AFTER output-slot rebind",
           "gate_pass": bool(all(conditions.values())) and not fail_closed}
 
 
@@ -464,9 +502,9 @@ def validate_timing_bracket(rows: list[dict], settled_continuous: bool = True) -
 
 HARD_STOP_NOTES = [
   "Every GPU arm runs as a fresh process under `timeout ... flock -w 90 /tmp/gpu-bench.lock`; no arm holds the lock across a wall-bracket step.",
-  "Phase 0 (NV render smoke) must survive on sm_120 (no Xid 31 MMU fault) with the *_epi_ffnresadd kernels (q4k_g3_lanemap_gemv_epi_ffnresadd_* and q6k_gen_coop_*_epi_ffnresadd) in the compiled program set and no E_32_32_4_02a9738c residual add.",
+  "Phase 0 (NV render smoke) must survive on sm_120 (no Xid 31 MMU fault) with the *_epi_ffnresadd kernels (q4k_g3_lanemap_gemv_epi_ffnresadd_* and q6k_gen_coop_*_epi_ffnresadd) in the compiled program set, no E_32_32_4_02a9738c residual add, and no E_32_32_4_fab82d40 block-output copy.",
   "The exact full-logit gate (fp32 SHA-256 over the stacked rows, token stream, shape, per-row argmax == sampled token) must pass before any census or bracket arm runs.",
-  "The census gate FAILS CLOSED if the residual add remains, if the *_epi_ffnresadd bodies do not appear 1:1 with the control add count, if the M2a fused16/cast families shift between arms, or if any unrelated program count shifts; expected counts derive from the measured control arm.",
+  "The census gate FAILS CLOSED if the residual add remains, if the *_epi_ffnresadd bodies do not appear 1:1 with the control add count, if the E_32_32_4_fab82d40 copies do not fold to zero, if the M5-closed E_32_32_4_0a5eb0ac cast shifts between arms, if the M2a fused16/cast families shift between arms, or if any unrelated program count shifts; expected counts derive from the measured control arm.",
   "The wall bracket requires identical token-stream hashes and a candidate median at least +50 us/token faster than BOTH bracketing controls.",
   "No policy promotion: no route-policy record changes; the lease attribute is harness-installed only.",
 ]
@@ -500,7 +538,7 @@ def no_go_record(model: str = DEFAULT_MODEL, depth: int = 512) -> dict:
     },
     "census": {
       "run": False, "result": "NOT_AUTHORIZED", "reason": "campaign stopped before the M2 census arm",
-      "contract": "E_32_32_4_02a9738c gone; *_epi_ffnresadd bodies 1:1 with the control add count; M2a fused16/cast families identical between arms; net program delta equals the add drop; no unrelated program-count shift; FAIL CLOSED on any violation",
+      "contract": "E_32_32_4_02a9738c gone; *_epi_ffnresadd bodies 1:1 with the control add count; E_32_32_4_fab82d40 folded to zero; E_32_32_4_0a5eb0ac identical between arms; M2a fused16/cast families identical between arms; net program delta equals the add drop plus the copy drop; no unrelated program-count shift; FAIL CLOSED on any violation",
     },
     "wall_bracket": {
       "run": False, "result": "NOT_AUTHORIZED", "reason": "campaign stopped before the reverse control/candidate/control wall bracket",
@@ -564,6 +602,7 @@ def ab(args) -> dict:
   smoke_gate = (smoke_result.get("survive") is True
                 and bool(smoke_result.get("fused16_body_present"))
                 and not bool(smoke_result.get("cast_present"))
+                and not bool(smoke_result.get("block_output_copy_present"))
                 and bool(smoke_result.get("ffn_resadd_body_present"))
                 and not bool(smoke_result.get("residual_add_present")))
   record["smoke"] = {"run": True, "result": "PASS" if smoke_gate else "NO-GO", "evidence": smoke_result}
@@ -607,7 +646,7 @@ def ab(args) -> dict:
                       "control_evidence": control_census, "candidate_evidence": candidate_census, **census_gate}
   if not census_gate["gate_pass"]:
     record["hard_stop_notes"] = HARD_STOP_NOTES + [
-      "HARD STOP at Phase 2: M2b census gate FAIL (residual add remained, *_epi_ffnresadd absent/mismatched, M2a families shifted, or unrelated program shift)."]
+      "HARD STOP at Phase 2: M2b+M2c census gate FAIL (residual add remained, *_epi_ffnresadd absent/mismatched, fab82d40 copies remained, 0a5eb0ac shifted, M2a families shifted, or unrelated program shift)."]
     return _write_record(record, pathlib.Path(args.out))
   bracket = wall_bracket(args)
   record["wall_bracket"] = {"run": True, "result": "PROMOTED" if bracket["promoted"] else "NO-GO", **bracket}

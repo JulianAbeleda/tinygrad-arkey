@@ -20,13 +20,17 @@ from tinygrad.helpers import Target
 from tinygrad.llm.decode_kernels import (Q4KGEMVEpilogue, Q6KGEMVRouteSpec, emit_q6k_gemv_kernel,
   q4k_g3_lanemap_gemv_kernel, q6k_spec_for_role)
 from tinygrad.llm.decode_routes import q4k_primitive_linear_call, q6k_primitive_linear_call
-from tinygrad.llm.kernel_program import (KernelProgram, KernelProgramProvenance, ResidualViewRequest,
-  _validated_residual_view)
+from tinygrad.llm.kernel_program import (DeclaredTypedOutput, KernelProgram, KernelProgramProvenance,
+  ResidualViewRequest, TypedLayout, _DECLARED_TYPED_OUTPUTS, _validated_residual_view)
+from tinygrad.llm.memory_semantics import RUNTIME_ACTIVATION, mark_memory_semantic
 from tinygrad.llm.model import TransformerBlock, TransformerConfig
 from tinygrad.llm.qk_primitives import Q4KPrimitiveLinear
 from tinygrad.llm.qk_primitives import QKPrimitiveCapability, QKPrimitiveRouteAdmission
 from tinygrad.renderer.cuda import CUDARenderer
 from tinygrad.uop.ops import Ops, UOp
+
+
+_N = 4096
 
 
 def _render_cuda(ast: UOp) -> str:
@@ -231,6 +235,88 @@ def test_m2b_ffn_down_after_accepts_next_block_residual_view():
   assert view is None and "no buffer/precompiled-output identity" in reason
   view, reason = _validated_residual_view(closed.uop, ff_request, ff_consumer)
   assert view is None
+
+
+def _declared_after_chain(admitted: bool = True, key: str = "after", sink_owner: bool = True) -> tuple[UOp, UOp]:
+  """M2c structural spelling: MS(RESHAPE(AFTER(param, CALL))) over a declared
+  epilogue-absorbing fp32 typed output, plus the caller output slot t. The
+  declaration is keyed on the AFTER itself (``key="after"``) or on the opaque
+  CALL's SINK body (``key="sink"``), mirroring the two lookups callify performs
+  after an enclosing @function substitutes its inputs."""
+  param = UOp.param(0, dtypes.float32, (_N,))
+  body = UOp.sink(param)
+  call = body.call(param, name=f"q4k_g3_lanemap_gemv_epi_ffnresadd_{_N}_{12288}", precompile=True)
+  after = param.after(call)
+  declared = DeclaredTypedOutput(TypedLayout(dtypes.float32, (_N,), (1, 1, _N)),
+                                 combine_fusion_admitted=False, epilogue_absorption_admitted=admitted)
+  if key == "after":
+    _DECLARED_TYPED_OUTPUTS[after] = declared
+  else:
+    _DECLARED_TYPED_OUTPUTS[call.src[0]] = declared
+  s = mark_memory_semantic(after.reshape(1, 1, _N), RUNTIME_ACTIVATION)
+  t = UOp.param(4, dtypes.float32, (_N,))
+  return s, t
+
+
+def test_m2c_declared_after_rebind_proves_the_output_slot_contract():
+  from tinygrad.callify import _body_output_is_declared_after, _declared_after_output_slot_rebind, \
+    _declared_epilogue_absorption_after
+  s, t = _declared_after_chain(key="after")
+  assert _declared_epilogue_absorption_after(s) is not None
+  assert _body_output_is_declared_after((s,)) is True
+  rebind = _declared_after_output_slot_rebind(s, t)
+  assert rebind is not None
+  param, view = rebind
+  assert param.op is Ops.PARAM and param.dtype is dtypes.float32 and param.numel() == _N
+  assert view.dtype is dtypes.float32 and view.numel() == _N
+
+
+def test_m2c_declared_after_sink_key_survives_after_substitution():
+  # The AFTER node is rebuilt when an enclosing @function substitutes its inputs, so the
+  # declaration is also keyed by the opaque CALL's SINK body; both spellings must fire.
+  from tinygrad.callify import _body_output_is_declared_after, _declared_after_output_slot_rebind, \
+    _declared_epilogue_absorption_after
+  s, t = _declared_after_chain(key="sink")
+  assert _declared_epilogue_absorption_after(s) is not None
+  assert _body_output_is_declared_after((s,)) is True
+  assert _declared_after_output_slot_rebind(s, t) is not None
+
+
+def test_m2c_declared_after_rebind_is_fail_closed():
+  from tinygrad.callify import _body_output_is_declared_after, _declared_after_output_slot_rebind, \
+    _declared_epilogue_absorption_after
+  # No declaration at all: every helper fails closed.
+  s, t = _declared_after_chain(admitted=False, key="after")
+  del _DECLARED_TYPED_OUTPUTS[s.src[0].src[0]]  # drop the AFTER-keyed declaration
+  s2, t2 = _declared_after_chain(admitted=False, key="sink")
+  for chain in ((s, t), (s2, t2)):
+    assert _declared_epilogue_absorption_after(chain[0]) is None
+    assert _body_output_is_declared_after((chain[0],)) is False
+    assert _declared_after_output_slot_rebind(*chain) is None
+  # A non-absorbing declaration also fails closed.
+  s3, t3 = _declared_after_chain(admitted=False, key="after")
+  assert _declared_epilogue_absorption_after(s3) is None
+  assert _declared_after_output_slot_rebind(s3, t3) is None
+
+
+def test_m2c_declared_after_rebind_rejects_wrong_output_slot():
+  from tinygrad.callify import _declared_after_output_slot_rebind
+  s, t = _declared_after_chain(key="after")
+  # Wrong dtype or span on the caller output slot rejects back to the generic spelling.
+  assert _declared_after_output_slot_rebind(s, UOp.param(4, dtypes.float16, (_N,))) is None
+  assert _declared_after_output_slot_rebind(s, UOp.param(4, dtypes.float32, (_N // 2,))) is None
+  # A body whose AFTER wraps one param while the CALL writes a different slot rejects
+  # (the rebind requires the AFTER's own output param to be the CALL's slot-1 writer).
+  param = UOp.param(0, dtypes.float32, (_N,))
+  other = UOp.param(1, dtypes.float32, (_N,))
+  body = UOp.sink(other)
+  call = body.call(other, name=f"q4k_g3_lanemap_gemv_epi_ffnresadd_{_N}_{12288}", precompile=True)
+  after = param.after(call)
+  _DECLARED_TYPED_OUTPUTS[after] = DeclaredTypedOutput(TypedLayout(dtypes.float32, (_N,), (1, 1, _N)),
+                                                       combine_fusion_admitted=False,
+                                                       epilogue_absorption_admitted=True)
+  s_bad = mark_memory_semantic(after.reshape(1, 1, _N), RUNTIME_ACTIVATION)
+  assert _declared_after_output_slot_rebind(s_bad, t) is None
 
 
 class _FakeQ6KFFNDown:

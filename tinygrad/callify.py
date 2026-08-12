@@ -258,6 +258,65 @@ def _body_output_carries_reduce_output_marker(srcs:tuple[UOp, ...]) -> bool:
   return False
 
 
+def _declared_epilogue_absorption_after(x:UOp) -> UOp|None:
+  """The AFTER at the bottom of a transparent result chain with a declared
+  epilogue-absorbing typed output, else None.
+
+  The M2b absorbed block returns its ffn_down GEMV output as
+  ``MEMORY_SEMANTIC(RESHAPE(AFTER(PARAM, CALL)))``.  The producer-side typed
+  declaration (``epilogue_absorption_admitted=True``) proves that AFTER is the
+  concrete contiguous block output, so callify may bind the invocation output
+  slot in place.  The AFTER node recorded at program-execution time is rebuilt
+  when an enclosing @function substitutes its inputs, so the declaration is
+  also keyed by the opaque CALL's SINK body (stable across that substitution);
+  both spellings are checked here, fail-closed.
+  """
+  from tinygrad.llm.kernel_program import _DECLARED_TYPED_OUTPUTS
+  while x.op in {Ops.CONTIGUOUS, Ops.RESHAPE, Ops.MEMORY_SEMANTIC} and len(x.src):
+    x = x.src[0]
+  if x.op is not Ops.AFTER or len(x.src) < 2: return None
+  declared = _DECLARED_TYPED_OUTPUTS.get(x)
+  if declared is not None and declared.epilogue_absorption_admitted: return x
+  call = x.src[1]
+  if call.op is Ops.CALL and call.src[0].op is Ops.SINK:
+    sink_declared = _DECLARED_TYPED_OUTPUTS.get(call.src[0])
+    if sink_declared is not None and sink_declared.epilogue_absorption_admitted: return x
+  return None
+
+
+def _declared_after_output_slot_rebind(s:UOp, t:UOp) -> tuple[UOp, UOp]|None:
+  """Prove the declared epilogue-absorbing AFTER's nested CALL may write this
+  invocation's output slot in place: ``(param, view)`` with ``view`` an
+  equal-span reshape of the caller output slot ``t``, else None (fail-closed).
+
+  The M2b absorbed block returns
+  ``MEMORY_SEMANTIC(RESHAPE(AFTER(param, CALL)))`` where ``param`` is the
+  ffn_down GEMV's output placeholder (arg slot 0, exactly one occurrence).
+  Rebinding that PARAM to a view of the caller's output slot makes the opaque
+  CALL write the block output directly, so the redirect's body value bottoms
+  at the invocation output and no boundary copy can render.
+  """
+  after = _declared_epilogue_absorption_after(s)
+  if after is None: return None
+  param, call = after.src[0], after.src[1]
+  if param.op is not Ops.PARAM or call.op is not Ops.CALL or len(call.src) < 2: return None
+  if call.src[1] is not param or sum(arg is param for arg in call.src[1:]) != 1: return None
+  if param.dtype != t.dtype or param.numel() != t.numel(): return None
+  return param, t.reshape(param.shape)
+
+
+def _body_output_is_declared_after(srcs:tuple[UOp, ...]) -> bool:
+  """Whether one body RESULT bottoms at an epilogue-absorbing declared AFTER.
+
+  The M2b absorbed block's result is the ffn_down GEMV's fp32 AFTER with the
+  producer-side typed declaration (``epilogue_absorption_admitted=True``); the
+  redirect keeps that output in place instead of rendering the boundary copy
+  the generic caller materialization creates.  Fail-closed: no declaration, or
+  a non-absorbing one, keeps the closed-graph spelling.
+  """
+  return any(_declared_epilogue_absorption_after(item) is not None for item in srcs)
+
+
 def _precompiled_output_redirect(s:UOp, t:UOp, redirect:bool) -> UOp|None:
   # how output s lands in the caller's buffer t, or None if it must be copied into t
   # An owned contiguous result is the same allocation contract with an explicit
@@ -265,12 +324,26 @@ def _precompiled_output_redirect(s:UOp, t:UOp, redirect:bool) -> UOp|None:
   # resolved output slot and retain ownership on the dependency-bearing AFTER.
   # This is intentionally exact: no movement/view may sit between the owner and
   # CONTIGUOUS, and dtype/span must match the allocated slot.
-  if redirect and s.op is Ops.MEMORY_SEMANTIC and len(s.src) == 1 and s.src[0].op is Ops.CONTIGUOUS:
+  if redirect and s.op is Ops.MEMORY_SEMANTIC and len(s.src) == 1:
     contig = s.src[0]
-    if s.dtype != t.dtype or s.shape != t.shape: return None
-    placed = t.after(t.store(contig.src[0]))
-    if (owner := memory_semantic_owner(s)) is not None: bind_memory_semantic_owner(placed, owner)
-    return placed
+    if contig.op is Ops.CONTIGUOUS:
+      if s.dtype != t.dtype or s.shape != t.shape: return None
+      placed = t.after(t.store(contig.src[0]))
+      if (owner := memory_semantic_owner(s)) is not None: bind_memory_semantic_owner(placed, owner)
+      return placed
+    # M2c declared-AFTER boundary: the result is the ffn_down GEMV's fp32 AFTER
+    # through the block's identity reshape (MEMORY_SEMANTIC(RESHAPE(AFTER))).
+    # The producer declaration proves the AFTER is the concrete contiguous
+    # block output.  transform_precompiled_call rebinds the nested CALL's
+    # output PARAM to a view of the invocation output slot, so the AFTER's
+    # base IS that slot; returning the bare AFTER (no STORE) leaves the CALL
+    # as the sole writer and no boundary copy can render.  Fail-closed: no
+    # declaration keeps the generic spelling.
+    if (after := _declared_epilogue_absorption_after(s)) is not None:
+      if s.dtype != t.dtype or s.shape != t.shape: return None
+      placed = after.reshape(t.shape)
+      if (owner := memory_semantic_owner(s)) is not None: bind_memory_semantic_owner(placed, owner)
+      return placed
   # materialize straight into t
   if s.op is Ops.CONTIGUOUS: return t.after(t.store(s.src[0]))
   # rebind output storage to t
@@ -507,7 +580,9 @@ def transform_precompiled_call(c:UOp) -> UOp|None:
   # decode function) keep the closed-graph spelling.
   out_active = _ACTIVE_REDUCE_OUTPUT_OUT_ROUTE_FUNCTIONS.value
   out_route = CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT and (
-    _body_output_carries_reduce_output_marker(c.src[0].src) or bool(out_active and id(c) in out_active))
+    _body_output_carries_reduce_output_marker(c.src[0].src) or
+    _body_output_is_declared_after(c.src[0].src) or
+    bool(out_active and id(c) in out_active))
   # An exact prior precompiled output already has a fresh contiguous output
   # allocation.  Retain its invocation spelling so the nested producer can
   # become AFTER(output, CALL); adding another transport CONTIGUOUS here would
@@ -535,6 +610,12 @@ def transform_precompiled_call(c:UOp) -> UOp|None:
       s = s.src[0]
     if (placed := _precompiled_output_redirect(s, t, out_route)) is not None and s not in subs:
       subs[s] = placed
+      # M2c output-slot rebind: the declared AFTER's nested CALL writes this
+      # invocation's output slot directly (proven fail-closed by the helper),
+      # so the redirected body value bottoms at the caller's own buffer and
+      # the identity copy between the CALL output and the block output folds.
+      if (rebind := _declared_after_output_slot_rebind(s, t)) is not None:
+        subs[rebind[0]] = rebind[1]
       items.append(s.after(*after_deps) if after_deps else s)
     else:
       items.append(t.after(t.store(s), *after_deps))

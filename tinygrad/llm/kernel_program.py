@@ -426,6 +426,16 @@ def _execute_outputs(output: Tensor | None, inputs: tuple[Tensor, ...], program:
   if program.output_spec is not None and program.output_spec.typed_output is not None:
     for result in results:
       _DECLARED_TYPED_OUTPUTS[result.uop] = program.output_spec.typed_output
+      # The AFTER node is rebuilt when an enclosing @function substitutes its
+      # inputs (function.py _function.__call__), so a callify-time lookup by
+      # AFTER identity misses.  The opaque CALL's SINK body is stable across
+      # that substitution (its PARAMs are the kernel's own placeholders):
+      # record the declaration there too, so the M2c output-boundary redirect
+      # can prove the epilogue-absorption contract after the enclosing block
+      # function substitutes its inputs.
+      call = result.uop.src[1] if len(result.uop.src) > 1 else None
+      if call is not None and call.op is Ops.CALL and call.src[0].op is Ops.SINK:
+        _DECLARED_TYPED_OUTPUTS[call.src[0]] = program.output_spec.typed_output
   return results
 
 
