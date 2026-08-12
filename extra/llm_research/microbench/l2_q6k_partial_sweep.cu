@@ -266,6 +266,10 @@ __global__ void __launch_bounds__(R*4*S) k_dequant_peak(float* __restrict__ out,
 #define Q4K_KB (Q4K_K / 256)            // 16 blocks per row
 #define Q4K_WORDS_PER_BLOCK 36
 #define Q4K_GROUPS 8
+#define Q4KD_ROWS 4096
+#define Q4KD_K 12288
+#define Q4KD_KB (Q4KD_K / 256)          // 48 blocks per row
+#define Q4KD_BPG (Q4KD_KB / 4)          // 12 blocks per group (4 groups x 32 lanes)
 
 // ---- Q6K vectorized load helpers -----------------------------------------
 // A Q6_K block is 210 bytes starting at 2-byte granularity. The vec variants read
@@ -724,7 +728,11 @@ __device__ __forceinline__ float q4k_group_dot(const unsigned* words, const __ha
   return contrib;
 }
 
-// ---- q4k: installed gate/up replica (1 row per block, 32 lanes, G3 lane map)
+// ---- q4k: installed gate/up replica (1 row per block, 32 lanes, G3 lane map).
+// Templated on NKB (k blocks per row; named NKB to dodge the KB=16 macro) and BPG
+// (blocks per group) so the same body serves the gate/up shape (NKB=16, BPG=4) and
+// the FFN-down shape (NKB=48, BPG=12).
+template<int NKB, int BPG>
 __global__ void __launch_bounds__(32) k_q4k_legacy(const unsigned* __restrict__ words,
                                                    const __half* __restrict__ x,
                                                    float* __restrict__ out, int iters, int rows) {
@@ -732,9 +740,9 @@ __global__ void __launch_bounds__(32) k_q4k_legacy(const unsigned* __restrict__ 
   for (int t = 0; t < iters; t++) {
     int row = (blockIdx.x + t) & (rows - 1);
     float acc = 0.0f;
-    for (int l = 0; l < 4; l++) {
-      int blk = bg*4 + l;
-      int base = (row*Q4K_KB + blk)*Q4K_WORDS_PER_BLOCK;
+    for (int l = 0; l < BPG; l++) {
+      int blk = bg*BPG + l;
+      int base = (row*NKB + blk)*Q4K_WORDS_PER_BLOCK;
       for (int grp = 0; grp < Q4K_GROUPS; grp++) acc += q4k_group_dot(words, x, base, blk, grp, wc);
     }
     for (int o = 16; o >= 1; o >>= 1) acc += __shfl_xor_sync(0xffffffffu, acc, o);
@@ -743,13 +751,13 @@ __global__ void __launch_bounds__(32) k_q4k_legacy(const unsigned* __restrict__ 
 }
 
 // ---- q4k: vectorized variants, R rows per block
-template<int VW, bool XSMEM>
+template<int VW, bool XSMEM, int NKB, int BPG>
 __device__ __forceinline__ void q4k_lane_dot(const unsigned* __restrict__ words,
                                              const __half* __restrict__ x,
                                              const __half* sx, int row, int bg, int wc,
                                              int b0, float& acc) {
-  int blk = bg*4 + b0;
-  int base = (row*Q4K_KB + blk)*Q4K_WORDS_PER_BLOCK;
+  int blk = bg*BPG + b0;
+  int base = (row*NKB + blk)*Q4K_WORDS_PER_BLOCK;
   unsigned w0, w1, w2, w3;
   if (VW == 128) {
     uint4 v0 = ((const uint4*)(words + base))[0];
@@ -819,23 +827,23 @@ __device__ __forceinline__ void q4k_lane_dot(const unsigned* __restrict__ words,
   }
 }
 
-template<int R, int VW, int PF, bool XSMEM>
+template<int R, int VW, int PF, bool XSMEM, int NKB, int BPG, int XHALVES>
 __global__ void __launch_bounds__(R*32) k_q4k_v(const unsigned* __restrict__ words,
                                                 const __half* __restrict__ x,
                                                 float* __restrict__ out, int iters, int rows) {
   int lane = threadIdx.x & 31;
   int bg = lane >> 3, wc = lane & 7;
   int row_local = threadIdx.x >> 5;
-  __shared__ alignas(16) __half sx[4096];
-  if (XSMEM) stage_x<4096>(sx, x);
+  __shared__ alignas(16) __half sx[XHALVES];
+  if (XSMEM) stage_x<XHALVES>(sx, x);
   for (int t = 0; t < iters; t++) {
     int row = (blockIdx.x*R + row_local + t) & (rows - 1);
     float acc = 0.0f;
     if (PF >= 2) {
 #pragma unroll 2
-      for (int b0 = 0; b0 < 4; b0++) q4k_lane_dot<VW, XSMEM>(words, x, sx, row, bg, wc, b0, acc);
+      for (int b0 = 0; b0 < BPG; b0++) q4k_lane_dot<VW, XSMEM, NKB, BPG>(words, x, sx, row, bg, wc, b0, acc);
     } else {
-      for (int b0 = 0; b0 < 4; b0++) q4k_lane_dot<VW, XSMEM>(words, x, sx, row, bg, wc, b0, acc);
+      for (int b0 = 0; b0 < BPG; b0++) q4k_lane_dot<VW, XSMEM, NKB, BPG>(words, x, sx, row, bg, wc, b0, acc);
     }
     for (int o = 16; o >= 1; o >>= 1) acc += __shfl_xor_sync(0xffffffffu, acc, o);
     if (lane == 0) out[row] = acc;
@@ -846,21 +854,21 @@ __global__ void __launch_bounds__(R*32) k_q4k_v(const unsigned* __restrict__ wor
 // 4 qpack words of a (grp/2, wc-quad) are one 16B-aligned uint4 (Q4_K blocks are 144B,
 // 0 mod 16), so the weight loads are pure LDG.128; x comes from smem as 2 LDS.128 per
 // group. Ladder over the 8 group lanes (xor 4/2/1), store on lane 0 of each group.
-template<int R, bool XSMEM>
+template<int R, bool XSMEM, int NKB, int BPG, int XHALVES>
 __global__ void __launch_bounds__(R*8) k_q4k_qv(const unsigned* __restrict__ words,
                                                 const __half* __restrict__ x,
                                                 float* __restrict__ out, int iters, int rows) {
   int lane = threadIdx.x & 7;
   int row_local = threadIdx.x >> 3;
   int bg = lane >> 1, wc0 = (lane & 1) * 4;
-  __shared__ alignas(16) __half sx[4096];
-  if (XSMEM) stage_x<4096>(sx, x);
+  __shared__ alignas(16) __half sx[XHALVES];
+  if (XSMEM) stage_x<XHALVES>(sx, x);
   for (int t = 0; t < iters; t++) {
     int row = (blockIdx.x*R + row_local + t) & (rows - 1);
     float acc = 0.0f;
-    for (int b0 = 0; b0 < 4; b0++) {
-      int blk = bg*4 + b0;
-      int base = (row*Q4K_KB + blk)*Q4K_WORDS_PER_BLOCK;
+    for (int b0 = 0; b0 < BPG; b0++) {
+      int blk = bg*BPG + b0;
+      int base = (row*NKB + blk)*Q4K_WORDS_PER_BLOCK;
       uint4 hdr = *(const uint4*)(words + base);
       unsigned w0 = hdr.x, w1 = hdr.y, w2 = hdr.z, w3 = hdr.w;
 #pragma unroll
@@ -1039,6 +1047,23 @@ static const Cfg2 CFGS2[] = {
   {"q4k_16row_512thr_u128_xsmem",2, 16, 1, 128, 1, true,  false, false},
   {"q4k_32row_1024thr_u128_xsmem",2, 32, 1, 128, 1, true,  false, false},
   {"q4k_16row_128thr_u128_quad_xsmem",2, 16, 1, 128, 1, true, true, false},
+  // ---- q4k-down 4096x12288 (FFN down, llama 11.776 us/node floor): control replica,
+  // vec width, prefetch, xsmem, block grouping. Same surface as the gate/up family but
+  // on the 48-block-per-row layout (BPG=12). The installed body is the epi_ffnresadd
+  // variant (M2b); the sweep replicates the plain dot body per the MC2 gate/up pattern.
+  {"q4kd_legacy",                3,  1, 1,  32, 1, false, false, true},
+  {"q4kd_legacy_u16",            3,  1, 1,  16, 1, false, false, false},
+  {"q4kd_legacy_u128",           3,  1, 1, 128, 1, false, false, false},
+  {"q4kd_legacy_u128_pf2",       3,  1, 1, 128, 2, false, false, false},
+  {"q4kd_legacy_xsmem",          3,  1, 1,  32, 1, true,  false, false},
+  {"q4kd_4row_128thr_u32",       3,  4, 1,  32, 1, false, false, false},
+  {"q4kd_4row_128thr_u32_xsmem", 3,  4, 1,  32, 1, true,  false, false},
+  {"q4kd_4row_128thr_u128_xsmem",3,  4, 1, 128, 1, true,  false, false},
+  {"q4kd_4row_128thr_u128_xsmem_pf2",3, 4, 1, 128, 2, true, false, false},
+  {"q4kd_8row_256thr_u128_xsmem",3,  8, 1, 128, 1, true,  false, false},
+  {"q4kd_16row_512thr_u128_xsmem",3, 16, 1, 128, 1, true,  false, false},
+  {"q4kd_32row_1024thr_u128_xsmem",3, 32, 1, 128, 1, true,  false, false},
+  {"q4kd_16row_128thr_u128_quad_xsmem",3, 16, 1, 128, 1, true, true, false},
 };
 static const int NCFGS2 = sizeof(CFGS2) / sizeof(CFGS2[0]);
 
@@ -1104,21 +1129,40 @@ static int launch_mem2(const Cfg2& c, int rows, const unsigned short* halfs,
     else return 0;
     return thr;
   }
+  // q4k-down 4096x12288 (KB=48, BPG=12): same surface as the q4k gate/up family
+  if (c.shape == 3) {
+    if (c.ctl) { k_q4k_legacy<Q4KD_KB, Q4KD_BPG><<<rows, 32, 0, st>>>(words, x, out, iters, rows); return 32; }
+    const int thr = c.r*32;
+    if (c.r == 1 && c.vec == 16) k_q4k_v<1, 16, 1, false, Q4KD_KB, Q4KD_BPG, Q4KD_K><<<rows, thr, 0, st>>>(words, x, out, iters, rows);
+    else if (c.r == 1 && c.vec == 128 && c.pf == 1 && !c.xsmem) k_q4k_v<1, 128, 1, false, Q4KD_KB, Q4KD_BPG, Q4KD_K><<<rows, thr, 0, st>>>(words, x, out, iters, rows);
+    else if (c.r == 1 && c.vec == 128 && c.pf == 2) k_q4k_v<1, 128, 2, false, Q4KD_KB, Q4KD_BPG, Q4KD_K><<<rows, thr, 0, st>>>(words, x, out, iters, rows);
+    else if (c.r == 1 && c.vec == 32 && c.xsmem) k_q4k_v<1, 32, 1, true, Q4KD_KB, Q4KD_BPG, Q4KD_K><<<rows, thr, 0, st>>>(words, x, out, iters, rows);
+    else if (c.r == 4 && c.vec == 32 && !c.xsmem) k_q4k_v<4, 32, 1, false, Q4KD_KB, Q4KD_BPG, Q4KD_K><<<rows/4, thr, 0, st>>>(words, x, out, iters, rows);
+    else if (c.r == 4 && c.vec == 32 && c.xsmem) k_q4k_v<4, 32, 1, true, Q4KD_KB, Q4KD_BPG, Q4KD_K><<<rows/4, thr, 0, st>>>(words, x, out, iters, rows);
+    else if (c.r == 4 && c.vec == 128 && c.pf == 1 && c.xsmem) k_q4k_v<4, 128, 1, true, Q4KD_KB, Q4KD_BPG, Q4KD_K><<<rows/4, thr, 0, st>>>(words, x, out, iters, rows);
+    else if (c.r == 4 && c.vec == 128 && c.pf == 2 && c.xsmem) k_q4k_v<4, 128, 2, true, Q4KD_KB, Q4KD_BPG, Q4KD_K><<<rows/4, thr, 0, st>>>(words, x, out, iters, rows);
+    else if (c.r == 8 && c.vec == 128 && c.xsmem) k_q4k_v<8, 128, 1, true, Q4KD_KB, Q4KD_BPG, Q4KD_K><<<rows/8, thr, 0, st>>>(words, x, out, iters, rows);
+    else if (c.r == 16 && c.vec == 128 && c.xsmem && c.al) k_q4k_qv<16, true, Q4KD_KB, Q4KD_BPG, Q4KD_K><<<rows/16, 128, 0, st>>>(words, x, out, iters, rows);
+    else if (c.r == 16 && c.vec == 128 && c.xsmem) k_q4k_v<16, 128, 1, true, Q4KD_KB, Q4KD_BPG, Q4KD_K><<<rows/16, thr, 0, st>>>(words, x, out, iters, rows);
+    else if (c.r == 32 && c.vec == 128 && c.xsmem) k_q4k_v<32, 128, 1, true, Q4KD_KB, Q4KD_BPG, Q4KD_K><<<rows/32, thr, 0, st>>>(words, x, out, iters, rows);
+    else return 0;
+    return thr;
+  }
   // q4k
-  if (c.ctl) { k_q4k_legacy<<<rows, 32, 0, st>>>(words, x, out, iters, rows); return 32; }
+  if (c.ctl) { k_q4k_legacy<Q4K_KB, 4><<<rows, 32, 0, st>>>(words, x, out, iters, rows); return 32; }
   const int thr = c.r*32;
-  if (c.r == 1 && c.vec == 16) k_q4k_v<1, 16, 1, false><<<rows, thr, 0, st>>>(words, x, out, iters, rows);
-  else if (c.r == 1 && c.vec == 128 && c.pf == 1 && !c.xsmem) k_q4k_v<1, 128, 1, false><<<rows, thr, 0, st>>>(words, x, out, iters, rows);
-  else if (c.r == 1 && c.vec == 128 && c.pf == 2) k_q4k_v<1, 128, 2, false><<<rows, thr, 0, st>>>(words, x, out, iters, rows);
-  else if (c.r == 1 && c.vec == 32 && c.xsmem) k_q4k_v<1, 32, 1, true><<<rows, thr, 0, st>>>(words, x, out, iters, rows);
-  else if (c.r == 4 && c.vec == 32 && !c.xsmem) k_q4k_v<4, 32, 1, false><<<rows/4, thr, 0, st>>>(words, x, out, iters, rows);
-  else if (c.r == 4 && c.vec == 32 && c.xsmem) k_q4k_v<4, 32, 1, true><<<rows/4, thr, 0, st>>>(words, x, out, iters, rows);
-  else if (c.r == 4 && c.vec == 128 && c.pf == 1 && c.xsmem) k_q4k_v<4, 128, 1, true><<<rows/4, thr, 0, st>>>(words, x, out, iters, rows);
-  else if (c.r == 4 && c.vec == 128 && c.pf == 2 && c.xsmem) k_q4k_v<4, 128, 2, true><<<rows/4, thr, 0, st>>>(words, x, out, iters, rows);
-  else if (c.r == 8 && c.vec == 128 && c.xsmem) k_q4k_v<8, 128, 1, true><<<rows/8, thr, 0, st>>>(words, x, out, iters, rows);
-  else if (c.r == 16 && c.vec == 128 && c.xsmem && c.al) k_q4k_qv<16, true><<<rows/16, 128, 0, st>>>(words, x, out, iters, rows);
-  else if (c.r == 16 && c.vec == 128 && c.xsmem) k_q4k_v<16, 128, 1, true><<<rows/16, thr, 0, st>>>(words, x, out, iters, rows);
-  else if (c.r == 32 && c.vec == 128 && c.xsmem) k_q4k_v<32, 128, 1, true><<<rows/32, thr, 0, st>>>(words, x, out, iters, rows);
+  if (c.r == 1 && c.vec == 16) k_q4k_v<1, 16, 1, false, Q4K_KB, 4, Q4K_K><<<rows, thr, 0, st>>>(words, x, out, iters, rows);
+  else if (c.r == 1 && c.vec == 128 && c.pf == 1 && !c.xsmem) k_q4k_v<1, 128, 1, false, Q4K_KB, 4, Q4K_K><<<rows, thr, 0, st>>>(words, x, out, iters, rows);
+  else if (c.r == 1 && c.vec == 128 && c.pf == 2) k_q4k_v<1, 128, 2, false, Q4K_KB, 4, Q4K_K><<<rows, thr, 0, st>>>(words, x, out, iters, rows);
+  else if (c.r == 1 && c.vec == 32 && c.xsmem) k_q4k_v<1, 32, 1, true, Q4K_KB, 4, Q4K_K><<<rows, thr, 0, st>>>(words, x, out, iters, rows);
+  else if (c.r == 4 && c.vec == 32 && !c.xsmem) k_q4k_v<4, 32, 1, false, Q4K_KB, 4, Q4K_K><<<rows/4, thr, 0, st>>>(words, x, out, iters, rows);
+  else if (c.r == 4 && c.vec == 32 && c.xsmem) k_q4k_v<4, 32, 1, true, Q4K_KB, 4, Q4K_K><<<rows/4, thr, 0, st>>>(words, x, out, iters, rows);
+  else if (c.r == 4 && c.vec == 128 && c.pf == 1 && c.xsmem) k_q4k_v<4, 128, 1, true, Q4K_KB, 4, Q4K_K><<<rows/4, thr, 0, st>>>(words, x, out, iters, rows);
+  else if (c.r == 4 && c.vec == 128 && c.pf == 2 && c.xsmem) k_q4k_v<4, 128, 2, true, Q4K_KB, 4, Q4K_K><<<rows/4, thr, 0, st>>>(words, x, out, iters, rows);
+  else if (c.r == 8 && c.vec == 128 && c.xsmem) k_q4k_v<8, 128, 1, true, Q4K_KB, 4, Q4K_K><<<rows/8, thr, 0, st>>>(words, x, out, iters, rows);
+  else if (c.r == 16 && c.vec == 128 && c.xsmem && c.al) k_q4k_qv<16, true, Q4K_KB, 4, Q4K_K><<<rows/16, 128, 0, st>>>(words, x, out, iters, rows);
+  else if (c.r == 16 && c.vec == 128 && c.xsmem) k_q4k_v<16, 128, 1, true, Q4K_KB, 4, Q4K_K><<<rows/16, thr, 0, st>>>(words, x, out, iters, rows);
+  else if (c.r == 32 && c.vec == 128 && c.xsmem) k_q4k_v<32, 128, 1, true, Q4K_KB, 4, Q4K_K><<<rows/32, thr, 0, st>>>(words, x, out, iters, rows);
   else return 0;
   return thr;
 }
@@ -1138,7 +1182,7 @@ static void run_bw_read(int shape, const void* buf, size_t bytes, cudaStream_t s
   cudaEventSynchronize(e1);
   float ms; cudaEventElapsedTime(&ms, e0, e1);
   double us = ms * 1e3 / passes;
-  const char* n = shape == 0 ? "partial" : shape == 1 ? "coop" : "q4k";
+  const char* n = shape == 0 ? "partial" : shape == 1 ? "coop" : shape == 2 ? "q4k" : "q4kd";
   printf("bw read %-8s set=%.2f MB -> %.2f us/pass -> %.2f TB/s (weight bytes only)\n",
          n, bytes / 1e6, us, bytes / us / 1e6);
   cudaFree(out);
@@ -1160,7 +1204,7 @@ int main(int argc, char** argv) {
     else if (!strcmp(argv[i], "--rows")) rows_arg = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--bw")) bw = true;
   }
-  int shape = !strcmp(shape_s, "coop") ? 1 : !strcmp(shape_s, "q4k") ? 2 : 0;
+  int shape = !strcmp(shape_s, "coop") ? 1 : !strcmp(shape_s, "q4k") ? 2 : !strcmp(shape_s, "q4kd") ? 3 : 0;
   bool dequant = !strcmp(mode, "dequant");
   bool compute = !strcmp(mode, "dot") || dequant;
 
@@ -1346,10 +1390,10 @@ int main(int argc, char** argv) {
       }
       if (bw) run_bw_read(0, halfs, (size_t)ROWS * KB * 210, st, e0, e1);
     }
-    if (shape == 1 || shape == 2) {
-      const int nrows = shape == 1 ? COOP_ROWS : Q4K_ROWS;
-      const int kk = shape == 1 ? COOP_K : Q4K_K;
-      const int kb = shape == 1 ? COOP_KB : Q4K_KB;
+    if (shape == 1 || shape == 2 || shape == 3) {
+      const int nrows = shape == 1 ? COOP_ROWS : shape == 2 ? Q4K_ROWS : Q4KD_ROWS;
+      const int kk = shape == 1 ? COOP_K : shape == 2 ? Q4K_K : Q4KD_K;
+      const int kb = shape == 1 ? COOP_KB : shape == 2 ? Q4K_KB : Q4KD_KB;
       const int wpb = shape == 1 ? HWPB : Q4K_WORDS_PER_BLOCK;
       const int qrows = rows_arg ? rows_arg : nrows;
       unsigned short* halfs2; unsigned* words2; __half* x2;
@@ -1414,7 +1458,8 @@ int main(int argc, char** argv) {
                macs / us_per_pass / 1e3, c.ctl ? "(control)" : c.xsmem ? "(x smem)" : "(x l2)");
         if (!c.ctl) {   // one-pass spot check vs the installed control replica
           if (shape == 1) k_coop_legacy<<<qrows/2, 32, 0, st>>>(halfs2, x2, ref, 1, qrows);
-          else k_q4k_legacy<<<qrows, 32, 0, st>>>(words2, x2, ref, 1, qrows);
+          else if (shape == 3) k_q4k_legacy<Q4KD_KB, Q4KD_BPG><<<qrows, 32, 0, st>>>(words2, x2, ref, 1, qrows);
+          else k_q4k_legacy<Q4K_KB, 4><<<qrows, 32, 0, st>>>(words2, x2, ref, 1, qrows);
           launch_mem2(c, qrows, halfs2, words2, x2, cmp, 1, st);
           cudaStreamSynchronize(st);
           float *hr = (float*)malloc((size_t)nrows * 4);
