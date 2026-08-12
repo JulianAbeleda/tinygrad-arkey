@@ -17,16 +17,19 @@ block-output copy family `fab82d40` x49 (pure fp32 identity copies, so
 byte-identical), and the reverse wall bracket measured candidate
 5.2031 ms/token = ~192.2 tok/s at +66.2/+78.9 us (median +72.6 us) vs the
 control bracket, ABOVE the +50 us promotion bar. Status: **M2a BOOKED;
-M2b complete (absorbed into the M2c booking); M2c BOOKED; next: the
-attention cast `0a5eb0ac` x36, then M1 norm epilogue.** M2a books +57.2 us
+M2b complete (absorbed into the M2c booking); M2c BOOKED; M2d LANDED (the
+attention cast `0a5eb0ac` x36, NO-GO on the +50 us bar); residual row
+exhausted; next: M1 norm epilogue.** M2a books +57.2 us
 of the +240.106 us residual/cast/contiguous row (candidate 5.2723 ms/token
 = 189.67 tok/s vs control bracket 5.3295 ms = 187.64 tok/s). M2b eliminates
 the `E_32_32_4_02a9738c` residual-add family (36 x ~1.7 us = ~61.7 us
 census) AND the transport-copy family `E_32_32_4_86a23e1a` x36 (an M2c-row
 item) via the attn_qo typed-output declaration; M2c then folds `fab82d40`
-x49. What remains in the row: the attention cast `0a5eb0ac` x36 (~60 us),
-then M1 norm epilogue. The M2b/M2c/M1 gate sequence stays the booking
-authority.
+x49. The remaining row item, the attention cast `0a5eb0ac` x36 (~60 us),
+was absorbed by M2d (fp16 flash-combine store, LANDED), so the
+residual/cast/contiguous row is now exhausted: M2a -57.2 us (booked) +
+M2b+M2c -72.6 us (booked) + M2d -35.8 us wall (landed). Next is the M1
+norm epilogue. The M2b/M2c/M1 gate sequence stays the booking authority.
 
 ## 1. Ledger position (per token)
 
@@ -36,9 +39,10 @@ authority.
 | **M2a booked (this scope)** | **candidate 5.2723 ms/token = 189.67 tok/s, +57.2 us/token vs control bracket 5.3295 ms (census: 36 casts -> 0, net -36 kernels)** |
 | **M2b (landed, NOT booked)** | **candidate 5.2516 ms/token = ~190.4 tok/s; wall +27.5 us (vs control A 5.2791) / +32.3 us (vs control B 5.2840), median +29.9 us < +50 us promotion bar (NO-GO); census PASS with swap-twin rule (36 `*_epi_ffnresadd` bodies 1:1, 0 residual adds, 0 `86a23e1a` transport copies); net -36 kernels** |
 | **M2c booked (M2b+M2c package, this scope)** | **candidate 5.2031 ms/token = ~192.2 tok/s; wall +66.2 us (vs control A 5.2693) / +78.9 us (vs control B 5.2820), median +72.6 us > +50 us promotion bar (PROMOTED); census PASS: `fab82d40` copies 49 -> 0, `02a9738c` adds 36 -> 0, `*_epi_ffnresadd` 0 -> 36, `0a5eb0ac` attention cast 36 == 36 (M5-closed), net -85 (715 -> 630 kernels); logits SHA-256 identical** |
+| **M2d (landed, NOT booked)** | **candidate 5.1717 ms/token = 193.36 tok/s; wall +34.9 us (vs control A 5.2066) / +36.6 us (vs control B 5.2083), median +35.8 us < +50 us promotion bar (NO-GO); census PASS: `0a5eb0ac` attention cast 36 -> 0, fp32 combine 36 -> 0 swapped 1:1 with fp16 combine 0 -> 36, net -36 (630 -> 594 kernels); exact logits SHA-256 identical (`70838f5237ce2cf2`)** |
 | Target | ~194 tok/s = 5.1546 ms/token -> need ~-169 us wall |
 | norms row | +495.330 us attribution, mostly tapped: q/k bodies booked; remaining 37 chains (r_16_256 3.84 us + E_32_32_4_f14a5cc0 2.27 us each ~= 226 us census) |
-| **residual/cast/contiguous row** | **+240.106 us attribution, +8.87 tok/s ceiling; M2a books -57.2 us; M2b+M2c books the combined package at -72.6 us wall (candidate 5.2031 ms = ~192.2 tok/s, census net -85: `02a9738c` adds + `fab82d40` copies + `86a23e1a` transport copies gone); remaining in-row: attention cast `0a5eb0ac` x36 (~60 us census) as the next item; M1 norm epilogue is its own row** |
+| **residual/cast/contiguous row** | **+240.106 us attribution, +8.87 tok/s ceiling; EXHAUSTED: M2a -57.2 us (booked), M2b+M2c -72.6 us wall (booked, candidate 5.2031 ms = ~192.2 tok/s), M2d -35.8 us wall (landed, candidate 5.1717 ms = 193.36 tok/s, attention cast `0a5eb0ac` x36 -> 0); ~-165.6 us wall banked of the +240.106 us attribution; next item is the M1 norm epilogue row** |
 | quant GEMV | ~4050 us census (70%): q4k/q6k; 10% win ~= 203 tok/s (after 194) |
 
 The residual family is the clean win: per-row epilogue ops, no redundant
