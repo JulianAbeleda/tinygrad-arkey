@@ -48,6 +48,7 @@ import argparse, contextlib, hashlib, io, json, pathlib, statistics, sys, time
 import numpy as np
 
 from extra.llm_research.decode.nv_fusion_population_ledger import POP_NORMS, classify as _ledger_classify
+from extra.llm_research.decode.nv_fusion_cost_model import predict_wall_delta, reconcile_cost_prediction
 from extra.llm_research.decode.nv_predispatch_full_logits_qualification import DEFAULT_MODEL, _load, _prompt
 from extra.llm_research.decode.nv_reduce_output_primitive_ab import validate_logits_gate as _c6_validate_logits_gate
 from extra.llm_research.decode.nv_reduce_output_fp32_qk_ab import (
@@ -99,6 +100,32 @@ CONSTRUCTION = {
     "census": "E_32_32_4_f14a5cc0 dropped by exactly the control fused16 count (the 36 ffn epilogues), rms_affine16 bodies present 1:1 with the control fused16 count, fused16 at zero, r_16_256 counts identical, no other program-count shift; FAIL CLOSED on any unrelated delta",
   },
   "question": "Does the M1 in-kernel ffn-norm absorption survive NV render (Xid 31 class), preserve exact full logits, remove exactly the 36 ffn-norm epilogues with the fused16 -> rms_affine16 1:1 swap and no r_16_256 shift, and book the remaining ffn-norm share of the norms row under the reverse wall bracket?",
+}
+
+# Predicted-wall-delta contract (nv_fusion_cost_model.py): the prediction is
+# derived from the llama reference shape (norm arithmetic NEVER enters the
+# matmul inner loop; llama keeps the norm as one fused rms_norm_f32 kernel) plus
+# the per-element arithmetic of this candidate (the epilogue re-executes once
+# per matrix dot, R=2; x streams fp32 instead of fp16; r_16_256 must stay).
+# The bracket reconciles the measured delta against this range: CONFIRMED /
+# EXPLAINED pass with evidence; CONTRADICTED fails the campaign closed.
+COST_PREDICTION = {
+  "contract": "before implementing, derive the predicted wall delta from the llama reference shape plus per-element instruction/traffic arithmetic; the wall bracket then either confirms it or explains the gap",
+  "llama_reference": "rms_norm_f32 = ONE fused reduce+affine kernel, fp32 out; norm never enters the matmul; matmul consumes quantize_q8_1 activation (llama_tinygrad_role_manifest.py)",
+  "arithmetic": {
+    "redundancy": 2,
+    "redundancy_note": "the norm epilogue re-executes once per matrix dot (gate and up each recompute (half)((h*s)*w))",
+    "per_element_extra_ops": "2 FMUL + fp16 RNE cast + upcast per element per matrix",
+    "x_traffic": "fp32 16KB vs fp16 8KB per token per block",
+    "scale_reduce_retained": "r_16_256 must stay (bitwise contract; llama keeps n_f32)",
+  },
+  "formula": "blocks x [ (R - 1) x M_removed - R x launch_us ]; positive = candidate slower",
+  "tolerance_us": 20.0,
+  "assumptions": {
+    "launch_us": "1.5 (range 1.0-2.0), E_32_32_4 class floor, m4-resadd-landing-scope-20260806.md",
+    "M_removed": "control census median of the folded epilogue family, measured per run before the bracket",
+  },
+  "unmodeled": ["in-kernel critical path (occupancy/dependency chain)", "activation traffic"],
 }
 
 
@@ -535,12 +562,39 @@ def validate_timing_bracket(rows: list[dict], settled_continuous: bool = True) -
           "note": "wall evidence only; booking requires the exact-logits gate and the M1 census gate"}
 
 
+def validate_cost_prediction(bracket: dict, control_census: dict, candidate_census: dict) -> dict:
+  """M1 predicted-wall-delta gate (nv_fusion_cost_model.py).
+
+  The COST_PREDICTION table is derived from the llama reference shape plus the
+  per-element arithmetic of the candidate; the measured bracket delta must then
+  confirm it or explain the gap.  A measured delta outside the predicted range
+  on the opposite side of zero is a CONTRADICTION and FAILS CLOSED: the premise
+  was unbacked by the llama-shaped arithmetic, so the campaign cannot book even
+  if the raw bracket numbers promoted."""
+  hist = control_census.get("histogram") or []
+  removed_medians = {name: med for name, _, med in hist if name.startswith(NORM_EPILOGUE_PREFIX)}
+  if not removed_medians:
+    return {"run": True, "result": "NO-GO", "reason": "control census has no norm-epilogue family to model"}
+  # All 37 control epilogues are the same kernel body, so the family median is the
+  # per-block M_removed; only the 36 ffn chains fold, but the per-block term uses the
+  # measured median of the identical body either way.
+  prediction = predict_wall_delta(36, {NORM_EPILOGUE_PREFIX: statistics.median(removed_medians.values())},
+                                  {NORM_EPILOGUE_PREFIX: COST_PREDICTION["arithmetic"]["redundancy"]})
+  measured = bracket["candidate_minus_control_bracket_us"]
+  reconciliation = reconcile_cost_prediction(measured, prediction,
+                                             tolerance_us=COST_PREDICTION["tolerance_us"])
+  return {"run": True, "result": "PASS" if reconciliation["result"] != "CONTRADICTED" else "FAIL",
+          "contract": COST_PREDICTION, "prediction": prediction, "reconciliation": reconciliation,
+          "measured_delta_us": measured, "note": reconciliation["note"]}
+
+
 HARD_STOP_NOTES = [
   "Every GPU arm runs as a fresh process under `timeout ... flock -w 90 /tmp/gpu-bench.lock`; no arm holds the lock across a wall-bracket step.",
   "Phase 0 (NV render smoke) must survive on sm_120 (no Xid 31 MMU fault) with the rms_affine16 kernels (q4k_g3_lanemap_w1w3_rms_affine16_*) in the compiled program set, no fused16 kernel, the ffn-norm epilogue reduced to the non-FFN chain, no E_32_32_4_02a9738c residual add, no E_32_32_4_fab82d40 copy, no E_32_32_4_0a5eb0ac attention cast, no legacy fp32 combine, and no E_32_32_4_3b0fcfbc opaque copy.",
   "The exact full-logit gate (fp32 SHA-256 over the stacked rows, token stream, shape, per-row argmax == sampled token) must pass before any census or bracket arm runs.",
   "The census gate FAILS CLOSED if the ffn-norm epilogues do not drop by exactly the control fused16 count, if the fused16 kernels remain, if the rms_affine16 bodies do not swap 1:1, if the r_16_256 scale-reduce count shifts, if any M2 family shifts, or if any unrelated program count shifts; expected counts derive from the measured control arm.",
   "The wall bracket requires identical token-stream hashes and a candidate median at least +50 us/token faster than BOTH bracketing controls.",
+  "The predicted-wall-delta gate (COST_PREDICTION + validate_cost_prediction) runs after the bracket: the measured delta must CONFIRM the llama-shaped prediction or EXPLAIN the gap with named residual causes; a CONTRADICTION (measured outside the predicted range on the opposite side of zero) FAILS CLOSED and the campaign cannot book.",
   "No policy promotion: no route-policy record changes; the lease attribute is harness-installed only.",
 ]
 
@@ -580,6 +634,10 @@ def no_go_record(model: str = DEFAULT_MODEL, depth: int = 512) -> dict:
       "run": False, "result": "NOT_AUTHORIZED", "reason": "campaign stopped before the reverse control/candidate/control wall bracket",
       "promotion_us": PROMOTION_US,
       "contract": "all three token-stream hashes identical; candidate median at least +50 us/token faster than both bracketing controls",
+    },
+    "cost_prediction": {
+      "run": False, "result": "NOT_AUTHORIZED", "reason": "campaign stopped before the predicted-wall-delta reconciliation",
+      "contract": "the measured bracket delta must CONFIRM the llama-shaped prediction or EXPLAIN the gap with named residual causes; CONTRADICTED fails closed",
     },
     "hard_stop_notes": list(HARD_STOP_NOTES),
     "isolation_notes": list(ISOLATION_NOTES),
@@ -693,6 +751,13 @@ def ab(args) -> dict:
     return _write_record(record, pathlib.Path(args.out))
   bracket = wall_bracket(args)
   record["wall_bracket"] = {"run": True, "result": "PROMOTED" if bracket["promoted"] else "NO-GO", **bracket}
+  cost_gate = validate_cost_prediction(bracket, control_census, candidate_census)
+  record["cost_prediction"] = cost_gate
+  if cost_gate["result"] == "FAIL":
+    record["verdict"] = "NO-GO"
+    record["hard_stop_notes"] = HARD_STOP_NOTES + [
+      "HARD STOP at Phase 4: predicted-wall-delta CONTRADICTION (measured delta outside the llama-shaped prediction range on the opposite side of zero); the premise was unbacked and cannot book even if the raw bracket numbers promoted."]
+    return _write_record(record, pathlib.Path(args.out))
   if bracket["promoted"]:
     record["verdict"] = "BOOKED"
     record["hard_stop_notes"] = HARD_STOP_NOTES
