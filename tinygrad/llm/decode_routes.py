@@ -9,9 +9,9 @@ from tinygrad.llm.decode_kernels import (Q6K_POS_EXTENT, decode_kv_rope_store_ke
   q6k_coop_row_tile_for_target, q6k_spec_for_role, q6k_vocab_scalar_reduce_eligible)
 from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeCapability, FlashDecodeRouteConfig,
   flash_decode_capability_from_renderer, flash_decode_live_split_block_tile, flash_decode_target_promoted)
-from tinygrad.llm.kernel_program import (DeclaredTypedOutput, KernelProgram, KernelProgramProvenance,
-                                         OutputSpec, ResidualViewRequest, TypedLayout, TypedViewRequest,
-                                         execute_promoted_program, execute_research_program)
+from tinygrad.llm.kernel_program import (ActivationViewRequest, DeclaredTypedOutput, KernelProgram,
+                                         KernelProgramProvenance, OutputSpec, ResidualViewRequest, TypedLayout,
+                                         TypedViewRequest, execute_promoted_program, execute_research_program)
 from tinygrad.llm.model_route_plan import decode_epilogue_fusion_promoted, decode_flash_combine_fusion_promoted
 from tinygrad.llm.qk_layout import Q4_K, Q6_K, QuantFormat
 from tinygrad.llm.route_selection import parse_route_mode
@@ -262,9 +262,18 @@ def q4k_gate_up_rms_affine_qualification_call(gate:Any, up:Any, raw_x:Tensor, no
   typed_output=(DeclaredTypedOutput(TypedLayout(out_dtype,(12288,),(1,1,12288)),
                                     combine_fusion_admitted=False, epilogue_absorption_admitted=True)
                 if store_fp16 else None)
+  # M1 raw-x typed-input opt-in: the raw fp32 h slot (slot 3) binds zero-copy to the
+  # block-output epi_resadd AFTER under the fail-closed validator
+  # (kernel_program._validated_activation_view).  Without the fold the generic flat-buffer
+  # ABI materializes an identity transport copy per block (E_32_32_4_86a23e1a), exactly
+  # cancelling the M1 -36 program fold.  The request is issued only here; any mismatch
+  # keeps the flat-buffer ABI (byte-identical control).
+  # Input tuple is (gate_words, up_words, raw_x, norm_weight, scale): raw_x is slot 2.
+  activation_input_views=(ActivationViewRequest(slot=2,dtype=dtypes.float32,flat_shape=(4096,),route_role="ffn_norm"),)
   program=KernelProgram(g_bind.route_id,f"{g_bind.candidate_id}.rms_affine_qualification",KernelProgramProvenance.RESEARCH_ONLY,
     q4k_g3_lanemap_gemv_w1w3_rms_affine_kernel(12288,4096,store_fp16=store_fp16),
-    output_spec=OutputSpec((12288,),out_dtype,typed_output=typed_output))
+    output_spec=OutputSpec((12288,),out_dtype,typed_output=typed_output),
+    activation_input_views=activation_input_views)
   return execute_research_program(None,gw,uw,xv,norm_weight.to(raw_x.device),scale,program=program).reshape(1,1,12288)
 
 

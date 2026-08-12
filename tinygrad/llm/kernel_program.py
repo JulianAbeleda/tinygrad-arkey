@@ -164,6 +164,39 @@ class ResidualViewRequest:
 
 
 @dataclass(frozen=True)
+class ActivationViewRequest:
+  """M1 raw-activation-slot typed-input opt-in (nv_epilogue_absorption_m1_ab.py): accept a
+  zero-copy view of the block-output epi_resadd AFTER for the fused w1+w3 rms-affine GEMV's
+  raw-x slot instead of the materialized flat-buffer copy.  The M1 gate/up GEMV absorbs the
+  ordinary ffn-norm epilogue in-kernel, so its x input is the RAW fp32 hidden state h: the
+  same AFTER the scale reduce (r_16_256) and the ffn_down residual read.  Binding x to that
+  AFTER directly removes the scheduler transport copy (E_32_32_4_86a23e1a) that otherwise
+  materializes per block and exactly cancels the M1 program fold.  Deliberately distinct from
+  TypedViewRequest (M5 combine ABI) and ResidualViewRequest (M4/M2b residual slot): the M1 x
+  slot is an activation, not a residual, and its producer is the block-output epi_resadd
+  GEMV (not the fp16 combine).  Closed default: only the M1 qualification call in
+  decode_routes.py ever issues one."""
+  slot: int
+  dtype: DType
+  flat_shape: tuple[int, ...]
+  route_role: str
+  kind: str = "rms_affine_x"
+
+  def __post_init__(self):
+    if not isinstance(self.slot, int) or self.slot < 0:
+      raise ValueError("activation view request slot must be a non-negative int")
+    if not isinstance(self.dtype, DType):
+      raise ValueError("activation view request dtype must be a DType")
+    if not isinstance(self.flat_shape, tuple) or not self.flat_shape or not all(
+        isinstance(dim, int) and dim > 0 for dim in self.flat_shape):
+      raise ValueError("activation view request flat_shape must be a non-empty tuple of positive ints")
+    if not isinstance(self.route_role, str) or not self.route_role:
+      raise ValueError("activation view request route_role must be a non-empty string")
+    if not isinstance(self.kind, str) or not self.kind:
+      raise ValueError("activation view request kind must be a non-empty string")
+
+
+@dataclass(frozen=True)
 class KernelProgram:
   route_id: str
   program_id: str
@@ -172,6 +205,7 @@ class KernelProgram:
   output_spec: OutputSpec | None = None
   typed_input_views: tuple[TypedViewRequest, ...] = ()
   residual_input_views: tuple[ResidualViewRequest, ...] = ()
+  activation_input_views: tuple[ActivationViewRequest, ...] = ()
 
   def __post_init__(self):
     for name, value in (("route_id", self.route_id), ("program_id", self.program_id)):
@@ -196,6 +230,14 @@ class KernelProgram:
       raise ValueError("kernel program residual_input_views slots must be unique")
     if set(rslots) & set(slots):
       raise ValueError("kernel program typed and residual input view slots must not overlap")
+    if not isinstance(self.activation_input_views, tuple) or not all(
+        isinstance(request, ActivationViewRequest) for request in self.activation_input_views):
+      raise ValueError("kernel program activation_input_views must be a tuple of ActivationViewRequest")
+    aslots = tuple(request.slot for request in self.activation_input_views)
+    if len(aslots) != len(set(aslots)):
+      raise ValueError("kernel program activation_input_views slots must be unique")
+    if set(aslots) & (set(rslots) | set(slots)):
+      raise ValueError("kernel program typed, residual, and activation input view slots must not overlap")
 
   def to_dict(self) -> dict[str, str]:
     return {"route_id": self.route_id, "program_id": self.program_id, "provenance": self.provenance.value}
@@ -407,6 +449,55 @@ def _fold_residual_input_views(inputs: tuple[Tensor, ...], program: KernelProgra
   return tuple(new_inputs)
 
 
+def _validated_activation_view(uop: UOp, request: ActivationViewRequest, program: KernelProgram) -> tuple[UOp | None, str]:
+  """M1 raw-activation-slot fail-closed validator (nv_epilogue_absorption_m1_ab.py census).
+  Returns ``(base_uop, "ok")`` when the raw-x chain is a pure offset-0 view of an opaque
+  block-output AFTER that declares an epilogue-absorbing typed output, and the consumer is
+  exactly the M1 rms-affine qualification program; else ``(None, reason)``.  Every failure
+  keeps the generic flat-buffer ABI (the transport copy), so control is unchanged."""
+  if request.slot != 2: return None, "not the raw-x slot"
+  if request.kind != "rms_affine_x": return None, f"wrong request kind {request.kind!r}"
+  if request.route_role != "ffn_norm": return None, f"wrong consumer route_role {request.route_role!r}"
+  if not (program.route_id.startswith("decode_q4k") and program.program_id.endswith(".rms_affine_qualification")):
+    return None, "program is not the M1 rms-affine qualification consumer"
+  chain = uop.src[0] if uop.op is Ops.CONTIGUOUS else uop
+  if chain.dtype is not request.dtype: return None, "request dtype mismatch"
+  if chain.numel() != prod(request.flat_shape): return None, "request numel mismatch"
+  if chain.dtype is not uop.dtype: return None, "view dtype is not preserved through the request chain"
+  if not _is_pure_residual_view(chain): return None, "view is not a contiguous offset-0 reshape"
+  base = chain.base
+  if base.op is not Ops.AFTER: return None, "raw-x producer is not an opaque program AFTER"
+  declared = _DECLARED_TYPED_OUTPUTS.get(base)
+  if declared is None: return None, "raw-x producer declared no typed output layout"
+  if declared.layout.dtype != request.dtype or declared.layout.flat_shape != request.flat_shape:
+    return None, "raw-x producer declared layout does not exactly match the requested view"
+  if not declared.layout.row_major: return None, "raw-x producer declared layout is not row-major"
+  if not declared.epilogue_absorption_admitted:
+    return None, "raw-x producer epilogue-absorption gate is closed"
+  return base, "ok"
+
+
+def _fold_activation_input_views(inputs: tuple[Tensor, ...], program: KernelProgram) -> tuple[Tensor, ...]:
+  """Apply the M1 raw-activation-slot typed-input opt-in.  Each accepted request substitutes
+  the validated producer AFTER for the materialized request; a rejection leaves the generic
+  flat-buffer input untouched (the transport copy stays)."""
+  if not program.activation_input_views: return inputs
+  new_inputs = list(inputs)
+  for request in program.activation_input_views:
+    if not 0 <= request.slot < len(inputs):
+      if getenv("M1_RMS_AFFINE_BOUNDARY_DEBUG"):
+        print(f"M1_RMS_AFFINE_BOUNDARY_DEBUG {program.route_id}/{program.program_id} "
+              f"slot={request.slot} out of range, no fold")
+      continue
+    view, reason = _validated_activation_view(inputs[request.slot].uop, request, program)
+    if view is not None:
+      new_inputs[request.slot] = Tensor(view)
+    elif getenv("M1_RMS_AFFINE_BOUNDARY_DEBUG"):
+      print(f"M1_RMS_AFFINE_BOUNDARY_DEBUG {program.route_id}/{program.program_id} "
+            f"slot={request.slot} rejected: {reason}")
+  return tuple(new_inputs)
+
+
 def _execute_outputs(output: Tensor | None, inputs: tuple[Tensor, ...], program: KernelProgram,
                      allowed: frozenset[KernelProgramProvenance], boundary: str) -> tuple[Tensor, ...]:
   if program.provenance not in allowed:
@@ -420,6 +511,7 @@ def _execute_outputs(output: Tensor | None, inputs: tuple[Tensor, ...], program:
     output = Tensor.empty(*program.output_spec.shape, dtype=program.output_spec.dtype, device=inputs[0].device)
   inputs = _fold_typed_input_views(inputs, program)
   inputs = _fold_residual_input_views(inputs, program)
+  inputs = _fold_activation_input_views(inputs, program)
   results = output.uop_program(*inputs, fxn=program.emitter)
   # record the producer's typed output declaration against the AFTER the program produced, so a
   # later consumer's validator can prove the declared layout (scope section 3.1/4(a)).
@@ -462,6 +554,6 @@ def execute_research_program_outputs(output: Tensor, *inputs: Tensor, program: K
                           "execute_research_program_outputs")
 
 
-__all__ = ["DeclaredTypedOutput", "KernelProgram", "KernelProgramProvenance", "OutputSpec", "TypedLayout",
-           "TypedViewRequest", "ResidualViewRequest", "execute_oracle_program", "execute_promoted_program",
-           "execute_research_program", "execute_research_program_outputs"]
+__all__ = ["ActivationViewRequest", "DeclaredTypedOutput", "KernelProgram", "KernelProgramProvenance", "OutputSpec",
+           "TypedLayout", "TypedViewRequest", "ResidualViewRequest", "execute_oracle_program",
+           "execute_promoted_program", "execute_research_program", "execute_research_program_outputs"]
