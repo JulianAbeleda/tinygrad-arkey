@@ -580,12 +580,17 @@ def validate_cost_prediction(bracket: dict, control_census: dict, candidate_cens
   # measured median of the identical body either way.
   prediction = predict_wall_delta(36, {NORM_EPILOGUE_PREFIX: statistics.median(removed_medians.values())},
                                   {NORM_EPILOGUE_PREFIX: COST_PREDICTION["arithmetic"]["redundancy"]})
-  measured = bracket["candidate_minus_control_bracket_us"]
+  # Repo-wide bracket convention: candidate_minus_control_bracket_us is computed
+  # as (control - candidate), so POSITIVE means the candidate is FASTER.  The cost
+  # model reconciles candidate-minus-control (positive = candidate SLOWER), so the
+  # field must be negated before reconciliation or a measured loss reads as a win.
+  measured = -bracket["candidate_minus_control_bracket_us"]
   reconciliation = reconcile_cost_prediction(measured, prediction,
                                              tolerance_us=COST_PREDICTION["tolerance_us"])
   return {"run": True, "result": "PASS" if reconciliation["result"] != "CONTRADICTED" else "FAIL",
           "contract": COST_PREDICTION, "prediction": prediction, "reconciliation": reconciliation,
-          "measured_delta_us": measured, "note": reconciliation["note"]}
+          "measured_delta_us": measured, "bracket_field_us": bracket["candidate_minus_control_bracket_us"],
+          "note": reconciliation["note"]}
 
 
 HARD_STOP_NOTES = [
