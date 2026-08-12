@@ -137,11 +137,12 @@ def _configure(model, arm: str) -> None:
 
 
 def _gates(model) -> dict:
+  from tinygrad import dtypes
   m1_weights = []
   for block in getattr(model, "blk", None) or []:
     weight = getattr(block, LEASE4, None)
     m1_weights.append(None if weight is None else {
-      "dtype": str(weight.dtype), "shape": list(weight.shape)})
+      "dtype": str(weight.dtype), "is_fp16": bool(weight.dtype == dtypes.float16), "shape": list(weight.shape)})
   return {
     "decode_direct_greedy_promoted": bool(getattr(model, "_decode_direct_greedy_promoted", False)),
     "reduce_output_rmsnorm_promoted": bool(getattr(model, "_decode_reduce_output_rmsnorm_promoted", False)),
@@ -186,7 +187,7 @@ def _assert_candidate_configured(gates: dict) -> None:
     if not value: missing.append(f"block[{index}].{LEASE3}")
   if gates.get("rms_affine_gateup_lease_model"): missing.append(f"model.{LEASE4} (unexpected; install per-block only)")
   for index, value in enumerate(gates.get("rms_affine_gateup_lease_blocks") or []):
-    if value is None or value.get("dtype") != "<dtype: float16>" or value.get("shape") != [4096]:
+    if value is None or value.get("is_fp16") is not True or value.get("shape") != [4096]:
       missing.append(f"block[{index}].{LEASE4} (expected fp16 (4096,), got {value})")
   if missing:
     raise RuntimeError(f"candidate arm requires M2a+M2b+M2d leases everywhere and {LEASE4} fp16 (4096,) on every block: {missing}")
