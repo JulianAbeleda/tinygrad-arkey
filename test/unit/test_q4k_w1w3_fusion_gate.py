@@ -10,8 +10,9 @@ import pytest
 from tinygrad import dtypes, Tensor
 from tinygrad.codegen import to_program
 from tinygrad.helpers import Target
-from tinygrad.llm.model_route_plan import (decode_q4k_w1w3_fusion_promoted,
-  load_decode_q4k_w1w3_fusion_promotion, _DECODE_Q4K_W1W3_FUSION_PROMOTED_TARGETS)
+from tinygrad.llm.model_route_plan import (decode_q4k_w1w3_fusion_promoted, decode_q4k_w1w3_fp16_store_promoted,
+  load_decode_q4k_w1w3_fusion_promotion, load_decode_q4k_w1w3_fp16_store_promotion,
+  _DECODE_Q4K_W1W3_FUSION_PROMOTED_TARGETS, _DECODE_Q4K_W1W3_FP16_STORE_PROMOTED_TARGETS)
 from tinygrad.llm.decode_kernels import q4k_g3_lanemap_gemv_w1w3_kernel
 from tinygrad.llm.decode_routes import q4k_gate_up_primitive_linear_call
 from tinygrad.llm.qk_primitives import QKPrimitiveCapability, QKPrimitiveRouteAdmission
@@ -47,6 +48,37 @@ def test_checked_in_record_promotes_only_the_measured_nv_target():
   assert decode_q4k_w1w3_fusion_promoted(("NV", "sm_120"))
   assert not decode_q4k_w1w3_fusion_promoted(("AMD", "gfx1100"))
   assert not decode_q4k_w1w3_fusion_promoted((None, None))
+
+
+def _write_fp16_policy(path, *, targets="absent"):
+  doc = {"schema": "boltbeam.route_policy.v1", "route": "decode_q4k_w1w3_fp16_store"}
+  if targets != "absent": doc["promoted_targets"] = targets
+  pathlib.Path(path).write_text(json.dumps(doc))
+  return path
+
+
+def test_fp16_store_closed_default_when_no_promoted_targets_key(tmp_path):
+  p = _write_fp16_policy(tmp_path / "policy.json", targets="absent")
+  assert load_decode_q4k_w1w3_fp16_store_promotion(p) == frozenset()
+
+
+def test_fp16_store_closed_default_when_promoted_targets_empty(tmp_path):
+  p = _write_fp16_policy(tmp_path / "policy.json", targets=[])
+  assert load_decode_q4k_w1w3_fp16_store_promotion(p) == frozenset()
+
+
+def test_fp16_store_loader_names_explicit_targets_only(tmp_path):
+  p = _write_fp16_policy(tmp_path / "policy.json", targets=[{"backend": "NV", "architecture": "sm_120"}])
+  promoted = load_decode_q4k_w1w3_fp16_store_promotion(p)
+  assert ("NV", "sm_120") in promoted
+  assert ("AMD", "gfx1100") not in promoted
+
+
+def test_fp16_store_checked_in_record_promotes_only_the_measured_nv_target():
+  assert _DECODE_Q4K_W1W3_FP16_STORE_PROMOTED_TARGETS == frozenset({("NV", "sm_120")})
+  assert decode_q4k_w1w3_fp16_store_promoted(("NV", "sm_120"))
+  assert not decode_q4k_w1w3_fp16_store_promoted(("AMD", "gfx1100"))
+  assert not decode_q4k_w1w3_fp16_store_promoted((None, None))
 
 
 def test_w1w3_admission_does_not_change_legacy_admitted():

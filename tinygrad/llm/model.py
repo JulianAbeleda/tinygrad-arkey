@@ -47,8 +47,8 @@ from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OU
                                            runtime_persistent, runtime_scratch)
 from tinygrad.llm.model_route_plan import (build_model_route_plan, decode_norm_fusion_promoted,
   decode_q4k_epilogue_fusion_promoted, decode_q4k_epilogue_resadd_promoted, decode_q4k_w1w3_fusion_promoted,
-  decode_kv_store_fusion_promoted, decode_rmsnorm_native_lowering_promoted, decode_reduce_output_rmsnorm_promoted,
-  decode_shared_q8_attention_promoted)
+  decode_q4k_w1w3_fp16_store_promoted, decode_kv_store_fusion_promoted, decode_rmsnorm_native_lowering_promoted,
+  decode_reduce_output_rmsnorm_promoted, decode_shared_q8_attention_promoted)
 from tinygrad.llm.prefill_candidate_runtime import decode_prefill_graph_candidate_set, automatic_promoted_prefill_graph_policy
 from tinygrad.llm.physical_memory_ledger import AllocationOwner, bind_allocation_owner
 from tinygrad.uop.ops import Ops, resolve
@@ -590,9 +590,12 @@ class FFNBlock:
         # Fused w1+w3 decode GEMV (q4k-w1w3-fused-qv-implementation-record-20260803.md): ONE kernel
         # computes silu(gate(x)) * up(x); the fallback lambda reproduces the legacy chain's z exactly,
         # so an off-target/off-shape admission changes nothing about what ffn_down consumes.
-        # Research-only, explicit lease (no loader policy creates this attribute): the fused kernel
-        # stores fp16 directly, folding ffn_down's input cast (the ordinary E_128_32_3 epilogue).
-        _w1w3_fp16_store = not _prefill and getattr(self, "_q4k_w1w3_fp16_store_lease", False)
+        # M2a (nv-epilogue-absorption-m2a-promotion-record-20260812.md): the fused16 spelling stores
+        # fp16 directly, folding ffn_down's input cast (the ordinary E_128_32_3 epilogue). Default-on
+        # for NV sm_120 through the loader record; the research lease still forces it where the
+        # record is closed (AB arms keep the same control/candidate contract).
+        _w1w3_fp16_store = not _prefill and (getattr(self, "_q4k_w1w3_fp16_store_lease", False)
+                                             or getattr(self, "_decode_q4k_w1w3_fp16_store_promoted", False))
         z = q4k_gate_up_primitive_linear_call(_fg, _fu, x,
           fallback=lambda: _prefill_semantic(_prefill, prefill_activation, _fg(x).silu().contiguous()) * _fu(x),
           store_fp16=_w1w3_fp16_store)
@@ -1727,6 +1730,15 @@ class Transformer:
     _w1w3_promoted = decode_q4k_w1w3_fusion_promoted((_norm_cap.backend, _norm_cap.architecture))
     model._decode_q4k_w1w3_fusion_promoted = _w1w3_promoted
     for _b in model.blk: _b._decode_q4k_w1w3_fusion_promoted = _w1w3_promoted
+    # M2a fp16-store spelling gate (decode-q4k-w1w3-fp16-store-route-policy.json, NV sm_120 promoted,
+    # nv-epilogue-absorption-m2a-promotion-record-20260812.md). SEPARATE record from the w1w3 fusion
+    # gate above: the fused16 kernel stores fp16 in-kernel, absorbing the E_128_32_3 ffn-activation
+    # cast; it only applies when the fused kernel itself is admitted, so the flag is ANDed with the
+    # w1w3 admission. The harness lease `_q4k_w1w3_fp16_store_lease` still forces the spelling where
+    # the loader record is closed (research arms), so the AB contract is unchanged.
+    _w1w3_fp16_promoted = _w1w3_promoted and decode_q4k_w1w3_fp16_store_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_q4k_w1w3_fp16_store_promoted = _w1w3_fp16_promoted
+    for _b in model.blk: _b._decode_q4k_w1w3_fp16_store_promoted = _w1w3_fp16_promoted
     # Decode kv-store chain fusion gate (decode-kv-store-chain-fusion-scope-20260803.md). CLOSED default
     # (decode-kv-store-fusion-route-policy.json, empty promoted_targets until a same-session A/B record
     # lands). Same resolve-once pattern as the w1w3 gate; blocks carry their own copy so the traced

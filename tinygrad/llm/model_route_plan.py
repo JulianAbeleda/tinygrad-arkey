@@ -256,6 +256,27 @@ def decode_q4k_w1w3_fusion_promoted(target:Target) -> bool:
   """Policy authority for the fused w1+w3 gate/up decode GEMV route (closed default, see the loader above)."""
   return target in _DECODE_Q4K_W1W3_FUSION_PROMOTED_TARGETS
 
+def load_decode_q4k_w1w3_fp16_store_promotion(path:str) -> frozenset[Target]:
+  """Read the w1+w3 fused fp16-store spelling promotion record (boltbeam.route_policy.v1, same schema
+  family as `load_decode_q4k_w1w3_fusion_promotion`). CLOSED default; deliberately a SEPARATE record
+  from the w1w3 fusion record: the fused16 kernel stores the gate/up result fp16 in-kernel, absorbing
+  the ordinary E_128_32_3 ffn-activation cast (M2a, nv-epilogue-absorption-route-scope-20260810.md),
+  and must not fire on any target until a measured record opts it in. A document without
+  `promoted_targets` -- or with an empty list -- promotes nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_Q4K_W1W3_FP16_STORE_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-q4k-w1w3-fp16-store-route-policy.json"
+_DECODE_Q4K_W1W3_FP16_STORE_PROMOTED_TARGETS: frozenset[Target] = load_decode_q4k_w1w3_fp16_store_promotion(_DECODE_Q4K_W1W3_FP16_STORE_PROMOTION_RECORD)
+
+def decode_q4k_w1w3_fp16_store_promoted(target:Target) -> bool:
+  """Policy authority for the w1+w3 fused fp16-store spelling (closed default, see the loader above)."""
+  return target in _DECODE_Q4K_W1W3_FP16_STORE_PROMOTED_TARGETS
+
 def load_decode_kv_store_fusion_promotion(path:str) -> frozenset[Target]:
   """Read the decode kv-store chain fusion promotion record (boltbeam.route_policy.v1, same schema
   family as `load_decode_q4k_w1w3_fusion_promotion`). CLOSED default; deliberately a SEPARATE record
