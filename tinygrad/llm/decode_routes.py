@@ -229,12 +229,21 @@ def q4k_gate_up_primitive_linear_call(gate:Any, up:Any, x:Tensor, fallback:Calla
   return execute_promoted_program(None, gw, uw, xv, program=program).reshape(1, 1, g_bind.N)
 
 def q4k_gate_up_rms_affine_qualification_call(gate:Any, up:Any, raw_x:Tensor, norm_weight:Tensor, eps:float,
-                                               fallback:Callable[[], Tensor]) -> Tensor:
+                                               fallback:Callable[[], Tensor], *, store_fp16: bool = False) -> Tensor:
   """One-block, default-off RMS scale + Q4 gate/up qualification boundary.
 
   There is deliberately no policy bit here: callers must hold an explicit
   harness-installed lease.  Every shape/type miss is an ordinary fallback.
-  """
+
+  The fused kernel reads the RAW fp32 hidden state (no fp16 pre-round), computes
+  the bitwise-exact control scale
+  ``(h.float().square().mean(-1, keepdim=True)+eps).rsqrt()`` on it (the same
+  expression the ordinary ffn-norm reduce renders as ``r_16_256``), and applies
+  the fp16 norm weight with the control epilogue's single fp16 round at each
+  packed-Q4 load.  ``store_fp16=True`` mirrors the landed fused16 spelling: the
+  fused z is stored already cast to fp16 under the ``*_rms_affine16_*`` name so
+  the graph's fp32->fp16 ffn-activation cast folds away and the ffn_down
+  consumer sees the same fp16 ABI as the control graph."""
   g_bind=Q4K_DECODE_CANDIDATE.bind(gate,raw_x,getattr(getattr(gate,"route_admission",None),"admitted",False))
   u_bind=Q4K_DECODE_CANDIDATE.bind(up,raw_x,getattr(getattr(up,"route_admission",None),"admitted",False))
   if g_bind is None or u_bind is None or (g_bind.T,g_bind.K,g_bind.N)!=(1,4096,12288) or (u_bind.T,u_bind.K,u_bind.N)!=(1,4096,12288): return fallback()
@@ -243,10 +252,19 @@ def q4k_gate_up_rms_affine_qualification_call(gate:Any, up:Any, raw_x:Tensor, no
   from tinygrad.llm.kernel_program import execute_research_program
   gw=gate.q4k_storage.words.to(raw_x.device).contiguous() if gate.q4k_storage.mode == "q4_ondemand" else gate.q4k_storage.words.to(raw_x.device)
   uw=up.q4k_storage.words.to(raw_x.device).contiguous() if up.q4k_storage.mode == "q4_ondemand" else up.q4k_storage.words.to(raw_x.device)
-  xv=raw_x[:,0,:].reshape(4096).cast(dtypes.float16).contiguous()
-  scale=((xv.cast(dtypes.float32)*xv.cast(dtypes.float32)).sum()/4096+eps).sqrt().reciprocal().reshape(1)
+  xv=raw_x[:,0,:].reshape(4096).contiguous()
+  # Bitwise-exact control scale (r_16_256 contract): the ordinary ffn-norm reduce
+  # computes rsqrt(mean(h^2)+eps) on the RAW fp32 h.  Rounding h to fp16 first (the
+  # old spelling) or using a `.sum()` association changes 2/4096 scale bits and
+  # fails the exact-logits gate.
+  scale=(raw_x.float().square().mean(-1,keepdim=True)+eps).rsqrt().reshape(1)
+  out_dtype=dtypes.float16 if store_fp16 else dtypes.float32
+  typed_output=(DeclaredTypedOutput(TypedLayout(out_dtype,(12288,),(1,1,12288)),
+                                    combine_fusion_admitted=False, epilogue_absorption_admitted=True)
+                if store_fp16 else None)
   program=KernelProgram(g_bind.route_id,f"{g_bind.candidate_id}.rms_affine_qualification",KernelProgramProvenance.RESEARCH_ONLY,
-    q4k_g3_lanemap_gemv_w1w3_rms_affine_kernel(12288,4096),output_spec=OutputSpec((12288,),dtypes.float32))
+    q4k_g3_lanemap_gemv_w1w3_rms_affine_kernel(12288,4096,store_fp16=store_fp16),
+    output_spec=OutputSpec((12288,),out_dtype,typed_output=typed_output))
   return execute_research_program(None,gw,uw,xv,norm_weight.to(raw_x.device),scale,program=program).reshape(1,1,12288)
 
 

@@ -11,10 +11,11 @@ def test_production_shape_and_cpu_algebra_contract():
   assert row["finite"] and row["roundpoint_exact"] and row["postdot_scalar_is_invalid"]
   assert row["topology"]["normalized_vector_store"] is False
 
-def test_fp16_roundpoint_precedes_affine_weight():
+def test_single_fp16_round_after_affine_matches_control_epilogue():
   x=np.array([.3333,-.6665],np.float16); w=np.array([1.1,.9],np.float16); scale=rms_scale(x)
   got=per_load_affine(x,w,scale)
-  expect=((x.astype(np.float32)*scale).astype(np.float16)*w).astype(np.float16)
+  # Control contract (E_32_32_4_f14a5cc0): (half)((x*s)*w), ONE round at the end.
+  expect=((x.astype(np.float32)*scale)*w.astype(np.float32)).astype(np.float16)
   np.testing.assert_array_equal(got,expect)
 
 def test_raw_load_consumer_has_explicit_scale_and_weight_inputs():

@@ -16,8 +16,9 @@ def rms_scale(x:np.ndarray, eps:float=1e-6) -> np.float32:
   return np.float32(1.0)/np.sqrt(np.mean(x*x,dtype=np.float32)+np.float32(eps))
 
 def per_load_affine(x:np.ndarray, weight:np.ndarray, scale:np.float32) -> np.ndarray:
-  # Exact ordinary RMSNorm round points: fp16(x*scale), then fp16(*weight).
-  return ((np.asarray(x,dtype=np.float32)*scale).astype(np.float16)*np.asarray(weight,dtype=np.float16)).astype(np.float16)
+  # Ordinary ffn-norm epilogue (E_32_32_4_f14a5cc0): ONE fp16 RNE round at the very end
+  # of the fp32 multiply chain -- (half)((x*s)*w), weight upcast fp16->fp32.
+  return ((np.asarray(x,dtype=np.float32)*scale)*np.asarray(weight,dtype=np.float32)).astype(np.float16)
 
 def gateup_reference(gate:np.ndarray, up:np.ndarray, x:np.ndarray, norm_weight:np.ndarray) -> np.ndarray:
   affine=per_load_affine(x,norm_weight,rms_scale(x))
@@ -52,11 +53,11 @@ def timing(replays:int=20,reps:int=3) -> dict:
   gw,uw,x,nw=(Tensor(a,dtype=dtypes.uint32 if a.dtype==np.uint32 else dtypes.float16,device=dev).contiguous().realize() for a in (gw,uw,x_np,nw_np))
   base=KernelProgram("research.rms_scale_gateup","control",KernelProgramProvenance.RESEARCH_ONLY,q4k_g3_lanemap_gemv_w1w3_kernel(ROWS,K,"scalar"))
   cand=KernelProgram("research.rms_scale_gateup","candidate",KernelProgramProvenance.RESEARCH_ONLY,q4k_g3_lanemap_gemv_w1w3_rms_affine_kernel(ROWS,K))
-  def scale(): return ((x.cast(dtypes.float32)*x.cast(dtypes.float32)).sum()/K+1e-6).sqrt().reciprocal().reshape(1)
+  def scale(): return (x.cast(dtypes.float32).square().mean(-1,keepdim=True)+1e-6).rsqrt().reshape(1)
   @TinyJit
   def control(g,u,xx,w):
-    s=((xx.cast(dtypes.float32)*xx.cast(dtypes.float32)).sum()/K+1e-6).sqrt().reciprocal()
-    a=((xx.cast(dtypes.float32)*s).cast(dtypes.float16)*w).cast(dtypes.float16)
+    s=(xx.cast(dtypes.float32).square().mean(-1,keepdim=True)+1e-6).rsqrt()
+    a=((xx.cast(dtypes.float32)*s)*w.cast(dtypes.float32)).cast(dtypes.float16)
     return execute_research_program(Tensor.empty(ROWS,dtype=dtypes.float32,device=dev),g,u,a,program=base).sum()
   @TinyJit
   def candidate(g,u,xx,w):
@@ -85,8 +86,8 @@ def correctness() -> dict:
   gw,uw,x,nw=(Tensor(a,dtype=dtypes.uint32 if a.dtype==np.uint32 else dtypes.float16,device=dev).contiguous().realize() for a in (gw,uw,x_np,nw_np))
   base=KernelProgram("research.rms_scale_gateup","control",KernelProgramProvenance.RESEARCH_ONLY,q4k_g3_lanemap_gemv_w1w3_kernel(ROWS,K,"scalar"))
   cand=KernelProgram("research.rms_scale_gateup","candidate",KernelProgramProvenance.RESEARCH_ONLY,q4k_g3_lanemap_gemv_w1w3_rms_affine_kernel(ROWS,K))
-  s=((x.cast(dtypes.float32)*x.cast(dtypes.float32)).sum()/K+1e-6).sqrt().reciprocal().reshape(1)
-  affine=((x.cast(dtypes.float32)*s[0]).cast(dtypes.float16)*nw).cast(dtypes.float16)
+  s=(x.cast(dtypes.float32).square().mean(-1,keepdim=True)+1e-6).rsqrt().reshape(1)
+  affine=((x.cast(dtypes.float32)*s[0])*nw.cast(dtypes.float32)).cast(dtypes.float16)
   a=execute_research_program(Tensor.empty(ROWS,dtype=dtypes.float32,device=dev),gw,uw,affine,program=base).realize().numpy()
   b=execute_research_program(Tensor.empty(ROWS,dtype=dtypes.float32,device=dev),gw,uw,x,nw,s,program=cand).realize().numpy()
   diff=np.asarray(a,dtype=np.float64)-np.asarray(b,dtype=np.float64)
@@ -100,7 +101,7 @@ def correctness() -> dict:
   ident_max=float(np.max(np.abs(ident_diff))); ident_rel=float(np.linalg.norm(ident_diff)/(np.linalg.norm(ident_a)+1e-30))
   return {"schema":"tinygrad.nv.rmsnorm_scale_gateup_microgate.v1","mode":"output_correctness","max_abs":max_abs,"rel_l2":rel_l2,
           "identity_affine_max_abs":ident_max,"identity_affine_rel_l2":ident_rel,
-          "finite":bool(np.isfinite(b).all()),"pass":bool(np.isfinite(b).all() and ident_max == 0.0 and rel_l2 <= 2e-4)}
+          "finite":bool(np.isfinite(b).all()),"pass":bool(np.isfinite(b).all() and ident_max == 0.0 and max_abs == 0.0)}
 
 if __name__ == "__main__":
   ap=argparse.ArgumentParser(); ap.add_argument("--out"); ap.add_argument("--mode",choices=("cpu","timing","correctness"),default="cpu"); ap.add_argument("--replays",type=int,default=20); ap.add_argument("--reps",type=int,default=3); a=ap.parse_args(); r=cpu_gate() if a.mode == "cpu" else timing(a.replays,a.reps) if a.mode == "timing" else correctness(); text=json.dumps(r,indent=2,sort_keys=True)

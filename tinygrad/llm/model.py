@@ -656,6 +656,16 @@ class FFNBlock:
       # Q4K primitive -- again the absorption signal, never the record alone.
       _ffn_absorbed = False
       _ffn_down_linear = getattr(self, "ffn_down", None)
+      # M2b ffn_down residual add (nv-epilogue-absorption-route-scope-20260810.md): under the
+      # harness-installed _ffn_down_resadd_lease the ffn_down Q4K/Q6K GEMV absorbs the h+ffn_out
+      # add in-kernel (total + h[row], fp32 store) and the block returns ffn_out directly. The
+      # lease is checked on the model, the block, AND the linear (the route re-checks it
+      # fail-closed), and "gate_out" absent keeps the M4 fused-prelude path closed/distinct.
+      _ffn_resadd_lease = (not _prefill and getattr(self, "_ffn_down_resadd_lease", False)
+                           and isinstance(_ffn_down_linear, (Q4KPrimitiveLinear, Q6KPrimitiveLinear))
+                           and getattr(_ffn_down_linear, "_ffn_down_resadd_lease", False)
+                           and getattr(_ffn_down_linear, "route_role", "") == "ffn_down"
+                           and not hasattr(self, "ffn_gate_exps"))
       if (_epi_fused and isinstance(_ffn_down_linear, Q4KPrimitiveLinear) and
           getattr(getattr(_ffn_down_linear, "route_admission", None), "q4k_epilogue_fusion_admitted", False)):
         gate_out = self.ffn_gate(normed_h)
@@ -663,29 +673,32 @@ class FFNBlock:
         ffn_out = self.ffn_down(gate_out, gate_out=gate_out, up_out=up_out, normed_h=h)
         _ffn_absorbed = True
       else:
-        # M2b ffn_down residual add (nv-epilogue-absorption-route-scope-20260810.md): under the
-        # harness-installed _ffn_down_resadd_lease the ffn_down Q4K/Q6K GEMV absorbs the h+ffn_out
-        # add in-kernel (total + h[row], fp32 store) and the block returns ffn_out directly. The
-        # lease is checked on the model, the block, AND the linear (the route re-checks it
-        # fail-closed), and "gate_out" absent keeps the M4 fused-prelude path closed/distinct.
-        if (not _prefill and getattr(self, "_ffn_down_resadd_lease", False)
-            and isinstance(_ffn_down_linear, (Q4KPrimitiveLinear, Q6KPrimitiveLinear))
-            and getattr(_ffn_down_linear, "_ffn_down_resadd_lease", False)
-            and getattr(_ffn_down_linear, "route_role", "") == "ffn_down"
-            and not hasattr(self, "ffn_gate_exps")):
+        # M1 norm-epilogue absorption: research-only, explicit lease.  Retain raw h across the
+        # FFN norm boundary and apply its scalar RMS scale plus fp16 affine weight at each Q4
+        # packed load, so the ffn-norm chain (r_16_256 + E_32_32_4_f14a5cc0) folds away and the
+        # fused gate/up GEMV stores the fp16 z directly.  No loader policy creates this
+        # attribute.  Checked BEFORE the M2b branch: under the M1 harness the M2b residual add
+        # stays live, so the absorbed z feeds ffn_down(z, normed_h=h) instead of the plain
+        # ffn_down(z).
+        _rms_affine_weight = getattr(self, "_rms_affine_gateup_norm_weight", None)
+        if (not _prefill and _rms_affine_weight is not None
+            and isinstance(getattr(self, "ffn_gate", None), Q4KPrimitiveLinear)
+            and isinstance(getattr(self, "ffn_up", None), Q4KPrimitiveLinear)):
+          z = q4k_gate_up_rms_affine_qualification_call(self.ffn_gate, self.ffn_up, h, _rms_affine_weight,
+            self.ffn_norm.eps, fallback=lambda: None, store_fp16=True)
+          if z is not None:
+            ffn_out = self.ffn_down(z, normed_h=h) if _ffn_resadd_lease else self.ffn_down(z)
+            _ffn_absorbed = _ffn_resadd_lease
+          elif _ffn_resadd_lease:
+            ffn_out = self._feed_forward(normed_h, residual=h)
+            _ffn_absorbed = True
+          else:
+            ffn_out = self._feed_forward(normed_h)
+        elif _ffn_resadd_lease:
           ffn_out = self._feed_forward(normed_h, residual=h)
           _ffn_absorbed = True
         else:
-          # Research-only, explicit lease: retain raw h across the FFN norm
-          # boundary and apply its scalar RMS scale plus affine weight at each
-          # Q4 packed load.  No loader policy creates this attribute.
-          _rms_affine_weight=getattr(self,"_rms_affine_gateup_norm_weight",None)
-          if (not _prefill and _rms_affine_weight is not None and isinstance(getattr(self,"ffn_gate",None),Q4KPrimitiveLinear)
-              and isinstance(getattr(self,"ffn_up",None),Q4KPrimitiveLinear)):
-            z=q4k_gate_up_rms_affine_qualification_call(self.ffn_gate,self.ffn_up,h,_rms_affine_weight,self.ffn_norm.eps,
-              fallback=lambda:None)
-            ffn_out=self._feed_forward(normed_h) if z is None else self.ffn_down(z)
-          else: ffn_out = self._feed_forward(normed_h)
+          ffn_out = self._feed_forward(normed_h)
       with role_metadata("residual"):
         # M2b absorbed block output: the ffn_down GEMV's AFTER is the concrete contiguous fp32
         # block output, so forcing .contiguous() here would materialize an E_32_32_4 copy per

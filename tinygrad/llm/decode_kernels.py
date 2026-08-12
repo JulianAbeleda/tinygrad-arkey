@@ -108,7 +108,13 @@ def _q4k_block_dot_packed_load(words:UOp, x:UOp, base:UOp, x_block:UOp, lane4:UO
   return contrib
 
 def _q4k_block_dot_rms_affine(words:UOp, x:UOp, norm_weight:UOp, scale:UOp, base:UOp, x_block:UOp, lane4:UOp) -> UOp:
-  """Packed Q4 dot with the ordinary RMSNorm fp16 round points at each load."""
+  """Packed Q4 dot with the ordinary ffn-norm epilogue applied per packed-Q4 load.
+  Control contract (E_32_32_4_f14a5cc0): the norm epilogue is `(half)((x*s)*w)` with
+  the weight upcast fp16->fp32 and ONE fp16 RNE round at the very end.  The fused
+  kernel reproduces that exact value per x element (fp32 multiply chain, then the
+  same single round), so the stored half is bitwise-identical to the standalone
+  epilogue's output.  The older double-round spelling (fp16(x*s), then fp16(*w))
+  is NOT the control round point and fails the exact-logits gate."""
   contrib=UOp.const(dtypes.float32,0.0)
   for grp in range(8):
     d,dmin,sc,mn=_q4k_group_params(words,base,grp)
@@ -117,18 +123,23 @@ def _q4k_block_dot_rms_affine(words:UOp, x:UOp, norm_weight:UOp, scale:UOp, base
       pos=lane4*4+nib; idx=x_block*Q4_K_BLOCK_ELEMS+grp*32+pos
       q=qpack.rshift(nib*8).bitwise_and(0xf)
       qw=d*sc.cast(dtypes.float32)*q.cast(dtypes.float32)-dmin*mn.cast(dtypes.float32)
-      # nn.RMSNorm: fp16(x*scale), then fp16(*weight), before the GEMV dot.
-      xv=((x[idx].cast(dtypes.float32)*scale[0]).cast(dtypes.float16)*norm_weight[idx].cast(dtypes.float16)).cast(dtypes.float32)
+      # Ordinary ffn-norm epilogue: (half)((x*s)*w) -- ONE fp16 round at the end.
+      xv=((x[idx].cast(dtypes.float32)*scale[0])*norm_weight[idx].cast(dtypes.float32)).cast(dtypes.float16).cast(dtypes.float32)
       contrib=contrib+qw*xv
   return contrib
 
-def q4k_g3_lanemap_gemv_w1w3_rms_affine_kernel(rows:int,k:int):
+def q4k_g3_lanemap_gemv_w1w3_rms_affine_kernel(rows:int,k:int,store_fp16:bool=False):
   """Research-only raw-x RMS scale/affine fused Q4 gate/up consumer."""
   # This is deliberately not a general RMSNorm lowering.  Its only admitted
   # lease has the exact NVIDIA decode FFN shape; widening it would silently
   # turn a measured experiment into a route selector.
   if (rows,k) != (12288,4096): raise ValueError(f"rms-affine gate/up requires (12288,4096), got ({rows},{k})")
   lm=Q4KGateUpLaneMap(k=k,n=rows); lm.validate()
+  # The fp16 store spelling mirrors the landed fused16 variant
+  # (q4k_g3_lanemap_gemv_w1w3fused16_*): the fused z is cast to fp16 in-kernel so
+  # the graph's fp32->fp16 ffn-activation cast folds away (the control graph's
+  # ffn_down consumes fp16 z).  The legacy fp32 name is unchanged.
+  name=f"q4k_g3_lanemap_w1w3_rms_affine16_{rows}_{k}" if store_fp16 else f"q4k_g3_lanemap_w1w3_rms_affine_{rows}_{k}"
   def kernel(out:UOp,gate_words:UOp,up_words:UOp,x:UOp,norm_weight:UOp,scale:UOp) -> UOp:
     row,lane=UOp.special(rows,"gidx0"),UOp.special(WARP,"lidx0")
     part=LanePartition(lane,lane_extent=lm.lane_extent,words_per_group=lm.words_per_group)
@@ -139,9 +150,10 @@ def q4k_g3_lanemap_gemv_w1w3_rms_affine_kernel(rows:int,k:int):
     ag=UOp.placeholder((1,),dtypes.float32,20,addrspace=AddrSpace.REG); au=UOp.placeholder((1,),dtypes.float32,21,addrspace=AddrSpace.REG)
     init=ag[0].store(0.0); init=au.after(init)[0].store(0.0); ag,au=ag.after(init),au.after(init)
     ug=ag[0].store(ag.after(lblk)[0]+cg); uu=au.after(ug)[0].store(au.after(lblk)[0]+cu).end(lblk)
-    return out[row].store(_silu_uop(_warp_reduce_sum_staged(ag.after(uu)[0],part.lane,part.lane_extent,90))*
-                          _warp_reduce_sum_staged(au.after(uu)[0],part.lane,part.lane_extent,95)).sink(
-      arg=KernelInfo(name=f"q4k_g3_lanemap_w1w3_rms_affine_{rows}_{k}",opts_to_apply=()))
+    total=(_silu_uop(_warp_reduce_sum_staged(ag.after(uu)[0],part.lane,part.lane_extent,90))*
+           _warp_reduce_sum_staged(au.after(uu)[0],part.lane,part.lane_extent,95))
+    result=total.cast(dtypes.float16) if store_fp16 else total
+    return out[row].store(result).sink(arg=KernelInfo(name=name,opts_to_apply=()))
   return kernel
 
 
