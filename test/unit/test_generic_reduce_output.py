@@ -28,15 +28,15 @@ ASSOCIATIONS = {
   "r_8_16_8": ((8, 16, 8), 1024, 8, 4),
 }
 
-# The stage-3 P2 body pin: the 08-10 body (ordinary serial-contiguous r_16_256
-# association) was reworked to the lean single-row launch -- one 32-lane block
-# where the 16 ACTIVE lanes each serially sum 256 contiguous elements and a
-# serial 16-partial combine (previously 16 warps recomputed the same chains
-# redundantly).  The per-element fp32 chain is byte-identical, so the fused
-# output stays bitwise equal for every dtype mix (see
-# test_native_value_matches_ordinary); this digest pins the lean geometry
-# along with the association.
-LEGACY_BODY_DIGEST = "911da535c76813c923205c539bcc360a725627b1f1bd3180e3cc8008678589ba"
+# The 08-10 body pin: the correction from the 08-05 strided shuffle-tree
+# ladder to the ordinary serial-contiguous association.  The 08-05 body was
+# NOT bitwise-equal to the ordinary r_16_256 reduce for fp32 x + fp16 w
+# (1-ulp fp32 scale differences flipping downstream fp16 values at rounding
+# boundaries), which is exactly the NV exact-logits gate failure.  The 08-10
+# body mirrors the ordinary kernel's serial 256-contiguous per-thread chain
+# and serial 16-partial combine, so the fused output is bitwise equal for
+# every dtype mix (see test_native_value_matches_ordinary).
+LEGACY_BODY_DIGEST = "23264243d010bc91916ec4ed071a42c3e3ee4004d697b1f215d5482c7844afc8"
 
 # Production per-site spellings from the fp32 q/k route and the FFN-down C6
 # route: (rows, dim) -> (warps, per_lane) as derived by
@@ -445,35 +445,6 @@ def test_multi_row_geometry_pin_per_row_grid():
     smem_after = [u for u in topo if u.op is Ops.AFTER and len(u.src) == 2 and u.src[0].op is Ops.DEFINE_LOCAL]
     assert len(smem_after) == 1 and smem_after[0].src[0].shape == (P,), \
       f"{(rows, dim)} shared-memory slots must be P, got {smem_after[0].src[0].shape}"
-
-
-def test_single_row_geometry_pin_lean_one_block():
-  """Stage-3 P2 geometry pin: the single-row body is ONE 32-lane block with
-  exactly spec.warps ACTIVE lanes (the r_16_256 chain), no WARP range and no
-  GLOBAL range: the launch drops from 16 warps to one warp while the serial
-  256-contiguous per-lane chain and the serial 16-partial combine stay
-  byte-identical (see test_legacy_body_pin_is_unchanged)."""
-  from tinygrad.codegen.late.reduce_output import emit_reduce_output
-  from tinygrad.uop.ops import ReduceOutputSpec, UOp, Ops, AxisType
-  spec = ReduceOutputSpec(1, 4096, 1e-6, dtypes.float16)
-  out, x, w = (UOp.placeholder((4096,), dtypes.float16, i) for i in range(3))
-  body = emit_reduce_output(spec, dtypes.float16, dtypes.float16)(out, x, w)
-  topo = body.toposort()
-  # One 32-lane LOCAL range; no warp (idx 1 LOCAL) and no GLOBAL row range.
-  local_lanes = [u for u in topo if u.op is Ops.RANGE and u.arg == (0, AxisType.LOCAL)]
-  assert len(local_lanes) == 1 and local_lanes[0].src[0].arg == 32, "single-row block must be 32 lanes"
-  assert not any(u.op is Ops.RANGE and u.arg == (1, AxisType.LOCAL) for u in topo), "lean body must not have a warp range"
-  assert not any(u.op is Ops.RANGE and u.arg == (0, AxisType.GLOBAL) for u in topo), "single-row body must not have a global range"
-  # The r_16_256 chain: 16 active lanes x 256 contiguous serial reduce.
-  red = [u for u in topo if u.op is Ops.RANGE and u.arg == (2, AxisType.REDUCE)]
-  assert len(red) == 1 and red[0].src[0].arg == 256, "serial reduce must span 256 contiguous elements"
-  # Epilogue keeps all 32 lanes busy: dim // lanes elements per lane.
-  epi = [u for u in topo if u.op is Ops.RANGE and u.arg == (2, AxisType.LOOP)]
-  assert len(epi) == 1 and epi[0].src[0].arg == 128, f"epilogue must span dim//lanes=128, got {epi[0].src[0].arg if epi else None}"
-  assert sum(u.op is Ops.BARRIER for u in topo) == 1, "single-row lean must have exactly one barrier"
-  smem_after = [u for u in topo if u.op is Ops.AFTER and len(u.src) == 2 and u.src[0].op is Ops.DEFINE_LOCAL]
-  assert len(smem_after) == 1 and smem_after[0].src[0].shape == (spec.warps,), \
-    f"partial slots must be spec.warps={spec.warps}, got {smem_after[0].src[0].shape}"
 
 
 def test_lazy_weight_marker_is_not_body_free():
