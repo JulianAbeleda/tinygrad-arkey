@@ -28,6 +28,7 @@ import argparse, contextlib, hashlib, io, json, pathlib, re, statistics, subproc
 import numpy as np
 
 from extra.llm_research.decode.nv_fusion_population_ledger import POP_NORMS, classify as _ledger_classify
+from extra.llm_research.decode.nv_fusion_cost_model import reconcile_cost_prediction
 from extra.llm_research.decode.nv_predispatch_full_logits_qualification import DEFAULT_MODEL, _load, _prompt
 from extra.llm_research.decode.nv_shared_q8_progressive_qualification import (
   _settled_continuous_windows, _timing_hash_authority, _validate_run_extent,
@@ -78,6 +79,35 @@ CONSTRUCTION = {
   "question": "Does the generic cooperative reduction-to-output primitive survive NV render (Xid 31 class), preserve exact full logits, show the expected fused-body census with an honest net program delta, and book the +495.330 us norms row under the reverse wall bracket?",
 }
 
+# Predicted-wall-delta contract (nv_fusion_cost_model.py): the prediction is
+# derived from llama's own d512 shape census (nv-llama-d512-node-ledger-20260812.json
+# and the stage-3 scope table): the 4096-dim block norms render in llama as
+# `rms_norm_f32<1024>` grid [1,1,1] at 2.88 us/launch (73 launches = 210.2 us),
+# while our body family costs 7.97 us/launch (19 bodies + 17 decode_norm =
+# 201.1 us, already at parity).  The reconcile term models the removed
+# control-census kernel mass against the llama floor for the same rows: if the
+# fused bodies land at llama's per-launch cost the wall delta is the llama
+# body mass minus the removed kernel mass; the envelope covers bodies at zero
+# cost (save all removed mass) up to bodies at twice the llama floor.  A
+# measured delta beyond the envelope on the opposite side of zero
+# CONTRADICTS the llama-shaped premise and fails the campaign closed.
+COST_PREDICTION = {
+  "contract": "before implementing, derive the predicted wall delta from the llama reference shape plus per-launch arithmetic; the wall bracket then either confirms it or explains the gap",
+  "llama_reference": "rms_norm_f32<1024> grid [1,1,1] at 2.88 us/launch, 73 launches = 210.2 us; ours 19 x 7.97 + 17 x 2.92 = 201.1 us (stage-3 scope table, nv-reduce-output-stage3-geometry-scope-20260813.md)",
+  "arithmetic": {
+    "formula": "point = added_body_mass - removed_control_mass (positive = candidate slower); lo = llama_floor_body_mass - removed_control_mass (best case: bodies reach llama's per-launch floor); hi = point + llama_floor_body_mass",
+    "added_body_mass": "candidate-census medians of the fused reduce_output_rmsnorm_1_4096 bodies x the added count",
+    "llama_floor_body_mass": "fused body counts x llama floor (reduce_output_rmsnorm_1_4096: 2.88 us/launch)",
+    "removed_control_mass": "control-census medians of the replaced r_16_256 / E_32_32_4_f14a5cc0 families x the count drop",
+    "envelope": "best case bodies at llama's floor (save the most mass) to pessimistic bodies at 2x their measured cost",
+  },
+  "tolerance_us": 20.0,
+  "unmodeled": ["launch overlap (removed kernels partially hidden behind the matmul stream)", "in-kernel critical path / occupancy", "non-norms callify redirects"],
+}
+
+LLAMA_FLOOR_US = {"reduce_output_rmsnorm_1_4096": 2.88}
+REPLACED_PREFIXES = ("r_16_256", "E_32_32_4_f14a5cc0")
+
 
 def _digest(a: np.ndarray) -> str:
   return hashlib.sha256(np.ascontiguousarray(a).view(np.uint8)).hexdigest()
@@ -114,17 +144,25 @@ def _require_candidate_callify_flags() -> None:
 
 def _configure(model, arm: str) -> None:
   """Set the candidate promotion conditions on a fresh model; the control arm
-  stays the closed production graph.  Both arms set the production-qualified
-  direct greedy flash route exactly like the committed census
-  (scratchpad/nv_reduce_output_rmsnorm_census.py), so the only inter-arm delta
-  is the reduce-output promotion plus its callify Context flags."""
+  constructs the closed route-less graph explicitly.  Both arms set the
+  production-qualified direct greedy flash route exactly like the committed
+  census (scratchpad/nv_reduce_output_rmsnorm_census.py), so the only
+  inter-arm delta is the reduce-output promotion plus its callify Context
+  flags.  The route policy is now production-promoted on NV sm_120 (P2
+  site-absorption booking, 882ce66a5), so the load path defaults the model
+  and every block to promoted; the control arm must force the flags closed
+  or the closed-graph assertion fails before any arm runs."""
   model._decode_direct_greedy_promoted = True
   if arm == "candidate":
     _require_candidate_callify_flags()
     model._decode_reduce_output_rmsnorm_promoted = True
     for block in model.blk:
       block._decode_reduce_output_rmsnorm_promoted = True
-  elif arm != "control":
+  elif arm == "control":
+    model._decode_reduce_output_rmsnorm_promoted = False
+    for block in model.blk:
+      block._decode_reduce_output_rmsnorm_promoted = False
+  else:
     raise ValueError(f"unknown arm {arm!r}")
 
 
@@ -405,13 +443,57 @@ def validate_timing_bracket(rows: list[dict], settled_continuous: bool = True) -
           "note": "wall evidence only; booking requires the exact-logits gate and the reduce-output census gate"}
 
 
+def validate_cost_prediction(bracket: dict, control_census: dict, candidate_census: dict) -> dict:
+  """Predicted-wall-delta gate (nv_fusion_cost_model.py).  The COST_PREDICTION
+  table is derived from llama's rms_norm_f32 per-launch floors; the measured
+  bracket delta must confirm the llama-shaped arithmetic or explain the gap.
+  A measured delta beyond the envelope on the opposite side of zero is a
+  CONTRADICTION and FAILS CLOSED: the premise was unbacked, so the campaign
+  cannot book even if the raw bracket numbers promoted."""
+  control_hist = {name: (count, med) for name, count, med in (control_census.get("histogram") or [])}
+  candidate_hist = {name: (count, med) for name, count, med in (candidate_census.get("histogram") or [])}
+  removed_terms = {}
+  for name, (count, med) in control_hist.items():
+    if not name.startswith(REPLACED_PREFIXES):
+      continue
+    drop = count - candidate_hist.get(name, (0, 0))[0]
+    if drop > 0:
+      removed_terms[name] = {"dropped_count": drop, "control_median_us": med, "mass_us": round(drop * med, 3)}
+  removed_mass = sum(term["mass_us"] for term in removed_terms.values())
+  added_terms = {}
+  for name, (count, med) in candidate_hist.items():
+    if not name.startswith("reduce_output_rmsnorm"):
+      continue
+    add = count - control_hist.get(name, (0, 0))[0]
+    if add > 0:
+      added_terms[name] = {"added_count": add, "candidate_median_us": med, "mass_us": round(add * med, 3),
+                           "llama_floor_us": LLAMA_FLOOR_US.get(name)}
+  added_mass = sum(term["mass_us"] for term in added_terms.values())
+  llama_body_mass = sum(term["added_count"] * (term["llama_floor_us"] or 0.0) for term in added_terms.values())
+  point = round(added_mass - removed_mass, 3)
+  lo = round(llama_body_mass - removed_mass, 3)
+  hi = round(point + max(1.0, llama_body_mass), 3)
+  measured = -bracket["candidate_minus_control_bracket_us"]
+  reconciliation = reconcile_cost_prediction(measured, {"predicted_delta_us": point, "range_us": [lo, hi]},
+                                             tolerance_us=COST_PREDICTION["tolerance_us"])
+  return {"run": True, "result": "PASS" if reconciliation["result"] != "CONTRADICTED" else "FAIL",
+          "contract": COST_PREDICTION, "prediction": {"predicted_delta_us": point, "range_us": [lo, hi],
+                                                      "llama_floor_body_mass_us": round(llama_body_mass, 3),
+                                                      "removed_control_mass_us": round(removed_mass, 3)},
+          "removed_terms": removed_terms, "added_terms": added_terms,
+          "reconciliation": reconciliation, "measured_delta_us": measured,
+          "bracket_field_us": bracket["candidate_minus_control_bracket_us"],
+          "note": "positive measured delta = candidate slower; the llama floor envelope is bodies at zero cost .. bodies at twice the llama floor"}
+
+
 HARD_STOP_NOTES = [
   "Every GPU arm runs as a fresh process under `timeout ... flock -w 90 /tmp/gpu-bench.lock`; no arm holds the lock across a wall-bracket step.",
   "Phase 0 (NV render smoke) must survive on sm_120 (no Xid 31 MMU fault) with the fused reduce_output_rmsnorm_1_4096 body in the compiled program set.",
   "The exact full-logit gate (fp32 SHA-256 over the stacked rows, token stream, shape) must pass before any census or bracket arm runs.",
   "The census gate requires fused bodies > 0, a consistent rmsnorm_reduce drop, removed norms epilogues, and untouched q/k reduce roles; callify-redirect shifts on non-norms families are reported, not hidden.",
   "The wall bracket requires identical token-stream hashes and a candidate median at least +50 us/token faster than BOTH bracketing controls.",
-  "No policy promotion: decode-reduce-output-rmsnorm-route-policy.json stays promoted_targets: []; no model wiring change; no default flip.",
+  "The predicted-wall-delta gate (COST_PREDICTION + validate_cost_prediction) runs after the bracket: the measured delta must CONFIRM the llama-shaped prediction or EXPLAIN the gap with named residual causes; a CONTRADICTION (measured outside the envelope on the opposite side of zero) FAILS CLOSED and the campaign cannot book.",
+  "The reduce-output route policy is production-promoted on NV sm_120 (P2 site-absorption booking, 882ce66a5); the control arm constructs the closed route-less graph explicitly (forced False flags on the model and every block), so the bracket still measures the route package vs the route-less graph.",
 ]
 
 ISOLATION_NOTES = [
@@ -594,6 +676,13 @@ def ab(args) -> dict:
     "gain_tok_per_s": tok_per_s(wall["candidate_ms"]) - tok_per_s(wall["control_bracket_median_ms"]),
   }
   booked = logits_gate["gate_pass"] and census_gate["gate_pass"] and wall["promoted"]
+  cost_gate = validate_cost_prediction(wall, control_census, candidate_census)
+  record["cost_prediction"] = cost_gate
+  if cost_gate["result"] == "FAIL":
+    record["verdict"] = "NO-GO"
+    record["hard_stop_notes"] = HARD_STOP_NOTES + [
+      "HARD STOP at Phase 3: predicted-wall-delta CONTRADICTION (measured delta outside the llama-shaped envelope on the opposite side of zero); the premise was unbacked and cannot book even if the raw bracket numbers promoted."]
+    return _write_record(record, pathlib.Path(args.out))
   record["verdict"] = "BOOKED" if booked else "NO-GO"
   if not booked:
     record["hard_stop_notes"] = HARD_STOP_NOTES + [
