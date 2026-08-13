@@ -38,6 +38,20 @@ ASSOCIATIONS = {
 # every dtype mix (see test_native_value_matches_ordinary).
 LEGACY_BODY_DIGEST = "23264243d010bc91916ec4ed071a42c3e3ee4004d697b1f215d5482c7844afc8"
 
+# Production per-site spellings from the fp32 q/k route and the FFN-down C6
+# route: (rows, dim) -> (warps, per_lane) as derived by
+# Tensor._semantic_reduce_output_rmsnorm.
+PER_SITE_SPELLINGS = {(32, 128): (32, 4), (8, 128): (8, 4), (1, 4096): (16, 8)}
+
+# sha256(repr(body)) pins for the multi-row q/k bodies.  The site-absorption
+# scope keeps the shipped recipe digests byte-identical: these digests are
+# the multi-row analogue of LEGACY_BODY_DIGEST (the ordinary r_8_16_8 /
+# r_2_8_4_4_16 partial-chain association, not a plain per-row serial chain).
+MULTI_ROW_BODY_DIGESTS = {
+  (32, 128): "98af9f89b54e303cba31ee3cb5823094dd7179b901f32d570f77367b1365c064",
+  (8, 128): "ddae2133da2e3ad9632aa828a9b048c37d7b6d574a067cc30c82ebd5741c22e3",
+}
+
 
 def _rng():
   return np.random.default_rng(20260809)
@@ -343,3 +357,97 @@ def test_association_derivation_matches_ordinary_shapes():
   for name, (shape, dim, warps, per_lane) in ASSOCIATIONS.items():
     got = reduce_output_association(shape)
     assert got == (warps, 32, per_lane), f"{name}: {got}"
+
+
+def test_per_site_admission_spelling_lowers_to_one_call_body_free():
+  """P1 site admission: every production reduce_output_rmsnorm shape admits
+  through the generic primitive with its production spelling and lowers to
+  exactly one fused-body CALL, with no ``*_weight_store``-style program in
+  the lowered graph (the body-free 1:1 swap contract, scope section 5 gate
+  3).  The ordinary norm renders two programs (reduce + epilogue); the marked
+  norm renders exactly one."""
+  rng = _rng()
+  for (rows, dim), (warps, per_lane) in PER_SITE_SPELLINGS.items():
+    x = Tensor(rng.normal(0, .2, (rows, dim)).astype(np.float16)).realize()
+    w = Tensor(rng.normal(1, .05, (dim,)).astype(np.float16)).realize()
+    norm = nn.RMSNorm(dim, eps=1e-6)
+    norm.weight = w
+    out = norm(x)
+    marked = out._semantic_reduce_output_rmsnorm(x, out, w, norm.eps)
+    spec = marked.uop.arg
+    assert (spec.warps, spec.per_lane) == (warps, per_lane), f"{(rows, dim)}: {(spec.warps, spec.per_lane)}"
+    names = _names(marked)
+    assert names == [f"reduce_output_rmsnorm_{rows}_{dim}"], f"{(rows, dim)}: {names}"
+    assert not any("weight_store" in name for name in names), f"{(rows, dim)}: {names}"
+    # The ordinary arm of the same site renders two programs (reduce + epilogue).
+    ordinary = _names(norm(x))
+    assert len(ordinary) == 2, f"{(rows, dim)} ordinary: {ordinary}"
+
+
+def test_per_site_bodies_compile_to_one_cpu_program():
+  """The fused bodies must lower through the CPU renderer to exactly one
+  PROGRAM with the production name.  Regression for the CPU thread-mode
+  gpudims path: the cooperative body has only LOCAL/WARP/LOOP ranges (no
+  global shape), and the split LOCAL ranges must serialize as loops instead
+  of indexing a one-element core_id list."""
+  from tinygrad.codegen import to_program
+  from tinygrad.codegen.late.reduce_output import emit_reduce_output
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.cstyle import ClangRenderer
+  ren = ClangRenderer(Target.parse("CPU:CLANG:x86_64,znver2"))
+  for (rows, dim), (warps, per_lane) in PER_SITE_SPELLINGS.items():
+    spec = ReduceOutputSpec(rows, dim, 1e-6, dtypes.float16, warps=warps, lanes=32, per_lane=per_lane)
+    out, x, w = (UOp.placeholder((rows * dim,), dtypes.float16, i) for i in range(3))
+    body = emit_reduce_output(spec, dtypes.float16, dtypes.float16)(out, x, w)
+    program = to_program(body, ren)
+    assert program.op is Ops.PROGRAM, f"{(rows, dim)}: {program.op}"
+    assert program.arg.name == f"reduce_output_rmsnorm_{rows}_{dim}", f"{(rows, dim)}: {program.arg.name}"
+    assert any(u.op is Ops.SOURCE for u in program.toposort()), f"{(rows, dim)}: no source"
+
+
+def test_multi_row_recipe_digests_are_pinned():
+  """The multi-row q/k bodies keep the NV ordinary partial-chain association
+  byte-identical (r_8_16_8 / r_2_8_4_4_16 tiling).  A drift in the emitted
+  association breaks these pins exactly like LEGACY_BODY_DIGEST breaks for
+  the single-row body."""
+  from tinygrad.codegen.late.reduce_output import emit_reduce_output
+  for (rows, dim), digest in MULTI_ROW_BODY_DIGESTS.items():
+    spec = ReduceOutputSpec(rows, dim, 1e-6, dtypes.float16, warps=rows, lanes=32, per_lane=dim // 32)
+    out, x, w = (UOp.placeholder((rows * dim,), dtypes.float16, i) for i in range(3))
+    body = emit_reduce_output(spec, dtypes.float16, dtypes.float16)(out, x, w)
+    assert body.arg.name == f"reduce_output_rmsnorm_{rows}_{dim}"
+    assert hashlib.sha256(repr(body).encode()).hexdigest() == digest, f"{(rows, dim)} body digest moved"
+
+
+def test_lazy_weight_marker_is_not_body_free():
+  """A marker whose weight has no durable identity must not be admitted
+  body-free: the lazy weight materializes as an extra program instead of
+  being absorbed.  Production never hits this path because the route helpers
+  bind a load-time identity weight (_decode_reduce_output_weight), which is
+  what keeps the census free of *_weight_store additions; this test locks the
+  fail-closed side so a spelling change cannot silently reintroduce the
+  per-body materialization (the 08-09 net +72 lesson)."""
+  rng = _rng()
+  dim = 4096
+  x = Tensor(rng.normal(0, .2, (1, dim)).astype(np.float16)).realize()
+  lazy = Tensor(rng.normal(1, .05, (dim,)).astype(np.float32)).realize().cast(dtypes.float16)
+  assert not lazy.uop.has_buffer_identity()
+  norm = nn.RMSNorm(dim, eps=1e-6)
+  norm.weight = lazy
+  out = norm(x)
+  marked = out._semantic_reduce_output_rmsnorm(x, out, lazy, norm.eps)
+  assert marked.uop.op is Ops.REDUCE_OUTPUT
+  # The identity-weight production spelling is exactly one fused body.
+  w2 = lazy.contiguous().realize()
+  norm2 = nn.RMSNorm(dim, eps=1e-6)
+  norm2.weight = w2
+  out2 = norm2(x)
+  identity_marked = out2._semantic_reduce_output_rmsnorm(x, out2, w2, norm2.eps)
+  identity_names = _names(identity_marked)
+  assert identity_names == ["reduce_output_rmsnorm_1_4096"], identity_names
+  assert not any("weight_store" in name for name in identity_names)
+  # The lazy-weight arm renders the fused body PLUS the weight materialization
+  # (not body-free), so a census diff would show a non-zero materialization.
+  lazy_names = _names(marked)
+  assert any("reduce_output_rmsnorm" in name for name in lazy_names)
+  assert len(lazy_names) > len(identity_names), lazy_names

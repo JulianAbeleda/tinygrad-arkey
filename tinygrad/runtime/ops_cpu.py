@@ -1,5 +1,5 @@
 from __future__ import annotations
-import platform, sys, ctypes, functools, time, mmap, threading, queue
+import platform, sys, os, ctypes, functools, time, mmap, threading, queue
 from tinygrad.helpers import to_mv, OSX, WIN, mv_address, suppress_finalizing, unwrap, data64_le
 from tinygrad.device import BufferSpec
 from tinygrad.runtime.support.hcq import HCQCompiled, HCQAllocator, HCQBuffer, HWQueue, HCQArgsState, HCQSignal, HCQProgram, MMIOInterface
@@ -120,6 +120,29 @@ class CPUProgram(HCQProgram):
 
 class CPUAllocator(HCQAllocator):
   def __init__(self, dev:CPUDevice): super().__init__(dev, supports_copy_from_disk=False, supports_transfer=False)
+  @property
+  def allocation_granularity(self) -> int:
+    # CPU buffers are anonymous mmap regions, which the kernel page-aligns.
+    # Expose the system allocation granularity so device-facts consumers
+    # (gguf_memory_scan's whole-file backing sizing) see a known alignment.
+    return mmap.ALLOCATIONGRANULARITY
+  def memory_stats(self) -> tuple[int, int]:
+    # Host RAM is the CPU device's memory pool; report it like the GPU
+    # allocators do so the selected-GGUF planner can size a CPU context.
+    if sys.platform == "linux":
+      # MemAvailable counts reclaimable page cache as free, unlike
+      # SC_AVPHYS_PAGES; it is the number the CPU planner should see.
+      values: dict[str, int] = {}
+      try:
+        with open("/proc/meminfo", encoding="utf-8") as meminfo:
+          for line in meminfo:
+            key, rest = line.split(":", 1)
+            if key in ("MemTotal", "MemAvailable"): values[key] = int(rest.split()[0]) << 10
+      except (OSError, ValueError, IndexError): values = {}
+      if "MemTotal" in values and "MemAvailable" in values and 0 <= values["MemAvailable"] <= values["MemTotal"]:
+        return values["MemTotal"], values["MemAvailable"]
+    page = os.sysconf("SC_PAGE_SIZE")
+    return page * os.sysconf("SC_PHYS_PAGES"), page * os.sysconf("SC_AVPHYS_PAGES")
   def _alloc(self, size:int, options:BufferSpec) -> HCQBuffer:
     if options.external_ptr is not None: addr, buf = options.external_ptr, None
     elif WIN: addr = mv_address(buf:=mmap.mmap(-1, size, access=mmap.ACCESS_WRITE))

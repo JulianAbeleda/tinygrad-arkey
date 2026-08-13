@@ -322,7 +322,10 @@ def _allocator_memory_probe(device: str) -> Mapping[str, Any]:
 
 
 def _default_memory_probe(device: str) -> Mapping[str, Any]:
-  if device.split(":", 1)[0].upper() in ("NV", "CUDA"):
+  backend = device.split(":", 1)[0].upper()
+  # CPU has no VRAM; its allocator's host-RAM stats are the honest memory fact.
+  if backend == "CPU": return _allocator_memory_probe(device)
+  if backend in ("NV", "CUDA"):
     try: return _nvidia_smi_memory_probe(device)
     except (OSError, subprocess.SubprocessError, ValueError, IndexError): pass
   try: return _rocm_smi_memory_probe(device)
