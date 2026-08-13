@@ -136,6 +136,36 @@ def test_metadata_quant_hosts_and_support_contract():
     classify({"id": 0, "name": "mystery_1", "metadata": None})
 
 
+def test_post_split_rmsnorm_families_classify_as_support():
+  # The 2026-08-12 post-split DAG names its non-quant producers
+  # reduce_output_rmsnorm_* and rmsnorm_q8_1_llama_provider_*; both are
+  # support kernels eligible to hide behind quant/flash hosts, never hosts.
+  for name in ("reduce_output_rmsnorm_32_128", "reduce_output_rmsnorm_8_128",
+               "reduce_output_rmsnorm_1_4096", "rmsnorm_q8_1_llama_provider_4096"):
+    assert classify({"id": 0, "name": name, "metadata": None}) == "support"
+  # The metadata guard is unchanged: a support name with semantic metadata is
+  # still refused, so a future quant rmsnorm family cannot be misclassified.
+  with pytest.raises(ValueError):
+    classify({"id": 0, "name": "rmsnorm_q8_1_llama_provider_4096",
+              "metadata": {"semantic": []}})
+
+
+def test_scan_accepts_post_split_rmsnorm_support_names():
+  # A support rmsnorm producer hides behind an independent quant host; the
+  # post-split name families must flow through the full scan, not just classify.
+  dag = _dag([
+    (0, "reduce_output_rmsnorm_32_128", 7.0, 0),
+    (1, "q4k_g3_lanemap_gemv_4096_4096", 4.0, 0),
+    (2, "rmsnorm_q8_1_llama_provider_4096", 2.0, 0),
+  ], [(0, 2), (1, 2)])
+  out = scan(dag)
+  assert out["classification"]["support_nodes"] == 2
+  row = out["pairs"][0]
+  assert row["support_name"] == "reduce_output_rmsnorm_32_128"
+  assert row["host_family"] == "q4k"
+  assert row["hideable_us"] == 4.0
+
+
 def test_fail_closed_on_malformed_input():
   dag = _dag([(0, "E_a", 1.0, 0), (1, "q4k_gemv", 2.0, 0)], [(0, 1)])
   bad = dict(dag)

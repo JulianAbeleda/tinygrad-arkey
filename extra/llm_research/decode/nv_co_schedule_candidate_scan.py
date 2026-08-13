@@ -32,7 +32,10 @@ import argparse, hashlib, json, pathlib
 
 SCHEMA = "tinygrad.nv_co_schedule_candidate_scan.v1"
 PROMOTION_GATE_US = 50.0
-SUPPORT_PREFIXES = ("E_", "r_")
+# Post-split (2026-08-12) DAGs additionally name the non-quant attention
+# producers reduce_output_rmsnorm_* and the FFN rmsnorm_q8_1_llama_provider_*;
+# both are support (non-quant, non-flash) eligible to hide behind quant/flash.
+SUPPORT_PREFIXES = ("E_", "r_", "rmsnorm", "reduce_output")
 HOST_PREFIXES = ("q4k", "q6k", "flash")
 FAMILIES = ("q4k", "q6k", "flash")
 
@@ -42,13 +45,13 @@ def load(path: str) -> dict:
 
 
 def classify(node: dict) -> str:
-  """Support = E_/r_ with no metadata; host = quant/flash families; else fail."""
+  """Support = E_/r_/rmsnorm/reduce_output with no metadata; host = quant/flash."""
   name, metadata = node["name"], node.get("metadata")
   if name.startswith(SUPPORT_PREFIXES) and not metadata:
     return "support"
   if name.startswith(HOST_PREFIXES):
     return "host"
-  raise ValueError(f"node {node['id']} ({name!r}) is neither support (E_/r_, no metadata) nor quant/flash host")
+  raise ValueError(f"node {node['id']} ({name!r}) is neither support (E_/r_/rmsnorm/reduce_output, no metadata) nor quant/flash host")
 
 
 def family_of(name: str) -> str:

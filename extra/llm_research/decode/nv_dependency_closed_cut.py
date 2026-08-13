@@ -13,24 +13,72 @@ def program_identity(name:str) -> str:
   return stem if sep and len(suffix) == 64 and all(c in "0123456789abcdef" for c in suffix) else name
 
 
+# Pre-split (2026-08-04/05) attention blocks were self-contained 9-node runs:
+# the fixed offsets below name the Q/K branches that precede each flash.  The
+# 2026-08-12 post-split DAG names the same roles with q4k/q6k/reduce_output/
+# rmsnorm families, so a layout detector selects the matching selector and any
+# unrelated graph fails closed.
+LEGACY_Q_OFFSETS = ((7, "E_2_8_16_4_"), (5, "r_8_16_8_"), (3, "E_8_2_16_4_"),
+                    (1, ("r_8_8_16_2_4_", "E_8_8_16_2_")))
+LEGACY_K_OFFSETS = ((8, "E_4_2_8_16_4_"), (6, "r_2_8_4_4_16_"), (4, "E_2_8_16_4_4_"))
+POST_SPLIT_Q_PREFIXES = ("q4k_g3_lanemap_gemv_4096_4096",
+                         "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+                         "reduce_output_rmsnorm_32_128", "E_16_32_4_2_")
+POST_SPLIT_K_PREFIXES = ("q4k_g3_lanemap_gemv_1024_4096",
+                         "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+                         "q6k_gen_partial_1024_4096", "q6k_q8_dp4a_1024_4096",
+                         "reduce_output_rmsnorm_8_128", "r_8_8_16_2_4_", "E_8_8_16_2_")
+
+
 def attention_cuts(dag:dict) -> dict[str, set[int]]:
   """Return the two coherent pre-flash branches from each attention block.
 
   The K branch stops before the shared merge.  The Q branch includes its
-  independent reduction tail.  Generated names are checked so an unrelated
+  independent reduction tail.  Both the pre-split 9-node block layout and the
+  post-split q4k/q6k/rmsnorm family layout are recognized by name; any other
   graph layout fails closed instead of silently selecting offsets.
   """
   nodes = dag["nodes"]
   flashes = [n["id"] for n in nodes if n["name"].startswith("flash_block_tiled_")]
+  if not flashes:
+    raise ValueError("no flash_block_tiled_ nodes; attention cuts undefined")
+  if _matches_legacy_layout(nodes, flashes[0]):
+    return _legacy_attention_cuts(nodes, flashes)
+  return _post_split_attention_cuts(nodes, flashes)
+
+
+def _matches_legacy_layout(nodes:list[dict], flash:int) -> bool:
+  if flash < 8: return False
+  return all(nodes[flash-x]["name"].startswith(p) for x, p in LEGACY_Q_OFFSETS + LEGACY_K_OFFSETS)
+
+
+def _legacy_attention_cuts(nodes:list[dict], flashes:list[int]) -> dict[str, set[int]]:
   q, k = set(), set()
   for f in flashes:
-    if f < 8: raise ValueError(f"flash node {f} has no complete attention prefix")
-    qids, kids = [f-x for x in (7, 5, 3, 1)], [f-x for x in (8, 6, 4)]
-    qprefix = ("E_2_8_16_4_", "r_8_16_8_", "E_8_2_16_4_", ("r_8_8_16_2_4_", "E_8_8_16_2_"))
-    kprefix = ("E_4_2_8_16_4_", "r_2_8_4_4_16_", "E_2_8_16_4_4_")
-    if any(not nodes[i]["name"].startswith(p) for i, p in zip(qids, qprefix)): raise ValueError(f"Q branch mismatch before flash {f}")
-    if any(not nodes[i]["name"].startswith(p) for i, p in zip(kids, kprefix)): raise ValueError(f"K branch mismatch before flash {f}")
+    if not _matches_legacy_layout(nodes, f):
+      raise ValueError(f"Q/K branch mismatch before flash {f}: layout is not the pre-split 9-node block")
+    q.update(f-x for x, _ in LEGACY_Q_OFFSETS)
+    k.update(f-x for x, _ in LEGACY_K_OFFSETS)
+  return {"attention_q": q, "attention_k": k}
+
+
+def _post_split_attention_cuts(nodes:list[dict], flashes:list[int]) -> dict[str, set[int]]:
+  """Select Q/K family nodes from each program-order flash window.
+
+  The post-split DAG interleaves attention blocks with FFN work, so the Q/K
+  roles are matched by family prefix inside the window between consecutive
+  flash_block_tiled_ nodes (the first flash's window starts at program order
+  0).  A flash whose window lacks either family fails closed.
+  """
+  q, k, prev = set(), set(), -1
+  for f in flashes:
+    window = nodes[prev+1:f]
+    qids = [n["id"] for n in window if n["name"].startswith(POST_SPLIT_Q_PREFIXES)]
+    kids = [n["id"] for n in window if n["name"].startswith(POST_SPLIT_K_PREFIXES)]
+    if not qids or not kids:
+      raise ValueError(f"flash {f}: window [{prev+1},{f}) lacks Q/K family nodes; graph layout not recognized")
     q.update(qids); k.update(kids)
+    prev = f
   return {"attention_q": q, "attention_k": k}
 
 

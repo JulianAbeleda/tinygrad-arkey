@@ -1,0 +1,42 @@
+{
+  "baseline_span_us": 5493.27,
+  "calibration": {
+    "derived_wait_cost_us": 4.743078260869595,
+    "model_undercharge_x": 13.066,
+    "naive_full_propagation_us": 2.678,
+    "raw_q_saving_us": 184.992,
+    "rule": "a future cut must clear +50 us costed at the calibrated wait cost on a fresh DAG before any GPU arm",
+    "source": "nv-decode-p4-dependency-closed-cut-record-20260805.md",
+    "wall_delta_us": -10.474
+  },
+  "candidates": {
+    "attention_k": {
+      "aux_nodes": 144,
+      "break_even_wait_cost_us": 4.125,
+      "costed_saving_us_calibrated": 25.705,
+      "effective_waits": 126,
+      "gate_wait_cost_us": 3.728,
+      "raw_saving_us": 519.79,
+      "verdict": "CPU_NO_GO"
+    },
+    "attention_q": {
+      "aux_nodes": 108,
+      "break_even_wait_cost_us": 3.772,
+      "costed_saving_us_calibrated": -10.474,
+      "effective_waits": 134,
+      "gate_wait_cost_us": 3.399,
+      "raw_saving_us": 505.5,
+      "verdict": "CPU_NO_GO"
+    }
+  },
+  "capture_identity": {
+    "name_digest": "b1fc9cc759a5b064df2c7f087a3acfc92c067e7af3abaa24d10f64361cd70cac",
+    "node_count": 596
+  },
+  "legacy_wait_cost_us": 0.363,
+  "max_calibrated_saving_us": 25.705,
+  "promotion_gate_us": 50.0,
+  "schema": "tinygrad.nv_wait_adjusted_cut_forecast.v1",
+  "verdict": "CPU_NO_GO",
+  "wait_cost_us": 4.743078260869595
+}

@@ -1,0 +1,52 @@
+{
+  "best_pair": {
+    "complementary_cta_bound": 1,
+    "hideable_us": 3.97,
+    "host_block": [
+      32,
+      1,
+      1
+    ],
+    "host_family": "q4k",
+    "host_id": 426,
+    "host_name": "q4k_g3_lanemap_gemv_1024_4096",
+    "host_regs": 62,
+    "host_smem_bytes": 1024,
+    "host_threads_per_cta": 32,
+    "recovery_us": 3.97,
+    "support_block": [
+      4,
+      8,
+      32
+    ],
+    "support_id": 428,
+    "support_name": "reduce_output_rmsnorm_32_128",
+    "support_regs": 38,
+    "support_smem_bytes": 3072,
+    "support_threads_per_cta": 1024
+  },
+  "budget": {
+    "registers_per_sm": 65536,
+    "smem_bytes_per_sm": 233472,
+    "threads_per_sm": 1536
+  },
+  "budget_sources": [
+    "registers_per_sm 65536: tinygrad/runtime/ops_nv.py register file comment",
+    "threads_per_sm 1536 (48 warps): nv-p3b-ffn-q8-cooperative-producer-static-record-20260805.md (six CTAs/SM, 1536/256)",
+    "smem_bytes_per_sm 228 KB: Blackwell architecture max; non-binding here (max 10 KB static, 0 dynamic)"
+  ],
+  "dependency_independent_pairs": 150,
+  "finding": "The tinygrad side is now a complete compiled-descriptor census (596 complete tuples), and 150 of 150 dependency-independent pairs are SM-co-resident, but best dependency-independent pair recovery 3.97 us < 50.0 us. No GPU arm is authorized by this join.",
+  "llama_complete_resource_rows": 0,
+  "llama_mmvq_rows": 216,
+  "llama_overlap_mass_us": {
+    "quantize_q8_1_behind_mmvq": 445.954
+  },
+  "pairs_with_descriptors": 150,
+  "positive_bound_pairs": 150,
+  "promotion_gate_us": 50.0,
+  "schema": "tinygrad.nv_overlap_resource_join.v1",
+  "status": "INCONCLUSIVE_FAIL_CLOSED",
+  "tinygrad_complete_resource_rows": 596,
+  "tinygrad_logical_nodes": 596
+}
