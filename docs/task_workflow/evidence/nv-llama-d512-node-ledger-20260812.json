@@ -1,0 +1,549 @@
+{
+  "anchor_class": "mmq",
+  "classes": {
+    "elementwise": {
+      "exposed_vs_mmq_us": 1.248,
+      "hidden_behind_mmq_us": 0.704,
+      "node_sum_us": 1.936,
+      "nodes": 1.0,
+      "union_us": 1.936
+    },
+    "flash_combine": {
+      "exposed_vs_mmq_us": 35.025,
+      "hidden_behind_mmq_us": 85.216,
+      "node_sum_us": 120.45,
+      "nodes": 36.0,
+      "union_us": 120.45
+    },
+    "flash_score": {
+      "exposed_vs_mmq_us": 56.016,
+      "hidden_behind_mmq_us": 57.825,
+      "node_sum_us": 113.888,
+      "nodes": 36.0,
+      "union_us": 113.888
+    },
+    "get_rows": {
+      "exposed_vs_mmq_us": 2.016,
+      "hidden_behind_mmq_us": 0.032,
+      "node_sum_us": 2.88,
+      "nodes": 2.0,
+      "union_us": 2.08
+    },
+    "kv_set_rows": {
+      "exposed_vs_mmq_us": 74.257,
+      "hidden_behind_mmq_us": 0.0,
+      "node_sum_us": 74.257,
+      "nodes": 36.0,
+      "union_us": 74.257
+    },
+    "mmq": {
+      "exposed_vs_mmq_us": 3542.555,
+      "hidden_behind_mmq_us": 0.0,
+      "node_sum_us": 3542.555,
+      "nodes": 217.0,
+      "union_us": 3542.555
+    },
+    "quantize_q8_1": {
+      "exposed_vs_mmq_us": 91.121,
+      "hidden_behind_mmq_us": 391.297,
+      "node_sum_us": 482.166,
+      "nodes": 217.0,
+      "union_us": 482.166
+    },
+    "rms_norm": {
+      "exposed_vs_mmq_us": 151.921,
+      "hidden_behind_mmq_us": 155.857,
+      "node_sum_us": 307.619,
+      "nodes": 145.0,
+      "union_us": 307.619
+    },
+    "rope": {
+      "exposed_vs_mmq_us": 94.001,
+      "hidden_behind_mmq_us": 32.544,
+      "node_sum_us": 126.769,
+      "nodes": 72.0,
+      "union_us": 126.769
+    }
+  },
+  "complete_replays": 16,
+  "definitions": {
+    "class_exposure": "per-class exposure is non-additive; use non_anchor_aggregate for the equation",
+    "median_equation": "terms are medianed independently and can differ by sub-us rounding/non-additivity",
+    "overlap_mass_us": "node sum minus all-kernel interval union; not recoverable wall savings",
+    "span_discount_vs_node_sum_pct": "(node sum - graph span) / node sum; overlap mass net of internal gaps",
+    "streams": "distinct CUPTI kernel-row streamId values; does not prove graph-internal scheduling structure"
+  },
+  "evidence": "OBSERVED_PROFILED_CUPTI_INTERVALS",
+  "graph_id": 5,
+  "inter_replay_gap": {
+    "all_median_us": 212.481,
+    "all_p05_us": 207.643,
+    "all_p95_us": 217.793,
+    "bounded_cap_us": 1000.0,
+    "bounded_count": 13,
+    "bounded_median_us": 212.481,
+    "excluded_count": 0,
+    "total_count": 13
+  },
+  "median": {
+    "internal_gap_us": 8.021,
+    "kernel_union_us": 3826.907,
+    "node_sum_us": 4774.383,
+    "nodes": 762.0,
+    "overlap_mass_us": 946.421,
+    "span_discount_vs_node_sum_pct": 19.671,
+    "span_us": 3835.212,
+    "streams": 1.0
+  },
+  "non_anchor_aggregate": {
+    "exposed_vs_mmq_us": 283.779,
+    "hidden_behind_mmq_us": 391.297,
+    "union_us": 674.676
+  },
+  "provenance": {
+    "capture_command": null,
+    "capture_nsys_version": null,
+    "export_command": null,
+    "reproduction_command": "extra/llm_research/decode/cuda_graph_timeline_ledger.py --trace /tmp/llama_tg10_node_20260812.sqlite --graph-id 5 --output /tmp/llama_ledger_20260812.json"
+  },
+  "replay_split": {
+    "authority_node_count": 762,
+    "complete_replays": 16,
+    "discarded_fragments": 0,
+    "discarded_sizes": [],
+    "raw_fragments": 16
+  },
+  "schema": "tinygrad.cuda_graph_timeline_ledger.v1",
+  "shape_census": [
+    {
+      "block": [
+        128,
+        1,
+        1
+      ],
+      "class": "elementwise",
+      "count_per_replay": 1,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        16,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "_Z11k_bin_bcastIXadL_ZN42_INTERNAL_c9f52302_11_binbcast_cu_6840010b6op_addEffEEfffJPKfEEvPKT0_PKT1_PT2_iii5uint3SB_SB_SB_SB_iiiiiiiiiiiDpT3_",
+      "median_duration_us": 1.936,
+      "name": "k_bin_bcast",
+      "registers_per_thread": 18,
+      "static_smem_bytes": 0,
+      "variant": "void k_bin_bcast<&op_add, float, float, float, const float *>(const T2 *, const T3 *, T4 *, int, int, int, uint3, uint3, uint3, uint3, uint3, int, int, int, int, int, int, int, int, int, int, int, T5...)"
+    },
+    {
+      "block": [
+        128,
+        1,
+        1
+      ],
+      "class": "flash_combine",
+      "count_per_replay": 36,
+      "dynamic_smem_bytes": 16,
+      "grid": [
+        1,
+        32,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "_Z26flash_attn_combine_resultsILi128EEvPKfPK6float2Pfi",
+      "median_duration_us": 3.36,
+      "name": "flash_attn_combine_results",
+      "registers_per_thread": 40,
+      "static_smem_bytes": 0,
+      "variant": "void flash_attn_combine_results<(int)128>(const float *, const float2 *, float *, int)"
+    },
+    {
+      "block": [
+        32,
+        4,
+        1
+      ],
+      "class": "flash_score",
+      "count_per_replay": 36,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        1,
+        2,
+        32
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "_Z18flash_attn_ext_vecILi128ELi1EL9ggml_type1ELS0_1ELb0EEvPKcS2_S2_S2_S2_PKiPfP6float2ffffjfi5uint3iiiiiiiiiiiliiliiiiil",
+      "median_duration_us": 3.136,
+      "name": "flash_attn_ext_vec",
+      "registers_per_thread": 162,
+      "static_smem_bytes": 8448,
+      "variant": "void flash_attn_ext_vec<(int)128, (int)1, (ggml_type)1, (ggml_type)1, (bool)0>(const char *, const char *, const char *, const char *, const char *, const int *, float *, float2 *, float, float, float, float, unsigned int, float, int, uint3, int, int, int, int, int, int, int, int, int, int, int, long, int, int, long, int, int, int, int, int, long)"
+    },
+    {
+      "block": [
+        256,
+        1,
+        1
+      ],
+      "class": "get_rows",
+      "count_per_replay": 2,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        1,
+        16,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "_Z16k_get_rows_floatIffEvPKT_PKiPT0_ll5uint3mmmmmmmmm",
+      "median_duration_us": 1.456,
+      "name": "k_get_rows_float",
+      "registers_per_thread": 38,
+      "static_smem_bytes": 0,
+      "variant": "void k_get_rows_float<float, float>(const T1 *, const int *, T2 *, long, long, uint3, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long)"
+    },
+    {
+      "block": [
+        256,
+        1,
+        1
+      ],
+      "class": "kv_set_rows",
+      "count_per_replay": 36,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        4,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "_Z10k_set_rowsIfl6__halfEvPKT_PKT0_PT1_llllllllllllll5uint3S9_S9_S9_S9_",
+      "median_duration_us": 2.08,
+      "name": "k_set_rows",
+      "registers_per_thread": 18,
+      "static_smem_bytes": 0,
+      "variant": "void k_set_rows<float, long, __half>(const T1 *, const T2 *, T3 *, long, long, long, long, long, long, long, long, long, long, long, long, long, long, uint3, uint3, uint3, uint3, uint3)"
+    },
+    {
+      "block": [
+        32,
+        4,
+        1
+      ],
+      "class": "mmq",
+      "count_per_replay": 37,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        4096,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+      "median_duration_us": 9.537,
+      "name": "mul_mat_vec_q",
+      "registers_per_thread": 56,
+      "static_smem_bytes": 384,
+      "variant": "void mul_mat_vec_q<(ggml_type)12, (int)1, (bool)0, (bool)0>(const void *, const void *, const int *, ggml_cuda_mm_fusion_args_device, float *, unsigned int, uint3, unsigned int, unsigned int, unsigned int, uint3, unsigned int, unsigned int, unsigned int, uint3, unsigned int, unsigned int, unsigned int, unsigned int)"
+    },
+    {
+      "block": [
+        32,
+        4,
+        1
+      ],
+      "class": "mmq",
+      "count_per_replay": 54,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        1024,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+      "median_duration_us": 3.392,
+      "name": "mul_mat_vec_q",
+      "registers_per_thread": 56,
+      "static_smem_bytes": 384,
+      "variant": "void mul_mat_vec_q<(ggml_type)12, (int)1, (bool)0, (bool)0>(const void *, const void *, const int *, ggml_cuda_mm_fusion_args_device, float *, unsigned int, uint3, unsigned int, unsigned int, unsigned int, uint3, unsigned int, unsigned int, unsigned int, uint3, unsigned int, unsigned int, unsigned int, unsigned int)"
+    },
+    {
+      "block": [
+        32,
+        4,
+        1
+      ],
+      "class": "mmq",
+      "count_per_replay": 53,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        4096,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+      "median_duration_us": 10.4,
+      "name": "mul_mat_vec_q",
+      "registers_per_thread": 48,
+      "static_smem_bytes": 768,
+      "variant": "void mul_mat_vec_q<(ggml_type)12, (int)1, (bool)1, (bool)0>(const void *, const void *, const int *, ggml_cuda_mm_fusion_args_device, float *, unsigned int, uint3, unsigned int, unsigned int, unsigned int, uint3, unsigned int, unsigned int, unsigned int, uint3, unsigned int, unsigned int, unsigned int, unsigned int)"
+    },
+    {
+      "block": [
+        32,
+        4,
+        1
+      ],
+      "class": "mmq",
+      "count_per_replay": 36,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        12288,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+      "median_duration_us": 37.921,
+      "name": "mul_mat_vec_q",
+      "registers_per_thread": 48,
+      "static_smem_bytes": 768,
+      "variant": "void mul_mat_vec_q<(ggml_type)12, (int)1, (bool)1, (bool)0>(const void *, const void *, const int *, ggml_cuda_mm_fusion_args_device, float *, unsigned int, uint3, unsigned int, unsigned int, unsigned int, uint3, unsigned int, unsigned int, unsigned int, uint3, unsigned int, unsigned int, unsigned int, unsigned int)"
+    },
+    {
+      "block": [
+        32,
+        4,
+        1
+      ],
+      "class": "mmq",
+      "count_per_replay": 18,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        1024,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "_Z13mul_mat_vec_qIL9ggml_type14ELi1ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+      "median_duration_us": 5.088,
+      "name": "mul_mat_vec_q",
+      "registers_per_thread": 48,
+      "static_smem_bytes": 384,
+      "variant": "void mul_mat_vec_q<(ggml_type)14, (int)1, (bool)0, (bool)0>(const void *, const void *, const int *, ggml_cuda_mm_fusion_args_device, float *, unsigned int, uint3, unsigned int, unsigned int, unsigned int, uint3, unsigned int, unsigned int, unsigned int, uint3, unsigned int, unsigned int, unsigned int, unsigned int)"
+    },
+    {
+      "block": [
+        32,
+        4,
+        1
+      ],
+      "class": "mmq",
+      "count_per_replay": 1,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        151936,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "_Z13mul_mat_vec_qIL9ggml_type14ELi1ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+      "median_duration_us": 303.699,
+      "name": "mul_mat_vec_q",
+      "registers_per_thread": 48,
+      "static_smem_bytes": 384,
+      "variant": "void mul_mat_vec_q<(ggml_type)14, (int)1, (bool)0, (bool)0>(const void *, const void *, const int *, ggml_cuda_mm_fusion_args_device, float *, unsigned int, uint3, unsigned int, unsigned int, unsigned int, uint3, unsigned int, unsigned int, unsigned int, uint3, unsigned int, unsigned int, unsigned int, unsigned int)"
+    },
+    {
+      "block": [
+        32,
+        4,
+        1
+      ],
+      "class": "mmq",
+      "count_per_replay": 18,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        4096,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "_Z13mul_mat_vec_qIL9ggml_type14ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+      "median_duration_us": 29.216,
+      "name": "mul_mat_vec_q",
+      "registers_per_thread": 46,
+      "static_smem_bytes": 768,
+      "variant": "void mul_mat_vec_q<(ggml_type)14, (int)1, (bool)1, (bool)0>(const void *, const void *, const int *, ggml_cuda_mm_fusion_args_device, float *, unsigned int, uint3, unsigned int, unsigned int, unsigned int, uint3, unsigned int, unsigned int, unsigned int, uint3, unsigned int, unsigned int, unsigned int, unsigned int)"
+    },
+    {
+      "block": [
+        256,
+        1,
+        1
+      ],
+      "class": "quantize_q8_1",
+      "count_per_replay": 181,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        16,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "_Z13quantize_q8_1PKfPvlllllj5uint3",
+      "median_duration_us": 3.008,
+      "name": "quantize_q8_1",
+      "registers_per_thread": 24,
+      "static_smem_bytes": 0,
+      "variant": "quantize_q8_1(const float *, void *, long, long, long, long, long, unsigned int, uint3)"
+    },
+    {
+      "block": [
+        256,
+        1,
+        1
+      ],
+      "class": "quantize_q8_1",
+      "count_per_replay": 36,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        48,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "_Z13quantize_q8_1PKfPvlllllj5uint3",
+      "median_duration_us": 0.832,
+      "name": "quantize_q8_1",
+      "registers_per_thread": 24,
+      "static_smem_bytes": 0,
+      "variant": "quantize_q8_1(const float *, void *, long, long, long, long, long, unsigned int, uint3)"
+    },
+    {
+      "block": [
+        1024,
+        1,
+        1
+      ],
+      "class": "rms_norm",
+      "count_per_replay": 73,
+      "dynamic_smem_bytes": 128,
+      "grid": [
+        1,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "_Z12rms_norm_f32ILi1024ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+      "median_duration_us": 2.88,
+      "name": "rms_norm_f32",
+      "registers_per_thread": 40,
+      "static_smem_bytes": 0,
+      "variant": "void rms_norm_f32<(int)1024, (bool)1, (bool)0>(const float *, float *, int, long, long, long, float, const float *, long, long, long, uint3, uint3, uint3, uint3, const float *, long, long, long, uint3, uint3, uint3, uint3)"
+    },
+    {
+      "block": [
+        256,
+        1,
+        1
+      ],
+      "class": "rms_norm",
+      "count_per_replay": 36,
+      "dynamic_smem_bytes": 128,
+      "grid": [
+        32,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+      "median_duration_us": 1.312,
+      "name": "rms_norm_f32",
+      "registers_per_thread": 40,
+      "static_smem_bytes": 0,
+      "variant": "void rms_norm_f32<(int)256, (bool)1, (bool)0>(const float *, float *, int, long, long, long, float, const float *, long, long, long, uint3, uint3, uint3, uint3, const float *, long, long, long, uint3, uint3, uint3, uint3)"
+    },
+    {
+      "block": [
+        256,
+        1,
+        1
+      ],
+      "class": "rms_norm",
+      "count_per_replay": 36,
+      "dynamic_smem_bytes": 128,
+      "grid": [
+        8,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+      "median_duration_us": 1.28,
+      "name": "rms_norm_f32",
+      "registers_per_thread": 40,
+      "static_smem_bytes": 0,
+      "variant": "void rms_norm_f32<(int)256, (bool)1, (bool)0>(const float *, float *, int, long, long, long, float, const float *, long, long, long, uint3, uint3, uint3, uint3, const float *, long, long, long, uint3, uint3, uint3, uint3)"
+    },
+    {
+      "block": [
+        1,
+        256,
+        1
+      ],
+      "class": "rope",
+      "count_per_replay": 36,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        8,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "_Z9rope_neoxILb1ELb0Ef6__halfEvPKT1_PT2_iiiiiiiiiiPKifff14rope_corr_dimsfPKfPKli",
+      "median_duration_us": 1.792,
+      "name": "rope_neox",
+      "registers_per_thread": 19,
+      "static_smem_bytes": 0,
+      "variant": "void rope_neox<(bool)1, (bool)0, float, __half>(const T3 *, T4 *, int, int, int, int, int, int, int, int, int, int, const int *, float, float, float, rope_corr_dims, float, const float *, const long *, int)"
+    },
+    {
+      "block": [
+        1,
+        256,
+        1
+      ],
+      "class": "rope",
+      "count_per_replay": 36,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        32,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "_Z9rope_neoxILb1ELb0EffEvPKT1_PT2_iiiiiiiiiiPKifff14rope_corr_dimsfPKfPKli",
+      "median_duration_us": 1.728,
+      "name": "rope_neox",
+      "registers_per_thread": 24,
+      "static_smem_bytes": 0,
+      "variant": "void rope_neox<(bool)1, (bool)0, float, float>(const T3 *, T4 *, int, int, int, int, int, int, int, int, int, int, const int *, float, float, float, rope_corr_dims, float, const float *, const long *, int)"
+    }
+  ],
+  "source": {
+    "path": "/tmp/llama_tg10_node_20260812.sqlite",
+    "sha256": "b8d41e7223d7310f0f73843decdeb0d33e9f9bc7eb6113749566381c4b16f04c",
+    "size_bytes": 3633152
+  },
+  "steady_replays": 14,
+  "tool": {
+    "path": "/home/ubuntu/tinygrad-arkey/extra/llm_research/decode/cuda_graph_timeline_ledger.py",
+    "sha256": "e4901ff1b9ed824c3009f6f5290dc8dc45379898276c92352b700b7f239fb1aa"
+  },
+  "warmup_replays_dropped": 2,
+  "warning": "Profiled intervals are not an unprofiled token-wall decomposition."
+}
