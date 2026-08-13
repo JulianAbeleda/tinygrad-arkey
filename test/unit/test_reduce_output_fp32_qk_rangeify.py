@@ -412,3 +412,42 @@ def test_opaque_q4k_after_lowers_through_rangeify():
   out = _attention(_rope(runtime_scratch(marked), 32, 128))
   with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
     assert "reduce_output_rmsnorm_32_128" in _names(out)
+
+
+def test_residual_sum_marks_and_admits_ffn_norm_through_rangeify():
+  """The decode ffn-norm input is the residual ``h = x + attn_out``, an ADD of
+  two invocation-owned opaque AFTERs.  Marker creation records the
+  residual-sum identity (and no weaker identity bit), and rangeify
+  materializes the ADD so the fused 1_4096 body admits."""
+  from tinygrad.helpers import Context
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  from tinygrad.llm.model import _decode_reduce_output_rmsnorm_fp16_consumer
+  x = Tensor(_opaque_gemv_after(4096), device="CPU")
+  attn_out = Tensor(_opaque_gemv_after(4096), device="CPU")
+  h = x + attn_out
+  marked = _decode_reduce_output_rmsnorm_fp16_consumer(_norm(4096), h, True)
+  assert marked.uop.op is Ops.REDUCE_OUTPUT
+  assert marked.uop.arg.residual_sum_at_marker is True
+  assert marked.uop.arg.input_identity_at_marker is False
+  assert marked.uop.arg.reduce_input_at_marker is False
+  assert marked.uop.arg.owned_contiguous_candidate is False
+  out = _attention(runtime_scratch(marked).reshape(1, 4096))
+  with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
+    assert "reduce_output_rmsnorm_1_4096" in _names(out)
+
+
+def test_residual_sum_fails_closed_for_non_identity_operand():
+  """An ADD with a non-identity operand (a bare materialized constant) never
+  gets the residual-sum bit, so the ffn-norm route stays on the ordinary
+  graph with no fused body."""
+  from tinygrad.helpers import Context
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  from tinygrad.llm.model import _decode_reduce_output_rmsnorm_fp16_consumer
+  x = Tensor(_opaque_gemv_after(4096), device="CPU")
+  h = x + 1
+  marked = _decode_reduce_output_rmsnorm_fp16_consumer(_norm(4096), h, True)
+  assert marked.uop.op is Ops.REDUCE_OUTPUT
+  assert marked.uop.arg.residual_sum_at_marker is False
+  out = _attention(runtime_scratch(marked).reshape(1, 4096))
+  with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
+    assert "reduce_output_rmsnorm_1_4096" not in _names(out)

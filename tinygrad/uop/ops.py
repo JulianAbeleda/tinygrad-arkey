@@ -2183,6 +2183,12 @@ class ReduceOutputSpec(NamedTuple):
   # reads the reduced input (bitwise the same kernel the ordinary spelling
   # runs), never the raw partials.
   reduce_input_at_marker: bool = False
+  # ``ADD(after, after)`` is the decode block residual ``h = x + attn_out``:
+  # a bounded residual-sum identity proven at marker creation (both operands
+  # are invocation-owned producers). Lowering materializes that exact ADD into
+  # a fresh buffer so the fused body reads the residual-add kernel output, the
+  # same residual the ordinary ffn-norm chain consumes.
+  residual_sum_at_marker: bool = False
 
 
 @dataclass(frozen=True)

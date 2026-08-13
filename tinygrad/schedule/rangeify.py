@@ -420,6 +420,25 @@ def _reduce_derived_materialized_view(x:UOp) -> UOp|None:
   # axis without a REDUCE range and pm_reduce_simplify erases it into a copy.
   return red_buf.after(red_buf.store(u.reshape(red_buf.shape)))
 
+def _reduce_residual_sum_materialized_view(x:UOp) -> UOp|None:
+  """Materialize the residual ADD into a fresh output buffer.
+
+  The marker input spelling is ``ADD(after, after)`` (the decode block
+  residual ``h = x + attn_out``). Each operand is re-proven as an
+  invocation-owned AFTER (the same bounded precompiled/opaque proofs the
+  marker used at creation), then the exact residual-add elementwise kernel is
+  emitted into a fresh buffer so the fused body reads the same residual the
+  ordinary ffn-norm chain consumes.
+  """
+  original, expected = x, x.numel()
+  if x.op is not Ops.ADD or len(x.src) != 2: return None
+  from tinygrad.tensor import _bounded_after_output_identity, _bounded_opaque_after_output_identity
+  for s in x.src:
+    if s.numel() != expected: return None
+    if not (_bounded_after_output_identity(s) or _bounded_opaque_after_output_identity(s)): return None
+  add_buf = UOp.new_buffer(x.device, x.numel(), x.dtype)
+  return add_buf.after(add_buf.store(x.reshape(add_buf.shape)))
+
 def _c6_marker(carrier:UOp) -> UOp|None:
   """Validate the C6 chain ``CONTIGUOUS(RESHAPE(MS(...)))`` and return its marker.
 
@@ -601,7 +620,7 @@ def lower_reduce_output_store(store:UOp, carrier:UOp|None=None, marker:UOp|None=
     trace_reduce_output("selector", reason)
     trace_reduce_output_association(assoc, reason)
   spec = marker.arg
-  if not (spec.input_identity_at_marker or spec.owned_contiguous_candidate or spec.reduce_input_at_marker): reject("marker_not_eligible"); return None
+  if not (spec.input_identity_at_marker or spec.owned_contiguous_candidate or spec.reduce_input_at_marker or spec.residual_sum_at_marker): reject("marker_not_eligible"); return None
   x, weight = marker.src[1], marker.src[2]
   out_buf, w_buf = _identity_buffer_view(target), _identity_buffer_view(weight)
   # The early owned-contiguous bit is deliberately weaker than identity. It
@@ -613,6 +632,7 @@ def lower_reduce_output_store(store:UOp, carrier:UOp|None=None, marker:UOp|None=
   if x_buf is None and spec.owned_contiguous_candidate: x_buf = _owned_precompiled_output_after_view(x)
   if x_buf is None and (spec.input_identity_at_marker or spec.owned_contiguous_candidate): x_buf = _reduce_output_m4_input_view(x)
   if x_buf is None and spec.reduce_input_at_marker: x_buf = _reduce_derived_materialized_view(x)
+  if x_buf is None and spec.residual_sum_at_marker: x_buf = _reduce_residual_sum_materialized_view(x)
   # Fail closed for lazy/movement inputs. Returning None lets the marker
   # fallback rewrite below preserve the exact ordinary graph.
   if out_buf is None: reject("output_not_identity"); return None

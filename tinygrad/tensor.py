@@ -125,6 +125,24 @@ def _bounded_reduce_output_identity(x: UOp) -> bool:
   return (_bounded_after_output_identity(u) or u.has_precompiled_output_identity()
           or _bounded_opaque_after_output_identity(u))
 
+def _bounded_residual_sum_identity(x: UOp) -> bool:
+  """Accept ``ADD(a, b)`` as a bounded residual-sum identity.
+
+  The decode block residual ``h = x + attn_out`` feeds the ffn-norm. Neither
+  operand is movement-only, but both are invocation-owned producers
+  (precompiled function outputs, or the bounded AFTER/Opaque custom-kernel
+  outputs they become after callify). The sum is materialized at lowering so
+  the fused reduce-output body reads the residual-add kernel's own output
+  buffer, the exact residual the ordinary ffn-norm chain consumes.
+  """
+  if x.op is not Ops.ADD or len(x.src) != 2: return False
+  expected = x.numel()
+  def owned(s: UOp) -> bool:
+    return (s.numel() == expected and
+            (s.has_precompiled_output_identity() or _bounded_after_output_identity(s)
+             or _bounded_opaque_after_output_identity(s)))
+  return all(owned(s) for s in x.src)
+
 def _get_winograd_matcols(mat, dims:int, shp:tuple[sint, ...], dtype:DType) -> list[list[Tensor]]:
   return [[Tensor.cat(*[Tensor.full(shp[:dim] + (1,) + shp[dim+1:], float(m[k]), dtype=dtype, buffer=False) for m in mat], dim=dim)
            for k in range(len(mat[0]))] for dim in range(dims)]
@@ -1425,6 +1443,7 @@ class Tensor(RandMixin):
     precompiled_contiguous = identity_uop.op is Ops.CONTIGUOUS and identity_uop.src[0].has_precompiled_output_identity()
     after_identity = _bounded_after_output_identity(identity_uop)
     reduce_identity = _bounded_reduce_output_identity(identity_uop)
+    residual_sum_identity = _bounded_residual_sum_identity(identity_uop)
     owned_contiguous_candidate = (x.uop.op is Ops.MEMORY_SEMANTIC and len(x.uop.src) == 1 and
                                   x.uop.src[0].op is Ops.CONTIGUOUS and memory_semantic_owner(x.uop) is not None)
     identity = not owned_contiguous_candidate and (identity_uop.has_buffer_identity() or
@@ -1433,6 +1452,7 @@ class Tensor(RandMixin):
                       ReduceOutputSpec(rows, dim, eps, out.dtype, input_identity_at_marker=identity,
                                        owned_contiguous_candidate=owned_contiguous_candidate,
                                        reduce_input_at_marker=reduce_identity,
+                                       residual_sum_at_marker=residual_sum_identity,
                                        warps=warps, lanes=32, per_lane=per_lane)), device=out.device)
 
   def _online_attention_primitive(self, key:Tensor, value:Tensor, attn_mask:Tensor|None,
