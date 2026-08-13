@@ -168,6 +168,32 @@ def _sites(before: dict, after: dict, diff: dict) -> dict:
   return report
 
 
+def _gemv_shift_explanation(diff: dict) -> dict:
+  """Account for the CPU-only o-proj -> ffn_down GEMV reduce fusion.
+
+  Binding the shared residual ``h`` instead of re-materializing a fresh ADD
+  lets the CPU scheduler fuse the attention-output (o-proj) GEMV reduce
+  (``r_64_16_4_16_4_2_4_8``, k=4096) into the ffn_down GEMV reduce
+  (``r_64_16_4_48_*``, k=12288): both write a 4096-wide output over the same
+  grid geometry.  The ffn_down kernel name grows the o-proj reduce ranges and
+  the graph-admission role stays ``ffn_down`` (the primary output).  This is a
+  correctness-preserving CPU-scheduler multi-output fusion, not a q/k geometry
+  change, and does not appear on the GPU graph where the o-proj/ffn_down use
+  custom Q4K/Q6K GEMV kernels.
+  """
+  attn_qo = "r_64_16_4_16_4_2_4_8"
+  ffn_down_before = "r_64_16_4_48_"
+  ffn_down_after = "r_64_16_4_16_4_2_32_48_"
+  return {
+    "summary": "CPU scheduler fuses the attn_qo o-proj GEMV reduce into the ffn_down GEMV reduce",
+    "removed_attn_qo_reduce": {n: c for n, c in sorted(diff["removed"].items()) if n.startswith(attn_qo)},
+    "renamed_ffn_down_removed": {n: c for n, c in sorted(diff["removed"].items()) if n.startswith(ffn_down_before)},
+    "renamed_ffn_down_added": {n: c for n, c in sorted(diff["added"].items()) if n.startswith(ffn_down_after)},
+    "cpu_only": True,
+    "correctness_authority": "full-logit GPU A/B (q/k families are unchanged in this diff)",
+  }
+
+
 def main() -> int:
   ap = argparse.ArgumentParser()
   ap.add_argument("--model", default=DEFAULT_MODEL)
@@ -223,6 +249,7 @@ def main() -> int:
       "zero_weight_materializations": not diff["weight_store_before"] and not diff["weight_store_after"],
       "after_bodies": ffn_site.get("after_bodies"),
       "body_delta": ffn_site.get("body_delta"),
+      "explained_gemv_shift": _gemv_shift_explanation(diff),
     }
   out = pathlib.Path(args.out)
   out.parent.mkdir(parents=True, exist_ok=True)
