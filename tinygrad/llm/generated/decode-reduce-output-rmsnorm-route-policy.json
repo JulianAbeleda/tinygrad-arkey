@@ -1,5 +1,8 @@
 {
   "schema": "boltbeam.route_policy.v1",
   "route": "decode_reduce_output_rmsnorm",
-  "promoted_targets": []
+  "description": "fp32 q/k reduce-output absorption promotion record (nv-reduce-output-fp32-qk-route-scope-20260810.md; docs/task_workflow/evidence/nv-fp32-qk-wall-bracket-20260812c.json). The q/k norm reduces fuse into cooperative fp32 reduce-output bodies (reduce_output_rmsnorm_32_128 x36 + reduce_output_rmsnorm_8_128 x36; C6 stays at 19 x reduce_output_rmsnorm_1_4096), replacing the ordinary q/k reduces (r_2_8_4_4_16 / r_8_16_8) plus their elementwise epilogues: norms kernels 328 -> 74 (net -163 programs including the side-effect accounting), exact full-logit SHA-256 identical to control, token stream 9e6664fd bit-exact in every arm. Wall bracket 2026-08-12c (stable machine, controls 4.5 us apart): control A 5.2374 / control B 5.2419 ms vs candidate 5.1987 ms = 192.36 tok/s, +38.7/+43.2 us/token. Below the +50 us bar, but the principal waived the bar on the M2d basis (correctness gates are the booking authority; the bar is wall evidence only) and accepted ~192 tok/s. The decode callify substrate (_decode_callify_substrate_promoted ORs this route) is enabled by this promotion.",
+  "promoted_targets": [
+    {"backend": "NV", "architecture": "sm_120"}
+  ]
 }
