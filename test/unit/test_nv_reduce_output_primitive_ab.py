@@ -42,8 +42,10 @@ def test_control_arm_sets_census_direct_greedy_route_only():
   # production-qualified direct greedy flash route as the committed census, so
   # the bracket measures only the reduce-output inter-arm delta.
   assert model._decode_direct_greedy_promoted is True
-  assert not hasattr(model, "_decode_reduce_output_rmsnorm_promoted")
-  assert not any(hasattr(block, "_decode_reduce_output_rmsnorm_promoted") for block in model.blk)
+  assert model._decode_reduce_output_rmsnorm_promoted is False
+  assert model._decode_reduce_output_ffn_rmsnorm_promoted is False
+  assert all(block._decode_reduce_output_rmsnorm_promoted is False for block in model.blk)
+  assert all(block._decode_reduce_output_ffn_rmsnorm_promoted is False for block in model.blk)
   assert _gates(model)["decode_direct_greedy_promoted"] is True
 
 

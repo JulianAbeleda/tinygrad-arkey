@@ -1806,10 +1806,17 @@ class Transformer:
     # on ``not _prefill`` before late concrete-view admission runs.
     _reduce_output_promoted = decode_reduce_output_rmsnorm_promoted((_norm_cap.backend, _norm_cap.architecture))
     model._decode_reduce_output_rmsnorm_promoted = _reduce_output_promoted
-    model._decode_reduce_output_ffn_rmsnorm_promoted = _reduce_output_promoted
+    # The FFN-norm site stays CLOSED by default even when the fp32 q/k route is
+    # promoted.  The residual-bind lowers one cooperative 1_4096 body per FFN
+    # norm, but on the GPU that body plus its fresh output materialization costs
+    # ~7.5 us against ~6 us for the ordinary reduce + epilogue it replaces, so
+    # the d512 reverse wall bracket is net-negative (192.36 -> 190.47 tok/s,
+    # C6 19 -> 55).  The booked policy keeps C6 at 19; harnesses open this knob
+    # explicitly when the FFN site is under measurement.
+    model._decode_reduce_output_ffn_rmsnorm_promoted = False
     for _b in model.blk:
       _b._decode_reduce_output_rmsnorm_promoted = _reduce_output_promoted
-      _b._decode_reduce_output_ffn_rmsnorm_promoted = _reduce_output_promoted
+      _b._decode_reduce_output_ffn_rmsnorm_promoted = False
     # M2c callify substrate: the block-output copy fold and the fp32 q/k reduce-output spelling are
     # gated on the callify owned-precompiled-output-redirect / typed-semantic-input-producer Context
     # flags, which production decode normally leaves closed. When a promoted policy requires them

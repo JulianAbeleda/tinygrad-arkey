@@ -1,9 +1,10 @@
 """Per-site REDUCE_OUTPUT decision flags for the decode norm call sites.
 
-The fp32 q/k site and the FFN-norm site share the global
-``_decode_reduce_output_rmsnorm_promoted`` route in production, but the FFN
-site has an independent knob so a CPU census can close it while the fp32 q/k
-site stays promoted (the live-split flash route depends on that site).
+The fp32 q/k site is promoted by the global
+``_decode_reduce_output_rmsnorm_promoted`` route in production.  The FFN-norm
+site has an independent knob and is CLOSED by default (its GPU wall bracket is
+net-negative), so a census can keep the fp32 q/k site promoted while the FFN
+site stays off.
 """
 
 from types import SimpleNamespace

@@ -107,7 +107,11 @@ kernels, so wall-clock is flat.
 ## Gates remaining
 
 None at this stage. The per-site GPU gate above completed; the route stays
-closed by default because the wall bracket did not promote.
+closed by default because the wall bracket did not promote.  Concretely, the
+decode loader pins `_decode_reduce_output_ffn_rmsnorm_promoted = False` on the
+model and every block (the FFN site no longer follows the global fp32 q/k
+route), so the production census returns to C6 = 19 / 91 fused bodies and the
+booked ~192 tok/s d512 wall is restored.
 
 ## Evidence
 

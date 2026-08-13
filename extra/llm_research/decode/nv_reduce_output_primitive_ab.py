@@ -154,15 +154,17 @@ def _configure(model, arm: str) -> None:
   or the closed-graph assertion fails before any arm runs.  The FFN-norm site
   has its own per-site knob (``_decode_reduce_output_ffn_rmsnorm_promoted``)
   and is set explicitly on both arms so a production-default ffn promotion can
-  never leak into the control graph."""
+  never leak into the control graph.  The ffn site is CLOSED by default: its
+  GPU wall bracket is net-negative (192.36 -> 190.47 tok/s), so the candidate
+  arm keeps it off and only the attn + final-norm C6 route is measured."""
   model._decode_direct_greedy_promoted = True
   if arm == "candidate":
     _require_candidate_callify_flags()
     model._decode_reduce_output_rmsnorm_promoted = True
-    model._decode_reduce_output_ffn_rmsnorm_promoted = True
+    model._decode_reduce_output_ffn_rmsnorm_promoted = False
     for block in model.blk:
       block._decode_reduce_output_rmsnorm_promoted = True
-      block._decode_reduce_output_ffn_rmsnorm_promoted = True
+      block._decode_reduce_output_ffn_rmsnorm_promoted = False
   elif arm == "control":
     model._decode_reduce_output_rmsnorm_promoted = False
     model._decode_reduce_output_ffn_rmsnorm_promoted = False
@@ -208,14 +210,10 @@ def _assert_candidate_configured(gates: dict) -> None:
   missing = []
   if not gates.get("reduce_output_rmsnorm_promoted"):
     missing.append("model._decode_reduce_output_rmsnorm_promoted")
-  if not gates.get("reduce_output_ffn_rmsnorm_promoted"):
-    missing.append("model._decode_reduce_output_ffn_rmsnorm_promoted")
   for index, value in enumerate(gates.get("block_reduce_output_rmsnorm_promoted") or []):
     if not value: missing.append(f"block[{index}]._decode_reduce_output_rmsnorm_promoted")
-  for index, value in enumerate(gates.get("block_reduce_output_ffn_rmsnorm_promoted") or []):
-    if not value: missing.append(f"block[{index}]._decode_reduce_output_ffn_rmsnorm_promoted")
   if missing:
-    raise RuntimeError(f"candidate arm requires reduce-output promotion on the model and every block: {missing}")
+    raise RuntimeError(f"candidate arm requires _decode_reduce_output_rmsnorm_promoted on the model and every block: {missing}")
 
 
 def _model(arm: str, model_path: str, max_context: int):
