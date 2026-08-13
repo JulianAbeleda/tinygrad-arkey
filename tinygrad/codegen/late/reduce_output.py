@@ -80,8 +80,6 @@ def emit_reduce_output(spec:ReduceOutputSpec, x_dtype, weight_dtype):
     # The single-row path keeps its LOCAL warp range.
     if spec.rows > 1:
       row = UOp.range(spec.rows, 0, AxisType.GLOBAL)
-    else:
-      warp = UOp.range(warps, 1, AxisType.LOCAL)
     if nv_assoc is not None:
       # NV ordinary partial-chain association for this row shape.  P lanes
       # each serially sum S elements at (t*t_stride + r*s_stride); idle lanes
@@ -107,15 +105,19 @@ def emit_reduce_output(spec:ReduceOutputSpec, x_dtype, weight_dtype):
       total = UOp.const(dtypes.float32, 0.0)
       for ti in range(P):
         total = (total + smem.after(ready)[ti]) if sumsq else total.maximum(smem.after(ready)[ti])
-    else:
-      # Ordinary r_16_256 association: each thread serially sums per_lane*lane
-      # CONTIGUOUS elements, then a serial chain combines the per-warp partials.
-      # The reduce index is lane-independent so every lane of a warp computes the
-      # identical serial chain; only lane 0 publishes it.  This is bitwise-equal
-      # to the ordinary kernel, unlike a strided per-lane split with a shuffle
-      # ladder, whose fp32 association differs in the last ulp.
+    elif spec.rows == 1:
+      # Stage-3 P2 lean single-row body: the ordinary r_16_256 association is
+      # spec.warps ACTIVE lanes each serially summing per_lane*lane CONTIGUOUS
+      # elements at ``partial_lane*(per_lane*lane) + red``, then a serial
+      # chain combines the warps partials in t order.  Idle lanes (laneid >=
+      # warps) compute an in-bounds duplicate partial and never publish, so
+      # the launch is ONE 32-lane block instead of 16 warps (the old body
+      # recomputed the same serial chain on all 32 lanes of every warp and
+      # published only lane 0).  The per-element fp32 chain is byte-identical,
+      # so the fused logits cannot move.
+      partial_lane = laneid % warps
       red = UOp.range(per_lane * lane, 2, AxisType.REDUCE)
-      base = (warp if spec.rows == 1 else row) * (per_lane * lane) + red
+      base = partial_lane * (per_lane * lane) + red
       xv = x[base].cast(dtypes.float32)
       acc = UOp.placeholder((1,), dtypes.float32, 20, AddrSpace.REG)
       acc = acc.after(acc[0].store(0.0))
@@ -123,21 +125,29 @@ def emit_reduce_output(spec:ReduceOutputSpec, x_dtype, weight_dtype):
         acc = acc.after(acc[0].store(acc.after(red)[0] + xv*xv).end(red))
       else:
         acc = acc.after(acc[0].store(acc.after(red)[0].maximum(xv.abs())).end(red))
-      # Every lane holds the same serial-chain value; no cross-lane ladder.
-      warp_total = acc[0]
-      # Single-row: one per-warp partial slot.  Row-mode: the block owns one
-      # row, so a single readback slot suffices (no cross-row combine exists
-      # across independent blocks).
-      smem = UOp.placeholder((warps,) if spec.rows == 1 else (1,), dtypes.float32, 230, AddrSpace.LOCAL)
-      published = (smem[warp] if spec.rows == 1 else smem[0]).store(warp_total, laneid.eq(0))
+      smem = UOp.placeholder((warps,), dtypes.float32, 230, AddrSpace.LOCAL)
+      published = smem[partial_lane].store(acc[0], laneid < warps)
       ready = UOp.barrier(UOp.group(published))
-      if spec.rows == 1:
-        total = UOp.const(dtypes.float32, 0.0)
-        for wi in range(warps):
-          total = (total + smem.after(ready)[wi]) if sumsq else total.maximum(smem.after(ready)[wi])
+      total = UOp.const(dtypes.float32, 0.0)
+      for wi in range(warps):
+        total = (total + smem.after(ready)[wi]) if sumsq else total.maximum(smem.after(ready)[wi])
+    else:
+      # Row-mode 4096: the block owns one row (GLOBAL row), the full-row serial
+      # chain, and a single readback slot; no cross-row combine exists across
+      # independent blocks.
+      red = UOp.range(per_lane * lane, 2, AxisType.REDUCE)
+      base = row * (per_lane * lane) + red
+      xv = x[base].cast(dtypes.float32)
+      acc = UOp.placeholder((1,), dtypes.float32, 20, AddrSpace.REG)
+      acc = acc.after(acc[0].store(0.0))
+      if sumsq:
+        acc = acc.after(acc[0].store(acc.after(red)[0] + xv*xv).end(red))
       else:
-        # Row-mode: the block reads back ONLY its own published row total.
-        total = smem.after(ready)[0]
+        acc = acc.after(acc[0].store(acc.after(red)[0].maximum(xv.abs())).end(red))
+      smem = UOp.placeholder((1,), dtypes.float32, 230, AddrSpace.LOCAL)
+      published = smem[0].store(acc[0], laneid.eq(0))
+      ready = UOp.barrier(UOp.group(published))
+      total = smem.after(ready)[0]
     if sumsq:
       scale = (total / UOp.const(dtypes.float32, float(dim)) + UOp.const(dtypes.float32, spec.eps)).sqrt().reciprocal()
     else:
@@ -146,18 +156,21 @@ def emit_reduce_output(spec:ReduceOutputSpec, x_dtype, weight_dtype):
       scale = (total + UOp.const(dtypes.float32, spec.eps)).reciprocal()
     # Lane restoration: reuse the same local ids after the reduction barrier;
     # only the serial per-lane phase changes from REDUCE to LOOP ownership.
-    epi = UOp.range(per_lane, 2, AxisType.LOOP)
     if spec.rows == 1:
-      obase = warp * (per_lane * lane) + laneid + epi * lane
+      # The lean single-row block has one 32-lane warp; the epilogue keeps all
+      # lanes busy with dim // lane elements per lane.
+      epi = UOp.range(dim // lane, 2, AxisType.LOOP)
+      obase = laneid + epi * lane
       wbase = obase
     else:
+      epi = UOp.range(per_lane, 2, AxisType.LOOP)
       # The weight is (dim,) and shared across rows; index the row-local
       # element (per_lane*lane == dim for the admitted multi-row shapes).
       obase = row * (per_lane * lane) + laneid + epi * lane
       wbase = laneid + epi * lane
     normed = (x[obase].cast(dtypes.float32) * scale).cast(x_dtype)
     value = (normed * weight[wbase].cast(x_dtype)).cast(spec.out_dtype)
-    return out[obase].store(value).end(laneid, *((warp,) if spec.rows == 1 else (row,)), epi).sink(
+    return out[obase].store(value).end(laneid, *((row,) if spec.rows > 1 else ()), epi).sink(
       arg=KernelInfo(name=f"reduce_output_{_RECIPE_STEMS[spec.recipe]}_{spec.rows}_{dim}", opts_to_apply=()))
   return kernel
 
