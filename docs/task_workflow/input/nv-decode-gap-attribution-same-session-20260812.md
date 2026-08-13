@@ -80,14 +80,17 @@ and the E_/r_ plumbing set.
 | attention O 4096x4096 (epi_resadd) | 11.78 | 9.97 | 0.85x | 359.0 | landed (M4), better than llama |
 | attention Q 4096x4096 | 9.54 | 9.51 | 1.00x | ~171 | parity |
 | attention K/V Q4 1024x4096 | 3.33 | 4.83 | 1.45x | 130.4 | shared-Q8 on 26/54 |
-| FFN-down Q4 4096x12288 (epi_ffnresadd) | 11.78 | 26.94 | **2.29x** | 484.9 | **never swept (audit rank 1)** |
+| FFN-down Q4 4096x12288 (epi_ffnresadd) | 11.78 | 26.94 | **2.29x** | 484.9 | **CLOSED NO-GO 08-12** (q4kd sweep: best quad u128 xsmem 11.43-11.45 us standalone = 1.23-1.65x above the floor under every offset; in-loop est 14.4-19.5 vs llama 11.776) |
 | FFN-down Q6 4096x12288 | 28.75 | 35.00 | 1.22x | 630.0 | MC2 coop NO-GO |
 | attention V Q6 partial 1024x4096 | 4.90 | 17.89 | 3.65x | 178.9 | MC2 partial NO-GO (local optimum) |
 | vocab 151936x4096 | 303.6 | 323.5 | 1.07x | 323.5 | landed, near parity |
 
-Confirms the quant audit (`nv-quant-gemv-llama-audit-20260812.md`): the Q4
-FFN-down shape is the one open quant row. At llama's floor it is worth
-18 x 15.2 = **~273 us/token**; the other shapes are closed NO-GO or landed.
+The Q4 FFN-down shape was the audit's rank 1, but the MC2-style sweep ran the
+same day and closed it NO-GO under every offset convention
+(`nv-q4kd-load-pattern-measurement-record-20260812.md`): no load-pattern row
+clears the llama floor (best in-loop estimate 14.4-19.5 us vs 11.776 us).
+The quant GEMV row is now exhausted except closed mechanisms; the per-shape
+deficit remains on the row but is not movable by the load-pattern surface.
 
 ## 5. Ranked recoverable rows with tok/s ceilings
 
@@ -98,13 +101,13 @@ Baseline 5.2031 ms/token = 192.19 tok/s. Ceiling = full class delta recovery at
 | rank | row | us/token | ceiling tok/s | ledger mapping |
 | --- | --- | ---: | ---: | --- |
 | 1 | reduce-output epilogue (fp32 q/k 240.5 + FFN-down 151.5) | 392.0 | **207.9** (+15.7) | fp32 q/k route booked +83.5 us wall; the reduces are the leftover epilogue mass (M1/M2-style fold sites) |
-| 2 | Q4 FFN-down 4096x12288 GEMV body | ~273 | **202.8** (+10.6) | quant audit rank 1, never swept; in-loop offset 1.26-1.7x keeps partial wins positive |
+| 2 | ~~Q4 FFN-down 4096x12288 GEMV body~~ | ~~~273~~ | ~~202.8~~ | **CLOSED NO-GO 08-12** (q4kd sweep floor table; quant row exhausted except closed mechanisms) |
 | 3 | flash score | 166.5 (90 at structural floor) | **198.5** (+6.4; +3.4 at floor) | 08-03 tile sweep NO-GO: zero-load floor 5.3 us is still 1.7x llama; structural, not geometry |
-| 4 | M1 norm chains (r_16_256 + E_f14a5cc0, 36 chains) | 229.5 census | ~197-193 line | ledger line to 193; prior fold attempt NO-GO +81.9 us (cost gate contradicted) |
+| 4 | M1 norm chains (r_16_256 + E_f14a5cc0, 36 chains) | 229.5 census | ~197-193 line | ledger line to 193; prior fold attempt NO-GO +81.9 us (cost gate contradicted); reopen via the generic reduce-output primitive (08-09 CPU gate PASS) |
 | 5 | vocab aux chain (E_1187, r_32_4_1187, r_128_16_8_1187, r_16_8) | 57.3 | **194.4** (+2.2) | L4 substrate landed; aux is the remaining tail |
-| 6 | attention K/V extras + Q6 partials | ~330 | closed | NO-GO per MC2/shared-Q8 sweeps; no new mechanism |
+| 6 | attention K/V extras + Q6 partials + Q4 FFN-down | ~600 | closed | NO-GO per MC2/shared-Q8/q4kd sweeps; no new mechanism |
 
-Closing all open rows (1-5, at floor) lands at ~4.55 ms/token ~= 220 tok/s on
+Closing all open rows (1, 3-5, at floor) lands at ~4.55 ms/token ~= 220 tok/s on
 kernel accounting alone; full wall parity (busy+host) is 4.074 ms = 245 tok/s.
 The last ~0.30 ms of that is llama's superior launch hiding (graph replay), not
 kernel work.
@@ -116,8 +119,10 @@ kernel work.
   the fold is body-free (pure removal of r_16_256 + E_f14a5cc0). The prior M1
   attempt added body work and lost 81.9 us, so a fresh M1 needs a body-free
   site or stays NO-GO.
-- **193 -> ~200 needs the quant row**: Q4 FFN-down sweep (rank 2, ~273 us
-  ceiling) plus the reduce-output folds (rank 1, 392 us ceiling).
+- **193 -> ~200 needs the epilogue/plumbing rows**: the reduce-output folds
+  (rank 1, 392 us ceiling) and flash-score structure (rank 3). The quant GEMV
+  row is exhausted: Q4 FFN-down closed NO-GO 08-12 (q4kd sweep), all other
+  shapes closed or landed.
 - **200 -> parity (~245) needs flash-score structure (rank 3) and launch
   hiding** - llama's 94% vs our 92% busy, plus the ~0.30 ms replay overhead
   delta.
@@ -136,15 +141,18 @@ at 200). Milestones: 193 needs -21.8 us, 200 needs -203.1 us, 210 needs
 | 1 | M1 norm chains (realistic wall, body-free fold) | ~22 | 5.181 | **~193.0** |
 | 2 | vocab aux tail (57.3 us census at 0.6 map) | 34 | 5.169 | 193.5 |
 | 3 | flash score at structural floor (90 of 166.5) | 90 | 5.113 | 195.6 |
-| 4 | Q4 FFN-down GEMV (273 us floor at 1.3x in-loop offset) | 210 | 4.993 | 200.3 |
+| 4 | ~~Q4 FFN-down GEMV~~ **CLOSED NO-GO 08-12** (q4kd sweep floor table) | ~~210~~ | - | - |
 | 5 | reduce-output epilogue (392 us at 0.6 body map) | 235 | 4.968 | 201.3 |
-| 6 | ranks 4+5 combined (quant + epilogue mass) | 445 | 4.758 | **~210.2** |
+| 6 | reduce-output + M1 + vocab + flash floor combined (realistic) | 381 | 4.822 | **~207.4** |
 | 7 | all class deltas at 1:1 (652.4 us) | 652 | 4.551 | **219.8** |
 | 8 | step 7 + llama launch hiding (the last ~0.48 ms) | 1129 | 4.074 | **245.5** (fresh rep 247.7) |
 
 Reading: steps 1-3 are the 192 -> ~195 band (small, mostly-landed territory);
-steps 4-5 are the ~200 band and are the two open quant/epilogue rows; step 6
-is the realistic joint ceiling of the quant side; step 7 is the kernel-sum
+step 4 is struck through: the Q4 FFN-down sweep closed NO-GO the same day
+(`nv-q4kd-load-pattern-measurement-record-20260812.md`); step 5 is the
+reduce-output epilogue (the remaining open epilogue mass); step 6 is the
+realistic joint ceiling of the open epilogue/plumbing rows (reduce-output
+235 + M1 22 + vocab 34 + flash floor 90 = 381 us); step 7 is the kernel-sum
 parity ceiling (all measured class deltas closed at 1:1); step 8 is full
 wall parity, which additionally requires matching llama's launch hiding
 (graph replay, 94% vs 92% busy). Tok/s values are estimates: census-to-wall
