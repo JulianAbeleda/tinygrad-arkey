@@ -87,6 +87,59 @@ def attach_compiled_descriptors(calls:list[CallRecord], descriptors:dict[int,dic
     out.append({"index":c.index,"name":c.name,"identity":c.identity,"descriptor":d})
   return out
 
+def collect_nv_compiled_descriptors(linear:Any, device:str="NV", var_vals:dict[str,int]|None=None) -> dict[int,dict[str,Any]]:
+  """One compiled descriptor per occurrence, read from the NV compiled kernels.
+
+  The capture linear was executed, so every compiled PROGRAM call has an
+  NVProgram in the process-wide runtime cache (keyed by the uop cache key).
+  Launch grid/block come from the compiled ProgramInfo (global/local size
+  after the local-size optimization); registers/shared/local usage and the
+  program binary come from the NVProgram itself. Any call without exactly one
+  compiled kernel raises; names never substitute for occurrence identity (the
+  descriptor dict is keyed by call index and validated by
+  attach_compiled_descriptors).
+  """
+  from tinygrad.engine.realize import runtime_cache
+  from tinygrad.uop.ops import Ops, sym_infer
+  var_vals = var_vals or {}
+
+  def launch_int(sz:Any, what:str, index:int, name:str) -> int:
+    value = sym_infer(sz, var_vals)
+    if not isinstance(value, int) or value < 0:
+      raise B3AttributionError(f"call {index}: {what} must be a non-negative int, got {value!r} for {name!r}")
+    return value
+
+  out: dict[int, dict[str, Any]] = {}
+  for index, call in enumerate(linear.src):
+    ast = call.src[0]
+    if ast.op is not Ops.PROGRAM:
+      raise B3AttributionError(f"call {index}: no compiled kernel (op {ast.op})")
+    prg = runtime_cache.get((ast.key, device))
+    if prg is None:
+      raise B3AttributionError(f"call {index}: no NV compiled kernel object for {ast.arg.name!r} (device {device!r})")
+    global_size, local_size = ast.arg.launch_dims(var_vals)
+    if local_size is None:
+      raise B3AttributionError(f"call {index}: no local size on compiled kernel {ast.arg.name!r}")
+    grid = [launch_int(sz, "grid component", index, ast.arg.name) for sz in global_size]
+    block = [launch_int(sz, "block component", index, ast.arg.name) for sz in local_size]
+    if len(grid) != 3 or len(block) != 3:
+      raise B3AttributionError(f"call {index}: launch geometry must be 3D, got grid {grid} block {block}")
+    lib = getattr(prg, "lib", None)
+    if not isinstance(lib, (bytes, bytearray, memoryview)) or not len(lib):
+      raise B3AttributionError(f"call {index}: compiled kernel {ast.arg.name!r} has no program binary")
+    out[index] = {
+      "binary_sha256": hashlib.sha256(bytes(lib)).hexdigest(),
+      "grid": grid,
+      "block": block,
+      "registers_per_thread": int(prg.regs_usage),
+      "static_smem_bytes": int(prg.shmem_usage),
+      # The NV runtime bakes all shared memory into the program (no extern
+      # dynamic shared carve-out), so dynamic shared is exactly zero here.
+      "dynamic_smem_bytes": 0,
+      "local_mem_bytes": int(prg.lcmem_usage),
+    }
+  return out
+
 
 # ---------------------------------------------------------------------------
 # Planner manifest collection (live seam; exercised hermetically)
@@ -606,11 +659,15 @@ def build_call_records(linear: Any, input_uops: tuple[Any, ...], group_map: dict
 
 @contextlib.contextmanager
 def capture_aligned_dags(harness: contextlib.AbstractContextManager | Any,
-                         report_path: str | None = None) -> Any:
+                         report_path: str | None = None,
+                         capture_extra: dict[str, Any] | None = None) -> Any:
   """Single-process dual snapshot: pre-planning (logical) and post-planning
   (physical) linears plus the placement manifest, then the full attribution
   report. The seam wraps jit_lower (input_uops), memory_plan_rewrite (both
-  linears), and graph_split_rewrite (group boundaries); no runtime file edit.
+  linears), compile_linear (compiled kernels), and graph_split_rewrite (group
+  boundaries); no runtime file edit. When capture_extra is provided it is
+  filled with the compiled linear and the built logical/physical CallRecords
+  (used by the NV descriptor emitter; the CUDA path passes nothing).
   """
   from tinygrad.engine import jit as tjit
   from tinygrad.schedule import memory as tmem
@@ -657,6 +714,10 @@ def capture_aligned_dags(harness: contextlib.AbstractContextManager | Any,
     manifest = state.get("manifest") or {}
     physical_calls = build_call_records(state["compiled"], state["input_uops"] or (), group_map,
                                         manifest, collector.arena_labels_by_uop_id)
+    if capture_extra is not None:
+      capture_extra["compiled"] = state["compiled"]
+      capture_extra["logical_calls"] = logical_calls
+      capture_extra["physical_calls"] = physical_calls
     # Overlay write positions from the compiled PROGRAM metadata onto the
     # pre-planning logical arm (pre-compile SINK ASTs do not carry outs).
     if len(state["pre"].src) == len(state["compiled"].src):
@@ -775,7 +836,10 @@ def main() -> int:
   ap = argparse.ArgumentParser()
   ap.add_argument("--synthetic", action="store_true")
   ap.add_argument("--capture-cuda", action="store_true", help="live CUDA d512 aligned capture (GPU, lock-held)")
+  ap.add_argument("--capture-nv", action="store_true", help="live NV d512 aligned capture + compiled descriptors (GPU, lock-held)")
   ap.add_argument("--depth", type=int, default=512)
+  ap.add_argument("--max-context", type=int, default=4608,
+                  help="model context for the NV harness (must match the DEBUG=2 prime trace config)")
   ap.add_argument("--model", default=DEFAULT_MODEL)
   ap.add_argument("--out", default=None)
   args = ap.parse_args()
@@ -801,7 +865,35 @@ def main() -> int:
     with capture_aligned_dags(harness, report_path=args.out) as report:
       print(json.dumps(report["summary"], indent=2, sort_keys=True))
     return 0
-  ap.error("no mode selected (--synthetic | --capture-cuda)")
+  if args.capture_nv:
+    from tinygrad.helpers import Context
+    from tinygrad.llm.model import Transformer
+    from tinygrad.device import Device
+    from extra.llm_research.decode.nv_predispatch_full_logits_qualification import _prompt
+
+    def harness() -> None:
+      model, _kv = Transformer.from_gguf(args.model, args.max_context)
+      # The prime-trace authority uses the real d512 tokenizer corpus, not the
+      # repeated-id smoke prompt, so the decode graph matches the DEBUG=2 trace.
+      gen = model.generate(_prompt(args.model, args.depth), chunk_size=32, temperature=0.0)
+      with Context(DEBUG=0):
+        # Token 1 prefill, token 2-3 warm the stable rollout jits (cnt 0), token 4
+        # captures: jit_lower + memory_plan_rewrite + graph_split_rewrite fire here.
+        for _ in range(4):
+          next(gen)
+      Device["NV"].synchronize()
+
+    extra: dict[str, Any] = {}
+    with capture_aligned_dags(harness, report_path=args.out, capture_extra=extra) as report:
+      descriptors = collect_nv_compiled_descriptors(extra["compiled"])
+      rows = attach_compiled_descriptors(extra["physical_calls"], descriptors)
+      report["compiled_descriptors"] = rows
+      # Re-emit so the capture artifact carries the compiled descriptor census.
+      emit_report(report, args.out)
+      print(json.dumps(report["summary"], indent=2, sort_keys=True))
+      sys.stdout.write("compiled descriptors: %d occurrences, all sourced from NVProgram objects\n" % len(rows))
+    return 0
+  ap.error("no mode selected (--synthetic | --capture-cuda | --capture-nv)")
   return 2
 
 

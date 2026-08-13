@@ -3,6 +3,7 @@
 Covers the required cases of the B3 exhaustive execution scope section 8.6
 plus the RecordingDepsTracker parity control from the risk register.
 """
+import hashlib
 import json
 
 import pytest
@@ -10,9 +11,11 @@ import pytest
 from extra.llm_research.decode.full_token_dag_capture import RecordingDepsTracker, attach_summary, restrict_dag
 from extra.llm_research.decode.route_b3_dag_attribution import (
   B3AttributionError, PLANNER_ALIAS, SEMANTIC, UNKNOWN, CallAccess, CallRecord,
+  attach_compiled_descriptors,
   build_attribution_fixture, build_duration_weighted_fixture, build_edges,
   build_partial_overlap_fixture, check_alignment, collect_manifest,
-  compute_attribution_report, emit_report, to_dag, validate_report,
+  collect_nv_compiled_descriptors, compute_attribution_report, emit_report,
+  to_dag, validate_report,
 )
 
 
@@ -220,3 +223,131 @@ def test_edges_parity_with_recording_deps_tracker():
   canonical = {(f, t, k) for f, t, k in tracker.edges}
   ours = _pair_edges(build_edges(calls))
   assert ours == canonical
+
+
+def _valid_descriptor(index: int) -> dict:
+  return {
+    "binary_sha256": "%064x" % (index + 1),
+    "grid": [1, 2, 3],
+    "block": [4, 5, 6],
+    "registers_per_thread": 32,
+    "static_smem_bytes": 1024,
+    "dynamic_smem_bytes": 0,
+    "local_mem_bytes": 512,
+  }
+
+
+def test_attach_compiled_descriptors_exact_set_contract():
+  """Compiled descriptors are keyed by occurrence index: missing/extra/partial
+  rows raise; names never substitute for occurrence identity."""
+  calls = [CallRecord(i, "k%d" % i, []) for i in range(4)]
+  rows = attach_compiled_descriptors(calls, {i: _valid_descriptor(i) for i in range(4)})
+  assert [r["index"] for r in rows] == [0, 1, 2, 3]
+  assert all(set(r["descriptor"]) == {"binary_sha256", "grid", "block", "registers_per_thread",
+                                      "static_smem_bytes", "dynamic_smem_bytes", "local_mem_bytes"}
+             for r in rows)
+  # Missing occurrence.
+  with pytest.raises(B3AttributionError):
+    attach_compiled_descriptors(calls, {i: _valid_descriptor(i) for i in range(3)})
+  # Extra occurrence.
+  with pytest.raises(B3AttributionError):
+    attach_compiled_descriptors(calls, {i: _valid_descriptor(i) for i in range(4)} | {9: _valid_descriptor(9)})
+
+
+def test_attach_compiled_descriptors_partial_and_malformed_rows_raise():
+  calls = [CallRecord(i, "k%d" % i, []) for i in range(2)]
+  descriptors = {i: _valid_descriptor(i) for i in range(2)}
+  # Partial row (missing a required field).
+  bad = {i: dict(d) for i, d in descriptors.items()}
+  del bad[0]["local_mem_bytes"]
+  with pytest.raises(B3AttributionError):
+    attach_compiled_descriptors(calls, bad)
+  # Extra field in a row.
+  bad = {i: dict(d) for i, d in descriptors.items()}
+  bad[0]["extra"] = 1
+  with pytest.raises(B3AttributionError):
+    attach_compiled_descriptors(calls, bad)
+  # Non-64-hex sha.
+  bad = {i: dict(d) for i, d in descriptors.items()}
+  bad[0]["binary_sha256"] = "not-a-sha"
+  with pytest.raises(B3AttributionError):
+    attach_compiled_descriptors(calls, bad)
+  # Negative scalar.
+  bad = {i: dict(d) for i, d in descriptors.items()}
+  bad[0]["registers_per_thread"] = -1
+  with pytest.raises(B3AttributionError):
+    attach_compiled_descriptors(calls, bad)
+  # Non-3 grid/block.
+  bad = {i: dict(d) for i, d in descriptors.items()}
+  bad[0]["grid"] = [1, 2]
+  with pytest.raises(B3AttributionError):
+    attach_compiled_descriptors(calls, bad)
+  bad = {i: dict(d) for i, d in descriptors.items()}
+  bad[0]["block"] = [1, 2, 3, 4]
+  with pytest.raises(B3AttributionError):
+    attach_compiled_descriptors(calls, bad)
+  # A name collision must not satisfy two occurrences: index 0 and 1 share a
+  # name, so only the full per-index set passes.
+  same_name = [CallRecord(0, "shared", []), CallRecord(1, "shared", [])]
+  rows = attach_compiled_descriptors(same_name, descriptors)
+  assert [r["descriptor"] for r in rows] == [descriptors[0], descriptors[1]]
+
+
+def test_collect_nv_compiled_descriptors_reads_nvprogram_objects():
+  """The emitter sources exactly one compiled descriptor per occurrence from
+  the NV compiled kernel objects (launch geometry + regs/smem/lmem + binary)."""
+  from types import SimpleNamespace
+  from tinygrad.engine.realize import runtime_cache
+  from tinygrad.uop.ops import Ops
+
+  class _PrgInfo:
+    name = "q4k_g3_lanemap_gemv_4096_4096"
+    global_size = (512, 1, 1)
+    local_size = (32, 1, 1)
+    def launch_dims(self, var_vals):
+      return self.global_size, self.local_size
+
+  def fake_call(name, key, lib):
+    ast = SimpleNamespace(op=Ops.PROGRAM, key=key, arg=_PrgInfo())
+    ast.arg.name = name
+    return SimpleNamespace(src=(ast,))
+
+  linear = SimpleNamespace(src=(
+    fake_call("q4k_g3_lanemap_gemv_4096_4096", b"k0", b"binary-0"),
+    fake_call("flash_fused_gmax_combine_f16_32_128", b"k1", b"binary-1"),
+  ))
+  runtime_cache[(b"k0", "NV")] = SimpleNamespace(lib=b"binary-0", regs_usage=40,
+                                                 shmem_usage=2048, lcmem_usage=128)
+  runtime_cache[(b"k1", "NV")] = SimpleNamespace(lib=b"binary-1", regs_usage=32,
+                                                 shmem_usage=4096, lcmem_usage=0)
+  try:
+    descriptors = collect_nv_compiled_descriptors(linear)
+  finally:
+    runtime_cache.pop((b"k0", "NV"), None)
+    runtime_cache.pop((b"k1", "NV"), None)
+  assert set(descriptors) == {0, 1}
+  d0 = descriptors[0]
+  assert d0["grid"] == [512, 1, 1] and d0["block"] == [32, 1, 1]
+  assert d0["registers_per_thread"] == 40
+  assert d0["static_smem_bytes"] == 2048
+  assert d0["dynamic_smem_bytes"] == 0
+  assert d0["local_mem_bytes"] == 128
+  assert d0["binary_sha256"] == hashlib.sha256(b"binary-0").hexdigest()
+  assert len(d0["binary_sha256"]) == 64
+  # Distinct occurrences keep distinct descriptors even when names collide.
+  assert descriptors[1]["binary_sha256"] == hashlib.sha256(b"binary-1").hexdigest()
+
+
+def test_collect_nv_compiled_descriptors_fails_closed_without_kernel():
+  from types import SimpleNamespace
+  from tinygrad.uop.ops import Ops
+
+  ast = SimpleNamespace(op=Ops.PROGRAM, key=b"missing", arg=SimpleNamespace(name="orphan"))
+  linear = SimpleNamespace(src=(SimpleNamespace(src=(ast,)),))
+  with pytest.raises(B3AttributionError):
+    collect_nv_compiled_descriptors(linear)
+  # Non-PROGRAM calls (no compiled kernel) also fail closed, never skipped.
+  ast2 = SimpleNamespace(op=Ops.COPY, key=b"copy", arg=None)
+  linear2 = SimpleNamespace(src=(SimpleNamespace(src=(ast2,)),))
+  with pytest.raises(B3AttributionError):
+    collect_nv_compiled_descriptors(linear2)
