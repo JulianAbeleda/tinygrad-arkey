@@ -77,6 +77,28 @@ def warp_reduce_sum(val:UOp, lane:UOp, width:int = WARP) -> UOp:
   return val   # every lane holds the width-wide sum
 
 
+def warp_reduce_sum_across_groups(val:UOp, lane:UOp, group_size:int, slot_base:int = _STAGE_SLOT) -> UOp:
+  """Sum `val` across `group_size`-aligned lane groups (offsets group_size, 2*group_size, ... < WARP).
+
+  This is the upper half of a full warp reduce: offsets below `group_size` are assumed already reduced
+  inside each group. Used by the llama-vec flash substrate where an 8-lane QK dot is followed by a
+  cross-group (4-groups-per-warp) PV/denominator combine. XOR offsets >= group_size preserve the
+  lane-within-group bits, so each lane ends up holding the whole-warp sum for its group position.
+  """
+  off = group_size
+  while off < WARP:
+    val = val + _staged_shfl(val, off, lane, slot_base); off <<= 1
+  return val
+
+
+def warp_reduce_max_across_groups(val:UOp, lane:UOp, group_size:int, slot_base:int = _STAGE_SLOT) -> UOp:
+  """Max-variant of `warp_reduce_sum_across_groups` (see that docstring)."""
+  off = group_size
+  while off < WARP:
+    val = val.maximum(_staged_shfl(val, off, lane, slot_base)); off <<= 1
+  return val
+
+
 # Auto-lowering for optimizer-produced lane reductions. This must stage every shuffle into a REG because an inline
 # ds_bpermute can be pulled into a divergent single-lane writeback gate. The hand-built primitives above remain
 # available to kernel authors and to the existing extra/llm_research emitters through this core owner.

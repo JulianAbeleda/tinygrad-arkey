@@ -360,6 +360,171 @@ def flash_single_stage_d512_kernel(Hd:int, Hq:int, Hkv:int, L:int, Tc, *, output
   return kernel
 
 
+def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc):
+  """Llama ``flash_attn_ext_vec`` substrate for d512 decode (closed-default, not routed).
+
+  Faithful transcription of the traced llama kernel (docs/task_workflow/input/
+  nv-flash-score-llama-trace-20260813.md): Q is loaded once into registers; K/V are
+  streamed straight from global/L2 with no per-tile LDS staging; each 8-lane group scores one KV column
+  with a 3-shuffle-stage reduce (4 columns in flight per warp, 16 per block); online softmax and PV
+  accumulation happen in registers in the same pass. The only cross-warp exchange is the final PV/den/max
+  combine, and the output is the legacy ``pout`` partial ABI so ``flash_fused_gmax_combine_kernel`` merges
+  the S=4 splits unchanged.
+
+  Fixed to the d512 shape family (Hd=128, Hq=32, Hkv=8, GQA=4). ``S`` is the KV split count (llama uses 4 at
+  context 512); ``MAXC`` bounds the symbolic context so the chunk loop is static. No quant/rope here: this is
+  the fp16-KV substrate proof.
+  """
+  if (Hd, Hq, Hkv) != (128, 32, 8): raise ValueError("llama-vec substrate is fixed to Hd=128,Hq=32,Hkv=8")
+  G = Hq // Hkv
+  NKQ, LANES, WARPS, THREADS = 8, 32, 4, 128
+  GROUPS = LANES // NKQ                        # 4 groups per warp
+  R = Hd // NKQ                                # 16 dims per thread
+  RP = R // 2                                  # 8 half2 per thread
+  COLS_PER_WARP = GROUPS * NKQ                 # 32 columns per warp per chunk
+  COLS_PER_CHUNK = THREADS                     # 128 columns per chunk
+  CHUNK_STRIDE = S * COLS_PER_CHUNK            # 512: each split owns one interleaved 128-col chunk
+  NCHUNK = _ceildiv(MAXC, CHUNK_STRIDE)        # 9 at MAXC=4608
+  W = Hd + 2
+  scale = 1.0 / (Hd ** 0.5)
+
+  def kernel(pout:UOp, q:UOp, cache:UOp) -> UOp:
+    from tinygrad.codegen.late.warp_reduce import (_warp_reduce_sum_staged, warp_reduce_sum_across_groups,
+                                                   warp_reduce_max_across_groups)
+    from tinygrad.codegen.late.flash_decode_intrinsics import fdot2 as _lower_fdot2
+    head = UOp.range(Hq, 0, AxisType.GLOBAL)    # 32 heads
+    split = UOp.range(S, 1, AxisType.GLOBAL)    # 4 KV splits
+    lane = UOp.range(LANES, 10, AxisType.LOCAL)
+    warp = UOp.range(WARPS, 11, AxisType.LOCAL)
+    kvh = head // G
+    # Bitwise lane split keeps the 32-lane range intact (no pm_split_ranges decomposition), so CUDA's
+    # __shfl_xor_sync sees the lane along threadIdx.x and the 8-lane group reduce stays warp-aligned.
+    glane = lane & (NKQ - 1)
+    group = lane >> 3
+
+    # Register-resident Q: 16 scalar halves per thread, loaded once. The 8 lanes of a group cover all 128
+    # dims; the 4 groups x 4 warps hold redundant copies so every group can score a column independently.
+    # Scalar (not half2-typed) registers keep the DEFINE_REG index pipeline devectorizer-friendly; the packed
+    # half2 is rebuilt with STACK at the dot, exactly as the legacy tile builds its q/k pairs.
+    qreg = UOp.placeholder((R,), dtypes.float16, 300, addrspace=AddrSpace.REG)
+    qp = UOp.range(R, 40)
+    qe = glane * R + qp
+    qload = qreg[qp].store(q[head * Hd + qe].cast(dtypes.float16)).end(qp)
+    qreg = qreg.after(qload)
+
+    acc = UOp.placeholder((R,), _F32, 301, addrspace=AddrSpace.REG)
+    den = UOp.placeholder((1,), _F32, 302, addrspace=AddrSpace.REG)
+    mx = UOp.placeholder((1,), _F32, 303, addrspace=AddrSpace.REG)
+    za = UOp.range(R, 41)
+    init = acc.after(head, split)[za].store(0.0).end(za)
+    init = den.after(init)[0].store(0.0)
+    init = mx.after(init)[0].store(-float("inf"))
+    acc, den, mx = acc.after(init), den.after(init), mx.after(init)
+
+    chunk = UOp.range(NCHUNK, 3, axis_type=AxisType.REDUCE)
+
+    # Per-column scores for this group's 8 columns, held in registers. Each 8-lane group scores
+    # column (warp*32 + group*8 + j); the 8 lanes hold complementary 16-dim Q slices and the
+    # 8-lane reduce broadcasts the full dot to every lane of the group.
+    score = UOp.placeholder((NKQ,), _F32, 304, addrspace=AddrSpace.REG)
+    j = UOp.range(NKQ, 5, axis_type=AxisType.REDUCE)
+    col = split * COLS_PER_CHUNK + chunk * CHUNK_STRIDE + warp * COLS_PER_WARP + group * NKQ + j
+    token = col
+    valid = token < Tc
+    dot = UOp.placeholder((1,), _F32, 305, addrspace=AddrSpace.REG)
+    dot_init = dot.after(chunk, j)[0].store(0.0)
+    dot = dot.after(dot_init)
+    p = UOp.range(RP, 6, axis_type=AxisType.REDUCE)
+    ke = glane * R + p * 2
+    qpair = UOp(Ops.STACK, dtypes.float16.vec(2), (qreg[p * 2], qreg[p * 2 + 1]))
+    kpair = UOp(Ops.STACK, dtypes.float16.vec(2), (cache[0, 0, kvh, token, ke].cast(dtypes.float16),
+                                                  cache[0, 0, kvh, token, ke + 1].cast(dtypes.float16)))
+    dot_update = dot[0].store(_lower_fdot2(dot.after(p)[0], qpair, kpair)).end(p)
+    sc = valid.where(_warp_reduce_sum_staged(dot.after(dot_update)[0], lane, NKQ) * scale, _fc(-float("inf")))
+    score_store = score[j].store(sc).end(j)
+    score = score.after(score_store)
+
+    # Group-wide max over this chunk's 8 columns, then cross-group reduce to the warp-wide max.
+    group_max = UOp.placeholder((1,), _F32, 306, addrspace=AddrSpace.REG)
+    jm = UOp.range(NKQ, 7, axis_type=AxisType.REDUCE)
+    gm_init = group_max.after(score_store)[0].set(-float("inf"))
+    gm = gm_init[0].set(gm_init.after(jm)[0].maximum(score[jm]), end=jm)
+    warp_max = warp_reduce_max_across_groups(gm_init.after(gm)[0], lane, NKQ)
+
+    # Online-softmax rescale by the warp max, then PV/den accumulation for this group's 8 columns.
+    valid_chunk = warp_max > -1e30
+    old_max = mx.after(score_store)[0]
+    rescale = valid_chunk.where(_fexp(old_max - warp_max), _fc(1.0))
+    new_max = valid_chunk.where(warp_max, old_max)
+    da = UOp.range(R, 8)
+    au = acc[da].store(acc.after(score_store)[da] * rescale).end(da)
+    du = den.after(au)[0].store(den.after(score_store)[0] * rescale)
+    mu = mx.after(du)[0].store(new_max)
+    acc, den, mx = acc.after(au), den.after(du), mx.after(mu)
+
+    jv = UOp.range(NKQ, 9, axis_type=AxisType.REDUCE)
+    tokv = split * COLS_PER_CHUNK + chunk * CHUNK_STRIDE + warp * COLS_PER_WARP + group * NKQ + jv
+    validv = tokv < Tc
+    prob = validv.where(_fexp(score[jv] - new_max), _fc(0.0))
+    dv = UOp.range(R, 12)
+    vdim = glane * R + dv
+    vval = cache[1, 0, kvh, tokv, vdim].cast(_F32)
+    a2 = acc[dv].store(acc.after(jv)[dv] + prob * vval).end(dv)
+    # mu (the running-max store) is a loop-carried register too; order it inside the chunk so it is not
+    # hoisted out as a dead tail and the next chunk reads the updated softmax frame.
+    d2 = den.after(a2, mu)[0].store(den.after(jv)[0] + prob)
+    chunk_end = d2.end(jv).end(chunk)
+
+    # Cross-group sum of PV and den (the 4 groups own disjoint columns but the same 16-dim slices).
+    # Only lanes 0..7 are group-0 owners, so they alone write each dim slice to avoid a 4-way same-value
+    # store race in shared memory. den/max are already warp-uniform after the cross-group reduce.
+    dr = UOp.range(R, 13)
+    warp_acc = warp_reduce_sum_across_groups(acc.after(chunk_end)[dr], lane, NKQ, slot_base=320)
+    warp_den = warp_reduce_sum_across_groups(den.after(chunk_end)[0], lane, NKQ, slot_base=340)
+    warp_mx = warp_reduce_max_across_groups(mx.after(chunk_end)[0], lane, NKQ, slot_base=350)
+
+    sh_pv = UOp.placeholder((WARPS * Hd,), _F32, 360, addrspace=AddrSpace.LOCAL)
+    sh_den = UOp.placeholder((WARPS,), _F32, 361, addrspace=AddrSpace.LOCAL)
+    sh_mx = UOp.placeholder((WARPS,), _F32, 362, addrspace=AddrSpace.LOCAL)
+    ps = sh_pv[warp * Hd + glane * R + dr].store(warp_acc, lane < NKQ).end(dr)
+    ps = sh_den.after(ps)[warp].store(warp_den, lane.eq(0))
+    ps = sh_mx.after(ps)[warp].store(warp_mx, lane.eq(0))
+    barrier = UOp.barrier(UOp.group(ps))
+
+    # Block-wide max over the 4 warp partials, then re-normalize each warp's PV/den by exp(warp_max -
+    # block_max) before summing. This is llama's fattn-vec.cuh:434-500: warp partials are only valid in a
+    # common softmax frame after the global-max rescale.
+    block_max = UOp.placeholder((1,), _F32, 370, addrspace=AddrSpace.REG)
+    wmax = UOp.range(WARPS, 14, axis_type=AxisType.REDUCE)
+    bm_init = block_max.after(barrier)[0].set(-float("inf"))
+    bm = bm_init[0].set(bm_init.after(wmax)[0].maximum(sh_mx.after(barrier)[wmax]), end=wmax)
+    global_max = bm_init.after(bm)[0]
+
+    block_pv = UOp.placeholder((R,), _F32, 371, addrspace=AddrSpace.REG)
+    block_den = UOp.placeholder((1,), _F32, 372, addrspace=AddrSpace.REG)
+    zr = UOp.range(R, 15)
+    pv_init = block_pv.after(bm)[zr].store(0.0).end(zr)
+    den_init = block_den.after(pv_init)[0].store(0.0)
+    block_pv, block_den = block_pv.after(den_init), block_den.after(den_init)
+
+    ws = UOp.range(WARPS, 16, axis_type=AxisType.REDUCE)
+    weight = _fexp(sh_mx.after(barrier)[ws] - global_max)
+    wr = UOp.range(R, 17)
+    pv_up = block_pv[wr].store(block_pv.after(ws)[wr] + weight * sh_pv.after(barrier)[ws * Hd + glane * R + wr]).end(wr)
+    den_up = block_den.after(pv_up)[0].store(block_den.after(ws)[0] + weight * sh_den.after(barrier)[ws]).end(ws)
+    final_pv, final_den = block_pv.after(den_up), block_den.after(den_up)
+
+    base = (head * S + split) * W
+    output_axis = UOp.range(R, 18)
+    output_dim = glane * R + output_axis
+    pv = pout[base + output_dim].store(final_pv[output_axis]).end(output_axis)
+    ls = pout.after(pv)[base + Hd].store(final_den[0], lane.eq(0))
+    ms = pout.after(ls)[base + (Hd + 1)].store(global_max, lane.eq(0))
+    return ms.end(head, split, lane, warp).sink(arg=_kernel_info(
+      f"flash_vec_llama_score_pv_{Hq}_{Hd}_{S}", coalesced_loads=True))
+  return kernel
+
+
 @dataclass(frozen=True)
 class LiveSplitGeometrySpec:
   split_count: int

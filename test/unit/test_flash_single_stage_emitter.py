@@ -3,7 +3,7 @@ from tinygrad.codegen import full_rewrite_to_sink, line_rewrite, pm_linearize_cl
 from tinygrad.codegen.late.linearizer import linearize
 from tinygrad.dtype import AddrSpace
 from tinygrad.helpers import Target
-from tinygrad.llm.flash_decode_attention import flash_single_stage_d512_kernel
+from tinygrad.llm.flash_decode_attention import flash_single_stage_d512_kernel, flash_vec_llama_score_pv_kernel
 from tinygrad.renderer.cstyle import HIPRenderer
 from tinygrad.renderer.cuda import CUDARenderer
 from tinygrad.uop.ops import Ops, UOp
@@ -45,6 +45,46 @@ def test_single_stage_cuda_and_hip_render_topology():
 def test_single_stage_shape_is_closed_to_exact_candidate():
   try:
     flash_single_stage_d512_kernel(128, 40, 8, 128, UOp.const(dtypes.int, 513))
+  except ValueError as e:
+    assert "fixed" in str(e)
+  else:
+    raise AssertionError("non-candidate shape must fail closed")
+
+
+def _vec_ast():
+  pout = UOp.placeholder((32*4*130,), dtypes.float32, 0)
+  q = UOp.placeholder((32*128,), dtypes.float16, 1)
+  cache = UOp.placeholder((2,1,8,4608,128), dtypes.float16, 2)
+  return flash_vec_llama_score_pv_kernel(128, 32, 8, 4608, 4, UOp.const(dtypes.int, 513))(pout, q, cache)
+
+
+def test_vec_llama_score_pv_is_closed_and_keeps_partial_abi():
+  ast = _vec_ast()
+  assert ast.arg.name == "flash_vec_llama_score_pv_32_128_4"
+  params = [u for u in ast.toposort() if u.op is Ops.PARAM]
+  assert len(params) == 3  # pout, q, cache: the legacy partial ABI, not a direct out
+  locals_ = [u for u in ast.toposort() if u.op is Ops.DEFINE_LOCAL]
+  assert sorted(u.dtype.size for u in locals_) == [4, 4, 512]
+
+
+def test_vec_llama_score_pv_cuda_and_hip_render_topology():
+  cuda = _render(_vec_ast(), CUDARenderer(Target("NV", arch="sm_120"), use_nvcc=True))
+  hip = _render(_vec_ast(), HIPRenderer(Target.parse("AMD:HIP:gfx1100")))
+  for src in (cuda, hip):
+    assert "flash_vec_llama_score_pv_32_128_4" in src
+  # Single-pass substrate: the only barrier is the final cross-warp combine, not per-tile K/V staging.
+  assert cuda.count("__syncthreads") == 1
+  assert hip.count("__builtin_amdgcn_s_barrier") == 1
+  assert "__launch_bounds__(128)" in cuda
+  # Lane stays along threadIdx.x (32) so __shfl_xor_sync addresses the 8-lane groups correctly.
+  assert "threadIdx.x; /* 32 */" in cuda and "threadIdx.y; /* 4 */" in cuda
+  assert cuda.count("__shfl_xor_sync") >= 9
+  assert hip.count("__builtin_amdgcn_ds_bpermute") >= 9
+
+
+def test_vec_llama_score_pv_shape_is_closed_to_exact_candidate():
+  try:
+    flash_vec_llama_score_pv_kernel(128, 40, 8, 4608, 4, UOp.const(dtypes.int, 513))
   except ValueError as e:
     assert "fixed" in str(e)
   else:

@@ -4,6 +4,7 @@ from tinygrad.renderer.cstyle import HIPRenderer
 from tinygrad.uop.ops import AxisType, Ops, UOp, graph_rewrite
 
 from tinygrad.codegen.late.warp_reduce import WARP, WARP_SHFL_XOR_TAG, pm_warp_reduce, pm_lower_warp_shfl_xor
+from tinygrad.codegen.late.warp_reduce import warp_reduce_sum_across_groups, warp_reduce_max_across_groups
 
 _amd = HIPRenderer(Target.parse("AMD:HIP:gfx1100"))
 
@@ -51,3 +52,25 @@ def test_warp_reduce_core_owns_old_extra_boundary():
   assert importlib.util.find_spec("tinygrad.codegen.experimental") is None
   assert importlib.util.find_spec("extra.llm_research.amd_warp_reduce") is None
   assert importlib.util.find_spec("extra.llm_research.warp_reduce_lowering") is None
+
+
+def test_across_group_reduces_emit_expected_xor_stages():
+  # 8-lane groups over a 32-lane warp need exactly two cross-group stages (offsets 8, then 16).
+  lane = UOp.range(WARP, 0, AxisType.WARP)
+  val = lane.cast(dtypes.float32)
+  for fxn in (warp_reduce_sum_across_groups, warp_reduce_max_across_groups):
+    out = fxn(val, lane, 8)
+    lowered = graph_rewrite(out, pm_lower_warp_shfl_xor, ctx=_amd)
+    bpermutes = [x for x in lowered.toposort() if x.op is Ops.CUSTOMI and "ds_bpermute" in str(x.arg)]
+    assert len(bpermutes) == 2
+    assert "__shfl_xor_sync" not in str(out)
+
+
+def test_across_group_reduce_is_group_aligned_and_renderer_agnostic():
+  lane = UOp.range(WARP, 0, AxisType.WARP)
+  val = lane.cast(dtypes.float32)
+  out = warp_reduce_max_across_groups(val, lane, 16)
+  # group_size=16 leaves only one cross-group stage before the width limit (offset 16).
+  tagged = [x for x in out.toposort() if x.op is Ops.CUSTOMI and isinstance(x.arg, tuple) and x.arg[:1] == (WARP_SHFL_XOR_TAG,)]
+  assert len(tagged) == 1
+  assert tagged[0].arg[1] == 16
