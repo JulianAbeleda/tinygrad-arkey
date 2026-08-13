@@ -467,3 +467,23 @@ def test_residual_sum_view_binds_shared_residual_without_materializing():
   assert _reduce_residual_sum_view(marked_input) is marked_input
   assert _reduce_residual_sum_view(runtime_scratch(x + 1).uop) is None
   assert _reduce_residual_sum_view(runtime_scratch(x + x).uop) is None
+
+
+def test_m4_view_proof_admits_shape_bearing_post_callify_after():
+  """The post-callify epi-resadd ffn spelling is
+  ``MEMORY_SEMANTIC(RESHAPE(AFTER(PARAM, CALL)))``: the opaque q4k o-proj
+  output with its output buffer promoted to a PARAM.  The m4 input-view proof
+  must walk the two-source RESHAPE by src[0] (the shape descriptor is src[1])
+  and re-prove the bounded opaque AFTER through its unique output argument,
+  rather than failing closed on the RESHAPE arity."""
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  from tinygrad.schedule.rangeify import _reduce_output_m4_input_view
+  from tinygrad.uop.ops import CallInfo, UOp
+  base = UOp.param(0, dtypes.float32, (4096,), "CPU")
+  inp = UOp.param(1, dtypes.float32, (4096,), "CPU")
+  call = UOp(Ops.CALL, dtypes.void, (UOp.sink(), base, inp), CallInfo(name="q4k_gemv", precompile=False))
+  after = base.after(call)
+  view = runtime_scratch(Tensor(after, device="CPU").reshape(1, 4096)).uop
+  assert view.op is Ops.MEMORY_SEMANTIC
+  assert _reduce_output_m4_input_view(view) is view
+  assert _reduce_output_m4_input_view(after) is None  # bare base: durable proofs own it

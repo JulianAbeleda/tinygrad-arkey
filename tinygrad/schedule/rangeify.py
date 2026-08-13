@@ -372,20 +372,28 @@ def _reduce_output_m4_input_view(x:UOp) -> UOp|None:
   Strip the production's transparent legs (CONTIGUOUS, MEMORY_SEMANTIC, and
   equal-span RESHAPE) down to the producer base and require the M4 residual
   contract's producer identity: buffer/precompiled-output identity, or an
-  AFTER with a declared typed output.  This reuses the M4 validator's
-  structure instead of reimplementing ownership from scratch.  A bare input
-  (zero stripped legs) is intentionally rejected here: after callify every
-  input is a PARAM, so the durable proofs (identity at marker creation, exact
-  invocation slot, owned precompiled output) own that case and run first.
+  AFTER with a declared typed output, or a bounded opaque custom-kernel AFTER.
+  The bounded-opaque case covers the GPU ffn-norm residual when o-proj epi
+  residual-add absorption is live: ``h`` is the q4k o-proj AFTER itself rather
+  than an ``ADD(x, attn_out)``, so the shared residual binding reads that same
+  producer buffer.  This reuses the M4 validator's structure instead of
+  reimplementing ownership from scratch.  A bare input (zero stripped legs) is
+  intentionally rejected here: after callify every input is a PARAM, so the
+  durable proofs (identity at marker creation, exact invocation slot, owned
+  precompiled output) own that case and run first.
   """
   original, expected = x, x.numel()
   legs = 0
   while x.op in {Ops.CONTIGUOUS, Ops.MEMORY_SEMANTIC} or (x.op is Ops.RESHAPE and len(x.src) and x.src[0].numel() == expected):
-    if len(x.src) != 1 or x.numel() != expected: return None
+    # RESHAPE keeps its shape descriptor in a second src; the data leg is
+    # src[0].  CONTIGUOUS and MEMORY_SEMANTIC stay strict single-source legs.
+    if (x.op is not Ops.RESHAPE and len(x.src) != 1) or x.numel() != expected: return None
     x = x.src[0]; legs += 1
   if legs == 0: return None
   from tinygrad.llm.kernel_program import _residual_producer_identity
-  return original if _residual_producer_identity(x) else None
+  from tinygrad.tensor import _bounded_after_output_identity, _bounded_opaque_after_output_identity
+  return original if (_residual_producer_identity(x) or _bounded_after_output_identity(x)
+                      or _bounded_opaque_after_output_identity(x)) else None
 
 def _reduce_derived_materialized_view(x:UOp) -> UOp|None:
   """Materialize the warp-coop REDUCE carrier into a fresh output buffer.
