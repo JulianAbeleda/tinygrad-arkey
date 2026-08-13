@@ -122,6 +122,34 @@ kernel work.
   hiding** - llama's 94% vs our 92% busy, plus the ~0.30 ms replay overhead
   delta.
 
+## 7. Tok/s ladder (translation of the attribution)
+
+Baseline 5.2031 ms/token = 192.19 tok/s. Rule of thumb in the 190-205 band:
+**~25 us/token saved ~= +1 tok/s** (exact derivative: 26.9 us at 192, 25.4 us
+at 200). Milestones: 193 needs -21.8 us, 200 needs -203.1 us, 210 needs
+-441.2 us, 220 needs -657.6 us, 245.45 (pair wall) needs -1129.0 us,
+247.98 (fresh rep) needs -1170.5 us.
+
+| step | work (from section 5) | us/token saved | new ms/token | new tok/s |
+| --- | --- | ---: | ---: | ---: |
+| 0 | production HEAD (today) | 0 | 5.2031 | 192.19 |
+| 1 | M1 norm chains (realistic wall, body-free fold) | ~22 | 5.181 | **~193.0** |
+| 2 | vocab aux tail (57.3 us census at 0.6 map) | 34 | 5.169 | 193.5 |
+| 3 | flash score at structural floor (90 of 166.5) | 90 | 5.113 | 195.6 |
+| 4 | Q4 FFN-down GEMV (273 us floor at 1.3x in-loop offset) | 210 | 4.993 | 200.3 |
+| 5 | reduce-output epilogue (392 us at 0.6 body map) | 235 | 4.968 | 201.3 |
+| 6 | ranks 4+5 combined (quant + epilogue mass) | 445 | 4.758 | **~210.2** |
+| 7 | all class deltas at 1:1 (652.4 us) | 652 | 4.551 | **219.8** |
+| 8 | step 7 + llama launch hiding (the last ~0.48 ms) | 1129 | 4.074 | **245.5** (fresh rep 247.7) |
+
+Reading: steps 1-3 are the 192 -> ~195 band (small, mostly-landed territory);
+steps 4-5 are the ~200 band and are the two open quant/epilogue rows; step 6
+is the realistic joint ceiling of the quant side; step 7 is the kernel-sum
+parity ceiling (all measured class deltas closed at 1:1); step 8 is full
+wall parity, which additionally requires matching llama's launch hiding
+(graph replay, 94% vs 92% busy). Tok/s values are estimates: census-to-wall
+mapping is 0.6 for body-adding changes and ~1.0 for pure kernel removal.
+
 ## Evidence
 
 - `docs/task_workflow/evidence/nv-llama-d512-node-ledger-20260812.json` (nsys
