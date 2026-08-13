@@ -1,0 +1,30 @@
+{
+  "count": 8,
+  "depth": 512,
+  "generated_identical": true,
+  "generated_sha256": [
+    "9e6664fd1d67a6124e786daaa1d895bdb64b972c3991c54dd5fcc6cea16f6881",
+    "9e6664fd1d67a6124e786daaa1d895bdb64b972c3991c54dd5fcc6cea16f6881",
+    "9e6664fd1d67a6124e786daaa1d895bdb64b972c3991c54dd5fcc6cea16f6881",
+    "9e6664fd1d67a6124e786daaa1d895bdb64b972c3991c54dd5fcc6cea16f6881",
+    "9e6664fd1d67a6124e786daaa1d895bdb64b972c3991c54dd5fcc6cea16f6881"
+  ],
+  "max_context": 1024,
+  "max_ms": 5.273422125,
+  "median_ms": 5.23143225,
+  "min_ms": 5.228044625,
+  "mode": "timing",
+  "per_token_ms": [
+    5.273422125,
+    5.237353375,
+    5.230976375,
+    5.228044625,
+    5.23143225
+  ],
+  "schema": "tinygrad.nv_predispatch_qualification.v1",
+  "spread_pct": 0.8674010831354998,
+  "switches": {
+    "JIT_INPUT_DESCRIPTOR_CACHE": "1",
+    "JIT_REUSE_WRITTEN_INPUT_SHADOWS": "1"
+  }
+}
