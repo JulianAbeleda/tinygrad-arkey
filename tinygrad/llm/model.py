@@ -430,7 +430,12 @@ def _decode_reduce_output_norm_flags(block, prefill:bool) -> tuple[bool,bool]:
   global_route=bool(getattr(block,"_decode_reduce_output_rmsnorm_promoted",False))
   shared_lease=isinstance(getattr(block,"_shared_q8_attention_admission",None),SharedQ8AttentionAdmission)
   fused_attn_lease=shared_lease and bool(getattr(block,"_decode_reduce_output_attn_rmsnorm_promoted",False))
-  return global_route or fused_attn_lease,global_route
+  # The FFN-norm site is independently gateable so a census can close it while
+  # the fp32 q/k site stays promoted (the live-split flash route depends on
+  # that site).  Absent the knob it follows the global route, so production
+  # behavior is unchanged.
+  ffn_route=bool(getattr(block,"_decode_reduce_output_ffn_rmsnorm_promoted",global_route))
+  return global_route or fused_attn_lease,ffn_route
 
 
 def _generation_input_slice(tokens:Tensor, start_pos:int|UOp, token_extent:UOp, bound_extent:int) -> Tensor:
@@ -1801,7 +1806,10 @@ class Transformer:
     # on ``not _prefill`` before late concrete-view admission runs.
     _reduce_output_promoted = decode_reduce_output_rmsnorm_promoted((_norm_cap.backend, _norm_cap.architecture))
     model._decode_reduce_output_rmsnorm_promoted = _reduce_output_promoted
-    for _b in model.blk: _b._decode_reduce_output_rmsnorm_promoted = _reduce_output_promoted
+    model._decode_reduce_output_ffn_rmsnorm_promoted = _reduce_output_promoted
+    for _b in model.blk:
+      _b._decode_reduce_output_rmsnorm_promoted = _reduce_output_promoted
+      _b._decode_reduce_output_ffn_rmsnorm_promoted = _reduce_output_promoted
     # M2c callify substrate: the block-output copy fold and the fp32 q/k reduce-output spelling are
     # gated on the callify owned-precompiled-output-redirect / typed-semantic-input-producer Context
     # flags, which production decode normally leaves closed. When a promoted policy requires them

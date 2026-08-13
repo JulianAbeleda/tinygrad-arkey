@@ -8,13 +8,18 @@ Captures the forced decode-only production graph for one or both arms:
   --arm baseline-context  the ordinary norms route under the same callify
                    Context flags the promoted route runs under, so the
                    reduce-output diff holds the callify substrate constant
+  --arm ffn-before  the fp32 q/k site promoted (keeps the live-split flash
+                   route alive on CPU) with the FFN-norm site closed, under
+                   the same callify Context: the per-site "before" arm for
+                   the M1 ffn-norm (1_4096) body-free removal
   --arm promoted   the fp32 q/k reduce-output route with the production
                    callify Context: the "after" census
 
-``--arm both`` captures baseline then promoted and writes one merged evidence
-document carrying the per-site before/after program counts, the exact-name
-added/removed diff, and the materialization check (zero ``*_weight_store``-
-style additions), so the P1 body-free 1:1 swap contract
+``--arm both`` captures baseline then promoted and ``--arm ffn`` captures
+ffn-before then promoted; each writes one merged evidence document carrying
+the per-site before/after program counts, the exact-name added/removed diff,
+and the materialization check (zero ``*_weight_store``-style additions), so
+the P1 body-free 1:1 swap contract
 (docs/task_workflow/input/nv-reduce-output-site-absorption-scope-20260812.md
 section 5 gate 3) can be verified per site on DEV=CPU.  The arm split mirrors
 the A/B harness (extra/llm_research/decode/nv_reduce_output_fp32_qk_ab.py):
@@ -45,7 +50,7 @@ def _program_counts(census: dict) -> dict[str, int]:
   return dict(collections.Counter(names))
 
 
-def _capture(args, promoted: bool, callify: bool = True) -> dict:
+def _capture(args, promoted: bool, callify: bool = True, ffn_promoted: bool|None = None) -> dict:
   from dataclasses import replace
   from tinygrad.llm.generate import load_model_and_tokenizer
   model, tokenizer = load_model_and_tokenizer(args.model, args.max_context, seed=20260617)
@@ -57,9 +62,14 @@ def _capture(args, promoted: bool, callify: bool = True) -> dict:
   # selects.
   model._decode_direct_greedy_promoted = True
   model._decode_reduce_output_rmsnorm_promoted = promoted
+  # The FFN-norm site is independently gateable: a per-site arm keeps the
+  # fp32 q/k site promoted (the live-split flash route needs it) while the
+  # ffn-norm markers close, so the ffn removal can be measured body-free.
+  model._decode_reduce_output_ffn_rmsnorm_promoted = promoted if ffn_promoted is None else ffn_promoted
   for block in model.blk:
     block.config = replace(block.config, prefill_tc_attn=False, prefill_custom_kernel_attn=False)
     block._decode_reduce_output_rmsnorm_promoted = promoted
+    block._decode_reduce_output_ffn_rmsnorm_promoted = promoted if ffn_promoted is None else ffn_promoted
   # Observe the exact pre-callify values passed by production model call sites.
   # Census-local; leaves model semantics unchanged.
   marker_inputs: list[dict] = []
@@ -146,20 +156,24 @@ def main() -> int:
   ap.add_argument("--depth", type=int, default=512)
   ap.add_argument("--max-context", type=int, default=4608)
   ap.add_argument("--chunk-size", type=int, default=32)
-  ap.add_argument("--arm", choices=("baseline", "baseline-context", "promoted", "both"), default="promoted")
+  ap.add_argument("--arm", choices=("baseline", "baseline-context", "ffn-before", "promoted", "both", "ffn"), default="promoted")
   ap.add_argument("--typed-semantic-producer", action="store_true",
                   help="enable only the closed typed CALL-input producer route with callify redirect (promoted arm)")
   ap.add_argument("--out", required=True)
   args = ap.parse_args()
-  arms = ("baseline", "baseline-context", "promoted") if args.arm == "both" else (args.arm,)
-  def _arm_kind(arm: str) -> tuple[bool, bool]:
-    if arm == "promoted": return True, True
-    if arm == "baseline-context": return False, True
-    return False, False
+  if args.arm == "both": arms = ("baseline", "baseline-context", "promoted")
+  elif args.arm == "ffn": arms = ("ffn-before", "promoted")
+  else: arms = (args.arm,)
+  def _arm_kind(arm: str) -> tuple[bool, bool|None, bool]:
+    """Return (q/k promoted, ffn promoted or None to follow q/k, callify)."""
+    if arm == "promoted": return True, None, True
+    if arm == "ffn-before": return True, False, True
+    if arm == "baseline-context": return False, None, True
+    return False, None, False
   captured = {}
   for arm in arms:
-    promoted, callify = _arm_kind(arm)
-    record = _capture(args, promoted=promoted, callify=callify)
+    promoted, ffn_promoted, callify = _arm_kind(arm)
+    record = _capture(args, promoted=promoted, callify=callify, ffn_promoted=ffn_promoted)
     record["arm"] = arm
     captured[arm] = record
   doc = {"schema": "tinygrad.nv_reduce_output_site_absorption_census.v1", "arms": captured}
@@ -179,6 +193,19 @@ def main() -> int:
     doc["diff"] = diff
     doc["sites"] = sites
     doc["contract"] = contract
+  if "ffn-before" in captured and "promoted" in captured:
+    before, after = captured["ffn-before"], captured["promoted"]
+    diff = _diff(before, after)
+    sites = _sites(before, after, diff)
+    ffn_site = sites.get("ffn_down_1_4096", {})
+    doc["ffn_diff"] = diff
+    doc["ffn_site"] = ffn_site
+    doc["ffn_contract"] = {
+      "net_program_delta": diff["net_program_delta"],
+      "zero_weight_materializations": not diff["weight_store_before"] and not diff["weight_store_after"],
+      "after_bodies": ffn_site.get("after_bodies"),
+      "body_delta": ffn_site.get("body_delta"),
+    }
   out = pathlib.Path(args.out)
   out.parent.mkdir(parents=True, exist_ok=True)
   out.write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n")
