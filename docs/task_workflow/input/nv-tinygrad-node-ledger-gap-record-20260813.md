@@ -1,11 +1,33 @@
 # NV decode gap - tinygrad CUPTI node ledger vs llama (2026-08-13)
 
 Date: 2026-08-13
-Branch: `nvidia-bringup-20260731` (HEAD `a985c60ca`)
+Branch: `nvidia-bringup-20260731` (HEAD `69cb46d45`)
 Status: **measurement record.** First same-measurement CUPTI node ledger of the
 tinygrad d512 decode token, paired against the pinned llama ledger. Answers
 "exactly why are we slower" as a direct per-class subtraction rather than the
 DEBUG=2 prime-token estimate used before.
+
+## 0. Measurement-route caveat (read first)
+
+This ledger captures `DEV=CUDA`, not the production route. Production
+(`DEV=NV`) executes the native NV backend; `nsys
+--cuda-graph-trace=node` only exposes node-level timelines on the CUDA-graph
+fallback route (`DEV=CUDA`). That route disables the promoted NV
+`reduce-output` norm fusion (the policy targets `{"backend":"NV", ...}`), so
+this trace contains **no** `reduce_output_rmsnorm_*` kernels.
+
+Consequences:
+
+- The absolute per-class delta below is a **structural probe of the CUDA
+  route**, not the production tok/s gap. It is valid evidence that the CUDA
+  route runs the support kernels serially, but it does not measure the
+  production norm fusion.
+- The 08-12 production attribution on `DEV=NV` remains the authoritative
+  per-class comparison for production. There norms were 17 nodes / 49.6 us,
+  already **-258 us vs llama** (better), not the `+108.6 us` shown below.
+- Keep this in mind for every "we pay X and llama doesn't" line in sections
+  2-4: those numbers are CUDA-route numbers and cannot be promoted to a
+  production verdict on their own.
 
 ## 1. Method
 
@@ -73,6 +95,12 @@ non-zero for tinygrad.
 | vocab non-GEMV aux | 0 | 0.0 | 10 | 129.8 | +129.8 |
 | output-reduce epilogue | 0 | 0.0 | 18 | 15.7 | +15.7 |
 | **total** | **762** | **4774.4** | **1021** | **5149.4** | **+375.0** |
+
+Route caveat on the two rows that matter most: `norms` and `residual` are
+`DEV=CUDA` observations. On production `DEV=NV`, norms are already fused by
+the promoted reduce-output primitive and are ahead of llama (see section 0).
+The `residual` row is the CUDA-route spelling of plumbing that the production
+opaque-producer boundary still gates separately.
 
 Reading the deltas:
 
