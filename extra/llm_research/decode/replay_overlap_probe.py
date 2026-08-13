@@ -43,7 +43,7 @@ def main() -> None:
   tgm._CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS = frozenset()
 
   launches: list[dict] = []
-  capture = {"on": True}
+  capture = {"on": False}
   _orig_call = HCQGraph.__call__
 
   def traced_call(self, input_uops, var_vals, wait=False):
@@ -69,6 +69,7 @@ def main() -> None:
   with Context(DEBUG=0):
     next(gen)  # T2: first replay, kickoff 1 (no collect)
   print("--- measured (T3)", file=sys.stderr, flush=True)
+  capture["on"] = True
   t0 = time.perf_counter()
   with Context(DEBUG=0):
     next(gen)  # T3: measured token (wall W, no sync)
@@ -81,13 +82,22 @@ def main() -> None:
     next(gen)  # T4: flush; collects T3's timestamps into the jsonl
 
   lines = [json.loads(l) for l in open(os.environ["HCQ_GRAPH_PROFILE_JSON"]) if l.strip()]
-  k = len(launches)
-  if len(lines) != k:
-    raise RuntimeError(f"profile line accounting: {len(lines)} lines vs {k} measured launches "
-                       f"(expected one jsonl line per measured replay, collected at the flush replay)")
+  if len(launches) == 0:
+    raise RuntimeError("no launches captured for the measured token")
+  # The jsonl accumulates profile lines for every replayed group (prefill replays
+  # included), so align each measured launch to its line by member-name prefix
+  # instead of by global index. The measured token's lines are the last ones
+  # appended (collected by the flush replay), and must match uniquely.
+  aligned: list[dict] = []
   for i, la in enumerate(launches):
-    if len(lines[i]["entries"]) != len(la["names"]):
-      raise RuntimeError(f"instance {i}: {len(lines[i]['entries'])} entries vs {len(la['names'])} members")
+    want = la["names"]
+    matches = [l for l in lines if len(l["entries"]) == len(want) and
+               all(e["name"].startswith(n[:24]) for e, n in zip(l["entries"], want))]
+    if len(matches) != 1:
+      raise RuntimeError(f"measured launch {i}: {len(matches)} profile lines match {len(want)} members "
+                         f"(expected exactly one, last-collected line)")
+    aligned.append(matches[0])
+  lines = aligned
 
   rows = []
   node_sum_us = 0

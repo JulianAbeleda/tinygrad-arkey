@@ -1,0 +1,60 @@
+{
+ "depth": 512,
+ "git_commit": "713b2a02043679495be13e1cc16c62e3100acfca",
+ "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+ "groups": 5,
+ "kernels": 596,
+ "node_sum_us": 4972.4,
+ "span_sum_us": 4972.5,
+ "host_submit_us": 407.1,
+ "wall_s_ms": 48101.37,
+ "wall_sync_ms": 48101.39,
+ "replay_overlap_pct": 0.0,
+ "rows": [
+  {
+   "group": 0,
+   "kernels": 32,
+   "node_sum_us": 213.6,
+   "span_us": 213.8,
+   "overlap_us": 0.0,
+   "overlap_pct": 0.0,
+   "host_submit_us": 67.8
+  },
+  {
+   "group": 1,
+   "kernels": 64,
+   "node_sum_us": 490.0,
+   "span_us": 490.0,
+   "overlap_us": 0.0,
+   "overlap_pct": 0.0,
+   "host_submit_us": 59.7
+  },
+  {
+   "group": 2,
+   "kernels": 128,
+   "node_sum_us": 857.9,
+   "span_us": 857.8,
+   "overlap_us": 0.1,
+   "overlap_pct": 0.0,
+   "host_submit_us": 67.0
+  },
+  {
+   "group": 3,
+   "kernels": 256,
+   "node_sum_us": 2002.0,
+   "span_us": 2002.0,
+   "overlap_us": 0.0,
+   "overlap_pct": 0.0,
+   "host_submit_us": 104.1
+  },
+  {
+   "group": 4,
+   "kernels": 116,
+   "node_sum_us": 1409.0,
+   "span_us": 1409.0,
+   "overlap_us": 0.0,
+   "overlap_pct": 0.0,
+   "host_submit_us": 108.5
+  }
+ ]
+}
