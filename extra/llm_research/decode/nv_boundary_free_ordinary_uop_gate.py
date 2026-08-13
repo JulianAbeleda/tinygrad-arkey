@@ -20,8 +20,16 @@ the ordinary arms instantiate neither (``contains_custom_kernel`` is false in ev
 ordinary arm by construction).  Populations with a known opaque production producer
 therefore also run an ``opaque_producer`` arm; see ``OPAQUE_ARMS``.
 
-Schema: ``tinygrad.nv_boundary_free_ordinary_uop_gate.v3`` (v2 renamed ``PASS`` ->
-``ORDINARY_PASS``, added per-population ``scope`` and the ``opaque_producer`` arm).
+``REDUCE_OUTPUT_PASS`` is the v4 re-open for populations whose production input is an
+identity/precompiled buffer: the landed ``Ops.REDUCE_OUTPUT`` primitive lowers to one
+ordinary ``CALL``/``SINK`` program for a realized input.  It is explicitly NOT a claim
+for arbitrary lazy producers; a ``lazy_add`` row is recorded alongside it to show that
+non-identity inputs retain the ordinary fallback.
+
+Schema: ``tinygrad.nv_boundary_free_ordinary_uop_gate.v4`` (v3 added the
+``opaque_producer`` arm; v4 adds the ``reduce_output`` arm and the
+``REDUCE_OUTPUT_PASS`` verdict).  ``run_v3()`` remains available for the closed
+pre-REDUCE_OUTPUT A/B harnesses whose construction is still NO-GO.
 """
 from __future__ import annotations
 
@@ -42,7 +50,8 @@ from extra.llm_research.decode.nv_fusion_population_ledger import (
 )
 
 DIM = 4096
-SCHEMA = "tinygrad.nv_boundary_free_ordinary_uop_gate.v3"
+SCHEMA_V3 = "tinygrad.nv_boundary_free_ordinary_uop_gate.v3"
+SCHEMA = "tinygrad.nv_boundary_free_ordinary_uop_gate.v4"
 
 
 def _programs(out: Tensor) -> list[str]:
@@ -109,11 +118,29 @@ def _residual_opaque(x: Tensor) -> Tensor:
   return (x.reshape(1, 1, DIM) + _producer_form("block_output").reshape(1, 1, DIM)).contiguous()
 
 
+def _reduce_output_norm(x: Tensor) -> Tensor:
+  # The production decode call site: nn.RMSNorm fallback plus the REDUCE_OUTPUT
+  # marker, with the load-time fp16 identity weight bound to avoid a fresh weight
+  # materialization.  This is the construction the v3 gate could not express.
+  from tinygrad.llm.model import _decode_reduce_output_rmsnorm
+  norm = nn.RMSNorm(DIM, eps=1e-6)
+  norm.weight = Tensor.randn(DIM, dtype=dtypes.float16, device=x.device).realize()
+  norm._decode_reduce_output_weight = norm.weight
+  return _decode_reduce_output_rmsnorm(norm, x, True)
+
+
 # Populations whose PRODUCTION producer is an opaque precompiled boundary rather than a
 # plain realized buffer.  Only listed where a record establishes the real chain; absence
 # means "not assessed", not "plain".
 OPAQUE_ARMS: dict[str, Callable[[Tensor], Tensor]] = {
   POP_RESIDUAL: _residual_opaque,
+}
+
+# Populations re-opened through the landed REDUCE_OUTPUT primitive.  The arm is
+# evaluated on a realized identity input only; the lazy_add row is evidence, not a
+# pass condition, because the primitive deliberately rejects non-identity inputs.
+REDUCE_OUTPUT_ARMS: dict[str, Callable[[Tensor], Tensor]] = {
+  POP_NORMS: _reduce_output_norm,
 }
 
 
@@ -152,25 +179,25 @@ def _verdict(rows: dict[str, dict], cause: str = "") -> tuple[str, str]:
   return "CONSTRUCTION_GAP", "construction not expressible as one ordinary program: " + detail
 
 
-def run(population: str | None = None, dag: dict | None = None) -> dict:
+def _row(out: Tensor) -> dict:
+  programs = _programs(out)
+  return {
+    "programs": programs,
+    "program_count": len(programs),
+    "contains_custom_kernel": _contains_op(out, Ops.CUSTOM),
+    "contains_contiguous": _contains_op(out, Ops.CONTIGUOUS),
+  }
+
+
+def _evaluate(population: str | None, dag: dict | None, schema: str,
+              include_reduce_output: bool) -> dict:
   pops = list(CONSTRUCTIONS) if population in (None, "all") else [population]
   populations = {}
   for pop in pops:
     fxn, contract_shape, base_shape = CONSTRUCTIONS[pop]
     base = Tensor.randn(*base_shape, dtype=dtypes.float16).realize()
-    rows = {}
-    for label, x in (("realized", base), ("lazy_add", base + base)):
-      if fxn is None:
-        rows[label] = None
-      else:
-        out = fxn(x)
-        programs = _programs(out)
-        rows[label] = {
-          "programs": programs,
-          "program_count": len(programs),
-          "contains_custom_kernel": _contains_op(out, Ops.CUSTOM),
-          "contains_contiguous": _contains_op(out, Ops.CONTIGUOUS),
-        }
+    rows = {label: None if fxn is None else _row(fxn(x))
+            for label, x in (("realized", base), ("lazy_add", base + base))}
     entry: dict = {"contract_shape": contract_shape, "baseline": rows}
     if fxn is None:
       entry["verdict"] = "NO_CONSTRUCTION"
@@ -182,26 +209,55 @@ def run(population: str | None = None, dag: dict | None = None) -> dict:
     ord_verdict, ord_reason = _verdict(rows, "reduction + dependent epilogue")
     entry["ordinary_verdict"], entry["ordinary_reason"] = ord_verdict, ord_reason
 
+    reduce_present = False
+    reduce_verdict, reduce_reason = None, None
+    if include_reduce_output:
+      reduce_fxn = REDUCE_OUTPUT_ARMS.get(pop)
+      if reduce_fxn is not None:
+        reduce_present = True
+        realized = _row(reduce_fxn(base))
+        lazy = _row(reduce_fxn(base + base))
+        reduce_verdict, reduce_reason = _verdict({"realized": realized},
+                                                 "REDUCE_OUTPUT identity input")
+        entry["reduce_output"] = {
+          "realized": realized,
+          "lazy_add": lazy,
+          "verdict": reduce_verdict,
+          "reason": reduce_reason,
+          "scope": ("REDUCE_OUTPUT evaluated on realized/production identity inputs only. "
+                    "The lazy_add row is recorded as evidence that non-identity inputs keep "
+                    "the ordinary fallback; it is not a pass condition for this arm."),
+        }
+
     opaque = OPAQUE_ARMS.get(pop)
     if opaque is None:
-      entry["verdict"], entry["reason"] = ord_verdict, ord_reason
-      entry["scope"] = ("ordinary arms only. ORDINARY_PASS does NOT clear custom-kernel-consumer or "
-                        "opaque-producer blockers; this population has no assessed opaque production "
-                        "producer (absence means not assessed, not plain).")
+      if reduce_present and reduce_verdict == "ORDINARY_PASS":
+        entry["verdict"] = "REDUCE_OUTPUT_PASS"
+        entry["reason"] = ("one replayable ordinary program via the REDUCE_OUTPUT primitive for "
+                           "realized/production identity inputs; no custom-program boundary, no "
+                           "CONTIGUOUS. Lazy/non-identity inputs retain the ordinary fallback.")
+        entry["scope"] = ("REDUCE_OUTPUT identity-input construction passes. This does NOT clear "
+                          "custom-kernel-consumer or opaque-producer blockers; this population has no "
+                          "assessed opaque production producer (absence means not assessed, not plain).")
+      else:
+        entry["verdict"], entry["reason"] = ord_verdict, ord_reason
+        entry["scope"] = ("ordinary arms only. ORDINARY_PASS does NOT clear custom-kernel-consumer or "
+                          "opaque-producer blockers; this population has no assessed opaque production "
+                          "producer (absence means not assessed, not plain).")
     else:
-      out = opaque(base)
-      programs = _programs(out)
-      op_row = {
-        "programs": programs,
-        "program_count": len(programs),
-        "contains_custom_kernel": _contains_op(out, Ops.CUSTOM),
-        "contains_contiguous": _contains_op(out, Ops.CONTIGUOUS),
-      }
+      op_row = _row(opaque(base))
       entry["opaque_producer"] = op_row
-      op_verdict, op_reason = _verdict({"opaque_producer": op_row}, "precompiled FUNCTION producer boundary")
+      op_verdict, op_reason = _verdict({"opaque_producer": op_row},
+                                       "precompiled FUNCTION producer boundary")
       entry["opaque_producer_verdict"], entry["opaque_producer_reason"] = op_verdict, op_reason
-      # The capability answer is the worst arm that ran.
-      if ord_verdict == "ORDINARY_PASS" and op_verdict != "ORDINARY_PASS":
+      if reduce_present and reduce_verdict == "ORDINARY_PASS":
+        # Reduce-output is an identity-input capability; an opaque producer still
+        # gates the population's real production form.
+        entry["verdict"] = "OPAQUE_PRODUCER_GAP"
+        entry["reason"] = ("REDUCE_OUTPUT construction is boundary-free for identity inputs, but the "
+                           "real production producer (block_output: MS(CONTIGUOUS(GETTUPLE(FUNCTION)))) "
+                           "is not: " + op_reason)
+      elif ord_verdict == "ORDINARY_PASS" and op_verdict != "ORDINARY_PASS":
         entry["verdict"] = "OPAQUE_PRODUCER_GAP"
         entry["reason"] = ("ordinary stand-in is boundary-free, but the real production producer "
                            "(block_output: MS(CONTIGUOUS(GETTUPLE(FUNCTION)))) is not: " + op_reason)
@@ -220,7 +276,17 @@ def run(population: str | None = None, dag: dict | None = None) -> dict:
       "dag_edge_count": len(dag["edges"]),
       "dag_name_digest": hashlib.sha256("\n".join(n["name"] for n in dag["nodes"]).encode()).hexdigest(),
     })
-  return {"schema": SCHEMA, "capture": capture, "populations": populations}
+  return {"schema": schema, "capture": capture, "populations": populations}
+
+
+def run_v3(population: str | None = None, dag: dict | None = None) -> dict:
+  """The pre-REDUCE_OUTPUT gate used by the closed norms/residual A/B harnesses."""
+  return _evaluate(population, dag, SCHEMA_V3, include_reduce_output=False)
+
+
+def run(population: str | None = None, dag: dict | None = None) -> dict:
+  """v4 gate: adds the REDUCE_OUTPUT arm for populations that now have it."""
+  return _evaluate(population, dag, SCHEMA, include_reduce_output=True)
 
 
 def main() -> None:
