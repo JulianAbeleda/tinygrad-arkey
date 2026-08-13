@@ -1,0 +1,43 @@
+{
+  "schema": "tinygrad.nv_reduce_output_fp32_qk_ab.reconfirm.v1",
+  "date": "2026-08-13",
+  "branch": "nvidia-bringup-20260731",
+  "commit": "77f8f4ebd",
+  "target": {
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "depth": 512,
+    "count": 32,
+    "max_context": 1024,
+    "reps": 8,
+    "settled_continuous": false,
+    "device": "NV sm_120",
+    "gpu": "RTX 5090"
+  },
+  "arms": {
+    "candidate": {
+      "median_ms_per_token": 5.166931296875,
+      "tok_per_s": 193.53847429804372,
+      "gates": {
+        "reduce_output_rmsnorm_promoted": true,
+        "reduce_output_ffn_rmsnorm_promoted": false,
+        "block_reduce_output_ffn_rmsnorm_promoted_all_false": true
+      }
+    },
+    "control": {
+      "median_ms_per_token": 5.272555828125,
+      "tok_per_s": 189.6613393196853,
+      "gates": {
+        "reduce_output_rmsnorm_promoted": false,
+        "reduce_output_ffn_rmsnorm_promoted": false
+      }
+    }
+  },
+  "bracket": {
+    "candidate_minus_control_us": 105.62453125000016,
+    "gain_tok_per_s": 3.877134978358413,
+    "token_stream_hash": "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+    "tokens_identical_across_arms": true
+  },
+  "verdict": "RECONFIRMED",
+  "note": "FFN-norm reduce-output site closed by default (77f8f4ebd). Production candidate arm is back above the booked ~192 tok/s reference (5.1987 ms = 192.36 tok/s at nv-fp32-qk-wall-bracket-20260812c.json) and beats the route-less control by ~105.6 us/token."
+}
