@@ -151,17 +151,24 @@ def _configure(model, arm: str) -> None:
   flags.  The route policy is now production-promoted on NV sm_120 (P2
   site-absorption booking, 882ce66a5), so the load path defaults the model
   and every block to promoted; the control arm must force the flags closed
-  or the closed-graph assertion fails before any arm runs."""
+  or the closed-graph assertion fails before any arm runs.  The FFN-norm site
+  has its own per-site knob (``_decode_reduce_output_ffn_rmsnorm_promoted``)
+  and is set explicitly on both arms so a production-default ffn promotion can
+  never leak into the control graph."""
   model._decode_direct_greedy_promoted = True
   if arm == "candidate":
     _require_candidate_callify_flags()
     model._decode_reduce_output_rmsnorm_promoted = True
+    model._decode_reduce_output_ffn_rmsnorm_promoted = True
     for block in model.blk:
       block._decode_reduce_output_rmsnorm_promoted = True
+      block._decode_reduce_output_ffn_rmsnorm_promoted = True
   elif arm == "control":
     model._decode_reduce_output_rmsnorm_promoted = False
+    model._decode_reduce_output_ffn_rmsnorm_promoted = False
     for block in model.blk:
       block._decode_reduce_output_rmsnorm_promoted = False
+      block._decode_reduce_output_ffn_rmsnorm_promoted = False
   else:
     raise ValueError(f"unknown arm {arm!r}")
 
@@ -171,8 +178,12 @@ def _gates(model) -> dict:
   return {
     "decode_direct_greedy_promoted": bool(getattr(model, "_decode_direct_greedy_promoted", False)),
     "reduce_output_rmsnorm_promoted": bool(getattr(model, "_decode_reduce_output_rmsnorm_promoted", False)),
+    "reduce_output_ffn_rmsnorm_promoted": bool(getattr(model, "_decode_reduce_output_ffn_rmsnorm_promoted", False)),
     "block_reduce_output_rmsnorm_promoted": [
       bool(getattr(block, "_decode_reduce_output_rmsnorm_promoted", False)) for block in model.blk
+    ] if getattr(model, "blk", None) else None,
+    "block_reduce_output_ffn_rmsnorm_promoted": [
+      bool(getattr(block, "_decode_reduce_output_ffn_rmsnorm_promoted", False)) for block in model.blk
     ] if getattr(model, "blk", None) else None,
   }
 
@@ -182,8 +193,12 @@ def _assert_control_closed(gates: dict) -> None:
   promoted = []
   if gates.get("reduce_output_rmsnorm_promoted"):
     promoted.append("model._decode_reduce_output_rmsnorm_promoted")
+  if gates.get("reduce_output_ffn_rmsnorm_promoted"):
+    promoted.append("model._decode_reduce_output_ffn_rmsnorm_promoted")
   for index, value in enumerate(gates.get("block_reduce_output_rmsnorm_promoted") or []):
     if value: promoted.append(f"block[{index}]._decode_reduce_output_rmsnorm_promoted")
+  for index, value in enumerate(gates.get("block_reduce_output_ffn_rmsnorm_promoted") or []):
+    if value: promoted.append(f"block[{index}]._decode_reduce_output_ffn_rmsnorm_promoted")
   if promoted:
     raise RuntimeError(f"control arm requires the closed model graph, observed promoted routes: {promoted}")
 
@@ -193,10 +208,14 @@ def _assert_candidate_configured(gates: dict) -> None:
   missing = []
   if not gates.get("reduce_output_rmsnorm_promoted"):
     missing.append("model._decode_reduce_output_rmsnorm_promoted")
+  if not gates.get("reduce_output_ffn_rmsnorm_promoted"):
+    missing.append("model._decode_reduce_output_ffn_rmsnorm_promoted")
   for index, value in enumerate(gates.get("block_reduce_output_rmsnorm_promoted") or []):
     if not value: missing.append(f"block[{index}]._decode_reduce_output_rmsnorm_promoted")
+  for index, value in enumerate(gates.get("block_reduce_output_ffn_rmsnorm_promoted") or []):
+    if not value: missing.append(f"block[{index}]._decode_reduce_output_ffn_rmsnorm_promoted")
   if missing:
-    raise RuntimeError(f"candidate arm requires _decode_reduce_output_rmsnorm_promoted on the model and every block: {missing}")
+    raise RuntimeError(f"candidate arm requires reduce-output promotion on the model and every block: {missing}")
 
 
 def _model(arm: str, model_path: str, max_context: int):
