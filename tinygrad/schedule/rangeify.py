@@ -420,24 +420,28 @@ def _reduce_derived_materialized_view(x:UOp) -> UOp|None:
   # axis without a REDUCE range and pm_reduce_simplify erases it into a copy.
   return red_buf.after(red_buf.store(u.reshape(red_buf.shape)))
 
-def _reduce_residual_sum_materialized_view(x:UOp) -> UOp|None:
-  """Materialize the residual ADD into a fresh output buffer.
+def _reduce_residual_sum_view(x:UOp) -> UOp|None:
+  """Bind the residual ADD without re-materializing the shared ``h``.
 
   The marker input spelling is ``ADD(after, after)`` (the decode block
-  residual ``h = x + attn_out``). Each operand is re-proven as an
-  invocation-owned AFTER (the same bounded precompiled/opaque proofs the
-  marker used at creation), then the exact residual-add elementwise kernel is
-  emitted into a fresh buffer so the fused body reads the same residual the
-  ordinary ffn-norm chain consumes.
+  residual ``h = x + attn_out``).  Re-prove both operands with the same
+  bounded invocation identity used at marker creation, then return the exact
+  residual value.  ``h`` already has a second consumer (the ffn_down
+  residual-add slot), so the scheduler materializes it once and this fused
+  body reads that same buffer.  Materializing a fresh ADD here would emit a
+  duplicate residual kernel and turn the 2->1 norm win into a net-zero swap.
   """
   original, expected = x, x.numel()
+  # The marker input arrives as MEMORY_SEMANTIC(ADD(...)) (the role wrapper the
+  # model's prefill_semantic adds), and may carry equal-span RESHAPE legs. Strip
+  # the same transparent legs the identity walk uses before requiring the ADD.
+  while x.op in {Ops.PERMUTE, Ops.MEMORY_SEMANTIC} or (x.op is Ops.RESHAPE and len(x.src) and x.src[0].numel() == expected):
+    if not len(x.src) or x.numel() != expected: return None
+    x = x.src[0]
   if x.op is not Ops.ADD or len(x.src) != 2: return None
-  from tinygrad.tensor import _bounded_after_output_identity, _bounded_opaque_after_output_identity
-  for s in x.src:
-    if s.numel() != expected: return None
-    if not (_bounded_after_output_identity(s) or _bounded_opaque_after_output_identity(s)): return None
-  add_buf = UOp.new_buffer(x.device, x.numel(), x.dtype)
-  return add_buf.after(add_buf.store(x.reshape(add_buf.shape)))
+  from tinygrad.tensor import _bounded_residual_sum_identity
+  if not _bounded_residual_sum_identity(x): return None
+  return original
 
 def _c6_marker(carrier:UOp) -> UOp|None:
   """Validate the C6 chain ``CONTIGUOUS(RESHAPE(MS(...)))`` and return its marker.
@@ -632,7 +636,7 @@ def lower_reduce_output_store(store:UOp, carrier:UOp|None=None, marker:UOp|None=
   if x_buf is None and spec.owned_contiguous_candidate: x_buf = _owned_precompiled_output_after_view(x)
   if x_buf is None and (spec.input_identity_at_marker or spec.owned_contiguous_candidate): x_buf = _reduce_output_m4_input_view(x)
   if x_buf is None and spec.reduce_input_at_marker: x_buf = _reduce_derived_materialized_view(x)
-  if x_buf is None and spec.residual_sum_at_marker: x_buf = _reduce_residual_sum_materialized_view(x)
+  if x_buf is None and spec.residual_sum_at_marker: x_buf = _reduce_residual_sum_view(x)
   # Fail closed for lazy/movement inputs. Returning None lets the marker
   # fallback rewrite below preserve the exact ordinary graph.
   if out_buf is None: reject("output_not_identity"); return None

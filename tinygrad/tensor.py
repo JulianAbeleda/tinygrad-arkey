@@ -128,20 +128,39 @@ def _bounded_reduce_output_identity(x: UOp) -> bool:
 def _bounded_residual_sum_identity(x: UOp) -> bool:
   """Accept ``ADD(a, b)`` as a bounded residual-sum identity.
 
-  The decode block residual ``h = x + attn_out`` feeds the ffn-norm. Neither
-  operand is movement-only, but both are invocation-owned producers
-  (precompiled function outputs, or the bounded AFTER/Opaque custom-kernel
-  outputs they become after callify). The sum is materialized at lowering so
-  the fused reduce-output body reads the residual-add kernel's own output
-  buffer, the exact residual the ordinary ffn-norm chain consumes.
+  The decode block residual ``h = x + attn_out`` feeds the ffn-norm. Each
+  operand is an invocation-owned producer: the block-input precompiled output
+  (the GETTUPLE spelling at creation, a PARAM after callify) and the attention
+  output (a custom-kernel AFTER on the flash route, a SDPA REDUCE on CPU). The
+  marker binds the same residual value at lowering: the ffn_down residual slot
+  is a second consumer, so the scheduler materializes ``h`` once and the fused
+  body reads that shared buffer rather than duplicating the residual ADD.
   """
   if x.op is not Ops.ADD or len(x.src) != 2: return False
   expected = x.numel()
-  def owned(s: UOp) -> bool:
-    return (s.numel() == expected and
-            (s.has_precompiled_output_identity() or _bounded_after_output_identity(s)
-             or _bounded_opaque_after_output_identity(s)))
-  return all(owned(s) for s in x.src)
+  if x.src[0] is x.src[1]: return False
+  return all(s.numel() == expected and _bounded_residual_operand_identity(s) for s in x.src)
+
+def _bounded_residual_operand_identity(s: UOp) -> bool:
+  """One operand of the decode residual ``h = x + attn_out`` is invocation-owned:
+  the block-input function parameter after callify, a precompiled function
+  output (the GETTUPLE spelling at creation), a bounded custom-kernel AFTER, or
+  a compute node (the SDPA/flash attention output REDUCE) the scheduler realizes
+  within the same invocation.  A materialized BUFFER/SLICE, movement-only views,
+  and constants are excluded so a lazy ``x+x`` or ``x+1`` never becomes a
+  residual-sum identity; the caller's numel guard also rejects scalar constants
+  broadcast into the residual add."""
+  u = s
+  # RESHAPE carries its shape descriptor as a second src, so walk by src[0] with a
+  # truthy src-length guard (same spelling as _plain_identity_buffer_view).
+  while u.op in {Ops.RESHAPE, Ops.MEMORY_SEMANTIC} and len(u.src) and u.src[0].numel() == u.numel():
+    u = u.src[0]
+  if u.op is Ops.PARAM or u.has_precompiled_output_identity(): return True
+  if _bounded_after_output_identity(u) or _bounded_opaque_after_output_identity(u): return True
+  # A compute node (REDUCE/MUL/ADD/CAST/...) is realized within this call;
+  # materialized leaves, movement legs, and constants are not invocation-owned producers.
+  return u.op not in {Ops.CONST, Ops.BUFFER, Ops.SLICE, Ops.RESHAPE, Ops.PERMUTE, Ops.EXPAND,
+                      Ops.SHRINK, Ops.PAD, Ops.FLIP, Ops.COPY, Ops.CONTIGUOUS, Ops.BIND, Ops.MEMORY_SEMANTIC}
 
 def _get_winograd_matcols(mat, dims:int, shp:tuple[sint, ...], dtype:DType) -> list[list[Tensor]]:
   return [[Tensor.cat(*[Tensor.full(shp[:dim] + (1,) + shp[dim+1:], float(m[k]), dtype=dtype, buffer=False) for m in mat], dim=dim)

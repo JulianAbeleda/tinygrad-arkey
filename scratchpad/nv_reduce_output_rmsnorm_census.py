@@ -50,6 +50,13 @@ def _program_counts(census: dict) -> dict[str, int]:
   return dict(collections.Counter(names))
 
 
+def _marker_row(x) -> dict:
+  """Record the pre-callify marker input spelling observed at a model call site."""
+  return {"op": x.uop.op.name, "base_op": x.uop.base.op.name, "shape": list(x.shape),
+          "dtype": str(x.dtype), "buffer_identity": bool(x.uop.has_buffer_identity()),
+          "precompiled_output_identity": bool(x.uop.has_precompiled_output_identity())}
+
+
 def _capture(args, promoted: bool, callify: bool = True, ffn_promoted: bool|None = None) -> dict:
   from dataclasses import replace
   from tinygrad.llm.generate import load_model_and_tokenizer
@@ -78,11 +85,22 @@ def _capture(args, promoted: bool, callify: bool = True, ffn_promoted: bool|None
     original_marker = model_module._decode_reduce_output_rmsnorm
     def observed_marker(norm, x, promoted):
       if promoted:
-        marker_inputs.append({"op": x.uop.op.name, "base_op": x.uop.base.op.name, "shape": list(x.shape),
-                              "dtype": str(x.dtype), "buffer_identity": bool(x.uop.has_buffer_identity()),
-                              "precompiled_output_identity": bool(x.uop.has_precompiled_output_identity())})
+        marker_inputs.append(_marker_row(x))
       return original_marker(norm, x, promoted)
+    original_fp16_marker = model_module._decode_reduce_output_rmsnorm_fp16_consumer
+    def observed_fp16_marker(norm, x, promoted):
+      marked = original_fp16_marker(norm, x, promoted)
+      if promoted:
+        row = _marker_row(x)
+        row["marker_op"] = marked.uop.op.name
+        row["input_identity_at_marker"] = bool(marked.uop.arg.input_identity_at_marker)
+        row["owned_contiguous_candidate"] = bool(marked.uop.arg.owned_contiguous_candidate)
+        row["reduce_input_at_marker"] = bool(marked.uop.arg.reduce_input_at_marker)
+        row["residual_sum_at_marker"] = bool(marked.uop.arg.residual_sum_at_marker)
+        marker_inputs.append(row)
+      return marked
     model_module._decode_reduce_output_rmsnorm = observed_marker
+    model_module._decode_reduce_output_rmsnorm_fp16_consumer = observed_fp16_marker
   ids = (tokenizer.prefix() if hasattr(tokenizer, "prefix") else []) + tokenizer.encode("the quick brown fox jumps. "*800)
   from tinygrad.llm.reduce_output_trace import REDUCE_OUTPUT_TRACE, reset_reduce_output_trace, reduce_output_trace_snapshot
   reset_reduce_output_trace()

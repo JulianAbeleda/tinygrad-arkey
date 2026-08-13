@@ -451,3 +451,19 @@ def test_residual_sum_fails_closed_for_non_identity_operand():
   out = _attention(runtime_scratch(marked).reshape(1, 4096))
   with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
     assert "reduce_output_rmsnorm_1_4096" not in _names(out)
+
+
+def test_residual_sum_view_binds_shared_residual_without_materializing():
+  """The lowering-time residual proof returns the exact marker input rather than
+  emitting a fresh ADD store.  ``h`` is shared with the ffn_down residual slot,
+  so the scheduler materializes it once; a non-residual ADD still fails closed."""
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  from tinygrad.schedule.rangeify import _reduce_residual_sum_view
+  x = Tensor(_opaque_gemv_after(4096), device="CPU")
+  attn_out = Tensor(_opaque_gemv_after(4096), device="CPU")
+  h = x + attn_out
+  marked_input = runtime_scratch(h).uop
+  assert marked_input.op is Ops.MEMORY_SEMANTIC
+  assert _reduce_residual_sum_view(marked_input) is marked_input
+  assert _reduce_residual_sum_view(runtime_scratch(x + 1).uop) is None
+  assert _reduce_residual_sum_view(runtime_scratch(x + x).uop) is None
