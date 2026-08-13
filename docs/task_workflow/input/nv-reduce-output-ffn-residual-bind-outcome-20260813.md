@@ -2,7 +2,8 @@
 
 Date: 2026-08-13
 Branch: `nvidia-bringup-20260731` (HEAD `6c224e7c2`)
-Status: **CPU measurement record. No GPU arm, no production policy change.**
+Status: **CPU + GPU measured. GPU wall bracket NOT_PROMOTED; no production
+policy change.**
 Closes the residual-identity blocker for the FFN-norm (`1_4096`) reduce-output
 site and accounts for the full `ffn-before -> promoted` census delta, including
 the extra `-34` that a strict site scope would otherwise flag as unexplained.
@@ -68,14 +69,45 @@ It is CPU-only: on the GPU the o-proj and ffn_down are custom Q4K/Q6K GEMV
 kernels and do not fuse this way, so the GPU census will show the ffn-site
 -34 without the CPU GEMV shift.
 
+## GPU A/B result (RTX 5090, d512)
+
+The GPU admission was blocked by the rangeify m4 input-view proof: the
+absorbed epi-resadd ffn spelling is `MEMORY_SEMANTIC(RESHAPE(AFTER(PARAM,
+CALL)))`, and RESHAPE carries its shape descriptor as a second source.  The
+proof rejected any two-source RESHAPE leg as an arity mismatch, so the
+absorbed blocks never admitted (`input_proof_missing`).  Commit `9ed605f46`
+walks the RESHAPE leg by `src[0]` and re-proves the bounded opaque AFTER.
+
+| arm | fused bodies | C6 | q | k | kernels | norms kernels |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| control | 0 | 0 | 0 | 0 | 757 | 328 |
+| candidate | 127 | 55 | 36 | 36 | 558 | 2 |
+
+Net program delta is **-199**; the norms population drops 328 -> 2 (only the
+output norm stays ordinary).  The 55 C6 bodies are 36 ffn + 18 attn + the
+final norm.  Full fp32 logits SHA-256 is bitwise identical to control
+(`4ff1b9eaf5308a4e0d44d8ab24b9ca23bc2831c430654b0f6f0724cc0ff84e69`).
+
+Reverse wall bracket (control / candidate / control, 5 reps x 32 tokens):
+
+| arm | median ms/token | tok/s |
+| --- | ---: | ---: |
+| control A | 5.2469 | 190.57 |
+| candidate | 5.2502 | 190.47 |
+| control B | 5.2749 | 189.58 |
+| control bracket median | 5.2609 | 190.08 |
+
+Candidate is **+10.68 us/token faster than the bracket median but -3.30
+us/token slower than control A**, well inside the 50 us/token promotion
+threshold and within run-to-run noise.  Verdict **NO-GO / NOT_PROMOTED**: the
+route is correctness-clean and removes 199 kernels, but at d512 the fused
+bodies carry real per-launch cost that offsets the removed cheap ordinary norm
+kernels, so wall-clock is flat.
+
 ## Gates remaining
 
-The GPU gate in the per-site absorption scope
-(`nv-reduce-output-site-absorption-scope-20260812.md` section 5) is the next
-authority: single-layer real-token A/B at d512 under the GPU bench lock, exact
-logits/token SHA, census contract, reverse wall bracket, then full A/B. The
-census contract now records `explained_gemv_shift` so the o-proj/ffn_down
-fusion is explicit rather than a silent unrelated-count change.
+None at this stage. The per-site GPU gate above completed; the route stays
+closed by default because the wall bracket did not promote.
 
 ## Evidence
 
