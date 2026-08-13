@@ -607,9 +607,10 @@ def _expr_tree(u):
 def _multi_row_body_association(rows, dim, eps, x_dtype, w_dtype):
   """Emit the cooperative body and extract the association it actually encodes:
   the per-lane partial-chain (P, S, t_stride, s_stride) and row stride, the
-  block-wide partial slot layout (rows x P), and the serial combine chain over
-  the row's own P partials.  The reconstruction below is driven by these, so a
-  drift in the emitter changes the extracted chain and breaks the bitwise gate.
+  per-block partial slot layout (P, one block owns its row), and the serial
+  combine chain over the row's own P partials.  The reconstruction below is
+  driven by these, so a drift in the emitter changes the extracted chain and
+  breaks the bitwise gate.
   """
   from tinygrad.codegen.late.reduce_output import emit_reduce_output
   from tinygrad.uop.ops import ReduceOutputSpec, UOp, AxisType, Ops
@@ -620,8 +621,9 @@ def _multi_row_body_association(rows, dim, eps, x_dtype, w_dtype):
   body = emit_reduce_output(spec, x_dtype, w_dtype)(out, x, w)
   topo = body.toposort()
   lane_range = next(u for u in topo if u.op is Ops.RANGE and u.arg == (0, AxisType.LOCAL))
-  warp_range = next(u for u in topo if u.op is Ops.RANGE and u.arg == (1, AxisType.LOCAL))
-  # Per-warp partial-chain reduce: the x read whose index tree contains the
+  row_range = next(u for u in topo if u.op is Ops.RANGE and u.arg == (0, AxisType.GLOBAL))
+  assert row_range.src[0].arg == rows, f"row range must span the rows, got {row_range.src[0].arg}"
+  # Per-row partial-chain reduce: the x read whose index tree contains the
   # REDUCE range, with the (P, S, t_stride, s_stride) association in its MULs.
   x_idx = [u for u in topo if u.op is Ops.INDEX and u.src[0] is x]
   red_x = [u for u in x_idx if any(v.op is Ops.RANGE and v.arg == (2, AxisType.REDUCE) for v in _expr_tree(u.src[1]))]
@@ -638,28 +640,27 @@ def _multi_row_body_association(rows, dim, eps, x_dtype, w_dtype):
   t_mul = [u for u in tree if u.op is Ops.MUL and mods[0] in u.src]
   assert len(t_mul) == 1, "partial lane must scale the element stride"
   t_stride = next(u.arg for u in t_mul[0].src if u.op is Ops.CONST)
-  warp_mul = [u for u in tree if u.op is Ops.MUL and warp_range in u.src]
-  assert len(warp_mul) == 1 and next(u.arg for u in warp_mul[0].src if u.op is Ops.CONST) == dim
+  row_mul = [u for u in tree if u.op is Ops.MUL and row_range in u.src]
+  assert len(row_mul) == 1 and next(u.arg for u in row_mul[0].src if u.op is Ops.CONST) == dim
   # Epilogue weight index must be the row-local element (multi-row shares a (dim,) weight).
   w_idx = [u for u in topo if u.op is Ops.INDEX and u.src[0] is w]
   assert len(w_idx) == 1
   widx = w_idx[0].src[1]
   assert (widx.op is Ops.ADD and widx.src[0].op is Ops.RANGE and widx.src[1].op is Ops.MUL and
           widx.src[1].src[0].op is Ops.RANGE), "multi-row weight index must be row-local laneid + epi*lane"
-  # Block-wide partial slots: rows x P, published at warp*P + t and read back
-  # as a serial ADD chain in t order (per-row isolation, no cross-row combine).
+  # Per-block partial slots: P (the block owns its row), read back as a serial
+  # ADD chain in t order (per-row isolation, no cross-row combine).
   smem_after = [u for u in topo if u.op is Ops.AFTER and len(u.src) == 2 and u.src[0].op is Ops.DEFINE_LOCAL]
   assert len(smem_after) == 1
   smem = smem_after[0].src[0]
-  assert smem.shape == (rows * P,), f"partial slots must be rows x P, got {smem.shape}"
+  assert smem.shape == (P,), f"partial slots must be P per row block, got {smem.shape}"
   reads = [u for u in topo if u.op is Ops.INDEX and len(u.src) == 2 and u.src[0] is smem_after[0]]
   assert len(reads) == P, "combine must read exactly the row's P partials"
   read_t = []
   for rd in reads:
     ridx = rd.src[1]
-    assert ridx.op is Ops.ADD and ridx.src[0].op is Ops.MUL and ridx.src[0].src[0] is warp_range
-    assert ridx.src[0].src[1].arg == P and ridx.src[1].op is Ops.CONST
-    read_t.append(ridx.src[1].arg)
+    assert ridx.op is Ops.CONST, "combine read must be a direct partial index"
+    read_t.append(ridx.arg)
   assert sorted(read_t) == list(range(P)), "combine must read partials 0..P-1 in order"
   add_chain = [u for u in topo if u.op is Ops.ADD and any(rd in u.src for rd in reads)]
   assert len(add_chain) == P, "combine must be a serial chain over the P partials"
@@ -749,8 +750,8 @@ def test_multi_row_fused_body_matches_ordinary_bitwise():
 
 
 def test_multi_row_scale_isolation_no_cross_row_combine():
-  """Row-mode must never combine rows: each warp's scale depends only on its own
-  row.  Rows span wildly different magnitudes (10**row), so a serial cross-row
+  """Row-mode must never combine rows: each row block's scale depends only on
+  its own row.  Rows span wildly different magnitudes (10**row), so a serial cross-row
   partial chain (the single-row combine pattern) cannot reproduce the ordinary
   per-row result while the isolated per-row body must, within fp32 association
   tolerance (the NV partial-chain order differs from the CPU plain chain in the
@@ -779,9 +780,10 @@ def test_multi_row_scale_isolation_no_cross_row_combine():
     scale = np.float32(1.0 / np.sqrt(np.float32(np.float32(running / dim) + 1e-6)))
     corrupted[r] = (x_np[r] * scale).astype(np.float32) * w_np
   assert not np.allclose(corrupted, ordinary, rtol=1e-3, atol=1e-4), "cross-row combine must not match ordinary"
-  # The structural isolation contract the body must keep: rows*P partial slots,
-  # exactly P reads of the row's own partials, and a serial combine chain only
-  # over those reads (no cross-row partials).
+  # The structural isolation contract the body must keep: P partial slots in
+  # the row's own block (each block owns one row, so no cross-row partials can
+  # exist), exactly P reads of the row's own partials, and a serial combine
+  # chain only over those reads.
   from tinygrad.codegen.late.reduce_output import emit_reduce_output
   from tinygrad.uop.ops import ReduceOutputSpec, UOp, AxisType
   P = _NV_ASSOC[(rows, dim)][0]
@@ -791,9 +793,9 @@ def test_multi_row_scale_isolation_no_cross_row_combine():
   topo = body.toposort()
   smem_after = [u for u in topo if u.op is Ops.AFTER and len(u.src) == 2 and u.src[0].op is Ops.DEFINE_LOCAL]
   assert len(smem_after) == 1
-  assert smem_after[0].src[0].shape == (rows * P,)
+  assert smem_after[0].src[0].shape == (P,)
   reads = [u for u in topo if u.op is Ops.INDEX and len(u.src) == 2 and u.src[0] is smem_after[0]]
-  assert len(reads) == P and sorted(u.src[1].src[1].arg for u in reads) == list(range(P))
+  assert len(reads) == P and sorted(u.src[1].arg for u in reads) == list(range(P))
   assert len([u for u in topo if u.op is Ops.ADD and any(rd in u.src for rd in reads)]) == P
 
 
@@ -830,9 +832,10 @@ def test_multi_row_fail_closed_combinations():
 
 
 def test_multi_row_4096_dim_body_structure():
-  """The marker admits multi-row dim 4096 (one warp per row, per_lane=128); the
-  emitter must cover it with the same row-mode body (full-row chain, one smem
-  readback, no cross-warp combine)."""
+  """The marker admits multi-row dim 4096 (per_lane=128, no NV partial-chain
+  association).  Stage-3 P1 made the row index GLOBAL for ALL multi-row shapes,
+  so this body is one 32-lane block per row with the full-row serial chain, a
+  single (1,) smem readback slot in the block, and no cross-row combine."""
   from tinygrad.codegen.late.reduce_output import emit_reduce_output
   from tinygrad.uop.ops import ReduceOutputSpec, UOp, AxisType
   rows, dim = 32, 4096
@@ -842,7 +845,11 @@ def test_multi_row_4096_dim_body_structure():
   topo = body.toposort()
   assert body.arg.name == "reduce_output_rmsnorm_32_4096"
   assert sum(u.op is Ops.BARRIER for u in topo) == 1
+  row_range = next(u for u in topo if u.op is Ops.RANGE and u.arg == (0, AxisType.GLOBAL))
+  assert row_range.src[0].arg == rows, "multi-row 4096 body must be one block per row"
   smem_after = [u for u in topo if u.op is Ops.AFTER and len(u.src) == 2 and u.src[0].op is Ops.DEFINE_LOCAL]
+  assert smem_after[0].src[0].shape == (1,), "else-branch row mode must use one per-block readback slot"
   reads = [u for u in topo if u.op is Ops.INDEX and len(u.src) == 2 and u.src[0] is smem_after[0]]
-  assert len(reads) == 1 and not any(u.op is Ops.ADD and reads[0] in u.src for u in topo)
+  assert len(reads) == 1 and reads[0].src[1].arg == 0
+  assert not any(u.op is Ops.ADD and reads[0] in u.src for u in topo)
   assert any(u.op is Ops.RANGE and u.src[0].op is Ops.CONST and u.src[0].arg == 4096 and u.arg == (2, AxisType.REDUCE) for u in topo)

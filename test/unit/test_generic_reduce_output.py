@@ -43,13 +43,16 @@ LEGACY_BODY_DIGEST = "23264243d010bc91916ec4ed071a42c3e3ee4004d697b1f215d5482c78
 # Tensor._semantic_reduce_output_rmsnorm.
 PER_SITE_SPELLINGS = {(32, 128): (32, 4), (8, 128): (8, 4), (1, 4096): (16, 8)}
 
-# sha256(repr(body)) pins for the multi-row q/k bodies.  The site-absorption
-# scope keeps the shipped recipe digests byte-identical: these digests are
-# the multi-row analogue of LEGACY_BODY_DIGEST (the ordinary r_8_16_8 /
-# r_2_8_4_4_16 partial-chain association, not a plain per-row serial chain).
+# sha256(repr(body)) pins for the multi-row q/k bodies.  Stage-3 P1 reworked
+# the multi-row launch to the per-row-grid geometry (grid = rows, block = 32
+# lanes, GLOBAL row range), so these digests now pin that geometry along with
+# the ordinary r_8_16_8 / r_2_8_4_4_16 partial-chain association (not a plain
+# per-row serial chain).  The bitwise association itself stays pinned by the
+# per-row (P, S, t_stride, s_stride) association assertions in
+# test/unit/test_reduce_output_rmsnorm.py, not by this repr digest.
 MULTI_ROW_BODY_DIGESTS = {
-  (32, 128): "98af9f89b54e303cba31ee3cb5823094dd7179b901f32d570f77367b1365c064",
-  (8, 128): "ddae2133da2e3ad9632aa828a9b048c37d7b6d574a067cc30c82ebd5741c22e3",
+  (32, 128): "5c50bae49fece748112aef9db971bc75652d65d9d440a7c786ca38a50e74d575",
+  (8, 128): "50acf004de4594050a749dee665901a8ad620f0a36cbf0c04a259604f2bd09c2",
 }
 
 
@@ -406,10 +409,11 @@ def test_per_site_bodies_compile_to_one_cpu_program():
 
 
 def test_multi_row_recipe_digests_are_pinned():
-  """The multi-row q/k bodies keep the NV ordinary partial-chain association
+  """The multi-row q/k bodies pin the per-row-grid geometry (grid = rows,
+  block = 32 lanes) with the NV ordinary partial-chain association
   byte-identical (r_8_16_8 / r_2_8_4_4_16 tiling).  A drift in the emitted
-  association breaks these pins exactly like LEGACY_BODY_DIGEST breaks for
-  the single-row body."""
+  geometry or association breaks these pins exactly like LEGACY_BODY_DIGEST
+  breaks for the single-row body."""
   from tinygrad.codegen.late.reduce_output import emit_reduce_output
   for (rows, dim), digest in MULTI_ROW_BODY_DIGESTS.items():
     spec = ReduceOutputSpec(rows, dim, 1e-6, dtypes.float16, warps=rows, lanes=32, per_lane=dim // 32)
@@ -417,6 +421,30 @@ def test_multi_row_recipe_digests_are_pinned():
     body = emit_reduce_output(spec, dtypes.float16, dtypes.float16)(out, x, w)
     assert body.arg.name == f"reduce_output_rmsnorm_{rows}_{dim}"
     assert hashlib.sha256(repr(body).encode()).hexdigest() == digest, f"{(rows, dim)} body digest moved"
+
+
+def test_multi_row_geometry_pin_per_row_grid():
+  """Stage-3 P1 geometry pin: each multi-row body is one block per row -- the
+  row index is a GLOBAL range with extent == spec.rows (grid = rows), the
+  block is exactly 32 LOCAL lanes, exactly one barrier, and the shared-memory
+  partial slots are P (the block owns its row, so rows*P is gone)."""
+  from tinygrad.codegen.late.reduce_output import emit_reduce_output, _NV_MULTI_ROW_ASSOC
+  for (rows, dim), (warps, per_lane) in PER_SITE_SPELLINGS.items():
+    if rows == 1: continue
+    P = _NV_MULTI_ROW_ASSOC[(rows, dim)][0]
+    spec = ReduceOutputSpec(rows, dim, 1e-6, dtypes.float16, warps=rows, lanes=32, per_lane=per_lane)
+    out, x, w = (UOp.placeholder((rows * dim,), dtypes.float16, i) for i in range(3))
+    body = emit_reduce_output(spec, dtypes.float16, dtypes.float16)(out, x, w)
+    topo = body.toposort()
+    global_rows = [u for u in topo if u.op is Ops.RANGE and u.arg == (0, AxisType.GLOBAL)]
+    assert len(global_rows) == 1, f"{(rows, dim)} must have exactly one GLOBAL row range"
+    assert global_rows[0].src[0].arg == rows, f"{(rows, dim)} GLOBAL extent must equal rows"
+    local_lanes = [u for u in topo if u.op is Ops.RANGE and u.arg == (0, AxisType.LOCAL)]
+    assert len(local_lanes) == 1 and local_lanes[0].src[0].arg == 32, f"{(rows, dim)} block must be 32 lanes"
+    assert sum(u.op is Ops.BARRIER for u in topo) == 1, f"{(rows, dim)} must have exactly one barrier"
+    smem_after = [u for u in topo if u.op is Ops.AFTER and len(u.src) == 2 and u.src[0].op is Ops.DEFINE_LOCAL]
+    assert len(smem_after) == 1 and smem_after[0].src[0].shape == (P,), \
+      f"{(rows, dim)} shared-memory slots must be P, got {smem_after[0].src[0].shape}"
 
 
 def test_lazy_weight_marker_is_not_body_free():

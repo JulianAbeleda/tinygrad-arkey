@@ -1,6 +1,7 @@
 # all of symbolic lives here now
 import math, struct
 from collections import defaultdict
+from enum import Enum
 from tinygrad.uop.ops import Ops, PatternMatcher, UPat, UOp, GroupOp, exec_alu
 from tinygrad.dtype import ConstType, dtypes, PtrDType, can_lossless_cast, Invalid
 from tinygrad.helpers import partition, all_same, prod, flatten, get_single_element, unwrap, IMAGE, dedup
@@ -223,13 +224,30 @@ gep_pushing = PatternMatcher([
   (UPat(Ops.WMMA, name="wmma").f(Ops.GEP, name="gep"), gep_through_wmma),
 ])
 
+def _commutative_key(u:UOp) -> tuple:
+  """Total-order key for commutative index canonicalization.
+
+  RANGE args may mix 2-tuples (GLOBAL) with 3-tuples (split LOCAL/WARP) once
+  pm_split_ranges has split part of a body (the per-row-grid reduce-output
+  body splits its 32-lane LOCAL range while its GLOBAL row range stays
+  unsplit).  Comparing those mixed tuples directly raises int-vs-AxisType;
+  normalizing enums to their values makes every key comparable without
+  changing the relative order of any pair the direct comparison could already
+  order (enum comparison is value comparison)."""
+  def norm(v) -> tuple:
+    if isinstance(v, UOp): return (v.op.value, norm(v.arg), v.dtype, tuple(norm(s) for s in v.src))
+    if isinstance(v, tuple): return tuple(norm(x) for x in v)
+    if isinstance(v, Enum): return v.value
+    return v
+  return norm(u.tuplize)
+
 commutative = PatternMatcher([
   # ** COMMUTATIVE flipping (only for index) **
   # NOTE: this can break merging vector math by only flipping some of them
   (UPat(GroupOp.Commutative, dtype=dtypes.weakint, name='x'), lambda x:
-    x.replace(src=x.src[::-1]) if x.src[1].tuplize < x.src[0].tuplize and not x.src[0].tuplize < x.src[1].tuplize else None),
+    x.replace(src=x.src[::-1]) if _commutative_key(x.src[1]) < _commutative_key(x.src[0]) and
+                                  not _commutative_key(x.src[0]) < _commutative_key(x.src[1]) else None),
 ])
-
 symbolic = symbolic_simple+commutative+PatternMatcher([
   # ** boolean algebra **
   # TODO: make a more general or folder like simplify_valid
