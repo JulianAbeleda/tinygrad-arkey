@@ -16,8 +16,8 @@ from extra.llm_research.decode.q4k_ffn_down_mmvq_profile_analysis import analyze
 from extra.llm_research.decode.ffn_q8_cooperative_producer import pack_q8_1_private, q4_q8_ffn_down_row_reference
 from extra.llm_research.decode.q4k_ffn_down_mmvq import (
   BLOCKS_PER_WARP,K,Q4_BLOCKS,Q8_PAYLOAD_WORDS,Q8_WORDS,ROWS,SUB_BLOCKS,Q4KFFNDownMMVQAdmission,
-  emit_four_warp_direct,emit_four_warp_fp16_direct,emit_q8_provider,owned_boundary_topology,ownership_coordinates,
-  q4k_ffn_down_mmvq_call)
+  emit_ffn_w1w3_q8_scalar_packet,emit_four_warp_direct,emit_four_warp_fp16_direct,emit_q8_provider,
+  owned_boundary_topology,ownership_coordinates,q4k_ffn_down_mmvq_call,q4k_ffn_down_mmvq_scalar_packet_call)
 from extra.llm_research.decode.route_class_numerics import _make_q4k_words
 from extra.llm_research.layout import q4_k_reference
 
@@ -39,6 +39,13 @@ def test_production_call_is_closed_without_explicit_admission():
   try: Q4KFFNDownMMVQAdmission(0,owned_input_boundary=1)
   except ValueError: pass
   else: raise AssertionError("owned boundary admission must require an explicit bool")
+  try: Q4KFFNDownMMVQAdmission(0,scalar_q8_packet=1)
+  except ValueError: pass
+  else: raise AssertionError("scalar_q8_packet admission must require an explicit bool")
+  try: Q4KFFNDownMMVQAdmission(0,fp16_fma=True,scalar_q8_packet=True)
+  except ValueError: pass
+  else: raise AssertionError("scalar_q8_packet and fp16_fma must be mutually exclusive")
+  assert q4k_ffn_down_mmvq_scalar_packet_call(None,None,None,None,None,None) is None
 
 
 def test_default_decode_route_import_is_strictly_behind_explicit_lease_guard():
@@ -96,6 +103,24 @@ def test_provider_is_one_production_shape_q8_kernel():
   assert program.arg.local_size == (256,1,1)
   assert "q8_1_llama_provider_12288" in source
   assert Q8_WORDS == 3456
+
+
+def test_scalar_packet_producer_renders_1024_threads_and_packed_q8_abi():
+  gate_words=ROWS*Q4_BLOCKS*36
+  ast=emit_ffn_w1w3_q8_scalar_packet()(
+    UOp.placeholder((Q8_WORDS,),dtypes.uint32,0),
+    UOp.placeholder((gate_words,),dtypes.uint32,1),
+    UOp.placeholder((gate_words,),dtypes.uint32,2),
+    UOp.placeholder((K,),dtypes.float16,3))
+  program,source,ptx=_render(ast,"q4k_ffn_down_scalar_packet_producer_v1")
+  assert program.arg.global_size == (384,1,1)
+  assert program.arg.local_size == (1024,1,1)
+  assert "ffn_w1w3_q8_scalar_packet_12288_4096" in source
+  # One 32-row Q8_1 packet per CTA: 32 warps publish one fp16 GLU result each,
+  # then warp zero quantizes after the CTA barrier. The staging array is LOCAL
+  # (shared) memory, never a per-thread stack spill.
+  assert "__syncthreads" in source and ".local " not in ptx
+  assert "st.global" in ptx and "shfl.sync" in ptx
 
 
 def test_owned_fp32_boundary_has_one_to_one_topology_and_explicit_fp16_rounding():

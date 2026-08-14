@@ -590,6 +590,18 @@ class FFNBlock:
     if hasattr(self, "ffn_gateup"):  # B1 fused gate/up
       gate, up = self.ffn_gateup(x)
       return self.ffn_down(_prefill_semantic(_prefill, prefill_activation, gate.silu().contiguous()) * up)
+    # Research-only scalar-packet Q8 fold: one packed W1/W3 producer plus the
+    # four-warp Q4/Q8 DP4A resadd consumer replaces the fused16 producer and the
+    # installed Q4-down resadd kernel. The admission lives on ffn_down; every
+    # gate/up/down shape miss returns None and falls through unchanged.
+    _scalar_q8_admission = getattr(self.ffn_down, "_q4k_ffn_down_mmvq_admission", None)
+    if (not _prefill and getattr(_scalar_q8_admission, "scalar_q8_packet", False)
+        and isinstance(getattr(self, "ffn_gate", None), Q4KPrimitiveLinear)
+        and isinstance(getattr(self, "ffn_up", None), Q4KPrimitiveLinear)
+        and isinstance(getattr(self, "ffn_down", None), Q4KPrimitiveLinear)):
+      from tinygrad.llm.q4k_ffn_down_mmvq import q4k_ffn_down_mmvq_scalar_packet_call
+      folded = q4k_ffn_down_mmvq_scalar_packet_call(self.ffn_gate, self.ffn_up, self.ffn_down, x, residual, _scalar_q8_admission)
+      if folded is not None: return folded
     if not _prefill and getattr(self, "_decode_q4k_w1w3_fusion_promoted", False):
       _fg, _fu = getattr(self, "ffn_gate", None), getattr(self, "ffn_up", None)
       if isinstance(_fg, Q4KPrimitiveLinear) and isinstance(_fu, Q4KPrimitiveLinear):

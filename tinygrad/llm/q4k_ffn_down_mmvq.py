@@ -13,9 +13,10 @@ from typing import Any
 
 from tinygrad import Tensor, dtypes
 from tinygrad.codegen.late.int8_dot import int8x4_dot
-from tinygrad.codegen.late.warp_reduce import _staged_shfl, _warp_reduce_sum_staged, warp_reduce_max
+from tinygrad.codegen.late.warp_reduce import WARP, _staged_shfl, _warp_reduce_sum_staged, warp_reduce_max
 from tinygrad.dtype import AddrSpace
-from tinygrad.llm.decode_kernels import Q4K_WORDS_PER_BLOCK, _f16_word, _q4k_block_dot_packed_load
+from tinygrad.llm.decode_kernels import (LanePartition, Q4KGateUpLaneMap, Q4K_WORDS_PER_BLOCK, _f16_word,
+  _q4k_block_dot_packed_load, _silu_uop)
 from tinygrad.llm.kernel_program import (DeclaredTypedOutput, KernelProgram, KernelProgramProvenance,
   OutputSpec, ResidualViewRequest, TypedLayout, TypedViewRequest, execute_research_program)
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
@@ -33,13 +34,17 @@ class Q4KFFNDownMMVQAdmission:
   block_index: int
   owned_input_boundary: bool = False
   fp16_fma: bool = False
+  scalar_q8_packet: bool = False
   def __post_init__(self):
     if not isinstance(self.block_index,int) or isinstance(self.block_index,bool) or self.block_index < 0:
       raise ValueError("Q4_K FFN-down MMVQ block index must be a non-negative integer")
     if not isinstance(self.owned_input_boundary,bool): raise ValueError("owned_input_boundary must be bool")
     if not isinstance(self.fp16_fma,bool): raise ValueError("fp16_fma must be bool")
+    if not isinstance(self.scalar_q8_packet,bool): raise ValueError("scalar_q8_packet must be bool")
     if self.owned_input_boundary and self.fp16_fma:
       raise ValueError("owned_input_boundary and fp16_fma are mutually exclusive research spellings")
+    if self.scalar_q8_packet and (self.owned_input_boundary or self.fp16_fma):
+      raise ValueError("scalar_q8_packet is mutually exclusive with owned_input_boundary and fp16_fma")
 
 
 def _pack4(values:list[UOp]) -> UOp:
@@ -83,6 +88,71 @@ def emit_q8_provider(source_dtype=dtypes.float16) -> callable:
     lane0=lane.eq(0); metadata_index=lane0.where(Q8_PAYLOAD_WORDS+group,UOp.const(dtypes.weakint,0))
     metadata=out[metadata_index].store(dh.bitwise_or(sh.lshift(16)),lane0)
     return UOp.group(payload,metadata).sink(arg=KernelInfo(name="q8_1_llama_provider_12288",opts_to_apply=()))
+  return kernel
+
+
+def emit_ffn_w1w3_q8_scalar_packet() -> callable:
+  """Fold llama Q8_1 quantization into the W1/W3 producer epilogue.
+
+  One 1024-thread CTA owns a 32-row Q8_1 packet. Every warp reduces one GLU row
+  with the same 32-lane scalar map as ``q4k_g3_lanemap_gemv_w1w3_kernel``, so
+  the gate/up arithmetic is bitwise identical to the fused16 producer. Lane zero
+  of each warp publishes its fp16 result to a 64-byte LOCAL array, then warp
+  zero performs the established ``quantize_q8_1`` CUDA spelling after the CTA
+  barrier. The output is the existing 3072+384-word packed ABI; there is no
+  fp16 activation buffer and no separate ``q8_1_llama_provider_12288`` node.
+  """
+  if (K, ROWS) != (12288, 4096): raise ValueError("scalar-packet producer is fixed to Qwen 12288x4096")
+  lm = Q4KGateUpLaneMap(k=ROWS, n=K); lm.validate()
+  grid_x, threads, pack = K // 32, 32 * 32, 32
+  blocks_per_group, k_blocks = lm.blocks_per_group, lm.k_blocks
+
+  def kernel(out:UOp, gate_words:UOp, up_words:UOp, x:UOp) -> UOp:
+    packet = UOp.special(grid_x, "gidx0")
+    lid = UOp.special(threads, "lidx0")
+    warp, lane = lid // WARP, lid % WARP
+    row = packet * pack + warp
+    part = LanePartition(lane, lane_extent=WARP, words_per_group=8)
+    lblk = UOp.range(blocks_per_group, 0, axis_type=AxisType.REDUCE)
+    blk = part.block_group * blocks_per_group + lblk
+    base_g = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    base_u = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    contrib_g = _q4k_block_dot_packed_load(gate_words, x, base_g, blk, part.word_col)
+    contrib_u = _q4k_block_dot_packed_load(up_words, x, base_u, blk, part.word_col)
+
+    acc_g = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG)
+    acc_u = UOp.placeholder((1,), dtypes.float32, 21, addrspace=AddrSpace.REG)
+    init = acc_g[0].store(0.0)
+    init = acc_u.after(init)[0].store(0.0)
+    acc_g, acc_u = acc_g.after(init), acc_u.after(init)
+    upd_g = acc_g[0].store(acc_g.after(lblk)[0] + contrib_g)
+    upd_u = acc_u.after(upd_g)[0].store(acc_u.after(lblk)[0] + contrib_u).end(lblk)
+    total_g = _warp_reduce_sum_staged(acc_g.after(upd_u)[0], part.lane, part.lane_extent, 90)
+    total_u = _warp_reduce_sum_staged(acc_u.after(upd_u)[0], part.lane, part.lane_extent, 95)
+    z = _silu_uop(total_g).mul(total_u).cast(dtypes.float16)
+
+    zsh = UOp.placeholder((pack,), dtypes.float16, 30, addrspace=AddrSpace.LOCAL)
+    published = zsh[warp].store(z, lane.eq(0))
+    ready = UOp.barrier(UOp.group(published))
+    consumer = ready.post_barrier_region(warp.eq(0))
+    rounded = zsh.after(consumer)[lane].cast(dtypes.float32)
+    amax = warp_reduce_max(rounded.abs(), lane, WARP, 100)
+    d = amax / UOp.const(dtypes.float32, 127.0)
+    scaled = d.eq(0.0).where(UOp.const(dtypes.float32, 0.0), rounded / d)
+    roundf = (scaled >= 0.0).where(scaled + UOp.const(dtypes.float32, 0.5),
+      scaled - UOp.const(dtypes.float32, 0.5)).cast(dtypes.int32)
+    q = roundf.maximum(UOp.const(dtypes.int32, -128)).minimum(UOp.const(dtypes.int32, 127)).cast(dtypes.int8)
+    q1 = _staged_shfl(q, 1, lane, 110)
+    q2 = _staged_shfl(q, 2, lane, 111)
+    q3 = _staged_shfl(q, 3, lane, 112)
+    payload = out[packet * 8 + lane // 4].store(_pack4([q, q1, q2, q3]), lane.bitwise_and(3).eq(0))
+    xsum = _warp_reduce_sum_staged(rounded, lane, WARP, 120)
+    dh = d.cast(dtypes.float16).bitcast(dtypes.uint16).cast(dtypes.uint32)
+    sh = xsum.cast(dtypes.float16).bitcast(dtypes.uint16).cast(dtypes.uint32)
+    metadata_idx = lane.eq(0).where(UOp.const(dtypes.weakint, Q8_PAYLOAD_WORDS) + packet, UOp.const(dtypes.weakint, 0))
+    metadata = out[metadata_idx].store(dh.bitwise_or(sh.lshift(16)), lane.eq(0))
+    return consumer.end_region(UOp.group(payload, metadata)).sink(
+      arg=KernelInfo(name="ffn_w1w3_q8_scalar_packet_12288_4096", opts_to_apply=()))
   return kernel
 
 
@@ -250,6 +320,52 @@ def q4k_ffn_down_mmvq_call(admission:object, linear:Any, x:Tensor, binding:Any,
   return out.reshape(1,1,ROWS)
 
 
+def q4k_ffn_down_mmvq_scalar_packet_call(gate:Any, up:Any, linear:Any, x:Tensor, residual:Tensor|None,
+                                         admission:Q4KFFNDownMMVQAdmission) -> Tensor|None:
+  """Two-program fold: scalar-packet W1/W3 Q8 producer + four-warp DP4A resadd.
+
+  This is the M2a/M2b-compatible successor to the stale owned-boundary route.
+  It replaces the promoted fused16 W1/W3 producer and the installed Q4-down
+  resadd consumer with one packed-Q8 producer and the direct Q4/Q8 consumer,
+  staying net-zero programs. Every shape/lease mismatch returns ``None`` so the
+  ordinary block path is unchanged.
+  """
+  if not isinstance(admission, Q4KFFNDownMMVQAdmission) or not admission.scalar_q8_packet: return None
+  capability = getattr(getattr(linear, "route_admission", None), "capability", None)
+  if (getattr(capability, "backend", None), getattr(capability, "architecture", None)) != ("NV", "sm_120"): return None
+  if (getattr(linear, "route_role", None), getattr(linear, "out_features", None), getattr(linear, "in_features", None)) != \
+      ("ffn_down", ROWS, K): return None
+  if residual is None: return None
+  if getattr(linear, "bias", None) is not None or getattr(gate, "bias", None) is not None or getattr(up, "bias", None) is not None: return None
+  if not str(x.device).startswith("NV"): return None
+  if (getattr(gate, "out_features", None), getattr(gate, "in_features", None)) != (K, ROWS): return None
+  if (getattr(up, "out_features", None), getattr(up, "in_features", None)) != (K, ROWS): return None
+  if not all(hasattr(obj, "q4k_storage") for obj in (gate, up, linear)): return None
+
+  def words(obj:Any) -> Tensor:
+    storage = obj.q4k_storage
+    return storage.words.to(x.device).contiguous() if storage.mode == "q4_ondemand" else storage.words.to(x.device)
+
+  xv = x[:, 0, :].reshape(ROWS).cast(dtypes.float16).contiguous()
+  residual_flat = residual[:, 0, :].reshape(ROWS).cast(dtypes.float32)
+  producer = KernelProgram("decode_q4k_ffn_down_mmvq", f"blk{admission.block_index}.scalar_packet",
+    KernelProgramProvenance.RESEARCH_ONLY, emit_ffn_w1w3_q8_scalar_packet(),
+    output_spec=OutputSpec((Q8_WORDS,), dtypes.uint32))
+  packed = execute_research_program(Tensor.empty((Q8_WORDS,), dtype=dtypes.uint32, device=x.device),
+    words(gate), words(up), xv, program=producer)
+  consumer = KernelProgram("decode_q4k_ffn_down_mmvq", f"blk{admission.block_index}.consumer",
+    KernelProgramProvenance.RESEARCH_ONLY, emit_four_warp_direct(UOp.const(dtypes.weakint, BLOCKS_PER_WARP), resadd=True),
+    output_spec=OutputSpec((ROWS,), dtypes.float32,
+      typed_output=DeclaredTypedOutput(TypedLayout(dtypes.float32, (ROWS,), (1, 1, ROWS)),
+        combine_fusion_admitted=False, epilogue_absorption_admitted=True)),
+    residual_input_views=(ResidualViewRequest(slot=2, dtype=dtypes.float32, flat_shape=(ROWS,),
+      route_role="ffn_down", kind="residual_add"),))
+  out = execute_research_program(Tensor.empty((ROWS,), dtype=dtypes.float32, device=x.device),
+    words(linear), packed, residual_flat, program=consumer)
+  return out.reshape(1, 1, ROWS)
+
+
 __all__=["Q4KFFNDownMMVQAdmission","ROWS","K","Q4_BLOCKS","BLOCKS_PER_WARP","SUB_BLOCKS","Q8_PAYLOAD_WORDS",
          "Q8_GROUPS","Q8_WORDS","ownership_coordinates","owned_boundary_topology","emit_q8_provider",
-         "emit_four_warp_direct","emit_four_warp_fp16_direct","q4k_ffn_down_mmvq_call"]
+         "emit_ffn_w1w3_q8_scalar_packet","emit_four_warp_direct","emit_four_warp_fp16_direct",
+         "q4k_ffn_down_mmvq_call","q4k_ffn_down_mmvq_scalar_packet_call"]

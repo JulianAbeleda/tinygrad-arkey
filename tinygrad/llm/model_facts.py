@@ -174,6 +174,10 @@ def program_identities_from_call(call:Any) -> tuple[ProgramIdentityMetadata, ...
   output_dtypes = {dtype_name(call.src[slot+1]) for slot in output_slots}
   if len(output_dtypes) != 1: return ()
   output_dtype = next(iter(output_dtypes))
+  # This resolver describes dense projection kernels only. A packed/quantized
+  # output (for example the folded W1/W3 -> Q8_1 producer's uint32 ABI) has no
+  # projection identity and must not be forced through the float-only schema.
+  if output_dtype not in PROGRAM_DTYPES: return ()
   value_args = tuple(call.src[slot+1] for slot in slots if slot not in output_slots and not program_tensor_facts(call.src[slot+1]))
   identities = []
   for binding in observed:

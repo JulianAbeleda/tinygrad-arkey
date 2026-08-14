@@ -21,9 +21,11 @@ import numpy as np
 
 from tinygrad import dtypes
 from tinygrad.codegen.late.int8_dot import int8x4_dot
-from tinygrad.codegen.late.warp_reduce import _staged_shfl, _warp_reduce_sum_staged, warp_reduce_max
+from tinygrad.codegen.late.warp_reduce import WARP, _staged_shfl, _warp_reduce_sum_staged, warp_reduce_max
 from tinygrad.dtype import AddrSpace
-from tinygrad.llm.decode_kernels import Q4K_WORDS_PER_BLOCK, _f16_word, _q4k_group_params, _silu_uop
+from tinygrad.llm.decode_kernels import (LanePartition, Q4KGateUpLaneMap, Q4K_WORDS_PER_BLOCK, _f16_word,
+  _q4k_block_dot_packed_load, _q4k_group_params, _silu_uop)
+from tinygrad.llm.q4k_ffn_down_mmvq import emit_ffn_w1w3_q8_scalar_packet
 from tinygrad.uop.ops import AxisType, KernelInfo, UOp
 
 K, ROWS, PACK = 4096, 12288, 32
