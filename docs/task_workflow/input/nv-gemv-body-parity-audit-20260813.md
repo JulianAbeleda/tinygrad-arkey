@@ -1,5 +1,12 @@
 # NV GEMV-body parity audit - the "at parity" claim is true in aggregate, closed per-shape (2026-08-13)
 
+> **SUPERSEDED 2026-08-13** by `nv-gemv-core-deficit-correction-20260813.md`.
+> This audit's conclusion ("GEMV at parity, not a lever") trusted the 08-12
+> folded-quantize framing and missed the 08-05 source audit's **+302.8 us core
+> deficit**. The row is NOT at parity and is NOT closed; the Q4 FFN-down NO-GO
+> was built on a copy-pasted llama floor (11.776 vs the true 19.23 us/node).
+> See the correction for the real lever.
+
 Date: 2026-08-13
 Branch: `nvidia-bringup-20260731` (HEAD `e97293cc4`)
 Status: **audit (read-only, no GPU change).** Answers "are the GEMV bodies at
