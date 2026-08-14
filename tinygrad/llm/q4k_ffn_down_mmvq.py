@@ -152,21 +152,27 @@ def emit_four_warp_direct(block_count:UOp, *, sum_dp4a:bool=False, resadd:bool=F
     warp,lane=lid//WARP,lid%WARP; group,word_base=lane//4,(lane%4)*2
     block_rel=UOp.range(block_count,2,axis_type=AxisType.LOOP); block=warp*BLOCKS_PER_WARP+block_rel
     base=(row*Q4_BLOCKS+block)*Q4K_WORDS_PER_BLOCK
-    w0,w1,w2,w3=words[base],words[base+1],words[base+2],words[base+3]
+    hdr=words.index(base).load(dtype=dtypes.uint32.vec(4))
+    w0,w1,w2,w3=hdr.gep(0),hdr.gep(1),hdr.gep(2),hdr.gep(3)
     d,dmin=_f16_word(w0,False),_f16_word(w0,True); g4=group%4
     b1=w1.rshift(g4*8).bitwise_and(0xff); b2=w2.rshift(g4*8).bitwise_and(0xff); hb=w3.rshift(g4*8).bitwise_and(0xff)
     scale=(group<4).where(b1.bitwise_and(63),hb.bitwise_and(0xf).bitwise_or(b1.rshift(6).lshift(4)))
     minimum=(group<4).where(b2.bitwise_and(63),hb.rshift(4).bitwise_or(b2.rshift(6).lshift(4)))
     contribution=UOp.const(dtypes.float32,0.)
+    q8d=_q8_d(packed,block*8+group)
+    qw_pair=words.index(base+4+(group//2)*8+word_base).load(dtype=dtypes.uint32.vec(2))
+    xv_pair=packed.index(block*64+group*8+word_base).load(dtype=dtypes.uint32.vec(2))
     for slot in range(2):
-      word=word_base+slot
-      qw=words[base+4+(group//2)*8+word].rshift((group%2)*4).bitwise_and(0x0F0F0F0F)
-      xv=packed[block*64+group*8+word]
-      dot=int8x4_dot(UOp.const(dtypes.int32,0),qw,xv).cast(dtypes.float32)
+      qw=qw_pair.gep(slot).rshift((group%2)*4).bitwise_and(0x0F0F0F0F)
+      xv=xv_pair.gep(slot)
+      dot=int8x4_dot(UOp.const(dtypes.int32,0),qw,xv)
       xsum=(int8x4_dot(UOp.const(dtypes.int32,0),UOp.const(dtypes.uint32,0x01010101),xv)
             if sum_dp4a else _i8lane(xv,0)+_i8lane(xv,1)+_i8lane(xv,2)+_i8lane(xv,3))
-      contribution=contribution+_q8_d(packed,block*8+group)*(
-        d*scale.cast(dtypes.float32)*dot-dmin*minimum.cast(dtypes.float32)*xsum.cast(dtypes.float32))
+      # llama keeps dot*scale and xsum*min in int32 (IMAD) and converts once;
+      # that removes the float-pipe FMUL/FFMA this kernel was paying per DP4A.
+      scale_dot=(dot*scale.cast(dtypes.int32)).cast(dtypes.float32)
+      min_sum=(xsum*minimum.cast(dtypes.int32)).cast(dtypes.float32)
+      contribution=contribution+q8d*(d*scale_dot-dmin*min_sum)
     acc=UOp.placeholder((1,),dtypes.float32,20,addrspace=AddrSpace.REG); acc=acc.after(acc[0].store(0.))
     acc=acc.after(acc[0].store(acc.after(block_rel)[0]+contribution).end(block_rel)); partial=acc[0]
     shared=UOp.placeholder(((WARPS_PER_ROW-1)*WARP,),dtypes.float32,40,addrspace=AddrSpace.LOCAL)

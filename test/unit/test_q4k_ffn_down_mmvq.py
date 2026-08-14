@@ -292,10 +292,10 @@ def test_sum_dp4a_research_spelling_adds_only_the_q8_correction_dp4a():
         UOp.placeholder((Q8_WORDS,),dtypes.uint32,2))
   _program,_source,scalar_ptx=_render(emit_four_warp_direct(blocks)(*args),"q4k_ffn_down_scalar_sum_v1")
   _program,_source,dp4a_ptx=_render(emit_four_warp_direct(blocks,sum_dp4a=True)(*args),"q4k_ffn_down_dp4a_sum_v1")
-  # The source substitution is exact, but today it changes NVRTC's loop
-  # lowering: retain the census rather than mistaking it for a one-change
-  # physical kernel comparison.
-  assert scalar_ptx.count("dp4a") == 2
+  # The vectorized packed loads and integer scale/min application changed
+  # NVRTC's loop unrolling (3 data dp4a per unrolled body). The correction sum
+  # still adds exactly one dp4a per data dp4a, so the census doubles.
+  assert scalar_ptx.count("dp4a") == 6
   assert dp4a_ptx.count("dp4a") == 12
 
 
