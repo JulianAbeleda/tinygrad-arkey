@@ -1,5 +1,13 @@
 # NV flash-score item-3 first-principles record - kernel body is flat, the win is overlap
 
+> **SUPERSEDED 2026-08-13** by `nv-truth-audit-flash-body-20260813.md`. The
+> "kernel body flat" conclusion rested on a Python-dispatch-dominated microgate
+> that also compared two non-production S=4 configs. Device-side CUPTI timing
+> shows the production tile at 4.19 us/node vs llama 3.16 us (+68 us in-situ),
+> and the vec kernel at 10.2 us (NCHUNK=2) / 39.6 us (NCHUNK=9), so the body is
+> NOT flat and the vec kernel is NOT ready to route. See the audit for the
+> corrected ladder.
+
 Date: 2026-08-13
 Branch: `nvidia-bringup-20260731` (HEAD `c56d33c14`)
 Status: **first-principles verdict (no production change).** Answers "can we

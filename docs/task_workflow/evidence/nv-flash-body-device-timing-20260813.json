@@ -1,0 +1,77 @@
+{
+  "schema": "tinygrad.nv_flash_body_device_timing.v1",
+  "date": "2026-08-13",
+  "branch": "nvidia-bringup-20260731",
+  "git_commit": "8b1acc998838e44f4f1ae0737bcf3e2a6f48e739",
+  "device": "CUDA",
+  "gpu": "RTX 5090 sm_120",
+  "method": "nsys --trace=cuda CUPTI_ACTIVITY_KIND_KERNEL device duration, 400 back-to-back launches + 20 warmup, isolated score kernel (no combine)",
+  "shape": {
+    "Hq": 32,
+    "Hkv": 8,
+    "Hd": 128,
+    "MAXC": 4608,
+    "Tc": 513
+  },
+  "reference": {
+    "llama_flash_score_in_situ_us_per_node": 3.16,
+    "llama_source": "nv-llama-d512-node-ledger-20260812.json (113.9 us / 36 nodes, CUPTI in-situ full graph)",
+    "tinygrad_tile_in_situ_us_per_node": 5.06,
+    "tinygrad_tile_in_situ_source": "nv-tinygrad-d512-node-ledger-20260813.json (182.0 us / 36 nodes, DEV=CUDA full graph)"
+  },
+  "measured": {
+    "tile_s48_prod": {
+      "S": 48,
+      "L": 16,
+      "grid_blocks": 384,
+      "avg_us": 4.187,
+      "med_us": 4.192,
+      "min_us": 3.712,
+      "max_us": 4.32,
+      "stddev_us": 0.047,
+      "instances": 421
+    },
+    "tile_s4": {
+      "S": 4,
+      "L": 144,
+      "grid_blocks": 32,
+      "avg_us": 25.41,
+      "med_us": 25.505,
+      "min_us": 22.56,
+      "max_us": 25.792,
+      "stddev_us": 0.329,
+      "instances": 421
+    },
+    "vec_s4": {
+      "S": 4,
+      "MAXC": 4608,
+      "NCHUNK": 9,
+      "grid_blocks": 128,
+      "avg_us": 39.614,
+      "med_us": 39.872,
+      "min_us": 33.92,
+      "max_us": 41.92,
+      "stddev_us": 1.415,
+      "instances": 421
+    },
+    "vec_s4_tcbound": {
+      "S": 4,
+      "MAXC": 1024,
+      "NCHUNK": 2,
+      "grid_blocks": 128,
+      "avg_us": 10.205,
+      "med_us": 10.208,
+      "min_us": 8.8,
+      "max_us": 10.56,
+      "stddev_us": 0.13,
+      "instances": 421
+    }
+  },
+  "probe": "extra/llm_research/decode/nv_flash_body_device_timing.py",
+  "nsys_reports": {
+    "tile_s48_prod": "/tmp/fb_tile_s48_prod.nsys-rep",
+    "tile_s4": "/tmp/fb_tile_s4.nsys-rep",
+    "vec_s4": "/tmp/fb_vec_s4.nsys-rep",
+    "vec_s4_tcbound": "/tmp/fb_vec_tcbound.nsys-rep"
+  }
+}
