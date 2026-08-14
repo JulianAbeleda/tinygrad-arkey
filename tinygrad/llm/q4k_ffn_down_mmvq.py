@@ -16,7 +16,8 @@ from tinygrad.codegen.late.int8_dot import int8x4_dot
 from tinygrad.codegen.late.warp_reduce import _staged_shfl, _warp_reduce_sum_staged, warp_reduce_max
 from tinygrad.dtype import AddrSpace
 from tinygrad.llm.decode_kernels import Q4K_WORDS_PER_BLOCK, _f16_word
-from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, execute_research_program
+from tinygrad.llm.kernel_program import (DeclaredTypedOutput, KernelProgram, KernelProgramProvenance,
+  OutputSpec, ResidualViewRequest, TypedLayout, execute_research_program)
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
 
 ROWS, K, QK = 4096, 12288, 256
@@ -94,14 +95,19 @@ def owned_boundary_topology() -> dict:
     "gpu_gate":"candidate graph must be exactly 875 calls with control partitions before timing"}
 
 
-def emit_four_warp_direct(block_count:UOp, *, sum_dp4a:bool=False) -> callable:
+def emit_four_warp_direct(block_count:UOp, *, sum_dp4a:bool=False, resadd:bool=False) -> callable:
   """Four-warp Q4/Q8 DP4A consumer with shared partial staging and direct output.
 
   ``sum_dp4a`` is an opt-in research spelling. It replaces the four signed
   byte extracts used for the Q8 correction sum with llama's exact
   ``dp4a(0x01010101, q8)`` form. It remains false for every production caller.
+
+  ``resadd`` absorbs the M2b ``h + ffn_out`` residual add in-kernel: the kernel
+  takes the fp32 ``normed_h`` residual as a fourth slot and stores
+  ``total + residual[row]``, matching the installed ``_epi_ffnresadd`` control
+  epilogue bit-for-bit. The consumer name gains the ``_epi_ffnresadd`` suffix.
   """
-  def kernel(out:UOp, words:UOp, packed:UOp) -> UOp:
+  def kernel(out:UOp, words:UOp, packed:UOp, *extra:UOp) -> UOp:
     row,lid=UOp.special(ROWS,"gidx0"),UOp.special(WARP*WARPS_PER_ROW,"lidx0")
     warp,lane=lid//WARP,lid%WARP; group,word_base=lane//4,(lane%4)*2
     block_rel=UOp.range(block_count,2,axis_type=AxisType.LOOP); block=warp*BLOCKS_PER_WARP+block_rel
@@ -128,8 +134,9 @@ def emit_four_warp_direct(block_count:UOp, *, sum_dp4a:bool=False) -> callable:
     publish=shared[shared_index].store(partial,other_warp); ready=UOp.barrier(UOp.group(publish)); total=partial
     for other in range(WARPS_PER_ROW-1): total=total+shared.after(ready)[other*WARP+lane]
     for slot,offset in enumerate((16,8,4,2,1),90): total=total+_staged_shfl(total,offset,lane,slot)
-    return out[row].store(total,warp.eq(0)&lane.eq(0)).sink(
-      arg=KernelInfo(name="q4k_q8_mmvq_direct_4096_12288",opts_to_apply=()))
+    result=total+extra[0][row] if resadd else total
+    name="q4k_q8_mmvq_direct_4096_12288_epi_ffnresadd" if resadd else "q4k_q8_mmvq_direct_4096_12288"
+    return out[row].store(result,warp.eq(0)&lane.eq(0)).sink(arg=KernelInfo(name=name,opts_to_apply=()))
   return kernel
 
 
@@ -140,7 +147,8 @@ def q4k_ffn_down_mmvq_call(admission:object, linear:Any, x:Tensor, binding:Any,
   capability=getattr(getattr(linear,"route_admission",None),"capability",None)
   if (getattr(capability,"backend",None),getattr(capability,"architecture",None)) != ("NV","sm_120"): return None
   if (getattr(linear,"route_role",None),binding.N,binding.K) != ("ffn_down",ROWS,K): return None
-  if epilogue_inputs or getattr(linear,"bias",None) is not None or not str(x.device).startswith("NV"): return None
+  if getattr(linear,"bias",None) is not None or not str(x.device).startswith("NV"): return None
+  if any(key != "normed_h" for key in epilogue_inputs): return None
   words=linear.q4k_storage.words.to(x.device).contiguous() if linear.q4k_storage.mode == "q4_ondemand" else linear.q4k_storage.words.to(x.device)
   if admission.owned_input_boundary:
     if x.dtype != dtypes.float32: return None
@@ -155,13 +163,34 @@ def q4k_ffn_down_mmvq_call(admission:object, linear:Any, x:Tensor, binding:Any,
       owned_uop=owned_uop.src[0]
     if owned_uop.op is not Ops.AFTER or owned_uop.shape != (K,) or owned_uop.dtype != x.dtype: return None
     xv=Tensor(owned_uop)
-  else: xv=x[:,0,:].reshape(K).cast(dtypes.float16).contiguous()
+  else:
+    # The promoted M2a fused16 producer hands the ffn_down consumer fp16 z directly.
+    # Consume that AFTER zero-copy when the equal-span reshape chain exposes it; a
+    # callify boundary that hides the AFTER falls back to the byte-identical
+    # flat-buffer ABI (which may materialize one transport copy).
+    direct_after=None
+    if x.dtype == dtypes.float16:
+      owned_uop=x.uop
+      owned_expected=owned_uop.numel()
+      while owned_uop.op is Ops.RESHAPE and len(owned_uop.src) and owned_uop.src[0].numel()==owned_expected:
+        owned_uop=owned_uop.src[0]
+      if owned_uop.op is Ops.AFTER and owned_uop.shape == (K,) and owned_uop.dtype == x.dtype:
+        direct_after=Tensor(owned_uop)
+    xv=direct_after if direct_after is not None else x[:,0,:].reshape(K).cast(dtypes.float16).contiguous()
+  resadd="normed_h" in epilogue_inputs
+  residual=epilogue_inputs["normed_h"][:,0,:].reshape(ROWS).cast(dtypes.float32) if resadd else None
   provider=KernelProgram("decode_q4k_ffn_down_mmvq",f"blk{admission.block_index}.q8_provider",
     KernelProgramProvenance.RESEARCH_ONLY,emit_q8_provider(dtypes.float32 if admission.owned_input_boundary else dtypes.float16))
   packed=execute_research_program(Tensor.empty((Q8_WORDS,),dtype=dtypes.uint32,device=x.device),xv,program=provider)
   consumer=KernelProgram("decode_q4k_ffn_down_mmvq",f"blk{admission.block_index}.consumer",
-    KernelProgramProvenance.RESEARCH_ONLY,emit_four_warp_direct(UOp.const(dtypes.weakint,BLOCKS_PER_WARP)))
-  out=execute_research_program(Tensor.empty((ROWS,),dtype=dtypes.float32,device=x.device),words,packed,program=consumer)
+    KernelProgramProvenance.RESEARCH_ONLY,emit_four_warp_direct(UOp.const(dtypes.weakint,BLOCKS_PER_WARP),resadd=resadd),
+    output_spec=OutputSpec((ROWS,),dtypes.float32,
+      typed_output=(DeclaredTypedOutput(TypedLayout(dtypes.float32,(ROWS,),(1,1,ROWS)),
+        combine_fusion_admitted=False,epilogue_absorption_admitted=True) if resadd else None)),
+    residual_input_views=((ResidualViewRequest(slot=2,dtype=dtypes.float32,flat_shape=(ROWS,),
+                                               route_role="ffn_down",kind="residual_add"),) if resadd else ()))
+  out=execute_research_program(Tensor.empty((ROWS,),dtype=dtypes.float32,device=x.device),
+    words,packed,*((residual,) if resadd else ()),program=consumer)
   return out.reshape(1,1,ROWS)
 
 

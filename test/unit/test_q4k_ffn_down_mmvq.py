@@ -210,3 +210,17 @@ def test_production_direct_consumer_has_fixed_bound_and_no_replay_variable():
   program,source,_ptx=_render(ast,"q4k_ffn_down_mmvq_direct_fixed_v1")
   assert program.arg.vars == ()
   assert f"< {BLOCKS_PER_WARP};" in source
+
+
+def test_resadd_consumer_absorbs_normed_h_in_kernel_under_m2b_name():
+  ast=emit_four_warp_direct(UOp.const(dtypes.weakint,BLOCKS_PER_WARP),resadd=True)(
+    UOp.placeholder((ROWS,),dtypes.float32,0),
+    UOp.placeholder((ROWS*Q4_BLOCKS*36,),dtypes.uint32,1),
+    UOp.placeholder((Q8_WORDS,),dtypes.uint32,2),
+    UOp.placeholder((ROWS,),dtypes.float32,3))
+  program,source,ptx=_render(ast,"q4k_ffn_down_mmvq_resadd_v1")
+  assert program.arg.global_size == (ROWS,1,1) and program.arg.local_size == (128,1,1)
+  assert program.arg.vars == ()
+  assert "q4k_q8_mmvq_direct_4096_12288_epi_ffnresadd" in source
+  assert "float* data3_4096" in source
+  assert "dp4a" in ptx and "st.global" in ptx

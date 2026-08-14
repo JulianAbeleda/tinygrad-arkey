@@ -43,8 +43,9 @@ def _exact_topology_delta(control:dict,candidate:dict,lease_count:int,owned:bool
   factor=2 if candidate["composed"] else 1
   before,after=collections.Counter(control["program_names"]),collections.Counter(candidate["program_names"])
   changed={name:after[name]-before[name] for name in before.keys()|after.keys() if after[name]!=before[name]}
-  expected={"q4k_g3_lanemap_gemv_4096_12288":-lease_count*factor,
-    "q8_1_llama_provider_12288":lease_count*factor,"q4k_q8_mmvq_direct_4096_12288":lease_count*factor}
+  expected={"q4k_g3_lanemap_gemv_epi_ffnresadd_4096_12288":-lease_count*factor,
+    "q8_1_llama_provider_12288":lease_count*factor,
+    "q4k_q8_mmvq_direct_4096_12288_epi_ffnresadd":lease_count*factor}
   removed_materialize={name:delta for name,delta in changed.items() if name not in expected}
   base_ok=all(changed.get(name)==delta for name,delta in expected.items()) and len(changed)==len(expected)+len(removed_materialize)
   owned_ok=owned and len(removed_materialize)==1 and next(iter(removed_materialize.values()))==-lease_count*factor
@@ -92,8 +93,8 @@ def child(model_path:str,depth:int,count:int,max_context:int,indices:tuple[int,.
   programs=[r.program_name for census in censuses for r in census.records if r.program_name]
   factor=2 if composed else 1
   provider_count=programs.count("q8_1_llama_provider_12288")
-  consumer_count=programs.count("q4k_q8_mmvq_direct_4096_12288")
-  installed_count=programs.count("q4k_g3_lanemap_gemv_4096_12288")
+  consumer_count=programs.count("q4k_q8_mmvq_direct_4096_12288_epi_ffnresadd")
+  installed_count=programs.count("q4k_g3_lanemap_gemv_epi_ffnresadd_4096_12288")
   topology={"provider_count":provider_count,"consumer_count":consumer_count,"installed_q4_ffn_down_count":installed_count,
     "expected_provider_count":len(indices)*factor,"expected_consumer_count":len(indices)*factor,
     "expected_installed_count":(len(Q4_FFN_DOWN_INDICES)-len(indices))*factor,
