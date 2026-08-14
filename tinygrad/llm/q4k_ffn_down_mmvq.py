@@ -15,7 +15,7 @@ from tinygrad import Tensor, dtypes
 from tinygrad.codegen.late.int8_dot import int8x4_dot
 from tinygrad.codegen.late.warp_reduce import _staged_shfl, _warp_reduce_sum_staged, warp_reduce_max
 from tinygrad.dtype import AddrSpace
-from tinygrad.llm.decode_kernels import Q4K_WORDS_PER_BLOCK, _f16_word
+from tinygrad.llm.decode_kernels import Q4K_WORDS_PER_BLOCK, _f16_word, _q4k_block_dot_packed_load
 from tinygrad.llm.kernel_program import (DeclaredTypedOutput, KernelProgram, KernelProgramProvenance,
   OutputSpec, ResidualViewRequest, TypedLayout, TypedViewRequest, execute_research_program)
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
@@ -23,6 +23,7 @@ from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
 ROWS, K, QK = 4096, 12288, 256
 WARP, WARPS_PER_ROW = 32, 4
 Q4_BLOCKS, BLOCKS_PER_WARP = K//QK, (K//QK)//WARPS_PER_ROW
+SUB_BLOCKS = BLOCKS_PER_WARP // WARPS_PER_ROW
 Q8_PAYLOAD_WORDS, Q8_GROUPS = K//4, K//32
 Q8_WORDS = Q8_PAYLOAD_WORDS + Q8_GROUPS
 
@@ -31,10 +32,14 @@ Q8_WORDS = Q8_PAYLOAD_WORDS + Q8_GROUPS
 class Q4KFFNDownMMVQAdmission:
   block_index: int
   owned_input_boundary: bool = False
+  fp16_fma: bool = False
   def __post_init__(self):
     if not isinstance(self.block_index,int) or isinstance(self.block_index,bool) or self.block_index < 0:
       raise ValueError("Q4_K FFN-down MMVQ block index must be a non-negative integer")
     if not isinstance(self.owned_input_boundary,bool): raise ValueError("owned_input_boundary must be bool")
+    if not isinstance(self.fp16_fma,bool): raise ValueError("fp16_fma must be bool")
+    if self.owned_input_boundary and self.fp16_fma:
+      raise ValueError("owned_input_boundary and fp16_fma are mutually exclusive research spellings")
 
 
 def _pack4(values:list[UOp]) -> UOp:
@@ -78,6 +83,41 @@ def emit_q8_provider(source_dtype=dtypes.float16) -> callable:
     lane0=lane.eq(0); metadata_index=lane0.where(Q8_PAYLOAD_WORDS+group,UOp.const(dtypes.weakint,0))
     metadata=out[metadata_index].store(dh.bitwise_or(sh.lshift(16)),lane0)
     return UOp.group(payload,metadata).sink(arg=KernelInfo(name="q8_1_llama_provider_12288",opts_to_apply=()))
+  return kernel
+
+
+def emit_four_warp_fp16_direct(block_count:UOp, *, resadd:bool=False) -> callable:
+  """Four-warp fp16-FMA Q4_K FFN-down consumer (occupancy/geometry research spelling).
+
+  This is the isolated geometry lever from the occupancy proof: 128 threads/row
+  across 4 warps like llama's Q4 MMQ, while the datapath stays the installed
+  scalar fp16 route -- the same packed weight loads/dequant and fp32 FMA,
+  consuming the ``w1w3fused16`` fp16 activation directly. There is no Q8 provider
+  node and no activation quantization, so the only numeric change versus the
+  installed 1-warp kernel is fp32 reduction reorder (four warp partials), not a
+  quantization. Each warp owns 12 of the 48 Q4 blocks; inside a warp the 32 lanes
+  keep the installed (word_col=lane%8, sub_group=lane//8) partition over 3 blocks
+  each. Cross-warp partials combine through shared memory, then a staged shuffle
+  reduces the 32 lanes. ``resadd`` absorbs M2b ``h + ffn_out`` in-kernel.
+  """
+  def kernel(out:UOp, words:UOp, x:UOp, *extra:UOp) -> UOp:
+    row,lid=UOp.special(ROWS,"gidx0"),UOp.special(WARP*WARPS_PER_ROW,"lidx0")
+    warp,lane=lid//WARP,lid%WARP
+    word_col=lane%8; sub_group=lane//8
+    block_rel=UOp.range(block_count,2,axis_type=AxisType.LOOP)
+    block=warp*BLOCKS_PER_WARP+sub_group*block_count+block_rel
+    base=(row*Q4_BLOCKS+block)*Q4K_WORDS_PER_BLOCK
+    contribution=_q4k_block_dot_packed_load(words,x,base,block,word_col)
+    acc=UOp.placeholder((1,),dtypes.float32,20,addrspace=AddrSpace.REG); acc=acc.after(acc[0].store(0.))
+    acc=acc.after(acc[0].store(acc.after(block_rel)[0]+contribution).end(block_rel)); partial=acc[0]
+    shared=UOp.placeholder(((WARPS_PER_ROW-1)*WARP,),dtypes.float32,40,addrspace=AddrSpace.LOCAL)
+    other_warp=warp>0; shared_index=other_warp.where((warp-1)*WARP+lane,UOp.const(dtypes.weakint,0))
+    publish=shared[shared_index].store(partial,other_warp); ready=UOp.barrier(UOp.group(publish)); total=partial
+    for other in range(WARPS_PER_ROW-1): total=total+shared.after(ready)[other*WARP+lane]
+    for slot,offset in enumerate((16,8,4,2,1),90): total=total+_staged_shfl(total,offset,lane,slot)
+    result=total+extra[0][row] if resadd else total
+    name="q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd" if resadd else "q4k_fp16_mmvq_direct_4096_12288"
+    return out[row].store(result,warp.eq(0)&lane.eq(0)).sink(arg=KernelInfo(name=name,opts_to_apply=()))
   return kernel
 
 
@@ -167,6 +207,24 @@ def q4k_ffn_down_mmvq_call(admission:object, linear:Any, x:Tensor, binding:Any,
     xv=x[:,0,:].reshape(K).cast(dtypes.float16).contiguous()
   resadd="normed_h" in epilogue_inputs
   residual=epilogue_inputs["normed_h"][:,0,:].reshape(ROWS).cast(dtypes.float32) if resadd else None
+  if admission.fp16_fma:
+    # The program_id must end in .gemv (not a bespoke suffix): the M5 epilogue-
+    # absorption validator accepts only .gemv/.q8_provider and the M2b residual
+    # validator accepts only .gemv/.consumer. A mismatched id silently falls back
+    # to the materializing flat-buffer ABI (two extra transport kernels per block).
+    consumer=KernelProgram("decode_q4k_ffn_down_mmvq",f"blk{admission.block_index}.gemv",
+      KernelProgramProvenance.RESEARCH_ONLY,
+      emit_four_warp_fp16_direct(UOp.const(dtypes.weakint,SUB_BLOCKS),resadd=resadd),
+      output_spec=OutputSpec((ROWS,),dtypes.float32,
+        typed_output=(DeclaredTypedOutput(TypedLayout(dtypes.float32,(ROWS,),(1,1,ROWS)),
+          combine_fusion_admitted=False,epilogue_absorption_admitted=True) if resadd else None)),
+      typed_input_views=(TypedViewRequest(slot=1,dtype=dtypes.float16,flat_shape=(K,),route_role="ffn_down",
+        requires_combine_fusion=False,requires_epilogue_absorption=True),),
+      residual_input_views=((ResidualViewRequest(slot=2,dtype=dtypes.float32,flat_shape=(ROWS,),
+        route_role="ffn_down",kind="residual_add"),) if resadd else ()))
+    out=execute_research_program(Tensor.empty((ROWS,),dtype=dtypes.float32,device=x.device),
+      words,xv,*((residual,) if resadd else ()),program=consumer)
+    return out.reshape(1,1,ROWS)
   provider_typed_views = () if admission.owned_input_boundary else (
     TypedViewRequest(slot=0,dtype=dtypes.float16,flat_shape=(K,),route_role="ffn_down",
       requires_combine_fusion=False,requires_epilogue_absorption=True),)
@@ -186,6 +244,6 @@ def q4k_ffn_down_mmvq_call(admission:object, linear:Any, x:Tensor, binding:Any,
   return out.reshape(1,1,ROWS)
 
 
-__all__=["Q4KFFNDownMMVQAdmission","ROWS","K","Q4_BLOCKS","BLOCKS_PER_WARP","Q8_PAYLOAD_WORDS",
-         "Q8_GROUPS","Q8_WORDS","ownership_coordinates","owned_boundary_topology","emit_q8_provider","emit_four_warp_direct",
-         "q4k_ffn_down_mmvq_call"]
+__all__=["Q4KFFNDownMMVQAdmission","ROWS","K","Q4_BLOCKS","BLOCKS_PER_WARP","SUB_BLOCKS","Q8_PAYLOAD_WORDS",
+         "Q8_GROUPS","Q8_WORDS","ownership_coordinates","owned_boundary_topology","emit_q8_provider",
+         "emit_four_warp_direct","emit_four_warp_fp16_direct","q4k_ffn_down_mmvq_call"]
