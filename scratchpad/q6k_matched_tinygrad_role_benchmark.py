@@ -40,7 +40,7 @@ def _graph_runner(jit: TinyJit):
 
 def live(rows: int, k: int, replays: int, timing_iters: int, timing_reps: int, base: pathlib.Path) -> dict:
   if (rows, k) != (1024, 4096): raise ValueError("this benchmark is pinned to the observed K/V role 1024x4096")
-  q6, q8 = _cpu_quantizers(base)
+  _, q6, q8 = _cpu_quantizers(base)
   rng = np.random.default_rng(20260804)
   weights_f32 = rng.normal(0, .2, size=(rows, k)).astype(np.float32)
   activation_f32 = rng.normal(0, .2, size=k).astype(np.float32)
