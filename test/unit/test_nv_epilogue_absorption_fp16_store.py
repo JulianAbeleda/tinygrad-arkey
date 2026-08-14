@@ -188,7 +188,7 @@ def test_epilogue_absorption_wrong_consumer_role_or_program_rejects():
     output_spec=OutputSpec((1,), dtypes.float32), typed_input_views=(_ffn_down_request(),))
   view2, reason2 = _validated_typed_view(z.cast(dtypes.float16).contiguous().uop,
                                          consumer2.typed_input_views[0], consumer2)
-  assert view2 is None and "program is not a q4k/q6k GEMV consumer" in reason2
+  assert view2 is None and "program is not a q4k/q6k GEMV or q8-provider consumer" in reason2
 
 
 class _FakeQ4K:

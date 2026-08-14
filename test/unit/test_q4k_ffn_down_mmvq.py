@@ -9,8 +9,9 @@ from tinygrad.runtime.support.compiler_cuda import NVRTCCompiler
 from tinygrad.uop.ops import Ops, UOp
 from tinygrad.llm.decode_routes import _Q4KDecodeCandidate
 from tinygrad.llm.decode_kernels import q4k_g3_lanemap_gemv_kernel, q4k_g3_lanemap_gemv_w1w3_kernel
-from tinygrad.llm.kernel_program import (KernelProgram, KernelProgramProvenance, OutputSpec,
-  execute_promoted_program, execute_research_program)
+from tinygrad.llm.kernel_program import (DeclaredTypedOutput, KernelProgram, KernelProgramProvenance,
+  OutputSpec, ResidualViewRequest, TypedLayout, TypedViewRequest, execute_promoted_program,
+  execute_research_program)
 from extra.llm_research.decode.q4k_ffn_down_mmvq_profile_analysis import analyze
 from extra.llm_research.decode.ffn_q8_cooperative_producer import pack_q8_1_private, q4_q8_ffn_down_row_reference
 from extra.llm_research.decode.q4k_ffn_down_mmvq import (
@@ -174,6 +175,55 @@ def test_owned_boundary_is_an_exact_three_call_replacement_in_isolated_cpu_sched
   # native NV gives the same call its compiled ``E_*`` program name.
   assert control[1] == "test" and control[2] == "q4k_g3_lanemap_gemv_4096_12288"
   assert candidate[1:] == ["q8_1_llama_provider_12288","q4k_q8_mmvq_direct_4096_12288"]
+
+
+def test_closed_fp16_resadd_route_folds_both_transports_to_zero_materialize():
+  # The closed (non-owned) resadd spelling has TWO boundary folds that must both
+  # land or the candidate pays two extra transport kernels: the fp16 z provider
+  # input (typed epilogue-absorption view) and the fp32 normed_h residual slot
+  # (residual view). Both producers declare epilogue absorption; the provider and
+  # direct consumer use their research-only ``.q8_provider`` / ``.consumer`` ids.
+  def schedule_names() -> list[str]:
+    gate_words=Tensor.empty((12288*(4096//256)*36,),dtype=dtypes.uint32,device="CPU")
+    up_words=Tensor.empty((12288*(4096//256)*36,),dtype=dtypes.uint32,device="CPU")
+    down_words=Tensor.empty((ROWS*Q4_BLOCKS*36,),dtype=dtypes.uint32,device="CPU")
+    hidden=Tensor.empty((4096,),dtype=dtypes.float16,device="CPU")
+    producer=KernelProgram("cpu_topology","w1w3_fused",KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
+      q4k_g3_lanemap_gemv_w1w3_kernel(K,4096,load_style="scalar",store_fp16=True),
+      output_spec=OutputSpec((K,),dtypes.float16,
+        typed_output=DeclaredTypedOutput(TypedLayout(dtypes.float16,(K,),(1,1,K)),
+          combine_fusion_admitted=False,epilogue_absorption_admitted=True)))
+    z=execute_promoted_program(None,gate_words,up_words,hidden,program=producer).reshape(1,1,K)
+    # h stands in for the attn residual producer: fp32 block output that declares
+    # epilogue absorption exactly like the promoted attn_qo residual_add GEMV.
+    h_producer=KernelProgram("cpu_topology","attn_resadd",KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
+      q4k_g3_lanemap_gemv_w1w3_kernel(ROWS,4096,load_style="scalar"),
+      output_spec=OutputSpec((ROWS,),dtypes.float32,
+        typed_output=DeclaredTypedOutput(TypedLayout(dtypes.float32,(ROWS,),(1,1,ROWS)),
+          combine_fusion_admitted=False,epilogue_absorption_admitted=True)))
+    h=execute_promoted_program(None,gate_words,up_words,hidden,program=h_producer).reshape(1,1,ROWS)
+    xv=z[:,0,:].reshape(K).cast(dtypes.float16).contiguous()
+    residual=h[:,0,:].reshape(ROWS).cast(dtypes.float32)
+    provider=KernelProgram("decode_q4k_ffn_down_mmvq","blk16.q8_provider",KernelProgramProvenance.RESEARCH_ONLY,
+      emit_q8_provider(dtypes.float16),
+      typed_input_views=(TypedViewRequest(slot=0,dtype=dtypes.float16,flat_shape=(K,),route_role="ffn_down",
+        requires_combine_fusion=False,requires_epilogue_absorption=True),))
+    packed=execute_research_program(Tensor.empty((Q8_WORDS,),dtype=dtypes.uint32,device="CPU"),xv,program=provider)
+    consumer=KernelProgram("decode_q4k_ffn_down_mmvq","blk16.consumer",KernelProgramProvenance.RESEARCH_ONLY,
+      emit_four_warp_direct(UOp.const(dtypes.weakint,BLOCKS_PER_WARP),resadd=True),
+      output_spec=OutputSpec((ROWS,),dtypes.float32,
+        typed_output=DeclaredTypedOutput(TypedLayout(dtypes.float32,(ROWS,),(1,1,ROWS)),
+          combine_fusion_admitted=False,epilogue_absorption_admitted=True)),
+      residual_input_views=(ResidualViewRequest(slot=2,dtype=dtypes.float32,flat_shape=(ROWS,),
+        route_role="ffn_down",kind="residual_add"),))
+    out=execute_research_program(Tensor.empty((ROWS,),dtype=dtypes.float32,device="CPU"),
+      down_words,packed,residual,program=consumer)
+    return [call.src[0].arg.name for call in out.schedule_linear().src]
+
+  names=schedule_names()
+  assert len(names)==4 and "test" not in names
+  assert names==["q4k_g3_lanemap_gemv_w1w3fused16_12288_4096","q4k_g3_lanemap_gemv_w1w3fused_4096_4096",
+    "q8_1_llama_provider_12288","q4k_q8_mmvq_direct_4096_12288_epi_ffnresadd"]
 
 
 def test_direct_consumer_keeps_four_warps_runtime_loop_dp4a_and_final_store():

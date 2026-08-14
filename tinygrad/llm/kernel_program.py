@@ -318,8 +318,8 @@ def _validated_typed_view(uop: UOp, request: TypedViewRequest, program: KernelPr
     if request.route_role != "ffn_down":
       return None, f"wrong consumer route_role {request.route_role!r}"
     if not (program.route_id.startswith("decode_q4k") or program.route_id.startswith("decode_q6k")) \
-        or not program.program_id.endswith(".gemv"):
-      return None, "program is not a q4k/q6k GEMV consumer"
+        or not (program.program_id.endswith(".gemv") or program.program_id.endswith(".q8_provider")):
+      return None, "program is not a q4k/q6k GEMV or q8-provider consumer"
     return chain.base, "ok"
   if not declared.combine_fusion_admitted: return None, "combine-fusion gate is closed"
   # (d) typed-ABI gate: the consumer must explicitly require the M5 combine contract
@@ -404,8 +404,9 @@ def _validated_residual_view(uop: UOp, request: ResidualViewRequest, program: Ke
     return None, "program is not a q4k GEMV consumer"
   if request.route_role == "ffn_down" and not ((program.route_id.startswith("decode_q4k") or
                                                 program.route_id.startswith("decode_q6k")) and
-                                               program.program_id.endswith(".gemv")):
-    return None, "program is not a q4k/q6k GEMV consumer"
+                                               (program.program_id.endswith(".gemv") or
+                                                program.program_id.endswith(".consumer"))):
+    return None, "program is not a q4k/q6k GEMV or direct consumer"
   # (b) request chain is a movement-only view: dtype/numel preserved through every leg
   chain = uop.src[0] if uop.op is Ops.CONTIGUOUS else uop
   if chain.dtype is not request.dtype: return None, "request dtype mismatch"

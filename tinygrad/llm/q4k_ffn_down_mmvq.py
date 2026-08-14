@@ -17,7 +17,7 @@ from tinygrad.codegen.late.warp_reduce import _staged_shfl, _warp_reduce_sum_sta
 from tinygrad.dtype import AddrSpace
 from tinygrad.llm.decode_kernels import Q4K_WORDS_PER_BLOCK, _f16_word
 from tinygrad.llm.kernel_program import (DeclaredTypedOutput, KernelProgram, KernelProgramProvenance,
-  OutputSpec, ResidualViewRequest, TypedLayout, execute_research_program)
+  OutputSpec, ResidualViewRequest, TypedLayout, TypedViewRequest, execute_research_program)
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
 
 ROWS, K, QK = 4096, 12288, 256
@@ -164,23 +164,15 @@ def q4k_ffn_down_mmvq_call(admission:object, linear:Any, x:Tensor, binding:Any,
     if owned_uop.op is not Ops.AFTER or owned_uop.shape != (K,) or owned_uop.dtype != x.dtype: return None
     xv=Tensor(owned_uop)
   else:
-    # The promoted M2a fused16 producer hands the ffn_down consumer fp16 z directly.
-    # Consume that AFTER zero-copy when the equal-span reshape chain exposes it; a
-    # callify boundary that hides the AFTER falls back to the byte-identical
-    # flat-buffer ABI (which may materialize one transport copy).
-    direct_after=None
-    if x.dtype == dtypes.float16:
-      owned_uop=x.uop
-      owned_expected=owned_uop.numel()
-      while owned_uop.op is Ops.RESHAPE and len(owned_uop.src) and owned_uop.src[0].numel()==owned_expected:
-        owned_uop=owned_uop.src[0]
-      if owned_uop.op is Ops.AFTER and owned_uop.shape == (K,) and owned_uop.dtype == x.dtype:
-        direct_after=Tensor(owned_uop)
-    xv=direct_after if direct_after is not None else x[:,0,:].reshape(K).cast(dtypes.float16).contiguous()
+    xv=x[:,0,:].reshape(K).cast(dtypes.float16).contiguous()
   resadd="normed_h" in epilogue_inputs
   residual=epilogue_inputs["normed_h"][:,0,:].reshape(ROWS).cast(dtypes.float32) if resadd else None
+  provider_typed_views = () if admission.owned_input_boundary else (
+    TypedViewRequest(slot=0,dtype=dtypes.float16,flat_shape=(K,),route_role="ffn_down",
+      requires_combine_fusion=False,requires_epilogue_absorption=True),)
   provider=KernelProgram("decode_q4k_ffn_down_mmvq",f"blk{admission.block_index}.q8_provider",
-    KernelProgramProvenance.RESEARCH_ONLY,emit_q8_provider(dtypes.float32 if admission.owned_input_boundary else dtypes.float16))
+    KernelProgramProvenance.RESEARCH_ONLY,emit_q8_provider(dtypes.float32 if admission.owned_input_boundary else dtypes.float16),
+    typed_input_views=provider_typed_views)
   packed=execute_research_program(Tensor.empty((Q8_WORDS,),dtype=dtypes.uint32,device=x.device),xv,program=provider)
   consumer=KernelProgram("decode_q4k_ffn_down_mmvq",f"blk{admission.block_index}.consumer",
     KernelProgramProvenance.RESEARCH_ONLY,emit_four_warp_direct(UOp.const(dtypes.weakint,BLOCKS_PER_WARP),resadd=resadd),
