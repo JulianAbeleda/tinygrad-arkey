@@ -470,6 +470,22 @@ def _q6k_coop_pos_reduce_sum(val:UOp, lane:UOp, row_tile:int, slot_base:int=90) 
   return val
 
 
+def _q6k_coop_tile_key_reduce_max(key:UOp, lane:UOp, slot_base:int=100) -> UOp:
+  """Warp-wide MAX of the packed per-row (max, index) key for the vocab_top1 epilogue.
+
+  The pos sum ladder deliberately keeps row_i separate; the top-1 reduce must instead mix
+  it, because the tile's ``row_tile`` rows compete for the max.  The standard XOR ladder
+  over the full warp covers all 32 lanes (row_tile * pos <= 32 is enforced by the
+  in_kernel validation), and every lane ends with the tile's best packed key.
+  """
+  off = WARP >> 1
+  while off >= 1:
+    key = key.maximum(_staged_shfl(key, off, lane, slot_base))
+    off >>= 1
+    slot_base += 1
+  return key
+
+
 @dataclass(frozen=True)
 class DecodeRMSNormSpec:
   """One fused decode RMSNorm kernel: per-row sumsq reduce + `x * rsqrt(sumsq/dim + eps) * w`
@@ -581,7 +597,8 @@ class Q6KGEMVRouteSpec:
   pos_axis: str = "local"
   block_axis: str = "reduce"
   reduction: str = "external_sum"
-  epilogue: str = ""  # "", "ffn_down_resadd" (M2b: total + h[row] in-kernel, fp32 store)
+  epilogue: str = ""  # "", "ffn_down_resadd" (M2b: total + h[row] in-kernel, fp32 store),
+                     # "vocab_top1" (P1: per-tile packed (max, index) key + in-kernel warp reduce)
   storage: str = "packed_u16"
   quant: QuantFormat = Q6_K
   opts: tuple = field(default_factory=tuple)
@@ -596,6 +613,7 @@ class Q6KGEMVRouteSpec:
   def kernel_name(self) -> str:
     suffix = "_inkernel" if self.reduction == "in_kernel" else ""
     if self.epilogue == "ffn_down_resadd": suffix += "_epi_ffnresadd"
+    if self.epilogue == "vocab_top1": suffix += "_epi_vocabtop1"
     return (f"q6k_gen_coop_{self.rows}_{self.k}" if self.route_family == "q6k_coop"
             else f"q6k_gen_partial_{self.rows}_{self.k}_{self.parts}") + suffix
 
@@ -603,7 +621,7 @@ class Q6KGEMVRouteSpec:
     if self.quant is not Q6_K: raise ValueError(f"Q6KGEMVRouteSpec quant must be Q6_K, got {self.quant!r}")
     if self.route_family not in ("q6k_coop", "q6k_partial"): raise ValueError(f"unknown route_family {self.route_family!r}")
     if self.reduction not in ("external_sum", "in_kernel"): raise ValueError(f"unsupported reduction {self.reduction!r}")
-    if self.epilogue not in ("", "ffn_down_resadd"):
+    if self.epilogue not in ("", "ffn_down_resadd", "vocab_top1"):
       raise ValueError(f"unsupported epilogue {self.epilogue!r}")
     if self.reduction == "in_kernel" and self.route_family == "q6k_partial":
       raise ValueError("in_kernel reduction is not implemented for the q6k_partial family (M2 non-landing, "
@@ -611,6 +629,9 @@ class Q6KGEMVRouteSpec:
     if self.epilogue == "ffn_down_resadd":
       if self.reduction != "in_kernel": raise ValueError("ffn_down_resadd epilogue requires in_kernel reduction")
       if self.rows != 4096: raise ValueError(f"ffn_down_resadd epilogue requires rows=4096, got rows={self.rows}")
+    if self.epilogue == "vocab_top1":
+      if self.reduction != "in_kernel": raise ValueError("vocab_top1 epilogue requires in_kernel reduction")
+      if self.route_family != "q6k_coop": raise ValueError("vocab_top1 epilogue requires the coop route family")
     if self.storage != "packed_u16": raise ValueError(f"unsupported storage {self.storage!r}")
     if self.k % Q6_K_BLOCK_ELEMS != 0: raise ValueError(f"k={self.k} must be a multiple of {Q6_K_BLOCK_ELEMS}")
     if self.lane_extent != Q6K_POS_EXTENT: raise ValueError(f"lane_extent must be {Q6K_POS_EXTENT}, got {self.lane_extent}")
@@ -661,6 +682,25 @@ def emit_q6k_vocab_scalar_reduce_kernel(spec:Q6KGEMVRouteSpec):
   return kernel
 
 
+def emit_q6k_vocab_top1_reduce_kernel(spec:Q6KGEMVRouteSpec):
+  """Final packed reduce for the vocab_top1 fused epilogue (P1 aux scatter-chain fusion).
+
+  The vocab GEMV's vocab_top1 epilogue already carried one packed u64 (max, index) key per
+  warp tile; this tiny kernel turns the per-tile keys into the first-index token id with one
+  u64 MAX over the tile axis (the cross-tile reduce), then unpacks ``rows-1-(key & 0xffffffff)``.
+  Tie semantics match today's r_16_8 Tensor.argmax chain and packed_argmax_finite_fp32: the
+  inverted row index in the low half breaks equal logits to the FIRST row.  No float cast
+  participates in the compare (BITCAST + integer ops only), so no float rounding can reorder ties.
+  """
+  if spec.epilogue != "vocab_top1": raise ValueError(f"vocab_top1 reduce requires the vocab_top1 epilogue, got {spec.to_json()}")
+  def kernel(out:UOp, keys:UOp) -> UOp:
+    tile = UOp.range(cdiv(spec.rows, spec.row_tile), 0, axis_type=AxisType.REDUCE)
+    best = keys[tile].reduce(tile, arg=Ops.MAX)
+    token = (UOp.const(dtypes.uint64, spec.rows - 1) - best.bitwise_and(0xffffffff)).cast(dtypes.int32)
+    return out[0].store(token).sink(arg=KernelInfo(name=f"q6k_vocab_top1_reduce_{spec.rows}_{spec.k}", opts_to_apply=()))
+  return kernel
+
+
 def _emit_q6k_coop(spec:Q6KGEMVRouteSpec):
   rows, row_tile, k_blocks, name = spec.rows, spec.row_tile, spec.k_blocks, spec.kernel_name
   in_kernel = spec.reduction == "in_kernel"
@@ -676,6 +716,24 @@ def _emit_q6k_coop(spec:Q6KGEMVRouteSpec):
       acc = acc.after(acc[0].store(0.0))
       acc = acc.after(acc[0].store(acc.after(blk)[0] + contrib).end(blk))
       total = _q6k_coop_pos_reduce_sum(acc[0], pos, row_tile)
+      # P1 vocab-head aux scatter-chain fusion (nv-vocab-aux-chain-fusion-scope-20260812.md):
+      # carry the per-tile (max, index) as one u64 key instead of the 151936-row logits
+      # scatter.  Each lane owns its row's total (replicated over the 16 pos lanes), so the
+      # warp reduce over the packed key picks the largest logit and, on ties, the FIRST row
+      # (the inverted row index in the low half is largest for the smallest row) with no
+      # float cast anywhere in the compare: the value leaves fp32 only through BITCAST and
+      # integer ops (identical ordering to packed_argmax_finite_fp32).  The tiny final
+      # packed reduce (q6k_vocab_top1_reduce_*) turns the per-warp keys into the token id.
+      if spec.epilogue == "vocab_top1":
+        bits = total.bitcast(dtypes.uint32)
+        bits = total.eq(0.0).where(UOp.const(dtypes.uint32, 0), bits)
+        neg = (bits >> UOp.const(dtypes.uint32, 31)).eq(UOp.const(dtypes.uint32, 1))
+        ordered = neg.where(bits.bitwise_not(), bits.bitwise_xor(UOp.const(dtypes.uint32, 0x80000000)))
+        inv_index = (UOp.const(dtypes.uint64, rows - 1) - row.cast(dtypes.uint64))
+        key = (ordered.cast(dtypes.uint64) << UOp.const(dtypes.uint64, 32)).bitwise_or(inv_index)
+        tile_key = _q6k_coop_tile_key_reduce_max(key, pos * row_tile + row_i)
+        return partials[row_o].store(tile_key).end(row_o, row_i, pos).sink(
+          arg=KernelInfo(name=name, opts_to_apply=()))
       # M2b ffn_down residual add (nv-epilogue-absorption-route-scope-20260810.md): the row's
       # total plus the hidden-state residual h[row], stored fp32. The in-kernel fp32 add is
       # bitwise-identical to the standalone h+ffn_out kernel (same values, fp32 add is
