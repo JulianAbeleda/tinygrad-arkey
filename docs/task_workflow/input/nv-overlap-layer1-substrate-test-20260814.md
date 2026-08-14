@@ -1,7 +1,8 @@
 # NV overlap Layer-1 substrate test: does multi-stream move the decode wall?
 
 Date: 2026-08-14. Target: RTX 5090, `DEV=CUDA` CUDAGraph route, sm_120.
-Status: **measurement record. Substrate runs, but buys ~0 wall on the decode DAG.**
+Status: **measurement record. The multi-stream lowerer runs, but the decode DAG
+buys ~0 from it. Layer 1 (overlap) is OPEN, blocked on substrate, not exhausted.**
 
 ## 1. Question
 
@@ -50,18 +51,24 @@ lowerer (`DEV=CUDA`) runs a different, chain-like graph (and loses the promoted
 `reduce-output` norm fusion, which is why its baseline is ~178 tok/s versus ~193 native).
 Turning on streams does not reconstruct that 596-node independence: it buys ~0.
 
-Therefore Layer 1 as a "flip a stream knob" item is closed at ~0 tok/s. The 219 bound is
-not a substrate toggle; reaching it requires DAG-shape work (re-consolidate the six
-ping-pong graphs, restore the fused-norm graph, and create GEMV-GEMV / support slack), which
-is the critical-path work, not the overlap lowerer.
+This does not close Layer 1. It closes only the "flip the existing stream knob on the
+current degraded graph" variant. llama's 936 us of overlap is real and is the exposure-side
+view of a structure we do not have: one long-running fused-quant matvec anchor that the
+support kernels hide behind. Our 253 chained ~16 us GEMVs provide no such shadow, and the
+route that has multi-stream (`DEV=CUDA`) does not run the fused-norm full-token graph. The
+overlap lever stays OPEN until we either reproduce llama's anchor+fusion topology or prove
+that topology does not map 1-to-1 onto our decomposition.
 
 ## 5. Verdict
 
 - Hardware + lowerer substrate: **present and correct** (multi-stream capture runs end to end,
-  identical numerics).
-- Transferable wall on the current decode DAG: **~0 tok/s**.
-- Next lever is DAG independence/critical-path shortening, not another stream or channel
-  construction attempt.
+  identical numerics). This is the only part this record closes.
+- Transferable wall on the current decode DAG: **~0 tok/s**, because that DAG is chain-like
+  and does not have llama's anchor structure.
+- Layer 1 verdict: **OPEN, blocked on substrate.** The missing substrate is llama's
+  anchor+fusion topology (a single long matvec anchor with quant folded in, support kernels
+  hidden behind it) plus a concurrency-capable route that runs the fused-norm full-token
+  graph. Overlap is not exhausted; it is unexpressible on the current graph.
 
 ## 6. Artifacts
 
