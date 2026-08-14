@@ -245,13 +245,13 @@ def _emit_q6(rows, rt=2):
   return kernel
 
 def _emit_q6_warp_direct(rows):
-  """Q6/Q8 four-warp direct-output consumer for the shared packed-Q8 ABI.
+  """Q6/Q8 llama-MMVQ direct-output consumer for the shared packed-Q8 ABI.
 
-  This is the measured flat direct-output mapping: each of four warps owns
-  four Q6 blocks, reduces its local contribution, publishes one float, then
-  lane zero writes the merged row.  Unlike the legacy shared-Q8 Q6 emitter it
-  has no global partial4 result or follow-up tensor sum.  The Q8 packet and
-  scale indexing is deliberately the existing shared-provider ABI.
+  One row per CTA and 32 lanes x 4 warps, matching llama's
+  ``vec_dot_q6_K_q8_1_impl_mmvq``: each lane loads two packed uint32 words
+  from ql/qh, produces two signed int8x4 values with bit ops, then dp4a's them
+  against the shared Q8_1 packets.  Blocks are strided across warps
+  (``block = warp + 4*block_rel``), so each warp owns one Q6 block per loop.
   """
   if rows != _KV_ROWS: raise ValueError("Q6 direct shared-Q8 consumer requires the exact 1024x4096 V shape")
   def kernel(out,h,xp):
@@ -260,11 +260,27 @@ def _emit_q6_warp_direct(rows):
     block_rel=UOp.range(4,0,axis_type=AxisType.REDUCE); block=warp*4+block_rel
     base=(row*(_K//256)+block)*Q6K_HALFWORDS_PER_BLOCK
     contrib=UOp.const(dtypes.float32,0.)
-    for quad in range(2):
-      chunk=lane*2+quad; group,pos4=chunk//4,chunk%4
-      qword=_pack4([_q6signed_dynamic_group(h,base,group,pos4*4+i) for i in range(4)])
-      dot=int8x4_dot(UOp.const(dtypes.int32,0),qword,xp[block*64+group*4+pos4]).cast(dtypes.float32)
-      contrib=contrib+dot*_f16_half(h[base+104])*_i8(_q6k_byte(h,base,192+group))*_q8_d(xp,block*8+group//2)
+    # get_int_b2(bq6_K->ql, lane): two halfwords, low halfword first.
+    vl=h[base+lane*2].cast(dtypes.uint32).bitwise_or(h[base+lane*2+1].cast(dtypes.uint32).lshift(16))
+    # get_int_b2(bq6_K->qh, 8*(lane//16)+lane%8) >> 2*((lane%16)//8).
+    qh_half=16*(lane//16)+2*(lane%8)
+    vh=h[base+64+qh_half].cast(dtypes.uint32).bitwise_or(
+      h[base+65+qh_half].cast(dtypes.uint32).lshift(16))
+    vh=vh.rshift(2*((lane%16)//8))
+    scale_idx=8*(lane//16)+(lane%16)//4
+    q8_group0=4*(lane//16)+(lane%16)//8
+    for i in range(2):
+      low=vl.rshift(4*i).bitwise_and(0x0F0F0F0F)
+      high=vh.rshift(4*i).lshift(4).bitwise_and(0x30303030)
+      qword=low.bitwise_or(high)
+      q8_group=q8_group0+2*i
+      xword=xp[block*64+q8_group*8+lane%8]
+      scale=_q6k_byte(h,base,192+scale_idx+4*i).cast(dtypes.uint8).bitcast(dtypes.int8).cast(dtypes.int32)
+      dot=int8x4_dot(UOp.const(dtypes.int32,0),qword,xword)
+      xsum=int8x4_dot(UOp.const(dtypes.int32,0),UOp.const(dtypes.uint32,0x01010101),xword)
+      # (qword - 32) dot xword is algebraically llama's __vsubss4(qword, 0x20).
+      contrib=contrib+(dot-UOp.const(dtypes.int32,32)*xsum).cast(dtypes.float32)*scale.cast(dtypes.float32)*_q8_d(xp,block*8+q8_group)
+    contrib=contrib*_f16_half(h[base+104])
     acc=UOp.placeholder((1,),dtypes.float32,20,addrspace=AddrSpace.REG)
     acc=acc.after(acc[0].store(0.)); acc=acc.after(acc[0].store(acc.after(block_rel)[0]+contrib).end(block_rel))
     total=acc[0]

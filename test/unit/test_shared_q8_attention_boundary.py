@@ -183,3 +183,20 @@ def test_q6_direct_consumer_passes_final_nv_program_spec():
     UOp.placeholder((1024*16*210,),dtypes.uint16,1),UOp.placeholder((1152,),dtypes.uint32,2))
   with Context(SPEC=1): lowered=full_rewrite_to_sink(sink,CUDARenderer(Target("NV",arch="sm_120"),use_nvcc=True))
   assert lowered.op is Ops.SINK and all(not (u.op is Ops.CONST and u.arg is Invalid) for u in lowered.toposort())
+
+
+def test_q6_direct_consumer_uses_both_llama_mmvq_scale_slots():
+  # vec_dot_q6_K_q8_1_impl_mmvq reads scales[scale_offset] and
+  # scales[scale_offset + 4] for the two packed int8x4 terms. The old flat
+  # consumer reused the first scale for both terms; this pins the two
+  # halfword loads so that regression cannot silently re-enter.
+  from tinygrad.codegen import to_program
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.cuda import CUDARenderer
+  from tinygrad.llm.shared_q8_attention import _emit_q6_warp_direct
+  from tinygrad.uop.ops import Ops
+  ast=_emit_q6_warp_direct(1024)(UOp.placeholder((1024,),dtypes.float32,0),
+    UOp.placeholder((1024*16*210,),dtypes.uint16,1),UOp.placeholder((1152,),dtypes.uint32,2))
+  prog=to_program(ast,CUDARenderer(Target.parse("NV:CUDA:sm_120")))
+  src=next(u.arg for u in prog.src if u.op is Ops.SOURCE)
+  assert "(alu8+96)" in src and "(alu8+98)" in src
