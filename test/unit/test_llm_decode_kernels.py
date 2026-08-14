@@ -44,6 +44,45 @@ def test_q4_g3_production_lowering_preserves_promoted_uop_identity(rows, k, dige
   assert promoted.arg.name == f"q4k_g3_lanemap_gemv_{rows}_{k}"
 
 
+def test_q4_ffn_down_resadd_scalar_lowering_preserves_promoted_uop_identity():
+  # The production ffn_down call (epilogue=ffn_down_resadd, load_style default) must stay
+  # byte-identical after the research-only quad load style was added (nv-q4-down-quad-re-census-
+  # 20260813.md). Re-derive the digest the same way as the pins above if this kernel legitimately
+  # changes; the quad spelling lives under its own name and must never alter this one.
+  args = _q4_args(4096, 12288) + (UOp.placeholder((4096,), dtypes.float32, 3),)
+  promoted = decode_kernels.q4k_g3_lanemap_gemv_kernel(4096, 12288,
+    epilogue=decode_kernels.Q4KGEMVEpilogue("ffn_down_resadd"))(*args)
+  assert hashlib.sha256(repr(promoted.key).encode()).hexdigest() == "6f2a6d71c00089700a8679818d8deba54e00368848f6e93a09cf0ca79937e97f"
+  assert promoted.arg.name == "q4k_g3_lanemap_gemv_epi_ffnresadd_4096_12288"
+
+
+def test_q4_ffn_down_quad_load_style_emits_new_kernel_name():
+  epi = decode_kernels.Q4KGEMVEpilogue("ffn_down_resadd")
+  args = _q4_args(4096, 12288) + (UOp.placeholder((4096,), dtypes.float32, 3),)
+  scalar = decode_kernels.q4k_g3_lanemap_gemv_kernel(4096, 12288, epilogue=epi)(*args)
+  quad = decode_kernels.q4k_g3_lanemap_gemv_kernel(4096, 12288, epilogue=epi, load_style="quad")(*args)
+  assert scalar.arg.name == "q4k_g3_lanemap_gemv_epi_ffnresadd_4096_12288"
+  assert quad.arg.name == "q4k_g3_lanemap_gemv_quad_epi_ffnresadd_4096_12288"
+  assert quad.arg.name != scalar.arg.name
+
+
+def test_q4_ffn_down_quad_load_style_rejects_unsupported_geometries():
+  with pytest.raises(ValueError):
+    decode_kernels.q4k_g3_lanemap_gemv_kernel(4096, 12288, load_style="bogus")
+  with pytest.raises(ValueError):
+    decode_kernels.q4k_g3_lanemap_gemv_kernel(4096, 12288,
+      epilogue=decode_kernels.Q4KGEMVEpilogue("ffn_down_fused"), load_style="quad")
+  with pytest.raises(ValueError):
+    decode_kernels.q4k_g3_lanemap_gemv_kernel(1234, 12288, load_style="quad")
+
+
+def test_q4_ffn_down_quad_admission_validation():
+  from tinygrad.llm.decode_routes import Q4KFFNDownQuadAdmission
+  assert Q4KFFNDownQuadAdmission(4).block_index == 4
+  for bad in (-1, 2.5, "x", True):
+    with pytest.raises(ValueError): Q4KFFNDownQuadAdmission(bad)
+
+
 @pytest.mark.parametrize("rows,k,parts,use_coop,family,digest", [
   (16, 256, 1, True, "q6k_coop", "a30e1686b4731061bdb504eb4481d6fb8d01fe1aa4048484dab83702a16b4a34"),
   (15, 512, 3, False, "q6k_partial", "7bdf86fc211ddaf5ea7495d51c3a7b18b8874e66e099a031174b7fba9a7c3881"),

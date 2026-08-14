@@ -50,6 +50,23 @@ class _LinearDecodeBinding:
   row_tile: int = 1
   use_coop: bool = False
 
+
+@dataclass(frozen=True)
+class Q4KFFNDownQuadAdmission:
+  """Research-only lease marker for the quad-u128-smem Q4 FFN-down load style.
+
+  A census harness attaches one to an exact 4096x12288 ``ffn_down`` linear; the quad
+  spelling is then used in place of the installed scalar kernel for that block's
+  ffn_down_resadd GEMV (new ``q4k_g3_lanemap_gemv_quad_epi_ffnresadd_*`` name, legacy
+  hashes untouched). Normal model loads never carry this marker, so production runs
+  the installed scalar path unchanged.
+  """
+  block_index: int
+  def __post_init__(self):
+    if not isinstance(self.block_index, int) or isinstance(self.block_index, bool) or self.block_index < 0:
+      raise ValueError("Q4_K FFN-down quad block index must be a non-negative integer")
+
+
 @dataclass(frozen=True)
 class _Q4KDecodeCandidate:
   candidate_id: str = "quant_linear_decode.q4k_generated_g3"
@@ -172,9 +189,17 @@ class _Q4KDecodeCandidate:
                                         combine_fusion_admitted=False,
                                         epilogue_absorption_admitted=True)
                     if epi_spec is not None and epi_spec.kind in ("ffn_down_resadd", "residual_add") else None)
+    # Research-only Q4 FFN-down quad-u128-smem load style (nv-q4-down-quad-re-census-20260813.md):
+    # a harness leases exact ffn_down linears with _q4k_ffn_down_quad_admission; the quad spelling is
+    # used ONLY when that marker AND the m2b_resadd epilogue are both present. Normal model loads have
+    # no marker, so the installed scalar kernel runs unchanged (production closed by default).
+    q4k_quad_admission = getattr(linear, "_q4k_ffn_down_quad_admission", None)
+    q4k_load_style = ("quad" if (q4k_quad_admission is not None and epi_spec is not None
+                                 and epi_spec.kind == "ffn_down_resadd" and route_role == "ffn_down")
+                      else "scalar")
     program = KernelProgram(binding.route_id, f"{binding.candidate_id}.gemv",
       KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
-      q4k_g3_lanemap_gemv_kernel(binding.N, binding.K, epilogue=epi_spec),
+      q4k_g3_lanemap_gemv_kernel(binding.N, binding.K, epilogue=epi_spec, load_style=q4k_load_style),
       output_spec=OutputSpec((binding.N,), out_dtype, typed_output=typed_output),
       typed_input_views=typed_input_views,
       residual_input_views=residual_input_views)

@@ -194,15 +194,86 @@ class Q4KGEMVEpilogue:
       raise ValueError(f"{self.kind} epilogue requires rows=4096, got rows={rows}")
 
 
-def q4k_g3_lanemap_gemv_kernel(rows:int, k:int, lanes:int=WARP, epilogue:Q4KGEMVEpilogue|None=None):
+def q4k_g3_lanemap_gemv_kernel(rows:int, k:int, lanes:int=WARP, epilogue:Q4KGEMVEpilogue|None=None,
+                               load_style:str="scalar"):
   """Lower the search-selected G3 lane map. When epilogue is None, the emitted UOps are byte-identical
   to the legacy kernel. Fused variants get NEW kernel names (e.g. q4k_g3_lanemap_gemv_epi_resadd_...)
-  so legacy hashes are untouched (pg3 guarantee)."""
+  so legacy hashes are untouched (pg3 guarantee).
+
+  `load_style="quad"` is a research-only quad-u128-smem spelling for the single-projection FFN-down
+  emitter: 16 rows/block x 8 lanes/row, weights loaded as pure uint4, x staged to shared memory once
+  per launch and read in-loop as uint4, 3-step XOR ladder 4/2/1 cross-lane reduce over the 8 row lanes
+  (the w1w3 quad geometry, single weight buffer). It renders under its own `q4k_g3_lanemap_gemv_quad_*`
+  name so legacy hashes are untouched, and is admitted only by an explicit harness lease in
+  decode_routes, never by production (which stays on the byte-identical `scalar` default)."""
   epi = epilogue or Q4KGEMVEpilogue()
   epi.validate(rows, k)
   lm = Q4KGateUpLaneMap(k=k, n=rows, lane_extent=lanes)
   lm.validate()
   name = f"q4k_g3_lanemap_gemv{epi.kernel_suffix}_{rows}_{k}"
+
+  if load_style == "quad":
+    if epi.kind == "ffn_down_fused":
+      raise ValueError("quad Q4 GEMV style does not support the ffn_down_fused epilogue")
+    rows_per_block, lanes_per_row = 16, 8
+    if rows % rows_per_block != 0:
+      raise ValueError(f"quad Q4 GEMV style requires rows % {rows_per_block} == 0, got rows={rows}")
+    name = f"q4k_g3_lanemap_gemv_quad{epi.kernel_suffix}_{rows}_{k}"
+    blocks, threads = rows // rows_per_block, rows_per_block * lanes_per_row
+
+    def kernel(out:UOp, words:UOp, x:UOp, *extra:UOp) -> UOp:
+      block = UOp.special(blocks, "gidx0")
+      lane = UOp.special(threads, "lidx0")
+      lane8 = lane.bitwise_and(UOp.const(dtypes.weakint, 7))
+      row_local = lane.rshift(UOp.const(dtypes.weakint, 3))
+      row = block.mul(UOp.const(dtypes.weakint, rows_per_block)) + row_local
+      bg = lane8.rshift(UOp.const(dtypes.weakint, 1))
+      # wc-quad offset in words; MUL form stays a 16B-aligned uint4 load.
+      wc0 = lane8.bitwise_and(UOp.const(dtypes.weakint, 1)).mul(UOp.const(dtypes.weakint, 4))
+      # x staged once per launch (24 KB fp16 halves at k=12288), read in-loop as uint4.
+      xsh = UOp.placeholder((k,), dtypes.float16, 22, addrspace=AddrSpace.LOCAL)
+      stage = UOp.range(k // (threads * 4), 0, axis_type=AxisType.REDUCE)
+      xoff = (stage.mul(UOp.const(dtypes.weakint, threads)) + lane).mul(UOp.const(dtypes.weakint, 4))
+      xvec = x.index(xoff).load(dtype=dtypes.float16.vec(4))
+      xstore = xsh.index(xoff).store(xvec)
+      barrier = UOp.barrier(UOp.group(xstore.end(stage)))
+
+      acc = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG)
+      acc = acc.after(acc[0].store(0.0))
+      b0 = UOp.range(lm.blocks_per_group, 1, axis_type=AxisType.REDUCE)
+      blk = bg.mul(UOp.const(dtypes.weakint, lm.blocks_per_group)) + b0
+      base = (row.mul(UOp.const(dtypes.weakint, lm.k_blocks)) + blk).mul(UOp.const(dtypes.weakint, Q4K_WORDS_PER_BLOCK))
+      hdr = words.index(base).load(dtype=dtypes.uint32.vec(4))
+      contrib = UOp.const(dtypes.float32, 0.0)
+      for g2 in range(4):
+        qw = words.index(base + UOp.const(dtypes.weakint, 4 + g2 * 8) + wc0).load(dtype=dtypes.uint32.vec(4))
+        for gp in range(2):
+          grp = 2 * g2 + gp
+          d, dmin, sc, mn = _q4k_group_params_from_words(hdr.gep(0), hdr.gep(1), hdr.gep(2), hdr.gep(3), grp)
+          xbase = blk.mul(UOp.const(dtypes.weakint, Q4_K_BLOCK_ELEMS)) + UOp.const(dtypes.weakint, grp * 32) + \
+            lane8.bitwise_and(UOp.const(dtypes.weakint, 1)).mul(UOp.const(dtypes.weakint, 16))
+          for wc in range(4):
+            qpack = qw.gep(wc).rshift((grp % 2) * 4).bitwise_and(0x0F0F0F0F)
+            for nib in range(4):
+              qv = qpack.rshift(nib * 8).bitwise_and(0xf)
+              weight = d * sc.cast(dtypes.float32) * qv.cast(dtypes.float32) - dmin * mn.cast(dtypes.float32)
+              xvv = _f16x4_lane(xsh.after(barrier).index(xbase + UOp.const(dtypes.weakint, wc * 4), ptr=True), nib)
+              contrib = contrib + weight * xvv
+      upd = acc[0].store(acc.after(b0)[0] + contrib).end(b0)
+      total = _warp_reduce_sum_staged(acc.after(upd)[0], lane8, lanes_per_row, 90)
+
+      if epi.kind in ("residual_add", "ffn_down_resadd"):
+        result = total + extra[0][row].cast(dtypes.float32)
+      elif epi.kind == "fp16_cast":
+        result = total.cast(dtypes.float16)
+      else:
+        result = total
+
+      return out[row].store(result, lane8.eq(0)).sink(arg=KernelInfo(name=name, opts_to_apply=()))
+    return kernel
+
+  if load_style != "scalar":
+    raise ValueError(f"unknown Q4 GEMV load style {load_style!r}")
 
   if epi.kind == "ffn_down_fused":
     def kernel(out:UOp, words:UOp, gate_out:UOp, up_out:UOp, normed_h:UOp) -> UOp:
