@@ -125,11 +125,16 @@ The other ladder rows are unaffected by this audit:
 
 ## 5. What is actually true about the launch-hiding layer
 
-Re-checked, not re-litigated blindly: llama's 946 us overlap decomposes into
-quantize_q8_1 391 us + rms_norm 156 us + rope 33 us (all already fused by
-tinygrad) + flash 143 us (the only exposed hidden mass). The graph scan found
-flash has zero dependency-independent partners, so the transferable
-launch-hiding ceiling is the scan's 17.9-33 us, not 946 us and not the
+Re-checked, not re-litigated blindly, with one precision fix. The ledger
+definitions (`nv-llama-d512-node-ledger-20260812.json`) say the per-class
+`hidden_behind_mmq_us` rows are **non-additive**; the additive aggregate is
+`non_anchor_aggregate.hidden_behind_mmq_us = 391.3 us`. So llama's 946 us
+overlap mass is 391.3 us hidden behind MMQ (essentially `quantize_q8_1`) plus
+~555 us of overlap among the non-MMQ kernels themselves and internal gaps, not
+946 us "behind the GEMV chain". This does not change the bottom line: the
+co-schedule scan's flash population has `ceiling_us: 0.0` and
+`greedy_recovery_us: 0` (`nv-co-schedule-scan-head-20260812.json`), and the
+transferable launch-hiding ceiling is the scan's 17.9-33 us, not 946 us or the
 ~0.48 ms the ladder's step 8 labels "launch hiding". This part of
 `nv-launch-hiding-substrate-exhaustive-account-20260813.md` holds; the flash
 half of it is the only row this audit changes.
