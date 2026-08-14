@@ -48,7 +48,8 @@ from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OU
 from tinygrad.llm.model_route_plan import (build_model_route_plan, decode_norm_fusion_promoted,
   decode_q4k_epilogue_fusion_promoted, decode_q4k_epilogue_resadd_promoted, decode_q4k_w1w3_fusion_promoted,
   decode_q4k_w1w3_fp16_store_promoted, decode_ffn_down_resadd_promoted, decode_kv_store_fusion_promoted,
-  decode_rmsnorm_native_lowering_promoted, decode_reduce_output_rmsnorm_promoted, decode_shared_q8_attention_promoted)
+  decode_rmsnorm_native_lowering_promoted, decode_reduce_output_rmsnorm_promoted, decode_shared_q8_attention_promoted,
+  decode_q6_direct_shared_q8_attention_promoted)
 from tinygrad.llm.prefill_candidate_runtime import decode_prefill_graph_candidate_set, automatic_promoted_prefill_graph_policy
 from tinygrad.llm.physical_memory_ledger import AllocationOwner, bind_allocation_owner
 from tinygrad.uop.ops import Ops, resolve
@@ -1755,6 +1756,15 @@ class Transformer:
     _shared_q8_promoted = decode_shared_q8_attention_promoted((_norm_cap.backend, _norm_cap.architecture))
     model._decode_shared_q8_attention_promoted = _shared_q8_promoted
     for _b in model.blk: _b._decode_shared_q8_attention_promoted = _shared_q8_promoted
+    # Q6 V direct-output consumer sub-variant gate. CLOSED default
+    # (decode-q6-direct-shared-q8-attention-route-policy.json, empty promoted_targets until
+    # the all-depth gate passes, nv-q6-direct-shared-q8-promotion-scope-20260814.md). It only
+    # changes the Q6_K V consumer inside an already-installed shared-Q8 lease; Q4_K V blocks and
+    # the shared Q8_1 provider are untouched, so the flag is inert unless the group lease above
+    # is also promoted. Same resolve-once pattern as the group gate.
+    _q6_direct_promoted = decode_q6_direct_shared_q8_attention_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_q6_direct_shared_q8_attention_promoted = _q6_direct_promoted
+    for _b in model.blk: _b._decode_q6_direct_shared_q8_attention_promoted = _q6_direct_promoted
     # Fused w1+w3 (gate/up) decode GEMV gate. CLOSED default (decode-q4k-w1w3-fusion-route-policy.json,
     # NV sm_120 promoted, q4k-w1w3-fused-qv-implementation-record-20260803.md). Same resolve-once
     # pattern as the M4 gate; the fused call additionally requires BOTH ffn_gate and ffn_up to be
@@ -1918,7 +1928,8 @@ class Transformer:
           _b = model.blk[_idx]
           _norm = getattr(_b, "attn_norm", None)
           if _norm is None or getattr(_norm, "weight", None) is None: continue
-          _b._shared_q8_attention_admission = SharedQ8AttentionAdmission(_idx, cooperative_q4=True)
+          _b._shared_q8_attention_admission = SharedQ8AttentionAdmission(_idx, cooperative_q4=True,
+            q6_direct_output=model._decode_q6_direct_shared_q8_attention_promoted)
           _b._decode_reduce_output_attn_rmsnorm_promoted = True
           try:
             _b._shared_q8_attention_norm_weight = Tensor.empty(4096, dtype=dtypes.float16,
