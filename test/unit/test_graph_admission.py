@@ -211,6 +211,16 @@ def test_runtime_tracemeta_context_controls_explicit_metadata_without_import_tim
   assert all_metadata[enabled.uop] == (tagged,)
 
 
+def test_metadata_wrapper_restores_role_metadata_after_raising_op():
+  # A wrapped Tensor method that raises must not leak its automatic metadata,
+  # or the next role_metadata block silently inherits the stale tag.
+  with pytest.raises(ValueError):
+    with Context(TRACEMETA=1): Tensor.rand(2, 2).reshape(3, 3)
+  tagged = Metadata("runtime_context", "fixture")
+  with Context(TRACEMETA=1), role_metadata(tagged): enabled = Tensor.empty(1) + 1
+  assert all_metadata[enabled.uop] == (tagged,)
+
+
 def test_supported_backend_limit_is_graphed_and_remains_visible_in_census():
   with observe_graph_admissions() as census: _split(_Linear([_call("a"), _call("b")]), observer=census, graph=_HybridSyntheticGraph)
   payload = census.to_dict()
