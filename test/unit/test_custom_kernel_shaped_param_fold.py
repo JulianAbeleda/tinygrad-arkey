@@ -16,14 +16,22 @@ and was never renderable on CPU.
 Scope: `docs/task_workflow/input/m4-resadd-rangeify-substrate-scope-20260806.md` S3. CPU only.
 """
 import numpy as np
+import pytest
 
 from tinygrad import Tensor, dtypes, UOp
-from tinygrad.helpers import DEV, Target
+from tinygrad.helpers import Context, Target
 from tinygrad.uop.ops import Ops, KernelInfo
 from tinygrad.renderer.cstyle import ClangRenderer
 from tinygrad.codegen import to_program
 
-DEV.value = "CPU"
+
+@pytest.fixture(autouse=True)
+def _cpu_device():
+  # DEV is process-global: scope CPU to each test so importing this module does
+  # not flip the default device for later tests in the same session.
+  with Context(DEV="CPU"):
+    yield
+
 
 N = 256
 

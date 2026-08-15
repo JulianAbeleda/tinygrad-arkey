@@ -12,14 +12,23 @@ express exactly fails closed with the existing trace reasons.
 """
 import hashlib
 import os
+
 import numpy as np
+import pytest
 
-from tinygrad.helpers import DEV
-
-DEV.value = "CPU"
+from tinygrad.helpers import Context
 
 from tinygrad import Tensor, dtypes, nn
 from tinygrad.uop.ops import Ops, UOp, ReduceOutputSpec, AxisType
+
+
+@pytest.fixture(autouse=True)
+def _cpu_device():
+  # DEV is process-global: scope CPU to each test so importing this module does
+  # not flip the default device for later tests in the same session.
+  with Context(DEV="CPU"):
+    yield
+
 
 # census associations: (ordinary reduce shape, dim, warps, per_lane)
 ASSOCIATIONS = {
