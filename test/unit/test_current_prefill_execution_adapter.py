@@ -1,4 +1,4 @@
-import hashlib, json, pickle
+import hashlib, json, os, pickle
 from pathlib import Path
 
 import numpy as np
@@ -14,6 +14,10 @@ from extra.llm_research.prefill.execution_bridge_contracts import ExecutionReque
 from tinygrad.uop.ops import Ops, ProgramInfo, UOp
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _has_amd():
+  return os.path.exists("/dev/kfd")
 
 
 def _nv_mint_payload() -> dict:
@@ -216,6 +220,7 @@ def test_packed_input_artifact_binds_exact_slot2_storage_contract(tmp_path, quan
     adapter._arrays(str(wrong), (512,4096,4096), admission.context.packed_weight)
 
 
+@pytest.mark.skipif(not _has_amd(), reason="AMD KFD is unavailable")
 def test_promoted_attn_qo_compile_only_produces_one_bound_final_program_and_proof_resources():
   entry = _candidate()
   canonical = adapter.admit_current_prefill(entry["payload"], entry["canonical_identity"]).canonical_identity
@@ -262,6 +267,7 @@ def test_promoted_attn_qo_compile_only_produces_one_bound_final_program_and_proo
   ("Q4_K", "uint32", "unsigned int", 144, 36),
   ("Q6_K", "uint16", "unsigned short", 210, 105),
 ))
+@pytest.mark.skipif(not _has_amd(), reason="AMD KFD is unavailable")
 def test_packed_attn_qo_compile_only_is_one_fp16_wmma_program_with_packed_b_abi(
     quant_format, storage_dtype, dtype_name, block_bytes, units_per_block):
   payload, identity = _packed_candidate(quant_format)
@@ -291,6 +297,7 @@ def test_packed_attn_qo_compile_only_is_one_fp16_wmma_program_with_packed_b_abi(
 
 
 @pytest.mark.parametrize("quant_format,storage_dtype", (("Q4_K", "uint32"), ("Q6_K", "uint16")))
+@pytest.mark.skipif(not _has_amd(), reason="AMD KFD is unavailable")
 def test_packed_shipping_binary_passes_resource_and_representation_gate(quant_format, storage_dtype):
   payload, identity = _packed_candidate(quant_format)
   _, evidence = adapter.prepare_current_prefill_compile(payload, identity, device="AMD")

@@ -5,6 +5,14 @@ from tinygrad.dtype import dtypes
 from tinygrad.uop.ops import Ops
 
 
+def _cuda_available():
+  from tinygrad.device import Device
+  try:
+    return str(Device.DEFAULT).startswith(("CUDA", "NV"))
+  except Exception:
+    return False
+
+
 def _request(**changes):
   values = {"adapter_id": adapter.ADAPTER_ID, "route_id": adapter.ROUTE_ID,
             "role": "ffn_gate_up", "rows": 12288, "k": 4096}
@@ -80,6 +88,7 @@ def _build_immutable_artifact(tmp_path, rows=32, k=1024, seed=99):
   return str(p), rows, k
 
 
+@pytest.mark.skipif(not _cuda_available(), reason="requires CUDA/NV")
 def test_verify_full_output_correctness_against_immutable_artifact(tmp_path):
   path, rows, k = _build_immutable_artifact(tmp_path)
   req = adapter.CurrentDecodeCompileRequest(adapter_id=adapter.ADAPTER_ID, route_id=adapter.ROUTE_ID,
@@ -111,6 +120,7 @@ def test_prepare_without_artifact_still_blocks():
     adapter.CurrentDecodeExecutionAdapter().prepare(req)
 
 
+@pytest.mark.skipif(not _cuda_available(), reason="requires CUDA/NV")
 def test_process_isolated_guarded_dispatch_passes(tmp_path):
   path, rows, k = _build_immutable_artifact(tmp_path, rows=32, k=1024, seed=13)
   req = adapter.CurrentDecodeCompileRequest(adapter_id=adapter.ADAPTER_ID, route_id=adapter.ROUTE_ID,

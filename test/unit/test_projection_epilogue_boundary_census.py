@@ -8,6 +8,7 @@ import pytest
 
 from tinygrad import Tensor, TinyJit, dtypes
 from tinygrad.callify import CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT
+from tinygrad.device import Device
 from tinygrad.function import function
 from tinygrad.helpers import Context
 from tinygrad.llm.decode_kernels import Q4KGEMVEpilogue, q4k_g3_lanemap_gemv_kernel
@@ -17,6 +18,13 @@ from tinygrad.llm.flash_decode_attention import describe_flash_decode_attention
 from tinygrad.llm.memory_semantics import runtime_activation, runtime_scratch
 from tinygrad.uop.ops import Ops, UOp
 from extra.llm_research.decode.nv_projection_epilogue_qualification import post_callify_copy_trace
+
+
+def _cuda_available():
+  try:
+    return str(Device.DEFAULT).startswith(("CUDA", "NV"))
+  except Exception:
+    return False
 
 
 @pytest.fixture(autouse=True)
@@ -85,6 +93,7 @@ def test_post_callify_trace_links_a_materialization_writer_to_epilogue_slot():
   assert endpoints and all(edge["shape"] == ["4096"] and edge["dtype"] == "dtypes.float" for edge in endpoints)
 
 
+@pytest.mark.skipif(not _cuda_available(), reason="requires CUDA/NV grid-parallel kernels")
 def test_post_callify_trace_uses_compiled_program_output_slots():
   from tinygrad.engine.realize import compile_linear
   n = k = 4096
@@ -189,6 +198,7 @@ def test_synthetic_composed_fp16_combine_and_plain_call_output_has_no_adapter():
   assert names == ["flash_fused_gmax_combine_f16_32_128", "test", "q4k_g3_lanemap_gemv_epi_resadd_4096_4096"]
 
 
+@pytest.mark.skipif(not _cuda_available(), reason="requires CUDA/NV grid-parallel kernels")
 def test_owned_output_stays_direct_through_precompiled_consumer_opaque_call():
   """Reproduce the real block-output -> next block -> attention-O topology.
 
@@ -214,6 +224,7 @@ def test_owned_output_stays_direct_through_precompiled_consumer_opaque_call():
   assert names[2] == "q4k_g3_lanemap_gemv_epi_resadd_4096_4096"
 
 
+@pytest.mark.skipif(not _cuda_available(), reason="requires CUDA/NV grid-parallel kernels")
 def test_owned_output_consumer_input_contract_has_exact_default_rollback():
   from tinygrad.engine.realize import compile_linear
   n = k = 4096

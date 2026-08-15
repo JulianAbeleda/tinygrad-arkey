@@ -10,6 +10,7 @@ AFTER (no copy) and stay closed-default on any mismatch (copy stays).
 """
 import pytest
 from tinygrad import Tensor, dtypes
+from tinygrad.device import Device
 from tinygrad.engine.realize import compile_linear
 from tinygrad.llm.decode_kernels import Q4KGEMVEpilogue, q4k_g3_lanemap_gemv_kernel, q4k_g3_lanemap_gemv_w1w3_rms_affine_kernel
 from tinygrad.llm.kernel_program import (ActivationViewRequest, DeclaredTypedOutput, KernelProgram,
@@ -23,6 +24,13 @@ from extra.llm_research.decode.nv_epilogue_absorption_m1_ab import validate_cost
 
 TRANSPORT_COPY = "E_32_32_4_86a23e1a5cd1cbd6101066fd85449138b653e9ecbb53d1d704f32aa470cd6f2b"
 N = K = 4096
+
+
+def _cuda_available():
+  try:
+    return str(Device.DEFAULT).startswith(("CUDA", "NV"))
+  except Exception:
+    return False
 
 
 def _cost_bracket(candidate_ms: float, control_ms: float) -> dict:
@@ -97,6 +105,7 @@ def _m1_calls(out: Tensor) -> list:
           and getattr(u.src[0].arg, "name", "").startswith("q4k_g3_lanemap_w1w3_rms_affine16_")]
 
 
+@pytest.mark.skipif(not _cuda_available(), reason="requires CUDA/NV grid-parallel kernels")
 def test_m1_raw_x_folds_to_epi_resadd_after_no_transport_copy():
   h, _ = _hidden_state()
   xv = h[:, 0, :].reshape(K).contiguous()

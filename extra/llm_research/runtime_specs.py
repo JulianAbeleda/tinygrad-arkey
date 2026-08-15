@@ -504,7 +504,7 @@ def _resolve_tensor_core(device:str, arch:str, dtype_in, dtype_out):
   # Normalize the device spelling exactly like the load-time `_tensor_core_family`
   # does (`.upper()`): the declared rows use "Metal"/"CUDA"/"AMD" while tinygrad
   # Device names are uppercase, and both must resolve to the same family.
-  family_for_arch = _tensor_core_family_by_device().get(device.upper())
+  family_for_arch = _tensor_core_family_by_device().get(device.split(":")[0].upper())
   if family_for_arch is None:
     raise FullKernelAdmissionError("capability_device", f"no declared tensor-core family for device {device!r}")
   family = family_for_arch(arch)

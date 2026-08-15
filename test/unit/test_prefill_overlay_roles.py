@@ -1,11 +1,19 @@
 import pathlib
 import pytest
 
+from tinygrad.device import Device
 from tinygrad.llm.gguf import gguf_load_metadata
 from tinygrad.llm.model import Transformer, derive_selected_gguf_prefill_inventory
 from tinygrad.llm.model_facts import (
   PREFILL_OVERLAY_LINEAR_NAMES, PREFILL_OVERLAY_ROLES, estimate_prefill_overlay_bytes, is_prefill_overlay_role,
 )
+
+
+def _cuda_available():
+  try:
+    return str(Device.DEFAULT).startswith(("CUDA", "NV"))
+  except Exception:
+    return False
 
 
 def test_overlay_role_set_is_canonical_and_covers_every_walk_name():
@@ -112,6 +120,7 @@ def test_inventory_overlay_bytes_equal_model_walk_on_real_qwen3_8b(qwen3_8b_mode
 
 @pytest.mark.skipif(not pathlib.Path("/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf").exists(),
                     reason="no local Qwen3 8B GGUF fixture")
+@pytest.mark.skipif(not _cuda_available(), reason="requires CUDA/NV prefill graph_gemm admission")
 def test_nv_promoted_candidate_census_in_admit_report(qwen3_8b_model):
   """P2: on NV the sm120 promoted candidate is admitted and labeled in the admission report and policy."""
   model, _ = qwen3_8b_model
