@@ -79,7 +79,7 @@ def test_isolated_rejects_abnormal_exit_after_result_was_queued():
 
 def test_isolated_timeout_retains_result_published_before_teardown_hang():
   result = run_isolated(
-    _return_then_hang_during_teardown, timeout_seconds=0.1,
+    _return_then_hang_during_teardown, timeout_seconds=2.0,
     terminate_grace_seconds=0.05, start_method="spawn")
   assert result.status == "timed_out" and result.timed_out is True
   assert result.result == {

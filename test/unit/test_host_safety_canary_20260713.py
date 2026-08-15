@@ -102,7 +102,7 @@ def test_normal_tiny_op_completes_and_does_not_false_trigger_timeout():
 
 
 def test_synthetic_child_hang_times_out_and_parent_survives_with_cleanup():
-  out = _run("timeout", timeout_seconds=0.4)
+  out = _run("timeout", health_probe=_healthy, timeout_seconds=0.4)
   # The PARENT survives; the terminal is typed timed_out and no guarded result
   # leaked out (the hung child's cleanup boundary was enforced by termination).
   assert out.dispatch_state == "timed_out" and out.passed is False
