@@ -65,7 +65,7 @@ def test_spec_validate_rejects_bad_contracts():
     (dict(rows=1, dim=100, eps=1e-6), "dim >= lane_width"),
     (dict(rows=1, dim=4096, eps=1e-6, warps_per_row=7), r"dim % \(lane_width"),
     (dict(rows=1, dim=4096, eps=0.0), "eps>0"),
-    (dict(rows=1, dim=4096, eps=1e-6, x_rank=2), r"x_rank in \(1, 3\)"),
+    (dict(rows=1, dim=4096, eps=1e-6, x_rank=4), r"x_rank in \(1, 2, 3\)"),
     (dict(rows=1, dim=4096, eps=1e-6, out_dtype=dtypes.float64), "out_dtype"),
   ]
   for kw, msg in bad:

@@ -27,16 +27,24 @@ MAXC = 256
 def decode_model():
   if not pathlib.Path(MODEL).exists():
     pytest.skip("no local Qwen3 8B GGUF fixture")
-  # closed arm: keep the shared-Q8 decode routes dormant (GPU sm_120 only anyway)
-  mrp._DECODE_SHARED_Q8_ATTENTION_PROMOTED_TARGETS = frozenset()
-  tgm._CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS = frozenset()
-  # CPU device facts carry no VRAM scan; inject fake facts so admission can plan.
-  cap = DeviceCapabilities(global_allocation_granularity=4096, supports_fp16=False)
-  probe = ProbeRecord("probe", "now")
-  tgm.scan_device_facts = lambda: DeviceFacts("CPU", "CPU", "cpu", 96 * 2**30, 64 * 2**30, cap, probe, probe)
-  from tinygrad.llm.model import Transformer
-  model, _ = Transformer.from_gguf(MODEL, MAXC)
-  return model
+  _shared_q8 = mrp._DECODE_SHARED_Q8_ATTENTION_PROMOTED_TARGETS
+  _custom_prefill = tgm._CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS
+  _scan_device_facts = tgm.scan_device_facts
+  try:
+    # closed arm: keep the shared-Q8 decode routes dormant (GPU sm_120 only anyway)
+    mrp._DECODE_SHARED_Q8_ATTENTION_PROMOTED_TARGETS = frozenset()
+    tgm._CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS = frozenset()
+    # CPU device facts carry no VRAM scan; inject fake facts so admission can plan.
+    cap = DeviceCapabilities(global_allocation_granularity=4096, supports_fp16=False)
+    probe = ProbeRecord("probe", "now")
+    tgm.scan_device_facts = lambda: DeviceFacts("CPU", "CPU", "cpu", 96 * 2**30, 64 * 2**30, cap, probe, probe)
+    from tinygrad.llm.model import Transformer
+    model, _ = Transformer.from_gguf(MODEL, MAXC)
+    yield model
+  finally:
+    mrp._DECODE_SHARED_Q8_ATTENTION_PROMOTED_TARGETS = _shared_q8
+    tgm._CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS = _custom_prefill
+    tgm.scan_device_facts = _scan_device_facts
 
 
 def _run(model, sp: int, toks: Tensor):

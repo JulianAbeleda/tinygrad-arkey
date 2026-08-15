@@ -28,7 +28,7 @@ def test_amd_interface_allocator_publishes_its_large_allocation_granularity():
   allocator.dev = type("FakeAMDDevice", (), {"is_am":lambda self:True})()
   assert allocator.allocation_granularity == 2 << 20
   allocator.dev = type("FakeKFDDevice", (), {"is_am":lambda self:False})()
-  assert allocator.allocation_granularity is None
+  assert allocator.allocation_granularity == 4 << 10
 
 
 def test_amd_interface_allocator_reports_live_allocatable_heap_bytes():
