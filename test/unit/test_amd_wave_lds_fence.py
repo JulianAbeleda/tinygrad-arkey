@@ -13,6 +13,14 @@ def _expanded(local_size: int, validity_mode: str = "tail_v1") -> UOp:
   score = UOp(Ops.WMMA, dtypes.float.vec(8), (
     UOp.const(dtypes.half.vec(16), 0), UOp.const(dtypes.half.vec(16), 0), UOp.const(dtypes.float.vec(8), 0)),
     arg=("__WMMA_16_16_16_half_float", (16, 16, 16), dtypes.float, (32,)))
+  if validity_mode == "all_v1":
+    # Unmasked all_v1 is the canonical static tile: non-dynamic, scalar state,
+    # kv_start=0, valid_kv=16.  It must still emit the wave-scoped LDS barrier.
+    state = UOp.const(dtypes.float, 0)
+    spec = NativeRowSoftmaxRepackSpec(mode="legacy_normalized", validity_mode="all_v1",
+                                      kv_start=0, valid_kv=16, dynamic_kv_v1=False, grid=grid)
+    return expand_native_row_softmax_repack(itertools.count(),
+      UOp(Ops.NATIVE_ROW_SOFTMAX_REPACK, dtypes.half, (score, state, state), arg=spec))
   state = UOp.const(dtypes.float.vec(8), 0)
   rng = UOp.range(4, 0, 4)
   spec = NativeRowSoftmaxRepackSpec(mode="loop_state_v1", validity_mode=validity_mode, kv_start=-1, valid_kv=64,

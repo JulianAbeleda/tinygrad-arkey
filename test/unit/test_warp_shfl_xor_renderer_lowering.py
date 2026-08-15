@@ -82,17 +82,19 @@ def test_cuda_provider_uses_a_lane_mask_like_metal_not_an_amd_address():
 
 
 def test_unprovided_renderer_raises_naming_the_op_and_the_target():
-  """A target with no warp_shfl_xor provider must fail loudly at lowering, never render AMD (or any
-  other target's) text silently -- this is the exact anti-pattern the scope calls out in section 4.4."""
+  """CPU provides an identity warp_shfl_xor (LOCAL ranges serialize to loops), but the
+  byte-address warp_bpermute stays unprovided and must fail loudly at lowering, naming
+  both the operation and the target -- never render another target's text silently."""
   ren = ClangRenderer(Target.parse("CPU:CLANG:x86_64,znver2"))
-  assert ClangRenderer.warp_shfl_xor is None
   lane = UOp.special(WARP, "lidx0")
-  tagged = warp_shfl_xor(lane.cast(dtypes.float32), 16, lane)
-  with pytest.raises(NotImplementedError, match="warp_shfl_xor"):
-    graph_rewrite(tagged, pm_lower_warp_shfl_xor, ctx=ren)
+  val = lane.cast(dtypes.float32)
+  assert graph_rewrite(warp_shfl_xor(val, 16, lane), pm_lower_warp_shfl_xor, ctx=ren) is val
+  tagged = _attention_style_bpermute()
+  with pytest.raises(NotImplementedError, match="warp_bpermute"):
+    graph_rewrite(tagged, pm_lower_warp_bpermute, ctx=ren)
   # the message must also name the target, not just the operation, so a failure is actionable
   try:
-    graph_rewrite(tagged, pm_lower_warp_shfl_xor, ctx=ren)
+    graph_rewrite(tagged, pm_lower_warp_bpermute, ctx=ren)
     assert False, "expected NotImplementedError"
   except NotImplementedError as e:
     assert "ClangRenderer" in str(e) and "CPU" in str(e)
@@ -105,13 +107,12 @@ def test_unprovided_renderer_raises_does_not_dispatch_on_device_default():
   raise for CPU, proving the decision reads `ctx`, not the process-global default device."""
   from tinygrad.helpers import Context
   ren = ClangRenderer(Target.parse("CPU:CLANG:x86_64,znver2"))
-  lane = UOp.special(WARP, "lidx0")
-  tagged = warp_shfl_xor(lane.cast(dtypes.float32), 16, lane)
+  tagged = _attention_style_bpermute()
   with Context(DEV="METAL"):
     from tinygrad import Device
     assert Device.DEFAULT == "METAL"
-    with pytest.raises(NotImplementedError, match="warp_shfl_xor"):
-      graph_rewrite(tagged, pm_lower_warp_shfl_xor, ctx=ren)
+    with pytest.raises(NotImplementedError, match="warp_bpermute"):
+      graph_rewrite(tagged, pm_lower_warp_bpermute, ctx=ren)
 
 
 # --- warp_bpermute (fused-attention row-softmax byte-address permute, P1 of the NV port scope) ---
