@@ -16,6 +16,7 @@ here (no GPU in this environment) and is written to run wherever a GPU is presen
 rest of this test module's convention of unconditional device="AMD" execution.
 """
 import itertools
+import os
 import pytest
 
 from tinygrad.dtype import Invalid, dtypes
@@ -181,6 +182,7 @@ def test_full_kernel_aligned_hot_path_isa_is_spill_free_and_unchanged_shape():
   assert offsets == {2 * (e * 256 + j * 16) for e in range(8) for j in range(4)}
 
 
+@pytest.mark.skipif(not os.path.exists("/dev/kfd"), reason="AMD KFD is unavailable")
 def test_numeric_parity_unaligned_kv_tokens_against_reference_softmax_attention():
   """Real-hardware numeric parity for an unaligned geometry (kv_tokens % 16 == 7): not executed in
   this environment (no GPU here / instructed not to run GPU workloads), written to run wherever an

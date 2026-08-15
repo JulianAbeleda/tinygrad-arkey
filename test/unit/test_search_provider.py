@@ -1,4 +1,4 @@
-import io, json
+import io, json, sys
 import pytest
 from types import SimpleNamespace
 
@@ -97,6 +97,7 @@ def test_metal_adapter_admits_only_live_exact_target_and_compiler_owned_plan(mon
   assert bad_op["error"]["code"] == "unsupported_plan"
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="Metal objc bridge requires macOS libSystem.dylib")
 def test_metal_target_facts_expose_replay_strategy_and_counters_without_hardware(monkeypatch):
   from tinygrad.runtime import ops_metal
   from tinygrad.runtime.graph import metal as metal_graph

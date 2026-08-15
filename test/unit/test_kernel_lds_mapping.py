@@ -1,3 +1,5 @@
+import sys
+
 import pytest
 
 from tinygrad.codegen.opt.kernel_lds import (binary_axis_count, cooperative_store_octet_rows, cooperative_store_row,
@@ -129,8 +131,9 @@ def test_renderers_declare_lds_bank_facts_amd_known_metal_unknown():
   a silent 32/8 borrowed from AMD."""
   amd = HIPRenderer(Target.parse("AMD:HIP:gfx1100"))
   assert (amd.lds_bank_dwords, amd.lds_bank_cycle_lanes) == (32, 8)
-  metal = MetalRenderer(Target.parse("METAL:METAL:Apple9"))
-  assert (metal.lds_bank_dwords, metal.lds_bank_cycle_lanes) == (None, None)
+  if sys.platform == "darwin":
+    metal = MetalRenderer(Target.parse("METAL:METAL:Apple9"))
+    assert (metal.lds_bank_dwords, metal.lds_bank_cycle_lanes) == (None, None)
 
 
 def test_cooperative_store_rotation_fires_for_amds_shipped_geometry():
@@ -141,9 +144,10 @@ def test_cooperative_store_rotation_fires_for_amds_shipped_geometry():
   amd = HIPRenderer(Target.parse("AMD:HIP:gfx1100"))
   assert cooperative_store_row_rotation(vectors_per_row=4, rows=128, stride_bytes=80, bank_dwords=amd.lds_bank_dwords,
                                         bank_cycle_lanes=amd.lds_bank_cycle_lanes) is True
-  metal = MetalRenderer(Target.parse("METAL:METAL:Apple9"))
-  assert cooperative_store_row_rotation(vectors_per_row=4, rows=128, stride_bytes=80, bank_dwords=metal.lds_bank_dwords,
-                                        bank_cycle_lanes=metal.lds_bank_cycle_lanes) is False
+  if sys.platform == "darwin":
+    metal = MetalRenderer(Target.parse("METAL:METAL:Apple9"))
+    assert cooperative_store_row_rotation(vectors_per_row=4, rows=128, stride_bytes=80, bank_dwords=metal.lds_bank_dwords,
+                                          bank_cycle_lanes=metal.lds_bank_cycle_lanes) is False
 
 
 def test_cooperative_store_rotation_unknown_facts_never_fall_through_to_amd_arithmetic():

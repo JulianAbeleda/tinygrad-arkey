@@ -1,5 +1,6 @@
 import unittest
 import ctypes
+import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 from unittest.mock import patch
@@ -10,6 +11,7 @@ from tinygrad.engine.jit import GraphAdmissionReason, GraphException, GraphRunne
 from tinygrad.helpers import Context
 
 
+@unittest.skipUnless(sys.platform == "darwin", "Metal objc bridge requires macOS libSystem.dylib")
 class TestMetalGraphAdmissionSynthetic(unittest.TestCase):
   @classmethod
   def setUpClass(cls):
@@ -63,6 +65,7 @@ class _FakeBuffer:
   def ensure_allocated(self): return self
 
 
+@unittest.skipUnless(sys.platform == "darwin", "Metal objc bridge requires macOS libSystem.dylib")
 class TestMetalHybridReplaySynthetic(unittest.TestCase):
   @classmethod
   def setUpClass(cls):
@@ -154,6 +157,7 @@ class TestMetalHybridReplaySynthetic(unittest.TestCase):
                                    "resident_buffer_count":2, "resident_buffer_bytes":300}
 
 
+@unittest.skipUnless(sys.platform == "darwin", "Metal objc bridge requires macOS libSystem.dylib")
 class TestMetalDirectEncoderSynthetic(unittest.TestCase):
   def test_shared_direct_encoder_binds_buffers_scalars_and_dispatch(self):
     from tinygrad.runtime.ops_metal import encode_metal_dispatch

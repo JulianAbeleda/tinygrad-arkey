@@ -3,6 +3,8 @@ target-capability-policy-decoupling-scope-20260730.md). These pin the three acce
 source is unchanged, Metal gets its own native intrinsic with no leftover AMD/lane arithmetic, and a renderer
 that declares no provider fails loudly at lowering instead of silently emitting AMD text on the wrong target.
 """
+import sys
+
 import pytest
 
 from tinygrad import Tensor, dtypes
@@ -60,6 +62,7 @@ def test_amd_kernel_source_is_byte_identical_to_pre_tg1():
   assert "__builtin_bit_cast(float, __builtin_amdgcn_ds_bpermute(" in src
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="Metal objc bridge requires macOS libSystem.dylib")
 def test_metal_kernel_source_has_simd_shuffle_xor_and_no_amd_builtin_or_dead_lane_arithmetic():
   ren = MetalRenderer(Target.parse("METAL:METAL:Apple9"))
   src = _rendered_source("METAL", ren)

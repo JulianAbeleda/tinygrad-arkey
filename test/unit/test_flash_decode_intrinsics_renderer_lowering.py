@@ -5,6 +5,9 @@ native equivalent (and, since this machine has real Metal hardware, that it actu
 stronger check than TG1 could offer for its own AMD/Metal pair), and that an unprovided renderer fails loudly
 at lowering rather than silently emitting the wrong target's text.
 """
+import shutil
+import sys
+
 import pytest
 
 from tinygrad import dtypes
@@ -85,6 +88,7 @@ def test_amd_kernel_source_has_fast_exp2_when_opted_in(monkeypatch):
     getenv.cache_clear()
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="Metal objc bridge requires macOS libSystem.dylib")
 def test_metal_kernel_source_has_no_amd_builtin_and_compiles_on_real_metal_hardware():
   """This machine's Metal backend is real hardware (scope section 8 note: unlike AMD, this is not a
   structural proxy) -- compiling is a strictly stronger check than rendered-source equality alone."""
@@ -97,6 +101,7 @@ def test_metal_kernel_source_has_no_amd_builtin_and_compiles_on_real_metal_hardw
   assert len(lib) > 0
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="Metal objc bridge requires macOS libSystem.dylib")
 def test_metal_fdot2_semantics_are_fp32_accumulate_not_half2_dot():
   """Pin the exact substitute expression so a future edit can't silently swap in `dot(half2,half2)` (which is
   not guaranteed to accumulate in fp32 the way AMD's fdot2 does)."""
@@ -131,6 +136,7 @@ def test_cuda_fdot2_reuses_the_metal_two_fma_substitute():
   assert ren.supports_flash_decode_fdot2 is True
 
 
+@pytest.mark.skipif(shutil.which("nvcc") is None, reason="nvcc is unavailable")
 def test_nv_kernel_source_has_no_amd_builtin_and_compiles_with_nvcc():
   """The full tile kernel renders through the CUDA renderer once the provider exists (no amdgcn text, shfl via
   __shfl_xor_sync, two-FMA fdot2, exp2 native) and nvcc accepts it -- the same compile-stronger-than-source
@@ -177,7 +183,8 @@ def test_unprovided_renderer_raises_does_not_dispatch_on_device_default():
 def test_capability_properties_are_derived_from_the_provider_not_restated():
   assert HIPRenderer(Target.parse("AMD:HIP:gfx1100")).supports_flash_decode_fdot2 is True
   assert HIPRenderer(Target.parse("AMD:HIP:gfx1100")).supports_flash_decode_exp2f is True
-  assert MetalRenderer(Target.parse("METAL:METAL:Apple9")).supports_flash_decode_fdot2 is True
-  assert MetalRenderer(Target.parse("METAL:METAL:Apple9")).supports_flash_decode_exp2f is True
+  if sys.platform == "darwin":
+    assert MetalRenderer(Target.parse("METAL:METAL:Apple9")).supports_flash_decode_fdot2 is True
+    assert MetalRenderer(Target.parse("METAL:METAL:Apple9")).supports_flash_decode_exp2f is True
   assert ClangRenderer(Target.parse("CPU:CLANG:x86_64,znver2")).supports_flash_decode_fdot2 is False
   assert ClangRenderer(Target.parse("CPU:CLANG:x86_64,znver2")).supports_flash_decode_exp2f is False
