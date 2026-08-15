@@ -58,11 +58,15 @@ def test_generate_jit_replay_matches_full_prefix_greedy_oracle():
       expected.append(token)
       reference_tokens.append(token)
 
-    # First request warms/captures; the second replays the same decode JIT from
-    # an independent prompt-side input and exercises prefix/cache recovery.
-    for _ in range(2):
+    # First request warms/captures; the later requests replay the same decode JIT
+    # from independent prompt-side inputs and exercise prefix/cache recovery. The
+    # three-pass shape also guards the capture-time schedule prune: pruning before
+    # TinyJit capture dropped the block-output seed feeding the LM head, so the
+    # replay omitted its KV-cache readers and sampled from a non-attention input.
+    for _ in range(3):
       got = [token for _, token in zip(range(4), model.generate(prompt.copy(), chunk_size=3, temperature=0.0))]
       assert got == expected
+    assert model.rollout_jit.captured is not None
 
 
 def test_decode_with_logits_is_a_closed_diagnostic_tap():

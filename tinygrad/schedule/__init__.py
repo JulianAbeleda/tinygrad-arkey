@@ -688,7 +688,12 @@ def create_linear_with_vars(big_sink:UOp) -> tuple[UOp, dict[str, int]]:
   # node once and uses rewrite results as-is, so resolution + one flatten at the root
   # stays linear in the final schedule size.
   linear = graph_rewrite(linear_call, pm_resolve_linear_call, name="resolve linear call", walk=True)
-  linear = _drop_dead_schedule_items(linear, linear_call.src[1:])
+  # JIT capture must carry the full resolved schedule into jit_lower, which performs the real
+  # memory planning and input substitution. Running the liveness prune here before capture drops
+  # the block-output seed that feeds the LM head on the capture step, so the replayed decode graph
+  # omits the KV-cache readers and samples from a non-attention input (decode correctness fails).
+  if not (capturing and CAPTURING):
+    linear = _drop_dead_schedule_items(linear, linear_call.src[1:])
   linear = _elide_residual_transports(linear)
   _t2 = time.perf_counter()
   if _trace:
