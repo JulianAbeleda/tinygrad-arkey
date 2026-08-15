@@ -4,7 +4,8 @@
 This is the GPU-side sibling of ``nv_vocab_top1_fusion_cpu_microgate.py``.  The
 control arm runs the production greedy LM-head argmax tail (four aux kernels);
 the candidate arm installs ``_decode_vocab_top1_lease`` so ``forward_greedy``
-uses the packed per-tile (max,index) epilogue plus the tiny cross-tile reduce.
+uses the packed per-tile (max,index) epilogue plus the ordinary scheduler
+cross-tile reduce.
 The only correctness gate on the fused arm is the exact token stream, because
 the fused route deliberately does not materialise the 151936-row logits.
 """
@@ -36,7 +37,7 @@ COST_PREDICTION = {
   "arithmetic": {
     "formula": "point = added_epilogue_mass - removed_tail_mass; positive = candidate slower",
     "removed_tail_mass": "four tail kernels x control medians (~54.5us total)",
-    "added_epilogue_mass": "packed per-tile epilogue extra + q6k_vocab_top1_reduce + held-copy barrier (~4.5us launch floor)",
+    "added_epilogue_mass": "packed per-tile epilogue extra + ordinary scheduler u64 cross-tile reduce + held-copy barrier",
     "launch_us_range": [1.0, 2.0],
     "envelope": "best case: tail fully removed at zero added cost; pessimistic: added mass at twice the launch floor",
   },
@@ -107,7 +108,7 @@ def child(model_path:str, depth:int, count:int, max_context:int, lease:bool) -> 
     "tail_programs": tail,
     "tail_program_count": len(tail),
     "program_count": len(programs),
-    "pass": (lease and vocab_epi == 1 and vocab_legacy == 0 and vocab_reduce == 1 and len(tail) == 0)
+    "pass": (lease and vocab_epi == 1 and vocab_legacy == 0 and vocab_reduce == 0 and len(tail) == 0)
             or (not lease and vocab_epi == 0 and vocab_reduce == 0 and vocab_legacy == 1 and len(tail) == 4),
   }
   if not topology["pass"]: raise RuntimeError(f"vocab top-1 topology failed: {topology}")

@@ -14,9 +14,10 @@ import pytest
 from tinygrad import Tensor, dtypes
 from tinygrad.codegen import to_program
 from tinygrad.helpers import Target
+from tinygrad.llm import decode_routes
 from tinygrad.llm.decode_kernels import (Q6KGEMVRouteSpec, emit_q6k_gemv_kernel,
-                                         emit_q6k_vocab_top1_reduce_kernel, q6k_spec_for_role)
-from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, execute_research_program
+                                         q6k_spec_for_role)
+from tinygrad.llm.qk_primitives import QKPrimitiveCapability, QKPrimitiveRouteAdmission
 from tinygrad.llm.packed_argmax import (packed_argmax_from_tile_keys, packed_argmax_tile_keys_fp32,
                                         packed_argmax_tiles_fp32)
 from tinygrad.renderer.cuda import CUDARenderer
@@ -113,35 +114,40 @@ def test_vocab_top1_route_validation_fail_closed():
                      route_family="q6k_partial", epilogue="vocab_top1", pos_axis="reduce").validate()
 
 
-def test_vocab_top1_final_reduce_kernel_executes_on_cpu():
-  """Hermetic DEV=CPU gate: feed per-tile keys into the emitted final reduce kernel and check
-  the token id equals the legacy r_16_8 argmax on normal, all-zero, and tie logits."""
-  spec = q6k_spec_for_role(VOCAB_ROWS, VOCAB_K, row_tile=2, reduction="in_kernel", epilogue="vocab_top1")
-  program = KernelProgram("research.vocab_top1", f"q6k_vocab_top1_reduce_{VOCAB_ROWS}_{VOCAB_K}",
-                          KernelProgramProvenance.RESEARCH_ONLY, emit_q6k_vocab_top1_reduce_kernel(spec))
-  rng = np.random.default_rng(99)
-  for a in (rng.standard_normal((1, VOCAB_ROWS)).astype(np.float32),
-            np.zeros((1, VOCAB_ROWS), dtype=np.float32), _tie_logits()):
-    x = Tensor(a)
-    legacy = x.argmax(-1, keepdim=True).numpy().ravel()
-    keys = packed_argmax_tile_keys_fp32(x, 2).reshape(VOCAB_ROWS // 2).contiguous()
-    out = Tensor.empty((1,), dtype=dtypes.int32)
-    got = execute_research_program(out, keys, program=program)
-    assert got.numpy().ravel().tolist() == legacy.tolist()
+def test_vocab_top1_call_finishes_with_ordinary_packed_reduce(monkeypatch):
+  """The fused route emits one GEMV program and finishes the cross-tile reduce with
+  packed_argmax_from_tile_keys, not the single-thread custom reduce kernel.  The old
+  custom path serialized rows/row_tile keys in one thread and regressed the wall."""
+  capability = QKPrimitiveCapability(backend="NV", architecture="sm_120",
+                                     wave_size=32, supports_warp_shfl_xor=True)
 
+  class _FakeQ6VocabLinear:
+    def __init__(self):
+      self.q6k_storage = type("_FakeQ6Storage", (), {"halfs": Tensor.zeros(8, dtype=dtypes.uint16)})()
+      self.decode_enabled, self.bias = True, None
+      self.in_features, self.out_features, self.parts = VOCAB_K, VOCAB_ROWS, 1
+      self.opts, self.route_role = (), "lm_head"
+      self.route_admission = QKPrimitiveRouteAdmission(capability, True)
 
-def test_vocab_top1_reduce_route_return_is_owned_copy():
-  """The fused route returns a held clone of the custom-kernel reduce output, not a reshape
-  view of that buffer.  The raw view replays one token behind under NV JIT capture/replay."""
-  spec = q6k_spec_for_role(VOCAB_ROWS, VOCAB_K, row_tile=2, reduction="in_kernel", epilogue="vocab_top1")
-  program = KernelProgram("research.vocab_top1", f"q6k_vocab_top1_reduce_{VOCAB_ROWS}_{VOCAB_K}",
-                          KernelProgramProvenance.RESEARCH_ONLY, emit_q6k_vocab_top1_reduce_kernel(spec))
-  logits = np.full((1, VOCAB_ROWS), -100.0, dtype=np.float32)
-  logits[0, 0], logits[0, 1000] = 3.0, 3.0
-  keys = packed_argmax_tile_keys_fp32(Tensor(logits), 2).reshape(VOCAB_ROWS // 2).contiguous()
-  out = Tensor.empty((1,), dtype=dtypes.int32)
-  token = execute_research_program(out, keys, program=program)
-  returned = token.reshape(1, 1).clone()
-  assert returned.shape == (1, 1)
-  assert int(returned.numpy().ravel()[0]) == 0
-  assert returned.uop.buf_uop is not token.uop.buf_uop
+  linear = _FakeQ6VocabLinear()
+  captured = []
+  emitted_keys = []
+  winning_row = 1000
+
+  def fake_execute_research_program(output, *inputs, program):
+    captured.append(program)
+    assert output.shape == (VOCAB_ROWS // 2,)
+    assert output.dtype == dtypes.uint64
+    keys = np.zeros(VOCAB_ROWS // 2, dtype=np.uint64)
+    keys[winning_row // 2] = (np.uint64(1) << 32) | np.uint64(VOCAB_ROWS - 1 - winning_row)
+    emitted_keys.append(Tensor(keys))
+    return emitted_keys[-1]
+
+  monkeypatch.setattr(decode_routes, "execute_research_program", fake_execute_research_program)
+  x = Tensor.zeros((1, 1, VOCAB_K), dtype=dtypes.float16)
+  token = decode_routes.q6k_vocab_top1_call(linear, x, True)
+  assert token is not None and token.shape == (1, 1)
+  assert int(token.numpy().ravel()[0]) == winning_row
+  assert len(captured) == 1
+  assert captured[0].program_id == f"{decode_routes.Q6K_DECODE_CANDIDATE.candidate_id}.vocab_top1_gemv"
+  assert token.uop.buf_uop is not emitted_keys[0].uop.buf_uop

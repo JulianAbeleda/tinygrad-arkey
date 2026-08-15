@@ -5,7 +5,7 @@ from typing import Callable, Any
 
 from tinygrad import Device, Tensor, UOp, dtypes, getenv
 from tinygrad.llm.decode_kernels import (Q6K_POS_EXTENT, decode_kv_rope_store_kernel,
-  emit_q6k_gemv_kernel, emit_q6k_vocab_scalar_reduce_kernel, emit_q6k_vocab_top1_reduce_kernel, q4k_g3_lanemap_gemv_kernel,
+  emit_q6k_gemv_kernel, emit_q6k_vocab_scalar_reduce_kernel, q4k_g3_lanemap_gemv_kernel,
   q6k_coop_row_tile_for_target, q6k_spec_for_role, q6k_vocab_scalar_reduce_eligible)
 from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeCapability, FlashDecodeRouteConfig,
   flash_decode_capability_from_renderer, flash_decode_live_split_block_tile, flash_decode_target_promoted)
@@ -13,6 +13,7 @@ from tinygrad.llm.kernel_program import (ActivationViewRequest, DeclaredTypedOut
                                          KernelProgramProvenance, OutputSpec, ResidualViewRequest, TypedLayout,
                                          TypedViewRequest, execute_promoted_program, execute_research_program)
 from tinygrad.llm.model_route_plan import decode_epilogue_fusion_promoted, decode_flash_combine_fusion_promoted
+from tinygrad.llm.packed_argmax import packed_argmax_from_tile_keys
 from tinygrad.llm.qk_layout import Q4_K, Q6_K, QuantFormat
 from tinygrad.llm.route_selection import parse_route_mode
 from tinygrad.uop.ops import Ops
@@ -482,15 +483,13 @@ def q6k_vocab_top1_call(linear:Any, x:Tensor, arch_ok:bool) -> Tensor | None:
     output_spec=OutputSpec((tiles,), dtypes.uint64))
   keys = execute_research_program(Tensor.empty((tiles,), dtype=dtypes.uint64, device=x.device),
                                   linear.q6k_storage.halfs.to(x.device), x_vec, program=gemv_program)
-  reduce_program = KernelProgram("decode_q6k_vocab_top1_research", f"{binding.candidate_id}.vocab_top1_reduce",
-    KernelProgramProvenance.RESEARCH_ONLY, emit_q6k_vocab_top1_reduce_kernel(spec),
-    output_spec=OutputSpec((1,), dtypes.int32))
-  token = execute_research_program(Tensor.empty((1,), dtype=dtypes.int32, device=keys.device), keys, program=reduce_program)
-  # The reduce output is a custom-kernel buffer. Returning the reshape view of that buffer
-  # lets the JIT memory plan reuse the producer after the custom CALL, which replays the token
-  # one step behind the eager stream. A held copy owns a fresh replay-written allocation, the
-  # same firewall the full-logit diagnostic path uses.
-  return token.reshape(1, 1).clone()
+  # The cross-tile reduce is an ordinary UOp graph (one u64 MAX + unpack) so the
+  # scheduler lowers it with a hierarchical parallel reduction.  The custom
+  # emit_q6k_vocab_top1_reduce_kernel path was a single-thread serial loop over
+  # rows/row_tile keys and cost ~0.89ms/token in the fused A/B.  The returned
+  # view is cloned so the JIT memory plan cannot replay the winner one token
+  # behind the eager stream (same firewall the custom reduce route used).
+  return packed_argmax_from_tile_keys(keys, binding.N, axis=0, keepdim=True).reshape(1, 1).clone()
 
 def q6k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], Tensor], arch_ok:bool,
                               epilogue_inputs:dict[str, Tensor]|None=None) -> Tensor:
