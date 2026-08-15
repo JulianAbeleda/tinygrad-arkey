@@ -487,3 +487,17 @@ def test_m4_view_proof_admits_shape_bearing_post_callify_after():
   assert view.op is Ops.MEMORY_SEMANTIC
   assert _reduce_output_m4_input_view(view) is view
   assert _reduce_output_m4_input_view(after) is None  # bare base: durable proofs own it
+
+
+def test_opaque_proof_rejects_precompiled_call():
+  """The bounded opaque AFTER proof is for precompile=False custom kernels.
+  A precompiled function output has its own redirect-gated output-slot
+  contract, so it must not leak through the opaque custom-kernel path."""
+  from tinygrad.tensor import _bounded_opaque_after_output_identity
+  from tinygrad.uop.ops import CallInfo, UOp
+  base = UOp.param(0, dtypes.float32, (4096,), "CPU")
+  inp = UOp.param(1, dtypes.float32, (4096,), "CPU")
+  precompiled = UOp(Ops.CALL, dtypes.void, (UOp.sink(), base, inp), CallInfo(name="custom", precompile=True))
+  opaque = UOp(Ops.CALL, dtypes.void, (UOp.sink(), base, inp), CallInfo(name="custom", precompile=False))
+  assert _bounded_opaque_after_output_identity(base.after(precompiled)) is False
+  assert _bounded_opaque_after_output_identity(base.after(opaque)) is True

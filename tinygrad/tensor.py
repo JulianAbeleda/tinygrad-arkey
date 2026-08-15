@@ -87,6 +87,9 @@ def _bounded_opaque_after_output_identity(after: UOp) -> bool:
   if after.op is not Ops.AFTER or len(after.src) != 2: return False
   base, call = after.src
   if call.op is not Ops.CALL or len(call.src) < 2: return False
+  # A precompiled function has its own output-slot contract gated behind the
+  # redirect flag; this proof is only for opaque custom kernels (precompile=False).
+  if bool(getattr(call.arg, "precompile", False)): return False
   base_buf = base
   while base_buf.op is Ops.RESHAPE and len(base_buf.src) and base_buf.src[0].numel() == base_buf.numel():
     base_buf = base_buf.src[0]
