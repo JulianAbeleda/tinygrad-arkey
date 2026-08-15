@@ -1,4 +1,4 @@
-import ast, collections, inspect, textwrap
+import ast, collections, inspect, json, pathlib, textwrap
 import numpy as np
 
 from tinygrad import Tensor, dtypes
@@ -9,6 +9,8 @@ from tinygrad.runtime.support.compiler_cuda import NVRTCCompiler
 from tinygrad.uop.ops import Ops, UOp
 from tinygrad.llm.decode_routes import _Q4KDecodeCandidate
 from tinygrad.llm.decode_kernels import q4k_g3_lanemap_gemv_kernel, q4k_g3_lanemap_gemv_w1w3_kernel
+from tinygrad.llm.model_route_plan import (decode_q4k_ffn_down_fp16_geometry_promoted,
+  load_decode_q4k_ffn_down_fp16_geometry_promotion, _DECODE_Q4K_FFN_DOWN_FP16_GEOMETRY_PROMOTED_TARGETS)
 from tinygrad.llm.kernel_program import (DeclaredTypedOutput, KernelProgram, KernelProgramProvenance,
   OutputSpec, ResidualViewRequest, TypedLayout, TypedViewRequest, execute_promoted_program,
   execute_research_program)
@@ -435,3 +437,22 @@ def test_fp16_fma_admission_is_mutually_exclusive_with_owned_boundary():
   try: Q4KFFNDownMMVQAdmission(0, fp16_fma=1)
   except ValueError: pass
   else: raise AssertionError("fp16_fma must require an explicit bool")
+
+
+def test_fp16_geometry_promotion_loader_names_explicit_targets_only(tmp_path):
+  p = pathlib.Path(tmp_path) / "policy.json"
+  p.write_text(json.dumps({"schema": "boltbeam.route_policy.v1", "route": "decode_q4k_ffn_down_fp16_geometry",
+                           "promoted_targets": [{"backend": "NV", "architecture": "sm_120"}]}))
+  promoted = load_decode_q4k_ffn_down_fp16_geometry_promotion(str(p))
+  assert ("NV", "sm_120") in promoted
+  assert ("AMD", "gfx1100") not in promoted
+  p.write_text(json.dumps({"schema": "boltbeam.route_policy.v1", "route": "decode_q4k_ffn_down_fp16_geometry",
+                           "promoted_targets": []}))
+  assert load_decode_q4k_ffn_down_fp16_geometry_promotion(str(p)) == frozenset()
+
+
+def test_fp16_geometry_checked_in_record_promotes_only_nv_target():
+  assert _DECODE_Q4K_FFN_DOWN_FP16_GEOMETRY_PROMOTED_TARGETS == frozenset({("NV", "sm_120")})
+  assert decode_q4k_ffn_down_fp16_geometry_promoted(("NV", "sm_120"))
+  assert not decode_q4k_ffn_down_fp16_geometry_promoted(("AMD", "gfx1100"))
+  assert not decode_q4k_ffn_down_fp16_geometry_promoted((None, None))

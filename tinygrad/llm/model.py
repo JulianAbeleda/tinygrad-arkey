@@ -50,7 +50,7 @@ from tinygrad.llm.model_route_plan import (build_model_route_plan, decode_norm_f
   decode_q4k_epilogue_fusion_promoted, decode_q4k_epilogue_resadd_promoted, decode_q4k_w1w3_fusion_promoted,
   decode_q4k_w1w3_fp16_store_promoted, decode_ffn_down_resadd_promoted, decode_kv_store_fusion_promoted,
   decode_rmsnorm_native_lowering_promoted, decode_reduce_output_rmsnorm_promoted, decode_shared_q8_attention_promoted,
-  decode_q6_direct_shared_q8_attention_promoted)
+  decode_q6_direct_shared_q8_attention_promoted, decode_q4k_ffn_down_fp16_geometry_promoted)
 from tinygrad.llm.prefill_candidate_runtime import decode_prefill_graph_candidate_set, automatic_promoted_prefill_graph_policy
 from tinygrad.llm.physical_memory_ledger import AllocationOwner, bind_allocation_owner
 from tinygrad.uop.ops import Ops, resolve
@@ -1828,6 +1828,13 @@ class Transformer:
     _ffn_resadd_promoted = decode_ffn_down_resadd_promoted((_norm_cap.backend, _norm_cap.architecture))
     model._decode_ffn_down_resadd_promoted = _ffn_resadd_promoted
     for _b in model.blk: _b._decode_ffn_down_resadd_promoted = _ffn_resadd_promoted
+    # Q4_K FFN-down four-warp fp16 geometry route (decode-q4k-ffn-down-fp16-geometry-route-policy.json,
+    # NV sm_120 promoted, -100.3 us at d512). It replaces the installed 1-warp/row epi_ffnresadd GEMV
+    # with the 4-warp/row fp16-FMA direct consumer; the control topology it swaps against requires the
+    # M2b ffn-down residual-add promotion, so the flag is ANDed with _ffn_resadd_promoted. The Q4-only
+    # admission is installed on the replaced Q4K primitives after they are built below.
+    model._decode_q4k_ffn_down_fp16_geometry_promoted = _ffn_resadd_promoted and \
+      decode_q4k_ffn_down_fp16_geometry_promoted((_norm_cap.backend, _norm_cap.architecture))
     # Decode kv-store chain fusion gate (decode-kv-store-chain-fusion-scope-20260803.md). CLOSED default
     # (decode-kv-store-fusion-route-policy.json, empty promoted_targets until a same-session A/B record
     # lands). Same resolve-once pattern as the w1w3 gate; blocks carry their own copy so the traced
@@ -1929,6 +1936,16 @@ class Transformer:
           _ffn = getattr(_b, "ffn_down", None)
           if _ffn is not None and isinstance(_ffn, (Q4KPrimitiveLinear, Q6KPrimitiveLinear)) and getattr(_ffn, "route_role", "") == "ffn_down":
             _ffn._decode_ffn_down_resadd_promoted = True
+      # Q4_K FFN-down four-warp fp16 geometry route: install the research admission on the exact
+      # Q4_K 4096x12288 ffn_down role only (Q6 down keeps its own route). Normal loads carry no
+      # admission, so this stays closed on every other target and the harness lease is unaffected.
+      if model._decode_q4k_ffn_down_fp16_geometry_promoted:
+        from tinygrad.llm.q4k_ffn_down_mmvq import Q4KFFNDownMMVQAdmission
+        for _idx, _b in enumerate(model.blk):
+          _ffn = getattr(_b, "ffn_down", None)
+          if _ffn is not None and isinstance(_ffn, Q4KPrimitiveLinear) and getattr(_ffn, "route_role", "") == "ffn_down" \
+             and getattr(_ffn, "out_features", None) == 4096 and getattr(_ffn, "in_features", None) == 12288:
+            _ffn._q4k_ffn_down_mmvq_admission = Q4KFFNDownMMVQAdmission(_idx, fp16_fma=True)
       if qk_cfg.storage_debug:
         summary = _qk_storage_summary(primitive_linears)
         cap = -1 if primitive_budget.cap_bytes is None else primitive_budget.cap_bytes
