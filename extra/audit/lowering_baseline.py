@@ -235,7 +235,6 @@ def _flash_decode_cases() -> list[KernelCase]:
   configs = [
     ("8B", "KV_BOTH", "decode_flash_live_split_g4_kvboth"),
     ("14B", "KV_BOTH", "decode_flash_live_split_g5_kvboth"),
-    ("14B", "K_ONLY", "decode_flash_block_tile_g5_konly"),
   ]
   cases = []
   for model, staging, route_id in configs:

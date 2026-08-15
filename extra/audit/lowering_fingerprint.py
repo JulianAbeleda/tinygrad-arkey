@@ -139,6 +139,15 @@ def _reset_uop_unique_counter() -> None:
   graph) while hardening this gate. Resetting it here makes the fingerprint depend only on the graphs built
   below, not on how much other tinygrad activity happened earlier in this process."""
   from tinygrad.uop.ops import UOp
+  # UOp.unique_num drives BUFFER identity, but a warm process also holds scheduler-level memoization keyed on
+  # those identities (the precompile-body bases and nested-resolution cache in tinygrad.schedule). Those caches
+  # return first-run UOp objects whose .unique() calls have already advanced the process counter, so a second
+  # in-process build skips re-interned BUFFER(LUNIQUE) scratch and shifts every downstream UNIQUE arg. Clear them
+  # alongside the counter so the second run rebuilds the same objects from the same source.
+  from tinygrad.schedule import _resolve_precompile_base, _resolve_precompile_body_key, _resolve_nested_cache
+  _resolve_precompile_base.clear()
+  _resolve_precompile_body_key.clear()
+  _resolve_nested_cache.clear()
   UOp.unique_num = itertools.count(0)
 
 
