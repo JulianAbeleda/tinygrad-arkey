@@ -5,7 +5,7 @@ from typing import Callable, Any
 
 from tinygrad import Device, Tensor, UOp, dtypes, getenv
 from tinygrad.llm.decode_kernels import (Q6K_POS_EXTENT, decode_kv_rope_store_kernel,
-  emit_q6k_gemv_kernel, emit_q6k_vocab_scalar_reduce_kernel, q4k_g3_lanemap_gemv_kernel,
+  emit_q6k_gemv_kernel, emit_q6k_vocab_scalar_reduce_kernel, emit_q6k_vocab_top1_reduce_kernel, q4k_g3_lanemap_gemv_kernel,
   q6k_coop_row_tile_for_target, q6k_spec_for_role, q6k_vocab_scalar_reduce_eligible)
 from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeCapability, FlashDecodeRouteConfig,
   flash_decode_capability_from_renderer, flash_decode_live_split_block_tile, flash_decode_target_promoted)
@@ -453,6 +453,44 @@ class _Q6KDecodeCandidate:
     return partial.sum(axis=1).reshape(1, 1, binding.N)
 
 Q6K_DECODE_CANDIDATE = _Q6KDecodeCandidate()
+
+
+def q6k_vocab_top1_call(linear:Any, x:Tensor, arch_ok:bool) -> Tensor | None:
+  """Research-only fused vocab top-1 route.
+
+  The production Q6K vocab GEMV already emits the coop in-kernel reduction.  This route swaps
+  that epilogue for the P1 ``vocab_top1`` spelling (one packed u64 (max,index) key per warp
+  tile) and follows it with the tiny cross-tile reduce, so the four sampler tail kernels
+  (``E_1187_32_4`` / ``r_32_4_1187`` / ``r_128_16_8_1187`` / ``r_16_8``) disappear.  It is
+  closed-default and RESEARCH_ONLY: it is only reachable from the model's forward_greedy path
+  when the caller installs ``_decode_vocab_top1_lease``.
+  """
+  binding = Q6K_DECODE_CANDIDATE.bind(linear, x, arch_ok)
+  if binding is None or getattr(linear, "route_role", "") != "lm_head": return None
+  if not (binding.use_coop and binding.row_tile * Q6K_POS_EXTENT <= 32): return None
+  capability = getattr(getattr(linear, "route_admission", None), "capability", None)
+  target = f"{capability.backend}:{capability.architecture}" if capability is not None and \
+    getattr(capability, "backend", None) is not None and getattr(capability, "architecture", None) is not None \
+    else Q6K_DECODE_CANDIDATE.target
+  x_vec = x[:, 0, :].reshape(binding.K).cast(dtypes.float16).contiguous()
+  spec = q6k_spec_for_role(binding.N, binding.K, parts=binding.parts, row_tile=binding.row_tile,
+                          use_coop=binding.use_coop, opts=linear.opts, target=target,
+                          reduction="in_kernel", epilogue="vocab_top1")
+  tiles = binding.N // binding.row_tile
+  gemv_program = KernelProgram("decode_q6k_vocab_top1_research", f"{binding.candidate_id}.vocab_top1_gemv",
+    KernelProgramProvenance.RESEARCH_ONLY, emit_q6k_gemv_kernel(spec),
+    output_spec=OutputSpec((tiles,), dtypes.uint64))
+  keys = execute_research_program(Tensor.empty((tiles,), dtype=dtypes.uint64, device=x.device),
+                                  linear.q6k_storage.halfs.to(x.device), x_vec, program=gemv_program)
+  reduce_program = KernelProgram("decode_q6k_vocab_top1_research", f"{binding.candidate_id}.vocab_top1_reduce",
+    KernelProgramProvenance.RESEARCH_ONLY, emit_q6k_vocab_top1_reduce_kernel(spec),
+    output_spec=OutputSpec((1,), dtypes.int32))
+  token = execute_research_program(Tensor.empty((1,), dtype=dtypes.int32, device=keys.device), keys, program=reduce_program)
+  # The reduce output is a custom-kernel buffer. Returning the reshape view of that buffer
+  # lets the JIT memory plan reuse the producer after the custom CALL, which replays the token
+  # one step behind the eager stream. A held copy owns a fresh replay-written allocation, the
+  # same firewall the full-logit diagnostic path uses.
+  return token.reshape(1, 1).clone()
 
 def q6k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], Tensor], arch_ok:bool,
                               epilogue_inputs:dict[str, Tensor]|None=None) -> Tensor:

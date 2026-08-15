@@ -128,3 +128,20 @@ def test_vocab_top1_final_reduce_kernel_executes_on_cpu():
     out = Tensor.empty((1,), dtype=dtypes.int32)
     got = execute_research_program(out, keys, program=program)
     assert got.numpy().ravel().tolist() == legacy.tolist()
+
+
+def test_vocab_top1_reduce_route_return_is_owned_copy():
+  """The fused route returns a held clone of the custom-kernel reduce output, not a reshape
+  view of that buffer.  The raw view replays one token behind under NV JIT capture/replay."""
+  spec = q6k_spec_for_role(VOCAB_ROWS, VOCAB_K, row_tile=2, reduction="in_kernel", epilogue="vocab_top1")
+  program = KernelProgram("research.vocab_top1", f"q6k_vocab_top1_reduce_{VOCAB_ROWS}_{VOCAB_K}",
+                          KernelProgramProvenance.RESEARCH_ONLY, emit_q6k_vocab_top1_reduce_kernel(spec))
+  logits = np.full((1, VOCAB_ROWS), -100.0, dtype=np.float32)
+  logits[0, 0], logits[0, 1000] = 3.0, 3.0
+  keys = packed_argmax_tile_keys_fp32(Tensor(logits), 2).reshape(VOCAB_ROWS // 2).contiguous()
+  out = Tensor.empty((1,), dtype=dtypes.int32)
+  token = execute_research_program(out, keys, program=program)
+  returned = token.reshape(1, 1).clone()
+  assert returned.shape == (1, 1)
+  assert int(returned.numpy().ravel()[0]) == 0
+  assert returned.uop.buf_uop is not token.uop.buf_uop

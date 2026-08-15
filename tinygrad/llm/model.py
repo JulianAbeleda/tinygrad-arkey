@@ -17,6 +17,7 @@ from tinygrad.llm.gguf_memory_scan import RuntimeGeometry, selected_gguf_backing
 from tinygrad.llm.decode_routes import (FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_CANDIDATE, _kv_store_parts_view,
                                         decode_kv_store_route, flash_decode_attention_route,
                                         q4k_gate_up_primitive_linear_call, q4k_gate_up_rms_affine_qualification_call,
+                                        q6k_vocab_top1_call,
                                         should_use_flash_decode as _route_should_use_flash_decode)
 from tinygrad.llm.decode_kernels import DecodeRMSNormSpec, emit_decode_rmsnorm_kernel
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
@@ -1372,6 +1373,24 @@ class Transformer:
     notify_prefill_route(self.output)
     return Transformer._stamp_position_var_vals(_prefill_semantic(_prefill, prefill_output, self.output(x)), _vv)
 
+  def _decode_vocab_top1_sample(self, tokens:Tensor, start_pos:int|UOp) -> Tensor | None:
+    """Decode-only research route for the fused vocab top-1 epilogue.
+
+    Mirrors ``logits`` up to the LM head, then replaces the full 151936-row logits materialization
+    plus the four-kernel argmax tail with the P1 packed per-tile reduce.  Returns ``None`` for any
+    shape/route that cannot be fused so the ordinary greedy path stays the live fallback.
+    """
+    _prefill = resolve(tokens.shape[1] != 1)
+    if _prefill: return None
+    x = _prefill_semantic(_prefill, prefill_activation, self.token_embd(tokens).float())
+    for block in self.blk: x = block(x, start_pos)
+    _reduce_output_norm = not _prefill and getattr(self, "_decode_reduce_output_rmsnorm_promoted", False)
+    with role_metadata("rms_norm"):
+      x = _prefill_semantic(_prefill, prefill_scratch,
+        _decode_reduce_output_rmsnorm(self.output_norm, x, _reduce_output_norm))
+    notify_prefill_route(self.output)
+    return q6k_vocab_top1_call(self.output, x, self.output.route_admission.admitted)
+
   def _forward_sampled(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, with_logits:bool) -> Tensor|tuple[Tensor, Tensor]:
     # This runs inside the TinyJit body: feedback's lazy clone/store is captured in the decode schedule instead of
     # being realized by JIT input preparation as a separate per-token copy and synchronization.
@@ -1395,6 +1414,12 @@ class Transformer:
 
   def forward_greedy(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> Tensor:
     tokens = _runtime_input_boundary(tokens)
+    _prefill = resolve(tokens.shape[1] != 1)
+    if not _prefill and getattr(self, "_decode_vocab_top1_lease", False):
+      sampled = self._decode_vocab_top1_sample(tokens, start_pos)
+      if sampled is not None:
+        return Transformer._stamp_position_var_vals(_prefill_semantic(_prefill, prefill_output, sampled),
+                                                    Transformer._bound_position_var_vals(start_pos))
     logits = self.logits(tokens, start_pos)[:, -1, :]
     sampled = packed_argmax_finite_fp32(logits, -1, keepdim=True) if getattr(self, "_decode_packed_argmax_promoted", False) \
       else logits.argmax(-1, keepdim=True)
