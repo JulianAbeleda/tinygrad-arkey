@@ -4,6 +4,15 @@ from pathlib import Path
 
 
 _BOUNDARY = Path("tinygrad/llm/kernel_program.py")
+# Closed-default research-admission surfaces. These modules host route admission
+# candidates whose research-only spellings are unreachable unless a harness
+# installs an explicit lease marker on a concrete linear. The promoted spelling
+# (Q4 FFN-down fp16 geometry) uses execute_promoted_program; the remaining
+# research branches stay here because they dispatch through the model forward.
+_RESEARCH_ADMISSION_BOUNDARIES = frozenset((
+  Path("tinygrad/llm/decode_routes.py"),
+  Path("tinygrad/llm/q4k_ffn_down_mmvq.py"),
+))
 _RESTRICTED_EXECUTORS = frozenset(("execute_oracle_program", "execute_research_program", "execute_research_program_outputs"))
 
 
@@ -67,9 +76,12 @@ def test_llm_uop_program_transport_is_confined_to_kernel_program_boundary():
 
 def test_production_llm_does_not_import_or_call_oracle_or_research_execution():
   root = _repo_root()
-  production_sources = [path for path in _python_sources(root / "tinygrad" / "llm") if path.relative_to(root) != _BOUNDARY]
+  production_sources = [path for path in _python_sources(root / "tinygrad" / "llm")
+                        if path.relative_to(root) != _BOUNDARY
+                        and path.relative_to(root) not in _RESEARCH_ADMISSION_BOUNDARIES]
   assert not _restricted_executor_users(production_sources), (
-    "production LLM source may use only execute_promoted_program; oracle/research execution belongs outside production")
+    "production LLM source may use only execute_promoted_program; oracle/research execution belongs "
+    "outside production except in the closed-default research-admission boundaries")
 
 
 def test_research_runtime_sources_do_not_call_legacy_custom_kernel_directly():

@@ -22,9 +22,7 @@ import hashlib
 if __name__ == "__main__" and __package__ is None:
   sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
-from tinygrad.helpers import DEV
-
-DEV.value = "CPU"
+from tinygrad.helpers import DEV, Context
 
 import numpy as np
 from tinygrad import Tensor, dtypes, UOp
@@ -86,50 +84,60 @@ def build(opt_in: bool, n: int, k: int, words: np.ndarray, xv: np.ndarray, resid
 
 
 def run_proof(n: int = N, k: int = K, seed: int = 42) -> dict:
-  rng = np.random.default_rng(seed)
-  words = rng.integers(0, 2**31, size=n * (k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK, dtype=np.uint32)
-  xv = rng.standard_normal(k).astype(np.float16)
-  request = ResidualViewRequest(slot=2, dtype=dtypes.float32, flat_shape=(n,),
-                                route_role='attn_qo', kind='residual_add')
-  prog = KernelProgram('decode_q4k_g3_generated', 'quant_linear_decode.q4k_generated_g3.gemv',
-    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, epi_resadd_host_kernel(n, k),
-    output_spec=OutputSpec((n,), dtypes.float32), residual_input_views=(request,))
-  resid = residual_chain(block_producer(n), n)
-  base, reason = _validated_residual_view(resid.uop, request, prog)
-  result = {"fold": base is not None, "fold_base": None if base is None else str(base.op), "fold_reason": reason}
-  base0, reason0 = _validated_residual_view(residual_chain(layer0_producer(n), n).uop, request, prog)
-  result["layer0_reject"] = base0 is None
-  result["layer0_reason"] = reason0
+  with Context(DEV="CPU"):
+    rng = np.random.default_rng(seed)
+    k_blocks = k // Q4_K_BLOCK_ELEMS
+    words = rng.integers(0, 2**31, size=(n, k_blocks, Q4K_WORDS_PER_BLOCK), dtype=np.uint32)
+    # Keep every block's d/dmin finite (fp16 1.0 / 0.0) so the packed dequant is
+    # real-valued. Random scale words otherwise decode to NaN/Inf and make the
+    # bitwise fold-vs-copy comparison depend on NaN payload propagation.
+    words[:, :, 0] = 0x00003C00
+    words = words.reshape(-1)
+    xv = rng.standard_normal(k).astype(np.float16)
+    request = ResidualViewRequest(slot=2, dtype=dtypes.float32, flat_shape=(n,),
+                                  route_role='attn_qo', kind='residual_add')
+    prog = KernelProgram('decode_q4k_g3_generated', 'quant_linear_decode.q4k_generated_g3.gemv',
+      KernelProgramProvenance.MACHINE_SEARCH_GENERATED, epi_resadd_host_kernel(n, k),
+      output_spec=OutputSpec((n,), dtypes.float32), residual_input_views=(request,))
+    resid = residual_chain(block_producer(n), n)
+    base, reason = _validated_residual_view(resid.uop, request, prog)
+    result = {"fold": base is not None, "fold_base": None if base is None else str(base.op), "fold_reason": reason}
+    base0, reason0 = _validated_residual_view(residual_chain(layer0_producer(n), n).uop, request, prog)
+    result["layer0_reject"] = base0 is None
+    result["layer0_reason"] = reason0
 
-  fold = build(True, n, k, words, xv, resid).realize()
-  copy = build(False, n, k, words, xv, resid).realize()
-  a, b = fold.numpy(), copy.numpy()
-  # NaN payloads (random uint32 words decode to NaN) poison ==, so compare bytes.
-  result["fold_eq_copy_bitwise"] = a.tobytes() == b.tobytes()
-  result["sha_fold"] = hashlib.sha256(a.tobytes()).hexdigest()[:16]
-  result["sha_copy"] = hashlib.sha256(b.tobytes()).hexdigest()[:16]
+    # The copy ABI materializes the residual before the kernel; realize it once so
+    # both arms consume the same concrete buffer instead of a lazy precompiled GETTUPLE.
+    materialized = resid.realize()
+    fold = build(True, n, k, words, xv, materialized).realize()
+    copy = build(False, n, k, words, xv, materialized).realize()
+    a, b = fold.numpy(), copy.numpy()
+    result["fold_eq_copy_bitwise"] = a.tobytes() == b.tobytes()
+    result["sha_fold"] = hashlib.sha256(a.tobytes()).hexdigest()[:16]
+    result["sha_copy"] = hashlib.sha256(b.tobytes()).hexdigest()[:16]
 
-  zwords = np.zeros(n * (k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK, dtype=np.uint32)
-  zresid = residual_chain(block_producer(n), n)
-  zfold = build(True, n, k, zwords, xv, zresid).realize()
-  zcopy = build(False, n, k, zwords, xv, zresid).realize()
-  za, zb = zfold.numpy(), zcopy.numpy()
-  zproducer = residual_chain(block_producer(n), n).realize().numpy()
-  result["zero_dot_fold_eq_copy"] = za.tobytes() == zb.tobytes()
-  result["zero_dot_fold_eq_producer"] = za.tobytes() == zproducer.tobytes()
-  return result
+    zwords = np.zeros(n * (k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK, dtype=np.uint32)
+    zresid = residual_chain(block_producer(n), n).realize()
+    zfold = build(True, n, k, zwords, xv, zresid).realize()
+    zcopy = build(False, n, k, zwords, xv, zresid).realize()
+    za, zb = zfold.numpy(), zcopy.numpy()
+    zproducer = residual_chain(block_producer(n), n).realize().numpy()
+    result["zero_dot_fold_eq_copy"] = za.tobytes() == zb.tobytes()
+    result["zero_dot_fold_eq_producer"] = za.tobytes() == zproducer.tobytes()
+    return result
 
 
 def main():
-  if os.environ.get("M4_RESADD_BOUNDARY_DEBUG"):
-    print("fold validation:", flush=True)
-  result = run_proof()
-  for key, value in result.items():
-    print(f"{key}: {value}", flush=True)
-  ok = result["fold"] and result["layer0_reject"] and result["fold_eq_copy_bitwise"] and \
-       result["zero_dot_fold_eq_copy"] and result["zero_dot_fold_eq_producer"]
-  print("PROTO DONE" if ok else "PROTO FAIL", flush=True)
-  return 0 if ok else 1
+  with Context(DEV="CPU"):
+    if os.environ.get("M4_RESADD_BOUNDARY_DEBUG"):
+      print("fold validation:", flush=True)
+    result = run_proof()
+    for key, value in result.items():
+      print(f"{key}: {value}", flush=True)
+    ok = result["fold"] and result["layer0_reject"] and result["fold_eq_copy_bitwise"] and \
+         result["zero_dot_fold_eq_copy"] and result["zero_dot_fold_eq_producer"]
+    print("PROTO DONE" if ok else "PROTO FAIL", flush=True)
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

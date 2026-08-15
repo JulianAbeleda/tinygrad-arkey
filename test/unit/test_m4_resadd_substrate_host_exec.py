@@ -7,16 +7,12 @@ epi_resadd emitter shape reading the residual arg with a flat row index; this lo
 (`_validated_residual_view` fires on the real block-output chain and rejects layer 0) and the
 shaped-arg codegen fold (`pm_index_is_shrink`) that makes the folded kernel renderable.
 """
-from tinygrad.helpers import DEV
-
-DEV.value = "CPU"
-
 from extra.llm_research.decode.m4_resadd_substrate_host_exec import run_proof
 
 
 def test_fold_fires_on_real_chain_and_layer0_fails_closed():
   result = run_proof()
-  assert result["fold"] and result["fold_base"] == "Ops.CONTIGUOUS"
+  assert result["fold"] and result["fold_base"] == "Ops.GETTUPLE"
   assert result["layer0_reject"]
 
 

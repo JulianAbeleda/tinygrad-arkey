@@ -32,10 +32,10 @@ def test_loader_names_explicit_targets_only(tmp_path):
 
 
 def test_checked_in_combine_record_promotes_nothing_and_other_records_stay():
-  # M5's fp16 combine variant promotes nothing by default; M2's Q6K in-kernel merge keeps its NV
-  # sm_120 opt-in; M3 norm and M4 q4k records stay closed.
-  assert _DECODE_FLASH_COMBINE_FUSION_PROMOTED_TARGETS == frozenset()
-  assert not decode_flash_combine_fusion_promoted(("NV", "sm_120"))
+  # M5's fp16 combine variant is promoted for NV sm_120 by the M2d wall bracket; M2's Q6K
+  # in-kernel merge keeps its own NV sm_120 opt-in; M3 norm and M4 q4k records stay closed.
+  assert _DECODE_FLASH_COMBINE_FUSION_PROMOTED_TARGETS == frozenset({("NV", "sm_120")})
+  assert decode_flash_combine_fusion_promoted(("NV", "sm_120"))
   assert not decode_flash_combine_fusion_promoted(("AMD", "gfx1100"))
   assert not decode_flash_combine_fusion_promoted((None, None))
   assert decode_epilogue_fusion_promoted(("NV", "sm_120"))

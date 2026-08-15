@@ -54,8 +54,8 @@ def required_topology_schema() -> dict[str, Any]:
 
 
 def workloads() -> list[dict[str, Any]]:
-  return [{"shape_key": f"qwen3_14b_q4k_m_gfx1100:{quant}:{role}:m{m}-n{n}-k{k}", "profile": "qwen3_14b_q4k_m_gfx1100",
-           "quant": quant, "role": role, "shape": {"M": m, "N": n, "K": k}, "route_applicability": "COVERED"}
+  return [{"shape_key": f"qwen3_14b_q4k_m_gfx1100:{quant.name}:{role}:m{m}-n{n}-k{k}", "profile": "qwen3_14b_q4k_m_gfx1100",
+           "quant": quant.name, "role": role, "shape": {"M": m, "N": n, "K": k}, "route_applicability": "COVERED"}
           for quant, role, m, n, k in COVERED_SHAPES]
 
 

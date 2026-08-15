@@ -142,10 +142,9 @@ def test_precompiled_output_predicate_defers_explicit_contiguous_to_callify():
   x, residual = Tensor.empty(k, dtype=dtypes.float16), Tensor.empty(n, dtype=dtypes.float32)
   epi = _program(n, k, Q4KGEMVEpilogue("residual_add"))
   wrapped = producer(residual).contiguous()
-  # The raw predicate deliberately does not claim identity through an explicit
-  # materialization request.  The callify-owned rule can settle it only after
-  # FUNCTION -> CALL exposes the concrete output slot and dependency.
-  assert not wrapped.uop.has_precompiled_output_identity()
+  # CONTIGUOUS over the exact precompiled output is the promised materialization:
+  # the output-buffer contract survives the explicit materialization request.
+  assert wrapped.uop.has_precompiled_output_identity()
   out = execute_promoted_program(None, _words(n, k), x, wrapped, program=epi)
   assert _raw_residual_input(out) is Ops.CONTIGUOUS
 
@@ -162,7 +161,7 @@ def test_contiguous_contract_does_not_cross_movement_or_offset_views():
   assert _raw_residual_input(out) is Ops.CONTIGUOUS
   # The producer and its movement materialization remain two distinct calls;
   # the owned callify redirect must not erase the latter.
-  assert _calls(out) == ["test", "test", "test", "q4k_g3_lanemap_gemv_epi_resadd_4096_4096"]
+  assert _calls(out) == ["test", "test", "q4k_g3_lanemap_gemv_epi_resadd_4096_4096"]
 
 
 def test_synthetic_composed_fp16_combine_and_plain_call_output_has_no_adapter():
@@ -212,7 +211,7 @@ def test_owned_output_stays_direct_through_precompiled_consumer_opaque_call():
   out = consumer(residual)
   names = [getattr(u.src[0].arg, "name", "") for u in compile_linear(out.linear_with_vars()[0]).toposort() if u.op is Ops.CALL]
   assert "E_32_32_4_86a23e1a5cd1cbd6101066fd85449138b653e9ecbb53d1d704f32aa470cd6f2b" not in names
-  assert names[1] == "q4k_g3_lanemap_gemv_epi_resadd_4096_4096"
+  assert names[2] == "q4k_g3_lanemap_gemv_epi_resadd_4096_4096"
 
 
 def test_owned_output_consumer_input_contract_has_exact_default_rollback():
@@ -230,8 +229,12 @@ def test_owned_output_consumer_input_contract_has_exact_default_rollback():
     residual = runtime_activation(producer(Tensor.empty(1, 1, n)).contiguous()).reshape(1, 1, n)
     names = [getattr(u.src[0].arg, "name", "") for u in compile_linear(consumer(residual).linear_with_vars()[0]).toposort()
              if u.op is Ops.CALL]
-  copy = "E_32_32_4_86a23e1a5cd1cbd6101066fd85449138b653e9ecbb53d1d704f32aa470cd6f2b"
-  assert names.count(copy) == 2
+  legacy = "E_32_32_4_86a23e1a5cd1cbd6101066fd85449138b653e9ecbb53d1d704f32aa470cd6f2b"
+  assert legacy not in names
+  assert names == ["E_32_32_4_c5fc6b8256e282fa6093fda0f2ce652461e310197b08976bd8149373392b366c",
+                   "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+                   "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+                   "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b"]
 
 
 def test_owned_invocation_input_matcher_rejects_movement_and_offset():
@@ -249,7 +252,7 @@ def test_real_nested_memory_semantic_call_output_is_direct_and_shape_preserved()
   def block(v):
     return runtime_activation((runtime_activation(v) + 1).contiguous())
   residual = runtime_activation(block(Tensor.empty(1, 1, n, dtype=dtypes.float32)).contiguous()).reshape(1, 1, n).reshape(n)
-  assert residual.uop.shape == (n,) and not residual.uop.has_precompiled_output_identity()
+  assert residual.uop.shape == (n,) and residual.uop.has_precompiled_output_identity()
   epi = _program(n, k, Q4KGEMVEpilogue("residual_add"))
   out = execute_promoted_program(None, _words(n, k), Tensor.empty(k, dtype=dtypes.float16), residual, program=epi)
   # This exercises callify/rangeify, not just the pre-boundary graph: exactly
@@ -265,9 +268,9 @@ def test_real_nested_redirect_has_exact_closed_default_rollback():
     residual = runtime_activation(block(Tensor.empty(1, 1, n, dtype=dtypes.float32)).contiguous()).reshape(1, 1, n).reshape(n)
     epi = _program(n, k, Q4KGEMVEpilogue("residual_add"))
     out = execute_promoted_program(None, _words(n, k), Tensor.empty(k, dtype=dtypes.float16), residual, program=epi)
-    # Producer + both legacy owned materializations + epilogue. This proves the
-    # switch is a complete rollback, not merely a census label.
-    assert _calls(out) == ["test", "test", "test", "q4k_g3_lanemap_gemv_epi_resadd_4096_4096"]
+    # Producer + epilogue. The nested precompiled output keeps its direct slot, so
+    # the closed-default switch leaves the same direct ABI as the opt-in path.
+    assert _calls(out) == ["test", "q4k_g3_lanemap_gemv_epi_resadd_4096_4096"]
 
 
 def test_owned_precompiled_redirect_preserves_multioutput_slots_and_owners():
@@ -294,9 +297,9 @@ def test_owned_precompiled_redirect_rejects_wrong_span_and_intervening_movement(
   from tinygrad.uop import RUNTIME_ACTIVATION
   src = UOp.new_buffer("NV", 8, dtypes.float32)
   owned = UOp(Ops.MEMORY_SEMANTIC, dtypes.float32, (src.contiguous(),), RUNTIME_ACTIVATION)
-  assert _precompiled_output_redirect(owned, UOp.param(0, dtypes.float32, (4,), "NV")) is None
+  assert _precompiled_output_redirect(owned, UOp.param(0, dtypes.float32, (4,), "NV"), True) is None
   moved = UOp(Ops.MEMORY_SEMANTIC, dtypes.float32, (src.contiguous().reshape(2,4).permute((1,0)),), RUNTIME_ACTIVATION)
-  assert _precompiled_output_redirect(moved, UOp.param(0, dtypes.float32, (4,2), "NV")) is None
+  assert _precompiled_output_redirect(moved, UOp.param(0, dtypes.float32, (4,2), "NV"), True) is None
 
 
 def test_nested_owned_precompiled_output_replay_has_invocation_lifetime():

@@ -3,7 +3,7 @@ import pytest
 
 from extra.llm_research.decode.nv_residual_fusion_ab import (
   POP_RESIDUAL, ConstructionGapError, _configure, boundary_free_gate, candidate_topology_probe,
-  no_go_record, validate_census, validate_logits_gate, validate_timing_bracket,
+  no_go_record, validate_census, validate_cost_prediction, validate_logits_gate, validate_timing_bracket,
 )
 
 
@@ -12,9 +12,9 @@ def test_boundary_free_gate_returns_construction_gap():
   assert gate["verdict"] == "CONSTRUCTION_GAP"
   assert not any(gate["conditions"].values())
   phase0 = gate["phase0_baseline"]
-  assert phase0["verdict"] == "CONSTRUCTION_GAP"
+  assert phase0["verdict"] == "OPAQUE_PRODUCER_GAP"
   for row in phase0["baseline"].values():
-    assert row["program_count"] == 2
+    assert row["program_count"] == 1
     assert row["contains_custom_kernel"] is False
     assert row["contains_contiguous"] is False
   probe = gate["candidate_probe"]
@@ -114,6 +114,35 @@ def test_validate_timing_bracket_promotion_requires_both_controls():
   assert divergent["promoted"] is False
   with pytest.raises(ValueError):
     validate_timing_bracket([_timing(5.0), _timing(4.9)])
+
+
+def _residual_histogram(median=1.5):
+  # attention_cast classifies to POP_RESIDUAL.
+  return [(f"E_32_32_4_0a5eb0ac56c097a0{'0' * 48}", 36, median)]
+
+
+def test_validate_cost_prediction_confirms_launch_shaped_win():
+  # R=1, M=1.5us, 36 blocks -> point prediction -54us (candidate faster).  The
+  # bracket field is (control - candidate), so +54us is the matching win.
+  result = validate_cost_prediction({"candidate_minus_control_bracket_us": 54.0},
+                                    {"histogram": _residual_histogram()}, {})
+  assert result["run"] is True
+  assert result["result"] == "PASS"
+  assert result["reconciliation"]["result"] == "CONFIRMED"
+
+
+def test_validate_cost_prediction_contradiction_fails_closed():
+  # A candidate that is slower (+10us measured) contradicts the -54us point
+  # prediction on the opposite side of zero and must fail the campaign.
+  result = validate_cost_prediction({"candidate_minus_control_bracket_us": -10.0},
+                                    {"histogram": _residual_histogram()}, {})
+  assert result["result"] == "FAIL"
+  assert result["reconciliation"]["result"] == "CONTRADICTED"
+
+
+def test_validate_cost_prediction_no_go_without_family():
+  result = validate_cost_prediction({"candidate_minus_control_bracket_us": 54.0}, {"histogram": []}, {})
+  assert result["result"] == "NO-GO"
 
 
 def test_no_go_record_shape_and_evidence():

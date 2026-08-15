@@ -25,7 +25,8 @@ from __future__ import annotations
 import argparse, contextlib, hashlib, io, json, os, pathlib, re, statistics, subprocess, sys, time
 import numpy as np
 
-from extra.llm_research.decode.nv_boundary_free_ordinary_uop_gate import run as _phase0_gate_run
+from extra.llm_research.decode.nv_boundary_free_ordinary_uop_gate import run_v3 as _phase0_gate_run
+from extra.llm_research.decode.nv_fusion_cost_model import predict_wall_delta, reconcile_cost_prediction
 from extra.llm_research.decode.nv_fusion_population_ledger import POP_RESIDUAL, classify as _ledger_classify
 from extra.llm_research.decode.nv_predispatch_full_logits_qualification import DEFAULT_MODEL, _load, _prompt
 from extra.llm_research.decode.nv_shared_q8_progressive_qualification import (
@@ -66,6 +67,32 @@ CONSTRUCTION = {
     "census": "changes only the residual population node census",
   },
   "question": "Can the residual add / cast epilogue be absorbed as an ordinary in-core epilogue of the consuming quant kernel under the boundary-free gate, and does the exact-output A/B book the residual attribution row?",
+}
+
+
+# Predicted-wall-delta contract (nv_fusion_cost_model.py): llama folds the
+# residual add into the consuming mul_mat_vec_q epilogue, so there is no
+# separate residual-add kernel launch per block.  This candidate removes one
+# epilogue launch per block (R=1, no matrix-dot redundancy); the bracket
+# reconciles the measured delta against that launch-removal range.  CONFIRMED /
+# EXPLAINED pass with evidence; CONTRADICTED fails closed.
+COST_PREDICTION = {
+  "contract": "before implementing, derive the predicted wall delta from the llama reference shape plus per-launch arithmetic; the wall bracket then either confirms it or explains the gap",
+  "llama_reference": "llama folds the residual add into the consuming mul_mat_vec_q epilogue; there is no separate residual-add kernel launch per block",
+  "arithmetic": {
+    "redundancy": 1,
+    "redundancy_note": "the residual add epilogue executes once per block (no matrix-dot redundancy)",
+    "per_element_extra_ops": "1 FADD + fp32 store per row",
+    "removed": "one residual-add epilogue kernel launch per block",
+  },
+  "formula": "blocks x [ (R - 1) x M_removed - R x launch_us ]; positive = candidate slower",
+  "tolerance_us": 20.0,
+  "assumptions": {
+    "launch_us": "1.5 (range 1.0-2.0), E_32_32_4 class floor, m4-resadd-landing-scope-20260806.md",
+    "M_removed": "control census median of the folded residual-epilogue family, measured per run before the bracket",
+    "blocks": 36,
+  },
+  "unmodeled": ["in-kernel critical path (occupancy/dependency chain)", "activation traffic"],
 }
 
 
@@ -165,7 +192,7 @@ def boundary_free_gate() -> dict:
   conditions are unmet."""
   from tinygrad.helpers import Context
   with Context(DEV="CPU"):
-    phase0 = _phase0_gate_run()
+    phase0 = _phase0_gate_run(POP_RESIDUAL)["populations"][POP_RESIDUAL]
   probe = candidate_topology_probe()
   conditions = {
     "phase0_verdict_pass": phase0["verdict"] == "PASS",
@@ -367,6 +394,30 @@ def validate_timing_bracket(rows: list[dict], settled_continuous: bool = True) -
           "note": "wall evidence only; booking requires the exact-logits gate and residual-confined census"}
 
 
+def validate_cost_prediction(bracket: dict, control_census: dict, candidate_census: dict) -> dict:
+  """Residual predicted-wall-delta gate (nv_fusion_cost_model.py).
+
+  The COST_PREDICTION table is derived from the llama reference shape plus the
+  per-launch arithmetic of the candidate; the measured bracket delta must then
+  confirm it or explain the gap.  A measured delta outside the predicted range
+  on the opposite side of zero is a CONTRADICTION and FAILS CLOSED."""
+  hist = control_census.get("histogram") or []
+  removed_medians = {name: med for name, _, med in hist
+                     if _ledger_classify(name)[0] == POP_RESIDUAL}
+  if not removed_medians:
+    return {"run": True, "result": "NO-GO", "reason": "control census has no residual-epilogue family to model"}
+  prediction = predict_wall_delta(COST_PREDICTION["assumptions"]["blocks"],
+                                  {"residual_epilogue": statistics.median(removed_medians.values())},
+                                  {"residual_epilogue": COST_PREDICTION["arithmetic"]["redundancy"]})
+  measured = -bracket["candidate_minus_control_bracket_us"]
+  reconciliation = reconcile_cost_prediction(measured, prediction,
+                                             tolerance_us=COST_PREDICTION["tolerance_us"])
+  return {"run": True, "result": "PASS" if reconciliation["result"] != "CONTRADICTED" else "FAIL",
+          "contract": COST_PREDICTION, "prediction": prediction, "reconciliation": reconciliation,
+          "measured_delta_us": measured, "bracket_field_us": bracket["candidate_minus_control_bracket_us"],
+          "note": reconciliation["note"]}
+
+
 def ledger_census(dag_path: str | None) -> dict:
   """Static residual census from the authority DAG, with a fail-closed
   reference fallback when the capture file is unavailable."""
@@ -490,6 +541,9 @@ def _run_full_ab(args) -> dict:
   wall = wall_bracket(args)
   booked = logits_gate["gate_pass"] and census_gate["gate_pass"] and wall["promoted"]
   record = no_go_record(boundary_free_gate(), ledger_census(args.census_dag), args.model, args.depth)
+  cost_gate = validate_cost_prediction(wall, control_census, candidate_census)
+  record["cost_prediction"] = cost_gate
+  if cost_gate["result"] == "FAIL": booked = False
   if booked:
     record["verdict"] = "BOOKED"
     record["census"] = census_gate

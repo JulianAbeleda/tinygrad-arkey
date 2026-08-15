@@ -22,7 +22,8 @@ from __future__ import annotations
 import argparse, contextlib, hashlib, io, json, os, pathlib, re, statistics, subprocess, sys, time
 import numpy as np
 
-from extra.llm_research.decode.nv_boundary_free_ordinary_uop_gate import run as _phase0_gate_run
+from extra.llm_research.decode.nv_boundary_free_ordinary_uop_gate import run_v3 as _phase0_gate_run
+from extra.llm_research.decode.nv_fusion_cost_model import predict_wall_delta, reconcile_cost_prediction
 from extra.llm_research.decode.nv_fusion_population_ledger import POP_NORMS, classify as _ledger_classify
 from extra.llm_research.decode.nv_predispatch_full_logits_qualification import DEFAULT_MODEL, _load, _prompt
 from extra.llm_research.decode.nv_shared_q8_progressive_qualification import (
@@ -62,6 +63,34 @@ CONSTRUCTION = {
     "census": "changes only the norms population node census",
   },
   "question": "Can the ffn/next RMSNorm epilogue be absorbed as an ordinary in-core epilogue of the consuming quant kernel under the boundary-free gate, and does the exact-output A/B book the norms attribution row?",
+}
+
+
+# Predicted-wall-delta contract (nv_fusion_cost_model.py): the prediction is
+# derived from the llama reference shape (the norm is ONE fused rms_norm_f32
+# kernel and its arithmetic never enters the matmul) plus the per-element
+# arithmetic of this candidate (the ffn/next norm epilogue re-executes once per
+# matrix dot, R=2; x streams fp32 instead of fp16; the r_16_256 scale reduce
+# must stay).  The bracket reconciles the measured delta against this range:
+# CONFIRMED / EXPLAINED pass with evidence; CONTRADICTED fails closed.
+COST_PREDICTION = {
+  "contract": "before implementing, derive the predicted wall delta from the llama reference shape plus per-element instruction/traffic arithmetic; the wall bracket then either confirms it or explains the gap",
+  "llama_reference": "rms_norm_f32 = ONE fused reduce+affine kernel, fp32 out; norm never enters the matmul; matmul consumes a compact quantized activation (llama_tinygrad_role_manifest.py)",
+  "arithmetic": {
+    "redundancy": 2,
+    "redundancy_note": "the ffn/next norm epilogue re-executes once per matrix dot (gate and up each recompute the fused affine)",
+    "per_element_extra_ops": "2 FMUL + fp16 RNE cast + upcast per element per matrix",
+    "x_traffic": "fp32 vs fp16 activation bytes double across the absorbed rows",
+    "scale_reduce_retained": "the r_16_256 scale reduce must stay (bitwise contract; llama keeps n_f32)",
+  },
+  "formula": "blocks x [ (R - 1) x M_removed - R x launch_us ]; positive = candidate slower",
+  "tolerance_us": 20.0,
+  "assumptions": {
+    "launch_us": "1.5 (range 1.0-2.0), E_32_32_4 class floor, m4-resadd-landing-scope-20260806.md",
+    "M_removed": "control census median of the folded norms-epilogue family, measured per run before the bracket",
+    "blocks": 36,
+  },
+  "unmodeled": ["in-kernel critical path (occupancy/dependency chain)", "activation traffic"],
 }
 
 
@@ -137,7 +166,7 @@ def boundary_free_gate() -> dict:
   absorbability conditions are unmet."""
   from tinygrad.helpers import Context
   with Context(DEV="CPU"):
-    phase0 = _phase0_gate_run()
+    phase0 = _phase0_gate_run(POP_NORMS)["populations"][POP_NORMS]
   probe = candidate_topology_probe()
   conditions = {
     "phase0_verdict_pass": phase0["verdict"] == "PASS",
@@ -339,6 +368,30 @@ def validate_timing_bracket(rows: list[dict], settled_continuous: bool = True) -
           "note": "wall evidence only; booking requires the exact-logits gate and norms-confined census"}
 
 
+def validate_cost_prediction(bracket: dict, control_census: dict, candidate_census: dict) -> dict:
+  """Norms predicted-wall-delta gate (nv_fusion_cost_model.py).
+
+  The COST_PREDICTION table is derived from the llama reference shape plus the
+  per-element arithmetic of the candidate; the measured bracket delta must then
+  confirm it or explain the gap.  A measured delta outside the predicted range
+  on the opposite side of zero is a CONTRADICTION and FAILS CLOSED."""
+  hist = control_census.get("histogram") or []
+  removed_medians = {name: med for name, _, med in hist
+                     if _ledger_classify(name)[0] == POP_NORMS and _ledger_classify(name)[1].endswith("epilogue")}
+  if not removed_medians:
+    return {"run": True, "result": "NO-GO", "reason": "control census has no norms-epilogue family to model"}
+  prediction = predict_wall_delta(COST_PREDICTION["assumptions"]["blocks"],
+                                  {"norms_epilogue": statistics.median(removed_medians.values())},
+                                  {"norms_epilogue": COST_PREDICTION["arithmetic"]["redundancy"]})
+  measured = -bracket["candidate_minus_control_bracket_us"]
+  reconciliation = reconcile_cost_prediction(measured, prediction,
+                                             tolerance_us=COST_PREDICTION["tolerance_us"])
+  return {"run": True, "result": "PASS" if reconciliation["result"] != "CONTRADICTED" else "FAIL",
+          "contract": COST_PREDICTION, "prediction": prediction, "reconciliation": reconciliation,
+          "measured_delta_us": measured, "bracket_field_us": bracket["candidate_minus_control_bracket_us"],
+          "note": reconciliation["note"]}
+
+
 def ledger_census(dag_path: str | None) -> dict:
   """Static norms census from the authority DAG, with a fail-closed reference
   fallback when the capture file is unavailable."""
@@ -459,6 +512,9 @@ def _run_full_ab(args) -> dict:
   wall = wall_bracket(args)
   booked = logits_gate["gate_pass"] and census_gate["gate_pass"] and wall["promoted"]
   record = no_go_record(boundary_free_gate(), ledger_census(args.census_dag), args.model, args.depth)
+  cost_gate = validate_cost_prediction(wall, control_census, candidate_census)
+  record["cost_prediction"] = cost_gate
+  if cost_gate["result"] == "FAIL": booked = False
   if booked:
     record["verdict"] = "BOOKED"
     record["census"] = census_gate

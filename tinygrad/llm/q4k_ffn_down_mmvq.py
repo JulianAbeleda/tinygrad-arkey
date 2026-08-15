@@ -18,7 +18,8 @@ from tinygrad.dtype import AddrSpace
 from tinygrad.llm.decode_kernels import (LanePartition, Q4KGateUpLaneMap, Q4K_WORDS_PER_BLOCK, _f16_word,
   _q4k_block_dot_packed_load, _silu_uop)
 from tinygrad.llm.kernel_program import (DeclaredTypedOutput, KernelProgram, KernelProgramProvenance,
-  OutputSpec, ResidualViewRequest, TypedLayout, TypedViewRequest, execute_research_program)
+  OutputSpec, ResidualViewRequest, TypedLayout, TypedViewRequest, execute_promoted_program,
+  execute_research_program)
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
 
 ROWS, K, QK = 4096, 12288, 256
@@ -289,7 +290,7 @@ def q4k_ffn_down_mmvq_call(admission:object, linear:Any, x:Tensor, binding:Any,
     # validator accepts only .gemv/.consumer. A mismatched id silently falls back
     # to the materializing flat-buffer ABI (two extra transport kernels per block).
     consumer=KernelProgram("decode_q4k_ffn_down_mmvq",f"blk{admission.block_index}.gemv",
-      KernelProgramProvenance.RESEARCH_ONLY,
+      KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
       emit_four_warp_fp16_direct(UOp.const(dtypes.weakint,SUB_BLOCKS),resadd=resadd),
       output_spec=OutputSpec((ROWS,),dtypes.float32,
         typed_output=(DeclaredTypedOutput(TypedLayout(dtypes.float32,(ROWS,),(1,1,ROWS)),
@@ -298,7 +299,7 @@ def q4k_ffn_down_mmvq_call(admission:object, linear:Any, x:Tensor, binding:Any,
         requires_combine_fusion=False,requires_epilogue_absorption=True),),
       residual_input_views=((ResidualViewRequest(slot=2,dtype=dtypes.float32,flat_shape=(ROWS,),
         route_role="ffn_down",kind="residual_add"),) if resadd else ()))
-    out=execute_research_program(Tensor.empty((ROWS,),dtype=dtypes.float32,device=x.device),
+    out=execute_promoted_program(Tensor.empty((ROWS,),dtype=dtypes.float32,device=x.device),
       words,xv,*((residual,) if resadd else ()),program=consumer)
     return out.reshape(1,1,ROWS)
   provider_typed_views = () if admission.owned_input_boundary else (
