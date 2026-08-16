@@ -61,21 +61,26 @@ def _normalize_fused_indices(spec:str) -> tuple[int,...]:
   if tuple(sorted(values)) != values: raise ValueError("fused indices must be strictly increasing")
   return values
 
-def _install_fused_norm_lease_indices(model, indices, cooperative_q4:bool=False, q6_direct_output:bool=False) -> list[int]:
+def _install_fused_norm_lease_indices(model, indices, cooperative_q4:bool=False, q6_direct_output:bool=False,
+                                      cooperative_subset:tuple[int,...]=()) -> list[int]:
   """Install an explicit default-off block subset for precision-budget search."""
   from tinygrad import Tensor, dtypes
   indices=list(indices)
   if not indices or any(not isinstance(x,int) or isinstance(x,bool) or x <= 0 or x >= len(model.blk) for x in indices):
     raise ValueError("explicit fused lease indices must be nonempty valid block indices excluding block 0")
   if indices != sorted(set(indices)): raise ValueError("explicit fused lease indices must be unique and increasing")
+  if cooperative_subset and not set(cooperative_subset) <= set(indices):
+    raise ValueError("cooperative subset must be contained in the fused lease")
+  cooperative_set = set(cooperative_subset)
   for block in model.blk:
     for name in ("_shared_q8_attention_admission", "_shared_q8_attention_norm_weight",
                  "_decode_reduce_output_attn_rmsnorm_promoted"):
       if hasattr(block,name): delattr(block,name)
   for block_index in indices:
     block=model.blk[block_index]
-    block._shared_q8_attention_admission=SharedQ8AttentionAdmission(block_index,cooperative_q4=cooperative_q4,
-                                                                       q6_direct_output=q6_direct_output)
+    coop = (block_index in cooperative_set) if cooperative_subset else cooperative_q4
+    block._shared_q8_attention_admission=SharedQ8AttentionAdmission(block_index,cooperative_q4=coop,
+                                                                    q6_direct_output=q6_direct_output)
     block._decode_reduce_output_attn_rmsnorm_promoted=True
     block._shared_q8_attention_norm_weight=Tensor.empty(4096,dtype=dtypes.float16,device=block.attn_norm.weight.device).assign(
       block.attn_norm.weight.cast(dtypes.float16).contiguous()).realize()
@@ -83,15 +88,19 @@ def _install_fused_norm_lease_indices(model, indices, cooperative_q4:bool=False,
 
 def child(model_path:str, depth:int, count:int, max_context:int, groups:int, fused_groups:int=0,
           cooperative_q4:bool=False, composed:bool=False, fused_indices:tuple[int,...]=(),
-          q6_direct_output:bool=False) -> tuple[dict, np.ndarray]:
+          q6_direct_output:bool=False, cooperative_subset:tuple[int,...]=()) -> tuple[dict, np.ndarray]:
   from tinygrad import Tensor, UOp
   from tinygrad.engine.jit import GraphAdmissionCensus, observe_graph_admissions
   from tinygrad.helpers import Context
   model = _load(model_path, max_context)
   if sum(bool(x) for x in (groups,fused_groups,fused_indices)) > 1:
     raise ValueError("ordinary, cumulative fused, and explicit fused leases are mutually exclusive")
-  leases = _install_fused_norm_lease_indices(model,fused_indices,cooperative_q4,q6_direct_output) if fused_indices else \
-    _install_fused_norm_leases(model,fused_groups,cooperative_q4,q6_direct_output) if fused_groups else _install_leases(model,groups)
+  if fused_indices:
+    leases = _install_fused_norm_lease_indices(model, fused_indices, cooperative_q4, q6_direct_output, cooperative_subset)
+  elif fused_groups:
+    leases = _install_fused_norm_leases(model, fused_groups, cooperative_q4, q6_direct_output)
+  else:
+    leases = _install_leases(model, groups)
   model._decode_direct_greedy_promoted=composed
   model._decode_feedback_pingpong_promoted=composed
   gen = model.generate(_prompt(model_path, depth), chunk_size=32, temperature=0.0)
@@ -131,20 +140,32 @@ def child(model_path:str, depth:int, count:int, max_context:int, groups:int, fus
   legacy_q4_count=sum(p.startswith("q4k_q8_dp4a_") for p in programs)
   capture_factor=2 if composed else 1; expected_providers=len(leases)*capture_factor
   expected_q6_direct=0
+  from tinygrad.llm.qk_primitives import Q6KPrimitiveLinear
   if q6_direct_output:
-    from tinygrad.llm.qk_primitives import Q6KPrimitiveLinear
     expected_q6_direct=sum(isinstance(model.blk[index].attn_v,Q6KPrimitiveLinear) for index in leases)*capture_factor
   if (fused_groups or fused_indices) and fused_provider_count != expected_providers:
     raise RuntimeError(f"fused qualification expected {expected_providers} RMSNorm/Q8 providers, observed {fused_provider_count}")
-  if cooperative_q4 and (provider_count != expected_providers or coop_q4_count < 2*expected_providers or legacy_q4_count):
-    raise RuntimeError(f"cooperative census failed providers={provider_count}/{expected_providers} coop_q4={coop_q4_count} legacy_q4={legacy_q4_count}")
+  coop_blocks = cooperative_subset if cooperative_subset else (leases if cooperative_q4 else ())
+  # Q (4096) and K (1024) are always cooperative Q4 consumers; a Q4 V adds one
+  # more 1024-row cooperative consumer, while a Q6 V routes to the direct path.
+  expected_coop = sum(3 if not isinstance(model.blk[i].attn_v, Q6KPrimitiveLinear) else 2
+                      for i in coop_blocks) * capture_factor
+  # Blocks outside the cooperative subset keep the ordinary shared-Q8 Q4
+  # consumers (q4k_q8_dp4a_*), one for Q, one for K, plus one more if V is Q4.
+  noncoop_blocks = [i for i in leases if i not in set(coop_blocks)] if cooperative_subset else []
+  expected_legacy = sum(3 if not isinstance(model.blk[i].attn_v, Q6KPrimitiveLinear) else 2
+                        for i in noncoop_blocks) * capture_factor
+  if (cooperative_q4 or cooperative_subset) and (provider_count != expected_providers
+      or coop_q4_count != expected_coop or legacy_q4_count != expected_legacy):
+    raise RuntimeError(f"cooperative census failed providers={provider_count}/{expected_providers} "
+                       f"coop_q4={coop_q4_count}/{expected_coop} legacy_q4={legacy_q4_count}/{expected_legacy}")
   # Qwen has mixed Q4/Q4/Q4 and Q4/Q4/Q6 attention groups. Count only actual
   # Q6 V leases; a Q4 V is intentionally untouched by this Q6-only route.
   if q6_direct_output and q6_direct_count != expected_q6_direct:
     raise RuntimeError(f"Q6 direct census expected {expected_q6_direct} Q6-V consumers, observed {q6_direct_count}")
   return ({"schema":"tinygrad.nv_shared_q8_progressive_qualification.v1", "groups":groups,
     "fused_groups":fused_groups, "leases":leases,"cooperative_q4":cooperative_q4,"q6_direct_output":q6_direct_output,"composed":composed,
-    "fused_indices":list(fused_indices),
+    "fused_indices":list(fused_indices), "cooperative_subset":list(cooperative_subset),
     "depth":depth, "count":count, "prelude_token":prelude, "tokens":tokens, "tokens_sha256":hashlib.sha256(
       ",".join(map(str,tokens)).encode()).hexdigest(), "logits_sha256":_digest(arr), "shape":list(arr.shape),
     "finite":True, "program_count":len(programs), "shared_q8_program_count":sum(
@@ -164,6 +185,7 @@ def _child_command(args, groups:int, out:pathlib.Path, fused_groups:int=0, mode:
   if getattr(args,"composed",False): cmd.append("--composed")
   if getattr(args,"settled_continuous",False): cmd.append("--settled-continuous")
   if getattr(args,"fused_indices",()): cmd += ["--fused-indices",",".join(map(str,args.fused_indices))]
+  if getattr(args,"cooperative_subset",()): cmd += ["--coop-indices",",".join(map(str,args.cooperative_subset))]
   return cmd
 
 def _settled_context_required(depth:int,count:int,reps:int) -> int:
@@ -296,12 +318,17 @@ def qualify_fused(args) -> dict:
 
 def timing_child(model_path:str,depth:int,count:int,max_context:int,reps:int,fused_groups:int,
                  cooperative_q4:bool=False,composed:bool=False,settled_continuous:bool=False,
-                 fused_indices:tuple[int,...]=(),q6_direct_output:bool=False) -> dict:
+                 fused_indices:tuple[int,...]=(),q6_direct_output:bool=False,
+                 cooperative_subset:tuple[int,...]=()) -> dict:
   from tinygrad import Device
   model=_load(model_path,max_context)
   if fused_groups and fused_indices: raise ValueError("cumulative and explicit fused leases are mutually exclusive")
-  leases=_install_fused_norm_lease_indices(model,fused_indices,cooperative_q4,q6_direct_output) if fused_indices else \
-    _install_fused_norm_leases(model,fused_groups,cooperative_q4,q6_direct_output) if fused_groups else []
+  if fused_indices:
+    leases=_install_fused_norm_lease_indices(model,fused_indices,cooperative_q4,q6_direct_output,cooperative_subset)
+  elif fused_groups:
+    leases=_install_fused_norm_leases(model,fused_groups,cooperative_q4,q6_direct_output)
+  else:
+    leases=[]
   model._decode_direct_greedy_promoted=composed; model._decode_feedback_pingpong_promoted=composed
   prompt,dev=_prompt(model_path,depth),Device[Device.DEFAULT]
   samples,hashes=[],[]
@@ -319,7 +346,7 @@ def timing_child(model_path:str,depth:int,count:int,max_context:int,reps:int,fus
     finally: gen.close()
     return {"schema":"tinygrad.nv_shared_q8_progressive_timing.v1","arm":f"fused-g{fused_groups}",
       "fused_groups":fused_groups,"leases":leases,"included_cost":True,"cooperative_q4":cooperative_q4,"q6_direct_output":q6_direct_output,"composed":composed,
-      "fused_indices":list(fused_indices),
+      "fused_indices":list(fused_indices),"cooperative_subset":list(cooperative_subset),
       "settled_continuous":True,"warmup_decode_calls":6,"reps":reps,"tokens_per_rep":count,**settled}
   warm=model.generate(prompt.copy(),chunk_size=32,temperature=0.0)
   try:
@@ -336,7 +363,7 @@ def timing_child(model_path:str,depth:int,count:int,max_context:int,reps:int,fus
     hashes.append(hashlib.sha256(",".join(map(str,tokens)).encode()).hexdigest())
   return {"schema":"tinygrad.nv_shared_q8_progressive_timing.v1","arm":f"fused-g{fused_groups}",
     "fused_groups":fused_groups,"leases":leases,"included_cost":True,"cooperative_q4":cooperative_q4,"q6_direct_output":q6_direct_output,"composed":composed,
-    "fused_indices":list(fused_indices),
+    "fused_indices":list(fused_indices),"cooperative_subset":list(cooperative_subset),
     "reps":reps,"tokens_per_rep":count,
     "samples_ms_per_token":samples,"median_ms_per_token":statistics.median(samples),
     "token_hashes":hashes,"tokens_identical_within_arm":len(set(hashes))==1}
@@ -420,6 +447,7 @@ def main() -> int:
   ap.add_argument("--count",type=int,default=8); ap.add_argument("--max-context",type=int,default=1024); ap.add_argument("--groups",type=int,default=0)
   ap.add_argument("--fused-groups",type=int,default=0); ap.add_argument("--reps",type=int,default=3)
   ap.add_argument("--fused-indices",default="",help="research-only explicit increasing block-index subset")
+  ap.add_argument("--coop-indices",default="",help="within-lease subset that keeps cooperative Q4; the rest of the lease uses ordinary Q4 Q/K")
   ap.add_argument("--reference-indices",default="",help="strict-subset reference for incremental settled timing")
   ap.add_argument("--out",required=True); ap.add_argument("--timeout",type=int,default=600); ap.add_argument("--lock-wait",type=int,default=90); ap.add_argument("--lock",default="/tmp/gpu-bench.lock")
   ap.add_argument("--atol",type=float,default=0.01)
@@ -428,10 +456,11 @@ def main() -> int:
   ap.add_argument("--settled-continuous",action="store_true")
   a=ap.parse_args()
   a.fused_indices=_normalize_fused_indices(a.fused_indices)
+  a.cooperative_subset=_normalize_fused_indices(a.coop_indices)
   a.reference_indices=_normalize_fused_indices(a.reference_indices)
   _validate_run_extent(a.depth,a.count,a.max_context,a.reps,a.settled_continuous)
   if a.mode == "child":
-    row, logits = child(a.model,a.depth,a.count,a.max_context,a.groups,a.fused_groups,a.cooperative_q4,a.composed,a.fused_indices,a.q6_direct_output); out=pathlib.Path(a.out); out.parent.mkdir(parents=True,exist_ok=True)
+    row, logits = child(a.model,a.depth,a.count,a.max_context,a.groups,a.fused_groups,a.cooperative_q4,a.composed,a.fused_indices,a.q6_direct_output,a.cooperative_subset); out=pathlib.Path(a.out); out.parent.mkdir(parents=True,exist_ok=True)
     # Native NV can retain driver/runtime objects during interpreter teardown.
     # Publish both artifacts atomically, flush the machine-readable stdout row,
     # then bypass teardown. A parent may therefore trust only final paths and
@@ -444,7 +473,7 @@ def main() -> int:
     os.replace(npz_tmp,npz_out); os.replace(json_tmp,out)
     print(json.dumps(row,sort_keys=True),flush=True); sys.stdout.flush(); sys.stderr.flush(); os._exit(0)
   elif a.mode == "timing-child":
-    result=timing_child(a.model,a.depth,a.count,a.max_context,a.reps,a.fused_groups,a.cooperative_q4,a.composed,a.settled_continuous,a.fused_indices,a.q6_direct_output)
+    result=timing_child(a.model,a.depth,a.count,a.max_context,a.reps,a.fused_groups,a.cooperative_q4,a.composed,a.settled_continuous,a.fused_indices,a.q6_direct_output,a.cooperative_subset)
     out=pathlib.Path(a.out); out.parent.mkdir(parents=True,exist_ok=True); out.write_text(json.dumps(result,indent=2,sort_keys=True)+"\n")
     print(json.dumps(result,sort_keys=True),flush=True); sys.stdout.flush(); sys.stderr.flush(); os._exit(0)
   elif a.mode == "qualify":
