@@ -69,6 +69,28 @@ def test_generate_jit_replay_matches_full_prefix_greedy_oracle():
     assert model.rollout_jit.captured is not None
 
 
+def test_capture_schedule_prune_is_active_during_jit_capture(monkeypatch):
+  import tinygrad.schedule as schedule
+
+  pruned_during_capture: list[bool] = []
+  real_prune = schedule._drop_dead_schedule_items
+
+  def spy_prune(linear, call_args):
+    # `capturing` is the active JIT capture stack; `CAPTURING` is its boolean
+    # mirror. The regression skipped this prune while either was set, which left
+    # dead capture kernels in the replayed graph.
+    pruned_during_capture.append(bool(schedule.capturing) and schedule.CAPTURING)
+    return real_prune(linear, call_args)
+
+  monkeypatch.setattr(schedule, "_drop_dead_schedule_items", spy_prune)
+  with Context(DEV="CPU", JIT=1):
+    _, model, state = _models_with_shared_weights()
+    for _ in range(2):
+      [token for _, token in zip(range(4), model.generate([1, 2, 3], chunk_size=3, temperature=0.0))]
+
+  assert pruned_during_capture and any(pruned_during_capture)
+
+
 def test_decode_with_logits_is_a_closed_diagnostic_tap():
   with Context(DEV="CPU", JIT=1):
     _, model, state = _models_with_shared_weights()

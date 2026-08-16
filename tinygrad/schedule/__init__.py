@@ -496,6 +496,39 @@ def _drop_dead_schedule_items(linear:UOp, call_args:tuple[UOp, ...]) -> UOp:
     for b in o_ids: writes.setdefault(b, []).append(i)
   if not writes: return linear
   outputs = {id(a) for a in call_args if a.op is Ops.BUFFER and id(a) in writes}
+  # During JIT capture a feedback buffer is split in two: the step's fresh write
+  # and the realized prior-step seed the consumer reads.  Memory planning re-aliases
+  # those halves later, but this pass runs before that substitution, so the fresh
+  # write looks unread and its producer chain (block-output/attention/FFN) would be
+  # dropped.  Root liveness at the write twin whenever its (dtype, numel, device)
+  # matches a read-only call-arg seed consumed after the write.
+  if capturing and CAPTURING:
+    call_arg_bufs = {id(a): a for a in call_args if a.op is Ops.BUFFER}
+    buf_uops: dict[int, UOp] = {}
+    def _base_buf(a:UOp) -> UOp|None:
+      while a.op in (Ops.SLICE, Ops.RESHAPE, Ops.MEMORY_SEMANTIC, Ops.CAST, Ops.CONTIGUOUS,
+                     Ops.INDEX, Ops.SHRINK, Ops.PERMUTE, Ops.EXPAND, Ops.PAD):
+        a = a.src[0]
+      return a if a.op is Ops.BUFFER else None
+    for it in linear.src:
+      for s in it.src[1:]:
+        if (b := _item_buf_id(s)) is not None and b not in buf_uops and (base := _base_buf(s)) is not None:
+          buf_uops[b] = base
+    first_read: dict[int, int] = {}
+    read_any: set[int] = set()
+    for i, (_o, i_ids) in enumerate(order):
+      read_any |= i_ids
+      for b in i_ids:
+        if b in call_arg_bufs and b not in writes: first_read.setdefault(b, i)
+    for b, ws in writes.items():
+      if b in outputs or not ws or b in read_any: continue
+      wb = buf_uops.get(b)
+      if wb is None: continue
+      for s, ri in first_read.items():
+        sb = call_arg_bufs[s]
+        if sb.dtype == wb.dtype and sb.arg == wb.arg and sb.device == wb.device and ws[-1] < ri:
+          outputs.add(b)
+          break
   live: set[int] = set()
   # Every kept item's producers must be walked too: marking a fail-safe item live
   # without pushing it loses its input edges (the composite-wrapped kernels would
@@ -688,12 +721,7 @@ def create_linear_with_vars(big_sink:UOp) -> tuple[UOp, dict[str, int]]:
   # node once and uses rewrite results as-is, so resolution + one flatten at the root
   # stays linear in the final schedule size.
   linear = graph_rewrite(linear_call, pm_resolve_linear_call, name="resolve linear call", walk=True)
-  # JIT capture must carry the full resolved schedule into jit_lower, which performs the real
-  # memory planning and input substitution. Running the liveness prune here before capture drops
-  # the block-output seed that feeds the LM head on the capture step, so the replayed decode graph
-  # omits the KV-cache readers and samples from a non-attention input (decode correctness fails).
-  if not (capturing and CAPTURING):
-    linear = _drop_dead_schedule_items(linear, linear_call.src[1:])
+  linear = _drop_dead_schedule_items(linear, linear_call.src[1:])
   linear = _elide_residual_transports(linear)
   _t2 = time.perf_counter()
   if _trace:
