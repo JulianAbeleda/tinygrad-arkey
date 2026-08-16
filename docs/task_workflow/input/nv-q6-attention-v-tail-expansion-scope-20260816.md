@@ -175,6 +175,29 @@ bitwise-compatible with llama). It is the shared-Q8 activation ABI itself
 (llama `Q8_1` `d=amax/127` quantization) versus the ordinary per-projection
 quantized path, accumulated through the residual stream in the tail layers.
 
+That activation-only hypothesis is now measured directly
+(`extra/llm_research/decode/nv_q8_activation_quantization_error_microgate.py`).
+It captures the real fp16 RMSNorm output for one attention block, quantizes it
+exactly the way the shared provider does, then computes both errors with the
+same dequantized Q6 V weights and fp64 accumulation (the only delta is
+`x -> q8_1(x)`):
+
+| block | activation rel L2 | V-projection rel L2 | activation amax |
+|---:|---:|---:|---:|
+| 18 (in-lease) | `6.457e-3` | `5.250e-3` | 5.01 |
+| 21 (tail) | `6.093e-3` | `5.498e-3` | 6.18 |
+| 30 (tail) | `5.402e-3` | `6.009e-3` | 14.90 |
+| 34 (tail) | `6.661e-3` | `6.205e-3` | 66.06 |
+
+The Q8_1 activation quantization costs a roughly uniform `~0.5-0.67%` relative
+error per V projection, on both in-lease and tail blocks. The tail expansion
+overshoots the final-logit `1e-3` gate not because the tail quantization is
+worse, but because a fresh tail block's `~0.6%` projection error reaches the
+output with fewer remaining residual adds to dilute it, while the in-lease
+blocks' error is already present in both control and candidate and cancels in
+the comparison. This is the same non-monotonic accumulation the 08-05 record
+documented, now with the per-projection activation cost pinned to a number.
+
 Census was correct in every arm (for the all-coop 9-block candidate: 34 direct
 Q6 consumers, 52 fused providers, 0 legacy shared-Q4; for the mixed arm: 34
 direct, 52 fused, 36 expected legacy shared-Q4), proving the wiring is sound
