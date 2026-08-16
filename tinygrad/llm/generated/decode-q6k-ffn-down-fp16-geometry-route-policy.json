@@ -1,6 +1,8 @@
 {
   "schema": "boltbeam.route_policy.v1",
   "route": "decode_q6k_ffn_down_fp16_geometry",
-  "description": "Q6_K FFN-down four-warp fp16 geometry research record (nv-q6-ffn-down-four-warp-fp16-microgate-20260815.md). Device-time win only: production census 31.78 us vs 34.85 us control on this node, correctness-clean (token sha unchanged). NOT promoted: the reverse wall bracket is NO-GO because df3dca075 regresses NV decode wall 200.9 -> 83.9 tok/s and masks the kernel win. Re-open and re-bracket once the capture-time schedule/memory-planner regression is fixed.",
-  "promoted_targets": []
+  "description": "Q6_K FFN-down four-warp fp16 geometry promotion record (nv-q6-ffn-down-four-warp-fp16-microgate-20260815.md; nv-q6k-ffn-down-four-warp-fp16-promotion-scope-20260816.md). Device time 25.7 us vs 31.0 us control on this node (below llama 28.75 us); reverse wall bracket after the capture-safe prune fix (dbc1fdee3) is -39.0 us/token (+0.79%), token-exact across control A/candidate/control C. The candidate swaps the installed row_tile-2 coop Q6 FFN-down consumer for a 128-thread four-warp fp16 direct consumer with the same Q6 dequant arithmetic, no Q8 provider, and the M2b residual add absorbed in-kernel. The route additionally requires the M2b ffn-down resadd promotion and is ANDed with it at resolve time.",
+  "promoted_targets": [
+    {"backend": "NV", "architecture": "sm_120"}
+  ]
 }

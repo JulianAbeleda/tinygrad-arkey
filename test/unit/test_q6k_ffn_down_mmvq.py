@@ -57,10 +57,9 @@ def test_four_warp_emitter_renders_one_row_per_block_and_128_threads():
   assert "st.global" in ptx and "shfl.sync" in ptx
 
 
-def test_route_policy_is_closed_default_research_only():
-  # Device-time win only; the reverse wall bracket is NO-GO while df3dca075
-  # regresses NV decode wall (200.9 -> 83.9 tok/s). Keep the route closed until
-  # the capture-time schedule/memory-planner regression is fixed and re-bracketed.
-  assert not decode_q6k_ffn_down_fp16_geometry_promoted(("NV", "sm_120"))
+def test_route_policy_promotes_nv_sm120_only():
+  # Promoted on NV sm_120 after the capture-safe prune fix restored the decode
+  # wall and the re-bracket measured -39.0 us/token (+0.79%), token-exact.
+  assert decode_q6k_ffn_down_fp16_geometry_promoted(("NV", "sm_120"))
   assert not decode_q6k_ffn_down_fp16_geometry_promoted(("AMD", "gfx1100"))
   assert not decode_q6k_ffn_down_fp16_geometry_promoted(("CUDA", "sm_120"))
