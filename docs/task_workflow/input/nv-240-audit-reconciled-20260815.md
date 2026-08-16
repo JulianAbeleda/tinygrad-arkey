@@ -26,7 +26,7 @@ FFN-down four-warp fp16 promotion moved production from 193.49 -> 198.86 census
 | --- | --- | --- |
 | 08-12 gap attribution | +652 us class deltas, "220 at 1:1" ceiling | kernel-work view; the 1:1 ceiling is unverified |
 | 08-14 gap correction | +936 us overlap mass is the dominant term | correct on llama's side; overlap is real there |
-| 08-15 Route B wall | multi-stream overlap is FLAT | correct at `319241408` (1021 kernels); stale at HEAD - width is 4 now |
+| 08-15 Route B wall | multi-stream overlap is FLAT | FLAT at HEAD too: width-4 q/k/v is bandwidth-bound (measured) |
 | 08-15 composition review | body-free fusion folds map ~0 wall | correct: "fusion to 220" is falsified |
 
 Resolution: the gap is three independent axes, and the four docs each price a
@@ -40,7 +40,8 @@ different subset.
 
 Views 1 and 4 price the kernel-work axis and show fusion caps ~207-222 tok/s.
 Views 2 and 3 price the overlap axis and show the overlap lever is real in
-llama. The width-1 justification for our side was stale: see section 6.
+llama. On our side the overlap lever is measured closed at HEAD even though the
+dag is width 4, because the parallelism is bandwidth-bound: see section 6.
 
 ## 3. The overlap axis is topology, not a knob
 
@@ -62,8 +63,9 @@ Correction (2026-08-15, HEAD `c74567a24`): the decode DAG is not width 1. It
 has width 4 in the attention head (q/k/v GEMVs plus one support eltwise are
 simultaneously ready) and a 425-442 kernel critical path out of 668. The open
 question is no longer "is there parallelism to distribute"; it is whether that
-width converts to wall, given q/k/v are all memory-bound and contend for the
-same HBM bandwidth.
+width converts to wall. It does not: the wall A/B at HEAD measured flat across
+1..4 streams (q/k/v are memory-bound and contend for the same HBM bandwidth).
+See `nv-overlap-route-b-head-wall-record-20260815.md`.
 
 ## 4. Open kernel-work levers (the second axis)
 
@@ -103,9 +105,8 @@ both blocked today:
 
 - native multi-compute channel (Route A): `CONSTRUCTION_BLOCKED` (driver-private
   native-channel activation gap);
-- CUDA multi-stream graph (Route B): FLAT at `319241408` (width-1 graph); the
-  width-4 graph at HEAD has not been wall-tested. The scheduler now distributes
-  39% of calls, so the FLAT conclusion no longer transfers.
+- CUDA multi-stream graph (Route B): measured FLAT at HEAD across 1..4 streams;
+  the width-4 q/k/v bundle is bandwidth-bound and buys no wall.
 
 The remaining ~650 us of support work is the target: fusion has been measured to
 capture ~0 of it, and overlap is the only measured mechanism that does capture
@@ -114,20 +115,14 @@ that support mass captured via anchor shadow.
 
 ## 6. The question that decides 240 (corrected 2026-08-15)
 
-The width-1 hypothesis is falsified at HEAD: the decode DAG has intrinsic width
-4 (q/k/v siblings) and `plan_multi_stream` distributes 39% of calls. See
-`nv-decode-dag-width-verdict-20260815.md`. The remaining question is whether
-that width converts to wall:
-
-1. q, k, and v are all memory-bound GEMVs; concurrency may saturate HBM and buy
-   ~0 wall even though the scheduler distributes them.
-2. Production NV uses `HCQGraph`, whose multi-queue path is native (Route A)
-   and opt-in via `HCQ_NUM_COMPUTE` + `HCQ_NV_MULTI_QUEUE_*`, not
-   `CUDA_GRAPH_STREAMS`. That path still needs a wall test at HEAD.
-
-If neither converts, the width-4 parallelism is bandwidth-bound and the honest
-240 lever returns to kernel work (Q6 GEMV core + flash score floor), not
-anchor shadow.
+The width-1 hypothesis is falsified at HEAD (decode DAG is width 4, q/k/v
+siblings), but the width-4 wall A/B is FLAT: the parallelism is memory-bound
+GEMV concurrency, not latency-bound support hiding behind an anchor. The
+overlap lever is therefore measured closed. llama's overlap is support mass
+hidden behind its `mul_mat_vec_q` anchor; at HEAD our support is fused into the
+GEMV epilogues, and un-fusing it is body-free FLAT. So 240 is not reachable
+through overlap. The honest lever is kernel work: Q6 GEMV core (~240 us) plus
+flash score floor (~90 us), landing ~215-222 tok/s.
 
 ## 7. Next measured steps (no implementation until these clear)
 
@@ -135,12 +130,10 @@ anchor shadow.
    perf-neutral on decode replay (capture-only change, replay should prune).
 2. Q6 GEMV core: replicate the Q4 four-warp geometry fix on Q6 V (3.65x) and
    Q6 FFN-down (1.22x). Mechanism already proven; highest-confidence lever.
-3. Re-run the Route B wall A/B at HEAD (`CUDA_GRAPH_STREAMS` 1..4) to test
-   whether width 4 alone converts to wall.
-4. Re-test NV native multi-queue at HEAD (`HCQ_NUM_COMPUTE=2` plus a pinned
-   support tail) and measure decode wall with token-identity against serial.
-5. Do not re-litigate: F3 norm folds (FLAT/NO-GO), DP4A Q4 down (NO-GO +45),
-   the pre-HEAD multi-stream overlap result (FLAT on a width-1 graph), vocab
+3. Q6 GEMV core is the next lever: replicate the Q4 four-warp geometry fix on
+   Q6 V (3.65x) and Q6 FFN-down (1.22x).
+4. Do not re-litigate: F3 norm folds (FLAT/NO-GO), DP4A Q4 down (NO-GO +45),
+   multi-stream overlap (FLAT at HEAD, width-4 bandwidth-bound), vocab
    two-program chain (NO-GO), the "220 at 1:1" composition (falsified).
 
 ## Evidence
@@ -150,6 +143,7 @@ anchor shadow.
 - `nv-q4-down-fp16-geometry-promotion-20260815.md`
 - `nv-overlap-route-b-wall-outcome-20260815.md` (Route B FLAT, width 1)
 - `nv-decode-dag-width-verdict-20260815.md` (width-1 falsified at HEAD: width 4)
+- `nv-overlap-route-b-head-wall-record-20260815.md` (width-4 wall A/B FLAT)
 - `nv-220-composition-review-outcome-20260815.md` (fusion-to-220 falsified)
 - `nv-gap-audit-correction-20260814.md` (overlap axis, +936 us)
 - `nv-gemv-core-recovery-status-20260813.md` (Q6 core deficit, DP4A successor)

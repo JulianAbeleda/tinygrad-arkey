@@ -85,28 +85,22 @@ Proved:
 - The decode DAG is **not width 1**. There is real, schedulable q/k/v
   parallelism, and `plan_multi_stream` can exploit it.
 
-Not yet proved:
+Resolved by follow-up:
 
-- That the width-4 parallelism converts to wall time. q, k, and v are all
-  memory-bound GEMVs reading from the same HBM; running them concurrently can
-  saturate the same bandwidth and buy nothing. The old wall A/B was FLAT on a
-  width-1 graph, so it tells us nothing about the width-4 graph.
-- That the NV native multi-queue path (Route A) is unblocked. Production NV
-  uses `HCQGraph`, not `CUDAGraph`; `CUDA_GRAPH_STREAMS` only applies to the
-  CUDA backend. NV's two-native-channel substrate is opt-in via
-  `HCQ_NUM_COMPUTE` plus `HCQ_NV_MULTI_QUEUE_PROGRAMS`/`INDICES`/`CUT_POLICY`.
+- The width-4 wall A/B at HEAD measures FLAT across 1..4 streams. q, k, and v
+  are memory-bound GEMVs on the same HBM, so the scheduler distributes them but
+  wall does not move. See `nv-overlap-route-b-head-wall-record-20260815.md`.
+- NV native multi-queue (Route A) would distribute the same bandwidth-bound
+  q/k/v GEMVs and is expected flat for the same reason; it is not a lever until
+  an independent latency-bound support tail exists.
 
 ## 6. Next measured steps
 
-1. Re-run the Route B wall A/B at HEAD on the CUDA backend
-   (`CUDA_GRAPH_STREAMS` in 1..4). This isolates whether width 4 alone moves the
-   needle, independent of the NV driver question.
-2. Re-test NV native multi-queue at HEAD: boot two compute channels and pin the
-   support tail (`HCQ_NUM_COMPUTE=2` + `HCQ_NV_MULTI_QUEUE_*`), then measure
-   decode wall and verify token-identity against the serial arm.
-3. Only if either arm moves wall toward 240 does the anchor-shadow path reopen;
-   otherwise the width-4 parallelism is bandwidth-bound and the honest lever
-   returns to kernel work (Q6 GEMV core + flash score floor).
+1. Q6 GEMV core is the next measured kernel-work lever (~240 us): replicate the
+   Q4 four-warp geometry fix on Q6 V and Q6 FFN-down.
+2. The anchor-shadow path stays closed unless support kernels are first emitted
+   as independent latency-bound work (already measured body-free FLAT), so it is
+   not a near-term 240 path.
 
 ## Evidence
 
