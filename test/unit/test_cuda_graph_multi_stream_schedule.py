@@ -12,6 +12,9 @@ captured multi-stream graphs co-schedule is answered by the B1 probe record.
 import heapq, random
 
 from tinygrad.runtime.graph import cuda
+from tinygrad.device import Buffer
+from tinygrad.dtype import dtypes
+from tinygrad.engine.jit import DepsTracker
 
 # Canonical DAGs: (preds, costs). Node order is topological by construction.
 CHAIN = ([[], [0], [1], [2]], [1, 1, 1, 1])
@@ -137,3 +140,33 @@ def test_per_stream_ordinals_strictly_increasing():
     for s in range(2):
       seq = [j for j in range(len(streams)) if streams[j] == s]
       assert seq == sorted(seq), f"stream {s} ordinals not increasing: {seq}"
+
+
+def test_capture_deps_use_subbuffer_ranges_not_bases():
+  # The capture lowerer feeds per-call buffers into the range-aware dependency
+  # tracker. Feeding the arena bases instead of the sub-buffers collapses every
+  # planned buffer to the full arena range and serializes independent fan-out
+  # writes (q/k/v, gate/up) that the planner placed at distinct offsets. This
+  # pins the call-site contract that broke overlap: sub-buffers, never bases.
+  arena = Buffer("CUDA", 4096, dtypes.uint8)
+  q = Buffer("CUDA", 1024, dtypes.uint8, base=arena, offset=0)
+  k = Buffer("CUDA", 1024, dtypes.uint8, base=arena, offset=2048)
+  assert q.base is k.base is arena
+  assert q.offset == 0 and k.offset == 2048
+
+  # Disjoint sub-buffer ranges written by independent kernels: no false edge.
+  tracker = DepsTracker()
+  assert tracker.access_resources([q], [0], new_dependency=0) == []
+  assert tracker.access_resources([k], [0], new_dependency=1) == []
+
+  # The same two writes fed as their shared base collapse to the full arena
+  # range: the second write must wait on the first (the width-1 chain bug).
+  tracker = DepsTracker()
+  assert tracker.access_resources([arena], [0], new_dependency=0) == []
+  assert tracker.access_resources([arena], [0], new_dependency=1) == [0]
+
+  # Semantic RAW edges on the same sub-range are still preserved.
+  tracker = DepsTracker()
+  assert tracker.access_resources([q], [0], new_dependency=0) == []
+  waits = tracker.access_resources([q], [], new_dependency=1)
+  assert waits == [0]

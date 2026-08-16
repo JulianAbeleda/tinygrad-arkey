@@ -103,10 +103,10 @@ class CUDAGraph(MultiGraphRunner):
     preds: list[list[int]] = [[] for _ in range(len(self.calls))]
     for j, ((_, ast, bufs, _), _) in enumerate(zip(self.calls, self.runtimes)):
       if ast.op is Ops.PROGRAM:
-        preds[j] = [d for d in self._access_resources([b.base for b in bufs], ast.arg.outs, new_dependency=j)]
+        preds[j] = [d for d in self._access_resources(list(bufs), ast.arg.outs, new_dependency=j)]
       elif ast.op is Ops.COPY:
         dest, src = bufs[0], bufs[1]
-        preds[j] = [d for d in self._access_resources([dest.base, src.base], [0], new_dependency=j)]
+        preds[j] = [d for d in self._access_resources([dest, src], [0], new_dependency=j)]
 
     # Cost proxy per scope: max(1, memory bytes). PROGRAM estimates live on the
     # SINK node's KernelInfo (ast.src[0].arg, the same source estimate_uop uses;
