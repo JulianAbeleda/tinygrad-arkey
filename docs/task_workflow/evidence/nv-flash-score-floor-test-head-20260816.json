@@ -1,0 +1,39 @@
+{
+ "schema": "tinygrad.nv_flash_score_floor_test.v1",
+ "date": "2026-08-16",
+ "branch": "nvidia-bringup-20260731",
+ "git_commit": "86d65365182218de8301cc1c0b132bc657fa2bff",
+ "method": "test-first flash score floor: NV census re-pin + isolated CUPTI body at HEAD + production-shape structural microbench",
+ "census_route": "NV",
+ "census_tok_s_median": 205.415,
+ "census_token_sha": "227ad3ce9621f2c382cc722a3c2f1677637d3e3f2bfbf37d6ca652f98880eb4e",
+ "flash_rows": {
+  "score": {
+   "count": 36,
+   "median_us": 6.56,
+   "total_us": 241.39,
+   "min_us": 6.05,
+   "max_us": 7.74
+  },
+  "combine": {
+   "count": 36,
+   "median_us": 3.39,
+   "total_us": 122.8,
+   "min_us": 3.26,
+   "max_us": 4.1
+  }
+ },
+ "isolated_body_us": {
+  "tile_s48_prod_med": 4.192,
+  "tile_s48_prod_avg": 4.181,
+  "tile_s48_prod_min": 4.096,
+  "tile_s48_prod_max": 4.32,
+  "llama_in_situ": 3.16
+ },
+ "microbench_production_shape_us": {
+  "warm_nacc8": 1.946,
+  "warm_qhoist0": 1.986,
+  "cold_iters1": 7.616,
+  "warm_nacc1_record": 2.334
+ }
+}
