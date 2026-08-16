@@ -391,6 +391,14 @@ class _Q6KDecodeCandidate:
       from tinygrad.llm.q6k_ffn_down_mmvq import q6k_ffn_down_mmvq_call
       if (mmvq := q6k_ffn_down_mmvq_call(q6k_mmvq_admission, linear, x, binding, epi_inputs)) is not None:
         return mmvq
+    # Closed-default Q6_K attention-V four-warp fp16 direct route. Normal model
+    # loads carry no admission object, so this returns None before constructing
+    # the installed parts graph. A research harness installs the admission on
+    # exact Q6_K 1024x4096 attn_kv linears.
+    if (q6k_v_admission := getattr(linear, "_q6k_v_four_warp_admission", None)) is not None:
+      from tinygrad.llm.q6k_v_mmvq import q6k_v_four_warp_call
+      if (v_mmvq := q6k_v_four_warp_call(q6k_v_admission, linear, x, binding)) is not None:
+        return v_mmvq
     capability = getattr(getattr(linear, "route_admission", None), "capability", None)
     target = f"{capability.backend}:{capability.architecture}" if capability is not None and \
       getattr(capability, "backend", None) is not None and getattr(capability, "architecture", None) is not None \

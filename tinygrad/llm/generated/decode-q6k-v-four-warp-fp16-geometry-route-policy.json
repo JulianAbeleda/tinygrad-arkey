@@ -1,0 +1,8 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_q6k_v_four_warp_fp16_geometry",
+  "description": "Q6_K attention-V four-warp fp16 geometry promotion record (nv-q6k-v-four-warp-fp16-promotion-20260816.md). The candidate swaps the installed q6k_gen_partial_1024_4096_4 parts route for q6k_v_four_warp_fp16_direct_1024_4096 on the 10 Q6_K attention-V blocks (128 threads/row, four warps, fp16 FMA datapath, single pass to a contiguous fp32[1024] output, no parts buffer, no provider node). In-loop census at HEAD ef24c46ae: direct 5.12 us median vs partial 17.94 us, program count unchanged at 596, token stream bit-identical (227ad3ce...). Reverse wall bracket d512: control A 4.9545 / candidate 4.8058 / control C 4.9518 ms per token, -147.35 us/token vs control midpoint, +3.07% tok/s, token-exact across all three arms (WALL_PASS, +50 us bar cleared).",
+  "promoted_targets": [
+    {"backend": "NV", "architecture": "sm_120"}
+  ]
+}

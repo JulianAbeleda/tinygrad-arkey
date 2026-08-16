@@ -295,6 +295,27 @@ def decode_q6k_ffn_down_fp16_geometry_promoted(target:Target) -> bool:
   """Policy authority for the Q6_K FFN-down four-warp fp16 geometry route (closed default)."""
   return target in _DECODE_Q6K_FFN_DOWN_FP16_GEOMETRY_PROMOTED_TARGETS
 
+def load_decode_q6k_v_four_warp_fp16_geometry_promotion(path:str) -> frozenset[Target]:
+  """Read the Q6_K attention-V four-warp fp16 geometry promotion record
+  (boltbeam.route_policy.v1, same schema family as the Q6 FFN-down record).
+  CLOSED default; the attention-V analog of the landed Q6 FFN-down route
+  (nv-q6k-v-four-warp-fp16-promotion-20260816.md: in-loop 5.12 us vs 17.94 us
+  control, -147.35 us/token wall bracket).  A document without
+  `promoted_targets` -- or with an empty list -- promotes nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_Q6K_V_FOUR_WARP_FP16_GEOMETRY_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-q6k-v-four-warp-fp16-geometry-route-policy.json"
+_DECODE_Q6K_V_FOUR_WARP_FP16_GEOMETRY_PROMOTED_TARGETS: frozenset[Target] = load_decode_q6k_v_four_warp_fp16_geometry_promotion(_DECODE_Q6K_V_FOUR_WARP_FP16_GEOMETRY_PROMOTION_RECORD)
+
+def decode_q6k_v_four_warp_fp16_geometry_promoted(target:Target) -> bool:
+  """Policy authority for the Q6_K attention-V four-warp fp16 geometry route (closed default)."""
+  return target in _DECODE_Q6K_V_FOUR_WARP_FP16_GEOMETRY_PROMOTED_TARGETS
+
 def load_decode_q4k_w1w3_fusion_promotion(path:str) -> frozenset[Target]:
   """Read the w1+w3 fused gate/up decode GEMV promotion record (boltbeam.route_policy.v1, same schema
   family as `load_decode_q4k_epilogue_fusion_promotion`). CLOSED default; deliberately a SEPARATE record

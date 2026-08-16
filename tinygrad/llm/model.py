@@ -51,7 +51,7 @@ from tinygrad.llm.model_route_plan import (build_model_route_plan, decode_norm_f
   decode_q4k_w1w3_fp16_store_promoted, decode_ffn_down_resadd_promoted, decode_kv_store_fusion_promoted,
   decode_rmsnorm_native_lowering_promoted, decode_reduce_output_rmsnorm_promoted, decode_shared_q8_attention_promoted,
   decode_q6_direct_shared_q8_attention_promoted, decode_q4k_ffn_down_fp16_geometry_promoted,
-  decode_q6k_ffn_down_fp16_geometry_promoted)
+  decode_q6k_ffn_down_fp16_geometry_promoted, decode_q6k_v_four_warp_fp16_geometry_promoted)
 from tinygrad.llm.prefill_candidate_runtime import decode_prefill_graph_candidate_set, automatic_promoted_prefill_graph_policy
 from tinygrad.llm.physical_memory_ledger import AllocationOwner, bind_allocation_owner
 from tinygrad.uop.ops import Ops, resolve
@@ -1842,6 +1842,12 @@ class Transformer:
     # requires the M2b ffn-down residual-add promotion, and is ANDed with it at resolve time.
     model._decode_q6k_ffn_down_fp16_geometry_promoted = _ffn_resadd_promoted and \
       decode_q6k_ffn_down_fp16_geometry_promoted((_norm_cap.backend, _norm_cap.architecture))
+    # Q6_K attention-V four-warp fp16 geometry route (decode-q6k-v-four-warp-fp16-geometry-route-policy.json,
+    # NV sm_120 promoted, in-loop 5.12 us vs 17.94 us control, -147.35 us/token wall bracket). It replaces
+    # the parts route on the 10 Q6_K attention-V blocks with a 128-thread four-warp fp16 direct consumer;
+    # the V output binds to the kv-store route as a flat fp32 view (vparts=1), so no parts reduce is left.
+    model._decode_q6k_v_four_warp_promoted = decode_q6k_v_four_warp_fp16_geometry_promoted(
+      (_norm_cap.backend, _norm_cap.architecture))
     # Decode kv-store chain fusion gate (decode-kv-store-chain-fusion-scope-20260803.md). CLOSED default
     # (decode-kv-store-fusion-route-policy.json, empty promoted_targets until a same-session A/B record
     # lands). Same resolve-once pattern as the w1w3 gate; blocks carry their own copy so the traced
@@ -1963,6 +1969,16 @@ class Transformer:
           if _ffn is not None and isinstance(_ffn, Q6KPrimitiveLinear) and getattr(_ffn, "route_role", "") == "ffn_down" \
              and getattr(_ffn, "out_features", None) == 4096 and getattr(_ffn, "in_features", None) == 12288:
             _ffn._q6k_ffn_down_mmvq_admission = Q6KFFNDownMMVQAdmission(_idx, fp16_fma=True)
+      # Q6_K attention-V four-warp fp16 geometry route: install the admission on the exact Q6_K
+      # 1024x4096 attn_kv role only (Q4 V keeps its own shared-Q8 route). Normal loads carry no
+      # admission, so this stays closed on every other target.
+      if model._decode_q6k_v_four_warp_promoted:
+        from tinygrad.llm.q6k_v_mmvq import Q6KVFourWarpAdmission
+        for _idx, _b in enumerate(model.blk):
+          _v = getattr(_b, "attn_v", None)
+          if _v is not None and isinstance(_v, Q6KPrimitiveLinear) and getattr(_v, "route_role", "") == "attn_kv" \
+             and getattr(_v, "out_features", None) == 1024 and getattr(_v, "in_features", None) == 4096:
+            _v._q6k_v_four_warp_admission = Q6KVFourWarpAdmission(_idx)
       if qk_cfg.storage_debug:
         summary = _qk_storage_summary(primitive_linears)
         cap = -1 if primitive_budget.cap_bytes is None else primitive_budget.cap_bytes
