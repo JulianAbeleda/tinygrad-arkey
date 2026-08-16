@@ -276,6 +276,25 @@ def decode_q4k_ffn_down_fp16_geometry_promoted(target:Target) -> bool:
   """Policy authority for the Q4_K FFN-down four-warp fp16 geometry route (closed default)."""
   return target in _DECODE_Q4K_FFN_DOWN_FP16_GEOMETRY_PROMOTED_TARGETS
 
+def load_decode_q6k_ffn_down_fp16_geometry_promotion(path:str) -> frozenset[Target]:
+  """Read the Q6_K FFN-down four-warp fp16 geometry promotion record (boltbeam.route_policy.v1,
+  same schema family as the Q4 geometry record). CLOSED default; the Q6 analog of the landed Q4
+  route (nv-q6-ffn-down-four-warp-fp16-microgate-20260815.md: device 25.7 us vs 31.0 us control).
+  A document without `promoted_targets` -- or with an empty list -- promotes nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_Q6K_FFN_DOWN_FP16_GEOMETRY_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-q6k-ffn-down-fp16-geometry-route-policy.json"
+_DECODE_Q6K_FFN_DOWN_FP16_GEOMETRY_PROMOTED_TARGETS: frozenset[Target] = load_decode_q6k_ffn_down_fp16_geometry_promotion(_DECODE_Q6K_FFN_DOWN_FP16_GEOMETRY_PROMOTION_RECORD)
+
+def decode_q6k_ffn_down_fp16_geometry_promoted(target:Target) -> bool:
+  """Policy authority for the Q6_K FFN-down four-warp fp16 geometry route (closed default)."""
+  return target in _DECODE_Q6K_FFN_DOWN_FP16_GEOMETRY_PROMOTED_TARGETS
+
 def load_decode_q4k_w1w3_fusion_promotion(path:str) -> frozenset[Target]:
   """Read the w1+w3 fused gate/up decode GEMV promotion record (boltbeam.route_policy.v1, same schema
   family as `load_decode_q4k_epilogue_fusion_promotion`). CLOSED default; deliberately a SEPARATE record

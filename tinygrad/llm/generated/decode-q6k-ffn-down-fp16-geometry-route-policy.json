@@ -1,0 +1,6 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_q6k_ffn_down_fp16_geometry",
+  "description": "Q6_K FFN-down four-warp fp16 geometry research record (nv-q6-ffn-down-four-warp-fp16-microgate-20260815.md). Device-time win only: production census 31.78 us vs 34.85 us control on this node, correctness-clean (token sha unchanged). NOT promoted: the reverse wall bracket is NO-GO because df3dca075 regresses NV decode wall 200.9 -> 83.9 tok/s and masks the kernel win. Re-open and re-bracket once the capture-time schedule/memory-planner regression is fixed.",
+  "promoted_targets": []
+}

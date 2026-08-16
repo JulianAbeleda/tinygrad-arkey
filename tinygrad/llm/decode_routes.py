@@ -384,6 +384,13 @@ class _Q6KDecodeCandidate:
     x_vec = x[:, 0, :].reshape(binding.K).cast(dtypes.float16).contiguous()
     route_role = getattr(linear, "route_role", "")
     epi_inputs = epilogue_inputs or {}
+    # Closed-default Q6_K FFN-down four-warp fp16 geometry route. Normal model loads carry no
+    # admission object, so this returns None before constructing the installed coop graph. A
+    # promoted policy installs the admission on exact Q6_K 4096x12288 ffn_down linears.
+    if (q6k_mmvq_admission := getattr(linear, "_q6k_ffn_down_mmvq_admission", None)) is not None:
+      from tinygrad.llm.q6k_ffn_down_mmvq import q6k_ffn_down_mmvq_call
+      if (mmvq := q6k_ffn_down_mmvq_call(q6k_mmvq_admission, linear, x, binding, epi_inputs)) is not None:
+        return mmvq
     capability = getattr(getattr(linear, "route_admission", None), "capability", None)
     target = f"{capability.backend}:{capability.architecture}" if capability is not None and \
       getattr(capability, "backend", None) is not None and getattr(capability, "architecture", None) is not None \
