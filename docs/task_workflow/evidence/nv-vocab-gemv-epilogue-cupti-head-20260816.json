@@ -1,0 +1,24 @@
+{
+  "delta_median_us": 0.3849999999999909,
+  "delta_pct": 0.11848669409812995,
+  "git_commit": "8d850098269ff7a470db5a4c62d5bc3cc056dc12",
+  "kernels": {
+    "q6k_gen_coop_151936_4096_inkernel": {
+      "count": 161,
+      "mean_us": 324.9393602484472,
+      "median_us": 324.931,
+      "p10_us": 323.075,
+      "p90_us": 326.98
+    },
+    "q6k_gen_coop_151936_4096_inkernel_epi_vocabtop1": {
+      "count": 161,
+      "mean_us": 325.3534534161491,
+      "median_us": 325.316,
+      "p10_us": 323.075,
+      "p90_us": 327.748
+    }
+  },
+  "replays": 150,
+  "schema": "tinygrad.nv_vocab_gemv_epilogue.nsys.v1",
+  "warmup": 10
+}

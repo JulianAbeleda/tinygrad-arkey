@@ -1,0 +1,40 @@
+{
+  "fused_minus_legacy_us": -8.769,
+  "fused_tail_sum_us": 42.656,
+  "git_commit": "8d850098269ff7a470db5a4c62d5bc3cc056dc12",
+  "kernels": {
+    "r_1187_16_4_2_9ac65475940770603e301db033b5cfb3043b99629c1af0494867ea5a291d4135": {
+      "count": 1,
+      "mean_us": 1.248,
+      "median_us": 1.248
+    },
+    "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5": {
+      "count": 221,
+      "mean_us": 10.058,
+      "median_us": 10.016
+    },
+    "r_16_4_1187_77cd82e5f7b917aebdca945e311818e0587a5ec937ff6dc00daf90904af5840d": {
+      "count": 221,
+      "mean_us": 42.111,
+      "median_us": 42.112
+    },
+    "r_16_4_ff7255bb20b1edcda760b863bdedde25b7642e1ceebf44328c33e1ebff82a84e": {
+      "count": 221,
+      "mean_us": 0.536,
+      "median_us": 0.544
+    },
+    "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c": {
+      "count": 221,
+      "mean_us": 0.546,
+      "median_us": 0.544
+    },
+    "r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f": {
+      "count": 221,
+      "mean_us": 40.708,
+      "median_us": 40.865
+    }
+  },
+  "legacy_tail_sum_us": 51.425,
+  "note": "isolated tail chain CUPTI median durations at HEAD (200 replays each); fused tail = r_16_4_1187 + r_16_4; legacy = r_32_4_1187 + r_128_16_8_1187 + r_16_8; r_1187_16_4_2 (n=1) is the keys-generator, excluded",
+  "schema": "tinygrad.nv_vocab_tail_cupti.v2.kernels"
+}
