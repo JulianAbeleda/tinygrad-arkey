@@ -35,23 +35,28 @@ Remaining Path A rows at HEAD:
 | reduce-output epilogue (q/k + ffn-down) | ~378 | primitive exists; body-free fold measured FLAT (wall-blocked) |
 | M1 norm chains + E/r plumbing | ~238 | body-free FLAT, body-adding NO-GO (closed) |
 | flash score installed gap | +122 | bodies at parity; gap is launch/graph behavior, not body |
-| vocab aux (F5) | ~52 | only unbuilt mechanism; packed-u64 carry exists, single-pass cross-tile max not built |
+| vocab aux (F5) | ~52 | closed NO_GO at HEAD: isolated fused tail -8.8 us, epilogue +0.4 us, wall is in-situ handoff (+25.5 us A/B); single-pass max unbuildable and would only recover ~9 us (`nv-vocab-top1-fusion-head-recheck-20260816.md`) |
 
 The reduce-output and M1 folds are values-blocked (rendered, measured FLAT), not
-substrate-blocked. The only Path A item that is substrate-missing is the vocab
-single-pass cross-tile max (~50 us, ~+2 tok/s if it lands).
+substrate-blocked. Path A is now fully dispositioned: the vocab single-pass cross-tile
+max is closed as NO_GO (in-situ wall, ~9 us ceiling, below the +50 us bar).
 
 ## 3. Path B (anchor shadow / overlap): no buildable substrate at HEAD
 
 | sub-route | status | measured evidence |
 | --- | --- | --- |
 | Route A native multi-compute channel | CONSTRUCTION_BLOCKED | RM rejects `NVA06F_CTRL_CMD_BIND` (`NV_ERR_INVALID_ARGUMENT`); without BIND extra channels never execute (`nv-decode-overlap-phase0-measurement-record-20260804.md`) |
-| Route B CUDA multi-stream graph | present, measured FLAT | 1-4 streams, tokens bitwise identical, wall flat ~179-180 tok/s; width-4 q/k/v is bandwidth-bound (`nv-overlap-route-b-head-wall-record-20260815.md`) |
+| Route B CUDA multi-stream graph | **present, NOT flat at HEAD** | 08-15 FLAT record predates the capture-deps fix `86d653651`; fresh HEAD A/B: 1 stream 179.1, 4 streams 187.9 tok/s (+4.8%), tokens bitwise identical (`nv-route-b-head-cuda-streams-20260816.json`). Width-4 was not bandwidth-bound; the old capture fed arena bases and degenerated to a width-1 chain. |
 | PDL (llama's actual single-stream mechanism) | economics-negative | launch-gap half already wired via dependent-QMD chain; programmatic half CONSTRUCTION-REQUIRED but recovers ~18-33 us (`nv-llama-pdl-launch-hiding-trace-record-20260816.md`) |
 
-Conclusion: Path B has no buildable substrate at HEAD. llama's ~925 us overlap
-mass is mostly quantize/norm/rope that tinygrad already fused away, so no route
-converts that mass to wall on our decomposition.
+Conclusion: Path B's three routes now split. Route B (CUDA multi-stream) is the
+first measured wall-positive overlap at HEAD: the capture-deps fix restored the
+width-4 DAG and 4 streams convert to +4.8%. Route A (native multi-compute) is
+still CONSTRUCTION_BLOCKED at the driver, and PDL remains economics-negative.
+llama's ~925 us overlap mass is mostly quantize/norm/rope that tinygrad already
+fused away; Route B shows the residual width-4 DAG does convert to wall on CUDA,
+but that transfer is CUDA-capture specific and does not yet reach the NV HCQ
+production route.
 
 ## 4. Honest target
 
