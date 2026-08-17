@@ -2114,6 +2114,26 @@ class Transformer:
       try: self(dummy, v_sp.bind(ctx), temp, use_flash=True).realize()
       except Exception: return
 
+  def _decode_submit_ahead_eligible(self) -> bool:
+    """Closed-default launch-hiding gate for the steady-decode pipeline.
+
+    The submit-ahead route reorders the steady decode loop to submit token
+    N+1's graph BEFORE ``item()`` on token N, so the host-side JIT prep for
+    N+1 overlaps the GPU execution of N.  It is only safe when the promoted
+    greedy pingpong pair is already captured AND its alias contract is
+    admitted (distinct fixed returns, read-only inputs): the loop then reads
+    the previous output tensor after submitting the next graph without any
+    risk of the next graph clobbering it.  A cold or unadmitted pair falls
+    back to the ordinary single-sync pingpong route, which is byte-identical.
+    """
+    if not bool(getattr(self, "_decode_submit_ahead_promoted", False)): return False
+    if not bool(getattr(self, "_decode_direct_greedy_promoted", False)): return False
+    if not bool(getattr(self, "_decode_feedback_pingpong_promoted", False)): return False
+    from tinygrad.llm.feedback_pingpong import pingpong_capture_contract
+    pair = self.rollout_greedy_pingpong_jits_flash
+    return all(getattr(jit, "captured", None) is not None for jit in pair) and \
+      pingpong_capture_contract(pair)["admitted"]
+
   def generate(self, tokens:list[int], chunk_size:int=32, temperature:float=0.0, diagnostic_full_logits:bool=False):
     if self.has_recurrent_block: chunk_size = 1
     _ring = self.config.ring and self.config.rope_dim == self.config.head_dim
@@ -2141,6 +2161,11 @@ class Transformer:
     # 512): generate passes no use_flash override and lets that single authority decide per captured graph.
     out, prompt_len, decode_feedback_phase = None, len(tokens), 0
     direct_greedy = temperature == 0.0 and bool(getattr(self, "_decode_direct_greedy_promoted", False))
+    # Launch hiding (submit-ahead) only reorders the steady flash-greedy
+    # pingpong decode; everything else keeps the exact existing scheduling.
+    submit_ahead = (not _ring and not diagnostic_full_logits and temperature == 0.0 and direct_greedy
+                    and self._decode_submit_ahead_eligible())
+    read_tok = None
     while _ring or len(tokens) < self.max_context:   # ring: unbounded logical context (caller controls when to stop)
       ubatch = self.config.prefill_ubatch
       if self.config.prefill_v2 and prefill_v2_target_admitted(self.config.prefill_device_facts) and (prompt_len - start_pos) >= ubatch:
@@ -2175,39 +2200,63 @@ class Transformer:
                                       start_pos, _N, _sinks)
         out = self(out, sp, temp, use_flash=True, ring_freqs=_rf, ring_full=(start_pos >= _N), greedy=direct_greedy).realize()
       else:
-        sp, nt = v_start_pos.bind(start_pos), v_toks.bind(min(chunk_size, len(tokens) - start_pos))
+        # Submit-ahead defers the prefill yield to the first steady-decode
+        # iteration, so start_pos == len(tokens) there: the next graph is
+        # still a one-token decode, never an empty prefill slice.
+        toks_remaining = len(tokens) - start_pos
+        if submit_ahead and toks_remaining < 1: toks_remaining = 1
+        sp, nt = v_start_pos.bind(start_pos), v_toks.bind(min(chunk_size, toks_remaining))
         ntv = nt.val
         # Select the flash-decode graph (rollout_jit_flash) vs SDPA graph (rollout_jit) per-token by context, so a
         # generation that STARTS short still crosses over to flash once ctx reaches the threshold. Without this the
         # decode graph is baked SDPA at the start ctx and never switches -> short-prompt decode SDPA-degrades the
         # whole way (e.g. 85->54 tok/s by ctx512). should_use_flash_decode returns False for ntv!=1 (prefill chunks).
         _uf = self.config.flash_decode and _route_should_use_flash_decode(sp, ntv)
-        decode_input = _generation_input_slice(t, sp, nt, ntv) if start_pos < prompt_len or out is None else \
-                       (out[0] if diagnostic_full_logits and isinstance(out, tuple) else out)
-        feedback_slot = (decode_feedback_phase & 1) if start_pos >= prompt_len and \
-          bool(getattr(self, "_decode_feedback_pingpong_promoted", False)) else None
-        out = (self.decode_with_logits(decode_input, sp, temp, use_flash=_uf, feedback_slot=feedback_slot)
-               if diagnostic_full_logits and ntv == 1 and start_pos >= prompt_len else
-               self(decode_input, sp, temp, use_flash=_uf, greedy=direct_greedy, feedback_slot=feedback_slot))
-        if feedback_slot is not None: decode_feedback_phase += 1
-        if isinstance(out, tuple):
-          out = (out[0].realize(), out[1].realize())
-        else: out = out.realize()
-        if feedback_slot is not None:
-          pair = self.rollout_greedy_logits_pingpong_jits_flash if diagnostic_full_logits and _uf else \
-                 self.rollout_greedy_logits_pingpong_jits if diagnostic_full_logits else \
-                 self.rollout_greedy_pingpong_jits_flash if _uf else self.rollout_greedy_pingpong_jits
-          if all(getattr(jit, "captured", None) is not None for jit in pair):
-            from tinygrad.llm.feedback_pingpong import pingpong_capture_contract
-            if not pingpong_capture_contract(pair)["admitted"]:
-              # Keep the generic alias-safe path as the automatic fallback;
-              # the harness records the exact failed contract separately.
-              self._decode_feedback_pingpong_promoted = False
-              decode_feedback_phase = 0
+        if submit_ahead and ntv == 1 and start_pos >= prompt_len and _uf and out is not None:
+          # Submit token start_pos+1's graph now; its input is the previous
+          # output (the token we yield this iteration).  The host-side prep of
+          # this submission overlaps the GPU execution of that token, then the
+          # bottom of the loop reads the PREVIOUS output after submission.
+          prev = out
+          out = self(prev, sp, temp, use_flash=_uf, greedy=True,
+                     feedback_slot=(decode_feedback_phase & 1)).realize()
+          decode_feedback_phase += 1
+          read_tok = prev
+        else:
+          decode_input = _generation_input_slice(t, sp, nt, ntv) if start_pos < prompt_len or out is None else \
+                         (out[0] if diagnostic_full_logits and isinstance(out, tuple) else out)
+          feedback_slot = (decode_feedback_phase & 1) if start_pos >= prompt_len and \
+            bool(getattr(self, "_decode_feedback_pingpong_promoted", False)) else None
+          out = (self.decode_with_logits(decode_input, sp, temp, use_flash=_uf, feedback_slot=feedback_slot)
+                 if diagnostic_full_logits and ntv == 1 and start_pos >= prompt_len else
+                 self(decode_input, sp, temp, use_flash=_uf, greedy=direct_greedy, feedback_slot=feedback_slot))
+          if feedback_slot is not None: decode_feedback_phase += 1
+          if isinstance(out, tuple):
+            out = (out[0].realize(), out[1].realize())
+          else: out = out.realize()
+          if feedback_slot is not None:
+            pair = self.rollout_greedy_logits_pingpong_jits_flash if diagnostic_full_logits and _uf else \
+                   self.rollout_greedy_logits_pingpong_jits if diagnostic_full_logits else \
+                   self.rollout_greedy_pingpong_jits_flash if _uf else self.rollout_greedy_pingpong_jits
+            if all(getattr(jit, "captured", None) is not None for jit in pair):
+              from tinygrad.llm.feedback_pingpong import pingpong_capture_contract
+              if not pingpong_capture_contract(pair)["admitted"]:
+                # Keep the generic alias-safe path as the automatic fallback;
+                # the harness records the exact failed contract separately.
+                self._decode_feedback_pingpong_promoted = False
+                decode_feedback_phase = 0
       start_pos += ntv
       # chunked prefill: keep processing until all prompt tokens are consumed
       if start_pos < len(tokens): continue
-      sampled, logits = out if diagnostic_full_logits and isinstance(out, tuple) else (out, None)
+      if submit_ahead and read_tok is None:
+        # The prefill output is the first deferred token: the steady-decode
+        # iteration above submits the NEXT graph and yields this output.
+        read_tok = out
+        continue
+      if submit_ahead:
+        sampled, logits = read_tok, None
+      else:
+        sampled, logits = out if diagnostic_full_logits and isinstance(out, tuple) else (out, None)
       tokens.append(int(sampled.item()))
       self._cached_tokens = tokens[:-1]
       # Prompt/prefill produces the first sampled token through the normal
