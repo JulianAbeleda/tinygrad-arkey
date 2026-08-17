@@ -1,0 +1,243 @@
+# NV substrate exhaustive scope: the anchor+shadow topology that unlocks 240 (2026-08-17)
+
+Date: 2026-08-17
+Branch: `nvidia-bringup-20260731`
+Status: **scope record. Read-only; no code, no GPU session.** Turns the
+08-15 substrate definition and the 08-17 stress test into one exhaustive,
+buildable inventory: every construction that must exist for the native NV
+decode route to render `overlap_mass > 0` (the anchor+shadow topology), its
+gate, its test, and its honest ceiling. This is the plan the next GPU sessions
+execute against.
+
+## 1. The definition the scope builds against
+
+From `nv-substrate-definition-20260815.md`: **substrate = a capability in the
+compile/lower/emit/runtime stack that makes a target construction expressible
+as one valid, replayable program.** Capability-blocked (cannot render) is a
+substrate problem; wall-blocked (renders but loses) is a values problem. They
+route to different work.
+
+The target construction for 240: one steady decode token on the **native NV
+production route** (the one at 208.84 tok/s in the 08-17 wall account) that
+renders with `overlap_mass > 0` and the promoted kernel-work rows intact.
+
+## 2. Why the scope exists (the arithmetic envelope)
+
+08-17 exact wall account (zero residual), same session, d512, RTX 5090:
+
+| term | tinygrad | llama | delta |
+| --- | ---: | ---: | ---: |
+| wall | 4788.3 us (208.84 tok/s) | 4058.9 us (246.37 tok/s) | +729.4 |
+| GPU busy (union) | 4519.3 | 3890.5 | +628.8 |
+| host gap | 269.0 | 168.3 | +100.6 |
+| overlap mass | 0.0 | 1125.1 | -1125.1 |
+| node sum | 4519.3 | 5015.7 | -496.3 |
+
+Stress test (`nv-240-climb-stress-test-20260817.json`, committed): llama's
+overlap is real GPU concurrency (865 same-stream pairs/replay, negative min
+inter-kernel gap, worth 53.5 tok/s to llama under a serialization
+counterfactual); tinygrad is exactly serial (0 pairs, union == node sum).
+Sensitivity: perfect kernel-row parity caps at 228.45 tok/s, plus host parity
+at 233.83 tok/s; clearing 240.0 needs at least ~110 us of hidden kernel time,
+and matching llama's union needs 628.8 us.
+
+**Conclusion this scope executes:** the last ~110-621 us to 240 is overlap.
+Overlap needs the anchor+shadow topology, which is CONSTRUCTION-REQUIRED on
+native. This document inventories every construction that path needs.
+
+## 3. Why the current DAG has zero overlap (measured root cause)
+
+`nv-overlap-planner-serialization-root-cause-20260815.md` (runtime dep
+capture, not a reconstruction): the **memory planner aliases independent
+fan-out live ranges into one arena slot**, adding WAR/WAW edges that collapse
+the DAG to width 1. With the planner on, every node after index 3 has exactly
+one predecessor: `q -> k -> v -> rope/kv -> flash -> ...` is one serial chain.
+With `NO_MEMORY_PLANNER=1`, q/k/v and gate/up become true siblings (9
+fan-in/fan-out joins in the first 32 nodes).
+
+The probe A/B on the CUDA route (same record): planner-on 178.95 tok/s,
+planner-off 4 streams 187.53 tok/s = **+8.5 tok/s (+4.8%)**, bitwise identical
+tokens. The gain is real but bounded: the only independent work is GEMV
+siblings (q/k/v, gate/up) which contend for HBM bandwidth, and the
+rope/kv/flash/norm support is a fan-in on the critical path that cannot hide.
+
+This is the structural reason the 08-13 "launch hiding exhausted" account and
+the 08-14 "anchor does not transfer" verdict both measured flat: the scans ran
+on a planner-serialized DAG that had nothing to hide.
+
+## 4. The substrate inventory (the stack, bottom to top)
+
+Every row is a construction (or an already-built capability that gates a later
+construction). Rows are ordered by dependency: S1 must land before S2 can be
+measured, S2 before S3, etc.
+
+### S1. DAG width (targeted memory-planning change) — CONSTRUCTION-REQUIRED
+
+**What.** The memory planner (`tinygrad/schedule/memory.py`,
+`memory_plan_rewrite`) must stop aliasing dependency-independent fan-out live
+ranges (q/k/v, gate/up) into one arena slot. Product change, not the
+`NO_MEMORY_PLANNER=1` probe (which pins every buffer and spikes VRAM). The
+probe proves the geometry; the product change must restore sibling edges
+without the VRAM cost.
+
+**Why first.** Without width there is nothing to co-schedule; every deeper row
+is unmeasurable. This is the gate for the whole stack.
+
+**Gate (pass criteria, in order):**
+1. Runtime dep capture (`scratchpad/nv_decode_runtime_deps_probe.py`) on the
+   changed planner shows q/k/v with the same predecessor (siblings), not
+   `q -> k -> v`.
+2. Ledger (NV HCQGraph profiler) shows `overlap_mass > 0.0` on steady tokens.
+3. Same-session canonical A/B wall: candidate not slower than control, tokens
+   bitwise identical (existing authority, fixed-depth d512).
+
+**Honest ceiling.** On the CUDA route the width restoration alone is +4.8%
+(~8.5 tok/s off a ~179 baseline). On the NV production route the baseline is
+208.84, so the same fractional gain is ~+10 tok/s (to ~219) if bandwidth
+physics transfers; this is a measurement, not a promise. Full 240 needs the
+stack above, not S1 alone.
+
+**Test.** Extend `test/unit/test_nv_parity_path_proof.py` (or a sibling) with a
+compile/runtime-dep assertion that the decode q/k/v triple are siblings under
+the new planner policy.
+
+### S2. Native NV multi-GPFIFO execution — BUILT + QUALIFIED, needs a DAG with width
+
+**What.** The native hardware substrate exists and passed: two compute GPFIFOs
+under one async ctxshare, constructed before the group's first schedule,
+co-schedule light kernels at 9.7% interval-union overlap (repeatable, clears
+the 5% gate). See `nv-rank2-native-concurrency-construction-verdict-20260805.md`.
+`HCQ_NUM_COMPUTE=2` is the qualified construction; `hw_compute_queues()`
+exposes `COMPUTE:{i}` and the HCQ scheduler already has a name-pinned
+multi-queue cut policy (`NV_MULTI_QUEUE_CUT_POLICY`,
+`HCQ_NV_MULTI_QUEUE_INDICES`, `scratchpad/nv_multi_queue_probe.py`,
+`test/unit/test_nv_multi_queue_probe_construction.py`).
+
+**Why after S1.** Multi-queue execution of a width-1 chain buys ~0 (measured
+08-15). Once S1 restores siblings, the width-4 graph can actually be placed
+across GPFIFOs.
+
+**Gate.**
+1. `HCQ_NUM_COMPUTE=2` + a cut policy that places q/k/v (and gate/up) on
+   distinct GPFIFOs runs end-to-end on the production decode route, tokens
+   bitwise identical.
+2. NV ledger shows `overlap_mass > 0` AND the wall A/B is positive (not
+   merely non-negative): same-session control (S1, 1 queue) vs candidate
+   (S1, 2 queues).
+3. The +4.8% CUDA-route number is reproduced or beaten on the native route.
+
+**Honest ceiling.** The measured +8.5 tok/s on CUDA is the current best
+evidence for what width + multi-queue is worth on this DAG; the native number
+is unmeasured. HBM contention between GEMV siblings caps the gain below the
+serialized-sum naive estimate.
+
+### S3. Anchor+shadow composition — CONSTRUCTION-REQUIRED (the layer-2 wall)
+
+**What.** The composed topology: one long fused-quant GEMV anchor per token
+with support work hidden behind it (`overlap_mass > 0`), exactly as defined in
+`nv-substrate-definition-20260815.md` section 3. On the current DAG the GEMV
+chain IS the anchor; what is missing is the shadow — support kernels whose
+durations stop landing on the critical path.
+
+**The dependency reality (measured, not guessed):**
+- q/k/v and gate/up GEMV siblings: hideable behind each other (S1+S2).
+- rope/kv/flash/norm: fan-in on the critical path (each consumes a GEMV
+  output), so they cannot hide behind an anchor *without a body change*. This
+  is why the flash pair is the only llama-exposed mass left on our side, and it
+  is at body parity (4.16 vs 4.10 us isolated).
+- reduce_output and vocab_aux: epilogue folds, not overlap; they are the
+  kernel-work rows in the wall account (fusion row, measured FLAT for the
+  body-free fold at 08-13).
+
+**Gate.** NV ledger on a steady token shows `overlap_mass > 0` with the
+promoted body rows (Q6 four-warp, reduce-output fusion) intact, and the wall
+A/B at HEAD is positive with bitwise-identical tokens.
+
+**Honest ceiling.** This row's transferable mass is bounded by the DAG's real
+independence (the S1 siblings) plus any prologue/epilogue hiding the execution
+mechanism (S4) adds. It is NOT llama's 1125 us: ~571 us of llama's hidden mass
+is quantize/norm/rope work tinygrad already fused away (08-16 PDL trace), and
+the flash pair is at body parity with an installed gap priced at ~+122 us.
+
+### S4. Programmatic dependent launch (llama's mechanism) — half wired, economics-negative at HEAD
+
+**What.** llama's overlap is single-stream PDL: `cudaTriggerProgrammaticLaunchCompletion`
+at kernel start + `cudaGridDependencySynchronize` before consumer reads
+(`ggml-cuda/common.cuh`, verified 08-16). Two halves on native:
+
+- Launch-gap half: **already wired.** `NVComputeQueue.exec()` chains
+  consecutive same-queue kernels via `dependent_qmd0_*` (QMD_SCHEDULE),
+  eliminating CPU round-trips (`ops_nv.py:166-171`; hcq.py:390-393 NV chain
+  optimization).
+- Programmatic half: **CONSTRUCTION-REQUIRED.** No renderer emits
+  `griddepcontrol`-class PTX (zero hits in `ptx.py`/`cuda.py`), and the QMD v05
+  latch fields (`DEPENDENCE_COUNTER`, `WAIT_ON_LATCH_ID`, `ARRIVE_AT_LATCH_ID`)
+  are present in `autogen/nv_570.py` but never programmed. Full PDL needs
+  renderer emission + QMD latch programming + a per-pair scheduler policy.
+
+**Why not first.** The 08-16 trace priced full PDL at ~18-33 us recoverable
+(the launch-gap half is already active; the programmatic half mostly overlaps
+work we have already fused). It is the mechanism that maps 1:1 to llama, so it
+is the fallback if S1+S2+S3 do not reach 240, but it is not the first lever.
+
+**Gate (if pursued).** A two-kernel microbench (producer/consumer, no data
+dependency between prologue and body) shows next-kernel prologue overlap on
+one NV GPFIFO with clean numerics; then a decode wall A/B.
+
+### S5. Host gap (269.0 vs 168.3 us) — separate row, graph substrate exhausted
+
+**What.** 100.6 us of the wall delta is host-gap: eager/JIT handoff and graph
+install behavior. The 08-13 account found the graph substrate for this
+exhausted (replay factor 0.917, 95.6% busy). Not part of the anchor+shadow
+stack; tracked separately in the wall account.
+
+## 5. What this scope explicitly does NOT build
+
+- Not llama's quantize pass (we fused it; no node to pipeline).
+- Not the CUDA multi-stream route (Route B) as the production target: it runs
+  a degraded graph (no NV reduce-output fusion, ~179 baseline) and is a
+  benchmark oracle for S1/S2 ceilings, not the delivery route.
+- Not per-shape GEMV tuning (Q4 FFN-down, Q6 attention-V sweeps closed NO-GO).
+- Not the flash single-stage body change (structural NO-GO at 08-13).
+- Not `NO_MEMORY_PLANNER=1` as a product (VRAM spike; probe only).
+
+## 6. Order of execution and gates (what the next sessions run)
+
+1. **S1 probe first (cheap, no GPU needed to start):** implement the targeted
+   planner policy; run the compile-only dependency probe to confirm the q/k/v
+   sibling geometry; then the GPU A/B.
+2. **S2 after S1 passes:** `HCQ_NUM_COMPUTE=2` + cut policy on the production
+   route; ledger + wall A/B.
+3. **S3 after S2:** compose the anchor+shadow and measure the transferable
+   overlap mass against the S1+S2 baseline.
+4. **S4 only if the stack stalls below 240:** PDL microbench, then decode A/B.
+5. **S5 in parallel where cheap:** host-gap measurement at HEAD (269.0 vs
+   168.3) is already in the account; any eager/JIT handoff reduction is a
+   separate tracked row.
+
+## 7. Acceptance test (one steady token at HEAD, native NV)
+
+The substrate is "present" when, in one session:
+
+1. Runtime dep capture shows q/k/v (and gate/up) siblings under the new
+   planner (no `NO_MEMORY_PLANNER`).
+2. NV HCQGraph ledger shows `overlap_mass > 0.0` on steady tokens with the
+   promoted body rows intact.
+3. Same-session canonical A/B: candidate wall <= control, tokens bitwise
+   identical, and the wall beats the 208.84 baseline by the measured S1+S2
+   margin.
+
+Every claim above is a measurement gate; a row is not "landed" until its gate
+passes with bitwise-identical tokens in a flocked same-session A/B.
+
+## 8. Evidence map
+
+- wall account + stress test: `nv-240-exact-wall-account-20260817.md`,
+  `nv-240-climb-stress-test-20260817.json`
+- substrate definition: `nv-substrate-definition-20260815.md`
+- DAG width root cause: `nv-overlap-planner-serialization-root-cause-20260815.md`
+- native co-schedule: `nv-rank2-native-concurrency-construction-verdict-20260805.md`
+- PDL mechanism + economics: `nv-llama-pdl-launch-hiding-trace-record-20260816.md`
+- multi-queue policy code: `ops_nv.py` (`HCQ_NUM_COMPUTE`),
+  `tinygrad/runtime/graph/hcq.py` (`NV_MULTI_QUEUE_CUT_POLICY`),
+  `scratchpad/nv_multi_queue_probe.py`
