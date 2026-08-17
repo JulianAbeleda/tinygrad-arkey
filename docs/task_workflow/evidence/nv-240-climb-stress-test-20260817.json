@@ -1,0 +1,134 @@
+{
+  "bottom_line": "WHERE the climb is: proven by additive arithmetic (240 needs >=110 us of hidden kernel time; non-overlap levers cap at 233.8).  THAT we can take it: not yet proven; every naive overlap arm measured FLAT, and llama's overlap comes from per-layer quantize/norm/rope pipelining we already fused into GEMVs.  The missing substrate is layer-2 anchor+shadow topology with in-graph concurrency, which is construction-required.",
+  "climb_sensitivity": {
+    "sensitivity_rows": [
+      {
+        "label": "base (HEAD, measured)",
+        "tok": 208.843,
+        "wall_us": 4788.287
+      },
+      {
+        "label": "perfect kernel-row parity (all behind-rows to 0, best case)",
+        "tok": 228.452,
+        "wall_us": 4377.287
+      },
+      {
+        "label": "+ host-gap parity (100.6 us)",
+        "tok": 233.829,
+        "wall_us": 4276.638
+      },
+      {
+        "label": "+ 110 us overlap (min to clear 240.0)",
+        "tok": 240.002,
+        "wall_us": 4166.638
+      },
+      {
+        "label": "overlap to llama union with current host gap",
+        "tok": 240.413,
+        "wall_us": 4159.505
+      },
+      {
+        "label": "llama wall (host parity too)",
+        "tok": 246.375,
+        "wall_us": 4058.856
+      }
+    ],
+    "target_240_wall_us": 4166.667,
+    "verdict": "non-overlap levers cap at ~233.8 tok/s (perfect kernel-row parity + host parity). Reaching 240.0 requires hiding >= ~110 us of kernel time behind other kernels, and reaching llama's union (240.4 tok/s at current host gap) requires hiding 628.8 us. The arithmetic climb is overlap."
+  },
+  "evidence_kind": "raw-trace stress test of the 'climb is overlap' claim; regenerable via scratchpad/nv_240_climb_stress_test.py",
+  "llama_overlap_is_real": {
+    "complete_replays": 49,
+    "concurrency_verdict": "overlap is real GPU concurrency: overlapping pairs occur within the single reported CUPTI streamId (graph multi-stream), and the min inter-kernel gap is negative (next kernel starts before the previous ends).",
+    "host_gap_us": 168.322,
+    "internal_gap_us": 8179.0,
+    "min_inter_kernel_gap_ns": {
+      "median": -4961,
+      "min": -5184
+    },
+    "node_sum_us": 5015.666,
+    "nodes_per_replay": 762,
+    "non_mmq_hidden_behind_mmq_us": 443.937,
+    "non_mmq_overlap_among_themselves_us": 681.028,
+    "overlap_by_class_us": {
+      "elementwise": 0.0,
+      "flash_combine": 0.0,
+      "flash_score": 0.0,
+      "get_rows": 0.791,
+      "kv_set_rows": 0.0,
+      "mmq": 0.0,
+      "quantize_q8_1": 0.0,
+      "rms_norm": 0.0,
+      "rope": 0.0
+    },
+    "overlap_mass_us": 1125.132,
+    "overlapping_pairs_per_replay": {
+      "max": 869,
+      "median": 865,
+      "min": 861
+    },
+    "serialization_counterfactual": {
+      "actual_tok_per_s": 246.375,
+      "actual_wall_us": 4058.857,
+      "assumption": "serialize all kernels within a token, keep host gap",
+      "overlap_value_tok_per_s": 53.473,
+      "serialized_tok_per_s": 192.902,
+      "serialized_wall_us": 5183.988
+    },
+    "source": "raw CUPTI node trace (graphId 6), 47 steady replays, single reported streamId",
+    "span_us": 3898.723,
+    "stream_ids_reported": [
+      45
+    ],
+    "union_us": 3890.534
+  },
+  "prior_measured_flat_arms": [
+    {
+      "arm": "multi-stream co-schedule scan",
+      "date": "2026-08-12",
+      "evidence": "nv-co-schedule-scan-head-20260812.json",
+      "result": "ceiling 33.36 us < 50 us gate, CPU_NO_GO (chain-like 253-serial-GEMV topology)"
+    },
+    {
+      "arm": "resource-complementarity join",
+      "date": "2026-08-12",
+      "evidence": "nv-overlap-resource-join-head-20260812.json",
+      "result": "150/150 dependency-independent pairs co-resident but best pair 3.97 us < 50 us, INCONCLUSIVE_FAIL_CLOSED"
+    },
+    {
+      "arm": "anchor mechanism transfer",
+      "date": "2026-08-14",
+      "evidence": "nv-anchor-verdict-20260814.md",
+      "result": "llama overlap is mostly quantize_q8_1 549.8 + rope 127.3 + kv_set_rows 74.6 us of work we fused away; transferable overlap bounded by critical path, substrate-blocked"
+    },
+    {
+      "arm": "multi-stream lowerer on current DAG",
+      "date": "2026-08-15",
+      "evidence": "nv-substrate-definition-20260815.md",
+      "result": "buys ~0 on the chain-like DAG (overlap_mass stays 0.0)"
+    }
+  ],
+  "question": "is 'the climb to 240 is overlap' grounded in evidence, or a guess?",
+  "schema": "tinygrad.nv_240_climb_stress_test.v1",
+  "session": "2026-08-17, RTX 5090, Qwen3-8B-Q4_K_M, d512",
+  "tinygrad_has_zero_overlap": {
+    "min_inter_kernel_gap_us": {
+      "median": 0.0,
+      "min": 0.0
+    },
+    "node_sum_us": 4516.875,
+    "nodes_per_token": {
+      "median": 594.0
+    },
+    "overlap_mass_us": 0.0,
+    "overlapping_pairs_per_token": {
+      "max": 0,
+      "median": 0.0,
+      "min": 0
+    },
+    "source": "raw HCQGraph profiler replays, 34 steady tokens, 5 replays/token",
+    "steady_tokens": 34,
+    "union_us": 4516.875,
+    "zero_overlap_verdict": "exactly serial: 0 overlapping pairs, 0.0 min gap, union == node_sum on every steady token"
+  }
+}

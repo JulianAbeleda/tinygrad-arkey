@@ -119,3 +119,76 @@ CONSTRUCTION-REQUIRED on native.**
   `llama-bench -p 512 -n 10 -d 512 -r 5`, `cuda_graph_timeline_ledger.py
   --trace ... --graph-id 6`.
 - Evidence: `docs/task_workflow/evidence/nv-240-exact-wall-account-20260817.json`.
+
+## 8. Stress test: is "the climb is overlap" grounded, or a guess?
+
+The claim under test is section 5's conclusion: 240 tok/s requires the overlap
+substrate, not more kernel-body fusion. Stress test re-derives every load-bearing
+number from the raw trace artifacts (llama CUPTI sqlite, tinygrad HCQ replay
+JSONL) and runs a serialization counterfactual plus a sensitivity table. Script:
+`scratchpad/nv_240_climb_stress_test.py`; evidence:
+`docs/task_workflow/evidence/nv-240-climb-stress-test-20260817.json`.
+
+### 8.1 llama's overlap is real GPU concurrency, not a union artifact
+
+The graphId-6 trace reports all 37338 kernels on a single CUPTI streamId (45),
+yet each steady replay contains 865 overlapping kernel pairs (min 861, max 869)
+and the minimum inter-kernel gap is **negative** (median -4961 ns, min -5184
+ns): the next kernel starts before the previous one ends. Within one reported
+streamId that is only possible if the CUDA graph is executing nodes on internal
+streams concurrently. Overlap mass reproduces exactly: node sum 5015.666 -
+union 3890.534 = **1125.132 us** (matches section 3's 1125.1).
+
+### 8.2 Serialization counterfactual: overlap is worth ~53.5 tok/s to llama
+
+If llama's kernels were serialized per token (union forced to node sum, host
+gap unchanged), its wall would grow from 4058.9 us to 5183.99 us, dropping
+246.38 -> **192.90 tok/s**. So the 1125 us overlap is real tok/s on llama's own
+body, not a profiler artifact. Breakdown of where the overlap lives: 443.9 us
+of non-mmq work hidden behind the mmq anchor, and 681.0 us overlapping among
+the non-mmq kernels themselves (quantize/norm/rope/flash pipelining).
+
+### 8.3 tinygrad is exactly serial at the raw level
+
+34 steady tokens, 594 nodes each, from the HCQ replay JSONL: zero overlapping
+pairs (0/0/0), minimum inter-kernel gap 0.000 us, union == node sum on every
+token. Confirms the account's `overlap_mass = 0.0` at the raw-kernel level, not
+just by construction.
+
+### 8.4 Sensitivity: non-overlap levers cap below 240
+
+Exact arithmetic on the measured anchors (base wall 4788.287, union 4519.316,
+host gap 268.971; kernel-row recovery = reduce_output 312.1 + vocab_aux 59.5 +
+flash_score 39.4 = 411.0 us; host parity 100.6 us):
+
+| scenario | wall us | tok/s |
+| --- | ---: | ---: |
+| base (HEAD, measured) | 4788.3 | 208.84 |
+| perfect kernel-row parity (all behind-rows -> 0, best case) | 4377.3 | 228.45 |
+| + host-gap parity (100.6 us) | 4276.6 | 233.83 |
+| + 110 us overlap (minimum to clear 240.0) | 4166.6 | 240.00 |
+| overlap to llama's union with our host gap | 4159.5 | 240.41 |
+| llama wall (host parity too) | 4058.9 | 246.38 |
+
+Even with every kernel-body and host row recovered at 1:1, the cap is 233.83
+tok/s. Clearing 240.0 requires at least ~110 us of hidden kernel time, and
+matching llama's union requires hiding 628.8 us. The arithmetic climb is
+overlap, exactly as section 5 stated.
+
+### 8.5 The honest limit: overlap is measured FLAT on every attempted arm
+
+The *direction* is proven by arithmetic; the *achievable lever* is not. Prior
+measured attempts at overlap on our topology all came back flat:
+
+- multi-stream co-schedule scan (08-12): ceiling 33.36 us < 50 us gate, CPU_NO_GO
+- resource join (08-12): 150/150 dependency-independent pairs SM-co-resident,
+  best pair recovery 3.97 us, INCONCLUSIVE_FAIL_CLOSED
+- multi-stream lowerer on the current chain DAG (08-15): buys ~0
+
+llama's overlap is per-layer pipelining of work we already fused away
+(quantize_q8_1 549.8 + rope 127.3 + kv_set_rows 74.6 = 751.7 us of separable
+mass we do not have as kernels). The substrate that reproduces llama's *outcome*
+(one long fused-quant GEMV anchor with an in-graph shadow, `overlap_mass > 0`)
+is layer-2 topology and was found CONSTRUCTION-REQUIRED on native. Until that
+substrate renders, the honest cap on this serial topology is ~233.8 tok/s even
+with perfect body and host rows.
