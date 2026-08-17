@@ -1,12 +1,41 @@
 # NV vocab top-1 fusion head recheck - corrected wall attribution
 
-Date: 2026-08-16
+Date: 2026-08-16 (amended 2026-08-17 with the NV per-kernel measurement)
 Status: audit record. The 08-14 NO_GO_WALL verdict is **confirmed at HEAD**, and the
-wall mechanism is **corrected**: the loss is NOT the packed-u64 reduce chain (that
-chain is ~9 us FASTER than the legacy tail in isolation).  The +25.5 us/token wall is
-in-situ (eager/JIT handoff inside the decode), not in any kernel body.
-Branch: `nvidia-bringup-20260731`, HEAD `8d8500982`.
+wall mechanism is now **measured on the NV backend**: the +25.5 us/token loss is the
+u64 cross-tile reduce `r_16_4_1187` reading its freshly-written 607 KB packed-keys
+input L2-cold after the 315 us vocab GEMV epilogue.  The kernel body is fast
+(44.0 us L2-warm, isolated on NV); the wall is L2 residency, not a kernel body and
+not the eager/JIT handoff (the 08-16 in-situ-handoff attribution was itself wrong).
+Branch: `nvidia-bringup-20260731`, HEAD `dcc592259`.
 
+## 0. Measured mechanism (2026-08-17, supersedes sections 3-5)
+
+Per-kernel GPU timestamps on the NV backend (HCQGraph profiler, PROFILE=1), plus
+isolated controls on the same kernel, are mutually consistent:
+
+| experiment | r_16_4_1187 median |
+| --- | ---: |
+| isolated, L2-warm reused keys buffer | 44.1 us |
+| isolated, fresh Tensor.empty keys each replay | 43.6 us |
+| 600 MB unrelated write flushes L2, then reduce over the SAME warm buffer | 85.7 us |
+| vocab epi GEMV writes keys, reduce reads directly (mimics in-situ) | 84.7 us |
+| vocab epi GEMV, then 2.2 us keys.clone() warm-up, then reduce | 44.0 us |
+| in-situ decode graph (control arm fused tail) | 83.1 us |
+
+The in-situ tail is +25.8 us slower than the legacy chain (84.3 vs 58.6 us, measured
+in the same decode graphs), matching the end-to-end A/B +25.5 us.  The mechanism:
+the 315 us vocab GEMV epilogue streams ~510 MB of weights through L2 and evicts its
+own 607 KB key writes; the single-block 16-thread u64 reduce then pays DRAM latency.
+A 2.2 us warm-up copy (exactly the role the legacy chain's `E_1187_32_4` copy plays)
+restores L2 residency and the fused tail becomes ~11 us FASTER than legacy.
+
+Evidence: `docs/task_workflow/evidence/nv-vocab-reduce-l2-mechanism-20260817.json`,
+`docs/task_workflow/evidence/nv-vocab-nv-backend-per-kernel-20260817.json`.
+
+The F5 verdict stays NO_GO_WALL at HEAD (the route as implemented loses 25.5 us), but
+the wall is now a measured, addressable cache-residency effect, not an in-situ handoff
+or a kernel-body limitation, and a warm-up copy is a proven ~-11 us/token lever.
 ## 1. Why this recheck
 
 The 08-14 record attributed the wall to the scheduler u64 cross-tile reduce

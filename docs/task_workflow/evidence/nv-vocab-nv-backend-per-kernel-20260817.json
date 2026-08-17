@@ -1,0 +1,28 @@
+{
+  "conclusion": "CORRECTED 2026-08-17: the in-situ u64 reduce r_16_4_1187 really does run ~83-85us on NV inside the decode, but controlled isolation proves this is L2 coldness of the freshly-written packed-keys input after the 315us vocab GEMV epilogue, NOT an NV-vs-CUDA kernel difference. The same kernel runs 44.0us L2-warm on NV (isolated), 43.6us with fresh allocation, 85.7us after an L2 flush, and 44.0us after a 2.2us warm-up copy of the keys. The wall mechanism is L2 residency; the 08-16 'in-situ handoff' attribution was also wrong. F5 stays NO_GO_WALL at HEAD but the mechanism is now measured and a warm-up copy is a proven ~-11us lever.",
+  "control_tail_us": {
+    "E_1187_32_4": 1.792,
+    "r_128_16_8_1187": 10.784,
+    "r_16_8": 1.248,
+    "r_32_4_1187": 44.736,
+    "total": 58.56
+  },
+  "count": 6,
+  "depth": 512,
+  "fused_tail_us": {
+    "r_16_4": 1.216,
+    "r_16_4_1187": 83.104,
+    "total": 84.32
+  },
+  "gemv_epilogue_delta_us": 1.312,
+  "git_commit": "dcc59225945b752aab7d737a665bef1e4cdb9fc0",
+  "measured_ab_delta_us": 25.513,
+  "method": "HCQGraph per-kernel GPU timestamps (PROFILE=1 + HCQ_GRAPH_PROFILE_JSON), NV backend, 90 graph replays per arm",
+  "model": "Qwen3-8B-Q4_K_M",
+  "predicted_delta_us": 27.072,
+  "reconciliation_us": 1.559,
+  "schema": "tinygrad.nv_vocab_nv_backend_per_kernel.v2",
+  "tail_delta_us": 25.76,
+  "vocab_gemv_epi_us": 314.768,
+  "vocab_gemv_plain_us": 313.456
+}

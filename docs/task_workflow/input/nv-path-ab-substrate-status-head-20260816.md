@@ -35,11 +35,11 @@ Remaining Path A rows at HEAD:
 | reduce-output epilogue (q/k + ffn-down) | ~378 | primitive exists; body-free fold measured FLAT (wall-blocked) |
 | M1 norm chains + E/r plumbing | ~238 | body-free FLAT, body-adding NO-GO (closed) |
 | flash score installed gap | +122 | bodies at parity; gap is launch/graph behavior, not body |
-| vocab aux (F5) | ~52 | closed NO_GO at HEAD: isolated fused tail -8.8 us, epilogue +0.4 us, wall is in-situ handoff (+25.5 us A/B); single-pass max unbuildable and would only recover ~9 us (`nv-vocab-top1-fusion-head-recheck-20260816.md`) |
+| vocab aux (F5) | ~52 | closed NO_GO at HEAD: measured on NV 2026-08-17 - the +25.5 us A/B loss is the u64 cross-tile reduce `r_16_4_1187` reading its packed keys L2-cold after the 315 us vocab GEMV epilogue (83-85 us in-situ vs 44.0 us L2-warm isolated); a 2.2 us warm-up copy of the keys (the legacy `E_1187_32_4` role) restores 44.0 us and flips the fused tail to ~-11 us (`nv-vocab-top1-fusion-head-recheck-20260816.md`) |
 
 The reduce-output and M1 folds are values-blocked (rendered, measured FLAT), not
 substrate-blocked. Path A is now fully dispositioned: the vocab single-pass cross-tile
-max is closed as NO_GO (in-situ wall, ~9 us ceiling, below the +50 us bar).
+max is closed as NO_GO at HEAD (wall is the measured L2-cold u64 reduce; ~9 us ceiling even after the warm-up-copy fix, below the +50 us bar).
 
 ## 3. Path B (anchor shadow / overlap): no buildable substrate at HEAD
 
