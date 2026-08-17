@@ -185,3 +185,54 @@ with bitwise-identical tokens in a flocked same-session A/B.
 - shared-Q8 provider/consumers: `tinygrad/llm/shared_q8_attention.py`,
   promotion records `decode-shared-q8-attention-route-policy.json`,
   `decode-q6-direct-shared-q8-attention-route-policy.json`
+
+## 10. Gated results (measured 2026-08-17, RTX 5090, flocked session)
+
+### Step 1: compile-only render probe -- PASSED
+
+`scratchpad/nv_shadow_merged_kernel_render_probe.py` renders Candidate B's
+merged per-layer support kernel (rope + kv_store + rmsnorm + Q8) as ONE NV
+program:
+
+- name: `shadow_merged_rope_store_rmsnorm_q8`
+- 25 stores, 7 global buffers, launch `(8,1,1) x (32,16,1)`
+- verdict `RENDERS`; no `CONSTRUCTION_GAP`
+
+The primitive exists; the merged composition is expressible on the NV
+renderer. Gate 1 of the acceptance test passes.
+
+### Step 2: size-class microbench -- TOO_SMALL (the honest gate outcome)
+
+`scratchpad/nv_shadow_merged_kernel_size_probe.py` runs the merged kernel on
+the device under the HCQ timestamp-signal harness (the same timing primitive
+as the decode overlap probe, NOT host realize time):
+
+- 64/64 reps completed; median kernel duration **2.5 us**
+- per-rep spread: 2.5-3.5 us, no stragglers
+- verdict: **TOO_SMALL** (the co-schedule band is 7-25 us)
+
+This is exactly what the size-class contract predicted: a single layer's
+support is tiny on native. Candidate B as one-per-layer is NOT anchor-class.
+The scope's own step 2 instruction applies: **widen it** (batch multiple
+layers' support into one kernel) and re-measure before the envelope probe.
+
+#### Harness note (why the first size probe "hung", corrected)
+
+The merged kernel executes fine via `Tensor.realize`; the "hang" was a harness
+bug, not a kernel bug. The shared probe helper `copyin` force-casts every
+input to float32, but the merged kernel's `k/v/x/w` inputs are fp16 buffers
+(allocated at `u.dtype.itemsize`), so the copy overflowed each allocation 2x
+and corrupted adjacent device memory, wedging the device timeline. The
+`start_pos` graph variable is NOT the blocker: the probe binds it to a
+constant before lowering and `ast.arg.vars` is empty at launch. The size
+probe now bypasses the shared `copyin` and fills each input with its own
+dtype. Same lesson as `nv_multi_queue_probe.py` R1: never copy fp32 bytes into
+an fp16-sized allocation.
+
+### Open (next gates)
+
+- Widen the merged kernel to anchor class (batch L layers, re-measure 7-25 us)
+- Step 3: real-kernel envelope probe (merged shadow behind a real q4k/q6k
+  GEMV anchor, single join, overlap > 0 across >= 3 runs)
+- Step 4: production wall A/B (`HCQ_NUM_COMPUTE=2` + Candidate-B shadow
+  route, bitwise-identical tokens)
