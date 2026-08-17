@@ -504,6 +504,13 @@ def q6k_vocab_top1_call(linear:Any, x:Tensor, arch_ok:bool) -> Tensor | None:
   # rows/row_tile keys and cost ~0.89ms/token in the fused A/B.  The returned
   # view is cloned so the JIT memory plan cannot replay the winner one token
   # behind the eager stream (same firewall the custom reduce route used).
+  # The vocab GEMV epilogue streams ~510 MB of weights through L2 and evicts its own
+  # 607 KB packed-key write; the single-block 16-thread u64 reduce then reads keys
+  # L2-cold and pays DRAM latency (~85 us vs 44 us L2-warm, measured 2026-08-17:
+  # nv-vocab-reduce-l2-mechanism-20260817.json).  A tiny copy of the keys re-warms L2
+  # before the reduce (the role the legacy E_1187_32_4 copy plays), flipping the fused
+  # tail from +25.8 us slower to ~-11 us faster than the legacy chain.
+  keys = keys.clone()
   return packed_argmax_from_tile_keys(keys, binding.N, axis=0, keepdim=True).reshape(1, 1).clone()
 
 def q6k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], Tensor], arch_ok:bool,

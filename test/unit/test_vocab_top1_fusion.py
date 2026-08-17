@@ -151,3 +151,48 @@ def test_vocab_top1_call_finishes_with_ordinary_packed_reduce(monkeypatch):
   assert len(captured) == 1
   assert captured[0].program_id == f"{decode_routes.Q6K_DECODE_CANDIDATE.candidate_id}.vocab_top1_gemv"
   assert token.uop.buf_uop is not emitted_keys[0].uop.buf_uop
+
+
+def test_vocab_top1_call_warms_l2_with_keys_copy_before_reduce(monkeypatch):
+  """The fused route copies the packed keys out of the vocab GEMV output before the
+  cross-tile reduce.  The 2026-08-17 measurement (nv-vocab-reduce-l2-mechanism) showed
+  the single-block u64 reduce reads the GEMV's keys L2-cold after the ~510 MB weight
+  stream (85 us vs 44 us L2-warm); the copy re-warms L2 (the legacy E_1187_32_4 role)
+  and flips the fused tail from +25.8 us slower to ~-11 us faster."""
+  capability = QKPrimitiveCapability(backend="NV", architecture="sm_120",
+                                     wave_size=32, supports_warp_shfl_xor=True)
+
+  class _FakeQ6VocabLinear:
+    def __init__(self):
+      self.q6k_storage = type("_FakeQ6Storage", (), {"halfs": Tensor.zeros(8, dtype=dtypes.uint16)})()
+      self.decode_enabled, self.bias = True, None
+      self.in_features, self.out_features, self.parts = VOCAB_K, VOCAB_ROWS, 1
+      self.opts, self.route_role = (), "lm_head"
+      self.route_admission = QKPrimitiveRouteAdmission(capability, True)
+
+  linear = _FakeQ6VocabLinear()
+  emitted_keys = []
+  winning_row = 1000
+
+  def fake_execute_research_program(output, *inputs, program):
+    keys = np.zeros(VOCAB_ROWS // 2, dtype=np.uint64)
+    keys[winning_row // 2] = (np.uint64(1) << 32) | np.uint64(VOCAB_ROWS - 1 - winning_row)
+    emitted_keys.append(Tensor(keys))
+    return emitted_keys[-1]
+
+  monkeypatch.setattr(decode_routes, "execute_research_program", fake_execute_research_program)
+  x = Tensor.zeros((1, 1, VOCAB_K), dtype=dtypes.float16)
+  token = decode_routes.q6k_vocab_top1_call(linear, x, True)
+
+  # The reduce must consume a copied buffer, not the raw vocab-GEMV key output: walk
+  # the returned graph for the STORE that copies the emitted keys into a fresh buffer
+  # (clone lowers to STORE(dst, COPY(keys)) with the value in slot 1).
+  keys_uop = emitted_keys[0].uop
+  copied_key_bufs = set()
+  for u in token.uop.toposort():
+    if u.op is Ops.STORE and u.src[1] is keys_uop:
+      copied_key_bufs.add(u.buf_uop)
+  assert len(copied_key_bufs) == 1, f"expected one keys warm-up copy store, got {len(copied_key_bufs)}"
+  # The warm-up copy must land in a distinct buffer from the GEMV output.
+  assert next(iter(copied_key_bufs)) is not keys_uop.buf_uop
+  assert token is not None and int(token.numpy().ravel()[0]) == winning_row
