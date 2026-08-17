@@ -168,17 +168,20 @@ Re-run at `86d653651` (record: `nv-flash-score-floor-test-head-20260816.md`):
 | --- | ---: |
 | NV census score row | 6.56 us x 36 = 241.4 us (unchanged vs prior pin 6.52) |
 | NV census combine row | 3.39 us x 36 = 122.8 us (unchanged) |
-| isolated tile body (CUPTI) | 4.19 us median (unchanged from 08-13) |
-| llama in-situ | 3.16 us (not an isolated-body measurement) |
+| isolated tile body (CUPTI) | 4.16-4.19 us median (fresh, this session) |
+| llama isolated body (CUPTI, matched harness) | **4.10 us** (grid.y=2, fresh, this session) |
+| llama in-situ | 3.16 us (graph/PDL measurement, not a body number) |
 | warm microbench peak (production shape) | 1.95 us (not reachable in graph) |
 | cold single-launch microbench | 7.6 us |
 
 The "~90 us structural floor" that the old ledger attributed to flash is a warm
 microbench artifact, not an installed-graph number (cold per-launch is 7.6 us).
 The fresh installed score-row gap is `(6.56 - 3.16) * 36 ~= 122 us`, but that
-mixes body, launch, and graph-install effects. The isolated tinygrad body is
-4.19 us; there is no matched isolated llama body in this evidence set. The old
-`(5.06 - 3.16) * 36 ~= 68 us` result is historical, not the fresh HEAD result.
+mixes launch and graph-install effects. The **matched isolated bodies are at
+parity**: llama 4.10 us vs tinygrad 4.16-4.19 us (within ~2%). The old
+"body gap" (4.19 vs 3.16) was isolated-vs-in-situ and is falsified; the
+`(5.06 - 3.16) * 36 ~= 68 us` result is historical and was the same
+invalid comparison. See `nv-llama-fattn-matched-isolated-record-20260816.md`.
 
 ## 6. Fresh ledger crosswalk at the measurement baseline
 
@@ -201,7 +204,7 @@ decomposition. `*` = class boundary differs between sides (see notes).
 | q6k FFN-down fp16 mmvq | 18 | 576.3 | ffn-down Q6 28.75 x 18 | 517.5 | +59 | open* |
 | q6k attn-V (2 routes) | 18 | 84.8 | attn-V Q6 4.90 x 18 | 88.2 | -3 | parity (landed) |
 | vocab 151936 GEMV | 1 | 331.3 | vocab | 303.6 | +28 | parity |
-| flash score | 36 | 241.4 | flash_score | 113.9 | +127 | open (body +37) |
+| flash score | 36 | 241.4 | flash_score | 113.9 | +127 | installed gap; body at parity |
 | flash combine | 36 | 122.8 | flash_combine | 120.5 | +2 | parity |
 | reduce-output rmsnorm (3 shapes) | 91 | 382.9 | absorbed in-kernel | 0 | +383 | open* |
 | rmsnorm q8_1 provider | 17 | 45.4 | rms_norm | 307.6 | -262 | **better** (fused) |
@@ -242,18 +245,19 @@ Open (real measured excess, mechanism not yet proven):
   mechanism (absorb into GEMV epilogue without adding body) is unproven.
 - M1 norm chains + E/r plumbing (~367 us): llama overlaps; we serialize.
   Body-free fold FLAT, body-adding NO-GO.
-- flash score: +122 us in the fresh installed row. Body-only attribution is
-  unresolved because 4.19 us isolated tinygrad and 3.16 us in-situ llama are
-  not matched measurements. The existing vec candidate is slower as-is.
+- flash score: +122 us in the fresh installed row, but matched isolated bodies
+  are at parity (llama 4.10 vs tinygrad 4.16-4.19). The gap is llama's
+  PDL/graph-install launch behavior, not the score body. The existing vec
+  candidate is slower as-is and is no longer justified as a body fix.
 - q4k/q6k FFN-down and q4k 1024 rows: ~+300 us vs llama before quant credit;
   llama's mmq absorb plus quant folding makes this smaller than it looks.
 
 ## 8. The honest bottom line
 
-- The fresh flash score-row excess is ~122 us, but its recoverable body mass is
-  unknown until both kernels are measured in the same isolated and installed
-  harnesses. The combine row is already at parity (122.8 vs 120.5 us total),
-  so removing the combine ABI is not supported as the first target.
+- The fresh flash score-row excess is ~122 us installed, but the matched
+  isolated bodies are at parity (4.10 vs 4.16-4.19). The excess is llama's
+  launch/graph embedding, so flash body work (including the vec rewrite) is not
+  supported. The combine row is already at parity (122.8 vs 120.5 us total).
 - The biggest measured excess is the reduce-output + M1/E-r plumbing family
   (~750 us of rows llama either absorbs or hides). Fusion has measured FLAT on
   body-free folds; overlap has measured FLAT on our DAG.

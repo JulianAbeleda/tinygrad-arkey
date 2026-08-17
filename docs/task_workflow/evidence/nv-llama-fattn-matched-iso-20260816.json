@@ -1,0 +1,41 @@
+{
+ "schema": "tinygrad.llama_fattn_vec_matched_iso.v1",
+ "date": "2026-08-16",
+ "branch": "nvidia-bringup-20260731",
+ "tinygrad_head": "86d653651",
+ "llama_source": "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/fattn-vec.cuh",
+ "llama_head": "ac4cddeb0",
+ "method": "nsys --trace=cuda CUPTI_ACTIVITY_KIND_KERNEL duration, 400 back-to-back launches + 20 warmup, isolated score kernel, default stream",
+ "shape": {
+  "Hd": 128,
+  "Hq": 32,
+  "Hkv": 8,
+  "Tc": 512
+ },
+ "llama_flash_attn_ext_vec_isolated_us": {
+  "gridy_1_32blocks": {
+   "med": 6.176,
+   "avg": 6.174,
+   "n": 399
+  },
+  "gridy_2_64blocks": {
+   "med": 4.096,
+   "avg": 4.092,
+   "n": 399
+  },
+  "gridy_4_128blocks": {
+   "med": 3.136,
+   "avg": 3.14,
+   "n": 399
+  }
+ },
+ "tinygrad_tile_s48_isolated_us": {
+  "run1_med": 4.192,
+  "run2_med": 4.16,
+  "n": 400
+ },
+ "llama_in_situ_reference_us_per_node": 3.16,
+ "llama_in_situ_source": "nv-llama-d512-node-ledger-20260812.json (full graph, PDL-enabled)",
+ "conclusion": "Matched isolated bodies: llama 4.10 vs tinygrad 4.16-4.19, parity within 2%. The 3.16 in-situ number is a PDL/graph-install artifact, not a body measurement. The flash body gap is falsified.",
+ "probe": "extra/llm_research/microbench/llama_fattn_vec_iso.cu"
+}
