@@ -99,6 +99,12 @@ The flash pair is the only exposed item, and the fresh ledger
 08-13 account (`nv-launch-hiding-substrate-exhaustive-account-20260813.md`) priced total
 recoverable launch-hiding at ~18-33 us, not the ~925 us overlap mass.
 
+Baseline note (do not reuse the stale 193.5): production NV census at HEAD is **~205-207 tok/s**
+(205.4 at `86d653651`, 207.4 at `ef24c46ae`, token sha unchanged); the 193.5 tok/s figure is the
+08-15 pre-Q6-V baseline (`d40b938af`) and the CUDA-route 179.6 tok/s is the separate Route B
+multi-stream measurement with no NV reduce-output fusion. llama fresh pair is 245.5-248 tok/s, so
+the HEAD gap to llama is ~38-43 tok/s (~0.7-0.8 ms/token).
+
 ## 6. Verdict
 
 1. llama's mechanism is single-stream PDL, now quantified from the pinned trace: 925.3 us overlap
@@ -110,7 +116,8 @@ recoverable launch-hiding at ~18-33 us, not the ~925 us overlap mass.
    tinygrad, and the remaining flash pair is at body parity with its installed gap priced at
    ~+122 us (launch/graph-install behavior, recoverable mass bounded by the ~18-33 us exhaustive
    account). Building full PDL does not buy the 240 line; the open reduce-output / M1-family rows
-   (~750 us) remain the larger exposed mass.
+   (~750 us census) remain the larger exposed mass, and the composition arithmetic must be rebased
+   against the ~205-207 tok/s HEAD baseline, not the stale 193.5.
 
 ## Evidence
 
