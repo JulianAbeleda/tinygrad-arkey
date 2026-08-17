@@ -2,7 +2,7 @@
 
 Date: 2026-08-17
 Branch: `nvidia-bringup-20260731`
-Status: **scope record. Read-only; no code, no GPU session.** Turns the
+Status: **scope record; S1 re-measured at HEAD (runtime width present).** Turns the
 08-15 substrate definition and the 08-17 stress test into one exhaustive,
 buildable inventory: every construction that must exist for the native NV
 decode route to render `overlap_mass > 0` (the anchor+shadow topology), its
@@ -71,7 +71,7 @@ Every row is a construction (or an already-built capability that gates a later
 construction). Rows are ordered by dependency: S1 must land before S2 can be
 measured, S2 before S3, etc.
 
-### S1. DAG width (targeted memory-planning change) — CONSTRUCTION-REQUIRED
+### S1. DAG width — MEASURED PRESENT AT HEAD (no planner change required)
 
 **What.** The memory planner (`tinygrad/schedule/memory.py`,
 `memory_plan_rewrite`) must stop aliasing dependency-independent fan-out live
@@ -80,14 +80,27 @@ ranges (q/k/v, gate/up) into one arena slot. Product change, not the
 probe proves the geometry; the product change must restore sibling edges
 without the VRAM cost.
 
-**Why first.** Without width there is nothing to co-schedule; every deeper row
-is unmeasurable. This is the gate for the whole stack.
+**Re-measured at HEAD (2026-08-17).** The 08-15 chain finding
+(`nv-overlap-planner-serialization-root-cause-20260815.md`) was captured on the
+stale CUDA route at 08-15 HEAD. On the current native NV production route the
+runtime-recorded dependencies (HCQGraph profiler replay JSONL, steady token)
+show the decode DAG already has width: q/k/v GEMVs are true siblings (identical
+predecessor sets, neither depends on the other), the max-ready width is 10, and
+the critical path is 189 levels over 594 nodes. Evidence:
+`nv-substrate-s1-runtime-width-head-20260817.json`. S1 is therefore not a
+construction anymore; it is a measured gate that already passes at HEAD.
+
+**Why it still gates the stack.** Without width there is nothing to co-schedule;
+the measurement confirms width is present, so the next construction (S2) is
+unblocked. The S1 gate becomes a regression guard: keep q/k/v (and gate/up)
+siblings under future planner changes.
 
 **Gate (pass criteria, in order):**
-1. Runtime dep capture (`scratchpad/nv_decode_runtime_deps_probe.py`) on the
-   changed planner shows q/k/v with the same predecessor (siblings), not
-   `q -> k -> v`.
-2. Ledger (NV HCQGraph profiler) shows `overlap_mass > 0.0` on steady tokens.
+1. Runtime dep capture shows q/k/v with the same predecessor (siblings) — PASS
+   at HEAD (width 10, evidence above).
+2. Ledger (NV HCQGraph profiler) shows `overlap_mass > 0.0` on steady tokens —
+   this moves to the S2 gate, because width without multi-queue placement still
+   executes serially on one GPFIFO.
 3. Same-session canonical A/B wall: candidate not slower than control, tokens
    bitwise identical (existing authority, fixed-depth d512).
 
@@ -97,11 +110,10 @@ is unmeasurable. This is the gate for the whole stack.
 physics transfers; this is a measurement, not a promise. Full 240 needs the
 stack above, not S1 alone.
 
-**Test.** Extend `test/unit/test_nv_parity_path_proof.py` (or a sibling) with a
-compile/runtime-dep assertion that the decode q/k/v triple are siblings under
-the new planner policy.
+**Test.** Pin the runtime-width finding as a regression test: assert the decode
+q/k/v triple are siblings in the runtime dependency capture.
 
-### S2. Native NV multi-GPFIFO execution — BUILT + QUALIFIED, needs a DAG with width
+### S2. Native NV multi-GPFIFO execution — BUILT + QUALIFIED; now the first real construction
 
 **What.** The native hardware substrate exists and passed: two compute GPFIFOs
 under one async ctxshare, constructed before the group's first schedule,
@@ -113,9 +125,14 @@ multi-queue cut policy (`NV_MULTI_QUEUE_CUT_POLICY`,
 `HCQ_NV_MULTI_QUEUE_INDICES`, `scratchpad/nv_multi_queue_probe.py`,
 `test/unit/test_nv_multi_queue_probe_construction.py`).
 
-**Why after S1.** Multi-queue execution of a width-1 chain buys ~0 (measured
-08-15). Once S1 restores siblings, the width-4 graph can actually be placed
-across GPFIFOs.
+**Why it is now first.** S1 is measured present at HEAD (width 10), so the
+remaining gap between "DAG has width" and "overlap_mass > 0" is execution
+placement. The scheduler already exposes a name-pinned NV admission policy
+(`HCQ_NV_MULTI_QUEUE_PROGRAMS`, `HCQ_NV_MULTI_QUEUE_INDICES`,
+`HCQ_NV_MULTI_QUEUE_CUT_POLICY`, `_pick_compute_queue` in `hcq.py`), and
+`HCQ_NUM_COMPUTE=2` is the qualified native construction. The gate is: does
+placing the width-10 DAG across two NV compute GPFIFOs convert to wall on the
+production route, with tokens bitwise identical?
 
 **Gate.**
 1. `HCQ_NUM_COMPUTE=2` + a cut policy that places q/k/v (and gate/up) on
@@ -125,6 +142,36 @@ across GPFIFOs.
    merely non-negative): same-session control (S1, 1 queue) vs candidate
    (S1, 2 queues).
 3. The +4.8% CUDA-route number is reproduced or beaten on the native route.
+
+**Gate result (measured 2026-08-17, generic readiness placement at HEAD).**
+The name-pinned cut policy was replaced by a generic dependency-readiness
+placement (`HCQ_NV_READY_PLACEMENT=1` in `hcq.py`: a node goes to the
+least-loaded GPFIFO unless it directly depends on the primary queue's current
+tail). The gate FAILS on the production route as composed:
+1. Placement engages but correctness holds: the census records 17-27% of
+   steady-token nodes on the aux GPFIFO, including the q/k/v GEMV siblings
+   (`q4k_g3_lanemap_gemv_1024_4096`, `q6k_v_four_warp_fp16_direct_1024_4096`,
+   `q4k_warp_coop_q8_dp4a_partial_1024_4096`, `q6k_q8_warp_direct_1024_4096`),
+   and the A/B tokens are bitwise identical (`5ede6924...` both arms).
+2. Hardware overlap does not appear: candidate NV ledger shows
+   `overlap_mass = 2.1us` over a 4580us node sum (vs llama's 1125us), so the
+   aux kernels serialize behind the join instead of co-running.
+3. The wall A/B is slightly NEGATIVE: candidate 205.88 vs control 207.75
+   tok/s (+44us/token), i.e. the cross-queue handoff costs more than the
+   (absent) overlap.
+Evidence: `nv-substrate-s2-ready-placement-wall-control-20260817.json`,
+`...-candidate-20260817.json`, `...-census-20260817.jsonl`,
+`...-ledger-candidate-20260817.json`.
+
+**Why it is flat (mechanism).** The DAG width is temporally sandwiched: each
+ready set (q/k/v siblings, gate/up siblings) sits between a primary producer
+(rope) and a primary consumer (attention score / ffn resadd), so while the aux
+GPFIFO runs the siblings the primary has no independent continuation to
+overlap against; the extra cross-queue signal is pure overhead. This is
+exactly the stress-test prediction (`bf57ead51`): non-overlap levers cap at
+233.8 tok/s and every prior arm measured FLAT. The generic readiness primitive
+is kept (gated off by default) as the scheduler that S3 needs once a
+shadow-timed anchor exists to hide work behind.
 
 **Honest ceiling.** The measured +8.5 tok/s on CUDA is the current best
 evidence for what width + multi-queue is worth on this DAG; the native number
@@ -203,11 +250,15 @@ stack; tracked separately in the wall account.
 
 ## 6. Order of execution and gates (what the next sessions run)
 
-1. **S1 probe first (cheap, no GPU needed to start):** implement the targeted
-   planner policy; run the compile-only dependency probe to confirm the q/k/v
-   sibling geometry; then the GPU A/B.
-2. **S2 after S1 passes:** `HCQ_NUM_COMPUTE=2` + cut policy on the production
-   route; ledger + wall A/B.
+1. **S1 gate recorded at HEAD (done):** runtime deps show q/k/v siblings, width
+   10; no planner change needed. Pin as a regression test.
+2. **S2 (the real first lever):** `HCQ_NUM_COMPUTE=2` + name-pinned cut policy
+   for the q/k/v (and gate/up) GEMV programs on the production decode route;
+   same-session ledger + wall A/B vs single-queue control, tokens bitwise
+   identical. **MEASURED 2026-08-17:** the generic readiness placement engages
+   (census) but overlap stays ~0 and the wall is slightly negative; S2 as
+   composed does not convert to wall. The primitive is kept gated-off; the
+   blocker for wall now is S3 (anchor+shadow temporal alignment), not placement.
 3. **S3 after S2:** compose the anchor+shadow and measure the transferable
    overlap mass against the S1+S2 baseline.
 4. **S4 only if the stack stalls below 240:** PDL microbench, then decode A/B.
@@ -219,8 +270,8 @@ stack; tracked separately in the wall account.
 
 The substrate is "present" when, in one session:
 
-1. Runtime dep capture shows q/k/v (and gate/up) siblings under the new
-   planner (no `NO_MEMORY_PLANNER`).
+1. Runtime dep capture shows q/k/v (and gate/up) siblings — PASS at HEAD
+   (no `NO_MEMORY_PLANNER`).
 2. NV HCQGraph ledger shows `overlap_mass > 0.0` on steady tokens with the
    promoted body rows intact.
 3. Same-session canonical A/B: candidate wall <= control, tokens bitwise
