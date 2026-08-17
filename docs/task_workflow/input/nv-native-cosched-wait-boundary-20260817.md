@@ -89,6 +89,46 @@ Options, in order of evidence:
    campaign can run the overlap experiment on `DEV=CUDA`, llama's structure
    is expressible there; it is not on the native HCQ route as built.
 
+## The arithmetic of building the native overlap substrate
+
+The overlap substrate, if built, means: unfuse the support work we folded into
+GEMV epilogues back into separate kernels (llama's `quantize_q8_1` 549.8 +
+`rope` 127.3 + `kv_set_rows` 74.6 = ~752 us of shadow mass), place it on the
+aux GPFIFO dep-free, and let it hide behind the anchor chain. Wall effect is
+1:1 in overlap mass (`wall = node_sum - overlap + host`, residual 0.0000 in
+the exact wall account):
+
+`overlap reachable = shadow_mass * r`, where `r` is the native pair's measured
+dep-free co-schedule rate. Measured this session (same construction, fresh
+processes, `HCQ_NUM_COMPUTE=2`):
+
+| kernel size | duration | r (repeat runs) | verdict |
+| --- | ---: | --- | --- |
+| 512 (decode-small) | ~4 us | 11.4 / 6.9 / 13.0 % | reliable band ~7-13% |
+| 1024 | ~10 us | 33.9 / 31.9 / 17.1 / 3.0 % | opportunistic spikes, unreliable |
+| 2048 | ~22 us | 4.6 % | DRAM-bound, serializes |
+
+Even the optimistic 32% spike applied to the full ~752 us shadow gives
+`752 * 0.32 = 240 us` hidden: wall 4788.3 - 240 = 4548 us = **219.9 tok/s**
+(+11 vs HEAD). At the reliable band, `752 * 0.11 = 82 us` = **212.5 tok/s**
+(+3.7). The best case is ~225 tok/s if the siblings (another ~270 us) also
+hid at 32% — still below the 233.8 non-overlap ceiling.
+
+The 240 target needs 4166.7 us: all non-overlap levers (reduce_output 312 +
+vocab 60 + flash 39 = 411 us) + host parity (100.6 us) land at 4276.6 us
+(233.8 tok/s), then a further **110 us of hidden kernel time** is required.
+At the reliable 11% rate that needs ~1000 us of dep-free shadow mass - more
+than llama's entire support structure. At the unreliable 32% spike it needs
+~344 us and a scheduler that does not serialize on the boundary waits, which
+the native pair does not provide (measured negative).
+
+So the arithmetic says: the native overlap substrate is buildable in
+principle but nets at most +4 to +12 tok/s, below the 233.8 non-overlap
+ceiling, and 240 requires either a reliable ~22%+ co-schedule rate (CUDA-like
+stream semantics, not present in the RM enum) or ~1 ms of dep-free shadow
+mass (the DAG does not have it). The overlap climb on native is
+arithmetic-negative; the rational next rows are the non-overlap levers.
+
 ## Reproduction
 
 `scratchpad/nv_decode_shaped_overlap_probe.py --arm {both_same,split_free,
