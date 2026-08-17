@@ -1,0 +1,91 @@
+{
+  "class_delta_sum_us": -496.35,
+  "class_residual_us": 0.0,
+  "classes": [
+    {
+      "class": "flash_combine",
+      "delta_us": -90.092,
+      "llama_us": 189.703,
+      "tg_us": 99.61
+    },
+    {
+      "class": "flash_score",
+      "delta_us": 39.429,
+      "llama_us": 173.622,
+      "tg_us": 213.051
+    },
+    {
+      "class": "gemv",
+      "delta_us": -660.626,
+      "llama_us": 4138.038,
+      "tg_us": 3477.412
+    },
+    {
+      "class": "norms",
+      "delta_us": -101.448,
+      "llama_us": 307.676,
+      "tg_us": 206.228
+    },
+    {
+      "class": "other",
+      "delta_us": 47.191,
+      "llama_us": 1.861,
+      "tg_us": 49.051
+    },
+    {
+      "class": "reduce_output",
+      "delta_us": 312.074,
+      "llama_us": 0.0,
+      "tg_us": 312.074
+    },
+    {
+      "class": "residual_cast",
+      "delta_us": -0.942,
+      "llama_us": 2.854,
+      "tg_us": 1.912
+    },
+    {
+      "class": "rope_kv",
+      "delta_us": -101.412,
+      "llama_us": 201.912,
+      "tg_us": 100.5
+    },
+    {
+      "class": "vocab_aux",
+      "delta_us": 59.478,
+      "llama_us": 0.0,
+      "tg_us": 59.478
+    }
+  ],
+  "equation": {
+    "busy_delta_us": 628.782,
+    "check": "wall = union + host_gap",
+    "host_delta_us": 100.648,
+    "residual_us": 0.0,
+    "wall_delta_us": 729.43
+  },
+  "llama": {
+    "build": "ac4cddeb0 (9592)",
+    "host_gap_us": 168.322,
+    "kernel_union_us": 3890.534,
+    "node_sum_us": 5015.666,
+    "overlap_mass_us": 1125.132,
+    "steady_replays": 47.0,
+    "tok_per_s": 246.37480899999997,
+    "wall_ms": 4.0588565205138325
+  },
+  "node_sum_delta_us": -496.35,
+  "schema": "tinygrad.nv_240_exact_wall_account.v1",
+  "session": "2026-08-17, RTX 5090, Qwen3-8B-Q4_K_M, d512",
+  "tinygrad": {
+    "git": "07e9b2abe1ef99a2ce026c4e6e6e40f427a3d2b5",
+    "host_gap_us": 268.971,
+    "kernel_union_us": 4519.316,
+    "node_sum_us": 4519.316,
+    "overlap_mass_us": 0.0,
+    "steady_tokens": 34,
+    "tok_per_s": 208.84296237226226,
+    "wall_ms": 4.7882868
+  },
+  "wall_delta_us": 729.43
+}
