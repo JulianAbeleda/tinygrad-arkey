@@ -403,6 +403,17 @@ class DepsTracker:
       else: self.r_dependency_map[key].append((s, e, new_dependency))
     return list({id(x):x for x in wait_nodes}.values())
 
+  def peek_access_resources(self, bufs:list[Buffer], write:list[int]) -> list[Any]:
+    """Read-only dependency probe: the wait list this access WOULD produce, without
+    mutating the maps.  Used by the generic NV readiness placement so the scheduler
+    can see a node's real resource deps before choosing a compute queue."""
+    wait_nodes = []
+    for i,buf in enumerate(bufs):
+      key, s, e = self._buf_key(buf), buf.offset, buf.offset + buf.nbytes
+      wait_nodes += [dep for st,en,dep in self.w_dependency_map[key] if st < e and s < en]
+      if i in write: wait_nodes += [dep for st,en,dep in self.r_dependency_map[key] if st < e and s < en]
+    return list({id(x):x for x in wait_nodes}.values())
+
 class GraphRunner:
   def __init__(self, linear:UOp, input_uops:tuple[UOp, ...]=()):
     self.linear = linear.src[0]

@@ -16,6 +16,12 @@ MULTI_QUEUE_CENSUS_JSON = os.environ.get("HCQ_MULTI_QUEUE_CENSUS_JSON", "")
 # names (or explicit `prefix:` entries) from a captured DAG; quantized/MMQ
 # kernels are intentionally never inferred eligible here.
 NV_MULTI_QUEUE_PROGRAMS = frozenset(x for x in os.environ.get("HCQ_NV_MULTI_QUEUE_PROGRAMS", "").split(",") if x)
+# Generic dependency-readiness admission (replaces the name-pinned policy
+# below when enabled): a node goes to the least-loaded compute GPFIFO unless
+# it directly depends on the primary queue's current tail, in which case it
+# stays primary (no concurrency is lost and the cross-queue handoff is
+# avoided). Off by default; the name-pinned path remains byte-identical.
+HCQ_NV_READY_PLACEMENT = getenv("HCQ_NV_READY_PLACEMENT", 0)
 
 def _parse_nv_multi_queue_indices(spec:str) -> frozenset[int]:
   """Parse an opt-in exact graph-index selector (for example ``11-17,37``).
@@ -191,7 +197,10 @@ class HCQGraph(MultiGraphRunner):
       if runtime is not None: self.device_vars[enqueue_dev] = merge_dicts([self.device_vars[enqueue_dev], {k: 0 for k in ast.arg.runtimevars}])
 
       if runtime is not None:
-        enqueue_queue = self._pick_compute_queue(enqueue_dev, runtime, j)
+        rdeps_peek = None
+        if HCQ_NV_READY_PLACEMENT and enqueue_dev.device.split(":", 1)[0] == "NV" and len(self.compute_queues[enqueue_dev]) > 1:
+          rdeps_peek = self.deps.peek_access_resources(bufs, ast.arg.outs)
+        enqueue_queue = self._pick_compute_queue(enqueue_dev, runtime, j, rdeps_peek)
       elif is_rdma:
         raise RuntimeError("RDMA peer-copy path was removed from this fork; use same-peer copies.")
       else:
@@ -346,12 +355,21 @@ class HCQGraph(MultiGraphRunner):
     self.last_timeline: dict[HCQCompiled, tuple[HCQSignal, int]] = {dev: (dev.timeline_signal, 0) for dev in self.devices}
     self.queue_signals_to_reset = [self.signals[q] for q in [q for qs in self.compute_queues.values() for q in qs] + list(self.copy_queues.values()) if q in self.signals]
 
-  def _pick_compute_queue(self, dev:HCQCompiled, runtime, graph_idx:int=-1) -> HWQueue:
+  def _pick_compute_queue(self, dev:HCQCompiled, runtime, graph_idx:int=-1, rdeps_peek:list[Any]|None=None) -> HWQueue:
     queues = self.compute_queues[dev]
+    if dev.device.split(":", 1)[0] != "NV" or len(queues) == 1: return queues[0]
+    if HCQ_NV_READY_PLACEMENT and rdeps_peek is not None:
+      # Readiness placement: a node that must wait for the primary queue's
+      # current tail cannot overlap it, so keep it on the primary (no extra
+      # cross-queue handoff). Anything else is placed on the least-loaded
+      # GPFIFO; with equal load the tie goes to the primary, which seeds the
+      # anchor and prevents the whole DAG from collapsing onto one aux queue.
+      tail = self.last_j[queues[0]]
+      if tail is not None and any(dep == (queues[0], tail + 1) for dep in rdeps_peek): return queues[0]
+      return min(queues, key=lambda q: self.compute_queue_load[q])
     # Native NV admission is deliberately name-pinned to the independently
     # captured support tail.  All other backends and every unlisted program
     # retain byte-identical primary-queue scheduling.
-    if dev.device.split(":", 1)[0] != "NV" or len(queues) == 1: return queues[0]
     # An occurrence cut denotes queue 1 exactly; it must not depend on the
     # incidental number of earlier calls on either queue.
     if graph_idx in (getattr(self, "nv_multi_queue_indices", frozenset()) or NV_MULTI_QUEUE_INDICES): return queues[1]
