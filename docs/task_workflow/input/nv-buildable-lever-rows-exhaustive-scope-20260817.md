@@ -13,14 +13,23 @@ gap, PDL) are construction/wall rows and are covered by
 pipeline: audit llama -> arithmetic (mass + tok/s ceiling) -> implement ->
 gate. Tok/s ceilings are exact at 1:1 wall recovery, sublinear after that.
 
+**Test status at HEAD (honest): this session tested ONLY the PDL substrate
+(`nv-pdl-substrate-verdict-20260817.md`). The four rows below are SCOPED, not
+re-gated at HEAD.** Their numbers come from the 08-17 same-session ledger and
+the cited prior records. L1's audit census harness (`nv_reduce_output_rmsnorm_census.py`)
+was attempted at HEAD and FAILS to run: flash admission is capability-gated
+now, so the CPU-only capture no longer binds the live-split route ("is not
+served by the generated live-split route"). The L1 audit tool must be updated
+to the capability-gated route before its gate can run.
+
 ## Summary table (from the ledger)
 
-| row | node mass | wall ceiling | tok/s ceiling | substrate | status |
-| --- | ---: | ---: | ---: | --- | --- |
-| L1 reduce_output | 312.1 us | +312.1 | 223.4 | present (geometry split, P2 NO-GO) | OPEN |
-| L2 vocab_aux | 59.5 us | +59.5 | 211.5 | present (fusion landed, tail open) | OPEN |
-| L3 flash_score parity | 39.4 us | +39.4 | 210.6 | present (body parity, shape gap) | OPEN |
-| L4 other (residual launches) | 47.2 us | +47.2 | 210.9 | present | OPEN |
+| row | node mass | wall ceiling | tok/s ceiling | tested at HEAD? | substrate / prior evidence | status |
+| --- | ---: | ---: | ---: | --- | --- | --- |
+| L1 reduce_output | 312.1 us | +312.1 | 223.4 | NO (census harness stale) | geometry split 08-13: P1 promoted (+55-67 us), P2 NO-GO reverted | OPEN |
+| L2 vocab_aux | 59.5 us | +59.5 | 211.5 | NO | 08-03/08-12/08-14 fusion records; F5 keys.clone landed | OPEN |
+| L3 flash_score parity | 39.4 us | +39.4 | 210.6 | PARTIAL (floor re-pinned 08-16, closed NO-GO) | body 4.19 vs 3.16 us; all shape attempts NO-GO | OPEN |
+| L4 other (residual launches) | 47.2 us | +47.2 | 210.9 | NO | none - pure census needed first | OPEN |
 
 L1+L2 at 1:1 = +17.6 tok/s exact (per ledger 4.1). L1-L4 all at 1:1 = 230.9
 tok/s; 240 still requires L5+L6+L7 (substrate docs above).
@@ -93,7 +102,13 @@ parity; the gap is shape/vectorization (our tile
 `flash_attn_ext_vec` 8-lane reduce, 128 columns parallel, 2 KV splits).
 
 Audit: `nv-flash-score-floor-test-head-20260816.md` re-pinned the body at HEAD
-(no drift); `nv-flash-score-llama-trace-20260813.md` traced llama's shape.
+(no drift; 4.19 us isolated vs llama 3.16, ~+37 us/36 nodes; in-situ ~+68 us);
+`nv-flash-score-llama-trace-20260813.md` traced llama's shape. Every prior
+attempt at the shape change is NO-GO (tile geometry sweep 08-03, single-stage
+combine 08-05, llama-vec single-pass as-is 08-13, multi-stream overlap 08-15).
+The 08-16 verdict: no ready kernel to capture the mass; any future attempt
+must first show a device-side body at production config faster than the 4.19
+us tile.
 The flash-attention kernel search generalization task (BubbleBeam vocab axes,
 FutureSight legality, Coder emit) is scoped separately; the cheap first step
 is a compile-only capability probe: can our lowering emit llama's shape
