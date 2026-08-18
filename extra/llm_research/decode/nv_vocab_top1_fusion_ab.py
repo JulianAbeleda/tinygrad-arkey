@@ -20,6 +20,7 @@ from extra.llm_research.decode.nv_shared_q8_progressive_qualification import (
 
 
 _TAIL_PREFIXES = ("E_1187_32_4", "r_32_4_1187", "r_128_16_8_1187", "r_16_8")
+_TAIL_FAMILY = ("1187", "r_16_8")
 _VOCAB_LEGACY_PREFIX = "q6k_gen_coop_151936_4096_inkernel"
 _VOCAB_EPI_NAME = "q6k_gen_coop_151936_4096_inkernel_epi_vocabtop1"
 _VOCAB_REDUCE_NAME = "q6k_vocab_top1_reduce_151936_4096"
@@ -100,6 +101,8 @@ def child(model_path:str, depth:int, count:int, max_context:int, lease:bool) -> 
   vocab_legacy = sum(p.startswith(_VOCAB_LEGACY_PREFIX) and p != _VOCAB_EPI_NAME for p in programs)
   vocab_reduce = programs.count(_VOCAB_REDUCE_NAME)
   tail = [p for p in programs if any(p.startswith(prefix) for prefix in _TAIL_PREFIXES)]
+  tail_family = [p for p in programs if p != _VOCAB_EPI_NAME and p != _VOCAB_LEGACY_PREFIX
+                 and p != _VOCAB_REDUCE_NAME and any(f in p for f in _TAIL_FAMILY)]
   topology = {
     "lease": lease,
     "vocab_top1_epi_count": vocab_epi,
@@ -107,10 +110,22 @@ def child(model_path:str, depth:int, count:int, max_context:int, lease:bool) -> 
     "vocab_top1_reduce_count": vocab_reduce,
     "tail_programs": tail,
     "tail_program_count": len(tail),
+    "tail_family_programs": tail_family,
+    "tail_family_program_count": len(tail_family),
     "program_count": len(programs),
     "pass": (lease and vocab_epi == 1 and vocab_legacy == 0 and vocab_reduce == 0 and len(tail) == 0)
             or (not lease and vocab_epi == 0 and vocab_reduce == 0 and vocab_legacy == 1 and len(tail) == 4),
   }
+  # Hard gate (lease arm only): the fused route must remove the ENTIRE argmax
+  # tail, not rename it. A tail-family kernel (any E_*/r_* with a 1187 vocab
+  # extent, or the r_16_8 winner reduce) after the vocab GEMV means the argmax
+  # still runs as separate kernels; the wall cannot move while that chain
+  # survives. Observed 2026-08-17: the scheduler lowers
+  # packed_argmax_from_tile_keys into E_1187_16_4 + r_16_4_1187, which the old
+  # prefix gate (E_1187_32_4 / r_32_4_1187 / ...) missed. The control arm
+  # legitimately carries the 4-kernel legacy chain, so the zero-tail gate only
+  # applies when the lease is installed.
+  if lease and len(tail_family) != 0: topology["pass"] = False
   if not topology["pass"]: raise RuntimeError(f"vocab top-1 topology failed: {topology}")
   return {"schema": "tinygrad.nv_vocab_top1_fusion.v1", "mode": "child", "lease": lease,
           "depth": depth, "count": count, "prelude_token": prelude, "tokens": tokens,
