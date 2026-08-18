@@ -21,6 +21,36 @@ nv_gpu = nv_570 # default to 570
 
 PMA = ContextVar("PMA", abs(VIZ.value)>=2)
 
+# Programmatic dependent launch (PDL) wiring, env-gated and name-pinned.
+# Off by default: empty lists leave every QMD byte-identical to today's
+# dependent_qmd0 chaining (QMD_SCHEDULE). When a producer/consumer pair is
+# named, the producer QMD additionally arms `arrive_at_latch` + program
+# pre-exit (released at the last CTA's trigger) and the consumer QMD waits on
+# that latch, so the consumer grid launches before the producer grid ends.
+# Matching uses exact names or `prefix:` rules, same vocabulary as the
+# renderer-side PDL emission in tinygrad/renderer/cuda.py.
+
+
+def _nv_pdl_match(name:str, spec:frozenset[str]) -> bool:
+  return name in spec or any(rule.startswith("prefix:") and name.startswith(rule.removeprefix("prefix:")) for rule in spec)
+
+
+def _nv_pdl_arm_pair(active_qmd:QMD, new_qmd:QMD, active_name:str, new_name:str) -> bool:
+  """Arm llama's PDL host half on a chained NV QMD pair (producer -> consumer).
+
+  Returns True when the pair was armed (producer arrives at the latch and
+  enables program pre-exit; consumer waits on the latch). Callers (the exec
+  chain path) leave every QMD byte-identical when this returns False.
+  """
+  producers = frozenset(x for x in os.environ.get("NV_PDL_PRODUCER_PROGRAMS", "").split(",") if x)
+  consumers = frozenset(x for x in os.environ.get("NV_PDL_CONSUMER_PROGRAMS", "").split(",") if x)
+  if not (producers and consumers): return False
+  if not _nv_pdl_match(active_name, producers) or not _nv_pdl_match(new_name, consumers): return False
+  active_qmd.write(arrive_at_latch_valid=1, arrive_at_latch_id=getenv("NV_PDL_LATCH_ID", 7),
+                   enable_program_pre_exit=1, pre_exit_at_last_cta_launch=1)
+  new_qmd.write(wait_on_latch_valid=1, wait_on_latch_id=getenv("NV_PDL_LATCH_ID", 7))
+  return True
+
 @dataclass(frozen=True)
 class ProfilePMAEvent(ProfileEvent): device:str; kern:str; blob:bytes; exec_tag:int # noqa: E702
 
@@ -141,6 +171,7 @@ class NVCommandQueue(HWQueue[HCQSignal, 'NVDevice', 'NVProgram', 'NVArgsState'])
 class NVComputeQueue(NVCommandQueue):
   def __init__(self, queue_idx=0):
     self.queue_idx = queue_idx
+    self.active_prg_name:str|None = None
     super().__init__()
 
   def memory_barrier(self):
@@ -169,7 +200,10 @@ class NVComputeQueue(NVCommandQueue):
       self.nvm(1, nv_gpu.NVC6C0_SEND_SIGNALING_PCAS2_B, 9)
     else:
       self.active_qmd.write(dependent_qmd0_pointer=qmd_buf.va_addr >> 8, dependent_qmd0_action=1, dependent_qmd0_prefetch=1, dependent_qmd0_enable=1)
+      if self.active_prg_name is not None:
+        _nv_pdl_arm_pair(self.active_qmd, qmd, self.active_prg_name, prg.name)
 
+    self.active_prg_name = prg.name
     self.active_qmd, self.active_qmd_buf = qmd, qmd_buf
     return self
 

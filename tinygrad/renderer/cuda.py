@@ -1,3 +1,5 @@
+import os
+
 from tinygrad.codegen.opt import tc
 from tinygrad.dtype import DType, dtypes
 from tinygrad.helpers import Target, prod
@@ -5,6 +7,26 @@ from tinygrad.renderer.cstyle import CStyleLanguage, base_rewrite, create_non_na
 from tinygrad.uop.ops import Ops, PatternMatcher, UPat, UOp
 
 _nms = list("xyzwabcdefghijkl") + [f'v{i}' for i in range(16, 32)]
+
+# Programmatic dependent launch (PDL) emission, env-gated and name-pinned.
+# Off by default: when the lists are empty no kernel source changes, so
+# unmarked programs stay byte-identical. A consumer program gets
+# `griddepcontrol.wait` (SASS ACQBULK) at the top of its body; a producer
+# program gets `griddepcontrol.launch_dependents` (SASS PREEXIT) at the end.
+# The matching supports exact names and `prefix:` rules, same vocabulary as
+# the NV multi-queue admission policy in tinygrad/runtime/graph/hcq.py.
+def _nv_pdl_match(name:str, spec:frozenset[str]) -> bool:
+  return name in spec or any(rule.startswith("prefix:") and name.startswith(rule.removeprefix("prefix:")) for rule in spec)
+
+def _nv_pdl_body(name:str, kernel:list[str]) -> list[str]:
+  """Prepend/append PDL asm to a rendered kernel body for marked programs."""
+  consumers = frozenset(x for x in os.environ.get("NV_PDL_CONSUMER_PROGRAMS", "").split(",") if x)
+  producers = frozenset(x for x in os.environ.get("NV_PDL_PRODUCER_PROGRAMS", "").split(",") if x)
+  if consumers and _nv_pdl_match(name, consumers):
+    kernel = ['  asm volatile("griddepcontrol.wait;");', *kernel]
+  if producers and _nv_pdl_match(name, producers):
+    kernel = [*kernel, '  asm volatile("griddepcontrol.launch_dependents;");']
+  return kernel
 
 class CUDARenderer(CStyleLanguage):
   supports_post_barrier_regions = True
@@ -92,6 +114,7 @@ class CUDARenderer(CStyleLanguage):
   def render_kernel(self, function_name, kernel, bufs, uops, prefix=None):
     prefix = ["#define INFINITY (__int_as_float(0x7f800000))", "#define NAN (__int_as_float(0x7fffffff))",
               "template <class T, class F> __device__ __forceinline__ T tg_bitcast(F v) { union U { F f; T t; }; U u; u.f = v; return u.t; }"]
+    kernel = _nv_pdl_body(function_name, kernel)
     # Buffer-argument dtypes count too: a kernel whose ONLY fp16/fp8/bf16 element is a `half*` parameter
     # (e.g. an fp16 KV cache stored from fp32 values) previously missed the header include and rendered
     # `half` undefined in the signature (NVRTC compile error). Body uops drive vector-prefix emission, so

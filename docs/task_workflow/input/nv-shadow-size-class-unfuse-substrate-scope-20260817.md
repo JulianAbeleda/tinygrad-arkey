@@ -287,3 +287,39 @@ an fp16-sized allocation.
 - If a serial batched shadow is later wanted: build a dedicated emitter that
   keeps the layer loop per-thread, then re-run step 2 (gate 7-25 us), then
   step 3 (real-kernel envelope probe), then step 4 (wall A/B).
+
+### Serial-unroll re-verification at HEAD (2026-08-18)
+
+Re-ran the size-class gate at HEAD (`30cd1c54d`) and probed the one remaining
+construction the batch widening could not express: a genuinely serial
+multi-layer support kernel (all L layer bodies in one kernel, no loop axis the
+scheduler can hoist to the grid). Three expression attempts, three consistent
+negatives:
+
+1. **Unrolled distinct-GLOBAL-axes variant** (`nv_shadow_serial_unroll_size_probe.py`):
+   each layer gets its own kvh/elem GLOBAL ranges. The renderer maps every
+   GLOBAL range to a grid dim, so L=2 exploded to grid (1024, 128, 8) = 1M
+   blocks. That is the OPPOSITE of serial: the scheduler parallelizes the
+   layers across blocks, and the cross-block AFTER chain deadlocks the queue
+   (timeline wait timeout, kernel never completes).
+2. **REDUCE-layer-loop variant**: layer axis as REDUCE (the class the
+   accumulator chains in `decode_kernels.py` use for in-block serial loops)
+   with GLOBAL kvh/elem. `CFGContext` rejects it: the layer END self-cycles
+   (`assert y.src[1] not in x.backward_slice_with_self`), because the same
+   REDUCE range is both a sibling dependency and its own target. The scheduler
+   cannot order nested ENDs over a shared serial axis.
+3. **All-REDUCE single-block variant**: kvh/elem/layer all REDUCE, grid
+   (1,1,1). L=1 measured 43 us (TOO_BIG, and it is a degenerate 1-thread
+   shape, not a production construction). L=2 with the in-kernel AFTER chain
+   hangs the device; without the chain the renderer dead-code-eliminates the
+   k-store (the v-store alone survives), so the kernel is wrong even when it
+   runs.
+
+The serial-unroll probe therefore does NOT open the size-class wall: the
+merged support mass is sub-7 us per layer, and the scheduler has no
+non-degenerate expression that both keeps the layer work per-thread and
+scales wall time into the 7-25 us band. This confirms the committed verdict
+(`2c4e68e06`): S3 closes as size-class-blocked (wall), not
+capability-blocked (substrate). The only path to a serial batched shadow is
+the dedicated emitter named below; that is scoped work and does not change
+the per-layer mass arithmetic.

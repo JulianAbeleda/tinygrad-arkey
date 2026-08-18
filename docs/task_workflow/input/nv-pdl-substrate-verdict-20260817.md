@@ -138,3 +138,32 @@ hides the whole producer tail; the native mechanism hides the final wave.
 - raw results: `/tmp/nv_pdl_substrate_{cfg}.json`
 - upstream context: `nv-llama-pdl-launch-hiding-trace-record-20260816.md`,
   `nv-llama-full-trace-lever-ledger-20260817.md`
+
+## 8. Exec-path wiring landed (2026-08-18)
+
+The 08-17 probe proved the mechanism by monkeypatching `QMD.write` by hand.
+This session moved that into the production exec path, env-gated and
+byte-identical by default:
+
+- `tinygrad/renderer/cuda.py`: `_nv_pdl_body` prepends
+  `asm volatile("griddepcontrol.wait;")` to marked consumer kernels and
+  appends `asm volatile("griddepcontrol.launch_dependents;")` to marked
+  producer kernels (`NV_PDL_CONSUMER_PROGRAMS` / `NV_PDL_PRODUCER_PROGRAMS`,
+  exact names or `prefix:` rules). Empty env => no source change.
+- `tinygrad/runtime/ops_nv.py`: `NVComputeQueue` tracks `active_prg_name`;
+  the dependent-QMD chaining branch calls `_nv_pdl_arm_pair`, which writes
+  the producer `arrive_at_latch_valid/id` + `enable_program_pre_exit` +
+  `pre_exit_at_last_cta_launch` and the consumer `wait_on_latch_valid/id`
+  (latch id `NV_PDL_LATCH_ID`, default 7). Empty env => every QMD identical.
+- `scratchpad/nv_pdl_exec_wiring_device_probe.py` proves the REAL exec path
+  (no monkeypatch): control arm 0 overlap; latch arm +64 us at 60 us spin,
+  +305 us at 300 us spin, checksum correct in all arms.
+- Decode A/B via `route_kernel_census.py`: control 205.58 tok/s vs candidate
+  (producer `prefix:rmsnorm_q8_1_llama_provider`, consumer
+  `prefix:q4k_warp_coop_q8_dp4a_partial`) 205.21 tok/s, tokens bitwise
+  identical (`227ad3ce`) 3/3. Wall-flat-to-slightly-negative: native release
+  fires at the LAST CTA trigger, so per-edge overlap is bounded to the final
+  wave and latch signaling costs roughly what it hides on the real route.
+- Unit pins: `test/unit/test_nv_pdl_substrate_wiring.py` (8 hermetic tests)
+  and `test/unit/test_nv_substrate_s1_runtime_width_pin.py` (4 hermetic
+  tests on the committed S1 evidence JSON). All 12 pass.
