@@ -213,8 +213,57 @@ as the decode overlap probe, NOT host realize time):
 
 This is exactly what the size-class contract predicted: a single layer's
 support is tiny on native. Candidate B as one-per-layer is NOT anchor-class.
-The scope's own step 2 instruction applies: **widen it** (batch multiple
-layers' support into one kernel) and re-measure before the envelope probe.
+The scope's own step 2 instruction applies: widen it. The widening was
+attempted and measured (below).
+
+#### Widening attempt (batch multiple layers) -- does NOT reach the band
+
+The merged kernel was re-emitted with a layer loop over L stacked layer buffer
+sets (`shadow_merged_batched_L{L}`) and re-measured at L=4/8/16:
+
+| layers | median us | launch | verdict |
+| --- | ---: | --- | --- |
+| 1 | 2.5 | (8,1,1)x(32,16,1) | TOO_SMALL |
+| 4 | 5.0 | (4,1,1)x(32,16,1) | TOO_SMALL |
+| 8 | 4.75 | (8,1,1)x(32,16,1) | TOO_SMALL |
+| 16 | 5.0 | (16,1,1)x(32,16,1) | TOO_SMALL |
+
+The duration is flat in L because the layer LOOP is hoisted to the grid
+(`grid.x == L`): the layers run in PARALLEL blocks, not serially in one block.
+Batching layers widens the GRID, not the per-kernel duration, so it cannot
+reach the 7-25 us band by construction.
+
+#### Size decomposition (what the 2.5 us is made of)
+
+Each sub-body was isolated and measured with the same timestamp harness:
+
+| kernel | median us |
+| --- | ---: |
+| rope + kv_store only | 1.75 |
+| rmsnorm + Q8 only | 2.0 |
+| merged (both) | 2.5 |
+
+Both halves are intrinsically sub-7 us. There is no per-layer support left to
+merge: the merged kernel already contains rope + kv_store + rmsnorm + Q8, the
+full per-layer support set. The shadow is genuinely small on native because
+the Q8 provider and kv-store are hand-tuned NV kernels (the reason our node
+sum is 496 us below llama in the first place).
+
+#### Honest gate verdict
+
+Step 2 does NOT pass: the merged per-layer support kernel is 2.5 us (below the
+7-25 us co-schedule band), and the scope's prescribed widening (batch layers)
+does not change the per-kernel duration because the layer loop parallelizes
+onto the grid. Candidate B as a single merged kernel is size-class-blocked on
+native. This is the same wall the envelope already named: llama's shadow only
+co-schedules because CUDA's executor amortizes per-kernel events; the native
+pair needs same-size-class shadows, and the real per-layer support is not one.
+
+This does NOT reopen the 240 arithmetic: the honest ceiling of the unfuse row
+remains +2.8 to +11 tok/s (below the 233.8 non-overlap ceiling), and now the
+size-class gate shows the transferable shape cannot even be constructed at
+anchor class. The row closes as size-class-blocked (wall), not
+capability-blocked (substrate): step 1 proved the primitive renders.
 
 #### Harness note (why the first size probe "hung", corrected)
 
@@ -231,8 +280,10 @@ an fp16-sized allocation.
 
 ### Open (next gates)
 
-- Widen the merged kernel to anchor class (batch L layers, re-measure 7-25 us)
-- Step 3: real-kernel envelope probe (merged shadow behind a real q4k/q6k
-  GEMV anchor, single join, overlap > 0 across >= 3 runs)
-- Step 4: production wall A/B (`HCQ_NUM_COMPUTE=2` + Candidate-B shadow
-  route, bitwise-identical tokens)
+- Closed by this record: widening by layer batching does not reach anchor
+  class (grid-parallel, flat in L). A serial per-thread layer loop would need
+  a new emitter (the layer axis must not hoist); that is scoped work, not a
+  primitive gap, and it does not change the sub-7 us per-layer mass.
+- If a serial batched shadow is later wanted: build a dedicated emitter that
+  keeps the layer loop per-thread, then re-run step 2 (gate 7-25 us), then
+  step 3 (real-kernel envelope probe), then step 4 (wall A/B).
