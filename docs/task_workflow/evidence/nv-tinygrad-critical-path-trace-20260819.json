@@ -1,0 +1,39 @@
+{
+  "schema": "tinygrad.nv_tinygrad_critical_path_trace.v1",
+  "date": "2026-08-19",
+  "branch": "nvidia-bringup-20260731",
+  "head": "d14e6964e",
+  "gpu": "RTX 5090 sm_120 DEV=NV",
+  "model": "Qwen3-8B-Q4_K_M.gguf",
+  "method": "Loaded /tmp/pipeline_serial_graph.jsonl lines 70-74 (the steady decode token: 596 nodes in 5 JIT groups, no cross-group edges). Computed the duration-weighted longest path per group and summed. Total reproduces the previously reported 4187.008 us exactly.",
+  "critical_path_total_us": 4187.008,
+  "critical_path_class_us": {
+    "gemv": 3259.072,
+    "flash": 314.272,
+    "reduce_output": 235.296,
+    "rmsnorm": 154.656,
+    "residual": 135.488,
+    "scatter_vocab": 55.648,
+    "q8_provider": 32.576
+  },
+  "refutation_of_prior_proposal": {
+    "proposal": "Relax tinygrad's edges so the Q/O/gate/down matmul spine is the only matmul chain, with K/V projections and set_rows KV-cache writes hanging off the parallel K/V branches.",
+    "trace_verdict": "ALREADY TRUE. The K/V projection kernels (q6k_v_four_warp_fp16_direct, q4k_q8_warp_direct) and the set_rows cache writes do NOT appear anywhere on the 4187 us critical path. tinygrad's critical chain already carries only Q, O, gate+up, and down matmuls (plus one ~8 us partial warp-coop matmul per layer), so removing K/V edges would move nothing.",
+    "per_layer_matmul_chain": "Q (q4k_g3_lanemap_gemv_4096_4096) -> O (q4k_g3_lanemap_gemv_epi_resadd) -> FFN gate+up (q4k_g3_lanemap_gemv_w1w3fused16_12288_4096) -> FFN down (q6k_fp16_mmvq_direct_epi_ffnresadd)"
+  },
+  "real_gap": {
+    "tinygrad_support_on_critical_path_us": 927.936,
+    "llama_non_mmq_exposed_union_us": 302.369,
+    "support_delta_us": 625.567,
+    "gemv_advantage_us": 328.81,
+    "net_critical_path_gap_us": 287.539,
+    "note": "tinygrad's gemv is already 328.8 us shorter than llama's mmq chain (3259.1 vs 3588.3). The entire remaining gap is support glue on the critical path: flash 314 + reduce_output 235 + rmsnorm 155 + residual 135 + scatter 56 + q8_provider 33 us, versus llama's ~302 us of exposed non-mmq work."
+  },
+  "ceiling_not_a_claim": {
+    "hide_all_support_to_llama_exposure_us": 625.6,
+    "critical_path_if_support_matches_llama_us": 3561.4,
+    "vs_llama_span_us": -338.1,
+    "note": "This is a geometric ceiling (support glue fully hidden to llama's exposure level), not a proven mechanism. No code path in tinygrad has yet demonstrated hiding flash/reduce_output/rmsnorm/residual behind the gemv chain."
+  },
+  "open_question": "The trace shows WHERE the gap is (support glue on the gemv chain), but not yet the dependency edges that would legally let tinygrad hide that glue. The next trace must compare, edge by edge, which llama glue nodes (flash score/combine, rms_norm, rope, residual) run off the mmq chain and why the equivalent tinygrad glue cannot."
+}

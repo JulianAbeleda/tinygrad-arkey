@@ -1,10 +1,13 @@
 """CPU-only contracts for BubbleBeam/FutureSight's static boundary."""
 from copy import deepcopy
 
+import pytest
+
 import extra.llm_research.bubblebeam_futuresight as bf
 from extra.llm_research.bubblebeam_futuresight import (
-  build_static_legality, build_static_priority, candidate_report, classify_candidates, dimension_mapping,
-  propose_legal_dimensions, q4k_lane_partition_candidates, rank_candidates,
+  build_flash_legality, build_flash_static_priority, build_static_legality, build_static_priority, candidate_report,
+  classify_candidates, dimension_mapping, propose_legal_dimensions, q4k_lane_partition_candidates,
+  rank_candidates, rank_static_candidates,
   should_route_q4k_lane_partition, target_schedule_vocabulary,
 )
 from tinygrad.uop.ops import UOp
@@ -116,3 +119,102 @@ def test_proposals_serialize_to_the_plain_boltbeam_dimension_boundary():
   assert plain == {"schedule.launch.threads": (32, 64), "schedule.tile.k": (256,)}
   import json
   assert json.loads(json.dumps(plain)) == {"schedule.launch.threads": [32, 64], "schedule.tile.k": [256]}
+
+
+# flash_decode_candidate.v1 legality and ordering ----------------------------
+def _flash_envelope(**tile_kwargs):
+  from extra.llm_research import flash_candidate_schema as schema
+  defaults = {"Hq": 8, "Hd": 128, "Hkv": 8, "MAXC": 4096, "split_count": 1}
+  defaults.update(tile_kwargs)
+  # Build without validating so invalid-geometry fixtures reach the legality check.
+  descriptor = {"schema_version": schema.SCHEMA_VERSION, "tile": schema.tile_fields(**defaults), "combine": None}
+  return schema.candidate_envelope(descriptor)
+
+
+def _sm120_facts(**overrides):
+  facts = {"subgroup_size": 32, "max_threads_per_threadgroup": 1024,
+           "max_threadgroup_memory_bytes": 227 * 1024}
+  facts.update(overrides)
+  return facts
+
+
+def test_flash_legality_classifies_an_enumerated_sm120_like_space_without_vendor_branches():
+  from extra.llm_research import flash_candidate_schema as schema
+  facts = _sm120_facts()
+  check = build_flash_legality({}, facts)
+  candidates, expected_legal = [], set()
+  for lane_width in (8, 16, 32, 64):
+    for reduce_structure in ("staged", "inline"):
+      for token_block in (16, 128, 512):
+        for stage_width in (1, 4):
+          for score_group_width in (None, 8):
+            for warps in (1, 8):
+              envelope = _flash_envelope(lane_width=lane_width, reduce_structure=reduce_structure,
+                                         token_block=token_block, stage_width=stage_width,
+                                         score_group_width=score_group_width, warps=warps)
+              candidates.append(envelope)
+              tile = envelope["tile"]
+              try:
+                schema.validate(envelope)
+                geometry_ok = True
+              except schema.SchemaError:
+                geometry_ok = False
+              ladder = schema.ladder_spans_lanes(tile)
+              subgroup_ok = not ladder or facts["subgroup_size"] % lane_width == 0
+              threads_ok = schema.derived_threads(tile) <= facts["max_threads_per_threadgroup"]
+              local_ok = schema.local_memory_bytes(envelope) <= facts["max_threadgroup_memory_bytes"]
+              if geometry_ok and subgroup_ok and threads_ok and local_ok:
+                expected_legal.add(envelope["candidate_hash"])
+  accepted, rejected = classify_candidates(candidates, (check,))
+  assert {candidate["candidate_hash"] for candidate in accepted} == expected_legal
+  assert {row.candidate_hash for row in rejected} == {c["candidate_hash"] for c in candidates} - expected_legal
+  assert {row.reason for row in rejected} <= {"lane_width_not_in_subgroup", "over_threads", "over_local_memory",
+                                              "invalid_flash_geometry"}
+
+
+def test_flash_legality_rejects_specific_invalid_geometries():
+  check = build_flash_legality({}, _sm120_facts())
+  assert check(_flash_envelope()) is None
+  assert check(_flash_envelope(lane_width=64)) == "lane_width_not_in_subgroup"
+  assert check(_flash_envelope(warps=64)) == "over_threads"
+  assert check(_flash_envelope(token_block=512)) == "over_local_memory"
+  assert check(_flash_envelope(reduce_structure="recursive")) == "invalid_flash_geometry"
+  wrong = _flash_envelope()
+  wrong["schema_version"] = "other.v1"
+  assert check(wrong) == "unsupported_schema_version"
+
+
+def test_flash_legality_needs_no_vendor_identity_keys():
+  minimal = {"subgroup_size": 32, "max_threads_per_threadgroup": 1024, "max_threadgroup_memory_bytes": 227 * 1024}
+  check = build_flash_legality({}, minimal)
+  assert check(_flash_envelope()) is None
+  assert check(_flash_envelope(lane_width=64)) == "lane_width_not_in_subgroup"
+  with pytest.raises(ValueError, match="subgroup_size"):
+    build_flash_legality({}, {"max_threads_per_threadgroup": 1024})
+
+
+def test_flash_static_priority_prefers_wider_lanes_and_penalizes_small_stage_width():
+  priority = build_flash_static_priority(_sm120_facts())
+  wide, narrow = _flash_envelope(lane_width=32), _flash_envelope(lane_width=8)
+  assert priority(wide)[0] > priority(narrow)[0]
+  assert "column=32" in priority(wide)[1] and "column=8" in priority(narrow)[1]
+  wide_stage = _flash_envelope(lane_width=32, stage_width=4)
+  assert priority(wide_stage)[0] > priority(wide)[0]  # stage_width 1 relaunches more staging passes
+  inline = _flash_envelope(lane_width=32, reduce_structure="inline")
+  assert priority(inline)[0] > priority(wide)[0]  # shorter ladder beats staged
+
+
+def test_flash_ranking_is_deterministic_and_tie_breaks_by_candidate_hash():
+  facts = _sm120_facts()
+  check = build_flash_legality({}, facts)
+  priority = build_flash_static_priority(facts)
+  legal = _flash_envelope(lane_width=32)
+  rejected = _flash_envelope(lane_width=64)
+  accepted, rejections = classify_candidates([legal, rejected], (check,))
+  assert [c["candidate_hash"] for c in accepted] == [legal["candidate_hash"]]
+  assert rejections[0].reason == "lane_width_not_in_subgroup"
+  first = dict(legal, candidate_hash="a" * 64)
+  second = dict(legal, candidate_hash="b" * 64)
+  ranked = rank_static_candidates([second, first], priority)
+  assert [row.candidate_hash for row in ranked] == ["a" * 64, "b" * 64]
+  assert ranked[0].score == ranked[1].score

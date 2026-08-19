@@ -1,0 +1,38 @@
+{
+  "schema": "tinygrad.nv_llama_critical_path_structure.v1",
+  "date": "2026-08-19",
+  "source": "/home/ubuntu/env/llama.cpp/llama_decode.dot (dumped via res->get_gf(), Qwen3-8B-Q4_K_M d512 decode)",
+  "method": "parse the ggml logical decode graph; collapse view/reshape/permute no-op tensors into their single producer; compute the longest real-op chain. Structural (unweighted by kernel duration); weighted path is a separate follow-up.",
+  "graph": {
+    "declared_nodes": 1744,
+    "edges": 2099,
+    "real_compute_nodes_after_noop_collapse": 913,
+    "op_census": {
+      "mmq_X_star_Y": 253,
+      "rmsnorm": 145,
+      "mul_x_star_y": 145,
+      "rope": 72,
+      "set_rows": 72,
+      "flash_attn_ext": 36,
+      "add_x_plus_y": 72,
+      "glu": 36,
+      "get_rows": 3
+    }
+  },
+  "structural_critical_path": {
+    "real_op_chain_length": 544,
+    "class_counts": {
+      "mmq": 145,
+      "rmsnorm": 109,
+      "mul": 109,
+      "rope": 36,
+      "flash": 36,
+      "add": 72,
+      "glu": 36,
+      "get_rows": 1
+    },
+    "per_layer_cycle": "rmsnorm -> mul -> mmq(Q) -> rmsnorm -> mul -> rope -> flash -> mmq(O) -> add -> rmsnorm -> mul -> mmq(gate) -> glu -> mmq(down) -> add",
+    "finding": "llama carries 4 of 7 matmuls per layer on the structural critical path: Q, O, gate, down. The K and V projections are off-path (parallel with Q's norm+rope branch), and the two set_rows KV-cache writes hang off the K/V branches, not the Q chain."
+  },
+  "note": "Structural dependency fact, not a wall claim. Follow-up trace (nv-tinygrad-critical-path-trace-20260819.json) shows tinygrad ALREADY carries only Q/O/gate/down on its critical path, so reproducing llama's matmul spine is not the lever. The open lever is the support glue between those matmuls."
+}

@@ -35,6 +35,67 @@ def _kernel_info(name:str, *, coalesced_loads:bool=False) -> KernelInfo:
   return KernelInfo(name=name, opts_to_apply=(), coalesced_loads=coalesced_loads)
 
 
+def _promoted_route_stage_width(Hq:int, split_count:int, query_group_size:int|None) -> int|None:
+  """The frozen stage_width of the promoted route matching (Hq, split_count, query_group_size), else None.
+
+  G4 (32, 48, None) stages with width 1 and G5 (40, 32, 2) with width 4. Those two geometries are the
+  historical "default geometry": their kernel names are byte-exact artifacts (the name is the rendered C
+  function name), so the naming rule must not append a suffix to them even though G5's stage_width differs
+  from the descriptor default."""
+  if (Hq, split_count, query_group_size) == (32, 48, None): return 1
+  if (Hq, split_count, query_group_size) == (40, 32, 2): return 4
+  return None
+
+
+def _promoted_route_split_count(Hq:int, query_group_size:int|None) -> int|None:
+  """The frozen split_count of the promoted route matching (Hq, query_group_size), else None.
+
+  G4 (32, None) uses S=48 and G5 (40, 2) uses S=32. split_count is shape-derived but participates in the
+  emitted program, so a non-default split count must not collide with the historical kernel name."""
+  if (Hq, query_group_size) == (32, None): return 48
+  if (Hq, query_group_size) == (40, 2): return 32
+  return None
+
+
+def flash_decode_coarse_split_override() -> int:
+  """Env-gated research override for the promoted G4 route's KV split count (0 = unset).
+
+  When ``FLASH_DECODE_COARSE_SPLIT`` is set to a positive int, decode_routes runs the production
+  G4 decode route with that split count instead of the promoted S=48. Unset env is byte-identical
+  to today: the promoted route, its admission guard, and its kernel names are untouched. G5
+  (40 heads, S=32) is not affected by this override.
+  """
+  return getenv("FLASH_DECODE_COARSE_SPLIT", 0)
+
+
+def _tile_geometry_suffix(*, Hq:int, split_count:int, lane_width:int, token_block:int, stage_width:int|None,
+                          reduce_structure:str|None, dot_pair_width:int, score_group_width:int|None, warps:int|None,
+                          query_group_size:int|None, QG:int) -> str:
+  """Deterministic JIT-cache suffix for non-default tile geometry; empty for the promoted-route geometry.
+
+  Only fields that differ from their production default are included, so G4/G5 keep their exact historical
+  kernel names while differently emitted programs get distinct, deterministic names (the canonical JSON is
+  the authoritative candidate identity; this suffix is the short-name side of the same contract)."""
+  route_split = _promoted_route_split_count(Hq, query_group_size)
+  if route_split is not None and split_count == route_split \
+      and lane_width == 32 and token_block == 16 and score_group_width is None and warps is None \
+      and reduce_structure in (None, "staged") and dot_pair_width == 2 and \
+      (stage_width == _promoted_route_stage_width(Hq, split_count, query_group_size) or
+       (stage_width is None and _promoted_route_stage_width(Hq, split_count, query_group_size) == 1)):
+    return ""
+  geom = ""
+  if split_count != route_split: geom += f"_s{split_count}"
+  if lane_width != 32: geom += f"_lw{lane_width}"
+  if token_block != 16: geom += f"_tk{token_block}"
+  route_sw = _promoted_route_stage_width(Hq, split_count, query_group_size)
+  if stage_width != (route_sw if route_sw is not None else 1): geom += f"_sw{stage_width}"
+  if reduce_structure not in (None, "staged"): geom += f"_r{reduce_structure[0]}"
+  if dot_pair_width != 2: geom += f"_dpw{dot_pair_width}"
+  if score_group_width is not None: geom += f"_sgw{score_group_width}"
+  if warps is not None and warps != QG: geom += f"_w{warps}"
+  return geom
+
+
 @dataclass(frozen=True)
 class CooperativeStageLaneMap:
   """Map each staging thread to a contiguous, vectorizable element chunk."""
@@ -92,15 +153,34 @@ def make_kv_element_loader(cache:UOp, Hd:int, kvscale:UOp|None=None, freqs:UOp|N
 def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc,
                                                               staging:str="KV_BOTH", quant:bool=False,
                                                               rope:bool=False, query_group_size:int|None=None,
-                                                              stage_width:int|None=None):
+                                                              stage_width:int|None=None, token_block:int=16,
+                                                              lane_width:int=32, score_group_width:int|None=None,
+                                                              warps:int|None=None, reduce_structure:str|None=None,
+                                                              dot_pair_width:int=2):
   """Emit the selected live-split tile: LDS K/V, online softmax, and sharded PV."""
-  if Hd % 64 != 0: raise ValueError(f"block tile requires Hd%64==0, got {Hd}")
+  if Hd % (lane_width * dot_pair_width) != 0:
+    raise ValueError(f"block tile requires Hd%(lane_width*dot_pair_width)==0, "
+                     f"got Hd={Hd} lane_width={lane_width} dot_pair_width={dot_pair_width}")
   if staging not in {"KV_BOTH", "K_ONLY"}: raise ValueError(f"unsupported staging={staging!r}")
+  if token_block < 1: raise ValueError(f"token_block must be >= 1, got {token_block}")
+  if lane_width < 1 or lane_width & (lane_width - 1):
+    raise ValueError(f"lane_width must be a positive power of two, got {lane_width}")
+  if dot_pair_width < 1: raise ValueError(f"dot_pair_width must be >= 1, got {dot_pair_width}")
+  if reduce_structure not in (None, "staged", "inline"):
+    raise ValueError(f"reduce_structure must be one of 'staged','inline', got {reduce_structure!r}")
   G = Hq // Hkv
   QG = G if query_group_size is None else query_group_size
   if QG < 1 or QG > G: raise ValueError(f"query_group_size must be in 1..{G}, got {QG}")
-  NG, W, LANES, WARPS, TK = _ceildiv(G, QG), Hd + 2, 32, QG, 16
-  THREADS, R, RP = LANES * WARPS, Hd // LANES, Hd // 64
+  if warps is not None and warps < QG: raise ValueError(f"warps must be >= QG={QG}, got {warps}")
+  # Column-parallel score groups are not implemented: dot ownership is elem =
+  # pair_axis*(LANES*dot_pair_width) + lane*dot_pair_width, so every lane must
+  # contribute to cover Hd. Narrowing the reduce width below lane_width would
+  # sum only a fraction of the dot and produce a wrong score.
+  if score_group_width is not None and score_group_width != lane_width:
+    raise ValueError(f"score_group_width must equal lane_width={lane_width} or be None, got {score_group_width}")
+  group_width = score_group_width or lane_width
+  NG, W, LANES, WARPS, TK = _ceildiv(G, QG), Hd + 2, lane_width, QG if warps is None else warps, token_block
+  THREADS, R, RP = LANES * WARPS, Hd // LANES, Hd // (LANES * dot_pair_width)
   STAGES, NB, scale = _ceildiv(TK * Hd, THREADS), _ceildiv(L, TK), 1.0 / (Hd ** 0.5)
 
   def kernel(pout:UOp, q:UOp, cache:UOp, *extra) -> UOp:
@@ -162,14 +242,18 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
       dot_init = dot.after(block, token_in_tile)[0].store(0.0)
       dot = dot.after(dot_init)
       pair_axis = UOp.range(RP, 6, axis_type=AxisType.REDUCE)
-      elem = pair_axis * 64 + lane * 2
+      elem = pair_axis * (LANES * dot_pair_width) + lane * dot_pair_width
       qpair = UOp(Ops.STACK, dtypes.float16.vec(2), (q[head * Hd + elem].cast(dtypes.float16), q[head * Hd + elem + 1].cast(dtypes.float16)))
       kpair = UOp(Ops.STACK, dtypes.float16.vec(2), (ksh.after(barrier)[token_in_tile * Hd + elem],
                                                  ksh.after(barrier)[token_in_tile * Hd + elem + 1]))
       fdot = _lower_fdot2(dot.after(pair_axis)[0], qpair, kpair)
       update = dot[0].store(fdot).end(pair_axis)
-      reduced = (warp_reduce_sum(dot.after(update)[0], lane, LANES) if getenv("DECODE_ATTN_BLOCK_TILE_INLINE_REDUCE", 0)
-                 else _warp_reduce_sum_staged(dot.after(update)[0], lane, LANES))
+      # reduce_structure is the descriptor owner; the env var is honored ONLY as a legacy alias when the
+      # caller passes reduce_structure=None, never as a production default (the spec always passes a value).
+      inline_reduce = (bool(getenv("DECODE_ATTN_BLOCK_TILE_INLINE_REDUCE", 0)) if reduce_structure is None
+                       else reduce_structure == "inline")
+      reduced = (warp_reduce_sum(dot.after(update)[0], lane, group_width) if inline_reduce
+                 else _warp_reduce_sum_staged(dot.after(update)[0], lane, group_width))
       return reduced * scale
 
     def merge_tail(token_in_tile, new_max, correction, probability):
@@ -198,13 +282,19 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
     ls = pout.after(pv)[base + Hd].store(final_den[0], lane.eq(0) & warp_active)
     ms = pout.after(ls)[base + (Hd + 1)].store(final_max[0], lane.eq(0) & warp_active)
     suffix = "" if QG == G else f"_qg{QG}"
+    geom_suffix = _tile_geometry_suffix(Hq=Hq, split_count=S, lane_width=lane_width, token_block=token_block,
+                                        stage_width=stage_width, reduce_structure=reduce_structure,
+                                        dot_pair_width=dot_pair_width, score_group_width=score_group_width,
+                                        warps=warps, query_group_size=query_group_size, QG=QG)
     return ms.end(kvh, split, query_group, lane, warp).sink(arg=_kernel_info(
-      f"flash_block_tiled_xlane_score_pv_tile_whole_cache_{Hq}_{Hd}{suffix}", coalesced_loads=bool(selected_width)))
+      f"flash_block_tiled_xlane_score_pv_tile_whole_cache_{Hq}_{Hd}{suffix}{geom_suffix}",
+      coalesced_loads=bool(selected_width)))
   return kernel
 
 
-def flash_fused_gmax_combine_kernel(Hd:int, Hq:int, S:int, stride:int|None=None, output_fp16:bool=False):
-  W, L_COL, M_COL, LANES, R = Hd + 2, Hd, Hd + 1, 32, Hd // 32
+def flash_fused_gmax_combine_kernel(Hd:int, Hq:int, S:int, stride:int|None=None, output_fp16:bool=False,
+                                    lane_width:int=32):
+  W, L_COL, M_COL, LANES, R = Hd + 2, Hd, Hd + 1, lane_width, Hd // lane_width
   if Hd % LANES != 0: raise ValueError(f"fused combine needs Hd%{LANES}==0, got {Hd}")
   NW, stride = _ceildiv(S, LANES), S if stride is None else stride
 
@@ -243,7 +333,10 @@ def flash_fused_gmax_combine_kernel(Hd:int, Hq:int, S:int, stride:int|None=None,
     output_dim = lane * R + output_axis
     value = final_acc[output_axis] / final_den
     if output_fp16: value = value.cast(dtypes.float16)
-    combine_name = f"flash_fused_gmax_combine_f16_{Hq}_{Hd}" if output_fp16 else f"flash_fused_gmax_combine_{Hq}_{Hd}"
+    s_suffix = "" if S == {32: 48, 40: 32}.get(Hq) else f"_s{S}"
+    lw_suffix = "" if lane_width == 32 else f"_lw{lane_width}"
+    combine_name = (f"flash_fused_gmax_combine_f16_{Hq}_{Hd}{s_suffix}{lw_suffix}" if output_fp16
+                    else f"flash_fused_gmax_combine_{Hq}_{Hd}{s_suffix}{lw_suffix}")
     return out[head * Hd + output_dim].store(value).end(output_axis).end(head, lane).sink(
       arg=KernelInfo(name=combine_name, opts_to_apply=()))
   return kernel
@@ -560,16 +653,35 @@ class FlashDecodeTileSpec:
   token_block: int = 16
   query_group_size: int|None = None
   stage_width: int = 1
-  target: str = "amd_gfx1100"
+  lane_width: int = 32
+  score_group_width: int|None = None
+  warps: int|None = None
+  reduce_structure: str = "staged"
+  dot_pair_width: int = 2
+  target: str|None = None
 
   def validate(self) -> None:
     if min(self.Hq, self.Hd, self.Hkv, self.MAXC) <= 0: raise ValueError("Hq, Hd, Hkv and MAXC must be positive")
     if self.staging != "KV_BOTH": raise ValueError(f"production flash decode requires staging='KV_BOTH', got {self.staging!r}")
-    if self.token_block != 16: raise ValueError(f"token_block must currently be 16, got {self.token_block}")
+    if self.token_block < 1: raise ValueError(f"token_block must be >= 1, got {self.token_block}")
     if self.Hq % self.Hkv != 0: raise ValueError(f"Hq must be divisible by Hkv, got Hq={self.Hq} Hkv={self.Hkv}")
     if self.query_group_size is not None and not 1 <= self.query_group_size <= self.Hq // self.Hkv:
       raise ValueError(f"query_group_size must be in 1..{self.Hq // self.Hkv}, got {self.query_group_size}")
     if self.stage_width not in (1, 2, 4, 8): raise ValueError(f"stage_width must be one of 1,2,4,8, got {self.stage_width}")
+    if self.lane_width < 1 or self.lane_width & (self.lane_width - 1):
+      raise ValueError(f"lane_width must be a positive power of two, got {self.lane_width}")
+    if self.score_group_width is not None and self.score_group_width != self.lane_width:
+      raise ValueError(f"score_group_width must equal lane_width={self.lane_width} or be None, "
+                       f"got {self.score_group_width}")
+    qg = self.query_group_size if self.query_group_size is not None else self.Hq // self.Hkv
+    if self.warps is not None and self.warps < qg:
+      raise ValueError(f"warps must be >= query_group_size={qg} when set, got {self.warps}")
+    if self.dot_pair_width < 1: raise ValueError(f"dot_pair_width must be >= 1, got {self.dot_pair_width}")
+    if self.Hd % (self.lane_width * self.dot_pair_width) != 0:
+      raise ValueError(f"Hd must be divisible by lane_width*dot_pair_width={self.lane_width * self.dot_pair_width}, "
+                       f"got Hd={self.Hd}")
+    if self.reduce_structure not in {"staged", "inline"}:
+      raise ValueError(f"reduce_structure must be one of 'staged','inline', got {self.reduce_structure!r}")
     self.geometry.validate()
 
   @property
@@ -586,19 +698,30 @@ class FlashDecodeTileSpec:
 
   @property
   def kernel_name(self) -> str:
-    suffix = "" if self.query_group_size is None else f"_qg{self.query_group_size}"
-    return f"flash_block_tiled_xlane_score_pv_tile_whole_cache_{self.Hq}_{self.Hd}{suffix}"
+    G = self.Hq // self.Hkv
+    QG = G if self.query_group_size is None else self.query_group_size
+    suffix = "" if QG == G else f"_qg{QG}"
+    geom_suffix = _tile_geometry_suffix(Hq=self.Hq, split_count=self.split_count, lane_width=self.lane_width,
+                                        token_block=self.token_block, stage_width=self.stage_width,
+                                        reduce_structure=self.reduce_structure, dot_pair_width=self.dot_pair_width,
+                                        score_group_width=self.score_group_width, warps=self.warps,
+                                        query_group_size=self.query_group_size, QG=QG)
+    return f"flash_block_tiled_xlane_score_pv_tile_whole_cache_{self.Hq}_{self.Hd}{suffix}{geom_suffix}"
 
   def emit(self, Tc:UOp):
     self.validate()
     return flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(
       self.Hd, self.Hq, self.Hkv, self.MAXC, self.geometry.aligned_per_split_length(Tc), self.split_count, Tc,
       staging=self.staging, quant=self.quant, rope=self.rope, query_group_size=self.query_group_size,
-      stage_width=self.stage_width)
+      stage_width=self.stage_width, token_block=self.token_block, lane_width=self.lane_width,
+      score_group_width=self.score_group_width, warps=self.warps, reduce_structure=self.reduce_structure,
+      dot_pair_width=self.dot_pair_width)
 
   def to_json(self) -> dict[str, Any]:
     return {key:getattr(self, key) for key in ("Hq", "Hd", "Hkv", "MAXC", "split_count", "staging", "quant", "rope",
-                                                 "token_block", "query_group_size", "stage_width", "target")}
+                                                 "token_block", "query_group_size", "stage_width", "lane_width",
+                                                 "score_group_width", "warps", "reduce_structure",
+                                                 "dot_pair_width", "target")}
 
 
 @dataclass(frozen=True)
@@ -608,16 +731,30 @@ class FlashCombineSpec:
   split_count: int
   stride: int|None = None
   output_fp16: bool = False
+  lane_width: int = 32
 
   def validate(self) -> None:
     if min(self.Hd, self.Hq, self.split_count) <= 0: raise ValueError("Hd, Hq and split_count must be positive")
     if self.stride is not None and self.stride < 1: raise ValueError(f"stride must be >= 1, got {self.stride}")
+    if self.lane_width < 1 or self.lane_width & (self.lane_width - 1):
+      raise ValueError(f"lane_width must be a positive power of two, got {self.lane_width}")
+    if self.Hd % self.lane_width != 0:
+      raise ValueError(f"Hd must be divisible by lane_width={self.lane_width}, got Hd={self.Hd}")
 
   @property
   def kernel_name(self) -> str:
     prefix = "flash_fused_gmax_combine_f16" if self.output_fp16 else "flash_fused_gmax_combine"
-    return f"{prefix}_{self.Hq}_{self.Hd}"
-  def emit(self): self.validate(); return flash_fused_gmax_combine_kernel(self.Hd, self.Hq, self.split_count, self.stride, self.output_fp16)
+    route_split = {32: 48, 40: 32}.get(self.Hq)
+    suffix = ""
+    if self.split_count != route_split: suffix += f"_s{self.split_count}"
+    if self.lane_width != 32: suffix += f"_lw{self.lane_width}"
+    return f"{prefix}_{self.Hq}_{self.Hd}{suffix}"
+  def emit(self):
+    self.validate()
+    return flash_fused_gmax_combine_kernel(self.Hd, self.Hq, self.split_count, self.stride, self.output_fp16,
+                                           self.lane_width)
+  def to_json(self) -> dict[str, Any]:
+    return {key:getattr(self, key) for key in ("Hd", "Hq", "split_count", "stride", "output_fp16", "lane_width")}
 
 
 @dataclass(frozen=True)
@@ -641,11 +778,20 @@ class FlashDecodeAttentionSpec:
 def describe_flash_decode_attention(Hq:int, Hd:int, Hkv:int, MAXC:int, S:int, *, staging:str="KV_BOTH",
                                     fused_combine:bool=True, quant:bool=False, rope:bool=False,
                                     combine_stride:int|None=None, query_group_size:int|None=None,
-                                    stage_width:int=1, combine_fp16:bool=False) -> FlashDecodeAttentionSpec:
+                                    stage_width:int=1, token_block:int=16, lane_width:int=32,
+                                    score_group_width:int|None=None, warps:int|None=None,
+                                    reduce_structure:str="staged", dot_pair_width:int=2,
+                                    combine_lane_width:int|None=None,
+                                    combine_fp16:bool=False) -> FlashDecodeAttentionSpec:
+  tile = FlashDecodeTileSpec(Hq, Hd, Hkv, MAXC, S, staging, quant, rope, query_group_size=query_group_size,
+                             stage_width=stage_width, token_block=token_block, lane_width=lane_width,
+                             score_group_width=score_group_width, warps=warps, reduce_structure=reduce_structure,
+                             dot_pair_width=dot_pair_width)
   return FlashDecodeAttentionSpec(
-    FlashDecodeTileSpec(Hq, Hd, Hkv, MAXC, S, staging, quant, rope, query_group_size=query_group_size,
-                        stage_width=stage_width),
-    FlashCombineSpec(Hd, Hq, S, combine_stride, output_fp16=combine_fp16) if fused_combine else None)
+    tile,
+    FlashCombineSpec(Hd, Hq, S, combine_stride, output_fp16=combine_fp16,
+                     lane_width=tile.lane_width if combine_lane_width is None else combine_lane_width)
+    if fused_combine else None)
 
 
 def emit_flash_decode_tile(spec:FlashDecodeAttentionSpec, Tc:UOp): return spec.emit_tile(Tc)
@@ -778,6 +924,8 @@ FLASH_DECODE_G5 = FlashDecodeRouteConfig("attention_decode.flash_live_split_g5",
 def flash_decode_live_split_block_tile(q:Tensor, cache_kv:Tensor, Tc:UOp, Hd:int, Hq:int, Hkv:int, MAXC:int, S:int,
                                        staging:str="KV_BOTH", fused_combine:bool=True, kv_scale:Tensor|None=None,
                                        freqs:Tensor|None=None, query_group_size:int|None=None, stage_width:int=1,
+                                       token_block:int=16, lane_width:int=32, score_group_width:int|None=None,
+                                       warps:int|None=None, reduce_structure:str="staged", dot_pair_width:int=2,
                                        combine_fp16:bool=False) -> Tensor:
   """Execute the selected live-split flash decode and return ``[Hq, Hd]``."""
   if not fused_combine: raise ValueError("fused_combine=False is no longer supported for decode live-split routes")
@@ -788,13 +936,25 @@ def flash_decode_live_split_block_tile(q:Tensor, cache_kv:Tensor, Tc:UOp, Hd:int
   # dispatch, which is exactly where this runs -- unable to open a device at all (see
   # decode_routes._flash_decode_capability_and_target_for_device's docstring).
   route = next((row for row in (FLASH_DECODE_G4, FLASH_DECODE_G5) if row.shape_ok(1, Hq, Hkv, Hd)), None)
-  if route is None or (route.split_size, route.query_group_size, route.stage_width, route.staging) != \
-      (S, query_group_size, stage_width, staging):
+  # stage_width/reduce_structure/dot_pair_width are searchable geometry overrides (P3); the promoted-route
+  # identity is the split/query-group/staging triple, not the staging coalesce width.
+  admitted = route is not None and (route.split_size, route.query_group_size, route.staging) == \
+      (S, query_group_size, staging)
+  # Env-gated coarse-split research override (FLASH_DECODE_COARSE_SPLIT): admit the env-selected
+  # split for the G4 d512 route in addition to the promoted one. Unset env leaves `admitted` exactly
+  # as before, so the promoted route stays byte-identical to today.
+  coarse_split = flash_decode_coarse_split_override()
+  if not admitted and route is not None and route.query_heads == FLASH_DECODE_G4.query_heads and coarse_split:
+    admitted = (coarse_split, route.query_group_size, route.staging) == (S, query_group_size, staging)
+  if not admitted:
     raise ValueError("flash decode geometry is not an admitted promoted route")
   quant, rope = kv_scale is not None, freqs is not None
   inputs = (q.reshape(Hq * Hd), cache_kv) + ((kv_scale,) if quant else ()) + ((freqs,) if rope else ())
   spec = describe_flash_decode_attention(Hq, Hd, Hkv, MAXC, S, staging=staging, quant=quant, rope=rope,
                                          query_group_size=query_group_size, stage_width=stage_width,
+                                         token_block=token_block, lane_width=lane_width,
+                                         score_group_width=score_group_width, warps=warps,
+                                         reduce_structure=reduce_structure, dot_pair_width=dot_pair_width,
                                          combine_fp16=combine_fp16)
   tile_program = KernelProgram(route.route_id, f"{route.candidate_id}.tile",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED, spec.emit_tile(Tc),

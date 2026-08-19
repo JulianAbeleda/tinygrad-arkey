@@ -20,8 +20,9 @@ NV_MULTI_QUEUE_PROGRAMS = frozenset(x for x in os.environ.get("HCQ_NV_MULTI_QUEU
 # below when enabled): a node goes to the least-loaded compute GPFIFO unless
 # it directly depends on the primary queue's current tail, in which case it
 # stays primary (no concurrency is lost and the cross-queue handoff is
-# avoided). Off by default; the name-pinned path remains byte-identical.
-HCQ_NV_READY_PLACEMENT = getenv("HCQ_NV_READY_PLACEMENT", 0)
+# avoided). On by default on NV after the overlap-substrate A/B; the
+# name-pinned path remains available for byte-identical bring-up runs.
+HCQ_NV_READY_PLACEMENT = getenv("HCQ_NV_READY_PLACEMENT", 1)
 
 def _parse_nv_multi_queue_indices(spec:str) -> frozenset[int]:
   """Parse an opt-in exact graph-index selector (for example ``11-17,37``).

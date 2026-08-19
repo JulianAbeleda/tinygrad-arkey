@@ -1,4 +1,4 @@
-import io, json, sys
+import io, json, subprocess, sys
 import pytest
 from types import SimpleNamespace
 
@@ -187,3 +187,152 @@ def test_prepared_cache_builds_once_and_reuses_same_object(monkeypatch):
   payload=_metal_payload(identity); adapter=provider.MetalAdapter(); builds=[]; fake=object()
   monkeypatch.setattr(provider.MetalAdapter, "_build_prepared", lambda _self, _payload: (builds.append(1) or fake))
   assert adapter._prepared(payload) is fake and adapter._prepared(payload) is fake and len(builds)==1
+
+
+# CUDA/NV flash adapter ------------------------------------------------------
+def _flash_descriptor(**tile_kwargs):
+  from extra.llm_research import flash_candidate_schema as schema
+  defaults = {"Hq": 8, "Hd": 128, "Hkv": 8, "MAXC": 4096, "split_count": 1}
+  defaults.update(tile_kwargs)
+  # Build without validating so invalid-geometry fixtures reach the adapter.
+  return {"schema_version": schema.SCHEMA_VERSION, "tile": schema.tile_fields(**defaults), "combine": None}
+
+
+def _nv_facts(**overrides):
+  facts = {"subgroup_size": 32, "max_threads_per_threadgroup": 1024,
+           "max_threadgroup_memory_bytes": 227 * 1024, "shuffle_supported": True, "fdot2_supported": True}
+  facts.update(overrides)
+  return facts
+
+
+def _flash_payload(descriptor=None, facts=None, **tile_kwargs):
+  from extra.llm_research import flash_candidate_schema as schema
+  descriptor = descriptor if descriptor is not None else _flash_descriptor(**tile_kwargs)
+  envelope = schema.candidate_envelope(descriptor)
+  return {"candidate": envelope, "candidate_hash": envelope["candidate_hash"],
+          "target_facts": facts if facts is not None else _nv_facts()}
+
+
+def test_cuda_describe_supplies_caller_supplied_target_facts():
+  facts = _nv_facts(architecture="sm_120", backend="CUDA")
+  out = provider.process(request("describe", {"target_facts": facts}), adapter=provider.CudaAdapter())
+  assert out["status"] == "ok"
+  target = out["result"]["target"]
+  assert target["subgroup_size"] == 32
+  assert target["max_threads_per_threadgroup"] == 1024
+  assert target["max_threadgroup_memory_bytes"] == 227 * 1024
+  assert target["shuffle_supported"] is True and target["fdot2_supported"] is True
+  assert target["architecture"] == "sm_120"
+  assert out["result"]["backend_live"] is False
+
+
+def test_cuda_describe_and_admit_fail_closed_without_facts():
+  adapter = provider.CudaAdapter()
+  blocked = provider.process(request("describe"), adapter=adapter)
+  assert blocked["error"]["code"] == "hardware_absent"
+  payload = _flash_payload()
+  payload.pop("target_facts")
+  admitted = provider.process(request("admit", payload), adapter=adapter)
+  assert admitted["error"]["code"] == "hardware_absent"
+  malformed = provider.process(request("admit", _flash_payload(facts={"subgroup_size": "wide"})), adapter=adapter)
+  assert malformed["error"]["code"] == "admission_rejected"
+
+
+def test_cuda_admit_validates_geometry_against_supplied_facts():
+  adapter = provider.CudaAdapter()
+  out = provider.process(request("admit", _flash_payload()), adapter=adapter)
+  assert out["status"] == "ok"
+  geometry = out["result"]["flash_geometry"]
+  assert geometry["lane_width"] == 32 and geometry["threads"] == 32
+  assert geometry["local_memory_bytes"] == 2 * 16 * 128 * 2
+  assert len(out["result"]["candidate_hash"]) == 64
+  assert out["result"]["plan_hash"] == out["result"]["candidate_hash"]
+
+
+def test_cuda_admit_rejects_over_threads_over_local_memory_and_cross_subgroup_lanes():
+  adapter = provider.CudaAdapter()
+  over_threads = provider.process(request("admit", _flash_payload(warps=64)), adapter=adapter)
+  assert over_threads["error"]["code"] == "resource_limit"
+  over_local = provider.process(request("admit", _flash_payload(token_block=512)), adapter=adapter)
+  assert over_local["error"]["code"] == "resource_limit"
+  cross_subgroup = provider.process(request("admit", _flash_payload(lane_width=64)), adapter=adapter)
+  assert cross_subgroup["error"]["code"] == "resource_limit"
+
+
+def test_cuda_admit_rejects_bad_geometry_and_hash_mismatch_with_classified_codes():
+  adapter = provider.CudaAdapter()
+  invalid = provider.process(request("admit", _flash_payload(reduce_structure="recursive")), adapter=adapter)
+  assert invalid["error"]["code"] == "admission_rejected"
+  payload = _flash_payload()
+  payload["candidate_hash"] = "f" * 64
+  forged = provider.process(request("admit", payload), adapter=adapter)
+  assert forged["error"]["code"] == "identity_mismatch"
+  wrong_schema = provider.process(request("admit", {"candidate": {"schema_version": "other.v1"},
+                                                    "candidate_hash": "f" * 64, "target_facts": _nv_facts()}), adapter=adapter)
+  assert wrong_schema["error"]["code"] == "admission_rejected"
+
+
+@pytest.mark.parametrize("action", ["compile", "check", "measure"])
+def test_cuda_compile_check_measure_fail_closed_without_live_backend(action):
+  adapter = provider.CudaAdapter()
+  out = provider.process(request(action, _flash_payload()), adapter=adapter)
+  assert out["status"] == "blocked"
+  assert out["error"]["code"] == "backend_unavailable"
+  assert out["error"]["details"]["action"] == action
+
+
+def test_cuda_canned_success_path_is_deterministic_and_needs_no_gpu():
+  adapter = provider.CudaAdapter(live_backend=True)
+  payload = _flash_payload()
+  first = provider.process(request("compile", payload), adapter=adapter)
+  second = provider.process(request("compile", payload), adapter=adapter)
+  assert first["status"] == "ok" and second["status"] == "ok"
+  assert first["result"]["compiler"] == "canned_fake_backend"
+  assert first["result"]["source_sha256"] == second["result"]["source_sha256"]
+  assert first["result"]["launch"] == second["result"]["launch"]
+  measured = provider.process(request("measure", payload), adapter=adapter)
+  again = provider.process(request("measure", payload), adapter=adapter)
+  assert measured["result"]["samples_ns"] == again["result"]["samples_ns"]
+  assert measured["result"]["timing_mode"] == "canned_fake_backend_deterministic_no_gpu"
+  assert measured["result"]["work_bytes"]["status"] == "estimated"
+  checked = provider.process(request("check", payload), adapter=adapter)
+  assert checked["status"] == "ok" and checked["result"]["correct"] is True
+  assert checked["result"]["oracle"].startswith("canned flash reference")
+
+
+def test_cuda_adapter_accepts_injected_backend_hooks_and_preserves_envelope_errors():
+  def fake_compile(_payload, descriptor):
+    return {"compiler": "fake_cubin", "source_sha256": descriptor["tile"]["Hd"] * "d"}
+  def fake_measure(_payload, descriptor):
+    return {"timing_mode": "fake", "samples_ns": [11, 22, 33], "summary_ns": {"min": 11},
+            "work_bytes": {"status": "exact", "provenance": "fake hook", "operations": 1, "bytes": 2}}
+  adapter = provider.CudaAdapter(live_backend=True, compile_fn=fake_compile, measure_fn=fake_measure)
+  compiled = provider.process(request("compile", _flash_payload()), adapter=adapter)
+  assert compiled["result"]["compiler"] == "fake_cubin"
+  assert compiled["result"]["source_sha256"] == "d" * 128
+  measured = provider.process(request("measure", _flash_payload()), adapter=adapter)
+  assert measured["result"]["timing_mode"] == "fake" and measured["result"]["samples_ns"] == [11, 22, 33]
+
+  class Exploding:
+    def compile(self, _payload):
+      raise RuntimeError("fake compiler crashed")
+  crashed = provider.process(request("compile", _flash_payload()), adapter=Exploding())
+  assert crashed["error"] == {"code": "provider_failure",
+                              "message": "provider adapter raised an unexpected exception",
+                              "retryable": False, "details": {"exception_type": "RuntimeError"}}
+
+
+def test_cuda_worker_registers_backend_via_main_without_any_gpu():
+  import pathlib
+  worker = pathlib.Path(provider.__file__)
+  facts = _nv_facts()
+  lines = json.dumps(request("describe", {"target_facts": facts})) + "\n" + \
+          json.dumps(request("compile", _flash_payload())) + "\n"
+  response = subprocess.run([sys.executable, str(worker), "--backend", "CUDA"], input=lines, text=True,
+                            stdout=subprocess.PIPE, check=True).stdout
+  rows = [json.loads(line) for line in response.splitlines()]
+  assert rows[0]["status"] == "ok"
+  assert rows[0]["result"]["target"]["subgroup_size"] == 32
+  assert rows[0]["result"]["target"]["fdot2_supported"] is True
+  assert rows[1]["status"] == "blocked"
+  assert rows[1]["error"]["code"] == "backend_unavailable"

@@ -1,0 +1,1238 @@
+{
+  "anchor": {
+    "calibration": {
+      "chosen_k": 16384,
+      "chosen_median_us": 212.25,
+      "rows": [
+        {
+          "k": 16384,
+          "median_us": 212.25
+        },
+        {
+          "k": 20480,
+          "median_us": 218.0
+        },
+        {
+          "k": 24576,
+          "median_us": 234.25
+        },
+        {
+          "k": 32768,
+          "median_us": 223.0
+        }
+      ],
+      "target_us": 100.0
+    },
+    "class": "fp16 GEMV x[1,4096]@W[4096,k]",
+    "k": 16384,
+    "target_us": 100.0
+  },
+  "bar_us": 50.0,
+  "branch": "nvidia-bringup-20260731",
+  "conclusion": "NO-GO",
+  "correction": "Auto-verdict PROMOTE is a false positive. The microbench only re-measures the ALREADY-LANDED two-GPIFO overlap substrate: a ~3 us support kernel can be ~1-5 us hidden behind a 100 us anchor with a small wait tax. Extrapolating that 1-5 us per-pair noise across the 596-kernel census produces the 449-670 us figure, but the per-pair numbers are non-monotonic (target 1.0 -> 5.0 us hidden, target 2.0 -> 1.25 us) and exceed the support duration, i.e. noise-dominated. The honest new-wall ceiling above the landed 2-queue baseline remains the queue-count-sweep bound (+26.4 us beyond 2 queues) plus the already-realized ~140 us reuse-lane overlap. Mechanism works, but it is not a NEW needle-moving lever.",
+  "date": "2026-08-19",
+  "device": "RTX 5090 sm_120 DEV=NV",
+  "git_commit": "d14e6964e",
+  "method": "HCQ timestamp-signal wall; HCQ_NUM_COMPUTE=2 bootstrap GPFIFOs; arms interleaved per rep; medians over 6 reps; flock held",
+  "predicted_wall_delta_us": {
+    "base_no_flash": {
+      "clamped": 449.014,
+      "unclamped": 449.014
+    },
+    "with_flash": {
+      "clamped": 514.0,
+      "unclamped": 670.054
+    }
+  },
+  "rationale": "per-pair hidden/tax measured at a 100us anchor; scaled over the 596-kernel decode census with linear interpolation on support duration and clamped to the 2-queue list-schedule saving bound",
+  "scaling": {
+    "interp_points": {
+      "hidden_us": [
+        [
+          1.0,
+          5.0
+        ],
+        [
+          2.0,
+          1.25
+        ],
+        [
+          4.0,
+          3.375
+        ]
+      ],
+      "total_tax_us": [
+        [
+          1.0,
+          -2.0
+        ],
+        [
+          2.0,
+          1.75
+        ],
+        [
+          4.0,
+          -0.375
+        ]
+      ]
+    },
+    "scenarios": [
+      {
+        "include_flash": false,
+        "per_kernel": [
+          {
+            "count": 37,
+            "hidden_us": 3.237,
+            "median_us": 3.87,
+            "name": "r_16_256",
+            "net_us": 128.529,
+            "tax_us": -0.237
+          },
+          {
+            "count": 38,
+            "hidden_us": 1.569,
+            "median_us": 2.3,
+            "name": "E_32_32_4",
+            "net_us": 5.225,
+            "tax_us": 1.431
+          },
+          {
+            "count": 36,
+            "hidden_us": 1.526,
+            "median_us": 2.26,
+            "name": "E_16_32_4_2",
+            "net_us": 1.89,
+            "tax_us": 1.474
+          },
+          {
+            "count": 36,
+            "hidden_us": 1.438,
+            "median_us": 1.95,
+            "name": "E_8_8_16_2",
+            "net_us": -4.5,
+            "tax_us": 1.562
+          },
+          {
+            "count": 19,
+            "hidden_us": 3.375,
+            "median_us": 7.84,
+            "name": "reduce_output_rmsnorm_1_4096",
+            "net_us": 71.25,
+            "tax_us": -0.375
+          },
+          {
+            "count": 36,
+            "hidden_us": 2.387,
+            "median_us": 3.07,
+            "name": "reduce_output_rmsnorm_32_128",
+            "net_us": 63.855,
+            "tax_us": 0.613
+          },
+          {
+            "count": 36,
+            "hidden_us": 2.461,
+            "median_us": 3.14,
+            "name": "reduce_output_rmsnorm_8_128",
+            "net_us": 69.21,
+            "tax_us": 0.539
+          },
+          {
+            "count": 26,
+            "hidden_us": 2.45,
+            "median_us": 1.68,
+            "name": "r_8_32_4_4",
+            "net_us": 49.4,
+            "tax_us": 0.55
+          },
+          {
+            "count": 17,
+            "hidden_us": 2.375,
+            "median_us": 1.7,
+            "name": "r_32_32_4_4",
+            "net_us": 29.75,
+            "tax_us": 0.625
+          },
+          {
+            "count": 17,
+            "hidden_us": 1.739,
+            "median_us": 2.46,
+            "name": "rmsnorm_q8_1_llama_provider_4096",
+            "net_us": 8.117,
+            "tax_us": 1.261
+          },
+          {
+            "count": 1,
+            "hidden_us": 3.375,
+            "median_us": 39.14,
+            "name": "r_32_4_1187",
+            "net_us": 3.75,
+            "tax_us": -0.375
+          },
+          {
+            "count": 1,
+            "hidden_us": 3.375,
+            "median_us": 11.1,
+            "name": "r_128_16_8_1187",
+            "net_us": 3.75,
+            "tax_us": -0.375
+          },
+          {
+            "count": 2,
+            "hidden_us": 3.003,
+            "median_us": 3.65,
+            "name": "E_1187_32_4",
+            "net_us": 6.012,
+            "tax_us": -0.003
+          },
+          {
+            "count": 1,
+            "hidden_us": 2.525,
+            "median_us": 3.2,
+            "name": "E_16_4_2_8_16_2_4_4",
+            "net_us": 2.05,
+            "tax_us": 0.475
+          },
+          {
+            "count": 1,
+            "hidden_us": 2.375,
+            "median_us": 1.7,
+            "name": "E_2",
+            "net_us": 1.75,
+            "tax_us": 0.625
+          },
+          {
+            "count": 1,
+            "hidden_us": 2.375,
+            "median_us": 1.7,
+            "name": "r_16_8",
+            "net_us": 1.75,
+            "tax_us": 0.625
+          },
+          {
+            "count": 1,
+            "hidden_us": 3.237,
+            "median_us": 1.47,
+            "name": "E",
+            "net_us": 3.475,
+            "tax_us": -0.238
+          },
+          {
+            "count": 1,
+            "hidden_us": 3.375,
+            "median_us": 4.8,
+            "name": "r_32_32_4_32_4",
+            "net_us": 3.75,
+            "tax_us": -0.375
+          }
+        ],
+        "predicted_wall_delta_us_clamped": 449.014,
+        "predicted_wall_delta_us_unclamped": 449.014,
+        "shadow_pairs": 307
+      },
+      {
+        "include_flash": true,
+        "per_kernel": [
+          {
+            "count": 37,
+            "hidden_us": 3.237,
+            "median_us": 3.87,
+            "name": "r_16_256",
+            "net_us": 128.529,
+            "tax_us": -0.237
+          },
+          {
+            "count": 38,
+            "hidden_us": 1.569,
+            "median_us": 2.3,
+            "name": "E_32_32_4",
+            "net_us": 5.225,
+            "tax_us": 1.431
+          },
+          {
+            "count": 36,
+            "hidden_us": 1.526,
+            "median_us": 2.26,
+            "name": "E_16_32_4_2",
+            "net_us": 1.89,
+            "tax_us": 1.474
+          },
+          {
+            "count": 36,
+            "hidden_us": 1.438,
+            "median_us": 1.95,
+            "name": "E_8_8_16_2",
+            "net_us": -4.5,
+            "tax_us": 1.562
+          },
+          {
+            "count": 19,
+            "hidden_us": 3.375,
+            "median_us": 7.84,
+            "name": "reduce_output_rmsnorm_1_4096",
+            "net_us": 71.25,
+            "tax_us": -0.375
+          },
+          {
+            "count": 36,
+            "hidden_us": 2.387,
+            "median_us": 3.07,
+            "name": "reduce_output_rmsnorm_32_128",
+            "net_us": 63.855,
+            "tax_us": 0.613
+          },
+          {
+            "count": 36,
+            "hidden_us": 2.461,
+            "median_us": 3.14,
+            "name": "reduce_output_rmsnorm_8_128",
+            "net_us": 69.21,
+            "tax_us": 0.539
+          },
+          {
+            "count": 26,
+            "hidden_us": 2.45,
+            "median_us": 1.68,
+            "name": "r_8_32_4_4",
+            "net_us": 49.4,
+            "tax_us": 0.55
+          },
+          {
+            "count": 17,
+            "hidden_us": 2.375,
+            "median_us": 1.7,
+            "name": "r_32_32_4_4",
+            "net_us": 29.75,
+            "tax_us": 0.625
+          },
+          {
+            "count": 17,
+            "hidden_us": 1.739,
+            "median_us": 2.46,
+            "name": "rmsnorm_q8_1_llama_provider_4096",
+            "net_us": 8.117,
+            "tax_us": 1.261
+          },
+          {
+            "count": 1,
+            "hidden_us": 3.375,
+            "median_us": 39.14,
+            "name": "r_32_4_1187",
+            "net_us": 3.75,
+            "tax_us": -0.375
+          },
+          {
+            "count": 1,
+            "hidden_us": 3.375,
+            "median_us": 11.1,
+            "name": "r_128_16_8_1187",
+            "net_us": 3.75,
+            "tax_us": -0.375
+          },
+          {
+            "count": 2,
+            "hidden_us": 3.003,
+            "median_us": 3.65,
+            "name": "E_1187_32_4",
+            "net_us": 6.012,
+            "tax_us": -0.003
+          },
+          {
+            "count": 1,
+            "hidden_us": 2.525,
+            "median_us": 3.2,
+            "name": "E_16_4_2_8_16_2_4_4",
+            "net_us": 2.05,
+            "tax_us": 0.475
+          },
+          {
+            "count": 1,
+            "hidden_us": 2.375,
+            "median_us": 1.7,
+            "name": "E_2",
+            "net_us": 1.75,
+            "tax_us": 0.625
+          },
+          {
+            "count": 1,
+            "hidden_us": 2.375,
+            "median_us": 1.7,
+            "name": "r_16_8",
+            "net_us": 1.75,
+            "tax_us": 0.625
+          },
+          {
+            "count": 1,
+            "hidden_us": 3.237,
+            "median_us": 1.47,
+            "name": "E",
+            "net_us": 3.475,
+            "tax_us": -0.238
+          },
+          {
+            "count": 1,
+            "hidden_us": 3.375,
+            "median_us": 4.8,
+            "name": "r_32_32_4_32_4",
+            "net_us": 3.75,
+            "tax_us": -0.375
+          },
+          {
+            "count": 36,
+            "hidden_us": 3.375,
+            "median_us": 6.48,
+            "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+            "net_us": 135.0,
+            "tax_us": -0.375
+          },
+          {
+            "count": 36,
+            "hidden_us": 2.695,
+            "median_us": 3.36,
+            "name": "flash_fused_gmax_combine_f16_32_128",
+            "net_us": 86.04,
+            "tax_us": 0.305
+          }
+        ],
+        "predicted_wall_delta_us_clamped": 514.0,
+        "predicted_wall_delta_us_unclamped": 670.054,
+        "shadow_pairs": 379
+      }
+    ],
+    "schedule_2q_saving_us_head_scaled": 514.0,
+    "schedule_2q_saving_us_old_dag": 624.49
+  },
+  "schema": "tinygrad.nv_anchor_shadow_probe.v1",
+  "support_calibration": {
+    "candidates": [
+      {
+        "dim": 4096,
+        "kind": "rmsnorm_reduce",
+        "median_us": 43.0,
+        "rows": 1
+      },
+      {
+        "dim": 4096,
+        "kind": "rmsnorm_reduce",
+        "median_us": 5.5,
+        "rows": 4
+      },
+      {
+        "dim": 4096,
+        "kind": "rmsnorm_reduce",
+        "median_us": 29.25,
+        "rows": 16
+      },
+      {
+        "dim": 4096,
+        "kind": "rmsnorm_reduce",
+        "median_us": 29.75,
+        "rows": 64
+      },
+      {
+        "dim": 1024,
+        "kind": "rmsnorm_reduce",
+        "median_us": 10.0,
+        "rows": 16
+      },
+      {
+        "dim": 1024,
+        "kind": "rmsnorm_reduce",
+        "median_us": 8.75,
+        "rows": 64
+      },
+      {
+        "kind": "elementwise",
+        "median_us": 3.75,
+        "n": 262144
+      },
+      {
+        "kind": "elementwise",
+        "median_us": 5.0,
+        "n": 524288
+      },
+      {
+        "kind": "elementwise",
+        "median_us": 8.0,
+        "n": 1048576
+      },
+      {
+        "kind": "elementwise",
+        "median_us": 12.5,
+        "n": 2097152
+      },
+      {
+        "kind": "elementwise",
+        "median_us": 24.25,
+        "n": 4194304
+      }
+    ],
+    "chosen": {
+      "1.0": {
+        "kind": "elementwise",
+        "median_us": 3.75,
+        "n": 262144,
+        "target_us": 1.0
+      },
+      "2.0": {
+        "kind": "elementwise",
+        "median_us": 3.75,
+        "n": 262144,
+        "target_us": 2.0
+      },
+      "4.0": {
+        "kind": "elementwise",
+        "median_us": 3.75,
+        "n": 262144,
+        "target_us": 4.0
+      }
+    }
+  },
+  "targets": {
+    "1.0": {
+      "arms": {
+        "chain_serial": {
+          "kernel_durations_us_median": [
+            208.25,
+            3.0,
+            208.0
+          ],
+          "reps": [
+            {
+              "durations_us": [
+                207.75,
+                3.0,
+                208.75
+              ],
+              "wall_us": 422.75
+            },
+            {
+              "durations_us": [
+                208.5,
+                3.0,
+                207.75
+              ],
+              "wall_us": 422.25
+            },
+            {
+              "durations_us": [
+                209.0,
+                3.0,
+                208.25
+              ],
+              "wall_us": 425.75
+            },
+            {
+              "durations_us": [
+                206.75,
+                3.25,
+                207.0
+              ],
+              "wall_us": 421.0
+            },
+            {
+              "durations_us": [
+                209.0,
+                3.0,
+                207.25
+              ],
+              "wall_us": 421.75
+            },
+            {
+              "durations_us": [
+                208.0,
+                3.0,
+                208.5
+              ],
+              "wall_us": 422.25
+            }
+          ],
+          "wall_us_median": 422.25
+        },
+        "chain_shadow": {
+          "kernel_durations_us_median": [
+            207.625,
+            207.875,
+            3.0
+          ],
+          "reps": [
+            {
+              "durations_us": [
+                210.75,
+                207.75,
+                3.0
+              ],
+              "wall_us": 420.25
+            },
+            {
+              "durations_us": [
+                206.0,
+                207.5,
+                3.0
+              ],
+              "wall_us": 414.5
+            },
+            {
+              "durations_us": [
+                207.75,
+                208.25,
+                3.0
+              ],
+              "wall_us": 417.0
+            },
+            {
+              "durations_us": [
+                206.0,
+                209.25,
+                3.0
+              ],
+              "wall_us": 416.75
+            },
+            {
+              "durations_us": [
+                207.5,
+                205.25,
+                3.0
+              ],
+              "wall_us": 417.5
+            },
+            {
+              "durations_us": [
+                208.0,
+                208.0,
+                3.0
+              ],
+              "wall_us": 417.5
+            }
+          ],
+          "wall_us_median": 417.25
+        },
+        "pair_serial": {
+          "kernel_durations_us_median": [
+            207.0,
+            3.0
+          ],
+          "reps": [
+            {
+              "durations_us": [
+                244.25,
+                3.25
+              ],
+              "wall_us": 249.5
+            },
+            {
+              "durations_us": [
+                205.5,
+                3.25
+              ],
+              "wall_us": 211.0
+            },
+            {
+              "durations_us": [
+                207.75,
+                3.0
+              ],
+              "wall_us": 213.0
+            },
+            {
+              "durations_us": [
+                206.25,
+                3.0
+              ],
+              "wall_us": 211.25
+            },
+            {
+              "durations_us": [
+                208.5,
+                3.0
+              ],
+              "wall_us": 212.75
+            },
+            {
+              "durations_us": [
+                205.75,
+                3.0
+              ],
+              "wall_us": 210.5
+            }
+          ],
+          "wall_us_median": 212.0
+        },
+        "pair_shadow": {
+          "kernel_durations_us_median": [
+            206.5,
+            3.0
+          ],
+          "reps": [
+            {
+              "durations_us": [
+                206.25,
+                3.75
+              ],
+              "wall_us": 212.0
+            },
+            {
+              "durations_us": [
+                206.0,
+                3.0
+              ],
+              "wall_us": 212.25
+            },
+            {
+              "durations_us": [
+                206.25,
+                3.0
+              ],
+              "wall_us": 211.75
+            },
+            {
+              "durations_us": [
+                206.75,
+                3.0
+              ],
+              "wall_us": 212.5
+            },
+            {
+              "durations_us": [
+                208.0,
+                3.0
+              ],
+              "wall_us": 212.25
+            },
+            {
+              "durations_us": [
+                206.75,
+                3.0
+              ],
+              "wall_us": 211.5
+            }
+          ],
+          "wall_us_median": 212.125
+        }
+      },
+      "chosen_support": {
+        "kind": "elementwise",
+        "median_us": 3.75,
+        "n": 262144,
+        "target_us": 1.0
+      },
+      "contention_tax_anchor_us": -0.125,
+      "contention_tax_support_us": 0.0,
+      "dP2_serial_us": 208.0,
+      "dP2_shadow_us": 207.875,
+      "dP_serial_us": 208.25,
+      "dP_shadow_us": 207.625,
+      "dS_serial_us": 3.0,
+      "dS_shadow_us": 3.0,
+      "hidden_fraction_of_support": 1.6666666666666667,
+      "measured_support_us": 3.0,
+      "realized_hidden_us": 5.0,
+      "total_tax_us": -2.0,
+      "wait_tax_pair_us": 0.125,
+      "wall_chain_serial_us": 422.25,
+      "wall_chain_shadow_us": 417.25,
+      "wall_pair_serial_us": 212.0,
+      "wall_pair_shadow_us": 212.125
+    },
+    "2.0": {
+      "arms": {
+        "chain_serial": {
+          "kernel_durations_us_median": [
+            206.875,
+            3.0,
+            207.5
+          ],
+          "reps": [
+            {
+              "durations_us": [
+                208.75,
+                3.0,
+                207.75
+              ],
+              "wall_us": 421.75
+            },
+            {
+              "durations_us": [
+                205.75,
+                3.0,
+                207.0
+              ],
+              "wall_us": 419.0
+            },
+            {
+              "durations_us": [
+                206.5,
+                3.0,
+                207.5
+              ],
+              "wall_us": 419.25
+            },
+            {
+              "durations_us": [
+                208.25,
+                3.25,
+                207.25
+              ],
+              "wall_us": 423.25
+            },
+            {
+              "durations_us": [
+                206.25,
+                2.75,
+                207.75
+              ],
+              "wall_us": 419.25
+            },
+            {
+              "durations_us": [
+                207.25,
+                3.0,
+                207.5
+              ],
+              "wall_us": 421.5
+            }
+          ],
+          "wall_us_median": 420.375
+        },
+        "chain_shadow": {
+          "kernel_durations_us_median": [
+            208.0,
+            206.625,
+            3.0
+          ],
+          "reps": [
+            {
+              "durations_us": [
+                207.0,
+                205.75,
+                3.0
+              ],
+              "wall_us": 417.75
+            },
+            {
+              "durations_us": [
+                208.0,
+                206.25,
+                3.25
+              ],
+              "wall_us": 419.0
+            },
+            {
+              "durations_us": [
+                208.25,
+                205.75,
+                3.0
+              ],
+              "wall_us": 418.5
+            },
+            {
+              "durations_us": [
+                208.0,
+                207.0,
+                3.0
+              ],
+              "wall_us": 419.75
+            },
+            {
+              "durations_us": [
+                208.75,
+                207.25,
+                3.0
+              ],
+              "wall_us": 420.25
+            },
+            {
+              "durations_us": [
+                206.75,
+                207.75,
+                3.0
+              ],
+              "wall_us": 419.25
+            }
+          ],
+          "wall_us_median": 419.125
+        },
+        "pair_serial": {
+          "kernel_durations_us_median": [
+            207.75,
+            3.0
+          ],
+          "reps": [
+            {
+              "durations_us": [
+                210.5,
+                3.5
+              ],
+              "wall_us": 215.0
+            },
+            {
+              "durations_us": [
+                208.25,
+                3.0
+              ],
+              "wall_us": 213.25
+            },
+            {
+              "durations_us": [
+                207.5,
+                3.0
+              ],
+              "wall_us": 213.5
+            },
+            {
+              "durations_us": [
+                207.0,
+                3.0
+              ],
+              "wall_us": 212.5
+            },
+            {
+              "durations_us": [
+                208.0,
+                3.0
+              ],
+              "wall_us": 212.75
+            },
+            {
+              "durations_us": [
+                204.75,
+                3.0
+              ],
+              "wall_us": 209.25
+            }
+          ],
+          "wall_us_median": 213.0
+        },
+        "pair_shadow": {
+          "kernel_durations_us_median": [
+            206.625,
+            3.0
+          ],
+          "reps": [
+            {
+              "durations_us": [
+                206.25,
+                3.0
+              ],
+              "wall_us": 211.5
+            },
+            {
+              "durations_us": [
+                207.75,
+                3.0
+              ],
+              "wall_us": 212.0
+            },
+            {
+              "durations_us": [
+                205.75,
+                3.0
+              ],
+              "wall_us": 210.75
+            },
+            {
+              "durations_us": [
+                206.75,
+                3.0
+              ],
+              "wall_us": 211.5
+            },
+            {
+              "durations_us": [
+                206.5,
+                3.25
+              ],
+              "wall_us": 211.75
+            },
+            {
+              "durations_us": [
+                207.5,
+                3.0
+              ],
+              "wall_us": 212.25
+            }
+          ],
+          "wall_us_median": 211.625
+        }
+      },
+      "chosen_support": {
+        "kind": "elementwise",
+        "median_us": 3.75,
+        "n": 262144,
+        "target_us": 2.0
+      },
+      "contention_tax_anchor_us": -0.875,
+      "contention_tax_support_us": 0.0,
+      "dP2_serial_us": 207.5,
+      "dP2_shadow_us": 206.625,
+      "dP_serial_us": 206.875,
+      "dP_shadow_us": 208.0,
+      "dS_serial_us": 3.0,
+      "dS_shadow_us": 3.0,
+      "hidden_fraction_of_support": 0.4166666666666667,
+      "measured_support_us": 3.0,
+      "realized_hidden_us": 1.25,
+      "total_tax_us": 1.75,
+      "wait_tax_pair_us": -1.375,
+      "wall_chain_serial_us": 420.375,
+      "wall_chain_shadow_us": 419.125,
+      "wall_pair_serial_us": 213.0,
+      "wall_pair_shadow_us": 211.625
+    },
+    "4.0": {
+      "arms": {
+        "chain_serial": {
+          "kernel_durations_us_median": [
+            207.75,
+            3.0,
+            207.5
+          ],
+          "reps": [
+            {
+              "durations_us": [
+                206.25,
+                2.75,
+                209.0
+              ],
+              "wall_us": 421.5
+            },
+            {
+              "durations_us": [
+                208.0,
+                3.0,
+                207.75
+              ],
+              "wall_us": 422.25
+            },
+            {
+              "durations_us": [
+                208.0,
+                3.25,
+                207.5
+              ],
+              "wall_us": 423.5
+            },
+            {
+              "durations_us": [
+                207.5,
+                3.0,
+                207.5
+              ],
+              "wall_us": 421.5
+            },
+            {
+              "durations_us": [
+                208.0,
+                2.75,
+                207.25
+              ],
+              "wall_us": 421.75
+            },
+            {
+              "durations_us": [
+                206.75,
+                3.25,
+                206.75
+              ],
+              "wall_us": 420.25
+            }
+          ],
+          "wall_us_median": 421.625
+        },
+        "chain_shadow": {
+          "kernel_durations_us_median": [
+            207.5,
+            206.75,
+            3.0
+          ],
+          "reps": [
+            {
+              "durations_us": [
+                208.0,
+                206.75,
+                3.0
+              ],
+              "wall_us": 415.75
+            },
+            {
+              "durations_us": [
+                207.0,
+                206.75,
+                3.25
+              ],
+              "wall_us": 419.0
+            },
+            {
+              "durations_us": [
+                209.75,
+                208.75,
+                3.25
+              ],
+              "wall_us": 419.75
+            },
+            {
+              "durations_us": [
+                205.75,
+                208.75,
+                3.0
+              ],
+              "wall_us": 416.0
+            },
+            {
+              "durations_us": [
+                209.0,
+                206.0,
+                3.0
+              ],
+              "wall_us": 419.5
+            },
+            {
+              "durations_us": [
+                206.0,
+                206.25,
+                3.0
+              ],
+              "wall_us": 417.5
+            }
+          ],
+          "wall_us_median": 418.25
+        },
+        "pair_serial": {
+          "kernel_durations_us_median": [
+            206.625,
+            3.0
+          ],
+          "reps": [
+            {
+              "durations_us": [
+                211.25,
+                3.25
+              ],
+              "wall_us": 217.0
+            },
+            {
+              "durations_us": [
+                205.25,
+                2.75
+              ],
+              "wall_us": 210.5
+            },
+            {
+              "durations_us": [
+                207.25,
+                3.0
+              ],
+              "wall_us": 212.5
+            },
+            {
+              "durations_us": [
+                206.0,
+                3.0
+              ],
+              "wall_us": 210.75
+            },
+            {
+              "durations_us": [
+                207.25,
+                3.0
+              ],
+              "wall_us": 213.0
+            },
+            {
+              "durations_us": [
+                206.0,
+                3.0
+              ],
+              "wall_us": 211.0
+            }
+          ],
+          "wall_us_median": 211.75
+        },
+        "pair_shadow": {
+          "kernel_durations_us_median": [
+            206.625,
+            3.0
+          ],
+          "reps": [
+            {
+              "durations_us": [
+                207.25,
+                3.5
+              ],
+              "wall_us": 212.5
+            },
+            {
+              "durations_us": [
+                208.5,
+                3.0
+              ],
+              "wall_us": 214.5
+            },
+            {
+              "durations_us": [
+                205.5,
+                3.25
+              ],
+              "wall_us": 210.25
+            },
+            {
+              "durations_us": [
+                206.25,
+                3.0
+              ],
+              "wall_us": 212.25
+            },
+            {
+              "durations_us": [
+                205.25,
+                3.0
+              ],
+              "wall_us": 209.75
+            },
+            {
+              "durations_us": [
+                207.0,
+                3.0
+              ],
+              "wall_us": 212.5
+            }
+          ],
+          "wall_us_median": 212.375
+        }
+      },
+      "chosen_support": {
+        "kind": "elementwise",
+        "median_us": 3.75,
+        "n": 262144,
+        "target_us": 4.0
+      },
+      "contention_tax_anchor_us": -0.75,
+      "contention_tax_support_us": 0.0,
+      "dP2_serial_us": 207.5,
+      "dP2_shadow_us": 206.75,
+      "dP_serial_us": 207.75,
+      "dP_shadow_us": 207.5,
+      "dS_serial_us": 3.0,
+      "dS_shadow_us": 3.0,
+      "hidden_fraction_of_support": 1.125,
+      "measured_support_us": 3.0,
+      "realized_hidden_us": 3.375,
+      "total_tax_us": -0.375,
+      "wait_tax_pair_us": 0.625,
+      "wall_chain_serial_us": 421.625,
+      "wall_chain_shadow_us": 418.25,
+      "wall_pair_serial_us": 211.75,
+      "wall_pair_shadow_us": 212.375
+    }
+  },
+  "verification": {
+    "anchor_hash": "3864be84a1a277996d17e806b07ff1fb1aa622dc2763f2563b12fa908ee81199",
+    "anchor_hash_match": true,
+    "anchor_max_err": 0.0,
+    "anchor_ref_hash": "3864be84a1a277996d17e806b07ff1fb1aa622dc2763f2563b12fa908ee81199",
+    "support_hash": "db08bf8444270671fd7cafcc2e4b116c05d5ade0acf70e1f8bceec4023088a15",
+    "support_hash_match": true,
+    "support_max_err": 1.1920838005607948e-07,
+    "support_ref_hash": "db08bf8444270671fd7cafcc2e4b116c05d5ade0acf70e1f8bceec4023088a15"
+  }
+}

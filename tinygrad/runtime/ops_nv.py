@@ -678,11 +678,11 @@ class NVDevice(HCQCompiled[NVSignal]):
     # deliberately construction-only: the native multi-channel probe needs to
     # ask whether channels which exist *before* the first group schedule behave
     # like CUDA's bootstrap group.  They are read before the group schedule and
-    # have no effect unless explicitly set by that isolated probe.
+    # are construction-only.  Two is enabled by default on native NV; set
+    # HCQ_NUM_COMPUTE=1 to restore the old single-channel construction.
     # Two is the only native concurrent construction qualified so far.  Fail
-    # closed above it instead of silently creating a topology we have not
-    # measured.  The default remains one and preserves the old construction.
-    boot_compute_channels = min(2, max(1, getenv("HCQ_NUM_COMPUTE", 1)))
+    # closed above it instead of silently creating a topology we have not measured.
+    boot_compute_channels = min(2, max(1, getenv("HCQ_NUM_COMPUTE", 2)))
     self.compute_gpfifos = [self._new_gpu_fifo(self.gpfifo_area, ctxshare, self.channel_group,
                                                 offset=0x100000*i, entries=0x10000, compute=True,
                                                 debugger=(i == 0), flags=(0x10 if i % 2 else 0))

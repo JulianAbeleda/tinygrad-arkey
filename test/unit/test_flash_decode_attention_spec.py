@@ -23,8 +23,8 @@ def test_flash_decode_attention_descriptor_defaults():
   assert spec.tile.rope is False
   assert isinstance(spec.combine, FlashCombineSpec)
   assert spec.emitted_kernel_names == (
-    "flash_block_tiled_xlane_score_pv_tile_whole_cache_40_128",
-    "flash_fused_gmax_combine_40_128")
+    "flash_block_tiled_xlane_score_pv_tile_whole_cache_40_128_s48",
+    "flash_fused_gmax_combine_40_128_s48")
 
 
 def test_tile_emit_kernel_name_matches_flash_kernels():
@@ -47,4 +47,20 @@ def test_combine_emit_kernel_name_matches_flash_kernels():
   pout = UOp.placeholder((40 * 48 * 130,), dtypes.float32, 1)
   kernel = emit_flash_decode_combine(spec)
   uops = kernel(out, pout)
-  assert uops.arg.name == "flash_fused_gmax_combine_40_128"
+  assert uops.arg.name == "flash_fused_gmax_combine_40_128_s48"
+
+
+def test_geometry_fields_are_descriptor_owned_through_the_alias():
+  """P1 (nv-search-genericization-flash-shape-scope-20260818.md section 4): the descriptor owns the
+  geometry fields; a non-default geometry gets a deterministic kernel-name suffix."""
+  spec = FlashDecodeTileSpec(Hq=32, Hd=128, Hkv=8, MAXC=8192, split_count=48, lane_width=16,
+                             token_block=32, stage_width=2, reduce_structure="inline",
+                             score_group_width=16, warps=8, dot_pair_width=1)
+  spec.validate()
+  assert spec.kernel_name == "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128_lw16_tk32_sw2_ri_dpw1_sgw16_w8"
+  assert spec.to_json()["lane_width"] == 16
+  assert spec.to_json()["reduce_structure"] == "inline"
+  assert spec.to_json()["target"] is None
+  combine = FlashCombineSpec(Hd=128, Hq=32, split_count=48, lane_width=16)
+  combine.validate()
+  assert combine.kernel_name == "flash_fused_gmax_combine_32_128_lw16"

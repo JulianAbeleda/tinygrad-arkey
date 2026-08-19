@@ -1,0 +1,85 @@
+{
+  "bitwise_breakdown": {
+    "dpw4": {
+      "bitwise": false,
+      "max_abs": 0.0008810367435216904
+    },
+    "inline_dpw2": {
+      "bitwise": true,
+      "max_abs": 0.0
+    },
+    "lw16": {
+      "bitwise": false,
+      "max_abs": 5.587935447692871e-09
+    },
+    "sw2": {
+      "bitwise": true,
+      "max_abs": 0.0
+    },
+    "sw4": {
+      "bitwise": true,
+      "max_abs": 0.0
+    },
+    "sw4_ri_dpw4": {
+      "bitwise": false,
+      "max_abs": 0.0008810367435216904
+    },
+    "tk8": {
+      "bitwise": true,
+      "max_abs": 0.0
+    }
+  },
+  "candidate": {
+    "first_token": 271,
+    "samples": [
+      178.1931608415127,
+      178.01356829127303,
+      175.191638522783,
+      178.040870024719
+    ],
+    "tok_s_median": 178.027219157996,
+    "token_sha": "bf1dc829d3a682cf60ad3b60d3f94e7b5653bca46d1a8dc979652aa1fb792aa6",
+    "wall_us": 5617.1185773143925
+  },
+  "candidate_geometry": {
+    "dot_pair_width": 2,
+    "reduce_structure": "staged",
+    "stage_width": 2
+  },
+  "candidate_tile_name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128_sw2",
+  "conclusion": "bitwise-identical stage_width=2 candidate improves wall by ~39us, below the +50us bar; the larger isolated-body winners (dot_pair_width=4/inline variants) change fp reduction order and break exact token identity, so they are not promotable.",
+  "control_a": {
+    "first_token": 271,
+    "samples": [
+      176.70868641510876,
+      176.80568443179962,
+      173.4889232891476,
+      176.8615014728602
+    ],
+    "tok_s_median": 176.7571854234542,
+    "token_sha": "bf1dc829d3a682cf60ad3b60d3f94e7b5653bca46d1a8dc979652aa1fb792aa6",
+    "wall_us": 5657.478634344154
+  },
+  "control_b": {
+    "first_token": 271,
+    "samples": [
+      176.87789931947512,
+      176.73093651897125,
+      173.37852534288643,
+      176.94188612083522
+    ],
+    "tok_s_median": 176.80441791922317,
+    "token_sha": "bf1dc829d3a682cf60ad3b60d3f94e7b5653bca46d1a8dc979652aa1fb792aa6",
+    "wall_us": 5655.967264669094
+  },
+  "control_tile_name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+  "date": "2026-08-19",
+  "git_commit": "d14e6964ee211f286b867616abe1daa9a137db5b",
+  "gpu": "RTX 5090 sm_120",
+  "method": "fresh process per arm, reverse control/candidate/control, settled continuous windows (first window dropped as capture), DEV=CUDA",
+  "promoted": false,
+  "promotion_bar_us": 50.0,
+  "schema": "tinygrad.nv_flash_geometry_ab.evidence.v1",
+  "token_sha_identical": true,
+  "wall_delta_us_vs_control_midpoint": 39.604
+}

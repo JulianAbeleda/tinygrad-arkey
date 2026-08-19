@@ -45,17 +45,22 @@ SCHEMA = "tinygrad.flash_variant_fingerprint.v1"
 
 # (Hq, Hkv, Hd) per model, matching ATTN_SHAPES in lowering_baseline.py.
 MODELS = {"8B": (32, 8, 128), "14B": (40, 8, 128)}
-STAGINGS = ("KV_BOTH", "K_ONLY")
+# Production only admits KV_BOTH: the canonical spec's validate() rejects K_ONLY, and the builder's K_ONLY
+# path is research-only, reached through the legacy extra/llm_research spec (which this gate does not
+# fingerprint). Certify the matrix production can actually emit.
+STAGINGS = ("KV_BOTH",)
 MAXC, S, TC = 4096, 4, 1024
 
-# The env-gated arms of the builder's variant matrix. "" is the default arm. Each entry becomes one subprocess.
-# DECODE_STAGE_COALESCE is deliberately absent: it changes the staging LaneMap and is covered by its own
-# microgate; adding it here would triple the arm count for a branch this gate was not built to certify. Say so
-# rather than implying the matrix is complete.
-ARMS: tuple[tuple[str, dict[str, str]], ...] = (
-  ("default", {}),
-  ("split_score", {"DECODE_ATTN_TILE_SPLIT_SCORE": "1"}),
-  ("inline_reduce", {"DECODE_ATTN_BLOCK_TILE_INLINE_REDUCE": "1"}),
+# The arms of the builder's variant matrix. "" is the default arm. Each entry becomes one subprocess.
+# Each arm is (name, env vars, describe kwargs): env vars keep the legacy-builder alias gates declared
+# covered (extra/llm_research/flash_kernels.py still reads DECODE_ATTN_BLOCK_TILE_INLINE_REDUCE), while the
+# describe kwargs drive the production builder through the descriptor-owned field (reduce_structure), which
+# is the only path production consults now. DECODE_STAGE_COALESCE is deliberately absent: it changes the
+# staging LaneMap and is covered by its own microgate; adding it here would triple the arm count for a
+# branch this gate was not built to certify. Say so rather than implying the matrix is complete.
+ARMS: tuple[tuple[str, dict[str, str], dict[str, Any]], ...] = (
+  ("default", {}, {}),
+  ("inline_reduce", {"DECODE_ATTN_BLOCK_TILE_INLINE_REDUCE": "1"}, {"reduce_structure": "inline"}),
 )
 
 _CHILD = """
@@ -67,7 +72,7 @@ from tinygrad.llm.flash_decode_attention import describe_flash_decode_attention
 out = {{}}
 for model, (Hq, Hkv, Hd) in {models!r}.items():
   for staging in {stagings!r}:
-    spec = describe_flash_decode_attention(Hq=Hq, Hd=Hd, Hkv=Hkv, MAXC={maxc}, S={s}, staging=staging)
+    spec = describe_flash_decode_attention(Hq=Hq, Hd=Hd, Hkv=Hkv, MAXC={maxc}, S={s}, staging=staging{describe_kwargs})
     fn = spec.emit_tile(UOp.const(dtypes.int32, {tc}))
     W2 = Hd + 2
     pout = UOp.placeholder((Hq * {s} * W2,), dtypes.float32, 0)
@@ -83,8 +88,10 @@ print(json.dumps(out))
 _ENV_ALLOWLIST = ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "LD_LIBRARY_PATH", "PYTHONHASHSEED")
 
 
-def _run_arm(arm_env: dict[str, str]) -> dict[str, str]:
-  src = _CHILD.format(root=str(ROOT), models=MODELS, stagings=STAGINGS, maxc=MAXC, s=S, tc=TC)
+def _run_arm(arm_env: dict[str, str], describe_kwargs: dict[str, Any]) -> dict[str, str]:
+  kwargs_src = "".join(f", {key}={value!r}" for key, value in sorted(describe_kwargs.items()))
+  src = _CHILD.format(root=str(ROOT), models=MODELS, stagings=STAGINGS, maxc=MAXC, s=S, tc=TC,
+                      describe_kwargs=kwargs_src)
   env = {k: os.environ[k] for k in _ENV_ALLOWLIST if k in os.environ}
   env["PYTHONPATH"] = str(ROOT)
   env.update(arm_env)
@@ -95,7 +102,7 @@ def _run_arm(arm_env: dict[str, str]) -> dict[str, str]:
 
 
 def compute() -> dict[str, dict[str, str]]:
-  return {name: _run_arm(env) for name, env in ARMS}
+  return {name: _run_arm(env, kwargs) for name, env, kwargs in ARMS}
 
 
 def build_artifact(argv: list[str]) -> dict[str, Any]:

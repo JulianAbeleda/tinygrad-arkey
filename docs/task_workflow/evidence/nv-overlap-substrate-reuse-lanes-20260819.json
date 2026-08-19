@@ -1,0 +1,77 @@
+{
+  "schema": "tinygrad.nv_overlap_substrate_reuse_lanes.evidence.v1",
+  "date": "2026-08-19",
+  "branch": "nvidia-bringup-20260731",
+  "git_commit": "d14e6964ee211f286b867616abe1daa9a137db5b",
+  "gpu": "RTX 5090 sm_120",
+  "model": "Qwen3-8B-Q4_K_M.gguf",
+  "backend": "DEV=NV (production native route)",
+  "method": "fresh process per arm under flock -w 600 /tmp/gpu-bench.lock; depth 512; 3 settle tokens; 24 measured tokens; 4 reps; token stream sha256 is the correctness gate",
+  "token_sha": "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b",
+  "token_sha_identical_across_arms": true,
+  "arms": [
+    {
+      "name": "serial_control",
+      "no_memory_planner": 0,
+      "compute_channels": 1,
+      "ready_placement": 0,
+      "reuse_lanes": true,
+      "tok_s_median": 205.9867330838798,
+      "wall_us_per_token": 4854.8,
+      "tok_s_samples": [205.3541598196497, 206.84384182079478, 206.61930634810992, 205.1496098735414],
+      "token_sha_reps": [
+        "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b",
+        "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b",
+        "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b",
+        "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b"
+      ]
+    },
+    {
+      "name": "planner_off_ceiling",
+      "no_memory_planner": 1,
+      "compute_channels": 2,
+      "ready_placement": 1,
+      "reuse_lanes": false,
+      "tok_s_median": 211.5007198356268,
+      "wall_us_per_token": 4728.1,
+      "tok_s_samples": [211.3758724432291, 211.73509864947493, 211.62556722802447, 209.1239339015805],
+      "token_sha_reps": [
+        "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b",
+        "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b",
+        "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b",
+        "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b"
+      ]
+    },
+    {
+      "name": "landed_reuse_lanes",
+      "no_memory_planner": 0,
+      "compute_channels": 2,
+      "ready_placement": 1,
+      "reuse_lanes": true,
+      "tok_s_median": 212.12374234078112,
+      "wall_us_per_token": 4714.2,
+      "tok_s_samples": [210.54258068307726, 212.37046968482048, 212.56796330898064, 211.87701499674176],
+      "token_sha_reps": [
+        "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b",
+        "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b",
+        "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b",
+        "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b"
+      ]
+    }
+  ],
+  "decode_graph_queue_census": {
+    "graph_index": 5,
+    "serial_control": {"calls": 32, "queue_counts": {"0": 32, "1": 0}},
+    "planner_off_ceiling": {"calls": 32, "queue_counts": {"0": 21, "1": 11}},
+    "landed_reuse_lanes": {"calls": 32, "queue_counts": {"0": 21, "1": 11}},
+    "landed_matches_planner_off_exactly": true,
+    "moved_to_queue_1": [
+      {"graph_idx": 11, "name": "reduce_output_rmsnorm_8_128"},
+      {"graph_idx": 13, "name": "E_8_8_16_2"},
+      {"graph_idx": 28, "name": "reduce_output_rmsnorm_8_128"},
+      {"graph_idx": 30, "name": "E_8_8_16_2"}
+    ]
+  },
+  "conclusion": "The landed reuse-lane planner coloring reproduces the NO_MEMORY_PLANNER overlap ceiling on the production two-GPFIFO route. Its decode-graph queue census is byte-for-byte the planner-off census (21 primary / 11 auxiliary), while serial control stays 32/0, and all three arms produce the identical token sha. The mechanism is the reuse-lane arena coloring in tinygrad/schedule/memory.py removing the false WAR/WAW edge that kept reduce_output_rmsnorm_8_128 and E_8_8_16_2 on the primary queue.",
+  "caveat": "Four tok/s samples per arm; the point estimate is +6.1 tok/s versus serial control (about 140 us/token), with the earlier session showing +3.5 tok/s (~81 us). Direction and mechanism are stable, but the absolute magnitude is session-sensitive."
+}

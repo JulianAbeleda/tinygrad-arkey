@@ -200,7 +200,7 @@ def test_bootstrap_runtime_builds_all_children_before_the_only_group_schedule():
   assert group < ctxshare < computes < dma < schedule
   assert src.count("NVA06C_CTRL_CMD_GPFIFO_SCHEDULE") == 1
   assert 'flags=(0x10 if i % 2 else 0)' in src
-  assert 'boot_compute_channels = min(2, max(1, getenv("HCQ_NUM_COMPUTE", 1)))' in src
+  assert 'boot_compute_channels = min(2, max(1, getenv("HCQ_NUM_COMPUTE", 2)))' in src
 
   new_fifo = inspect.getsource(ops_nv.NVDevice._new_gpu_fifo)
   assert "if channel_group == self.nvdevice:" in new_fifo

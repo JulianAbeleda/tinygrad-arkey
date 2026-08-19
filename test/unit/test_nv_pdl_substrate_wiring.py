@@ -46,6 +46,26 @@ def test_renderer_producer_gets_launch_at_end(monkeypatch):
   assert body[0] == "  out[i] = v;"
 
 
+def test_renderer_producer_trigger_start_emits_launch_at_top(monkeypatch):
+  monkeypatch.setenv("NV_PDL_CONSUMER_PROGRAMS", "")
+  monkeypatch.setenv("NV_PDL_PRODUCER_PROGRAMS", "prefix:q4k_g3_lanemap")
+  monkeypatch.setenv("NV_PDL_TRIGGER_POSITION", "start")
+  body = _nv_pdl_body("q4k_g3_lanemap_gemv_1024_4096", ["  out[i] = v;"])
+  assert body[0] == '  asm volatile("griddepcontrol.launch_dependents;");'
+  assert body[-1] == "  out[i] = v;"
+
+
+def test_renderer_trigger_unset_matches_end_byte_for_byte(monkeypatch):
+  monkeypatch.setenv("NV_PDL_CONSUMER_PROGRAMS", "")
+  monkeypatch.setenv("NV_PDL_PRODUCER_PROGRAMS", "prefix:q4k_g3_lanemap")
+  monkeypatch.delenv("NV_PDL_TRIGGER_POSITION", raising=False)
+  default = _nv_pdl_body("q4k_g3_lanemap_gemv_1024_4096", ["  float x = 1.0;", "  out[i] = x;"])
+  monkeypatch.setenv("NV_PDL_TRIGGER_POSITION", "end")
+  explicit_end = _nv_pdl_body("q4k_g3_lanemap_gemv_1024_4096", ["  float x = 1.0;", "  out[i] = x;"])
+  assert default == explicit_end == ["  float x = 1.0;", "  out[i] = x;",
+                                     '  asm volatile("griddepcontrol.launch_dependents;");']
+
+
 def test_renderer_default_is_byte_identical(monkeypatch):
   monkeypatch.setenv("NV_PDL_CONSUMER_PROGRAMS", "")
   monkeypatch.setenv("NV_PDL_PRODUCER_PROGRAMS", "")

@@ -8,7 +8,8 @@ from tinygrad.llm.decode_kernels import (Q6K_POS_EXTENT, decode_kv_rope_store_ke
   emit_q6k_gemv_kernel, emit_q6k_vocab_scalar_reduce_kernel, q4k_g3_lanemap_gemv_kernel,
   q6k_coop_row_tile_for_target, q6k_spec_for_role, q6k_vocab_scalar_reduce_eligible)
 from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeCapability, FlashDecodeRouteConfig,
-  flash_decode_capability_from_renderer, flash_decode_live_split_block_tile, flash_decode_target_promoted)
+  flash_decode_capability_from_renderer, flash_decode_coarse_split_override, flash_decode_live_split_block_tile,
+  flash_decode_target_promoted)
 from tinygrad.llm.kernel_program import (ActivationViewRequest, DeclaredTypedOutput, KernelProgram,
                                          KernelProgramProvenance, OutputSpec, ResidualViewRequest, TypedLayout,
                                          TypedViewRequest, execute_promoted_program, execute_research_program)
@@ -565,7 +566,6 @@ def _flash_decode_capability_and_target_for_device(device:str) -> tuple[FlashDec
 class _FlashDecodeCandidate:
   """Compatibility selection facade over the executor-owned route definition."""
   route: FlashDecodeRouteConfig
-  target: str = "AMD"
 
   @property
   def candidate_id(self): return self.route.candidate_id
@@ -606,7 +606,11 @@ class _FlashDecodeCandidate:
       print(f"FLASH_DECODE_ADMISSION_DEBUG candidate={self.candidate_id} device={device} "
             f"admitted={admission.admitted} reason={admission.reason}")
     if not admission.admitted: return None
-    return _FlashDecodeBinding(self.candidate_id, self.route_id, self.target, B, Hq, Hkv, Hd,
+    # The binding's target label is derived from the resolved (backend, arch) tuple, never a hardcoded
+    # vendor literal: the renderer's target device is "AMD" for HIP and "CUDA" for NV, so AMD keeps its
+    # historical label while an NV backend gets its own. `or "AMD"` only guards an unlabeled device string.
+    backend_label = target[0] or "AMD"
+    return _FlashDecodeBinding(self.candidate_id, self.route_id, backend_label, B, Hq, Hkv, Hd,
                                self.split_size, self.query_group_size, self.staging, self.stage_width,
                                admission.combine_fusion_admitted)
 
@@ -618,7 +622,7 @@ FLASH_DECODE_G5_CANDIDATE = _FlashDecodeCandidate(FLASH_DECODE_G5)
 def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp, T:int|UOp, B:int,
                                  Hq:int, Hkv:int, Hd:int, max_context:int, kv_scale:Tensor|None=None,
                                  freqs:Tensor|None=None, ring_full:bool=False,
-                                 combine_fp16:bool|None=None) -> Tensor:
+                                 combine_fp16:bool|None=None, tile_geometry:dict|None=None) -> Tensor:
   MAXC = max_context
   vsp = UOp.variable("start_pos", 0, MAXC - 1)  # unbound twin of start_pos (for kernel ranges)
   # full-ring (ctx>=N): the ring buffer is full and start_pos is the wrapped WRITE slot, so the live read length is the
@@ -646,7 +650,19 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
   # fp16 combine variant (flash_fused_gmax_combine_f16_*) so its in-kernel RNE store absorbs the
   # E_32_32_4_0a5eb0ac attention cast. Without the lease, `binding.combine_fusion` is the policy
   # answer (False) and the legacy fp32 combine renders byte-identical.
+  geom = dict(tile_geometry or {})
+  # Env-gated coarse-split research override (FLASH_DECODE_COARSE_SPLIT): run the production G4
+  # decode route with the env-selected split count instead of the promoted S=48. Unset env keeps
+  # binding.split_size, so production behavior is byte-identical to today; the admission guard in
+  # flash_decode_live_split_block_tile accepts the env value only when it is set.
+  split_size = binding.split_size
+  if (coarse_split := flash_decode_coarse_split_override()) and binding.Hq == FLASH_DECODE_G4.query_heads:
+    split_size = coarse_split
   return flash_decode_live_split_block_tile(q.reshape(binding.Hq, binding.Hd), assigned_kv, _tc,
-    binding.Hd, binding.Hq, binding.Hkv, MAXC, binding.split_size, staging=binding.staging,
+    binding.Hd, binding.Hq, binding.Hkv, MAXC, split_size, staging=binding.staging,
     fused_combine=True, kv_scale=kv_scale, freqs=freqs, query_group_size=binding.query_group_size,
-    stage_width=binding.stage_width, combine_fp16=bool(binding.combine_fusion or combine_fp16))
+    stage_width=geom.get("stage_width", binding.stage_width),
+    token_block=geom.get("token_block", 16), lane_width=geom.get("lane_width", 32),
+    score_group_width=geom.get("score_group_width"), warps=geom.get("warps"),
+    reduce_structure=geom.get("reduce_structure", "staged"), dot_pair_width=geom.get("dot_pair_width", 2),
+    combine_fp16=bool(binding.combine_fusion or combine_fp16))

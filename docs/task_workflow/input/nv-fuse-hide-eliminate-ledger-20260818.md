@@ -22,7 +22,7 @@ ceilings (perfect 1:1 recovery), not forecasts; wall-to-tok/s is sublinear.
 | L4 | FUSE | other residual launches | ~13 | open (small), body-free folds measured FLAT | ~13 | ~207 |
 | F5 | FUSE | `E_*`/`r_*` norm/residual plumbing | 466.1 | FLAT - fusion of these maps ~0 wall (08-15 composition review) | ~0 | ~206 |
 | L2 | FUSE | vocab argmax tail (`E_1187_32_4`, `r_32_4_1187`, `r_128_16_8_1187`, `r_16_8`) | 57.5 | **NO-GO** - hidden mass, ~10% wall transfer (A/B -1.55 us); real ceiling 2-3 us | 2-3 | ~206 |
-| L5 | HIDE | overlap / shadow mass | llama 1125.1, tg 0 | size-class WALL - all-tiny shadows -4% to -37%; zero 8-25 us kernels left after fusion | ~18-33 transferable | ~208-209 |
+| L5 | HIDE | overlap / shadow mass | llama 1125.1, tg 0 | **LANDED 2026-08-19** reuse-lane arena coloring + native two-GPFIFO readiness placement reproduce the NO_MEMORY_PLANNER ceiling (decode census 21/11 matches planner-off; +6.1 tok/s this session, token sha identical) | ~140 us this session (~81 us in the prior session) | ~212 |
 | L7 | HIDE | PDL programmatic launch | - | **substrate PROVEN** (+65 us device probe, checksum pass; decode A/B wall-neutral 205.99 vs 205.55) | per-edge final wave only | ~206 |
 | L6 | HIDE | host gap (submit-ahead gate, closed-default) | 100.6 | open - last clean wall lever; gate `_decode_submit_ahead_eligible` exists | +100.6 | **~213** |
 | L3 | ELIMINATE | flash score shape (32-lane/5-stage/16-serial/48-split vs llama 8-lane/3-stage/128-parallel/2-split) | 39.4 | structural - template is hand-picked constants, search cannot reach llama's shape | 39.4 at 1:1 | ~208 |
@@ -34,10 +34,12 @@ ceilings (perfect 1:1 recovery), not forecasts; wall-to-tok/s is sublinear.
   (L8) already beat llama on work by 496 us; L1 landed with ~0 left; L2 is
   hidden mass so it was never worth 59.5 us of wall (the old ledger row was
   wrong on that); F5 maps ~0 wall.
-- **HIDE is closed at HEAD.** Substrate proven (L7) but wall-neutral, and the
-  shape bar (8-25 us, >=4 same-class kernels, one join) has no production mass
-  left to fill it. L6 is the only HIDE-adjacent row with real headroom, and it
-  is host-side (submit-ahead), not kernel co-scheduling.
+- **HIDE overlap is now landed, but it is only the modest slice the current
+  two-GPFIFO substrate can expose.** L5's reuse-lane fix moves
+  `reduce_output_rmsnorm_8_128` and `E_8_8_16_2` to the auxiliary queue and
+  matches the planner-off ceiling, worth ~6 tok/s (~140 us) this session, not
+  llama's full ~946 us shadow. L6 remains the only other HIDE row with real
+  headroom and is host-side.
 - **ELIMINATE is where the remaining upside lives**, and both rows are
   codegen/search work: a searchable flash shape (L3) and a cheaper packed-key
   reduce (E1). Neither is a buildable kernel-level fusion today.
@@ -137,3 +139,130 @@ ahead of llama; only the score (239.02 us) is the open structural row.
 Resolved non-search rows land ~213 tok/s (L6 host gap at 1:1). 230 needs
 ~470 us cut; the only rows that can supply it are the ELIMINATE/codegen rows,
 which is the post-230 direction (search finds shapes hand-picking cannot).
+
+## 2026-08-19 P3 update: measured flash geometry search
+
+The L3 (ELIMINATE flash score shape) row now has a measured, correctness-cleared
+winner population. Evidence: `docs/task_workflow/evidence/nv-flash-geometry-search-20260819.json`.
+
+- Population: 432 legal candidates over `lane_width x token_block x stage_width x
+  reduce_structure x dot_pair_width x split_count`; `score_group_width` and
+  `warps` are pinned because sub-lane groups and `warps < query_group_size` are
+  numerically invalid in the current emitter (now rejected by validation).
+- Correctness: all 432 candidates match the production fused tile+combine output
+  on CUDA (`matches_control=True`), max observed abs diff `1.49e-08`.
+- Authoritative body (`nsys --trace=cuda`, 400 back-to-back launches + 20 warmup,
+  control bracketed): control `4.289 us` in-session (pinned 4.19 us), and 11
+  candidates beat the pinned 4.19 us. Best tile bodies:
+  `flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128_sw4_ri_dpw4` and
+  `..._sw4_dpw4` at `3.968 us` median (420 instances each).
+- Isolated llama matched body was pinned at `4.10 us` (grid.y=2), so the best
+  candidates clear the llama isolated body as well.
+- Promotion wiring landed but **not booked**: `_flash_decode_tile_geometry_lease`
+  now threads the searched tile geometry through
+  `flash_decode_attention_route -> flash_decode_live_split_block_tile`, and
+  `extra/llm_research/decode/nv_flash_geometry_ab.py` is the control/candidate/
+  control wall bracket.
+- P4 wall bracket (2026-08-19, fresh process per arm, reverse
+  control/candidate/control): the bitwise-identical `stage_width=2` candidate
+  preserves the exact token stream but improves wall by only `~39.6 us/token`,
+  below the standing `+50 us` promotion bar. The larger isolated-body winners
+  (`dot_pair_width=4` / inline variants) change fp reduction order
+  (`max_abs 8.8e-04`) and therefore fail the exact-token gate, so they are not
+  promotable. Evidence: `docs/task_workflow/evidence/nv-flash-geometry-ab-20260819.json`.
+
+Status: **P3 gate met** (isolated body beat 4.19 us cold-discipline). **P4
+wall promotion NO-GO**: best bitwise-identical candidate is sub-bar
+(~39.6 us < 50 us) and the faster bitwise-breaking candidates cannot be
+promoted under the exact-logits gate.
+
+## 2026-08-19 clean-GPU re-run (27B server unloaded)
+
+The earlier P4 bracket ran while the 27B llama-server was resident. After it
+was unloaded (`nvidia-smi` 32071 MiB free), the reverse bracket was re-run on
+the idle GPU: fresh process per arm, interleaved
+control/candidate/control/candidate/control, settled windows with the first
+per-arm window dropped as prefill-capture, `DEV=CUDA`, under
+`flock -w 600 /tmp/gpu-bench.lock`. Evidence:
+`docs/task_workflow/evidence/nv-flash-geometry-ab-clean-20260819.json`.
+
+- Token identity: control and candidate are bitwise identical in the clean
+  session (`sha256 e3f81cdb...`, first token 271). The contended-session sha
+  was `bf1dc829...`; the drift confirms the token stream is
+  memory/state-adaptive across sessions even though it is stable within a
+  session. Absolute tok/s stayed ~177 after the unload, so freeing VRAM did not
+  recover the ~206 historical anchor.
+- Pooled settled samples: control n=18 median 176.549 tok/s (5664.13 us/token);
+  candidate (`stage_width=2`) n=10 median 176.482 tok/s (5666.29 us/token).
+- Median delta: candidate -0.07 tok/s, i.e. ~2.2 us/token slower. Bootstrap
+  95% CI: [-1.36, +1.19] tok/s -> wall delta CI [-43.9, +37.8] us/token
+  (positive = candidate faster). The +50 us promotion bar is above the upper
+  bound.
+
+**Clean verdict: the bitwise-identical `stage_width=2` flash-shape candidate is
+statistically neutral and NOT promotable.** The prior +39.6 us reading was
+contended-session noise, not a real wall gain. The faster isolated-body
+winners (`dot_pair_width=4` / inline variants) still change fp reduction order
+and fail exact-logits identity, so the flash-shape codegen lever is closed at
+the P3 gate with a measured-negative P4. This completes the scoped
+flash-shape search end to end.
+
+## 2026-08-19 overlap-substrate proof (HIDE/L5)
+
+The remaining HIDE question was whether the planner-on multi-queue route can
+recover the `NO_MEMORY_PLANNER` overlap ceiling without disabling the planner.
+The blocker was a false WAR/WAW edge: `reduce_output_rmsnorm_8_128` reused the
+arena slot of `reduce_output_rmsnorm_32_128`, whose last reader is a sibling
+norm, so the runtime serialized the two independent branches.
+
+Fix landed in `tinygrad/schedule/memory.py`:
+
+- `_fanout_lanes` gives overlapping sibling fan-out outputs distinct arena
+  lanes.
+- `_independent_reuse_lanes` colors a dead buffer's slot only to a
+  dependency-reachable successor; otherwise it hands the new writer a fresh
+  lane. This removes the planner-introduced false dependency.
+- The lane key is now `(device, copy_flag, fanout_lane, reuse_lane)`.
+- Native NV construction is two compute GPFIFOs by default
+  (`HCQ_NUM_COMPUTE=2`) with generic readiness placement on
+  (`HCQ_NV_READY_PLACEMENT=1`).
+
+Measured on `DEV=NV`, depth 512, fresh process per arm, token sha
+`1d299b89...` identical across arms:
+
+| arm | tok/s | wall us/token | decode queue census |
+| --- | ---: | ---: | ---: |
+| serial control (1q) | 205.99 | 4854.8 | 32/0 |
+| planner-off ceiling (2q + placement) | 211.50 | 4728.1 | 21/11 |
+| landed reuse lanes (2q + placement) | 212.12 | 4714.2 | 21/11 |
+
+Evidence:
+`docs/task_workflow/evidence/nv-overlap-substrate-reuse-lanes-20260819.json`.
+The landed decode-graph queue census exactly matches planner-off and moves the
+target `reduce_output_rmsnorm_8_128` / `E_8_8_16_2` nodes to queue 1.
+
+**Verdict: the overlap substrate is proven and landed.** It is a real but
+modest lever (~6 tok/s, ~140 us this session; ~81 us in the earlier session),
+not llama's full ~946 us shadow. The remaining path to 254 tok/s is still
+codegen/search plus any deeper multi-queue construction beyond the currently
+qualified two GPFIFOs.
+
+## 2026-08-19 route-to-parity theory sweep (T1/T2/T3)
+
+Fresh landed control re-confirmed at `210.8 tok/s / 4744.5 us/token`, token sha
+`1d299b89...` (`nv-fresh-critical-path-audit-20260819.json`). Four candidate
+levers were tested in same-session flocked A/Bs on `DEV=NV`; none clears the
+`+50 us/token` bar.
+
+| theory | measured | booking |
+| --- | --- | --- |
+| T3 flash coarse split S=4/S=2 | S=4 +763 us, S=2 +1672 us slower; tokens bitwise identical to S=48 | NO-GO, S=48 already optimal (`nv-flash-coarse-split-ab-20260819.json`) |
+| T1 early PDL trigger | START vs END `griddepcontrol.launch_dependents` = 0.24 us noise; only the landed QMD latch overlaps (+99.8 us) | NO-GO, no new lever (`nv-pdl-early-trigger-20260819.json`) |
+| T2 cross-layer anchor+shadow | 3 us support hides ~1-5 us behind 100 us anchor on the landed 2-GPIFO substrate | NO-GO, re-measures landed substrate, not new wall (`nv-anchor-shadow-probe-20260819.json`) |
+| deeper queues / critical path | queue-count sweep bound +26.4 us beyond 2q; fresh PROFILE=1 capture has replay-boundary inflation | closed (`nv-fresh-critical-path-audit-20260819.json`) |
+
+Bottom line: the 685.6 us gap to llama's same-session anchor is llama's own
+overlap of support mass that tinygrad has already fused away (tinygrad node_sum
+is ~496 us below llama's), plus ~100 us host gap. The remaining levers are
+structural (llama-style multi-stream pipelining of work tinygrad no longer
+emits, and the 5-replay host-gap structure), not flash/vocab/PDL codegen.

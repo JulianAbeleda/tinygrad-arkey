@@ -170,15 +170,16 @@ class PlannerManifestCollector:
   def _arena_id(self, key: Any, arenas: dict[Any, Any]) -> str:
     if key in self.arena_labels:
       return self.arena_labels[key]
-    # Lane key is (device, copy_flag); only the device participates in the
-    # label so arena identities resolve from allocated Buffers (which do not
-    # carry the copy flag). Same-device same-size lanes collide and fail
-    # closed as UNKNOWN rather than misattributing.
+    # Lane key is (device, copy_flag, fanout_lane, reuse_lane). Device, fanout,
+    # and reuse lane participate in the label so arena identities resolve from
+    # allocated Buffers; the copy flag is not part of the arena label.
     dev = str(key[0]) if isinstance(key, tuple) else str(key)
+    fanout = key[2] if isinstance(key, tuple) and len(key) > 2 else 0
+    reuse = key[3] if isinstance(key, tuple) and len(key) > 3 else 0
     if arenas is None or key not in arenas:
-      label = "arena:%s" % dev
+      label = "arena:%s:%d:%d" % (dev, fanout, reuse)
     else:
-      label = "arena:%s:%d" % (dev, int(arenas[key].arg))
+      label = "arena:%s:%d:%d:%d" % (dev, fanout, reuse, int(arenas[key].arg))
     self.arena_labels[key] = label
     return label
 
@@ -186,13 +187,16 @@ class PlannerManifestCollector:
                offsets: dict[Any, int], nbytes: dict[Any, int],
                first: dict[Any, int], last: dict[Any, int]) -> None:
     from tinygrad.uop.ops import Ops
+    from tinygrad.schedule.memory import _fanout_lanes, _independent_reuse_lanes
     copy_bufs: set[Any] = set()
     for si in linear.src:
       if si.src[0].op is Ops.COPY:
         copy_bufs.update(_linear_bufs(si))
+    lanes = _fanout_lanes(linear, first, last)
+    reuse_lanes = _independent_reuse_lanes(linear, first, last)
     for buf, offset in offsets.items():
       bid = self._buf_id(buf)
-      key = (buf.device, 1 if buf in copy_bufs else 0)
+      key = (buf.device, 1 if buf in copy_bufs else 0, lanes.get(buf, 0), reuse_lanes.get(buf, 0))
       placed = arenas is not None and key in arenas
       if placed:
         self.arena_labels_by_uop_id[id(arenas[key])] = self._arena_id(key, arenas)

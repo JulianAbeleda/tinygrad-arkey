@@ -12,9 +12,14 @@ _nms = list("xyzwabcdefghijkl") + [f'v{i}' for i in range(16, 32)]
 # Off by default: when the lists are empty no kernel source changes, so
 # unmarked programs stay byte-identical. A consumer program gets
 # `griddepcontrol.wait` (SASS ACQBULK) at the top of its body; a producer
-# program gets `griddepcontrol.launch_dependents` (SASS PREEXIT) at the end.
-# The matching supports exact names and `prefix:` rules, same vocabulary as
-# the NV multi-queue admission policy in tinygrad/runtime/graph/hcq.py.
+# program gets `griddepcontrol.launch_dependents` (SASS PREEXIT). The
+# instruction is emitted at the END of the producer body by default (the
+# native last-CTA semantics); set NV_PDL_TRIGGER_POSITION=start to emit it at
+# the TOP, which is llama's `cudaTriggerProgrammaticLaunchCompletion` at
+# kernel-start semantics. Unset NV_PDL_TRIGGER_POSITION keeps the default
+# end placement and therefore byte-identical output. The matching supports
+# exact names and `prefix:` rules, same vocabulary as the NV multi-queue
+# admission policy in tinygrad/runtime/graph/hcq.py.
 def _nv_pdl_match(name:str, spec:frozenset[str]) -> bool:
   return name in spec or any(rule.startswith("prefix:") and name.startswith(rule.removeprefix("prefix:")) for rule in spec)
 
@@ -25,7 +30,8 @@ def _nv_pdl_body(name:str, kernel:list[str]) -> list[str]:
   if consumers and _nv_pdl_match(name, consumers):
     kernel = ['  asm volatile("griddepcontrol.wait;");', *kernel]
   if producers and _nv_pdl_match(name, producers):
-    kernel = [*kernel, '  asm volatile("griddepcontrol.launch_dependents;");']
+    launch = '  asm volatile("griddepcontrol.launch_dependents;");'
+    kernel = ([launch, *kernel] if os.environ.get("NV_PDL_TRIGGER_POSITION", "end") == "start" else [*kernel, launch])
   return kernel
 
 class CUDARenderer(CStyleLanguage):

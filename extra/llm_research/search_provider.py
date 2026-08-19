@@ -13,7 +13,7 @@ import json, math
 import platform, subprocess
 import sys, argparse
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Protocol, TextIO
+from typing import Any, Callable, Mapping, Protocol, TextIO
 
 PROTOCOL = "tinygrad.search_provider.v1"
 ACTIONS = ("describe", "admit", "compile", "check", "measure")
@@ -613,6 +613,169 @@ class MetalAdapter:
             "thermal_status": "unavailable_no_authoritative_api"}
 
 
+# CUDA/NV flash adapter ------------------------------------------------------
+_NV_FACT_KEYS = ("subgroup_size", "max_threads_per_threadgroup", "max_threadgroup_memory_bytes",
+                 "shuffle_supported", "fdot2_supported")
+
+
+def _flash_schema():
+  """Lazy import keeps the standalone worker script free of the extra package at import time."""
+  from extra.llm_research import flash_candidate_schema as flash_schema
+  return flash_schema
+
+
+def _nv_facts(payload: Mapping[str, Any]) -> dict[str, Any]:
+  """Read and validate caller-supplied target facts; this adapter never autodetects a device."""
+  value = payload.get("target_facts")
+  if not isinstance(value, Mapping):
+    raise ProtocolError("hardware_absent",
+                        "CUDA adapter requires caller-supplied target_facts; no live NV backend autodetection exists")
+  facts = dict(value)
+  missing = [key for key in _NV_FACT_KEYS if key not in facts]
+  if missing:
+    raise ProtocolError("admission_rejected", "target_facts is missing required fields", details={"missing": missing})
+  for key in ("subgroup_size", "max_threads_per_threadgroup", "max_threadgroup_memory_bytes"):
+    if isinstance(facts[key], bool) or not isinstance(facts[key], int) or facts[key] <= 0:
+      raise ProtocolError("admission_rejected", f"target_facts.{key} must be a positive int")
+  for key in ("shuffle_supported", "fdot2_supported"):
+    if not isinstance(facts[key], bool):
+      raise ProtocolError("admission_rejected", f"target_facts.{key} must be a bool")
+  return facts
+
+
+def _canned_cuda_compile(payload: Mapping[str, Any], descriptor: Mapping[str, Any]) -> dict[str, Any]:
+  """Deterministic fake compile result bound to the canonical descriptor; never touches a GPU."""
+  schema = _flash_schema()
+  canonical = schema.canonical_json(descriptor)
+  threads = schema.derived_threads(descriptor["tile"])
+  return {"compiler": "canned_fake_backend", "source_sha256": _sha256(canonical),
+          "cubin_sha256": _sha256("canned:" + canonical),
+          "launch": {"global_size": [descriptor["tile"]["Hq"] * descriptor["tile"]["split_count"]],
+                     "local_size": [threads]},
+          "pipeline": {"max_total_threads_per_threadgroup": threads},
+          "representative_tile": {"token_block": descriptor["tile"]["token_block"],
+                                  "lane_width": descriptor["tile"]["lane_width"]},
+          "candidate_plan_hash": _sha256(canonical)}
+
+
+def _canned_cuda_check(payload: Mapping[str, Any], descriptor: Mapping[str, Any]) -> dict[str, Any]:
+  del payload
+  tile = descriptor["tile"]
+  return {"correct": True, "oracle": "canned flash reference (deterministic fake backend, no GPU)",
+          "representative_geometry": {"Hd": tile["Hd"], "Hq": tile["Hq"], "token_block": tile["token_block"],
+                                      "lane_width": tile["lane_width"]},
+          "tolerance": {"atol": 1e-3, "rtol": 1e-3}}
+
+
+def _canned_cuda_measure(payload: Mapping[str, Any], descriptor: Mapping[str, Any]) -> dict[str, Any]:
+  """Deterministic fake timing keyed by the candidate hash; repeatable across runs and processes."""
+  schema = _flash_schema()
+  samples, warmups = payload.get("samples", 3), payload.get("warmups", 1)
+  if not isinstance(samples, int) or not isinstance(warmups, int) or not (1 <= samples <= 20 and 0 <= warmups <= 10):
+    raise ProtocolError("admission_rejected", "samples must be 1..20 and warmups 0..10")
+  digest = schema.candidate_hash(descriptor)
+  base = 3000 + int(digest[:8], 16) % 500000
+  samples_ns = [base + (i * 37) % 97 for i in range(samples)]
+  tile = descriptor["tile"]
+  operations = 4 * tile["Hq"] * tile["Hd"] * tile["MAXC"]
+  bytes_ = 2 * tile["MAXC"] * tile["Hd"] * 2 * (tile["Hq"] // tile["Hkv"]) + tile["Hq"] * (tile["Hd"] + 2) * 4
+  return {"timing_mode": "canned_fake_backend_deterministic_no_gpu", "synchronized": True,
+          "warmups": warmups, "samples_ns": samples_ns,
+          "summary_ns": {"min": min(samples_ns), "mean": sum(samples_ns) / len(samples_ns),
+                         "max": max(samples_ns), "range": max(samples_ns) - min(samples_ns)},
+          "work_bytes": {"status": "estimated",
+                         "provenance": "modeled flash decode traffic (score+PV flops, KV fp16 reads); physical cache traffic unobserved",
+                         "operations": operations, "bytes": bytes_}}
+
+
+@dataclass(frozen=True)
+class CudaAdapter:
+  """Generic facts-driven NV/CUDA adapter for flash_decode_candidate.v1 payloads.
+
+  describe() and admit() are pure facts validation: nothing is autodetected,
+  no GPU is touched, and BoltBeam types/promotion policy are never imported.
+  compile/check/measure fail closed unless ``live_backend`` is claimed, and
+  their canned default implementations return deterministic results so the
+  success path can be exercised by CPU-only unit tests.  Real compiler/runtime
+  wiring replaces the ``*_fn`` hooks; each hook receives (payload, descriptor).
+  """
+  live_backend: bool = False
+  compile_fn: Callable[..., Mapping[str, Any]] | None = None
+  check_fn: Callable[..., Mapping[str, Any]] | None = None
+  measure_fn: Callable[..., Mapping[str, Any]] | None = None
+
+  def _flash_candidate(self, payload: Mapping[str, Any]) -> tuple[Any, dict[str, Any], dict[str, Any]]:
+    schema = _flash_schema()
+    candidate = payload.get("candidate")
+    if not isinstance(candidate, Mapping):
+      raise ProtocolError("admission_rejected", "payload.candidate must be an object")
+    if candidate.get("schema_version") != schema.SCHEMA_VERSION:
+      raise ProtocolError("admission_rejected", f"candidate must use {schema.SCHEMA_VERSION}")
+    try:
+      descriptor = schema.validate(candidate)
+    except schema.SchemaError as exc:
+      raise ProtocolError("admission_rejected", f"flash descriptor is invalid: {exc}") from exc
+    if payload.get("candidate_hash") != schema.candidate_hash(candidate):
+      raise ProtocolError("identity_mismatch", "candidate_hash does not match canonical flash descriptor bytes")
+    return schema, descriptor, candidate
+
+  def describe(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
+    facts = _nv_facts(payload)
+    return {"provider_revision": _revision(), "target": facts, "backend_live": self.live_backend,
+            "supported_plan_kinds": [], "compiler_transforms": [],
+            "limitations": ["flash geometry legality is fact-driven; this adapter owns no compiler Opt transforms",
+                            "no model execution or route promotion"]}
+
+  def admit(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
+    _pinned_identity(payload)
+    schema, descriptor, candidate = self._flash_candidate(payload)
+    facts = _nv_facts(payload)
+    tile = descriptor["tile"]
+    threads = schema.derived_threads(tile)
+    if threads > facts["max_threads_per_threadgroup"]:
+      raise ProtocolError("resource_limit", "flash workgroup threads exceed target limit",
+                          details={"threads": threads, "limit": facts["max_threads_per_threadgroup"]})
+    local = schema.local_memory_bytes(descriptor)
+    if local > facts["max_threadgroup_memory_bytes"]:
+      raise ProtocolError("resource_limit", "flash local-memory footprint exceeds target capacity",
+                          details={"local_bytes": local, "limit": facts["max_threadgroup_memory_bytes"]})
+    if schema.ladder_spans_lanes(tile) and facts["subgroup_size"] % tile["lane_width"]:
+      raise ProtocolError("resource_limit", "lane_width does not divide subgroup_size; a shuffle ladder would cross physical subgroups",
+                          details={"lane_width": tile["lane_width"], "subgroup_size": facts["subgroup_size"]})
+    return {"admitted": True, "target": facts, "candidate_hash": schema.candidate_hash(candidate),
+            "plan_hash": _sha256(schema.canonical_json(descriptor)),
+            "flash_geometry": {"lane_width": tile["lane_width"], "group_width": schema.derived_group_width(tile),
+                               "warps": schema.derived_warps(tile), "threads": threads,
+                               "local_memory_bytes": local, "reduce_structure": tile["reduce_structure"]}}
+
+  def compile(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
+    if not self.live_backend:
+      raise ProtocolError("backend_unavailable", "no live NV/CUDA backend is available; compile fails closed",
+                          details={"action": "compile"})
+    _, descriptor, _ = self._flash_candidate(payload)
+    admitted = self.admit(payload)
+    fn = self.compile_fn if self.compile_fn is not None else _canned_cuda_compile
+    return {**admitted, **dict(fn(payload, descriptor))}
+
+  def check(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
+    if not self.live_backend:
+      raise ProtocolError("backend_unavailable", "no live NV/CUDA backend is available; check fails closed",
+                          details={"action": "check"})
+    _, descriptor, _ = self._flash_candidate(payload)
+    self.admit(payload)
+    fn = self.check_fn if self.check_fn is not None else _canned_cuda_check
+    return dict(fn(payload, descriptor))
+
+  def measure(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
+    if not self.live_backend:
+      raise ProtocolError("backend_unavailable", "no live NV/CUDA backend is available; measure fails closed",
+                          details={"action": "measure"})
+    _, descriptor, _ = self._flash_candidate(payload)
+    compiled = self.compile(payload)
+    fn = self.measure_fn if self.measure_fn is not None else _canned_cuda_measure
+    return {**compiled, **dict(fn(payload, descriptor))}
+
+
 def _response(*, request_id: str | None, action: str | None, status: str,
               result: Mapping[str, Any] | None = None, error: ProtocolError | None = None) -> dict[str, Any]:
   row: dict[str, Any] = {"protocol": PROTOCOL, "request_id": request_id, "action": action, "status": status}
@@ -656,8 +819,9 @@ def serve(input_stream: TextIO = sys.stdin, output_stream: TextIO = sys.stdout, 
 
 def main() -> int:
   parser = argparse.ArgumentParser(description="tinygrad target-neutral search provider")
-  parser.add_argument("--backend", choices=("METAL",), help="registered provider backend; omitted is fail-closed")
+  parser.add_argument("--backend", choices=("METAL", "CUDA"), help="registered provider backend; omitted is fail-closed")
   args = parser.parse_args()
-  return serve(adapter=MetalAdapter() if args.backend == "METAL" else UnsupportedAdapter())
+  adapter = MetalAdapter() if args.backend == "METAL" else CudaAdapter() if args.backend == "CUDA" else UnsupportedAdapter()
+  return serve(adapter=adapter)
 
 if __name__ == "__main__": raise SystemExit(main())

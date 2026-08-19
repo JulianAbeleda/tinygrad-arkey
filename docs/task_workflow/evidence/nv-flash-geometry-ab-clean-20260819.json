@@ -1,0 +1,76 @@
+{
+  "bootstrap_95ci": {
+    "orientation": "positive = candidate faster",
+    "tok_s_diff_hi": 1.1875597356697654,
+    "tok_s_diff_lo": -1.3582782381803895,
+    "wall_us_delta_hi": -43.91470622499946,
+    "wall_us_delta_lo": 37.84522163098973
+  },
+  "candidate": {
+    "median_tok_s": 176.48241759600387,
+    "median_wall_us": 5666.2868382116,
+    "n_settled": 10,
+    "settled_tok_s_samples": [
+      176.2700730895367,
+      173.55722133480006,
+      176.43147675197335,
+      176.53335844003436,
+      176.21129129627803,
+      177.75678233231469,
+      177.55804080139148,
+      177.66038757715276,
+      176.27191062424853,
+      177.38226606672114
+    ]
+  },
+  "candidate_geometry": {
+    "dot_pair_width": 2,
+    "reduce_structure": "staged",
+    "stage_width": 2
+  },
+  "candidate_tile_name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128_sw2",
+  "conclusion": "Clean-GPU bitwise-identical stage_width=2 candidate is statistically neutral: median candidate-vs-control -0.07 tok/s, 95% CI [-1.36, +1.19] tok/s (wall delta CI [-43.9, +37.8] us/token, positive = candidate faster). The +50 us bar is above the 95% CI upper bound, so sw2 is NOT promotable; the prior contended +39.6 us reading was session noise.",
+  "control": {
+    "median_tok_s": 176.54948532729077,
+    "median_wall_us": 5664.134325547204,
+    "n_settled": 18,
+    "settled_tok_s_samples": [
+      176.63941235671038,
+      177.77433615447902,
+      177.72011778785316,
+      177.46670235241393,
+      177.6908360029374,
+      177.81269227760947,
+      177.79088240172888,
+      177.92314867463423,
+      177.70997192629133,
+      176.45955829787118,
+      174.4855379307965,
+      176.31846086482025,
+      176.11654107759952,
+      176.24672653195285,
+      175.5770444337656,
+      176.10612617296363,
+      175.90818272452123,
+      176.2337557305482
+    ]
+  },
+  "control_tile_name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+  "cross_session_note": "Contended-session token sha bf1dc829... differs from clean-session sha e3f81cdb...; within the clean session control==candidate==control bitwise. Absolute tok/s stayed ~177 after the 27B unload, so the ~206 historical anchor was not recovered by freeing VRAM.",
+  "date": "2026-08-19",
+  "delta_median": {
+    "candidate_minus_control_tok_s": -0.06706773128689747,
+    "wall_delta_us_vs_control_midpoint": -2.152512664396454
+  },
+  "first_token": 271,
+  "git_commit": "d14e6964ee211f286b867616abe1daa9a137db5b",
+  "gpu": "RTX 5090 sm_120",
+  "gpu_state": "27B llama-server unloaded; nvidia-smi 32071 MiB free at start",
+  "method": "fresh process per arm, interleaved control/candidate/control/candidate/control, DEV=CUDA, settled windows (first per-arm window dropped as prefill-capture), flock -w 600 /tmp/gpu-bench.lock",
+  "promoted": false,
+  "promotion_bar_us": 50.0,
+  "schema": "tinygrad.nv_flash_geometry_ab.clean.evidence.v1",
+  "supersedes": "nv-flash-geometry-ab-20260819.json (27B-resident contended session)",
+  "token_sha": "e3f81cdb8618136921a457b67aed80d282a8bac778dafd59060f9ba3deb6f03c",
+  "token_sha_identical_across_arms": true
+}
