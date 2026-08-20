@@ -1867,7 +1867,10 @@ class Transformer:
     for _b in model.blk:
       for _name in ("attn_norm", "ffn_norm", "attn_q_norm", "attn_k_norm"):
         _norm = getattr(_b, _name, None)
-        if _norm is not None: _norm._rmsnorm_native_promoted = _rmsnorm_native_promoted
+        if _norm is None: continue
+        _norm._rmsnorm_native_promoted = _rmsnorm_native_promoted
+        if _rmsnorm_native_promoted and _name in ("attn_norm", "ffn_norm"):
+          _norm._rmsnorm_native_output_dtype = dtypes.float16
     model.output_norm._rmsnorm_native_promoted = _rmsnorm_native_promoted
     # Cooperative ordinary-CALL reduce/output route.  Promotion lives on the
     # model/block call sites, never nn.RMSNorm: the call sites gate the marker

@@ -309,7 +309,17 @@ class RMSNorm:
     # forward-20260802.md section 9.3). The ordinary graph above is always
     # the marker's fallback source; prefill shapes are rejected here too.
     if self.weight is not None and getattr(self, "_rmsnorm_native_promoted", False):
-      return out._semantic_rmsnorm(x, out, self.weight, self.eps)
+      # Block attention/FFN norms declare an fp16 consumer contract so the
+      # native body stores the exact value the Q4/Q6 GEMVs consume, removing
+      # the fp32->fp16 boundary cast. The final output norm and q/k norms keep
+      # their fp32 contract (no attribute). The pre-dequantized fp16 weight
+      # buffer (loader-owned) avoids one per-call packed-weight materialization;
+      # both opt-ins fall back to the ordinary values when absent.
+      native_out_dtype = getattr(self, "_rmsnorm_native_output_dtype", None)
+      native_out = out if native_out_dtype is None or native_out_dtype == out.dtype else out.cast(native_out_dtype)
+      native_weight = getattr(self, "_decode_reduce_output_weight", None)
+      native_weight = self.weight if native_weight is None else native_weight
+      return native_out._semantic_rmsnorm(x, native_out, native_weight, self.eps)
     return out
 
 from tinygrad.uop.ops import UOp, KernelInfo, Ops, AxisType

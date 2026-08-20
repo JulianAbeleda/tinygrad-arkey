@@ -242,12 +242,36 @@ def lower_rmsnorm_semantic(att:UOp) -> UOp:
                             x_rank=1, target=device, native=True)
   out_buf = UOp.new_buffer(device, numel, att.dtype)
   # Bind through the custom-kernel transport exactly like the M3 opaque path.
-  # A manual kernel.call with a RESHAPE-over-lazy-producer arg crashes the
-  # symbolic pass (`bad reshape: () -> (4096,)` when the producer collapses),
-  # so the transport's CONTIGUOUS boundary is the scheduler-stable binding.
-  x_arg = x.reshape(numel).contiguous()
+  # The real decode activation is a MEMORY_SEMANTIC/RESHAPE view of the prior
+  # invocation's AFTER output. `custom_kernel` preserves an exact AFTER arg,
+  # so unwrapping that equal-span view chain binds the existing buffer with no
+  # per-call copy. Anything less specific keeps the conservative CONTIGUOUS
+  # boundary; a RESHAPE-over-lazy-producer arg would otherwise crash symbolic
+  # (`bad reshape: () -> (4096,)` when the producer collapses).
+  x_arg = _flat_after_view(x)
+  if x_arg is None: x_arg = x.reshape(numel).contiguous()
   outs = UOp.custom_kernel(out_buf, x_arg, w, fxn=emit_decode_rmsnorm_kernel(kspec))
   return outs[0].reshape(att.shape)
+
+def _flat_after_view(x:UOp) -> UOp|None:
+  """Return the rank-1 AFTER below an equal-span MEMORY_SEMANTIC/RESHAPE chain.
+
+  This is the one admitted decode producer shape that can bind a native norm
+  copy-free: the view chain is purely descriptive and its base is already the
+  previous invocation's contiguous output buffer. Every other chain returns
+  None so the caller keeps its materializing fallback.
+  """
+  original, expected = x, x.numel()
+  # RESHAPE carries its shape descriptor in a second source; the value leg is
+  # always src[0], matching the walk used by has_buffer_identity.
+  while x.op in (Ops.MEMORY_SEMANTIC, Ops.RESHAPE) and len(x.src) >= 1:
+    if x.src[0].numel() != expected: return None
+    x = x.src[0]
+  if x is not original and x.op is Ops.AFTER and len(x.src) == 2 and \
+      x.dtype == original.dtype and x.device == original.device and \
+      x.shape is not None and len(x.shape) == 1:
+    return x
+  return None
 
 pm_rmsnorm_semantic = PatternMatcher([
   (UPat(Ops.RMSNORM, name="att"), lower_rmsnorm_semantic),

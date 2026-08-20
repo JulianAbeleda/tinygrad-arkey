@@ -87,6 +87,35 @@ def test_admitted_marker_lowers_to_single_native_kernel_no_copies():
   assert all(k == "rmsnorm_native_1_4096" for k in _kernels(norm(Tensor.randn(1, 4096, dtype=dtypes.float32).realize())))
 
 
+def test_native_fp16_consumer_uses_declared_output_and_predequantized_weight():
+  from tinygrad import Tensor
+  norm = _norm(dtype=dtypes.float32)
+  norm._rmsnorm_native_output_dtype = dtypes.float16
+  fp16_weight = Tensor.randn(4096, dtype=dtypes.float16).realize()
+  norm._decode_reduce_output_weight = fp16_weight
+  x = Tensor.randn(1, 4096, dtype=dtypes.float32).realize()
+  out = norm(x)
+  assert out.dtype == dtypes.float16
+  assert out.uop.op.name == "RMSNORM"
+  assert _kernels(out) == ["rmsnorm_native_1_4096"]
+
+
+def test_preserved_rmsnorm_view_unwraps_contiguous_marker_chain():
+  from tinygrad import Tensor
+  norm = _norm(dtype=dtypes.float32)
+  norm._rmsnorm_native_output_dtype = dtypes.float16
+  x = Tensor.randn(1, 1, 4096, dtype=dtypes.float32).realize()
+  out = norm(x)
+  request = out[:, 0, :].uop.reshape(4096).contiguous()
+  preserved = UOp._preserved_rmsnorm_view(request)
+  assert preserved is request.src[0]
+  assert preserved.op == Ops.RESHAPE and preserved.shape == (4096,)
+  # A contiguous request over the ordinary fallback has no marker contract.
+  plain = _norm(flag=False)(x)
+  plain_request = plain[:, 0, :].uop.reshape(4096).contiguous()
+  assert UOp._preserved_rmsnorm_view(plain_request) is None
+
+
 def test_unadmitted_marker_returns_ordinary_source():
   from tinygrad import Tensor
   # A marker over a prefill shape exists only if constructed directly; lowering must

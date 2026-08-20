@@ -1302,13 +1302,42 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     # value-producing bodies are always wrapped in TUPLE so FUNCTION dtype is always void
     body = self if self.op is Ops.TUPLE else UOp.maketuple(self)
     return UOp(Ops.FUNCTION, dtypes.void, (body,)+srcs, CallInfo(grad_fxn, metadata, name, precompile, precompile_backward))
+
+  @staticmethod
+  def _preserved_rmsnorm_view(x:UOp) -> UOp|None:
+    """Unwrap a contiguous request over a pure view of a native RMSNorm marker.
+
+    The Path 3 semantic norm is lowered after the opaque consumers are built,
+    so the M5 typed-AFTER fold cannot fire at program-execution time. Keeping
+    the rank-1 view over the marker (rather than materializing CONTIGUOUS)
+    lets the later semantic substitution bind the call argument to the native
+    norm's AFTER buffer. Every non-pure movement or non-marker terminal keeps
+    the conservative materializing boundary.
+    """
+    if x.op is not Ops.CONTIGUOUS: return None
+    original, expected = x.src[0], x.src[0].numel()
+    cur = original
+    while cur.op in (Ops.MEMORY_SEMANTIC, Ops.RESHAPE, Ops.SLICE) and len(cur.src) >= 1:
+      if cur.numel() != expected: return None
+      if cur.op is Ops.SLICE and any(offset != 0 for offset in cur.arg[0]): return None
+      cur = cur.src[0]
+    if cur.op is Ops.RMSNORM and cur.dtype == original.dtype and cur.device == original.device: return original
+    return None
+
   def custom_kernel(*srcs:UOp, fxn:Callable, grad_fxn:Callable|None=None) -> list[UOp]:
     # MEMORY_SEMANTIC is transparent to physical layout. Preserve an already
     # concrete buffer/view argument so ownership metadata does not force a
     # redundant materialization before an opaque kernel.
-    contig_srcs = tuple(x if x.op is Ops.AFTER or x.has_precompiled_output_identity() or
-                         (x.op is Ops.MEMORY_SEMANTIC and x.src[0].has_buffer_identity())
-                        else x.contiguous() for x in srcs)
+    contig_srcs = []
+    for x in srcs:
+      preserved = UOp._preserved_rmsnorm_view(x)
+      if preserved is not None:
+        contig_srcs.append(preserved)
+      elif x.op is Ops.AFTER or x.has_precompiled_output_identity() or \
+          (x.op is Ops.MEMORY_SEMANTIC and x.src[0].has_buffer_identity()):
+        contig_srcs.append(x)
+      else:
+        contig_srcs.append(x.contiguous())
     placeholders = [UOp.placeholder_like(s, slot=i) for i,s in enumerate(contig_srcs)]
     kernel = fxn(*placeholders).call(*contig_srcs, grad_fxn=grad_fxn)
     return [s.after(kernel) for s in contig_srcs]
