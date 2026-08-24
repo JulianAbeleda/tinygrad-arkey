@@ -1,0 +1,149 @@
+{
+  "buffer_sizes": {
+    "q4k_warp_coop_q8_dp4a_direct_4096_4096": [
+      16384,
+      9437184,
+      8192
+    ],
+    "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096": [
+      4096,
+      4096,
+      2359296,
+      2359296,
+      8192
+    ],
+    "rmsnorm_q8_1_llama_provider_4096": [
+      8192,
+      16384,
+      8192
+    ]
+  },
+  "buffer_vas": {
+    "q4k_warp_coop_q8_dp4a_direct_4096_4096": [
+      157975244800,
+      139025884480,
+      157975236608
+    ],
+    "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096": [
+      157975261184,
+      157975265280,
+      139014071104,
+      139035322176,
+      157975236608
+    ],
+    "rmsnorm_q8_1_llama_provider_4096": [
+      157975236608,
+      157975220224,
+      142858940416
+    ]
+  },
+  "capture_identity": {
+    "dependencies": {
+      "provider_to_kv": true,
+      "provider_to_q": true
+    },
+    "sequence": {
+      "q4k_warp_coop_q8_dp4a_direct_4096_4096": 1510,
+      "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096": 1511,
+      "rmsnorm_q8_1_llama_provider_4096": 1509
+    },
+    "target_pair_occurrence": 0
+  },
+  "commit": "d4e20ebe6baa1d517a5c865f9ea759c420691273",
+  "cubin_sha256": {
+    "q4k_warp_coop_q8_dp4a_direct_4096_4096": "8333b53cff03bf17d26a41c3dfa1ab25685a5688a24556d77fe096e5894de27c",
+    "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096": "6c75d8f0459c4c06f44eeb3d1b41d4bc15c8dc9ce4e8fb3a9a879578625b20cd",
+    "rmsnorm_q8_1_llama_provider_4096": "70505ad1fc1b66b0329d5f794881da5f2b0e9196f019a146e912ce6a5f32c6cb"
+  },
+  "gpu_state_after": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2782",
+    "driver_version": "595.84",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Enabled",
+    "power.draw": "83.38",
+    "pstate": "P0",
+    "temperature.gpu": "47"
+  },
+  "gpu_state_before": {
+    "clocks.mem": "405",
+    "clocks.sm": "225",
+    "driver_version": "595.84",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Enabled",
+    "power.draw": "19.72",
+    "pstate": "P8",
+    "temperature.gpu": "42"
+  },
+  "n_per_block": 8,
+  "order": [
+    "control",
+    "candidate"
+  ],
+  "output_checksums": {
+    "bitwise_identical": true,
+    "candidate": [
+      "a836e8e0514b892c53e8ba8aabe3a41a9a4ed29bdb9b1d0cbefbd189d2091f15",
+      "308fd6c91bf6ca651a37dad127e235a1df56557d9c66765b0a4385056a21b816",
+      "9c5ab31f4992afc62987870153ec353dbc4fb583d7f67a7659f1f016fda6952e",
+      "ad7c3889b36828de752b3ee72f498816fdf7b0ec1988a7fafe9cc495b90f7ac5"
+    ],
+    "control": [
+      "a836e8e0514b892c53e8ba8aabe3a41a9a4ed29bdb9b1d0cbefbd189d2091f15",
+      "308fd6c91bf6ca651a37dad127e235a1df56557d9c66765b0a4385056a21b816",
+      "9c5ab31f4992afc62987870153ec353dbc4fb583d7f67a7659f1f016fda6952e",
+      "ad7c3889b36828de752b3ee72f498816fdf7b0ec1988a7fafe9cc495b90f7ac5"
+    ]
+  },
+  "projection": {
+    "all_36_layers_unvalidated_ceiling_tok_s": 225.72610745407775,
+    "all_36_layers_unvalidated_ceiling_us": 85.248,
+    "endpoint_tok_s": 221.46453207800593,
+    "endpoint_us": 4515.39571875,
+    "installed_route_projected_tok_s": 222.51476887888137,
+    "installed_route_recovery_us": 21.312,
+    "installed_shared_q4q4_layers": 9
+  },
+  "runs": [
+    {
+      "arm": "control",
+      "durations_us": [
+        18.496,
+        18.752,
+        18.528,
+        18.56,
+        18.56,
+        18.24
+      ],
+      "median_us": 18.544
+    },
+    {
+      "arm": "candidate",
+      "durations_us": [
+        17.344,
+        15.936,
+        15.84,
+        16.0,
+        16.352,
+        17.312
+      ],
+      "median_us": 16.176
+    }
+  ],
+  "schema": "tinygrad.nv_qkv_live_hcq_concurrency.v1",
+  "timing": {
+    "candidate_median": 16.176,
+    "candidate_over_control": 0.8723037100949097,
+    "control_median": 18.544,
+    "recovery_us_per_layer": 2.368,
+    "unit": "us_per_cache_cold_provider_to_join_span"
+  },
+  "token_ids": [
+    13876,
+    38835,
+    34208
+  ],
+  "token_sha256": "8e53da8dcae4daec5228d377e3f7f8c465060d92b94a995e83f4bb7e7c7d7dcc",
+  "verdict": "ADVANCE_TO_SCHEDULER_SCOPE",
+  "warmup_per_block": 2
+}

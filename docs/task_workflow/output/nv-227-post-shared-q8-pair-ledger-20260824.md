@@ -51,3 +51,13 @@ generic cache stores           0
 
 The immediate clean probe is therefore producer-to-join concurrency under a
 validated cold-cache protocol, before any scheduler/runtime route is changed.
+
+## 2026-08-24 closure
+
+That probe is complete. Rendered CUDA and live-HCQ microgates recovered
+2.116 and 2.048 us/layer respectively, but the production census proved that
+the installed scheduler already assigns provider/Q to queue 0 and paired K/V
+to queue 1. Reapplying the placement is a no-op, and auxiliary-first replay is
+8.176 us/token wall-negative. See
+`nv-227-qkv-concurrency-result-20260824.md` and the successor
+`nv-227-post-concurrency-ledger-20260824.md`. No endpoint recovery is booked.
