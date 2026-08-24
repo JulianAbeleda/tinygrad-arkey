@@ -98,3 +98,26 @@ closed microkernel spelling:
    fresh A/B/A wall bracket, then rebuild this ledger.
 
 Evidence: `docs/task_workflow/evidence/nv-full-ledger-audit-20260824/`.
+
+## Comparison snapshot for handoff
+
+| metric | tinygrad | llama | gap |
+| --- | ---: | ---: | ---: |
+| wall latency | 4503.391 us | 4048.325 us | **+455.067 us** |
+| throughput | 222.055 tok/s | 247.061 tok/s | **-25.006 tok/s** |
+| device union | 4260.750 us | 3888.240 us | **+372.510 us** |
+| host/outside-union | 242.641 us | 160.085 us | **+82.557 us** |
+| node sum | 4272.176 us | 5011.035 us | -738.859 us |
+| resident overlap | 11.426 us | 1122.329 us | -1110.903 us |
+
+| milestone | recovery required from fresh wall | resulting target |
+| --- | ---: | ---: |
+| 227 tok/s | 98.105 us/token | 4405.286 us/token |
+| 240 tok/s | 336.725 us/token | 4166.667 us/token |
+| fresh llama parity | 455.067 us/token | 4048.325 us/token |
+
+The retained role-level residual ranking is: norms/accounting `+115.42 us`,
+flash score `+82.24 us`, K/V `+73.12 us`, flash combine `+66.69 us`, vocab
+`+65.44 us`, down `+57.91 us`, gate/up `+53.65 us`, Q `+51.42 us`, and O
+`+48.86 us`; activation quantization is a `-113.98 us` tinygrad advantage.
+Those role rows are ranking evidence, not additive wall credits.
