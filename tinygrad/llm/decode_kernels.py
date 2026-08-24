@@ -107,6 +107,35 @@ def _q4k_block_dot_packed_load(words:UOp, x:UOp, base:UOp, x_block:UOp, lane4:UO
   for grp in range(8): contrib = contrib + _q4k_group_dot_packed_load(words, x, base, x_block, grp, lane4)
   return contrib
 
+def _half4_lane(v:UOp, nib:int) -> UOp:
+  """Extract one fp16 lane of a global half4 vector load as fp32. GEP on a float vector load
+  is spec-illegal, so the extraction rides CUSTOMI (the same family as fdot2/exp2f). The scalar
+  anchor keeps the CUSTOMI shape scalar while the real operand (a half4 LOAD) is src[1], which
+  also keeps the half4 type prefix emitted."""
+  return UOp(Ops.CUSTOMI, dtypes.float32, (UOp.const(dtypes.float32, 0.0), v),
+             arg=f"float({{1}}.{'xyzw'[nib]})")
+
+def _q4k_block_dot_packed_load_vec(words:UOp, x:UOp, base:UOp, x_block:UOp, lane4:UOp) -> UOp:
+  """Vectorized-load Q4_K block dot, bit-identical to `_q4k_block_dot_packed_load`: the four
+  header words load as one uint4, each qpack word loads once for its two groups, and the four
+  per-group fp16 activations load as one half4. The per-lane accumulation order (nib 0..3,
+  group 0..7) and every shift/mask are unchanged, so the fp32 result is identical."""
+  hdr = words.index(base).load(dtype=dtypes.uint32.vec(4))
+  w0, w1, w2, w3 = hdr.gep(0), hdr.gep(1), hdr.gep(2), hdr.gep(3)
+  contrib = UOp.const(dtypes.float32, 0.0)
+  for g2 in range(4):
+    qw = words[base + 4 + g2 * 8 + lane4]
+    for gp in range(2):
+      grp = 2 * g2 + gp
+      d, dmin, sc, mn = _q4k_group_params_from_words(w0, w1, w2, w3, grp)
+      qpack = qw.rshift(gp * 4).bitwise_and(0x0F0F0F0F)
+      xv = x.index(x_block * Q4_K_BLOCK_ELEMS + grp * 32 + lane4 * 4).load(dtype=dtypes.float16.vec(4))
+      for nib in range(4):
+        q = qpack.rshift(nib * 8).bitwise_and(0xf)
+        weight = d * sc.cast(dtypes.float32) * q.cast(dtypes.float32) - dmin * mn.cast(dtypes.float32)
+        contrib = contrib + weight * _half4_lane(xv, nib)
+  return contrib
+
 def _q4k_block_dot_rms_affine(words:UOp, x:UOp, norm_weight:UOp, scale:UOp, base:UOp, x_block:UOp, lane4:UOp) -> UOp:
   """Packed Q4 dot with the ordinary ffn-norm epilogue applied per packed-Q4 load.
   Control contract (E_32_32_4_f14a5cc0): the norm epilogue is `(half)((x*s)*w)` with
@@ -205,7 +234,14 @@ def q4k_g3_lanemap_gemv_kernel(rows:int, k:int, lanes:int=WARP, epilogue:Q4KGEMV
   per launch and read in-loop as uint4, 3-step XOR ladder 4/2/1 cross-lane reduce over the 8 row lanes
   (the w1w3 quad geometry, single weight buffer). It renders under its own `q4k_g3_lanemap_gemv_quad_*`
   name so legacy hashes are untouched, and is admitted only by an explicit harness lease in
-  decode_routes, never by production (which stays on the byte-identical `scalar` default)."""
+  decode_routes, never by production (which stays on the byte-identical `scalar` default).
+
+  `load_style="vector"` keeps the installed 32-lane/1-row-per-block geometry but widens the global
+  loads: the four header words load as one uint4, each qpack word loads once for its two groups, and
+  the four per-group fp16 activations load as one half4 (the same `_q4k_block_dot_packed_load_vec`
+  spelling as the w1w3 kernel). The per-lane accumulation order is unchanged, so the result is
+  bit-identical to `scalar`; it renders under its own `q4k_g3_lanemap_gemv_vec_*` name. The
+  `ffn_down_fused` epilogue reads activations instead of x and keeps the scalar inner loop."""
   epi = epilogue or Q4KGEMVEpilogue()
   epi.validate(rows, k)
   lm = Q4KGateUpLaneMap(k=k, n=rows, lane_extent=lanes)
@@ -272,7 +308,9 @@ def q4k_g3_lanemap_gemv_kernel(rows:int, k:int, lanes:int=WARP, epilogue:Q4KGEMV
       return out[row].store(result, lane8.eq(0)).sink(arg=KernelInfo(name=name, opts_to_apply=()))
     return kernel
 
-  if load_style != "scalar":
+  elif load_style == "vector":
+    name = f"q4k_g3_lanemap_gemv_vec{epi.kernel_suffix}_{rows}_{k}"
+  elif load_style != "scalar":
     raise ValueError(f"unknown Q4 GEMV load style {load_style!r}")
 
   if epi.kind == "ffn_down_fused":
@@ -300,6 +338,29 @@ def q4k_g3_lanemap_gemv_kernel(rows:int, k:int, lanes:int=WARP, epilogue:Q4KGEMV
       acc = acc.after(acc[0].store(acc.after(lblk)[0] + contrib).end(lblk))
       total = _lane_partition_reduce_sum(acc[0], part)
       return out[row].store(total + normed_h[row].cast(dtypes.float32)).sink(arg=KernelInfo(name=name, opts_to_apply=()))
+    return kernel
+
+  if load_style == "vector":
+    def kernel(out:UOp, words:UOp, x:UOp, *extra:UOp) -> UOp:
+      row, lane = UOp.special(rows, "gidx0"), UOp.special(lanes, "lidx0")
+      part = LanePartition(lane, lane_extent=lm.lane_extent, words_per_group=lm.words_per_group)
+      lblk = UOp.range(lm.blocks_per_group, 0, axis_type=AxisType.REDUCE)
+      blk = part.block_group * lm.blocks_per_group + lblk
+      base = (row * lm.k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+      contrib = _q4k_block_dot_packed_load_vec(words, x, base, blk, part.word_col)
+      acc = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG)
+      acc = acc.after(acc[0].store(0.0))
+      acc = acc.after(acc[0].store(acc.after(lblk)[0] + contrib).end(lblk))
+      total = _lane_partition_reduce_sum(acc[0], part)
+
+      if epi.kind in ("residual_add", "ffn_down_resadd"):
+        result = total + extra[0][row].cast(dtypes.float32)
+      elif epi.kind == "fp16_cast":
+        result = total.cast(dtypes.float16)
+      else:
+        result = total
+
+      return out[row].store(result).sink(arg=KernelInfo(name=name, opts_to_apply=()))
     return kernel
 
   def kernel(out:UOp, words:UOp, x:UOp, *extra:UOp) -> UOp:
@@ -390,6 +451,9 @@ def q4k_g3_lanemap_gemv_w1w3_kernel(rows:int, k:int, load_style:str = "scalar", 
   elif load_style == "scalar":
     rows_per_block, lanes_per_row = 1, WARP
     name = f"q4k_g3_lanemap_gemv_w1w3fused16_{rows}_{k}" if store_fp16 else f"q4k_g3_lanemap_gemv_w1w3fused_{rows}_{k}"
+  elif load_style == "vector":
+    rows_per_block, lanes_per_row = 1, WARP
+    name = f"q4k_g3_lanemap_gemv_w1w3vec16_{rows}_{k}" if store_fp16 else f"q4k_g3_lanemap_gemv_w1w3vec_{rows}_{k}"
   else:
     raise ValueError(f"unknown w1w3 load style {load_style!r}")
   blocks, threads = rows // rows_per_block, rows_per_block * lanes_per_row
@@ -456,6 +520,30 @@ def q4k_g3_lanemap_gemv_w1w3_kernel(rows:int, k:int, load_style:str = "scalar", 
       val = _silu_uop(total_g) * total_u
       if store_fp16: val = val.cast(dtypes.float16)
       return out[row].store(val, lane8.eq(0)).sink(arg=KernelInfo(name=name, opts_to_apply=()))
+    return kernel
+
+  if load_style == "vector":
+    def kernel(out:UOp, gate_words:UOp, up_words:UOp, x:UOp) -> UOp:
+      row, lane = UOp.special(rows, "gidx0"), UOp.special(WARP, "lidx0")
+      part = LanePartition(lane, lane_extent=lm.lane_extent, words_per_group=lm.words_per_group)
+      lblk = UOp.range(lm.blocks_per_group, 0, axis_type=AxisType.REDUCE)
+      blk = part.block_group * lm.blocks_per_group + lblk
+      base_g = (row * lm.k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+      base_u = (row * lm.k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+      contrib_g = _q4k_block_dot_packed_load_vec(gate_words, x, base_g, blk, part.word_col)
+      contrib_u = _q4k_block_dot_packed_load_vec(up_words, x, base_u, blk, part.word_col)
+      acc_g = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG)
+      acc_u = UOp.placeholder((1,), dtypes.float32, 21, addrspace=AddrSpace.REG)
+      init = acc_g[0].store(0.0)
+      init = acc_u.after(init)[0].store(0.0)
+      acc_g, acc_u = acc_g.after(init), acc_u.after(init)
+      upd_g = acc_g[0].store(acc_g.after(lblk)[0] + contrib_g)
+      upd_u = acc_u.after(upd_g)[0].store(acc_u.after(lblk)[0] + contrib_u).end(lblk)
+      total_g = _warp_reduce_sum_staged(acc_g.after(upd_u)[0], part.lane, part.lane_extent, 90)
+      total_u = _warp_reduce_sum_staged(acc_u.after(upd_u)[0], part.lane, part.lane_extent, 95)
+      val = _silu_uop(total_g) * total_u
+      if store_fp16: val = val.cast(dtypes.float16)
+      return out[row].store(val).sink(arg=KernelInfo(name=name, opts_to_apply=()))
     return kernel
 
   def kernel(out:UOp, gate_words:UOp, up_words:UOp, x:UOp) -> UOp:

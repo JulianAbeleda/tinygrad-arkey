@@ -926,7 +926,7 @@ def flash_decode_live_split_block_tile(q:Tensor, cache_kv:Tensor, Tc:UOp, Hd:int
                                        freqs:Tensor|None=None, query_group_size:int|None=None, stage_width:int=1,
                                        token_block:int=16, lane_width:int=32, score_group_width:int|None=None,
                                        warps:int|None=None, reduce_structure:str="staged", dot_pair_width:int=2,
-                                       combine_fp16:bool=False) -> Tensor:
+                                       combine_lane_width:int|None=None, combine_fp16:bool=False) -> Tensor:
   """Execute the selected live-split flash decode and return ``[Hq, Hd]``."""
   if not fused_combine: raise ValueError("fused_combine=False is no longer supported for decode live-split routes")
   # TG7: this is a pure shape-based route SELECTION (which of G4/G5 matches, to label the emitted
@@ -955,6 +955,7 @@ def flash_decode_live_split_block_tile(q:Tensor, cache_kv:Tensor, Tc:UOp, Hd:int
                                          token_block=token_block, lane_width=lane_width,
                                          score_group_width=score_group_width, warps=warps,
                                          reduce_structure=reduce_structure, dot_pair_width=dot_pair_width,
+                                         combine_lane_width=combine_lane_width,
                                          combine_fp16=combine_fp16)
   tile_program = KernelProgram(route.route_id, f"{route.candidate_id}.tile",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED, spec.emit_tile(Tc),

@@ -1,0 +1,8 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_producer_kv_cache_sink",
+  "description": "Terminal K RMSNorm+RoPE producer-owned K/V cache sink. On RTX 5090 NV sm_120, six NVRTC full-cache byte gates passed for fp16/fp32 caches and first/interior/last slots. The depth-512 graph removes all 36 E_8_8_16_2 stores (516 to 480 nodes), with corrected profile node sum -47.040 us/token and union -45.250 us/token. A reps=7 control/candidate/control plain bracket measured 4.553372 / 4.516326 / 4.544594 ms/token, recovering 32.658 us/token with identical token streams. TINYGRAD_PRODUCER_KV_CACHE_SINK_DISABLE=1 restores the legacy store chain at model load.",
+  "promoted_targets": [
+    {"backend": "NV", "architecture": "sm_120"}
+  ]
+}

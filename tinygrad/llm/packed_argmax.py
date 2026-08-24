@@ -8,6 +8,87 @@ kernel, or model-shape knowledge.
 from __future__ import annotations
 
 from tinygrad import Tensor, dtypes
+from tinygrad.codegen.late.warp_reduce import _staged_shfl
+from tinygrad.dtype import AddrSpace
+from tinygrad.helpers import cdiv
+from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
+from tinygrad.uop.ops import AxisType, KernelInfo, UOp
+
+
+def _argmax_pair(best_value:UOp, best_index:UOp, other_value:UOp, other_index:UOp) -> tuple[UOp, UOp]:
+  """Select the larger fp32 value, breaking exact ties toward the first index."""
+  better = (other_value > best_value) | (other_value.eq(best_value) & (other_index < best_index))
+  return better.where(other_value, best_value), better.where(other_index, best_index)
+
+
+def emit_native_finite_fp32_argmax(n:int, threads:int=1024) -> callable:
+  """One-CTA first-index argmax over one finite contiguous fp32 row.
+
+  Each thread scans a fixed strided slice in registers, each warp reduces its
+  value/index pair with shuffles, and warp zero reduces the 32 shared winners.
+  Value comparisons remain fp32 throughout, so this preserves ordinary argmax
+  ordering (including signed-zero ties) without a packed-u64 data path.
+  """
+  if not isinstance(n, int) or n < 1: raise ValueError(f"n must be a positive integer, got {n!r}")
+  if threads not in (256, 512, 1024): raise ValueError(f"threads must be 256, 512, or 1024, got {threads}")
+  warps = threads // 32
+  def kernel(out:UOp, x:UOp) -> UOp:
+    tid = UOp.special(threads, "lidx0")
+    warp, lane = tid // 32, tid % 32
+
+    best_value_reg = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG)
+    best_index_reg = UOp.placeholder((1,), dtypes.int32, 21, addrspace=AddrSpace.REG)
+    value_init = best_value_reg[0].store(-float("inf"))
+    index_init = best_index_reg.after(value_init)[0].store(n)
+    best_value_reg = best_value_reg.after(value_init, index_init)
+    best_index_reg = best_index_reg.after(value_init, index_init)
+
+    step = UOp.range(cdiv(n, threads), 0, axis_type=AxisType.REDUCE)
+    index = step * threads + tid
+    valid = index < n
+    value = valid.where(x.index(valid.where(index, 0)).load(dtype=dtypes.float32), -float("inf"))
+    next_value, next_index = _argmax_pair(best_value_reg.after(step)[0], best_index_reg.after(step)[0],
+                                           value, index.cast(dtypes.int32))
+    value_update = best_value_reg[0].store(next_value)
+    index_update = best_index_reg.after(value_update)[0].store(next_index).end(step)
+    best_value, best_index = best_value_reg.after(index_update)[0], best_index_reg.after(index_update)[0]
+
+    for slot, offset in enumerate((16, 8, 4, 2, 1), 90):
+      other_value = _staged_shfl(best_value, offset, lane, slot)
+      other_index = _staged_shfl(best_index, offset, lane, slot+5)
+      best_value, best_index = _argmax_pair(best_value, best_index, other_value, other_index)
+
+    shared_values = UOp.placeholder((warps,), dtypes.float32, 40, addrspace=AddrSpace.LOCAL)
+    shared_indices = UOp.placeholder((warps,), dtypes.int32, 41, addrspace=AddrSpace.LOCAL)
+    value_publish = shared_values[warp].store(best_value, lane.eq(0))
+    index_publish = shared_indices.after(value_publish)[warp].store(best_index, lane.eq(0))
+    ready = UOp.barrier(UOp.group(index_publish))
+
+    valid_warp = lane < warps
+    shared_index = valid_warp.where(lane, 0)
+    block_value = valid_warp.where(shared_values.after(ready)[shared_index], -float("inf"))
+    block_index = valid_warp.where(shared_indices.after(ready)[shared_index], n)
+    for slot, offset in enumerate((16, 8, 4, 2, 1), 110):
+      other_value = _staged_shfl(block_value, offset, lane, slot)
+      other_index = _staged_shfl(block_index, offset, lane, slot+5)
+      block_value, block_index = _argmax_pair(block_value, block_index, other_value, other_index)
+    return out[0].store(block_index, tid.eq(0)).sink(
+      arg=KernelInfo(name=f"native_finite_fp32_argmax_{n}_t{threads}", opts_to_apply=()))
+  return kernel
+
+
+def native_argmax_finite_fp32(x:Tensor, threads:int=1024) -> Tensor:
+  """Execute the one-kernel finite-fp32 argmax for one contiguous NV row."""
+  if x.dtype != dtypes.float32 or x.ndim != 2 or x.shape[0] != 1 or not isinstance(x.shape[1], int):
+    raise ValueError(f"native argmax needs one static fp32 row, got shape={x.shape} dtype={x.dtype}")
+  if not str(x.device).startswith("NV"): raise ValueError(f"native argmax is NV-only, got {x.device}")
+  n = x.shape[1]
+  program = KernelProgram("decode_native_finite_fp32_argmax", f"vocab_{n}_t{threads}",
+    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emit_native_finite_fp32_argmax(n, threads),
+    output_spec=OutputSpec((1,), dtypes.int32))
+  # The held decode return must not be a view of the custom program's internal
+  # allocation: that allocation participates in the next replay's memory plan.
+  return execute_promoted_program(None, x.reshape(n).contiguous(), program=program).reshape(1, 1).clone()
 
 
 def packed_argmax_finite_fp32(x:Tensor, axis:int=-1, keepdim:bool=False) -> Tensor:

@@ -1,0 +1,6 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_q4_direct_shared_q8_attention",
+  "description": "Cooperative Q4/Q8 direct-output promotion record. This sub-variant of the NV sm_120 shared-Q8 max17 lease merges the existing four warp partials inside the producer CTA in the same left-to-right fp32 order and removes 43 standalone completion kernels per token (17 Q and 26 K/V). Promoted after identical token streams, a -47.504 us inclusive device bucket / -52.312 us union profile, depth-512 reverse wall passes at reps 9 and 15 (-15.038 and -22.979 us/token), and a depth-128 pass (-61.639 us/token). TINYGRAD_SHARED_Q8_Q4_PARTIAL_OUTPUT=1 restores the prior partial-output ABI.",
+  "promoted_targets": [{"backend": "NV", "architecture": "sm_120"}]
+}

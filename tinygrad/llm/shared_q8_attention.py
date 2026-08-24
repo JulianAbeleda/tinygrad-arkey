@@ -33,6 +33,10 @@ class SharedQ8AttentionAdmission:
   block_index: int
   target: tuple[str, str] = ("NV", "sm_120")
   cooperative_q4: bool = False
+  # Research-only direct-output spelling for the cooperative Q4 consumer.
+  # It preserves the four warp partials and folds their exact fp32 sum into
+  # the producer CTA, removing the standalone completion kernel.
+  q4_direct_output: bool = False
   # Kept separate from the Q4 cooperative lease: this selects only the Q6 V
   # direct-output consumer in a real Q4/Q4/Q6 attention group.  It is an
   # explicit qualification lease, never a model-load policy.
@@ -42,6 +46,9 @@ class SharedQ8AttentionAdmission:
     if not isinstance(self.block_index, int) or self.block_index < 0: raise ValueError("block_index must be non-negative")
     if self.target != ("NV", "sm_120"): raise ValueError("only the isolated NV sm_120 qualification target is supported")
     if not isinstance(self.cooperative_q4, bool): raise ValueError("cooperative_q4 must be bool")
+    if not isinstance(self.q4_direct_output, bool): raise ValueError("q4_direct_output must be bool")
+    if self.q4_direct_output and not self.cooperative_q4:
+      raise ValueError("q4_direct_output requires cooperative_q4")
     if not isinstance(self.q6_direct_output, bool): raise ValueError("q6_direct_output must be bool")
 
 def _pack4(vs):
@@ -205,8 +212,8 @@ def _emit_q4(rows, rt=2):
     return out[row].store(t).end(ro,ri,p4).sink(arg=KernelInfo(name=f"q4k_q8_dp4a_{rows}_{_K}",opts_to_apply=()))
   return kernel
 
-def _emit_q4_cooperative(rows, block_count:UOp):
-  """Closed-lease four-warp Q4/Q8 consumer; four partials require an external sum."""
+def _emit_q4_cooperative(rows, block_count:UOp, *, direct_output:bool=False):
+  """Closed-lease four-warp Q4/Q8 consumer, with optional exact in-CTA partial merge."""
   if rows not in (_Q_ROWS,_KV_ROWS): raise ValueError("cooperative Q4 requires a production attention shape")
   def kernel(out,w,xp):
     row,lid=UOp.special(rows,"gidx0"),UOp.special(128,"lidx0")
@@ -226,6 +233,13 @@ def _emit_q4_cooperative(rows, block_count:UOp):
       c=c+_q8_d(xp,block*8+group)*(d*sc.cast(dtypes.float32)*dot-dm*mn.cast(dtypes.float32)*sx.cast(dtypes.float32))
     a=UOp.placeholder((1,),dtypes.float32,20,addrspace=AddrSpace.REG); a=a.after(a[0].store(0.)); a=a.after(a[0].store(a.after(br)[0]+c).end(br)); t=a[0]
     for slot,off in enumerate((16,8,4,2,1),90): t=t+_staged_shfl(t,off,lane,slot)
+    if direct_output:
+      smem=UOp.placeholder((4,),dtypes.float32,230,addrspace=AddrSpace.LOCAL)
+      published=smem[warp].store(t,lane.eq(0)); ready=UOp.barrier(UOp.group(published))
+      merged=UOp.const(dtypes.float32,0.0)
+      for wi in range(4): merged=merged+smem.after(ready)[wi]
+      return out[row].store(merged,lid.eq(0)).sink(
+        arg=KernelInfo(name=f"q4k_warp_coop_q8_dp4a_direct_{rows}_{_K}",opts_to_apply=()))
     return out[row,warp].store(t,lane.eq(0)).sink(
       arg=KernelInfo(name=f"q4k_warp_coop_q8_dp4a_partial_{rows}_{_K}",opts_to_apply=()))
   return kernel
@@ -331,14 +345,16 @@ def shared_q8_attention_call(admission, q_linear, k_linear, v_linear, x:Tensor, 
     xp=execute_promoted_program(None,x[:,0,:].reshape(_K),program=provider)
   def run(linear, rows, emitter, storage):
     cooperative=admission.cooperative_q4 and emitter is _emit_q4
+    q4_direct=cooperative and admission.q4_direct_output
     q6_direct=admission.q6_direct_output and emitter is _emit_q6
-    emitted=(lambda rows:_emit_q4_cooperative(rows,cooperative_blocks)) if cooperative else (_emit_q6_warp_direct if q6_direct else emitter)
-    shape=(rows,4) if cooperative else (rows,)
-    suffix='.coop' if cooperative else '.q6_direct' if q6_direct else ''
+    emitted=(lambda rows:_emit_q4_cooperative(rows,cooperative_blocks,direct_output=q4_direct)) if cooperative else \
+      (_emit_q6_warp_direct if q6_direct else emitter)
+    shape=(rows,4) if cooperative and not q4_direct else (rows,)
+    suffix='.coop_direct' if q4_direct else '.coop' if cooperative else '.q6_direct' if q6_direct else ''
     program=KernelProgram("decode_shared_q8_attention", f"{route_kind}.blk{admission.block_index}.{rows}{suffix}",
       KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emitted(rows), output_spec=OutputSpec(shape,dtypes.float32))
     ret=execute_promoted_program(None,storage.to(x.device),xp,program=program)
-    if cooperative: ret=ret.sum(axis=1).contiguous()
+    if cooperative and not q4_direct: ret=ret.sum(axis=1).contiguous()
     return ret.reshape(1,1,rows)
   v_emitter,v_storage=(_emit_q4,v_linear.q4k_storage.words) if isinstance(v_linear,Q4KPrimitiveLinear) else (_emit_q6,v_linear.q6k_storage.halfs)
   return run(q_linear,_Q_ROWS,_emit_q4,q_linear.q4k_storage.words), run(k_linear,_KV_ROWS,_emit_q4,k_linear.q4k_storage.words), run(v_linear,_KV_ROWS,v_emitter,v_storage)

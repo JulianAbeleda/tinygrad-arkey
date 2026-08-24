@@ -1,0 +1,6 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_native_argmax",
+  "description": "One-CTA finite-fp32 decode argmax promotion. On RTX 5090 NV sm_120 at depth 512, the 1024-thread paired fp32/int32 reducer removes the three scheduler r_* reductions while preserving first-index ties and signed-zero equality. Random, all-equal, tied, signed-zero, and finite-extrema microgates matched ordinary argmax. After adding a held one-element clone for replay-safe feedback, the reps=9 control/candidate/control wall bracket was token-exact and measured 4.6057195 / 4.5493336 / 4.6057190 ms/token, a 56.386 us/token (1.239%) recovery. TINYGRAD_NATIVE_ARGMAX_DISABLE=1 restores the scheduler argmax tail at model load.",
+  "promoted_targets": [{"backend": "NV", "architecture": "sm_120"}]
+}

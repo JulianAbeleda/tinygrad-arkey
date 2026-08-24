@@ -105,6 +105,26 @@ def test_q6_direct_lease_changes_only_q6_v_consumer_and_keeps_the_provider_share
   assert len({id(inputs[1].uop) for inputs,_p in seen[1:]})==1
 
 
+def test_cooperative_q4_direct_output_folds_the_external_completion(monkeypatch):
+  import tinygrad.llm.shared_q8_attention as route
+  seen=[]
+  def fake_execute(_output,*inputs,program):
+    seen.append((inputs,program)); return Tensor.empty(*program.output_spec.shape,dtype=program.output_spec.dtype)
+  monkeypatch.setattr(route,"execute_promoted_program",fake_execute)
+  lease=SharedQ8AttentionAdmission(3,cooperative_q4=True,q4_direct_output=True,q6_direct_output=True)
+  out=shared_q8_attention_call(lease,_q4(4096),_q4(1024),_q6(1024),Tensor.empty(1,1,4096),
+    UOp.variable("start_pos",0,1023).bind(513))
+  assert tuple(x.shape for x in out)==((1,1,4096),(1,1,1024),(1,1,1024))
+  q4_programs=[p for _i,p in seen if p.program_id.endswith(".coop_direct")]
+  assert len(q4_programs)==2 and {p.output_spec.shape for p in q4_programs}=={(4096,),(1024,)}
+  emitted=[p.emitter(UOp.placeholder(p.output_spec.shape,dtypes.float32,0),
+    UOp.placeholder((p.output_spec.shape[0]*16*36,),dtypes.uint32,1),
+    UOp.placeholder((1152,),dtypes.uint32,2)) for p in q4_programs]
+  assert {ast.arg.name for ast in emitted}=={
+    "q4k_warp_coop_q8_dp4a_direct_4096_4096","q4k_warp_coop_q8_dp4a_direct_1024_4096"}
+  assert all(any(u.op is Ops.BARRIER for u in ast.toposort()) for ast in emitted)
+
+
 def test_shared_q8_consumes_only_explicit_reduce_output_marker_sources(monkeypatch):
   import tinygrad.llm.shared_q8_attention as route
   seen = []
@@ -140,6 +160,8 @@ def test_shared_q8_lease_cannot_widen_target_or_block_scope():
   with pytest.raises(ValueError): SharedQ8AttentionAdmission(-1)
   with pytest.raises(ValueError): SharedQ8AttentionAdmission(0, ("AMD", "gfx1100"))
   with pytest.raises(ValueError): SharedQ8AttentionAdmission(0, cooperative_q4=1)
+  with pytest.raises(ValueError): SharedQ8AttentionAdmission(0, q4_direct_output=1)
+  with pytest.raises(ValueError): SharedQ8AttentionAdmission(0, q4_direct_output=True)
   with pytest.raises(ValueError): SharedQ8AttentionAdmission(0, q6_direct_output=1)
 
 

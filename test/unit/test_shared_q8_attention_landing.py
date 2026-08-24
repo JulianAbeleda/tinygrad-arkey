@@ -18,6 +18,9 @@ def _policy_path() -> str:
 def _q6_direct_policy_path() -> str:
   return str(mrp._DECODE_Q6_DIRECT_SHARED_Q8_ATTENTION_PROMOTION_RECORD)
 
+def _q4_direct_policy_path() -> str:
+  return str(mrp._DECODE_Q4_DIRECT_SHARED_Q8_ATTENTION_PROMOTION_RECORD)
+
 
 def test_shared_q8_policy_record_promotes_nv_sm120():
   assert mrp.decode_shared_q8_attention_promoted(("NV", "sm_120")) is True
@@ -33,6 +36,25 @@ def test_q6_direct_policy_record_promotes_nv_sm120():
   data = __import__("json").loads(__import__("pathlib").Path(_q6_direct_policy_path()).read_text())
   assert data["schema"] == "boltbeam.route_policy.v1"
   assert data["promoted_targets"] == [{"backend": "NV", "architecture": "sm_120"}]
+
+def test_q4_direct_policy_record_promotes_nv_sm120():
+  assert mrp.decode_q4_direct_shared_q8_attention_promoted(("NV", "sm_120")) is True
+  assert mrp.decode_q4_direct_shared_q8_attention_promoted(("AMD", "gfx1100")) is False
+  data = __import__("json").loads(__import__("pathlib").Path(_q4_direct_policy_path()).read_text())
+  assert data["schema"] == "boltbeam.route_policy.v1"
+  assert data["promoted_targets"] == [{"backend": "NV", "architecture": "sm_120"}]
+
+def test_q4_direct_loader_promotes_explicit_target(tmp_path):
+  rec = tmp_path / "q4-direct-promoted.json"
+  rec.write_text('{"schema": "boltbeam.route_policy.v1", "promoted_targets": '
+                 '[{"backend": "NV", "architecture": "sm_120"}]}')
+  assert mrp.load_decode_q4_direct_shared_q8_attention_promotion(str(rec)) == frozenset({("NV", "sm_120")})
+
+def test_q4_direct_loader_rejects_wrong_schema(tmp_path):
+  bad = tmp_path / "q4-direct-bad.json"
+  bad.write_text('{"schema": "not.route_policy.v1", "promoted_targets": []}')
+  with pytest.raises(ValueError, match="route_policy.v1"):
+    mrp.load_decode_q4_direct_shared_q8_attention_promotion(str(bad))
 
 
 def test_q6_direct_loader_promotes_explicit_target(monkeypatch, tmp_path):

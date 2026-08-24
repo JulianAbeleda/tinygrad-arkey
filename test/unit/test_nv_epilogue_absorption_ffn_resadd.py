@@ -18,7 +18,7 @@ import json, pathlib
 import numpy as np
 import pytest
 
-from tinygrad import Tensor, dtypes
+from tinygrad import Tensor, dtypes, getenv
 from tinygrad.codegen import to_program
 from tinygrad.helpers import Target
 from tinygrad.llm.model_route_plan import (decode_ffn_down_resadd_promoted, load_decode_ffn_down_resadd_promotion,
@@ -140,14 +140,14 @@ def test_q4k_route_picks_ffn_down_resadd_only_under_the_lease():
   leased = q4k_primitive_linear_call(_FakeQ4KFFNDown(True), x, fallback=lambda _: x, arch_ok=True,
                                      epilogue_inputs={"normed_h": h})
   names = _call_names(leased)
-  assert "q4k_g3_lanemap_gemv_epi_ffnresadd_4096_12288" in names
+  assert "q4k_g3_lanemap_gemv_vec_epi_ffnresadd_4096_12288" in names
   assert not any("gemv_4096_12288" in name and "ffnresadd" not in name for name in names)
   assert leased.dtype == dtypes.float32
 
   closed = q4k_primitive_linear_call(_FakeQ4KFFNDown(False), x, fallback=lambda _: x, arch_ok=True,
                                      epilogue_inputs={"normed_h": h})
   closed_names = _call_names(closed)
-  assert "q4k_g3_lanemap_gemv_4096_12288" in closed_names
+  assert "q4k_g3_lanemap_gemv_vec_4096_12288" in closed_names
   assert not any("ffnresadd" in name for name in closed_names)
 
 
@@ -159,8 +159,21 @@ def test_q4k_route_picks_ffn_down_resadd_under_the_promoted_flag():
   promoted = q4k_primitive_linear_call(_FakeQ4KFFNDown(promoted=True), x, fallback=lambda _: x, arch_ok=True,
                                        epilogue_inputs={"normed_h": h})
   names = _call_names(promoted)
-  assert "q4k_g3_lanemap_gemv_epi_ffnresadd_4096_12288" in names
+  assert "q4k_g3_lanemap_gemv_vec_epi_ffnresadd_4096_12288" in names
   assert promoted.dtype == dtypes.float32
+
+
+def test_q4k_route_scalar_load_rollback_restores_scalar_name(monkeypatch):
+  # getenv is process-cached, so isolate both the environment mutation and its cache entry.
+  getenv.cache_clear()
+  with monkeypatch.context() as m:
+    m.setenv("TINYGRAD_Q4K_SCALAR_LOAD", "1")
+    x = Tensor.zeros((1, 1, 12288), dtype=dtypes.float16, device="CPU")
+    h = Tensor.zeros((1, 1, 4096), dtype=dtypes.float32, device="CPU")
+    out = q4k_primitive_linear_call(_FakeQ4KFFNDown(promoted=True), x, fallback=lambda _: x, arch_ok=True,
+                                    epilogue_inputs={"normed_h": h})
+    assert "q4k_g3_lanemap_gemv_epi_ffnresadd_4096_12288" in _call_names(out)
+  getenv.cache_clear()
 
 
 def test_ffn_down_resadd_promotion_loader_closed_default(tmp_path):

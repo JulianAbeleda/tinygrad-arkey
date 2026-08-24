@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from tinygrad import Tensor, dtypes
-from tinygrad.llm.packed_argmax import packed_argmax_finite_fp32
+from tinygrad.llm.packed_argmax import emit_native_finite_fp32_argmax, packed_argmax_finite_fp32
 
 
 def _check(a:np.ndarray, axis:int):
@@ -44,3 +44,9 @@ def test_packed_argmax_fail_closed_input_contract():
     packed_argmax_finite_fp32(Tensor(1.0))
   with pytest.raises(ValueError, match="axis"):
     packed_argmax_finite_fp32(Tensor([1.0]), 1)
+
+
+def test_native_argmax_emitter_contract():
+  for threads in (256, 512, 1024): assert callable(emit_native_finite_fp32_argmax(151936, threads))
+  with pytest.raises(ValueError, match="positive"): emit_native_finite_fp32_argmax(0)
+  with pytest.raises(ValueError, match="threads"): emit_native_finite_fp32_argmax(17, 128)

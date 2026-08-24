@@ -143,6 +143,13 @@ def test_combine_lane_width_validation():
   assert FlashCombineSpec(Hd=128, Hq=32, split_count=48, lane_width=16).validate() is None
 
 
+def test_live_split_exposes_independent_combine_width():
+  from inspect import signature
+  from tinygrad.llm.flash_decode_attention import flash_decode_live_split_block_tile
+  parameter = signature(flash_decode_live_split_block_tile).parameters["combine_lane_width"]
+  assert parameter.default is None
+
+
 def test_production_defaults_never_consult_the_env(monkeypatch):
   """Production defaults are descriptor-owned: the env switches are legacy aliases only (builder params
   None), so the G4/G5 emission must be byte-identical whether or not the env vars are set."""

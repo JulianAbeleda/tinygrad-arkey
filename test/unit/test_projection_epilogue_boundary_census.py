@@ -34,9 +34,28 @@ def _candidate_callify_redirect():
   with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1): yield
 
 
-def _program(n:int, k:int, epilogue:Q4KGEMVEpilogue|None=None) -> KernelProgram:
+def _program(n:int, k:int, epilogue:Q4KGEMVEpilogue|None=None, load_style:str="scalar",
+             typed_output:DeclaredTypedOutput|None=None) -> KernelProgram:
   return KernelProgram("p2b_boundary_census", "p2b_boundary_census.gemv", KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
-    q4k_g3_lanemap_gemv_kernel(n, k, epilogue=epilogue), output_spec=OutputSpec((n,), dtypes.float32))
+    q4k_g3_lanemap_gemv_kernel(n, k, epilogue=epilogue, load_style=load_style),
+    output_spec=OutputSpec((n,), dtypes.float32, typed_output=typed_output))
+
+
+@pytest.mark.parametrize("load_style", ("scalar", "vector"))
+def test_declared_output_survives_precompiled_function_substitution(load_style):
+  from tinygrad.callify import _declared_epilogue_absorption_after
+  n = k = 4096
+  declared = DeclaredTypedOutput(TypedLayout(dtypes.float32, (n,), (1, 1, n)), False, True)
+  epi = _program(n, k, Q4KGEMVEpilogue("residual_add"), load_style=load_style, typed_output=declared)
+  words, activation = _words(n, k), Tensor.empty(k, dtype=dtypes.float16)
+  @function(precompile=True, allow_implicit=True)
+  def consumer(residual):
+    out = execute_promoted_program(None, words, activation, residual.reshape(n), program=epi)
+    return runtime_activation(out.reshape(1, 1, n).contiguous())
+  result = consumer(Tensor.empty(1, 1, n, dtype=dtypes.float32))
+  fn_uop = result.uop.src[0]
+  assert fn_uop.op is Ops.FUNCTION and fn_uop.src[0].op is Ops.TUPLE
+  assert _declared_epilogue_absorption_after(fn_uop.src[0].src[0]) is not None
 
 
 def _calls(t:Tensor) -> list[str]:
@@ -198,8 +217,9 @@ def test_synthetic_composed_fp16_combine_and_plain_call_output_has_no_adapter():
   assert names == ["flash_fused_gmax_combine_f16_32_128", "test", "q4k_g3_lanemap_gemv_epi_resadd_4096_4096"]
 
 
+@pytest.mark.parametrize("load_style", ("scalar", "vector"))
 @pytest.mark.skipif(not _cuda_available(), reason="requires CUDA/NV grid-parallel kernels")
-def test_owned_output_stays_direct_through_precompiled_consumer_opaque_call():
+def test_owned_output_stays_direct_through_precompiled_consumer_opaque_call(load_style):
   """Reproduce the real block-output -> next block -> attention-O topology.
 
   The consumer FUNCTION's invocation normalization and its nested opaque CALL
@@ -210,7 +230,7 @@ def test_owned_output_stays_direct_through_precompiled_consumer_opaque_call():
   from tinygrad.engine.realize import compile_linear
   n = k = 4096
   words, activation = _words(n, k), Tensor.empty(k, dtype=dtypes.float16)
-  epi = _program(n, k, Q4KGEMVEpilogue("residual_add"))
+  epi = _program(n, k, Q4KGEMVEpilogue("residual_add"), load_style=load_style)
   @function(precompile=True, allow_implicit=True)
   def producer(v): return runtime_activation((runtime_activation(v) + 1).contiguous())
   @function(precompile=True, allow_implicit=True)
@@ -219,9 +239,13 @@ def test_owned_output_stays_direct_through_precompiled_consumer_opaque_call():
     return runtime_activation(out.reshape(1, 1, n).contiguous())
   residual = runtime_activation(producer(Tensor.empty(1, 1, n)).contiguous()).reshape(1, 1, n)
   out = consumer(residual)
-  names = [getattr(u.src[0].arg, "name", "") for u in compile_linear(out.linear_with_vars()[0]).toposort() if u.op is Ops.CALL]
-  assert "E_32_32_4_86a23e1a5cd1cbd6101066fd85449138b653e9ecbb53d1d704f32aa470cd6f2b" not in names
-  assert names[2] == "q4k_g3_lanemap_gemv_epi_resadd_4096_4096"
+  linear = compile_linear(out.linear_with_vars()[0])
+  names = [getattr(u.src[0].arg, "name", "") for u in linear.toposort() if u.op is Ops.CALL]
+  trace = post_callify_copy_trace(linear)
+  assert "E_32_32_4_86a23e1a5cd1cbd6101066fd85449138b653e9ecbb53d1d704f32aa470cd6f2b" not in names, (names, trace)
+  expected = ("q4k_g3_lanemap_gemv_epi_resadd_4096_4096" if load_style == "scalar" else
+              "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096")
+  assert names[2] == expected
 
 
 @pytest.mark.skipif(not _cuda_available(), reason="requires CUDA/NV grid-parallel kernels")

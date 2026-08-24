@@ -1425,7 +1425,8 @@ class Tensor(RandMixin):
     src = (out.uop, x.uop, weight.uop)
     return Tensor(UOp(Ops.RMSNORM, out.dtype, src=src, arg=spec), device=out.device)
 
-  def _semantic_reduce_output_rmsnorm(self, x:Tensor, out:Tensor, weight:Tensor, eps:float) -> Tensor:
+  def _semantic_reduce_output_rmsnorm(self, x:Tensor, out:Tensor, weight:Tensor, eps:float,
+                                      freqs:Tensor|None=None) -> Tensor:
     """Default-off cooperative reduction/output marker with an exact fallback."""
     from tinygrad.uop.ops import ReduceOutputSpec, memory_semantic_owner
     if not all_int(x.shape) or len(x.shape) == 0: return out
@@ -1470,12 +1471,18 @@ class Tensor(RandMixin):
                                   x.uop.src[0].op is Ops.CONTIGUOUS and memory_semantic_owner(x.uop) is not None)
     identity = not owned_contiguous_candidate and (identity_uop.has_buffer_identity() or
       identity_uop.has_precompiled_output_identity() or precompiled_contiguous or after_identity or reduce_identity)
-    return Tensor(UOp(Ops.REDUCE_OUTPUT, out.dtype, (out.uop, x.uop, weight.uop),
+    if freqs is not None:
+      if rows not in (8, 32) or dim != 128 or freqs.dtype != dtypes.float32 or len(freqs.shape) != 2 or freqs.shape[1] != dim: return out
+      epilogue, extra = "rope", (freqs.uop,)
+    else:
+      epilogue, extra = "identity", ()
+    return Tensor(UOp(Ops.REDUCE_OUTPUT, out.dtype, (out.uop, x.uop, weight.uop, *extra),
                       ReduceOutputSpec(rows, dim, eps, out.dtype, input_identity_at_marker=identity,
                                        owned_contiguous_candidate=owned_contiguous_candidate,
                                        reduce_input_at_marker=reduce_identity,
                                        residual_sum_at_marker=residual_sum_identity,
-                                       warps=warps, lanes=32, per_lane=per_lane)), device=out.device)
+                                       warps=warps, lanes=32, per_lane=per_lane,
+                                       epilogue=epilogue)), device=out.device)
 
   def _online_attention_primitive(self, key:Tensor, value:Tensor, attn_mask:Tensor|None,
                                   scale:float, acc_dtype:DType, out_dtype:DType) -> Tensor|None:

@@ -100,6 +100,16 @@ class _Words:
     return self
 
 
+def test_q4k_single_projection_vector_load_is_sm120_default_with_scalar_rollback():
+  nv = SimpleNamespace(route_admission=SimpleNamespace(capability=SimpleNamespace(backend="NV", architecture="sm_120")))
+  amd = SimpleNamespace(route_admission=SimpleNamespace(capability=SimpleNamespace(backend="AMD", architecture="gfx1100")))
+  enabled = lambda _name, default=0: default
+  scalar = lambda name, default=0: 1 if name == "TINYGRAD_Q4K_SCALAR_LOAD" else default
+  assert decode_routes._q4k_single_projection_load_style(nv, enabled) == "vector"
+  assert decode_routes._q4k_single_projection_load_style(amd, enabled) == "scalar"
+  assert decode_routes._q4k_single_projection_load_style(nv, scalar) == "scalar"
+
+
 def test_q4k_smallk_batched_routes_to_fallback(monkeypatch):
   linear = SimpleNamespace(decode_enabled=True, bias=None, in_features=8, name="batched_test_linear")
   x = _TensorShapeOnly(shape=(1, 4, 8))

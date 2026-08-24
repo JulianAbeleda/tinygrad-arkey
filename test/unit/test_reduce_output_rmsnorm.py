@@ -813,6 +813,28 @@ def test_multi_row_marker_lowers_to_fused_call_name():
     assert _names(marked) == [f"reduce_output_rmsnorm_{rows}_128"]
 
 
+@pytest.mark.parametrize("rows", (32, 8))
+def test_multi_row_rope_epilogue_body(rows):
+  from tinygrad.codegen.late.reduce_output import emit_reduce_output
+  from tinygrad.uop.ops import ReduceOutputSpec, UOp
+  spec = ReduceOutputSpec(rows, 128, 1e-6, dtypes.float32, warps=rows, lanes=32, per_lane=4, epilogue="rope")
+  out = UOp.placeholder((rows * 128,), dtypes.float32, 0)
+  x = UOp.placeholder((rows * 128,), dtypes.float32, 1)
+  w = UOp.placeholder((128,), dtypes.float16, 2)
+  freqs = UOp.placeholder((1024, 128), dtypes.float32, 3)
+  body = emit_reduce_output(spec, dtypes.float32, dtypes.float16)(out, x, w, freqs)
+  assert body.arg.name == f"reduce_output_rmsnorm_rope_{rows}_128"
+  # accumulator + shared publication + the paired low/high output stores.
+  assert sum(u.op is Ops.STORE for u in body.toposort()) == 5
+
+
+def test_rope_epilogue_fails_closed_outside_qk_shape():
+  from tinygrad.codegen.late.reduce_output import emit_reduce_output
+  from tinygrad.uop.ops import ReduceOutputSpec
+  with pytest.raises(ValueError):
+    emit_reduce_output(ReduceOutputSpec(1, 4096, 1e-6, dtypes.float32, epilogue="rope"), dtypes.float32, dtypes.float16)
+
+
 def test_multi_row_fail_closed_combinations():
   from tinygrad.codegen.late.reduce_output import emit_reduce_output
   from tinygrad.uop.ops import ReduceOutputSpec

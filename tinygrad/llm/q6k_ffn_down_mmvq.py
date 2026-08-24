@@ -36,19 +36,25 @@ BLOCKS_PER_SUB = BLOCKS_PER_WARP // 2      # 6
 class Q6KFFNDownMMVQAdmission:
   block_index: int
   fp16_fma: bool = True
+  rows_per_block: int = 1
   def __post_init__(self):
     if not isinstance(self.block_index, int) or isinstance(self.block_index, bool) or self.block_index < 0:
       raise ValueError("Q6_K FFN-down MMVQ block index must be a non-negative integer")
     if not isinstance(self.fp16_fma, bool):
       raise ValueError("fp16_fma must be bool")
+    if not isinstance(self.rows_per_block, int) or isinstance(self.rows_per_block, bool) or self.rows_per_block not in (1, 2, 4, 8):
+      raise ValueError("rows_per_block must be one of 1, 2, 4, or 8")
 
 
-def emit_q6k_four_warp_fp16_direct() -> callable:
+def emit_q6k_four_warp_fp16_direct(*, rows_per_block:int=1) -> callable:
   """Four-warp fp16-direct Q6_K FFN-down consumer (128 threads/row, no Q8 provider)."""
+  if rows_per_block not in (1, 2, 4, 8): raise ValueError(f"unsupported Q6 FFN-down rows_per_block {rows_per_block}")
   def kernel(out:UOp, halfs:UOp, x:UOp, h:UOp) -> UOp:
-    row = UOp.special(ROWS, "gidx0")
-    lid = UOp.special(WARP * WARPS_PER_ROW, "lidx0")
-    warp, lane = lid // WARP, lid % WARP
+    row_group = UOp.special(ROWS // rows_per_block, "gidx0")
+    lid = UOp.special(WARP * WARPS_PER_ROW * rows_per_block, "lidx0")
+    row_in_block, row_lid = lid // (WARP * WARPS_PER_ROW), lid % (WARP * WARPS_PER_ROW)
+    row = row_group * rows_per_block + row_in_block
+    warp, lane = row_lid // WARP, row_lid % WARP
     sub, pos = lane // POS, lane % POS
 
     acc = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG)
@@ -62,15 +68,16 @@ def emit_q6k_four_warp_fp16_direct() -> callable:
 
     for slot, offset in enumerate((16, 8, 4, 2, 1), 90):
       total = total + _staged_shfl(total, offset, lane, slot)
-    smem = UOp.placeholder((WARPS_PER_ROW,), dtypes.float32, 40, addrspace=AddrSpace.LOCAL)
-    published = smem[warp].store(total, lane.eq(0))
+    smem = UOp.placeholder((WARPS_PER_ROW * rows_per_block,), dtypes.float32, 40, addrspace=AddrSpace.LOCAL)
+    published = smem[row_in_block * WARPS_PER_ROW + warp].store(total, lane.eq(0))
     ready = UOp.barrier(UOp.group(published))
     merged = UOp.const(dtypes.float32, 0.0)
     for wi in range(WARPS_PER_ROW):
-      merged = merged + smem.after(ready)[wi]
+      merged = merged + smem.after(ready)[row_in_block * WARPS_PER_ROW + wi]
     result = merged + h[row].cast(dtypes.float32)
-    return out[row].store(result, lid.eq(0)).sink(
-      arg=KernelInfo(name="q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd", opts_to_apply=()))
+    name = ("q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd" if rows_per_block == 1 else
+            f"q6k_fp16_mmvq_direct_rpb{rows_per_block}_4096_12288_epi_ffnresadd")
+    return out[row].store(result, row_lid.eq(0)).sink(arg=KernelInfo(name=name, opts_to_apply=()))
   return kernel
 
 
@@ -88,7 +95,8 @@ def q6k_ffn_down_mmvq_call(admission:object, linear:Any, x:Tensor, binding:Any,
   xv = x[:, 0, :].reshape(K).cast(dtypes.float16).contiguous()
   residual = epilogue_inputs["normed_h"][:, 0, :].reshape(ROWS).cast(dtypes.float32)
   consumer = KernelProgram("decode_q6k_ffn_down_mmvq", f"blk{admission.block_index}.gemv",
-    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emit_q6k_four_warp_fp16_direct(),
+    KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
+    emit_q6k_four_warp_fp16_direct(rows_per_block=admission.rows_per_block),
     output_spec=OutputSpec((ROWS,), dtypes.float32,
       typed_output=DeclaredTypedOutput(TypedLayout(dtypes.float32, (ROWS,), (1, 1, ROWS)),
         combine_fusion_admitted=False, epilogue_absorption_admitted=True)),

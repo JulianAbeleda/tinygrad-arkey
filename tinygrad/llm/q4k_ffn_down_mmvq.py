@@ -1,10 +1,9 @@
-"""Closed-default native Q4_K FFN-down MMVQ admission candidate.
+"""Admission-gated native Q4_K FFN-down MMVQ route.
 
-The route is deliberately unreachable unless a research harness attaches an
-explicit ``Q4KFFNDownMMVQAdmission`` to one concrete Q4_K FFN-down linear. It
-keeps the installed fp16 activation boundary, packs that buffer to llama's
-Q8_1 CUDA ABI, and consumes it with four warps per output row. There is no
-W1/W3 producer redesign and no generic environment-variable selector.
+The route is unreachable unless the production policy or a research harness
+attaches an explicit ``Q4KFFNDownMMVQAdmission`` to one concrete Q4_K FFN-down
+linear. The promoted fp16 spelling consumes the installed activation buffer
+with four warps per output row. There is no W1/W3 producer redesign.
 """
 from __future__ import annotations
 
@@ -16,7 +15,7 @@ from tinygrad.codegen.late.int8_dot import int8x4_dot
 from tinygrad.codegen.late.warp_reduce import WARP, _staged_shfl, _warp_reduce_sum_staged, warp_reduce_max
 from tinygrad.dtype import AddrSpace
 from tinygrad.llm.decode_kernels import (LanePartition, Q4KGateUpLaneMap, Q4K_WORDS_PER_BLOCK, _f16_word,
-  _q4k_block_dot_packed_load, _silu_uop)
+  _q4k_block_dot_packed_load, _q4k_block_dot_packed_load_vec, _silu_uop)
 from tinygrad.llm.kernel_program import (DeclaredTypedOutput, KernelProgram, KernelProgramProvenance,
   OutputSpec, ResidualViewRequest, TypedLayout, TypedViewRequest, execute_promoted_program,
   execute_research_program)
@@ -36,16 +35,20 @@ class Q4KFFNDownMMVQAdmission:
   owned_input_boundary: bool = False
   fp16_fma: bool = False
   scalar_q8_packet: bool = False
+  vector_loads: bool = False
   def __post_init__(self):
     if not isinstance(self.block_index,int) or isinstance(self.block_index,bool) or self.block_index < 0:
       raise ValueError("Q4_K FFN-down MMVQ block index must be a non-negative integer")
     if not isinstance(self.owned_input_boundary,bool): raise ValueError("owned_input_boundary must be bool")
     if not isinstance(self.fp16_fma,bool): raise ValueError("fp16_fma must be bool")
     if not isinstance(self.scalar_q8_packet,bool): raise ValueError("scalar_q8_packet must be bool")
+    if not isinstance(self.vector_loads,bool): raise ValueError("vector_loads must be bool")
     if self.owned_input_boundary and self.fp16_fma:
       raise ValueError("owned_input_boundary and fp16_fma are mutually exclusive research spellings")
     if self.scalar_q8_packet and (self.owned_input_boundary or self.fp16_fma):
       raise ValueError("scalar_q8_packet is mutually exclusive with owned_input_boundary and fp16_fma")
+    if self.vector_loads and not self.fp16_fma:
+      raise ValueError("vector_loads requires the fp16_fma spelling")
 
 
 def _pack4(values:list[UOp]) -> UOp:
@@ -157,7 +160,7 @@ def emit_ffn_w1w3_q8_scalar_packet() -> callable:
   return kernel
 
 
-def emit_four_warp_fp16_direct(block_count:UOp, *, resadd:bool=False) -> callable:
+def emit_four_warp_fp16_direct(block_count:UOp, *, resadd:bool=False, load_style:str="scalar") -> callable:
   """Four-warp fp16-FMA Q4_K FFN-down consumer (occupancy/geometry research spelling).
 
   This is the isolated geometry lever from the occupancy proof: 128 threads/row
@@ -171,6 +174,8 @@ def emit_four_warp_fp16_direct(block_count:UOp, *, resadd:bool=False) -> callabl
   each. Cross-warp partials combine through shared memory, then a staged shuffle
   reduces the 32 lanes. ``resadd`` absorbs M2b ``h + ffn_out`` in-kernel.
   """
+  if load_style not in ("scalar", "vector"): raise ValueError(f"unknown Q4 FFN-down load style {load_style!r}")
+  block_dot = _q4k_block_dot_packed_load_vec if load_style == "vector" else _q4k_block_dot_packed_load
   def kernel(out:UOp, words:UOp, x:UOp, *extra:UOp) -> UOp:
     row,lid=UOp.special(ROWS,"gidx0"),UOp.special(WARP*WARPS_PER_ROW,"lidx0")
     warp,lane=lid//WARP,lid%WARP
@@ -178,7 +183,7 @@ def emit_four_warp_fp16_direct(block_count:UOp, *, resadd:bool=False) -> callabl
     block_rel=UOp.range(block_count,2,axis_type=AxisType.LOOP)
     block=warp*BLOCKS_PER_WARP+sub_group*block_count+block_rel
     base=(row*Q4_BLOCKS+block)*Q4K_WORDS_PER_BLOCK
-    contribution=_q4k_block_dot_packed_load(words,x,base,block,word_col)
+    contribution=block_dot(words,x,base,block,word_col)
     acc=UOp.placeholder((1,),dtypes.float32,20,addrspace=AddrSpace.REG); acc=acc.after(acc[0].store(0.))
     acc=acc.after(acc[0].store(acc.after(block_rel)[0]+contribution).end(block_rel)); partial=acc[0]
     shared=UOp.placeholder(((WARPS_PER_ROW-1)*WARP,),dtypes.float32,40,addrspace=AddrSpace.LOCAL)
@@ -187,7 +192,8 @@ def emit_four_warp_fp16_direct(block_count:UOp, *, resadd:bool=False) -> callabl
     for other in range(WARPS_PER_ROW-1): total=total+shared.after(ready)[other*WARP+lane]
     for slot,offset in enumerate((16,8,4,2,1),90): total=total+_staged_shfl(total,offset,lane,slot)
     result=total+extra[0][row] if resadd else total
-    name="q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd" if resadd else "q4k_fp16_mmvq_direct_4096_12288"
+    stem = "q4k_fp16_mmvq_direct_vec" if load_style == "vector" else "q4k_fp16_mmvq_direct"
+    name=f"{stem}_4096_12288_epi_ffnresadd" if resadd else f"{stem}_4096_12288"
     return out[row].store(result,warp.eq(0)&lane.eq(0)).sink(arg=KernelInfo(name=name,opts_to_apply=()))
   return kernel
 
@@ -291,7 +297,8 @@ def q4k_ffn_down_mmvq_call(admission:object, linear:Any, x:Tensor, binding:Any,
     # to the materializing flat-buffer ABI (two extra transport kernels per block).
     consumer=KernelProgram("decode_q4k_ffn_down_mmvq",f"blk{admission.block_index}.gemv",
       KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
-      emit_four_warp_fp16_direct(UOp.const(dtypes.weakint,SUB_BLOCKS),resadd=resadd),
+      emit_four_warp_fp16_direct(UOp.const(dtypes.weakint,SUB_BLOCKS),resadd=resadd,
+        load_style="vector" if admission.vector_loads else "scalar"),
       output_spec=OutputSpec((ROWS,),dtypes.float32,
         typed_output=(DeclaredTypedOutput(TypedLayout(dtypes.float32,(ROWS,),(1,1,ROWS)),
           combine_fusion_admitted=False,epilogue_absorption_admitted=True) if resadd else None)),

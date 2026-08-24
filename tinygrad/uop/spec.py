@@ -420,7 +420,8 @@ spec_tensor = PatternMatcher([
 
   (UPat(Ops.REDUCE_OUTPUT, name="x"),
    lambda x: hasattr(x.arg, 'recipe') and _reduce_output_recipe_supported(x.arg.recipe)
-   and len(x.src) == (3 if x.arg.affine else 2)
+   and len(x.src) == (3 if x.arg.affine else 2) + int(getattr(x.arg, 'epilogue', 'identity') == 'rope')
+   and (getattr(x.arg, 'epilogue', 'identity') in ('identity', 'rope'))
    and x.dtype == x.src[0].dtype == x.arg.out_dtype),
 
   # COPY. TODO: this should not have allow_any_len, but something is adding ranges

@@ -587,7 +587,12 @@ def _elide_residual_transports(linear:UOp) -> UOp:
       if s == 1 and f.op in (Ops.SINK, Ops.COPY): continue  # own write slot, not a read
       if (b := buf_id(it.src[s])) is not None: consumers.setdefault(b, []).append(i)
   def resadd_item(i:int) -> bool:
-    return getattr(items[i].src[0].arg, "name", "").startswith("q4k_g3_lanemap_gemv_epi_resadd_")
+    # Load-width/topology variants retain the same residual-add output contract under distinct
+    # kernel names (for example ``gemv_vec_epi_resadd``). Match the semantic family and epilogue
+    # instead of pinning the scalar spelling, otherwise an identity fp32 transport reappears once
+    # per block even though the producer/consumer buffer proof below is unchanged.
+    name = getattr(items[i].src[0].arg, "name", "")
+    return name.startswith("q4k_g3_lanemap_gemv") and "_epi_resadd_" in name
   def is_identity_transport(f:UOp, out:UOp, inn:UOp) -> bool:
     # SINK bodies are interned per unique key, so the verdict is cached per body.
     if (v := _elide_transport_body_cache.get(id(f))) is not None: return v

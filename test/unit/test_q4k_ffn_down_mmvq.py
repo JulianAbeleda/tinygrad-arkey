@@ -47,6 +47,9 @@ def test_production_call_is_closed_without_explicit_admission():
   try: Q4KFFNDownMMVQAdmission(0,fp16_fma=True,scalar_q8_packet=True)
   except ValueError: pass
   else: raise AssertionError("scalar_q8_packet and fp16_fma must be mutually exclusive")
+  try: Q4KFFNDownMMVQAdmission(0,vector_loads=True)
+  except ValueError: pass
+  else: raise AssertionError("vector loads must require the fp16_fma spelling")
   assert q4k_ffn_down_mmvq_scalar_packet_call(None,None,None,None,None,None) is None
 
 
@@ -412,16 +415,17 @@ def test_four_warp_fp16_direct_matches_independent_dense_reference():
 
 
 def test_four_warp_fp16_direct_renders_four_warps_and_fp16_fma_only():
-  for resadd in (False, True):
+  for resadd, load_style in ((False, "scalar"), (True, "scalar"), (True, "vector")):
     extra = (UOp.placeholder((ROWS,), dtypes.float32, 3),) if resadd else ()
-    ast = emit_four_warp_fp16_direct(UOp.const(dtypes.weakint, SUB_BLOCKS), resadd=resadd)(
+    ast = emit_four_warp_fp16_direct(UOp.const(dtypes.weakint, SUB_BLOCKS), resadd=resadd, load_style=load_style)(
       UOp.placeholder((ROWS,), dtypes.float32, 0),
       UOp.placeholder((ROWS * Q4_BLOCKS * 36,), dtypes.uint32, 1),
       UOp.placeholder((K,), dtypes.float16, 2), *extra)
-    program, source, ptx = _render(ast, f"q4k_fp16_direct_resadd{resadd}_v1")
+    program, source, ptx = _render(ast, f"q4k_fp16_direct_resadd{resadd}_{load_style}_v1")
     assert program.arg.global_size == (ROWS, 1, 1) and program.arg.local_size == (128, 1, 1)
     assert program.arg.vars == ()
-    name = "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd" if resadd else "q4k_fp16_mmvq_direct_4096_12288"
+    stem = "q4k_fp16_mmvq_direct_vec" if load_style == "vector" else "q4k_fp16_mmvq_direct"
+    name = f"{stem}_4096_12288_epi_ffnresadd" if resadd else f"{stem}_4096_12288"
     assert name in source and "__syncthreads" in source
     assert f"< {SUB_BLOCKS};" in source
     assert "dp4a" not in ptx and ".local " not in ptx and "st.global" in ptx
@@ -431,6 +435,8 @@ def test_four_warp_fp16_direct_renders_four_warps_and_fp16_fma_only():
 
 def test_fp16_fma_admission_is_mutually_exclusive_with_owned_boundary():
   assert Q4KFFNDownMMVQAdmission(0, fp16_fma=True).fp16_fma
+  vector = Q4KFFNDownMMVQAdmission(0, fp16_fma=True, vector_loads=True)
+  assert vector.fp16_fma and vector.vector_loads
   try: Q4KFFNDownMMVQAdmission(0, owned_input_boundary=True, fp16_fma=True)
   except ValueError: pass
   else: raise AssertionError("owned boundary and fp16_fma spellings must be mutually exclusive")

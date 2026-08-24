@@ -12,6 +12,7 @@ _BOUNDARY = Path("tinygrad/llm/kernel_program.py")
 _RESEARCH_ADMISSION_BOUNDARIES = frozenset((
   Path("tinygrad/llm/decode_routes.py"),
   Path("tinygrad/llm/q4k_ffn_down_mmvq.py"),
+  Path("tinygrad/llm/qk_norm_rope_mmvq.py"),
 ))
 _RESTRICTED_EXECUTORS = frozenset(("execute_oracle_program", "execute_research_program", "execute_research_program_outputs"))
 

@@ -658,6 +658,20 @@ def lower_reduce_output_store(store:UOp, carrier:UOp|None=None, marker:UOp|None=
   spec = marker.arg
   if not (spec.input_identity_at_marker or spec.owned_contiguous_candidate or spec.reduce_input_at_marker or spec.residual_sum_at_marker): reject("marker_not_eligible"); return None
   x, weight = marker.src[1], marker.src[2]
+  if spec.epilogue == "identity":
+    if len(marker.src) != 3: reject("epilogue_arity"); return None
+    freqs_buf = None
+  elif spec.epilogue == "rope":
+    if len(marker.src) != 4: reject("epilogue_arity"); return None
+    freqs = marker.src[3]
+    freqs_buf = _identity_buffer_view(freqs)
+    if freqs_buf is None and freqs.op is Ops.MEMORY_SEMANTIC and len(freqs.src) == 1:
+      from tinygrad.uop import RUNTIME_PERSISTENT
+      if freqs.arg == RUNTIME_PERSISTENT: freqs_buf = _identity_buffer_view(freqs.src[0])
+    if freqs_buf is None or freqs.dtype != dtypes.float32 or freqs.shape is None or len(freqs.shape) != 2 or freqs.shape[1] != spec.dim:
+      reject("rope_freqs_not_identity"); return None
+  else:
+    reject("epilogue_unsupported"); return None
   out_buf, w_buf = _identity_buffer_view(target), _identity_buffer_view(weight)
   # The early owned-contiguous bit is deliberately weaker than identity. It
   # may only advance through the durable invocation-output proof; an ordinary
@@ -690,7 +704,11 @@ def lower_reduce_output_store(store:UOp, carrier:UOp|None=None, marker:UOp|None=
     out_ph = UOp.placeholder((spec.rows*spec.dim,), spec.out_dtype, 0)
     x_ph = UOp.placeholder((spec.rows*spec.dim,), x.dtype, 1)
     w_ph = UOp.placeholder((spec.dim,), weight.dtype, 2)
-    body = emit_reduce_output(spec, x.dtype, weight.dtype)(out_ph, x_ph, w_ph)
+    if spec.epilogue == "rope":
+      f_ph = UOp.placeholder(freqs.shape, freqs.dtype, 3)
+      body = emit_reduce_output(spec, x.dtype, weight.dtype)(out_ph, x_ph, w_ph, f_ph)
+    else:
+      body = emit_reduce_output(spec, x.dtype, weight.dtype)(out_ph, x_ph, w_ph)
   except ValueError:
     reject("emitter_rejected"); return None
   trace_reduce_output("selector", "accepted")
@@ -705,7 +723,7 @@ def lower_reduce_output_store(store:UOp, carrier:UOp|None=None, marker:UOp|None=
     # The owner lives on the validated MEMORY_SEMANTIC wrapper (the outer
     # CONTIGUOUS of the C6 chain carries no arg).
     body = body.replace(arg=replace(body.arg, memory_semantic_slots=((0, wrapper.arg),)))
-  return body.call(out_buf, x_buf, w_buf)
+  return body.call(out_buf, x_buf, w_buf, *((freqs_buf,) if freqs_buf is not None else ()))
 
 pm_reduce_output_store = PatternMatcher([
   (UPat(Ops.STORE, src=(UPat(), UPat(Ops.REDUCE_OUTPUT)), name="store"), lower_reduce_output_store),

@@ -2,7 +2,7 @@ from __future__ import annotations
 import contextlib, contextvars, functools, hashlib, itertools, json, pathlib
 from dataclasses import dataclass, replace
 from tinygrad import Tensor, nn, UOp, TinyJit, dtypes, function, Device, role_metadata
-from tinygrad.helpers import prod
+from tinygrad.helpers import prod, getenv
 from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.codegen.opt.postrange import warmstart_key as _warmstart_key
 from tinygrad.llm.admission import (
@@ -15,6 +15,7 @@ from tinygrad.llm.device_facts import scan_device_facts
 from tinygrad.llm.gguf import MODEL_PARAMETER_ALLOCATION_OWNER, gguf_load, gguf_load_metadata, gguf_load_with_metadata
 from tinygrad.llm.gguf_memory_scan import RuntimeGeometry, selected_gguf_backing_bytes
 from tinygrad.llm.decode_routes import (FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_CANDIDATE, _kv_store_parts_view,
+                                        _q4k_single_projection_load_style,
                                         decode_kv_store_route, flash_decode_attention_route,
                                         q4k_gate_up_primitive_linear_call, q4k_gate_up_rms_affine_qualification_call,
                                         q6k_vocab_top1_call,
@@ -22,7 +23,8 @@ from tinygrad.llm.decode_routes import (FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_
 from tinygrad.llm.decode_kernels import DecodeRMSNormSpec, emit_decode_rmsnorm_kernel
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
 from tinygrad.llm.shared_q8_attention import SharedQ8AttentionAdmission, shared_q8_attention_call
-from tinygrad.llm.packed_argmax import packed_argmax_finite_fp32
+from tinygrad.llm.packed_argmax import native_argmax_finite_fp32, packed_argmax_finite_fp32
+from tinygrad.llm.producer_kv_cache_sink import ProducerKVCacheSinkAdmission, producer_kv_cache_sink_call
 from tinygrad.llm.prefill_routes import direct_packed_prefill_policy, is_direct_packed_prefill_linear, route_prefill_linear, validate_prefill_route_mode
 from tinygrad.llm.prefill_memory_plan import Strategy
 from tinygrad.llm.prefill_attachments import attach_selected_prefill_inventory
@@ -49,8 +51,12 @@ from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OU
 from tinygrad.llm.model_route_plan import (build_model_route_plan, decode_norm_fusion_promoted,
   decode_q4k_epilogue_fusion_promoted, decode_q4k_epilogue_resadd_promoted, decode_q4k_w1w3_fusion_promoted,
   decode_q4k_w1w3_fp16_store_promoted, decode_ffn_down_resadd_promoted, decode_kv_store_fusion_promoted,
-  decode_rmsnorm_native_lowering_promoted, decode_reduce_output_rmsnorm_promoted, decode_shared_q8_attention_promoted,
-  decode_q6_direct_shared_q8_attention_promoted, decode_q4k_ffn_down_fp16_geometry_promoted,
+  decode_rmsnorm_native_lowering_promoted, decode_reduce_output_rmsnorm_promoted, decode_qk_norm_rope_promoted,
+  decode_producer_kv_cache_sink_promoted,
+  decode_native_argmax_threads,
+  decode_shared_q8_attention_promoted,
+  decode_q6_direct_shared_q8_attention_promoted, decode_q4_direct_shared_q8_attention_promoted,
+  decode_q4k_ffn_down_fp16_geometry_promoted,
   decode_q6k_ffn_down_fp16_geometry_promoted, decode_q6k_v_four_warp_fp16_geometry_promoted)
 from tinygrad.llm.prefill_candidate_runtime import decode_prefill_graph_candidate_set, automatic_promoted_prefill_graph_policy
 from tinygrad.llm.physical_memory_ledger import AllocationOwner, bind_allocation_owner
@@ -413,6 +419,18 @@ def _decode_reduce_output_rmsnorm(norm, x:Tensor, promoted:bool) -> Tensor:
   if weight is None: weight = norm.weight
   return out._semantic_reduce_output_rmsnorm(x, out, weight, norm.eps)
 
+def _decode_reduce_output_rmsnorm_rope(norm, x:Tensor, ordinary_rope:Tensor, freqs:Tensor, promoted:bool) -> Tensor:
+  """Attach the closed-default full-head RoPE epilogue to REDUCE_OUTPUT.
+
+  ``ordinary_rope`` is the complete fallback.  The semantic marker retains
+  the pre-norm input and the persistent frequency table, allowing rangeify to
+  emit one cooperative body without an opaque KernelProgram materialization.
+  """
+  if not promoted or norm.weight is None: return ordinary_rope
+  weight = getattr(norm, "_decode_reduce_output_weight", None)
+  if weight is None: weight = norm.weight
+  return ordinary_rope._semantic_reduce_output_rmsnorm(x, ordinary_rope, weight, norm.eps, freqs=freqs)
+
 def _decode_reduce_output_rmsnorm_fp16_consumer(norm, x:Tensor, promoted:bool) -> Tensor:
   """Closed-default typed RMSNorm boundary for Q4 decode consumers only.
 
@@ -768,6 +786,10 @@ class TransformerBlock(FFNBlock):
                                              getattr(self, "_shared_q8_attention_norm_weight", None))
       q, k, v = _shared_q8 if _shared_q8 is not None else (self.attn_q(x), self.attn_k(x), self.attn_v(x))
     q, k, v = (_prefill_semantic(_prefill, prefill_scratch, value) for value in (q, k, v))
+    # Qualification-only producer-side cache sink captures the exact terminal projection
+    # values before reshape/transpose. The admission object is never installed by the
+    # loader, so ordinary production traces do not retain these extra Python references.
+    _producer_kv_inputs = (k, v) if (not _prefill and getattr(self, "_producer_kv_cache_sink_admission", None) is not None) else None
     # Decode kv-store fusion (decode-kv-store-chain-fusion-scope-20260803.md, Option A): capture the flat
     # k/v GEMV outputs BEFORE reshape/transpose so the fused store kernel can consume them as [kvh*Hd+elem]
     # views. v is never normed, so the pre-transpose capture is final; k is rebound below after the
@@ -783,6 +805,8 @@ class TransformerBlock(FFNBlock):
       _kv_store_flat[1], _kv_vparts = _kv_store_parts_view(_kv_store_flat[1])
     _fused_norm = not _prefill and getattr(self, "_decode_norm_fusion_promoted", False)
     _reduce_output_norm = not _prefill and getattr(self, "_decode_reduce_output_rmsnorm_promoted", False)
+    _qk_norm_rope = not _prefill and getattr(self, "_decode_qk_norm_rope_promoted", False)
+    _q_norm_input = _k_norm_input = None
     if self.config.qk_norm and self.config.qk_norm != self.config.head_dim:
       with role_metadata("rms_norm"):
         _nq = _decode_rmsnorm(self.attn_q_norm, q, _fused_norm)
@@ -800,6 +824,7 @@ class TransformerBlock(FFNBlock):
     k = k.reshape(B, T, self.config.n_kv_heads, self.config.head_dim).transpose(1, 2)  # (B,KvH,T,Hd)
     v = v.reshape(B, T, self.config.n_kv_heads, self.config.head_dim).transpose(1, 2)  # (B,KvH,T,Hd)
     if self.config.qk_norm == self.config.head_dim:
+      _q_norm_input, _k_norm_input = q, k
       with role_metadata("rms_norm"):
         _nq = _decode_rmsnorm(self.attn_q_norm, q, _fused_norm)
         _nk = _decode_rmsnorm(self.attn_k_norm, k, _fused_norm)
@@ -848,11 +873,15 @@ class TransformerBlock(FFNBlock):
     # Q is roped via _fr (the gathered ring table when ring, else freqs_cis) indexed by start_pos: in the full ring
     # start_pos is the write slot wp, and _fr[wp] = freqs[pos_of(wp)] = the query's (newest) position -> consistent
     # with the K positions. In fill / non-ring, _fr == freqs_cis and start_pos is the absolute position (unchanged).
-    q = _prefill_semantic(_prefill, prefill_scratch,
-                          apply_rope(q[..., :self.config.rope_dim], _fr[_graph_pos:_graph_pos+T]).cat(q[..., self.config.rope_dim:], dim=-1))
+    _q_rope = apply_rope(q[..., :self.config.rope_dim], _fr[_graph_pos:_graph_pos+T]).cat(q[..., self.config.rope_dim:], dim=-1)
+    if _qk_norm_rope and _q_norm_input is not None and self.config.rope_dim == self.config.head_dim and not _rope_read:
+      _q_rope = _decode_reduce_output_rmsnorm_rope(self.attn_q_norm, _q_norm_input, _q_rope, _fr, True)
+    q = _prefill_semantic(_prefill, prefill_scratch, _q_rope)
     if not _rope_read and not _kv_store_fused:
-      k = _prefill_semantic(_prefill, prefill_scratch,
-                            apply_rope(k[..., :self.config.rope_dim], self.freqs_cis[_graph_pos:_graph_pos+T]).cat(k[..., self.config.rope_dim:], dim=-1))
+      _k_rope = apply_rope(k[..., :self.config.rope_dim], self.freqs_cis[_graph_pos:_graph_pos+T]).cat(k[..., self.config.rope_dim:], dim=-1)
+      if _qk_norm_rope and _k_norm_input is not None and self.config.rope_dim == self.config.head_dim:
+        _k_rope = _decode_reduce_output_rmsnorm_rope(self.attn_k_norm, _k_norm_input, _k_rope, self.freqs_cis, True)
+      k = _prefill_semantic(_prefill, prefill_scratch, _k_rope)
 
     # NOTE: we don't want to change self.cache_kv, the function API doesn't support this well
     if self.config.kv_quant and _rope_read:
@@ -877,7 +906,18 @@ class TransformerBlock(FFNBlock):
       v = _prefill_semantic(_prefill, prefill_scratch, assigned_kv[1, :, :, 0:_graph_pos+T, :].cast(dtypes.float16) * _vsc)
     else:
       assigned_scale = None
-      if _kv_store_fused:
+      _producer_assigned_kv = None
+      if (_producer_kv_inputs is not None and not _rope_read and not _kv_store_fused and isinstance(B, int) and B == 1 and
+          isinstance(T, int) and T == 1 and self.config.rope_dim == self.config.head_dim and
+          self.config.qk_norm == self.config.head_dim):
+        _producer_assigned_kv = producer_kv_cache_sink_call(
+          getattr(self, "_producer_kv_cache_sink_admission", None), self.cache_kv,
+          _producer_kv_inputs[0], _producer_kv_inputs[1], self.attn_k_norm, self.freqs_cis, self.config.max_context)
+      if _producer_assigned_kv is not None:
+        # The cache AFTER carries the K-producer call that also consumed final V;
+        # flash therefore waits on the same semantic K/V join as the legacy store.
+        assigned_kv = _producer_assigned_kv
+      elif _kv_store_fused:
         # Option A: ONE kernel ropes k in-kernel (exact apply_rope arithmetic, fp32), casts k/v to the
         # cache's own dtype, and stores both at slot start_pos -- replacing the k-rope + k-cast + v-cast +
         # Tensor.stack(k,v) + cache store chain. `assigned_kv` is the cache AFTER the store, same contract
@@ -1400,8 +1440,10 @@ class Transformer:
     _vv = Transformer._bound_position_var_vals(start_pos)
     logits = self.logits(tokens, start_pos)[:, -1, :]
     # Gumbel-max trick: argmax(logits/temp - log(-log(uniform))) is equivalent to sampling from softmax(logits/temp)
-    sampled = (logits / temperature.maximum(1e-12) -
-               (Tensor.rand_like(logits).maximum(1e-12).log().neg()).log()).argmax(-1, keepdim=True)
+    scores = logits / temperature.maximum(1e-12) - (Tensor.rand_like(logits).maximum(1e-12).log().neg()).log()
+    native_threads = getattr(self, "_decode_native_argmax_lease", getattr(self, "_decode_native_argmax_threads", 0))
+    sampled = native_argmax_finite_fp32(scores, native_threads) if native_threads and not resolve(tokens.shape[1] != 1) \
+      else scores.argmax(-1, keepdim=True)
     sampled = _prefill_semantic(resolve(tokens.shape[1] != 1), prefill_output, sampled)
     # The diagnostic return must own a fresh replay-written allocation.  The
     # sampling path reads ``logits`` in-place, while a view of that internal
@@ -1423,16 +1465,20 @@ class Transformer:
         return Transformer._stamp_position_var_vals(_prefill_semantic(_prefill, prefill_output, sampled),
                                                     Transformer._bound_position_var_vals(start_pos))
     logits = self.logits(tokens, start_pos)[:, -1, :]
-    sampled = packed_argmax_finite_fp32(logits, -1, keepdim=True) if getattr(self, "_decode_packed_argmax_promoted", False) \
-      else logits.argmax(-1, keepdim=True)
+    native_threads = getattr(self, "_decode_native_argmax_lease", getattr(self, "_decode_native_argmax_threads", 0))
+    sampled = native_argmax_finite_fp32(logits, native_threads) if native_threads else \
+      packed_argmax_finite_fp32(logits, -1, keepdim=True) if getattr(self, "_decode_packed_argmax_promoted", False) else \
+      logits.argmax(-1, keepdim=True)
     return Transformer._stamp_position_var_vals(_prefill_semantic(resolve(tokens.shape[1] != 1), prefill_output, sampled),
                                                 Transformer._bound_position_var_vals(start_pos))
 
   def forward_greedy_with_logits(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> tuple[Tensor, Tensor]:
     tokens = _runtime_input_boundary(tokens)
     logits = self.logits(tokens, start_pos)[:, -1, :]
-    sampled = packed_argmax_finite_fp32(logits, -1, keepdim=True) if getattr(self, "_decode_packed_argmax_promoted", False) \
-      else logits.argmax(-1, keepdim=True)
+    native_threads = getattr(self, "_decode_native_argmax_lease", getattr(self, "_decode_native_argmax_threads", 0))
+    sampled = native_argmax_finite_fp32(logits, native_threads) if native_threads else \
+      packed_argmax_finite_fp32(logits, -1, keepdim=True) if getattr(self, "_decode_packed_argmax_promoted", False) else \
+      logits.argmax(-1, keepdim=True)
     sampled = _prefill_semantic(resolve(tokens.shape[1] != 1), prefill_output, sampled)
     _vv = Transformer._bound_position_var_vals(start_pos)
     return Transformer._stamp_position_var_vals(sampled, _vv), Transformer._stamp_position_var_vals(logits.clone(), _vv)
@@ -1804,6 +1850,14 @@ class Transformer:
     _q6_direct_promoted = decode_q6_direct_shared_q8_attention_promoted((_norm_cap.backend, _norm_cap.architecture))
     model._decode_q6_direct_shared_q8_attention_promoted = _q6_direct_promoted
     for _b in model.blk: _b._decode_q6_direct_shared_q8_attention_promoted = _q6_direct_promoted
+    # Cooperative Q4/Q8 direct-output sub-variant. It retains the four warp
+    # partials and their left-to-right fp32 association, but merges them inside
+    # the producer CTA. This removes 43 completion nodes in the max17 group.
+    # TINYGRAD_SHARED_Q8_Q4_PARTIAL_OUTPUT=1 restores the prior partial ABI.
+    _q4_direct_promoted = _shared_q8_promoted and decode_q4_direct_shared_q8_attention_promoted(
+      (_norm_cap.backend, _norm_cap.architecture)) and not getenv("TINYGRAD_SHARED_Q8_Q4_PARTIAL_OUTPUT", 0)
+    model._decode_q4_direct_shared_q8_attention_promoted = _q4_direct_promoted
+    for _b in model.blk: _b._decode_q4_direct_shared_q8_attention_promoted = _q4_direct_promoted
     # Fused w1+w3 (gate/up) decode GEMV gate. CLOSED default (decode-q4k-w1w3-fusion-route-policy.json,
     # NV sm_120 promoted, q4k-w1w3-fused-qv-implementation-record-20260803.md). Same resolve-once
     # pattern as the M4 gate; the fused call additionally requires BOTH ffn_gate and ffn_up to be
@@ -1888,6 +1942,30 @@ class Transformer:
     for _b in model.blk:
       _b._decode_reduce_output_rmsnorm_promoted = _reduce_output_promoted
       _b._decode_reduce_output_ffn_rmsnorm_promoted = False
+    # Full-head Q/K norm+RoPE epilogue. This is a semantic REDUCE_OUTPUT
+    # lowering, not an opaque KernelProgram boundary; target policy remains
+    # separate and is additionally gated by the established q/k marker route.
+    _qk_norm_rope_promoted = _reduce_output_promoted and decode_qk_norm_rope_promoted(
+      (_norm_cap.backend, _norm_cap.architecture))
+    model._decode_qk_norm_rope_promoted = _qk_norm_rope_promoted
+    for _b in model.blk: _b._decode_qk_norm_rope_promoted = _qk_norm_rope_promoted
+    # Producer-owned K/V cache sink. The terminal 8x128 K RMSNorm+RoPE body
+    # writes K and final V directly to the current fp16/fp32 cache slot,
+    # deleting the 36 generic cache-store joins. It composes only with the
+    # already-promoted exact Q/K norm+RoPE route and remains shape-gated in the
+    # call site. The environment switch restores the complete legacy chain.
+    _producer_kv_sink_promoted = _qk_norm_rope_promoted and decode_producer_kv_cache_sink_promoted(
+      (_norm_cap.backend, _norm_cap.architecture))
+    model._decode_producer_kv_cache_sink_promoted = _producer_kv_sink_promoted
+    if _producer_kv_sink_promoted:
+      for _index, _b in enumerate(model.blk):
+        _b._producer_kv_cache_sink_admission = ProducerKVCacheSinkAdmission(_index)
+    # One-CTA finite-fp32 decode argmax. The native reducer replaces the three
+    # scheduler reduction kernels at the sampled-score tail and keeps a held
+    # one-element clone for replay-safe feedback. NV sm_120 is promoted after
+    # a token-exact reps=9 reverse bracket recovered 56.386 us/token. The
+    # environment switch is an explicit load-time rollback/control arm.
+    model._decode_native_argmax_threads = decode_native_argmax_threads((_norm_cap.backend, _norm_cap.architecture))
     # M2c callify substrate: the block-output copy fold and the fp32 q/k reduce-output spelling are
     # gated on the callify owned-precompiled-output-redirect / typed-semantic-input-producer Context
     # flags, which production decode normally leaves closed. When a promoted policy requires them
@@ -1953,16 +2031,18 @@ class Transformer:
           _ffn = getattr(_b, "ffn_down", None)
           if _ffn is not None and isinstance(_ffn, (Q4KPrimitiveLinear, Q6KPrimitiveLinear)) and getattr(_ffn, "route_role", "") == "ffn_down":
             _ffn._decode_ffn_down_resadd_promoted = True
-      # Q4_K FFN-down four-warp fp16 geometry route: install the research admission on the exact
-      # Q4_K 4096x12288 ffn_down role only (Q6 down keeps its own route). Normal loads carry no
-      # admission, so this stays closed on every other target and the harness lease is unaffected.
+      # Q4_K FFN-down four-warp fp16 geometry route: install the admission on the exact Q4_K
+      # 4096x12288 ffn_down role only (Q6 down keeps its own route). The vector-load spelling is
+      # bit-exact and passed production d512/d128 reverse brackets; TINYGRAD_Q4K_SCALAR_LOAD=1
+      # restores the scalar spelling along with the ordinary Q4 single-projection routes.
       if model._decode_q4k_ffn_down_fp16_geometry_promoted:
         from tinygrad.llm.q4k_ffn_down_mmvq import Q4KFFNDownMMVQAdmission
         for _idx, _b in enumerate(model.blk):
           _ffn = getattr(_b, "ffn_down", None)
           if _ffn is not None and isinstance(_ffn, Q4KPrimitiveLinear) and getattr(_ffn, "route_role", "") == "ffn_down" \
              and getattr(_ffn, "out_features", None) == 4096 and getattr(_ffn, "in_features", None) == 12288:
-            _ffn._q4k_ffn_down_mmvq_admission = Q4KFFNDownMMVQAdmission(_idx, fp16_fma=True)
+            _ffn._q4k_ffn_down_mmvq_admission = Q4KFFNDownMMVQAdmission(_idx, fp16_fma=True,
+              vector_loads=_q4k_single_projection_load_style(_ffn) == "vector")
       # Q6_K FFN-down four-warp fp16 geometry route: install the admission on the exact Q6_K
       # 4096x12288 ffn_down role only (Q4 down keeps its own route). Normal loads carry no
       # admission, so this stays closed on every other target.
@@ -2020,6 +2100,7 @@ class Transformer:
           _norm = getattr(_b, "attn_norm", None)
           if _norm is None or getattr(_norm, "weight", None) is None: continue
           _b._shared_q8_attention_admission = SharedQ8AttentionAdmission(_idx, cooperative_q4=True,
+            q4_direct_output=model._decode_q4_direct_shared_q8_attention_promoted,
             q6_direct_output=model._decode_q6_direct_shared_q8_attention_promoted)
           _b._decode_reduce_output_attn_rmsnorm_promoted = True
           try:

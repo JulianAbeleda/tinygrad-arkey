@@ -2218,6 +2218,9 @@ class ReduceOutputSpec(NamedTuple):
   # a fresh buffer so the fused body reads the residual-add kernel output, the
   # same residual the ordinary ffn-norm chain consumes.
   residual_sum_at_marker: bool = False
+  # Optional output-wide epilogue. ``identity`` preserves the historical
+  # behavior. ``rope`` is admitted only for the bounded q/k rows x 128 shape.
+  epilogue: str = "identity"
 
 
 @dataclass(frozen=True)

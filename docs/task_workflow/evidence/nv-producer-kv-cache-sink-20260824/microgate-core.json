@@ -1,0 +1,181 @@
+{
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "method": "NVRTC production compiler; installed K norm+RoPE plus legacy store vs producer-owned direct cache sink",
+  "results": [
+    {
+      "cache_dtype": "half",
+      "candidate_sha256": "f0d23f30810e44988050e5b676635f4851efd9f1240ae601dcb78ae847f8e79d",
+      "control_sha256": "f0d23f30810e44988050e5b676635f4851efd9f1240ae601dcb78ae847f8e79d",
+      "full_cache_bit_exact": true,
+      "mismatch_bytes": 0,
+      "outside_slot_changed_bytes": 0,
+      "seed": 20260824,
+      "start_pos": 0
+    },
+    {
+      "cache_dtype": "half",
+      "candidate_sha256": "a9bbb664e5c6dc57bde9b43657d91bbfddbc65f1fd561a6fd12779ed705466a5",
+      "control_sha256": "a9bbb664e5c6dc57bde9b43657d91bbfddbc65f1fd561a6fd12779ed705466a5",
+      "full_cache_bit_exact": true,
+      "mismatch_bytes": 0,
+      "outside_slot_changed_bytes": 0,
+      "seed": 20260825,
+      "start_pos": 7
+    },
+    {
+      "cache_dtype": "half",
+      "candidate_sha256": "1cc6b6ecc975c3897d61ecc68db5ccc4430a6fe3c3aab02edcaf805b9ab41cb8",
+      "control_sha256": "1cc6b6ecc975c3897d61ecc68db5ccc4430a6fe3c3aab02edcaf805b9ab41cb8",
+      "full_cache_bit_exact": true,
+      "mismatch_bytes": 0,
+      "outside_slot_changed_bytes": 0,
+      "seed": 20260826,
+      "start_pos": 18
+    },
+    {
+      "cache_dtype": "float",
+      "candidate_sha256": "30a6aca610ee71aee8aa55902af67bcc97af6d4235111d9df1c600bed54f74ae",
+      "control_sha256": "30a6aca610ee71aee8aa55902af67bcc97af6d4235111d9df1c600bed54f74ae",
+      "full_cache_bit_exact": true,
+      "mismatch_bytes": 0,
+      "outside_slot_changed_bytes": 0,
+      "seed": 20260824,
+      "start_pos": 0
+    },
+    {
+      "cache_dtype": "float",
+      "candidate_sha256": "2c8f1891faf1c64fb189781e60759ac6d531b5790ba1ebc9d34da045e0a9b743",
+      "control_sha256": "2c8f1891faf1c64fb189781e60759ac6d531b5790ba1ebc9d34da045e0a9b743",
+      "full_cache_bit_exact": true,
+      "mismatch_bytes": 0,
+      "outside_slot_changed_bytes": 0,
+      "seed": 20260825,
+      "start_pos": 7
+    },
+    {
+      "cache_dtype": "float",
+      "candidate_sha256": "872c5ac24272037c2ba427c27ce491fbc07e89c74ee60e0cbab466c802fdf6a1",
+      "control_sha256": "872c5ac24272037c2ba427c27ce491fbc07e89c74ee60e0cbab466c802fdf6a1",
+      "full_cache_bit_exact": true,
+      "mismatch_bytes": 0,
+      "outside_slot_changed_bytes": 0,
+      "seed": 20260826,
+      "start_pos": 18
+    }
+  ],
+  "schema": "tinygrad.nv_producer_kv_cache_sink_microgate.v1",
+  "shape": {
+    "Hd": 128,
+    "Hkv": 8,
+    "MAXC": 19
+  },
+  "source": {
+    "float": {
+      "candidate": {
+        "block": [
+          2,
+          16,
+          1
+        ],
+        "grid": [
+          8,
+          1,
+          1
+        ],
+        "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+        "source_sha256": "045288c58df7a76ad495f91139f8e5a4ee0e92c22df50e389f909abf34d162f7",
+        "vars": [
+          "start_pos"
+        ]
+      },
+      "control": {
+        "block": [
+          2,
+          16,
+          1
+        ],
+        "grid": [
+          8,
+          1,
+          1
+        ],
+        "name": "reduce_output_rmsnorm_rope_8_128",
+        "source_sha256": "ec2c6056f1d7f0e8cdff1f4c728381e9998629dbbaf6a2a38c7c6461f8483305",
+        "vars": [
+          "start_pos"
+        ]
+      },
+      "store": {
+        "block": [
+          1,
+          1,
+          1
+        ],
+        "grid": [
+          128,
+          8,
+          1
+        ],
+        "name": "legacy_kv_cache_store_float",
+        "source_sha256": "fc499e7b9ec82ffe16642bedb47e7a5f3f9d56be0ab881c9268b72c63c3cd04d",
+        "vars": [
+          "start_pos"
+        ]
+      }
+    },
+    "half": {
+      "candidate": {
+        "block": [
+          2,
+          16,
+          1
+        ],
+        "grid": [
+          8,
+          1,
+          1
+        ],
+        "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+        "source_sha256": "3821389071d6fb94f39ebae825be6ee58d3186bd586dbf0d195851c2216f9cf3",
+        "vars": [
+          "start_pos"
+        ]
+      },
+      "control": {
+        "block": [
+          2,
+          16,
+          1
+        ],
+        "grid": [
+          8,
+          1,
+          1
+        ],
+        "name": "reduce_output_rmsnorm_rope_8_128",
+        "source_sha256": "ec2c6056f1d7f0e8cdff1f4c728381e9998629dbbaf6a2a38c7c6461f8483305",
+        "vars": [
+          "start_pos"
+        ]
+      },
+      "store": {
+        "block": [
+          1,
+          1,
+          1
+        ],
+        "grid": [
+          128,
+          8,
+          1
+        ],
+        "name": "legacy_kv_cache_store_half",
+        "source_sha256": "e45dfa44f86a975d803a6f6a4f0ece57317992e498408d8df0c05ee48f6f232c",
+        "vars": [
+          "start_pos"
+        ]
+      }
+    }
+  },
+  "verdict": "PASS_CACHE_BYTES"
+}

@@ -58,15 +58,22 @@ class Q4KFFNDownQuadAdmission:
   """Research-only lease marker for the quad-u128-smem Q4 FFN-down load style.
 
   A census harness attaches one to an exact 4096x12288 ``ffn_down`` linear; the quad
-  spelling is then used in place of the installed scalar kernel for that block's
+  spelling is then used in place of the installed single-projection kernel for that block's
   ffn_down_resadd GEMV (new ``q4k_g3_lanemap_gemv_quad_epi_ffnresadd_*`` name, legacy
-  hashes untouched). Normal model loads never carry this marker, so production runs
-  the installed scalar path unchanged.
+  hashes untouched). Normal model loads never carry this marker, so production keeps
+  its target-selected ordinary load style.
   """
   block_index: int
   def __post_init__(self):
     if not isinstance(self.block_index, int) or isinstance(self.block_index, bool) or self.block_index < 0:
       raise ValueError("Q4_K FFN-down quad block index must be a non-negative integer")
+
+
+def _q4k_single_projection_load_style(linear:Any, getenv_fn=getenv) -> str:
+  capability = getattr(getattr(linear, "route_admission", None), "capability", None)
+  nv_sm120 = (capability is not None and getattr(capability, "backend", None) == "NV"
+              and getattr(capability, "architecture", None) == "sm_120")
+  return "vector" if (nv_sm120 and not getenv_fn("TINYGRAD_Q4K_SCALAR_LOAD", 0)) else "scalar"
 
 
 @dataclass(frozen=True)
@@ -101,6 +108,14 @@ class _Q4KDecodeCandidate:
       from tinygrad.llm.q4k_ffn_down_mmvq import q4k_ffn_down_mmvq_call
       if (mmvq := q4k_ffn_down_mmvq_call(ffn_down_mmvq_admission,linear,x,binding,epilogue_inputs or {})) is not None:
         return mmvq
+    # Closed-default Q4_K attention-K four-warp exact route. Normal model
+    # loads carry no admission object, so this returns None before constructing
+    # any graph. A research harness installs the admission on exact Q4_K
+    # 1024x4096 attn_kv linears; Q4 V keeps its own shared-Q8 route.
+    if (q4k_k_admission := getattr(linear, "_q4k_k_four_warp_admission", None)) is not None:
+      from tinygrad.llm.q4k_k_four_warp import q4k_k_four_warp_call
+      if (k_four := q4k_k_four_warp_call(q4k_k_admission, linear, x, binding)) is not None:
+        return k_four
     # L1 M4: q4k GEMV epilogue absorption is gated by its own closed record
     # (decode-q4k-epilogue-fusion-route-policy.json, measured non-landing) -- NOT M2's
     # decode_epilogue_fusion record, which stays NV-promoted for the Q6K in-kernel merge only.
@@ -194,11 +209,20 @@ class _Q4KDecodeCandidate:
     # Research-only Q4 FFN-down quad-u128-smem load style (nv-q4-down-quad-re-census-20260813.md):
     # a harness leases exact ffn_down linears with _q4k_ffn_down_quad_admission; the quad spelling is
     # used ONLY when that marker AND the m2b_resadd epilogue are both present. Normal model loads have
-    # no marker, so the installed scalar kernel runs unchanged (production closed by default).
+    # no marker, so production keeps its ordinary single-projection load style.
     q4k_quad_admission = getattr(linear, "_q4k_ffn_down_quad_admission", None)
-    q4k_load_style = ("quad" if (q4k_quad_admission is not None and epi_spec is not None
-                                 and epi_spec.kind == "ffn_down_resadd" and route_role == "ffn_down")
-                      else "scalar")
+    if q4k_quad_admission is not None and epi_spec is not None and epi_spec.kind == "ffn_down_resadd" and route_role == "ffn_down":
+      q4k_load_style = "quad"
+    elif epi_spec is not None and epi_spec.kind == "ffn_down_fused":
+      # The fused prelude reads gate_out/up_out activations (not x), so the vectorized x-load
+      # spelling does not apply; keep the installed scalar inner loop for that closed path.
+      q4k_load_style = "scalar"
+    else:
+      # Vectorized global loads (uint4 header, deduplicated qpack, half4 activations) are
+      # bit-identical to the scalar spelling. Cold counters show unchanged DRAM bytes but a
+      # higher achieved rate, and two production reverse brackets plus a depth-128 bracket pass
+      # once the vector residual-output transport is elided. Keep a scalar rollback/control arm.
+      q4k_load_style = _q4k_single_projection_load_style(linear)
     program = KernelProgram(binding.route_id, f"{binding.candidate_id}.gemv",
       KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
       q4k_g3_lanemap_gemv_kernel(binding.N, binding.K, epilogue=epi_spec, load_style=q4k_load_style),
@@ -254,9 +278,14 @@ def q4k_gate_up_primitive_linear_call(gate:Any, up:Any, x:Tensor, fallback:Calla
                                       combine_fusion_admitted=False,
                                       epilogue_absorption_admitted=True)
                   if store_fp16 else None)
+  # Vectorized-load spelling (q4k_g3_lanemap_gemv_w1w3vec16_*): the fused w1+w3 GEMV is NV sm_120
+  # only, and the vectorized spelling is bit-identical to the scalar spelling (same per-lane
+  # accumulation order and shifts; only the global load widths change from scalar LDG to uint4/half4).
+  # TINYGRAD_Q4K_W1W3_SCALAR_LOAD=1 restores the scalar spelling for reverse-bracket control arms.
+  load_style = "scalar" if getenv("TINYGRAD_Q4K_W1W3_SCALAR_LOAD", 0) else "vector"
   program = KernelProgram(g_bind.route_id, f"{g_bind.candidate_id}.w1w3_fused",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
-    q4k_g3_lanemap_gemv_w1w3_kernel(g_bind.N, g_bind.K, load_style="scalar", store_fp16=store_fp16),
+    q4k_g3_lanemap_gemv_w1w3_kernel(g_bind.N, g_bind.K, load_style=load_style, store_fp16=store_fp16),
     output_spec=OutputSpec((g_bind.N,), out_dtype, typed_output=typed_output))
   return execute_promoted_program(None, gw, uw, xv, program=program).reshape(1, 1, g_bind.N)
 
@@ -665,4 +694,5 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
     token_block=geom.get("token_block", 16), lane_width=geom.get("lane_width", 32),
     score_group_width=geom.get("score_group_width"), warps=geom.get("warps"),
     reduce_structure=geom.get("reduce_structure", "staged"), dot_pair_width=geom.get("dot_pair_width", 2),
+    combine_lane_width=geom.get("combine_lane_width"),
     combine_fp16=bool(binding.combine_fusion or combine_fp16))

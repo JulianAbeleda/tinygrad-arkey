@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Iterable
+from tinygrad.helpers import getenv
 from tinygrad.llm.model_facts import normalize_route_role
 
 # Serialized route-policy compatibility API.  This consumes only caller-supplied
@@ -255,6 +256,30 @@ def decode_q6_direct_shared_q8_attention_promoted(target:Target) -> bool:
   """Policy authority for the Q6 V direct-output consumer (closed default, see the loader above)."""
   return target in _DECODE_Q6_DIRECT_SHARED_Q8_ATTENTION_PROMOTED_TARGETS
 
+def load_decode_q4_direct_shared_q8_attention_promotion(path:str) -> frozenset[Target]:
+  """Read the cooperative Q4/Q8 direct-output promotion record.
+
+  This is a separate sub-variant of the shared-Q8 group lease. It folds the
+  four exact warp partials into the producer CTA and removes the standalone
+  completion kernel; a missing or empty record promotes nothing.
+  """
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1":
+    raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_Q4_DIRECT_SHARED_Q8_ATTENTION_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / \
+  "decode-q4-direct-shared-q8-attention-route-policy.json"
+_DECODE_Q4_DIRECT_SHARED_Q8_ATTENTION_PROMOTED_TARGETS: frozenset[Target] = \
+  load_decode_q4_direct_shared_q8_attention_promotion(_DECODE_Q4_DIRECT_SHARED_Q8_ATTENTION_PROMOTION_RECORD)
+
+def decode_q4_direct_shared_q8_attention_promoted(target:Target) -> bool:
+  """Policy authority for the cooperative Q4 direct-output consumer."""
+  return target in _DECODE_Q4_DIRECT_SHARED_Q8_ATTENTION_PROMOTED_TARGETS
+
 def load_decode_q4k_ffn_down_fp16_geometry_promotion(path:str) -> frozenset[Target]:
   """Read the Q4_K FFN-down four-warp fp16 geometry promotion record (boltbeam.route_policy.v1,
   same schema family as the shared-Q8 records). CLOSED default and a SEPARATE record from the
@@ -481,6 +506,50 @@ _DECODE_REDUCE_OUTPUT_RMSNORM_TARGETS = load_decode_reduce_output_rmsnorm_promot
 
 def decode_reduce_output_rmsnorm_promoted(target:Target) -> bool:
   return target in _DECODE_REDUCE_OUTPUT_RMSNORM_TARGETS
+
+def load_decode_qk_norm_rope_promotion(path:str) -> frozenset[Target]:
+  """Closed-default policy for the semantic Q/K REDUCE_OUTPUT RoPE epilogue."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  return frozenset((t.get("backend"), t.get("architecture")) for t in (data.get("promoted_targets") or ()))
+
+_DECODE_QK_NORM_ROPE_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-qk-norm-rope-route-policy.json"
+_DECODE_QK_NORM_ROPE_TARGETS = load_decode_qk_norm_rope_promotion(_DECODE_QK_NORM_ROPE_RECORD)
+
+def decode_qk_norm_rope_promoted(target:Target) -> bool:
+  return target in _DECODE_QK_NORM_ROPE_TARGETS
+
+def load_decode_producer_kv_cache_sink_promotion(path:str) -> frozenset[Target]:
+  """Closed-default policy for the terminal K producer-owned K/V cache sink."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  return frozenset((t.get("backend"), t.get("architecture")) for t in (data.get("promoted_targets") or ()))
+
+_DECODE_PRODUCER_KV_CACHE_SINK_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-producer-kv-cache-sink-route-policy.json"
+_DECODE_PRODUCER_KV_CACHE_SINK_TARGETS = load_decode_producer_kv_cache_sink_promotion(_DECODE_PRODUCER_KV_CACHE_SINK_RECORD)
+
+def decode_producer_kv_cache_sink_promoted(target:Target, getenv_fn=getenv) -> bool:
+  """Resolve the producer-owned sink with an explicit load-time rollback."""
+  return target in _DECODE_PRODUCER_KV_CACHE_SINK_TARGETS and not getenv_fn("TINYGRAD_PRODUCER_KV_CACHE_SINK_DISABLE", 0)
+
+def load_decode_native_argmax_promotion(path:str) -> frozenset[Target]:
+  """Closed-default policy for the one-CTA finite-fp32 decode argmax."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  return frozenset((t.get("backend"), t.get("architecture")) for t in (data.get("promoted_targets") or ()))
+
+_DECODE_NATIVE_ARGMAX_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-native-argmax-route-policy.json"
+_DECODE_NATIVE_ARGMAX_TARGETS = load_decode_native_argmax_promotion(_DECODE_NATIVE_ARGMAX_RECORD)
+
+def decode_native_argmax_promoted(target:Target) -> bool:
+  return target in _DECODE_NATIVE_ARGMAX_TARGETS
+
+def decode_native_argmax_threads(target:Target, getenv_fn=getenv) -> int:
+  """Resolve the promoted CTA width, with an explicit load-time rollback."""
+  return 1024 if decode_native_argmax_promoted(target) and not getenv_fn("TINYGRAD_NATIVE_ARGMAX_DISABLE", 0) else 0
 
 @dataclass(frozen=True)
 class PrimitiveRouteEntry:
