@@ -29,23 +29,25 @@ terminal producer sinks       36
 generic cache stores           0
 ```
 
-## Next producer-side order
+## Producer-side closure and next order
 
-1. Test mixed Q4/Q6 K/V pairs as two separate grammars: ten ordinary blocks
-   and eight shared-Q8 blocks. The population is 18 pairs, but weight bytes do
-   not fall, so advancement requires a native rate/launch win and then a wall
-   bracket; population alone is not evidence.
-2. If mixed pairs cannot recover a material fraction of `110.109 us`, widen
-   ownership to an attention Q/K/V producer boundary. That can amortize more
-   launch/control work than K/V-only fusion, but has a higher register and
-   semantic-boundary risk.
-3. Keep topology-only overlap work behind producer body reduction. Installed
-   overlap is only `13.202 us/token`; timestamp reordering cannot supply the
-   missing `110.109 us/token` without creating genuinely concurrent work.
+1. The eight shared-Q8 mixed Q4-K/Q6-V pairs passed native/profile gates but
+   failed the strict wall gate. The ten ordinary mixed pairs have incompatible
+   installed 32-thread K and 128-thread V geometries. K/V launch fusion is now
+   exhausted as a parity route; the endpoint is unchanged.
+2. Test actual producer concurrency, not timestamp reordering: a cache-cold
+   complete-span microgate comparing serialized Q then K/V with Q and K/V on
+   separate queues, joined before flash. This is the outstanding test named by
+   the retained HCQ adjudication and has a tens-to-hundreds-of-microseconds
+   ceiling across 36 layers. Promotion still requires a token-exact production
+   wall bracket; dependency legality alone books nothing.
+3. If concurrent memory streamers only contend and do not shorten the join
+   span, return to production-conditioned streaming rate/cache-state on the
+   Q, O, gate/up, down, K/V, and flash-score bodies. Small launch fusions and
+   wider flash-combine topology are already adjudicated.
 4. Weight-byte reduction remains the larger roofline lever, but it requires a
    new representation or consumer contract. Wider loads and launch fusion do
    not reduce DRAM bytes.
 
-The immediate clean probe is ordinary mixed Q4-K/Q6-V pairing, followed by
-the shared-Q8 mixed pair only if the isolated arithmetic/occupancy gate is
-positive.
+The immediate clean probe is therefore producer-to-join concurrency under a
+validated cold-cache protocol, before any scheduler/runtime route is changed.

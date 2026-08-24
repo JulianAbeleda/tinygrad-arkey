@@ -1,0 +1,35 @@
+{
+  "schema": "tinygrad.nv_227_shared_q8_mixed_kv_pair_summary.v1",
+  "base_commit": "ae72610baea59cb3e1548ee5c22ae37b09db5ab5",
+  "eligible_blocks": [1, 2, 3, 6, 9, 12, 15, 18],
+  "microgate": {
+    "passes": 500,
+    "reps": 9,
+    "bitwise_identical": true,
+    "mismatched_float32_words": 0,
+    "control_median_us_per_pair": 4.536576,
+    "candidate_median_us_per_pair": 3.468160,
+    "recovery_us_per_pair": 1.068416,
+    "projected_8_pair_recovery_us": 8.547328,
+    "registers": 40,
+    "spill_loads": 0,
+    "spill_stores": 0
+  },
+  "profile": {
+    "all_token_hashes_equal": true,
+    "control_nodes": 462,
+    "candidate_nodes": 454,
+    "node_sum_delta_us": -6.128,
+    "union_delta_us": -11.500
+  },
+  "wall_r7": {
+    "all_token_hashes_equal": true,
+    "control_a_ms_per_token": 4.47636071875,
+    "candidate_ms_per_token": 4.4798704375,
+    "control_c_ms_per_token": 4.48963215625,
+    "control_midpoint_ms_per_token": 4.4829964375,
+    "recovery_us_per_token": 3.126,
+    "verdict": "NO_GO_WALL"
+  },
+  "promoted": false
+}

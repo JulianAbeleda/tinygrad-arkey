@@ -1,7 +1,8 @@
 from tinygrad import dtypes
 import pytest
 
-from tinygrad.llm.shared_q8_attention import SharedQ8AttentionAdmission, _emit_q4_cooperative_pair
+from tinygrad.llm.shared_q8_attention import (SharedQ8AttentionAdmission, _emit_q4_cooperative_pair,
+  _emit_q4_q6_cooperative_pair)
 from tinygrad.llm.model_route_plan import decode_shared_q8_q4kv_pair_promoted, load_decode_shared_q8_q4kv_pair_promotion
 from tinygrad.uop.ops import Ops, UOp
 
@@ -22,12 +23,26 @@ def test_shared_q8_pair_rejects_non_kv_shape():
   else: raise AssertionError("non-K/V pair shape must be rejected")
 
 
+def test_shared_q8_mixed_pair_exact_body_shape():
+  rows,k=1024,4096; q4words=rows*(k//256)*36; q6halfs=rows*(k//256)*110
+  body=_emit_q4_q6_cooperative_pair(rows,UOp.variable("mixed_pair_blocks_test",1,4))(
+    UOp.placeholder((rows,),dtypes.float32,0),UOp.placeholder((rows,),dtypes.float32,1),
+    UOp.placeholder((q4words,),dtypes.uint32,2),UOp.placeholder((q6halfs,),dtypes.uint16,3),
+    UOp.placeholder((k//4+k//32,),dtypes.uint32,4))
+  assert body.arg.name == "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096"
+  assert sum(u.op is Ops.BARRIER for u in body.toposort()) == 1
+
+
 def test_shared_q8_pair_admission_is_separate_and_closed():
   assert not SharedQ8AttentionAdmission(1,cooperative_q4=True,q4_direct_output=True).q4_kv_pair_output
   admitted=SharedQ8AttentionAdmission(1,cooperative_q4=True,q4_direct_output=True,q4_kv_pair_output=True)
   assert admitted.q4_kv_pair_output
   with pytest.raises(ValueError,match="requires cooperative Q4 direct output"):
     SharedQ8AttentionAdmission(1,q4_kv_pair_output=True)
+  mixed=SharedQ8AttentionAdmission(1,cooperative_q4=True,q4_direct_output=True,q6_direct_output=True,q4_q6_kv_pair_output=True)
+  assert mixed.q4_q6_kv_pair_output
+  with pytest.raises(ValueError,match="requires cooperative Q4 and Q6 direct output"):
+    SharedQ8AttentionAdmission(1,cooperative_q4=True,q4_direct_output=True,q4_q6_kv_pair_output=True)
 
 
 def test_shared_q8_pair_policy_and_rollback(tmp_path):

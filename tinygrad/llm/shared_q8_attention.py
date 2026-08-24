@@ -46,6 +46,9 @@ class SharedQ8AttentionAdmission:
   # direct-output consumer because it changes projection ownership, not just
   # the four-partial completion boundary.
   q4_kv_pair_output: bool = False
+  # Mixed Q4-K/Q6-V dual producer; separately leased because it owns a
+  # different weight grammar and requires the Q6 direct consumer.
+  q4_q6_kv_pair_output: bool = False
 
   def __post_init__(self):
     if not isinstance(self.block_index, int) or self.block_index < 0: raise ValueError("block_index must be non-negative")
@@ -58,6 +61,10 @@ class SharedQ8AttentionAdmission:
     if not isinstance(self.q4_kv_pair_output, bool): raise ValueError("q4_kv_pair_output must be bool")
     if self.q4_kv_pair_output and not (self.cooperative_q4 and self.q4_direct_output):
       raise ValueError("q4_kv_pair_output requires cooperative Q4 direct output")
+    if not isinstance(self.q4_q6_kv_pair_output, bool): raise ValueError("q4_q6_kv_pair_output must be bool")
+    if self.q4_q6_kv_pair_output and not (self.cooperative_q4 and self.q4_direct_output and self.q6_direct_output):
+      raise ValueError("q4_q6_kv_pair_output requires cooperative Q4 and Q6 direct output")
+    if self.q4_kv_pair_output and self.q4_q6_kv_pair_output: raise ValueError("only one K/V pair grammar may be selected")
 
 def _pack4(vs):
   r=UOp.const(dtypes.uint32,0)
@@ -298,6 +305,60 @@ def _emit_q4_cooperative_pair(rows:int, block_count:UOp):
       arg=KernelInfo(name=f"q4k_warp_coop_q8_dp4a_pair_direct_{rows}_{_K}",opts_to_apply=()))
   return kernel
 
+
+def _emit_q4_q6_cooperative_pair(rows:int, block_count:UOp):
+  """Exact cooperative Q4-K/Q6-V consumers sharing one Q8 launch."""
+  if rows != _KV_ROWS: raise ValueError("cooperative Q4/Q6 K/V pair requires the 1024-row production shape")
+  def kernel(k_out,v_out,k_words,v_halfs,xp):
+    row,lid=UOp.special(rows,"gidx0"),UOp.special(128,"lidx0")
+    warp,lane=lid//32,lid%32; group,word_base=lane//4,(lane%4)*2
+    br=UOp.range(block_count,2,axis_type=AxisType.LOOP); block=warp*4+br
+
+    q4_base=(row*(_K//256)+block)*Q4K_WORDS_PER_BLOCK
+    w0,w1,w2,w3=k_words[q4_base],k_words[q4_base+1],k_words[q4_base+2],k_words[q4_base+3]
+    d,dm=_f16_word(w0,False),_f16_word(w0,True); g4=group%4
+    b1=w1.rshift(g4*8).bitwise_and(0xff); b2=w2.rshift(g4*8).bitwise_and(0xff); hb=w3.rshift(g4*8).bitwise_and(0xff)
+    sc=(group<4).where(b1.bitwise_and(63),hb.bitwise_and(0xf).bitwise_or(b1.rshift(6).lshift(4)))
+    mn=(group<4).where(b2.bitwise_and(63),hb.rshift(4).bitwise_or(b2.rshift(6).lshift(4)))
+    ck=UOp.const(dtypes.float32,0.0)
+    for ws in range(2):
+      word=word_base+ws; qw=k_words[q4_base+4+(group//2)*8+word].rshift((group%2)*4).bitwise_and(0x0F0F0F0F)
+      xv=xp[block*64+group*8+word]; dot=int8x4_dot(UOp.const(dtypes.int32,0),qw,xv).cast(dtypes.float32)
+      sx=_i8lane(xv,0)+_i8lane(xv,1)+_i8lane(xv,2)+_i8lane(xv,3)
+      ck=ck+_q8_d(xp,block*8+group)*(d*sc.cast(dtypes.float32)*dot-dm*mn.cast(dtypes.float32)*sx.cast(dtypes.float32))
+
+    q6_base=(row*(_K//256)+block)*Q6K_HALFWORDS_PER_BLOCK
+    vl=v_halfs[q6_base+lane*2].cast(dtypes.uint32).bitwise_or(v_halfs[q6_base+lane*2+1].cast(dtypes.uint32).lshift(16))
+    qh_half=16*(lane//16)+2*(lane%8)
+    vh=v_halfs[q6_base+64+qh_half].cast(dtypes.uint32).bitwise_or(
+      v_halfs[q6_base+65+qh_half].cast(dtypes.uint32).lshift(16)).rshift(2*((lane%16)//8))
+    scale_idx=8*(lane//16)+(lane%16)//4; q8_group0=4*(lane//16)+(lane%16)//8
+    cv=UOp.const(dtypes.float32,0.0)
+    for i in range(2):
+      qword=vl.rshift(4*i).bitwise_and(0x0F0F0F0F).bitwise_or(vh.rshift(4*i).lshift(4).bitwise_and(0x30303030))
+      q8_group=q8_group0+2*i; xword=xp[block*64+q8_group*8+lane%8]
+      scale=_q6k_byte(v_halfs,q6_base,192+scale_idx+4*i).cast(dtypes.uint8).bitcast(dtypes.int8).cast(dtypes.int32)
+      dot=int8x4_dot(UOp.const(dtypes.int32,0),qword,xword)
+      xsum=int8x4_dot(UOp.const(dtypes.int32,0),UOp.const(dtypes.uint32,0x01010101),xword)
+      cv=cv+(dot-UOp.const(dtypes.int32,32)*xsum).cast(dtypes.float32)*scale.cast(dtypes.float32)*_q8_d(xp,block*8+q8_group)
+    cv=cv*_f16_half(v_halfs[q6_base+104])
+
+    ak=UOp.placeholder((1,),dtypes.float32,20,addrspace=AddrSpace.REG)
+    av=UOp.placeholder((1,),dtypes.float32,21,addrspace=AddrSpace.REG)
+    init=ak[0].store(0.0); init=av.after(init)[0].store(0.0); ak,av=ak.after(init),av.after(init)
+    upk=ak[0].store(ak.after(br)[0]+ck); upv=av.after(upk)[0].store(av.after(br)[0]+cv).end(br)
+    tk,tv=ak.after(upv)[0],av.after(upv)[0]
+    for slot,off in enumerate((16,8,4,2,1),90): tk=tk+_staged_shfl(tk,off,lane,slot)
+    for slot,off in enumerate((16,8,4,2,1),100): tv=tv+_staged_shfl(tv,off,lane,slot)
+    sk=UOp.placeholder((4,),dtypes.float32,230,addrspace=AddrSpace.LOCAL)
+    sv=UOp.placeholder((4,),dtypes.float32,231,addrspace=AddrSpace.LOCAL)
+    pk=sk[warp].store(tk,lane.eq(0)); pv=sv.after(pk)[warp].store(tv,lane.eq(0))
+    ready=UOp.barrier(UOp.group(pv)); mk=UOp.const(dtypes.float32,0.0); mv=UOp.const(dtypes.float32,0.0)
+    for wi in range(4): mk,mv=mk+sk.after(ready)[wi],mv+sv.after(ready)[wi]
+    return UOp.group(k_out[row].store(mk,lid.eq(0)),v_out[row].store(mv,lid.eq(0))).sink(
+      arg=KernelInfo(name=f"q4k_q6k_warp_coop_q8_dp4a_pair_direct_{rows}_{_K}",opts_to_apply=()))
+  return kernel
+
 def _emit_q6(rows, rt=2):
   def kernel(out,h,xp):
     ro,ri=UOp.range(rows//rt,0),UOp.range(rt,1,axis_type=AxisType.LOCAL)
@@ -411,15 +472,18 @@ def shared_q8_attention_call(admission, q_linear, k_linear, v_linear, x:Tensor, 
     if cooperative and not q4_direct: ret=ret.sum(axis=1).contiguous()
     return ret.reshape(1,1,rows)
   q=run(q_linear,_Q_ROWS,_emit_q4,q_linear.q4k_storage.words)
-  if admission.q4_kv_pair_output:
-    if not isinstance(v_linear,Q4KPrimitiveLinear): return None
+  if admission.q4_kv_pair_output or admission.q4_q6_kv_pair_output:
+    if admission.q4_kv_pair_output and not isinstance(v_linear,Q4KPrimitiveLinear): return None
+    if admission.q4_q6_kv_pair_output and not isinstance(v_linear,Q6KPrimitiveLinear): return None
+    emitter=_emit_q4_cooperative_pair if admission.q4_kv_pair_output else _emit_q4_q6_cooperative_pair
     pair=KernelProgram("decode_shared_q8_attention",f"{route_kind}.blk{admission.block_index}.kv_pair.coop_direct",
-      KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED,_emit_q4_cooperative_pair(_KV_ROWS,cooperative_blocks),
+      KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED,emitter(_KV_ROWS,cooperative_blocks),
       output_spec=OutputSpec((_KV_ROWS,),dtypes.float32))
     k_out=Tensor.empty((_KV_ROWS,),dtype=dtypes.float32,device=x.device)
     v_out=Tensor.empty((_KV_ROWS,),dtype=dtypes.float32,device=x.device)
+    v_storage=v_linear.q4k_storage.words if isinstance(v_linear,Q4KPrimitiveLinear) else v_linear.q6k_storage.halfs
     outputs=execute_promoted_program_outputs(k_out,v_out,k_linear.q4k_storage.words.to(x.device),
-      v_linear.q4k_storage.words.to(x.device),xp,program=pair)
+      v_storage.to(x.device),xp,program=pair)
     k,v=outputs[0].reshape(1,1,_KV_ROWS),outputs[1].reshape(1,1,_KV_ROWS)
   else:
     k=run(k_linear,_KV_ROWS,_emit_q4,k_linear.q4k_storage.words)
