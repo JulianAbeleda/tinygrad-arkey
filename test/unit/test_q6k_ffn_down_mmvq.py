@@ -33,6 +33,18 @@ def test_production_call_is_closed_without_explicit_admission():
     pass
   else:
     raise AssertionError("unsupported row packing must fail closed")
+  try:
+    Q6KFFNDownMMVQAdmission(0, packed_lanemap=1)
+  except ValueError:
+    pass
+  else:
+    raise AssertionError("packed lanemap admission must require an explicit bool")
+  try:
+    Q6KFFNDownMMVQAdmission(0, rows_per_block=2, packed_lanemap=True)
+  except ValueError:
+    pass
+  else:
+    raise AssertionError("packed lanemap must fail closed for unproved row packing")
 
 
 def test_default_decode_route_import_is_strictly_behind_explicit_lease_guard():
@@ -68,6 +80,23 @@ def test_four_warp_emitter_renders_requested_rows_per_block():
   try: emit_q6k_four_warp_fp16_direct(rows_per_block=3)
   except ValueError: pass
   else: raise AssertionError("unsupported rows-per-block geometry must fail closed")
+
+
+def test_packed_lanemap_emitter_is_a_distinct_closed_default_spelling():
+  halfs_words = ROWS * (K // 256) * Q6K_HALFWORDS_PER_BLOCK
+  ast = emit_q6k_four_warp_fp16_direct(packed_lanemap=True)(
+    UOp.placeholder((ROWS,), dtypes.float32, 0),
+    UOp.placeholder((halfs_words,), dtypes.uint16, 1),
+    UOp.placeholder((K,), dtypes.float16, 2),
+    UOp.placeholder((ROWS,), dtypes.float32, 3))
+  program = to_program(ast, CUDARenderer(Target.parse("NV:CUDA:sm_120")))
+  source = next(u.arg for u in program.src if u.op is Ops.SOURCE)
+  ptx = NVRTCCompiler("sm_120", ptx=True, cache_key="q6k_ffn_down_fp16_packed_lanemap_v1").compile(source).decode()
+  assert program.arg.global_size == (ROWS, 1, 1)
+  assert program.arg.local_size == (128, 1, 1)
+  assert "q6k_fp16_packed_lanemap_4096_12288_epi_ffnresadd" in source
+  assert "half4" in source and "__shfl_xor_sync" in source and "__syncthreads" in source
+  assert "st.global" in ptx and "shfl.sync" in ptx
 
 
 def test_route_policy_promotes_nv_sm120_only():

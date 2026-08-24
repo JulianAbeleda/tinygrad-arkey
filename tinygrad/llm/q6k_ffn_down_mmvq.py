@@ -20,7 +20,8 @@ from typing import Any
 from tinygrad import Tensor, dtypes
 from tinygrad.codegen.late.warp_reduce import _staged_shfl
 from tinygrad.dtype import AddrSpace
-from tinygrad.llm.decode_kernels import Q6_K_BLOCK_ELEMS, Q6K_HALFWORDS_PER_BLOCK, _q6k_block_dot
+from tinygrad.llm.decode_kernels import (
+  Q6_K_BLOCK_ELEMS, Q6K_HALFWORDS_PER_BLOCK, _f16_half, _half4_lane, _q6k_block_dot, _q6k_byte)
 from tinygrad.llm.kernel_program import (DeclaredTypedOutput, KernelProgram, KernelProgramProvenance,
   OutputSpec, ResidualViewRequest, TypedLayout, TypedViewRequest, execute_promoted_program)
 from tinygrad.uop.ops import AxisType, KernelInfo, UOp
@@ -37,6 +38,7 @@ class Q6KFFNDownMMVQAdmission:
   block_index: int
   fp16_fma: bool = True
   rows_per_block: int = 1
+  packed_lanemap: bool = False
   def __post_init__(self):
     if not isinstance(self.block_index, int) or isinstance(self.block_index, bool) or self.block_index < 0:
       raise ValueError("Q6_K FFN-down MMVQ block index must be a non-negative integer")
@@ -44,25 +46,66 @@ class Q6KFFNDownMMVQAdmission:
       raise ValueError("fp16_fma must be bool")
     if not isinstance(self.rows_per_block, int) or isinstance(self.rows_per_block, bool) or self.rows_per_block not in (1, 2, 4, 8):
       raise ValueError("rows_per_block must be one of 1, 2, 4, or 8")
+    if not isinstance(self.packed_lanemap, bool):
+      raise ValueError("packed_lanemap must be bool")
+    if self.packed_lanemap and self.rows_per_block != 1:
+      raise ValueError("packed_lanemap is admitted only for rows_per_block=1")
 
 
-def emit_q6k_four_warp_fp16_direct(*, rows_per_block:int=1) -> callable:
+def _i8f(v:UOp) -> UOp: return v.cast(dtypes.uint8).bitcast(dtypes.int8).cast(dtypes.float32)
+
+
+def _q6k_block_dot_packed_lanemap(halfs:UOp, x:UOp, base:UOp, x_block:UOp, lane:UOp) -> UOp:
+  """Q6_K block dot with llama's packed lane ownership and an fp16 activation.
+
+  Each lane decodes two packed int8x4-shaped qwords and reads the matching two
+  half4 activation spans. The Q6 block remains scalar-halfword addressed
+  because its 210-byte stride misaligns every other block; the same-byte win
+  comes from packed ownership and load deduplication, not an unsafe wide cast.
+  """
+  vl = halfs[base + lane * 2].cast(dtypes.uint32).bitwise_or(
+    halfs[base + lane * 2 + 1].cast(dtypes.uint32).lshift(16))
+  qh_half = 16 * (lane // 16) + 2 * (lane % 8)
+  vh = halfs[base + 64 + qh_half].cast(dtypes.uint32).bitwise_or(
+    halfs[base + 65 + qh_half].cast(dtypes.uint32).lshift(16))
+  vh = vh.rshift(2 * ((lane % 16) // 8))
+  scale_idx = 8 * (lane // 16) + (lane % 16) // 4
+  x_group0 = 4 * (lane // 16) + (lane % 16) // 8
+  d = _f16_half(halfs[base + 104])
+  contribution = UOp.const(dtypes.float32, 0.0)
+  for term in range(2):
+    low = vl.rshift(4 * term).bitwise_and(0x0F0F0F0F)
+    high = vh.rshift(4 * term).lshift(4).bitwise_and(0x30303030)
+    qword = low.bitwise_or(high)
+    scale = _i8f(_q6k_byte(halfs, base, 192 + scale_idx + 4 * term))
+    x_group = x_group0 + 2 * term
+    xv = x.index(x_block * Q6_K_BLOCK_ELEMS + x_group * 32 + (lane % 8) * 4).load(dtype=dtypes.float16.vec(4))
+    for nib in range(4):
+      q = qword.rshift(nib * 8).bitwise_and(0xff).cast(dtypes.float32) - 32.0
+      contribution = contribution + (d * q * scale) * _half4_lane(xv, nib)
+  return contribution
+
+
+def emit_q6k_four_warp_fp16_direct(*, rows_per_block:int=1, packed_lanemap:bool=False) -> callable:
   """Four-warp fp16-direct Q6_K FFN-down consumer (128 threads/row, no Q8 provider)."""
   if rows_per_block not in (1, 2, 4, 8): raise ValueError(f"unsupported Q6 FFN-down rows_per_block {rows_per_block}")
+  if not isinstance(packed_lanemap, bool): raise ValueError("packed_lanemap must be bool")
+  if packed_lanemap and rows_per_block != 1: raise ValueError("packed_lanemap requires rows_per_block=1")
   def kernel(out:UOp, halfs:UOp, x:UOp, h:UOp) -> UOp:
     row_group = UOp.special(ROWS // rows_per_block, "gidx0")
     lid = UOp.special(WARP * WARPS_PER_ROW * rows_per_block, "lidx0")
     row_in_block, row_lid = lid // (WARP * WARPS_PER_ROW), lid % (WARP * WARPS_PER_ROW)
     row = row_group * rows_per_block + row_in_block
     warp, lane = row_lid // WARP, row_lid % WARP
-    sub, pos = lane // POS, lane % POS
 
     acc = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG)
     acc = acc.after(acc[0].store(0.0))
-    blk = UOp.range(BLOCKS_PER_SUB, 0, axis_type=AxisType.REDUCE)
-    block = warp * BLOCKS_PER_WARP + sub * BLOCKS_PER_SUB + blk
+    blk = UOp.range(BLOCKS_PER_WARP if packed_lanemap else BLOCKS_PER_SUB, 0, axis_type=AxisType.REDUCE)
+    block = (warp * BLOCKS_PER_WARP + blk if packed_lanemap else
+             warp * BLOCKS_PER_WARP + (lane // POS) * BLOCKS_PER_SUB + blk)
     base = (row * K_BLOCKS + block) * Q6K_HALFWORDS_PER_BLOCK
-    contrib = _q6k_block_dot(halfs, x, base, block, pos)
+    contrib = (_q6k_block_dot_packed_lanemap(halfs, x, base, block, lane) if packed_lanemap else
+               _q6k_block_dot(halfs, x, base, block, lane % POS))
     acc = acc.after(acc[0].store(acc.after(blk)[0] + contrib).end(blk))
     total = acc[0]
 
@@ -75,7 +118,8 @@ def emit_q6k_four_warp_fp16_direct(*, rows_per_block:int=1) -> callable:
     for wi in range(WARPS_PER_ROW):
       merged = merged + smem.after(ready)[row_in_block * WARPS_PER_ROW + wi]
     result = merged + h[row].cast(dtypes.float32)
-    name = ("q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd" if rows_per_block == 1 else
+    name = ("q6k_fp16_packed_lanemap_4096_12288_epi_ffnresadd" if packed_lanemap else
+            "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd" if rows_per_block == 1 else
             f"q6k_fp16_mmvq_direct_rpb{rows_per_block}_4096_12288_epi_ffnresadd")
     return out[row].store(result, row_lid.eq(0)).sink(arg=KernelInfo(name=name, opts_to_apply=()))
   return kernel
@@ -96,7 +140,7 @@ def q6k_ffn_down_mmvq_call(admission:object, linear:Any, x:Tensor, binding:Any,
   residual = epilogue_inputs["normed_h"][:, 0, :].reshape(ROWS).cast(dtypes.float32)
   consumer = KernelProgram("decode_q6k_ffn_down_mmvq", f"blk{admission.block_index}.gemv",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
-    emit_q6k_four_warp_fp16_direct(rows_per_block=admission.rows_per_block),
+    emit_q6k_four_warp_fp16_direct(rows_per_block=admission.rows_per_block, packed_lanemap=admission.packed_lanemap),
     output_spec=OutputSpec((ROWS,), dtypes.float32,
       typed_output=DeclaredTypedOutput(TypedLayout(dtypes.float32, (ROWS,), (1, 1, ROWS)),
         combine_fusion_admitted=False, epilogue_absorption_admitted=True)),
