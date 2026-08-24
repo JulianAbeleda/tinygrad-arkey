@@ -280,6 +280,19 @@ def decode_q4_direct_shared_q8_attention_promoted(target:Target) -> bool:
   """Policy authority for the cooperative Q4 direct-output consumer."""
   return target in _DECODE_Q4_DIRECT_SHARED_Q8_ATTENTION_PROMOTED_TARGETS
 
+def load_decode_shared_q8_q4kv_pair_promotion(path:str) -> frozenset[Target]:
+  """Closed-default policy for the shared-Q8 Q4/Q4 K/V dual-output producer."""
+  policy_path=pathlib.Path(path).expanduser(); data=json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  return frozenset((t.get("backend"),t.get("architecture")) for t in (data.get("promoted_targets") or ()))
+
+_DECODE_SHARED_Q8_Q4KV_PAIR_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-shared-q8-q4kv-pair-route-policy.json"
+_DECODE_SHARED_Q8_Q4KV_PAIR_TARGETS = load_decode_shared_q8_q4kv_pair_promotion(_DECODE_SHARED_Q8_Q4KV_PAIR_RECORD)
+
+def decode_shared_q8_q4kv_pair_promoted(target:Target,getenv_fn=getenv) -> bool:
+  """Resolve the shared-Q8 pair route with an explicit load-time rollback."""
+  return target in _DECODE_SHARED_Q8_Q4KV_PAIR_TARGETS and not getenv_fn("TINYGRAD_SHARED_Q8_Q4KV_PAIR_DISABLE",0)
+
 def load_decode_q4k_ffn_down_fp16_geometry_promotion(path:str) -> frozenset[Target]:
   """Read the Q4_K FFN-down four-warp fp16 geometry promotion record (boltbeam.route_policy.v1,
   same schema family as the shared-Q8 records). CLOSED default and a SEPARATE record from the
