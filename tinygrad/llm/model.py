@@ -51,7 +51,8 @@ from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OU
                                            runtime_persistent, runtime_scratch)
 from tinygrad.llm.model_route_plan import (build_model_route_plan, decode_norm_fusion_promoted,
   decode_q4k_epilogue_fusion_promoted, decode_q4k_epilogue_resadd_promoted, decode_q4k_w1w3_fusion_promoted,
-  decode_q4k_w1w3_fp16_store_promoted, decode_ffn_down_resadd_promoted, decode_kv_store_fusion_promoted,
+  decode_q4k_w1w3_fp16_store_promoted, decode_q4k_gate_up_four_warp_vector_promoted,
+  decode_ffn_down_resadd_promoted, decode_kv_store_fusion_promoted,
   decode_rmsnorm_native_lowering_promoted, decode_reduce_output_rmsnorm_promoted, decode_qk_norm_rope_promoted,
   decode_producer_kv_cache_sink_promoted, decode_q4k_kv_pair_promoted,
   decode_native_argmax_threads,
@@ -627,6 +628,12 @@ class FFNBlock:
     if not _prefill and getattr(self, "_decode_q4k_w1w3_fusion_promoted", False):
       _fg, _fu = getattr(self, "ffn_gate", None), getattr(self, "ffn_up", None)
       if isinstance(_fg, Q4KPrimitiveLinear) and isinstance(_fu, Q4KPrimitiveLinear):
+        _four_warp_admission = getattr(_fg, "_q4k_gate_up_four_warp_admission", None)
+        if _four_warp_admission is not None:
+          from tinygrad.llm.q4k_gate_up_four_warp_mmvq import q4k_gate_up_four_warp_call
+          _four_warp_z = q4k_gate_up_four_warp_call(_four_warp_admission, _fg, _fu, x)
+          if _four_warp_z is not None:
+            return self.ffn_down(_four_warp_z) if residual is None else self.ffn_down(_four_warp_z, normed_h=residual)
         # Fused w1+w3 decode GEMV (q4k-w1w3-fused-qv-implementation-record-20260803.md): ONE kernel
         # computes silu(gate(x)) * up(x); the fallback lambda reproduces the legacy chain's z exactly,
         # so an off-target/off-shape admission changes nothing about what ffn_down consumes.
@@ -1887,6 +1894,10 @@ class Transformer:
     _w1w3_fp16_promoted = _w1w3_promoted and decode_q4k_w1w3_fp16_store_promoted((_norm_cap.backend, _norm_cap.architecture))
     model._decode_q4k_w1w3_fp16_store_promoted = _w1w3_fp16_promoted
     for _b in model.blk: _b._decode_q4k_w1w3_fp16_store_promoted = _w1w3_fp16_promoted
+    _gateup_fourwarp_promoted = _w1w3_fp16_promoted and decode_q4k_gate_up_four_warp_vector_promoted(
+      (_norm_cap.backend, _norm_cap.architecture)) and not getenv("TINYGRAD_Q4K_GATE_UP_FOUR_WARP_DISABLE", 0)
+    model._decode_q4k_gate_up_four_warp_vector_promoted = _gateup_fourwarp_promoted
+    for _b in model.blk: _b._decode_q4k_gate_up_four_warp_vector_promoted = _gateup_fourwarp_promoted
     # M2b+M2c ffn-down residual-add absorption gate (decode-ffn-down-resadd-route-policy.json,
     # NV sm_120 promoted, nv-epilogue-absorption-m2c-ab-20260811.json BOOKED). M2b: the ffn_down
     # Q4K/Q6K GEMV absorbs the h+ffn_out add in-kernel; M2c: the declared epilogue-absorbing block
@@ -2049,6 +2060,14 @@ class Transformer:
           _ffn = getattr(_b, "ffn_down", None)
           if _ffn is not None and isinstance(_ffn, (Q4KPrimitiveLinear, Q6KPrimitiveLinear)) and getattr(_ffn, "route_role", "") == "ffn_down":
             _ffn._decode_ffn_down_resadd_promoted = True
+      if model._decode_q4k_gate_up_four_warp_vector_promoted:
+        from tinygrad.llm.q4k_gate_up_four_warp_mmvq import Q4KGateUpFourWarpAdmission
+        for _idx, _b in enumerate(model.blk):
+          _fg, _fu = getattr(_b, "ffn_gate", None), getattr(_b, "ffn_up", None)
+          if isinstance(_fg, Q4KPrimitiveLinear) and isinstance(_fu, Q4KPrimitiveLinear) and \
+             (getattr(_fg, "out_features", None), getattr(_fg, "in_features", None)) == (12288, 4096) and \
+             (getattr(_fu, "out_features", None), getattr(_fu, "in_features", None)) == (12288, 4096):
+            _fg._q4k_gate_up_four_warp_admission = Q4KGateUpFourWarpAdmission(_idx, vector_loads=True)
       # Q4_K FFN-down four-warp fp16 geometry route: install the admission on the exact Q4_K
       # 4096x12288 ffn_down role only (Q6 down keeps its own route). The vector-load spelling is
       # bit-exact and passed production d512/d128 reverse brackets; TINYGRAD_Q4K_SCALAR_LOAD=1

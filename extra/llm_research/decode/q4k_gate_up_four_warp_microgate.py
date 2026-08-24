@@ -49,7 +49,7 @@ def _render(ren: CUDARenderer) -> dict[str, str]:
 
   control = q4k_g3_lanemap_gemv_w1w3_kernel(ROWS, K, load_style="vector", store_fp16=True)(
     out, gate, up, x)
-  candidate = emit_q4k_gate_up_four_warp_fp16()(out, gate, up, x)
+  candidate = emit_q4k_gate_up_four_warp_fp16(vector_loads=True)(out, gate, up, x)
 
   def src(u: UOp) -> str:
     return next(x.arg for x in to_program(u, ren).src if x.op is Ops.SOURCE)
@@ -100,7 +100,7 @@ static double time_candidate(half* out, unsigned int* g, unsigned int* u, half* 
   cudaEvent_t s, e; cudaEventCreate(&s); cudaEventCreate(&e);
   cudaEventRecord(s);
   for (int i = 0; i < passes; i++)
-    q4k_gate_up_four_warp_fp16_12288_4096<<<12288, 128>>>(out, g, u, x);
+  q4k_gate_up_four_warp_vec_fp16_12288_4096<<<12288, 128>>>(out, g, u, x);
   cudaEventRecord(e); check(cudaDeviceSynchronize(), "sync candidate");
   float ms = 0; cudaEventElapsedTime(&ms, s, e);
   cudaEventDestroy(s); cudaEventDestroy(e);
@@ -124,7 +124,7 @@ int main(int argc, char** argv) {
   check(cudaMemset(x, 0, K_ARG * sizeof(half)), "memset x");
 
     q4k_g3_lanemap_gemv_w1w3vec16_12288_4096<<<12288, 32>>>(ctrl, g, u, x);
-  q4k_gate_up_four_warp_fp16_12288_4096<<<12288, 128>>>(cand, g, u, x);
+    q4k_gate_up_four_warp_vec_fp16_12288_4096<<<12288, 128>>>(cand, g, u, x);
   check(cudaGetLastError(), "warmup launch"); check(cudaDeviceSynchronize(), "warmup sync");
 
   half* h1 = (half*)malloc(ROWS_ARG * sizeof(half));

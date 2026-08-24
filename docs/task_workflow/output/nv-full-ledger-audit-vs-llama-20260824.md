@@ -55,7 +55,7 @@ are:
 | Q projections, ordinary + shared | 303.952 | 36 | 8.443 |
 | 4096 RMS/reduction rows | 263.072 | 56 | mixed |
 | flash combine | 102.496 | 36 | 2.847 |
-| K/V projections, all installed forms | 201.056 | 36 | mixed |
+| K/V projections, all installed forms | 257.872 | 72 logical outputs | mixed |
 | Q/K norm+RoPE and KV sink | 137.216 | 72 | 1.906 |
 | activation epilogues | 54.176 | 38 | 1.426 |
 | Q8 providers | 30.912 | 17 | 1.818 |

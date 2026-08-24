@@ -22,9 +22,11 @@ from tinygrad import Tensor, dtypes
 from tinygrad.codegen.late.warp_reduce import _warp_reduce_sum_staged
 from tinygrad.dtype import AddrSpace
 from tinygrad.llm.decode_kernels import (
-  LanePartition, Q4KGateUpLaneMap, Q4K_WORDS_PER_BLOCK, _q4k_block_dot_packed_load, _silu_uop)
+  LanePartition, Q4KGateUpLaneMap, Q4K_WORDS_PER_BLOCK, _q4k_block_dot_packed_load,
+  _q4k_block_dot_packed_load_vec, _silu_uop)
 from tinygrad.llm.kernel_program import (
-  KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program)
+  DeclaredTypedOutput, KernelProgram, KernelProgramProvenance, OutputSpec, TypedLayout,
+  execute_promoted_program)
 from tinygrad.uop.ops import AxisType, KernelInfo, UOp
 
 ROWS, K = 12288, 4096
@@ -36,16 +38,18 @@ BLOCKS_PER_WARP = K_BLOCKS // WARPS_PER_ROW
 @dataclass(frozen=True)
 class Q4KGateUpFourWarpAdmission:
   block_index: int
+  vector_loads: bool = False
   def __post_init__(self):
     if not isinstance(self.block_index, int) or isinstance(self.block_index, bool) or self.block_index < 0:
       raise ValueError("Q4_K gate/up four-warp block index must be a non-negative integer")
 
 
-def emit_q4k_gate_up_four_warp_fp16() -> callable:
+def emit_q4k_gate_up_four_warp_fp16(vector_loads:bool=False) -> callable:
   """Four-warp fp16-direct Q4_K gate/up consumer (128 threads/row, fused silu)."""
   lm = Q4KGateUpLaneMap(k=K, n=ROWS)
   lm.validate()
-  name = f"q4k_gate_up_four_warp_fp16_{ROWS}_{K}"
+  name = f"q4k_gate_up_four_warp_{'vec_' if vector_loads else ''}fp16_{ROWS}_{K}"
+  block_dot = _q4k_block_dot_packed_load_vec if vector_loads else _q4k_block_dot_packed_load
 
   def kernel(out:UOp, gate_words:UOp, up_words:UOp, x:UOp) -> UOp:
     row = UOp.special(ROWS, "gidx0")
@@ -55,8 +59,8 @@ def emit_q4k_gate_up_four_warp_fp16() -> callable:
     block = warp * BLOCKS_PER_WARP + part.block_group
     base = (row * K_BLOCKS + block) * Q4K_WORDS_PER_BLOCK
 
-    contrib_g = _q4k_block_dot_packed_load(gate_words, x, base, block, part.word_col)
-    contrib_u = _q4k_block_dot_packed_load(up_words, x, base, block, part.word_col)
+    contrib_g = block_dot(gate_words, x, base, block, part.word_col)
+    contrib_u = block_dot(up_words, x, base, block, part.word_col)
     total_g = _warp_reduce_sum_staged(contrib_g, lane, WARP, 90)
     total_u = _warp_reduce_sum_staged(contrib_u, lane, WARP, 95)
 
@@ -95,11 +99,13 @@ def q4k_gate_up_four_warp_call(admission:object, gate:Any, up:Any, x:Tensor) -> 
   gw = gate.q4k_storage.words.to(x.device).contiguous() if gate.q4k_storage.mode == "q4_ondemand" else gate.q4k_storage.words.to(x.device)
   uw = up.q4k_storage.words.to(x.device).contiguous() if up.q4k_storage.mode == "q4_ondemand" else up.q4k_storage.words.to(x.device)
   xv = x[:, 0, :].reshape(K).cast(dtypes.float16).contiguous()
+  typed_output = DeclaredTypedOutput(TypedLayout(dtypes.float16, (ROWS,), (1, 1, ROWS)),
+                                     combine_fusion_admitted=False,
+                                     epilogue_absorption_admitted=True)
   consumer = KernelProgram("decode_q4k_gate_up_four_warp", f"blk{admission.block_index}.gate_up",
-    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emit_q4k_gate_up_four_warp_fp16(),
-    output_spec=OutputSpec((ROWS,), dtypes.float16))
-  out = execute_promoted_program(Tensor.empty((ROWS,), dtype=dtypes.float16, device=x.device),
-    gw, uw, xv, program=consumer)
+    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emit_q4k_gate_up_four_warp_fp16(admission.vector_loads),
+    output_spec=OutputSpec((ROWS,), dtypes.float16, typed_output=typed_output))
+  out = execute_promoted_program(None, gw, uw, xv, program=consumer)
   return out.reshape(1, 1, ROWS)
 
 

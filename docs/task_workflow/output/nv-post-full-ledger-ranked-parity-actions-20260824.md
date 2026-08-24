@@ -76,7 +76,7 @@ or tail algorithm if the refreshed body gap survives.
 
 ### 5. Refresh K/V after pair fusion and producer-sink landings
 
-The current K/V projection pool is `201.056 us/token`, but the retained
+The current K/V projection pool is `257.872 us/token`, but the retained
 `73.12 us` residual predates the latest ordinary/shared pair and producer-sink
 changes.  It is therefore a remeasurement target, not a valid recovery
 projection.  Compare the current paired call graph with llama before any more

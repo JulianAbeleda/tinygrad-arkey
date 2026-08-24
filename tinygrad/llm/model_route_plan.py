@@ -397,6 +397,14 @@ def decode_q4k_w1w3_fp16_store_promoted(target:Target) -> bool:
   """Policy authority for the w1+w3 fused fp16-store spelling (closed default, see the loader above)."""
   return target in _DECODE_Q4K_W1W3_FP16_STORE_PROMOTED_TARGETS
 
+_DECODE_Q4K_GATE_UP_FOUR_WARP_VECTOR_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-q4k-gate-up-four-warp-vector-route-policy.json"
+_DECODE_Q4K_GATE_UP_FOUR_WARP_VECTOR_PROMOTED_TARGETS: frozenset[Target] = load_decode_q4k_w1w3_fusion_promotion(
+  _DECODE_Q4K_GATE_UP_FOUR_WARP_VECTOR_PROMOTION_RECORD)
+
+def decode_q4k_gate_up_four_warp_vector_promoted(target:Target) -> bool:
+  """Policy authority for the typed-output four-warp+vector gate/up route."""
+  return target in _DECODE_Q4K_GATE_UP_FOUR_WARP_VECTOR_PROMOTED_TARGETS
+
 def load_decode_ffn_down_resadd_promotion(path:str) -> frozenset[Target]:
   """Read the ffn_down residual-add absorption promotion record (boltbeam.route_policy.v1, same schema
   family as `load_decode_q4k_w1w3_fp16_store_promotion`). CLOSED default; deliberately a SEPARATE record
