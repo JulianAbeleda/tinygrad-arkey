@@ -1,0 +1,61 @@
+{
+  "bitwise_identical": true,
+  "commit": "a8f153e1d5b62baf67ae01f9da4324350b3d4f81",
+  "mismatched_words": 0,
+  "passes": 1000,
+  "ptxas": [
+    "ptxas info    : 0 bytes gmem",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_pair_vec_1024_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_gemv_pair_vec_1024_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 67 registers, used 0 barriers",
+    "ptxas info    : Compile time = 17.505 ms",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_1024_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_1024_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 43 registers, used 0 barriers",
+    "ptxas info    : Compile time = 8.561 ms"
+  ],
+  "reps": 11,
+  "schema": "tinygrad.q4k_kv_pair_fusion_microgate.v1",
+  "shape": {
+    "k": 4096,
+    "q4_pairs_per_token": 18,
+    "rows": 1024
+  },
+  "timing": {
+    "candidate_median": 3.731072,
+    "candidate_over_control": 0.6832424070178318,
+    "candidate_samples": [
+      3.727392,
+      3.729376,
+      3.728192,
+      3.72528,
+      3.727008,
+      3.733504,
+      3.73408,
+      3.733056,
+      3.731072,
+      3.733344,
+      3.732288
+    ],
+    "control_median": 5.460832,
+    "control_samples": [
+      5.457568,
+      5.457024,
+      5.457728,
+      5.457376,
+      5.460832,
+      5.459648,
+      5.463616,
+      5.463904,
+      5.461824,
+      5.463936,
+      5.464576
+    ],
+    "projected_18_pair_recovery_us": 31.135679999999994,
+    "recovery_us_per_pair": 1.7297599999999997,
+    "unit": "us_per_pair_cuda_event"
+  },
+  "verdict": "ADVANCE"
+}

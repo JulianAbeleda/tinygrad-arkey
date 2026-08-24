@@ -25,6 +25,7 @@ from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, 
 from tinygrad.llm.shared_q8_attention import SharedQ8AttentionAdmission, shared_q8_attention_call
 from tinygrad.llm.packed_argmax import native_argmax_finite_fp32, packed_argmax_finite_fp32
 from tinygrad.llm.producer_kv_cache_sink import ProducerKVCacheSinkAdmission, producer_kv_cache_sink_call
+from tinygrad.llm.q4k_kv_pair import q4k_kv_pair_call
 from tinygrad.llm.prefill_routes import direct_packed_prefill_policy, is_direct_packed_prefill_linear, route_prefill_linear, validate_prefill_route_mode
 from tinygrad.llm.prefill_memory_plan import Strategy
 from tinygrad.llm.prefill_attachments import attach_selected_prefill_inventory
@@ -52,7 +53,7 @@ from tinygrad.llm.model_route_plan import (build_model_route_plan, decode_norm_f
   decode_q4k_epilogue_fusion_promoted, decode_q4k_epilogue_resadd_promoted, decode_q4k_w1w3_fusion_promoted,
   decode_q4k_w1w3_fp16_store_promoted, decode_ffn_down_resadd_promoted, decode_kv_store_fusion_promoted,
   decode_rmsnorm_native_lowering_promoted, decode_reduce_output_rmsnorm_promoted, decode_qk_norm_rope_promoted,
-  decode_producer_kv_cache_sink_promoted,
+  decode_producer_kv_cache_sink_promoted, decode_q4k_kv_pair_promoted,
   decode_native_argmax_threads,
   decode_shared_q8_attention_promoted,
   decode_q6_direct_shared_q8_attention_promoted, decode_q4_direct_shared_q8_attention_promoted,
@@ -777,14 +778,18 @@ class TransformerBlock(FFNBlock):
                  for lin in (self.attn_q, self.attn_k, self.attn_v))
     elif hasattr(self, "attn_qkv"): q, k, v = self.attn_qkv(x)  # B1 fused q/k/v
     else:
+      # Closed research lease for an exact ordinary Q4/Q4 K/V pair. Harnesses
+      # install it only on blocks outside the shared-Q8 triple boundary.
+      _q4kv_pair = q4k_kv_pair_call(getattr(self, "_q4k_kv_pair_admission", None), self.attn_k, self.attn_v, x)
       # P3a qualification hook: this is CLOSED by construction.  The loader
       # never installs ``_shared_q8_attention_admission``; a harness may lease
       # one exact block and the callee revalidates the real Q4/Q4/{Q4,Q6} tuple.
       # A miss preserves the three ordinary primitive calls verbatim.
-      _shared_q8 = shared_q8_attention_call(getattr(self, "_shared_q8_attention_admission", None),
-                                             self.attn_q, self.attn_k, self.attn_v, x, start_pos,
-                                             getattr(self, "_shared_q8_attention_norm_weight", None))
-      q, k, v = _shared_q8 if _shared_q8 is not None else (self.attn_q(x), self.attn_k(x), self.attn_v(x))
+      _shared_q8 = None if _q4kv_pair is not None else shared_q8_attention_call(
+        getattr(self, "_shared_q8_attention_admission", None), self.attn_q, self.attn_k, self.attn_v, x, start_pos,
+        getattr(self, "_shared_q8_attention_norm_weight", None))
+      q, k, v = ((self.attn_q(x), *_q4kv_pair) if _q4kv_pair is not None else
+                 _shared_q8 if _shared_q8 is not None else (self.attn_q(x), self.attn_k(x), self.attn_v(x)))
     q, k, v = (_prefill_semantic(_prefill, prefill_scratch, value) for value in (q, k, v))
     # Qualification-only producer-side cache sink captures the exact terminal projection
     # values before reshape/transpose. The admission object is never installed by the
@@ -1960,6 +1965,11 @@ class Transformer:
     if _producer_kv_sink_promoted:
       for _index, _b in enumerate(model.blk):
         _b._producer_kv_cache_sink_admission = ProducerKVCacheSinkAdmission(_index)
+    # Ordinary Q4/Q4 K/V dual-output producer. Admission is installed only
+    # after primitive replacement and after the shared-Q8 leases are known;
+    # this resolve-once flag carries only the target/rollback policy.
+    model._decode_q4k_kv_pair_promoted = decode_q4k_kv_pair_promoted(
+      (_norm_cap.backend, _norm_cap.architecture))
     # One-CTA finite-fp32 decode argmax. The native reducer replaces the three
     # scheduler reduction kernels at the sampled-score tail and keeps a held
     # one-element clone for replay-safe feedback. NV sm_120 is promoted after
@@ -2109,6 +2119,18 @@ class Transformer:
           except Exception:
             # A failed norm copy declines the fused provider for that block (legacy graph).
             _b._shared_q8_attention_norm_weight = None
+      # Fuse only the nine ordinary Q4/Q4 K/V pairs proved by the composed
+      # profile/wall gate. Shared-Q8 blocks have a distinct producer grammar
+      # and are intentionally excluded here; mixed Q4/Q6 pairs also miss.
+      if model._decode_q4k_kv_pair_promoted:
+        from tinygrad.llm.q4k_kv_pair import Q4KKVPairAdmission
+        for _idx, _b in enumerate(model.blk):
+          if getattr(_b, "_shared_q8_attention_admission", None) is not None: continue
+          _k, _v = getattr(_b, "attn_k", None), getattr(_b, "attn_v", None)
+          if isinstance(_k, Q4KPrimitiveLinear) and isinstance(_v, Q4KPrimitiveLinear) and \
+             all(getattr(x, "route_role", "") == "attn_kv" and getattr(x, "out_features", None) == 1024 and
+                 getattr(x, "in_features", None) == 4096 for x in (_k, _v)):
+            _b._q4k_kv_pair_admission = Q4KKVPairAdmission(_idx)
     if _runtime_inventory is not None:
       attach_selected_prefill_inventory(model, _runtime_inventory, _runtime_policy, _device_facts,
                                         direct_packed_policy=direct_packed_prefill_policy(config.n_heads, config.n_kv_heads))

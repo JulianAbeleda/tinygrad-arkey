@@ -542,6 +542,12 @@ def execute_promoted_program(output: Tensor | None = None, *inputs: Tensor, prog
     KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED)), "execute_promoted_program")
 
 
+def execute_promoted_program_outputs(output: Tensor | None = None, *inputs: Tensor, program: KernelProgram) -> tuple[Tensor, ...]:
+  """Promoted boundary variant for a program with multiple caller-owned writable buffers."""
+  return _execute_outputs(output, inputs, program, frozenset((KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
+    KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED)), "execute_promoted_program_outputs")
+
+
 def execute_oracle_program(output: Tensor, *inputs: Tensor, program: KernelProgram) -> Tensor:
   return _execute(output, inputs, program, frozenset((KernelProgramProvenance.HAND_AUTHORED_ORACLE,)), "execute_oracle_program")
 
@@ -557,4 +563,4 @@ def execute_research_program_outputs(output: Tensor, *inputs: Tensor, program: K
 
 __all__ = ["ActivationViewRequest", "DeclaredTypedOutput", "KernelProgram", "KernelProgramProvenance", "OutputSpec",
            "TypedLayout", "TypedViewRequest", "ResidualViewRequest", "execute_oracle_program",
-           "execute_promoted_program", "execute_research_program", "execute_research_program_outputs"]
+           "execute_promoted_program", "execute_promoted_program_outputs", "execute_research_program", "execute_research_program_outputs"]

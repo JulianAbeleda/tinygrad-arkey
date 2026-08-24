@@ -534,6 +534,20 @@ def decode_producer_kv_cache_sink_promoted(target:Target, getenv_fn=getenv) -> b
   """Resolve the producer-owned sink with an explicit load-time rollback."""
   return target in _DECODE_PRODUCER_KV_CACHE_SINK_TARGETS and not getenv_fn("TINYGRAD_PRODUCER_KV_CACHE_SINK_DISABLE", 0)
 
+def load_decode_q4k_kv_pair_promotion(path:str) -> frozenset[Target]:
+  """Closed-default policy for ordinary Q4/Q4 K/V dual-output producers."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  return frozenset((t.get("backend"), t.get("architecture")) for t in (data.get("promoted_targets") or ()))
+
+_DECODE_Q4K_KV_PAIR_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-q4k-kv-pair-route-policy.json"
+_DECODE_Q4K_KV_PAIR_TARGETS = load_decode_q4k_kv_pair_promotion(_DECODE_Q4K_KV_PAIR_RECORD)
+
+def decode_q4k_kv_pair_promoted(target:Target, getenv_fn=getenv) -> bool:
+  """Resolve the Q4/Q4 pair route with an explicit load-time rollback."""
+  return target in _DECODE_Q4K_KV_PAIR_TARGETS and not getenv_fn("TINYGRAD_Q4K_KV_PAIR_DISABLE", 0)
+
 def load_decode_native_argmax_promotion(path:str) -> frozenset[Target]:
   """Closed-default policy for the one-CTA finite-fp32 decode argmax."""
   policy_path = pathlib.Path(path).expanduser()

@@ -1,0 +1,8 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_q4k_kv_pair",
+  "description": "Dual-output vector Q4_K K/V producer for the nine ordinary Q4/Q4 attention blocks on RTX 5090 NV sm_120. The native gate is bit-exact and 31.7% faster per pair. The composed depth-512 graph is 480 to 471 nodes with node sum -19.728 us/token and union -18.500 us/token. A stabilized reps=9 control/candidate/control wall bracket measured 4.519055 / 4.498261 / 4.505304 ms/token, recovering 13.919 us/token with identical token streams. TINYGRAD_Q4K_KV_PAIR_DISABLE=1 restores the two single-projection launches at model load.",
+  "promoted_targets": [
+    {"backend": "NV", "architecture": "sm_120"}
+  ]
+}
