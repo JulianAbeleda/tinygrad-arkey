@@ -2,7 +2,8 @@ from tinygrad import dtypes
 import pytest
 
 from tinygrad.llm.shared_q8_attention import (SharedQ8AttentionAdmission, _emit_q4_cooperative_pair,
-  _emit_q4_cooperative_qkv, _emit_q4_cooperative_qkv_balanced, _emit_q4_cooperative_qkv_full, _emit_q4_q6_cooperative_pair)
+  _emit_q4_cooperative_qkv, _emit_q4_cooperative_qkv_balanced, _emit_q4_cooperative_qkv_full,
+  _emit_q4_q6_cooperative_pair, _emit_q4_q6_cooperative_qkv_full)
 from tinygrad.llm.model_route_plan import (decode_shared_q8_q4kv_pair_promoted, load_decode_shared_q8_q4kv_pair_promotion,
   decode_shared_q8_q4q6_kv_pair_promoted, load_decode_shared_q8_q4q6_kv_pair_promotion)
 from tinygrad.uop.ops import Ops, UOp
@@ -52,6 +53,17 @@ def test_shared_q8_mixed_pair_exact_body_shape():
   assert sum(u.op is Ops.BARRIER for u in body.toposort()) == 1
 
 
+def test_shared_q8_mixed_qkv_full_exact_body_shape():
+  qrows,rows,k=4096,1024,4096; q4words=rows*(k//256)*36; q6halfs=rows*(k//256)*110
+  body=_emit_q4_q6_cooperative_qkv_full(UOp.variable("mixed_qkv_blocks_test",1,4))(
+    UOp.placeholder((qrows,),dtypes.float32,0),UOp.placeholder((rows,),dtypes.float32,1),
+    UOp.placeholder((rows,),dtypes.float32,2),UOp.placeholder((q4words*4,),dtypes.uint32,3),
+    UOp.placeholder((q4words,),dtypes.uint32,4),UOp.placeholder((q6halfs,),dtypes.uint16,5),
+    UOp.placeholder((k//4+k//32,),dtypes.uint32,6))
+  assert body.arg.name == "q4k_q6k_warp_coop_q8_dp4a_qkv_full_direct_4096_1024_4096"
+  assert sum(u.op is Ops.BARRIER for u in body.toposort()) == 5
+
+
 def test_shared_q8_pair_admission_is_separate_and_closed():
   assert not SharedQ8AttentionAdmission(1,cooperative_q4=True,q4_direct_output=True).q4_kv_pair_output
   admitted=SharedQ8AttentionAdmission(1,cooperative_q4=True,q4_direct_output=True,q4_kv_pair_output=True)
@@ -62,6 +74,9 @@ def test_shared_q8_pair_admission_is_separate_and_closed():
   assert mixed.q4_q6_kv_pair_output
   with pytest.raises(ValueError,match="requires cooperative Q4 and Q6 direct output"):
     SharedQ8AttentionAdmission(1,cooperative_q4=True,q4_direct_output=True,q4_q6_kv_pair_output=True)
+  full=SharedQ8AttentionAdmission(1,cooperative_q4=True,q4_direct_output=True,q6_direct_output=True,
+    q4_q6_qkv_triple_output=True)
+  assert full.q4_q6_qkv_triple_output
 
 
 def test_shared_q8_pair_policy_and_rollback(tmp_path):

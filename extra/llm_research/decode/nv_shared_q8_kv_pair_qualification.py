@@ -23,9 +23,9 @@ def _install(model,candidate:bool,mixed:bool=False,triple:bool=False) -> list[in
     if not (isinstance(getattr(block,"attn_k",None),Q4KPrimitiveLinear) and isinstance(getattr(block,"attn_v",None),v_type)): continue
     if not (current.cooperative_q4 and current.q4_direct_output):
       raise RuntimeError(f"block {index} lacks the promoted cooperative direct-output prerequisite")
-    if triple and (mixed or not isinstance(getattr(block,"attn_v",None),Q4KPrimitiveLinear)):
-      raise RuntimeError(f"triple QKV requires ordinary Q4/Q4 block, got {index}")
-    if triple:
+    if triple and not mixed and not isinstance(getattr(block,"attn_v",None),Q4KPrimitiveLinear):
+      raise RuntimeError(f"triple QKV requires Q4/Q4 or Q4/Q6 block, got {index}")
+    if triple and not mixed:
       k_words=block.attn_k.q4k_storage.words
       v_words=block.attn_v.q4k_storage.words
       # Equalize persistent allocation/address topology in both arms. The
@@ -34,7 +34,9 @@ def _install(model,candidate:bool,mixed:bool=False,triple:bool=False) -> list[in
       # placement and allocator pressure.
       block.attn_q._shared_q8_qkv_words=k_words.cat(v_words,dim=0).contiguous().realize()
     block._shared_q8_attention_admission=replace(current,q4_kv_pair_output=False if (mixed or triple) else candidate,
-      q4_q6_kv_pair_output=candidate if mixed else False,q4_qkv_triple_output=candidate if triple else False)
+      q4_q6_kv_pair_output=candidate if mixed and not triple else False,
+      q4_qkv_triple_output=candidate if triple and not mixed else False,
+      q4_q6_qkv_triple_output=candidate if triple and mixed else False)
     eligible.append(index)
   expected=8 if mixed else 9
   if len(eligible)!=expected: raise RuntimeError(f"expected {expected} shared-Q8 {'Q4/Q6' if mixed else 'Q4/Q4'} pairs, got {eligible}")

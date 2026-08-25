@@ -11,7 +11,7 @@ Starting commit: `5e7f36945215ebc4ed2efbaf887ef241dafce7fd`
 | --- | ---: | --- | --- | ---: |
 | S44 shared-Q8 Q4/Q4/Q4 | 9 | `WALL_PASS` | `nv-shared-q8-qkv-producer-result-20260825.md` | +16.119 us/token |
 | O44 ordinary Q4/Q4/Q4 | 9 | `WALL_PASS` | composed producer/cache confirmation, reps-9 | +6.867 us/token; research composition |
-| S46 shared-Q8 Q4/Q4/Q6 | 8 | `NOT_STARTED` | — | 0 |
+| S46 shared-Q8 Q4/Q4/Q6 | 8 | `WALL_CLOSED` | split-region full-grid reps-9 | 0; repaired wall loses 5.527 us/token |
 | O46 ordinary Q4/Q4/Q6 | 10 | `NOT_STARTED` | — | 0 |
 
 `WALL_PASS` is not `INSTALLED`: S44 still requires policy/composition gates.
@@ -24,8 +24,8 @@ The campaign currently books no installed endpoint movement from this matrix.
 | 0. committed uniform-region substrate | `COMPLETE` | `01f63ed6e`; 19 focused tests pass |
 | 1A. O44 boundary-matched discriminator | `COMPLETE` | full producer advances flash/output readiness; bare wall -3.388 us/token at reps-9 |
 | 1B. O44 direct V-cache composition | `COMPLETE` | existing producer-owned cache completion composes at +6.867 us/token, reps-9 |
-| 2. reusable producer specification | `IN_PROGRESS` | selected contract: full producer plus producer-owned cache completion |
-| 3. S46 full-grid qualification | `NOT_STARTED` | wall pass or closure |
+| 2. reusable producer specification | `COMPLETE` | typed uniform grid plus selected producer-owned cache completion |
+| 3. S46 full-grid qualification | `COMPLETE` | exact/device pass; repaired reps-9 wall closed at -5.527 us/token |
 | 4. O46 full-grid qualification | `NOT_STARTED` | wall pass or closure |
 | 5. independent policy landing | `NOT_STARTED` | rollback-qualified installed rows |
 | 6. composed wall and fresh ledger | `NOT_STARTED` | reps>=9 composition and ledger |
@@ -48,8 +48,8 @@ device-ledger columns remain ceilings until then.
 
 ## Next action
 
-Factor the selected full-producer plus producer-owned cache-completion contract,
-then implement and microgate the S46 shared-Q8 Q4/Q4/Q6 population.
+Implement and qualify the O46 ordinary-fp16 Q4/Q4/Q6 population using the
+same full-grid and producer-owned cache-completion contract.
 
 ## Phase 1 controlling evidence
 
@@ -67,3 +67,17 @@ then implement and microgate the S46 shared-Q8 Q4/Q4/Q6 population.
   confirmed `+6.867 us/token`; candidate beats both controls.  This selects the
   reusable output/completion contract.  It is a research wall pass, not yet an
   installed/default route.
+
+## Phase 3 S46 controlling evidence
+
+- `phase3-s46/production-profile-split-regions-v3.json`: exact token hash and
+  all eight blocks; 16 nodes removed and GPU union improves by 25.500 us/token.
+- The first mixed emitter computed both Q4-K and Q6-V in every auxiliary CTA;
+  its negative wall was promoted into the disjoint-region repair.  Two compiler
+  walls (sibling terminal regions and a region-scoped register declaration)
+  were also repaired before final judgment.
+- `phase3-s46/production-wall-split-regions-r9.json`: candidate 4.355902 ms,
+  controls 4.344939 and 4.355810 ms, exact hash.  It does not beat either
+  control consistently and loses 5.527 us/token at the midpoint.  With
+  population, output, arithmetic, topology, and cache composition accounted,
+  S46 is `WALL_CLOSED` for this full-grid geometry.
