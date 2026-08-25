@@ -232,6 +232,12 @@ overlap” or “compress everything.” It is an exact Q+K/V triple producer th
 turns small low-rate streams into one larger high-rate body, followed by the
 same full-token wall authority used for every promotion.
 
+Follow-up result (2026-08-25): this bet passed. A typed uniform full-grid
+region with separate caller-owned Q/K/V outputs is bit-exact and recovered
+16.119 us/token end-to-end in the 7-repetition production bracket (about
+0.84 tok/s at the measured endpoint). The gain is service-rate/topology only;
+it does not claim DRAM-byte reduction.
+
 Evidence:
 
 - `docs/task_workflow/evidence/nv-byte-topology-wall-audit-20260825/accounting.json`

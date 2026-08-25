@@ -49,6 +49,9 @@ class SharedQ8AttentionAdmission:
   # Mixed Q4-K/Q6-V dual producer; separately leased because it owns a
   # different weight grammar and requires the Q6 direct consumer.
   q4_q6_kv_pair_output: bool = False
+  # Exact full-grid Q+K/V producer. This requires an explicitly packed
+  # K-then-V weight view installed by the qualification harness.
+  q4_qkv_triple_output: bool = False
 
   def __post_init__(self):
     if not isinstance(self.block_index, int) or self.block_index < 0: raise ValueError("block_index must be non-negative")
@@ -65,6 +68,11 @@ class SharedQ8AttentionAdmission:
     if self.q4_q6_kv_pair_output and not (self.cooperative_q4 and self.q4_direct_output and self.q6_direct_output):
       raise ValueError("q4_q6_kv_pair_output requires cooperative Q4 and Q6 direct output")
     if self.q4_kv_pair_output and self.q4_q6_kv_pair_output: raise ValueError("only one K/V pair grammar may be selected")
+    if not isinstance(self.q4_qkv_triple_output, bool): raise ValueError("q4_qkv_triple_output must be bool")
+    if self.q4_qkv_triple_output and not (self.cooperative_q4 and self.q4_direct_output):
+      raise ValueError("q4_qkv_triple_output requires cooperative Q4 direct output")
+    if self.q4_qkv_triple_output and (self.q4_kv_pair_output or self.q4_q6_kv_pair_output):
+      raise ValueError("QKV triple output is exclusive with a K/V pair grammar")
 
 def _pack4(vs):
   r=UOp.const(dtypes.uint32,0)
@@ -422,6 +430,65 @@ def _emit_q4_cooperative_qkv_balanced(block_count:UOp):
   return kernel
 
 
+def _emit_q4_cooperative_qkv_full(block_count:UOp):
+  """Full-Q-grid Q4/Q4/Q4 producer with an exact conditional K/V tail.
+
+  Every one of 4,096 CTAs produces one Q row. The first 2,048 CTAs also own
+  one row of packed K-then-V storage. The branch predicate is a proved global
+  workgroup id, so its exact four-warp K/V merge may contain a barrier without
+  making barrier participation divergent inside any CTA.
+  """
+  def kernel(q_out,k_out,v_out,q_words,kv_words,xp):
+    q_row,lid=UOp.special(_Q_ROWS,"gidx0"),UOp.special(128,"lidx0")
+    warp,lane=lid//32,lid%32; group,word_base=lane//4,(lane%4)*2
+
+    def block_contribution(words,packed,row,rel):
+      block=warp*4+rel; base=(row*(_K//256)+block)*Q4K_WORDS_PER_BLOCK
+      w0,w1,w2,w3=words[base],words[base+1],words[base+2],words[base+3]
+      d,dm=_f16_word(w0,False),_f16_word(w0,True); g4=group%4
+      b1=w1.rshift(g4*8).bitwise_and(0xff); b2=w2.rshift(g4*8).bitwise_and(0xff); hb=w3.rshift(g4*8).bitwise_and(0xff)
+      sc=(group<4).where(b1.bitwise_and(63),hb.bitwise_and(0xf).bitwise_or(b1.rshift(6).lshift(4)))
+      mn=(group<4).where(b2.bitwise_and(63),hb.rshift(4).bitwise_or(b2.rshift(6).lshift(4)))
+      c=UOp.const(dtypes.float32,0.0)
+      for ws in range(2):
+        word=word_base+ws; qw=words[base+4+(group//2)*8+word].rshift((group%2)*4).bitwise_and(0x0F0F0F0F)
+        xv=packed[block*64+group*8+word]; dot=int8x4_dot(UOp.const(dtypes.int32,0),qw,xv).cast(dtypes.float32)
+        sx=_i8lane(xv,0)+_i8lane(xv,1)+_i8lane(xv,2)+_i8lane(xv,3)
+        c=c+_q8_d(packed,block*8+group)*(d*sc.cast(dtypes.float32)*dot-dm*mn.cast(dtypes.float32)*sx.cast(dtypes.float32))
+      return c
+
+    qbr=UOp.range(block_count,2,axis_type=AxisType.LOOP)
+    qc=block_contribution(q_words,xp,q_row,qbr)
+    qa=UOp.placeholder((1,),dtypes.float32,20,addrspace=AddrSpace.REG); qa=qa.after(qa[0].store(0.0))
+    qa=qa.after(qa[0].store(qa.after(qbr)[0]+qc).end(qbr)); qt=qa[0]
+    for slot,off in enumerate((16,8,4,2,1),90): qt=qt+_staged_shfl(qt,off,lane,slot)
+    qs=UOp.placeholder((4,),dtypes.float32,230,addrspace=AddrSpace.LOCAL)
+    qp=qs[warp].store(qt,lane.eq(0)); qready=UOp.barrier(UOp.group(qp)); qm=UOp.const(dtypes.float32,0.0)
+    for wi in range(4): qm=qm+qs.after(qready)[wi]
+    qstore=q_out[q_row].store(qm,lid.eq(0))
+
+    # The second unconditional barrier makes the Q store part of the region
+    # anchor's backward slice. It is reached by every workitem before the
+    # uniform workgroup-id branch is evaluated.
+    anchor=UOp.barrier(UOp.group(qstore))
+    region=anchor.post_barrier_region(q_row<_KV_ROWS*2,workgroup_uniform=True)
+    gated_words,gated_xp=kv_words.after(region),xp.after(region)
+    kc=UOp.const(dtypes.float32,0.0)
+    for rel in range(4): kc=kc+block_contribution(gated_words,gated_xp,q_row,UOp.const(dtypes.weakint,rel))
+    kt=kc
+    for slot,off in enumerate((16,8,4,2,1),100): kt=kt+_staged_shfl(kt,off,lane,slot)
+    ks=UOp.placeholder((4,),dtypes.float32,231,addrspace=AddrSpace.LOCAL)
+    kp=ks[warp].store(kt,lane.eq(0)); kready=UOp.barrier(UOp.group(kp)); km=UOp.const(dtypes.float32,0.0)
+    for wi in range(4): km=km+ks.after(kready)[wi]
+    k_idx=(q_row<_KV_ROWS).where(q_row,UOp.const(dtypes.weakint,0))
+    v_idx=(q_row>=_KV_ROWS).where(q_row-_KV_ROWS,UOp.const(dtypes.weakint,0))
+    active_k=lid.eq(0)&(q_row<_KV_ROWS); active_v=lid.eq(0)&(q_row>=_KV_ROWS)
+    stores=UOp.group(k_out[k_idx].store(km,active_k),v_out[v_idx].store(km,active_v))
+    return region.end_region(stores).sink(
+      arg=KernelInfo(name=f"q4k_warp_coop_q8_dp4a_qkv_full_direct_{_Q_ROWS}_{_KV_ROWS}_{_K}",opts_to_apply=()))
+  return kernel
+
+
 def _emit_q4_q6_cooperative_pair(rows:int, block_count:UOp):
   """Exact cooperative Q4-K/Q6-V consumers sharing one Q8 launch."""
   if rows != _KV_ROWS: raise ValueError("cooperative Q4/Q6 K/V pair requires the 1024-row production shape")
@@ -587,6 +654,21 @@ def shared_q8_attention_call(admission, q_linear, k_linear, v_linear, x:Tensor, 
     ret=execute_promoted_program(None,storage.to(x.device),xp,program=program)
     if cooperative and not q4_direct: ret=ret.sum(axis=1).contiguous()
     return ret.reshape(1,1,rows)
+  if admission.q4_qkv_triple_output:
+    if not isinstance(v_linear,Q4KPrimitiveLinear): return None
+    packed_words=getattr(q_linear,"_shared_q8_qkv_words",None)
+    if packed_words is None or tuple(packed_words.shape) != (2*_KV_ROWS*(_K//256)*Q4K_WORDS_PER_BLOCK,): return None
+    program=KernelProgram("decode_shared_q8_attention",f"q4q4q4.blk{admission.block_index}.qkv_full.coop_direct",
+      KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED,_emit_q4_cooperative_qkv_full(cooperative_blocks),
+      output_spec=OutputSpec((_Q_ROWS,),dtypes.float32))
+    q_out=Tensor.empty((_Q_ROWS,),dtype=dtypes.float32,device=x.device)
+    k_out=Tensor.empty((_KV_ROWS,),dtype=dtypes.float32,device=x.device)
+    v_out=Tensor.empty((_KV_ROWS,),dtype=dtypes.float32,device=x.device)
+    outputs=execute_promoted_program_outputs(q_out,k_out,v_out,q_linear.q4k_storage.words.to(x.device),packed_words.to(x.device),xp,program=program)
+    q=outputs[0].reshape(1,1,_Q_ROWS)
+    k=outputs[1].reshape(1,1,_KV_ROWS)
+    v=outputs[2].reshape(1,1,_KV_ROWS)
+    return q,k,v
   q=run(q_linear,_Q_ROWS,_emit_q4,q_linear.q4k_storage.words)
   if admission.q4_kv_pair_output or admission.q4_q6_kv_pair_output:
     if admission.q4_kv_pair_output and not isinstance(v_linear,Q4KPrimitiveLinear): return None

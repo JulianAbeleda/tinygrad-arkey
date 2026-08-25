@@ -129,3 +129,23 @@ Evidence:
 - `docs/task_workflow/evidence/nv-shared-q8-qkv-producer-20260825/verdict.json`
 
 Verdict: `NO_GO_CURRENT_GRAMMARS_FULL_GRID_BLOCKED_BY_TYPED_UNIFORM_CONTROL_FLOW_WALL`.
+
+## 2026-08-25 follow-up: typed full-grid geometry clears the wall
+
+The compiler-side uniform-region prerequisite was implemented and the exact
+full-grid producer was retested with caller-owned, separate Q/K/V outputs.
+The isolated microgate remained bit-exact and recovered about 1.5--2.0 us per
+producer group in pointer-rotated cold replay. The decisive production bracket
+used 9 eligible blocks, depth 512, 32 tokens, and 7 accepted repetitions per
+arm. All token hashes matched. The control midpoint was 4.380153 ms/token and
+the candidate was 4.364033 ms/token: **16.119 us/token recovered**, or about
+0.84 tok/s at this endpoint (228.3 -> 229.1 tok/s).
+
+This is a promoted geometry win, not a byte win: DRAM payload is unchanged and
+the end-to-end recovery is smaller than the isolated sum because the producer
+overlaps the rest of the token path. The earlier packed-output result was not
+accepted because output slicing introduced copy kernels; separate caller-owned
+outputs remove that accounting defect.
+
+Evidence: `full-split-output-smoke.json` and
+`production-wall-triple-r7-split.json` in the producer evidence directory.

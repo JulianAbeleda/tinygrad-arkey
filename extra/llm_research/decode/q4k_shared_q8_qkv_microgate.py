@@ -12,7 +12,7 @@ from tinygrad import dtypes
 from tinygrad.codegen import to_program
 from tinygrad.helpers import Target
 from tinygrad.llm.shared_q8_attention import (_emit_q4_cooperative, _emit_q4_cooperative_pair, _emit_q4_cooperative_qkv,
-  _emit_q4_cooperative_qkv_balanced)
+  _emit_q4_cooperative_qkv_balanced, _emit_q4_cooperative_qkv_full)
 from tinygrad.renderer.cuda import CUDARenderer
 from tinygrad.uop.ops import Ops, UOp
 
@@ -39,7 +39,7 @@ def _ncu_csv(binary:Path,symbol:str) -> dict:
   return {"symbol":symbol,"rows":rows,"stderr":cp.stderr.strip()}
 
 
-def _render() -> tuple[str,str,str,str]:
+def _render() -> tuple[str,str,str,str,str]:
   p=UOp.placeholder; extent=UOp.const(dtypes.weakint,4)
   q=_emit_q4_cooperative(Q_ROWS,extent,direct_output=True)(
     p((Q_ROWS,),dtypes.float32,0),p((Q_WORDS,),dtypes.uint32,1),p((PACKED,),dtypes.uint32,2))
@@ -50,11 +50,13 @@ def _render() -> tuple[str,str,str,str]:
     p((KV_WORDS,),dtypes.uint32,5),p((PACKED,),dtypes.uint32,6))
   balanced=_emit_q4_cooperative_qkv_balanced(extent)(p((Q_ROWS,),dtypes.float32,0),p((KV_ROWS*2,),dtypes.float32,1),
     p((Q_WORDS,),dtypes.uint32,2),p((KV_WORDS*2,),dtypes.uint32,3),p((PACKED,),dtypes.uint32,4))
+  full=_emit_q4_cooperative_qkv_full(extent)(p((Q_ROWS,),dtypes.float32,0),p((KV_ROWS,),dtypes.float32,1),
+    p((KV_ROWS,),dtypes.float32,2),p((Q_WORDS,),dtypes.uint32,3),p((KV_WORDS*2,),dtypes.uint32,4),p((PACKED,),dtypes.uint32,5))
   ren=CUDARenderer(Target("NV",arch="sm_120"),use_nvcc=False)
   def src(u:UOp) -> str:
     text=next(x.arg for x in to_program(u,ren).src if x.op is Ops.SOURCE)
     return text[text.index('extern "C" __global__'):]
-  return src(q),src(pair),src(triple),src(balanced)
+  return src(q),src(pair),src(triple),src(balanced),src(full)
 
 
 HARNESS=r'''
@@ -78,6 +80,7 @@ __Q__
 __PAIR__
 __TRIPLE__
 __BALANCED__
+__FULL__
 
 static void ck(cudaError_t e,const char* what) { if (e!=cudaSuccess) { fprintf(stderr,"%s: %s\n",what,cudaGetErrorString(e)); exit(2); } }
 static void control(float* out,unsigned int* wq,unsigned int* wk,unsigned int* wv,unsigned int* xp) {
@@ -90,8 +93,12 @@ static void candidate(float* out,unsigned int* wq,unsigned int* wk,unsigned int*
 static void balanced(float* out,unsigned int* wq,unsigned int* wkv,unsigned int* xp) {
   q4k_warp_coop_q8_dp4a_qkv_balanced_direct_4096_1024_4096<<<2*KV_ROWS,128>>>(out,out+Q_ROWS,wq,wkv,xp);
 }
+static void full_grid(float* out,unsigned int* wq,unsigned int* wkv,unsigned int* xp) {
+  q4k_warp_coop_q8_dp4a_qkv_full_direct_4096_1024_4096<<<Q_ROWS,128>>>(out,out+Q_ROWS,out+Q_ROWS+KV_ROWS,wq,wkv,xp);
+}
 static void launch(int arm,float* out,unsigned int* wq,unsigned int* wk,unsigned int* wv,unsigned int* wkv,unsigned int* xp) {
-  if (arm==0) control(out,wq,wk,wv,xp); else if (arm==1) candidate(out,wq,wk,wv,xp); else balanced(out,wq,wkv,xp);
+  if (arm==0) control(out,wq,wk,wv,xp); else if (arm==1) candidate(out,wq,wk,wv,xp);
+  else if (arm==2) balanced(out,wq,wkv,xp); else full_grid(out,wq,wkv,xp);
 }
 static double hot(int arm,float* out,unsigned int* wq,unsigned int* wk,unsigned int* wv,unsigned int* wkv,unsigned int* xp,int passes) {
   cudaEvent_t s,e; ck(cudaEventCreate(&s),"event"); ck(cudaEventCreate(&e),"event"); ck(cudaEventRecord(s),"record");
@@ -120,11 +127,12 @@ static double rotated(int arm,float* out,unsigned int* rotations,unsigned int* x
 }
 int main(int argc,char** argv) {
   int hot_passes=argc>1?atoi(argv[1]):300,cold_passes=argc>2?atoi(argv[2]):20,reps=argc>3?atoi(argv[3]):9;
-  float *ctrl=nullptr,*cand=nullptr,*bal=nullptr; unsigned int *wq=nullptr,*wk=nullptr,*wv=nullptr,*wkv=nullptr,*xp=nullptr,*rotations=nullptr; unsigned char* evict=nullptr;
+  float *ctrl=nullptr,*cand=nullptr,*bal=nullptr,*full=nullptr; unsigned int *wq=nullptr,*wk=nullptr,*wv=nullptr,*wkv=nullptr,*xp=nullptr,*rotations=nullptr; unsigned char* evict=nullptr;
   ck(cudaMalloc(&ctrl,(Q_ROWS+2*KV_ROWS)*sizeof(float)),"ctrl"); ck(cudaMalloc(&cand,(Q_ROWS+2*KV_ROWS)*sizeof(float)),"cand");
-  ck(cudaMalloc(&bal,(Q_ROWS+2*KV_ROWS)*sizeof(float)),"bal"); ck(cudaMalloc(&wq,Q_WORDS*sizeof(unsigned int)),"wq"); ck(cudaMalloc(&wk,KV_WORDS*sizeof(unsigned int)),"wk");
+  ck(cudaMalloc(&bal,(Q_ROWS+2*KV_ROWS)*sizeof(float)),"bal"); ck(cudaMalloc(&full,(Q_ROWS+2*KV_ROWS)*sizeof(float)),"full");
+  ck(cudaMalloc(&wq,Q_WORDS*sizeof(unsigned int)),"wq"); ck(cudaMalloc(&wk,KV_WORDS*sizeof(unsigned int)),"wk");
   ck(cudaMalloc(&wv,KV_WORDS*sizeof(unsigned int)),"wv"); ck(cudaMalloc(&wkv,2*KV_WORDS*sizeof(unsigned int)),"wkv"); ck(cudaMalloc(&xp,PACKED*sizeof(unsigned int)),"xp"); ck(cudaMalloc(&evict,EVICT_BYTES),"evict");
-  ck(cudaMalloc(&rotations,3ULL*ROTATIONS*GROUP_WORDS*sizeof(unsigned int)),"rotations");
+  ck(cudaMalloc(&rotations,4ULL*ROTATIONS*GROUP_WORDS*sizeof(unsigned int)),"rotations");
   unsigned int *hwq=(unsigned int*)malloc(Q_WORDS*sizeof(unsigned int));
   unsigned int *hwk=(unsigned int*)malloc(KV_WORDS*sizeof(unsigned int));
   unsigned int *hwv=(unsigned int*)malloc(KV_WORDS*sizeof(unsigned int));
@@ -140,28 +148,30 @@ int main(int argc,char** argv) {
   ck(cudaMemcpy(wq,hwq,Q_WORDS*4,cudaMemcpyHostToDevice),"wq copy"); ck(cudaMemcpy(wk,hwk,KV_WORDS*4,cudaMemcpyHostToDevice),"wk copy");
   ck(cudaMemcpy(wv,hwv,KV_WORDS*4,cudaMemcpyHostToDevice),"wv copy"); ck(cudaMemcpy(xp,hxp,PACKED*4,cudaMemcpyHostToDevice),"xp copy");
   ck(cudaMemcpy(wkv,hwk,KV_WORDS*4,cudaMemcpyHostToDevice),"wkv k copy"); ck(cudaMemcpy(wkv+KV_WORDS,hwv,KV_WORDS*4,cudaMemcpyHostToDevice),"wkv v copy");
-  for (int i=0;i<3*ROTATIONS;i++) {
+  for (int i=0;i<4*ROTATIONS;i++) {
     unsigned int* dst=rotations+(size_t)i*GROUP_WORDS;
     ck(cudaMemcpy(dst,wq,Q_WORDS*4,cudaMemcpyDeviceToDevice),"rotation q"); ck(cudaMemcpy(dst+Q_WORDS,wk,KV_WORDS*4,cudaMemcpyDeviceToDevice),"rotation k");
     ck(cudaMemcpy(dst+Q_WORDS+KV_WORDS,wv,KV_WORDS*4,cudaMemcpyDeviceToDevice),"rotation v");
   }
   free(hwq); free(hwk); free(hwv); free(hxp);
-  control(ctrl,wq,wk,wv,xp); candidate(cand,wq,wk,wv,xp); balanced(bal,wq,wkv,xp); ck(cudaDeviceSynchronize(),"warmup");
+  control(ctrl,wq,wk,wv,xp); candidate(cand,wq,wk,wv,xp); balanced(bal,wq,wkv,xp); full_grid(full,wq,wkv,xp); ck(cudaDeviceSynchronize(),"warmup");
   float *hc=(float*)malloc((Q_ROWS+2*KV_ROWS)*4),*hp=(float*)malloc((Q_ROWS+2*KV_ROWS)*4);
   ck(cudaMemcpy(hc,ctrl,(Q_ROWS+2*KV_ROWS)*4,cudaMemcpyDeviceToHost),"ctrl copy"); ck(cudaMemcpy(hp,cand,(Q_ROWS+2*KV_ROWS)*4,cudaMemcpyDeviceToHost),"cand copy");
   int mismatch=0; for (int i=0;i<Q_ROWS+2*KV_ROWS;i++) mismatch+=memcmp(&hc[i],&hp[i],4)!=0;
   ck(cudaMemcpy(hp,bal,(Q_ROWS+2*KV_ROWS)*4,cudaMemcpyDeviceToHost),"balanced copy"); int balanced_mismatch=0;
   for (int i=0;i<Q_ROWS+2*KV_ROWS;i++) balanced_mismatch+=memcmp(&hc[i],&hp[i],4)!=0;
-  printf("mismatched_words=%d balanced_mismatched_words=%d bitwise_identical=%d\n",mismatch,balanced_mismatch,mismatch==0&&balanced_mismatch==0); free(hc); free(hp);
+  ck(cudaMemcpy(hp,full,(Q_ROWS+2*KV_ROWS)*4,cudaMemcpyDeviceToHost),"full copy"); int full_mismatch=0;
+  for (int i=0;i<Q_ROWS+2*KV_ROWS;i++) full_mismatch+=memcmp(&hc[i],&hp[i],4)!=0;
+  printf("mismatched_words=%d balanced_mismatched_words=%d full_mismatched_words=%d bitwise_identical=%d\n",mismatch,balanced_mismatch,full_mismatch,mismatch==0&&balanced_mismatch==0&&full_mismatch==0); free(hc); free(hp);
   for (int r=0;r<reps;r++) {
-    int order[3]; if (r&1) { order[0]=2; order[1]=1; order[2]=0; } else { order[0]=0; order[1]=1; order[2]=2; }
-    double hh[3],cc[3],rr[3]; float* outs[3]={ctrl,cand,bal};
-    for (int i=0;i<3;i++) hh[order[i]]=hot(order[i],outs[order[i]],wq,wk,wv,wkv,xp,hot_passes);
-    for (int i=0;i<3;i++) cc[order[i]]=cold(order[i],outs[order[i]],wq,wk,wv,wkv,xp,evict,cold_passes);
-    for (int i=0;i<3;i++) rr[order[i]]=rotated(order[i],outs[order[i]],rotations,xp,cold_passes);
-    printf("rep=%d hot_control=%.6f hot_candidate=%.6f hot_balanced=%.6f cold_control=%.6f cold_candidate=%.6f cold_balanced=%.6f rotated_control=%.6f rotated_candidate=%.6f rotated_balanced=%.6f\n",r,hh[0],hh[1],hh[2],cc[0],cc[1],cc[2],rr[0],rr[1],rr[2]);
+    int order[4]; if (r&1) { order[0]=3; order[1]=2; order[2]=1; order[3]=0; } else { order[0]=0; order[1]=1; order[2]=2; order[3]=3; }
+    double hh[4],cc[4],rr[4]; float* outs[4]={ctrl,cand,bal,full};
+    for (int i=0;i<4;i++) hh[order[i]]=hot(order[i],outs[order[i]],wq,wk,wv,wkv,xp,hot_passes);
+    for (int i=0;i<4;i++) cc[order[i]]=cold(order[i],outs[order[i]],wq,wk,wv,wkv,xp,evict,cold_passes);
+    for (int i=0;i<4;i++) rr[order[i]]=rotated(order[i],outs[order[i]],rotations,xp,cold_passes);
+    printf("rep=%d hot_control=%.6f hot_candidate=%.6f hot_balanced=%.6f hot_full=%.6f cold_control=%.6f cold_candidate=%.6f cold_balanced=%.6f cold_full=%.6f rotated_control=%.6f rotated_candidate=%.6f rotated_balanced=%.6f rotated_full=%.6f\n",r,hh[0],hh[1],hh[2],hh[3],cc[0],cc[1],cc[2],cc[3],rr[0],rr[1],rr[2],rr[3]);
   }
-  cudaFree(ctrl); cudaFree(cand); cudaFree(bal); cudaFree(wq); cudaFree(wk); cudaFree(wv); cudaFree(wkv); cudaFree(xp); cudaFree(evict); cudaFree(rotations); return mismatch||balanced_mismatch?5:0;
+  cudaFree(ctrl); cudaFree(cand); cudaFree(bal); cudaFree(full); cudaFree(wq); cudaFree(wk); cudaFree(wv); cudaFree(wkv); cudaFree(xp); cudaFree(evict); cudaFree(rotations); return mismatch||balanced_mismatch||full_mismatch?5:0;
 }
 '''
 
@@ -170,7 +180,7 @@ def main() -> int:
   ap=argparse.ArgumentParser(); ap.add_argument("--hot-passes",type=int,default=300); ap.add_argument("--cold-passes",type=int,default=20)
   ap.add_argument("--reps",type=int,default=9); ap.add_argument("--counters",action="store_true")
   ap.add_argument("--out",type=Path,required=True); args=ap.parse_args()
-  q,pair,triple,balanced=_render(); source=HARNESS.replace("__Q__",q).replace("__PAIR__",pair).replace("__TRIPLE__",triple).replace("__BALANCED__",balanced)
+  q,pair,triple,balanced,full=_render(); source=HARNESS.replace("__Q__",q).replace("__PAIR__",pair).replace("__TRIPLE__",triple).replace("__BALANCED__",balanced).replace("__FULL__",full)
   with tempfile.TemporaryDirectory(prefix="q4k_shared_q8_qkv_") as td:
     src=Path(td)/"gate.cu"; binary=Path(td)/"gate"; src.write_text(source)
     env={**os.environ,"PATH":f"{CUDA_BIN}:"+os.environ.get("PATH","")}
@@ -179,9 +189,9 @@ def main() -> int:
     run=subprocess.run([str(binary),str(args.hot_passes),str(args.cold_passes),str(args.reps)],capture_output=True,text=True)
     print(run.stdout.strip())
     if run.returncode not in (0,5): print(run.stderr[-4000:],file=sys.stderr); return 4
-    mm=re.search(r"mismatched_words=(\d+) balanced_mismatched_words=(\d+) bitwise_identical=(\d+)",run.stdout)
-    samples={k:[] for k in ("hot_control","hot_candidate","hot_balanced","cold_control","cold_candidate","cold_balanced",
-      "rotated_control","rotated_candidate","rotated_balanced")}
+    mm=re.search(r"mismatched_words=(\d+) balanced_mismatched_words=(\d+) full_mismatched_words=(\d+) bitwise_identical=(\d+)",run.stdout)
+    samples={k:[] for k in ("hot_control","hot_candidate","hot_balanced","hot_full","cold_control","cold_candidate","cold_balanced","cold_full",
+      "rotated_control","rotated_candidate","rotated_balanced","rotated_full")}
     for line in run.stdout.splitlines():
       for key in samples:
         if (m:=re.search(rf"{key}=([0-9.]+)",line)): samples[key].append(float(m.group(1)))
@@ -189,19 +199,23 @@ def main() -> int:
     counters=None
     if args.counters:
       symbols=("q4k_warp_coop_q8_dp4a_direct_4096_4096","q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
-        "q4k_warp_coop_q8_dp4a_qkv_direct_4096_1024_4096","q4k_warp_coop_q8_dp4a_qkv_balanced_direct_4096_1024_4096")
+        "q4k_warp_coop_q8_dp4a_qkv_direct_4096_1024_4096","q4k_warp_coop_q8_dp4a_qkv_balanced_direct_4096_1024_4096",
+        "q4k_warp_coop_q8_dp4a_qkv_full_direct_4096_1024_4096")
       counters={symbol:_ncu_csv(binary,symbol) for symbol in symbols}
     result={"schema":"tinygrad.q4k_shared_q8_qkv_microgate.v1","commit":subprocess.check_output(["git","-C",str(ROOT),"rev-parse","HEAD"],text=True).strip(),
       "shape":{"q_rows":Q_ROWS,"kv_rows":KV_ROWS,"k":K,"shared_q8_q4q4q4_groups_per_token":9},"hot_passes":args.hot_passes,"cold_passes":args.cold_passes,"reps":args.reps,
-      "bitwise_identical":bool(mm and int(mm.group(3))),"mismatched_words":{"collapsed":int(mm.group(1)),"balanced":int(mm.group(2))} if mm else None,"samples":samples,"medians_us":med,
+      "bitwise_identical":bool(mm and int(mm.group(4))),"mismatched_words":{"collapsed":int(mm.group(1)),"balanced":int(mm.group(2)),"full":int(mm.group(3))} if mm else None,"samples":samples,"medians_us":med,
       "recovery_us":{"hot_per_group":med["hot_control"]-med["hot_candidate"],"cold_per_group":med["cold_control"]-med["cold_candidate"],
         "cold_projected_9_groups":9*(med["cold_control"]-med["cold_candidate"]),
         "balanced_hot_per_group":med["hot_control"]-med["hot_balanced"],"balanced_cold_per_group":med["cold_control"]-med["cold_balanced"],
         "balanced_cold_projected_9_groups":9*(med["cold_control"]-med["cold_balanced"]),
         "rotated_per_group":med["rotated_control"]-med["rotated_candidate"],"rotated_projected_9_groups":9*(med["rotated_control"]-med["rotated_candidate"]),
         "balanced_rotated_per_group":med["rotated_control"]-med["rotated_balanced"],"balanced_rotated_projected_9_groups":9*(med["rotated_control"]-med["rotated_balanced"])},
+      "full_recovery_us":{"hot_per_group":med["hot_control"]-med["hot_full"],"cold_per_group":med["cold_control"]-med["cold_full"],
+        "cold_projected_9_groups":9*(med["cold_control"]-med["cold_full"]),"rotated_per_group":med["rotated_control"]-med["rotated_full"],
+        "rotated_projected_9_groups":9*(med["rotated_control"]-med["rotated_full"])},
       "ptxas":build.stderr.strip().splitlines(),"ncu":counters,
-      "verdict":"ADVANCE_BALANCED" if mm and int(mm.group(3)) and med["rotated_balanced"]<med["rotated_control"] else "NO_GO"}
+      "verdict":"ADVANCE_FULL" if mm and int(mm.group(4)) and med["rotated_full"]<med["rotated_control"] else "NO_GO"}
     args.out.parent.mkdir(parents=True,exist_ok=True); args.out.write_text(json.dumps(result,indent=2,sort_keys=True)+"\n"); print(json.dumps(result,indent=2,sort_keys=True))
     return 0 if result["bitwise_identical"] else 5
 
