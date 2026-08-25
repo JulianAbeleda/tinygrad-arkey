@@ -17,24 +17,28 @@ from extra.llm_research.decode.nv_gateup_fourwarp_profile_closure import (
   _per_name_table, _replay_metrics)
 
 
-def _install(model, candidate:bool, triple:bool=False) -> list[int]:
+def _install(model, candidate:bool, triple:bool=False, mixed:bool=False) -> list[int]:
   if not candidate and not triple: return []
-  from tinygrad.llm.q4k_kv_pair import Q4KKVPairAdmission, Q4KQKVAdmission
+  from tinygrad.llm.q4k_kv_pair import Q4KKVPairAdmission, Q4KQKVAdmission, Q4Q6QKVAdmission
+  from tinygrad.llm.qk_primitives import Q6KPrimitiveLinear
   admitted=[]
   for index, block in enumerate(model.blk):
     # This first landing deliberately excludes the separate shared-Q8 triple.
     if getattr(block, "_shared_q8_attention_admission", None) is not None: continue
-    if not (hasattr(getattr(block, "attn_k", None), "q4k_storage") and
-            hasattr(getattr(block, "attn_v", None), "q4k_storage")): continue
+    if not hasattr(getattr(block,"attn_k",None),"q4k_storage"): continue
+    if mixed:
+      if not isinstance(getattr(block,"attn_v",None),Q6KPrimitiveLinear): continue
+    elif not hasattr(getattr(block,"attn_v",None),"q4k_storage"): continue
     if triple:
       # Both arms own the same packed K-then-V allocation so allocator/address
       # topology cannot masquerade as a producer win.
-      block.attn_q._q4k_qkv_words=block.attn_k.q4k_storage.words.cat(
+      if not mixed: block.attn_q._q4k_qkv_words=block.attn_k.q4k_storage.words.cat(
         block.attn_v.q4k_storage.words,dim=0).contiguous().realize()
-      if candidate: block._q4k_qkv_admission=Q4KQKVAdmission(index)
+      if candidate: block._q4k_qkv_admission=Q4Q6QKVAdmission(index) if mixed else Q4KQKVAdmission(index)
     elif candidate: block._q4k_kv_pair_admission=Q4KKVPairAdmission(index)
     admitted.append(index)
-  if triple and len(admitted)!=9: raise RuntimeError(f"expected 9 ordinary Q4/Q4/Q4 blocks, got {admitted}")
+  expected=10 if mixed else 9
+  if triple and len(admitted)!=expected: raise RuntimeError(f"expected {expected} ordinary {'Q4/Q4/Q6' if mixed else 'Q4/Q4/Q4'} blocks, got {admitted}")
   return admitted
 
 
@@ -64,7 +68,7 @@ def _pattern_and_replays(lines:list[dict], triple_candidate:bool=False) -> tuple
   return pattern,out
 
 
-def _run_tokens(candidate:bool, depth:int, count:int, max_context:int, reps:int, triple:bool=False):
+def _run_tokens(candidate:bool, depth:int, count:int, max_context:int, reps:int, triple:bool=False, mixed:bool=False):
   # Phase A-C isolate projection fusion with the legacy cache-store chain.
   # The explicit composition phase leaves the promoted producer sink enabled.
   os.environ["DEV"]="NV"
@@ -75,7 +79,7 @@ def _run_tokens(candidate:bool, depth:int, count:int, max_context:int, reps:int,
   from tinygrad import Device
   from extra.llm_research.decode.nv_predispatch_full_logits_qualification import _load, _prompt
   from extra.llm_research.decode.nv_shared_q8_progressive_qualification import _settled_continuous_windows
-  model=_load(MODEL,max_context); admitted=_install(model,candidate,triple)
+  model=_load(MODEL,max_context); admitted=_install(model,candidate,triple,mixed)
   model._decode_direct_greedy_promoted=False; model._decode_feedback_pingpong_promoted=False
   gen=model.generate(_prompt(MODEL,depth),chunk_size=32,temperature=0.0)
   try: settled=_settled_continuous_windows(gen,Device["NV"],count,reps)
@@ -84,11 +88,11 @@ def _run_tokens(candidate:bool, depth:int, count:int, max_context:int, reps:int,
 
 
 def profile_child(candidate:bool, depth:int, count:int, max_context:int, reps:int,
-                  profile_jsonl:pathlib.Path, out:pathlib.Path, triple:bool=False) -> dict:
+                  profile_jsonl:pathlib.Path, out:pathlib.Path, triple:bool=False, mixed:bool=False) -> dict:
   os.environ.update(PROFILE="1",HCQ_GRAPH_PROFILE_JSON=str(profile_jsonl))
   profile_jsonl.unlink(missing_ok=True); _install_graph_tracker()
   from tinygrad import Device
-  settled,admitted=_run_tokens(candidate,depth,count,max_context,reps,triple)
+  settled,admitted=_run_tokens(candidate,depth,count,max_context,reps,triple,mixed)
   Device["NV"].synchronize(); _flush_final_timestamps(); Device["NV"].synchronize()
   lines=[json.loads(x) for x in profile_jsonl.read_text().splitlines() if x.strip()]
   pattern,replays=_pattern_and_replays(lines,triple and candidate)
@@ -100,17 +104,17 @@ def profile_child(candidate:bool, depth:int, count:int, max_context:int, reps:in
           ("node_count","node_sum_us","union_us","overlap_us","span_us")}
   table=_per_name_table(steady)
   result={"schema":"tinygrad.nv_q4k_kv_pair_qualification.v1","mode":"profile-child",
-    "arm":"candidate" if candidate else "control","triple":triple,"depth":depth,"count":count,"reps":reps,
+    "arm":"candidate" if candidate else "control","triple":triple,"mixed":mixed,"depth":depth,"count":count,"reps":reps,
     "max_context":max_context,"gpu_state":_gpu_state(),"admitted_blocks":admitted,"settled":settled,
     "group_pattern":pattern,"complete_replay_count":len(replays),"steady_replay_count":len(steady),
     "ledger":ledger,"per_name_table":table}
   out.parent.mkdir(parents=True,exist_ok=True); out.write_text(json.dumps(result,indent=2,sort_keys=True)+"\n"); return result
 
 
-def timing_child(candidate:bool, depth:int, count:int, max_context:int, reps:int, out:pathlib.Path, triple:bool=False) -> dict:
-  settled,admitted=_run_tokens(candidate,depth,count,max_context,reps,triple)
+def timing_child(candidate:bool, depth:int, count:int, max_context:int, reps:int, out:pathlib.Path, triple:bool=False, mixed:bool=False) -> dict:
+  settled,admitted=_run_tokens(candidate,depth,count,max_context,reps,triple,mixed)
   result={"schema":"tinygrad.nv_q4k_kv_pair_qualification.v1","mode":"timing-child",
-    "arm":"candidate" if candidate else "control","triple":triple,"depth":depth,"count":count,"reps":reps,
+    "arm":"candidate" if candidate else "control","triple":triple,"mixed":mixed,"depth":depth,"count":count,"reps":reps,
     "max_context":max_context,"gpu_state":_gpu_state(),"admitted_blocks":admitted,**settled}
   out.parent.mkdir(parents=True,exist_ok=True); out.write_text(json.dumps(result,indent=2,sort_keys=True)+"\n"); return result
 
@@ -121,6 +125,7 @@ def _child(mode:str,candidate:bool,label:str,root:pathlib.Path,args) -> dict:
     "--reps",str(args.reps),"--out",str(out)]
   if candidate: cmd.append("--candidate")
   if args.triple: cmd.append("--triple")
+  if args.mixed: cmd.append("--mixed")
   if mode=="profile": cmd += ["--profile-jsonl",str(root/f"{label}.profile.jsonl")]
   child_env={**os.environ,"PYTHONPATH":str(ROOT),"DEV":"NV"}
   if candidate or args.triple: child_env.pop("TINYGRAD_Q4K_KV_PAIR_DISABLE",None)
@@ -167,13 +172,14 @@ def main() -> int:
   ap=argparse.ArgumentParser(); ap.add_argument("--mode",choices=("profile","profile-child","timing","timing-child"),default="profile")
   ap.add_argument("--candidate",action="store_true"); ap.add_argument("--depth",type=int,default=512)
   ap.add_argument("--triple",action="store_true")
+  ap.add_argument("--mixed",action="store_true")
   ap.add_argument("--count",type=int,default=32); ap.add_argument("--max-context",type=int,default=1024)
   ap.add_argument("--reps",type=int,default=3); ap.add_argument("--profile-jsonl",type=pathlib.Path)
   ap.add_argument("--out",type=pathlib.Path,required=True); args=ap.parse_args()
   if args.mode=="profile-child":
     if args.profile_jsonl is None: raise SystemExit("--profile-jsonl is required")
-    result=profile_child(args.candidate,args.depth,args.count,args.max_context,args.reps,args.profile_jsonl,args.out,args.triple)
-  elif args.mode=="timing-child": result=timing_child(args.candidate,args.depth,args.count,args.max_context,args.reps,args.out,args.triple)
+    result=profile_child(args.candidate,args.depth,args.count,args.max_context,args.reps,args.profile_jsonl,args.out,args.triple,args.mixed)
+  elif args.mode=="timing-child": result=timing_child(args.candidate,args.depth,args.count,args.max_context,args.reps,args.out,args.triple,args.mixed)
   elif args.mode=="profile": result=profile_driver(args)
   else: result=timing_driver(args)
   print(json.dumps(result if "per_name_table" not in result else {k:v for k,v in result.items() if k!="per_name_table"},indent=2,sort_keys=True))

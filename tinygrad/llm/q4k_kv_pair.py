@@ -10,10 +10,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from tinygrad import Tensor, dtypes
-from tinygrad.codegen.late.warp_reduce import _warp_reduce_sum_staged
+from tinygrad.codegen.late.warp_reduce import _staged_shfl, _warp_reduce_sum_staged
 from tinygrad.dtype import AddrSpace
 from tinygrad.llm.decode_kernels import (LanePartition, Q4KGateUpLaneMap, Q4K_WORDS_PER_BLOCK,
-  _q4k_block_dot_packed_load, _q4k_block_dot_packed_load_vec)
+  Q6K_HALFWORDS_PER_BLOCK, _q4k_block_dot_packed_load, _q4k_block_dot_packed_load_vec, _q6k_block_dot)
 from tinygrad.llm.kernel_program import (KernelProgram, KernelProgramProvenance, OutputSpec,
   execute_promoted_program_outputs)
 from tinygrad.uop.ops import AxisType, KernelInfo, UOp
@@ -38,6 +38,14 @@ class Q4KQKVAdmission:
   def __post_init__(self):
     if not isinstance(self.block_index, int) or isinstance(self.block_index, bool) or self.block_index < 0:
       raise ValueError("Q4_K Q/K/V producer block index must be a non-negative integer")
+
+
+@dataclass(frozen=True)
+class Q4Q6QKVAdmission:
+  block_index:int
+  def __post_init__(self):
+    if not isinstance(self.block_index,int) or isinstance(self.block_index,bool) or self.block_index < 0:
+      raise ValueError("Q4/Q6 Q/K/V producer block index must be a non-negative integer")
 
 
 def emit_q4k_kv_pair_vector(rows:int=ROWS, k:int=K):
@@ -122,6 +130,49 @@ def emit_q4k_qkv_full(q_rows:int=Q_ROWS, kv_rows:int=ROWS, k:int=K):
   return kernel
 
 
+def emit_q4k_q4k_q6_qkv_full(q_rows:int=Q_ROWS,kv_rows:int=ROWS,k:int=K):
+  """Ordinary-fp16 Q4-Q/Q4-K/Q6-V full grid with one physical warp.
+
+  Q4 rows retain the installed vector-load association.  Q6 V retains the
+  installed four-warp arithmetic by carrying four independent virtual-warp
+  accumulators, reducing each with the same shuffle tree, then merging their
+  totals left-to-right.  Disjoint uniform regions ensure K and V CTAs execute
+  only their own format adapter.
+  """
+  if (q_rows,kv_rows,k)!=(Q_ROWS,ROWS,K): raise ValueError("mixed QKV requires exact production shapes")
+  lm=Q4KGateUpLaneMap(k=k,n=q_rows); lm.validate()
+  def kernel(q_out:UOp,k_out:UOp,v_out:UOp,q_words:UOp,k_words:UOp,v_halfs:UOp,x:UOp)->UOp:
+    row,lane=UOp.special(q_rows,"gidx0"),UOp.special(WARP,"lidx0")
+    part=LanePartition(lane,lane_extent=lm.lane_extent,words_per_group=lm.words_per_group)
+    def q4_dot(words,rng_row,slot:int):
+      blk=UOp.range(lm.blocks_per_group,slot,axis_type=AxisType.REDUCE)
+      block=part.block_group*lm.blocks_per_group+blk; base=(rng_row*lm.k_blocks+block)*Q4K_WORDS_PER_BLOCK
+      c=_q4k_block_dot_packed_load_vec(words,x,base,block,part.word_col)
+      acc=UOp.placeholder((1,),dtypes.float32,20+slot,addrspace=AddrSpace.REG); acc=acc.after(acc[0].store(0.0))
+      acc=acc.after(acc[0].store(acc.after(blk)[0]+c).end(blk))
+      return _warp_reduce_sum_staged(acc[0],part.lane,part.lane_extent,90+slot*10)
+    qstore=q_out[row].store(q4_dot(q_words,row,0))
+    anchor=UOp.barrier(UOp.group(qstore))
+
+    kregion=anchor.post_barrier_region(row<kv_rows,workgroup_uniform=True)
+    kend=kregion.end_region(k_out[row].store(q4_dot(k_words.after(kregion),row,1)))
+    vanchor=UOp.barrier(kend)
+    vregion=vanchor.post_barrier_region((row>=kv_rows)&(row<kv_rows*2),workgroup_uniform=True)
+    vrow=row-kv_rows; pos=lane%16; sub=lane//16; totals=[]
+    for virtual_warp in range(4):
+      total=UOp.const(dtypes.float32,0.0)
+      for rel in range(2):
+        block=virtual_warp*4+sub*2+UOp.const(dtypes.weakint,rel)
+        base=(vrow*16+block)*Q6K_HALFWORDS_PER_BLOCK
+        total=total+_q6k_block_dot(v_halfs.after(vregion),x.after(vregion),base,block,pos)
+      for slot,off in enumerate((16,8,4,2,1),130+virtual_warp*5): total=total+_staged_shfl(total,off,lane,slot)
+      totals.append(total)
+    merged=totals[0]+totals[1]+totals[2]+totals[3]
+    vend=vregion.end_region(v_out[vrow].store(merged))
+    return vend.sink(arg=KernelInfo(name=f"q4k_q6k_g3_lanemap_gemv_qkv_full_{q_rows}_{kv_rows}_{k}",opts_to_apply=()))
+  return kernel
+
+
 def q4k_kv_pair_call(admission:object, k_linear:Any, v_linear:Any, x:Tensor) -> tuple[Tensor, Tensor]|None:
   """Return exact K/V tensors from the leased dual producer, or None."""
   if not isinstance(admission, Q4KKVPairAdmission): return None
@@ -148,26 +199,30 @@ def q4k_kv_pair_call(admission:object, k_linear:Any, v_linear:Any, x:Tensor) -> 
 
 def q4k_qkv_call(admission:object, q_linear:Any, k_linear:Any, v_linear:Any, x:Tensor) -> tuple[Tensor,Tensor,Tensor]|None:
   """Return exact ordinary Q/K/V tensors from the leased full-grid producer."""
-  if not isinstance(admission,Q4KQKVAdmission): return None
+  if not isinstance(admission,(Q4KQKVAdmission,Q4Q6QKVAdmission)): return None
+  mixed=isinstance(admission,Q4Q6QKVAdmission)
   for linear,role,rows in ((q_linear,"attn_qo",Q_ROWS),(k_linear,"attn_kv",ROWS),(v_linear,"attn_kv",ROWS)):
     capability=getattr(getattr(linear,"route_admission",None),"capability",None)
     if (getattr(capability,"backend",None),getattr(capability,"architecture",None)) != ("NV","sm_120"): return None
     if (getattr(linear,"route_role",None),getattr(linear,"out_features",None),getattr(linear,"in_features",None)) != (role,rows,K): return None
-    if getattr(linear,"bias",None) is not None or not hasattr(linear,"q4k_storage"): return None
+    storage="q6k_storage" if mixed and linear is v_linear else "q4k_storage"
+    if getattr(linear,"bias",None) is not None or not hasattr(linear,storage): return None
   if x.shape != (1,1,K) or not str(x.device).startswith("NV"): return None
-  packed_words=getattr(q_linear,"_q4k_qkv_words",None)
-  expected=2*ROWS*(K//256)*Q4K_WORDS_PER_BLOCK
-  if packed_words is None or packed_words.shape != (expected,): return None
+  packed_words=getattr(q_linear,"_q4k_qkv_words",None); expected=2*ROWS*(K//256)*Q4K_WORDS_PER_BLOCK
+  if not mixed and (packed_words is None or packed_words.shape != (expected,)): return None
   qw=q_linear.q4k_storage.words.to(x.device).contiguous() if q_linear.q4k_storage.mode == "q4_ondemand" else q_linear.q4k_storage.words.to(x.device)
   xv=x[:,0,:].reshape(K).cast(dtypes.float16).contiguous()
-  program=KernelProgram("decode_q4k_qkv",f"blk{admission.block_index}.qkv_full",
-    KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED,emit_q4k_qkv_full(),output_spec=OutputSpec((Q_ROWS,),dtypes.float32))
+  emitter=emit_q4k_q4k_q6_qkv_full() if mixed else emit_q4k_qkv_full()
+  program=KernelProgram("decode_q4k_qkv",f"blk{admission.block_index}.qkv_full{'_mixed' if mixed else ''}",
+    KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED,emitter,output_spec=OutputSpec((Q_ROWS,),dtypes.float32))
   q_out=Tensor.empty((Q_ROWS,),dtype=dtypes.float32,device=x.device)
   k_out=Tensor.empty((ROWS,),dtype=dtypes.float32,device=x.device)
   v_out=Tensor.empty((ROWS,),dtype=dtypes.float32,device=x.device)
-  outputs=execute_promoted_program_outputs(q_out,k_out,v_out,qw,packed_words.to(x.device),xv,program=program)
+  inputs=(qw,k_linear.q4k_storage.words.to(x.device),v_linear.q6k_storage.halfs.to(x.device),xv) if mixed else (qw,packed_words.to(x.device),xv)
+  outputs=execute_promoted_program_outputs(q_out,k_out,v_out,*inputs,program=program)
   return tuple(out.reshape(1,1,rows) for out,rows in zip(outputs,(Q_ROWS,ROWS,ROWS)))
 
 
-__all__ = ["Q4KKVPairAdmission", "Q4KQKVAdmission", "emit_q4k_kv_pair_vector", "emit_q4k_qkv_full",
+__all__ = ["Q4KKVPairAdmission", "Q4KQKVAdmission", "Q4Q6QKVAdmission", "emit_q4k_kv_pair_vector", "emit_q4k_qkv_full",
+           "emit_q4k_q4k_q6_qkv_full",
            "q4k_kv_pair_call", "q4k_qkv_call"]

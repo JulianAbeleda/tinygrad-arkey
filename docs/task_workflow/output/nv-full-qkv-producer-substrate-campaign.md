@@ -12,7 +12,7 @@ Starting commit: `5e7f36945215ebc4ed2efbaf887ef241dafce7fd`
 | S44 shared-Q8 Q4/Q4/Q4 | 9 | `WALL_PASS` | `nv-shared-q8-qkv-producer-result-20260825.md` | +16.119 us/token |
 | O44 ordinary Q4/Q4/Q4 | 9 | `WALL_PASS` | composed producer/cache confirmation, reps-9 | +6.867 us/token; research composition |
 | S46 shared-Q8 Q4/Q4/Q6 | 8 | `WALL_CLOSED` | split-region full-grid reps-9 | 0; repaired wall loses 5.527 us/token |
-| O46 ordinary Q4/Q4/Q6 | 10 | `NOT_STARTED` | — | 0 |
+| O46 ordinary Q4/Q4/Q6 | 10 | `WALL_CLOSED` | one-warp virtual-Q6 full-grid reps-7 | 0; wall loses 9.200 us/token |
 
 `WALL_PASS` is not `INSTALLED`: S44 still requires policy/composition gates.
 The campaign currently books no installed endpoint movement from this matrix.
@@ -26,7 +26,7 @@ The campaign currently books no installed endpoint movement from this matrix.
 | 1B. O44 direct V-cache composition | `COMPLETE` | existing producer-owned cache completion composes at +6.867 us/token, reps-9 |
 | 2. reusable producer specification | `COMPLETE` | typed uniform grid plus selected producer-owned cache completion |
 | 3. S46 full-grid qualification | `COMPLETE` | exact/device pass; repaired reps-9 wall closed at -5.527 us/token |
-| 4. O46 full-grid qualification | `NOT_STARTED` | wall pass or closure |
+| 4. O46 full-grid qualification | `COMPLETE` | exact/device pass; reps-7 wall closed at -9.200 us/token |
 | 5. independent policy landing | `NOT_STARTED` | rollback-qualified installed rows |
 | 6. composed wall and fresh ledger | `NOT_STARTED` | reps>=9 composition and ledger |
 
@@ -48,8 +48,8 @@ device-ledger columns remain ceilings until then.
 
 ## Next action
 
-Implement and qualify the O46 ordinary-fp16 Q4/Q4/Q6 population using the
-same full-grid and producer-owned cache-completion contract.
+Install the S44 and composed O44 winners behind independent target-scoped
+policies, then run rollback and composed-wall qualification.
 
 ## Phase 1 controlling evidence
 
@@ -81,3 +81,16 @@ same full-grid and producer-owned cache-completion contract.
   control consistently and loses 5.527 us/token at the midpoint.  With
   population, output, arithmetic, topology, and cache composition accounted,
   S46 is `WALL_CLOSED` for this full-grid geometry.
+
+## Phase 4 O46 controlling evidence
+
+- `phase4-o46/production-profile.json`: exact token hash and all ten blocks;
+  20 nodes removed and GPU union improves by 48.250 us/token.
+- The one-warp adapter preserves the installed Q4 geometry and represents the
+  four installed Q6 warps as four independent accumulators and shuffle trees,
+  merging their totals left-to-right.  This avoids redundant Q reads but
+  serializes the four Q6 partials on the per-block critical path.
+- `phase4-o46/production-wall-r7.json`: candidate 4.416224 ms, controls
+  4.400842 and 4.413207 ms, exact hash.  The candidate loses both controls and
+  loses 9.200 us/token at the midpoint.  With the aggregate-work win and
+  critical-span loss both measured, O46 is `WALL_CLOSED` for this geometry.

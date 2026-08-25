@@ -1,8 +1,8 @@
 import pytest
 
 from tinygrad import dtypes
-from tinygrad.llm.q4k_kv_pair import (Q4KKVPairAdmission, Q4KQKVAdmission, emit_q4k_kv_pair_vector,
-  emit_q4k_qkv_full, q4k_kv_pair_call, q4k_qkv_call)
+from tinygrad.llm.q4k_kv_pair import (Q4KKVPairAdmission, Q4KQKVAdmission, Q4Q6QKVAdmission, emit_q4k_kv_pair_vector,
+  emit_q4k_qkv_full, emit_q4k_q4k_q6_qkv_full, q4k_kv_pair_call, q4k_qkv_call)
 from tinygrad.llm.model_route_plan import decode_q4k_kv_pair_promoted, load_decode_q4k_kv_pair_promotion
 from tinygrad.uop.ops import Ops, UOp
 
@@ -34,6 +34,16 @@ def test_q4k_qkv_full_exact_body():
   assert sum(u.op is Ops.BARRIER for u in body.toposort()) == 1
 
 
+def test_q4q6_qkv_full_exact_body():
+  qwords,kvwords,q6halfs=4096*16*36,1024*16*36,1024*16*110
+  body=emit_q4k_q4k_q6_qkv_full()(UOp.placeholder((4096,),dtypes.float32,0),
+    UOp.placeholder((1024,),dtypes.float32,1),UOp.placeholder((1024,),dtypes.float32,2),
+    UOp.placeholder((qwords,),dtypes.uint32,3),UOp.placeholder((kvwords,),dtypes.uint32,4),
+    UOp.placeholder((q6halfs,),dtypes.uint16,5),UOp.placeholder((4096,),dtypes.float16,6))
+  assert body.arg.name == "q4k_q6k_g3_lanemap_gemv_qkv_full_4096_1024_4096"
+  assert sum(u.op is Ops.BARRIER for u in body.toposort()) == 2
+
+
 def test_q4k_kv_pair_admission_is_closed():
   assert Q4KKVPairAdmission(0).block_index == 0
   with pytest.raises(ValueError): Q4KKVPairAdmission(-1)
@@ -41,6 +51,7 @@ def test_q4k_kv_pair_admission_is_closed():
   assert q4k_kv_pair_call(None, None, None, None) is None
   assert Q4KQKVAdmission(0).block_index == 0
   with pytest.raises(ValueError): Q4KQKVAdmission(True)
+  assert Q4Q6QKVAdmission(0).block_index == 0
   assert q4k_qkv_call(None,None,None,None,None) is None
 
 
