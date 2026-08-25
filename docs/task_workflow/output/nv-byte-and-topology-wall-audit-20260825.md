@@ -238,6 +238,12 @@ region with separate caller-owned Q/K/V outputs is bit-exact and recovered
 0.84 tok/s at the measured endpoint). The gain is service-rate/topology only;
 it does not claim DRAM-byte reduction.
 
+The same substrate was then applied to the nine ordinary Q4/Q4/Q4 blocks.
+That candidate was bit-exact and faster both in isolated cold timing and in
+the GPU timestamp ledger, but lost 27.746 us/token in the full wall bracket.
+The ordinary full-grid spelling is therefore closed at the program/output
+boundary; the shared-Q8 win must not be generalized across producer contracts.
+
 Evidence:
 
 - `docs/task_workflow/evidence/nv-byte-topology-wall-audit-20260825/accounting.json`

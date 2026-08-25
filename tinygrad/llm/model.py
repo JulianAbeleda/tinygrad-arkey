@@ -25,7 +25,7 @@ from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, 
 from tinygrad.llm.shared_q8_attention import SharedQ8AttentionAdmission, shared_q8_attention_call
 from tinygrad.llm.packed_argmax import native_argmax_finite_fp32, packed_argmax_finite_fp32
 from tinygrad.llm.producer_kv_cache_sink import ProducerKVCacheSinkAdmission, producer_kv_cache_sink_call
-from tinygrad.llm.q4k_kv_pair import q4k_kv_pair_call
+from tinygrad.llm.q4k_kv_pair import q4k_kv_pair_call, q4k_qkv_call
 from tinygrad.llm.prefill_routes import direct_packed_prefill_policy, is_direct_packed_prefill_linear, route_prefill_linear, validate_prefill_route_mode
 from tinygrad.llm.prefill_memory_plan import Strategy
 from tinygrad.llm.prefill_attachments import attach_selected_prefill_inventory
@@ -790,7 +790,9 @@ class TransformerBlock(FFNBlock):
     else:
       # Closed research lease for an exact ordinary Q4/Q4 K/V pair. Harnesses
       # install it only on blocks outside the shared-Q8 triple boundary.
-      _q4kv_pair = q4k_kv_pair_call(getattr(self, "_q4k_kv_pair_admission", None), self.attn_k, self.attn_v, x)
+      _q4qkv = q4k_qkv_call(getattr(self, "_q4k_qkv_admission", None), self.attn_q, self.attn_k, self.attn_v, x)
+      _q4kv_pair = None if _q4qkv is not None else q4k_kv_pair_call(
+        getattr(self, "_q4k_kv_pair_admission", None), self.attn_k, self.attn_v, x)
       # P3a qualification hook: this is CLOSED by construction.  The loader
       # never installs ``_shared_q8_attention_admission``; a harness may lease
       # one exact block and the callee revalidates the real Q4/Q4/{Q4,Q6} tuple.
@@ -798,7 +800,7 @@ class TransformerBlock(FFNBlock):
       _shared_q8 = None if _q4kv_pair is not None else shared_q8_attention_call(
         getattr(self, "_shared_q8_attention_admission", None), self.attn_q, self.attn_k, self.attn_v, x, start_pos,
         getattr(self, "_shared_q8_attention_norm_weight", None))
-      q, k, v = ((self.attn_q(x), *_q4kv_pair) if _q4kv_pair is not None else
+      q, k, v = (_q4qkv if _q4qkv is not None else (self.attn_q(x), *_q4kv_pair) if _q4kv_pair is not None else
                  _shared_q8 if _shared_q8 is not None else (self.attn_q(x), self.attn_k(x), self.attn_v(x)))
     q, k, v = (_prefill_semantic(_prefill, prefill_scratch, value) for value in (q, k, v))
     # Qualification-only producer-side cache sink captures the exact terminal projection
