@@ -1,7 +1,7 @@
 # What makes a token fast
 
 Date: 2026-07-31
-Updated: 2026-08-03 (industry synthesis, quantized decode theory, graph-reuse theory, and generator contract)
+Updated: 2026-08-24 (dense-token ledger, causal promotion loop, and wall interpretation)
 
 This is a principles document. It is not organised around beating any particular competitor —
 llama.cpp appears only as an external datapoint that validates the frame. The principles below are
@@ -14,6 +14,119 @@ document. New performance theory belongs here first, then campaign scopes may ci
 
 Every number is cited. Numbers that are **measured** and numbers that are **projected** are marked as
 such, because this codebase has repeatedly been misled by projections presented as facts (§9).
+
+### Scope
+
+The token ledger added below is for **dense autoregressive transformers**. Every token traverses every
+layer, so each layer's weights and boundaries belong in the accounting. It must not be transferred to
+mixture-of-experts, recurrent, speculative, or other conditional-compute architectures without first
+rebuilding their route ledger. Those architectures can change which weights execute, how routing costs
+enter the critical path, and which work may overlap.
+
+Campaign measurements and competitor comparisons intentionally do not live in this principles section.
+They belong in dated evidence and campaign ledgers, where machine state, binaries, synchronization, and
+sampling protocol can be audited.
+
+---
+
+## 0. The complete dense-token ledger, and why ledger-driven progress compounds
+
+A token becomes faster only when the production route completes sooner. Kernel instruction count,
+launch count, node count, bandwidth, and isolated microbenchmark time are evidence about that route;
+none is the definition of success by itself. The working identity is:
+
+```
+device_union = node_sum - genuine_overlap
+token_wall   = device_union + non_overlapped_host_and_boundary_time
+```
+
+The identity is an accounting model, not permission to subtract independently measured quantities.
+`node_sum`, `device_union`, and wall must come from compatible runs and clock domains before their
+difference is interpreted.
+
+### 0.1 The route ledger
+
+For a conventional decoder-only dense transformer, inventory the whole production token in dependency
+order. Implementations may fuse or rename rows, but no semantic work may disappear from the ledger:
+
+| route region | semantic work to account | common speed levers |
+| --- | --- | --- |
+| token entry | token lookup, input movement, first normalization | retain graph-resident values; remove conversions and materializations |
+| attention projections | Q, K, and V quantized matrix-vector products | reduce compulsory/route bytes; coalesce loads; raise achieved bandwidth; share activation preparation |
+| position and cache production | Q/K normalization, positional transform, K/V cache writes | absorb epilogues into producers; write the final cache representation directly |
+| attention | score formation, masking, reduction/softmax, value accumulation | tile for cache reuse; fuse reductions legally; avoid score/probability intermediates |
+| attention output | output projection and residual update | keep the residual live; produce the consumer's declared type/layout |
+| feed-forward entry | normalization and activation quantization/preparation | share one prepared activation across consumers when exact semantics permit |
+| gate and up projections | two large quantized matrix-vector products | stream weights near the sustainable memory rate; pair only when shared work or topology is actually removed |
+| activation and down projection | gated activation, down projection, residual update | fuse the activation/epilogue; avoid materialized hidden states and redundant header or scale work |
+| token exit | final normalization, vocabulary projection, selection/sampling | eliminate serial tails; keep reductions and selection device-native where possible |
+| runtime boundary | launches, graph segmentation, synchronization, dispatch, copies | capture stable topology; remove true dependency boundaries; do not count already-overlapped launches |
+
+Each physical row in a measured ledger should record at least:
+
+| field | question it answers |
+| --- | --- |
+| semantic role and multiplicity | What work is this, and how often does one token execute it? |
+| selected implementation | Which production kernel or fused route actually ran? |
+| input/output contract | Which dtype, shape, layout, and ownership cross the boundary? |
+| compulsory bytes | What must cross the binding memory tier for any legal implementation? |
+| route bytes | What additional traffic comes from rereads, intermediates, spills, or conversion? |
+| body time and achieved rate | Is the row limited by bytes, instructions, occupancy, latency, or compute? |
+| predecessor/successor edges | Is the row critical, removable, fusible, or able to overlap? |
+| node sum, union contribution, and wall evidence | Did local movement survive composition into the token? |
+| exactness evidence | Did the candidate preserve the required token semantics? |
+
+This is the entire ledger in two senses: every semantic region is present, and every cost is assigned to
+body work, transported bytes, a topology boundary, overlap, or an unaccounted residual. A faster kernel
+that merely moves cost into a conversion or copy has not improved the ledger.
+
+### 0.2 The only general ways to make a dense token faster
+
+Every valid win reduces at least one term below without increasing another by more:
+
+1. **Move fewer route bytes.** Keep quantized weights packed, delete intermediate write/read pairs,
+   share prepared activations, and make producers emit the exact representation consumers require.
+2. **Move compulsory bytes faster.** Improve coalescing, vector width, lane mapping, occupancy, and
+   memory-level parallelism so a streaming row approaches the target's sustainable rate. Wider loads
+   can help here even when they cannot reduce DRAM bytes; the question is whether the production row's
+   achieved rate, then token wall, improves.
+3. **Do less body work.** Remove redundant unpacking, address arithmetic, reductions, and repeated
+   metadata work, provided that work lies on the binding path rather than behind memory latency.
+4. **Delete a real boundary.** Fuse an epilogue, absorb a residual, sink a cache write into its producer,
+   pair compatible producers, or remove a host/device round trip. The output contract is part of the
+   optimization: an undeclared type or layout can recreate the deleted boundary as a hidden copy.
+5. **Create genuine overlap.** Schedule independent work concurrently and measure the resulting union.
+   A comparator's overlap is not automatically available to this graph, and overlap mass is not a pile
+   of removable body time.
+6. **Shorten the serial tail.** Device-native selection and sampling matter when they terminate the
+   dependency chain, even if their arithmetic volume is small.
+
+Fewer nodes are useful only when they represent less critical-path work or fewer boundaries. More nodes
+can still form a faster token if their union is smaller. Likewise, an isolated bandwidth or instruction
+win is only a mechanism; wall reduction is the composed result.
+
+### 0.3 Why the ledger makes progress faster
+
+The productive loop is deliberately asymmetric: testing is cheap, promotion is demanding.
+
+1. Capture a fresh production wall and a full device ledger.
+2. Rank rows by total token contribution, not by per-call ugliness or visual complexity.
+3. State the candidate's accounting claim before coding: fewer bytes, higher rate, less body work,
+   fewer boundaries, more overlap, or a shorter tail.
+4. Run the smallest causal gate that can falsify that claim, with exactness checked at the relevant
+   boundary.
+5. If facts say the lever should work but the test is flat, treat the result as an information wall:
+   inspect route selection, hidden materializations, output contracts, composition, synchronization,
+   and clock-domain alignment before declaring the mechanism exhausted.
+6. Promote only after the exact production route wins under a clean repeated wall bracket and the
+   ledger explains where the time went.
+7. Re-capture the entire ledger. Promotion changes topology and ranking, so yesterday's next target may
+   no longer be today's next target.
+
+This loop compounds because it prevents three expensive mistakes: optimizing a row that is not on the
+critical path, abandoning a sound mechanism after testing an incomplete route, and booking a local win
+whose cost reappears at the next boundary. Dated campaign documents retain the numerical history; this
+document retains the general rule that made that history reproducible.
 
 ---
 
