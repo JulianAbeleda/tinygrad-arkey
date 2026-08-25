@@ -1,0 +1,126 @@
+{
+  "bitwise_identical": true,
+  "cold_passes": 20,
+  "commit": "dbaaa8ee2bcfdbdfac47a5a474d5ed372b187b22",
+  "hot_passes": 300,
+  "medians_us": {
+    "cold_balanced": 18.7376,
+    "cold_candidate": 22.9376,
+    "cold_control": 17.9216,
+    "hot_balanced": 5.956693,
+    "hot_candidate": 6.331947,
+    "hot_control": 7.175253
+  },
+  "mismatched_words": {
+    "balanced": 0,
+    "collapsed": 0
+  },
+  "ptxas": [
+    "ptxas info    : 0 bytes gmem",
+    "ptxas info    : Compiling entry function 'q4k_warp_coop_q8_dp4a_qkv_balanced_direct_4096_1024_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_warp_coop_q8_dp4a_qkv_balanced_direct_4096_1024_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 40 registers, used 1 barriers, 48 bytes smem",
+    "ptxas info    : Compile time = 10.367 ms",
+    "ptxas info    : Compiling entry function 'q4k_warp_coop_q8_dp4a_qkv_direct_4096_1024_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_warp_coop_q8_dp4a_qkv_direct_4096_1024_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 40 registers, used 1 barriers, 96 bytes smem",
+    "ptxas info    : Compile time = 15.429 ms",
+    "ptxas info    : Compiling entry function 'q4k_warp_coop_q8_dp4a_pair_direct_1024_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 40 registers, used 1 barriers, 32 bytes smem",
+    "ptxas info    : Compile time = 6.268 ms",
+    "ptxas info    : Compiling entry function 'q4k_warp_coop_q8_dp4a_direct_4096_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_warp_coop_q8_dp4a_direct_4096_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 40 registers, used 1 barriers, 16 bytes smem",
+    "ptxas info    : Compile time = 8.315 ms"
+  ],
+  "recovery_us": {
+    "balanced_cold_per_group": -0.815999999999999,
+    "balanced_cold_projected_9_groups": -7.3439999999999905,
+    "balanced_hot_per_group": 1.21856,
+    "cold_per_group": -5.015999999999998,
+    "cold_projected_9_groups": -45.143999999999984,
+    "hot_per_group": 0.8433059999999992
+  },
+  "reps": 9,
+  "samples": {
+    "cold_balanced": [
+      18.9488,
+      18.7408,
+      18.84,
+      18.640001,
+      18.9472,
+      18.427201,
+      18.536001,
+      18.531201,
+      18.7376
+    ],
+    "cold_candidate": [
+      22.528,
+      23.656,
+      23.0368,
+      23.2448,
+      22.8352,
+      23.144,
+      22.728,
+      22.8368,
+      22.9376
+    ],
+    "cold_control": [
+      17.8128,
+      18.123201,
+      18.0192,
+      17.9216,
+      17.8176,
+      18.027201,
+      17.9168,
+      17.923201,
+      17.7184
+    ],
+    "hot_balanced": [
+      5.918613,
+      5.936,
+      5.95008,
+      5.98048,
+      5.956693,
+      5.959147,
+      5.956693,
+      5.974187,
+      5.96352
+    ],
+    "hot_candidate": [
+      6.305067,
+      6.318293,
+      6.336747,
+      6.335467,
+      6.331947,
+      6.324907,
+      6.318187,
+      6.339307,
+      6.34208
+    ],
+    "hot_control": [
+      7.194773,
+      7.138027,
+      7.181013,
+      7.147946,
+      7.175253,
+      7.1536,
+      7.17888,
+      7.16128,
+      7.187413
+    ]
+  },
+  "schema": "tinygrad.q4k_shared_q8_qkv_microgate.v1",
+  "shape": {
+    "k": 4096,
+    "kv_rows": 1024,
+    "q_rows": 4096,
+    "shared_q8_q4q4q4_groups_per_token": 9
+  },
+  "verdict": "NO_GO"
+}

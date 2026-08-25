@@ -8,6 +8,13 @@ Route basis: installed `e9c3e4edd` device ledger plus current `619cc7688` no-go 
 
 ## Verdict
 
+> Update, 2026-08-25: the first-ranked shared-Q8 Q4/Q4/Q4 triple producer was
+> tested through bit-exact, hot, two independent cold, and NCU counter gates.
+> The 1,024- and 2,048-CTA grammars are cold-negative. The surviving 4,096-CTA
+> grammar is blocked on a typed workgroup-uniform region that can safely contain
+> the exact K/V merge barrier. See
+> `nv-shared-q8-qkv-producer-result-20260825.md`. No recovery is booked.
+
 The wall is neither **bytes alone** nor **scheduler topology alone**. It is a
 coupled **quantized-streaming issue/rate wall**:
 

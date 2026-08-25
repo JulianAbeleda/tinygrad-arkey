@@ -2,7 +2,7 @@ from tinygrad import dtypes
 import pytest
 
 from tinygrad.llm.shared_q8_attention import (SharedQ8AttentionAdmission, _emit_q4_cooperative_pair,
-  _emit_q4_q6_cooperative_pair)
+  _emit_q4_cooperative_qkv, _emit_q4_cooperative_qkv_balanced, _emit_q4_q6_cooperative_pair)
 from tinygrad.llm.model_route_plan import (decode_shared_q8_q4kv_pair_promoted, load_decode_shared_q8_q4kv_pair_promotion,
   decode_shared_q8_q4q6_kv_pair_promoted, load_decode_shared_q8_q4q6_kv_pair_promotion)
 from tinygrad.uop.ops import Ops, UOp
@@ -22,6 +22,20 @@ def test_shared_q8_pair_rejects_non_kv_shape():
   try: _emit_q4_cooperative_pair(4096,UOp.variable("bad_pair_blocks",1,4))
   except ValueError: pass
   else: raise AssertionError("non-K/V pair shape must be rejected")
+
+
+def test_shared_q8_qkv_research_bodies_keep_exact_output_topology():
+  qrows,kvrows,k=4096,1024,4096; qwords=qrows*(k//256)*36; kvwords=kvrows*(k//256)*36
+  packed=k//4+k//32; blocks=UOp.variable("qkv_blocks_test",1,4); p=UOp.placeholder
+  collapsed=_emit_q4_cooperative_qkv(blocks)(p((qrows,),dtypes.float32,0),p((kvrows,),dtypes.float32,1),
+    p((kvrows,),dtypes.float32,2),p((qwords,),dtypes.uint32,3),p((kvwords,),dtypes.uint32,4),
+    p((kvwords,),dtypes.uint32,5),p((packed,),dtypes.uint32,6))
+  balanced=_emit_q4_cooperative_qkv_balanced(blocks)(p((qrows,),dtypes.float32,0),p((kvrows*2,),dtypes.float32,1),
+    p((qwords,),dtypes.uint32,2),p((kvwords*2,),dtypes.uint32,3),p((packed,),dtypes.uint32,4))
+  assert collapsed.arg.name == "q4k_warp_coop_q8_dp4a_qkv_direct_4096_1024_4096"
+  assert balanced.arg.name == "q4k_warp_coop_q8_dp4a_qkv_balanced_direct_4096_1024_4096"
+  assert sum(u.op is Ops.BARRIER for u in collapsed.toposort()) == 1
+  assert sum(u.op is Ops.BARRIER for u in balanced.toposort()) == 1
 
 
 def test_shared_q8_mixed_pair_exact_body_shape():

@@ -306,6 +306,122 @@ def _emit_q4_cooperative_pair(rows:int, block_count:UOp):
   return kernel
 
 
+def _emit_q4_cooperative_qkv(block_count:UOp):
+  """Three-output Q4/Q4/Q4 attention producer with exact row association.
+
+  One 128-thread CTA owns four consecutive Q rows and the corresponding K/V
+  row.  Each of the six rows retains the direct producer's four warp block
+  slices, warp shuffle tree, and left-to-right shared-memory merge.  The
+  candidate therefore changes launch topology without changing weight bytes
+  or floating-point association.
+  """
+  def kernel(q_out,k_out,v_out,q_words,k_words,v_words,xp):
+    kv_row,lid=UOp.special(_KV_ROWS,"gidx0"),UOp.special(128,"lidx0")
+    warp,lane=lid//32,lid%32; group,word_base=lane//4,(lane%4)*2
+    br=UOp.range(block_count,2,axis_type=AxisType.LOOP); block=warp*4+br
+
+    def contribution(words,row):
+      base=(row*(_K//256)+block)*Q4K_WORDS_PER_BLOCK
+      w0,w1,w2,w3=words[base],words[base+1],words[base+2],words[base+3]
+      d,dm=_f16_word(w0,False),_f16_word(w0,True); g4=group%4
+      b1=w1.rshift(g4*8).bitwise_and(0xff); b2=w2.rshift(g4*8).bitwise_and(0xff); hb=w3.rshift(g4*8).bitwise_and(0xff)
+      sc=(group<4).where(b1.bitwise_and(63),hb.bitwise_and(0xf).bitwise_or(b1.rshift(6).lshift(4)))
+      mn=(group<4).where(b2.bitwise_and(63),hb.rshift(4).bitwise_or(b2.rshift(6).lshift(4)))
+      c=UOp.const(dtypes.float32,0.0)
+      for ws in range(2):
+        word=word_base+ws; qw=words[base+4+(group//2)*8+word].rshift((group%2)*4).bitwise_and(0x0F0F0F0F)
+        xv=xp[block*64+group*8+word]; dot=int8x4_dot(UOp.const(dtypes.int32,0),qw,xv).cast(dtypes.float32)
+        sx=_i8lane(xv,0)+_i8lane(xv,1)+_i8lane(xv,2)+_i8lane(xv,3)
+        c=c+_q8_d(xp,block*8+group)*(d*sc.cast(dtypes.float32)*dot-dm*mn.cast(dtypes.float32)*sx.cast(dtypes.float32))
+      return c
+
+    rows=(kv_row*4,kv_row*4+1,kv_row*4+2,kv_row*4+3,kv_row,kv_row)
+    words=(q_words,q_words,q_words,q_words,k_words,v_words)
+    contribs=tuple(contribution(w,r) for w,r in zip(words,rows))
+    accs=tuple(UOp.placeholder((1,),dtypes.float32,20+i,addrspace=AddrSpace.REG) for i in range(6))
+    dep=accs[0][0].store(0.0)
+    for acc in accs[1:]: dep=acc.after(dep)[0].store(0.0)
+    accs=tuple(acc.after(dep) for acc in accs)
+    updates=[]; update_dep=dep
+    for acc,c in zip(accs,contribs):
+      update_dep=acc.after(update_dep)[0].store(acc.after(br)[0]+c)
+      updates.append(update_dep)
+    complete=UOp.group(*updates).end(br)
+    totals=[]
+    for i,acc in enumerate(accs):
+      total=acc.after(complete)[0]
+      for slot,off in enumerate((16,8,4,2,1),90+i*5): total=total+_staged_shfl(total,off,lane,slot)
+      totals.append(total)
+    smems=tuple(UOp.placeholder((4,),dtypes.float32,230+i,addrspace=AddrSpace.LOCAL) for i in range(6))
+    published=[]; pub_dep=complete
+    for smem,total in zip(smems,totals):
+      pub_dep=smem.after(pub_dep)[warp].store(total,lane.eq(0)); published.append(pub_dep)
+    ready=UOp.barrier(UOp.group(*published)); merged=[]
+    for smem in smems:
+      value=UOp.const(dtypes.float32,0.0)
+      for wi in range(4): value=value+smem.after(ready)[wi]
+      merged.append(value)
+    stores=[q_out[rows[i]].store(merged[i],lid.eq(0)) for i in range(4)]
+    stores += [k_out[kv_row].store(merged[4],lid.eq(0)),v_out[kv_row].store(merged[5],lid.eq(0))]
+    return UOp.group(*stores).sink(arg=KernelInfo(name=f"q4k_warp_coop_q8_dp4a_qkv_direct_{_Q_ROWS}_{_KV_ROWS}_{_K}",opts_to_apply=()))
+  return kernel
+
+
+def _emit_q4_cooperative_qkv_balanced(block_count:UOp):
+  """Balanced Q4/Q4/Q4 producer: two Q rows plus one packed K/V row per CTA.
+
+  K and V weights and outputs use one row-major K-then-V allocation.  This
+  keeps the logical triple-output contract while exposing 2,048 CTAs, twice
+  the parallelism of the six-row grouping above, with unchanged payload.
+  """
+  def kernel(q_out,kv_out,q_words,kv_words,xp):
+    group_row,lid=UOp.special(_KV_ROWS*2,"gidx0"),UOp.special(128,"lidx0")
+    warp,lane=lid//32,lid%32; group,word_base=lane//4,(lane%4)*2
+    br=UOp.range(block_count,2,axis_type=AxisType.LOOP); block=warp*4+br
+
+    def contribution(words,row):
+      base=(row*(_K//256)+block)*Q4K_WORDS_PER_BLOCK
+      w0,w1,w2,w3=words[base],words[base+1],words[base+2],words[base+3]
+      d,dm=_f16_word(w0,False),_f16_word(w0,True); g4=group%4
+      b1=w1.rshift(g4*8).bitwise_and(0xff); b2=w2.rshift(g4*8).bitwise_and(0xff); hb=w3.rshift(g4*8).bitwise_and(0xff)
+      sc=(group<4).where(b1.bitwise_and(63),hb.bitwise_and(0xf).bitwise_or(b1.rshift(6).lshift(4)))
+      mn=(group<4).where(b2.bitwise_and(63),hb.rshift(4).bitwise_or(b2.rshift(6).lshift(4)))
+      c=UOp.const(dtypes.float32,0.0)
+      for ws in range(2):
+        word=word_base+ws; qw=words[base+4+(group//2)*8+word].rshift((group%2)*4).bitwise_and(0x0F0F0F0F)
+        xv=xp[block*64+group*8+word]; dot=int8x4_dot(UOp.const(dtypes.int32,0),qw,xv).cast(dtypes.float32)
+        sx=_i8lane(xv,0)+_i8lane(xv,1)+_i8lane(xv,2)+_i8lane(xv,3)
+        c=c+_q8_d(xp,block*8+group)*(d*sc.cast(dtypes.float32)*dot-dm*mn.cast(dtypes.float32)*sx.cast(dtypes.float32))
+      return c
+
+    rows=(group_row*2,group_row*2+1,group_row)
+    contribs=(contribution(q_words,rows[0]),contribution(q_words,rows[1]),contribution(kv_words,rows[2]))
+    accs=tuple(UOp.placeholder((1,),dtypes.float32,20+i,addrspace=AddrSpace.REG) for i in range(3))
+    dep=accs[0][0].store(0.0)
+    for acc in accs[1:]: dep=acc.after(dep)[0].store(0.0)
+    accs=tuple(acc.after(dep) for acc in accs); updates=[]; update_dep=dep
+    for acc,c in zip(accs,contribs):
+      update_dep=acc.after(update_dep)[0].store(acc.after(br)[0]+c); updates.append(update_dep)
+    complete=UOp.group(*updates).end(br); totals=[]
+    for i,acc in enumerate(accs):
+      total=acc.after(complete)[0]
+      for slot,off in enumerate((16,8,4,2,1),90+i*5): total=total+_staged_shfl(total,off,lane,slot)
+      totals.append(total)
+    smems=tuple(UOp.placeholder((4,),dtypes.float32,230+i,addrspace=AddrSpace.LOCAL) for i in range(3))
+    published=[]; pub_dep=complete
+    for smem,total in zip(smems,totals):
+      pub_dep=smem.after(pub_dep)[warp].store(total,lane.eq(0)); published.append(pub_dep)
+    ready=UOp.barrier(UOp.group(*published)); merged=[]
+    for smem in smems:
+      value=UOp.const(dtypes.float32,0.0)
+      for wi in range(4): value=value+smem.after(ready)[wi]
+      merged.append(value)
+    return UOp.group(q_out[rows[0]].store(merged[0],lid.eq(0)),q_out[rows[1]].store(merged[1],lid.eq(0)),
+      kv_out[rows[2]].store(merged[2],lid.eq(0))).sink(
+        arg=KernelInfo(name=f"q4k_warp_coop_q8_dp4a_qkv_balanced_direct_{_Q_ROWS}_{_KV_ROWS}_{_K}",opts_to_apply=()))
+  return kernel
+
+
 def _emit_q4_q6_cooperative_pair(rows:int, block_count:UOp):
   """Exact cooperative Q4-K/Q6-V consumers sharing one Q8 launch."""
   if rows != _KV_ROWS: raise ValueError("cooperative Q4/Q6 K/V pair requires the 1024-row production shape")
