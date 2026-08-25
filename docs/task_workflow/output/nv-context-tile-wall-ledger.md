@@ -64,3 +64,28 @@ optimization.
 | adaptive S48/S64 policy | measured substrate pass | not installed | build second graph, exact semantic gate, crossing-boundary wall bracket |
 
 Decision: `CONTEXT_ALIGNMENT_WALL_FOUND__ADAPTIVE_SPLIT_SUBSTRATE_PASS`.
+
+## Adaptive dual-graph implementation gate
+
+A closed-default dual-graph substrate now preserves the S=48 graph and owns a
+separate S=64 capture selected from logical `start_pos`. The first crossing
+run exposed an 11.7-second lazy-capture pause on the boundary token. Warming
+the ordinary sampled graph did not fix the composed route because direct-
+greedy ping-pong owns two distinct captures. Prewarming both actual feedback
+graphs before prompt execution removed the pause completely.
+
+| arm | median | boundary behavior | tokens |
+| --- | ---: | --- | --- |
+| installed S=48 control | 4.359039 ms/token | steps to about 4.405 ms after boundary | reference hash |
+| prewarmed adaptive S48/S64 | 4.272964 ms/token | all eight windows 4.268--4.290 ms | exact same hash |
+
+The mixed-band recovery is **86.074 us/token**, approximately **229.41 to
+234.03 tok/s (+4.62 tok/s)**. The steady post-boundary recovery remains
+137.482 us/token (+7.29 tok/s at the d800 bracket).
+
+The substrate stays closed-default pending a target promotion record and an
+explicit startup/graph-memory admission decision. The token path is complete;
+there is no remaining correctness or boundary-capture wall.
+
+Implementation decision:
+`DUAL_GRAPH_TOKEN_PATH_PASS__PROMOTION_POLICY_AND_STARTUP_COST_PENDING`.

@@ -204,3 +204,12 @@ def test_coarse_split_env_override_contract(monkeypatch):
   assert flash_decode_coarse_split_override() == 2
   s2 = describe_flash_decode_attention(32, 128, 8, 4608, 2)
   assert s2.tile.kernel_name == "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128_s2"
+
+
+def test_adaptive_s64_context_band_is_bounded():
+  from tinygrad.llm.model import _adaptive_flash_split_count
+  assert _adaptive_flash_split_count(True, 767, 1024) is None
+  assert _adaptive_flash_split_count(True, 768, 1024) == 64
+  assert _adaptive_flash_split_count(True, 1023, 1024) == 64
+  assert _adaptive_flash_split_count(False, 800, 1024) is None
+  assert _adaptive_flash_split_count(True, 800, 2048) is None

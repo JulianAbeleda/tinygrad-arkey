@@ -13,6 +13,17 @@
     "token_hashes_equal": true
   },
   "schema": "tinygrad.nv_endpoint_regime_wall_summary.v1",
+  "adaptive_crossing": {
+    "candidate_ms_per_token": 4.2729643125,
+    "candidate_tok_s": 234.02952279974204,
+    "control_ms_per_token": 4.35903853125,
+    "control_tok_s": 229.40839727742643,
+    "recovery_us_per_token": 86.07421875000011,
+    "tok_s_gain": 4.62112552231561,
+    "all_windows_settled": true,
+    "token_hash_equal": true,
+    "prewarmed_graphs": "direct_greedy_pingpong_slots_0_and_1"
+  },
   "above_boundary_s64": {
     "candidate_ms_per_token": 4.274723625,
     "candidate_tok_s": 233.93325348011014,
@@ -24,5 +35,5 @@
     "candidate_tok_s_gain": 7.289213321573222,
     "token_hashes_equal": true
   },
-  "decision": "ADAPTIVE_S48_BELOW_769__S64_AT_769_TO_1024"
+  "decision": "DUAL_GRAPH_TOKEN_PATH_PASS__PROMOTION_POLICY_AND_STARTUP_COST_PENDING"
 }

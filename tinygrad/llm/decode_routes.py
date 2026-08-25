@@ -684,9 +684,11 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
   # decode route with the env-selected split count instead of the promoted S=48. Unset env keeps
   # binding.split_size, so production behavior is byte-identical to today; the admission guard in
   # flash_decode_live_split_block_tile accepts the env value only when it is set.
-  split_size = binding.split_size
+  split_size = geom.get("split_count", binding.split_size)
   if (coarse_split := flash_decode_coarse_split_override()) and binding.Hq == FLASH_DECODE_G4.query_heads:
-    split_size = coarse_split
+    # A graph-local typed geometry lease takes precedence.  The env override
+    # remains the admission authority for non-promoted split counts.
+    if "split_count" not in geom: split_size = coarse_split
   return flash_decode_live_split_block_tile(q.reshape(binding.Hq, binding.Hd), assigned_kv, _tc,
     binding.Hd, binding.Hq, binding.Hkv, MAXC, split_size, staging=binding.staging,
     fused_combine=True, kv_scale=kv_scale, freqs=freqs, query_group_size=binding.query_group_size,

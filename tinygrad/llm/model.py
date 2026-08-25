@@ -86,6 +86,10 @@ def generic_llm_control():
 def _should_use_flash_attention(ring_freqs:Tensor|None, start_pos:int|UOp, T:int|UOp, use_flash:bool) -> bool:
   return ring_freqs is not None or _route_should_use_flash_decode(start_pos, T, use_flash)
 
+def _adaptive_flash_split_count(enabled:bool,start_pos:int,max_context:int)->int|None:
+  """Measured G4 context band: S48 wins through Tc=768; S64 wins for Tc=769..1024."""
+  return 64 if enabled and max_context <= 1024 and 768 <= start_pos < max_context else None
+
 def prefill_v2_target_admitted(device_facts:object|None) -> bool:
   """Whether the concrete fp16 prefill-v2 route is admissible on this load target.
 
@@ -1253,25 +1257,31 @@ class Transformer:
     self.prefill_jit = TinyJit(self.forward)
     self.rollout_jit = TinyJit(self.forward)
     self.rollout_jit_flash = TinyJit(self.forward)
+    self.rollout_jit_flash_s64 = TinyJit(self.forward)
     self.prefill_greedy_jit = TinyJit(self.forward_greedy)
     self.prefill_v2_greedy_jit = TinyJit(self.forward_greedy)
     self.rollout_greedy_jit = TinyJit(self.forward_greedy)
     self.rollout_greedy_jit_flash = TinyJit(self.forward_greedy)
+    self.rollout_greedy_jit_flash_s64 = TinyJit(self.forward_greedy)
     # Closed-default P5 experiment: two captures can form an alias-free
     # device-resident feedback ring.  A harness must explicitly promote the
     # route and provide the alternating slot; ordinary callers retain the
     # single-capture path and CapturedJit's generic written-input firewall.
     self.rollout_greedy_pingpong_jits = tuple(TinyJit(self.forward_greedy) for _ in range(2))
     self.rollout_greedy_pingpong_jits_flash = tuple(TinyJit(self.forward_greedy) for _ in range(2))
+    self.rollout_greedy_pingpong_jits_flash_s64 = tuple(TinyJit(self.forward_greedy) for _ in range(2))
     # Diagnostic-only captures return the already-computed decode logits beside
     # the sampled token. They are separate so the production sampled graph's
     # return/lifetime contract remains byte-for-byte unchanged.
     self.rollout_logits_jit = TinyJit(self.forward_with_logits)
     self.rollout_logits_jit_flash = TinyJit(self.forward_with_logits)
+    self.rollout_logits_jit_flash_s64 = TinyJit(self.forward_with_logits)
     self.rollout_greedy_logits_jit = TinyJit(self.forward_greedy_with_logits)
     self.rollout_greedy_logits_jit_flash = TinyJit(self.forward_greedy_with_logits)
+    self.rollout_greedy_logits_jit_flash_s64 = TinyJit(self.forward_greedy_with_logits)
     self.rollout_greedy_logits_pingpong_jits = tuple(TinyJit(self.forward_greedy_with_logits) for _ in range(2))
     self.rollout_greedy_logits_pingpong_jits_flash = tuple(TinyJit(self.forward_greedy_with_logits) for _ in range(2))
+    self.rollout_greedy_logits_pingpong_jits_flash_s64 = tuple(TinyJit(self.forward_greedy_with_logits) for _ in range(2))
     self.rollout_jit_ring = TinyJit(self.forward_ring)        # ring FILL phase (ctx<N): read [0:start_pos+T], identity freqs
     self.rollout_jit_ring_full = TinyJit(self.forward_ring)   # ring FULL phase (ctx>=N): read [0:N], wrapped write slot + gathered freqs
     # The selected prefill candidate gets a separate concrete-M capture.
@@ -1512,7 +1522,7 @@ class Transformer:
     return self.forward(tokens, start_pos, temperature)
 
   def decode_with_logits(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, use_flash:bool=False,
-                         feedback_slot:int|None=None) -> tuple[Tensor, Tensor]:
+                         feedback_slot:int|None=None, flash_split_count:int|None=None) -> tuple[Tensor, Tensor]:
     """Closed-surface diagnostic tap for a normal (non-ring) one-token decode.
 
     It deliberately rejects prefill and ring inputs rather than silently
@@ -1524,13 +1534,16 @@ class Transformer:
     for q4k_linear in self._q4k_linears.linears: q4k_linear.decode_enabled = True
     for block in self.blk:
       block._use_flash, block._prefill_v2, block._is_prefill, block._ring_freqs, block._ring_full = use_flash, False, False, None, False
+      block._flash_decode_tile_geometry_lease = ({"split_count":flash_split_count} if flash_split_count is not None else None)
     if feedback_slot not in (None, 0, 1): raise ValueError("feedback_slot must be None, 0, or 1")
     pingpong = bool(getattr(self, "_decode_feedback_pingpong_promoted", False)) and feedback_slot is not None
-    greedy_jit = ((self.rollout_greedy_logits_pingpong_jits_flash if use_flash else self.rollout_greedy_logits_pingpong_jits)[feedback_slot]
-                  if pingpong else (self.rollout_greedy_logits_jit_flash if use_flash else self.rollout_greedy_logits_jit))
+    greedy_flash_pair = self.rollout_greedy_logits_pingpong_jits_flash_s64 if flash_split_count == 64 else self.rollout_greedy_logits_pingpong_jits_flash
+    greedy_flash = self.rollout_greedy_logits_jit_flash_s64 if flash_split_count == 64 else self.rollout_greedy_logits_jit_flash
+    greedy_jit = ((greedy_flash_pair if use_flash else self.rollout_greedy_logits_pingpong_jits)[feedback_slot]
+                  if pingpong else (greedy_flash if use_flash else self.rollout_greedy_logits_jit))
     direct_greedy = bool(getattr(self, "_decode_direct_greedy_promoted", False))
     jit = greedy_jit if direct_greedy and float(temperature.item()) == 0.0 else \
-          (self.rollout_logits_jit_flash if use_flash else self.rollout_logits_jit)
+          ((self.rollout_logits_jit_flash_s64 if flash_split_count == 64 else self.rollout_logits_jit_flash) if use_flash else self.rollout_logits_jit)
     with prefill_route_scope(False), self._decode_callify_substrate():
       return jit(tokens, start_pos, temperature)
 
@@ -1551,7 +1564,8 @@ class Transformer:
       yield
 
   def __call__(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, use_flash:bool=False,
-               ring_freqs:Tensor|None=None, ring_full:bool=False, greedy:bool=False, feedback_slot:int|None=None) -> Tensor:
+               ring_freqs:Tensor|None=None, ring_full:bool=False, greedy:bool=False, feedback_slot:int|None=None,
+               flash_split_count:int|None=None) -> Tensor:
     is_prefill = resolve(tokens.shape[1] != 1)
     generic_control = _GENERIC_LLM_CONTROL.get()
     # prefill v2: only when opt-in AND this is a CONCRETE-batch prefill chunk. Normal prefill passes a symbolic
@@ -1566,6 +1580,7 @@ class Transformer:
     for block in self.blk:
       block._use_flash, block._prefill_v2, block._is_prefill, block._ring_freqs, block._ring_full = \
         use_flash, is_prefill_v2, is_prefill, None, ring_full
+      block._flash_decode_tile_geometry_lease = ({"split_count":flash_split_count} if flash_split_count is not None else None)
     # StreamingLLM ring decode: distinct captured graphs with `freqs` as a per-step JIT input (rebound each token). The
     # FULL-phase graph (ring_full, ctx>=N) reads the whole [0:N] cache and writes at the wrapped slot; the FILL-phase
     # graph reads [0:start_pos+T] like normal decode. block._ring_full (baked bool) selects the read mode in _attention.
@@ -1578,11 +1593,13 @@ class Transformer:
       jit = self.prefill_v2_jits.setdefault((start_pos, greedy), TinyJit(self.forward_greedy if greedy else self.forward))
     else:
       pingpong = bool(getattr(self, "_decode_feedback_pingpong_promoted", False)) and feedback_slot is not None
-      rollout_greedy = ((self.rollout_greedy_pingpong_jits_flash if use_flash else self.rollout_greedy_pingpong_jits)[feedback_slot]
-                        if pingpong else (self.rollout_greedy_jit_flash if use_flash else self.rollout_greedy_jit))
+      greedy_flash_pair = self.rollout_greedy_pingpong_jits_flash_s64 if flash_split_count == 64 else self.rollout_greedy_pingpong_jits_flash
+      greedy_flash = self.rollout_greedy_jit_flash_s64 if flash_split_count == 64 else self.rollout_greedy_jit_flash
+      rollout_greedy = ((greedy_flash_pair if use_flash else self.rollout_greedy_pingpong_jits)[feedback_slot]
+                        if pingpong else (greedy_flash if use_flash else self.rollout_greedy_jit))
       jit = ((self.prefill_v2_greedy_jit if greedy else self.prefill_v2_jit) if is_prefill_v2 else (self.prefill_greedy_jit if greedy else self.prefill_jit)) if is_prefill else \
             (rollout_greedy if greedy else
-             (self.rollout_jit_flash if use_flash else self.rollout_jit))
+             ((self.rollout_jit_flash_s64 if flash_split_count == 64 else self.rollout_jit_flash) if use_flash else self.rollout_jit))
     if not is_prefill_v2:
       if not is_prefill:
         # Decode captures under the M2c callify substrate when a promoted policy
@@ -2380,6 +2397,7 @@ class Transformer:
         # decode graph is baked SDPA at the start ctx and never switches -> short-prompt decode SDPA-degrades the
         # whole way (e.g. 85->54 tok/s by ctx512). should_use_flash_decode returns False for ntv!=1 (prefill chunks).
         _uf = self.config.flash_decode and _route_should_use_flash_decode(sp, ntv)
+        _flash_split = _adaptive_flash_split_count(_uf and getattr(self,"_flash_decode_adaptive_s64_lease",False),start_pos,self.max_context)
         if submit_ahead and ntv == 1 and start_pos >= prompt_len and _uf and out is not None:
           # Submit token start_pos+1's graph now; its input is the previous
           # output (the token we yield this iteration).  The host-side prep of
@@ -2387,7 +2405,7 @@ class Transformer:
           # bottom of the loop reads the PREVIOUS output after submission.
           prev = out
           out = self(prev, sp, temp, use_flash=_uf, greedy=True,
-                     feedback_slot=(decode_feedback_phase & 1)).realize()
+                     feedback_slot=(decode_feedback_phase & 1),flash_split_count=_flash_split).realize()
           decode_feedback_phase += 1
           read_tok = prev
         else:
@@ -2395,9 +2413,9 @@ class Transformer:
                          (out[0] if diagnostic_full_logits and isinstance(out, tuple) else out)
           feedback_slot = (decode_feedback_phase & 1) if start_pos >= prompt_len and \
             bool(getattr(self, "_decode_feedback_pingpong_promoted", False)) else None
-          out = (self.decode_with_logits(decode_input, sp, temp, use_flash=_uf, feedback_slot=feedback_slot)
+          out = (self.decode_with_logits(decode_input, sp, temp, use_flash=_uf, feedback_slot=feedback_slot,flash_split_count=_flash_split)
                  if diagnostic_full_logits and ntv == 1 and start_pos >= prompt_len else
-                 self(decode_input, sp, temp, use_flash=_uf, greedy=direct_greedy, feedback_slot=feedback_slot))
+                 self(decode_input, sp, temp, use_flash=_uf, greedy=direct_greedy, feedback_slot=feedback_slot,flash_split_count=_flash_split))
           if feedback_slot is not None: decode_feedback_phase += 1
           if isinstance(out, tuple):
             out = (out[0].realize(), out[1].realize())
