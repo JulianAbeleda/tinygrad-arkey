@@ -1,0 +1,7 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "description": "Promotes the exact packed-lane Q6_K FFN-down spelling after cold isolated and current composed d512 wall qualification. TINYGRAD_Q6K_FFN_DOWN_PACKED_LANEMAP_DISABLE=1 restores the prior four-warp spelling.",
+  "promoted_targets": [
+    {"backend": "NV", "architecture": "sm_120"}
+  ]
+}

@@ -7,7 +7,8 @@ from tinygrad.renderer.cuda import CUDARenderer
 from tinygrad.runtime.support.compiler_cuda import NVRTCCompiler
 from tinygrad.uop.ops import Ops, UOp
 from tinygrad.llm.decode_routes import _Q6KDecodeCandidate
-from tinygrad.llm.model_route_plan import decode_q6k_ffn_down_fp16_geometry_promoted
+from tinygrad.llm.model_route_plan import (decode_q6k_ffn_down_fp16_geometry_promoted,
+  decode_q6k_ffn_down_packed_lanemap_promoted)
 from tinygrad.llm.q6k_ffn_down_mmvq import (K, ROWS, Q6KFFNDownMMVQAdmission,
   emit_q6k_four_warp_fp16_direct, q6k_ffn_down_mmvq_call)
 from tinygrad.llm.qk_layout import Q6K_HALFWORDS_PER_BLOCK
@@ -105,3 +106,11 @@ def test_route_policy_promotes_nv_sm120_only():
   assert decode_q6k_ffn_down_fp16_geometry_promoted(("NV", "sm_120"))
   assert not decode_q6k_ffn_down_fp16_geometry_promoted(("AMD", "gfx1100"))
   assert not decode_q6k_ffn_down_fp16_geometry_promoted(("CUDA", "sm_120"))
+
+
+def test_packed_lanemap_policy_is_target_scoped_with_rollback():
+  assert decode_q6k_ffn_down_packed_lanemap_promoted(("NV", "sm_120"), lambda _key, _default: 0)
+  assert not decode_q6k_ffn_down_packed_lanemap_promoted(("NV", "sm_89"), lambda _key, _default: 0)
+  assert not decode_q6k_ffn_down_packed_lanemap_promoted(("AMD", "gfx1100"), lambda _key, _default: 0)
+  assert not decode_q6k_ffn_down_packed_lanemap_promoted(("NV", "sm_120"), lambda key, _default:
+    int(key == "TINYGRAD_Q6K_FFN_DOWN_PACKED_LANEMAP_DISABLE"))

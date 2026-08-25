@@ -333,6 +333,21 @@ def decode_q6k_ffn_down_fp16_geometry_promoted(target:Target) -> bool:
   """Policy authority for the Q6_K FFN-down four-warp fp16 geometry route (closed default)."""
   return target in _DECODE_Q6K_FFN_DOWN_FP16_GEOMETRY_PROMOTED_TARGETS
 
+def load_decode_q6k_ffn_down_packed_lanemap_promotion(path:str) -> frozenset[Target]:
+  """Closed-default policy for the exact packed-lane Q6_K FFN-down spelling."""
+  policy_path=pathlib.Path(path).expanduser(); data=json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  return frozenset((t.get("backend"),t.get("architecture")) for t in (data.get("promoted_targets") or ()))
+
+_DECODE_Q6K_FFN_DOWN_PACKED_LANEMAP_RECORD = pathlib.Path(__file__).with_name("generated") / \
+  "decode-q6k-ffn-down-packed-lanemap-route-policy.json"
+_DECODE_Q6K_FFN_DOWN_PACKED_LANEMAP_TARGETS = load_decode_q6k_ffn_down_packed_lanemap_promotion(
+  _DECODE_Q6K_FFN_DOWN_PACKED_LANEMAP_RECORD)
+
+def decode_q6k_ffn_down_packed_lanemap_promoted(target:Target,getenv_fn=getenv) -> bool:
+  """Resolve the packed-lane spelling with an explicit load-time rollback."""
+  return target in _DECODE_Q6K_FFN_DOWN_PACKED_LANEMAP_TARGETS and not getenv_fn("TINYGRAD_Q6K_FFN_DOWN_PACKED_LANEMAP_DISABLE",0)
+
 def load_decode_q6k_v_four_warp_fp16_geometry_promotion(path:str) -> frozenset[Target]:
   """Read the Q6_K attention-V four-warp fp16 geometry promotion record
   (boltbeam.route_policy.v1, same schema family as the Q6 FFN-down record).
