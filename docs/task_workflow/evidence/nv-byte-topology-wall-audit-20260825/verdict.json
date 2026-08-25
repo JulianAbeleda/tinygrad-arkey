@@ -1,0 +1,23 @@
+{
+  "schema": "tinygrad.nv_byte_topology_wall_verdict.v1",
+  "verdict": "COUPLED_QUANTIZED_STREAMING_ISSUE_RATE_WALL",
+  "rejected_simplifications": {
+    "pure_dram_byte_floor": "refuted by fixed-memory SM-clock sensitivity",
+    "missing_queue_count": "refuted by exact DAG sweep and installed two-queue placement",
+    "generic_lossless_weight_compression": "small offline feasibility result before decode cost"
+  },
+  "key_facts": {
+    "projection_and_vocab_payload_bytes_per_token": 4670533632,
+    "weight_kernel_us_per_token": 3280.512,
+    "weight_kernel_fraction_of_device_union": 0.798178,
+    "dependency_overlap_ceiling_us": 321.760,
+    "installed_measured_overlap_us": 3.536,
+    "fixed_memory_low_sm_latency_growth_pct": 23.245358,
+    "measured_loaded_high_sm_clock_mhz": 2850,
+    "measured_loaded_low_sm_clock_mhz": 1995,
+    "inverse_clock_scaled_wall_fraction": 0.542392,
+    "zlib_level9_saving_pct": 1.630029
+  },
+  "next_test": "exact Q+K/V triple-output producer, starting with shared-Q8 Q4/Q4/Q4",
+  "promotion_authority": "cold exact gate, complete output/topology census, then reps>=9 full-token A/B/A"
+}

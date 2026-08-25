@@ -1,0 +1,314 @@
+{
+  "device": {
+    "aggregate_weight_rate_GBps": 1423.721,
+    "measured_overlap_us": 3.536,
+    "node_sum_us": 4113.536,
+    "one_hundred_MB_us_at_observed_rate": 70.238,
+    "one_percent_weight_bytes_us_at_observed_rate": 32.805,
+    "union_us": 4110.0,
+    "weight_kernel_fraction_of_union": 0.798178,
+    "weight_kernel_us": 3280.512
+  },
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "model_architecture": "qwen3",
+  "queue_sweep": {
+    "critical_path_us": 3856.64,
+    "method": "longest-tail list schedule; cross-queue wait overhead omitted (upper bound on queue-count benefit)",
+    "node_count": 454,
+    "schedule": [
+      {
+        "queues": 1,
+        "saving_vs_serial_us": -0.0,
+        "slack_vs_critical_path_us": 321.76,
+        "span_us": 4178.4
+      },
+      {
+        "queues": 2,
+        "saving_vs_serial_us": 318.624,
+        "slack_vs_critical_path_us": 3.136,
+        "span_us": 3859.776
+      },
+      {
+        "queues": 3,
+        "saving_vs_serial_us": 321.76,
+        "slack_vs_critical_path_us": 0.0,
+        "span_us": 3856.64
+      },
+      {
+        "queues": 4,
+        "saving_vs_serial_us": 321.76,
+        "slack_vs_critical_path_us": 0.0,
+        "span_us": 3856.64
+      },
+      {
+        "queues": 5,
+        "saving_vs_serial_us": 321.76,
+        "slack_vs_critical_path_us": 0.0,
+        "span_us": 3856.64
+      },
+      {
+        "queues": 6,
+        "saving_vs_serial_us": 321.76,
+        "slack_vs_critical_path_us": 0.0,
+        "span_us": 3856.64
+      },
+      {
+        "queues": 7,
+        "saving_vs_serial_us": 321.76,
+        "slack_vs_critical_path_us": 0.0,
+        "span_us": 3856.64
+      },
+      {
+        "queues": 8,
+        "saving_vs_serial_us": 321.76,
+        "slack_vs_critical_path_us": 0.0,
+        "span_us": 3856.64
+      },
+      {
+        "queues": 9,
+        "saving_vs_serial_us": 321.76,
+        "slack_vs_critical_path_us": 0.0,
+        "span_us": 3856.64
+      },
+      {
+        "queues": 10,
+        "saving_vs_serial_us": 321.76,
+        "slack_vs_critical_path_us": 0.0,
+        "span_us": 3856.64
+      },
+      {
+        "queues": 11,
+        "saving_vs_serial_us": 321.76,
+        "slack_vs_critical_path_us": 0.0,
+        "span_us": 3856.64
+      },
+      {
+        "queues": 12,
+        "saving_vs_serial_us": 321.76,
+        "slack_vs_critical_path_us": 0.0,
+        "span_us": 3856.64
+      },
+      {
+        "queues": 13,
+        "saving_vs_serial_us": 321.76,
+        "slack_vs_critical_path_us": 0.0,
+        "span_us": 3856.64
+      },
+      {
+        "queues": 14,
+        "saving_vs_serial_us": 321.76,
+        "slack_vs_critical_path_us": 0.0,
+        "span_us": 3856.64
+      },
+      {
+        "queues": 15,
+        "saving_vs_serial_us": 321.76,
+        "slack_vs_critical_path_us": 0.0,
+        "span_us": 3856.64
+      },
+      {
+        "queues": 16,
+        "saving_vs_serial_us": 321.76,
+        "slack_vs_critical_path_us": 0.0,
+        "span_us": 3856.64
+      }
+    ],
+    "schema": "tinygrad.nv_queue_count_sweep.v1",
+    "serialized_us": 4178.4,
+    "total_schedule_slack_us": 321.76
+  },
+  "schema": "tinygrad.nv_byte_topology_wall_audit.v1",
+  "topology": {
+    "critical_path_us": 3856.64,
+    "dependency_overlap_ceiling_us": 321.76,
+    "edge_count": 1129,
+    "families": {
+      "argmax": {
+        "node_us": 8.384,
+        "nodes": 1,
+        "off_path_us": 0.0,
+        "zero_slack_nodes": 1,
+        "zero_slack_us": 8.384
+      },
+      "attn_kv": {
+        "node_us": 246.752,
+        "nodes": 46,
+        "off_path_us": 231.456,
+        "zero_slack_nodes": 1,
+        "zero_slack_us": 15.296
+      },
+      "attn_o": {
+        "node_us": 305.76,
+        "nodes": 36,
+        "off_path_us": 0.0,
+        "zero_slack_nodes": 36,
+        "zero_slack_us": 305.76
+      },
+      "attn_q": {
+        "node_us": 311.488,
+        "nodes": 36,
+        "off_path_us": 11.584,
+        "zero_slack_nodes": 35,
+        "zero_slack_us": 299.904
+      },
+      "elementwise": {
+        "node_us": 87.52,
+        "nodes": 44,
+        "off_path_us": 8.192,
+        "zero_slack_nodes": 42,
+        "zero_slack_us": 79.328
+      },
+      "ffn_down": {
+        "node_us": 854.336,
+        "nodes": 36,
+        "off_path_us": 0.0,
+        "zero_slack_nodes": 36,
+        "zero_slack_us": 854.336
+      },
+      "flash_combine": {
+        "node_us": 101.216,
+        "nodes": 36,
+        "off_path_us": 0.0,
+        "zero_slack_nodes": 36,
+        "zero_slack_us": 101.216
+      },
+      "flash_score": {
+        "node_us": 232.192,
+        "nodes": 36,
+        "off_path_us": 0.0,
+        "zero_slack_nodes": 36,
+        "zero_slack_us": 232.192
+      },
+      "gate_up": {
+        "node_us": 1281.632,
+        "nodes": 36,
+        "off_path_us": 0.0,
+        "zero_slack_nodes": 36,
+        "zero_slack_us": 1281.632
+      },
+      "norm": {
+        "node_us": 133.856,
+        "nodes": 19,
+        "off_path_us": 0.0,
+        "zero_slack_nodes": 19,
+        "zero_slack_us": 133.856
+      },
+      "q8_provider": {
+        "node_us": 30.72,
+        "nodes": 17,
+        "off_path_us": 0.0,
+        "zero_slack_nodes": 17,
+        "zero_slack_us": 30.72
+      },
+      "qk_norm_rope_cache": {
+        "node_us": 142.976,
+        "nodes": 72,
+        "off_path_us": 70.528,
+        "zero_slack_nodes": 36,
+        "zero_slack_us": 72.448
+      },
+      "reduction_norm": {
+        "node_us": 127.552,
+        "nodes": 38,
+        "off_path_us": 0.0,
+        "zero_slack_nodes": 38,
+        "zero_slack_us": 127.552
+      },
+      "vocab_main": {
+        "node_us": 314.016,
+        "nodes": 1,
+        "off_path_us": 0.0,
+        "zero_slack_nodes": 1,
+        "zero_slack_us": 314.016
+      }
+    },
+    "node_count": 454,
+    "serialized_us": 4178.4
+  },
+  "weight_bytes": {
+    "projection_and_vocab_payload_bytes_per_token": 4670533632,
+    "q6_projection_payload_bytes": 1315614720,
+    "roles": {
+      "attn_k": {
+        "ggml_types": {
+          "12": 36
+        },
+        "payload_bytes": 84934656,
+        "tensors": 36
+      },
+      "attn_o": {
+        "ggml_types": {
+          "12": 36
+        },
+        "payload_bytes": 339738624,
+        "tensors": 36
+      },
+      "attn_q": {
+        "ggml_types": {
+          "12": 36
+        },
+        "payload_bytes": 339738624,
+        "tensors": 36
+      },
+      "attn_v": {
+        "ggml_types": {
+          "12": 18,
+          "14": 18
+        },
+        "payload_bytes": 104398848,
+        "tensors": 36
+      },
+      "ffn_down": {
+        "ggml_types": {
+          "12": 18,
+          "14": 18
+        },
+        "payload_bytes": 1252786176,
+        "tensors": 36
+      },
+      "ffn_gate": {
+        "ggml_types": {
+          "12": 36
+        },
+        "payload_bytes": 1019215872,
+        "tensors": 36
+      },
+      "ffn_up": {
+        "ggml_types": {
+          "12": 36
+        },
+        "payload_bytes": 1019215872,
+        "tensors": 36
+      },
+      "norms": {
+        "ggml_types": {
+          "0": 144
+        },
+        "payload_bytes": 1216512,
+        "tensors": 144
+      },
+      "output_norm": {
+        "ggml_types": {
+          "0": 1
+        },
+        "payload_bytes": 16384,
+        "tensors": 1
+      },
+      "token_embedding_storage": {
+        "ggml_types": {
+          "12": 1
+        },
+        "payload_bytes": 350060544,
+        "tensors": 1
+      },
+      "vocab_output": {
+        "ggml_types": {
+          "14": 1
+        },
+        "payload_bytes": 510504960,
+        "tensors": 1
+      }
+    },
+    "token_embedding_full_storage_bytes_not_streamed_per_decode": 350060544
+  }
+}

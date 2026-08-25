@@ -1,0 +1,18 @@
+{
+  "schema": "tinygrad.nv_full_token_ncu_instrumentation.v1",
+  "backend": "NV direct-driver/ioctl path",
+  "attempts": [
+    {
+      "method": "cuProfilerStart range after explicit cuInit",
+      "result": "CUDA_ERROR_INVALID_CONTEXT",
+      "profiled_kernels": 0
+    },
+    {
+      "method": "profile-from-start with one-token kernel-name and launch-count filter",
+      "result": "No kernels were profiled",
+      "profiled_kernels": 0
+    }
+  ],
+  "verdict": "INSTRUMENTATION_WALL_NOT_A_MECHANISM_RESULT",
+  "interpretation": "NCU observes CUDA-driver launches used by isolated-cubin gates, but not the production NV backend's direct submission path. Whole-token DRAM bytes are therefore not claimed from this attempt."
+}

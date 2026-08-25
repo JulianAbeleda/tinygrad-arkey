@@ -1,0 +1,60 @@
+{
+  "codec": "zlib",
+  "compressed_bytes": 4594402592,
+  "level": 9,
+  "payload_bytes": 4670533632,
+  "roles": {
+    "attn_k": {
+      "payload_bytes": 84934656,
+      "saving_pct": 2.017839455310211,
+      "tensors": 36,
+      "zlib_bytes": 83220811
+    },
+    "attn_o": {
+      "payload_bytes": 339738624,
+      "saving_pct": 1.8658826380600124,
+      "tensors": 36,
+      "zlib_bytes": 333399500
+    },
+    "attn_q": {
+      "payload_bytes": 339738624,
+      "saving_pct": 1.9969698823528503,
+      "tensors": 36,
+      "zlib_bytes": 332954146
+    },
+    "attn_v": {
+      "payload_bytes": 104398848,
+      "saving_pct": 1.0563507367437608,
+      "tensors": 36,
+      "zlib_bytes": 103296030
+    },
+    "ffn_down": {
+      "payload_bytes": 1252786176,
+      "saving_pct": 1.020649991591227,
+      "tensors": 36,
+      "zlib_bytes": 1239999614
+    },
+    "ffn_gate": {
+      "payload_bytes": 1019215872,
+      "saving_pct": 2.1783478466081085,
+      "tensors": 36,
+      "zlib_bytes": 997013805
+    },
+    "ffn_up": {
+      "payload_bytes": 1019215872,
+      "saving_pct": 1.9119421641031864,
+      "tensors": 36,
+      "zlib_bytes": 999729054
+    },
+    "vocab_output": {
+      "payload_bytes": 510504960,
+      "saving_pct": 1.1195440686805447,
+      "tensors": 1,
+      "zlib_bytes": 504789632
+    }
+  },
+  "saving_bytes": 76131040,
+  "saving_pct": 1.6300287290169746,
+  "schema": "tinygrad.nv_weight_payload_compressibility.v1",
+  "warning": "offline feasibility diagnostic; no optimal-codec, GPU-decodable representation, or runtime speed claim"
+}

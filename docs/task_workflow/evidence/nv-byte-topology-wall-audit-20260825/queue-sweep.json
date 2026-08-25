@@ -1,0 +1,106 @@
+{
+  "critical_path_us": 3856.64,
+  "method": "longest-tail list schedule; cross-queue wait overhead omitted (upper bound on queue-count benefit)",
+  "node_count": 454,
+  "schedule": [
+    {
+      "queues": 1,
+      "saving_vs_serial_us": -0.0,
+      "slack_vs_critical_path_us": 321.76,
+      "span_us": 4178.4
+    },
+    {
+      "queues": 2,
+      "saving_vs_serial_us": 318.624,
+      "slack_vs_critical_path_us": 3.136,
+      "span_us": 3859.776
+    },
+    {
+      "queues": 3,
+      "saving_vs_serial_us": 321.76,
+      "slack_vs_critical_path_us": 0.0,
+      "span_us": 3856.64
+    },
+    {
+      "queues": 4,
+      "saving_vs_serial_us": 321.76,
+      "slack_vs_critical_path_us": 0.0,
+      "span_us": 3856.64
+    },
+    {
+      "queues": 5,
+      "saving_vs_serial_us": 321.76,
+      "slack_vs_critical_path_us": 0.0,
+      "span_us": 3856.64
+    },
+    {
+      "queues": 6,
+      "saving_vs_serial_us": 321.76,
+      "slack_vs_critical_path_us": 0.0,
+      "span_us": 3856.64
+    },
+    {
+      "queues": 7,
+      "saving_vs_serial_us": 321.76,
+      "slack_vs_critical_path_us": 0.0,
+      "span_us": 3856.64
+    },
+    {
+      "queues": 8,
+      "saving_vs_serial_us": 321.76,
+      "slack_vs_critical_path_us": 0.0,
+      "span_us": 3856.64
+    },
+    {
+      "queues": 9,
+      "saving_vs_serial_us": 321.76,
+      "slack_vs_critical_path_us": 0.0,
+      "span_us": 3856.64
+    },
+    {
+      "queues": 10,
+      "saving_vs_serial_us": 321.76,
+      "slack_vs_critical_path_us": 0.0,
+      "span_us": 3856.64
+    },
+    {
+      "queues": 11,
+      "saving_vs_serial_us": 321.76,
+      "slack_vs_critical_path_us": 0.0,
+      "span_us": 3856.64
+    },
+    {
+      "queues": 12,
+      "saving_vs_serial_us": 321.76,
+      "slack_vs_critical_path_us": 0.0,
+      "span_us": 3856.64
+    },
+    {
+      "queues": 13,
+      "saving_vs_serial_us": 321.76,
+      "slack_vs_critical_path_us": 0.0,
+      "span_us": 3856.64
+    },
+    {
+      "queues": 14,
+      "saving_vs_serial_us": 321.76,
+      "slack_vs_critical_path_us": 0.0,
+      "span_us": 3856.64
+    },
+    {
+      "queues": 15,
+      "saving_vs_serial_us": 321.76,
+      "slack_vs_critical_path_us": 0.0,
+      "span_us": 3856.64
+    },
+    {
+      "queues": 16,
+      "saving_vs_serial_us": 321.76,
+      "slack_vs_critical_path_us": 0.0,
+      "span_us": 3856.64
+    }
+  ],
+  "schema": "tinygrad.nv_queue_count_sweep.v1",
+  "serialized_us": 4178.4,
+  "total_schedule_slack_us": 321.76
+}
