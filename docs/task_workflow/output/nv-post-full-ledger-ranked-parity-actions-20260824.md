@@ -1,5 +1,9 @@
 # NV ranked actions after the full llama ledger audit
 
+> Superseded by `nv-ranked-parity-campaign-closure-20260824.md` and the
+> post-campaign rebuild in `nv-full-ledger-audit-vs-llama-20260824.md`. The
+> queue below is preserved as the campaign's starting plan, not current advice.
+
 Date: 2026-08-24  
 Starting point: **4503.391 us/token = 222.055 tok/s** fresh  
 Conservative campaign point: **4515.396 us/token = 221.465 tok/s**  

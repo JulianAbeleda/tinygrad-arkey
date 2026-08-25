@@ -1,0 +1,39 @@
+{
+  "schema": "tinygrad.nv_q6k_vocab_exact_order_activation_staging.v1",
+  "date": "2026-08-24",
+  "target": {"backend": "NV", "architecture": "sm_120"},
+  "source": {
+    "path": "extra/llm_research/microbench/q6k_vocab_coop_ceiling_cuda.cu",
+    "sha256": "536ba452360ad2b5b8e7cd590a8d58b62e07801d2926af6a09002eb11bda2959"
+  },
+  "shape": {
+    "rows": 151936,
+    "k": 4096,
+    "q6_blocks_per_row": 16,
+    "q6_bytes_per_block": 210,
+    "weight_bytes": 510504960
+  },
+  "method": {
+    "passes_per_sample": 16,
+    "repetitions": 7,
+    "accumulators": 1,
+    "row_groups": 1,
+    "accumulation_order_preserved": true,
+    "gpu_clocks": {"sm_mhz": 2790, "memory_mhz": 14001}
+  },
+  "global_activation": {
+    "x_shared": false,
+    "samples_us": [330.98, 331.15, 330.84, 330.94, 331.59, 330.91, 331.31],
+    "median_us": 330.98,
+    "median_weight_rate_gb_s": 1542
+  },
+  "shared_activation": {
+    "x_shared": true,
+    "samples_us": [514.63, 514.51, 514.52, 514.47, 514.59, 514.44, 514.46],
+    "median_us": 514.51,
+    "median_weight_rate_gb_s": 992
+  },
+  "candidate_minus_control_us": 183.53,
+  "admission_note": "nacc>1 variants reassociate fp32 accumulation and are not exact-order candidates",
+  "verdict": "NO_GO_EXACT_ORDER_ACTIVATION_STAGING"
+}

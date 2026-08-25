@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""Phase 0: rebuild the current production decode ledger (2026-08-23 authority).
+"""Rebuild the current composed production decode ledger.
 
-The accepted composition (Q6_K FFN-down four-warp fp16 direct + semantic Q/K
-REDUCE_OUTPUT RMSNorm+RoPE epilogue) changed the decode graph after the old
-596-node full-token census was frozen.  This harness profiles the *current
-production candidate* (both routes enabled, no research override) and closes:
+This harness profiles the current no-rollback route population, verifies the
+promoted admissions at model load, and closes:
 
     wall        = device_union + host_gap
     device_union = node_sum - overlap
@@ -46,7 +44,24 @@ def _verify_production_routes(model) -> dict:
   native_argmax_threads = int(getattr(model, "_decode_native_argmax_threads", 0))
   if native_argmax_threads != 1024:
     raise RuntimeError(f"production native argmax policy not installed: threads={native_argmax_threads}")
+  q6_packed = [idx for idx in q6 if getattr(getattr(model.blk[idx].ffn_down,
+    "_q6k_ffn_down_mmvq_admission", None), "packed_lanemap", False)]
+  gateup = [idx for idx, block in enumerate(model.blk)
+    if getattr(getattr(block, "ffn_gate", None), "_q4k_gate_up_four_warp_admission", None) is not None]
+  shared = [getattr(block, "_shared_q8_attention_admission", None) for block in model.blk]
+  q4q4_shared = [x.block_index for x in shared if x is not None and x.q4_kv_pair_output]
+  q4q6_shared = [x.block_index for x in shared if x is not None and x.q4_q6_kv_pair_output]
+  ordinary_pairs = [idx for idx, block in enumerate(model.blk)
+    if getattr(block, "_q4k_kv_pair_admission", None) is not None]
+  if len(q6_packed) != 18 or len(gateup) != 36 or len(q4q4_shared) != 9 or len(q4q6_shared) != 8 or len(ordinary_pairs) != 9:
+    raise RuntimeError(f"current route census mismatch q6_packed={q6_packed} gateup={gateup} "
+      f"shared_q4q4={q4q4_shared} shared_q4q6={q4q6_shared} ordinary={ordinary_pairs}")
+  if not getattr(model, "_decode_producer_kv_cache_sink_promoted", False):
+    raise RuntimeError("production K/V cache sink policy not installed")
   return {"qk_norm_rope_blocks": qk, "q6_ffn_down_blocks": q6,
+          "q6_ffn_down_packed_blocks": q6_packed, "gateup_fourwarp_blocks": gateup,
+          "shared_q4q4_pair_blocks": q4q4_shared, "shared_q4q6_pair_blocks": q4q6_shared,
+          "ordinary_q4q4_pair_blocks": ordinary_pairs, "producer_kv_cache_sink": True,
           "native_argmax_threads": native_argmax_threads}
 
 
@@ -66,8 +81,8 @@ def run_child(depth: int, count: int, max_context: int, reps: int,
   dev = Device["NV"]
   model = _load(MODEL, max_context)
   routes = _verify_production_routes(model)
-  model._decode_direct_greedy_promoted = False
-  model._decode_feedback_pingpong_promoted = False
+  model._decode_direct_greedy_promoted = True
+  model._decode_feedback_pingpong_promoted = True
   gen = model.generate(_prompt(MODEL, depth), chunk_size=32, temperature=0.0)
   try:
     settled = _settled_continuous_windows(gen, dev, count, reps)

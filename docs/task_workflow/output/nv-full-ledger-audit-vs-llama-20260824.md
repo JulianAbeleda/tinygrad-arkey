@@ -1,123 +1,112 @@
-# NV full ledger audit versus llama
+# NV full ledger audit versus llama — post-campaign rebuild
 
-Date: 2026-08-24  
-tinygrad HEAD tested: `dc03370a7`  
-GPU: RTX 5090, pinned 2790 MHz graphics / 14001 MHz memory  
+Date: 2026-08-24
+tinygrad tested commit: `7a18a43ff`
+GPU: RTX 5090, graphics 2790 MHz / memory 14001 MHz
 Depth: 512
 
 ## Verdict
 
-tinygrad has not reached llama.  The fresh same-session wall result is
-**4.503391 ms/token = 222.055 tok/s** for tinygrad and **4.048325 ms/token =
-247.061 tok/s** for llama.  The measured parity gap is therefore **455.067
-us/token = 25.006 tok/s**.
+The fresh installed tinygrad endpoint is **4355.023 us/token = 229.620
+tok/s**. It exceeds the 227 checkpoint by **50.263 us/token**, or **2.620
+tok/s**. Llama parity is not reached: the retained same-binary llama authority
+is **4048.325 us/token = 247.016 tok/s**, leaving **306.699 us/token** or
+**17.396 tok/s**.
 
-The immediate 227 checkpoint is close: the fresh wall needs **98.105
-us/token**, while the conservative booked endpoint still needs **110.109
-us/token**.  The 240 checkpoint needs **336.725 us/token** from the fresh wall.
-Neither 240 nor fresh llama parity may be claimed from current candidates.
+The old ledger displayed llama as `247.061 tok/s`; that did not reciprocate
+its recorded `4048.3246 us/token`. This rebuild computes throughput directly
+from latency and corrects it to `247.0158 tok/s`.
 
-## Full wall reconciliation
+## Wall and device comparison
 
-| term | tinygrad | llama | tinygrad - llama |
+| metric | tinygrad current | llama retained | tinygrad - llama |
 | --- | ---: | ---: | ---: |
-| unprofiled wall, us/token | 4503.391 | 4048.325 | +455.067 |
-| profiled resident union | 4260.750 | 3888.240 | +372.510 |
-| inferred host/outside-union gap | 242.641 | 160.085 | +82.557 |
-| profiled node sum | 4272.176 | 5011.035 | -738.859 |
-| resident overlap | 11.426 | 1122.329 | -1110.903 |
+| unprofiled wall | 4355.023 us | 4048.325 us | +306.699 us |
+| throughput | 229.620 tok/s | 247.016 tok/s | -17.396 tok/s |
+| profiled device union | 4187.750 us | 3888.240 us | +299.510 us |
+| profiled node sum | 4191.232 us | 5011.035 us | -819.803 us |
+| resident overlap | 3.482 us | 1122.329 us | -1118.847 us |
+| nodes | 452 | 762 | -310 |
 
-The closing identity is:
+The tinygrad profile identity closes exactly:
 
 ```text
-wall delta = union delta + host-gap delta
-455.067    = 372.510     + 82.557 us/token
+4191.232 node sum - 3.482 overlap = 4187.750 us union
 ```
 
-Node sum is not the parity objective.  llama carries about 1.12 ms of
-overlapped PDL wait residence, so its node sum is much larger while its union
-and wall are smaller.  Treating the `-738.9 us` node-sum difference as a
-tinygrad advantage would be a category error.
+Unprofiled wall and profiled union are deliberately separate authorities.
+The earlier `wall - profiled union` construction mixed domains and falsely
+suggested an `82.557 us` host opportunity. A same-token marker run measured a
+median `4.576 us` outside the marked device interval after subtracting marker
+submission cost. This ledger therefore makes no host-gap subtraction claim.
 
-## Current tinygrad device census
+## Current tinygrad census
 
-The corrected current replay contains 462 nodes.  Its largest disjoint pools
-are:
+The composed replay is `32 + 64 + 128 + 228 = 452` nodes. Current promoted
+route populations are:
+
+| route | population |
+| --- | ---: |
+| Q4 gate/up four-warp vector | 36 |
+| Q6 down packed-lane | 18 |
+| ordinary Q4/Q4 K/V pair | 9 |
+| shared-Q8 Q4/Q4 K/V pair | 9 |
+| shared-Q8 mixed Q4/Q6 K/V pair | 8 |
+| Q6 V direct | 10 |
+| producer-owned K/V cache sink | 36 |
+| native vocab argmax | 1 |
+
+Largest disjoint program rows:
 
 | pool | us/token | calls | us/call |
 | --- | ---: | ---: | ---: |
-| gate/up Q4_K | 1323.632 | 36 | 36.768 |
-| down Q6_K | 549.792 | 18 | 30.544 |
-| down Q4_K | 362.448 | 18 | 20.136 |
-| O projection | 307.392 | 36 | 8.539 |
-| vocab main | 312.576 | 1 | 312.576 |
-| flash score | 240.416 | 36 | 6.678 |
-| Q projections, ordinary + shared | 303.952 | 36 | 8.443 |
-| 4096 RMS/reduction rows | 263.072 | 56 | mixed |
-| flash combine | 102.496 | 36 | 2.847 |
-| K/V projections, all installed forms | 257.872 | 72 logical outputs | mixed |
-| Q/K norm+RoPE and KV sink | 137.216 | 72 | 1.906 |
-| activation epilogues | 54.176 | 38 | 1.426 |
-| Q8 providers | 30.912 | 17 | 1.818 |
-| vocab argmax/tail | 8.864 | 1 | 8.864 |
+| gate/up Q4 | 1284.352 | 36 | 35.676 |
+| down Q6 | 535.744 | 18 | 29.764 |
+| down Q4 | 363.808 | 18 | 20.212 |
+| vocab main | 312.608 | 1 | 312.608 |
+| O projection | 306.816 | 36 | 8.523 |
+| Q projection, ordinary + shared | 302.144 | 36 | mixed |
+| flash score | 238.944 | 36 | 6.637 |
+| physical K/V projection producers | 237.568 | 46 | mixed |
+| flash combine | 102.208 | 36 | 2.839 |
+| Q/K norm+RoPE and cache sink | 138.464 | 72 | mixed |
+| Q8 providers | 30.464 | 17 | 1.792 |
+| native vocab argmax | 8.800 | 1 | 8.800 |
 
-The current graph closes at `node_sum=4272.176`, `union=4260.750`, and
-`overlap=11.426 us/token`.  The earlier parser's 910 ms result was invalid: it
-concatenated many 462-node token replays.  The parser now recognizes the
-current `32+64+128+238` replay grouping.
+Pair producers are counted by physical launches in this table; paired kernels
+each produce two logical K/V outputs.
 
-## Lever audit
+## Movement during this ranked campaign
 
-1. **Kernel launch-shape variants are closed as a broad strategy.** The Q6
-   packed lane map improved the profiled body by 13.848 us/token but was wall
-   neutral.  Gate/up four-warp is 7.13 percent slower than the installed vector
-   route.  Flash-combine width, K/V concurrency, and queue-placement probes
-   are also closed no-go results.
-2. **The main measured deficit is still device union.** Recovering 372.5 us of
-   serialized residence requires either lower streamed bytes, a substantial
-   fixed-byte rate improvement that survives cold production, or a new
-   overlap construction with a causal wall result.
-3. **Host/outside-union time has reopened as a secondary lever.** The fresh
-   audit attributes 82.6 us of the parity gap to tinygrad's larger outside-
-   union term.  This is an inferred aggregate, not yet assigned to submission,
-   synchronization, graph replay, or measurement-boundary components.
-4. **227 is not yet booked.** The fresh wall is only 98.1 us from 227, but the
-   campaign endpoint remains the conservative 4515.396 us/token until a
-   same-session reverse bracket promotes a mechanism.
+| accepted action | conservative booked recovery |
+| --- | ---: |
+| typed four-warp vector gate/up | 53.329 us/token |
+| Q6 down packed lane map | 10.607 us/token |
+| shared-Q8 mixed Q4/Q6 pair | 3.126 us/token |
+| total new conservative booking | 67.062 us/token |
 
-## Next process
+The conservative campaign endpoint is `4448.334 us/token = 224.803 tok/s`,
+still `43.048 us` short of 227. The fresh installed endpoint is faster and is
+the current performance authority, but same-session candidate bookings remain
+separate from cross-session endpoint movement.
 
-The next clean phase should split the two open terms rather than reopen a
-closed microkernel spelling:
+## Remaining gap
 
-1. capture matched host/API and GPU timestamps around one settled current
-   token to assign the **82.557 us host/outside-union** term;
-2. rank the **372.510 us union excess** using current cold production bodies,
-   with gate/up, down, flash, vocab, and handoff boundaries kept disjoint;
-3. implement only the highest causal candidate, require bit-exact output and a
-   fresh A/B/A wall bracket, then rebuild this ledger.
-
-Evidence: `docs/task_workflow/evidence/nv-full-ledger-audit-20260824/`.
-
-## Comparison snapshot for handoff
-
-| metric | tinygrad | llama | gap |
-| --- | ---: | ---: | ---: |
-| wall latency | 4503.391 us | 4048.325 us | **+455.067 us** |
-| throughput | 222.055 tok/s | 247.061 tok/s | **-25.006 tok/s** |
-| device union | 4260.750 us | 3888.240 us | **+372.510 us** |
-| host/outside-union | 242.641 us | 160.085 us | **+82.557 us** |
-| node sum | 4272.176 us | 5011.035 us | -738.859 us |
-| resident overlap | 11.426 us | 1122.329 us | -1110.903 us |
-
-| milestone | recovery required from fresh wall | resulting target |
+| target | latency target | recovery from fresh tinygrad |
 | --- | ---: | ---: |
-| 227 tok/s | 98.105 us/token | 4405.286 us/token |
-| 240 tok/s | 336.725 us/token | 4166.667 us/token |
-| fresh llama parity | 455.067 us/token | 4048.325 us/token |
+| 227 tok/s | 4405.286 us | already ahead by 50.263 us |
+| 240 tok/s | 4166.667 us | 188.357 us |
+| retained llama | 4048.325 us | 306.699 us |
 
-The retained role-level residual ranking is: norms/accounting `+115.42 us`,
-flash score `+82.24 us`, K/V `+73.12 us`, flash combine `+66.69 us`, vocab
-`+65.44 us`, down `+57.91 us`, gate/up `+53.65 us`, Q `+51.42 us`, and O
-`+48.86 us`; activation quantization is a `-113.98 us` tinygrad advantage.
-Those role rows are ranking evidence, not additive wall credits.
+The remaining gap is overwhelmingly device residence. The largest current
+surfaces are gate/up, down, flash, vocab, and projection bodies/boundaries.
+Closed constructions must not be retried without new information: flash
+single-stage and wider combine, exact-order vocab shared staging, row-packed
+Q6 down, and tested queue-placement variants all have complete negative gates.
+
+Evidence is under
+`docs/task_workflow/evidence/nv-ranked-parity-campaign-20260824/`, especially
+`07-current-default-wall-r15.json`, `07-current-default-profile.json`, and
+`07-final-ledger.json`.
+
+Verdict: `FRESH_DEFAULT_229_620_TOK_S_227_PASSED_LLAMA_GAP_306_699_US`.
