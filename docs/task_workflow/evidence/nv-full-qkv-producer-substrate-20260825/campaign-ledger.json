@@ -1,0 +1,50 @@
+{
+  "schema": "tinygrad.nv_full_qkv_producer_substrate_campaign_ledger.v1",
+  "date": "2026-08-25",
+  "commit_before_final_record": "6200d2b35",
+  "population_status": {
+    "S44": {"blocks": 9, "status": "WALL_CLOSED", "booked_us_per_token": 0.0},
+    "O44": {"blocks": 9, "status": "WALL_CLOSED", "booked_us_per_token": 0.0},
+    "S46": {"blocks": 8, "status": "WALL_CLOSED", "booked_us_per_token": 0.0},
+    "O46": {"blocks": 10, "status": "WALL_CLOSED", "booked_us_per_token": 0.0}
+  },
+  "clean_installed_endpoint": {
+    "authority": "phase6-composed/clean-installed-endpoint-r9.json",
+    "depth": 512,
+    "count": 32,
+    "reps": 9,
+    "median_us_per_token": 4350.7758125,
+    "tok_per_s": 229.844078,
+    "token_stream_hash": "28b0923439dde9076100800bfaed6a9a8a7e00e396691776a16514a609e0543a",
+    "full_grid_census": {"S44": 0, "O44": 0},
+    "producer_cache_sink_blocks": 36
+  },
+  "fresh_profile_ledger": {
+    "authority": "phase6-composed/final-installed-ledger.json",
+    "profiled_wall_us": 5530.389,
+    "node_sum_us": 4110.72,
+    "union_us": 4107.25,
+    "overlap_us": 3.47,
+    "span_us": 4961.0,
+    "profiled_host_gap_us": 1423.139,
+    "note": "Profiled wall/host gap include instrumentation and are not converted to installed tok/s."
+  },
+  "reference_240": {
+    "latency_us": 4166.666667,
+    "current_latency_gap_us": 184.109146,
+    "current_tok_per_s_gap": 10.155922
+  },
+  "measured_rate_model_wall": {
+    "exact_weight_payload_mb": 4670.534,
+    "demonstrated_large_body_payload_rate_gb_s": 1627.0,
+    "weight_stream_time_at_demonstrated_rate_us": 2870.642,
+    "fresh_non_weight_device_mass_us_approx": 826.738,
+    "modeled_device_time_us": 3697.38,
+    "modeled_tok_per_s": 270.462,
+    "current_distance_us": 653.396,
+    "current_distance_tok_per_s": 40.618,
+    "qualification": "Rate-normalized model ceiling, not a hard hardware lower bound; it assumes all exact weight bodies reach the demonstrated large-body payload rate while non-weight device mass is unchanged."
+  },
+  "booked_full_grid_recovery_us_per_token": 0.0,
+  "decision": "CAMPAIGN_COMPLETE_NO_INSTALL"
+}

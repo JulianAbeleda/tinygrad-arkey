@@ -28,7 +28,7 @@ The campaign currently books no installed endpoint movement from this matrix.
 | 3. S46 full-grid qualification | `COMPLETE` | exact/device pass; repaired reps-9 wall closed at -5.527 us/token |
 | 4. O46 full-grid qualification | `COMPLETE` | exact/device pass; reps-7 wall closed at -9.200 us/token |
 | 5. independent policy landing | `COMPLETE` | both candidate policies closed after load-time rollback qualification |
-| 6. composed wall and fresh ledger | `IN_PROGRESS` | no winners; clean reps>=9 endpoint and ledger remain |
+| 6. composed wall and fresh ledger | `COMPLETE` | no winners; clean reps-9 endpoint and fresh ledger recorded |
 
 ## Running arithmetic
 
@@ -48,8 +48,8 @@ device-ledger columns remain ceilings until then.
 
 ## Next action
 
-Run the clean reps-9 installed endpoint and rebuild the final device/token
-ledger.  No full-grid recovery is booked.
+Campaign complete. No full-grid recovery is booked; the retained installed
+endpoint uses the previously promoted pair/cache topology.
 
 ## Phase 1 controlling evidence
 
@@ -79,6 +79,26 @@ ledger.  No full-grid recovery is booked.
 - The reciprocal composed rollback arms also fail: S44 loses 18.983 us/token
   with O44 active; O44 sits between controls with S44 active.  Both generated
   full-grid policy records therefore retain empty `promoted_targets`.
+
+## Phase 6 final endpoint and wall ledger
+
+- `phase6-composed/clean-installed-endpoint-r9.json`: 4.350776 ms/token =
+  229.844 tok/s in the current slower session, with exact hashes, zero S44/O44
+  full-grid admissions, and all 36 producer cache sinks.  The earlier fast
+  demonstrated regime around 235 tok/s remains separately valid; this run does
+  not overwrite it.
+- `phase6-composed/final-installed-ledger.json`: 4.107250 ms GPU union,
+  4.110720 ms node sum, and 3.470 us overlap.  Its 5.530389 ms profiled wall
+  includes 1.423139 ms of profiling/host gap and is not a tok/s authority.
+- `campaign-ledger.json` records all four population closures and zero booked
+  full-grid recovery.  At the current endpoint, 240 is 184.109 us away.
+- The wall-oriented reference is not 240.  Normalizing the exact 4.670534 GB
+  weight stream to the demonstrated 1.627 TB/s large-body rate while retaining
+  current non-weight device mass gives a 3.697 ms / 270.5 tok/s model ceiling.
+  The current distance to that modeled wall is about 653 us/token.  This is a
+  measured-rate ceiling, not a hard hardware lower bound: it says the remaining
+  lever is broad issue/dequant service rate or numerical byte reduction, not
+  another launch-only full-grid composition.
 
 ## Phase 3 S46 controlling evidence
 
