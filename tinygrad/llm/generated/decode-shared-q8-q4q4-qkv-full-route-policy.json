@@ -1,0 +1,6 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_shared_q8_q4q4_qkv_full",
+  "description": "Closed after installed-policy validation. Although an earlier research bracket recovered 16.119 us/token, equal-allocation load-time rollback lost 22.397 us/token in isolation and 18.983 us/token with O44 active. The implementation remains reproducible but promotes no target.",
+  "promoted_targets": []
+}

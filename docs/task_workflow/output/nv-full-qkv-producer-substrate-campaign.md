@@ -9,8 +9,8 @@ Starting commit: `5e7f36945215ebc4ed2efbaf887ef241dafce7fd`
 
 | population | blocks | status | controlling result | booked wall |
 | --- | ---: | --- | --- | ---: |
-| S44 shared-Q8 Q4/Q4/Q4 | 9 | `WALL_PASS` | `nv-shared-q8-qkv-producer-result-20260825.md` | +16.119 us/token |
-| O44 ordinary Q4/Q4/Q4 | 9 | `WALL_PASS` | composed producer/cache confirmation, reps-9 | +6.867 us/token; research composition |
+| S44 shared-Q8 Q4/Q4/Q4 | 9 | `WALL_CLOSED` | installed-policy isolated rollback, reps-7 | 0; loses 22.397 us/token |
+| O44 ordinary Q4/Q4/Q4 | 9 | `WALL_CLOSED` | installed-policy isolated rollback, reps-7 | 0; flat/loses 0.862 us/token |
 | S46 shared-Q8 Q4/Q4/Q6 | 8 | `WALL_CLOSED` | split-region full-grid reps-9 | 0; repaired wall loses 5.527 us/token |
 | O46 ordinary Q4/Q4/Q6 | 10 | `WALL_CLOSED` | one-warp virtual-Q6 full-grid reps-7 | 0; wall loses 9.200 us/token |
 
@@ -27,8 +27,8 @@ The campaign currently books no installed endpoint movement from this matrix.
 | 2. reusable producer specification | `COMPLETE` | typed uniform grid plus selected producer-owned cache completion |
 | 3. S46 full-grid qualification | `COMPLETE` | exact/device pass; repaired reps-9 wall closed at -5.527 us/token |
 | 4. O46 full-grid qualification | `COMPLETE` | exact/device pass; reps-7 wall closed at -9.200 us/token |
-| 5. independent policy landing | `NOT_STARTED` | rollback-qualified installed rows |
-| 6. composed wall and fresh ledger | `NOT_STARTED` | reps>=9 composition and ledger |
+| 5. independent policy landing | `COMPLETE` | both candidate policies closed after load-time rollback qualification |
+| 6. composed wall and fresh ledger | `IN_PROGRESS` | no winners; clean reps>=9 endpoint and ledger remain |
 
 ## Running arithmetic
 
@@ -38,8 +38,8 @@ Reference variable endpoint: approximately `4282-4292 us/token = 233-234 tok/s`.
 | quantity | value |
 | --- | ---: |
 | clean-regime latency needed for 240 | about 84 us/token |
-| S44 measured wall recovery | 16.119 us/token |
-| O44 composed wall recovery | 6.867 us/token |
+| S44 booked installed recovery | 0 us/token |
+| O44 booked installed recovery | 0 us/token |
 | remaining after both, if O44 is unlocked | about 36.4 us/token |
 | required average across 18 mixed blocks | about 2.02 us/block |
 
@@ -48,8 +48,8 @@ device-ledger columns remain ceilings until then.
 
 ## Next action
 
-Install the S44 and composed O44 winners behind independent target-scoped
-policies, then run rollback and composed-wall qualification.
+Run the clean reps-9 installed endpoint and rebuild the final device/token
+ledger.  No full-grid recovery is booked.
 
 ## Phase 1 controlling evidence
 
@@ -67,6 +67,18 @@ policies, then run rollback and composed-wall qualification.
   confirmed `+6.867 us/token`; candidate beats both controls.  This selects the
   reusable output/completion contract.  It is a research wall pass, not yet an
   installed/default route.
+
+## Phase 5 installed-policy adjudication
+
+- `phase5-policy/s44-isolated-rollback-r7.json`: all nine S44 full producers
+  execute with exact hashes and equal packed allocations, but lose 22.397
+  us/token to the installed S44 K/V pair when O44 full-grid is disabled.
+- `phase5-policy/o44-isolated-rollback-r7.json`: all nine O44 full producers
+  execute with exact hashes, but lose 0.862 us/token at midpoint and fail to
+  beat both installed-pair controls when S44 full-grid is disabled.
+- The reciprocal composed rollback arms also fail: S44 loses 18.983 us/token
+  with O44 active; O44 sits between controls with S44 active.  Both generated
+  full-grid policy records therefore retain empty `promoted_targets`.
 
 ## Phase 3 S46 controlling evidence
 

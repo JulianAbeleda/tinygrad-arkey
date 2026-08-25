@@ -59,6 +59,7 @@ from tinygrad.llm.model_route_plan import (build_model_route_plan, decode_norm_f
   decode_shared_q8_attention_promoted,
   decode_q6_direct_shared_q8_attention_promoted, decode_q4_direct_shared_q8_attention_promoted,
   decode_shared_q8_q4kv_pair_promoted, decode_shared_q8_q4q6_kv_pair_promoted,
+  decode_shared_q8_q4q4_qkv_full_promoted, decode_q4k_q4q4_qkv_full_promoted,
   decode_q4k_ffn_down_fp16_geometry_promoted,
   decode_q6k_ffn_down_fp16_geometry_promoted, decode_q6k_ffn_down_packed_lanemap_promoted,
   decode_q6k_ffn_down_unroll_promoted,
@@ -1886,6 +1887,9 @@ class Transformer:
       decode_shared_q8_q4q6_kv_pair_promoted((_norm_cap.backend,_norm_cap.architecture))
     model._decode_shared_q8_q4q6_kv_pair_promoted = _shared_q8_q4q6_pair_promoted
     for _b in model.blk: _b._decode_shared_q8_q4q6_kv_pair_promoted = _shared_q8_q4q6_pair_promoted
+    _shared_q8_q4q4_full_promoted = _q4_direct_promoted and decode_shared_q8_q4q4_qkv_full_promoted(
+      (_norm_cap.backend,_norm_cap.architecture))
+    model._decode_shared_q8_q4q4_qkv_full_promoted = _shared_q8_q4q4_full_promoted
     # Fused w1+w3 (gate/up) decode GEMV gate. CLOSED default (decode-q4k-w1w3-fusion-route-policy.json,
     # NV sm_120 promoted, q4k-w1w3-fused-qv-implementation-record-20260803.md). Same resolve-once
     # pattern as the M4 gate; the fused call additionally requires BOTH ffn_gate and ffn_up to be
@@ -2001,6 +2005,8 @@ class Transformer:
     # this resolve-once flag carries only the target/rollback policy.
     model._decode_q4k_kv_pair_promoted = decode_q4k_kv_pair_promoted(
       (_norm_cap.backend, _norm_cap.architecture))
+    model._decode_q4k_q4q4_qkv_full_promoted = decode_q4k_q4q4_qkv_full_promoted(
+      (_norm_cap.backend,_norm_cap.architecture))
     # One-CTA finite-fp32 decode argmax. The native reducer replaces the three
     # scheduler reduction kernels at the sampled-score tail and keeps a held
     # one-element clone for replay-safe feedback. NV sm_120 is promoted after
@@ -2153,12 +2159,18 @@ class Transformer:
           _b._shared_q8_attention_admission = SharedQ8AttentionAdmission(_idx, cooperative_q4=True,
             q4_direct_output=model._decode_q4_direct_shared_q8_attention_promoted,
             q6_direct_output=model._decode_q6_direct_shared_q8_attention_promoted,
-            q4_kv_pair_output=model._decode_shared_q8_q4kv_pair_promoted and
+            q4_kv_pair_output=model._decode_shared_q8_q4kv_pair_promoted and not model._decode_shared_q8_q4q4_qkv_full_promoted and
               isinstance(getattr(_b,"attn_k",None),Q4KPrimitiveLinear) and
               isinstance(getattr(_b,"attn_v",None),Q4KPrimitiveLinear),
             q4_q6_kv_pair_output=model._decode_shared_q8_q4q6_kv_pair_promoted and
               isinstance(getattr(_b,"attn_k",None),Q4KPrimitiveLinear) and
-              isinstance(getattr(_b,"attn_v",None),Q6KPrimitiveLinear))
+              isinstance(getattr(_b,"attn_v",None),Q6KPrimitiveLinear),
+            q4_qkv_triple_output=model._decode_shared_q8_q4q4_qkv_full_promoted and
+              isinstance(getattr(_b,"attn_k",None),Q4KPrimitiveLinear) and
+              isinstance(getattr(_b,"attn_v",None),Q4KPrimitiveLinear))
+          if isinstance(getattr(_b,"attn_k",None),Q4KPrimitiveLinear) and isinstance(getattr(_b,"attn_v",None),Q4KPrimitiveLinear):
+            _b.attn_q._shared_q8_qkv_words=_b.attn_k.q4k_storage.words.cat(
+              _b.attn_v.q4k_storage.words,dim=0).contiguous().realize()
           _b._decode_reduce_output_attn_rmsnorm_promoted = True
           try:
             _b._shared_q8_attention_norm_weight = Tensor.empty(4096, dtype=dtypes.float16,
@@ -2169,15 +2181,17 @@ class Transformer:
       # Fuse only the nine ordinary Q4/Q4 K/V pairs proved by the composed
       # profile/wall gate. Shared-Q8 blocks have a distinct producer grammar
       # and are intentionally excluded here; mixed Q4/Q6 pairs also miss.
-      if model._decode_q4k_kv_pair_promoted:
-        from tinygrad.llm.q4k_kv_pair import Q4KKVPairAdmission
+      if model._decode_q4k_kv_pair_promoted or model._decode_q4k_q4q4_qkv_full_promoted:
+        from tinygrad.llm.q4k_kv_pair import Q4KKVPairAdmission, Q4KQKVAdmission
         for _idx, _b in enumerate(model.blk):
           if getattr(_b, "_shared_q8_attention_admission", None) is not None: continue
           _k, _v = getattr(_b, "attn_k", None), getattr(_b, "attn_v", None)
           if isinstance(_k, Q4KPrimitiveLinear) and isinstance(_v, Q4KPrimitiveLinear) and \
              all(getattr(x, "route_role", "") == "attn_kv" and getattr(x, "out_features", None) == 1024 and
                  getattr(x, "in_features", None) == 4096 for x in (_k, _v)):
-            _b._q4k_kv_pair_admission = Q4KKVPairAdmission(_idx)
+            _b.attn_q._q4k_qkv_words=_k.q4k_storage.words.cat(_v.q4k_storage.words,dim=0).contiguous().realize()
+            if model._decode_q4k_q4q4_qkv_full_promoted: _b._q4k_qkv_admission=Q4KQKVAdmission(_idx)
+            elif model._decode_q4k_kv_pair_promoted: _b._q4k_kv_pair_admission = Q4KKVPairAdmission(_idx)
     if _runtime_inventory is not None:
       attach_selected_prefill_inventory(model, _runtime_inventory, _runtime_policy, _device_facts,
                                         direct_packed_policy=direct_packed_prefill_policy(config.n_heads, config.n_kv_heads))
