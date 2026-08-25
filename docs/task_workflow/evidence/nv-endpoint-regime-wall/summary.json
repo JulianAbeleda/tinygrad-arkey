@@ -1,0 +1,28 @@
+{
+  "boundary": {
+    "cause": "ceil(context/48) crosses token_block=16 and aligned per-split work rises from 16 to 32",
+    "first_slow_context": 769,
+    "production_split_count": 48,
+    "token_block": 16
+  },
+  "below_boundary_s64": {
+    "candidate_ms_per_token": 4.251197125,
+    "control_a_ms_per_token": 4.236616125,
+    "control_c_ms_per_token": 4.2252471875,
+    "candidate_recovery_us_per_token": -20.265468750000126,
+    "token_hashes_equal": true
+  },
+  "schema": "tinygrad.nv_endpoint_regime_wall_summary.v1",
+  "above_boundary_s64": {
+    "candidate_ms_per_token": 4.274723625,
+    "candidate_tok_s": 233.93325348011014,
+    "control_a_ms_per_token": 4.40389525,
+    "control_c_ms_per_token": 4.420515875,
+    "control_midpoint_ms_per_token": 4.4122055625,
+    "control_midpoint_tok_s": 226.64404015853692,
+    "candidate_recovery_us_per_token": 137.48193750000003,
+    "candidate_tok_s_gain": 7.289213321573222,
+    "token_hashes_equal": true
+  },
+  "decision": "ADAPTIVE_S48_BELOW_769__S64_AT_769_TO_1024"
+}
