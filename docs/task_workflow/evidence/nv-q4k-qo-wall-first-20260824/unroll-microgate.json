@@ -1,0 +1,277 @@
+{
+  "commit": "532ab2b5053a7f6beab25879c5614ee5ca931fa4",
+  "control": "current vector production spelling",
+  "schema": "tinygrad.nv_q4k_qo_unroll_microgate.v1",
+  "shape": {
+    "k": 4096,
+    "rows": 4096
+  },
+  "variants": [
+    {
+      "bitwise_identical": true,
+      "cuda_event": {
+        "candidate_us": 5.2064,
+        "control_us": 4.9408,
+        "recovery_us": -0.26560000000000006
+      },
+      "ncu": {
+        "candidate": {
+          "rows": [
+            {
+              "metric": "dram__bytes.sum",
+              "unit": "byte",
+              "value": "9457152"
+            },
+            {
+              "metric": "dram__bytes_op_read.sum",
+              "unit": "byte",
+              "value": "9457152"
+            },
+            {
+              "metric": "dram__bytes_op_write.sum",
+              "unit": "byte",
+              "value": "0"
+            },
+            {
+              "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+              "unit": "%",
+              "value": "55.99"
+            },
+            {
+              "metric": "gpu__time_duration.sum",
+              "unit": "ns",
+              "value": "9600"
+            },
+            {
+              "metric": "l1tex__throughput.avg.pct_of_peak_sustained_elapsed",
+              "unit": "%",
+              "value": "21.84"
+            },
+            {
+              "metric": "lts__t_bytes.sum",
+              "unit": "byte",
+              "value": "11236192"
+            },
+            {
+              "metric": "lts__t_sector_op_read_hit_rate.pct",
+              "unit": "%",
+              "value": "13.73"
+            },
+            {
+              "metric": "sm__inst_executed.sum",
+              "unit": "inst",
+              "value": "4718592"
+            },
+            {
+              "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+              "unit": "%",
+              "value": "32.79"
+            }
+          ],
+          "symbol": "q4k_g3_lanemap_gemv_vec_u2_4096_4096"
+        },
+        "control": {
+          "rows": [
+            {
+              "metric": "dram__bytes.sum",
+              "unit": "byte",
+              "value": "9452800"
+            },
+            {
+              "metric": "dram__bytes_op_read.sum",
+              "unit": "byte",
+              "value": "9452800"
+            },
+            {
+              "metric": "dram__bytes_op_write.sum",
+              "unit": "byte",
+              "value": "0"
+            },
+            {
+              "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+              "unit": "%",
+              "value": "56.15"
+            },
+            {
+              "metric": "gpu__time_duration.sum",
+              "unit": "ns",
+              "value": "9568"
+            },
+            {
+              "metric": "l1tex__throughput.avg.pct_of_peak_sustained_elapsed",
+              "unit": "%",
+              "value": "21.73"
+            },
+            {
+              "metric": "lts__t_bytes.sum",
+              "unit": "byte",
+              "value": "11199104"
+            },
+            {
+              "metric": "lts__t_sector_op_read_hit_rate.pct",
+              "unit": "%",
+              "value": "13.52"
+            },
+            {
+              "metric": "sm__inst_executed.sum",
+              "unit": "inst",
+              "value": "4784128"
+            },
+            {
+              "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+              "unit": "%",
+              "value": "33.61"
+            }
+          ],
+          "symbol": "q4k_g3_lanemap_gemv_vec_4096_4096"
+        },
+        "stderr_tail": {
+          "candidate": "",
+          "control": ""
+        }
+      },
+      "ptxas": [
+        "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_u2_4096_4096' for 'sm_120a'",
+        "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+        "ptxas info    : Used 56 registers, used 0 barriers",
+        "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_4096_4096' for 'sm_120a'",
+        "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+        "ptxas info    : Used 43 registers, used 0 barriers"
+      ],
+      "unroll_blocks": 2
+    },
+    {
+      "bitwise_identical": true,
+      "cuda_event": {
+        "candidate_us": 5.016,
+        "control_us": 4.9816,
+        "recovery_us": -0.034399999999999764
+      },
+      "ncu": {
+        "candidate": {
+          "rows": [
+            {
+              "metric": "dram__bytes.sum",
+              "unit": "byte",
+              "value": "9465856"
+            },
+            {
+              "metric": "dram__bytes_op_read.sum",
+              "unit": "byte",
+              "value": "9465856"
+            },
+            {
+              "metric": "dram__bytes_op_write.sum",
+              "unit": "byte",
+              "value": "0"
+            },
+            {
+              "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+              "unit": "%",
+              "value": "57.20"
+            },
+            {
+              "metric": "gpu__time_duration.sum",
+              "unit": "ns",
+              "value": "9440"
+            },
+            {
+              "metric": "l1tex__throughput.avg.pct_of_peak_sustained_elapsed",
+              "unit": "%",
+              "value": "22.29"
+            },
+            {
+              "metric": "lts__t_bytes.sum",
+              "unit": "byte",
+              "value": "11337120"
+            },
+            {
+              "metric": "lts__t_sector_op_read_hit_rate.pct",
+              "unit": "%",
+              "value": "14.46"
+            },
+            {
+              "metric": "sm__inst_executed.sum",
+              "unit": "inst",
+              "value": "4628480"
+            },
+            {
+              "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+              "unit": "%",
+              "value": "33.18"
+            }
+          ],
+          "symbol": "q4k_g3_lanemap_gemv_vec_u4_4096_4096"
+        },
+        "control": {
+          "rows": [
+            {
+              "metric": "dram__bytes.sum",
+              "unit": "byte",
+              "value": "9452800"
+            },
+            {
+              "metric": "dram__bytes_op_read.sum",
+              "unit": "byte",
+              "value": "9452800"
+            },
+            {
+              "metric": "dram__bytes_op_write.sum",
+              "unit": "byte",
+              "value": "0"
+            },
+            {
+              "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+              "unit": "%",
+              "value": "56.21"
+            },
+            {
+              "metric": "gpu__time_duration.sum",
+              "unit": "ns",
+              "value": "9568"
+            },
+            {
+              "metric": "l1tex__throughput.avg.pct_of_peak_sustained_elapsed",
+              "unit": "%",
+              "value": "22.27"
+            },
+            {
+              "metric": "lts__t_bytes.sum",
+              "unit": "byte",
+              "value": "11197344"
+            },
+            {
+              "metric": "lts__t_sector_op_read_hit_rate.pct",
+              "unit": "%",
+              "value": "13.50"
+            },
+            {
+              "metric": "sm__inst_executed.sum",
+              "unit": "inst",
+              "value": "4784128"
+            },
+            {
+              "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+              "unit": "%",
+              "value": "34.45"
+            }
+          ],
+          "symbol": "q4k_g3_lanemap_gemv_vec_4096_4096"
+        },
+        "stderr_tail": {
+          "candidate": "",
+          "control": ""
+        }
+      },
+      "ptxas": [
+        "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_u4_4096_4096' for 'sm_120a'",
+        "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+        "ptxas info    : Used 56 registers, used 0 barriers",
+        "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_4096_4096' for 'sm_120a'",
+        "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+        "ptxas info    : Used 43 registers, used 0 barriers"
+      ],
+      "unroll_blocks": 4
+    }
+  ]
+}
