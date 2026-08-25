@@ -26,13 +26,18 @@ class Q5Down:
     if resadd:q6=q6+res
     return self.q6_mask.where(q6,q5)
 
-def install(model,path,blocks,retain_q6_fraction):
+def install(model,path,blocks,retain_q6_fraction,q5_shards,shard_count):
   _,meta=gguf_load_metadata(path);infos={x[0]:x for x in meta["tensor_infos"]};installed=[]
   for bi in blocks:
     name=f"blk.{bi}.ffn_down.weight";_n,shape,typ,off=infos[name]
     if tuple(shape)!=(K,ROWS) or typ!=14:raise RuntimeError(infos[name])
     n=ROWS*K;n6=(n//256)*210;raw=np.asarray(np.memmap(path,mode="r",dtype=np.uint8,offset=meta["data_start"]+off,shape=(n6,))).copy();dense,q5=convert(raw,n);mask=None;retained=0
-    if retain_q6_fraction:
+    if q5_shards:
+      keep=np.ones(ROWS,dtype=np.bool_)
+      for shard in q5_shards:
+        lo,hi=(ROWS*shard)//shard_count,(ROWS*(shard+1))//shard_count;keep[lo:hi]=False
+      retained=int(keep.sum());mask=Tensor(keep.reshape(1,1,ROWS),device="NV").realize()
+    elif retain_q6_fraction:
       q5d=ggml_data_to_tensor(Tensor(q5.copy(),dtype=dtypes.uint8),n,13).numpy().reshape(ROWS,K).astype(np.float32);dense=dense.reshape(ROWS,K)
       score=np.linalg.norm(q5d-dense,axis=1)/np.maximum(np.linalg.norm(dense,axis=1),1e-30);retained=int(round(ROWS*retain_q6_fraction));keep=np.zeros(ROWS,dtype=np.bool_);keep[np.argpartition(score,-retained)[-retained:]]=True
       mask=Tensor(keep.reshape(1,1,ROWS),device="NV").realize()
@@ -40,9 +45,12 @@ def install(model,path,blocks,retain_q6_fraction):
   return installed
 
 def main():
-  ap=argparse.ArgumentParser();ap.add_argument("--model",default="/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf");ap.add_argument("--blocks",default="");ap.add_argument("--retain-q6-fraction",type=float,default=0.0);ap.add_argument("--depth",type=int,default=128);ap.add_argument("--count",type=int,default=4);ap.add_argument("--max-context",type=int,default=512);ap.add_argument("--out",required=True);a=ap.parse_args()
+  ap=argparse.ArgumentParser();ap.add_argument("--model",default="/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf");ap.add_argument("--blocks",default="");ap.add_argument("--retain-q6-fraction",type=float,default=0.0);ap.add_argument("--q5-row-shards",default="");ap.add_argument("--shard-count",type=int,default=4);ap.add_argument("--depth",type=int,default=128);ap.add_argument("--count",type=int,default=4);ap.add_argument("--max-context",type=int,default=512);ap.add_argument("--out",required=True);a=ap.parse_args()
   if not 0<=a.retain_q6_fraction<1:raise ValueError("--retain-q6-fraction must be in [0,1)")
-  blocks=[int(x) for x in a.blocks.split(",") if x];model=_load(a.model,a.max_context);installed=install(model,pathlib.Path(a.model),blocks,a.retain_q6_fraction) if blocks else []
+  q5_shards=[int(x) for x in a.q5_row_shards.split(",") if x!=""]
+  if any(x<0 or x>=a.shard_count for x in q5_shards):raise ValueError("Q5 shard index out of range")
+  if q5_shards and a.retain_q6_fraction:raise ValueError("choose row shards or retained fraction, not both")
+  blocks=[int(x) for x in a.blocks.split(",") if x];model=_load(a.model,a.max_context);installed=install(model,pathlib.Path(a.model),blocks,a.retain_q6_fraction,q5_shards,a.shard_count) if blocks else []
   gen=model.generate(_prompt(a.model,a.depth),chunk_size=32,temperature=0.0)
   try:next(gen)
   finally:gen.close()
@@ -50,5 +58,5 @@ def main():
   for i in range(a.count):
     sample,full=model.decode_with_logits(token,sp.bind(a.depth+1+i),temp);arr=full.numpy();logits.append(arr);tokens.append(int(arr.argmax(axis=-1).item()))
   stack=np.stack(logits);out=pathlib.Path(a.out);out.parent.mkdir(parents=True,exist_ok=True);np.savez_compressed(out.with_suffix(".npz"),logits=stack)
-  ret={"schema":"tinygrad.nv_q5k_full_logits.v1","commit":subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),"blocks":blocks,"retain_q6_fraction":a.retain_q6_fraction,"installed":installed,"depth":a.depth,"count":a.count,"tokens":tokens,"finite":bool(np.isfinite(stack).all()),"logits_sha256":hashlib.sha256(stack.tobytes()).hexdigest()};out.write_text(json.dumps(ret,indent=2,sort_keys=True)+"\n");print(json.dumps(ret));return 0
+  ret={"schema":"tinygrad.nv_q5k_full_logits.v1","commit":subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),"blocks":blocks,"retain_q6_fraction":a.retain_q6_fraction,"q5_row_shards":q5_shards,"shard_count":a.shard_count,"installed":installed,"depth":a.depth,"count":a.count,"tokens":tokens,"finite":bool(np.isfinite(stack).all()),"logits_sha256":hashlib.sha256(stack.tobytes()).hexdigest()};out.write_text(json.dumps(ret,indent=2,sort_keys=True)+"\n");print(json.dumps(ret));return 0
 if __name__=="__main__":raise SystemExit(main())

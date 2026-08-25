@@ -76,6 +76,24 @@ are closed.
 Follow-up decision:
 `NO_ADMISSIBLE_SINGLETON__WEIGHT_ERROR_ROW_SELECTOR_NON_MONOTONIC`.
 
+### End-to-end sensitivity investment gate
+
+Block 2 was divided into four equal physical output-row shards. Each shard's
+signed recurrent full-logit delta was measured directly, rather than inferred
+from weight error. Exhaustive additive search across all 15 nonempty shard
+subsets predicted **zero** subsets that pass every recurrent step. The most
+favorable predicted 50%-Q5 subset, shards 2+3, was then run directly. It saved
+3,342,336 physical bytes but measured aggregate `1.109e-3` and maximum-step
+`1.439e-3`, confirming the no-go.
+
+This closes coarse end-to-end row-shard selection before production-kernel
+investment. Finer learned/group calibration is not disproven, but its maximum
+value is now paired with substantially greater representation and search cost;
+it is not the next ranked engineering lever.
+
+Investment decision:
+`COARSE_END_TO_END_ROW_SENSITIVITY_NO_GO__NO_HYBRID_KERNEL_INVESTMENT`.
+
 Evidence:
 
 - `docs/task_workflow/evidence/nv-numerical-byte-reduction/q6-v-feasibility.json`
