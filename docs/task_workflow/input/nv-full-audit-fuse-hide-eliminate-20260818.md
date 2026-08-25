@@ -6,7 +6,7 @@ Status: **audit record, read-only. Exhaustive classification of every kernel
 family in the steady decode token at HEAD into the three camps (FUSE / HIDE /
 ELIMINATE) with measured evidence and a verdict per row. No runtime change.**
 
-Principles anchor: `docs/what-makes-a-token-fast-20260731.md` (the canonical
+Principles anchor: `docs/what-makes-inference-fast.md` (the canonical
 "what makes a token fast" doc). In particular its wall decomposition:
 `T_token >= T_bulk + T_boundary,critical`, its rule that "fewer kernels is not
 faster unless a boundary actually leaves the non-overlapped critical path",

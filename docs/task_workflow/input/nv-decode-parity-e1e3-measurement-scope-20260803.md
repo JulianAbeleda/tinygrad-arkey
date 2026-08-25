@@ -158,5 +158,5 @@ plus probe sources/artifacts.
   device probes carry their own numeric checks.
 - Never touch user files: `docs/README.md`,
   `docs/beating-llama-first-principles-20260731.md`,
-  `docs/what-makes-a-token-fast-20260731.md`,
+  `docs/what-makes-inference-fast.md`,
   `extra/llm_research/microbench/*` binaries, `scratchpad/t6_metal_admission_probe.py`.

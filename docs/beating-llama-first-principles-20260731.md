@@ -2,7 +2,7 @@
 
 Date: 2026-07-31
 
-> **Authority note (2026-08-03):** `docs/what-makes-a-token-fast-20260731.md` is now the canonical
+> **Authority note (2026-08-03):** `docs/what-makes-inference-fast.md` is now the canonical
 > performance-principles authority. This document is retained as the AMD/Metal campaign application and
 > evidence history. Where a generalized theory statement here conflicts with that document—especially the
 > §1 execution-unit claim, the quantized-decode stack, or generator/search rules—the canonical document wins.

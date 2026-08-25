@@ -68,7 +68,7 @@ External sanity: shiinamiyuki/sm120_gemm's real BF16 GEMMs on the same chip reac
 TF, i.e. 55–85% of this R — consistent with R as the ceiling. A third-party figure (~319 TF,
 "76% of spec") is not directly comparable (different methodology/instruction), so 255.4 TF
 is the denominator for any efficiency claim in this bring-up, per
-`docs/what-makes-a-token-fast-20260731.md` §9: never quote a spec sheet. 255.4 TF is 61% of
+`docs/what-makes-inference-fast.md` §9: never quote a spec sheet. 255.4 TF is 61% of
 the 419 TF sheet figure.
 
 `BW` is measured in the next section, so `M* = (w/16)·(R/BW)` is a single number now.
@@ -260,7 +260,7 @@ floor. An earlier version of this file used fixed `iters` values copied from the
 that never plateaued — physically impossible, and never reported externally. Root cause: `iters`
 was too small relative to `blocks`, so measured wall time was dominated by fixed host-side
 dispatch/synchronize round-trip overhead (~0.3–0.7ms) rather than GPU compute time — the enqueue-
-vs-execution trap from `docs/what-makes-a-token-fast-20260731.md` §9.6, reached this time through
+vs-execution trap from `docs/what-makes-inference-fast.md` §9.6, reached this time through
 undersized `iters` rather than a missing `synchronize()`. Fixed by calibration; see
 `fma_peak_metal.py`'s module docstring for the full account.
 
@@ -309,7 +309,7 @@ sentinel) in the whole kernel.
 
 **Verdict: one shared unit, not two.** On this M4, `simdgroup_multiply_accumulate` does not reach a
 separate, faster matrix pipe — it lowers onto (or performs comparably to) the same FP ALUs plain
-FMA already uses. `docs/what-makes-a-token-fast-20260731.md` §5's "which unit — worth 10–20×"
+FMA already uses. `docs/what-makes-inference-fast.md` §5's "which unit — worth 10–20×"
 principle does not apply here; see that doc's §5/§10 for the consequence for Metal prefill
 routing.
 

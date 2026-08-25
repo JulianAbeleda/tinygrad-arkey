@@ -2,7 +2,7 @@
 
 Date: 2026-07-31
 
-Companion to `docs/what-makes-a-token-fast-20260731.md`. That doc states the principles; this one is
+Companion to `docs/what-makes-inference-fast.md`. That doc states the principles; this one is
 the procedure. It is written as *"if you were starting from scratch on a target nobody here has used,
 what do you do, in what order, and what do you refuse to do."*
 

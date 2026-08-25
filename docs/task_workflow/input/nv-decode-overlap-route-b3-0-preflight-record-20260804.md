@@ -14,7 +14,7 @@ Authority: B3 exhaustive execution scope section 7 (`G-B3-0`).
 - B0/B1/B2 measurement records present on disk.
 - `git status --short`: 3 modified docs (`docs/README.md`,
   `docs/beating-llama-first-principles-20260731.md`,
-  `docs/what-makes-a-token-fast-20260731.md`), plus untracked census/numerics
+  `docs/what-makes-inference-fast.md`), plus untracked census/numerics
   tools and microbench binaries under `extra/llm_research/` and one scratchpad
   probe. These are preserved untouched; this record commits no user paths.
 - toolchain: `nsys` at `/usr/local/bin/nsys`; CUDA toolkit 13.2 at

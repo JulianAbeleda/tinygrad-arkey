@@ -1,6 +1,6 @@
 """Graph-topology analysis over a traced LLM UOp body.
 
-Implements the three generic motifs from docs/what-makes-a-token-fast-20260731.md section 2A.1
+Implements the three generic motifs from docs/what-makes-inference-fast.md section 2A.1
 as pure graph facts over the semantic model graph (the traced @function body, before
 kernelization):
 

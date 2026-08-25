@@ -47,7 +47,7 @@ record `l4-vocab-substrate-fusion-measurement-record-20260803.md` (commit `05b1e
 - Never touch the untracked scratchpads (`extra/llm_research/microbench/dp4a_peak_cuda*`,
   `scratchpad/t6_metal_admission_probe.py`) or the user-owned docs
   (`docs/README.md`, `docs/beating-llama-first-principles-20260731.md`,
-  `docs/what-makes-a-token-fast-20260731.md`).
+  `docs/what-makes-inference-fast.md`).
 
 ## 1. Established state (verified facts)
 

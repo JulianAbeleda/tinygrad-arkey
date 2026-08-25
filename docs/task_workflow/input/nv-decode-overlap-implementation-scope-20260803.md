@@ -566,7 +566,7 @@ the current graph boundaries are the suspected cap. Scope:
   endpoint; no promoting a route. Route B implementation is NOT authorized
   by this document.
 - No user files: `docs/README.md`, `docs/beating-llama-first-principles-
-  20260731.md`, `docs/what-makes-a-token-fast-20260731.md`,
+  20260731.md`, `docs/what-makes-inference-fast.md`,
   `extra/llm_research/microbench/*` binaries (including the untracked
   `cuda_stream_overlap_probe` binary), `scratchpad/t6_metal_admission_probe.py`.
 - No `master`/`dev`/`exp` commits; no concurrent GPU sessions.

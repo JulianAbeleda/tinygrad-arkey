@@ -6,7 +6,7 @@ Status: **living ledger. One table that shows every lever row, its camp
 (FUSE / HIDE / ELIMINATE), its measured status at HEAD, and its tok/s ceiling.**
 Companion audit with per-kernel evidence:
 `nv-full-audit-fuse-hide-eliminate-20260818.md`. Principles:
-`docs/what-makes-a-token-fast-20260731.md`.
+`docs/what-makes-inference-fast.md`.
 
 Anchors (fresh census this session, `route_kernel_census.py` control):
 **205.99 tok/s**, wall ~4854.7 us, node_sum 4999.6 us, 596 kernels/token,

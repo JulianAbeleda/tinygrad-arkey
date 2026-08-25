@@ -216,7 +216,7 @@ concurrent edits are not allowed. This record carries the exact additive design:
   in the same harness, so the comparison is unbiased.
 - Worktree at record time: tracked tree clean except user-owned doc modifications
   (`docs/README.md`, `docs/beating-llama-first-principles-20260731.md`,
-  `docs/what-makes-a-token-fast-20260731.md`); untracked user-owned artifacts
+  `docs/what-makes-inference-fast.md`); untracked user-owned artifacts
   (`dp4a_peak_cuda*`, `flash_score_tile_peak_cuda`, `l2_q6k_partial_sweep`,
   `q6k_vocab_coop_ceiling_cuda`, `scratchpad/t6_metal_admission_probe.py`) untouched.
 

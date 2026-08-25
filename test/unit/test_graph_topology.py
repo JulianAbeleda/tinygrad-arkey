@@ -1,7 +1,7 @@
 """Hermetic tests for the graph-topology motif analyzer.
 
 Builds a synthetic traced body (UOp DAG) that contains the three generic motifs from
-docs/what-makes-a-token-fast-20260731.md section 2A.1 and asserts the analyzer reports them.
+docs/what-makes-inference-fast.md section 2A.1 and asserts the analyzer reports them.
 The synthetic CALL/AFTER construction mirrors the shape real custom kernels produce
 (custom_kernel -> fxn(*placeholders).call(*contig_srcs) -> src.after(kernel)).
 No GPU or model is needed.

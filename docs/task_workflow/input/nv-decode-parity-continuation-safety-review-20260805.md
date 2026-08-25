@@ -2,7 +2,7 @@
 
 Date: 2026-08-05. Scope: current intended generic core, renderer/spec,
 shared-Q8/decode route, and research-harness diff. Excluded: user-owned
-`docs/README.md`, `beating-llama*`, `what-makes-a-token-fast*`,
+`docs/README.md`, `beating-llama*`, `what-makes-inference-fast*`,
 `tinygrad/function.py`, scratch/raw artifacts, and binaries. No GPU was used.
 
 ## Result

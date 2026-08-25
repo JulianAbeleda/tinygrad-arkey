@@ -318,7 +318,7 @@ carries the winning row and the exact design:
 - H4 is an 8B-aligned 4-halfword struct: CUDA 13.2 has no `__half4`; vector x loads use it.
 - Worktree at record time: tracked tree clean except the probe file (this record's
   [test] commit) and user-owned doc modifications (`docs/README.md`,
-  `docs/beating-llama-first-principles-20260731.md`, `docs/what-makes-a-token-fast-20260731.md`);
+  `docs/beating-llama-first-principles-20260731.md`, `docs/what-makes-inference-fast.md`);
   untracked user-owned artifacts (`dp4a_peak_cuda*`, `flash_score_tile_peak_cuda`,
   `l2_q6k_partial_sweep`, `q6k_vocab_coop_ceiling_cuda`,
   `scratchpad/t6_metal_admission_probe.py`) untouched.

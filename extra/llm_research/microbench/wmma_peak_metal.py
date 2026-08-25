@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Metal equivalent of wmma_peak.cpp (this directory): the achievable isolated
 simdgroup_multiply_accumulate rate `R`, for the crossover M* = (w/16)*(R/BW) in
-docs/what-makes-a-token-fast-20260731.md.
+docs/what-makes-inference-fast.md.
 
 Mirrors wmma_peak.cpp's structure element-for-element:
   - NACC independent accumulators (swept: latency-hiding count is unknown for this
@@ -88,7 +88,7 @@ def build(nacc: int) -> tuple[MetalProgram, bytes, str]:
 def run_once(prog: MetalProgram, out_buf: Buffer, iters: int, blocks: int, tpb: int) -> float:
   """Returns GPU end-to-end wall time in seconds, host-timed with explicit synchronize()
   before and after (Metal is async -- timing enqueue alone once produced a bogus 63,583
-  GFLOPS figure on this device, docs/what-makes-a-token-fast-20260731.md#9.6)."""
+  GFLOPS figure on this device, docs/what-makes-inference-fast.md#9.6)."""
   Device[DEVICE].synchronize()
   t0 = time.perf_counter()
   prog(out_buf.get_buf(DEVICE), global_size=(blocks, 1, 1), local_size=(tpb, 1, 1), vals=(iters,), wait=False)

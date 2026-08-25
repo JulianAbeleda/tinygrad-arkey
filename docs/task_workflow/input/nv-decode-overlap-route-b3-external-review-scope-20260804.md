@@ -247,7 +247,7 @@ that depth only; no composed endpoint).
   GPU.
 - No changes to the NV decode route, HCQGraph, or ops_nv.py.
 - No user files (`docs/README.md`, `docs/beating-llama-*`,
-  `docs/what-makes-a-token-fast-*`, `extra/llm_research/microbench/*`
+  `docs/what-makes-inference-fast-*`, `extra/llm_research/microbench/*`
   binaries, `scratchpad/t6_metal_admission_probe.py`).
 
 ## 10. One-line job

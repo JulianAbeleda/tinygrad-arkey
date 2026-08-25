@@ -301,7 +301,7 @@ pp4096 (historical rows).
   (`symbolic+reduce_collapse+debuf`).
 - **No promotion, no user files.** Nothing promotes to `dev`/`exp`/`master`;
   `docs/README.md`, `docs/beating-llama-first-principles-20260731.md`,
-  `docs/what-makes-a-token-fast-20260731.md`, `extra/llm_research/microbench/
+  `docs/what-makes-inference-fast.md`, `extra/llm_research/microbench/
   *` binaries, and `scratchpad/t6_metal_admission_probe.py` are user files
   and must never be committed.
 
@@ -356,7 +356,7 @@ it:
 - `executable-taskgraph-ir-scope-20260803.md` (five-lever ranking rationale)
 - `nv-parity-and-beyond-forward-scope-20260803.md` (canonical forward
   authority, lifecycle states)
-- `docs/what-makes-a-token-fast-20260731.md` (the principles document the
+- `docs/what-makes-inference-fast.md` (the principles document the
   section 2 model is drawn from; user file, do not edit)
 - Harness: `extra/llm_research/decode/decode_runtime_overhead.py`,
   `extra/llm_research/decode/gemv_class_census_nv.py`

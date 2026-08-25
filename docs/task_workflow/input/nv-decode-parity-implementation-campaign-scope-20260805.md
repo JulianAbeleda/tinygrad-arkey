@@ -284,7 +284,7 @@ committed. GPU work uses `flock /tmp/gpu-bench.lock`.
 Tracks may not edit another track's primary implementation files without
 coordinator handoff. Existing user modifications in `docs/README.md`,
 `docs/beating-llama-first-principles-20260731.md`, and
-`docs/what-makes-a-token-fast-20260731.md` remain untouched.
+`docs/what-makes-inference-fast.md` remain untouched.
 
 ## 9. Campaign stop conditions
 

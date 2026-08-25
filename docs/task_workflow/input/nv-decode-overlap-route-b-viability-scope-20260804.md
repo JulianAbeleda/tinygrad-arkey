@@ -106,7 +106,7 @@ reference). CUPTI works on this path (CUDA Driver API), unlike DEV=NV.
 GPU sessions sequential, flocked (`flock /tmp/nv_gpu.lock`); evidence
 classes OBSERVED/INFERRED; commits `[docs]`/`[test]` on
 `nvidia-bringup-20260731` only; never touch user files (`docs/README.md`,
-`docs/beating-llama-*`, `docs/what-makes-a-token-fast-*`,
+`docs/beating-llama-*`, `docs/what-makes-inference-fast-*`,
 `extra/llm_research/microbench/*` binaries, `scratchpad/t6_metal_admission_probe.py`);
 no route changes, no graph changes, no promotion; `git diff --check` clean.
 

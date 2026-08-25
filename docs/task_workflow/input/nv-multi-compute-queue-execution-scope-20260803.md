@@ -145,6 +145,6 @@ If and only if the probe passes, the next scope revision authorizes:
 Deliverables: scope doc; closed-default device slice; probe script; probe
 measurement record with anchored JSON; conditional next-scope revision.
 Bans: no change to user files (`docs/README.md`, `docs/beating-llama-*`,
-`docs/what-makes-a-token-fast-*`, `extra/llm_research/microbench/*`,
+`docs/what-makes-inference-fast-*`, `extra/llm_research/microbench/*`,
 `scratchpad/t6_metal_admission_probe.py`); no `master`/`dev`/`exp` commits; no
 promotion of the probe into the decode path; no concurrent GPU sessions.

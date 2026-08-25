@@ -209,7 +209,7 @@ cannot produce exactly that fraction is not the cause.
 - Whole-model prefill wiring or tok/s claims. This scope ends at a correct kernel.
 - Promotion to `dev`/`master`, or adding rows to `PACKED_WMMA_ROUTES`.
 - Chasing a matrix unit. Measured 2026-07-31: M4 has none — plain FMA reaches 3909 GFLOPS against
-  `simdgroup_multiply_accumulate`'s 3781 (`docs/what-makes-a-token-fast-20260731.md` §5, §10). This work
+  `simdgroup_multiply_accumulate`'s 3781 (`docs/what-makes-inference-fast.md` §5, §10). This work
   is worth doing because tile-granularity staging keeps dequant out of the inner loop, which on a
   single-unit machine is the entire lever — not because it reaches a faster pipe.
 
