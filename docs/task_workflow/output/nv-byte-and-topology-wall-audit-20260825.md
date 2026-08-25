@@ -244,6 +244,12 @@ the GPU timestamp ledger, but lost 27.746 us/token in the full wall bracket.
 The ordinary full-grid spelling is therefore closed at the program/output
 boundary; the shared-Q8 win must not be generalized across producer contracts.
 
+The follow-on work is tracked as one full-population campaign rather than a
+sequence of unrelated Q4 experiments. Its controlling scope is
+`docs/task_workflow/input/nv-full-qkv-producer-substrate-campaign-scope-20260825.md`;
+the live population/phase matrix is
+`docs/task_workflow/output/nv-full-qkv-producer-substrate-campaign.md`.
+
 Evidence:
 
 - `docs/task_workflow/evidence/nv-byte-topology-wall-audit-20260825/accounting.json`
