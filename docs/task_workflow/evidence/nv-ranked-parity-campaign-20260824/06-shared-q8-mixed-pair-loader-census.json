@@ -1,0 +1,11 @@
+{
+  "schema": "tinygrad.nv_shared_q8_q4q6_pair_loader_census.v1",
+  "target": {"backend": "NV", "architecture": "sm_120"},
+  "default": {"shared_q8_leases": 17, "q4_q4_pairs": 9, "q4_q6_pairs": 8},
+  "rollback": {
+    "environment": {"TINYGRAD_SHARED_Q8_Q4Q6_KV_PAIR_DISABLE": 1},
+    "shared_q8_leases": 17,
+    "q4_q4_pairs": 9,
+    "q4_q6_pairs": 0
+  }
+}

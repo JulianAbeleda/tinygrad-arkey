@@ -29,7 +29,9 @@
     "control_c_ms_per_token": 4.48963215625,
     "control_midpoint_ms_per_token": 4.4829964375,
     "recovery_us_per_token": 3.126,
-    "verdict": "NO_GO_WALL"
+    "verdict": "POSITIVE_WALL_MIDPOINT"
   },
-  "promoted": false
+  "promotion_policy": "promote bit-exact positive full-wall midpoint when topology accounting is complete",
+  "booked_recovery_us_per_token": 3.126,
+  "promoted": true
 }

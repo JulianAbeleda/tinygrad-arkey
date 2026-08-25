@@ -3,7 +3,8 @@ import pytest
 
 from tinygrad.llm.shared_q8_attention import (SharedQ8AttentionAdmission, _emit_q4_cooperative_pair,
   _emit_q4_q6_cooperative_pair)
-from tinygrad.llm.model_route_plan import decode_shared_q8_q4kv_pair_promoted, load_decode_shared_q8_q4kv_pair_promotion
+from tinygrad.llm.model_route_plan import (decode_shared_q8_q4kv_pair_promoted, load_decode_shared_q8_q4kv_pair_promotion,
+  decode_shared_q8_q4q6_kv_pair_promoted, load_decode_shared_q8_q4q6_kv_pair_promotion)
 from tinygrad.uop.ops import Ops, UOp
 
 
@@ -53,3 +54,13 @@ def test_shared_q8_pair_policy_and_rollback(tmp_path):
   assert not decode_shared_q8_q4kv_pair_promoted(("NV","sm_120"),disabled)
   policy=tmp_path/"policy.json"; policy.write_text('{"schema":"boltbeam.route_policy.v1"}')
   assert load_decode_shared_q8_q4kv_pair_promotion(str(policy)) == frozenset()
+
+
+def test_shared_q8_mixed_pair_policy_and_rollback(tmp_path):
+  enabled=lambda _name,default=0: default
+  disabled=lambda name,default=0: 1 if name=="TINYGRAD_SHARED_Q8_Q4Q6_KV_PAIR_DISABLE" else default
+  assert decode_shared_q8_q4q6_kv_pair_promoted(("NV","sm_120"),enabled)
+  assert not decode_shared_q8_q4q6_kv_pair_promoted(("AMD","gfx1100"),enabled)
+  assert not decode_shared_q8_q4q6_kv_pair_promoted(("NV","sm_120"),disabled)
+  policy=tmp_path/"mixed-policy.json"; policy.write_text('{"schema":"boltbeam.route_policy.v1"}')
+  assert load_decode_shared_q8_q4q6_kv_pair_promotion(str(policy)) == frozenset()

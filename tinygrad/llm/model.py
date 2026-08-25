@@ -58,7 +58,7 @@ from tinygrad.llm.model_route_plan import (build_model_route_plan, decode_norm_f
   decode_native_argmax_threads,
   decode_shared_q8_attention_promoted,
   decode_q6_direct_shared_q8_attention_promoted, decode_q4_direct_shared_q8_attention_promoted,
-  decode_shared_q8_q4kv_pair_promoted,
+  decode_shared_q8_q4kv_pair_promoted, decode_shared_q8_q4q6_kv_pair_promoted,
   decode_q4k_ffn_down_fp16_geometry_promoted,
   decode_q6k_ffn_down_fp16_geometry_promoted, decode_q6k_ffn_down_packed_lanemap_promoted,
   decode_q6k_v_four_warp_fp16_geometry_promoted)
@@ -1879,6 +1879,10 @@ class Transformer:
       (_norm_cap.backend,_norm_cap.architecture))
     model._decode_shared_q8_q4kv_pair_promoted = _shared_q8_q4kv_pair_promoted
     for _b in model.blk: _b._decode_shared_q8_q4kv_pair_promoted = _shared_q8_q4kv_pair_promoted
+    _shared_q8_q4q6_pair_promoted = _q4_direct_promoted and _q6_direct_promoted and \
+      decode_shared_q8_q4q6_kv_pair_promoted((_norm_cap.backend,_norm_cap.architecture))
+    model._decode_shared_q8_q4q6_kv_pair_promoted = _shared_q8_q4q6_pair_promoted
+    for _b in model.blk: _b._decode_shared_q8_q4q6_kv_pair_promoted = _shared_q8_q4q6_pair_promoted
     # Fused w1+w3 (gate/up) decode GEMV gate. CLOSED default (decode-q4k-w1w3-fusion-route-policy.json,
     # NV sm_120 promoted, q4k-w1w3-fused-qv-implementation-record-20260803.md). Same resolve-once
     # pattern as the M4 gate; the fused call additionally requires BOTH ffn_gate and ffn_up to be
@@ -2145,7 +2149,10 @@ class Transformer:
             q6_direct_output=model._decode_q6_direct_shared_q8_attention_promoted,
             q4_kv_pair_output=model._decode_shared_q8_q4kv_pair_promoted and
               isinstance(getattr(_b,"attn_k",None),Q4KPrimitiveLinear) and
-              isinstance(getattr(_b,"attn_v",None),Q4KPrimitiveLinear))
+              isinstance(getattr(_b,"attn_v",None),Q4KPrimitiveLinear),
+            q4_q6_kv_pair_output=model._decode_shared_q8_q4q6_kv_pair_promoted and
+              isinstance(getattr(_b,"attn_k",None),Q4KPrimitiveLinear) and
+              isinstance(getattr(_b,"attn_v",None),Q6KPrimitiveLinear))
           _b._decode_reduce_output_attn_rmsnorm_promoted = True
           try:
             _b._shared_q8_attention_norm_weight = Tensor.empty(4096, dtype=dtypes.float16,

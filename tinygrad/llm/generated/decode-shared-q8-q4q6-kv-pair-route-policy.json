@@ -1,0 +1,7 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "description": "Promotes the exact shared-Q8 mixed Q4-K/Q6-V producer for eight NV sm_120 blocks. It removes eight launches, reduces node sum by 6.128 us/token and device union by 11.500 us/token, and measured +3.126 us/token full-wall midpoint recovery with matching token streams. TINYGRAD_SHARED_Q8_Q4Q6_KV_PAIR_DISABLE=1 restores separate consumers.",
+  "promoted_targets": [
+    {"backend": "NV", "architecture": "sm_120"}
+  ]
+}
