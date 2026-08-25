@@ -1,0 +1,48 @@
+{
+  "bounded_steady_replays": {
+    "candidate": 8,
+    "control": 8
+  },
+  "candidate_median_us": {
+    "attention_output_ready_us": 37.25,
+    "cache_ready_us": 16.75,
+    "flash_start_us": 19.75,
+    "k_norm_start_us": 13.25,
+    "kv_ready_us": 10.5,
+    "producer_span_us": 10.368,
+    "q_norm_start_us": 10.5,
+    "q_ready_us": 10.5
+  },
+  "candidate_minus_control_us": {
+    "attention_output_ready_us": -2.5,
+    "cache_ready_us": -2.75,
+    "flash_start_us": -2.5,
+    "k_norm_start_us": -3.5,
+    "kv_ready_us": -6.25,
+    "producer_span_us": -6.382,
+    "q_norm_start_us": 2.0,
+    "q_ready_us": 2.0
+  },
+  "control_median_us": {
+    "attention_output_ready_us": 39.75,
+    "cache_ready_us": 19.5,
+    "flash_start_us": 22.25,
+    "k_norm_start_us": 16.75,
+    "kv_ready_us": 16.75,
+    "producer_span_us": 16.75,
+    "q_norm_start_us": 8.5,
+    "q_ready_us": 8.5
+  },
+  "decision": "DOWNSTREAM_READINESS_NOT_CAUSAL",
+  "interpretation": "The full producer delays Q-only readiness but advances the cache join, flash start, and attention-output completion; re-bracket the contradictory unprofiled wall before changing CTA geometry.",
+  "population_blocks": 9,
+  "sample_count": {
+    "candidate": 72,
+    "control": 72
+  },
+  "schema": "tinygrad.nv_qkv_completion_boundary_analysis.v1",
+  "sources": {
+    "candidate": "docs/task_workflow/evidence/nv-ordinary-q4-qkv-full-20260825/production-profile-accounted_arms/candidate.profile.jsonl",
+    "control": "docs/task_workflow/evidence/nv-ordinary-q4-qkv-full-20260825/production-profile-accounted_arms/control.profile.jsonl"
+  }
+}

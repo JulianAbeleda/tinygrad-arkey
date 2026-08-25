@@ -1,0 +1,192 @@
+{
+  "all_token_hashes_equal": true,
+  "arms": [
+    {
+      "admitted_blocks": [
+        13,
+        19,
+        20,
+        22,
+        23,
+        25,
+        26,
+        28,
+        29
+      ],
+      "arm": "control",
+      "complete_replay_count": 101,
+      "count": 32,
+      "depth": 512,
+      "gpu_state": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2910",
+        "name": "NVIDIA GeForce RTX 5090",
+        "persistence_mode": "Disabled",
+        "power.draw": "288.74",
+        "temperature.gpu": "50"
+      },
+      "group_pattern": [
+        32,
+        64,
+        128,
+        230
+      ],
+      "ledger": {
+        "node_count": 454.0,
+        "node_sum_us": 4124.512,
+        "overlap_us": 14.762,
+        "span_us": 4686.0,
+        "union_us": 4109.25
+      },
+      "max_context": 1024,
+      "mode": "profile-child",
+      "reps": 3,
+      "schema": "tinygrad.nv_q4k_kv_pair_qualification.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          5.3324730625,
+          5.30802715625,
+          5.3037234375
+        ],
+        "external_contention_high_limit_ms": 5.55802715625,
+        "median_ms_per_token": 5.30802715625,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          5.3324730625,
+          5.30802715625,
+          5.3037234375
+        ],
+        "timed_token_count": 96,
+        "token_hashes": [
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+          "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b"
+        ],
+        "token_stream_hash": "1e73e557e48b0c2f0792318e1a306f06a1412cd9800ba7a1e667b9c09c4a1254",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "steady_replay_count": 9,
+      "triple": true
+    },
+    {
+      "admitted_blocks": [
+        13,
+        19,
+        20,
+        22,
+        23,
+        25,
+        26,
+        28,
+        29
+      ],
+      "arm": "candidate",
+      "complete_replay_count": 101,
+      "count": 32,
+      "depth": 512,
+      "gpu_state": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2662",
+        "name": "NVIDIA GeForce RTX 5090",
+        "persistence_mode": "Disabled",
+        "power.draw": "281.12",
+        "temperature.gpu": "58"
+      },
+      "group_pattern": [
+        32,
+        64,
+        128,
+        221
+      ],
+      "ledger": {
+        "node_count": 445.0,
+        "node_sum_us": 4088.992,
+        "overlap_us": 11.328,
+        "span_us": 4608.75,
+        "union_us": 4076.5
+      },
+      "max_context": 1024,
+      "mode": "profile-child",
+      "reps": 3,
+      "schema": "tinygrad.nv_q4k_kv_pair_qualification.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          5.3872288125,
+          5.330466875,
+          5.31584125
+        ],
+        "external_contention_high_limit_ms": 5.580466875,
+        "median_ms_per_token": 5.330466875,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          5.3872288125,
+          5.330466875,
+          5.31584125
+        ],
+        "timed_token_count": 96,
+        "token_hashes": [
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+          "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b"
+        ],
+        "token_stream_hash": "1e73e557e48b0c2f0792318e1a306f06a1412cd9800ba7a1e667b9c09c4a1254",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "steady_replay_count": 9,
+      "triple": true
+    }
+  ],
+  "ledger_delta": {
+    "node_count": -9.0,
+    "node_sum_us": -35.52,
+    "overlap_us": -3.434,
+    "span_us": -77.25,
+    "union_us": -32.75
+  },
+  "mode": "profile",
+  "schema": "tinygrad.nv_q4k_kv_pair_qualification.v1",
+  "structural": {
+    "admitted_blocks": [
+      13,
+      19,
+      20,
+      22,
+      23,
+      25,
+      26,
+      28,
+      29
+    ],
+    "candidate_nodes": 445.0,
+    "candidate_pattern": [
+      32,
+      64,
+      128,
+      221
+    ],
+    "control_nodes": 454.0,
+    "control_pattern": [
+      32,
+      64,
+      128,
+      230
+    ],
+    "pair_names": {}
+  }
+}
