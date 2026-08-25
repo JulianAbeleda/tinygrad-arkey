@@ -352,6 +352,12 @@ pm_linearize_cleanups = PatternMatcher([
 
 def validate_post_barrier_regions(lst:list[UOp], ren:Renderer) -> None:
   """Validate lexical and synchronization safety before rendering regions."""
+  def workgroup_uniform_gate(gate:UOp) -> bool:
+    # Fail closed: a uniform region predicate may contain only scalar ALU over
+    # constants and global workgroup ids. In particular, local ids, ranges,
+    # loads, and buffer indices can vary across workitems and are rejected.
+    allowed=GroupOp.ALU|{Ops.CONST,Ops.SPECIAL,Ops.CAST,Ops.BITCAST}
+    return all(x.op in allowed and (x.op is not Ops.SPECIAL or str(x.arg).startswith("gidx")) for x in gate.toposort())
   stack:list[tuple[UOp, int]] = []
   positions = {u:i for i,u in enumerate(lst)}
   for i,u in enumerate(lst):
@@ -361,6 +367,8 @@ def validate_post_barrier_regions(lst:list[UOp], ren:Renderer) -> None:
       if len(u.src) != 2 or u.src[0].dtype is not dtypes.bool or u.src[1].op is not Ops.BARRIER:
         raise RuntimeError("post-barrier region IF must have <bool gate, barrier> sources")
       if positions.get(u.src[1], i) >= i: raise RuntimeError("post-barrier region must follow its anchor barrier")
+      if u.arg.workgroup_uniform and not workgroup_uniform_gate(u.src[0]):
+        raise RuntimeError("workgroup-uniform post-barrier region gate is not proved uniform")
       stack.append((u, i))
     elif u.op is Ops.ENDIF and isinstance(u.arg, PostBarrierRegion):
       if not stack: raise RuntimeError("post-barrier region ENDIF has no open IF")
@@ -369,7 +377,7 @@ def validate_post_barrier_regions(lst:list[UOp], ren:Renderer) -> None:
         raise RuntimeError("post-barrier region ENDIF must reference its IF and at least one body root")
       if any(mif not in root.backward_slice_with_self for root in u.src[1:]):
         raise RuntimeError("every post-barrier region body root must depend on its IF")
-      if any(x.op is Ops.BARRIER for x in lst[start+1:i]):
+      if not mif.arg.workgroup_uniform and any(x.op is Ops.BARRIER for x in lst[start+1:i]):
         raise RuntimeError("workgroup barriers are forbidden inside a predicated post-barrier region")
   if stack: raise RuntimeError("post-barrier region IF has no matching ENDIF")
 

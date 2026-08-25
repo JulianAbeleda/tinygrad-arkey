@@ -74,6 +74,18 @@ def test_post_barrier_region_rejects_unsupported_renderer_and_inner_barrier():
   with pytest.raises(RuntimeError,match="forbidden inside"): validate_post_barrier_regions([gate,barrier,region,inner,body2,end2],Supported())
 
 
+def test_workgroup_uniform_region_admits_inner_barrier_and_rejects_local_gate():
+  anchor=UOp(Ops.BARRIER,dtypes.void); gidx=UOp.special(64,"gidx0"); gate=gidx<32
+  region=anchor.post_barrier_region(gate,workgroup_uniform=True)
+  inner=UOp(Ops.BARRIER,dtypes.void,(region,)); body=UOp.const(dtypes.float32,1).after(inner); end=region.end_region(body)
+  class Supported: supports_post_barrier_regions=True
+  validate_post_barrier_regions([gidx,gate,anchor,region,inner,body,end],Supported())
+  lgate=UOp.special(64,"lidx0")<32; bad=anchor.post_barrier_region(lgate,workgroup_uniform=True)
+  bad_body=UOp.const(dtypes.float32,1).after(bad); bad_end=bad.end_region(bad_body)
+  with pytest.raises(RuntimeError,match="not proved uniform"):
+    validate_post_barrier_regions([lgate,anchor,bad,bad_body,bad_end],Supported())
+
+
 def test_post_barrier_region_requires_body_dependency_and_untyped_if_stays_banned():
   gate=UOp.const(dtypes.bool,True); barrier=UOp(Ops.BARRIER,dtypes.void)
   region=barrier.post_barrier_region(gate)

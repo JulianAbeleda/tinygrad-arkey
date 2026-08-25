@@ -26,10 +26,14 @@ class PostBarrierRegion:
   """Typed contract for a divergent region entered after a workgroup barrier.
 
   The barrier is deliberately outside the region, so every workitem reaches
-  it.  The region may then predicate arbitrary non-barrier work (for example a
-  single consumer warp loading lane partials produced by sibling warps).
+  it.  The ordinary region may predicate arbitrary non-barrier work (for
+  example a single consumer warp loading lane partials produced by sibling
+  warps). ``workgroup_uniform`` is a stronger, separately validated contract:
+  every workitem in a workgroup takes the same branch, so barriers are legal
+  inside it.
   """
   version: int = 1
+  workgroup_uniform: bool = False
 
 @dataclass(frozen=True, order=True)
 class ParamArg:
@@ -635,10 +639,11 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
   def end(self, *src:UOp): return UOp(Ops.END, src=(self,)+src) if len(src) else self
   def after(self, *src:UOp, **kwargs): return UOp(Ops.AFTER, self.dtype, (self,)+src, **kwargs) if len(src) else self
   def barrier(self, *src:UOp): return UOp(Ops.BARRIER, src=(self,)+src)
-  def post_barrier_region(self, gate:UOp) -> UOp:
+  def post_barrier_region(self, gate:UOp, *, workgroup_uniform:bool=False) -> UOp:
     if self.op is not Ops.BARRIER: raise ValueError("post_barrier_region must be anchored by an Ops.BARRIER")
     if gate.dtype is not dtypes.bool: raise ValueError(f"post_barrier_region gate must be bool, got {gate.dtype}")
-    return UOp(Ops.IF, dtypes.void, (gate, self), arg=PostBarrierRegion())
+    if not isinstance(workgroup_uniform,bool): raise ValueError("workgroup_uniform must be bool")
+    return UOp(Ops.IF, dtypes.void, (gate, self), arg=PostBarrierRegion(workgroup_uniform=workgroup_uniform))
   def end_region(self, *body_roots:UOp) -> UOp:
     if self.op is not Ops.IF or not isinstance(self.arg, PostBarrierRegion):
       raise ValueError("end_region requires an IF created by post_barrier_region")
