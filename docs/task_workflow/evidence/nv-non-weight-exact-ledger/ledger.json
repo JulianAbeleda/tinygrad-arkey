@@ -1,0 +1,55 @@
+{
+  "schema": "tinygrad.nv_non_weight_exact_ledger.v1",
+  "date": "2026-08-25",
+  "source": "docs/task_workflow/evidence/nv-full-qkv-producer-substrate-20260825/phase6-composed/final-installed-ledger.json",
+  "profile_node_sum_us": 4110.720,
+  "classified_row_median_sum_us": 4109.664,
+  "weight_body_row_mass_us": 3281.344,
+  "non_weight_row_mass_us": 828.320,
+  "unclassified_median_to_node_sum_residual_us": 1.056,
+  "buckets": [
+    {
+      "bucket": "flash_score",
+      "mass_us": 234.048,
+      "status": "COMPULSORY_BODY_TESTED_CONSTRUCTIONS_CLOSED",
+      "evidence": "body already at parity/faster in retained comparison; single-stage, cache, readiness and PDL constructions closed"
+    },
+    {
+      "bucket": "flash_combine",
+      "mass_us": 99.872,
+      "status": "WIDTH_AXIS_WALL_CLOSED",
+      "evidence": "128-lane device win failed the complete token-wall bracket"
+    },
+    {
+      "bucket": "norm_rope_provider",
+      "mass_us": 474.112,
+      "status": "COUPLED_MOSTLY_COMPULSORY_TOP_EXACT_AXIS_CLOSED",
+      "evidence": "norm/provider accounting is offset by fused activation-quant advantage; compact exact 4096 reduction tested in this campaign was slower"
+    },
+    {
+      "bucket": "native_argmax",
+      "mass_us": 8.512,
+      "status": "PROMOTED_NEAR_FLOOR",
+      "evidence": "single-CTA exact replacement already removed the former serial vocab tail"
+    },
+    {
+      "bucket": "misc_reduce_elementwise",
+      "mass_us": 11.776,
+      "status": "SMALL_COMPULSORY_OR_BOUNDARY_MASS",
+      "evidence": "entire gross mass is below a material campaign threshold before replacement cost"
+    }
+  ],
+  "new_test": {
+    "candidate": "compact exact reduce_output_rmsnorm_1_4096",
+    "mechanism": "compute the 16 ordinary serial 256-element partials once rather than redundantly across lanes while retaining their combine order and the 512-thread affine epilogue",
+    "elementwise_bit_exact": true,
+    "control_device_us": 5.408,
+    "candidate_device_us": 7.936,
+    "control_confirm_device_us": 5.408,
+    "candidate_delta_us_per_call": 2.528,
+    "population_calls": 19,
+    "decision": "PRIMITIVE_NO_GO"
+  },
+  "booked_recovery_us_per_token": 0.0,
+  "decision": "NO_MATERIAL_UNCLOSED_EXACT_NON_WEIGHT_POOL"
+}
