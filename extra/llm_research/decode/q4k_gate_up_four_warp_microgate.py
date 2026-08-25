@@ -12,6 +12,8 @@ which this standalone gate cannot and does not substitute for).
 from __future__ import annotations
 
 import argparse
+import csv
+import io
 import json
 import os
 import re
@@ -34,6 +36,7 @@ from tinygrad.renderer.cuda import CUDARenderer
 from tinygrad.uop.ops import Ops, UOp
 
 CUDA_BIN = "/usr/local/cuda-13.2/bin"
+NCU = "/usr/local/bin/ncu"
 ROWS, K = 12288, 4096
 W_PER_TENSOR = (K // Q4_K_BLOCK_ELEMS) * 36 * ROWS
 
@@ -160,10 +163,33 @@ int main(int argc, char** argv) {
 """
 
 
+def _ncu(binary: str, symbol: str) -> list[dict[str, str]]:
+  metrics = ",".join([
+    "dram__bytes.sum", "dram__bytes_op_read.sum", "dram__bytes_op_write.sum",
+    "dram__throughput.avg.pct_of_peak_sustained_elapsed", "gpu__time_duration.sum",
+    "l1tex__throughput.avg.pct_of_peak_sustained_elapsed", "lts__t_bytes.sum",
+    "lts__t_sector_op_read_hit_rate.pct", "sm__inst_executed.sum",
+    "sm__throughput.avg.pct_of_peak_sustained_elapsed", "launch__registers_per_thread",
+  ])
+  cp = subprocess.run(["sudo", "-n", NCU, "-k", symbol, "--launch-skip", "1", "--launch-count", "1",
+    "--cache-control", "all", "--metrics", metrics, "--csv", binary, "1", "1"],
+    capture_output=True, text=True)
+  if cp.returncode:
+    raise RuntimeError(f"ncu {symbol} failed: {cp.stderr[-4000:]}")
+  rows, header = [], None
+  for cols in csv.reader(io.StringIO(cp.stdout)):
+    if cols and cols[0] == "ID": header = cols; continue
+    if header is not None and len(cols) == len(header):
+      row = dict(zip(header, cols))
+      rows.append({"metric": row["Metric Name"], "unit": row["Metric Unit"], "value": row["Metric Value"]})
+  return rows
+
+
 def main() -> int:
   ap = argparse.ArgumentParser()
   ap.add_argument("--passes", type=int, default=200)
   ap.add_argument("--reps", type=int, default=7)
+  ap.add_argument("--ncu", action="store_true")
   ap.add_argument("--out", default="")
   args = ap.parse_args()
 
@@ -232,6 +258,12 @@ def main() -> int:
         "control_median": med(c_vals),
         "candidate_median": med(v_vals),
         "candidate_over_control": med(v_vals) / med(c_vals),
+      }
+    if args.ncu:
+      out["ncu"] = {
+        "method": "Nsight Compute --cache-control all; one post-warmup launch",
+        "current": {"symbol": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+          "rows": _ncu(binp, "q4k_gate_up_four_warp_vec_fp16_12288_4096")},
       }
 
     text = json.dumps(out, indent=2, sort_keys=True)

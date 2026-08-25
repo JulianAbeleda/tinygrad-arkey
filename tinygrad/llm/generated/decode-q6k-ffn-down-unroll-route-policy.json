@@ -1,0 +1,7 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "description": "Promotes bit-exact four-block unrolling for packed-lane Q6_K FFN-down after cold-counter and production d512 wall qualification. TINYGRAD_Q6K_FFN_DOWN_UNROLL_DISABLE=1 restores the packed-lane loop.",
+  "promoted_targets": [
+    {"backend": "NV", "architecture": "sm_120"}
+  ]
+}

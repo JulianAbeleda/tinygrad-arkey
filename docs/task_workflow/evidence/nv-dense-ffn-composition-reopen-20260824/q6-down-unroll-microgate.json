@@ -1,0 +1,95 @@
+{
+  "commit": "1d1690f15309df73ce4e966319f0bae8a4562b0d",
+  "correctness": {
+    "12": {
+      "bitwise_identical": true,
+      "finite": true,
+      "max_abs_diff": 0.0
+    },
+    "2": {
+      "bitwise_identical": true,
+      "finite": true,
+      "max_abs_diff": 0.0
+    },
+    "3": {
+      "bitwise_identical": true,
+      "finite": true,
+      "max_abs_diff": 0.0
+    },
+    "4": {
+      "bitwise_identical": true,
+      "finite": true,
+      "max_abs_diff": 0.0
+    },
+    "6": {
+      "bitwise_identical": true,
+      "finite": true,
+      "max_abs_diff": 0.0
+    }
+  },
+  "mechanism": "unroll the 12-block packed-lane loop to expose independent loads against long-scoreboard stalls",
+  "payload": {
+    "q6_sha256": "4fe2fde3ad2580a88cacbc2c5e415d1a33d8de2d56d27e4497e59a640bc9ebd3",
+    "x_sha256": "371643f46464fb03d5a0a9b0bb3630a9debf7777c2fb008486a3d86d2e4fb698"
+  },
+  "schema": "tinygrad.nv_q6k_down_unroll_microgate.v1",
+  "timing": {
+    "best_recovery_us": 0.7609299999999735,
+    "best_unroll": 12,
+    "medians": {
+      "12": 134.1528,
+      "2": 134.96141,
+      "3": 135.45424,
+      "4": 134.45917,
+      "6": 134.68209000000002,
+      "control": 134.91373
+    },
+    "replays": 100,
+    "reps": 5,
+    "samples": {
+      "12": [
+        133.99721,
+        132.70638,
+        134.1528,
+        134.25268,
+        134.49063
+      ],
+      "2": [
+        134.96141,
+        133.92788000000002,
+        136.10254999999998,
+        134.57609,
+        135.07201999999998
+      ],
+      "3": [
+        135.38571,
+        137.27886,
+        135.66664,
+        134.20850000000002,
+        135.45424
+      ],
+      "4": [
+        134.80202,
+        133.31251,
+        134.56547,
+        134.02215,
+        134.45917
+      ],
+      "6": [
+        135.17121,
+        134.68209000000002,
+        135.09215,
+        133.16805,
+        134.09429
+      ],
+      "control": [
+        139.34894,
+        134.77296,
+        134.91373,
+        135.43651,
+        134.51398
+      ]
+    },
+    "unit": "us_per_launch_host_synchronized"
+  }
+}

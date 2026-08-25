@@ -39,6 +39,7 @@ class Q6KFFNDownMMVQAdmission:
   fp16_fma: bool = True
   rows_per_block: int = 1
   packed_lanemap: bool = False
+  unroll_blocks: int|None = None
   def __post_init__(self):
     if not isinstance(self.block_index, int) or isinstance(self.block_index, bool) or self.block_index < 0:
       raise ValueError("Q6_K FFN-down MMVQ block index must be a non-negative integer")
@@ -50,6 +51,10 @@ class Q6KFFNDownMMVQAdmission:
       raise ValueError("packed_lanemap must be bool")
     if self.packed_lanemap and self.rows_per_block != 1:
       raise ValueError("packed_lanemap is admitted only for rows_per_block=1")
+    if self.unroll_blocks not in (None, 2, 3, 4, 6, 12):
+      raise ValueError("unroll_blocks must divide the 12-block packed-lane loop")
+    if self.unroll_blocks is not None and not self.packed_lanemap:
+      raise ValueError("unroll_blocks requires packed_lanemap=True")
 
 
 def _i8f(v:UOp) -> UOp: return v.cast(dtypes.uint8).bitcast(dtypes.int8).cast(dtypes.float32)
@@ -86,11 +91,14 @@ def _q6k_block_dot_packed_lanemap(halfs:UOp, x:UOp, base:UOp, x_block:UOp, lane:
   return contribution
 
 
-def emit_q6k_four_warp_fp16_direct(*, rows_per_block:int=1, packed_lanemap:bool=False) -> callable:
+def emit_q6k_four_warp_fp16_direct(*, rows_per_block:int=1, packed_lanemap:bool=False,
+                                   unroll_blocks:int|None=None) -> callable:
   """Four-warp fp16-direct Q6_K FFN-down consumer (128 threads/row, no Q8 provider)."""
   if rows_per_block not in (1, 2, 4, 8): raise ValueError(f"unsupported Q6 FFN-down rows_per_block {rows_per_block}")
   if not isinstance(packed_lanemap, bool): raise ValueError("packed_lanemap must be bool")
   if packed_lanemap and rows_per_block != 1: raise ValueError("packed_lanemap requires rows_per_block=1")
+  if unroll_blocks not in (None, 2, 3, 4, 6, 12): raise ValueError("unroll_blocks must divide the 12-block packed-lane loop")
+  if unroll_blocks is not None and not packed_lanemap: raise ValueError("unroll_blocks requires packed_lanemap=True")
   def kernel(out:UOp, halfs:UOp, x:UOp, h:UOp) -> UOp:
     row_group = UOp.special(ROWS // rows_per_block, "gidx0")
     lid = UOp.special(WARP * WARPS_PER_ROW * rows_per_block, "lidx0")
@@ -100,13 +108,19 @@ def emit_q6k_four_warp_fp16_direct(*, rows_per_block:int=1, packed_lanemap:bool=
 
     acc = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG)
     acc = acc.after(acc[0].store(0.0))
-    blk = UOp.range(BLOCKS_PER_WARP if packed_lanemap else BLOCKS_PER_SUB, 0, axis_type=AxisType.REDUCE)
-    block = (warp * BLOCKS_PER_WARP + blk if packed_lanemap else
-             warp * BLOCKS_PER_WARP + (lane // POS) * BLOCKS_PER_SUB + blk)
-    base = (row * K_BLOCKS + block) * Q6K_HALFWORDS_PER_BLOCK
-    contrib = (_q6k_block_dot_packed_lanemap(halfs, x, base, block, lane) if packed_lanemap else
-               _q6k_block_dot(halfs, x, base, block, lane % POS))
-    acc = acc.after(acc[0].store(acc.after(blk)[0] + contrib).end(blk))
+    outer = UOp.range((BLOCKS_PER_WARP // unroll_blocks) if unroll_blocks is not None else
+                      (BLOCKS_PER_WARP if packed_lanemap else BLOCKS_PER_SUB), 0, axis_type=AxisType.REDUCE)
+    blocks = [outer * unroll_blocks + j for j in range(unroll_blocks)] if unroll_blocks is not None else [outer]
+    contribs = []
+    for blk in blocks:
+      block = (warp * BLOCKS_PER_WARP + blk if packed_lanemap else
+               warp * BLOCKS_PER_WARP + (lane // POS) * BLOCKS_PER_SUB + blk)
+      base = (row * K_BLOCKS + block) * Q6K_HALFWORDS_PER_BLOCK
+      contribs.append(_q6k_block_dot_packed_lanemap(halfs, x, base, block, lane) if packed_lanemap else
+                      _q6k_block_dot(halfs, x, base, block, lane % POS))
+    next_acc = acc.after(outer)[0]
+    for contrib in contribs: next_acc = next_acc + contrib
+    acc = acc.after(acc[0].store(next_acc).end(outer))
     total = acc[0]
 
     for slot, offset in enumerate((16, 8, 4, 2, 1), 90):
@@ -118,7 +132,8 @@ def emit_q6k_four_warp_fp16_direct(*, rows_per_block:int=1, packed_lanemap:bool=
     for wi in range(WARPS_PER_ROW):
       merged = merged + smem.after(ready)[row_in_block * WARPS_PER_ROW + wi]
     result = merged + h[row].cast(dtypes.float32)
-    name = ("q6k_fp16_packed_lanemap_4096_12288_epi_ffnresadd" if packed_lanemap else
+    name = (f"q6k_fp16_packed_lanemap_u{unroll_blocks}_4096_12288_epi_ffnresadd" if unroll_blocks is not None else
+            "q6k_fp16_packed_lanemap_4096_12288_epi_ffnresadd" if packed_lanemap else
             "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd" if rows_per_block == 1 else
             f"q6k_fp16_mmvq_direct_rpb{rows_per_block}_4096_12288_epi_ffnresadd")
     return out[row].store(result, row_lid.eq(0)).sink(arg=KernelInfo(name=name, opts_to_apply=()))
@@ -140,7 +155,8 @@ def q6k_ffn_down_mmvq_call(admission:object, linear:Any, x:Tensor, binding:Any,
   residual = epilogue_inputs["normed_h"][:, 0, :].reshape(ROWS).cast(dtypes.float32)
   consumer = KernelProgram("decode_q6k_ffn_down_mmvq", f"blk{admission.block_index}.gemv",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
-    emit_q6k_four_warp_fp16_direct(rows_per_block=admission.rows_per_block, packed_lanemap=admission.packed_lanemap),
+    emit_q6k_four_warp_fp16_direct(rows_per_block=admission.rows_per_block, packed_lanemap=admission.packed_lanemap,
+      unroll_blocks=admission.unroll_blocks),
     output_spec=OutputSpec((ROWS,), dtypes.float32,
       typed_output=DeclaredTypedOutput(TypedLayout(dtypes.float32, (ROWS,), (1, 1, ROWS)),
         combine_fusion_admitted=False, epilogue_absorption_admitted=True)),

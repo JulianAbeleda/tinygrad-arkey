@@ -1,0 +1,32 @@
+{
+  "microgate": {
+    "12": {
+      "bitwise_identical": true,
+      "finite": true,
+      "max_abs_diff": 0.0
+    },
+    "2": {
+      "bitwise_identical": true,
+      "finite": true,
+      "max_abs_diff": 0.0
+    },
+    "3": {
+      "bitwise_identical": true,
+      "finite": true,
+      "max_abs_diff": 0.0
+    },
+    "4": {
+      "bitwise_identical": true,
+      "finite": true,
+      "max_abs_diff": 0.0
+    },
+    "6": {
+      "bitwise_identical": true,
+      "finite": true,
+      "max_abs_diff": 0.0
+    }
+  },
+  "schema": "tinygrad.nv_dense_ffn_candidate_exactness.v1",
+  "token_stream_hash": "28b0923439dde9076100800bfaed6a9a8a7e00e396691776a16514a609e0543a",
+  "wall_all_token_hashes_equal": true
+}

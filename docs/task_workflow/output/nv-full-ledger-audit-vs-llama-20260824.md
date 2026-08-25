@@ -1,5 +1,9 @@
 # NV full ledger audit versus llama — post-campaign rebuild
 
+> Superseded for the current tinygrad endpoint and device ledger by
+> `nv-dense-ffn-composition-reopen-result-20260824.md`. This document remains
+> the retained pre-Q6-unroll campaign comparison.
+
 Date: 2026-08-24
 tinygrad tested commit: `7a18a43ff`
 GPU: RTX 5090, graphics 2790 MHz / memory 14001 MHz

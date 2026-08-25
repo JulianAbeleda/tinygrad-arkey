@@ -1,0 +1,11 @@
+{
+  "arithmetic_order": "left-to-right block accumulation preserved",
+  "candidate": "Q6 packed-lane four-block unroll",
+  "compulsory_bytes": "unchanged",
+  "input_contract": "unchanged Q6_K weights, fp16 activation, fp32 residual",
+  "output_contract": "unchanged fp32[4096] residual-added output",
+  "population": 18,
+  "rollback": "TINYGRAD_Q6K_FFN_DOWN_UNROLL_DISABLE=1",
+  "schema": "tinygrad.nv_dense_ffn_candidate_contract.v1",
+  "topology": "unchanged"
+}

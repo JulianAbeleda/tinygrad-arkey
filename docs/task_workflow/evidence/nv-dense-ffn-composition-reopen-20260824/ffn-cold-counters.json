@@ -1,0 +1,31 @@
+{
+  "attribution": {
+    "gateup_dram_pct": 84.94,
+    "q4_down_vector_dram_pct": 73.85,
+    "q6_control_dram_pct": 74.74,
+    "q6_control_duration_ns": 31392.0,
+    "q6_control_long_scoreboard_pct": 75.05,
+    "q6_u4_dram_pct": 77.5,
+    "q6_u4_duration_ns": 30272.0,
+    "q6_u4_long_scoreboard_pct": 41.46
+  },
+  "schema": "tinygrad.nv_dense_ffn_cold_counters.v1",
+  "sources": {
+    "gateup": {
+      "path": "docs/task_workflow/evidence/nv-dense-ffn-composition-reopen-20260824/gateup-cold-counters.json",
+      "sha256": "db3c9b7a0c1bca229c64084ef74d467b5114a977d3ca4840722c5e6673399bfa"
+    },
+    "q4_down": {
+      "path": "docs/task_workflow/evidence/nv-q4k-down-vector-load-20260824/microgate.json",
+      "sha256": "b71636ac8a0b01d7a1f0be3cdddeb3bb2813c92fc99265fb72205b761e2c50a7"
+    },
+    "q6_down": {
+      "path": "docs/task_workflow/evidence/nv-dense-ffn-composition-reopen-20260824/q6-down-cold-counters.json",
+      "sha256": "072e0981f23c4191653dec9354db353578bb9a28a0fa4d09301da888e2a162f3"
+    },
+    "q6_down_u4": {
+      "path": "docs/task_workflow/evidence/nv-dense-ffn-composition-reopen-20260824/q6-down-u4-cold-counters.json",
+      "sha256": "60c21b4160c8bae9859d409903995e0709612b659c5c1eb7180e3660585cd6bf"
+    }
+  }
+}

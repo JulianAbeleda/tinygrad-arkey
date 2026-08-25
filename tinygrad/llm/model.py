@@ -61,6 +61,7 @@ from tinygrad.llm.model_route_plan import (build_model_route_plan, decode_norm_f
   decode_shared_q8_q4kv_pair_promoted, decode_shared_q8_q4q6_kv_pair_promoted,
   decode_q4k_ffn_down_fp16_geometry_promoted,
   decode_q6k_ffn_down_fp16_geometry_promoted, decode_q6k_ffn_down_packed_lanemap_promoted,
+  decode_q6k_ffn_down_unroll_promoted,
   decode_q6k_v_four_warp_fp16_geometry_promoted)
 from tinygrad.llm.prefill_candidate_runtime import decode_prefill_graph_candidate_set, automatic_promoted_prefill_graph_policy
 from tinygrad.llm.physical_memory_ledger import AllocationOwner, bind_allocation_owner
@@ -1928,6 +1929,8 @@ class Transformer:
       decode_q6k_ffn_down_fp16_geometry_promoted((_norm_cap.backend, _norm_cap.architecture))
     model._decode_q6k_ffn_down_packed_lanemap_promoted = model._decode_q6k_ffn_down_fp16_geometry_promoted and \
       decode_q6k_ffn_down_packed_lanemap_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_q6k_ffn_down_unroll_promoted = model._decode_q6k_ffn_down_packed_lanemap_promoted and \
+      decode_q6k_ffn_down_unroll_promoted((_norm_cap.backend, _norm_cap.architecture))
     # Q6_K attention-V four-warp fp16 geometry route (decode-q6k-v-four-warp-fp16-geometry-route-policy.json,
     # NV sm_120 promoted, in-loop 5.12 us vs 17.94 us control, -147.35 us/token wall bracket). It replaces
     # the parts route on the 10 Q6_K attention-V blocks with a 128-thread four-warp fp16 direct consumer;
@@ -2097,7 +2100,8 @@ class Transformer:
           if _ffn is not None and isinstance(_ffn, Q6KPrimitiveLinear) and getattr(_ffn, "route_role", "") == "ffn_down" \
              and getattr(_ffn, "out_features", None) == 4096 and getattr(_ffn, "in_features", None) == 12288:
             _ffn._q6k_ffn_down_mmvq_admission = Q6KFFNDownMMVQAdmission(_idx, fp16_fma=True,
-              packed_lanemap=model._decode_q6k_ffn_down_packed_lanemap_promoted)
+              packed_lanemap=model._decode_q6k_ffn_down_packed_lanemap_promoted,
+              unroll_blocks=4 if model._decode_q6k_ffn_down_unroll_promoted else None)
       # Q6_K attention-V four-warp fp16 geometry route: install the admission on the exact Q6_K
       # 1024x4096 attn_kv role only (Q4 V keeps its own shared-Q8 route). Normal loads carry no
       # admission, so this stays closed on every other target.

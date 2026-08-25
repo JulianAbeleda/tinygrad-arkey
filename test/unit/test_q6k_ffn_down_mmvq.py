@@ -8,7 +8,7 @@ from tinygrad.runtime.support.compiler_cuda import NVRTCCompiler
 from tinygrad.uop.ops import Ops, UOp
 from tinygrad.llm.decode_routes import _Q6KDecodeCandidate
 from tinygrad.llm.model_route_plan import (decode_q6k_ffn_down_fp16_geometry_promoted,
-  decode_q6k_ffn_down_packed_lanemap_promoted)
+  decode_q6k_ffn_down_packed_lanemap_promoted, decode_q6k_ffn_down_unroll_promoted)
 from tinygrad.llm.q6k_ffn_down_mmvq import (K, ROWS, Q6KFFNDownMMVQAdmission,
   emit_q6k_four_warp_fp16_direct, q6k_ffn_down_mmvq_call)
 from tinygrad.llm.qk_layout import Q6K_HALFWORDS_PER_BLOCK
@@ -46,6 +46,18 @@ def test_production_call_is_closed_without_explicit_admission():
     pass
   else:
     raise AssertionError("packed lanemap must fail closed for unproved row packing")
+  try:
+    Q6KFFNDownMMVQAdmission(0, packed_lanemap=True, unroll_blocks=5)
+  except ValueError:
+    pass
+  else:
+    raise AssertionError("unroll must divide the 12-block packed-lane loop")
+  try:
+    Q6KFFNDownMMVQAdmission(0, unroll_blocks=4)
+  except ValueError:
+    pass
+  else:
+    raise AssertionError("unroll must require the packed-lane route")
 
 
 def test_default_decode_route_import_is_strictly_behind_explicit_lease_guard():
@@ -99,6 +111,16 @@ def test_packed_lanemap_emitter_is_a_distinct_closed_default_spelling():
   assert "half4" in source and "__shfl_xor_sync" in source and "__syncthreads" in source
   assert "st.global" in ptx and "shfl.sync" in ptx
 
+  unrolled = emit_q6k_four_warp_fp16_direct(packed_lanemap=True, unroll_blocks=4)(
+    UOp.placeholder((ROWS,), dtypes.float32, 0),
+    UOp.placeholder((halfs_words,), dtypes.uint16, 1),
+    UOp.placeholder((K,), dtypes.float16, 2),
+    UOp.placeholder((ROWS,), dtypes.float32, 3))
+  unrolled_program = to_program(unrolled, CUDARenderer(Target.parse("NV:CUDA:sm_120")))
+  unrolled_source = next(u.arg for u in unrolled_program.src if u.op is Ops.SOURCE)
+  assert "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd" in unrolled_source
+  assert "Ridx0 < 3" in unrolled_source
+
 
 def test_route_policy_promotes_nv_sm120_only():
   # Promoted on NV sm_120 after the capture-safe prune fix restored the decode
@@ -114,3 +136,11 @@ def test_packed_lanemap_policy_is_target_scoped_with_rollback():
   assert not decode_q6k_ffn_down_packed_lanemap_promoted(("AMD", "gfx1100"), lambda _key, _default: 0)
   assert not decode_q6k_ffn_down_packed_lanemap_promoted(("NV", "sm_120"), lambda key, _default:
     int(key == "TINYGRAD_Q6K_FFN_DOWN_PACKED_LANEMAP_DISABLE"))
+
+
+def test_unroll_policy_is_target_scoped_with_rollback():
+  assert decode_q6k_ffn_down_unroll_promoted(("NV", "sm_120"), lambda _key, _default: 0)
+  assert not decode_q6k_ffn_down_unroll_promoted(("NV", "sm_89"), lambda _key, _default: 0)
+  assert not decode_q6k_ffn_down_unroll_promoted(("AMD", "gfx1100"), lambda _key, _default: 0)
+  assert not decode_q6k_ffn_down_unroll_promoted(("NV", "sm_120"), lambda key, _default:
+    int(key == "TINYGRAD_Q6K_FFN_DOWN_UNROLL_DISABLE"))
