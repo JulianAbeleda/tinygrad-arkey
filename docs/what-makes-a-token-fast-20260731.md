@@ -1,13 +1,14 @@
-# What makes a token fast
+# What makes inference fast
 
 Date: 2026-07-31
-Updated: 2026-08-24 (dense-token ledger, causal promotion loop, and wall interpretation)
+Updated: 2026-08-24 (kernel lifecycle, token lifecycle, dense-token ledger, and causal promotion loop)
 
 This is a principles document. It is not organised around beating any particular competitor —
 llama.cpp appears only as an external datapoint that validates the frame. The principles below are
 irreducible: they follow from how the hardware works, and they hold on any target.
 
-This is the canonical repo answer to **"what makes a kernel/token fast?"**
+This is the canonical repo answer to **"what makes inference fast?"** It has two nested answers: first
+make each selected kernel fast, then make the complete token path preserve those local gains.
 `docs/beating-llama-first-principles-20260731.md` applies an earlier version of these principles to one
 campaign; `docs/pure-machine-search.md` defines authorship and promotion provenance. Neither replaces this
 document. New performance theory belongs here first, then campaign scopes may cite it without restating it.
@@ -29,7 +30,53 @@ sampling protocol can be audited.
 
 ---
 
-## 0. The complete dense-token ledger, and why ledger-driven progress compounds
+## 0. Fast kernels and fast tokens are two different achievements
+
+Inference performance has two lifecycles:
+
+```text
+kernel lifecycle                         token lifecycle
+----------------                         ---------------
+identify one operation                   inventory the whole token route
+        ↓                                        ↓
+find its binding resource                rank total repeated/critical cost
+        ↓                                        ↓
+build and validate a local candidate     compose selected kernels and contracts
+        ↓                                        ↓
+prove the kernel itself is faster        remove copies, boundaries, and serial tails
+        ↓                                        ↓
+declare its exact output contract ─────→ prove the complete production token is faster
+```
+
+The left lifecycle creates a locally efficient primitive. The right lifecycle decides whether inference
+benefits. A kernel can win in isolation while the token stays flat because its saved time is replaced by
+a conversion, materialization, launch, synchronization, or slower consumer. Conversely, a modest kernel
+change can create a large token win when its output contract also deletes repeated downstream work.
+
+This distinction explains why a system may already have highly competitive arithmetic kernels and still
+have a slower token path. The remaining problem is then not necessarily to invent better matrix math. It
+is to stop losing that kernel speed at the joins between operations and across the repeated layer graph.
+
+### 0.1 The kernel lifecycle: create local speed
+
+Every kernel candidate should pass through the same lifecycle:
+
+| stage | required question | evidence |
+| --- | --- | --- |
+| identify | What exact semantic operation, shapes, formats, and multiplicity does this kernel serve? | selected production route and census |
+| attribute | Which resource binds: compulsory bytes, route bytes, instruction issue, compute rate, occupancy, reduction, or latency? | byte/operation ledger, profiler counters, and disassembly where needed |
+| design | Which mechanism attacks that bound without moving cost elsewhere? | explicit causal claim |
+| validate | Is the candidate bit-exact or within the declared numerical contract? | boundary-level exactness test |
+| isolate | Does the intended mechanism make the kernel faster under representative cache and input conditions? | repeated kernel or subgraph bracket |
+| contract | Does it emit the dtype, layout, ownership, and destination required by the real consumer? | producer/consumer contract audit |
+| compose | Is the candidate still selected, and does its gain survive its immediate production neighborhood? | production subgraph measurement |
+| promote | Does the complete token wall improve without an unexplained ledger displacement? | clean repeated end-to-end bracket |
+
+The isolated result answers **“did we build a faster kernel?”** It does not answer **“did inference get
+faster?”** Isolation is intentionally useful: it proves or rejects the local mechanism cheaply. But the
+candidate remains provisional until the token lifecycle accepts it.
+
+### 0.2 The token lifecycle: preserve and compose local speed
 
 A token becomes faster only when the production route completes sooner. Kernel instruction count,
 launch count, node count, bandwidth, and isolated microbenchmark time are evidence about that route;
@@ -44,7 +91,19 @@ The identity is an accounting model, not permission to subtract independently me
 `node_sum`, `device_union`, and wall must come from compatible runs and clock domains before their
 difference is interpreted.
 
-### 0.1 The route ledger
+The token lifecycle is:
+
+1. Inventory every semantic region, physical node, boundary, and repetition in the selected route.
+2. Rank total critical contribution rather than isolated per-call time.
+3. Insert locally validated kernels with explicit producer/consumer contracts.
+4. Remove hidden copies, materializations, redundant preparation, graph breaks, and serial tails.
+5. Measure device node sum, genuine overlap, device union, and production wall in compatible domains.
+6. Accept only gains that remain visible at wall, then rebuild the ledger because the bottleneck moved.
+
+The token result answers **“did the user receive the next token sooner?”** That is the authority for
+inference speed.
+
+### 0.3 The route ledger
 
 For a conventional decoder-only dense transformer, inventory the whole production token in dependency
 order. Implementations may fuse or rename rows, but no semantic work may disappear from the ledger:
@@ -80,7 +139,7 @@ This is the entire ledger in two senses: every semantic region is present, and e
 body work, transported bytes, a topology boundary, overlap, or an unaccounted residual. A faster kernel
 that merely moves cost into a conversion or copy has not improved the ledger.
 
-### 0.2 The only general ways to make a dense token faster
+### 0.4 The only general ways to make a dense token faster
 
 Every valid win reduces at least one term below without increasing another by more:
 
@@ -105,9 +164,10 @@ Fewer nodes are useful only when they represent less critical-path work or fewer
 can still form a faster token if their union is smaller. Likewise, an isolated bandwidth or instruction
 win is only a mechanism; wall reduction is the composed result.
 
-### 0.3 Why the ledger makes progress faster
+### 0.5 Why the two-lifecycle ledger makes progress faster
 
-The productive loop is deliberately asymmetric: testing is cheap, promotion is demanding.
+The productive loop joins the two lifecycles and is deliberately asymmetric: testing is cheap,
+promotion is demanding.
 
 1. Capture a fresh production wall and a full device ledger.
 2. Rank rows by total token contribution, not by per-call ugliness or visual complexity.
