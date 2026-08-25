@@ -51,6 +51,31 @@ Both require a new causal construction before any tok/s credit.
 
 Decision: `BYTE_AND_KERNEL_PASS__RECURRENT_QUALITY_WALL__NO_BOOKING`.
 
+## Selective-precision follow-up
+
+All 18 Q6-down blocks were subsequently tested as independent Q5 singletons
+under the same four-step recurrent full-logit gate. All logits were finite and
+all greedy tokens agreed, but **zero of 18** singletons satisfied `1e-3` on
+both aggregate and every recurrent step. The best placement was block 2 at
+aggregate `1.500e-3`; the population median was `2.868e-3`.
+
+The reason is not ordinary local quantization error. Singleton full-logit error
+is negatively correlated with both standalone projection error (`-0.521`) and
+weight error (`-0.498`). Block 6 is the clearest counterexample: it has the
+lowest local error but is the second-worst full-model placement. Downstream
+amplification and cancellation determine admissibility.
+
+A row-selective discriminator retained the largest standalone-error rows of
+the best block in Q6. Keeping 25% and 50% improved aggregate error, but no arm
+passed every recurrent step; keeping 75% became worse again. The response is
+non-monotonic, proving that standalone row-error ranking is not a safe mixed-
+precision policy. A reopen now requires end-to-end calibration sensitivity or
+direct subset search. Uniform block selection and weight-error row selection
+are closed.
+
+Follow-up decision:
+`NO_ADMISSIBLE_SINGLETON__WEIGHT_ERROR_ROW_SELECTOR_NON_MONOTONIC`.
+
 Evidence:
 
 - `docs/task_workflow/evidence/nv-numerical-byte-reduction/q6-v-feasibility.json`
@@ -60,3 +85,4 @@ Evidence:
 - `docs/task_workflow/evidence/nv-numerical-byte-reduction/q5-logits-control.json`
 - `docs/task_workflow/evidence/nv-numerical-byte-reduction/q5-logits-block0.json`
 - `docs/task_workflow/evidence/nv-numerical-byte-reduction/q5-logits-block0-comparison.json`
+- `docs/task_workflow/evidence/nv-numerical-byte-reduction/q5-sensitivity-census.json`
