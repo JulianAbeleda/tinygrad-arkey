@@ -58,6 +58,22 @@ us/token across the nine eligible groups. This fails before model integration,
 so there is no justification for an output-ownership lease, route census, or
 full-token A/B/A.
 
+## Service-rate ceiling
+
+The measured payload is about 14.17 MB per Q4/Q4/Q4 group. Holding that byte
+count and all other work fixed, the best-case arithmetic ceilings are small:
+
+| hypothetical aggregate rate | body time | recovery versus balanced | nine-group token recovery |
+| ---: | ---: | ---: | ---: |
+| 1.135 TB/s (Q-control rate) | 12.48 us | 3.20 us/group | 28.8 us/token, about +1.6 tok/s |
+| 1.47 TB/s (down rate) | 9.64 us | 6.04 us/group | 54.3 us/token, about +3.0 tok/s |
+| 1.60 TB/s (gate/up rate) | 8.85 us | 6.82 us/group | 61.4 us/token, about +3.5 tok/s |
+
+These are roofline ceilings, not forecasts: they assume the higher rate costs
+no extra instructions, barriers, or output transport. They show why CTA
+service-rate improvement is worth testing, but cannot by itself close a
+roughly millisecond-scale endpoint gap.
+
 ## Counter accounting
 
 Cold NCU replay observes effectively the same DRAM payload:
