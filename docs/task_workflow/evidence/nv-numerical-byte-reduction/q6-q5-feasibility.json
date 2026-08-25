@@ -1,0 +1,902 @@
+{
+  "commit": "1004877f3dc83299bc9b1b0a2300020c4cbddb32",
+  "quality_contract": {
+    "cosine_min": 0.999,
+    "relative_l2_max": 0.05
+  },
+  "rows": [
+    {
+      "block": 0,
+      "bytes_saved": 557056,
+      "outputs": [
+        {
+          "cosine": 0.9997165435168047,
+          "finite": true,
+          "max_abs": 0.004865681752562523,
+          "mean_abs": 0.0009870844934312117,
+          "relative_l2": 0.02382904057759606
+        },
+        {
+          "cosine": 0.999710143269799,
+          "finite": true,
+          "max_abs": 0.004343068227171898,
+          "mean_abs": 0.0009344420043362334,
+          "relative_l2": 0.024134356302638597
+        }
+      ],
+      "q5_bytes": 2883584,
+      "q6_bytes": 3440640,
+      "role": "V",
+      "tensor": "blk.0.attn_v.weight",
+      "weight": {
+        "cosine": 0.9993479584127261,
+        "finite": true,
+        "max_abs": 0.0032892823219299316,
+        "mean_abs": 0.0005703117918471889,
+        "relative_l2": 0.036109555989092955
+      }
+    },
+    {
+      "block": 1,
+      "bytes_saved": 557056,
+      "outputs": [
+        {
+          "cosine": 0.9994582569241122,
+          "finite": true,
+          "max_abs": 0.010590789839625359,
+          "mean_abs": 0.002138811588565659,
+          "relative_l2": 0.032915973733264825
+        },
+        {
+          "cosine": 0.9995300865464596,
+          "finite": true,
+          "max_abs": 0.009320318698883057,
+          "mean_abs": 0.0018512790538807167,
+          "relative_l2": 0.03065435635644946
+        }
+      ],
+      "q5_bytes": 2883584,
+      "q6_bytes": 3440640,
+      "role": "V",
+      "tensor": "blk.1.attn_v.weight",
+      "weight": {
+        "cosine": 0.9992593729587225,
+        "finite": true,
+        "max_abs": 0.011447668075561523,
+        "mean_abs": 0.0011772160672620657,
+        "relative_l2": 0.03848332301858538
+      }
+    },
+    {
+      "block": 2,
+      "bytes_saved": 557056,
+      "outputs": [
+        {
+          "cosine": 0.99950546863226,
+          "finite": true,
+          "max_abs": 0.007432207465171814,
+          "mean_abs": 0.0015333187284340966,
+          "relative_l2": 0.031474115348057725
+        },
+        {
+          "cosine": 0.9994966428084586,
+          "finite": true,
+          "max_abs": 0.0054919421672821045,
+          "mean_abs": 0.0013816139555729023,
+          "relative_l2": 0.031773776080667185
+        }
+      ],
+      "q5_bytes": 2883584,
+      "q6_bytes": 3440640,
+      "role": "V",
+      "tensor": "blk.2.attn_v.weight",
+      "weight": {
+        "cosine": 0.9993410830342813,
+        "finite": true,
+        "max_abs": 0.006754875183105469,
+        "mean_abs": 0.000846978001945331,
+        "relative_l2": 0.036298848089032824
+      }
+    },
+    {
+      "block": 3,
+      "bytes_saved": 557056,
+      "outputs": [
+        {
+          "cosine": 0.9994684012245598,
+          "finite": true,
+          "max_abs": 0.00919990986585617,
+          "mean_abs": 0.001524348586826818,
+          "relative_l2": 0.03260292903160445
+        },
+        {
+          "cosine": 0.9993892369915982,
+          "finite": true,
+          "max_abs": 0.007061629556119442,
+          "mean_abs": 0.0013555296707181697,
+          "relative_l2": 0.034961174623770186
+        }
+      ],
+      "q5_bytes": 2883584,
+      "q6_bytes": 3440640,
+      "role": "V",
+      "tensor": "blk.3.attn_v.weight",
+      "weight": {
+        "cosine": 0.999307382283333,
+        "finite": true,
+        "max_abs": 0.007445812225341797,
+        "mean_abs": 0.0008768521673943042,
+        "relative_l2": 0.037215786531222955
+      }
+    },
+    {
+      "block": 6,
+      "bytes_saved": 557056,
+      "outputs": [
+        {
+          "cosine": 0.9993388898021504,
+          "finite": true,
+          "max_abs": 0.007811024785041809,
+          "mean_abs": 0.0012493711762999737,
+          "relative_l2": 0.03635798162040458
+        },
+        {
+          "cosine": 0.9991956257377923,
+          "finite": true,
+          "max_abs": 0.005712773650884628,
+          "mean_abs": 0.001138898106319175,
+          "relative_l2": 0.04010306954866796
+        }
+      ],
+      "q5_bytes": 2883584,
+      "q6_bytes": 3440640,
+      "role": "V",
+      "tensor": "blk.6.attn_v.weight",
+      "weight": {
+        "cosine": 0.9992569759122316,
+        "finite": true,
+        "max_abs": 0.01077723503112793,
+        "mean_abs": 0.00068453024499604,
+        "relative_l2": 0.03854622735538951
+      }
+    },
+    {
+      "block": 9,
+      "bytes_saved": 557056,
+      "outputs": [
+        {
+          "cosine": 0.99930953444295,
+          "finite": true,
+          "max_abs": 0.006355235353112221,
+          "mean_abs": 0.0012031078650807103,
+          "relative_l2": 0.03730227839459093
+        },
+        {
+          "cosine": 0.9993035015536703,
+          "finite": true,
+          "max_abs": 0.0055593689903616905,
+          "mean_abs": 0.001113696473339587,
+          "relative_l2": 0.03732662805937077
+        }
+      ],
+      "q5_bytes": 2883584,
+      "q6_bytes": 3440640,
+      "role": "V",
+      "tensor": "blk.9.attn_v.weight",
+      "weight": {
+        "cosine": 0.9993396055483844,
+        "finite": true,
+        "max_abs": 0.006201982498168945,
+        "mean_abs": 0.0006879098368841596,
+        "relative_l2": 0.03633991549017178
+      }
+    },
+    {
+      "block": 12,
+      "bytes_saved": 557056,
+      "outputs": [
+        {
+          "cosine": 0.9992218001163072,
+          "finite": true,
+          "max_abs": 0.0038670022040605545,
+          "mean_abs": 0.0007760222763408819,
+          "relative_l2": 0.03951266646520322
+        },
+        {
+          "cosine": 0.9993226733295799,
+          "finite": true,
+          "max_abs": 0.003855515271425247,
+          "mean_abs": 0.0007118267388932509,
+          "relative_l2": 0.036831202069998265
+        }
+      ],
+      "q5_bytes": 2883584,
+      "q6_bytes": 3440640,
+      "role": "V",
+      "tensor": "blk.12.attn_v.weight",
+      "weight": {
+        "cosine": 0.9993189281212043,
+        "finite": true,
+        "max_abs": 0.0037749409675598145,
+        "mean_abs": 0.0004344401879166071,
+        "relative_l2": 0.03690437849913954
+      }
+    },
+    {
+      "block": 15,
+      "bytes_saved": 557056,
+      "outputs": [
+        {
+          "cosine": 0.9992618663212534,
+          "finite": true,
+          "max_abs": 0.003067496232688427,
+          "mean_abs": 0.0007549401422011215,
+          "relative_l2": 0.03843347688591453
+        },
+        {
+          "cosine": 0.9992500490580701,
+          "finite": true,
+          "max_abs": 0.003122406080365181,
+          "mean_abs": 0.0006689403372774905,
+          "relative_l2": 0.03873342518012153
+        }
+      ],
+      "q5_bytes": 2883584,
+      "q6_bytes": 3440640,
+      "role": "V",
+      "tensor": "blk.15.attn_v.weight",
+      "weight": {
+        "cosine": 0.9993220725795033,
+        "finite": true,
+        "max_abs": 0.007587432861328125,
+        "mean_abs": 0.0004085652992529276,
+        "relative_l2": 0.036818748793666575
+      }
+    },
+    {
+      "block": 18,
+      "bytes_saved": 557056,
+      "outputs": [
+        {
+          "cosine": 0.9993023141909276,
+          "finite": true,
+          "max_abs": 0.003649270161986351,
+          "mean_abs": 0.0007424660758488244,
+          "relative_l2": 0.037353783177140984
+        },
+        {
+          "cosine": 0.9992464725610213,
+          "finite": true,
+          "max_abs": 0.002597544342279434,
+          "mean_abs": 0.0006765537674482403,
+          "relative_l2": 0.03883495026561239
+        }
+      ],
+      "q5_bytes": 2883584,
+      "q6_bytes": 3440640,
+      "role": "V",
+      "tensor": "blk.18.attn_v.weight",
+      "weight": {
+        "cosine": 0.9993296348878357,
+        "finite": true,
+        "max_abs": 0.0046994686126708984,
+        "mean_abs": 0.000416517514125303,
+        "relative_l2": 0.03661303544992593
+      }
+    },
+    {
+      "block": 21,
+      "bytes_saved": 557056,
+      "outputs": [
+        {
+          "cosine": 0.9993527699482242,
+          "finite": true,
+          "max_abs": 0.0037676841020584106,
+          "mean_abs": 0.000680086697684601,
+          "relative_l2": 0.03603248812165206
+        },
+        {
+          "cosine": 0.9992202498556411,
+          "finite": true,
+          "max_abs": 0.0029862960800528526,
+          "mean_abs": 0.0006538741344570553,
+          "relative_l2": 0.03953207463881642
+        }
+      ],
+      "q5_bytes": 2883584,
+      "q6_bytes": 3440640,
+      "role": "V",
+      "tensor": "blk.21.attn_v.weight",
+      "weight": {
+        "cosine": 0.999277906727378,
+        "finite": true,
+        "max_abs": 0.004621267318725586,
+        "mean_abs": 0.00038734327175404815,
+        "relative_l2": 0.0379991083517074
+      }
+    },
+    {
+      "block": 0,
+      "bytes_saved": 6684672,
+      "outputs": [
+        {
+          "cosine": 0.9993679325744048,
+          "finite": true,
+          "max_abs": 0.0654374212026596,
+          "mean_abs": 0.008240011019324811,
+          "relative_l2": 0.0355571519024065
+        },
+        {
+          "cosine": 0.9993643818608392,
+          "finite": true,
+          "max_abs": 0.07939419150352478,
+          "mean_abs": 0.00801431467925795,
+          "relative_l2": 0.035649147983861755
+        }
+      ],
+      "q5_bytes": 34603008,
+      "q6_bytes": 41287680,
+      "role": "down",
+      "tensor": "blk.0.ffn_down.weight",
+      "weight": {
+        "cosine": 0.9993601386480462,
+        "finite": true,
+        "max_abs": 0.028656005859375,
+        "mean_abs": 0.00038639545834110817,
+        "relative_l2": 0.03577051195445004
+      }
+    },
+    {
+      "block": 1,
+      "bytes_saved": 6684672,
+      "outputs": [
+        {
+          "cosine": 0.9990908784178169,
+          "finite": true,
+          "max_abs": 0.04950246214866638,
+          "mean_abs": 0.004889920646519386,
+          "relative_l2": 0.042700483358592056
+        },
+        {
+          "cosine": 0.999208342092858,
+          "finite": true,
+          "max_abs": 0.039045095443725586,
+          "mean_abs": 0.004964201202938057,
+          "relative_l2": 0.03981709924339746
+        }
+      ],
+      "q5_bytes": 34603008,
+      "q6_bytes": 41287680,
+      "role": "down",
+      "tensor": "blk.1.ffn_down.weight",
+      "weight": {
+        "cosine": 0.9990724851674608,
+        "finite": true,
+        "max_abs": 0.054256439208984375,
+        "mean_abs": 0.00023229119636880569,
+        "relative_l2": 0.04306770725834134
+      }
+    },
+    {
+      "block": 2,
+      "bytes_saved": 6684672,
+      "outputs": [
+        {
+          "cosine": 0.9991939459297101,
+          "finite": true,
+          "max_abs": 2.853623390197754,
+          "mean_abs": 0.26229674660862656,
+          "relative_l2": 0.04016568582893209
+        },
+        {
+          "cosine": 0.998982086435308,
+          "finite": true,
+          "max_abs": 3.0551986694335938,
+          "mean_abs": 0.2604010822469718,
+          "relative_l2": 0.045118103035287446
+        }
+      ],
+      "q5_bytes": 34603008,
+      "q6_bytes": 41287680,
+      "role": "down",
+      "tensor": "blk.2.ffn_down.weight",
+      "weight": {
+        "cosine": 0.9990228273830398,
+        "finite": true,
+        "max_abs": 2.259521484375,
+        "mean_abs": 0.012151029137164926,
+        "relative_l2": 0.04420692172888645
+      }
+    },
+    {
+      "block": 3,
+      "bytes_saved": 6684672,
+      "outputs": [
+        {
+          "cosine": 0.9990904283323679,
+          "finite": true,
+          "max_abs": 0.0293533056974411,
+          "mean_abs": 0.005659880034727394,
+          "relative_l2": 0.04264218435124919
+        },
+        {
+          "cosine": 0.9991448640947955,
+          "finite": true,
+          "max_abs": 0.03984738886356354,
+          "mean_abs": 0.005578696681368456,
+          "relative_l2": 0.041367369687937555
+        }
+      ],
+      "q5_bytes": 34603008,
+      "q6_bytes": 41287680,
+      "role": "down",
+      "tensor": "blk.3.ffn_down.weight",
+      "weight": {
+        "cosine": 0.9991636071040375,
+        "finite": true,
+        "max_abs": 0.011893987655639648,
+        "mean_abs": 0.0002650702679230695,
+        "relative_l2": 0.040897290198049586
+      }
+    },
+    {
+      "block": 6,
+      "bytes_saved": 6684672,
+      "outputs": [
+        {
+          "cosine": 0.9996891003192302,
+          "finite": true,
+          "max_abs": 0.11744832992553711,
+          "mean_abs": 0.0015096246190182683,
+          "relative_l2": 0.030314591050053227
+        },
+        {
+          "cosine": 0.9999668770949289,
+          "finite": true,
+          "max_abs": 0.06975841522216797,
+          "mean_abs": 0.0015132911958062323,
+          "relative_l2": 0.009297883711341996
+        }
+      ],
+      "q5_bytes": 34603008,
+      "q6_bytes": 41287680,
+      "role": "down",
+      "tensor": "blk.6.ffn_down.weight",
+      "weight": {
+        "cosine": 0.9998470853052139,
+        "finite": true,
+        "max_abs": 0.052423954010009766,
+        "mean_abs": 6.983235314924248e-05,
+        "relative_l2": 0.017487533018328713
+      }
+    },
+    {
+      "block": 9,
+      "bytes_saved": 6684672,
+      "outputs": [
+        {
+          "cosine": 0.999347090934366,
+          "finite": true,
+          "max_abs": 0.07719027996063232,
+          "mean_abs": 0.011927843737339572,
+          "relative_l2": 0.03613517087817422
+        },
+        {
+          "cosine": 0.999357579685616,
+          "finite": true,
+          "max_abs": 0.05450865626335144,
+          "mean_abs": 0.01157665850905687,
+          "relative_l2": 0.03587004518354243
+        }
+      ],
+      "q5_bytes": 34603008,
+      "q6_bytes": 41287680,
+      "role": "down",
+      "tensor": "blk.9.ffn_down.weight",
+      "weight": {
+        "cosine": 0.999346542614736,
+        "finite": true,
+        "max_abs": 0.01411592960357666,
+        "mean_abs": 0.0005606245729315636,
+        "relative_l2": 0.03614854573330089
+      }
+    },
+    {
+      "block": 12,
+      "bytes_saved": 6684672,
+      "outputs": [
+        {
+          "cosine": 0.9993512288115729,
+          "finite": true,
+          "max_abs": 0.044657960534095764,
+          "mean_abs": 0.010128631974112068,
+          "relative_l2": 0.03601840482711963
+        },
+        {
+          "cosine": 0.9993713509146326,
+          "finite": true,
+          "max_abs": 0.048928916454315186,
+          "mean_abs": 0.009885801728614751,
+          "relative_l2": 0.03545345240338912
+        }
+      ],
+      "q5_bytes": 34603008,
+      "q6_bytes": 41287680,
+      "role": "down",
+      "tensor": "blk.12.ffn_down.weight",
+      "weight": {
+        "cosine": 0.9993433095163411,
+        "finite": true,
+        "max_abs": 0.02108001708984375,
+        "mean_abs": 0.0004778418656895174,
+        "relative_l2": 0.03623789578374344
+      }
+    },
+    {
+      "block": 15,
+      "bytes_saved": 6684672,
+      "outputs": [
+        {
+          "cosine": 0.9993052760029741,
+          "finite": true,
+          "max_abs": 0.061451032757759094,
+          "mean_abs": 0.011196359281939294,
+          "relative_l2": 0.03727987839121773
+        },
+        {
+          "cosine": 0.9993298042204048,
+          "finite": true,
+          "max_abs": 0.05560293793678284,
+          "mean_abs": 0.01094349446339038,
+          "relative_l2": 0.03661105112413235
+        }
+      ],
+      "q5_bytes": 34603008,
+      "q6_bytes": 41287680,
+      "role": "down",
+      "tensor": "blk.15.ffn_down.weight",
+      "weight": {
+        "cosine": 0.9993374559003536,
+        "finite": true,
+        "max_abs": 0.03611946105957031,
+        "mean_abs": 0.0005278050434007753,
+        "relative_l2": 0.036399014368886026
+      }
+    },
+    {
+      "block": 18,
+      "bytes_saved": 6684672,
+      "outputs": [
+        {
+          "cosine": 0.9993696030708593,
+          "finite": true,
+          "max_abs": 0.05360719561576843,
+          "mean_abs": 0.011904688828963117,
+          "relative_l2": 0.03550399170227566
+        },
+        {
+          "cosine": 0.9993272102145818,
+          "finite": true,
+          "max_abs": 0.059427112340927124,
+          "mean_abs": 0.011664244943858648,
+          "relative_l2": 0.036679403643974304
+        }
+      ],
+      "q5_bytes": 34603008,
+      "q6_bytes": 41287680,
+      "role": "down",
+      "tensor": "blk.18.ffn_down.weight",
+      "weight": {
+        "cosine": 0.9993292693516952,
+        "finite": true,
+        "max_abs": 0.0322265625,
+        "mean_abs": 0.0005639185320814496,
+        "relative_l2": 0.03662301187188725
+      }
+    },
+    {
+      "block": 21,
+      "bytes_saved": 6684672,
+      "outputs": [
+        {
+          "cosine": 0.9993291407419277,
+          "finite": true,
+          "max_abs": 0.06390964984893799,
+          "mean_abs": 0.012017699045372865,
+          "relative_l2": 0.036625503166801715
+        },
+        {
+          "cosine": 0.999363733109929,
+          "finite": true,
+          "max_abs": 0.08983486890792847,
+          "mean_abs": 0.011797226733051502,
+          "relative_l2": 0.03567128970536918
+        }
+      ],
+      "q5_bytes": 34603008,
+      "q6_bytes": 41287680,
+      "role": "down",
+      "tensor": "blk.21.ffn_down.weight",
+      "weight": {
+        "cosine": 0.9993401919859901,
+        "finite": true,
+        "max_abs": 0.024727821350097656,
+        "mean_abs": 0.0005667412763183203,
+        "relative_l2": 0.036323837775863003
+      }
+    },
+    {
+      "block": 24,
+      "bytes_saved": 6684672,
+      "outputs": [
+        {
+          "cosine": 0.9993389341850725,
+          "finite": true,
+          "max_abs": 0.05141746997833252,
+          "mean_abs": 0.01095188083809262,
+          "relative_l2": 0.03635820960606964
+        },
+        {
+          "cosine": 0.999348535674346,
+          "finite": true,
+          "max_abs": 0.06228959560394287,
+          "mean_abs": 0.010950953614610626,
+          "relative_l2": 0.03609272565832676
+        }
+      ],
+      "q5_bytes": 34603008,
+      "q6_bytes": 41287680,
+      "role": "down",
+      "tensor": "blk.24.ffn_down.weight",
+      "weight": {
+        "cosine": 0.9993487081355096,
+        "finite": true,
+        "max_abs": 0.027980804443359375,
+        "mean_abs": 0.0005166231579719257,
+        "relative_l2": 0.03608856867681454
+      }
+    },
+    {
+      "block": 27,
+      "bytes_saved": 6684672,
+      "outputs": [
+        {
+          "cosine": 0.9993599400580429,
+          "finite": true,
+          "max_abs": 0.051959097385406494,
+          "mean_abs": 0.01187777049676697,
+          "relative_l2": 0.0357743148574345
+        },
+        {
+          "cosine": 0.9993338606540149,
+          "finite": true,
+          "max_abs": 0.059486448764801025,
+          "mean_abs": 0.01201254533862084,
+          "relative_l2": 0.03649828697670173
+        }
+      ],
+      "q5_bytes": 34603008,
+      "q6_bytes": 41287680,
+      "role": "down",
+      "tensor": "blk.27.ffn_down.weight",
+      "weight": {
+        "cosine": 0.9993557039689149,
+        "finite": true,
+        "max_abs": 0.02395915985107422,
+        "mean_abs": 0.0005609236838199175,
+        "relative_l2": 0.0358942806003052
+      }
+    },
+    {
+      "block": 30,
+      "bytes_saved": 6684672,
+      "outputs": [
+        {
+          "cosine": 0.9993582657758073,
+          "finite": true,
+          "max_abs": 0.04998946189880371,
+          "mean_abs": 0.010681068031317409,
+          "relative_l2": 0.03587285241560242
+        },
+        {
+          "cosine": 0.9993339068835723,
+          "finite": true,
+          "max_abs": 0.06697243452072144,
+          "mean_abs": 0.010651505304849707,
+          "relative_l2": 0.03649366950925681
+        }
+      ],
+      "q5_bytes": 34603008,
+      "q6_bytes": 41287680,
+      "role": "down",
+      "tensor": "blk.30.ffn_down.weight",
+      "weight": {
+        "cosine": 0.9993616786941832,
+        "finite": true,
+        "max_abs": 0.039742469787597656,
+        "mean_abs": 0.0005014683937514993,
+        "relative_l2": 0.035727599564205785
+      }
+    },
+    {
+      "block": 31,
+      "bytes_saved": 6684672,
+      "outputs": [
+        {
+          "cosine": 0.9993836549637283,
+          "finite": true,
+          "max_abs": 0.04952733963727951,
+          "mean_abs": 0.009894812639913653,
+          "relative_l2": 0.03511081465342721
+        },
+        {
+          "cosine": 0.999335588249829,
+          "finite": true,
+          "max_abs": 0.09486919641494751,
+          "mean_abs": 0.009864056557944423,
+          "relative_l2": 0.03646108508987545
+        }
+      ],
+      "q5_bytes": 34603008,
+      "q6_bytes": 41287680,
+      "role": "down",
+      "tensor": "blk.31.ffn_down.weight",
+      "weight": {
+        "cosine": 0.9993624769842891,
+        "finite": true,
+        "max_abs": 0.021886825561523438,
+        "mean_abs": 0.00047518273912317,
+        "relative_l2": 0.03570517569586973
+      }
+    },
+    {
+      "block": 32,
+      "bytes_saved": 6684672,
+      "outputs": [
+        {
+          "cosine": 0.9993744985091905,
+          "finite": true,
+          "max_abs": 0.05656075477600098,
+          "mean_abs": 0.011695065420553874,
+          "relative_l2": 0.03536666196522348
+        },
+        {
+          "cosine": 0.9993841019423947,
+          "finite": true,
+          "max_abs": 0.09594690799713135,
+          "mean_abs": 0.011300116732172683,
+          "relative_l2": 0.03509189284657086
+        }
+      ],
+      "q5_bytes": 34603008,
+      "q6_bytes": 41287680,
+      "role": "down",
+      "tensor": "blk.32.ffn_down.weight",
+      "weight": {
+        "cosine": 0.9993603902995201,
+        "finite": true,
+        "max_abs": 0.034272193908691406,
+        "mean_abs": 0.0005475630782652748,
+        "relative_l2": 0.035763534040082895
+      }
+    },
+    {
+      "block": 33,
+      "bytes_saved": 6684672,
+      "outputs": [
+        {
+          "cosine": 0.9993760517951861,
+          "finite": true,
+          "max_abs": 0.09245109558105469,
+          "mean_abs": 0.011244103884564538,
+          "relative_l2": 0.035321515684978266
+        },
+        {
+          "cosine": 0.9993317438020878,
+          "finite": true,
+          "max_abs": 0.057511404156684875,
+          "mean_abs": 0.01127213677364125,
+          "relative_l2": 0.03655224410444631
+        }
+      ],
+      "q5_bytes": 34603008,
+      "q6_bytes": 41287680,
+      "role": "down",
+      "tensor": "blk.33.ffn_down.weight",
+      "weight": {
+        "cosine": 0.9993608840891096,
+        "finite": true,
+        "max_abs": 0.031208038330078125,
+        "mean_abs": 0.0005352250790930194,
+        "relative_l2": 0.03574974596766261
+      }
+    },
+    {
+      "block": 34,
+      "bytes_saved": 6684672,
+      "outputs": [
+        {
+          "cosine": 0.9993244883250292,
+          "finite": true,
+          "max_abs": 0.062469348311424255,
+          "mean_abs": 0.01020582484352417,
+          "relative_l2": 0.03675237194472108
+        },
+        {
+          "cosine": 0.9993269997688837,
+          "finite": true,
+          "max_abs": 0.18191778659820557,
+          "mean_abs": 0.010086327905582948,
+          "relative_l2": 0.03668483865024923
+        }
+      ],
+      "q5_bytes": 34603008,
+      "q6_bytes": 41287680,
+      "role": "down",
+      "tensor": "blk.34.ffn_down.weight",
+      "weight": {
+        "cosine": 0.9993438568703088,
+        "finite": true,
+        "max_abs": 0.026479721069335938,
+        "mean_abs": 0.0004791961110962954,
+        "relative_l2": 0.03622259870583632
+      }
+    },
+    {
+      "block": 35,
+      "bytes_saved": 6684672,
+      "outputs": [
+        {
+          "cosine": 0.9995789291637134,
+          "finite": true,
+          "max_abs": 0.09786844253540039,
+          "mean_abs": 0.005425388511866913,
+          "relative_l2": 0.02926154917207821
+        },
+        {
+          "cosine": 0.9993176634101227,
+          "finite": true,
+          "max_abs": 0.09917235374450684,
+          "mean_abs": 0.005425385824082696,
+          "relative_l2": 0.03693773283757144
+        }
+      ],
+      "q5_bytes": 34603008,
+      "q6_bytes": 41287680,
+      "role": "down",
+      "tensor": "blk.35.ffn_down.weight",
+      "weight": {
+        "cosine": 0.9993492002106187,
+        "finite": true,
+        "max_abs": 0.07965087890625,
+        "mean_abs": 0.00025781284328611304,
+        "relative_l2": 0.036074833971901185
+      }
+    }
+  ],
+  "schema": "tinygrad.nv_q6_to_q5_feasibility.v1",
+  "summary": {
+    "by_role": {
+      "V": {
+        "bytes_saved": 5570560,
+        "cosine_min": 0.9991956257377923,
+        "relative_l2_max": 0.04010306954866796,
+        "relative_l2_median": 0.03659459184520142
+      },
+      "down": {
+        "bytes_saved": 120324096,
+        "cosine_min": 0.998982086435308,
+        "relative_l2_max": 0.045118103035287446,
+        "relative_l2_median": 0.03624669024212193
+      }
+    },
+    "bytes_saved": 125894656,
+    "bytes_saved_fraction": 0.16190476190476188,
+    "cosine_min": 0.998982086435308,
+    "feasibility_pass": false,
+    "q5_bytes": 651689984,
+    "q6_bytes": 777584640,
+    "relative_l2_max": 0.045118103035287446,
+    "relative_l2_median": 0.03635809561323711
+  }
+}
