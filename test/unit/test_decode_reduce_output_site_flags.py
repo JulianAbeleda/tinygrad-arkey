@@ -47,3 +47,15 @@ def test_shared_q8_attention_lease_promotes_attention_only():
     _decode_reduce_output_attn_rmsnorm_promoted=True,
   )
   assert _decode_reduce_output_norm_flags(block, False) == (True, False)
+
+def test_native_attention_norm_bypasses_global_reduce_output_route():
+  block = _block(_decode_reduce_output_rmsnorm_promoted=True,
+    attn_norm=SimpleNamespace(_rmsnorm_native_promoted=True))
+  assert _decode_reduce_output_norm_flags(block, False) == (False, True)
+
+def test_shared_q8_provider_retains_reduce_output_ownership_over_native_site():
+  block = _block(_decode_reduce_output_rmsnorm_promoted=True,
+    attn_norm=SimpleNamespace(_rmsnorm_native_promoted=True),
+    _shared_q8_attention_admission=SharedQ8AttentionAdmission(0),
+    _decode_reduce_output_attn_rmsnorm_promoted=True)
+  assert _decode_reduce_output_norm_flags(block, False) == (True, True)

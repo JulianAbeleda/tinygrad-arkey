@@ -576,8 +576,14 @@ _DECODE_RMSNORM_NATIVE_LOWERING_PROMOTION_RECORD = pathlib.Path(__file__).with_n
 _DECODE_RMSNORM_NATIVE_LOWERING_PROMOTED_TARGETS: frozenset[Target] = load_decode_rmsnorm_native_lowering_promotion(_DECODE_RMSNORM_NATIVE_LOWERING_PROMOTION_RECORD)
 
 def decode_rmsnorm_native_lowering_promoted(target:Target) -> bool:
-  """Policy authority for the Path 3 semantic RMSNorm native-lowering route (closed default)."""
+  """Target authority for the Path 3 semantic RMSNorm native-lowering route."""
   return target in _DECODE_RMSNORM_NATIVE_LOWERING_PROMOTED_TARGETS
+
+_DECODE_RMSNORM_NATIVE_LOWERING_SITES = frozenset(("attn_norm", "ffn_norm", "output_norm"))
+
+def decode_rmsnorm_native_lowering_site_promoted(target:Target, site:str) -> bool:
+  """Keep the native route on the qualified 4096-wide sites; Q/K retain their fused route."""
+  return decode_rmsnorm_native_lowering_promoted(target) and site in _DECODE_RMSNORM_NATIVE_LOWERING_SITES
 
 def load_decode_reduce_output_rmsnorm_promotion(path:str) -> frozenset[Target]:
   """Closed-default policy for the ordinary-CALL cooperative RMSNorm route."""

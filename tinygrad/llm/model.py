@@ -53,7 +53,8 @@ from tinygrad.llm.model_route_plan import (build_model_route_plan, decode_norm_f
   decode_q4k_epilogue_fusion_promoted, decode_q4k_epilogue_resadd_promoted, decode_q4k_w1w3_fusion_promoted,
   decode_q4k_w1w3_fp16_store_promoted, decode_q4k_gate_up_four_warp_vector_promoted,
   decode_ffn_down_resadd_promoted, decode_kv_store_fusion_promoted,
-  decode_rmsnorm_native_lowering_promoted, decode_reduce_output_rmsnorm_promoted, decode_qk_norm_rope_promoted,
+  decode_rmsnorm_native_lowering_promoted, decode_rmsnorm_native_lowering_site_promoted,
+  decode_reduce_output_rmsnorm_promoted, decode_qk_norm_rope_promoted,
   decode_producer_kv_cache_sink_promoted, decode_q4k_kv_pair_promoted,
   decode_native_argmax_threads,
   decode_shared_q8_attention_promoted,
@@ -470,12 +471,14 @@ def _decode_reduce_output_norm_flags(block, prefill:bool) -> tuple[bool,bool]:
   global_route=bool(getattr(block,"_decode_reduce_output_rmsnorm_promoted",False))
   shared_lease=isinstance(getattr(block,"_shared_q8_attention_admission",None),SharedQ8AttentionAdmission)
   fused_attn_lease=shared_lease and bool(getattr(block,"_decode_reduce_output_attn_rmsnorm_promoted",False))
+  native_attn=bool(getattr(getattr(block,"attn_norm",None),"_rmsnorm_native_promoted",False)) and \
+    not getenv("TINYGRAD_NATIVE_ATTN_NORM_COMPLETION_DISABLE",0)
   # The FFN-norm site is independently gateable so a census can close it while
   # the fp32 q/k site stays promoted (the live-split flash route depends on
   # that site).  Absent the knob it follows the global route, so production
   # behavior is unchanged.
   ffn_route=bool(getattr(block,"_decode_reduce_output_ffn_rmsnorm_promoted",global_route))
-  return global_route or fused_attn_lease,ffn_route
+  return (global_route and not native_attn) or fused_attn_lease,ffn_route
 
 
 def _generation_input_slice(tokens:Tensor, start_pos:int|UOp, token_extent:UOp, bound_extent:int) -> Tensor:
@@ -1978,20 +1981,20 @@ class Transformer:
     _kv_store_promoted = decode_kv_store_fusion_promoted((_norm_cap.backend, _norm_cap.architecture))
     model._decode_kv_store_fusion_promoted = _kv_store_promoted
     for _b in model.blk: _b._decode_kv_store_fusion_promoted = _kv_store_promoted
-    # Path 3 semantic RMSNorm: per-norm marker flag resolved ONCE from the same
-    # load-entry facts. CLOSED default (decode-rmsnorm-native-lowering-route-
-    # policy.json, empty promoted_targets); nn.RMSNorm.__call__ reads the flag
-    # and additionally rejects prefill shapes, so no prefill marker can exist.
-    _rmsnorm_native_promoted = decode_rmsnorm_native_lowering_promoted((_norm_cap.backend, _norm_cap.architecture))
+    # Path 3 semantic RMSNorm: per-site marker flags resolve once from load-entry facts. The
+    # qualified 4096-wide attention/FFN/output sites use native lowering; Q/K keep the fused
+    # reduce-output + RoPE/cache route. nn.RMSNorm additionally rejects prefill shapes.
+    _norm_target = (_norm_cap.backend, _norm_cap.architecture)
+    _rmsnorm_native_promoted = decode_rmsnorm_native_lowering_promoted(_norm_target)
     model._decode_rmsnorm_native_promoted = _rmsnorm_native_promoted
     for _b in model.blk:
       for _name in ("attn_norm", "ffn_norm", "attn_q_norm", "attn_k_norm"):
         _norm = getattr(_b, _name, None)
         if _norm is None: continue
-        _norm._rmsnorm_native_promoted = _rmsnorm_native_promoted
-        if _rmsnorm_native_promoted and _name in ("attn_norm", "ffn_norm"):
+        _norm._rmsnorm_native_promoted = decode_rmsnorm_native_lowering_site_promoted(_norm_target, _name)
+        if _norm._rmsnorm_native_promoted and _name in ("attn_norm", "ffn_norm"):
           _norm._rmsnorm_native_output_dtype = dtypes.float16
-    model.output_norm._rmsnorm_native_promoted = _rmsnorm_native_promoted
+    model.output_norm._rmsnorm_native_promoted = decode_rmsnorm_native_lowering_site_promoted(_norm_target, "output_norm")
     # Cooperative ordinary-CALL reduce/output route.  Promotion lives on the
     # model/block call sites, never nn.RMSNorm: the call sites gate the marker
     # on ``not _prefill`` before late concrete-view admission runs.

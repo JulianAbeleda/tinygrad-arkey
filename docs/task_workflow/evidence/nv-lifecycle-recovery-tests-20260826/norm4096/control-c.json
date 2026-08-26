@@ -1,0 +1,29 @@
+{
+  "arm": "control",
+  "median_ms_per_token": 4.344412625,
+  "native_promoted_sample": {
+    "attn": false,
+    "ffn": false,
+    "k": false,
+    "output": false,
+    "q": false
+  },
+  "rejected_high_samples_ms_per_token": [],
+  "samples_ms_per_token": [
+    4.3508308125,
+    4.35152525,
+    4.33987775,
+    4.3457744375,
+    4.3396924375,
+    4.3409485625,
+    4.344412625
+  ],
+  "schema": "tinygrad.nv_norm_native_wall_ab.v1",
+  "sites": [
+    "attn",
+    "ffn",
+    "output"
+  ],
+  "timed_token_count": 112,
+  "token_stream_hash": "9abe039627443641c7caaaa50137137765f7bf2640439c614c3364d3d1fa103e"
+}
