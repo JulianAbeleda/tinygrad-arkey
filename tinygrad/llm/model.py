@@ -90,6 +90,15 @@ def _adaptive_flash_split_count(enabled:bool,start_pos:int,max_context:int)->int
   """Measured G4 context band: S48 wins through Tc=768; S64 wins for Tc=769..1024."""
   return 64 if enabled and max_context <= 1024 and 768 <= start_pos < max_context else None
 
+def _request_static_flash_split_count(prompt_len:int, expected_output_tokens:int|None, max_context:int)->int|None:
+  """Select the measured single-graph S64 crossing route from an explicit request horizon."""
+  if expected_output_tokens is None: return None
+  if expected_output_tokens < 0: raise ValueError("expected_output_tokens must be non-negative")
+  # Qualified at prompt 704: 65 pre-cliff tokens lose ~20.3 us each and are
+  # repaid after about ten post-cliff tokens. Keep admission on that measured
+  # near-boundary band until a broader horizon bracket exists.
+  return 64 if max_context <= 1024 and 704 <= prompt_len < max_context and prompt_len + expected_output_tokens >= 779 else None
+
 def prefill_v2_target_admitted(device_facts:object|None) -> bool:
   """Whether the concrete fp16 prefill-v2 route is admissible on this load target.
 
@@ -2319,7 +2328,8 @@ class Transformer:
     return all(getattr(jit, "captured", None) is not None for jit in pair) and \
       pingpong_capture_contract(pair)["admitted"]
 
-  def generate(self, tokens:list[int], chunk_size:int=32, temperature:float=0.0, diagnostic_full_logits:bool=False):
+  def generate(self, tokens:list[int], chunk_size:int=32, temperature:float=0.0, diagnostic_full_logits:bool=False,
+               expected_output_tokens:int|None=None):
     if self.has_recurrent_block: chunk_size = 1
     _ring = self.config.ring and self.config.rope_dim == self.config.head_dim
     if _ring and len(tokens) > self.max_context:
@@ -2345,6 +2355,7 @@ class Transformer:
     # flash-decode selection is centralized in should_use_flash_decode (default FLASH_DECODE=auto, threshold
     # 512): generate passes no use_flash override and lets that single authority decide per captured graph.
     out, prompt_len, decode_feedback_phase = None, len(tokens), 0
+    request_flash_split = _request_static_flash_split_count(prompt_len, expected_output_tokens, self.max_context)
     direct_greedy = temperature == 0.0 and bool(getattr(self, "_decode_direct_greedy_promoted", False))
     # Launch hiding (submit-ahead) only reorders the steady flash-greedy
     # pingpong decode; everything else keeps the exact existing scheduling.
@@ -2397,7 +2408,9 @@ class Transformer:
         # decode graph is baked SDPA at the start ctx and never switches -> short-prompt decode SDPA-degrades the
         # whole way (e.g. 85->54 tok/s by ctx512). should_use_flash_decode returns False for ntv!=1 (prefill chunks).
         _uf = self.config.flash_decode and _route_should_use_flash_decode(sp, ntv)
-        _flash_split = _adaptive_flash_split_count(_uf and getattr(self,"_flash_decode_adaptive_s64_lease",False),start_pos,self.max_context)
+        _flash_split = request_flash_split if _uf else None
+        if _flash_split is None:
+          _flash_split = _adaptive_flash_split_count(_uf and getattr(self,"_flash_decode_adaptive_s64_lease",False),start_pos,self.max_context)
         if submit_ahead and ntv == 1 and start_pos >= prompt_len and _uf and out is not None:
           # Submit token start_pos+1's graph now; its input is the previous
           # output (the token we yield this iteration).  The host-side prep of

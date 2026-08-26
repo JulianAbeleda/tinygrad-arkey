@@ -101,7 +101,7 @@ def _set_admission(model, enabled: bool) -> list[int]:
 
 
 def timing_child(depth: int, count: int, max_context: int, reps: int, enabled: bool|None, composed: bool,
-                 out: pathlib.Path, adaptive_s64:bool=False) -> dict:
+                 out: pathlib.Path, adaptive_s64:bool=False, static_s64_horizon:bool=False) -> dict:
   from tinygrad import Device
   from extra.llm_research.decode.nv_predispatch_full_logits_qualification import _load, _prompt
   from extra.llm_research.decode.nv_shared_q8_progressive_qualification import _settled_continuous_windows
@@ -128,14 +128,15 @@ def timing_child(depth: int, count: int, max_context: int, reps: int, enabled: b
         for _ in range(3):model(tok,pos.bind(min(800,max_context-1)),temp,use_flash=True,greedy=True,feedback_slot=slot,flash_split_count=64).realize()
     else:
       for _ in range(3):model(tok,pos.bind(min(800,max_context-1)),temp,use_flash=True,flash_split_count=64).realize()
-  gen = model.generate(_prompt(MODEL, depth), chunk_size=32, temperature=0.0)
+  gen = model.generate(_prompt(MODEL, depth), chunk_size=32, temperature=0.0,
+                       expected_output_tokens=(count*reps+7 if static_s64_horizon else None))
   try:
     settled = _settled_continuous_windows(gen, Device[Device.DEFAULT], count, reps)
   finally:
     gen.close()
   result = {"schema": "tinygrad.qk_norm_rope_wall_bracket.v1",
     "enabled": enabled, "route_source": "production-policy" if enabled is None else "research-override",
-    "composed": composed, "adaptive_s64":adaptive_s64,"qk_norm_rope_blocks": admitted,
+    "composed": composed, "adaptive_s64":adaptive_s64,"static_s64_horizon":static_s64_horizon,"qk_norm_rope_blocks": admitted,
     "gpu_state": _gpu_state(),
     "depth": depth, "count": count, "reps": reps,
     "included_cost": True, "settled_continuous": True, **settled}
@@ -194,13 +195,14 @@ def main() -> int:
   ap.add_argument("--production-default", action="store_true")
   ap.add_argument("--composed", action="store_true")
   ap.add_argument("--adaptive-s64", action="store_true")
+  ap.add_argument("--static-s64-horizon", action="store_true")
   ap.add_argument("--out", default="/tmp/qk_norm_rope_wall_bracket.json")
   args = ap.parse_args()
   if args.mode == "timing-child":
     if args.enabled and args.production_default: ap.error("--enabled and --production-default are mutually exclusive")
     enabled = None if args.production_default else args.enabled
     row = timing_child(args.depth, args.count, args.max_context, args.reps, enabled, args.composed,
-      pathlib.Path(args.out),args.adaptive_s64)
+      pathlib.Path(args.out),args.adaptive_s64,args.static_s64_horizon)
     print(json.dumps(row, indent=2, sort_keys=True))
     return 0
   result = bracket(args.depth, args.count, args.max_context, args.reps, args.composed, pathlib.Path(args.out))

@@ -219,3 +219,14 @@ def test_adaptive_s64_kernel_lease_is_narrow():
   assert not _adaptive_split_lease_admitted(FLASH_DECODE_G4, 32, None, "KV_BOTH", 1024)
   assert not _adaptive_split_lease_admitted(FLASH_DECODE_G4, 64, None, "KV_BOTH", 2048)
   assert not _adaptive_split_lease_admitted(FLASH_DECODE_G5, 64, 2, "KV_BOTH", 1024)
+
+def test_request_static_s64_horizon_policy_is_bounded():
+  from tinygrad.llm.model import _request_static_flash_split_count
+  assert _request_static_flash_split_count(704, 75, 1024) == 64
+  assert _request_static_flash_split_count(704, 74, 1024) is None
+  assert _request_static_flash_split_count(768, 11, 1024) == 64
+  assert _request_static_flash_split_count(703, 200, 1024) is None
+  assert _request_static_flash_split_count(704, None, 1024) is None
+  assert _request_static_flash_split_count(704, 200, 2048) is None
+  with pytest.raises(ValueError, match="non-negative"):
+    _request_static_flash_split_count(704, -1, 1024)

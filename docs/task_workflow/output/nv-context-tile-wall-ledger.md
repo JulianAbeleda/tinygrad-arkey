@@ -122,3 +122,23 @@ continues to fail closed.
 
 Updated decision:
 `DUAL_GRAPH_DEPLOYMENT_NO_GO__SINGLE_GRAPH_HORIZON_POLICY_PASS`.
+
+## Bounded promotion
+
+The request-horizon policy is now wired into `Transformer.generate` and the
+HTTP completion path passes the client's explicit `max_tokens`.  Admission is
+intentionally narrow: max context at most 1024, prompt length at least 704,
+and a declared horizon reaching context 779.  This is the measured payback
+boundary for the worst admitted start; missing horizons and all other requests
+retain the existing S48 route.
+
+The integrated composed gate used the typed horizon input with no
+`FLASH_DECODE_COARSE_SPLIT` environment override and no adaptive dual-graph
+lease.  Its eight settled windows measured 4.273808 ms/token with the exact
+reference token stream.  Relative to the 4.359039 ms/token S48 crossing
+control, the installed bounded policy recovers 85.231 us/token, approximately
+229.41 to 233.98 tok/s (+4.57 tok/s).  This is booked for the qualified request
+band only; the pre-boundary endpoint remains unchanged.
+
+Promotion decision:
+`SINGLE_GRAPH_HORIZON_POLICY_BOOKED_FOR_QUALIFIED_REQUESTS`.
