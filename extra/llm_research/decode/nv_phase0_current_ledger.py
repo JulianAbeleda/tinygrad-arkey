@@ -53,7 +53,7 @@ def _verify_production_routes(model) -> dict:
   q4q6_shared = [x.block_index for x in shared if x is not None and x.q4_q6_kv_pair_output]
   ordinary_pairs = [idx for idx, block in enumerate(model.blk)
     if getattr(block, "_q4k_kv_pair_admission", None) is not None]
-  if len(q6_packed) != 18 or len(gateup) != 36 or len(q4q4_shared) != 9 or len(q4q6_shared) != 8 or len(ordinary_pairs) != 9:
+  if len(q6_packed) != 18 or len(gateup) != 36 or len(q4q4_shared) != 10 or len(q4q6_shared) != 8 or len(ordinary_pairs) != 8:
     raise RuntimeError(f"current route census mismatch q6_packed={q6_packed} gateup={gateup} "
       f"shared_q4q4={q4q4_shared} shared_q4q6={q4q6_shared} ordinary={ordinary_pairs}")
   if not getattr(model, "_decode_producer_kv_cache_sink_promoted", False):

@@ -1883,8 +1883,8 @@ class Transformer:
     # L1 GEMV substrate: decode shared-Q8 attention group. CLOSED default
     # (decode-shared-q8-attention-route-policy.json, empty promoted_targets until the
     # section-6 full gate passes, nv-gemv-substrate-landing-scope-20260808.md). Same
-    # resolve-once pattern as the M4 gate; the loader installs the booked max17
-    # cooperative lease (blocks 1-12 and 14-18) only when the record promotes NV sm_120.
+    # resolve-once pattern as the M4 gate; the loader installs the booked max18
+    # cooperative lease (blocks 1-12, 14-18, and 25) only when the record promotes NV sm_120.
     _shared_q8_promoted = decode_shared_q8_attention_promoted((_norm_cap.backend, _norm_cap.architecture))
     model._decode_shared_q8_attention_promoted = _shared_q8_promoted
     for _b in model.blk: _b._decode_shared_q8_attention_promoted = _shared_q8_promoted
@@ -2173,13 +2173,13 @@ class Transformer:
       attachments = attach_program_identity_metadata(model, model_facts.tensors, primitive_linears=primitive_linears, module_at=_module_at)
       model._program_identity_linears = [linear for _path, linear in attachments]
       # L1 GEMV substrate lease install: when the record promotes NV sm_120, install the
-      # booked max17 cooperative lease (blocks 1-12 and 14-18; block 0 embedding boundary and
-      # block 13 precision boundary stay ordinary, tail expansion NO-GO) exactly like the
+      # booked max18 cooperative lease (blocks 1-12, 14-18, and 25; block 0 embedding boundary and
+      # block 13 precision boundary stay ordinary) exactly like the
       # qualification harness does. The admission is a trace-time opt-in:
       # shared_q8_attention_call revalidates the real Q4/Q4/{Q4,Q6} tuple and REDUCE_OUTPUT
       # norm marker, returning None to the ordinary primitives on any miss.
       if model._decode_shared_q8_attention_promoted:
-        _SHARED_Q8_LEASE = tuple(range(1, 13)) + tuple(range(14, 19))
+        _SHARED_Q8_LEASE = tuple(range(1, 13)) + tuple(range(14, 19)) + (25,)
         for _idx in _SHARED_Q8_LEASE:
           if _idx >= len(model.blk): break
           _b = model.blk[_idx]

@@ -1,7 +1,7 @@
 {
   "schema": "boltbeam.route_policy.v1",
   "route": "decode_shared_q8_attention",
-  "description": "Decode shared-Q8 attention group promotion record (nv-gemv-substrate-landing-scope-20260808.md). The llama MMVQ package - Q8_1 packed activation provider + DP4A + four-warp per-row ownership - replaces the three ordinary Q4_K/Q6_K attention projections on the booked max17 lease (blocks 1-12 and 14-18; block 0 embedding boundary and block 13 precision boundary stay ordinary, blocks 19-35 tail expansion NO-GO). PROMOTED to NV sm_120: section-6 full gate PASSED 2026-08-09, artifact /tmp/nv_shared_q8_section6_gate_final.json, verdict PASS; open >= M2 baseline at d512/d2048/d4096 with positive open-vs-closed deltas; census 34 fused / 86 coop / 0 legacy; semantic gate_pass true; pins 3/3 at every depth; pg3 legacy sha 27857cb8ca03 unmoved; commits 61d076ab6 + 4b1228f79. The Q6 direct-output lease and FFN-down arms stay closed.",
+  "description": "Decode shared-Q8 attention group promotion record. The original max17 lease covers blocks 1-12 and 14-18. The current composed-substrate extension additionally admits block 25: its reps-9 control/candidate/control bracket recovered 23.738 us/token while beating both controls, and its fresh prompted full-logit gate passed with identical tokens/argmax/top-10 order, relative L2 0.000367 <= 0.001, and perturbation-to-margin 0.080 <= 1.0. The resulting max18 lease is blocks 1-12, 14-18, and 25; block 0 and block 13 remain excluded, as do all unqualified tail blocks. Evidence: docs/task_workflow/evidence/nv-ranked-wall-tests-20260826/ and docs/task_workflow/output/nv-ranked-wall-tests-result.md.",
   "promoted_targets": [
     {
       "backend": "NV",

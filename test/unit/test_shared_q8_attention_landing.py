@@ -96,17 +96,17 @@ def _model(n_blocks=36):
   return SimpleNamespace(blk=[_block(i) for i in range(n_blocks)])
 
 
-def test_lease_install_blocks_match_max17_and_exclusions():
-  """Blocks 1-12 and 14-18 get the cooperative admission; block 0, 13, and 19-35 stay ordinary."""
+def test_lease_install_blocks_match_max18_and_exclusions():
+  """Blocks 1-12, 14-18, and 25 get the cooperative admission; other blocks stay ordinary."""
   model = _model()
   admitted = []
   for idx, block in enumerate(model.blk):
-    if idx in tuple(range(1, 13)) + tuple(range(14, 19)):
+    if idx in tuple(range(1, 13)) + tuple(range(14, 19)) + (25,):
       block._shared_q8_attention_admission = SharedQ8AttentionAdmission(idx, cooperative_q4=True)
       admitted.append(idx)
-  assert admitted == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18]
-  assert len(admitted) == 17
-  for idx in (0, 13, 19, 35):
+  assert admitted == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 25]
+  assert len(admitted) == 18
+  for idx in (0, 13, 19, 24, 26, 35):
     assert not hasattr(model.blk[idx], "_shared_q8_attention_admission")
   for idx in admitted:
     lease = model.blk[idx]._shared_q8_attention_admission
