@@ -1,0 +1,210 @@
+{
+  "all_token_hashes_equal": true,
+  "arms": [
+    {
+      "arm": "control_a",
+      "candidate_splits": 6,
+      "candidate_token_bound": 768,
+      "count": 16,
+      "depth": 512,
+      "max_context": 1024,
+      "profile_jsonl": null,
+      "reps": 9,
+      "schema": "tinygrad.nv_flash_bounded_wall.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          4.1186075625,
+          4.10067975,
+          4.09983875,
+          4.0963854375,
+          4.09614375,
+          4.1045606875,
+          4.09779125,
+          4.0983548125,
+          4.1044198125
+        ],
+        "external_contention_high_limit_ms": 4.34983875,
+        "median_ms_per_token": 4.09983875,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          4.1186075625,
+          4.10067975,
+          4.09983875,
+          4.0963854375,
+          4.09614375,
+          4.1045606875,
+          4.09779125,
+          4.0983548125,
+          4.1044198125
+        ],
+        "timed_token_count": 144,
+        "token_hashes": [
+          "cc523cc67a8622f6a0efc130c1ec7497faa0620448f7bc5ea59385273ac92fb6",
+          "6d602f7d7fffe9fce3658e4ec6c5ffefd6986c1dc6bcfe51c1e7493289d7d8a5",
+          "74d2d3505fd4789d1b7286ba7bc5bd250fb7975bad39364d83ac217fc46af2b1",
+          "cc523cc67a8622f6a0efc130c1ec7497faa0620448f7bc5ea59385273ac92fb6",
+          "6d602f7d7fffe9fce3658e4ec6c5ffefd6986c1dc6bcfe51c1e7493289d7d8a5",
+          "74d2d3505fd4789d1b7286ba7bc5bd250fb7975bad39364d83ac217fc46af2b1",
+          "cc523cc67a8622f6a0efc130c1ec7497faa0620448f7bc5ea59385273ac92fb6",
+          "6d602f7d7fffe9fce3658e4ec6c5ffefd6986c1dc6bcfe51c1e7493289d7d8a5",
+          "74d2d3505fd4789d1b7286ba7bc5bd250fb7975bad39364d83ac217fc46af2b1"
+        ],
+        "token_stream_hash": "3124253b6e5174fac25c6e66586562c116c463e4301cee477e45fe83dc3cca10",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      }
+    },
+    {
+      "arm": "candidate",
+      "candidate_splits": 6,
+      "candidate_token_bound": 768,
+      "count": 16,
+      "depth": 512,
+      "max_context": 1024,
+      "profile_jsonl": null,
+      "reps": 9,
+      "schema": "tinygrad.nv_flash_bounded_wall.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          4.1056025,
+          4.0872789375,
+          4.0856590625,
+          4.0964943125,
+          4.0882639375,
+          4.07884575,
+          4.0889921875,
+          4.0841925625,
+          4.0891418125
+        ],
+        "external_contention_high_limit_ms": 4.3382639375,
+        "median_ms_per_token": 4.0882639375,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          4.1056025,
+          4.0872789375,
+          4.0856590625,
+          4.0964943125,
+          4.0882639375,
+          4.07884575,
+          4.0889921875,
+          4.0841925625,
+          4.0891418125
+        ],
+        "timed_token_count": 144,
+        "token_hashes": [
+          "cc523cc67a8622f6a0efc130c1ec7497faa0620448f7bc5ea59385273ac92fb6",
+          "6d602f7d7fffe9fce3658e4ec6c5ffefd6986c1dc6bcfe51c1e7493289d7d8a5",
+          "74d2d3505fd4789d1b7286ba7bc5bd250fb7975bad39364d83ac217fc46af2b1",
+          "cc523cc67a8622f6a0efc130c1ec7497faa0620448f7bc5ea59385273ac92fb6",
+          "6d602f7d7fffe9fce3658e4ec6c5ffefd6986c1dc6bcfe51c1e7493289d7d8a5",
+          "74d2d3505fd4789d1b7286ba7bc5bd250fb7975bad39364d83ac217fc46af2b1",
+          "cc523cc67a8622f6a0efc130c1ec7497faa0620448f7bc5ea59385273ac92fb6",
+          "6d602f7d7fffe9fce3658e4ec6c5ffefd6986c1dc6bcfe51c1e7493289d7d8a5",
+          "74d2d3505fd4789d1b7286ba7bc5bd250fb7975bad39364d83ac217fc46af2b1"
+        ],
+        "token_stream_hash": "3124253b6e5174fac25c6e66586562c116c463e4301cee477e45fe83dc3cca10",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      }
+    },
+    {
+      "arm": "control_c",
+      "candidate_splits": 6,
+      "candidate_token_bound": 768,
+      "count": 16,
+      "depth": 512,
+      "max_context": 1024,
+      "profile_jsonl": null,
+      "reps": 9,
+      "schema": "tinygrad.nv_flash_bounded_wall.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          4.11317725,
+          4.0994159375,
+          4.103584375,
+          4.0947635625,
+          4.09301025,
+          4.0912889375,
+          4.09316175,
+          4.0956565,
+          4.0975105
+        ],
+        "external_contention_high_limit_ms": 4.3456565,
+        "median_ms_per_token": 4.0956565,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          4.11317725,
+          4.0994159375,
+          4.103584375,
+          4.0947635625,
+          4.09301025,
+          4.0912889375,
+          4.09316175,
+          4.0956565,
+          4.0975105
+        ],
+        "timed_token_count": 144,
+        "token_hashes": [
+          "cc523cc67a8622f6a0efc130c1ec7497faa0620448f7bc5ea59385273ac92fb6",
+          "6d602f7d7fffe9fce3658e4ec6c5ffefd6986c1dc6bcfe51c1e7493289d7d8a5",
+          "74d2d3505fd4789d1b7286ba7bc5bd250fb7975bad39364d83ac217fc46af2b1",
+          "cc523cc67a8622f6a0efc130c1ec7497faa0620448f7bc5ea59385273ac92fb6",
+          "6d602f7d7fffe9fce3658e4ec6c5ffefd6986c1dc6bcfe51c1e7493289d7d8a5",
+          "74d2d3505fd4789d1b7286ba7bc5bd250fb7975bad39364d83ac217fc46af2b1",
+          "cc523cc67a8622f6a0efc130c1ec7497faa0620448f7bc5ea59385273ac92fb6",
+          "6d602f7d7fffe9fce3658e4ec6c5ffefd6986c1dc6bcfe51c1e7493289d7d8a5",
+          "74d2d3505fd4789d1b7286ba7bc5bd250fb7975bad39364d83ac217fc46af2b1"
+        ],
+        "token_stream_hash": "3124253b6e5174fac25c6e66586562c116c463e4301cee477e45fe83dc3cca10",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      }
+    }
+  ],
+  "candidate_splits": 6,
+  "candidate_token_bound": 768,
+  "count": 16,
+  "depth": 512,
+  "max_context": 1024,
+  "max_observed_tc": 663,
+  "mode": "reverse-bracket-unprofiled",
+  "reps": 9,
+  "schema": "tinygrad.nv_flash_bounded_wall.v1",
+  "token_stream_hashes": [
+    "3124253b6e5174fac25c6e66586562c116c463e4301cee477e45fe83dc3cca10"
+  ],
+  "tokens_per_second": {
+    "candidate": 244.60260278877848,
+    "candidate_delta": 0.5660999306992096,
+    "control_midpoint": 244.03650285807927
+  },
+  "verdict": "WALL_PASS",
+  "walls_us_per_token": {
+    "candidate": 4088.2639375,
+    "candidate_delta": -9.483687500000087,
+    "control_a": 4099.83875,
+    "control_c": 4095.6564999999996,
+    "control_midpoint": 4097.747625
+  }
+}

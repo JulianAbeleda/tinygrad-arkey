@@ -134,6 +134,17 @@ default-path endpoint is 4.094502 ms/token (244.230 tok/s). The remaining flash
 debt is now about the same size as the complete endpoint gap. This is exposure,
 not a claim that all residual flash service will translate independently.
 
+The priority-1 cache-policy follow-up is now wall-resolved. An aggregate
+36-layer/72-MiB primitive showed that evict-first one-use streams can preserve
+the K/V-sized footprint exactly, but production conversion did not follow.
+Q/K/V-only streaming recovered just 6.329 us/token (+0.377 tok/s), below the
+50-us booking bar; applying the policy to every installed dense quantized
+weight consumer regressed 23.588 us/token (-1.391 tok/s). The broad policy
+barely moved the production flash row and slowed large gate/up and FFN-down
+consumers by discarding useful intra-kernel packed-weight reuse. No endpoint is
+booked. Reopen this row only with line/reuse-aware streaming or a K/V residency
+mechanism that does not change projection service.
+
 ### Native 4096 norms: at least 28 us gross
 
 The native promotion removed the large legacy penalty. The residual service
@@ -187,6 +198,33 @@ equal to the endpoint gap. The next discriminator should explain why the wide
 S8 score remains about 60 us/token behind llama under production conditioning,
 while charging exact bytes, numerical order, output ownership, and token wall.
 
+The priority-1 conditioning discriminator has since run. The exact installed
+score is 4.536 us/layer hot, effectively tied with llama's 4.526-us production
+row. Immediate Q/K/V producers add only 0.008 us/layer. Crossing the 96-MiB L2
+capacity boundary and then running the exact local producer prefix reproduces
+1.144 of the 1.644-us/layer production residual, or 41.184 us/token. This
+identifies cache/working-set conditioning as the dominant mechanism, but books
+zero recovery until a production residency/eviction policy passes token wall.
+
+The matched llama conditioner closes the next branch. The identical 96-MiB
+read stream costs llama S6 0.640 us/layer and tinygrad's installed S8 1.296
+us/layer. Llama S8 costs 0.608 us/layer, ruling out six-versus-eight split
+geometry as the explanation. Llama therefore experiences the same L2-capacity
+knee but is about 2x less cold-sensitive. Matching that sensitivity exposes
+23.616 us/token, a ceiling of about 245.65 tok/s, with zero recovery booked.
+The open discriminator is now K/V allocation/stride/address color versus
+load-address service for equal bytes, measured hot and cold with counters.
+
+The full discriminator is now closed. The primary structural contributor is
+excess physical horizon work: installed S8 reads and executes the empty upper
+partitions at d512. An exact S6/768 closed lease cuts DRAM/L2/L1 bytes and
+instructions by about 25% and passes a 144-token reverse wall bracket at
+-9.484 us/token (+0.566 tok/s), with identical token hashes. Gated loads,
+separate K/V, and address-color variants are no-gos. Because the recovery is
+below the 50-us booking threshold and S6 becomes invalid when Tc reaches 769,
+the endpoint remains 4.094502 ms/token / 244.230 tok/s. Reopening requires a
+generic active-horizon graph-bucket selector, not a fixed d512 split literal.
+
 ## Evidence
 
 - `docs/task_workflow/evidence/nv-ranked-wall-tests-20260826/post-landing-endpoint.json`
@@ -199,3 +237,5 @@ while charging exact bytes, numerical order, output ownership, and token wall.
 - `docs/task_workflow/output/nv-byte-and-topology-wall-audit-20260825.md`
 - `docs/task_workflow/output/nv-qo-service-rate-admissibility-result.md`
 - `docs/task_workflow/output/nv-ranked-wall-tests-result.md`
+- `docs/task_workflow/output/nv-flash-wide-production-conditioning-result.md`
+- `docs/task_workflow/output/nv-flash-active-horizon-result.md`

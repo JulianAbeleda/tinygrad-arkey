@@ -651,18 +651,23 @@ FLASH_DECODE_CANDIDATE = _FlashDecodeCandidate(FLASH_DECODE_G4)
 FLASH_DECODE_G5_CANDIDATE = _FlashDecodeCandidate(FLASH_DECODE_G5)
 
 def _flash_llama_vec_wide_research_call(q:Tensor, assigned_kv:Tensor, Tc:UOp, binding:_FlashDecodeBinding,
-                                         MAXC:int, S:int, output_fp16:bool, *, promoted:bool=False) -> Tensor:
+                                         MAXC:int, S:int, output_fp16:bool, *, promoted:bool=False,
+                                         token_bound:int|None=None) -> Tensor:
   """Extent-derived wide-KV flash at the approved research/promotion admission boundary."""
   extent_split = MAXC // 128 if MAXC % 128 == 0 else None
-  if (binding.Hq, binding.Hkv, binding.Hd) != (32, 8, 128) or S != extent_split or assigned_kv.dtype != dtypes.float16:
-    raise ValueError(f"llama_vec_wide research route requires Hq32/Hkv8/Hd128, S=MAXC/128, and fp16 KV, got "
-                     f"Hq={binding.Hq}, Hkv={binding.Hkv}, Hd={binding.Hd}, S={S}, MAXC={MAXC}, cache={assigned_kv.dtype}")
+  bounded = token_bound is not None and token_bound % 128 == 0 and token_bound <= MAXC and S == token_bound // 128
+  if (binding.Hq, binding.Hkv, binding.Hd) != (32, 8, 128) or (S != extent_split and not bounded) or \
+      assigned_kv.dtype != dtypes.float16:
+    raise ValueError(f"llama_vec_wide research route requires Hq32/Hkv8/Hd128, fp16 KV, and either S=MAXC/128 "
+                     f"or S=token_bound/128, got Hq={binding.Hq}, Hkv={binding.Hkv}, Hd={binding.Hd}, S={S}, "
+                     f"MAXC={MAXC}, token_bound={token_bound}, cache={assigned_kv.dtype}")
   cache_bits = Tensor(assigned_kv.uop.bitcast(dtypes.uint32))
   provenance = KernelProgramProvenance.MACHINE_SEARCH_GENERATED if promoted else KernelProgramProvenance.RESEARCH_ONLY
   execute = execute_promoted_program if promoted else execute_research_program
   tile_program = KernelProgram(binding.route_id, f"{binding.candidate_id}.llama_vec_wide.tile",
     provenance,
-    flash_vec_llama_score_pv_kernel(binding.Hd, binding.Hq, binding.Hkv, MAXC, S, Tc, wide_kv=True, wide_q=False),
+    flash_vec_llama_score_pv_kernel(binding.Hd, binding.Hq, binding.Hkv, MAXC, S, Tc, wide_kv=True, wide_q=False,
+                                    token_bound=token_bound),
     output_spec=OutputSpec((binding.Hq * S * (binding.Hd + 2),), dtypes.float32))
   partial = execute(None, q.reshape(binding.Hq * binding.Hd), cache_bits, program=tile_program)
   combine_program = KernelProgram(binding.route_id, f"{binding.candidate_id}.llama_vec_wide.combine",
@@ -728,7 +733,7 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
     if kv_scale is not None or freqs is not None:
       raise ValueError("llama_vec_wide research route requires plain, pre-rotated fp16 KV")
     return _flash_llama_vec_wide_research_call(q, assigned_kv, _tc, binding, MAXC, split_size, output_fp16,
-                                                promoted=wide_promoted)
+                                                promoted=wide_promoted, token_bound=geom.get("token_bound"))
   return flash_decode_live_split_block_tile(q.reshape(binding.Hq, binding.Hd), assigned_kv, _tc,
     binding.Hd, binding.Hq, binding.Hkv, MAXC, split_size, staging=binding.staging,
     fused_combine=True, kv_scale=kv_scale, freqs=freqs, query_group_size=binding.query_group_size,

@@ -1,0 +1,39 @@
+{
+  "arm": "candidate",
+  "candidate_splits": 5,
+  "candidate_token_bound": 640,
+  "count": 2,
+  "depth": 512,
+  "max_context": 1024,
+  "profile_jsonl": "docs/task_workflow/evidence/nv-flash-kv-layout-matrix-20260826/profile-s5.jsonl",
+  "reps": 2,
+  "schema": "tinygrad.nv_flash_bounded_wall.v1",
+  "settled": {
+    "accepted_samples_ms_per_token": [
+      5.2017275,
+      5.2387115
+    ],
+    "external_contention_high_limit_ms": 5.4702195,
+    "median_ms_per_token": 5.2202195,
+    "prelude_token": 13876,
+    "rejected_high_samples_ms_per_token": [],
+    "samples_ms_per_token": [
+      5.2017275,
+      5.2387115
+    ],
+    "timed_token_count": 4,
+    "token_hashes": [
+      "49231545a8bedc0604b56aac0681e96208858834ddaf61fe014590f70c6baada",
+      "ac5db0c829874a0a6217de9b53e9ecf6d6e1d93e4eb113196fadb347362b1006"
+    ],
+    "token_stream_hash": "5512bfc1f74c1ee1e244d71fb3a23025d0c4e11859056318cf6697d4be840a21",
+    "warmup_tokens": [
+      38835,
+      34208,
+      13,
+      279,
+      3974,
+      13876
+    ]
+  }
+}

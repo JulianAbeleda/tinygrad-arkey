@@ -103,3 +103,21 @@ def test_vec_llama_wide_kv_renders_llama_16_byte_copy_grammar():
   assert cuda.count("uint4") >= 6
   assert "half4" not in cuda and "half8" not in cuda
   assert cuda.count("__syncthreads") == 1
+
+
+def test_vec_llama_wide_kv_active_horizon_is_bounded_and_fail_closed():
+  pout = UOp.placeholder((32*6*130,), dtypes.float32, 0)
+  q = UOp.placeholder((32*64,), dtypes.uint32, 1)
+  cache = UOp.placeholder((2,1,8,1024,64), dtypes.uint32, 2)
+  ast = flash_vec_llama_score_pv_kernel(128, 32, 8, 1024, 6, UOp.const(dtypes.int, 641),
+                                        wide_kv=True, token_bound=768)(pout, q, cache)
+  assert ast.arg.name == "flash_vec_llama_score_pv_32_128_6_widekv16"
+
+  for invalid_bound in (769, 1152):
+    try:
+      flash_vec_llama_score_pv_kernel(128, 32, 8, 1024, 6, UOp.const(dtypes.int, 641),
+                                      wide_kv=True, token_bound=invalid_bound)
+    except ValueError as e:
+      assert "token_bound" in str(e)
+    else:
+      raise AssertionError(f"invalid active horizon {invalid_bound} must fail closed")
