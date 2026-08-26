@@ -225,6 +225,16 @@ below the 50-us booking threshold and S6 becomes invalid when Tc reaches 769,
 the endpoint remains 4.094502 ms/token / 244.230 tok/s. Reopening requires a
 generic active-horizon graph-bucket selector, not a fixed d512 split literal.
 
+The graph-bucketing investment bracket is also closed. Full-window S5 and
+late-S6 candidates passed at -5.408 and -20.299 us/token respectively, while
+S7 regressed 3.797 us/token. Together with the prior early-S6 pass, the
+measured policy is S6 through Tc 768 and S8 afterward, not a distinct graph for
+every 128-token bucket. At the current endpoint this is worth about +0.57 tok/s
+while the S6 graph is active and an estimated +0.445 tok/s when amortized over
+a complete 512-token continuation to 1024. This remains unbooked until the
+typed graph selector itself passes production wall; the existing alternate
+Flash TinyJit selection provides the implementation substrate.
+
 ## Evidence
 
 - `docs/task_workflow/evidence/nv-ranked-wall-tests-20260826/post-landing-endpoint.json`

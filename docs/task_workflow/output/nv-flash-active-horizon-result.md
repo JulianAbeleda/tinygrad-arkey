@@ -2,7 +2,7 @@
 
 ## Verdict
 
-`ACTIVE_HORIZON_PRIMITIVE_PROMOTED__FIXED_S6_DEFAULT_REJECTED__GRAPH_BUCKETING_OPEN`
+`ACTIVE_HORIZON_PRIMITIVE_PROMOTED__GRAPH_BUCKETING_INVEST_PASS__S6_TO_768_S8_AFTER`
 
 The remaining wide-Flash cold sensitivity has a concrete contributor. The
 installed kernel derives eight 128-token partitions from the 1024-token cache
@@ -102,6 +102,45 @@ incorrect at Tc 769. The measured S6 wall result supports investing in that
 generic graph-bucketing substrate, but the expected endpoint value is presently
 about half a tok/s, not the earlier 1.4-tok/s synthetic ceiling.
 
+## Graph-bucketing investment test
+
+The remaining horizons were tested with full 117-token reverse brackets rather
+than extrapolated from isolated kernel timing:
+
+| candidate and tested interval | wall delta | tok/s delta | decision |
+|---|---:|---:|---|
+| S5/640, Tc 512-636 | -5.408 us/token | +0.324 | wall pass |
+| S6/768, early interval through Tc 663 | -9.484 us/token | +0.566 | wall pass |
+| S6/768, Tc 640-764 | -20.299 us/token | +1.206 | wall pass |
+| S7/896, Tc 768-892 | +3.797 us/token | -0.225 | no-go |
+
+All token-stream hashes matched their reverse controls. The S7 result agrees
+with its weak conditioned microgate: removing one physical partition is not
+automatically faster in the production lifecycle. Conversely, S6 remains a
+strong pass across both halves of its safe range. S5 is a real primitive pass,
+but S6 is both safe and faster in the same early interval, so the measured
+service policy is **S6 through Tc 768, then S8**. It is not the mechanically
+smallest `ceil(Tc/128)` graph at every token.
+
+Using the current 4.094502-ms endpoint as a common translation baseline:
+
+- while S6 is active near the d512 endpoint, the measured early bracket is
+  worth about +0.57 tok/s;
+- averaged over Tc 513-768, the two S6 brackets imply about 14.892 us/token,
+  or roughly +0.89 tok/s for that 256-token region;
+- amortized over a complete 512-token continuation from 513 through 1024,
+  including an unchanged S8 second half, the estimate is 7.446 us/token,
+  moving 244.230 to about **244.675 tok/s (+0.445)**.
+
+This is a pre-installation return estimate, not a booked endpoint. It does not
+charge one-time graph capture/compile cost or an unmeasured transition cost.
+The implementation investment is bounded because the model already owns and
+selects distinct ordinary and alternate-split Flash TinyJits per token. The
+required extension is a typed S6 wide-Flash graph variant with a 768 semantic
+bound and an S8 fallback, followed by the standard hash, graph-census, and
+reverse wall qualification. No S5 or S7 production graph is justified by the
+current service results.
+
 ## Evidence
 
 - `docs/task_workflow/evidence/nv-flash-kv-layout-matrix-20260826/matrix-r1.json`
@@ -112,6 +151,12 @@ about half a tok/s, not the earlier 1.4-tok/s synthetic ceiling.
 - `docs/task_workflow/evidence/nv-flash-kv-layout-matrix-20260826/profile-s5.jsonl`
 - `docs/task_workflow/evidence/nv-flash-kv-layout-matrix-20260826/wall-s5-r9.json`
 - `docs/task_workflow/evidence/nv-flash-kv-layout-matrix-20260826/wall-s6-r9.json`
+- `docs/task_workflow/evidence/nv-flash-kv-layout-matrix-20260826/invest-matrix-tc769.json`
+- `docs/task_workflow/evidence/nv-flash-kv-layout-matrix-20260826/invest-matrix-tc832.json`
+- `docs/task_workflow/evidence/nv-flash-kv-layout-matrix-20260826/invest-matrix-tc896.json`
+- `docs/task_workflow/evidence/nv-flash-kv-layout-matrix-20260826/invest-wall-s5-full-r9.json`
+- `docs/task_workflow/evidence/nv-flash-kv-layout-matrix-20260826/invest-wall-s6-late-r9.json`
+- `docs/task_workflow/evidence/nv-flash-kv-layout-matrix-20260826/invest-wall-s7-full-r9.json`
 - `extra/llm_research/decode/nv_flash_kv_layout_matrix.py`
 - `extra/llm_research/decode/nv_flash_bounded_counter_probe.py`
 - `extra/llm_research/decode/nv_flash_bounded_wall.py`
