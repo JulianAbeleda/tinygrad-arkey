@@ -1,0 +1,22 @@
+{
+  "schema": "tinygrad.nv_flash_adaptive_deployment_summary.v1",
+  "dual_graph": {
+    "s64_incremental_bytes": 165428760,
+    "cold_s64_capture_seconds": 185.93340084305964,
+    "warm_cache_s64_capture_seconds": 184.33483180194162,
+    "decision": "NO_GO_DEPLOYMENT_LATENCY"
+  },
+  "static_s64_crossing": {
+    "depth": 704,
+    "timed_tokens": 128,
+    "control_s48_ms_per_token": 4.35903853125,
+    "candidate_s64_ms_per_token": 4.26819475,
+    "recovery_us_per_token": 90.84378124999981,
+    "control_tok_s": 229.40839727742643,
+    "candidate_tok_s": 234.29097514241684,
+    "tok_s_gain": 4.882577864990409,
+    "token_stream_hash": "ccdf6dacfc69df611c0def178d4380c7752e579efa405e5ecdf687292b9b6115",
+    "token_hash_equal": true,
+    "decision": "SINGLE_GRAPH_HORIZON_POLICY_PASS"
+  }
+}

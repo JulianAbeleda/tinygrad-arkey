@@ -89,3 +89,36 @@ there is no remaining correctness or boundary-capture wall.
 
 Implementation decision:
 `DUAL_GRAPH_TOKEN_PATH_PASS__PROMOTION_POLICY_AND_STARTUP_COST_PENDING`.
+
+## Deployment-cost closure and single-graph route
+
+The dual-graph path is not blocked by VRAM, but it is blocked by construction
+latency.  A fresh-process phase census measured the normal S48 ping-pong pair
+and then the additional S64 pair.  The S64 pair adds 165,428,760 allocator
+bytes, but requires 185.93 seconds to trace/schedule/capture.  A second process
+with a warm compiler cache still required 184.33 seconds, so this is repeated
+full-model graph construction rather than a one-time binary-cache miss.
+
+The cleaner deployment route is request-static geometry.  On the same composed
+depth-704, 16-token, eight-window crossing workload, selecting S64 before the
+first decode capture produced 4.268195 ms/token with the exact reference token
+stream.  Against the 4.359039 ms/token S48 crossing control, this recovers
+90.844 us/token, or approximately 229.41 to 234.29 tok/s (+4.88 tok/s).  It also
+avoids both the second graph's 165 MB and its boundary construction pause.
+
+This does not authorize global S64.  S64 remains measured slower below context
+769.  The admissible production shape is therefore a request-level horizon
+decision: select one graph before decode when the request is expected to run
+far enough beyond the cliff to repay the pre-cliff loss.  With the measured
+band costs, a request beginning at context 704 repays that loss after roughly
+ten post-boundary tokens.  The current generator does not own an output-horizon
+input, so automatic broad promotion remains closed pending that typed input and
+a reverse bracket around its decision boundary.
+
+The graph-local S64 lease is now independently admitted at the kernel guard;
+it no longer relies on `FLASH_DECODE_COARSE_SPLIT=64` being present in the
+process environment.  Ordinary calls remain S48 and arbitrary leased geometry
+continues to fail closed.
+
+Updated decision:
+`DUAL_GRAPH_DEPLOYMENT_NO_GO__SINGLE_GRAPH_HORIZON_POLICY_PASS`.

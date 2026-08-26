@@ -920,13 +920,19 @@ FLASH_DECODE_G4 = FlashDecodeRouteConfig("attention_decode.flash_live_split", "d
 FLASH_DECODE_G5 = FlashDecodeRouteConfig("attention_decode.flash_live_split_g5", "decode_flash_live_split_g5_kvboth",
                                           40, 32, 2, 4)
 
+def _adaptive_split_lease_admitted(route:FlashDecodeRouteConfig|None, S:int, query_group_size:int|None,
+                                   staging:str, MAXC:int) -> bool:
+  return route is not None and route.query_heads == FLASH_DECODE_G4.query_heads and MAXC <= 1024 and \
+    (64, route.query_group_size, route.staging) == (S, query_group_size, staging)
+
 
 def flash_decode_live_split_block_tile(q:Tensor, cache_kv:Tensor, Tc:UOp, Hd:int, Hq:int, Hkv:int, MAXC:int, S:int,
                                        staging:str="KV_BOTH", fused_combine:bool=True, kv_scale:Tensor|None=None,
                                        freqs:Tensor|None=None, query_group_size:int|None=None, stage_width:int=1,
                                        token_block:int=16, lane_width:int=32, score_group_width:int|None=None,
                                        warps:int|None=None, reduce_structure:str="staged", dot_pair_width:int=2,
-                                       combine_lane_width:int|None=None, combine_fp16:bool=False) -> Tensor:
+                                       combine_lane_width:int|None=None, combine_fp16:bool=False,
+                                       split_count_leased:bool=False) -> Tensor:
   """Execute the selected live-split flash decode and return ``[Hq, Hd]``."""
   if not fused_combine: raise ValueError("fused_combine=False is no longer supported for decode live-split routes")
   # TG7: this is a pure shape-based route SELECTION (which of G4/G5 matches, to label the emitted
@@ -946,6 +952,10 @@ def flash_decode_live_split_block_tile(q:Tensor, cache_kv:Tensor, Tc:UOp, Hd:int
   coarse_split = flash_decode_coarse_split_override()
   if not admitted and route is not None and route.query_heads == FLASH_DECODE_G4.query_heads and coarse_split:
     admitted = (coarse_split, route.query_group_size, route.staging) == (S, query_group_size, staging)
+  # Closed-default graph-local lease used by the qualified adaptive policy.
+  # Arbitrary split geometry remains inadmissible.
+  if not admitted and split_count_leased:
+    admitted = _adaptive_split_lease_admitted(route, S, query_group_size, staging, MAXC)
   if not admitted:
     raise ValueError("flash decode geometry is not an admitted promoted route")
   quant, rope = kv_scale is not None, freqs is not None

@@ -697,4 +697,4 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
     score_group_width=geom.get("score_group_width"), warps=geom.get("warps"),
     reduce_structure=geom.get("reduce_structure", "staged"), dot_pair_width=geom.get("dot_pair_width", 2),
     combine_lane_width=geom.get("combine_lane_width"),
-    combine_fp16=bool(binding.combine_fusion or combine_fp16))
+    combine_fp16=bool(binding.combine_fusion or combine_fp16), split_count_leased="split_count" in geom)

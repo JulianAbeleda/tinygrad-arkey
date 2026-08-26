@@ -6,7 +6,7 @@ import pytest
 from tinygrad import dtypes
 from tinygrad.uop.ops import UOp
 from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeCapability,
-  FlashDecodeTileSpec, describe_flash_decode_attention, flash_decode_coarse_split_override)
+  FlashDecodeTileSpec, _adaptive_split_lease_admitted, describe_flash_decode_attention, flash_decode_coarse_split_override)
 
 
 def _tile_inputs(hq:int, split_count:int, max_context:int=8192):
@@ -213,3 +213,9 @@ def test_adaptive_s64_context_band_is_bounded():
   assert _adaptive_flash_split_count(True, 1023, 1024) == 64
   assert _adaptive_flash_split_count(False, 800, 1024) is None
   assert _adaptive_flash_split_count(True, 800, 2048) is None
+
+def test_adaptive_s64_kernel_lease_is_narrow():
+  assert _adaptive_split_lease_admitted(FLASH_DECODE_G4, 64, None, "KV_BOTH", 1024)
+  assert not _adaptive_split_lease_admitted(FLASH_DECODE_G4, 32, None, "KV_BOTH", 1024)
+  assert not _adaptive_split_lease_admitted(FLASH_DECODE_G4, 64, None, "KV_BOTH", 2048)
+  assert not _adaptive_split_lease_admitted(FLASH_DECODE_G5, 64, 2, "KV_BOTH", 1024)
