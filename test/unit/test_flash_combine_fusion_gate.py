@@ -5,8 +5,11 @@ the Q6K in-kernel merge, and independently of the M3 norm and M4 q4k records."""
 import json, pathlib
 
 from tinygrad.llm.model_route_plan import (decode_epilogue_fusion_promoted, decode_flash_combine_fusion_promoted,
+  decode_flash_llama_vec_wide_promoted,
   decode_norm_fusion_promoted, decode_q4k_epilogue_fusion_promoted, load_decode_flash_combine_fusion_promotion,
-  _DECODE_FLASH_COMBINE_FUSION_PROMOTED_TARGETS)
+  load_decode_flash_llama_vec_wide_promotion, _DECODE_FLASH_COMBINE_FUSION_PROMOTED_TARGETS,
+  _DECODE_FLASH_LLAMA_VEC_WIDE_PROMOTED_TARGETS)
+from tinygrad.llm.decode_routes import _flash_llama_vec_wide_installed_admitted
 
 
 def _write_policy(path, *, targets="absent"):
@@ -41,3 +44,21 @@ def test_checked_in_combine_record_promotes_nothing_and_other_records_stay():
   assert decode_epilogue_fusion_promoted(("NV", "sm_120"))
   assert not decode_norm_fusion_promoted(("NV", "sm_120"))
   assert not decode_q4k_epilogue_fusion_promoted(("NV", "sm_120"))
+
+
+def test_wide_flash_policy_is_closed_by_default_and_installed_only_on_nv_sm120(tmp_path):
+  absent = tmp_path / "absent.json"
+  absent.write_text(json.dumps({"schema":"boltbeam.route_policy.v1", "route":"decode_flash_llama_vec_wide"}))
+  assert load_decode_flash_llama_vec_wide_promotion(absent) == frozenset()
+  assert _DECODE_FLASH_LLAMA_VEC_WIDE_PROMOTED_TARGETS == frozenset({("NV", "sm_120")})
+  assert decode_flash_llama_vec_wide_promoted(("NV", "sm_120"))
+  assert not decode_flash_llama_vec_wide_promoted(("AMD", "gfx1100"))
+  assert not decode_flash_llama_vec_wide_promoted((None, None))
+
+
+def test_wide_flash_installed_admission_is_extent_bounded_and_geometry_yields():
+  assert _flash_llama_vec_wide_installed_admitted(True, {}, 768)
+  assert _flash_llama_vec_wide_installed_admitted(True, {}, 1024)
+  assert not _flash_llama_vec_wide_installed_admitted(True, {}, 40960)
+  assert not _flash_llama_vec_wide_installed_admitted(True, {"split_count":64}, 1024)
+  assert not _flash_llama_vec_wide_installed_admitted(False, {}, 1024)

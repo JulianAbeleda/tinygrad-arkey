@@ -9,11 +9,12 @@ from tinygrad.llm.decode_kernels import (Q6K_POS_EXTENT, decode_kv_rope_store_ke
   q6k_coop_row_tile_for_target, q6k_spec_for_role, q6k_vocab_scalar_reduce_eligible)
 from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeCapability, FlashDecodeRouteConfig,
   flash_decode_capability_from_renderer, flash_decode_coarse_split_override, flash_decode_live_split_block_tile,
-  flash_decode_target_promoted)
+  flash_decode_target_promoted, flash_fused_gmax_combine_kernel, flash_vec_llama_score_pv_kernel)
 from tinygrad.llm.kernel_program import (ActivationViewRequest, DeclaredTypedOutput, KernelProgram,
                                          KernelProgramProvenance, OutputSpec, ResidualViewRequest, TypedLayout,
                                          TypedViewRequest, execute_promoted_program, execute_research_program)
-from tinygrad.llm.model_route_plan import decode_epilogue_fusion_promoted, decode_flash_combine_fusion_promoted
+from tinygrad.llm.model_route_plan import (decode_epilogue_fusion_promoted, decode_flash_combine_fusion_promoted,
+                                           decode_flash_llama_vec_wide_promoted)
 from tinygrad.llm.packed_argmax import packed_argmax_from_tile_keys
 from tinygrad.llm.qk_layout import Q4_K, Q6_K, QuantFormat
 from tinygrad.llm.route_selection import parse_route_mode
@@ -569,6 +570,7 @@ class _FlashDecodeBinding:
   staging: str
   stage_width: int
   combine_fusion: bool = False
+  llama_vec_wide: bool = False
 
 _RESOLVED_FLASH_DECODE_CAPABILITY: dict[str, tuple[FlashDecodeCapability, tuple[str|None, str|None]]] = {}
 
@@ -641,12 +643,41 @@ class _FlashDecodeCandidate:
     backend_label = target[0] or "AMD"
     return _FlashDecodeBinding(self.candidate_id, self.route_id, backend_label, B, Hq, Hkv, Hd,
                                self.split_size, self.query_group_size, self.staging, self.stage_width,
-                               admission.combine_fusion_admitted)
+                               admission.combine_fusion_admitted, decode_flash_llama_vec_wide_promoted(target))
 
 # Public compatibility aliases. Their sole route authority is owned beside the
 # flash executor, so selection cannot drift from execution configuration.
 FLASH_DECODE_CANDIDATE = _FlashDecodeCandidate(FLASH_DECODE_G4)
 FLASH_DECODE_G5_CANDIDATE = _FlashDecodeCandidate(FLASH_DECODE_G5)
+
+def _flash_llama_vec_wide_research_call(q:Tensor, assigned_kv:Tensor, Tc:UOp, binding:_FlashDecodeBinding,
+                                         MAXC:int, S:int, output_fp16:bool, *, promoted:bool=False) -> Tensor:
+  """Extent-derived wide-KV flash at the approved research/promotion admission boundary."""
+  extent_split = MAXC // 128 if MAXC % 128 == 0 else None
+  if (binding.Hq, binding.Hkv, binding.Hd) != (32, 8, 128) or S != extent_split or assigned_kv.dtype != dtypes.float16:
+    raise ValueError(f"llama_vec_wide research route requires Hq32/Hkv8/Hd128, S=MAXC/128, and fp16 KV, got "
+                     f"Hq={binding.Hq}, Hkv={binding.Hkv}, Hd={binding.Hd}, S={S}, MAXC={MAXC}, cache={assigned_kv.dtype}")
+  cache_bits = Tensor(assigned_kv.uop.bitcast(dtypes.uint32))
+  provenance = KernelProgramProvenance.MACHINE_SEARCH_GENERATED if promoted else KernelProgramProvenance.RESEARCH_ONLY
+  execute = execute_promoted_program if promoted else execute_research_program
+  tile_program = KernelProgram(binding.route_id, f"{binding.candidate_id}.llama_vec_wide.tile",
+    provenance,
+    flash_vec_llama_score_pv_kernel(binding.Hd, binding.Hq, binding.Hkv, MAXC, S, Tc, wide_kv=True, wide_q=False),
+    output_spec=OutputSpec((binding.Hq * S * (binding.Hd + 2),), dtypes.float32))
+  partial = execute(None, q.reshape(binding.Hq * binding.Hd), cache_bits, program=tile_program)
+  combine_program = KernelProgram(binding.route_id, f"{binding.candidate_id}.llama_vec_wide.combine",
+    provenance,
+    flash_fused_gmax_combine_kernel(binding.Hd, binding.Hq, S, output_fp16=output_fp16, lane_width=128),
+    output_spec=OutputSpec((binding.Hq * binding.Hd,), dtypes.float16 if output_fp16 else dtypes.float32))
+  return execute(None, partial, program=combine_program).reshape(binding.Hq, binding.Hd)
+
+
+def _flash_llama_vec_wide_installed_admitted(promoted:bool, geom:dict, max_context:int) -> bool:
+  # The installed route is qualified only at the two physical cache extents used by the dense
+  # decode endpoint. Explicit geometry always wins, and larger request capacities must not inherit
+  # an unmeasured S=MAXC/128 launch merely because the arithmetic divides evenly.
+  return promoted and not geom and max_context in (768, 1024)
+
 
 def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp, T:int|UOp, B:int,
                                  Hq:int, Hkv:int, Hd:int, max_context:int, kv_scale:Tensor|None=None,
@@ -689,6 +720,15 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
     # A graph-local typed geometry lease takes precedence.  The env override
     # remains the admission authority for non-promoted split counts.
     if "split_count" not in geom: split_size = coarse_split
+  output_fp16 = bool(binding.combine_fusion or combine_fp16)
+  wide_lease = bool(geom.get("llama_vec_wide", False))
+  wide_promoted = _flash_llama_vec_wide_installed_admitted(binding.llama_vec_wide, geom, MAXC)
+  if wide_promoted: split_size = MAXC // 128
+  if wide_lease or wide_promoted:
+    if kv_scale is not None or freqs is not None:
+      raise ValueError("llama_vec_wide research route requires plain, pre-rotated fp16 KV")
+    return _flash_llama_vec_wide_research_call(q, assigned_kv, _tc, binding, MAXC, split_size, output_fp16,
+                                                promoted=wide_promoted)
   return flash_decode_live_split_block_tile(q.reshape(binding.Hq, binding.Hd), assigned_kv, _tc,
     binding.Hd, binding.Hq, binding.Hkv, MAXC, split_size, staging=binding.staging,
     fused_combine=True, kv_scale=kv_scale, freqs=freqs, query_group_size=binding.query_group_size,
@@ -697,4 +737,4 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
     score_group_width=geom.get("score_group_width"), warps=geom.get("warps"),
     reduce_structure=geom.get("reduce_structure", "staged"), dot_pair_width=geom.get("dot_pair_width", 2),
     combine_lane_width=geom.get("combine_lane_width"),
-    combine_fp16=bool(binding.combine_fusion or combine_fp16), split_count_leased="split_count" in geom)
+    combine_fp16=output_fp16, split_count_leased="split_count" in geom)

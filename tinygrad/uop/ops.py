@@ -1339,6 +1339,8 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
       if preserved is not None:
         contig_srcs.append(preserved)
       elif x.op is Ops.AFTER or x.has_precompiled_output_identity() or \
+          (x.op is Ops.BITCAST and (x.src[0].has_buffer_identity() or \
+            (x.src[0].op is Ops.AFTER and x.src[0].src[0].has_buffer_identity()))) or \
           (x.op is Ops.MEMORY_SEMANTIC and x.src[0].has_buffer_identity()):
         contig_srcs.append(x)
       else:

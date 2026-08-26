@@ -89,3 +89,17 @@ def test_vec_llama_score_pv_shape_is_closed_to_exact_candidate():
     assert "fixed" in str(e)
   else:
     raise AssertionError("non-candidate shape must fail closed")
+
+
+def test_vec_llama_wide_kv_renders_llama_16_byte_copy_grammar():
+  pout = UOp.placeholder((32*6*130,), dtypes.float32, 0)
+  # The research boundary supplies zero-copy uint32 views: every uint4 load is
+  # one aligned 16-byte cooperative copy covering eight adjacent fp16 values.
+  q = UOp.placeholder((32*64,), dtypes.uint32, 1)
+  cache = UOp.placeholder((2,1,8,768,64), dtypes.uint32, 2)
+  ast = flash_vec_llama_score_pv_kernel(128, 32, 8, 768, 6, UOp.const(dtypes.int, 513), wide_kv=True)(pout, q, cache)
+  cuda = _render(ast, CUDARenderer(Target("NV", arch="sm_120"), use_nvcc=True))
+  assert ast.arg.name == "flash_vec_llama_score_pv_32_128_6_widekv16"
+  assert cuda.count("uint4") >= 6
+  assert "half4" not in cuda and "half8" not in cuda
+  assert cuda.count("__syncthreads") == 1

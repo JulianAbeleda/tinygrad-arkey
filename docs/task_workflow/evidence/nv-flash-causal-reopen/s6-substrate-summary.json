@@ -1,0 +1,56 @@
+{
+  "schema": "tinygrad.nv_flash_vec_s6_substrate_test.v1",
+  "date": "2026-08-26",
+  "shape": {
+    "Hq": 32,
+    "Hkv": 8,
+    "Hd": 128,
+    "Tc": 513,
+    "physical_bound": 768,
+    "control_splits": 48,
+    "candidate_splits": 6
+  },
+  "correctness_after_empty_partition_fix": [
+    {"case": "normal", "finite": true, "bitwise": false, "mismatched_fp16_words": 5, "max_abs": 0.00000762939453125, "mean_abs": 2.0081643015146255e-9},
+    {"case": "zero", "finite": true, "bitwise": true, "mismatched_fp16_words": 0, "max_abs": 0.0, "mean_abs": 0.0},
+    {"case": "dynamic", "finite": true, "bitwise": true, "mismatched_fp16_words": 0, "max_abs": 0.0, "mean_abs": 0.0}
+  ],
+  "resources": {
+    "control_score": {"registers": 40, "shared_bytes": 10240, "local_bytes": 576, "grid": [48, 8, 1], "block": [32, 4, 1]},
+    "candidate_score": {"registers": 48, "shared_bytes": 4224, "local_bytes": 576, "grid": [6, 32, 1], "block": [32, 4, 1]}
+  },
+  "native_nv_device_medians_us_per_layer": {
+    "control_score_s48": 4.096,
+    "control_combine_s48_lw32": 2.560,
+    "control_island": 6.656,
+    "candidate_score_s6": 9.216,
+    "candidate_combine_s6_lw128": 1.152,
+    "candidate_island": 10.368,
+    "candidate_minus_control": 3.712,
+    "projected_loss_us_per_36_layers": 133.632
+  },
+  "counter_comparison": {
+    "candidate_uops_s6": {
+      "ncu_duration_us": 11.74,
+      "thread_instructions": 982720,
+      "l1_bytes": 205310000,
+      "l2_bytes": 17350000,
+      "dram_read_bytes": 3180000,
+      "dram_peak_percent": 15.35,
+      "sm_peak_percent": 11.63,
+      "occupancy_percent": 9.60
+    },
+    "llama_s6": {
+      "ncu_duration_us": 6.30,
+      "thread_instructions": 894720,
+      "l1_bytes": 13470000,
+      "l2_bytes": 12790000,
+      "dram_read_bytes": 418050,
+      "dram_peak_percent": 3.78,
+      "sm_peak_percent": 8.31,
+      "occupancy_percent": 9.52
+    }
+  },
+  "verdict": "NO_GO_CURRENT_UOPS_VECTOR_SUBSTRATE",
+  "wall": "The algorithm and occupancy are not the limiting difference. Scalar/uncoalesced global K/V lowering inflates L1 transactions by about 15.2x versus llama. A wide coalesced KV-load primitive is required before this topology can be reconsidered for production."
+}

@@ -537,6 +537,22 @@ def decode_flash_combine_fusion_promoted(target:Target) -> bool:
   loader above)."""
   return target in _DECODE_FLASH_COMBINE_FUSION_PROMOTED_TARGETS
 
+def load_decode_flash_llama_vec_wide_promotion(path:str) -> frozenset[Target]:
+  """Closed-default target policy for the extent-derived wide-KV vector flash route."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_FLASH_LLAMA_VEC_WIDE_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-flash-llama-vec-wide-route-policy.json"
+_DECODE_FLASH_LLAMA_VEC_WIDE_PROMOTED_TARGETS: frozenset[Target] = \
+  load_decode_flash_llama_vec_wide_promotion(_DECODE_FLASH_LLAMA_VEC_WIDE_PROMOTION_RECORD)
+
+def decode_flash_llama_vec_wide_promoted(target:Target) -> bool:
+  return target in _DECODE_FLASH_LLAMA_VEC_WIDE_PROMOTED_TARGETS
+
 def load_decode_norm_fusion_promotion(path:str) -> frozenset[Target]:
   """Read the L1 M3 fused decode RMSNorm promotion record (boltbeam.route_policy.v1, same schema family
   as `load_decode_epilogue_fusion_promotion`). CLOSED default with the same semantics: a document without

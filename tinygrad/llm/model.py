@@ -1544,9 +1544,11 @@ class Transformer:
     if resolve(tokens.shape[1] != 1): raise ValueError("decode_with_logits only supports one-token decode")
     if _GENERIC_LLM_CONTROL.get(): raise ValueError("decode_with_logits does not support generic-control routing")
     for q4k_linear in self._q4k_linears.linears: q4k_linear.decode_enabled = True
+    flash_geometry = dict(getattr(self, "_flash_decode_tile_geometry_lease", None) or {})
+    if flash_split_count is not None: flash_geometry["split_count"] = flash_split_count
     for block in self.blk:
       block._use_flash, block._prefill_v2, block._is_prefill, block._ring_freqs, block._ring_full = use_flash, False, False, None, False
-      block._flash_decode_tile_geometry_lease = ({"split_count":flash_split_count} if flash_split_count is not None else None)
+      block._flash_decode_tile_geometry_lease = flash_geometry or None
     if feedback_slot not in (None, 0, 1): raise ValueError("feedback_slot must be None, 0, or 1")
     pingpong = bool(getattr(self, "_decode_feedback_pingpong_promoted", False)) and feedback_slot is not None
     greedy_flash_pair = self.rollout_greedy_logits_pingpong_jits_flash_s64 if flash_split_count == 64 else self.rollout_greedy_logits_pingpong_jits_flash
@@ -1589,10 +1591,12 @@ class Transformer:
     # context-aware flash: each block reads _use_flash at trace time; rollout_jit (SDPA) and
     # rollout_jit_flash bake distinct attention -- each is only ever called with its own use_flash, so
     # capture is consistent. The decode-only T==1 guard in _attention ignores it during prefill.
+    flash_geometry = dict(getattr(self, "_flash_decode_tile_geometry_lease", None) or {})
+    if flash_split_count is not None: flash_geometry["split_count"] = flash_split_count
     for block in self.blk:
       block._use_flash, block._prefill_v2, block._is_prefill, block._ring_freqs, block._ring_full = \
         use_flash, is_prefill_v2, is_prefill, None, ring_full
-      block._flash_decode_tile_geometry_lease = ({"split_count":flash_split_count} if flash_split_count is not None else None)
+      block._flash_decode_tile_geometry_lease = flash_geometry or None
     # StreamingLLM ring decode: distinct captured graphs with `freqs` as a per-step JIT input (rebound each token). The
     # FULL-phase graph (ring_full, ctx>=N) reads the whole [0:N] cache and writes at the wrapped slot; the FILL-phase
     # graph reads [0:start_pos+T] like normal decode. block._ring_full (baked bool) selects the read mode in _attention.

@@ -77,3 +77,22 @@ def test_fold_drops_reshape_and_expand_from_the_compiled_program():
   prog_ops = {u.op for u in prog.src[0].toposort()}
   assert Ops.RESHAPE not in prog_ops and Ops.EXPAND not in prog_ops and Ops.STACK not in prog_ops
   assert any(u.op is Ops.SOURCE for u in prog.src)
+
+
+def test_size_changing_bitcast_keeps_after_store_alias_at_custom_boundary():
+  """A cache reinterpretation must retain both its original buffer and its
+  ordering edge; making this argument contiguous would materialize a different
+  uint32 buffer instead of presenting the stored fp16 bytes zero-copy."""
+  cache = Tensor.empty(16, dtype=dtypes.float16)
+  update = cache[:2].uop.store(Tensor.zeros(2, dtype=dtypes.float16).uop)
+  bits = Tensor(cache.uop.after(update).bitcast(dtypes.uint32))
+  out = Tensor.empty(8, dtype=dtypes.uint32)
+
+  def copy_kernel(dst:UOp, src:UOp) -> UOp:
+    row = UOp.range(8, 0)
+    return dst[row].store(src[row].cast(dtypes.uint32)).end(row).sink(arg=KernelInfo(name="k_bitcast_after_copy"))
+
+  results = UOp.custom_kernel(out.uop, bits.uop, fxn=copy_kernel)
+  retained = results[1].src[0]
+  assert retained.op is Ops.BITCAST and retained.src[0].op is Ops.AFTER
+  assert Ops.CONTIGUOUS not in {u.op for u in retained.toposort()}

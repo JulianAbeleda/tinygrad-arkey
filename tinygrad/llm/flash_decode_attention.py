@@ -453,7 +453,8 @@ def flash_single_stage_d512_kernel(Hd:int, Hq:int, Hkv:int, L:int, Tc, *, output
   return kernel
 
 
-def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc):
+def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc, *, wide_kv:bool=False,
+                                    wide_q:bool=True, token_bound:int|None=None):
   """Llama ``flash_attn_ext_vec`` substrate for d512 decode (closed-default, not routed).
 
   Faithful transcription of the traced llama kernel (docs/task_workflow/input/
@@ -477,7 +478,9 @@ def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc
   COLS_PER_WARP = GROUPS * NKQ                 # 32 columns per warp per chunk
   COLS_PER_CHUNK = THREADS                     # 128 columns per chunk
   CHUNK_STRIDE = S * COLS_PER_CHUNK            # 512: each split owns one interleaved 128-col chunk
-  NCHUNK = _ceildiv(MAXC, CHUNK_STRIDE)        # 9 at MAXC=4608
+  if token_bound is not None and (token_bound > MAXC or token_bound % COLS_PER_CHUNK):
+    raise ValueError(f"token_bound must be <= MAXC and a multiple of {COLS_PER_CHUNK}, got {token_bound}")
+  NCHUNK = _ceildiv(MAXC if token_bound is None else token_bound, CHUNK_STRIDE)
   W = Hd + 2
   scale = 1.0 / (Hd ** 0.5)
 
@@ -495,15 +498,33 @@ def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc
     glane = lane & (NKQ - 1)
     group = lane >> 3
 
+    def packed_half8(ptr:UOp, idx:UOp) -> tuple[UOp, ...]:
+      # Match llama's 16-byte cooperative copy. A direct half8 is devectorized
+      # into two 8-byte half4 loads; a uint4 input view keeps the aligned
+      # 128-bit transfer. The research caller supplies q/cache as zero-copy
+      # uint32 bitcast views because pointer reinterpret casts are erased by
+      # the current C-style devectorizer before LOAD folding.
+      raw_ptr = ptr.src[0] if ptr.op is Ops.RESHAPE else ptr
+      if raw_ptr.dtype.base != dtypes.uint32: raise ValueError("wide_kv requires uint32 bitcast views for q and cache")
+      words = raw_ptr.index(idx // 2).load(dtype=dtypes.uint32.vec(4))
+      return tuple(words.gep(i // 2).rshift((i & 1) * 16).cast(dtypes.uint16).bitcast(dtypes.float16) for i in range(8))
+
+    def owned_dim(i:UOp|int) -> UOp:
+      return (i // 8) * 64 + glane * 8 + (i % 8) if wide_kv else glane * R + i
+
     # Register-resident Q: 16 scalar halves per thread, loaded once. The 8 lanes of a group cover all 128
     # dims; the 4 groups x 4 warps hold redundant copies so every group can score a column independently.
     # Scalar (not half2-typed) registers keep the DEFINE_REG index pipeline devectorizer-friendly; the packed
     # half2 is rebuilt with STACK at the dot, exactly as the legacy tile builds its q/k pairs.
-    qreg = UOp.placeholder((R,), dtypes.float16, 300, addrspace=AddrSpace.REG)
-    qp = UOp.range(R, 40)
-    qe = glane * R + qp
-    qload = qreg[qp].store(q[head * Hd + qe].cast(dtypes.float16)).end(qp)
-    qreg = qreg.after(qload)
+    if wide_kv and wide_q:
+      qlanes = packed_half8(q, head * Hd + glane * 8) + packed_half8(q, head * Hd + 64 + glane * 8)
+    else:
+      qreg = UOp.placeholder((R,), dtypes.float16, 300, addrspace=AddrSpace.REG)
+      qp = UOp.range(R, 40)
+      qe = owned_dim(qp)
+      qload = qreg[qp].store(q[head * Hd + qe].cast(dtypes.float16)).end(qp)
+      qreg = qreg.after(qload)
+      qlanes = tuple(qreg[i] for i in range(R))
 
     acc = UOp.placeholder((R,), _F32, 301, addrspace=AddrSpace.REG)
     den = UOp.placeholder((1,), _F32, 302, addrspace=AddrSpace.REG)
@@ -527,12 +548,22 @@ def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc
     dot = UOp.placeholder((1,), _F32, 305, addrspace=AddrSpace.REG)
     dot_init = dot.after(chunk, j)[0].store(0.0)
     dot = dot.after(dot_init)
-    p = UOp.range(RP, 6, axis_type=AxisType.REDUCE)
-    ke = glane * R + p * 2
-    qpair = UOp(Ops.STACK, dtypes.float16.vec(2), (qreg[p * 2], qreg[p * 2 + 1]))
-    kpair = UOp(Ops.STACK, dtypes.float16.vec(2), (cache[0, 0, kvh, token, ke].cast(dtypes.float16),
-                                                  cache[0, 0, kvh, token, ke + 1].cast(dtypes.float16)))
-    dot_update = dot[0].store(_lower_fdot2(dot.after(p)[0], qpair, kpair)).end(p)
+    if wide_kv:
+      kbase = (kvh * MAXC + token) * Hd
+      klanes = packed_half8(cache, kbase + glane * 8) + packed_half8(cache, kbase + 64 + glane * 8)
+      dot_value = dot[0]
+      for pi in range(RP):
+        qpair = UOp(Ops.STACK, dtypes.float16.vec(2), (qlanes[pi * 2], qlanes[pi * 2 + 1]))
+        kpair = UOp(Ops.STACK, dtypes.float16.vec(2), (klanes[pi * 2], klanes[pi * 2 + 1]))
+        dot_value = _lower_fdot2(dot_value, qpair, kpair)
+      dot_update = dot[0].store(dot_value)
+    else:
+      p = UOp.range(RP, 6, axis_type=AxisType.REDUCE)
+      ke = glane * R + p * 2
+      qpair = UOp(Ops.STACK, dtypes.float16.vec(2), (qreg[p * 2], qreg[p * 2 + 1]))
+      kpair = UOp(Ops.STACK, dtypes.float16.vec(2), (cache[0, 0, kvh, token, ke].cast(dtypes.float16),
+                                                    cache[0, 0, kvh, token, ke + 1].cast(dtypes.float16)))
+      dot_update = dot[0].store(_lower_fdot2(dot.after(p)[0], qpair, kpair)).end(p)
     sc = valid.where(_warp_reduce_sum_staged(dot.after(dot_update)[0], lane, NKQ) * scale, _fc(-float("inf")))
     score_store = score[j].store(sc).end(j)
     score = score.after(score_store)
@@ -559,10 +590,15 @@ def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc
     tokv = split * COLS_PER_CHUNK + chunk * CHUNK_STRIDE + warp * COLS_PER_WARP + group * NKQ + jv
     validv = tokv < Tc
     prob = validv.where(_fexp(score[jv] - new_max), _fc(0.0))
-    dv = UOp.range(R, 12)
-    vdim = glane * R + dv
-    vval = cache[1, 0, kvh, tokv, vdim].cast(_F32)
-    a2 = acc[dv].store(acc.after(jv)[dv] + prob * vval).end(dv)
+    if wide_kv:
+      vbase = ((Hkv + kvh) * MAXC + tokv) * Hd
+      vlanes = packed_half8(cache, vbase + glane * 8) + packed_half8(cache, vbase + 64 + glane * 8)
+      a2 = UOp.group(*[acc[di].store(acc.after(jv)[di] + prob * vlanes[di].cast(_F32)) for di in range(R)])
+    else:
+      dv = UOp.range(R, 12)
+      vdim = glane * R + dv
+      vval = cache[1, 0, kvh, tokv, vdim].cast(_F32)
+      a2 = acc[dv].store(acc.after(jv)[dv] + prob * vval).end(dv)
     # mu (the running-max store) is a loop-carried register too; order it inside the chunk so it is not
     # hoisted out as a dead tail and the next chunk reads the updated softmax frame.
     d2 = den.after(a2, mu)[0].store(den.after(jv)[0] + prob)
@@ -579,7 +615,7 @@ def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc
     sh_pv = UOp.placeholder((WARPS * Hd,), _F32, 360, addrspace=AddrSpace.LOCAL)
     sh_den = UOp.placeholder((WARPS,), _F32, 361, addrspace=AddrSpace.LOCAL)
     sh_mx = UOp.placeholder((WARPS,), _F32, 362, addrspace=AddrSpace.LOCAL)
-    ps = sh_pv[warp * Hd + glane * R + dr].store(warp_acc, lane < NKQ).end(dr)
+    ps = sh_pv[warp * Hd + owned_dim(dr)].store(warp_acc, lane < NKQ).end(dr)
     ps = sh_den.after(ps)[warp].store(warp_den, lane.eq(0))
     ps = sh_mx.after(ps)[warp].store(warp_mx, lane.eq(0))
     barrier = UOp.barrier(UOp.group(ps))
@@ -601,20 +637,26 @@ def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc
     block_pv, block_den = block_pv.after(den_init), block_den.after(den_init)
 
     ws = UOp.range(WARPS, 16, axis_type=AxisType.REDUCE)
-    weight = _fexp(sh_mx.after(barrier)[ws] - global_max)
+    # A physical partition may be wholly outside logical Tc (the current llama-like
+    # d512 geometry has six 128-token parts, while Tc is only 513).  In that case
+    # every warp max and the block max are -inf.  exp(-inf - -inf) is NaN and used
+    # to poison the empty partial before the outer combine can give it zero weight.
+    # Preserve the partial ABI for an empty part: PV=0, denominator=0, max=-inf.
+    block_valid = global_max > -1e30
+    weight = block_valid.where(_fexp(sh_mx.after(barrier)[ws] - global_max), _fc(0.0))
     wr = UOp.range(R, 17)
-    pv_up = block_pv[wr].store(block_pv.after(ws)[wr] + weight * sh_pv.after(barrier)[ws * Hd + glane * R + wr]).end(wr)
+    pv_up = block_pv[wr].store(block_pv.after(ws)[wr] + weight * sh_pv.after(barrier)[ws * Hd + owned_dim(wr)]).end(wr)
     den_up = block_den.after(pv_up)[0].store(block_den.after(ws)[0] + weight * sh_den.after(barrier)[ws]).end(ws)
     final_pv, final_den = block_pv.after(den_up), block_den.after(den_up)
 
     base = (head * S + split) * W
     output_axis = UOp.range(R, 18)
-    output_dim = glane * R + output_axis
+    output_dim = owned_dim(output_axis)
     pv = pout[base + output_dim].store(final_pv[output_axis]).end(output_axis)
     ls = pout.after(pv)[base + Hd].store(final_den[0], lane.eq(0))
     ms = pout.after(ls)[base + (Hd + 1)].store(global_max, lane.eq(0))
     return ms.end(head, split, lane, warp).sink(arg=_kernel_info(
-      f"flash_vec_llama_score_pv_{Hq}_{Hd}_{S}", coalesced_loads=True))
+      f"flash_vec_llama_score_pv_{Hq}_{Hd}_{S}{'_widekv16' if wide_kv else ''}", coalesced_loads=True))
   return kernel
 
 

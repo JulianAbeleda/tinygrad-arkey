@@ -1,0 +1,42 @@
+{
+  "schema": "tinygrad.nv_flash_llama_vec_wide_substrate.v1",
+  "shape": {
+    "head_dim": 128,
+    "kv_heads": 8,
+    "logical_tokens": 513,
+    "max_context": 768,
+    "query_heads": 32,
+    "splits": 6
+  },
+  "native_hcq_median_us_per_layer": {
+    "installed_combine": 2.56,
+    "installed_complete": 6.656,
+    "installed_score": 4.096,
+    "scalar_combine": 1.152,
+    "scalar_complete": 10.336,
+    "scalar_score": 9.184,
+    "wide_combine": 1.152,
+    "wide_complete": 5.408,
+    "wide_score": 4.256
+  },
+  "wide_ncu": {
+    "achieved_occupancy_pct": 9.38,
+    "dram_read_mb": 3.17,
+    "duration_us": 6.37,
+    "l1_traffic_mb": 13.62,
+    "l2_hit_rate_pct": 75.32,
+    "l2_traffic_mb": 13.13,
+    "sm_throughput_pct": 8.14,
+    "thread_instructions": 799168
+  },
+  "llama_ncu_reference": {
+    "l1_traffic_mb": 13.47,
+    "thread_instructions": 895000
+  },
+  "render_gate": {
+    "copy_bytes": 16,
+    "load_type": "uint4",
+    "narrow_half_vectors_absent": true
+  },
+  "verdict": "isolated_pass"
+}

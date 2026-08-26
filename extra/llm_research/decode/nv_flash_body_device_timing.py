@@ -62,6 +62,16 @@ def build_programs() -> dict[str, tuple[KernelProgram, int, int]]:
     "vec_s4_tcbound": (_score_program("vec_s4_tcbound",
       flash_vec_llama_score_pv_kernel(Hd, Hq, Hkv, 1024, 4, tc), 4),
       4, 1024),
+    # Current production-graph hypothesis: the physical KV extent is padded to
+    # 768 and the llama vector topology assigns one 128-token part to each of
+    # six grid-y partitions.  Unlike the historical S=4/MAXC=1024 row, this has
+    # one compiled chunk and includes the logically empty sixth part at Tc=513.
+    "vec_s6_bound768": (_score_program("vec_s6_bound768",
+      flash_vec_llama_score_pv_kernel(Hd, Hq, Hkv, 768, 6, tc), 6),
+      6, 768),
+    "vec_s6_bound768_wide": (_score_program("vec_s6_bound768_wide",
+      flash_vec_llama_score_pv_kernel(Hd, Hq, Hkv, 768, 6, tc, wide_kv=True), 6),
+      6, 768),
   }
 
 
@@ -88,6 +98,10 @@ def run(replays: int = 400, warmup: int = 20, only: str | None = None) -> dict:
                "replays": replays, "warmup": warmup, "runs": {}}
   for name, (program, S, maxc) in programs.items():
     q, cache = _inputs(maxc)
+    if name.endswith("_wide"):
+      # Zero-copy storage reinterpretation: the wide emitter consumes uint4
+      # words while preserving the original fp16 allocation and byte layout.
+      q, cache = Tensor(q.uop.bitcast(dtypes.uint32)), Tensor(cache.uop.bitcast(dtypes.uint32))
     dst = Tensor.empty(Hq * S * W, dtype=dtypes.float32, device="CUDA")
     # Warm up and validate numerics once.
     res = execute_research_program(dst, q, cache, program=program)
@@ -113,7 +127,8 @@ if __name__ == "__main__":
   ap = argparse.ArgumentParser()
   ap.add_argument("--replays", type=int, default=400)
   ap.add_argument("--warmup", type=int, default=20)
-  ap.add_argument("--only", choices=("tile_s48_prod", "tile_s4", "vec_s4", "vec_s4_tcbound"))
+  ap.add_argument("--only", choices=("tile_s48_prod", "tile_s4", "vec_s4", "vec_s4_tcbound", "vec_s6_bound768",
+                                            "vec_s6_bound768_wide"))
   ap.add_argument("--out", type=Path)
   args = ap.parse_args()
   got = run(args.replays, args.warmup, args.only)
