@@ -41,7 +41,7 @@ is research substrate, not a production admission.
 
 | row | measured position | tok/s | relative to wall | relative to retained llama |
 | --- | --- | ---: | --- | --- |
-| tinygrad pre-boundary S=48 | context below 769 | about 236.6 | local S=48 winner; 59.6 us from 240 at the representative median | about 178 us / 10.4 tok/s behind the retained d512 llama authority; position-window matching remains a caveat |
+| tinygrad pre-boundary S=48 | bounded d512 pre-cliff authority | 234.66 | local S=48 winner; 94.8 us / 5.34 tok/s from 240 | 213.1 us / 12.36 tok/s behind the retained d512 llama authority |
 | tinygrad post-boundary S=48 | context above 769 | 226.6 at d800 bracket | avoidable alignment cliff, not a true hardware ceiling | unmeasured at matched d800 llama context |
 | tinygrad post-boundary S=64 | context above 769 | 233.9 at d800 bracket | recovers 137.5 us of the cliff; next wall requires a fresh ledger after adaptive integration | unmeasured at matched d800 llama context |
 | retained llama authority | historical d512 authority | 247.0 | comparison reference | reference |
