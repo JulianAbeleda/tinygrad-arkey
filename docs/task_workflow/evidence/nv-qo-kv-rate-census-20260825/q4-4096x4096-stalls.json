@@ -1,0 +1,237 @@
+{
+  "bitwise_identical": true,
+  "commit": "8ff57fe0f1333d06808caff4079b77987a8ec7ef",
+  "epilogue": "",
+  "max_abs_diff": null,
+  "mean_abs_diff": null,
+  "method": "render production CUDA -> nvcc sm_120a -> cudaEvent",
+  "ncu": {
+    "candidate": {
+      "rows": [
+        {
+          "metric": "dram__bytes.sum",
+          "unit": "byte",
+          "value": "9452800"
+        },
+        {
+          "metric": "dram__bytes_op_read.sum",
+          "unit": "byte",
+          "value": "9452800"
+        },
+        {
+          "metric": "dram__bytes_op_write.sum",
+          "unit": "byte",
+          "value": "0"
+        },
+        {
+          "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "57.24"
+        },
+        {
+          "metric": "gpu__time_duration.sum",
+          "unit": "ns",
+          "value": "9376"
+        },
+        {
+          "metric": "l1tex__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "21.89"
+        },
+        {
+          "metric": "launch__registers_per_thread",
+          "unit": "register/thread",
+          "value": "43"
+        },
+        {
+          "metric": "lts__t_bytes.sum",
+          "unit": "byte",
+          "value": "11196608"
+        },
+        {
+          "metric": "lts__t_sector_op_read_hit_rate.pct",
+          "unit": "%",
+          "value": "13.49"
+        },
+        {
+          "metric": "sm__inst_executed.sum",
+          "unit": "inst",
+          "value": "4784128"
+        },
+        {
+          "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "33.86"
+        },
+        {
+          "metric": "smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct",
+          "unit": "%",
+          "value": "70.85"
+        },
+        {
+          "metric": "smsp__warp_issue_stalled_math_pipe_throttle_per_warp_active.pct",
+          "unit": "%",
+          "value": "3.38"
+        },
+        {
+          "metric": "smsp__warp_issue_stalled_mio_throttle_per_warp_active.pct",
+          "unit": "%",
+          "value": "0.12"
+        },
+        {
+          "metric": "smsp__warp_issue_stalled_short_scoreboard_per_warp_active.pct",
+          "unit": "%",
+          "value": "1.32"
+        },
+        {
+          "metric": "smsp__warp_issue_stalled_wait_per_warp_active.pct",
+          "unit": "%",
+          "value": "3.65"
+        }
+      ],
+      "symbol": "q4k_g3_lanemap_gemv_vec_4096_4096"
+    },
+    "control": {
+      "rows": [
+        {
+          "metric": "dram__bytes.sum",
+          "unit": "byte",
+          "value": "9453312"
+        },
+        {
+          "metric": "dram__bytes_op_read.sum",
+          "unit": "byte",
+          "value": "9453312"
+        },
+        {
+          "metric": "dram__bytes_op_write.sum",
+          "unit": "byte",
+          "value": "0"
+        },
+        {
+          "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "48.08"
+        },
+        {
+          "metric": "gpu__time_duration.sum",
+          "unit": "ns",
+          "value": "11200"
+        },
+        {
+          "metric": "l1tex__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "57.66"
+        },
+        {
+          "metric": "launch__registers_per_thread",
+          "unit": "register/thread",
+          "value": "61"
+        },
+        {
+          "metric": "lts__t_bytes.sum",
+          "unit": "byte",
+          "value": "11225664"
+        },
+        {
+          "metric": "lts__t_sector_op_read_hit_rate.pct",
+          "unit": "%",
+          "value": "13.56"
+        },
+        {
+          "metric": "sm__inst_executed.sum",
+          "unit": "inst",
+          "value": "5238784"
+        },
+        {
+          "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "31.91"
+        },
+        {
+          "metric": "smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct",
+          "unit": "%",
+          "value": "33.66"
+        },
+        {
+          "metric": "smsp__warp_issue_stalled_math_pipe_throttle_per_warp_active.pct",
+          "unit": "%",
+          "value": "2.70"
+        },
+        {
+          "metric": "smsp__warp_issue_stalled_mio_throttle_per_warp_active.pct",
+          "unit": "%",
+          "value": "1.09"
+        },
+        {
+          "metric": "smsp__warp_issue_stalled_short_scoreboard_per_warp_active.pct",
+          "unit": "%",
+          "value": "1.84"
+        },
+        {
+          "metric": "smsp__warp_issue_stalled_wait_per_warp_active.pct",
+          "unit": "%",
+          "value": "6.36"
+        }
+      ],
+      "symbol": "q4k_g3_lanemap_gemv_4096_4096"
+    },
+    "method": "Nsight Compute --cache-control all; one post-warmup launch"
+  },
+  "passes": 40,
+  "ptxas": [
+    "ptxas info    : 0 bytes gmem",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_4096_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_4096_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 43 registers, used 0 barriers",
+    "ptxas info    : Compile time = 9.765 ms",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_4096_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_gemv_4096_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 61 registers, used 0 barriers",
+    "ptxas info    : Compile time = 10.050 ms"
+  ],
+  "raw_stdout": [
+    "bitwise_identical=1",
+    "max_abs_diff=0 mean_abs_diff=nan",
+    "shape=4096x4096 passes=40 reps=7",
+    "rep=0 control=7.8856 candidate=4.9512",
+    "rep=1 control=7.7600 candidate=4.9712",
+    "rep=2 control=7.6656 candidate=5.0064",
+    "rep=3 control=7.7048 candidate=4.9752",
+    "rep=4 control=7.7104 candidate=4.9240",
+    "rep=5 control=7.6112 candidate=4.9752",
+    "rep=6 control=7.6224 candidate=5.0000"
+  ],
+  "reps": 7,
+  "schema": "tinygrad.q4k_single_vector_load_microgate.v1",
+  "shape": {
+    "k": 4096,
+    "rows": 4096
+  },
+  "timing": {
+    "candidate": [
+      4.9512,
+      4.9712,
+      5.0064,
+      4.9752,
+      4.924,
+      4.9752,
+      5.0
+    ],
+    "candidate_median": 4.9752,
+    "candidate_over_control": 0.6457273388017859,
+    "control": [
+      7.8856,
+      7.76,
+      7.6656,
+      7.7048,
+      7.7104,
+      7.6112,
+      7.6224
+    ],
+    "control_median": 7.7048,
+    "unit": "us_per_launch_cuda_event"
+  }
+}

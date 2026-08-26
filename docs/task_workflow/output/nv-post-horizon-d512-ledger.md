@@ -45,23 +45,24 @@ service, not Python or graph bookkeeping.
 
 ## Ranked next actions
 
-1. **New exact issue/dequant scheduling for Q/O/K/V.** Rebuild a current cold
-   rate census and advance only a body with a measured size-aware rate deficit
-   and a causal stall mechanism.  The candidate must change load-level
-   parallelism, dequant scheduling, or CTA aggregation; instruction-only
-   unrolling is already closed.
-2. **Removal of a complete physical stream/ramp.** A new producer-consumer
+1. **Removal of a complete physical stream/ramp.** A new producer-consumer
    ownership construction remains admissible, but tested ordinary QKV full
    grid, shared producer variants, queue order, and broad PDL placements may
    not be repeated as if untested.
-3. **Training/calibration-aware byte reduction.** This has the largest
+2. **Training/calibration-aware byte reduction.** This has the largest
    theoretical ceiling, but requires a new model artifact.  Post-hoc Q5/Q4
    and coarse row selection are closed under the current quality contract.
-4. **Vocabulary projection service rate.** Reopen only with a construction
+3. **Vocabulary projection service rate.** Reopen only with a construction
    that raises the full 151936x4096 stream rate; the reduction tail is already
    near floor.
-5. **Broader context geometry table.** Useful for consistency beyond context
+4. **Broader context geometry table.** Useful for consistency beyond context
    1024, but it does not raise the present pre-cliff endpoint.
 
+The Q/O/K/V causal census has now completed.  Q/O shows 70.85% long-scoreboard
+stall, but every known exact translation (two/four-block unroll, 2/4/8 rows per
+CTA, four-warp/Q8 ownership, and QKV aggregation) is already primitive- or
+wall-closed.  This lane books zero and may reopen only for a distinct
+latency-hiding mechanism.
+
 Decision:
-`SHORT_CONTEXT_DEVICE_WALL_CONFIRMED__NEXT_GATE_QO_KV_RATE_CAUSAL_CENSUS`.
+`SHORT_CONTEXT_DEVICE_WALL_CONFIRMED__KNOWN_QO_KV_RATE_TRANSLATIONS_CLOSED`.
