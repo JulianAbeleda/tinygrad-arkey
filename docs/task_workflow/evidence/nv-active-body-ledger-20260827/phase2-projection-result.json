@@ -1,0 +1,51 @@
+{
+  "schema": "tinygrad.nv_active_body_ledger.phase2.v1",
+  "protocol": {
+    "runtime": "CUDA driver API",
+    "timer": "nsys CUPTI_ACTIVITY_KIND_KERNEL active duration",
+    "conditioning_mib": 96,
+    "warmup_sequences": 2,
+    "measured_sequences": 9,
+    "selection": "second target launch after each conditioning stream",
+    "inputs": "zero initialized; projection service time is data independent"
+  },
+  "tinygrad_exact_bodies": [
+    {"name": "q4k_g3_lanemap_gemv_vec_4096_4096", "count": 18, "median_us": 7.936},
+    {"name": "q4k_warp_coop_q8_dp4a_direct_4096_4096", "count": 18, "median_us": 8.256},
+    {"name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096", "count": 36, "median_us": 8.000},
+    {"name": "q4k_gate_up_four_warp_vec_fp16_12288_4096", "count": 36, "median_us": 35.136},
+    {"name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd", "count": 18, "median_us": 27.264},
+    {"name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd", "count": 18, "median_us": 19.392},
+    {"name": "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096", "count": 10, "median_us": 3.936},
+    {"name": "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096", "count": 8, "median_us": 5.216},
+    {"name": "q4k_g3_lanemap_gemv_pair_vec_1024_4096", "count": 8, "median_us": 5.312},
+    {"name": "q6k_v_four_warp_fp16_direct_1024_4096", "count": 10, "median_us": 4.544},
+    {"name": "q4k_g3_lanemap_gemv_vec_1024_4096", "count": 10, "median_us": 3.584},
+    {"name": "rmsnorm_q8_1_llama_provider_4096", "count": 18, "median_us": 1.312}
+  ],
+  "region_comparison_us_per_token": [
+    {"region": "gate_up", "tinygrad": 1264.896, "llama": 1291.116, "tiny_minus_llama": -26.220},
+    {"region": "down", "tinygrad": 839.808, "llama": 880.972, "tiny_minus_llama": -41.164},
+    {"region": "O", "tinygrad": 288.000, "llama": 284.993, "tiny_minus_llama": 3.007},
+    {"region": "Q_K_V_plus_shared_provider", "tinygrad": 519.936, "llama": 536.321, "tiny_minus_llama": -16.385},
+    {"region": "native_norms", "tinygrad": 110.880, "llama": 203.778, "tiny_minus_llama": -92.898},
+    {"region": "flash_score_disturbed", "tinygrad": 153.216, "llama": 157.824, "tiny_minus_llama": -4.608},
+    {"region": "vocabulary_plus_llama_quant", "tinygrad": 317.402, "llama": 301.602, "tiny_minus_llama": 15.800}
+  ],
+  "reconciliation": {
+    "selected_tinygrad_active_us": 3494.138,
+    "selected_llama_active_us": 3656.606,
+    "selected_tiny_minus_llama_us": -162.468,
+    "retained_tinygrad_node_sum_us": 3925.824,
+    "selected_old_tinygrad_rows_us": 3718.144,
+    "current_boundary_adjusted_tinygrad_node_sum_us": 3701.818,
+    "llama_cupti_node_sum_us": 3878.210,
+    "adjusted_active_body_delta_us": -176.392,
+    "tinygrad_endpoint_us": 4060.523,
+    "llama_endpoint_us": 4021.721,
+    "endpoint_delta_us": 38.802,
+    "implied_non_body_boundary_delta_us": 215.194,
+    "warning": "The 215.194-us value is a diagnostic residual across isolated CUDA-active and production graph boundaries, not a directly recoverable pool."
+  },
+  "verdict": "TINYGRAD_ACTIVE_BODIES_AHEAD_REMAINING_GAP_IS_ACTIVATION_GRAPH_BOUNDARY"
+}

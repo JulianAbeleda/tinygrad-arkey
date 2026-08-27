@@ -5,14 +5,20 @@
 > with llama CUPTI active durations. They are not body debts. Exact installed
 > cubins under one CUDA protocol make tinygrad's score body slightly faster hot
 > and after matched disturbance. See `nv-flash-score-common-protocol-result.md`.
+> The correction now also covers norms and every dense projection family.
+> Aggregate gate/up, down, Q/K/V, norms, and Flash are faster than llama on the
+> common CUPTI-active boundary; only vocabulary (+15.800 us/token) and O
+> (+3.007 us/token) remain measured body losses. The endpoint loss therefore
+> sits primarily at the activation/graph boundary, not in projection SASS. See
+> `nv-active-body-ledger-phase2-result.md`. The older body table below is
+> retained as provenance and is superseded by that result.
 > The unprofiled endpoint wall remains authoritative.
 
 ## Decision
 
-The remaining dense-decode loss is approximately accounted. Tinygrad is not
-broadly slower than llama: it wins several fused lifecycle regions, then gives
-those wins back primarily in flash attention, with smaller debt in residual
-4096-wide norms, Q/O projections, and the vocabulary main body.
+The endpoint loss is measured, but its old kernel attribution is superseded.
+Tinygrad's common-protocol active bodies are faster in aggregate; the next
+ledger must account for QMD activation service and device-idle graph cadence.
 
 This is a lifecycle ledger. Llama's separate activation quantization, RoPE,
 cache-store, and sampling work must be charged when tinygrad owns the same work
