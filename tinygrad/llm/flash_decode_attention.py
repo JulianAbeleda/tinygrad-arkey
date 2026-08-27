@@ -470,7 +470,8 @@ def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc
                                     wide_q:bool=True, wide_q_f32:bool=False, token_bound:int|None=None, guard_kv_loads:bool=False,
                                     separate_kv:bool=False, transpose_pv_smem:bool=False, query_group_size:int=1,
                                     share_kv_across_query_heads:bool=False, v_pipeline_tail:int=0,
-                                    v_dimension_major:bool=False):
+                                    v_dimension_major:bool=False, shared_probability_ownership:bool=False,
+                                    packed_pv_f16:bool=False, warp_probability_ownership:bool=False):
   """Llama ``flash_attn_ext_vec`` substrate for d512 decode (closed-default, not routed).
 
   Faithful transcription of the traced llama kernel (docs/task_workflow/input/
@@ -507,12 +508,20 @@ def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc
     raise ValueError("v_pipeline_tail must be 0/1/2/4/8 and requires wide_kv with a single static chunk")
   if v_dimension_major and v_pipeline_tail != 8:
     raise ValueError("v_dimension_major requires a complete eight-column V register tile")
+  if shared_probability_ownership and (QG != 1 or NCHUNK != 1):
+    raise ValueError("shared probability ownership requires one query head per CTA and one static chunk")
+  if warp_probability_ownership and (QG != 1 or NCHUNK != 1):
+    raise ValueError("warp probability ownership requires one query head per CTA and one static chunk")
+  if warp_probability_ownership and shared_probability_ownership:
+    raise ValueError("warp and shared probability ownership are mutually exclusive")
+  if packed_pv_f16 and not (shared_probability_ownership and v_dimension_major):
+    raise ValueError("packed fp16 PV is only a research arm for the complete shared-probability V topology")
   W = Hd + 2
   scale = 1.0 / (Hd ** 0.5)
 
   def build_kernel(pout:UOp, q:UOp, cache:UOp, cache_v:UOp|None) -> UOp:
-    from tinygrad.codegen.late.warp_reduce import (_warp_reduce_sum_staged, warp_reduce_sum_across_groups,
-                                                   warp_reduce_max_across_groups)
+    from tinygrad.codegen.late.warp_reduce import (_warp_reduce_sum_staged, warp_bpermute,
+                                                   warp_reduce_sum_across_groups, warp_reduce_max_across_groups)
     from tinygrad.codegen.late.flash_decode_intrinsics import fdot2 as _lower_fdot2
     head_axis = UOp.range(Hq if QG == 1 else Hq // QG, 0, AxisType.GLOBAL)
     split = UOp.range(S, 1, AxisType.GLOBAL)    # 4 KV splits
@@ -578,7 +587,8 @@ def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc
       qreg = qreg.after(qload)
       qlanes = tuple(qreg[i] for i in range(R))
 
-    acc = UOp.placeholder((R,), _F32, 301, addrspace=AddrSpace.REG)
+    acc_dtype = dtypes.float16 if packed_pv_f16 else _F32
+    acc = UOp.placeholder((R,), acc_dtype, 301, addrspace=AddrSpace.REG)
     den = UOp.placeholder((1,), _F32, 302, addrspace=AddrSpace.REG)
     mx = UOp.placeholder((1,), _F32, 303, addrspace=AddrSpace.REG)
     za = UOp.range(R, 41)
@@ -611,6 +621,14 @@ def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc
     # column (warp*32 + group*8 + j); the 8 lanes hold complementary 16-dim Q slices and the
     # 8-lane reduce broadcasts the full dot to every lane of the group.
     score = UOp.placeholder((NKQ,), _F32, 304, addrspace=AddrSpace.REG)
+    if shared_probability_ownership:
+      score_shared = UOp.placeholder((WARPS * GROUPS * NKQ,), _F32, 392, addrspace=AddrSpace.LOCAL)
+      score_base = warp * (GROUPS * NKQ) + group * NKQ
+    if warp_probability_ownership:
+      # One score is live in each lane.  glane j owns column j for its 8-lane
+      # dot group; consumers name the owner lane explicitly through a native
+      # warp shuffle instead of retaining eight replicated score registers.
+      score_owned = UOp.placeholder((1,), _F32, 393, addrspace=AddrSpace.REG)
     j = UOp.range(NKQ, 5, axis_type=AxisType.REDUCE)
     col = split * COLS_PER_CHUNK + chunk * CHUNK_STRIDE + warp_in_head * COLS_PER_WARP + group * NKQ + j
     token = col
@@ -640,14 +658,22 @@ def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc
                                                     cache[0, 0, kvh, token, ke + 1].cast(dtypes.float16)))
       dot_update = dot[0].store(_lower_fdot2(dot.after(p)[0], qpair, kpair)).end(p)
     sc = valid.where(_warp_reduce_sum_staged(dot.after(dot_update)[0], lane, NKQ) * scale, _fc(-float("inf")))
-    score_store = score[j].store(sc).end(j)
-    score = score.after(score_store)
+    if shared_probability_ownership: score_store = score_shared[score_base + j].store(sc, glane.eq(j)).end(j)
+    elif warp_probability_ownership: score_store = score_owned[0].store(sc, glane.eq(j)).end(j)
+    else: score_store = score[j].store(sc).end(j)
+    score_ready = UOp.barrier(score_store) if shared_probability_ownership else score_store
+    score = score.after(score_ready)
+    def score_at(i:UOp|int) -> UOp:
+      if shared_probability_ownership: return score_shared.after(score_ready)[score_base + i]
+      if warp_probability_ownership:
+        return warp_bpermute((group * NKQ + i).cast(dtypes.uint32) * 4, score_owned.after(score_ready)[0])
+      return score[i]
 
     # Group-wide max over this chunk's 8 columns, then cross-group reduce to the warp-wide max.
     group_max = UOp.placeholder((1,), _F32, 306, addrspace=AddrSpace.REG)
     jm = UOp.range(NKQ, 7, axis_type=AxisType.REDUCE)
-    gm_init = group_max.after(score_store)[0].set(-float("inf"))
-    gm = gm_init[0].set(gm_init.after(jm)[0].maximum(score[jm]), end=jm)
+    gm_init = group_max.after(score_ready)[0].set(-float("inf"))
+    gm = gm_init[0].set(gm_init.after(jm)[0].maximum(score_at(jm)), end=jm)
     warp_max = warp_reduce_max_across_groups(gm_init.after(gm)[0], lane, NKQ)
 
     # Research-only V tail software pipeline.  Keep the successful K path untouched and force only
@@ -669,14 +695,21 @@ def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc
 
     # Online-softmax rescale by the warp max, then PV/den accumulation for this group's 8 columns.
     valid_chunk = warp_max > -1e30
-    old_max = mx.after(score_store, vtail_ready if v_pipeline_tail else score_store)[0]
+    old_max = mx.after(score_ready, vtail_ready if v_pipeline_tail else score_ready)[0]
     rescale = valid_chunk.where(_fexp(old_max - warp_max), _fc(1.0))
     new_max = valid_chunk.where(warp_max, old_max)
     da = UOp.range(R, 8)
-    au = acc[da].store(acc.after(score_store)[da] * rescale).end(da)
-    du = den.after(au)[0].store(den.after(score_store)[0] * rescale)
+    au = acc[da].store((acc.after(score_ready)[da] * rescale).cast(acc_dtype)).end(da)
+    du = den.after(au)[0].store(den.after(score_ready)[0] * rescale)
     mu = mx.after(du)[0].store(new_max)
     acc, den, mx = acc.after(au), den.after(du), mx.after(mu)
+
+    if warp_probability_ownership:
+      owned_col = split * COLS_PER_CHUNK + warp_in_head * COLS_PER_WARP + group * NKQ + glane
+      owned_valid = owned_col < Tc
+      owned_prob = owned_valid.where(_fexp(score_owned.after(score_ready)[0] - new_max), _fc(0.0))
+      def warp_prob_at(i:UOp|int) -> UOp:
+        return warp_bpermute((group * NKQ + i).cast(dtypes.uint32) * 4, owned_prob)
 
     if share_kv_across_query_heads:
       # Every sibling must finish reading K before the producer overwrites the shared tile with V.
@@ -702,16 +735,19 @@ def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc
       for ji in range(NKQ):
         tokvi = split * COLS_PER_CHUNK + warp_in_head * COLS_PER_WARP + group * NKQ + ji
         validvi = tokvi < Tc
-        pstores.append(probreg[ji].store(validvi.where(_fexp(score[ji] - new_max), _fc(0.0))))
-      prob_ready=UOp.group(*pstores)
+        probi=warp_prob_at(ji) if warp_probability_ownership else validvi.where(_fexp(score_at(ji) - new_max), _fc(0.0))
+        pstores.append(score_shared[score_base + ji].store(probi, glane.eq(ji)) if shared_probability_ownership else probreg[ji].store(probi))
+      prob_ready=UOp.barrier(UOp.group(*pstores)) if shared_probability_ownership else UOp.group(*pstores)
+      def prob_at(i:int) -> UOp:
+        return score_shared.after(prob_ready)[score_base + i] if shared_probability_ownership else probreg.after(prob_ready)[i]
       astores=[]
       for di in range(R):
         aval=acc.after(mu,prob_ready)[di]
-        for ji in range(NKQ):aval=aval + probreg.after(prob_ready)[ji] * vtail.after(vtail_ready)[ji * R + di].cast(_F32)
-        astores.append(acc[di].store(aval))
+        for ji in range(NKQ):aval=aval + prob_at(ji) * vtail.after(vtail_ready)[ji * R + di].cast(_F32)
+        astores.append(acc[di].store(aval.cast(acc_dtype)))
       adone=UOp.group(*astores)
       dstage=mu
-      for ji in range(NKQ):dstage=den.after(dstage,adone)[0].store(den.after(dstage)[0]+probreg.after(prob_ready)[ji])
+      for ji in range(NKQ):dstage=den.after(dstage,adone)[0].store(den.after(dstage)[0]+prob_at(ji))
       chunk_end=dstage.end(chunk)
     elif v_pipeline_tail:
       # Static spelling preserves each dimension's j=0..7 recurrence while letting the selected tail
@@ -720,7 +756,7 @@ def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc
       for ji in range(NKQ):
         tokvi = split * COLS_PER_CHUNK + warp_in_head * COLS_PER_WARP + group * NKQ + ji
         validvi = tokvi < Tc
-        probi = validvi.where(_fexp(score[ji] - new_max), _fc(0.0))
+        probi = warp_prob_at(ji) if warp_probability_ownership else validvi.where(_fexp(score_at(ji) - new_max), _fc(0.0))
         if ji >= NKQ - v_pipeline_tail:
           ti = ji - (NKQ - v_pipeline_tail)
           vlanesi = tuple(vtail.after(vtail_ready)[ti * R + di] for di in range(R))
@@ -737,7 +773,7 @@ def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc
       jv = UOp.range(NKQ, 9, axis_type=AxisType.REDUCE)
       tokv = split * COLS_PER_CHUNK + chunk * CHUNK_STRIDE + warp_in_head * COLS_PER_WARP + group * NKQ + jv
       validv = tokv < Tc
-      prob = validv.where(_fexp(score[jv] - new_max), _fc(0.0))
+      prob = warp_prob_at(jv) if warp_probability_ownership else validv.where(_fexp(score_at(jv) - new_max), _fc(0.0))
       if wide_kv:
         if share_kv_across_query_heads:
           vslot = (warp_in_head * COLS_PER_WARP + group * NKQ + jv) * Hd
@@ -766,7 +802,7 @@ def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc
       dr_outer, dr_inner = UOp.range(2, 19), UOp.range(8, 20)
       dr = dr_outer * 8 + dr_inner
     else: dr = UOp.range(R, 13)
-    warp_acc = warp_reduce_sum_across_groups(acc.after(chunk_end)[dr], lane, NKQ, slot_base=320)
+    warp_acc = warp_reduce_sum_across_groups(acc.after(chunk_end)[dr].cast(_F32), lane, NKQ, slot_base=320)
     warp_den = warp_reduce_sum_across_groups(den.after(chunk_end)[0], lane, NKQ, slot_base=340)
     warp_mx = warp_reduce_max_across_groups(mx.after(chunk_end)[0], lane, NKQ, slot_base=350)
 
@@ -828,7 +864,8 @@ def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc
       f"{'_guardkv' if guard_kv_loads else ''}{'_separatekv' if separate_kv else ''}"
       f"{'_tpvsmem' if transpose_pv_smem else ''}{f'_qg{QG}' if QG != 1 else ''}"
       f"{'_sharekv' if share_kv_across_query_heads else ''}{f'_vtail{v_pipeline_tail}' if v_pipeline_tail else ''}"
-      f"{'_vdimmajor' if v_dimension_major else ''}", coalesced_loads=True))
+      f"{'_vdimmajor' if v_dimension_major else ''}{'_sharedprob' if shared_probability_ownership else ''}"
+      f"{'_packedpv16' if packed_pv_f16 else ''}{'_warpprob' if warp_probability_ownership else ''}", coalesced_loads=True))
 
   if separate_kv:
     def kernel_separate(pout:UOp, q:UOp, cache_k:UOp, cache_v:UOp) -> UOp:

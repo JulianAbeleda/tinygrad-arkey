@@ -3,7 +3,8 @@ from tinygrad.codegen import full_rewrite_to_sink, line_rewrite, pm_linearize_cl
 from tinygrad.codegen.late.linearizer import linearize
 from tinygrad.dtype import AddrSpace
 from tinygrad.helpers import Target
-from tinygrad.llm.flash_decode_attention import flash_single_stage_d512_kernel, flash_vec_llama_score_pv_kernel
+from tinygrad.llm.flash_decode_attention import (flash_fused_gmax_combine_kernel, flash_single_stage_d512_kernel,
+                                                  flash_vec_llama_score_pv_kernel)
 from tinygrad.renderer.cstyle import HIPRenderer
 from tinygrad.renderer.cuda import CUDARenderer
 from tinygrad.uop.ops import Ops, UOp
@@ -103,6 +104,53 @@ def test_vec_llama_wide_kv_renders_llama_16_byte_copy_grammar():
   assert cuda.count("uint4") >= 6
   assert "half4" not in cuda and "half8" not in cuda
   assert cuda.count("__syncthreads") == 1
+
+
+def test_vec_llama_wide_f32_q_uses_four_aligned_vector_loads():
+  pout = UOp.placeholder((32*8*130,), dtypes.float32, 0)
+  q = UOp.placeholder((32*128,), dtypes.uint32, 1)
+  cache = UOp.placeholder((2,1,8,1024,64), dtypes.uint32, 2)
+  ast = flash_vec_llama_score_pv_kernel(128, 32, 8, 1024, 8, UOp.const(dtypes.int, 513),
+                                        wide_kv=True, wide_q=False, wide_q_f32=True)(pout, q, cache)
+  cuda = _render(ast, CUDARenderer(Target("NV", arch="sm_120"), use_nvcc=True))
+  assert ast.arg.name == "flash_vec_llama_score_pv_32_128_8_widekv16"
+  # The zero-copy uint32 view preserves the exact fp32 bits while each uint4
+  # request covers four query values. Cache traffic uses the same vector type.
+  assert cuda.count("uint4") >= 8
+  assert "tg_bitcast<float>" in cuda
+
+
+def test_combine_register_weight_broadcast_removes_shared_barrier():
+  out = UOp.placeholder((32*128,), dtypes.float16, 0)
+  partial = UOp.placeholder((32*8*130,), dtypes.float32, 1)
+  ast = flash_fused_gmax_combine_kernel(128, 32, 8, output_fp16=True, lane_width=128,
+                                        register_weights=True)(out, partial)
+  cuda = _render(ast, CUDARenderer(Target("NV", arch="sm_120"), use_nvcc=True))
+  assert ast.arg.name == "flash_fused_gmax_combine_f16_32_128_s8_lw128_regw"
+  assert "__syncthreads" not in cuda
+  assert "__shfl_sync" in cuda
+
+
+def test_vec_llama_warp_probability_ownership_renders_native_shuffle_without_extra_cta_barrier():
+  ast = flash_vec_llama_score_pv_kernel(128, 32, 8, 768, 6, UOp.const(dtypes.int, 512),
+    wide_kv=True, wide_q=False, token_bound=768, warp_probability_ownership=True)(
+      UOp.placeholder((32*6*130,), dtypes.float32, 0),
+      UOp.placeholder((32*128,), dtypes.float32, 1),
+      UOp.placeholder((2*8*768*128//2,), dtypes.uint32, 2))
+  src = _render(ast, CUDARenderer(Target("NV", arch="sm_120"), use_nvcc=True))
+  assert "_warpprob" in src
+  assert src.count("__shfl_sync") >= 2
+  assert src.count("__syncthreads();") == 1
+
+
+def test_vec_llama_grouped_query_normalizes_cta_geometry():
+  for qg, splits in ((1, 6), (2, 12), (4, 24)):
+    pout = UOp.placeholder((32*splits*130,), dtypes.float32, 0)
+    q = UOp.placeholder((32*64,), dtypes.uint32, 1)
+    cache = UOp.placeholder((2,1,8,1024,64), dtypes.uint32, 2)
+    ast = flash_vec_llama_score_pv_kernel(128, 32, 8, 1024, splits, UOp.const(dtypes.int, 641),
+      wide_kv=True, token_bound=768, query_group_size=qg)(pout, q, cache)
+    assert ast.arg.name.endswith(f"_qg{qg}") if qg != 1 else not ast.arg.name.endswith("_qg1")
 
 
 def test_vec_llama_wide_kv_active_horizon_is_bounded_and_fail_closed():

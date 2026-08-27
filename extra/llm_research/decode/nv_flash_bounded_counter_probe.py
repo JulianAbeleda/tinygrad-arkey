@@ -40,16 +40,19 @@ METRICS = ",".join((
 
 
 def _render(splits:int, token_bound:int|None, *, transpose_pv_smem:bool=False,
-            v_pipeline_tail:int=0, v_dimension_major:bool=False) -> tuple[str, str]:
+            v_pipeline_tail:int=0, v_dimension_major:bool=False, shared_probability_ownership:bool=False,
+            packed_pv_f16:bool=False, warp_probability_ownership:bool=False) -> tuple[str, str]:
   out = UOp.placeholder((Hq*splits*W,), dtypes.float32, 0)
   q = UOp.placeholder((Hq*Hd,), dtypes.float32, 1)
   cache = UOp.placeholder((2*Hkv*MAXC*Hd//2,), dtypes.uint32, 2)
   sink = flash_vec_llama_score_pv_kernel(Hd, Hq, Hkv, MAXC, splits, UOp.const(dtypes.int, Tc),
     wide_kv=True, wide_q=False, token_bound=token_bound, transpose_pv_smem=transpose_pv_smem)(out, q, cache)
-  if v_pipeline_tail or v_dimension_major:
+  if v_pipeline_tail or v_dimension_major or shared_probability_ownership or packed_pv_f16 or warp_probability_ownership:
     sink = flash_vec_llama_score_pv_kernel(Hd, Hq, Hkv, MAXC, splits, UOp.const(dtypes.int, Tc),
       wide_kv=True, wide_q=False, token_bound=token_bound, transpose_pv_smem=transpose_pv_smem,
-      v_pipeline_tail=v_pipeline_tail, v_dimension_major=v_dimension_major)(out, q, cache)
+      v_pipeline_tail=v_pipeline_tail, v_dimension_major=v_dimension_major,
+      shared_probability_ownership=shared_probability_ownership, packed_pv_f16=packed_pv_f16,
+      warp_probability_ownership=warp_probability_ownership)(out, q, cache)
   program = to_program(sink, CUDARenderer(Target("NV", arch="sm_120"), use_nvcc=False))
   source = next(x.arg for x in program.src if x.op is Ops.SOURCE)
   return program.arg.name, source

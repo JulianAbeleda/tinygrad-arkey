@@ -16,15 +16,23 @@ recoverable service time.
 
 | implementation | latency | throughput |
 |---|---:|---:|
-| tinygrad, observed after extent-derived wide-flash promotion | **4.094502 ms/token** | **244.230 tok/s** |
+| tinygrad, installed Flash ceiling endpoint | **4.060523 ms/token** | **246.274 tok/s** |
 | llama official authority | **4.021721 ms/token** | **248.711 tok/s** |
-| tinygrad debt | **72.781 us/token** | **4.481 tok/s** |
+| tinygrad debt | **38.802 us/token** | **2.437 tok/s** |
 
-The post-promotion tinygrad device node sum is 3,954.656 us. The retained
-like-for-like llama PDL-off node sum is 3,878.254 us, leaving 76.402 us of
-device-service debt. That is within about 4 us of the unprofiled endpoint gap.
-The current loss therefore does not require a large unidentified host or
-overlap term to balance.
+The load-schedule promotion is a paired compiler/capture contract.  Against
+its enclosed cap-32 control it books 15.954 us/token (0.953 tok/s); relative to
+the prior retained endpoint, the new conservative midpoint advances 10.700
+us/token (0.640 tok/s).  Candidate-arm drift is preserved in the evidence and
+the midpoint—not the 4.074658-ms fast arm—is used here.
+
+The last full pre-load-schedule tinygrad device node sum is 3,954.656 us. The
+retained like-for-like llama PDL-off node sum is 3,878.254 us, leaving 76.402
+us of pre-promotion device-service debt.  The causal load-schedule profile
+recovers 17.024 us in node sum and 16.250 us in device union; applying that
+measured delta yields roughly 59--60 us of residual device debt, consistent
+with the new 62.081-us endpoint gap.  A fresh full post-promotion profile is
+still required before replacing the retained per-row timestamps wholesale.
 
 The profiled tinygrad wall field is not an endpoint authority. Profiling adds a
 large host/instrumentation term; only its device rows, node sum, union, and
@@ -34,8 +42,8 @@ route census are used here.
 
 | lifecycle region | tinygrad | charged llama | TG - llama | current reading |
 |---|---:|---:|---:|---|
-| flash score | 222.656 us | 162.948 us | **+59.708 us** | residual production-conditioning debt |
-| flash combine | 50.272 us | 37.057 us | **+13.215 us** | small residual body debt |
+| flash score | 194.048 us | 162.948 us | **+31.100 us** | installed S6 production row |
+| flash combine | 48.448 us | 37.057 us | **+11.391 us unmatched row difference** | matched NCU: tinygrad 1.888 us vs llama 2.528 us; row is not a recovery pool |
 | native 4096 norms | 231.680 us | 203.778 us | **+27.902 us** | lower-bound residual debt; shared provider owns some fused work |
 | Q projection bodies | 296.352 us | 272.609 us including llama Q quant | **+23.743 us** before provider allocation | small genuine debt |
 | O projections | 304.256 us | 284.993 us including llama O quant | **+19.263 us** | small genuine debt |
@@ -55,10 +63,10 @@ roughly 14-us main-GEMV difference is treated as clean GPU debt.
 
 The reconciliation is nevertheless strong:
 
-- gross tinygrad losing territory is about 158 us;
+- gross tinygrad losing territory is about 140 us after the booked Flash score recovery;
 - tinygrad's fusion and lifecycle wins offset roughly 80 us;
-- the resulting approximately 78-us net agrees with the measured 76.402-us
-  device-node difference and 72.781-us endpoint difference.
+- the resulting approximately 60-us net agrees with the post-promotion
+  62.081-us endpoint difference and the converted device-union estimate.
 
 ## Exact weight and service-rate ledger
 
@@ -127,10 +135,15 @@ llama score + combine    = 200.005 us
 gross difference         =  72.923 us
 ```
 
-The extent-derived wide-load route is now installed for NV sm_120 G4 fp16-KV
+> **Historical pre-promotion checkpoint.** The 4.094502-ms / 244.230-tok/s
+> row below was superseded by the installed Flash ceiling authority at the top
+> of this document: 4.060523 ms/token / 246.274 tok/s. It must not be used for
+> current projections.
+
+The extent-derived wide-load route was installed for NV sm_120 G4 fp16-KV
 decode: S=MAXC/128 gives S8 on the official MAXC1024 graph. Its reps-9 reverse
-bracket recovered 81.468 us/token with canonical token hashes, and the fresh
-default-path endpoint is 4.094502 ms/token (244.230 tok/s). The remaining flash
+bracket recovered 81.468 us/token with canonical token hashes, and that stage's
+default-path endpoint was 4.094502 ms/token (244.230 tok/s). The remaining flash
 debt is now about the same size as the complete endpoint gap. This is exposure,
 not a claim that all residual flash service will translate independently.
 
@@ -199,12 +212,19 @@ S8 score remains about 60 us/token behind llama under production conditioning,
 while charging exact bytes, numerical order, output ownership, and token wall.
 
 The priority-1 conditioning discriminator has since run. The exact installed
-score is 4.536 us/layer hot, effectively tied with llama's 4.526-us production
-row. Immediate Q/K/V producers add only 0.008 us/layer. Crossing the 96-MiB L2
+score is 4.536 us/layer hot and 6.184889 us/layer in production. Llama is
+3.808--3.872 us/layer hot and 4.526 us/layer in production. The prior
+"effectively tied" statement mixed tinygrad hot with llama production and is
+withdrawn. Immediate Q/K/V producers add only 0.008 us/layer. Crossing the 96-MiB L2
 capacity boundary and then running the exact local producer prefix reproduces
 1.144 of the 1.644-us/layer production residual, or 41.184 us/token. This
 identifies cache/working-set conditioning as the dominant mechanism, but books
 zero recovery until a production residency/eviction policy passes token wall.
+
+Aligned boundary accounting decomposes the 59.708-us/token production score
+gap into 23.904--26.208 us/token of hot-body debt and 33.500--35.804 us/token
+of kernel-to-production conversion debt. Thus conversion remains the majority
+at 56--60%, but the hot bodies are not tied.
 
 The matched llama conditioner closes the next branch. The identical 96-MiB
 read stream costs llama S6 0.640 us/layer and tinygrad's installed S8 1.296
@@ -222,18 +242,102 @@ instructions by about 25% and passes a 144-token reverse wall bracket at
 -9.484 us/token (+0.566 tok/s), with identical token hashes. Gated loads,
 separate K/V, and address-color variants are no-gos. Because the recovery is
 below the 50-us booking threshold and S6 becomes invalid when Tc reaches 769,
-the endpoint remains 4.094502 ms/token / 244.230 tok/s. Reopening requires a
-generic active-horizon graph-bucket selector, not a fixed d512 split literal.
+the then-current endpoint remained 4.094502 ms/token / 244.230 tok/s. This row
+is superseded by the installed 246.274-tok/s authority above. The generic selector
+has now been tested below and closes this translation path.
 
-The graph-bucketing investment bracket is also closed. Full-window S5 and
+The graph-bucketing investment is now conversion-closed. Full-window S5 and
 late-S6 candidates passed at -5.408 and -20.299 us/token respectively, while
-S7 regressed 3.797 us/token. Together with the prior early-S6 pass, the
-measured policy is S6 through Tc 768 and S8 afterward, not a distinct graph for
-every 128-token bucket. At the current endpoint this is worth about +0.57 tok/s
-while the S6 graph is active and an estimated +0.445 tok/s when amortized over
-a complete 512-token continuation to 1024. This remains unbooked until the
-typed graph selector itself passes production wall; the existing alternate
-Flash TinyJit selection provides the implementation substrate.
+S7 regressed 3.797 us/token. Those primitives suggested S6 through Tc 768 and
+S8 afterward, but the typed selector does not convert. Cold execution hits a
+deterministic lazy-S8 capture stall at the transition. Prewarming both S6 and
+S8 greedy ping-pong pairs removes the stall, preserves the token stream, and
+then regresses 10.676 us/token (-0.634 tok/s) versus the control midpoint. The
+earlier +0.445 tok/s full-continuation estimate is not booked or actionable.
+
+The exact pre-Flash hop ledger now locates the production conditioning event.
+Gate/up alone leaves the reheated score at 4.768 us/layer with effectively no
+target DRAM reads. Adding the prior layer's FFN-down moves the score to 5.600
+us/layer, creates about 3.692 MB of target DRAM reads, and drops the L2 read
+hit rate to 78.79%. The shared provider is neutral; Q adds 0.272 us/layer;
+paired K/V and the completion hops are neutral or slightly reheating. The full
+entry chain is 1.200 us/layer, or 43.200 us/token, above hot.
+
+The cause and charge therefore occur at different hops: FFN-down crosses the
+L2 capacity neighborhood, while the next Flash score pays for the displaced
+historical K/V. Matching llama's retained S8 conditioning penalty leaves a
+narrower 21.312-us/token excess-cold-sensitivity ceiling, worth at most about
+245.51 tok/s from the current endpoint. Zero is booked. The next admissible
+construction is line/reuse-aware FFN-down streaming or K/V protection, not a
+repeat of the failed whole-dense eviction policy.
+
+The matched llama production-order replay now separates residency from paid
+service. Llama's K/V target begins refetching about 3.18 MB from DRAM after the
+FFN prefix, yet that hop adds only 0.128 us. Q later adds 0.832 us with almost
+no additional target DRAM traffic, and Q completion returns 0.192 us. A pure
+capacity sweep is flat, crosses a sharp knee between 90 and 92 MiB, and then
+plateaus through 108 MiB. This is ordinary cache replacement, not an explicit
+one-to-one clear. Against the exact full prefix, tinygrad's remaining excess is
+0.464 us/layer, or 16.704 us/token, for a 245.230-tok/s ceiling. It is not
+booked: the llama small completion hops are modeled, and the next construction
+must lower both target DRAM reads and paid target time.
+
+Direct NCU on llama's actual PDL-off graph confirms that it reaches Flash cold:
+3.166 MB of DRAM reads and a 75.58% L2 hit rate. Its corrected full-prefix
+replay reproduces that state and 850,944 dynamic instructions. Llama still
+falls 16.9--18.9% from hot to production; tinygrad falls 36.35%. Matching only
+that conversion difference is a 246.245--246.384-tok/s ceiling, with zero
+booked.
+
+The first cold-body compiler test is now mechanism-closed. Program-scoped fast
+math removes 5.65% of matched S8 instructions and one register, but leaves
+about 4.23 MB of cold DRAM traffic unchanged and long-scoreboard stalls
+dominant. The cold NCU body improves only 0.47%, versus 4.05% hot. Fresh
+production graph profiles nevertheless reproduce a 4.976-us/token score-body
+reduction and a 5.504-us/token total-node reduction with effectively no
+overlap. Two unprofiled token brackets cannot resolve that roughly 0.12%
+endpoint signal: the tighter bracket's candidate flanks differ by 5.786 us.
+This is classified as a proven body/graph win behind a resolution wall, not
+booked recovery. Its exact-translation ceiling is 244.53--244.56 tok/s, and
+promotion additionally requires a general dense-model numerical/quality
+contract because fast math is not bit-exact floating-point execution.
+
+## Complete Flash lifecycle authority
+
+### Ceiling refresh
+
+The earlier S8-only Flash accounting is superseded for the installed dense
+d512 endpoint by the ceiling campaign in
+`docs/task_workflow/output/nv-flash-ceiling-exhaustion-result.md`.
+
+The current endpoint is 4060.523 us/token / 246.274 tok/s versus llama at
+4021.721 us/token / 248.711 tok/s.  Automatic S6-through-Tc768 selection now
+passes both the transition and canonical fixed-window gates when both S6/S8
+ping-pong pairs are captured ahead of steady decode.  S8 register-broadcast
+combine is booked; the same spelling is explicitly not booked on S6 because
+it reverses under the real distinct-graph capture topology.
+
+The installed S6 Flash body is 194.048 us score plus 48.448 us combine.  Llama
+is 162.948 plus 37.057 us.  Device overlap is effectively zero, so ordinary
+PDL cannot hide the 42.491-us gross body debt.  The normalized QG ownership
+sweep does not open a lever: QG2 is exact but slower, while QG4 is non-exact
+for a sub-microsecond isolated movement.  The remaining open construction
+class is equal-byte cold score service through real K/V sharing or line-aware
+producer/cache admission.
+
+The score row is no longer treated as an isolated black box. The complete
+producer-to-O lifecycle, including graph horizon selection, Q/K/V readiness,
+KV cache ownership, score geometry, partial ABI, combine, scheduling/PDL,
+working-set conditioning, and every closed construction is recorded in
+`docs/task_workflow/output/nv-flash-complete-lifecycle.md`.
+
+Its accounting conclusion is narrower than the old gross 72.923-us
+score/combine difference.  The installed S6 route reduces that gross Flash
+debt to 42.491 us, while tinygrad remains faster in parts of the fused Q/K
+completion and KV-store lifecycle.  Score-to-combine and combine-to-O device
+overlap is effectively zero.  The active-horizon construction is booked; the
+next work must derive a new equal-horizon cold-service mechanism rather than
+repeat a closed geometry or PDL spelling.
 
 ## Evidence
 
@@ -249,3 +353,9 @@ Flash TinyJit selection provides the implementation substrate.
 - `docs/task_workflow/output/nv-ranked-wall-tests-result.md`
 - `docs/task_workflow/output/nv-flash-wide-production-conditioning-result.md`
 - `docs/task_workflow/output/nv-flash-active-horizon-result.md`
+- `docs/task_workflow/output/nv-flash-active-horizon-selector-result.md`
+- `docs/task_workflow/output/nv-flash-entry-hop-ledger-result.md`
+- `docs/task_workflow/output/nv-flash-entry-hop-vs-llama-result.md`
+- `docs/task_workflow/output/nv-flash-kernel-to-production-conversion-result.md`
+- `docs/task_workflow/output/nv-flash-fast-math-result.md`
+- `docs/task_workflow/output/nv-flash-complete-lifecycle.md`
