@@ -1,0 +1,38 @@
+{
+  "contract": {
+    "delivery_batch": 1,
+    "depth": 512,
+    "selection": "greedy_argmax",
+    "host_visible_each_token": true,
+    "selected_token_fed_back": true,
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf"
+  },
+  "tinygrad": {
+    "commit": "28ef5c2d7",
+    "median_us_per_token": 4065.897,
+    "median_tokens_per_second": 245.9481880628063,
+    "repetitions": 9,
+    "timed_tokens_per_repetition": 24,
+    "token_hashes_exact": true,
+    "source": "tiny-batch1-greedy-r9.json"
+  },
+  "llama": {
+    "commit": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a",
+    "clean_worktree": true,
+    "cuda": true,
+    "flash_attention": true,
+    "graphs": true,
+    "measurement_only_change": "test_gen uses CPU greedy argmax after per-token synchronization and feeds the selected token into the next decode",
+    "samples_tokens_per_second": [226.457, 246.403, 246.523, 246.451, 246.157, 246.407, 246.227],
+    "settled_median_tokens_per_second": 246.405,
+    "settled_median_us_per_token": 4058.359205373268,
+    "repetitions": 7,
+    "timed_tokens_per_repetition": 20
+  },
+  "tinygrad_minus_llama": {
+    "tokens_per_second": -0.4568119371936916,
+    "microseconds_per_token": 7.537794626732193,
+    "percent": -0.185
+  },
+  "verdict": "LLAMA_AHEAD_WITHIN_ONE_TOKEN_PER_SECOND"
+}

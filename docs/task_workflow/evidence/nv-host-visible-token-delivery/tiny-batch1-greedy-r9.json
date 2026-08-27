@@ -1,0 +1,60 @@
+{
+  "arm": "candidate",
+  "count": 24,
+  "depth": 512,
+  "max_context": 768,
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "relax_dependent_qmd_invalidate": false,
+  "relax_internal_membar": true,
+  "reps": 9,
+  "schema": "tinygrad.nv_qmd_membar_wall.v1",
+  "settled": {
+    "accepted_samples_ms_per_token": [
+      4.069303416666666,
+      4.065867375,
+      4.065897,
+      4.059474125,
+      4.067308416666666,
+      4.067866958333333,
+      4.067666166666666,
+      4.060955625,
+      4.0625820416666665
+    ],
+    "external_contention_high_limit_ms": 4.315897,
+    "median_ms_per_token": 4.065897,
+    "prelude_token": 13876,
+    "rejected_high_samples_ms_per_token": [],
+    "samples_ms_per_token": [
+      4.069303416666666,
+      4.065867375,
+      4.065897,
+      4.059474125,
+      4.067308416666666,
+      4.067866958333333,
+      4.067666166666666,
+      4.060955625,
+      4.0625820416666665
+    ],
+    "timed_token_count": 216,
+    "token_hashes": [
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809"
+    ],
+    "token_stream_hash": "7e0b38ec59adc79a268f665ee525b602869c1930794239eb45ba21e9e0a22e3e",
+    "warmup_tokens": [
+      38835,
+      34208,
+      13,
+      279,
+      3974,
+      13876
+    ]
+  }
+}

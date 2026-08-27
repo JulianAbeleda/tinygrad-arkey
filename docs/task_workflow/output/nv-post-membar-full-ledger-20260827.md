@@ -232,6 +232,30 @@ throughput/latency policy, not a faster single-token kernel: callers selecting
 batch 16 wait for up to 16 generated tokens before the first delivery in that
 batch.  Batch 1 remains the authority for interactive streaming latency.
 
+### Matched batch-1 greedy comparison
+
+The earlier llama throughput used random token feedback and is not authority
+for an interactive greedy claim.  The strict comparison uses a clean llama
+worktree at commit `ac4cddeb0dbd778f650bf568f6f08344a06abe3a`, CUDA Flash
+Attention and graphs, depth 512, a synchronization and CPU greedy argmax after
+every token, host-visible delivery, and feedback of that selected token into
+the next decode.  The only measurement-only llama change replaces random
+feedback in `test_gen` with this greedy path.
+
+| batch-1 greedy endpoint | latency | throughput |
+|---|---:|---:|
+| tinygrad, 9 settled windows | 4065.897 us/token | 245.948 tok/s |
+| llama, settled median of 6 windows | **4058.359 us/token** | **246.405 tok/s** |
+| tinygrad minus llama | +7.538 us/token | -0.457 tok/s |
+
+The two endpoints are effectively at parity, but tinygrad is not yet faster
+under the strict token-at-a-time contract.  An unqualified faster-than-llama
+claim therefore remains closed.  The remaining acceptance threshold is small
+and explicit: recover more than 8 us/token in a stable reverse bracket.  The
+260.939 tok/s result remains a valid buffered-throughput claim, not an
+interactive-latency claim.  With the non-Q campaign complete, Q service rate
+is now the final deferred lever.
+
 ## Evidence
 
 - `docs/task_workflow/evidence/nv-post-membar-full-ledger-20260827/installed-wall-r15.json`
@@ -254,3 +278,5 @@ batch.  Batch 1 remains the authority for interactive streaming latency.
 - `docs/task_workflow/evidence/nv-host-visible-token-delivery/batch16-ring-r7.json`
 - `docs/task_workflow/evidence/nv-host-visible-token-delivery/production-batch16-r7.json`
 - `docs/task_workflow/evidence/nv-host-visible-token-delivery/production-batch16-partial5.json`
+- `docs/task_workflow/evidence/nv-host-visible-token-delivery/tiny-batch1-greedy-r9.json`
+- `docs/task_workflow/evidence/nv-host-visible-token-delivery/batch1-greedy-vs-llama.json`
