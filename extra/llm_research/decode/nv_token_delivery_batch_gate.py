@@ -40,28 +40,35 @@ def _batched(gen, batch:int):
   finally: Tensor.item=original
 
 
-def run(batch:int,count:int,reps:int,depth:int,max_context:int):
+def run(batch:int,count:int,reps:int,depth:int,max_context:int,production:bool=False):
   from tinygrad import Device
   from extra.llm_research.decode.nv_predispatch_full_logits_qualification import _load,_prompt
   model=_load(MODEL,max_context)
-  def make(): return model.generate(_prompt(MODEL,depth),chunk_size=32,temperature=0.0)
-  control=make(); control_warm=[next(control) for _ in range(6)]; Device['NV'].synchronize()
-  a=_windows(control,count,reps); control.close()
-  model.reset_generation_state()
-  candidate_raw=make(); candidate_warm=[next(candidate_raw) for _ in range(6)]; Device['NV'].synchronize()
-  candidate=_batched(candidate_raw,batch); b=_windows(candidate,count,reps); candidate.close(); candidate_raw.close()
-  return {'schema':'tinygrad.nv_token_delivery_batch_gate.v1','batch':batch,'count':count,'reps':reps,'depth':depth,
-    'control_warm':control_warm,'candidate_warm':candidate_warm,'control':a,'candidate':b,
-    'walls_us_per_token':{'control':a['median_ms_per_token']*1000,'candidate':b['median_ms_per_token']*1000,
-      'delta':(b['median_ms_per_token']-a['median_ms_per_token'])*1000},
-    'tokens_per_second':{'control':1000/a['median_ms_per_token'],'candidate':1000/b['median_ms_per_token']},
-    'all_windows_exact':a['token_hashes']==b['token_hashes']}
+  warm_count=batch if production else 6
+  def arm(candidate:bool):
+    gen=model.generate(_prompt(MODEL,depth),chunk_size=32,temperature=0.0,
+      expected_output_tokens=warm_count+count*reps if candidate and production else None,
+      delivery_batch=batch if candidate and production else 1)
+    warm=[next(gen) for _ in range(warm_count)];Device['NV'].synchronize()
+    timed=_windows(gen if production or not candidate else _batched(gen,batch),count,reps);gen.close()
+    return {'warm':warm,'timed':timed}
+  a=arm(False);model.reset_generation_state();b=arm(True);model.reset_generation_state();c=arm(False)
+  control=statistics.median((a['timed']['median_ms_per_token'],c['timed']['median_ms_per_token']))
+  candidate=b['timed']['median_ms_per_token']
+  exact=a['timed']['token_hashes']==b['timed']['token_hashes']==c['timed']['token_hashes']
+  return {'schema':'tinygrad.nv_token_delivery_batch_gate.v2','mode':'production' if production else 'measurement',
+    'batch':batch,'count':count,'reps':reps,'depth':depth,'arms':{'control_a':a,'candidate':b,'control_c':c},
+    'walls_us_per_token':{'control_a':a['timed']['median_ms_per_token']*1000,'candidate':candidate*1000,
+      'control_c':c['timed']['median_ms_per_token']*1000,'control_midpoint':control*1000,'delta':(candidate-control)*1000},
+    'tokens_per_second':{'control':1000/control,'candidate':1000/candidate,'delta':1000/candidate-1000/control},
+    'all_windows_exact':exact}
 
 
 def main():
   ap=argparse.ArgumentParser();ap.add_argument('--batch',type=int,default=4);ap.add_argument('--count',type=int,default=24)
   ap.add_argument('--reps',type=int,default=7);ap.add_argument('--depth',type=int,default=512);ap.add_argument('--max-context',type=int,default=768)
-  ap.add_argument('--out',type=pathlib.Path,required=True);a=ap.parse_args();r=run(a.batch,a.count,a.reps,a.depth,a.max_context)
+  ap.add_argument('--production',action='store_true');ap.add_argument('--out',type=pathlib.Path,required=True);a=ap.parse_args()
+  r=run(a.batch,a.count,a.reps,a.depth,a.max_context,a.production)
   a.out.parent.mkdir(parents=True,exist_ok=True);a.out.write_text(json.dumps(r,indent=2,sort_keys=True)+'\n');print(json.dumps(r,indent=2,sort_keys=True))
   return 0 if r['all_windows_exact'] else 1
 if __name__=='__main__': raise SystemExit(main())

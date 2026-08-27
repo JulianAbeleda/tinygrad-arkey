@@ -2342,7 +2342,11 @@ class Transformer:
       pingpong_capture_contract(pair)["admitted"]
 
   def generate(self, tokens:list[int], chunk_size:int=32, temperature:float=0.0, diagnostic_full_logits:bool=False,
-               expected_output_tokens:int|None=None):
+               expected_output_tokens:int|None=None, delivery_batch:int=1):
+    if not isinstance(delivery_batch, int) or delivery_batch < 1:
+      raise ValueError(f"delivery_batch must be a positive integer, got {delivery_batch!r}")
+    if delivery_batch > 1 and (temperature != 0.0 or diagnostic_full_logits or expected_output_tokens is None or expected_output_tokens < 1):
+      raise ValueError("delivery_batch > 1 requires greedy generation and a positive expected_output_tokens")
     if self.has_recurrent_block: chunk_size = 1
     _ring = self.config.ring and self.config.rope_dim == self.config.head_dim
     if _ring and len(tokens) > self.max_context:
@@ -2375,6 +2379,22 @@ class Transformer:
       bool(getenv("NV_ARGMAX_HOST_MIRROR", 0))
     if host_argmax_mirror and getattr(self, "_decode_host_argmax_mirror", None) is None:
       self._decode_host_argmax_mirror = make_native_argmax_host_mirror("NV", getenv("NV_ARGMAX_HOST_MIRROR_MEMORY", "host"))
+    batched_delivery = delivery_batch > 1
+    # The promoted native argmax returns a held clone specifically so its GPU
+    # feedback value survives replay.  Batching retains that same return before
+    # the next replay; it does not require the optional two-capture ping-pong
+    # route (the exact batch-ring gate qualified the ordinary capture).
+    if batched_delivery and (_ring or not bool(getattr(self, "_decode_native_argmax_threads", 0))):
+      raise ValueError("delivery_batch > 1 requires non-ring greedy native-argmax decode")
+    delivery_ring = None
+    delivery_pending:list[int] = []
+    delivery_generated = 0
+    if batched_delivery:
+      if not str(Device.DEFAULT).startswith("NV"): raise ValueError("delivery_batch > 1 is currently NV-only")
+      from tinygrad.device import Buffer, BufferSpec
+      # Buffer owns and releases the fixed ring when the generator closes.
+      delivery_ring_owner = Buffer("NV", delivery_batch, dtypes.int32, options=BufferSpec(nolru=True), preallocate=True)
+      delivery_ring = delivery_ring_owner._buf
     # Launch hiding (submit-ahead) only reorders the steady flash-greedy
     # pingpong decode; everything else keeps the exact existing scheduling.
     submit_ahead = (not _ring and not diagnostic_full_logits and temperature == 0.0 and direct_greedy
@@ -2474,6 +2494,25 @@ class Transformer:
         sampled, logits = read_tok, None
       else:
         sampled, logits = out if diagnostic_full_logits and isinstance(out, tuple) else (out, None)
+      if batched_delivery:
+        assert delivery_ring is not None and isinstance(sampled.device, str)
+        dev = Device[sampled.device]
+        src = sampled.uop.buffer.get_buf(sampled.device)
+        slot = len(delivery_pending)
+        dev.hw_copy_queue_t().wait(dev.timeline_signal, dev.timeline_value-1).copy(delivery_ring.offset(slot*4, 4), src, 4) \
+          .signal(dev.timeline_signal, dev.next_timeline()).submit(dev)
+        delivery_pending.append(len(tokens)); tokens.append(0); delivery_generated += 1
+        flush = len(delivery_pending) == delivery_batch or delivery_generated == expected_output_tokens or \
+          (not _ring and len(tokens) >= self.max_context)
+        if not flush: continue
+        raw = bytearray(len(delivery_pending)*4)
+        dev.allocator._copyout(memoryview(raw), delivery_ring.offset(0, len(raw)))
+        delivered = [int.from_bytes(raw[i*4:(i+1)*4], "little", signed=True) for i in range(len(delivery_pending))]
+        for idx, token in zip(delivery_pending, delivered): tokens[idx] = token
+        delivery_pending.clear()
+        self._cached_tokens = tokens[:-1]
+        for token in delivered: yield token
+        continue
       if host_argmax_mirror:
         Device[sampled.device].synchronize()
         tokens.append(read_native_argmax_host_mirror(self._decode_host_argmax_mirror))

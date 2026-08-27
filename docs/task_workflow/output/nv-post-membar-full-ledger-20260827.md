@@ -213,6 +213,25 @@ batch at the generation boundary, and document the additional first-delivery
 latency.  Q remains deferred until this bounded-delivery route is either
 landed or rejected by its production reverse bracket.
 
+The explicit production API subsequently passed.  `generate(...,
+delivery_batch=16, expected_output_tokens=N)` retains ordinary GPU feedback,
+stores selected int32 tokens into an owned device ring, and performs one
+ordered copyout per batch.  `delivery_batch=1` remains the default and retains
+the existing token-at-a-time behavior.
+
+| production bracket | control A | batch 16 | control C |
+|---|---:|---:|---:|
+| latency | 4049.717 us/token | **3832.315 us/token** | 4047.116 us/token |
+| throughput | 246.931 tok/s | **260.939 tok/s** | 247.090 tok/s |
+
+The control midpoint is 4048.417 us/token or 247.010 tok/s.  Production
+batching therefore books 216.102 us/token and +13.929 tok/s while matching
+every control token hash.  A separate 16+5 partial-boundary gate also matched
+all tokens and flushed the final five results correctly.  This is a
+throughput/latency policy, not a faster single-token kernel: callers selecting
+batch 16 wait for up to 16 generated tokens before the first delivery in that
+batch.  Batch 1 remains the authority for interactive streaming latency.
+
 ## Evidence
 
 - `docs/task_workflow/evidence/nv-post-membar-full-ledger-20260827/installed-wall-r15.json`
@@ -233,3 +252,5 @@ landed or rejected by its production reverse bracket.
 - `docs/task_workflow/evidence/nv-host-visible-token-delivery/batch4-ring-r7.json`
 - `docs/task_workflow/evidence/nv-host-visible-token-delivery/batch8-ring-r7.json`
 - `docs/task_workflow/evidence/nv-host-visible-token-delivery/batch16-ring-r7.json`
+- `docs/task_workflow/evidence/nv-host-visible-token-delivery/production-batch16-r7.json`
+- `docs/task_workflow/evidence/nv-host-visible-token-delivery/production-batch16-partial5.json`
