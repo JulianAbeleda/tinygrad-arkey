@@ -1,0 +1,179 @@
+{
+  "all_token_hashes_equal": true,
+  "arms": [
+    {
+      "arm": "control_a",
+      "candidate_contract": "production generate",
+      "candidate_mode": "host-mirror",
+      "count": 24,
+      "depth": 512,
+      "max_context": 768,
+      "reps": 7,
+      "schema": "tinygrad.nv_token_readback_wall.child.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          4.0677032083333335,
+          4.057360875,
+          4.05469,
+          4.055078666666667,
+          4.052139833333333,
+          4.055878125,
+          4.045999541666666
+        ],
+        "external_contention_high_limit_ms": 4.305078666666667,
+        "median_ms_per_token": 4.055078666666667,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          4.0677032083333335,
+          4.057360875,
+          4.05469,
+          4.055078666666667,
+          4.052139833333333,
+          4.055878125,
+          4.045999541666666
+        ],
+        "timed_token_count": 168,
+        "token_hashes": [
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809"
+        ],
+        "token_stream_hash": "7efb6e975be0a4eefb80faba1316f8c942575f83a95d8be7ef547b244f2b8c0c",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      }
+    },
+    {
+      "arm": "candidate",
+      "candidate_contract": "native argmax writes both the ordinary GPU feedback token and a pinned-host mirror; CPU waits the compute timeline then reads the mirror",
+      "candidate_mode": "host-mirror",
+      "count": 24,
+      "depth": 512,
+      "max_context": 768,
+      "reps": 7,
+      "schema": "tinygrad.nv_token_readback_wall.child.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          4.079983458333333,
+          4.06388525,
+          4.0654215,
+          4.0627995,
+          4.0683879166666665,
+          4.065479958333333,
+          4.0672245
+        ],
+        "external_contention_high_limit_ms": 4.315479958333333,
+        "median_ms_per_token": 4.065479958333333,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          4.079983458333333,
+          4.06388525,
+          4.0654215,
+          4.0627995,
+          4.0683879166666665,
+          4.065479958333333,
+          4.0672245
+        ],
+        "timed_token_count": 168,
+        "token_hashes": [
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809"
+        ],
+        "token_stream_hash": "7efb6e975be0a4eefb80faba1316f8c942575f83a95d8be7ef547b244f2b8c0c",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      }
+    },
+    {
+      "arm": "control_c",
+      "candidate_contract": "production generate",
+      "candidate_mode": "host-mirror",
+      "count": 24,
+      "depth": 512,
+      "max_context": 768,
+      "reps": 7,
+      "schema": "tinygrad.nv_token_readback_wall.child.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          4.080934541666666,
+          4.06992975,
+          4.068422291666667,
+          4.074417333333334,
+          4.081828291666667,
+          4.079855041666667,
+          4.079210041666666
+        ],
+        "external_contention_high_limit_ms": 4.329210041666666,
+        "median_ms_per_token": 4.079210041666666,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          4.080934541666666,
+          4.06992975,
+          4.068422291666667,
+          4.074417333333334,
+          4.081828291666667,
+          4.079855041666667,
+          4.079210041666666
+        ],
+        "timed_token_count": 168,
+        "token_hashes": [
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809"
+        ],
+        "token_stream_hash": "7efb6e975be0a4eefb80faba1316f8c942575f83a95d8be7ef547b244f2b8c0c",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      }
+    }
+  ],
+  "candidate_mode": "host-mirror",
+  "mode": "reverse-bracket",
+  "schema": "tinygrad.nv_token_readback_wall.v1",
+  "tokens_per_second": {
+    "candidate": 245.97341771424098,
+    "control": 245.8727581123424,
+    "delta": 0.10065960189857037
+  },
+  "walls_us_per_token": {
+    "candidate": 4065.4799583333333,
+    "candidate_delta": -1.6643958333334012,
+    "control_a": 4055.078666666667,
+    "control_c": 4079.2100416666663,
+    "control_midpoint": 4067.1443541666667
+  }
+}

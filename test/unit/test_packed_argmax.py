@@ -48,5 +48,6 @@ def test_packed_argmax_fail_closed_input_contract():
 
 def test_native_argmax_emitter_contract():
   for threads in (256, 512, 1024): assert callable(emit_native_finite_fp32_argmax(151936, threads))
+  assert callable(emit_native_finite_fp32_argmax(151936, 1024, host_mirror=True))
   with pytest.raises(ValueError, match="positive"): emit_native_finite_fp32_argmax(0)
   with pytest.raises(ValueError, match="threads"): emit_native_finite_fp32_argmax(17, 128)

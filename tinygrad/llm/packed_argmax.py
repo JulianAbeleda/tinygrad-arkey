@@ -8,11 +8,29 @@ kernel, or model-shape knowledge.
 from __future__ import annotations
 
 from tinygrad import Tensor, dtypes
+from tinygrad.device import BufferSpec
 from tinygrad.codegen.late.warp_reduce import _staged_shfl
 from tinygrad.dtype import AddrSpace
 from tinygrad.helpers import cdiv
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
 from tinygrad.uop.ops import AxisType, KernelInfo, UOp
+
+
+def make_native_argmax_host_mirror(device:str, memory:str="host") -> Tensor:
+  """Allocate one pinned-host int32 that is also writable by an NV kernel."""
+  if not device.startswith("NV"): raise ValueError(f"native argmax host mirror is NV-only, got {device}")
+  uop = UOp.new_buffer(device, 1, dtypes.int32)
+  if memory not in ("host", "mapped_vram"): raise ValueError(f"unsupported native argmax mirror memory {memory!r}")
+  uop.buffer.options = BufferSpec(host=memory == "host", cpu_access=memory == "mapped_vram", nolru=True)
+  uop.buffer.ensure_allocated()
+  return Tensor(uop)
+
+
+def read_native_argmax_host_mirror(mirror:Tensor) -> int:
+  """Read a mirror after the caller has waited for its producing compute timeline."""
+  if mirror.shape != (1,) or mirror.dtype != dtypes.int32 or not isinstance(mirror.device, str):
+    raise ValueError("invalid native argmax host mirror")
+  return int(mirror.uop.buffer.get_buf(mirror.device).cpu_view().view(size=4, fmt="i")[0])
 
 
 def _argmax_pair(best_value:UOp, best_index:UOp, other_value:UOp, other_index:UOp) -> tuple[UOp, UOp]:
@@ -21,7 +39,7 @@ def _argmax_pair(best_value:UOp, best_index:UOp, other_value:UOp, other_index:UO
   return better.where(other_value, best_value), better.where(other_index, best_index)
 
 
-def emit_native_finite_fp32_argmax(n:int, threads:int=1024) -> callable:
+def emit_native_finite_fp32_argmax(n:int, threads:int=1024, host_mirror:bool=False) -> callable:
   """One-CTA first-index argmax over one finite contiguous fp32 row.
 
   Each thread scans a fixed strided slice in registers, each warp reduces its
@@ -32,7 +50,8 @@ def emit_native_finite_fp32_argmax(n:int, threads:int=1024) -> callable:
   if not isinstance(n, int) or n < 1: raise ValueError(f"n must be a positive integer, got {n!r}")
   if threads not in (256, 512, 1024): raise ValueError(f"threads must be 256, 512, or 1024, got {threads}")
   warps = threads // 32
-  def kernel(out:UOp, x:UOp) -> UOp:
+  def kernel(out:UOp, *args:UOp) -> UOp:
+    mirror, x = args if host_mirror else (None, args[0])
     tid = UOp.special(threads, "lidx0")
     warp, lane = tid // 32, tid % 32
 
@@ -72,8 +91,10 @@ def emit_native_finite_fp32_argmax(n:int, threads:int=1024) -> callable:
       other_value = _staged_shfl(block_value, offset, lane, slot)
       other_index = _staged_shfl(block_index, offset, lane, slot+5)
       block_value, block_index = _argmax_pair(block_value, block_index, other_value, other_index)
-    return out[0].store(block_index, tid.eq(0)).sink(
-      arg=KernelInfo(name=f"native_finite_fp32_argmax_{n}_t{threads}", opts_to_apply=()))
+    out_store = out[0].store(block_index, tid.eq(0))
+    stores = (out_store, mirror[0].store(block_index, tid.eq(0))) if mirror is not None else (out_store,)
+    return stores[0].sink(*stores[1:],
+      arg=KernelInfo(name=f"native_finite_fp32_argmax_{n}_t{threads}{'_host_mirror' if host_mirror else ''}", opts_to_apply=()))
   return kernel
 
 
@@ -89,6 +110,22 @@ def native_argmax_finite_fp32(x:Tensor, threads:int=1024) -> Tensor:
   # The held decode return must not be a view of the custom program's internal
   # allocation: that allocation participates in the next replay's memory plan.
   return execute_promoted_program(None, x.reshape(n).contiguous(), program=program).reshape(1, 1).clone()
+
+
+def native_argmax_finite_fp32_host_mirror(x:Tensor, mirror:Tensor, threads:int=1024) -> tuple[Tensor, Tensor]:
+  """Research gate: write the exact native argmax to GPU output and a caller-owned mirror."""
+  if x.dtype != dtypes.float32 or x.ndim != 2 or x.shape[0] != 1 or not isinstance(x.shape[1], int):
+    raise ValueError(f"native argmax needs one static fp32 row, got shape={x.shape} dtype={x.dtype}")
+  if mirror.shape != (1,) or mirror.dtype != dtypes.int32 or mirror.device != x.device:
+    raise ValueError(f"native argmax mirror needs one int32 on {x.device}, got {mirror.shape=} {mirror.dtype=} {mirror.device=}")
+  if not str(x.device).startswith("NV"): raise ValueError(f"native argmax is NV-only, got {x.device}")
+  n = x.shape[1]
+  program = KernelProgram("decode_native_finite_fp32_argmax", f"vocab_{n}_t{threads}.host_mirror",
+    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emit_native_finite_fp32_argmax(n, threads, host_mirror=True),
+    output_spec=OutputSpec((1,), dtypes.int32))
+  out = Tensor.empty(1, dtype=dtypes.int32, device=x.device)
+  results = out.uop_program(mirror, x.reshape(n).contiguous(), fxn=program.emitter)
+  return results[0].reshape(1, 1).clone(), results[1]
 
 
 def packed_argmax_finite_fp32(x:Tensor, axis:int=-1, keepdim:bool=False) -> Tensor:

@@ -164,6 +164,31 @@ sequence remains service-rate microgate, cold full-token bracket, and generic
 shape sweep; no Q estimate is counted in the current endpoint or the
 261.460-tok/s delivery ceiling.
 
+### Host-visible scalar discriminator
+
+Direct GPU writes were coherent for 10,000 alternating-value iterations in
+each of CPU-mapped VRAM, pinned cached host memory, and uncached system memory.
+There were no stale values or guard corruptions.  The exact native argmax then
+wrote both its ordinary GPU feedback token and a host mirror; 17 selected
+winners matched the ordinary path, GPU output, and mirror.  Its isolated
+synchronized gate recovered about 44 us against `Tensor.item()`.
+
+That isolated saving did not translate to the production token wall:
+
+| mirror placement | control midpoint | candidate | delta | exact tokens |
+|---|---:|---:|---:|---:|
+| pinned cached host | 4067.144 us | 4065.480 us | -1.664 us | yes |
+| CPU-mapped VRAM | 4064.221 us | 4064.747 us | +0.526 us | yes |
+
+Neither candidate beat both controls, so neither is promoted.  The existing
+ordered four-byte copy is not the large remaining recovery pool.  The
+261.460-tok/s no-delivery arm must now be interpreted primarily as a cadence
+ceiling: suppressing every host rendezvous permits queued decode work, whereas
+a correct streaming generator must expose each selected token.  The next
+discriminator is bounded multi-token run-ahead with exact GPU feedback and a
+host-visible result ring, followed by batched synchronization and delivery.
+This tests cadence without charging Q or changing the greedy token sequence.
+
 ## Evidence
 
 - `docs/task_workflow/evidence/nv-post-membar-full-ledger-20260827/installed-wall-r15.json`
@@ -175,3 +200,8 @@ shape sweep; no Q estimate is counted in the current endpoint or the
 - `docs/task_workflow/evidence/nv-post-membar-full-ledger-20260827/token-readback-skip-presync-r7.json`
 - `docs/task_workflow/evidence/nv-post-membar-full-ledger-20260827/token-readback-optin-r7.json`
 - `docs/task_workflow/evidence/nv-post-membar-full-ledger-20260827/installed-copyout-promoted-r15.json`
+- `docs/task_workflow/evidence/nv-host-visible-token-delivery/scalar-matrix.json`
+- `docs/task_workflow/evidence/nv-host-visible-token-delivery/argmax-host-mirror-r9.json`
+- `docs/task_workflow/evidence/nv-host-visible-token-delivery/argmax-host-mirror-gpu-only-r7.json`
+- `docs/task_workflow/evidence/nv-host-visible-token-delivery/production-host-mirror-r7.json`
+- `docs/task_workflow/evidence/nv-host-visible-token-delivery/production-mapped-vram-mirror-r7.json`

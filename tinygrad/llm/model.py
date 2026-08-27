@@ -23,7 +23,9 @@ from tinygrad.llm.decode_routes import (FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_
 from tinygrad.llm.decode_kernels import DecodeRMSNormSpec, emit_decode_rmsnorm_kernel
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
 from tinygrad.llm.shared_q8_attention import SharedQ8AttentionAdmission, shared_q8_attention_call
-from tinygrad.llm.packed_argmax import native_argmax_finite_fp32, packed_argmax_finite_fp32
+from tinygrad.llm.packed_argmax import (make_native_argmax_host_mirror, native_argmax_finite_fp32,
+                                        native_argmax_finite_fp32_host_mirror, packed_argmax_finite_fp32,
+                                        read_native_argmax_host_mirror)
 from tinygrad.llm.producer_kv_cache_sink import ProducerKVCacheSinkAdmission, producer_kv_cache_sink_call
 from tinygrad.llm.q4k_kv_pair import q4k_kv_pair_call, q4k_qkv_call
 from tinygrad.llm.prefill_routes import direct_packed_prefill_policy, is_direct_packed_prefill_linear, route_prefill_linear, validate_prefill_route_mode
@@ -1506,7 +1508,9 @@ class Transformer:
                                                     Transformer._bound_position_var_vals(start_pos))
     logits = self.logits(tokens, start_pos)[:, -1, :]
     native_threads = getattr(self, "_decode_native_argmax_lease", getattr(self, "_decode_native_argmax_threads", 0))
-    sampled = native_argmax_finite_fp32(logits, native_threads) if native_threads else \
+    _host_mirror = getattr(self, "_decode_host_argmax_mirror", None)
+    sampled = native_argmax_finite_fp32_host_mirror(logits, _host_mirror, native_threads)[0] if native_threads and _host_mirror is not None else \
+      native_argmax_finite_fp32(logits, native_threads) if native_threads else \
       packed_argmax_finite_fp32(logits, -1, keepdim=True) if getattr(self, "_decode_packed_argmax_promoted", False) else \
       logits.argmax(-1, keepdim=True)
     return Transformer._stamp_position_var_vals(_prefill_semantic(resolve(tokens.shape[1] != 1), prefill_output, sampled),
@@ -1516,7 +1520,9 @@ class Transformer:
     tokens = _runtime_input_boundary(tokens)
     logits = self.logits(tokens, start_pos)[:, -1, :]
     native_threads = getattr(self, "_decode_native_argmax_lease", getattr(self, "_decode_native_argmax_threads", 0))
-    sampled = native_argmax_finite_fp32(logits, native_threads) if native_threads else \
+    _host_mirror = getattr(self, "_decode_host_argmax_mirror", None)
+    sampled = native_argmax_finite_fp32_host_mirror(logits, _host_mirror, native_threads)[0] if native_threads and _host_mirror is not None else \
+      native_argmax_finite_fp32(logits, native_threads) if native_threads else \
       packed_argmax_finite_fp32(logits, -1, keepdim=True) if getattr(self, "_decode_packed_argmax_promoted", False) else \
       logits.argmax(-1, keepdim=True)
     sampled = _prefill_semantic(resolve(tokens.shape[1] != 1), prefill_output, sampled)
@@ -2364,6 +2370,11 @@ class Transformer:
     out, prompt_len, decode_feedback_phase = None, len(tokens), 0
     request_flash_split = _request_static_flash_split_count(prompt_len, expected_output_tokens, self.max_context)
     direct_greedy = temperature == 0.0 and bool(getattr(self, "_decode_direct_greedy_promoted", False))
+    host_argmax_mirror = direct_greedy and not diagnostic_full_logits and \
+      bool(getattr(self, "_decode_native_argmax_threads", 0)) and not bool(getattr(self, "_decode_vocab_top1_lease", False)) and \
+      bool(getenv("NV_ARGMAX_HOST_MIRROR", 0))
+    if host_argmax_mirror and getattr(self, "_decode_host_argmax_mirror", None) is None:
+      self._decode_host_argmax_mirror = make_native_argmax_host_mirror("NV", getenv("NV_ARGMAX_HOST_MIRROR_MEMORY", "host"))
     # Launch hiding (submit-ahead) only reorders the steady flash-greedy
     # pingpong decode; everything else keeps the exact existing scheduling.
     submit_ahead = (not _ring and not diagnostic_full_logits and temperature == 0.0 and direct_greedy
@@ -2463,7 +2474,11 @@ class Transformer:
         sampled, logits = read_tok, None
       else:
         sampled, logits = out if diagnostic_full_logits and isinstance(out, tuple) else (out, None)
-      tokens.append(int(sampled.item()))
+      if host_argmax_mirror:
+        Device[sampled.device].synchronize()
+        tokens.append(read_native_argmax_host_mirror(self._decode_host_argmax_mirror))
+      else:
+        tokens.append(int(sampled.item()))
       self._cached_tokens = tokens[:-1]
       # Prompt/prefill produces the first sampled token through the normal
       # prefill graph, so its diagnostic logit is explicitly ``None`` rather
