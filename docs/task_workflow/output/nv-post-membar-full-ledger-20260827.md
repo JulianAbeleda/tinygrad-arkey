@@ -189,6 +189,30 @@ discriminator is bounded multi-token run-ahead with exact GPU feedback and a
 host-visible result ring, followed by batched synchronization and delivery.
 This tests cadence without charging Q or changing the greedy token sequence.
 
+### Bounded delivery cadence result
+
+The first retention spelling cloned each sampled Tensor and regressed to about
+48 tok/s.  That was an information wall, not a cadence result: each clone
+introduced uncaptured scheduling and allocation work.  Replacing it with a
+fixed device token ring made the test admissible.  After each ordinary greedy
+graph, the copy queue retains four bytes into the next ring slot without a CPU
+wait; one copyout at the batch boundary returns every selected token in order.
+
+| delivery batch | control | candidate | recovery | token sequence |
+|---:|---:|---:|---:|---:|
+| 4 | 245.954 tok/s | 257.378 tok/s | 180.463 us/token | exact |
+| 8 | 246.460 tok/s | 259.638 tok/s | 205.950 us/token | exact |
+| 16 | 245.585 tok/s | **260.639 tok/s** | 235.180 us/token | exact |
+
+This reaches the non-Q campaign target and explains the former no-delivery
+ceiling: delivery cadence, not scalar byte transport, was the transferable
+lever.  It is not a replacement for ordinary token-at-a-time streaming.  The
+production investment must expose batching explicitly, preserve batch-1
+semantics by default, retain device-resident greedy feedback, flush a partial
+batch at the generation boundary, and document the additional first-delivery
+latency.  Q remains deferred until this bounded-delivery route is either
+landed or rejected by its production reverse bracket.
+
 ## Evidence
 
 - `docs/task_workflow/evidence/nv-post-membar-full-ledger-20260827/installed-wall-r15.json`
@@ -205,3 +229,7 @@ This tests cadence without charging Q or changing the greedy token sequence.
 - `docs/task_workflow/evidence/nv-host-visible-token-delivery/argmax-host-mirror-gpu-only-r7.json`
 - `docs/task_workflow/evidence/nv-host-visible-token-delivery/production-host-mirror-r7.json`
 - `docs/task_workflow/evidence/nv-host-visible-token-delivery/production-mapped-vram-mirror-r7.json`
+- `docs/task_workflow/evidence/nv-host-visible-token-delivery/batch4-gate-r7.json`
+- `docs/task_workflow/evidence/nv-host-visible-token-delivery/batch4-ring-r7.json`
+- `docs/task_workflow/evidence/nv-host-visible-token-delivery/batch8-ring-r7.json`
+- `docs/task_workflow/evidence/nv-host-visible-token-delivery/batch16-ring-r7.json`

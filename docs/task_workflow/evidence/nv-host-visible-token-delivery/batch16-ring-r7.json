@@ -1,0 +1,75 @@
+{
+  "all_windows_exact": true,
+  "batch": 16,
+  "candidate": {
+    "median_ms_per_token": 3.836725,
+    "samples_ms_per_token": [
+      3.8367015,
+      3.83404903125,
+      3.836725,
+      3.8348089375,
+      3.83783896875,
+      3.83822753125,
+      3.83903121875
+    ],
+    "token_hashes": [
+      "292341c4cbe5c5981b3682235896133a6c7ae0606f3713eb44dc8e998d01ffb1",
+      "14a359d2ef898796a127183a25c07c5534ba63920e88165d8f10177d4a03a474",
+      "16fe1223312dad5b3c342ef60da7632ed6dcfe52289cc59ef7e1c7c5fd61bb25",
+      "292341c4cbe5c5981b3682235896133a6c7ae0606f3713eb44dc8e998d01ffb1",
+      "14a359d2ef898796a127183a25c07c5534ba63920e88165d8f10177d4a03a474",
+      "16fe1223312dad5b3c342ef60da7632ed6dcfe52289cc59ef7e1c7c5fd61bb25",
+      "292341c4cbe5c5981b3682235896133a6c7ae0606f3713eb44dc8e998d01ffb1"
+    ]
+  },
+  "candidate_warm": [
+    13876,
+    38835,
+    34208,
+    13,
+    279,
+    3974
+  ],
+  "control": {
+    "median_ms_per_token": 4.07190475,
+    "samples_ms_per_token": [
+      4.07530296875,
+      4.07222371875,
+      4.06865584375,
+      4.070726875,
+      4.07246171875,
+      4.07190475,
+      4.06713203125
+    ],
+    "token_hashes": [
+      "292341c4cbe5c5981b3682235896133a6c7ae0606f3713eb44dc8e998d01ffb1",
+      "14a359d2ef898796a127183a25c07c5534ba63920e88165d8f10177d4a03a474",
+      "16fe1223312dad5b3c342ef60da7632ed6dcfe52289cc59ef7e1c7c5fd61bb25",
+      "292341c4cbe5c5981b3682235896133a6c7ae0606f3713eb44dc8e998d01ffb1",
+      "14a359d2ef898796a127183a25c07c5534ba63920e88165d8f10177d4a03a474",
+      "16fe1223312dad5b3c342ef60da7632ed6dcfe52289cc59ef7e1c7c5fd61bb25",
+      "292341c4cbe5c5981b3682235896133a6c7ae0606f3713eb44dc8e998d01ffb1"
+    ]
+  },
+  "control_warm": [
+    13876,
+    38835,
+    34208,
+    13,
+    279,
+    3974
+  ],
+  "count": 32,
+  "depth": 512,
+  "reps": 7,
+  "schema": "tinygrad.nv_token_delivery_batch_gate.v1",
+  "tokens_per_second": {
+    "candidate": 260.6389564016186,
+    "control": 245.58531237745677
+  },
+  "walls_us_per_token": {
+    "candidate": 3836.725,
+    "control": 4071.9047499999997,
+    "delta": -235.1797499999999
+  }
+}
