@@ -1,0 +1,14 @@
+{
+  "schema": "tinygrad.nv_active_boundary.fixed_tax_test.v1",
+  "calls_per_token": 208,
+  "observed_old_command_minus_exact_active_us_per_token": 65.984,
+  "observed_weighted_mean_us_per_call": 0.317231,
+  "fresh_hcq_noop_plain_slope_us_per_kernel": 0.651152,
+  "fresh_hcq_noop_timestamp_slope_us_per_kernel": 0.650689,
+  "fixed_floor_prediction_us_per_token": 135.200,
+  "per_family_delta_range_us_per_call": [-0.270222, 1.158400],
+  "unweighted_family_median_us_per_call": 0.389333,
+  "unweighted_family_mean_us_per_call": 0.373889,
+  "verdict": "REJECT_UNIVERSAL_FIXED_TAX_FOR_PRODUCTION_ROWS",
+  "reading": "The clean HCQ floor is real, but production exposure depends on kernel family, predecessor, and schedule."
+}
