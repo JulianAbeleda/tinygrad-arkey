@@ -1,0 +1,65 @@
+{
+  "condition_mib": 96,
+  "llama_cubin_sha256": "cc76cd433d9b56dc83fc80813631c450dd703972cdd994f9c193124d3af263e9",
+  "llama_output_finite": true,
+  "llama_output_zero": true,
+  "logical_tc": 768,
+  "rows": [
+    {
+      "arm": "tiny",
+      "event_us": 61.781439781188965
+    },
+    {
+      "arm": "llama",
+      "event_us": 62.168641090393066
+    },
+    {
+      "arm": "llama",
+      "event_us": 62.11008071899414
+    },
+    {
+      "arm": "tiny",
+      "event_us": 61.758079528808594
+    },
+    {
+      "arm": "tiny",
+      "event_us": 61.791038513183594
+    },
+    {
+      "arm": "llama",
+      "event_us": 62.15167999267578
+    },
+    {
+      "arm": "llama",
+      "event_us": 62.12543964385986
+    },
+    {
+      "arm": "tiny",
+      "event_us": 61.74304008483887
+    }
+  ],
+  "schema": "tinygrad.nv_flash_score_exact_common_cuda.v1",
+  "summary": {
+    "llama": {
+      "median_event_us": 62.13855981826782,
+      "samples": [
+        62.168641090393066,
+        62.11008071899414,
+        62.15167999267578,
+        62.12543964385986
+      ]
+    },
+    "tiny": {
+      "median_event_us": 61.76975965499878,
+      "samples": [
+        61.781439781188965,
+        61.758079528808594,
+        61.791038513183594,
+        61.74304008483887
+      ]
+    }
+  },
+  "tiny_cubin_sha256": "b18b18d244ae9f8b65e7bdb4627f2f1915b6b8eeb3a9b9cd1dc56b340eb14fbe",
+  "tiny_minus_llama_us": -0.36880016326904297,
+  "zero_inputs": true
+}

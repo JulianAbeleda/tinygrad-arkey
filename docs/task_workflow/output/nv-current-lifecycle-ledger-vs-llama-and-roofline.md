@@ -1,5 +1,12 @@
 # Current dense lifecycle ledger versus llama and the roofline
 
+> **Timing-boundary correction (2026-08-27):** the Flash score row and the
+> cross-runtime device-node-sum delta below mix tinygrad HCQ timestamp intervals
+> with llama CUPTI active durations. They are not body debts. Exact installed
+> cubins under one CUDA protocol make tinygrad's score body slightly faster hot
+> and after matched disturbance. See `nv-flash-score-common-protocol-result.md`.
+> The unprofiled endpoint wall remains authoritative.
+
 ## Decision
 
 The remaining dense-decode loss is approximately accounted. Tinygrad is not

@@ -37,16 +37,17 @@ installed production Flash rows total 242.496 us/token across 36 layers, or
 The older 36.35% tinygrad Flash drop predates the load-schedule, active-horizon,
 tail-V, and capture-policy promotions and is superseded for the installed path.
 
-The retained llama audit reported approximately 17--19%, so current tinygrad
-is in the same approximate conversion band.  This is percentage conversion
-parity, not absolute Flash-service parity: the corrected production population
-still leaves about 30--31 us/token of score debt versus the retained llama
-PDL-off row.  The canonical V-tail wall bracket confirms a 5.878-us/token win
-against its controls, but V-tail is already installed and therefore does not
-move this endpoint authority again.
+The retained llama audit reported approximately 17--19%, but the percentages
+used different timing boundaries and are no longer used for body comparison.
+The apparent 30--31 us/token score debt mixed tinygrad HCQ timestamp intervals
+with llama CUPTI active durations. Exact installed cubins in one CUDA protocol
+make tinygrad 0.074 us/layer faster hot and 0.128 us/layer faster after a
+96-MiB disturbance. Flash score and combine bodies are at or beyond parity;
+the remaining token-wall gap belongs elsewhere in lifecycle/launch accounting.
 
 ## Sources
 
 - `docs/task_workflow/output/nv-flash-ceiling-exhaustion-result.md`
 - `docs/task_workflow/output/nv-current-lifecycle-ledger-vs-llama-and-roofline.md`
 - `docs/task_workflow/output/nv-post-flash-parity-reconciliation.md`
+- `docs/task_workflow/output/nv-flash-score-common-protocol-result.md`
