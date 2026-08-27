@@ -7,11 +7,13 @@ survives stable descriptor reuse. It is not caused by native graph rebuilding,
 missing dependent-QMD prefetch, pushbuffer word count, leading barriers, final
 completion placement, or sample order.
 
-The surviving unknown is narrower: CUDA graph's private steady-state
-descriptor/scheduling encoding services the same strict chain about 72 us
-faster across the 208-call heterogeneous population. Switching the complete
-model to the CUDA backend is not viable; that route is about 1.46 ms/token
-slower. A native command-stream capture/diff is required before implementation.
+The main mechanism is now identified and promoted. Tinygrad requested an L1
+system-memory barrier at every grid QMD, including internal edges already
+ordered by `dependent_qmd0`. CUDA graph's hardware-accelerated dependency path
+does not charge that full barrier at every node. Removing it only from QMDs
+that have a same-queue dependent successor recovers 50.501 us in the matched
+208-call bridge and 67.530 us/token in the production reverse bracket. The
+final QMD retains its system membar.
 
 ## Executed matrix
 
@@ -34,17 +36,17 @@ slower. A native command-stream capture/diff is required before implementation.
 | 15 | whole CUDA backend wins | matched dense route smoke | CUDA 5.657 ms, NV 4.195 ms, identical token hash | closed |
 | 16 | single-cubin artifact | 12-cubin 208-call bridge | corrected graph advantage 68.460--78.356 us | closed |
 | 17 | fresh/bound native command buffer | bound queue and fixed QMD addresses | gap remains 72.357 us, 46/46 hashes | closed |
+| 18 | pure scheduler versus kernel interaction | matched 208-node no-op chain | native 141.028, CUDA 104.128 us | pure 36.900-us scheduler floor proven |
+| 19 | redundant QMD cache invalidations | retain only first invalidation | no material no-op or real-population movement | closed |
+| 20 | per-grid L1 system membar | clear only on internal dependent QMDs | 2686.277 -> 2635.776 us; 46/46 hashes | proven and promoted |
+| 21 | producer/consumer visibility | 256 alternating pairs, 511 internal edges | zero errors; 459.103 -> 332.855 us | semantic pass |
+| 22 | production token correctness/wall | control/candidate/control, reps=9 | identical hashes; -67.530 us/token | production pass |
 
 ## Exhaustive remaining list
 
 | ID | question | smallest admissible test | status |
 |---:|---|---|---|
-| 18 | CUDA versus native QMD fields | capture same strict-chain QMDs and field-diff v5 | RM ownership mapped; payload dump still open |
-| 19 | hidden launch descriptor outside QMD | follow graph GPFIFO/PB references and dump CB0/tables | RM ownership mapped; payload dump still open |
-| 20 | USERD/doorbell publication cadence | correlate `GP_PUT`, entries, and doorbell writes | allocation census complete; active-channel watchpoint open |
-| 21 | QMD memory class/locality | reproduce captured CUDA placement in native sidecar | blocked on capture |
-| 22 | dependent action differs | identify CUDA action before testing native alternative | blocked on capture |
-| 23 | second dependent slot/window | inspect CUDA chain; strict serial semantics prohibit speculative branch | blocked on capture |
+| 23 | CUDA versus native remaining ~20-us bridge residual | matched active-body and QMD field attribution | open; main 50.501 us recovered |
 | 24 | graph upload flag alone | explicit upload versus warmed ordinary instantiate | closed: 2615.328 versus 2611.936 us at 208, no material movement |
 | 25 | graph rebuild/update | rebuild, update, and reuse arms | low priority; stable reuse result already isolates steady path |
 | 26 | exact graph boundaries | one/four/five matched bridge executables | open, bounded small by prior merge losses |
@@ -53,24 +55,23 @@ slower. A native command-stream capture/diff is required before implementation.
 | 29 | two-GPFIFO exact topology | replay captured production assignments/edges in both front ends | open after capture diff |
 | 30 | native hardware-only timing | bracket chain with hardware timestamp signals | open; current native drain includes CPU completion observation |
 | 31 | clock telemetry | retain SM/memory clocks per arm | open; order reversal already passes |
-| 32 | production native candidate | gated implementation of captured transferable property | blocked on IDs 18--20 |
-| 33 | production exactness | full token-stream and multiple-context gates | blocked on candidate |
-| 34 | production wall | reps>=7 reverse bracket | blocked on candidate |
-| 35 | dense-model generality | second dense shape/quant population | blocked on candidate |
+| 32 | production native candidate | relax internal dependent-QMD membar only | complete, Blackwell default with rollback |
+| 33 | production exactness | adversarial visibility plus token stream | complete |
+| 34 | production wall | reps>=7 reverse bracket | complete: -67.530 us/token, +3.930 tok/s in bracket |
+| 35 | dense-model generality | second dense Q8 0.6B population | -87.145 us/token; semantic comparison inconclusive because controls also diverged |
 | 36 | vocabulary body | independent service-rate construction | open, measured 15.800-us ceiling |
 | 37 | O body | independent cleanup | open, measured 3.007-us ceiling |
 
 ## Command-stream capture requirement
 
-The next tool must correlate NVIDIA RM handles rather than guess mappings by
-size. It needs to resolve the usermode/doorbell VMA, USERD, GPFIFO memory, GPU
-VA mappings, pushbuffer entries, `SEND_PCAS`, QMD, and referenced CB0 or
-out-of-line descriptor tables. Capture only the standalone strict-chain bridge
-first. Diff one-node, sixteen-node, and 208-node graph executions against the
-native authorities.
-
-No production runtime mutation is justified until that diff identifies a
-specific transferable property.
+The `mmap64` correction resolved active ownership without a kernel module.
+Exactly CUDA channel 1 advances during graph replay. Its first replay uploads a
+large resident graph object; steady replay publishes three GPFIFO entries
+(start event, compact graph launcher, end event). This agrees with NVIDIA's
+documented hardware acceleration for graph dependencies, but the transferable
+property was found by field isolation rather than copying a private graph
+descriptor: omit the internal `CWD_MEMBAR_TYPE_L1_SYSMEMBAR` and preserve it
+at external completion.
 
 ### RM ownership census
 
@@ -92,16 +93,18 @@ GPFIFO/PB/QMD chain is admissible for IDs 18--20.
 
 ## Token-rate ledger
 
-The bound, ABI-correct, bitwise bridge measures a 72.357-us synthetic movement:
+The production reverse bracket books 67.530 us/token. In that fresh current-tree
+session it moved 4178.963 -> 4111.433 us/token, or 239.294 -> 243.224 tok/s.
+Normalized onto the prior installed authority:
 
 ```text
-4060.523 - 72.357 = 3988.166 us/token
-1e6 / 3988.166     = 250.742 tok/s
+4060.523 - 67.530 = 3992.993 us/token
+1e6 / 3992.993    = 250.439 tok/s
 ```
 
-This is an investment ceiling, not a booking. The whole CUDA route is a
-negative control, not a candidate: 5.657 ms/token versus native 4.195 ms/token
-in the same short smoke, with identical generated tokens.
+The first pair is the directly measured current endpoint; the second is a
+normalization for continuity with the earlier ledger, not a fresh 250.439
+tok/s endpoint measurement.
 
 ## Evidence
 

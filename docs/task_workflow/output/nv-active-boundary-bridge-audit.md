@@ -102,3 +102,17 @@ and enables QMD prefetch. Disabling prefetch loses 127.230 us; moving completion
 to the pushbuffer is slightly slower; removing the leading wait/barrier is
 approximately neutral. The remaining cause therefore requires a CUDA graph
 QMD/descriptor/USERD capture rather than another source-level queue guess.
+
+## Resolution: internal grid membar
+
+A matched 208-node no-op population retained 36.900 us of the gap, proving a
+pure node-service component. Field isolation then found the transferable cause:
+every native grid QMD requested `CWD_MEMBAR_TYPE_L1_SYSMEMBAR`. Clearing that
+field only when the QMD has a same-queue dependent successor moved the real
+population from 2686.277 to 2635.776 us while preserving all 46 logical buffer
+hashes. The final QMD remains unchanged.
+
+An adversarial 256-pair producer/consumer chain reported zero errors across 511
+internal edges per replay. The production reps=9 reverse bracket preserved the
+token-stream hash and recovered 67.530 us/token. This property is now the
+Blackwell default with `NV_RELAX_INTERNAL_QMD_MEMBAR=0` as rollback.

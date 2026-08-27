@@ -21,6 +21,12 @@ nv_gpu = nv_570 # default to 570
 
 PMA = ContextVar("PMA", abs(VIZ.value)>=2)
 
+def _nv_relax_internal_membar(qmd:QMD) -> bool:
+  """Drop only the system membar on a Blackwell QMD that has a same-queue dependent successor."""
+  if qmd.ver < 5 or not int(os.environ.get("NV_RELAX_INTERNAL_QMD_MEMBAR", "1")): return False
+  qmd.write(cwd_membar_type=nv_gpu.NVCEC0_QMDV05_00_CWD_MEMBAR_TYPE_L1_NONE)
+  return True
+
 # Programmatic dependent launch (PDL) wiring, env-gated and name-pinned.
 # Off by default: empty lists leave every QMD byte-identical to today's
 # dependent_qmd0 chaining (QMD_SCHEDULE). When a producer/consumer pair is
@@ -50,6 +56,7 @@ def _nv_pdl_arm_pair(active_qmd:QMD, new_qmd:QMD, active_name:str, new_name:str)
                    enable_program_pre_exit=1, pre_exit_at_last_cta_launch=1)
   new_qmd.write(wait_on_latch_valid=1, wait_on_latch_id=getenv("NV_PDL_LATCH_ID", 7))
   return True
+
 
 @dataclass(frozen=True)
 class ProfilePMAEvent(ProfileEvent): device:str; kern:str; blob:bytes; exec_tag:int # noqa: E702
@@ -200,6 +207,10 @@ class NVComputeQueue(NVCommandQueue):
       self.nvm(1, nv_gpu.NVC6C0_SEND_SIGNALING_PCAS2_B, 9)
     else:
       self.active_qmd.write(dependent_qmd0_pointer=qmd_buf.va_addr >> 8, dependent_qmd0_action=1, dependent_qmd0_prefetch=1, dependent_qmd0_enable=1)
+      # A dependent QMD is ordered by the compute scheduler itself.  Keep the final grid's system membar for
+      # host/device completion visibility, but allow internal same-queue edges to avoid paying a full L1
+      # system barrier. NV_RELAX_INTERNAL_QMD_MEMBAR=0 is the qualified rollback.
+      _nv_relax_internal_membar(self.active_qmd)
       if self.active_prg_name is not None:
         _nv_pdl_arm_pair(self.active_qmd, qmd, self.active_prg_name, prg.name)
 

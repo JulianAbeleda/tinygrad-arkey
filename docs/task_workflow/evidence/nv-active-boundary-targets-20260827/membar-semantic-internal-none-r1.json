@@ -1,0 +1,29 @@
+{
+  "commit": "61a6e9c5282518dac34b0bebdd8f445e9a308fa0",
+  "error_count": 0,
+  "median_us": 332.855,
+  "membar": "internal-none",
+  "pairs": 256,
+  "pass": true,
+  "reps": 15,
+  "samples_us": [
+    332.855,
+    333.125,
+    332.504,
+    333.396,
+    332.775,
+    333.085,
+    333.315,
+    332.744,
+    332.995,
+    333.505,
+    332.464,
+    332.364,
+    332.824,
+    332.684,
+    333.266
+  ],
+  "schema": "tinygrad.nv_qmd_membar_semantic.v1",
+  "transitions": 511,
+  "warmup": 5
+}

@@ -23,19 +23,23 @@ NS=(16,32,64,128,208)
 def trace_snapshot(label):
  if not os.getenv('NV_IOCTL_TRACE_SNAPSHOT'): return
  fn=ctypes.CDLL(None).nv_ioctl_trace_snapshot; fn.argtypes=(ctypes.c_char_p,); fn(label.encode())
+ if os.getenv('NV_IOCTL_TRACE_DUMP_PB'):
+  dump=ctypes.CDLL(None).nv_ioctl_trace_dump_active_pb; dump.argtypes=(ctypes.c_char_p,); dump(label.encode())
+ if os.getenv('NV_IOCTL_TRACE_DUMP_MAPPINGS'):
+  dump=ctypes.CDLL(None).nv_ioctl_trace_dump_mappings; dump.argtypes=(ctypes.c_char_p,); dump(label.encode())
 
 def ols(xs,ys):
  mx,my=statistics.mean(xs),statistics.mean(ys); m=sum((x-mx)*(y-my) for x,y in zip(xs,ys))/sum((x-mx)**2 for x in xs)
  return m,my-m*mx
 
-def sequence(rows):
- remain=COUNTS.copy(); out=[]
+def sequence(rows,counts=COUNTS):
+ remain=counts.copy(); out=[]
  while any(remain.values()):
   for r in rows:
    if remain[r['name']]: out.append(r); remain[r['name']]-=1
  return out
 
-def run_nv(rows, seq, warmup, reps, prologue, completion, chain, replay, prefetch):
+def run_nv(rows, seq, warmup, reps, prologue, completion, chain, replay, prefetch, invalidate, membar):
  from tinygrad import Device
  from tinygrad.runtime.ops_nv import NVProgram
  from tinygrad.runtime.ops_nv import NVComputeQueue
@@ -51,8 +55,11 @@ def run_nv(rows, seq, warmup, reps, prologue, completion, chain, replay, prefetc
   q=NVComputeQueue(queue_idx=0); q.setup(compute_class=dev.iface.compute_class,local_mem_window=dev.local_mem_window,shared_mem_window=dev.shared_mem_window)
   if prologue in ('full','wait'): q.wait(dev.timeline_signal,dev.timeline_value-1)
   if prologue in ('full','barrier'): q.memory_barrier()
-  for r in seq[:n]:
+  for node_idx,r in enumerate(seq[:n]):
    p,bs,_sizes,g,b,vals=state[r['name']]; prev=q.active_qmd; q.exec(p,p.fill_kernargs(bs,vals),g,b)
+   if invalidate=='none' or (invalidate=='first' and node_idx): q.active_qmd.write(invalidate_texture_header_cache=0,invalidate_texture_sampler_cache=0,invalidate_texture_data_cache=0,invalidate_shader_data_cache=0)
+   if membar=='none': q.active_qmd.write(cwd_membar_type=0)
+   elif membar=='internal-none' and prev is not None: prev.write(cwd_membar_type=0)
    if prev is not None: prev.write(dependent_qmd0_prefetch=prefetch)
    if chain=='pcas': q.active_qmd=None
   if completion=='pushbuffer': q.active_qmd=None
@@ -112,11 +119,16 @@ def run_cuda(rows,seq,warmup,reps,upload):
 
 def main():
  ap=argparse.ArgumentParser(description=__doc__); ap.add_argument('--backend',choices=('nv','cuda-graph'),required=True); ap.add_argument('--warmup',type=int,default=5); ap.add_argument('--reps',type=int,default=11); ap.add_argument('--out',type=pathlib.Path,required=True)
- ap.add_argument('--nv-prologue',choices=('full','wait','barrier','none'),default='full'); ap.add_argument('--nv-completion',choices=('qmd','pushbuffer'),default='qmd'); ap.add_argument('--nv-chain',choices=('dependent','pcas'),default='dependent'); ap.add_argument('--nv-replay',choices=('fresh','bound'),default='fresh'); ap.add_argument('--nv-prefetch',type=int,choices=(0,1),default=1); ap.add_argument('--cuda-upload',type=int,choices=(0,1),default=0); a=ap.parse_args()
- rows=json.loads(CAP.read_text())['captured']; assert {r['name'] for r in rows} == set(COUNTS)
+ ap.add_argument('--nv-prologue',choices=('full','wait','barrier','none'),default='full'); ap.add_argument('--nv-completion',choices=('qmd','pushbuffer'),default='qmd'); ap.add_argument('--nv-chain',choices=('dependent','pcas'),default='dependent'); ap.add_argument('--nv-replay',choices=('fresh','bound'),default='fresh'); ap.add_argument('--nv-prefetch',type=int,choices=(0,1),default=1); ap.add_argument('--nv-qmd-invalidate',choices=('all','first','none'),default='all'); ap.add_argument('--nv-qmd-membar',choices=('system','internal-none','none'),default='system'); ap.add_argument('--cuda-upload',type=int,choices=(0,1),default=0); ap.add_argument('--population',choices=('projection','noop'),default='projection'); a=ap.parse_args()
+ if a.population=='projection': rows=json.loads(CAP.read_text())['captured']; counts=COUNTS; assert {r['name'] for r in rows} == set(counts)
+ else:
+  from tinygrad.runtime.support.compiler_cuda import NVRTCCompiler
+  cubin=ROOT/'docs/task_workflow/evidence/nv-active-boundary-targets-20260827/nv_frontend_noop.cubin'
+  cubin.write_bytes(NVRTCCompiler('sm_120',ptx=False,cache_key='nv_frontend_noop_v1').compile('extern "C" __global__ void nv_frontend_noop(unsigned int *out) { if (threadIdx.x == 0 && blockIdx.x == 0) out[0] = 1; }'))
+  rows=[{'name':'nv_frontend_noop','cubin_path':str(cubin),'calls':[{'n_bufs':1,'buf_meta':[{'size':4}],'global_size':[1,1,1],'local_size':[32,1,1],'vals':[]}]}]; counts={'nv_frontend_noop':208}
  for r in rows:
   signatures={(c['n_bufs'],tuple(b['size'] for b in c['buf_meta']),tuple(c['global_size']),tuple(c['local_size']),tuple(c['vals'])) for c in r['calls']}
   assert len(signatures)==1, f"non-constant captured ABI for {r['name']}: {signatures}"
- seq=sequence(rows); vals,hashes=run_nv(rows,seq,a.warmup,a.reps,a.nv_prologue,a.nv_completion,a.nv_chain,a.nv_replay,a.nv_prefetch) if a.backend=='nv' else run_cuda(rows,seq,a.warmup,a.reps,a.cuda_upload); m,i=ols([r['n'] for r in vals],[r['median_us'] for r in vals])
- out={'schema':'tinygrad.nv_projection_frontend_bridge.v1','backend':a.backend,'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'population':len(seq),'ns':NS,'warmup':a.warmup,'reps':a.reps,'rows':vals,'slope_us_per_node':m,'intercept_us':i,'sequence':[r['name'] for r in seq],'final_buffer_sha256':hashes,'nv_options':{'prologue':a.nv_prologue,'completion':a.nv_completion,'chain':a.nv_chain,'replay':a.nv_replay,'prefetch':a.nv_prefetch},'cuda_options':{'upload':a.cuda_upload}}; a.out.parent.mkdir(parents=True,exist_ok=True); a.out.write_text(json.dumps(out,indent=2,sort_keys=True)+'\n'); print(json.dumps({'backend':a.backend,'slope_us_per_node':m,'intercept_us':i,'medians':[(r['n'],r['median_us']) for r in vals],'buffer_hashes':sum(map(len,hashes.values())),'nv_options':out['nv_options'],'cuda_options':out['cuda_options']},indent=2))
+ seq=sequence(rows,counts); vals,hashes=run_nv(rows,seq,a.warmup,a.reps,a.nv_prologue,a.nv_completion,a.nv_chain,a.nv_replay,a.nv_prefetch,a.nv_qmd_invalidate,a.nv_qmd_membar) if a.backend=='nv' else run_cuda(rows,seq,a.warmup,a.reps,a.cuda_upload); m,i=ols([r['n'] for r in vals],[r['median_us'] for r in vals])
+ out={'schema':'tinygrad.nv_projection_frontend_bridge.v1','backend':a.backend,'population_kind':a.population,'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'population':len(seq),'ns':NS,'warmup':a.warmup,'reps':a.reps,'rows':vals,'slope_us_per_node':m,'intercept_us':i,'sequence':[r['name'] for r in seq],'final_buffer_sha256':hashes,'nv_options':{'prologue':a.nv_prologue,'completion':a.nv_completion,'chain':a.nv_chain,'replay':a.nv_replay,'prefetch':a.nv_prefetch,'invalidate':a.nv_qmd_invalidate,'membar':a.nv_qmd_membar},'cuda_options':{'upload':a.cuda_upload}}; a.out.parent.mkdir(parents=True,exist_ok=True); a.out.write_text(json.dumps(out,indent=2,sort_keys=True)+'\n'); print(json.dumps({'backend':a.backend,'population_kind':a.population,'slope_us_per_node':m,'intercept_us':i,'medians':[(r['n'],r['median_us']) for r in vals],'buffer_hashes':sum(map(len,hashes.values())),'nv_options':out['nv_options'],'cuda_options':out['cuda_options']},indent=2))
 if __name__=='__main__': main()

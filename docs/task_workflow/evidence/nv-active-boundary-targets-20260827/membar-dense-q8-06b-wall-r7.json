@@ -1,0 +1,183 @@
+{
+  "all_token_hashes_equal": false,
+  "arms": [
+    {
+      "arm": "control_a",
+      "count": 24,
+      "depth": 256,
+      "max_context": 512,
+      "model": "/home/ubuntu/models/Mamser-Qwen3-0.6B-Q8_0.gguf",
+      "relax_internal_membar": false,
+      "reps": 7,
+      "schema": "tinygrad.nv_qmd_membar_wall.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          6.991404416666667,
+          7.094953583333333,
+          7.21981675,
+          7.323810125,
+          7.43325775,
+          7.552846416666667,
+          7.630321041666667
+        ],
+        "external_contention_high_limit_ms": 8.696949374999999,
+        "median_ms_per_token": 7.323810125,
+        "prelude_token": 34208,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          6.991404416666667,
+          7.094953583333333,
+          7.21981675,
+          7.323810125,
+          7.43325775,
+          7.552846416666667,
+          7.630321041666667
+        ],
+        "timed_token_count": 168,
+        "token_hashes": [
+          "e815ef87c6e76d469e0be1813b1311404061fc1240f3dd9843b5afa89a8442ae",
+          "78dc079072b206eeae6ab135690a0f166b7772b10e4ce193da2ce18cca1e50b5",
+          "71ddad19d800c95683733cb7d8d6a6c4a8d33f8d1e4204bdd2a2fdca725f88c1",
+          "2b7949256ab4135a8375a1ffad17060f227dca9501830bd9785c1c091a053450",
+          "3e15b860d7717375f56fcbd3bbf6a179e8134bdaad9c0178fd03960fb4ff0e16",
+          "91a19ef705a9c01e5e08b172afb1c10b1af2f89c08f1ba19ce6f13d2559bd26f",
+          "99817a69128f7803d69d71c78ce26b2abeff38a8c72e7833734a124c8fa90d32"
+        ],
+        "token_stream_hash": "f0da187b3ed7d1302b66c2b81fc55c8086caececaa9740c62c915784b2bbfcf4",
+        "warmup_tokens": [
+          13,
+          24494,
+          44622,
+          118599,
+          104529,
+          53482
+        ]
+      }
+    },
+    {
+      "arm": "candidate",
+      "count": 24,
+      "depth": 256,
+      "max_context": 512,
+      "model": "/home/ubuntu/models/Mamser-Qwen3-0.6B-Q8_0.gguf",
+      "relax_internal_membar": true,
+      "reps": 7,
+      "schema": "tinygrad.nv_qmd_membar_wall.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          6.886961666666667,
+          6.997682666666667,
+          7.099272041666667,
+          7.241665416666667,
+          7.320938458333333,
+          7.437903041666667,
+          7.541924375
+        ],
+        "external_contention_high_limit_ms": 8.419091166666668,
+        "median_ms_per_token": 7.241665416666667,
+        "prelude_token": 34208,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          6.886961666666667,
+          6.997682666666667,
+          7.099272041666667,
+          7.241665416666667,
+          7.320938458333333,
+          7.437903041666667,
+          7.541924375
+        ],
+        "timed_token_count": 168,
+        "token_hashes": [
+          "c5a7d98dfee1e1119f0118031421138db6971049a1df5dfae85433563419125a",
+          "a12d94bdaffe18986902a5eb51e7734d5569a38d58a79088d9f7e8a17db36745",
+          "af1f3d6d5eedea650d04f16a06178e6c7d893324fd566b7360b0b73a0aafefbe",
+          "2eeaea0cb96759d0eecf91ca3a8c3eea24694ee2b25e210c31d0ef691f21c773",
+          "f7dee4cbdd3ab7813bfc06c0abbc1c5e36af9da9d7f176a386710098feeb6324",
+          "1de925f164462728177740b566ffcad1ccdec6d3488071ca2c7891b5224959c8",
+          "0a03b8a0adb56e627a1396719c926864ee0601ecf201e8f24668b1109d8a3bce"
+        ],
+        "token_stream_hash": "3e996e8443e1003fd14cd42eff4f0798732173c4ae3a9dda8367c44876946d6b",
+        "warmup_tokens": [
+          13,
+          81665,
+          21684,
+          80314,
+          95592,
+          126966
+        ]
+      }
+    },
+    {
+      "arm": "control_c",
+      "count": 24,
+      "depth": 256,
+      "max_context": 512,
+      "model": "/home/ubuntu/models/Mamser-Qwen3-0.6B-Q8_0.gguf",
+      "relax_internal_membar": false,
+      "reps": 7,
+      "schema": "tinygrad.nv_qmd_membar_wall.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          7.001505708333333,
+          7.123916041666667,
+          7.246413541666667,
+          7.333811375,
+          7.446966541666667,
+          7.556031166666667,
+          7.65823375
+        ],
+        "external_contention_high_limit_ms": 8.593183374999997,
+        "median_ms_per_token": 7.333811375,
+        "prelude_token": 34208,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          7.001505708333333,
+          7.123916041666667,
+          7.246413541666667,
+          7.333811375,
+          7.446966541666667,
+          7.556031166666667,
+          7.65823375
+        ],
+        "timed_token_count": 168,
+        "token_hashes": [
+          "7224c2e23f91cd3851523d45bdb85c2c8a19f120755d2f50b4fa17f4910ba6b0",
+          "c76c63bdda54e60c63db8e75efa5ae80ab81d9d9b30c80a15880d72dc4d28cc0",
+          "f5d70a6c63d194f01e0ecb4390b9fea0d851d75d3e84b4299ee1d8690685d009",
+          "2eb6de0180f43aced2c388c474ce3075a2c4623fb7b29a1cdb07b01fb0436402",
+          "66509e7b8092ae348aeedcced27e64010a70b04b9568812d44c002de1e4c0fe8",
+          "5bafd461a5dae308acbe70cffe2b3a92cac793f08b4e21545212a2911bb24b26",
+          "5d1f08425be7fa8fd655fa0f5c19c7b6d9988dc4c227f03ee98616a9ad3e5f75"
+        ],
+        "token_stream_hash": "d086e62c2dfcc54a030a3d76fbef7792cfccfd5a97cd0813f18bc388bca56798",
+        "warmup_tokens": [
+          13,
+          42266,
+          10798,
+          118411,
+          44873,
+          82714
+        ]
+      }
+    }
+  ],
+  "mode": "reverse-bracket-unprofiled",
+  "schema": "tinygrad.nv_qmd_membar_wall.v1",
+  "token_stream_hashes": [
+    "3e996e8443e1003fd14cd42eff4f0798732173c4ae3a9dda8367c44876946d6b",
+    "d086e62c2dfcc54a030a3d76fbef7792cfccfd5a97cd0813f18bc388bca56798",
+    "f0da187b3ed7d1302b66c2b81fc55c8086caececaa9740c62c915784b2bbfcf4"
+  ],
+  "tokens_per_second": {
+    "candidate": 138.0897821789037,
+    "candidate_delta": 1.6419962949524916,
+    "control_midpoint": 136.4477858839512
+  },
+  "walls_us_per_token": {
+    "candidate": 7241.665416666667,
+    "candidate_delta": -87.14533333333384,
+    "control_a": 7323.810125,
+    "control_c": 7333.811375,
+    "control_midpoint": 7328.810750000001
+  }
+}
