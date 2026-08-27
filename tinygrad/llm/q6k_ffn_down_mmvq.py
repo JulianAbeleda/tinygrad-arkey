@@ -15,6 +15,7 @@ explicit ``Q6KFFNDownMMVQAdmission`` to a concrete Q6_K FFN-down linear.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from typing import Any
 
 from tinygrad import Tensor, dtypes
@@ -60,7 +61,8 @@ class Q6KFFNDownMMVQAdmission:
 def _i8f(v:UOp) -> UOp: return v.cast(dtypes.uint8).bitcast(dtypes.int8).cast(dtypes.float32)
 
 
-def _q6k_block_dot_packed_lanemap(halfs:UOp, x:UOp, base:UOp, x_block:UOp, lane:UOp) -> UOp:
+def _q6k_block_dot_packed_lanemap(halfs:UOp, x:UOp, base:UOp, x_block:UOp, lane:UOp,
+                                  data_halfs:UOp|None=None) -> UOp:
   """Q6_K block dot with llama's packed lane ownership and an fp16 activation.
 
   Each lane decodes two packed int8x4-shaped qwords and reads the matching two
@@ -68,11 +70,15 @@ def _q6k_block_dot_packed_lanemap(halfs:UOp, x:UOp, base:UOp, x_block:UOp, lane:
   because its 210-byte stride misaligns every other block; the same-byte win
   comes from packed ownership and load deduplication, not an unsafe wide cast.
   """
-  vl = halfs[base + lane * 2].cast(dtypes.uint32).bitwise_or(
-    halfs[base + lane * 2 + 1].cast(dtypes.uint32).lshift(16))
+  # A research split may address the one-touch ql/qh payload through a second alias while keeping
+  # reused scale/d metadata on the ordinary-caching pointer. Both aliases name the same immutable
+  # allocation; the split exists solely so the renderer can apply a load policy by reuse class.
+  qhalfs = halfs if data_halfs is None else data_halfs
+  vl = qhalfs[base + lane * 2].cast(dtypes.uint32).bitwise_or(
+    qhalfs[base + lane * 2 + 1].cast(dtypes.uint32).lshift(16))
   qh_half = 16 * (lane // 16) + 2 * (lane % 8)
-  vh = halfs[base + 64 + qh_half].cast(dtypes.uint32).bitwise_or(
-    halfs[base + 65 + qh_half].cast(dtypes.uint32).lshift(16))
+  vh = qhalfs[base + 64 + qh_half].cast(dtypes.uint32).bitwise_or(
+    qhalfs[base + 65 + qh_half].cast(dtypes.uint32).lshift(16))
   vh = vh.rshift(2 * ((lane % 16) // 8))
   scale_idx = 8 * (lane // 16) + (lane % 16) // 4
   x_group0 = 4 * (lane // 16) + (lane % 16) // 8
@@ -92,14 +98,16 @@ def _q6k_block_dot_packed_lanemap(halfs:UOp, x:UOp, base:UOp, x_block:UOp, lane:
 
 
 def emit_q6k_four_warp_fp16_direct(*, rows_per_block:int=1, packed_lanemap:bool=False,
-                                   unroll_blocks:int|None=None) -> callable:
+                                   unroll_blocks:int|None=None, split_weight_stream:bool=False,
+                                   research_name_suffix:str="") -> callable:
   """Four-warp fp16-direct Q6_K FFN-down consumer (128 threads/row, no Q8 provider)."""
   if rows_per_block not in (1, 2, 4, 8): raise ValueError(f"unsupported Q6 FFN-down rows_per_block {rows_per_block}")
   if not isinstance(packed_lanemap, bool): raise ValueError("packed_lanemap must be bool")
   if packed_lanemap and rows_per_block != 1: raise ValueError("packed_lanemap requires rows_per_block=1")
   if unroll_blocks not in (None, 2, 3, 4, 6, 12): raise ValueError("unroll_blocks must divide the 12-block packed-lane loop")
   if unroll_blocks is not None and not packed_lanemap: raise ValueError("unroll_blocks requires packed_lanemap=True")
-  def kernel(out:UOp, halfs:UOp, x:UOp, h:UOp) -> UOp:
+  if split_weight_stream and not packed_lanemap: raise ValueError("split_weight_stream requires packed_lanemap=True")
+  def build(out:UOp, halfs:UOp, x:UOp, h:UOp, data_halfs:UOp|None=None) -> UOp:
     row_group = UOp.special(ROWS // rows_per_block, "gidx0")
     lid = UOp.special(WARP * WARPS_PER_ROW * rows_per_block, "lidx0")
     row_in_block, row_lid = lid // (WARP * WARPS_PER_ROW), lid % (WARP * WARPS_PER_ROW)
@@ -116,7 +124,7 @@ def emit_q6k_four_warp_fp16_direct(*, rows_per_block:int=1, packed_lanemap:bool=
       block = (warp * BLOCKS_PER_WARP + blk if packed_lanemap else
                warp * BLOCKS_PER_WARP + (lane // POS) * BLOCKS_PER_SUB + blk)
       base = (row * K_BLOCKS + block) * Q6K_HALFWORDS_PER_BLOCK
-      contribs.append(_q6k_block_dot_packed_lanemap(halfs, x, base, block, lane) if packed_lanemap else
+      contribs.append(_q6k_block_dot_packed_lanemap(halfs, x, base, block, lane, data_halfs) if packed_lanemap else
                       _q6k_block_dot(halfs, x, base, block, lane % POS))
     next_acc = acc.after(outer)[0]
     for contrib in contribs: next_acc = next_acc + contrib
@@ -136,7 +144,14 @@ def emit_q6k_four_warp_fp16_direct(*, rows_per_block:int=1, packed_lanemap:bool=
             "q6k_fp16_packed_lanemap_4096_12288_epi_ffnresadd" if packed_lanemap else
             "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd" if rows_per_block == 1 else
             f"q6k_fp16_mmvq_direct_rpb{rows_per_block}_4096_12288_epi_ffnresadd")
+    if split_weight_stream: name += "_splitstream"
+    name += research_name_suffix
     return out[row].store(result, row_lid.eq(0)).sink(arg=KernelInfo(name=name, opts_to_apply=()))
+  if split_weight_stream:
+    def kernel_split(out:UOp, halfs:UOp, data_halfs:UOp, x:UOp, h:UOp) -> UOp:
+      return build(out, halfs, x, h, data_halfs)
+    return kernel_split
+  def kernel(out:UOp, halfs:UOp, x:UOp, h:UOp) -> UOp: return build(out, halfs, x, h)
   return kernel
 
 
@@ -153,10 +168,11 @@ def q6k_ffn_down_mmvq_call(admission:object, linear:Any, x:Tensor, binding:Any,
 
   xv = x[:, 0, :].reshape(K).cast(dtypes.float16).contiguous()
   residual = epilogue_inputs["normed_h"][:, 0, :].reshape(ROWS).cast(dtypes.float32)
+  split_weight_stream = os.environ.get("NV_Q6_FFN_DOWN_SPLIT_WEIGHT_STREAM", "0") == "1"
   consumer = KernelProgram("decode_q6k_ffn_down_mmvq", f"blk{admission.block_index}.gemv",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
     emit_q6k_four_warp_fp16_direct(rows_per_block=admission.rows_per_block, packed_lanemap=admission.packed_lanemap,
-      unroll_blocks=admission.unroll_blocks),
+      unroll_blocks=admission.unroll_blocks, split_weight_stream=split_weight_stream),
     output_spec=OutputSpec((ROWS,), dtypes.float32,
       typed_output=DeclaredTypedOutput(TypedLayout(dtypes.float32, (ROWS,), (1, 1, ROWS)),
         combine_fusion_admitted=False, epilogue_absorption_admitted=True)),
@@ -164,8 +180,9 @@ def q6k_ffn_down_mmvq_call(admission:object, linear:Any, x:Tensor, binding:Any,
       requires_combine_fusion=False, requires_epilogue_absorption=True),),
     residual_input_views=(ResidualViewRequest(slot=2, dtype=dtypes.float32, flat_shape=(ROWS,),
       route_role="ffn_down", kind="residual_add"),))
-  out = execute_promoted_program(Tensor.empty((ROWS,), dtype=dtypes.float32, device=x.device),
-    linear.q6k_storage.halfs.to(x.device), xv, residual, program=consumer)
+  weights = linear.q6k_storage.halfs.to(x.device)
+  inputs = (weights, weights, xv, residual) if split_weight_stream else (weights, xv, residual)
+  out = execute_promoted_program(Tensor.empty((ROWS,), dtype=dtypes.float32, device=x.device), *inputs, program=consumer)
   return out.reshape(1, 1, ROWS)
 
 

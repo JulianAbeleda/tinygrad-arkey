@@ -1,0 +1,190 @@
+{
+  "cubins": {
+    "flash_vec_llama_score_pv_32_128_6_widekv16": {
+      "path": "docs/task_workflow/evidence/nv-flash-v-schedule-20260827/vdimmajor-r1/cubins/flash_vec_llama_score_pv_32_128_6_widekv16.cubin",
+      "regs_usage": 96,
+      "sha256": "a8e2e1da72e87cbca7928a00e5fa25d1caf860a9545e6cbcda4525b3c411a6bf",
+      "shmem_usage": 4224
+    },
+    "flash_vec_llama_score_pv_32_128_6_widekv16_vtail1": {
+      "path": "docs/task_workflow/evidence/nv-flash-v-schedule-20260827/vdimmajor-r1/cubins/flash_vec_llama_score_pv_32_128_6_widekv16_vtail1.cubin",
+      "regs_usage": 96,
+      "sha256": "8736e4d49a17c658ccd22a95c02ecd7403a290824bab1e5869d5ef46bbf96720",
+      "shmem_usage": 4224
+    },
+    "flash_vec_llama_score_pv_32_128_6_widekv16_vtail2": {
+      "path": "docs/task_workflow/evidence/nv-flash-v-schedule-20260827/vdimmajor-r1/cubins/flash_vec_llama_score_pv_32_128_6_widekv16_vtail2.cubin",
+      "regs_usage": 96,
+      "sha256": "4ae183c84ba73a23084ac0e9eca690bad3adf6a8ed0ad759c908122c8f8119c3",
+      "shmem_usage": 4224
+    },
+    "flash_vec_llama_score_pv_32_128_6_widekv16_vtail4": {
+      "path": "docs/task_workflow/evidence/nv-flash-v-schedule-20260827/vdimmajor-r1/cubins/flash_vec_llama_score_pv_32_128_6_widekv16_vtail4.cubin",
+      "regs_usage": 96,
+      "sha256": "a18a857f434de0a8c3860a57350a6bbeb9d6523455df1ac234c04fa0d0e5c792",
+      "shmem_usage": 4224
+    },
+    "flash_vec_llama_score_pv_32_128_6_widekv16_vtail8_vdimmajor": {
+      "path": "docs/task_workflow/evidence/nv-flash-v-schedule-20260827/vdimmajor-r1/cubins/flash_vec_llama_score_pv_32_128_6_widekv16_vtail8_vdimmajor.cubin",
+      "regs_usage": 167,
+      "sha256": "3473602bb815a1db42d6feae64c399872f4582e92cd8e863c541a69dcc6303aa",
+      "shmem_usage": 4224
+    }
+  },
+  "device": "NV",
+  "exact": {
+    "control": {
+      "final_fp16_bitwise_equal": true,
+      "max_final_abs_delta": 0.0,
+      "partial_fp32_bitwise_equal": true,
+      "partial_mismatched_words": 0
+    },
+    "vdimmajor": {
+      "final_fp16_bitwise_equal": true,
+      "max_final_abs_delta": 0.0,
+      "partial_fp32_bitwise_equal": true,
+      "partial_mismatched_words": 0
+    },
+    "vtail1": {
+      "final_fp16_bitwise_equal": true,
+      "max_final_abs_delta": 0.0,
+      "partial_fp32_bitwise_equal": true,
+      "partial_mismatched_words": 0
+    },
+    "vtail2": {
+      "final_fp16_bitwise_equal": true,
+      "max_final_abs_delta": 0.0,
+      "partial_fp32_bitwise_equal": true,
+      "partial_mismatched_words": 0
+    },
+    "vtail4": {
+      "final_fp16_bitwise_equal": true,
+      "max_final_abs_delta": 0.0,
+      "partial_fp32_bitwise_equal": true,
+      "partial_mismatched_words": 0
+    }
+  },
+  "schema": "tinygrad.nv_flash_v_schedule_microgate.v1",
+  "shape": {
+    "hd": 128,
+    "hkv": 8,
+    "hq": 32,
+    "splits": 6,
+    "tc": 641,
+    "token_bound": 768
+  },
+  "timing": {
+    "medians": {
+      "control": 150.152902,
+      "vdimmajor": 150.32766399999997,
+      "vtail1": 150.756322,
+      "vtail2": 149.45439,
+      "vtail4": 149.583405
+    },
+    "replays": 500,
+    "reps": 7,
+    "samples": {
+      "control": [
+        [
+          149.31866,
+          151.00363000000002,
+          149.329702,
+          151.474048,
+          150.64402600000003,
+          151.614014,
+          150.065624
+        ],
+        [
+          149.24385999999998,
+          151.06178400000002,
+          149.234584,
+          150.595976,
+          149.661778,
+          150.95510000000002,
+          149.340846
+        ]
+      ],
+      "vdimmajor": [
+        [
+          148.56703,
+          150.69199799999998,
+          335.12238,
+          150.795356,
+          149.657628,
+          150.966242,
+          148.744066
+        ],
+        [
+          150.344798,
+          148.77757,
+          149.96332999999998,
+          149.340644,
+          150.81196599999998,
+          149.344572,
+          150.65106
+        ]
+      ],
+      "vtail1": [
+        [
+          291.054614,
+          150.313958,
+          151.595338,
+          149.82330199999998,
+          151.05348800000002,
+          150.07398,
+          151.05598999999998
+        ],
+        [
+          150.45915599999998,
+          149.287062,
+          385.261614,
+          150.25769200000002,
+          151.1961,
+          149.307864,
+          151.14504399999998
+        ]
+      ],
+      "vtail2": [
+        [
+          149.58577,
+          150.247572,
+          149.512128,
+          150.66905400000002,
+          148.66674,
+          150.627614,
+          148.45728
+        ],
+        [
+          148.995004,
+          150.035588,
+          148.691166,
+          150.213288,
+          149.12938200000002,
+          150.403048,
+          149.32301
+        ]
+      ],
+      "vtail4": [
+        [
+          150.25608799999998,
+          148.561938,
+          150.178158,
+          148.68241,
+          150.594492,
+          149.080788,
+          149.96393
+        ],
+        [
+          148.592598,
+          149.902874,
+          148.69653599999998,
+          149.20288,
+          150.188,
+          148.716394,
+          150.19924
+        ]
+      ]
+    },
+    "unit": "us_per_tile_plus_combine_host_synchronized"
+  }
+}

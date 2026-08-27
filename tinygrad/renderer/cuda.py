@@ -2,7 +2,7 @@ import os
 
 from tinygrad.codegen.opt import tc
 from tinygrad.dtype import DType, dtypes
-from tinygrad.helpers import Target, prod
+from tinygrad.helpers import NV_FLASH_LOAD_SCHEDULE, Target, prod
 from tinygrad.renderer.cstyle import CStyleLanguage, base_rewrite, create_non_native_float_pats, uops_to_dtypes, wmma_args, _install_native_attention_bindings
 from tinygrad.uop.ops import Ops, PatternMatcher, UPat, UOp
 
@@ -33,6 +33,107 @@ def _nv_pdl_body(name:str, kernel:list[str]) -> list[str]:
     launch = '  asm volatile("griddepcontrol.launch_dependents;");'
     kernel = ([launch, *kernel] if os.environ.get("NV_PDL_TRIGGER_POSITION", "end") == "start" else [*kernel, launch])
   return kernel
+
+
+def _nv_pdl_body_split_phase(name:str, kernel:list[str]) -> list[str]:
+  """Policy-driven PDL emission behind NV_SPLIT_PHASE=1 (interim scaffolding).
+
+  Reads the versioned NV_SPLIT_PHASE_POLICY JSON file via the memoized loader
+  in extra/llm_research/decode/nv_edge_aware_pdl_render_policy.py instead of
+  the process-wide NV_PDL_* name prefixes. This is not the production
+  interface: the target is per-program split policy carried in graph metadata.
+  """
+  try:
+    from extra.llm_research.decode.nv_edge_aware_pdl_render_policy import apply_nv_split_phase_policy
+  except ImportError as e:
+    raise ImportError("NV_SPLIT_PHASE=1 requires extra/llm_research/decode/nv_edge_aware_pdl_render_policy importable (run from the repo root)") from e
+  return apply_nv_split_phase_policy(name, kernel)
+
+
+def _nv_l2_streaming_weight_source(name:str, source:str) -> str:
+  """Research gate: render direct loads from the second kernel buffer with ``__ldcs``.
+
+  Rules identify the immutable weight-buffer indices for hand-authored decode
+  GEMVs. CUDA's streaming-load intrinsic gives those lines evict-first priority
+  instead of letting them displace the KV working set. The rewrite is
+  exact-name/env gated and rejects a matched kernel with no eligible loads, so
+  the default renderer remains byte-identical.
+  """
+  # Rule spelling is ``program@1+2`` (buffer indices); ``@...`` omitted means
+  # buffer 1.  Exact names and ``prefix:`` keep the existing NV policy idiom.
+  indices = None
+  for raw in (x for x in os.environ.get("NV_L2_STREAMING_WEIGHT_PROGRAMS", "").split(",") if x):
+    rule, sep, fields = raw.rpartition("@")
+    if not sep: rule, fields = raw, "1"
+    if _nv_pdl_match(name, frozenset((rule,))):
+      indices = tuple(int(x) for x in fields.split("+") if x)
+      break
+  if indices is None: return source
+  needles = tuple(f"data{i}_" for i in indices)
+  out, replaced = [], 0
+  for line in source.splitlines():
+    if " = (*" in line and any(x in line for x in needles) and line.endswith(";"):
+      lhs, rhs = line.rsplit(" = ", 1)
+      expr = rhs[:-1]
+      if expr.startswith("(*") and expr.endswith(")"):
+        line = f"{lhs} = __ldcs({expr[2:-1]});"
+        replaced += 1
+    out.append(line)
+  if replaced == 0: raise RuntimeError(f"NV L2 streaming-weight policy matched {name!r} but rewrote no data1 loads")
+  return "\n".join(out)
+
+
+def _nv_l2_q6_payload_source(name:str, source:str) -> str:
+  """Research gate: stream Q6 ql/qh payload while retaining its reused metadata.
+
+  Unlike the split-pointer experiment this preserves the production ABI.  The
+  exact Q6 decode grammar emits qh as val0..7, scales as val8..15, ql as
+  val16..23, and block scales as val24..27.
+  """
+  programs=frozenset(x for x in os.environ.get("NV_L2_STREAMING_Q6_PAYLOAD_PROGRAMS", "").split(",") if x)
+  if not programs or not _nv_pdl_match(name,programs): return source
+  out,replaced=[],0
+  for line in source.splitlines():
+    stripped=line.strip()
+    selected=any(stripped.startswith(f"unsigned short val{i} = (*") for i in (*range(8),*range(16,24)))
+    if selected and "data1_" in line and line.endswith(";"):
+      lhs,rhs=line.rsplit(" = ",1);expr=rhs[:-1]
+      if expr.startswith("(*") and expr.endswith(")"):
+        line=f"{lhs} = __ldcs({expr[2:-1]});";replaced+=1
+    out.append(line)
+  if replaced != 16: raise RuntimeError(f"NV Q6 payload policy matched {name!r}, expected 16 rewrites but saw {replaced}")
+  return "\n".join(out)
+
+
+def _nv_fast_math_source(name:str, source:str) -> str:
+  """Research lease for program-scoped NVRTC fast math.
+
+  The marker changes the source/cache identity and is consumed by
+  ``NVRTCCompiler``. Empty policy remains byte-identical.
+  """
+  programs = frozenset(x for x in os.environ.get("NV_FAST_MATH_PROGRAMS", "").split(",") if x)
+  if not programs or not _nv_pdl_match(name, programs): return source
+  return "#define TINYGRAD_NV_USE_FAST_MATH 1\n" + source
+
+
+def _nv_min_blocks_source(name:str, source:str) -> str:
+  """Research lease for CUDA's two-argument ``__launch_bounds__`` contract.
+
+  The second argument lets ptxas spend registers up to the one-block residency
+  boundary to expose per-thread ILP.  Keep this exact-name/prefix gated: it is
+  a compiler scheduling contract, not a generally safe renderer default.
+  """
+  programs = frozenset(x for x in os.environ.get("NV_MIN_BLOCKS_PROGRAMS", "").split(",") if x)
+  admitted = bool(NV_FLASH_LOAD_SCHEDULE) and name.startswith("flash_vec_llama_score_pv_")
+  if not admitted and (not programs or not _nv_pdl_match(name, programs)): return source
+  marker = "__launch_bounds__("
+  start = source.find(marker)
+  if start < 0: raise RuntimeError(f"NV min-blocks policy matched {name!r} but found no launch bounds")
+  end = source.find(")", start + len(marker))
+  if end < 0 or "," in source[start:end]:
+    raise RuntimeError(f"NV min-blocks policy matched {name!r} but launch bounds were not single-argument")
+  return source[:end] + ", 1" + source[end:]
+
 
 class CUDARenderer(CStyleLanguage):
   supports_post_barrier_regions = True
@@ -120,7 +221,10 @@ class CUDARenderer(CStyleLanguage):
   def render_kernel(self, function_name, kernel, bufs, uops, prefix=None):
     prefix = ["#define INFINITY (__int_as_float(0x7f800000))", "#define NAN (__int_as_float(0x7fffffff))",
               "template <class T, class F> __device__ __forceinline__ T tg_bitcast(F v) { union U { F f; T t; }; U u; u.f = v; return u.t; }"]
-    kernel = _nv_pdl_body(function_name, kernel)
+    if os.environ.get("NV_SPLIT_PHASE", "") not in ("", "0"):
+      kernel = _nv_pdl_body_split_phase(function_name, kernel)
+    else:
+      kernel = _nv_pdl_body(function_name, kernel)
     # Buffer-argument dtypes count too: a kernel whose ONLY fp16/fp8/bf16 element is a `half*` parameter
     # (e.g. an fp16 KV cache stored from fp32 values) previously missed the header include and rendered
     # `half` undefined in the signature (NVRTC compile error). Body uops drive vector-prefix emission, so
@@ -148,7 +252,9 @@ class CUDARenderer(CStyleLanguage):
     : {", ".join([f'"r"(a_pk[{i}])' for i in range(n_operands[0])])}, {", ".join([f'"r"(b_pk[{i}])' for i in range(n_operands[1])])});
   return c;\n}}""")
 
-    return super().render_kernel(function_name, kernel, bufs, uops, prefix=prefix)
+    source = super().render_kernel(function_name, kernel, bufs, uops, prefix=prefix)
+    return _nv_min_blocks_source(function_name,
+      _nv_fast_math_source(function_name, _nv_l2_q6_payload_source(function_name, _nv_l2_streaming_weight_source(function_name, source))))
 
   def supported_dtypes(self):
     ver = int(self.target.arch[3:])

@@ -1,0 +1,157 @@
+{
+  "cubins": {
+    "flash_vec_llama_score_pv_32_128_6_widekv16": {
+      "path": "docs/task_workflow/evidence/nv-flash-v-schedule-20260827/vtail-r1/cubins/flash_vec_llama_score_pv_32_128_6_widekv16.cubin",
+      "regs_usage": 56,
+      "sha256": "cdffbedabdf1a6604df8344244219892c9520126308cf65af5b51b478e07e51d",
+      "shmem_usage": 4224
+    },
+    "flash_vec_llama_score_pv_32_128_6_widekv16_vtail1": {
+      "path": "docs/task_workflow/evidence/nv-flash-v-schedule-20260827/vtail-r1/cubins/flash_vec_llama_score_pv_32_128_6_widekv16_vtail1.cubin",
+      "regs_usage": 56,
+      "sha256": "6db6f40de8b496eccf2ff05eec057eb9b4d756bde5ff6e354a9d46d1d31b6a6f",
+      "shmem_usage": 4224
+    },
+    "flash_vec_llama_score_pv_32_128_6_widekv16_vtail2": {
+      "path": "docs/task_workflow/evidence/nv-flash-v-schedule-20260827/vtail-r1/cubins/flash_vec_llama_score_pv_32_128_6_widekv16_vtail2.cubin",
+      "regs_usage": 56,
+      "sha256": "7be65a1948ce14273a8d09471bad9f4f948a615536d11b9f4f4a61fa09ab6d74",
+      "shmem_usage": 4224
+    },
+    "flash_vec_llama_score_pv_32_128_6_widekv16_vtail4": {
+      "path": "docs/task_workflow/evidence/nv-flash-v-schedule-20260827/vtail-r1/cubins/flash_vec_llama_score_pv_32_128_6_widekv16_vtail4.cubin",
+      "regs_usage": 56,
+      "sha256": "1d12cf155dbaa4bcf17e8c9ad66628c7d32484aa2da4ba28227b54da7272d65e",
+      "shmem_usage": 4224
+    }
+  },
+  "device": "NV",
+  "exact": {
+    "control": {
+      "final_fp16_bitwise_equal": true,
+      "max_final_abs_delta": 0.0,
+      "partial_fp32_bitwise_equal": true,
+      "partial_mismatched_words": 0
+    },
+    "vtail1": {
+      "final_fp16_bitwise_equal": true,
+      "max_final_abs_delta": 0.0,
+      "partial_fp32_bitwise_equal": true,
+      "partial_mismatched_words": 0
+    },
+    "vtail2": {
+      "final_fp16_bitwise_equal": true,
+      "max_final_abs_delta": 0.0,
+      "partial_fp32_bitwise_equal": true,
+      "partial_mismatched_words": 0
+    },
+    "vtail4": {
+      "final_fp16_bitwise_equal": true,
+      "max_final_abs_delta": 0.0,
+      "partial_fp32_bitwise_equal": true,
+      "partial_mismatched_words": 0
+    }
+  },
+  "schema": "tinygrad.nv_flash_v_schedule_microgate.v1",
+  "shape": {
+    "hd": 128,
+    "hkv": 8,
+    "hq": 32,
+    "splits": 6,
+    "tc": 641,
+    "token_bound": 768
+  },
+  "timing": {
+    "medians": {
+      "control": 153.184323,
+      "vtail1": 152.29945800000002,
+      "vtail2": 152.71846499999998,
+      "vtail4": 153.977864
+    },
+    "replays": 500,
+    "reps": 7,
+    "samples": {
+      "control": [
+        [
+          160.591694,
+          157.586068,
+          154.38454800000002,
+          154.445904,
+          153.268842,
+          154.404548,
+          153.798532
+        ],
+        [
+          151.964098,
+          153.672072,
+          151.907792,
+          152.76434400000002,
+          151.808364,
+          152.21297399999997,
+          151.522158
+        ]
+      ],
+      "vtail1": [
+        [
+          153.820896,
+          152.394136,
+          287.371598,
+          152.604276,
+          154.38513,
+          152.530096,
+          153.157352
+        ],
+        [
+          151.101698,
+          150.99467199999998,
+          152.595602,
+          151.15578,
+          152.71719399999998,
+          151.441564,
+          152.86046599999997
+        ]
+      ],
+      "vtail2": [
+        [
+          152.42694,
+          153.53497,
+          151.85504999999998,
+          153.44508,
+          151.751734,
+          152.79941,
+          151.41531400000002
+        ],
+        [
+          154.397856,
+          151.79688000000002,
+          153.00999,
+          151.84395,
+          153.164224,
+          152.00551800000002,
+          153.178612
+        ]
+      ],
+      "vtail4": [
+        [
+          153.54378599999998,
+          152.840408,
+          154.198052,
+          153.47613800000002,
+          154.228072,
+          152.953424,
+          154.339224
+        ],
+        [
+          152.65068599999998,
+          154.430598,
+          152.782278,
+          154.411942,
+          331.88319,
+          155.085604,
+          153.215102
+        ]
+      ]
+    },
+    "unit": "us_per_tile_plus_combine_host_synchronized"
+  }
+}

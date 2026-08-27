@@ -1,0 +1,645 @@
+{
+  "arm": "vdimmajor",
+  "candidate": {
+    "median_us": 4.056768,
+    "resources": {
+      "raw": "flash_vec_llama_score_pv_32_128_6_widekv16_vtail8_vdimmajor' for 'sm_120a'\nptxas info    : Function properties for flash_vec_llama_score_pv_32_128_6_widekv16_vtail8_vdimmajor\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 167 registers, used 1 barriers, 2080 bytes smem\nptxas info    : Compile time = 41.532 ms\n",
+      "registers": 167,
+      "spill_load_bytes": 0,
+      "spill_store_bytes": 0
+    },
+    "samples_us": [
+      4.069952,
+      4.056768,
+      4.054336,
+      4.056384,
+      4.054784,
+      4.058176,
+      4.05632,
+      4.06624,
+      4.064384
+    ],
+    "sass": {
+      "ldg_e_128_constant": 0,
+      "ldg_e_128_ordinary": 32,
+      "ldg_total": 48,
+      "machine_word_count": 2304,
+      "machine_words_sha256": "9936f1d93fee15a3d8bfbe0b06aeccc307386255707f94372c50e0ef3cda4aac"
+    },
+    "symbol": "flash_vec_llama_score_pv_32_128_6_widekv16_vtail8_vdimmajor"
+  },
+  "control": {
+    "median_us": 4.085312,
+    "resources": {
+      "raw": "flash_vec_llama_score_pv_32_128_6_widekv16' for 'sm_120a'\nptxas info    : Function properties for flash_vec_llama_score_pv_32_128_6_widekv16\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 96 registers, used 1 barriers, 2080 bytes smem\nptxas info    : Compile time = 40.725 ms\n",
+      "registers": 96,
+      "spill_load_bytes": 0,
+      "spill_store_bytes": 0
+    },
+    "samples_us": [
+      4.085312,
+      4.083904,
+      4.084352,
+      4.087104,
+      4.083776,
+      4.08384,
+      4.089728,
+      4.095424,
+      4.090112
+    ],
+    "sass": {
+      "ldg_e_128_constant": 0,
+      "ldg_e_128_ordinary": 32,
+      "ldg_total": 48,
+      "machine_word_count": 2352,
+      "machine_words_sha256": "f9dd085642a52777d241d18c521d8d053cd84dda2147db24b6436ab7ae6c4a2b"
+    },
+    "symbol": "flash_vec_llama_score_pv_32_128_6_widekv16"
+  },
+  "exact": {
+    "bit_mismatches": 0,
+    "max_abs": 0.0
+  },
+  "ncu": {
+    "arms": {
+      "candidate": {
+        "cold": [
+          {
+            "metric": "dram__bytes.sum",
+            "unit": "byte",
+            "value": "3182592"
+          },
+          {
+            "metric": "dram__bytes_op_read.sum",
+            "unit": "byte",
+            "value": "3182592"
+          },
+          {
+            "metric": "dram__bytes_op_write.sum",
+            "unit": "byte",
+            "value": "0"
+          },
+          {
+            "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+            "unit": "%",
+            "value": "30.16"
+          },
+          {
+            "metric": "gpu__time_duration.sum",
+            "unit": "ns",
+            "value": "6016"
+          },
+          {
+            "metric": "l1tex__average_t_sectors_per_request_pipe_lsu_mem_global_op_ld.ratio",
+            "unit": "sector",
+            "value": "13.33"
+          },
+          {
+            "metric": "l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum",
+            "unit": "",
+            "value": "101376"
+          },
+          {
+            "metric": "l1tex__data_pipe_lsu_wavefronts_mem_shared_op_st.sum",
+            "unit": "",
+            "value": "26194"
+          },
+          {
+            "metric": "l1tex__t_bytes.sum",
+            "unit": "byte",
+            "value": "16564320"
+          },
+          {
+            "metric": "l1tex__t_output_wavefronts_pipe_lsu_mem_global_op_ld.sum",
+            "unit": "",
+            "value": "36868"
+          },
+          {
+            "metric": "l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum",
+            "unit": "sector",
+            "value": "491520"
+          },
+          {
+            "metric": "launch__registers_per_thread",
+            "unit": "register/thread",
+            "value": "167"
+          },
+          {
+            "metric": "lts__t_bytes.sum",
+            "unit": "byte",
+            "value": "13175680"
+          },
+          {
+            "metric": "lts__t_sector_op_read_hit_rate.pct",
+            "unit": "%",
+            "value": "75.34"
+          },
+          {
+            "metric": "sm__inst_executed.sum",
+            "unit": "inst",
+            "value": "759872"
+          },
+          {
+            "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+            "unit": "%",
+            "value": "9.38"
+          },
+          {
+            "metric": "smsp__inst_executed_op_global_ld.sum",
+            "unit": "inst",
+            "value": "36864"
+          },
+          {
+            "metric": "smsp__inst_executed_op_shared_ld.sum",
+            "unit": "inst",
+            "value": "13824"
+          },
+          {
+            "metric": "smsp__inst_executed_op_shared_st.sum",
+            "unit": "inst",
+            "value": "13824"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_barrier_per_warp_active.pct",
+            "unit": "%",
+            "value": "4.05"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_lg_throttle_per_warp_active.pct",
+            "unit": "%",
+            "value": "1.59"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct",
+            "unit": "%",
+            "value": "58.00"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_math_pipe_throttle_per_warp_active.pct",
+            "unit": "%",
+            "value": "0.35"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_mio_throttle_per_warp_active.pct",
+            "unit": "%",
+            "value": "0.92"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_not_selected_per_warp_active.pct",
+            "unit": "%",
+            "value": "0.56"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_short_scoreboard_per_warp_active.pct",
+            "unit": "%",
+            "value": "8.25"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_wait_per_warp_active.pct",
+            "unit": "%",
+            "value": "9.13"
+          },
+          {
+            "metric": "smsp__warps_active.avg.pct_of_peak_sustained_active",
+            "unit": "%",
+            "value": "9.31"
+          }
+        ],
+        "hot": [
+          {
+            "metric": "dram__bytes.sum",
+            "unit": "byte",
+            "value": "1280"
+          },
+          {
+            "metric": "dram__bytes_op_read.sum",
+            "unit": "byte",
+            "value": "0"
+          },
+          {
+            "metric": "dram__bytes_op_write.sum",
+            "unit": "byte",
+            "value": "1280"
+          },
+          {
+            "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+            "unit": "%",
+            "value": "0.01"
+          },
+          {
+            "metric": "gpu__time_duration.sum",
+            "unit": "ns",
+            "value": "5280"
+          },
+          {
+            "metric": "l1tex__average_t_sectors_per_request_pipe_lsu_mem_global_op_ld.ratio",
+            "unit": "sector",
+            "value": "13.33"
+          },
+          {
+            "metric": "l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum",
+            "unit": "",
+            "value": "101376"
+          },
+          {
+            "metric": "l1tex__data_pipe_lsu_wavefronts_mem_shared_op_st.sum",
+            "unit": "",
+            "value": "26194"
+          },
+          {
+            "metric": "l1tex__t_bytes.sum",
+            "unit": "byte",
+            "value": "16565504"
+          },
+          {
+            "metric": "l1tex__t_output_wavefronts_pipe_lsu_mem_global_op_ld.sum",
+            "unit": "",
+            "value": "36865"
+          },
+          {
+            "metric": "l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum",
+            "unit": "sector",
+            "value": "491520"
+          },
+          {
+            "metric": "launch__registers_per_thread",
+            "unit": "register/thread",
+            "value": "167"
+          },
+          {
+            "metric": "lts__t_bytes.sum",
+            "unit": "byte",
+            "value": "13173536"
+          },
+          {
+            "metric": "lts__t_sector_op_read_hit_rate.pct",
+            "unit": "%",
+            "value": "98.31"
+          },
+          {
+            "metric": "sm__inst_executed.sum",
+            "unit": "inst",
+            "value": "759872"
+          },
+          {
+            "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+            "unit": "%",
+            "value": "10.74"
+          },
+          {
+            "metric": "smsp__inst_executed_op_global_ld.sum",
+            "unit": "inst",
+            "value": "36864"
+          },
+          {
+            "metric": "smsp__inst_executed_op_shared_ld.sum",
+            "unit": "inst",
+            "value": "13824"
+          },
+          {
+            "metric": "smsp__inst_executed_op_shared_st.sum",
+            "unit": "inst",
+            "value": "13824"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_barrier_per_warp_active.pct",
+            "unit": "%",
+            "value": "6.33"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_lg_throttle_per_warp_active.pct",
+            "unit": "%",
+            "value": "2.00"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct",
+            "unit": "%",
+            "value": "51.44"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_math_pipe_throttle_per_warp_active.pct",
+            "unit": "%",
+            "value": "0.42"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_mio_throttle_per_warp_active.pct",
+            "unit": "%",
+            "value": "1.14"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_not_selected_per_warp_active.pct",
+            "unit": "%",
+            "value": "0.56"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_short_scoreboard_per_warp_active.pct",
+            "unit": "%",
+            "value": "10.68"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_wait_per_warp_active.pct",
+            "unit": "%",
+            "value": "11.77"
+          },
+          {
+            "metric": "smsp__warps_active.avg.pct_of_peak_sustained_active",
+            "unit": "%",
+            "value": "9.57"
+          }
+        ]
+      },
+      "control": {
+        "cold": [
+          {
+            "metric": "dram__bytes.sum",
+            "unit": "byte",
+            "value": "3183104"
+          },
+          {
+            "metric": "dram__bytes_op_read.sum",
+            "unit": "byte",
+            "value": "3183104"
+          },
+          {
+            "metric": "dram__bytes_op_write.sum",
+            "unit": "byte",
+            "value": "0"
+          },
+          {
+            "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+            "unit": "%",
+            "value": "31.29"
+          },
+          {
+            "metric": "gpu__time_duration.sum",
+            "unit": "ns",
+            "value": "5824"
+          },
+          {
+            "metric": "l1tex__average_t_sectors_per_request_pipe_lsu_mem_global_op_ld.ratio",
+            "unit": "sector",
+            "value": "13.33"
+          },
+          {
+            "metric": "l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum",
+            "unit": "",
+            "value": "101376"
+          },
+          {
+            "metric": "l1tex__data_pipe_lsu_wavefronts_mem_shared_op_st.sum",
+            "unit": "",
+            "value": "26135"
+          },
+          {
+            "metric": "l1tex__t_bytes.sum",
+            "unit": "byte",
+            "value": "16564160"
+          },
+          {
+            "metric": "l1tex__t_output_wavefronts_pipe_lsu_mem_global_op_ld.sum",
+            "unit": "",
+            "value": "36864"
+          },
+          {
+            "metric": "l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum",
+            "unit": "sector",
+            "value": "491520"
+          },
+          {
+            "metric": "launch__registers_per_thread",
+            "unit": "register/thread",
+            "value": "96"
+          },
+          {
+            "metric": "lts__t_bytes.sum",
+            "unit": "byte",
+            "value": "13174272"
+          },
+          {
+            "metric": "lts__t_sector_op_read_hit_rate.pct",
+            "unit": "%",
+            "value": "75.35"
+          },
+          {
+            "metric": "sm__inst_executed.sum",
+            "unit": "inst",
+            "value": "797760"
+          },
+          {
+            "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+            "unit": "%",
+            "value": "9.63"
+          },
+          {
+            "metric": "smsp__inst_executed_op_global_ld.sum",
+            "unit": "inst",
+            "value": "36864"
+          },
+          {
+            "metric": "smsp__inst_executed_op_shared_ld.sum",
+            "unit": "inst",
+            "value": "13824"
+          },
+          {
+            "metric": "smsp__inst_executed_op_shared_st.sum",
+            "unit": "inst",
+            "value": "13824"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_barrier_per_warp_active.pct",
+            "unit": "%",
+            "value": "2.69"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_lg_throttle_per_warp_active.pct",
+            "unit": "%",
+            "value": "1.44"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct",
+            "unit": "%",
+            "value": "58.71"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_math_pipe_throttle_per_warp_active.pct",
+            "unit": "%",
+            "value": "0.53"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_mio_throttle_per_warp_active.pct",
+            "unit": "%",
+            "value": "1.04"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_not_selected_per_warp_active.pct",
+            "unit": "%",
+            "value": "0.66"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_short_scoreboard_per_warp_active.pct",
+            "unit": "%",
+            "value": "7.90"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_wait_per_warp_active.pct",
+            "unit": "%",
+            "value": "8.87"
+          },
+          {
+            "metric": "smsp__warps_active.avg.pct_of_peak_sustained_active",
+            "unit": "%",
+            "value": "9.49"
+          }
+        ],
+        "hot": [
+          {
+            "metric": "dram__bytes.sum",
+            "unit": "byte",
+            "value": "2048"
+          },
+          {
+            "metric": "dram__bytes_op_read.sum",
+            "unit": "byte",
+            "value": "0"
+          },
+          {
+            "metric": "dram__bytes_op_write.sum",
+            "unit": "byte",
+            "value": "2048"
+          },
+          {
+            "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+            "unit": "%",
+            "value": "0.02"
+          },
+          {
+            "metric": "gpu__time_duration.sum",
+            "unit": "ns",
+            "value": "5344"
+          },
+          {
+            "metric": "l1tex__average_t_sectors_per_request_pipe_lsu_mem_global_op_ld.ratio",
+            "unit": "sector",
+            "value": "13.33"
+          },
+          {
+            "metric": "l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum",
+            "unit": "",
+            "value": "101376"
+          },
+          {
+            "metric": "l1tex__data_pipe_lsu_wavefronts_mem_shared_op_st.sum",
+            "unit": "",
+            "value": "26128"
+          },
+          {
+            "metric": "l1tex__t_bytes.sum",
+            "unit": "byte",
+            "value": "16564672"
+          },
+          {
+            "metric": "l1tex__t_output_wavefronts_pipe_lsu_mem_global_op_ld.sum",
+            "unit": "",
+            "value": "36864"
+          },
+          {
+            "metric": "l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum",
+            "unit": "sector",
+            "value": "491520"
+          },
+          {
+            "metric": "launch__registers_per_thread",
+            "unit": "register/thread",
+            "value": "96"
+          },
+          {
+            "metric": "lts__t_bytes.sum",
+            "unit": "byte",
+            "value": "13174912"
+          },
+          {
+            "metric": "lts__t_sector_op_read_hit_rate.pct",
+            "unit": "%",
+            "value": "98.20"
+          },
+          {
+            "metric": "sm__inst_executed.sum",
+            "unit": "inst",
+            "value": "797760"
+          },
+          {
+            "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+            "unit": "%",
+            "value": "10.64"
+          },
+          {
+            "metric": "smsp__inst_executed_op_global_ld.sum",
+            "unit": "inst",
+            "value": "36864"
+          },
+          {
+            "metric": "smsp__inst_executed_op_shared_ld.sum",
+            "unit": "inst",
+            "value": "13824"
+          },
+          {
+            "metric": "smsp__inst_executed_op_shared_st.sum",
+            "unit": "inst",
+            "value": "13824"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_barrier_per_warp_active.pct",
+            "unit": "%",
+            "value": "5.22"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_lg_throttle_per_warp_active.pct",
+            "unit": "%",
+            "value": "1.83"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct",
+            "unit": "%",
+            "value": "53.28"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_math_pipe_throttle_per_warp_active.pct",
+            "unit": "%",
+            "value": "0.64"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_mio_throttle_per_warp_active.pct",
+            "unit": "%",
+            "value": "1.25"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_not_selected_per_warp_active.pct",
+            "unit": "%",
+            "value": "0.74"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_short_scoreboard_per_warp_active.pct",
+            "unit": "%",
+            "value": "10.25"
+          },
+          {
+            "metric": "smsp__warp_issue_stalled_wait_per_warp_active.pct",
+            "unit": "%",
+            "value": "11.33"
+          },
+          {
+            "metric": "smsp__warps_active.avg.pct_of_peak_sustained_active",
+            "unit": "%",
+            "value": "9.64"
+          }
+        ]
+      }
+    },
+    "metrics": "dram__bytes.sum,dram__bytes_op_read.sum,dram__bytes_op_write.sum,dram__throughput.avg.pct_of_peak_sustained_elapsed,gpu__time_duration.sum,lts__t_bytes.sum,lts__t_sector_op_read_hit_rate.pct,l1tex__t_bytes.sum,sm__inst_executed.sum,sm__throughput.avg.pct_of_peak_sustained_elapsed,launch__registers_per_thread,smsp__warps_active.avg.pct_of_peak_sustained_active,l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum,l1tex__average_t_sectors_per_request_pipe_lsu_mem_global_op_ld.ratio,l1tex__t_output_wavefronts_pipe_lsu_mem_global_op_ld.sum,l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum,l1tex__data_pipe_lsu_wavefronts_mem_shared_op_st.sum,smsp__inst_executed_op_global_ld.sum,smsp__inst_executed_op_shared_ld.sum,smsp__inst_executed_op_shared_st.sum,smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct,smsp__warp_issue_stalled_lg_throttle_per_warp_active.pct,smsp__warp_issue_stalled_mio_throttle_per_warp_active.pct,smsp__warp_issue_stalled_short_scoreboard_per_warp_active.pct,smsp__warp_issue_stalled_wait_per_warp_active.pct,smsp__warp_issue_stalled_barrier_per_warp_active.pct,smsp__warp_issue_stalled_not_selected_per_warp_active.pct,smsp__warp_issue_stalled_math_pipe_throttle_per_warp_active.pct"
+  },
+  "schema": "tinygrad.nv_flash_v_schedule_counter_probe.v1",
+  "shape": {
+    "splits": 6,
+    "token_bound": 768
+  }
+}

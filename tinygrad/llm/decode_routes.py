@@ -652,27 +652,33 @@ FLASH_DECODE_G5_CANDIDATE = _FlashDecodeCandidate(FLASH_DECODE_G5)
 
 def _flash_llama_vec_wide_research_call(q:Tensor, assigned_kv:Tensor, Tc:UOp, binding:_FlashDecodeBinding,
                                          MAXC:int, S:int, output_fp16:bool, *, promoted:bool=False,
-                                         token_bound:int|None=None) -> Tensor:
+                                         token_bound:int|None=None, wide_q_f32:bool=False,
+                                         combine_register_weights:bool=False, query_group_size:int=1) -> Tensor:
   """Extent-derived wide-KV flash at the approved research/promotion admission boundary."""
   extent_split = MAXC // 128 if MAXC % 128 == 0 else None
-  bounded = token_bound is not None and token_bound % 128 == 0 and token_bound <= MAXC and S == token_bound // 128
+  bounded = token_bound is not None and token_bound % 128 == 0 and token_bound <= MAXC and \
+    S == (token_bound // 128) * query_group_size
   if (binding.Hq, binding.Hkv, binding.Hd) != (32, 8, 128) or (S != extent_split and not bounded) or \
       assigned_kv.dtype != dtypes.float16:
     raise ValueError(f"llama_vec_wide research route requires Hq32/Hkv8/Hd128, fp16 KV, and either S=MAXC/128 "
                      f"or S=token_bound/128, got Hq={binding.Hq}, Hkv={binding.Hkv}, Hd={binding.Hd}, S={S}, "
                      f"MAXC={MAXC}, token_bound={token_bound}, cache={assigned_kv.dtype}")
   cache_bits = Tensor(assigned_kv.uop.bitcast(dtypes.uint32))
+  q_arg = Tensor(q.uop.bitcast(dtypes.uint32)) if wide_q_f32 else q
   provenance = KernelProgramProvenance.MACHINE_SEARCH_GENERATED if promoted else KernelProgramProvenance.RESEARCH_ONLY
   execute = execute_promoted_program if promoted else execute_research_program
   tile_program = KernelProgram(binding.route_id, f"{binding.candidate_id}.llama_vec_wide.tile",
     provenance,
     flash_vec_llama_score_pv_kernel(binding.Hd, binding.Hq, binding.Hkv, MAXC, S, Tc, wide_kv=True, wide_q=False,
-                                    token_bound=token_bound),
+                                    wide_q_f32=wide_q_f32, token_bound=token_bound,
+                                    query_group_size=query_group_size,
+                                    v_pipeline_tail=getenv("NV_FLASH_V_PIPELINE_TAIL", 1)),
     output_spec=OutputSpec((binding.Hq * S * (binding.Hd + 2),), dtypes.float32))
-  partial = execute(None, q.reshape(binding.Hq * binding.Hd), cache_bits, program=tile_program)
+  partial = execute(None, q_arg.reshape(binding.Hq * binding.Hd), cache_bits, program=tile_program)
   combine_program = KernelProgram(binding.route_id, f"{binding.candidate_id}.llama_vec_wide.combine",
     provenance,
-    flash_fused_gmax_combine_kernel(binding.Hd, binding.Hq, S, output_fp16=output_fp16, lane_width=128),
+    flash_fused_gmax_combine_kernel(binding.Hd, binding.Hq, S, output_fp16=output_fp16, lane_width=128,
+                                    register_weights=combine_register_weights),
     output_spec=OutputSpec((binding.Hq * binding.Hd,), dtypes.float16 if output_fp16 else dtypes.float32))
   return execute(None, partial, program=combine_program).reshape(binding.Hq, binding.Hd)
 
@@ -682,6 +688,15 @@ def _flash_llama_vec_wide_installed_admitted(promoted:bool, geom:dict, max_conte
   # decode endpoint. Explicit geometry always wins, and larger request capacities must not inherit
   # an unmeasured S=MAXC/128 launch merely because the arithmetic divides evenly.
   return promoted and not geom and max_context in (768, 1024)
+
+def _flash_combine_register_weights_admitted(wide_promoted:bool, geom:dict, getenv_fn=getenv) -> bool:
+  """Install register-broadcast weights only with the qualified wide route.
+
+  Explicit research geometry remains authoritative.  The environment switch
+  is a load-time rollback used by the installed reverse bracket.
+  """
+  if getenv_fn("TINYGRAD_FLASH_COMBINE_REGISTER_DISABLE", 0): return False
+  return bool(geom.get("combine_register_weights", False)) or wide_promoted
 
 
 def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp, T:int|UOp, B:int,
@@ -733,7 +748,11 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
     if kv_scale is not None or freqs is not None:
       raise ValueError("llama_vec_wide research route requires plain, pre-rotated fp16 KV")
     return _flash_llama_vec_wide_research_call(q, assigned_kv, _tc, binding, MAXC, split_size, output_fp16,
-                                                promoted=wide_promoted, token_bound=geom.get("token_bound"))
+                                                promoted=wide_promoted, token_bound=geom.get("token_bound"),
+                                                wide_q_f32=bool(geom.get("wide_q_f32", False)),
+                                                combine_register_weights=_flash_combine_register_weights_admitted(
+                                                  wide_promoted, geom),
+                                                query_group_size=int(geom.get("query_group_size", 1)))
   return flash_decode_live_split_block_tile(q.reshape(binding.Hq, binding.Hd), assigned_kv, _tc,
     binding.Hd, binding.Hq, binding.Hkv, MAXC, split_size, staging=binding.staging,
     fused_combine=True, kv_scale=kv_scale, freqs=freqs, query_group_size=binding.query_group_size,
