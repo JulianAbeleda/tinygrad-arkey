@@ -87,3 +87,18 @@ bracket.
 
 The corrected mechanical translation is 3982.167--3992.063 us/token, or
 250.50--251.12 tok/s. It is an investment ceiling only.
+
+## Persistent-replay follow-up
+
+An additional audit corrected the remaining front-end asymmetry: the first
+bridge rebuilt native QMD allocations per sample while reusing one CUDA graph
+executable. CUDA's first graph replay is indeed expensive, but a bound native
+queue with stable command-buffer and QMD addresses still measures 2686.277 us
+against a paired CUDA graph at 2613.920 us. All 46 logical hashes match. The
+surviving persistent-replay difference is **72.357 us**.
+
+Native already encodes the dependent chain in a constant 20-word pushbuffer
+and enables QMD prefetch. Disabling prefetch loses 127.230 us; moving completion
+to the pushbuffer is slightly slower; removing the leading wait/barrier is
+approximately neutral. The remaining cause therefore requires a CUDA graph
+QMD/descriptor/USERD capture rather than another source-level queue guess.

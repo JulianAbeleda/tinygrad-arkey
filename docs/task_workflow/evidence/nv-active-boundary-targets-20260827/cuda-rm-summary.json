@@ -1,0 +1,781 @@
+{
+  "channels": [
+    {
+      "cid": 81667,
+      "class": "0xc96f",
+      "flags": 0,
+      "gp_fifo_entries": 1024,
+      "gp_fifo_offset": 8594128896,
+      "h_object": 1543503898,
+      "h_object_buffer": 1543503893,
+      "h_parent": 1543503891,
+      "h_root": 3251881078,
+      "h_userd_memory": [
+        1543503893,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "userd_offset": [
+        8192,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cid": 81668,
+      "class": "0xc96f",
+      "flags": 16,
+      "gp_fifo_entries": 1024,
+      "gp_fifo_offset": 8594141184,
+      "h_object": 1543503904,
+      "h_object_buffer": 1543503893,
+      "h_parent": 1543503891,
+      "h_root": 3251881078,
+      "h_userd_memory": [
+        1543503893,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "userd_offset": [
+        20480,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cid": 81669,
+      "class": "0xc96f",
+      "flags": 0,
+      "gp_fifo_entries": 1024,
+      "gp_fifo_offset": 8594153472,
+      "h_object": 1543503907,
+      "h_object_buffer": 1543503893,
+      "h_parent": 1543503891,
+      "h_root": 3251881078,
+      "h_userd_memory": [
+        1543503893,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "userd_offset": [
+        32768,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cid": 81670,
+      "class": "0xc96f",
+      "flags": 16,
+      "gp_fifo_entries": 1024,
+      "gp_fifo_offset": 8594165760,
+      "h_object": 1543503911,
+      "h_object_buffer": 1543503893,
+      "h_parent": 1543503891,
+      "h_root": 3251881078,
+      "h_userd_memory": [
+        1543503893,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "userd_offset": [
+        45056,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cid": 81671,
+      "class": "0xc96f",
+      "flags": 0,
+      "gp_fifo_entries": 1024,
+      "gp_fifo_offset": 8594178048,
+      "h_object": 1543503914,
+      "h_object_buffer": 1543503893,
+      "h_parent": 1543503891,
+      "h_root": 3251881078,
+      "h_userd_memory": [
+        1543503893,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "userd_offset": [
+        57344,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cid": 81672,
+      "class": "0xc96f",
+      "flags": 16,
+      "gp_fifo_entries": 1024,
+      "gp_fifo_offset": 8594190336,
+      "h_object": 1543503918,
+      "h_object_buffer": 1543503893,
+      "h_parent": 1543503891,
+      "h_root": 3251881078,
+      "h_userd_memory": [
+        1543503893,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "userd_offset": [
+        69632,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cid": 81673,
+      "class": "0xc96f",
+      "flags": 0,
+      "gp_fifo_entries": 1024,
+      "gp_fifo_offset": 8594202624,
+      "h_object": 1543503921,
+      "h_object_buffer": 1543503893,
+      "h_parent": 1543503891,
+      "h_root": 3251881078,
+      "h_userd_memory": [
+        1543503893,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "userd_offset": [
+        81920,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cid": 81674,
+      "class": "0xc96f",
+      "flags": 16,
+      "gp_fifo_entries": 1024,
+      "gp_fifo_offset": 8594214912,
+      "h_object": 1543503925,
+      "h_object_buffer": 1543503893,
+      "h_parent": 1543503891,
+      "h_root": 3251881078,
+      "h_userd_memory": [
+        1543503893,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "userd_offset": [
+        94208,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cid": 81676,
+      "class": "0xc96f",
+      "flags": 0,
+      "gp_fifo_entries": 1024,
+      "gp_fifo_offset": 8594227200,
+      "h_object": 1543503930,
+      "h_object_buffer": 1543503893,
+      "h_parent": 1543503928,
+      "h_root": 3251881078,
+      "h_userd_memory": [
+        1543503893,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "userd_offset": [
+        106496,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cid": 81677,
+      "class": "0xc96f",
+      "flags": 0,
+      "gp_fifo_entries": 1024,
+      "gp_fifo_offset": 8594239488,
+      "h_object": 1543503933,
+      "h_object_buffer": 1543503893,
+      "h_parent": 1543503928,
+      "h_root": 3251881078,
+      "h_userd_memory": [
+        1543503893,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "userd_offset": [
+        118784,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cid": 81678,
+      "class": "0xc96f",
+      "flags": 0,
+      "gp_fifo_entries": 1024,
+      "gp_fifo_offset": 8594251776,
+      "h_object": 1543503936,
+      "h_object_buffer": 1543503893,
+      "h_parent": 1543503928,
+      "h_root": 3251881078,
+      "h_userd_memory": [
+        1543503893,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "userd_offset": [
+        131072,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cid": 81679,
+      "class": "0xc96f",
+      "flags": 0,
+      "gp_fifo_entries": 1024,
+      "gp_fifo_offset": 8594264064,
+      "h_object": 1543503939,
+      "h_object_buffer": 1543503893,
+      "h_parent": 1543503928,
+      "h_root": 3251881078,
+      "h_userd_memory": [
+        1543503893,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "userd_offset": [
+        143360,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cid": 81681,
+      "class": "0xc96f",
+      "flags": 0,
+      "gp_fifo_entries": 1024,
+      "gp_fifo_offset": 8594276352,
+      "h_object": 1543503944,
+      "h_object_buffer": 1543503893,
+      "h_parent": 1543503942,
+      "h_root": 3251881078,
+      "h_userd_memory": [
+        1543503893,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "userd_offset": [
+        155648,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cid": 81682,
+      "class": "0xc96f",
+      "flags": 0,
+      "gp_fifo_entries": 1024,
+      "gp_fifo_offset": 8594288640,
+      "h_object": 1543503947,
+      "h_object_buffer": 1543503893,
+      "h_parent": 1543503942,
+      "h_root": 3251881078,
+      "h_userd_memory": [
+        1543503893,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "userd_offset": [
+        167936,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cid": 81683,
+      "class": "0xc96f",
+      "flags": 0,
+      "gp_fifo_entries": 1024,
+      "gp_fifo_offset": 8594300928,
+      "h_object": 1543503950,
+      "h_object_buffer": 1543503893,
+      "h_parent": 1543503942,
+      "h_root": 3251881078,
+      "h_userd_memory": [
+        1543503893,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "userd_offset": [
+        180224,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cid": 81684,
+      "class": "0xc96f",
+      "flags": 0,
+      "gp_fifo_entries": 1024,
+      "gp_fifo_offset": 8594313216,
+      "h_object": 1543503953,
+      "h_object_buffer": 1543503893,
+      "h_parent": 1543503942,
+      "h_root": 3251881078,
+      "h_userd_memory": [
+        1543503893,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "userd_offset": [
+        192512,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "class_counts": {
+    "0x003e": 22,
+    "0x0040": 34,
+    "0x0041": 2,
+    "0x0079": 7,
+    "0x0080": 1,
+    "0x00de": 1,
+    "0x2080": 1,
+    "0x2081": 1,
+    "0x50a0": 1,
+    "0x83de": 1,
+    "0x9067": 1,
+    "0x90f1": 2,
+    "0xa06c": 3,
+    "0xc661": 2,
+    "0xc96f": 16,
+    "0xcab5": 12,
+    "0xcb33": 1,
+    "0xcec0": 8
+  },
+  "ioctl_counts": {
+    "0x01": 1,
+    "0x13": 10,
+    "0x17": 14,
+    "0x18": 13,
+    "0x19": 1,
+    "0x1a": 1,
+    "0x1b": 16,
+    "0x1c": 16,
+    "0x21": 44,
+    "0x22": 46,
+    "0x25": 1,
+    "0x27": 5,
+    "0x29": 110,
+    "0x2a": 173,
+    "0x2b": 116,
+    "0x41": 1,
+    "0x44": 1,
+    "0x46": 1,
+    "0x48": 1,
+    "0x49": 44,
+    "0x4b": 1,
+    "0x4e": 26,
+    "0x4f": 23,
+    "0x51": 1,
+    "0x5e": 2,
+    "0xc8": 2,
+    "0xc9": 10,
+    "0xce": 8,
+    "0xcf": 7,
+    "0xd6": 2,
+    "0xd7": 1
+  },
+  "line_count": 698,
+  "map_memory": [
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503875,
+      "h_memory": 1543503877,
+      "length": 65536,
+      "linear": 4173004800,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503875,
+      "h_memory": 1543503878,
+      "length": 65536,
+      "linear": 68722556928,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503875,
+      "h_memory": 1543503879,
+      "length": 3152,
+      "linear": 4819542016,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503875,
+      "h_memory": 1543503893,
+      "length": 2097152,
+      "linear": 68723671040,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503874,
+      "h_memory": 1543503895,
+      "length": 41943040,
+      "linear": 18709983232,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503874,
+      "h_memory": 1543503897,
+      "length": 4096,
+      "linear": 6619959296,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503874,
+      "h_memory": 1543503901,
+      "length": 2097152,
+      "linear": 7669657600,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503874,
+      "h_memory": 1543503903,
+      "length": 4096,
+      "linear": 7669653504,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503874,
+      "h_memory": 1543503906,
+      "length": 4096,
+      "linear": 4521787392,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503874,
+      "h_memory": 1543503910,
+      "length": 4096,
+      "linear": 6611542016,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503874,
+      "h_memory": 1543503913,
+      "length": 4096,
+      "linear": 20784304128,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503874,
+      "h_memory": 1543503917,
+      "length": 4096,
+      "linear": 23930007552,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503874,
+      "h_memory": 1543503920,
+      "length": 4096,
+      "linear": 21910667264,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503874,
+      "h_memory": 1543503924,
+      "length": 4096,
+      "linear": 6225944576,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503874,
+      "h_memory": 1543503929,
+      "length": 4096,
+      "linear": 6611546112,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503874,
+      "h_memory": 1543503932,
+      "length": 4096,
+      "linear": 6611550208,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503874,
+      "h_memory": 1543503935,
+      "length": 4096,
+      "linear": 19219894272,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503874,
+      "h_memory": 1543503938,
+      "length": 4096,
+      "linear": 15418331136,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503874,
+      "h_memory": 1543503943,
+      "length": 4096,
+      "linear": 21657632768,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503874,
+      "h_memory": 1543503946,
+      "length": 4096,
+      "linear": 16746463232,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503874,
+      "h_memory": 1543503949,
+      "length": 4096,
+      "linear": 12143427584,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503874,
+      "h_memory": 1543503952,
+      "length": 4096,
+      "linear": 7612522496,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503874,
+      "h_memory": 1543503956,
+      "length": 2097152,
+      "linear": 19672219648,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503874,
+      "h_memory": 1543503962,
+      "length": 2097152,
+      "linear": 5821485056,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503874,
+      "h_memory": 1543503979,
+      "length": 2097152,
+      "linear": 15073992704,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881078,
+      "h_device": 1543503874,
+      "h_memory": 1543503990,
+      "length": 6205456,
+      "linear": 17719214080,
+      "offset": 0
+    }
+  ],
+  "map_memory_dma": [],
+  "trace": "/tmp/nv-cuda-20260827.trace",
+  "usermodes": [
+    {
+      "class": "0xc661",
+      "h_object": 1543503877,
+      "h_parent": 1543503875,
+      "h_root": 3251881078
+    },
+    {
+      "class": "0xc661",
+      "h_object": 1543503878,
+      "h_parent": 1543503875,
+      "h_root": 3251881078,
+      "nested_u64": 9222614812342616065
+    }
+  ]
+}

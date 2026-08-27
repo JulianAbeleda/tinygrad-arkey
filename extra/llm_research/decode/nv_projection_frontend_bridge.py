@@ -7,7 +7,7 @@ identical. Prefix-length regression removes each runtime's fixed drain/event
 intercept; this is a front-end cadence discriminator, not a production wall.
 """
 from __future__ import annotations
-import argparse, ctypes, hashlib, json, pathlib, statistics, subprocess, sys, time
+import argparse, ctypes, hashlib, json, os, pathlib, statistics, subprocess, sys, time
 
 ROOT=pathlib.Path(__file__).resolve().parents[3]; sys.path.insert(0,str(ROOT))
 CAP=ROOT/'docs/task_workflow/evidence/nv-active-body-ledger-20260827/tiny-projection-capture.json'
@@ -20,6 +20,10 @@ COUNTS={
  'q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd':18, 'q4k_g3_lanemap_gemv_pair_vec_1024_4096':8}
 NS=(16,32,64,128,208)
 
+def trace_snapshot(label):
+ if not os.getenv('NV_IOCTL_TRACE_SNAPSHOT'): return
+ fn=ctypes.CDLL(None).nv_ioctl_trace_snapshot; fn.argtypes=(ctypes.c_char_p,); fn(label.encode())
+
 def ols(xs,ys):
  mx,my=statistics.mean(xs),statistics.mean(ys); m=sum((x-mx)*(y-my) for x,y in zip(xs,ys))/sum((x-mx)**2 for x in xs)
  return m,my-m*mx
@@ -31,7 +35,7 @@ def sequence(rows):
    if remain[r['name']]: out.append(r); remain[r['name']]-=1
  return out
 
-def run_nv(rows, seq, warmup, reps):
+def run_nv(rows, seq, warmup, reps, prologue, completion, chain, replay, prefetch):
  from tinygrad import Device
  from tinygrad.runtime.ops_nv import NVProgram
  from tinygrad.runtime.ops_nv import NVComputeQueue
@@ -43,14 +47,25 @@ def run_nv(rows, seq, warmup, reps):
    q=dev.allocator._alloc(b['size'],BufferSpec()); seed=(rows.index(r)*17+bi*29+1)&255; dev.allocator._copyin(q,memoryview(bytes([seed])*b['size'])); bs.append(q)
   state[r['name']]=(p,tuple(bs),tuple(b['size'] for b in c['buf_meta']),tuple(c['global_size']),tuple(c['local_size']),tuple(c['vals']))
  dev.synchronize(); result=[]
+ def build_queue(n, done=None):
+  q=NVComputeQueue(queue_idx=0); q.setup(compute_class=dev.iface.compute_class,local_mem_window=dev.local_mem_window,shared_mem_window=dev.shared_mem_window)
+  if prologue in ('full','wait'): q.wait(dev.timeline_signal,dev.timeline_value-1)
+  if prologue in ('full','barrier'): q.memory_barrier()
+  for r in seq[:n]:
+   p,bs,_sizes,g,b,vals=state[r['name']]; prev=q.active_qmd; q.exec(p,p.fill_kernargs(bs,vals),g,b)
+   if prev is not None: prev.write(dependent_qmd0_prefetch=prefetch)
+   if chain=='pcas': q.active_qmd=None
+  if completion=='pushbuffer': q.active_qmd=None
+  q.signal(done or dev.timeline_signal,1 if done is not None else dev.next_timeline())
+  return q
  for n in NS:
   samples=[]
-  for rep in range(warmup+reps):
-   q=NVComputeQueue(queue_idx=0); q.setup(compute_class=dev.iface.compute_class,local_mem_window=dev.local_mem_window,shared_mem_window=dev.shared_mem_window)
-   q.wait(dev.timeline_signal,dev.timeline_value-1).memory_barrier()
-   for r in seq[:n]:
-    p,bs,_sizes,g,b,vals=state[r['name']]; q.exec(p,p.fill_kernargs(bs,vals),g,b)
-   target=dev.next_timeline(); q.signal(dev.timeline_signal,target); q.submit(dev); t=time.perf_counter_ns(); dev.synchronize(); samples.append((time.perf_counter_ns()-t)/1e3)
+  if replay=='bound':
+   done=dev.new_signal(); q=build_queue(n,done); q.bind(dev)
+   for rep in range(warmup+reps): done.value=0; t=time.perf_counter_ns(); q.submit(dev); done.wait(1); samples.append((time.perf_counter_ns()-t)/1e3)
+  else:
+   for rep in range(warmup+reps):
+    q=build_queue(n); t=time.perf_counter_ns(); q.submit(dev); dev.synchronize(); samples.append((time.perf_counter_ns()-t)/1e3)
   result.append({'n':n,'samples_us':samples[warmup:],'median_us':statistics.median(samples[warmup:])})
  hashes={}
  for name,(_p,bs,sizes,_g,_b,_vals) in state.items():
@@ -59,7 +74,7 @@ def run_nv(rows, seq, warmup, reps):
    host=bytearray(size); dev.allocator._copyout(memoryview(host),q); hashes[name].append(hashlib.sha256(host).hexdigest())
  return result,hashes
 
-def run_cuda(rows,seq,warmup,reps):
+def run_cuda(rows,seq,warmup,reps,upload):
  from tinygrad.runtime.autogen import cuda
  from tinygrad.runtime.ops_cuda import check,encode_args
  check(cuda.cuInit(0)); dev=ctypes.c_int(); check(cuda.cuDeviceGet(ctypes.byref(dev),0)); ctx=cuda.CUcontext(); check(cuda.cuDevicePrimaryCtxRetain(ctypes.byref(ctx),dev)); check(cuda.cuCtxSetCurrent(ctx))
@@ -79,10 +94,11 @@ def run_cuda(rows,seq,warmup,reps):
     fn,g,b,va,_vals,_ps,_sizes=state[r['name']]; node=cuda.CUgraphNode(); deps=None if prior is None else (cuda.CUgraphNode*1)(prior)
     kp=cuda.CUDA_KERNEL_NODE_PARAMS_v1(fn,*g,*b,0,ctypes.cast(0,ctypes.POINTER(ctypes.c_void_p)),va); check(cuda.cuGraphAddKernelNode(ctypes.byref(node),graph,deps,0 if prior is None else 1,ctypes.byref(kp))); kps.append(kp); prior=node
    check(cuda.cuGraphInstantiate_v2(ctypes.byref(inst),graph,None,None,0))
+   if upload: check(cuda.cuGraphUpload(inst,stream)); check(cuda.cuStreamSynchronize(stream))
    for _ in range(warmup): check(cuda.cuGraphLaunch(inst,stream))
-   check(cuda.cuStreamSynchronize(stream)); samples=[]
+   check(cuda.cuStreamSynchronize(stream)); trace_snapshot(f'cuda-n{n}-warm'); samples=[]
    for _ in range(reps):
-    a,beg=cuda.CUevent(),cuda.CUevent(); check(cuda.cuEventCreate(ctypes.byref(a),0)); check(cuda.cuEventCreate(ctypes.byref(beg),0)); check(cuda.cuEventRecord(a,stream)); check(cuda.cuGraphLaunch(inst,stream)); check(cuda.cuEventRecord(beg,stream)); check(cuda.cuEventSynchronize(beg)); ms=ctypes.c_float(); check(cuda.cuEventElapsedTime(ctypes.byref(ms),a,beg)); samples.append(ms.value*1000); check(cuda.cuEventDestroy_v2(a)); check(cuda.cuEventDestroy_v2(beg))
+    a,beg=cuda.CUevent(),cuda.CUevent(); check(cuda.cuEventCreate(ctypes.byref(a),0)); check(cuda.cuEventCreate(ctypes.byref(beg),0)); check(cuda.cuEventRecord(a,stream)); check(cuda.cuGraphLaunch(inst,stream)); check(cuda.cuEventRecord(beg,stream)); check(cuda.cuEventSynchronize(beg)); trace_snapshot(f'cuda-n{n}-rep'); ms=ctypes.c_float(); check(cuda.cuEventElapsedTime(ctypes.byref(ms),a,beg)); samples.append(ms.value*1000); check(cuda.cuEventDestroy_v2(a)); check(cuda.cuEventDestroy_v2(beg))
    result.append({'n':n,'samples_us':samples,'median_us':statistics.median(samples)}); check(cuda.cuGraphExecDestroy(inst)); check(cuda.cuGraphDestroy(graph))
   hashes={}
   for name,(_fn,_g,_b,_va,_vals,ps,sizes) in state.items():
@@ -95,11 +111,12 @@ def run_cuda(rows,seq,warmup,reps):
   check(cuda.cuStreamDestroy_v2(stream)); check(cuda.cuDevicePrimaryCtxRelease(dev))
 
 def main():
- ap=argparse.ArgumentParser(description=__doc__); ap.add_argument('--backend',choices=('nv','cuda-graph'),required=True); ap.add_argument('--warmup',type=int,default=5); ap.add_argument('--reps',type=int,default=11); ap.add_argument('--out',type=pathlib.Path,required=True); a=ap.parse_args()
+ ap=argparse.ArgumentParser(description=__doc__); ap.add_argument('--backend',choices=('nv','cuda-graph'),required=True); ap.add_argument('--warmup',type=int,default=5); ap.add_argument('--reps',type=int,default=11); ap.add_argument('--out',type=pathlib.Path,required=True)
+ ap.add_argument('--nv-prologue',choices=('full','wait','barrier','none'),default='full'); ap.add_argument('--nv-completion',choices=('qmd','pushbuffer'),default='qmd'); ap.add_argument('--nv-chain',choices=('dependent','pcas'),default='dependent'); ap.add_argument('--nv-replay',choices=('fresh','bound'),default='fresh'); ap.add_argument('--nv-prefetch',type=int,choices=(0,1),default=1); ap.add_argument('--cuda-upload',type=int,choices=(0,1),default=0); a=ap.parse_args()
  rows=json.loads(CAP.read_text())['captured']; assert {r['name'] for r in rows} == set(COUNTS)
  for r in rows:
   signatures={(c['n_bufs'],tuple(b['size'] for b in c['buf_meta']),tuple(c['global_size']),tuple(c['local_size']),tuple(c['vals'])) for c in r['calls']}
   assert len(signatures)==1, f"non-constant captured ABI for {r['name']}: {signatures}"
- seq=sequence(rows); vals,hashes=run_nv(rows,seq,a.warmup,a.reps) if a.backend=='nv' else run_cuda(rows,seq,a.warmup,a.reps); m,i=ols([r['n'] for r in vals],[r['median_us'] for r in vals])
- out={'schema':'tinygrad.nv_projection_frontend_bridge.v1','backend':a.backend,'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'population':len(seq),'ns':NS,'warmup':a.warmup,'reps':a.reps,'rows':vals,'slope_us_per_node':m,'intercept_us':i,'sequence':[r['name'] for r in seq],'final_buffer_sha256':hashes}; a.out.parent.mkdir(parents=True,exist_ok=True); a.out.write_text(json.dumps(out,indent=2,sort_keys=True)+'\n'); print(json.dumps({'backend':a.backend,'slope_us_per_node':m,'intercept_us':i,'medians':[(r['n'],r['median_us']) for r in vals],'buffer_hashes':sum(map(len,hashes.values()))},indent=2))
+ seq=sequence(rows); vals,hashes=run_nv(rows,seq,a.warmup,a.reps,a.nv_prologue,a.nv_completion,a.nv_chain,a.nv_replay,a.nv_prefetch) if a.backend=='nv' else run_cuda(rows,seq,a.warmup,a.reps,a.cuda_upload); m,i=ols([r['n'] for r in vals],[r['median_us'] for r in vals])
+ out={'schema':'tinygrad.nv_projection_frontend_bridge.v1','backend':a.backend,'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'population':len(seq),'ns':NS,'warmup':a.warmup,'reps':a.reps,'rows':vals,'slope_us_per_node':m,'intercept_us':i,'sequence':[r['name'] for r in seq],'final_buffer_sha256':hashes,'nv_options':{'prologue':a.nv_prologue,'completion':a.nv_completion,'chain':a.nv_chain,'replay':a.nv_replay,'prefetch':a.nv_prefetch},'cuda_options':{'upload':a.cuda_upload}}; a.out.parent.mkdir(parents=True,exist_ok=True); a.out.write_text(json.dumps(out,indent=2,sort_keys=True)+'\n'); print(json.dumps({'backend':a.backend,'slope_us_per_node':m,'intercept_us':i,'medians':[(r['n'],r['median_us']) for r in vals],'buffer_hashes':sum(map(len,hashes.values())),'nv_options':out['nv_options'],'cuda_options':out['cuda_options']},indent=2))
 if __name__=='__main__': main()
