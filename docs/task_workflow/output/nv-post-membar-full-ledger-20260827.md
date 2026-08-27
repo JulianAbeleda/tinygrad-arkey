@@ -131,6 +131,39 @@ pre-promotion 4094.098-us authority this is **57.219 us/token** or about
 label llama-bench as decode-only/random-feedback; a full greedy-generation
 parity claim requires a llama sampling+feedback harness.
 
+## Ordered campaign to the delivered-token ceiling
+
+Q projection work is deliberately deferred.  The immediate objective is to
+translate the already measured no-host-delivery ceiling into a correct,
+host-delivered token path.  That ceiling arm measured **3824.676 us/token =
+261.460 tok/s**; it is a recovery bound, not a production endpoint.
+
+The tests must run in this order:
+
+1. qualify direct GPU writes to each available CPU-visible NV allocation
+   class, including cached/uncached coherency, stale-read stress, exact scalar
+   values, and completion-signal ownership;
+2. make argmax emit a host-visible scalar while preserving the ordinary GPU
+   token used for greedy device-to-device feedback;
+3. test signal-only completion and remove only waits proven redundant by the
+   producer timeline;
+4. exhaust the remaining four-byte copyout setup, DMA, and CPU wakeup costs;
+5. run matched real-greedy tinygrad and llama lifecycle accounting, then lock a
+   fresh delivered-token ledger.
+
+Every candidate follows test-then-invest: exact output/guard qualification,
+reverse A/B/A brackets with at least seven repetitions, a reproducible full
+token-wall win, and an explicit rollback.  Each proven promotion is committed
+and pushed independently.  An expected-pass failure is first treated as a
+possible information or measurement wall and revisited with a stronger
+discriminator before the mechanism is closed.
+
+Only after this non-Q path either reaches approximately **260 delivered
+tok/s** or is causally exhausted does the campaign reopen Q.  The deferred Q
+sequence remains service-rate microgate, cold full-token bracket, and generic
+shape sweep; no Q estimate is counted in the current endpoint or the
+261.460-tok/s delivery ceiling.
+
 ## Evidence
 
 - `docs/task_workflow/evidence/nv-post-membar-full-ledger-20260827/installed-wall-r15.json`
