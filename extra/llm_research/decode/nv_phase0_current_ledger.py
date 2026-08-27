@@ -125,6 +125,8 @@ def analyze(profile_jsonl: pathlib.Path, settled: dict, warmup: int) -> dict:
   table = _per_name_table(steady)
   # Order rows by median wall contribution (count * median_us per replay).
   rows = [{"name": name, "per_replay_count": int(v["per_replay_count"]),
+           "replay_samples": int(v["replay_samples"]),
+           "steady_replay_fraction": round(v["replay_samples"] / len(steady), 6),
            "median_us_per_replay": v["median_us"],
            "mean_us_per_replay": v["mean_us"],
            "median_us_per_call": round(v["median_us"] / v["per_replay_count"], 6),

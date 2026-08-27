@@ -38,12 +38,15 @@ The older 36.35% tinygrad Flash drop predates the load-schedule, active-horizon,
 tail-V, and capture-policy promotions and is superseded for the installed path.
 
 The retained llama audit reported approximately 17--19%, so current tinygrad
-is provisionally in the same conversion band. This is not yet a formal
-cross-runtime parity claim because the retained llama percentage and current
-tinygrad percentage use different profiling protocols. A fresh matched llama
-hot/production replay is required before booking exact relative parity.
+is in the same approximate conversion band.  This is percentage conversion
+parity, not absolute Flash-service parity: the corrected production population
+still leaves about 30--31 us/token of score debt versus the retained llama
+PDL-off row.  The canonical V-tail wall bracket confirms a 5.878-us/token win
+against its controls, but V-tail is already installed and therefore does not
+move this endpoint authority again.
 
 ## Sources
 
 - `docs/task_workflow/output/nv-flash-ceiling-exhaustion-result.md`
 - `docs/task_workflow/output/nv-current-lifecycle-ledger-vs-llama-and-roofline.md`
+- `docs/task_workflow/output/nv-post-flash-parity-reconciliation.md`

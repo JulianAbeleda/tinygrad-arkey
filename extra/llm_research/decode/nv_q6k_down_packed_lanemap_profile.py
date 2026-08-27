@@ -18,21 +18,22 @@ CANDIDATE="q6k_fp16_packed_lanemap_4096_12288_epi_ffnresadd"
 
 
 def _current_decode_replays(lines:list[dict])->list[list[dict]]:
-  """Recover current 462-node token replays: 32 + 64 + 128 + 238.
+  """Recover installed decode replays and exclude symbolic/prefill graphs.
 
-  The older profile helper expects a 256-node fourth group. Paired K/V and
-  native-tail landings changed the current graph family, while prefill still
-  produces 256/394 groups. Select the most common tail after the stable
-  32/64/128 prefix so the parser follows the current decode population.
+  The current endpoint has one extra launch in the first three batches and a
+  shorter fourth batch, so its signature is 33/66/132/185.  Symbolic/prefill
+  graphs retain the older 32/64/128 prefix and contain ``_toks`` kernels.  Be
+  deliberately fail-closed here: silently selecting the most common tail can
+  turn prefill work into a plausible-looking but physically impossible token
+  ledger.
   """
-  sizes=[len(x.get("entries",[])) for x in lines]; tails=Counter()
-  for i in range(len(sizes)-3):
-    if tuple(sizes[i:i+3])==(32,64,128): tails[sizes[i+3]]+=1
-  if not tails: return []
-  group=(32,64,128,tails.most_common(1)[0][0]); replays=[]; i=0
+  group=(33,66,132,185); sizes=[len(x.get("entries",[])) for x in lines]
+  replays=[]; i=0
   while i+4<=len(lines):
-    if tuple(sizes[i:i+4])==group:
-      replays.append([e for row in lines[i:i+4] for e in row.get("entries",[])]); i+=4
+    rows=lines[i:i+4]
+    entries=[e for row in rows for e in row.get("entries",[])]
+    if tuple(sizes[i:i+4])==group and all("_toks" not in str(e.get("name","")) for e in entries):
+      replays.append(entries); i+=4
     else: i+=1
   return replays
 
