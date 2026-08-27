@@ -1,0 +1,179 @@
+{
+  "all_token_hashes_equal": true,
+  "arms": [
+    {
+      "arm": "control_a",
+      "candidate_contract": "production generate",
+      "candidate_mode": "skip-presync",
+      "count": 24,
+      "depth": 512,
+      "max_context": 768,
+      "reps": 7,
+      "schema": "tinygrad.nv_token_readback_wall.child.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          4.133618125,
+          4.117610083333333,
+          4.120359416666666,
+          4.119891875,
+          4.121434791666666,
+          4.12068625,
+          4.119613
+        ],
+        "external_contention_high_limit_ms": 4.370359416666666,
+        "median_ms_per_token": 4.120359416666666,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          4.133618125,
+          4.117610083333333,
+          4.120359416666666,
+          4.119891875,
+          4.121434791666666,
+          4.12068625,
+          4.119613
+        ],
+        "timed_token_count": 168,
+        "token_hashes": [
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809"
+        ],
+        "token_stream_hash": "7efb6e975be0a4eefb80faba1316f8c942575f83a95d8be7ef547b244f2b8c0c",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      }
+    },
+    {
+      "arm": "candidate",
+      "candidate_contract": "normal scalar copyout with only its redundant initial device synchronize suppressed",
+      "candidate_mode": "skip-presync",
+      "count": 24,
+      "depth": 512,
+      "max_context": 768,
+      "reps": 7,
+      "schema": "tinygrad.nv_token_readback_wall.child.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          4.082525791666667,
+          4.069214125,
+          4.063485375,
+          4.069514666666667,
+          4.065770083333334,
+          4.07581275,
+          4.0677563333333335
+        ],
+        "external_contention_high_limit_ms": 4.319214125,
+        "median_ms_per_token": 4.069214125,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          4.082525791666667,
+          4.069214125,
+          4.063485375,
+          4.069514666666667,
+          4.065770083333334,
+          4.07581275,
+          4.0677563333333335
+        ],
+        "timed_token_count": 168,
+        "token_hashes": [
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809"
+        ],
+        "token_stream_hash": "7efb6e975be0a4eefb80faba1316f8c942575f83a95d8be7ef547b244f2b8c0c",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      }
+    },
+    {
+      "arm": "control_c",
+      "candidate_contract": "production generate",
+      "candidate_mode": "skip-presync",
+      "count": 24,
+      "depth": 512,
+      "max_context": 768,
+      "reps": 7,
+      "schema": "tinygrad.nv_token_readback_wall.child.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          4.1283494166666665,
+          4.111003041666667,
+          4.10459725,
+          4.100656958333333,
+          4.117033583333334,
+          4.108817291666666,
+          4.1120705
+        ],
+        "external_contention_high_limit_ms": 4.361003041666667,
+        "median_ms_per_token": 4.111003041666667,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          4.1283494166666665,
+          4.111003041666667,
+          4.10459725,
+          4.100656958333333,
+          4.117033583333334,
+          4.108817291666666,
+          4.1120705
+        ],
+        "timed_token_count": 168,
+        "token_hashes": [
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809"
+        ],
+        "token_stream_hash": "7efb6e975be0a4eefb80faba1316f8c942575f83a95d8be7ef547b244f2b8c0c",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      }
+    }
+  ],
+  "candidate_mode": "skip-presync",
+  "mode": "reverse-bracket",
+  "schema": "tinygrad.nv_token_readback_wall.v1",
+  "tokens_per_second": {
+    "candidate": 245.74769704457367,
+    "control": 242.9731420677781,
+    "delta": 2.774554976795571
+  },
+  "walls_us_per_token": {
+    "candidate": 4069.2141250000004,
+    "candidate_delta": -46.467104166666104,
+    "control_a": 4120.359416666666,
+    "control_c": 4111.003041666667,
+    "control_midpoint": 4115.6812291666665
+  }
+}

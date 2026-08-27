@@ -720,6 +720,9 @@ class NVDevice(HCQCompiled[NVSignal]):
 
     super().__init__(device, NVAllocator(self), [CUDARenderer, PTXRenderer, NVCCRenderer, NAKRenderer], functools.partial(NVProgram, self), NVSignal,
                      NVComputeQueue, NVCopyQueue, arch=self.arch)
+    # The copy queue waits on the compute timeline itself, so its source is ordered without a duplicate CPU pre-wait.
+    # NV_COPYOUT_SKIP_PRESYNC=0 restores the conservative generic HCQ copyout sequence.
+    self.copyout_wait_orders_source = bool(int(os.environ.get("NV_COPYOUT_SKIP_PRESYNC", "1")))
 
     self.pma_enabled = PMA.value > 0 and PROFILE >= 1
     if self.pma_enabled: self._prof_init()

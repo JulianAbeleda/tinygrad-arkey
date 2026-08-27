@@ -613,6 +613,8 @@ class HCQAllocatorBase(LRUAllocator[HCQDeviceType], Generic[HCQDeviceType]):
 
   def _offset(self, buf, size:int, offset:int) -> HCQBuffer: return buf.offset(offset=offset, size=size)
 
+def _hcq_copyout_needs_presync(dev) -> bool: return not getattr(dev, "copyout_wait_orders_source", False)
+
 class HCQAllocator(HCQAllocatorBase, Generic[HCQDeviceType]):
   def _copyin(self, dest:HCQBuffer, src:memoryview):
     if self.dev.hw_copy_queue_t is None:
@@ -656,7 +658,9 @@ class HCQAllocator(HCQAllocatorBase, Generic[HCQDeviceType]):
         self.b_timeline[batch_info[1]] = self.dev.timeline_value - 1
 
   def _copyout(self, dest:memoryview, src:HCQBuffer):
-    self.dev.synchronize()
+    # Ordered hardware copy queues already wait on the producer timeline below. Devices that qualify this
+    # path can skip the redundant CPU-side wait while retaining the copy-completion wait.
+    if _hcq_copyout_needs_presync(self.dev): self.dev.synchronize()
     if self.dev.hw_copy_queue_t is None:
       with cpu_profile(f'{self.dev.device} -> TINY', f"{self.dev.device}:COPY"): ctypes.memmove(from_mv(dest), int(src.va_addr), len(dest))
       return

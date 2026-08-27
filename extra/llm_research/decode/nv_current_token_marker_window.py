@@ -10,6 +10,7 @@ def main():
   ap=argparse.ArgumentParser(); ap.add_argument('--model',default=MODEL); ap.add_argument('--depth',type=int,default=512)
   ap.add_argument('--count',type=int,default=24); ap.add_argument('--warmup',type=int,default=6)
   ap.add_argument('--max-context',type=int,default=768); ap.add_argument('--expected-groups',type=int,default=4)
+  ap.add_argument('--submit-ahead',action='store_true')
   ap.add_argument('--out',type=pathlib.Path,required=True); a=ap.parse_args()
   os.environ.update(DEV='NV',PROFILE='0')
   from tinygrad import Device
@@ -33,7 +34,10 @@ def main():
     return ret
   HCQGraph.__call__=wrapped
 
-  model=_load(a.model,a.max_context); gen=model.generate(_prompt(a.model,a.depth),chunk_size=32,temperature=0.0)
+  model=_load(a.model,a.max_context)
+  model._decode_direct_greedy_promoted=True; model._decode_feedback_pingpong_promoted=True
+  model._decode_submit_ahead_promoted=a.submit_ahead
+  gen=model.generate(_prompt(a.model,a.depth),chunk_size=32,temperature=0.0)
   tokens=[]; walls=[]; windows=[]; pre_first=[]; post_last=[]
   try:
     for _ in range(a.warmup): next(gen)
@@ -46,7 +50,7 @@ def main():
       pre_first.append((state['first_enter_ns']-t0)/1e3); post_last.append((t1-state['last_exit_ns'])/1e3)
   finally: state['active']=False; gen.close(); HCQGraph.__call__=original
   row={'schema':'tinygrad.nv_current_token_marker_window.v1','commit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
-       'depth':a.depth,'count':a.count,'warmup':a.warmup,'max_context':a.max_context,'expected_groups':a.expected_groups,
+       'depth':a.depth,'count':a.count,'warmup':a.warmup,'max_context':a.max_context,'expected_groups':a.expected_groups,'submit_ahead':a.submit_ahead,
        'wall_us':walls,'device_window_us':windows,'outside_window_us':[w-d for w,d in zip(walls,windows)],
        'pre_first_graph_us':pre_first,'post_last_graph_us':post_last,'tokens':tokens,
        'median':{'wall_us':statistics.median(walls),'device_window_us':statistics.median(windows),'outside_window_us':statistics.median([w-d for w,d in zip(walls,windows)]),

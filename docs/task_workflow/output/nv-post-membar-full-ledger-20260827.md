@@ -95,6 +95,42 @@ same-session wall residual.  It must be attacked with causal full-wall tests;
 neither the profiled host-gap subtraction nor the raw pre-first interval is
 bookable.
 
+## Token-readback cause and promotion
+
+The lifecycle comparison was not semantically symmetric.  The pinned
+`llama-bench` generation loop calls `llama_decode`, synchronizes, and then
+supplies another random CPU token.  It does not sample logits or feed the
+model's selected token back.  Tinygrad's measured `generate()` includes GPU
+argmax, scalar token delivery to the host, and device-to-device feedback into
+the next decode.
+
+A ceiling arm retained tinygrad's GPU greedy feedback but suppressed host
+`Tensor.item()` delivery.  It measured 3824.676 us/token versus 4117.085
+us/token control, exposing a 292.409-us synchronization/readback pool.  This
+arm is not promotable because it does not deliver tokens to the caller.
+
+Inspection found two waits in generic HCQ copyout: a CPU wait for the compute
+timeline followed by a copy-queue command that waits on that same timeline,
+then the required copy-completion wait.  Suppressing only the redundant first
+wait retained ordinary token delivery and reproduced in two reverse brackets:
+
+| qualification | control midpoint | candidate | recovery | token hashes |
+|---|---:|---:|---:|---|
+| monkeypatch discriminator | 4115.681 us | 4069.214 us | 46.467 us | identical |
+| actual NV opt-in | 4111.519 us | 4079.271 us | 32.248 us | identical |
+
+The NV default now declares that its ordered copy queue owns source ordering.
+The copy queue still waits on the producer timeline and the CPU still waits
+for copy completion.  `NV_COPYOUT_SKIP_PRESYNC=0` restores the conservative
+generic HCQ sequence.
+
+The promoted 15-window endpoint is **4036.879 us/token = 247.716 tok/s**.
+Every window is accepted and every token hash matches.  Relative to the fresh
+pre-promotion 4094.098-us authority this is **57.219 us/token** or about
+**3.462 tok/s** faster.  The remaining comparison to llama must henceforth
+label llama-bench as decode-only/random-feedback; a full greedy-generation
+parity claim requires a llama sampling+feedback harness.
+
 ## Evidence
 
 - `docs/task_workflow/evidence/nv-post-membar-full-ledger-20260827/installed-wall-r15.json`
@@ -102,3 +138,7 @@ bookable.
 - `docs/task_workflow/evidence/nv-post-membar-full-ledger-20260827/current-marker-host-partition-r24.json`
 - `docs/task_workflow/evidence/nv-post-membar-full-ledger-20260827/llama-same-session-summary.json`
 - `docs/task_workflow/evidence/nv-post-membar-full-ledger-20260827/submit-ahead-r7.json`
+- `docs/task_workflow/evidence/nv-post-membar-full-ledger-20260827/token-readback-r7.json`
+- `docs/task_workflow/evidence/nv-post-membar-full-ledger-20260827/token-readback-skip-presync-r7.json`
+- `docs/task_workflow/evidence/nv-post-membar-full-ledger-20260827/token-readback-optin-r7.json`
+- `docs/task_workflow/evidence/nv-post-membar-full-ledger-20260827/installed-copyout-promoted-r15.json`
