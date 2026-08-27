@@ -39,9 +39,9 @@ def run_nv(rows, seq, warmup, reps):
  dev=Device['NV']; state={}
  for r in rows:
   p=NVProgram(dev,r['name'],pathlib.Path(r['cubin_path']).read_bytes()); c=r['calls'][0]; bs=[]
-  for b in c['buf_meta']:
-   q=dev.allocator._alloc(b['size'],BufferSpec()); dev.allocator._copyin(q,memoryview(bytearray(b['size']))); bs.append(q)
-  state[r['name']]=(p,tuple(bs),tuple(c['global_size']),tuple(c['local_size']))
+  for bi,b in enumerate(c['buf_meta']):
+   q=dev.allocator._alloc(b['size'],BufferSpec()); seed=(rows.index(r)*17+bi*29+1)&255; dev.allocator._copyin(q,memoryview(bytes([seed])*b['size'])); bs.append(q)
+  state[r['name']]=(p,tuple(bs),tuple(b['size'] for b in c['buf_meta']),tuple(c['global_size']),tuple(c['local_size']),tuple(c['vals']))
  dev.synchronize(); result=[]
  for n in NS:
   samples=[]
@@ -49,10 +49,15 @@ def run_nv(rows, seq, warmup, reps):
    q=NVComputeQueue(queue_idx=0); q.setup(compute_class=dev.iface.compute_class,local_mem_window=dev.local_mem_window,shared_mem_window=dev.shared_mem_window)
    q.wait(dev.timeline_signal,dev.timeline_value-1).memory_barrier()
    for r in seq[:n]:
-    p,bs,g,b=state[r['name']]; q.exec(p,p.fill_kernargs(bs),g,b)
+    p,bs,_sizes,g,b,vals=state[r['name']]; q.exec(p,p.fill_kernargs(bs,vals),g,b)
    target=dev.next_timeline(); q.signal(dev.timeline_signal,target); q.submit(dev); t=time.perf_counter_ns(); dev.synchronize(); samples.append((time.perf_counter_ns()-t)/1e3)
   result.append({'n':n,'samples_us':samples[warmup:],'median_us':statistics.median(samples[warmup:])})
- return result
+ hashes={}
+ for name,(_p,bs,sizes,_g,_b,_vals) in state.items():
+  hashes[name]=[]
+  for q,size in zip(bs,sizes):
+   host=bytearray(size); dev.allocator._copyout(memoryview(host),q); hashes[name].append(hashlib.sha256(host).hexdigest())
+ return result,hashes
 
 def run_cuda(rows,seq,warmup,reps):
  from tinygrad.runtime.autogen import cuda
@@ -63,14 +68,15 @@ def run_cuda(rows,seq,warmup,reps):
   for r in rows:
    mod,fn=cuda.CUmodule(),cuda.CUfunction(); check(cuda.cuModuleLoadData(ctypes.byref(mod),pathlib.Path(r['cubin_path']).read_bytes())); check(cuda.cuModuleGetFunction(ctypes.byref(fn),mod,r['name'].encode())); keep.append(mod)
    ps=[]
-   for b in r['calls'][0]['buf_meta']:
-    p=cuda.CUdeviceptr(); check(cuda.cuMemAlloc_v2(ctypes.byref(p),b['size'])); check(cuda.cuMemsetD8_v2(p,0,b['size'])); ps.append(p); keep.append(p)
-   ca,va=encode_args(ps,[]); keep.extend((ca,va)); state[r['name']]=(fn,tuple(r['calls'][0]['global_size']),tuple(r['calls'][0]['local_size']),va)
+   sizes=[]
+   for bi,b in enumerate(r['calls'][0]['buf_meta']):
+    p=cuda.CUdeviceptr(); check(cuda.cuMemAlloc_v2(ctypes.byref(p),b['size'])); seed=(rows.index(r)*17+bi*29+1)&255; check(cuda.cuMemsetD8_v2(p,seed,b['size'])); ps.append(p); sizes.append(b['size']); keep.append(p)
+   vals=tuple(r['calls'][0]['vals']); ca,va=encode_args(ps,vals); keep.extend((ca,va)); state[r['name']]=(fn,tuple(r['calls'][0]['global_size']),tuple(r['calls'][0]['local_size']),va,vals,ps,sizes)
   result=[]
   for n in NS:
    graph,inst=cuda.CUgraph(),cuda.CUgraphExec(); check(cuda.cuGraphCreate(ctypes.byref(graph),0)); prior=None; kps=[]
    for r in seq[:n]:
-    fn,g,b,va=state[r['name']]; node=cuda.CUgraphNode(); deps=None if prior is None else (cuda.CUgraphNode*1)(prior)
+    fn,g,b,va,_vals,_ps,_sizes=state[r['name']]; node=cuda.CUgraphNode(); deps=None if prior is None else (cuda.CUgraphNode*1)(prior)
     kp=cuda.CUDA_KERNEL_NODE_PARAMS_v1(fn,*g,*b,0,ctypes.cast(0,ctypes.POINTER(ctypes.c_void_p)),va); check(cuda.cuGraphAddKernelNode(ctypes.byref(node),graph,deps,0 if prior is None else 1,ctypes.byref(kp))); kps.append(kp); prior=node
    check(cuda.cuGraphInstantiate_v2(ctypes.byref(inst),graph,None,None,0))
    for _ in range(warmup): check(cuda.cuGraphLaunch(inst,stream))
@@ -78,13 +84,22 @@ def run_cuda(rows,seq,warmup,reps):
    for _ in range(reps):
     a,beg=cuda.CUevent(),cuda.CUevent(); check(cuda.cuEventCreate(ctypes.byref(a),0)); check(cuda.cuEventCreate(ctypes.byref(beg),0)); check(cuda.cuEventRecord(a,stream)); check(cuda.cuGraphLaunch(inst,stream)); check(cuda.cuEventRecord(beg,stream)); check(cuda.cuEventSynchronize(beg)); ms=ctypes.c_float(); check(cuda.cuEventElapsedTime(ctypes.byref(ms),a,beg)); samples.append(ms.value*1000); check(cuda.cuEventDestroy_v2(a)); check(cuda.cuEventDestroy_v2(beg))
    result.append({'n':n,'samples_us':samples,'median_us':statistics.median(samples)}); check(cuda.cuGraphExecDestroy(inst)); check(cuda.cuGraphDestroy(graph))
-  return result
+  hashes={}
+  for name,(_fn,_g,_b,_va,_vals,ps,sizes) in state.items():
+   hashes[name]=[]
+   for p,size in zip(ps,sizes):
+    host=bytearray(size); check(cuda.cuMemcpyDtoH_v2(ctypes.addressof(ctypes.c_ubyte.from_buffer(host)),p,size)); hashes[name].append(hashlib.sha256(host).hexdigest())
+  return result,hashes
  finally:
   # Process exit releases allocations/modules; explicit mixed-type cleanup is intentionally avoided in measurement tooling.
   check(cuda.cuStreamDestroy_v2(stream)); check(cuda.cuDevicePrimaryCtxRelease(dev))
 
 def main():
  ap=argparse.ArgumentParser(description=__doc__); ap.add_argument('--backend',choices=('nv','cuda-graph'),required=True); ap.add_argument('--warmup',type=int,default=5); ap.add_argument('--reps',type=int,default=11); ap.add_argument('--out',type=pathlib.Path,required=True); a=ap.parse_args()
- rows=json.loads(CAP.read_text())['captured']; seq=sequence(rows); vals=run_nv(rows,seq,a.warmup,a.reps) if a.backend=='nv' else run_cuda(rows,seq,a.warmup,a.reps); m,i=ols([r['n'] for r in vals],[r['median_us'] for r in vals])
- out={'schema':'tinygrad.nv_projection_frontend_bridge.v1','backend':a.backend,'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'population':len(seq),'ns':NS,'warmup':a.warmup,'reps':a.reps,'rows':vals,'slope_us_per_node':m,'intercept_us':i,'sequence':[r['name'] for r in seq]}; a.out.parent.mkdir(parents=True,exist_ok=True); a.out.write_text(json.dumps(out,indent=2,sort_keys=True)+'\n'); print(json.dumps({'backend':a.backend,'slope_us_per_node':m,'intercept_us':i,'medians':[(r['n'],r['median_us']) for r in vals]},indent=2))
+ rows=json.loads(CAP.read_text())['captured']; assert {r['name'] for r in rows} == set(COUNTS)
+ for r in rows:
+  signatures={(c['n_bufs'],tuple(b['size'] for b in c['buf_meta']),tuple(c['global_size']),tuple(c['local_size']),tuple(c['vals'])) for c in r['calls']}
+  assert len(signatures)==1, f"non-constant captured ABI for {r['name']}: {signatures}"
+ seq=sequence(rows); vals,hashes=run_nv(rows,seq,a.warmup,a.reps) if a.backend=='nv' else run_cuda(rows,seq,a.warmup,a.reps); m,i=ols([r['n'] for r in vals],[r['median_us'] for r in vals])
+ out={'schema':'tinygrad.nv_projection_frontend_bridge.v1','backend':a.backend,'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'population':len(seq),'ns':NS,'warmup':a.warmup,'reps':a.reps,'rows':vals,'slope_us_per_node':m,'intercept_us':i,'sequence':[r['name'] for r in seq],'final_buffer_sha256':hashes}; a.out.parent.mkdir(parents=True,exist_ok=True); a.out.write_text(json.dumps(out,indent=2,sort_keys=True)+'\n'); print(json.dumps({'backend':a.backend,'slope_us_per_node':m,'intercept_us':i,'medians':[(r['n'],r['median_us']) for r in vals],'buffer_hashes':sum(map(len,hashes.values()))},indent=2))
 if __name__=='__main__': main()

@@ -104,8 +104,8 @@ in both runs. At the complete 208-call population:
 
 | confirmation | native HCQ | CUDA graph | recovery |
 |---|---:|---:|---:|
-| run 1 | 2685.761 us | 2603.104 us | **82.657 us** |
-| run 2 | 2674.569 us | 2604.960 us | **69.609 us** |
+| ABI-correct run 1 | 2674.572 us | 2606.112 us | **68.460 us** |
+| ABI-correct run 2 | 2681.716 us | 2603.360 us | **78.356 us** |
 
 This rejects the single-hot-cubin artifact theory. A native front-end/cadence
 opportunity survives heterogeneous binaries and large projection bodies.
@@ -114,10 +114,21 @@ The result is not yet a production booking. The bridge is serial, reuses hot
 buffers, and does not reproduce the installed two-queue dependency topology.
 Those restrictions are symmetric between arms and make the causal front-end
 comparison valid, but the 69.609--82.657-us movement must survive a production
-graph bracket before it changes the endpoint.
+graph bracket before it changes the endpoint. An audit found that the original
+four heterogeneous traces omitted scalar argument `700` for three Q8 kernel
+families (36 calls). Those traces are invalid and retained only as provenance.
+The table above comes from two new ABI-asserted runs with captured pointer and
+scalar arguments; the conclusion survives, but the original numeric range is
+superseded.
+
+The subsequent semantic oracle initializes every captured logical buffer with
+a deterministic nonzero pattern and compares final cross-runtime SHA-256
+values after identical replay populations. All **46/46 logical buffer hashes
+match bitwise**. The timing construction therefore passes both the ABI and
+execution-semantic gates.
 
 Applied mechanically to the installed endpoint, the observed projection-only
-range is 3977.866--3990.914 us/token, or 250.57--251.39 tok/s. This is now the
+range is 3982.167--3992.063 us/token, or 250.50--251.12 tok/s. This is now the
 highest measured recovery construction, not merely the old 215-us residual.
 
 ## Investment decision
@@ -146,7 +157,13 @@ therefore the only currently open route to a result materially beyond parity.
 - `docs/task_workflow/evidence/nv-active-boundary-targets-20260827/projection-bridge-nv-r2.json`
 - `docs/task_workflow/evidence/nv-active-boundary-targets-20260827/projection-bridge-cuda-r1.json`
 - `docs/task_workflow/evidence/nv-active-boundary-targets-20260827/projection-bridge-cuda-r2.json`
+- `docs/task_workflow/evidence/nv-active-boundary-targets-20260827/projection-bridge-nv-abi-r1.json`
+- `docs/task_workflow/evidence/nv-active-boundary-targets-20260827/projection-bridge-nv-abi-r2.json`
+- `docs/task_workflow/evidence/nv-active-boundary-targets-20260827/projection-bridge-cuda-abi-r1.json`
+- `docs/task_workflow/evidence/nv-active-boundary-targets-20260827/projection-bridge-cuda-abi-r2.json`
 - `docs/task_workflow/evidence/nv-active-boundary-targets-20260827/frontend-bridge-summary.json`
+- `docs/task_workflow/evidence/nv-active-boundary-targets-20260827/projection-bridge-nv-semantic-v2.json`
+- `docs/task_workflow/evidence/nv-active-boundary-targets-20260827/projection-bridge-cuda-semantic-v2.json`
 - `docs/task_workflow/evidence/nv-active-body-ledger-20260827/phase2-projection-result.json`
 - `docs/task_workflow/output/nv-hcq-dispatch-slope-result-20260822.md`
 - `docs/task_workflow/output/nv-active-body-ledger-phase2-result.md`

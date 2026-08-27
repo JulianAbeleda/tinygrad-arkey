@@ -9,20 +9,28 @@
   },
   "heterogeneous_projection_population": {
     "calls": 208,
-    "r1_native_hcq_us": 2685.761,
-    "r1_cuda_graph_us": 2603.104,
-    "r1_native_minus_cuda_graph_us": 82.657,
-    "r2_native_hcq_us": 2674.569,
-    "r2_cuda_graph_us": 2604.960,
-    "r2_native_minus_cuda_graph_us": 69.609,
-    "observed_recovery_range_us_per_token": [69.609, 82.657],
+    "r1_native_hcq_us": 2674.572,
+    "r1_cuda_graph_us": 2606.112,
+    "r1_native_minus_cuda_graph_us": 68.460,
+    "r2_native_hcq_us": 2681.716,
+    "r2_cuda_graph_us": 2603.360,
+    "r2_native_minus_cuda_graph_us": 78.356,
+    "observed_recovery_range_us_per_token": [68.460, 78.356],
     "verdict": "CUDA_GRAPH_FASTER_AT_EVERY_PREFIX_BOTH_RUNS"
   },
   "endpoint_translation": {
     "installed_tinygrad_us_per_token": 4060.523,
-    "translated_us_per_token_range": [3977.866, 3990.914],
-    "translated_tok_per_s_range": [250.569, 251.391],
+    "translated_us_per_token_range": [3982.167, 3992.063],
+    "translated_tok_per_s_range": [250.497, 251.120],
     "booking": false
   },
-  "scope": "Serial, hot, zero-initialized exact-cubin replay. The result proves a front-end cadence opportunity but is not a production wall booking."
+  "scope": "Serial, zero-initialized exact-cubin replay with captured pointer and scalar ABI. The result proves a front-end cadence opportunity but is not a production wall booking.",
+  "semantic_validation": {
+    "initialization": "deterministic nonzero byte pattern per captured buffer",
+    "launch_population": "identical prefix sequence and replay count",
+    "logical_buffer_hashes_compared": 46,
+    "mismatches": 0,
+    "verdict": "BITWISE_FINAL_BUFFER_PASS"
+  },
+  "supersedes": "The original projection bridge omitted scalar 700 for three Q8 families (36 calls). Its four JSON files are retained as invalid audit provenance and must not be cited for recovery."
 }
