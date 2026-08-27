@@ -1,0 +1,28 @@
+{
+  "schema": "tinygrad.nv_frontend_bridge_summary.v1",
+  "single_cubin": {
+    "native_hcq_slope_us_per_node": 1.525771,
+    "cuda_graph_r1_slope_us_per_node": 1.294722,
+    "cuda_graph_r2_slope_us_per_node": 1.294135,
+    "native_minus_cuda_graph_us_per_node": [0.231050, 0.231637],
+    "verdict": "CUDA_GRAPH_FASTER"
+  },
+  "heterogeneous_projection_population": {
+    "calls": 208,
+    "r1_native_hcq_us": 2685.761,
+    "r1_cuda_graph_us": 2603.104,
+    "r1_native_minus_cuda_graph_us": 82.657,
+    "r2_native_hcq_us": 2674.569,
+    "r2_cuda_graph_us": 2604.960,
+    "r2_native_minus_cuda_graph_us": 69.609,
+    "observed_recovery_range_us_per_token": [69.609, 82.657],
+    "verdict": "CUDA_GRAPH_FASTER_AT_EVERY_PREFIX_BOTH_RUNS"
+  },
+  "endpoint_translation": {
+    "installed_tinygrad_us_per_token": 4060.523,
+    "translated_us_per_token_range": [3977.866, 3990.914],
+    "translated_tok_per_s_range": [250.569, 251.391],
+    "booking": false
+  },
+  "scope": "Serial, hot, zero-initialized exact-cubin replay. The result proves a front-end cadence opportunity but is not a production wall booking."
+}

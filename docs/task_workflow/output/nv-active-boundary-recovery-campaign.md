@@ -80,6 +80,56 @@ chain cadence. If it is tied, the remaining tax is production predecessor and
 cache topology; instrument those exact transitions rather than rewriting the
 runtime globally.
 
+## Matched front-end bridge result
+
+The proposed bridge is now implemented and passes two levels of confirmation.
+
+First, the exact production Q/K completion cubin was replayed as the same
+serial chain through native HCQ and CUDA graph:
+
+| front end | drain slope |
+|---|---:|
+| native HCQ | 1.5258 us/node |
+| CUDA graph, run 1 | 1.2947 us/node |
+| CUDA graph, run 2 | 1.2941 us/node |
+
+CUDA graph recovers 0.2311--0.2316 us per small node. Ordinary CUDA launches
+cost 3.41--3.45 us/node, so the result is specifically graph replay rather
+than a generic CUDA-driver advantage.
+
+Second, the bridge replayed all twelve exact installed projection/provider
+cubins with their captured ABIs, real family counts, and a deterministic
+round-robin serial order. CUDA graph beat native HCQ at every measured prefix
+in both runs. At the complete 208-call population:
+
+| confirmation | native HCQ | CUDA graph | recovery |
+|---|---:|---:|---:|
+| run 1 | 2685.761 us | 2603.104 us | **82.657 us** |
+| run 2 | 2674.569 us | 2604.960 us | **69.609 us** |
+
+This rejects the single-hot-cubin artifact theory. A native front-end/cadence
+opportunity survives heterogeneous binaries and large projection bodies.
+
+The result is not yet a production booking. The bridge is serial, reuses hot
+buffers, and does not reproduce the installed two-queue dependency topology.
+Those restrictions are symmetric between arms and make the causal front-end
+comparison valid, but the 69.609--82.657-us movement must survive a production
+graph bracket before it changes the endpoint.
+
+Applied mechanically to the installed endpoint, the observed projection-only
+range is 3977.866--3990.914 us/token, or 250.57--251.39 tok/s. This is now the
+highest measured recovery construction, not merely the old 215-us residual.
+
+## Investment decision
+
+Proceed with the substrate. The next implementation must compare the native
+and CUDA graph command encodings for this exact population and identify which
+transferable property lowers cadence: QMD reuse, GPFIFO/pushbuffer density,
+queue admission fields, or replay submission structure. The first production
+candidate should port that property into a new native replay path behind an
+environment gate; it should not replace the installed path until exactness and
+a reverse wall bracket pass.
+
 ## Token-rate interpretation
 
 Recovering the full measured differential would give an illustrative, not
@@ -90,6 +140,13 @@ therefore the only currently open route to a result materially beyond parity.
 ## Evidence
 
 - `docs/task_workflow/evidence/nv-active-boundary-targets-20260827/hcq-dispatch-current.json`
+- `docs/task_workflow/evidence/nv-active-boundary-targets-20260827/cuda-graph-bridge-r1.json`
+- `docs/task_workflow/evidence/nv-active-boundary-targets-20260827/cuda-graph-bridge-r2.json`
+- `docs/task_workflow/evidence/nv-active-boundary-targets-20260827/projection-bridge-nv-r1.json`
+- `docs/task_workflow/evidence/nv-active-boundary-targets-20260827/projection-bridge-nv-r2.json`
+- `docs/task_workflow/evidence/nv-active-boundary-targets-20260827/projection-bridge-cuda-r1.json`
+- `docs/task_workflow/evidence/nv-active-boundary-targets-20260827/projection-bridge-cuda-r2.json`
+- `docs/task_workflow/evidence/nv-active-boundary-targets-20260827/frontend-bridge-summary.json`
 - `docs/task_workflow/evidence/nv-active-body-ledger-20260827/phase2-projection-result.json`
 - `docs/task_workflow/output/nv-hcq-dispatch-slope-result-20260822.md`
 - `docs/task_workflow/output/nv-active-body-ledger-phase2-result.md`
