@@ -1,0 +1,11 @@
+{
+  "schema": "tinygrad.llama_same_session_wall.v1",
+  "binary": "/home/ubuntu/env/llama.cpp/build-cuda/bin/llama-bench",
+  "build_commit": "ac4cddeb0",
+  "command": "llama-bench -m Qwen3-8B-Q4_K_M.gguf -ngl 99 -fa on -p 0 -n 20 -d 512 -r 7 -o json",
+  "samples_ns_for_20_tokens": [85617537, 80008265, 80082435, 80174067, 80098254, 80328116, 80262583],
+  "samples_us_per_token": [4280.87685, 4000.41325, 4004.12175, 4008.70335, 4004.9127, 4016.4058, 4013.12915],
+  "median_us_per_token": 4008.70335,
+  "median_tokens_per_second": 249.457222,
+  "note": "Run from a fresh temporary directory because the dirty local llama source adds a one-time llama_decode.dot dump and the repository copy is root-owned. The benchmark binary and model are unchanged."
+}

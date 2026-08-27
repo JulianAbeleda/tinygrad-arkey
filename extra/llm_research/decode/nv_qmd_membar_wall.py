@@ -20,7 +20,7 @@ def run_arm(arm,model_path,depth,count,reps,max_context,out):
  model=_load(model_path,max_context); gen=model.generate(_prompt(model_path,depth),chunk_size=32,temperature=0.0)
  try: settled=_settled_continuous_windows(gen,Device['NV'],count,reps)
  finally: gen.close()
- result={'schema':'tinygrad.nv_qmd_membar_wall.v1','arm':arm,'model':model_path,'depth':depth,'count':count,'reps':reps,'max_context':max_context,'relax_internal_membar':os.getenv('NV_RELAX_INTERNAL_QMD_MEMBAR')=='1','settled':settled}; out.parent.mkdir(parents=True,exist_ok=True); out.write_text(json.dumps(result,indent=2,sort_keys=True)+'\n'); return result
+ result={'schema':'tinygrad.nv_qmd_membar_wall.v1','arm':arm,'model':model_path,'depth':depth,'count':count,'reps':reps,'max_context':max_context,'relax_internal_membar':os.getenv('NV_RELAX_INTERNAL_QMD_MEMBAR','1')!='0','settled':settled}; out.parent.mkdir(parents=True,exist_ok=True); out.write_text(json.dumps(result,indent=2,sort_keys=True)+'\n'); return result
 
 def main():
  ap=argparse.ArgumentParser(); ap.add_argument('--arm',choices=('control_a','candidate','control_c')); ap.add_argument('--model',default=MODEL); ap.add_argument('--depth',type=int,default=512); ap.add_argument('--count',type=int,default=24); ap.add_argument('--reps',type=int,default=9); ap.add_argument('--max-context',type=int,default=768); ap.add_argument('--out',type=pathlib.Path,required=True); a=ap.parse_args()

@@ -1,0 +1,875 @@
+{
+  "schema": "tinygrad.nv_decode_group_window_ledger.v1",
+  "evidence": "OBSERVATIONAL_NATIVE_QUEUE_TIMESTAMPS",
+  "commit": "e411a292a4a4466bb4d6fdbb66e7c0b415a55224",
+  "route": "DEV=NV",
+  "depth": 512,
+  "reps": 3,
+  "marker_off": [
+    {
+      "token": 330,
+      "wall_us": 4650.981,
+      "host_t0_ns": 1758141352171865,
+      "next_return_ns": 1758141356817556,
+      "host_t1_ns": 1758141356822846,
+      "host_calls_ns": [
+        {
+          "programs": 32,
+          "enter_ns": 1758141352777480,
+          "exit_ns": 1758141352843504,
+          "name_sha256": "64768cbbae595701017e17ff8a35066a8125bd369be7258f9d349d46ebbe4402"
+        },
+        {
+          "programs": 64,
+          "enter_ns": 1758141352886214,
+          "exit_ns": 1758141352950144,
+          "name_sha256": "bf57a6a0b5f49ba0acaaa695b0a0d5cc76f75d1a1c3b6fca7715aad4232110f7"
+        },
+        {
+          "programs": 128,
+          "enter_ns": 1758141352977025,
+          "exit_ns": 1758141353063467,
+          "name_sha256": "0b501c47b96c50755ddeb467de8d11eaec16128075ce40d933a77abf76fab40b"
+        },
+        {
+          "programs": 194,
+          "enter_ns": 1758141353096849,
+          "exit_ns": 1758141353153235,
+          "name_sha256": "d209b411f209a35b1cea8f05d7e13a506d162552567fccf8cb4afdb70fc9311b"
+        }
+      ],
+      "item_calls_ns": [
+        {
+          "enter_ns": 1758141353209901,
+          "exit_ns": 1758141356811335
+        }
+      ],
+      "mode": "normal",
+      "host_partition": {
+        "pre_first_graph_us": 605.615,
+        "graph_call_cpu_sum_us": 272.782,
+        "inter_graph_host_sum_us": 102.973,
+        "last_graph_return_to_item_us": 56.666,
+        "item_total_us": 3601.434,
+        "item_pre_drain_us": 0.0,
+        "item_after_drain_us": 3601.434,
+        "python_yield_tail_us": 6.221,
+        "post_next_synchronize_us": 5.29,
+        "host_wall_us": 4650.981
+      }
+    },
+    {
+      "token": 330,
+      "wall_us": 4245.163,
+      "host_t0_ns": 1758186590302642,
+      "next_return_ns": 1758186594542725,
+      "host_t1_ns": 1758186594547805,
+      "host_calls_ns": [
+        {
+          "programs": 32,
+          "enter_ns": 1758186590550106,
+          "exit_ns": 1758186590599709,
+          "name_sha256": "64768cbbae595701017e17ff8a35066a8125bd369be7258f9d349d46ebbe4402"
+        },
+        {
+          "programs": 64,
+          "enter_ns": 1758186590644624,
+          "exit_ns": 1758186590690049,
+          "name_sha256": "bf57a6a0b5f49ba0acaaa695b0a0d5cc76f75d1a1c3b6fca7715aad4232110f7"
+        },
+        {
+          "programs": 128,
+          "enter_ns": 1758186590714294,
+          "exit_ns": 1758186590770961,
+          "name_sha256": "0b501c47b96c50755ddeb467de8d11eaec16128075ce40d933a77abf76fab40b"
+        },
+        {
+          "programs": 194,
+          "enter_ns": 1758186590803592,
+          "exit_ns": 1758186590868133,
+          "name_sha256": "d209b411f209a35b1cea8f05d7e13a506d162552567fccf8cb4afdb70fc9311b"
+        }
+      ],
+      "item_calls_ns": [
+        {
+          "enter_ns": 1758186590930880,
+          "exit_ns": 1758186594536453
+        }
+      ],
+      "mode": "normal",
+      "host_partition": {
+        "pre_first_graph_us": 247.464,
+        "graph_call_cpu_sum_us": 216.236,
+        "inter_graph_host_sum_us": 101.791,
+        "last_graph_return_to_item_us": 62.747,
+        "item_total_us": 3605.573,
+        "item_pre_drain_us": 0.0,
+        "item_after_drain_us": 3605.573,
+        "python_yield_tail_us": 6.272,
+        "post_next_synchronize_us": 5.08,
+        "host_wall_us": 4245.163
+      }
+    },
+    {
+      "token": 330,
+      "wall_us": 4248.68,
+      "host_t0_ns": 1758231879931105,
+      "next_return_ns": 1758231884174315,
+      "host_t1_ns": 1758231884179785,
+      "host_calls_ns": [
+        {
+          "programs": 32,
+          "enter_ns": 1758231880163681,
+          "exit_ns": 1758231880211881,
+          "name_sha256": "64768cbbae595701017e17ff8a35066a8125bd369be7258f9d349d46ebbe4402"
+        },
+        {
+          "programs": 64,
+          "enter_ns": 1758231880255283,
+          "exit_ns": 1758231880296179,
+          "name_sha256": "bf57a6a0b5f49ba0acaaa695b0a0d5cc76f75d1a1c3b6fca7715aad4232110f7"
+        },
+        {
+          "programs": 128,
+          "enter_ns": 1758231880320896,
+          "exit_ns": 1758231880368535,
+          "name_sha256": "0b501c47b96c50755ddeb467de8d11eaec16128075ce40d933a77abf76fab40b"
+        },
+        {
+          "programs": 194,
+          "enter_ns": 1758231880400866,
+          "exit_ns": 1758231880457252,
+          "name_sha256": "d209b411f209a35b1cea8f05d7e13a506d162552567fccf8cb4afdb70fc9311b"
+        }
+      ],
+      "item_calls_ns": [
+        {
+          "enter_ns": 1758231880517625,
+          "exit_ns": 1758231884167662
+        }
+      ],
+      "mode": "normal",
+      "host_partition": {
+        "pre_first_graph_us": 232.576,
+        "graph_call_cpu_sum_us": 193.121,
+        "inter_graph_host_sum_us": 100.45,
+        "last_graph_return_to_item_us": 60.373,
+        "item_total_us": 3650.037,
+        "item_pre_drain_us": 0.0,
+        "item_after_drain_us": 3650.037,
+        "python_yield_tail_us": 6.653,
+        "post_next_synchronize_us": 5.47,
+        "host_wall_us": 4248.68
+      }
+    }
+  ],
+  "marker_off_pre_item_drain": [
+    {
+      "token": 330,
+      "wall_us": 4302.479,
+      "host_t0_ns": 1758152658914648,
+      "next_return_ns": 1758152663212017,
+      "host_t1_ns": 1758152663217127,
+      "host_calls_ns": [
+        {
+          "programs": 32,
+          "enter_ns": 1758152659165198,
+          "exit_ns": 1758152659214721,
+          "name_sha256": "64768cbbae595701017e17ff8a35066a8125bd369be7258f9d349d46ebbe4402"
+        },
+        {
+          "programs": 64,
+          "enter_ns": 1758152659259435,
+          "exit_ns": 1758152659304690,
+          "name_sha256": "bf57a6a0b5f49ba0acaaa695b0a0d5cc76f75d1a1c3b6fca7715aad4232110f7"
+        },
+        {
+          "programs": 128,
+          "enter_ns": 1758152659330759,
+          "exit_ns": 1758152659387655,
+          "name_sha256": "0b501c47b96c50755ddeb467de8d11eaec16128075ce40d933a77abf76fab40b"
+        },
+        {
+          "programs": 194,
+          "enter_ns": 1758152659420437,
+          "exit_ns": 1758152659484647,
+          "name_sha256": "d209b411f209a35b1cea8f05d7e13a506d162552567fccf8cb4afdb70fc9311b"
+        }
+      ],
+      "item_calls_ns": [
+        {
+          "enter_ns": 1758152659547976,
+          "drain_ns": 3566528,
+          "after_drain_ns": 1758152663115586,
+          "exit_ns": 1758152663204734
+        }
+      ],
+      "mode": "pre_item_drain",
+      "host_partition": {
+        "pre_first_graph_us": 250.55,
+        "graph_call_cpu_sum_us": 215.884,
+        "inter_graph_host_sum_us": 103.565,
+        "last_graph_return_to_item_us": 63.329,
+        "item_total_us": 3656.758,
+        "item_pre_drain_us": 3566.528,
+        "item_after_drain_us": 89.148,
+        "python_yield_tail_us": 7.283,
+        "post_next_synchronize_us": 5.11,
+        "host_wall_us": 4302.479
+      }
+    },
+    {
+      "token": 330,
+      "wall_us": 4270.13,
+      "host_t0_ns": 1758197898992881,
+      "next_return_ns": 1758197903258212,
+      "host_t1_ns": 1758197903263011,
+      "host_calls_ns": [
+        {
+          "programs": 32,
+          "enter_ns": 1758197899224436,
+          "exit_ns": 1758197899270653,
+          "name_sha256": "64768cbbae595701017e17ff8a35066a8125bd369be7258f9d349d46ebbe4402"
+        },
+        {
+          "programs": 64,
+          "enter_ns": 1758197899314815,
+          "exit_ns": 1758197899355121,
+          "name_sha256": "bf57a6a0b5f49ba0acaaa695b0a0d5cc76f75d1a1c3b6fca7715aad4232110f7"
+        },
+        {
+          "programs": 128,
+          "enter_ns": 1758197899380158,
+          "exit_ns": 1758197899428719,
+          "name_sha256": "0b501c47b96c50755ddeb467de8d11eaec16128075ce40d933a77abf76fab40b"
+        },
+        {
+          "programs": 194,
+          "enter_ns": 1758197899461020,
+          "exit_ns": 1758197899517526,
+          "name_sha256": "d209b411f209a35b1cea8f05d7e13a506d162552567fccf8cb4afdb70fc9311b"
+        }
+      ],
+      "item_calls_ns": [
+        {
+          "enter_ns": 1758197899578500,
+          "drain_ns": 3568664,
+          "after_drain_ns": 1758197903147825,
+          "exit_ns": 1758197903251750
+        }
+      ],
+      "mode": "pre_item_drain",
+      "host_partition": {
+        "pre_first_graph_us": 231.555,
+        "graph_call_cpu_sum_us": 191.59,
+        "inter_graph_host_sum_us": 101.5,
+        "last_graph_return_to_item_us": 60.974,
+        "item_total_us": 3673.25,
+        "item_pre_drain_us": 3568.664,
+        "item_after_drain_us": 103.925,
+        "python_yield_tail_us": 6.462,
+        "post_next_synchronize_us": 4.799,
+        "host_wall_us": 4270.13
+      }
+    },
+    {
+      "token": 330,
+      "wall_us": 4286.893,
+      "host_t0_ns": 1758243236186958,
+      "next_return_ns": 1758243240469322,
+      "host_t1_ns": 1758243240473851,
+      "host_calls_ns": [
+        {
+          "programs": 32,
+          "enter_ns": 1758243236421729,
+          "exit_ns": 1758243236469478,
+          "name_sha256": "64768cbbae595701017e17ff8a35066a8125bd369be7258f9d349d46ebbe4402"
+        },
+        {
+          "programs": 64,
+          "enter_ns": 1758243236514382,
+          "exit_ns": 1758243236558285,
+          "name_sha256": "bf57a6a0b5f49ba0acaaa695b0a0d5cc76f75d1a1c3b6fca7715aad4232110f7"
+        },
+        {
+          "programs": 128,
+          "enter_ns": 1758243236583222,
+          "exit_ns": 1758243236633927,
+          "name_sha256": "0b501c47b96c50755ddeb467de8d11eaec16128075ce40d933a77abf76fab40b"
+        },
+        {
+          "programs": 194,
+          "enter_ns": 1758243236667380,
+          "exit_ns": 1758243236728574,
+          "name_sha256": "d209b411f209a35b1cea8f05d7e13a506d162552567fccf8cb4afdb70fc9311b"
+        }
+      ],
+      "item_calls_ns": [
+        {
+          "enter_ns": 1758243236791863,
+          "drain_ns": 3579485,
+          "after_drain_ns": 1758243240372020,
+          "exit_ns": 1758243240462640
+        }
+      ],
+      "mode": "pre_item_drain",
+      "host_partition": {
+        "pre_first_graph_us": 234.771,
+        "graph_call_cpu_sum_us": 203.551,
+        "inter_graph_host_sum_us": 103.294,
+        "last_graph_return_to_item_us": 63.289,
+        "item_total_us": 3670.777,
+        "item_pre_drain_us": 3579.485,
+        "item_after_drain_us": 90.62,
+        "python_yield_tail_us": 6.682,
+        "post_next_synchronize_us": 4.529,
+        "host_wall_us": 4286.893
+      }
+    }
+  ],
+  "marker_on": [
+    {
+      "token": 330,
+      "wall_us": 4289.655,
+      "device_window_us": 3948.416,
+      "outside_window_us": 341.2389999999996,
+      "groups": [
+        {
+          "programs": 32,
+          "enter_ns": 1758163970355674,
+          "exit_ns": 1758163970399256,
+          "name_sha256": "64768cbbae595701017e17ff8a35066a8125bd369be7258f9d349d46ebbe4402"
+        },
+        {
+          "programs": 64,
+          "enter_ns": 1758163970445392,
+          "exit_ns": 1758163970486770,
+          "name_sha256": "bf57a6a0b5f49ba0acaaa695b0a0d5cc76f75d1a1c3b6fca7715aad4232110f7"
+        },
+        {
+          "programs": 128,
+          "enter_ns": 1758163970512398,
+          "exit_ns": 1758163970564195,
+          "name_sha256": "0b501c47b96c50755ddeb467de8d11eaec16128075ce40d933a77abf76fab40b"
+        },
+        {
+          "programs": 194,
+          "enter_ns": 1758163970596956,
+          "exit_ns": 1758163970653382,
+          "name_sha256": "d209b411f209a35b1cea8f05d7e13a506d162552567fccf8cb4afdb70fc9311b"
+        }
+      ],
+      "host_t0_ns": 1758163970093602,
+      "next_return_ns": 1758163974377016,
+      "host_t1_ns": 1758163974383257,
+      "host_calls_ns": [
+        {
+          "programs": 32,
+          "enter_ns": 1758163970355674,
+          "exit_ns": 1758163970399256,
+          "name_sha256": "64768cbbae595701017e17ff8a35066a8125bd369be7258f9d349d46ebbe4402"
+        },
+        {
+          "programs": 64,
+          "enter_ns": 1758163970445392,
+          "exit_ns": 1758163970486770,
+          "name_sha256": "bf57a6a0b5f49ba0acaaa695b0a0d5cc76f75d1a1c3b6fca7715aad4232110f7"
+        },
+        {
+          "programs": 128,
+          "enter_ns": 1758163970512398,
+          "exit_ns": 1758163970564195,
+          "name_sha256": "0b501c47b96c50755ddeb467de8d11eaec16128075ce40d933a77abf76fab40b"
+        },
+        {
+          "programs": 194,
+          "enter_ns": 1758163970596956,
+          "exit_ns": 1758163970653382,
+          "name_sha256": "d209b411f209a35b1cea8f05d7e13a506d162552567fccf8cb4afdb70fc9311b"
+        }
+      ],
+      "item_calls_ns": [
+        {
+          "enter_ns": 1758163970750254,
+          "exit_ns": 1758163974368680
+        }
+      ],
+      "mode": "normal",
+      "host_partition": {
+        "pre_first_graph_us": 262.072,
+        "graph_call_cpu_sum_us": 193.183,
+        "inter_graph_host_sum_us": 104.525,
+        "last_graph_return_to_item_us": 96.872,
+        "item_total_us": 3618.426,
+        "item_pre_drain_us": 0.0,
+        "item_after_drain_us": 3618.426,
+        "python_yield_tail_us": 8.336,
+        "post_next_synchronize_us": 6.241,
+        "host_wall_us": 4289.655
+      }
+    },
+    {
+      "token": 330,
+      "wall_us": 4261.163,
+      "device_window_us": 3935.488,
+      "outside_window_us": 325.6749999999997,
+      "groups": [
+        {
+          "programs": 32,
+          "enter_ns": 1758209210498723,
+          "exit_ns": 1758209210542655,
+          "name_sha256": "64768cbbae595701017e17ff8a35066a8125bd369be7258f9d349d46ebbe4402"
+        },
+        {
+          "programs": 64,
+          "enter_ns": 1758209210587109,
+          "exit_ns": 1758209210628566,
+          "name_sha256": "bf57a6a0b5f49ba0acaaa695b0a0d5cc76f75d1a1c3b6fca7715aad4232110f7"
+        },
+        {
+          "programs": 128,
+          "enter_ns": 1758209210652341,
+          "exit_ns": 1758209210700311,
+          "name_sha256": "0b501c47b96c50755ddeb467de8d11eaec16128075ce40d933a77abf76fab40b"
+        },
+        {
+          "programs": 194,
+          "enter_ns": 1758209210732992,
+          "exit_ns": 1758209210791261,
+          "name_sha256": "d209b411f209a35b1cea8f05d7e13a506d162552567fccf8cb4afdb70fc9311b"
+        }
+      ],
+      "host_t0_ns": 1758209210242823,
+      "next_return_ns": 1758209214498726,
+      "host_t1_ns": 1758209214503986,
+      "host_calls_ns": [
+        {
+          "programs": 32,
+          "enter_ns": 1758209210498723,
+          "exit_ns": 1758209210542655,
+          "name_sha256": "64768cbbae595701017e17ff8a35066a8125bd369be7258f9d349d46ebbe4402"
+        },
+        {
+          "programs": 64,
+          "enter_ns": 1758209210587109,
+          "exit_ns": 1758209210628566,
+          "name_sha256": "bf57a6a0b5f49ba0acaaa695b0a0d5cc76f75d1a1c3b6fca7715aad4232110f7"
+        },
+        {
+          "programs": 128,
+          "enter_ns": 1758209210652341,
+          "exit_ns": 1758209210700311,
+          "name_sha256": "0b501c47b96c50755ddeb467de8d11eaec16128075ce40d933a77abf76fab40b"
+        },
+        {
+          "programs": 194,
+          "enter_ns": 1758209210732992,
+          "exit_ns": 1758209210791261,
+          "name_sha256": "d209b411f209a35b1cea8f05d7e13a506d162552567fccf8cb4afdb70fc9311b"
+        }
+      ],
+      "item_calls_ns": [
+        {
+          "enter_ns": 1758209210884266,
+          "exit_ns": 1758209214491993
+        }
+      ],
+      "mode": "normal",
+      "host_partition": {
+        "pre_first_graph_us": 255.9,
+        "graph_call_cpu_sum_us": 191.628,
+        "inter_graph_host_sum_us": 100.91,
+        "last_graph_return_to_item_us": 93.005,
+        "item_total_us": 3607.727,
+        "item_pre_drain_us": 0.0,
+        "item_after_drain_us": 3607.727,
+        "python_yield_tail_us": 6.733,
+        "post_next_synchronize_us": 5.26,
+        "host_wall_us": 4261.163
+      }
+    },
+    {
+      "token": 330,
+      "wall_us": 4257.578,
+      "device_window_us": 3926.24,
+      "outside_window_us": 331.33800000000065,
+      "groups": [
+        {
+          "programs": 32,
+          "enter_ns": 1758254597063481,
+          "exit_ns": 1758254597106171,
+          "name_sha256": "64768cbbae595701017e17ff8a35066a8125bd369be7258f9d349d46ebbe4402"
+        },
+        {
+          "programs": 64,
+          "enter_ns": 1758254597149702,
+          "exit_ns": 1758254597188315,
+          "name_sha256": "bf57a6a0b5f49ba0acaaa695b0a0d5cc76f75d1a1c3b6fca7715aad4232110f7"
+        },
+        {
+          "programs": 128,
+          "enter_ns": 1758254597212751,
+          "exit_ns": 1758254597257775,
+          "name_sha256": "0b501c47b96c50755ddeb467de8d11eaec16128075ce40d933a77abf76fab40b"
+        },
+        {
+          "programs": 194,
+          "enter_ns": 1758254597290998,
+          "exit_ns": 1758254597344137,
+          "name_sha256": "d209b411f209a35b1cea8f05d7e13a506d162552567fccf8cb4afdb70fc9311b"
+        }
+      ],
+      "host_t0_ns": 1758254596807831,
+      "next_return_ns": 1758254601059578,
+      "host_t1_ns": 1758254601065409,
+      "host_calls_ns": [
+        {
+          "programs": 32,
+          "enter_ns": 1758254597063481,
+          "exit_ns": 1758254597106171,
+          "name_sha256": "64768cbbae595701017e17ff8a35066a8125bd369be7258f9d349d46ebbe4402"
+        },
+        {
+          "programs": 64,
+          "enter_ns": 1758254597149702,
+          "exit_ns": 1758254597188315,
+          "name_sha256": "bf57a6a0b5f49ba0acaaa695b0a0d5cc76f75d1a1c3b6fca7715aad4232110f7"
+        },
+        {
+          "programs": 128,
+          "enter_ns": 1758254597212751,
+          "exit_ns": 1758254597257775,
+          "name_sha256": "0b501c47b96c50755ddeb467de8d11eaec16128075ce40d933a77abf76fab40b"
+        },
+        {
+          "programs": 194,
+          "enter_ns": 1758254597290998,
+          "exit_ns": 1758254597344137,
+          "name_sha256": "d209b411f209a35b1cea8f05d7e13a506d162552567fccf8cb4afdb70fc9311b"
+        }
+      ],
+      "item_calls_ns": [
+        {
+          "enter_ns": 1758254597437993,
+          "exit_ns": 1758254601051392
+        }
+      ],
+      "mode": "normal",
+      "host_partition": {
+        "pre_first_graph_us": 255.65,
+        "graph_call_cpu_sum_us": 179.466,
+        "inter_graph_host_sum_us": 101.19,
+        "last_graph_return_to_item_us": 93.856,
+        "item_total_us": 3613.399,
+        "item_pre_drain_us": 0.0,
+        "item_after_drain_us": 3613.399,
+        "python_yield_tail_us": 8.186,
+        "post_next_synchronize_us": 5.831,
+        "host_wall_us": 4257.578
+      }
+    }
+  ],
+  "pre_item_drain": [
+    {
+      "token": 330,
+      "wall_us": 4297.12,
+      "device_window_us": 3944.608,
+      "outside_window_us": 352.5119999999997,
+      "groups": [
+        {
+          "programs": 32,
+          "enter_ns": 1758175281008630,
+          "exit_ns": 1758175281052513,
+          "name_sha256": "64768cbbae595701017e17ff8a35066a8125bd369be7258f9d349d46ebbe4402"
+        },
+        {
+          "programs": 64,
+          "enter_ns": 1758175281096615,
+          "exit_ns": 1758175281136380,
+          "name_sha256": "bf57a6a0b5f49ba0acaaa695b0a0d5cc76f75d1a1c3b6fca7715aad4232110f7"
+        },
+        {
+          "programs": 128,
+          "enter_ns": 1758175281160776,
+          "exit_ns": 1758175281207013,
+          "name_sha256": "0b501c47b96c50755ddeb467de8d11eaec16128075ce40d933a77abf76fab40b"
+        },
+        {
+          "programs": 194,
+          "enter_ns": 1758175281239213,
+          "exit_ns": 1758175281293084,
+          "name_sha256": "d209b411f209a35b1cea8f05d7e13a506d162552567fccf8cb4afdb70fc9311b"
+        }
+      ],
+      "host_t0_ns": 1758175280759022,
+      "next_return_ns": 1758175285051483,
+      "host_t1_ns": 1758175285056142,
+      "host_calls_ns": [
+        {
+          "programs": 32,
+          "enter_ns": 1758175281008630,
+          "exit_ns": 1758175281052513,
+          "name_sha256": "64768cbbae595701017e17ff8a35066a8125bd369be7258f9d349d46ebbe4402"
+        },
+        {
+          "programs": 64,
+          "enter_ns": 1758175281096615,
+          "exit_ns": 1758175281136380,
+          "name_sha256": "bf57a6a0b5f49ba0acaaa695b0a0d5cc76f75d1a1c3b6fca7715aad4232110f7"
+        },
+        {
+          "programs": 128,
+          "enter_ns": 1758175281160776,
+          "exit_ns": 1758175281207013,
+          "name_sha256": "0b501c47b96c50755ddeb467de8d11eaec16128075ce40d933a77abf76fab40b"
+        },
+        {
+          "programs": 194,
+          "enter_ns": 1758175281239213,
+          "exit_ns": 1758175281293084,
+          "name_sha256": "d209b411f209a35b1cea8f05d7e13a506d162552567fccf8cb4afdb70fc9311b"
+        }
+      ],
+      "item_calls_ns": [
+        {
+          "enter_ns": 1758175281384836,
+          "drain_ns": 3571779,
+          "after_drain_ns": 1758175284958008,
+          "exit_ns": 1758175285045221
+        }
+      ],
+      "mode": "pre_item_drain",
+      "host_partition": {
+        "pre_first_graph_us": 249.608,
+        "graph_call_cpu_sum_us": 183.756,
+        "inter_graph_host_sum_us": 100.698,
+        "last_graph_return_to_item_us": 91.752,
+        "item_total_us": 3660.385,
+        "item_pre_drain_us": 3571.779,
+        "item_after_drain_us": 87.213,
+        "python_yield_tail_us": 6.262,
+        "post_next_synchronize_us": 4.659,
+        "host_wall_us": 4297.12
+      }
+    },
+    {
+      "token": 330,
+      "wall_us": 4302.841,
+      "device_window_us": 3934.624,
+      "outside_window_us": 368.21700000000055,
+      "groups": [
+        {
+          "programs": 32,
+          "enter_ns": 1758220525882855,
+          "exit_ns": 1758220525927910,
+          "name_sha256": "64768cbbae595701017e17ff8a35066a8125bd369be7258f9d349d46ebbe4402"
+        },
+        {
+          "programs": 64,
+          "enter_ns": 1758220525973295,
+          "exit_ns": 1758220526023048,
+          "name_sha256": "bf57a6a0b5f49ba0acaaa695b0a0d5cc76f75d1a1c3b6fca7715aad4232110f7"
+        },
+        {
+          "programs": 128,
+          "enter_ns": 1758220526049528,
+          "exit_ns": 1758220526100323,
+          "name_sha256": "0b501c47b96c50755ddeb467de8d11eaec16128075ce40d933a77abf76fab40b"
+        },
+        {
+          "programs": 194,
+          "enter_ns": 1758220526133235,
+          "exit_ns": 1758220526195031,
+          "name_sha256": "d209b411f209a35b1cea8f05d7e13a506d162552567fccf8cb4afdb70fc9311b"
+        }
+      ],
+      "host_t0_ns": 1758220525616085,
+      "next_return_ns": 1758220529914558,
+      "host_t1_ns": 1758220529918926,
+      "host_calls_ns": [
+        {
+          "programs": 32,
+          "enter_ns": 1758220525882855,
+          "exit_ns": 1758220525927910,
+          "name_sha256": "64768cbbae595701017e17ff8a35066a8125bd369be7258f9d349d46ebbe4402"
+        },
+        {
+          "programs": 64,
+          "enter_ns": 1758220525973295,
+          "exit_ns": 1758220526023048,
+          "name_sha256": "bf57a6a0b5f49ba0acaaa695b0a0d5cc76f75d1a1c3b6fca7715aad4232110f7"
+        },
+        {
+          "programs": 128,
+          "enter_ns": 1758220526049528,
+          "exit_ns": 1758220526100323,
+          "name_sha256": "0b501c47b96c50755ddeb467de8d11eaec16128075ce40d933a77abf76fab40b"
+        },
+        {
+          "programs": 194,
+          "enter_ns": 1758220526133235,
+          "exit_ns": 1758220526195031,
+          "name_sha256": "d209b411f209a35b1cea8f05d7e13a506d162552567fccf8cb4afdb70fc9311b"
+        }
+      ],
+      "item_calls_ns": [
+        {
+          "enter_ns": 1758220526288997,
+          "drain_ns": 3532286,
+          "after_drain_ns": 1758220529821904,
+          "exit_ns": 1758220529907565
+        }
+      ],
+      "mode": "pre_item_drain",
+      "host_partition": {
+        "pre_first_graph_us": 266.77,
+        "graph_call_cpu_sum_us": 207.399,
+        "inter_graph_host_sum_us": 104.777,
+        "last_graph_return_to_item_us": 93.966,
+        "item_total_us": 3618.568,
+        "item_pre_drain_us": 3532.286,
+        "item_after_drain_us": 85.661,
+        "python_yield_tail_us": 6.993,
+        "post_next_synchronize_us": 4.368,
+        "host_wall_us": 4302.841
+      }
+    },
+    {
+      "token": 330,
+      "wall_us": 4304.446,
+      "device_window_us": 3950.912,
+      "outside_window_us": 353.5340000000001,
+      "groups": [
+        {
+          "programs": 32,
+          "enter_ns": 1758265960159468,
+          "exit_ns": 1758265960202739,
+          "name_sha256": "64768cbbae595701017e17ff8a35066a8125bd369be7258f9d349d46ebbe4402"
+        },
+        {
+          "programs": 64,
+          "enter_ns": 1758265960247693,
+          "exit_ns": 1758265960288159,
+          "name_sha256": "bf57a6a0b5f49ba0acaaa695b0a0d5cc76f75d1a1c3b6fca7715aad4232110f7"
+        },
+        {
+          "programs": 128,
+          "enter_ns": 1758265960312865,
+          "exit_ns": 1758265960359683,
+          "name_sha256": "0b501c47b96c50755ddeb467de8d11eaec16128075ce40d933a77abf76fab40b"
+        },
+        {
+          "programs": 194,
+          "enter_ns": 1758265960392435,
+          "exit_ns": 1758265960446216,
+          "name_sha256": "d209b411f209a35b1cea8f05d7e13a506d162552567fccf8cb4afdb70fc9311b"
+        }
+      ],
+      "host_t0_ns": 1758265959905782,
+      "next_return_ns": 1758265964205549,
+      "host_t1_ns": 1758265964210228,
+      "host_calls_ns": [
+        {
+          "programs": 32,
+          "enter_ns": 1758265960159468,
+          "exit_ns": 1758265960202739,
+          "name_sha256": "64768cbbae595701017e17ff8a35066a8125bd369be7258f9d349d46ebbe4402"
+        },
+        {
+          "programs": 64,
+          "enter_ns": 1758265960247693,
+          "exit_ns": 1758265960288159,
+          "name_sha256": "bf57a6a0b5f49ba0acaaa695b0a0d5cc76f75d1a1c3b6fca7715aad4232110f7"
+        },
+        {
+          "programs": 128,
+          "enter_ns": 1758265960312865,
+          "exit_ns": 1758265960359683,
+          "name_sha256": "0b501c47b96c50755ddeb467de8d11eaec16128075ce40d933a77abf76fab40b"
+        },
+        {
+          "programs": 194,
+          "enter_ns": 1758265960392435,
+          "exit_ns": 1758265960446216,
+          "name_sha256": "d209b411f209a35b1cea8f05d7e13a506d162552567fccf8cb4afdb70fc9311b"
+        }
+      ],
+      "item_calls_ns": [
+        {
+          "enter_ns": 1758265960539310,
+          "drain_ns": 3575588,
+          "after_drain_ns": 1758265964115540,
+          "exit_ns": 1758265964199387
+        }
+      ],
+      "mode": "pre_item_drain",
+      "host_partition": {
+        "pre_first_graph_us": 253.686,
+        "graph_call_cpu_sum_us": 184.336,
+        "inter_graph_host_sum_us": 102.412,
+        "last_graph_return_to_item_us": 93.094,
+        "item_total_us": 3660.077,
+        "item_pre_drain_us": 3575.588,
+        "item_after_drain_us": 83.847,
+        "python_yield_tail_us": 6.162,
+        "post_next_synchronize_us": 4.679,
+        "host_wall_us": 4304.446
+      }
+    }
+  ],
+  "median": {
+    "marker_off_wall_us": 4248.68,
+    "marker_on_wall_us": 4261.163,
+    "device_window_us": 3935.488,
+    "outside_window_us": 331.33800000000065,
+    "marker_overhead_us": 12.482999999999265
+  },
+  "host_partition_median": {
+    "pre_first_graph_us": 255.9,
+    "graph_call_cpu_sum_us": 191.628,
+    "inter_graph_host_sum_us": 101.19,
+    "last_graph_return_to_item_us": 93.856,
+    "item_total_us": 3613.399,
+    "item_pre_drain_us": 0.0,
+    "item_after_drain_us": 3613.399,
+    "python_yield_tail_us": 8.186,
+    "post_next_synchronize_us": 5.831,
+    "host_wall_us": 4261.163
+  },
+  "marker_off_host_median": {
+    "pre_first_graph_us": 247.464,
+    "graph_call_cpu_sum_us": 216.236,
+    "inter_graph_host_sum_us": 101.791,
+    "last_graph_return_to_item_us": 60.373,
+    "item_total_us": 3605.573,
+    "item_pre_drain_us": 0.0,
+    "item_after_drain_us": 3605.573,
+    "python_yield_tail_us": 6.272,
+    "post_next_synchronize_us": 5.29,
+    "host_wall_us": 4248.68
+  },
+  "marker_off_pre_item_drain_median": {
+    "pre_first_graph_us": 234.771,
+    "graph_call_cpu_sum_us": 203.551,
+    "inter_graph_host_sum_us": 103.294,
+    "last_graph_return_to_item_us": 63.289,
+    "item_total_us": 3670.777,
+    "item_pre_drain_us": 3568.664,
+    "item_after_drain_us": 90.62,
+    "python_yield_tail_us": 6.682,
+    "post_next_synchronize_us": 4.799,
+    "host_wall_us": 4286.893
+  },
+  "pre_item_drain_median": {
+    "pre_first_graph_us": 253.686,
+    "graph_call_cpu_sum_us": 184.336,
+    "inter_graph_host_sum_us": 102.412,
+    "last_graph_return_to_item_us": 93.094,
+    "item_total_us": 3660.077,
+    "item_pre_drain_us": 3571.779,
+    "item_after_drain_us": 85.661,
+    "python_yield_tail_us": 6.262,
+    "post_next_synchronize_us": 4.659,
+    "host_wall_us": 4302.841
+  }
+}
