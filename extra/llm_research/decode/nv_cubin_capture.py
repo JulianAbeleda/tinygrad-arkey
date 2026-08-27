@@ -70,15 +70,20 @@ def install_hook(prefixes: list[str]) -> None:
   ops_nv.NVProgram.__call__ = patched_call
 
 
-def run_capture(prefixes: list[str], out: pathlib.Path, depth: int, model: str, max_context: int = 4608) -> dict:
+def run_capture(prefixes: list[str], out: pathlib.Path, depth: int, model: str, max_context: int = 4608,
+                official_loader: bool = False) -> dict:
   install_hook(prefixes)
   from tinygrad import Device
-  from tinygrad.llm.generate import load_model_and_tokenizer
-
   dev = Device[Device.DEFAULT]
-  mdl, tok = load_model_and_tokenizer(model, max_context, seed=20260617)
-  base = (tok.prefix() if hasattr(tok, "prefix") else []) + tok.encode("the quick brown fox jumps. " * 800)
-  prompt = (base * (1 + depth // len(base)))[:depth]
+  if official_loader:
+    from extra.llm_research.decode.nv_predispatch_full_logits_qualification import _load, _prompt
+    mdl = _load(model, max_context); prompt = _prompt(model, depth)
+    mdl._decode_direct_greedy_promoted = True; mdl._decode_feedback_pingpong_promoted = True
+  else:
+    from tinygrad.llm.generate import load_model_and_tokenizer
+    mdl, tok = load_model_and_tokenizer(model, max_context, seed=20260617)
+    base = (tok.prefix() if hasattr(tok, "prefix") else []) + tok.encode("the quick brown fox jumps. " * 800)
+    prompt = (base * (1 + depth // len(base)))[:depth]
 
   gen = mdl.generate(prompt.copy(), chunk_size=32, temperature=0.0)
   try:
@@ -99,6 +104,7 @@ def run_capture(prefixes: list[str], out: pathlib.Path, depth: int, model: str, 
     return result
 
   captured = []
+  out.parent.mkdir(parents=True, exist_ok=True)
   for name, rec in CAPTURED.items():
     cubin_path = out.with_name(f"{name}.cubin")
     cubin_path.write_bytes(rec["cubin"])
@@ -109,8 +115,8 @@ def run_capture(prefixes: list[str], out: pathlib.Path, depth: int, model: str, 
     captured.append(row)
 
   result = {"schema": "tinygrad.nv_cubin_capture.v1", "captured": captured,
-            "verdict": "CAPTURED", "prefixes": prefixes, "depth": depth, "max_context": max_context}
-  out.parent.mkdir(parents=True, exist_ok=True)
+            "verdict": "CAPTURED", "prefixes": prefixes, "depth": depth, "max_context": max_context,
+            "official_loader": official_loader}
   out.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
   print(json.dumps(result, indent=2, sort_keys=True))
   return result
@@ -123,10 +129,11 @@ def main() -> int:
   ap.add_argument("--out", type=pathlib.Path, required=True)
   ap.add_argument("--depth", type=int, default=512)
   ap.add_argument("--max-context", type=int, default=4608)
+  ap.add_argument("--official-loader", action="store_true")
   ap.add_argument("--model", default="/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf")
   args = ap.parse_args()
   prefixes = [p for p in (args.prefixes.split(",") if args.prefixes else (args.prefix or "").split(",")) if p]
-  run_capture(prefixes, args.out, args.depth, args.model, args.max_context)
+  run_capture(prefixes, args.out, args.depth, args.model, args.max_context, args.official_loader)
   return 0
 
 

@@ -1,0 +1,373 @@
+{
+  "captured": [
+    {
+      "calls": [
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 142686027776
+            },
+            {
+              "size": 16384,
+              "va_addr": 157033730048
+            },
+            {
+              "size": 8192,
+              "va_addr": 142857994240
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157038235648
+            },
+            {
+              "size": 16384,
+              "va_addr": 157038206976
+            },
+            {
+              "size": 8192,
+              "va_addr": 142858010624
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157042728960
+            },
+            {
+              "size": 16384,
+              "va_addr": 157042700288
+            },
+            {
+              "size": 8192,
+              "va_addr": 142858055680
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157047148544
+            },
+            {
+              "size": 16384,
+              "va_addr": 157047132160
+            },
+            {
+              "size": 8192,
+              "va_addr": 142858080256
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157051568128
+            },
+            {
+              "size": 16384,
+              "va_addr": 157051551744
+            },
+            {
+              "size": 8192,
+              "va_addr": 142858104832
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157056000000
+            },
+            {
+              "size": 16384,
+              "va_addr": 157055983616
+            },
+            {
+              "size": 8192,
+              "va_addr": 142858129408
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157060431872
+            },
+            {
+              "size": 16384,
+              "va_addr": 157060415488
+            },
+            {
+              "size": 8192,
+              "va_addr": 142858153984
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157064851456
+            },
+            {
+              "size": 16384,
+              "va_addr": 157064835072
+            },
+            {
+              "size": 8192,
+              "va_addr": 142858178560
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        }
+      ],
+      "cubin_bytes": 10992,
+      "cubin_path": "docs/task_workflow/evidence/nv-active-body-ledger-20260827/rmsnorm_native_1_4096.cubin",
+      "cubin_sha256": "e9615606370f73faa85245380cb6f05661536c3909a727f64db1dbc3b252bc24",
+      "lcmem_usage": 576,
+      "max_threads": 2048,
+      "name": "rmsnorm_native_1_4096",
+      "regs_usage": 26,
+      "shmem_usage": 2176
+    },
+    {
+      "calls": [
+        {
+          "buf_meta": [
+            {
+              "size": 610304,
+              "va_addr": 157193154560
+            },
+            {
+              "size": 510504960,
+              "va_addr": 137663013696
+            },
+            {
+              "size": 8192,
+              "va_addr": 157193138176
+            }
+          ],
+          "global_size": [
+            75968,
+            1,
+            1
+          ],
+          "local_size": [
+            2,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 610304,
+              "va_addr": 157193777152
+            },
+            {
+              "size": 510504960,
+              "va_addr": 137663013696
+            },
+            {
+              "size": 8192,
+              "va_addr": 157208838144
+            }
+          ],
+          "global_size": [
+            75968,
+            1,
+            1
+          ],
+          "local_size": [
+            2,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 610304,
+              "va_addr": 157193154560
+            },
+            {
+              "size": 510504960,
+              "va_addr": 137663013696
+            },
+            {
+              "size": 8192,
+              "va_addr": 157224493056
+            }
+          ],
+          "global_size": [
+            75968,
+            1,
+            1
+          ],
+          "local_size": [
+            2,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 610304,
+              "va_addr": 157193777152
+            },
+            {
+              "size": 510504960,
+              "va_addr": 137663013696
+            },
+            {
+              "size": 8192,
+              "va_addr": 157241257984
+            }
+          ],
+          "global_size": [
+            75968,
+            1,
+            1
+          ],
+          "local_size": [
+            2,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        }
+      ],
+      "cubin_bytes": 10400,
+      "cubin_path": "docs/task_workflow/evidence/nv-active-body-ledger-20260827/q6k_gen_coop_151936_4096_inkernel.cubin",
+      "cubin_sha256": "46ae07b81bad8bd00b1c06bb8fe5af9abbcf0c3f85d936423fdf79687bdaf4a1",
+      "lcmem_usage": 576,
+      "max_threads": 1152,
+      "name": "q6k_gen_coop_151936_4096_inkernel",
+      "regs_usage": 56,
+      "shmem_usage": 1024
+    }
+  ],
+  "depth": 512,
+  "max_context": 1024,
+  "official_loader": true,
+  "prefixes": [
+    "q6k_gen_coop_151936_4096_inkernel",
+    "rmsnorm_native_1_4096"
+  ],
+  "schema": "tinygrad.nv_cubin_capture.v1",
+  "verdict": "CAPTURED"
+}
