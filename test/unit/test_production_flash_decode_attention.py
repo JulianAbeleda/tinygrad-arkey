@@ -234,6 +234,16 @@ def test_flash_block_geometry_override_is_merged_last():
   assert _flash_block_geometry(model,0,{"split_count":6}) == {"split_count":6}
   assert _flash_block_geometry(model,1,{"split_count":6}) == {"split_count":7,"o_q8_owned":True}
 
+def test_flash_fine_q8_block_geometry_is_closed_and_mutually_exclusive():
+  from tinygrad.llm.model import _flash_block_geometry
+  from tinygrad.llm.flash_decode_attention import flash_fused_gmax_combine_kernel
+  class M: pass
+  model=M(); model._flash_decode_block_geometry_overrides={2:{"o_q8_fine_owned":True}}
+  assert _flash_block_geometry(model,1,{"split_count":6}) == {"split_count":6}
+  assert _flash_block_geometry(model,2,{"split_count":6}) == {"split_count":6,"o_q8_fine_owned":True}
+  with pytest.raises(ValueError,match="only one combine-owned Q8"):
+    flash_fused_gmax_combine_kernel(128,32,6,output_fp16=True,lane_width=128,output_q8=True,output_q8_fine=True)
+
 def test_flash_q8_multi_output_adapter_reorders_only_emitter_arguments():
   from tinygrad.llm.decode_routes import _flash_combine_q8_outputs_emitter
   seen=[]

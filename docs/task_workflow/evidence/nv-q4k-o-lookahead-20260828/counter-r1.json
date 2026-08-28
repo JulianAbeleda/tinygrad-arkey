@@ -1,0 +1,307 @@
+{
+  "commit": "aa8388c1731e6c5db5dbc7641dd878a0227b1493",
+  "correctness": {
+    "bitwise_all": true,
+    "fixtures": [
+      {
+        "finite": true,
+        "fixture": 0,
+        "max_abs": 0.0,
+        "mismatched_words": 0
+      },
+      {
+        "finite": true,
+        "fixture": 1,
+        "max_abs": 0.0,
+        "mismatched_words": 0
+      },
+      {
+        "finite": true,
+        "fixture": 2,
+        "max_abs": 0.0,
+        "mismatched_words": 0
+      }
+    ]
+  },
+  "lookahead": {
+    "cache_lines_per_next_block": 2,
+    "distance_blocks": 1,
+    "issuer": "word_col zero in each 8-lane block group",
+    "payload_retained": false
+  },
+  "method": "installed residual-fused FP16 O plus register-free next-block two-line L2 hints; cudaEvent hot and 16-copy rotated-cold r1",
+  "ncu": {
+    "candidate": {
+      "returncode": 0,
+      "rows": [
+        {
+          "metric": "dram__bytes.sum",
+          "unit": "byte",
+          "value": "9469696"
+        },
+        {
+          "metric": "dram__bytes_op_read.sum",
+          "unit": "byte",
+          "value": "9469696"
+        },
+        {
+          "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "51.31"
+        },
+        {
+          "metric": "gpu__time_duration.sum",
+          "unit": "ns",
+          "value": "10496"
+        },
+        {
+          "metric": "launch__registers_per_thread",
+          "unit": "register/thread",
+          "value": "47"
+        },
+        {
+          "metric": "lts__t_bytes.sum",
+          "unit": "byte",
+          "value": "23709312"
+        },
+        {
+          "metric": "lts__t_sector_op_read_hit_rate.pct",
+          "unit": "%",
+          "value": "84.70"
+        },
+        {
+          "metric": "sm__inst_executed.sum",
+          "unit": "inst",
+          "value": "4919296"
+        },
+        {
+          "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "30.33"
+        },
+        {
+          "metric": "smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct",
+          "unit": "%",
+          "value": "74.18"
+        }
+      ],
+      "stderr_tail": ""
+    },
+    "control": {
+      "returncode": 0,
+      "rows": [
+        {
+          "metric": "dram__bytes.sum",
+          "unit": "byte",
+          "value": "9469440"
+        },
+        {
+          "metric": "dram__bytes_op_read.sum",
+          "unit": "byte",
+          "value": "9469440"
+        },
+        {
+          "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "57.20"
+        },
+        {
+          "metric": "gpu__time_duration.sum",
+          "unit": "ns",
+          "value": "9408"
+        },
+        {
+          "metric": "launch__registers_per_thread",
+          "unit": "register/thread",
+          "value": "43"
+        },
+        {
+          "metric": "lts__t_bytes.sum",
+          "unit": "byte",
+          "value": "11346400"
+        },
+        {
+          "metric": "lts__t_sector_op_read_hit_rate.pct",
+          "unit": "%",
+          "value": "14.53"
+        },
+        {
+          "metric": "sm__inst_executed.sum",
+          "unit": "inst",
+          "value": "4800512"
+        },
+        {
+          "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "34.28"
+        },
+        {
+          "metric": "smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct",
+          "unit": "%",
+          "value": "73.86"
+        }
+      ],
+      "stderr_tail": ""
+    }
+  },
+  "ptxas": [
+    "/tmp/nv_q4k_o_lookahead__9nr5dcv/gate.cu(175): warning #177-D: function \"ck\" was declared but never referenced",
+    "  static void ck(cudaError_t e,const char*w){if(e!=cudaSuccess){fprintf(",
+    "              ^",
+    "",
+    "Remark: The warnings can be suppressed with \"-diag-suppress <warning-number>\"",
+    "",
+    "/tmp/nv_q4k_o_lookahead__9nr5dcv/gate.cu(175): warning #177-D: function \"ck\" was declared but never referenced",
+    "  static void ck(cudaError_t e,const char*w){if(e!=cudaSuccess){fprintf(",
+    "              ^",
+    "",
+    "Remark: The warnings can be suppressed with \"-diag-suppress <warning-number>\"",
+    "",
+    "ptxas info    : 0 bytes gmem",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_epi_resadd_lookahead_4096_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_epi_resadd_lookahead_4096_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 47 registers, used 0 barriers",
+    "ptxas info    : Compile time = 10.199 ms",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 43 registers, used 0 barriers",
+    "ptxas info    : Compile time = 8.921 ms"
+  ],
+  "sass": {
+    "candidate": {
+      "available": true,
+      "instructions": 344,
+      "ldg": 14,
+      "ldg_128": 1,
+      "ldg_64": 8,
+      "opcodes": {
+        "BRA": 1,
+        "BRA.U": 1,
+        "CCTL.E.PF2": 2,
+        "EXIT": 1,
+        "FADD": 6,
+        "FFMA": 64,
+        "FMUL": 16,
+        "HADD2.F32": 34,
+        "HFMA2": 1,
+        "I2FP.F32.U32": 48,
+        "IADD": 4,
+        "IADD.64": 5,
+        "IMAD": 3,
+        "IMAD.SHL.U32": 1,
+        "IMAD.WIDE.U32": 7,
+        "ISETP.NE.U32.AND": 1,
+        "ISETP.NE.U32.OR": 1,
+        "LDC": 1,
+        "LDC.64": 4,
+        "LDCU.64": 2,
+        "LDG.E": 5,
+        "LDG.E.128": 1,
+        "LDG.E.64": 8,
+        "LEA.HI": 1,
+        "LOP3.LUT": 54,
+        "MOV": 1,
+        "NOP": 9,
+        "S2R": 2,
+        "SHF.R.U32.HI": 49,
+        "SHF.R.U64": 1,
+        "SHFL.BFLY": 5,
+        "STG.E": 1,
+        "UIADD3": 1,
+        "UISETP.NE.U32.AND": 1,
+        "UMOV": 2
+      }
+    },
+    "control": {
+      "available": true,
+      "instructions": 344,
+      "ldg": 14,
+      "ldg_128": 1,
+      "ldg_64": 8,
+      "opcodes": {
+        "BRA": 1,
+        "BRA.U": 1,
+        "EXIT": 1,
+        "FADD": 6,
+        "FFMA": 64,
+        "FMUL": 16,
+        "HADD2.F32": 34,
+        "HFMA2": 1,
+        "I2FP.F32.U32": 48,
+        "IADD": 2,
+        "IADD.64": 7,
+        "IMAD.SHL.U32": 1,
+        "IMAD.WIDE.U32": 7,
+        "LDC": 1,
+        "LDC.64": 2,
+        "LDCU.64": 4,
+        "LDG.E": 5,
+        "LDG.E.128": 1,
+        "LDG.E.64": 8,
+        "LEA": 1,
+        "LEA.HI": 1,
+        "LEA.HI.X": 1,
+        "LOP3.LUT": 55,
+        "NOP": 14,
+        "S2R": 2,
+        "SHF.L.U64.HI": 1,
+        "SHF.R.U32.HI": 48,
+        "SHF.R.U64": 1,
+        "SHFL.BFLY": 5,
+        "STG.E": 1,
+        "UIADD3": 1,
+        "UISETP.NE.U32.AND": 1,
+        "UMOV": 2
+      }
+    }
+  },
+  "schema": "tinygrad.nv_q4k_o_l2_lookahead_microgate.v1",
+  "scoreboard": {
+    "candidate_pct": 74.18,
+    "control_pct": 73.86,
+    "reduced": false
+  },
+  "shape": {
+    "k": 4096,
+    "rotated_weight_bytes": 150994944,
+    "rows": 4096,
+    "weight_bytes": 9437184
+  },
+  "threshold": {
+    "cold_recovery_us_per_call": 0.15,
+    "scoreboard_must_reduce": true
+  },
+  "timing": {
+    "candidate_cold_rate_tb_s": 1.1749482071713147,
+    "cold_passes": 4,
+    "cold_recovery_us": 0.7759999999999998,
+    "control_cold_rate_tb_s": 1.071433242506812,
+    "hot_passes": 20,
+    "hot_recovery_us": -0.30239999999999956,
+    "medians": {
+      "cold_candidate": 8.032,
+      "cold_control": 8.808,
+      "hot_candidate": 5.504,
+      "hot_control": 5.2016
+    },
+    "reps": 1,
+    "samples": {
+      "cold_candidate": [
+        8.032
+      ],
+      "cold_control": [
+        8.808
+      ],
+      "hot_candidate": [
+        5.504
+      ],
+      "hot_control": [
+        5.2016
+      ]
+    },
+    "unit": "us_per_call"
+  },
+  "verdict": "STOP"
+}

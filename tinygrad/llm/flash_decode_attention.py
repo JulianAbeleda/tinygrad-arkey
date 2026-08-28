@@ -295,18 +295,19 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
 
 def flash_fused_gmax_combine_kernel(Hd:int, Hq:int, S:int, stride:int|None=None, output_fp16:bool=False,
                                     lane_width:int=32, register_weights:bool=False, successor_prefetch_groups:int=0,
-                                    output_q8:bool=False):
+                                    output_q8:bool=False, output_q8_fine:bool=False):
   W, L_COL, M_COL, LANES, R = Hd + 2, Hd, Hd + 1, lane_width, Hd // lane_width
   if Hd % LANES != 0: raise ValueError(f"fused combine needs Hd%{LANES}==0, got {Hd}")
   NW, stride = _ceildiv(S, LANES), S if stride is None else stride
 
   if successor_prefetch_groups not in (0, 1, 2, 4):
     raise ValueError(f"successor prefetch groups must be one of 0/1/2/4, got {successor_prefetch_groups}")
-  if output_q8 and (lane_width != 128 or not output_fp16 or successor_prefetch_groups):
+  if output_q8 and output_q8_fine: raise ValueError("only one combine-owned Q8 representation may be selected")
+  if (output_q8 or output_q8_fine) and (lane_width != 128 or not output_fp16 or successor_prefetch_groups):
     raise ValueError("combine-owned Q8 requires fp16 output, lane width 128, and no successor prefetch")
 
   def kernel(out:UOp, pout:UOp, *successor:UOp) -> UOp:
-    if len(successor) != int(bool(successor_prefetch_groups or output_q8)):
+    if len(successor) != int(bool(successor_prefetch_groups or output_q8 or output_q8_fine)):
       raise ValueError("combine auxiliary output/input argument does not match the selected research mode")
     head = UOp.range(Hq, 0, AxisType.GLOBAL)
     lane = UOp.range(LANES, 1, AxisType.LOCAL)
@@ -368,6 +369,7 @@ def flash_fused_gmax_combine_kernel(Hd:int, Hq:int, S:int, stride:int|None=None,
     combine_name += rw_suffix
     if successor_prefetch_groups: combine_name += f"_opf{successor_prefetch_groups}early"
     if output_q8: combine_name += "_q8o"
+    if output_q8_fine: combine_name += "_q8f16o"
     stores=[out[head * Hd + output_dim].store(value)]
     if output_q8:
       rounded=value.cast(dtypes.float32); lane32=lane&31; group=head*4+lane//32
@@ -383,6 +385,22 @@ def flash_fused_gmax_combine_kernel(Hd:int, Hq:int, S:int, stride:int|None=None,
       metadata=d.cast(dtypes.float16).bitcast(dtypes.uint16).cast(dtypes.uint32) | \
         xsum.cast(dtypes.float16).bitcast(dtypes.uint16).cast(dtypes.uint32).lshift(16)
       stores.append(successor[0][1024+group].store(metadata,lane32.eq(0)))
+    if output_q8_fine:
+      # Quality-first research representation: retain the exact fp16 combine
+      # rounding point, but halve the activation scale group from 32 to 16.
+      rounded=value.cast(dtypes.float32); lane16=lane&15; group16=head*8+lane//16
+      amax=warp_reduce_max(rounded.abs(),lane16,16,slot_base=290)
+      d=amax/UOp.const(dtypes.float32,127.0); inv=d.eq(0.0).where(UOp.const(dtypes.float32,0.0),d.reciprocal())
+      qi=(rounded*inv).round().maximum(UOp.const(dtypes.float32,-128.0)).minimum(
+        UOp.const(dtypes.float32,127.0)).cast(dtypes.int8).cast(dtypes.int32)
+      q1,q2,q3=(_staged_shfl(qi,off,lane16,300+off) for off in (1,2,3))
+      packed=qi.cast(dtypes.uint8).cast(dtypes.uint32) | q1.cast(dtypes.uint8).cast(dtypes.uint32).lshift(8) | \
+        q2.cast(dtypes.uint8).cast(dtypes.uint32).lshift(16) | q3.cast(dtypes.uint8).cast(dtypes.uint32).lshift(24)
+      stores.append(successor[0][head*32+lane//4].store(packed,(lane16&3).eq(0)))
+      xsum=_warp_reduce_sum_staged(rounded,lane16,16,slot_base=310)
+      metadata=d.cast(dtypes.float16).bitcast(dtypes.uint16).cast(dtypes.uint32) | \
+        xsum.cast(dtypes.float16).bitcast(dtypes.uint16).cast(dtypes.uint32).lshift(16)
+      stores.append(successor[0][1024+group16].store(metadata,lane16.eq(0)))
     store = UOp.group(*stores).end(output_axis).end(head, lane)
     return store.sink(*(hint.end(head,lane) for hint in prefetch), arg=KernelInfo(name=combine_name, opts_to_apply=()))
   return kernel

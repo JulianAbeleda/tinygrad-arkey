@@ -22,7 +22,8 @@ from tinygrad.llm.decode_routes import (FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_
                                         should_use_flash_decode as _route_should_use_flash_decode)
 from tinygrad.llm.decode_kernels import DecodeRMSNormSpec, emit_decode_rmsnorm_kernel
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
-from tinygrad.llm.shared_q8_attention import SharedQ8AttentionAdmission, q4k_q8_o_call, shared_q8_attention_call
+from tinygrad.llm.shared_q8_attention import (SharedQ8AttentionAdmission, q4k_q8_fine_o_call, q4k_q8_o_call,
+                                               shared_q8_attention_call)
 from tinygrad.llm.packed_argmax import (make_native_argmax_host_mirror, native_argmax_finite_fp32,
                                         native_argmax_finite_fp32_host_mirror, packed_argmax_finite_fp32,
                                         read_native_argmax_host_mirror)
@@ -1030,9 +1031,11 @@ class TransformerBlock(FFNBlock):
     # candidate binding selects the flash graph upstream; ring decode always
     # uses it because its wrapped write slot is not a logical context length.
     _o_q8 = None
+    _o_q8_fine = False
     if _should_use_flash_attention(_ring_freqs, start_pos, T, getattr(self, "_use_flash", False)):
       Hq, Hkv, Hd = self.config.n_heads, self.config.n_kv_heads, self.config.head_dim
       _flash_geom = getattr(self, "_flash_decode_tile_geometry_lease", None)
+      _o_q8_fine = bool((_flash_geom or {}).get("o_q8_fine_owned",False))
       _o_prefetch_groups = int((_flash_geom or {}).get("o_successor_prefetch_groups", 0))
       _o_successor_weights = None
       if _o_prefetch_groups:
@@ -1121,7 +1124,8 @@ class TransformerBlock(FFNBlock):
       return _prefill_semantic(_prefill, prefill_activation, out.contiguous())
     if _has_residual:
       if _o_q8 is not None:
-        _q8_o=q4k_q8_o_call(True,self.attn_output,_o_q8,residual_for_output)
+        _q8_o=(q4k_q8_fine_o_call(True,self.attn_output,_o_q8,residual_for_output) if _o_q8_fine else
+               q4k_q8_o_call(True,self.attn_output,_o_q8,residual_for_output))
         if _q8_o is None: raise RuntimeError("combine-owned Q8 O route failed after admission")
         return _prefill_semantic(_prefill,prefill_activation,_q8_o)
       return _prefill_semantic(_prefill, prefill_activation,

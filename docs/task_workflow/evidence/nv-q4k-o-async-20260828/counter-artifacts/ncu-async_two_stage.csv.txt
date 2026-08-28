@@ -1,0 +1,21 @@
+==PROF== Connected to process 2867905 (/tmp/nv_q4k_o_async_z7uhp_f4/gate)
+fixture=0 arm=1 finite=1 mismatched_words=0 max_abs=0
+fixture=0 arm=2 finite=1 mismatched_words=0 max_abs=0
+fixture=1 arm=1 finite=1 mismatched_words=0 max_abs=0
+fixture=1 arm=2 finite=1 mismatched_words=0 max_abs=0
+fixture=2 arm=1 finite=1 mismatched_words=0 max_abs=0
+fixture=2 arm=2 finite=1 mismatched_words=0 max_abs=0
+==PROF== Disconnected from process 2867905
+"ID","Process ID","Process Name","Host Name","Kernel Name","Context","Stream","Block Size","Grid Size","Device","CC","Section Name","Metric Name","Metric Unit","Metric Value"
+"0","2867905","gate","127.0.0.1","q4k_g3_lanemap_gemv_vec_epi_resadd_async2_4096_4096","1","7","(32, 1, 1)","(4096, 1, 1)","0","12.0","Command line profiler metrics","dram__bytes.sum","byte","9472768"
+"0","2867905","gate","127.0.0.1","q4k_g3_lanemap_gemv_vec_epi_resadd_async2_4096_4096","1","7","(32, 1, 1)","(4096, 1, 1)","0","12.0","Command line profiler metrics","dram__bytes_op_read.sum","byte","9472768"
+"0","2867905","gate","127.0.0.1","q4k_g3_lanemap_gemv_vec_epi_resadd_async2_4096_4096","1","7","(32, 1, 1)","(4096, 1, 1)","0","12.0","Command line profiler metrics","dram__throughput.avg.pct_of_peak_sustained_elapsed","%","46.87"
+"0","2867905","gate","127.0.0.1","q4k_g3_lanemap_gemv_vec_epi_resadd_async2_4096_4096","1","7","(32, 1, 1)","(4096, 1, 1)","0","12.0","Command line profiler metrics","gpu__time_duration.sum","ns","11488"
+"0","2867905","gate","127.0.0.1","q4k_g3_lanemap_gemv_vec_epi_resadd_async2_4096_4096","1","7","(32, 1, 1)","(4096, 1, 1)","0","12.0","Command line profiler metrics","launch__registers_per_thread","register/thread","45"
+"0","2867905","gate","127.0.0.1","q4k_g3_lanemap_gemv_vec_epi_resadd_async2_4096_4096","1","7","(32, 1, 1)","(4096, 1, 1)","0","12.0","Command line profiler metrics","lts__t_bytes.sum","byte","11382176"
+"0","2867905","gate","127.0.0.1","q4k_g3_lanemap_gemv_vec_epi_resadd_async2_4096_4096","1","7","(32, 1, 1)","(4096, 1, 1)","0","12.0","Command line profiler metrics","lts__t_sector_op_read_hit_rate.pct","%","14.80"
+"0","2867905","gate","127.0.0.1","q4k_g3_lanemap_gemv_vec_epi_resadd_async2_4096_4096","1","7","(32, 1, 1)","(4096, 1, 1)","0","12.0","Command line profiler metrics","sm__inst_executed.sum","inst","5464064"
+"0","2867905","gate","127.0.0.1","q4k_g3_lanemap_gemv_vec_epi_resadd_async2_4096_4096","1","7","(32, 1, 1)","(4096, 1, 1)","0","12.0","Command line profiler metrics","sm__throughput.avg.pct_of_peak_sustained_elapsed","%","30.31"
+"0","2867905","gate","127.0.0.1","q4k_g3_lanemap_gemv_vec_epi_resadd_async2_4096_4096","1","7","(32, 1, 1)","(4096, 1, 1)","0","12.0","Command line profiler metrics","smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct","%","68.23"
+
+STDERR

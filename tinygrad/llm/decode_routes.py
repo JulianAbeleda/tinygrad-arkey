@@ -661,7 +661,7 @@ def _flash_llama_vec_wide_research_call(q:Tensor, assigned_kv:Tensor, Tc:UOp, bi
                                          token_bound:int|None=None, wide_q_f32:bool=False,
                                          combine_register_weights:bool=False, query_group_size:int=1,
                                          successor_weights:Tensor|None=None, successor_prefetch_groups:int=0,
-                                         output_q8:bool=False) -> Tensor|tuple[Tensor,Tensor]:
+                                         output_q8:bool=False, output_q8_fine:bool=False) -> Tensor|tuple[Tensor,Tensor]:
   """Extent-derived wide-KV flash at the approved research/promotion admission boundary."""
   extent_split = MAXC // 128 if MAXC % 128 == 0 else None
   bounded = token_bound is not None and token_bound % 128 == 0 and token_bound <= MAXC and \
@@ -685,15 +685,16 @@ def _flash_llama_vec_wide_research_call(q:Tensor, assigned_kv:Tensor, Tc:UOp, bi
   partial = execute(None, q_arg.reshape(binding.Hq * binding.Hd), cache_bits, program=tile_program)
   combine_emitter=flash_fused_gmax_combine_kernel(binding.Hd, binding.Hq, S, output_fp16=output_fp16, lane_width=128,
                                     register_weights=combine_register_weights,
-                                    successor_prefetch_groups=successor_prefetch_groups,output_q8=output_q8)
-  if output_q8: combine_emitter=_flash_combine_q8_outputs_emitter(combine_emitter)
+                                    successor_prefetch_groups=successor_prefetch_groups,output_q8=output_q8,
+                                    output_q8_fine=output_q8_fine)
+  if output_q8 or output_q8_fine: combine_emitter=_flash_combine_q8_outputs_emitter(combine_emitter)
   combine_program = KernelProgram(binding.route_id, f"{binding.candidate_id}.llama_vec_wide.combine",
     provenance,
     combine_emitter,
     output_spec=OutputSpec((binding.Hq * binding.Hd,), dtypes.float16 if output_fp16 else dtypes.float32))
-  if output_q8:
+  if output_q8 or output_q8_fine:
     out=Tensor.empty((binding.Hq*binding.Hd,),dtype=dtypes.float16,device=q.device)
-    q8=Tensor.empty((1152,),dtype=dtypes.uint32,device=q.device)
+    q8=Tensor.empty((1280 if output_q8_fine else 1152,),dtype=dtypes.uint32,device=q.device)
     results=execute_research_program_outputs(out,q8,partial,program=combine_program)
     return results[0].reshape(binding.Hq,binding.Hd),results[1]
   combine_args=(partial,) if successor_weights is None else (partial,successor_weights)
@@ -767,17 +768,20 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
       raise ValueError("llama_vec_wide research route requires plain, pre-rotated fp16 KV")
     successor_prefetch_groups=int(geom.get("o_successor_prefetch_groups",0))
     output_q8=bool(geom.get("o_q8_owned",False))
-    if output_q8 and successor_prefetch_groups: raise ValueError("O prefetch and combine-owned Q8 are exclusive")
+    output_q8_fine=bool(geom.get("o_q8_fine_owned",False))
+    if output_q8 and output_q8_fine: raise ValueError("only one combine-owned Q8 representation may be selected")
+    if (output_q8 or output_q8_fine) and successor_prefetch_groups: raise ValueError("O prefetch and combine-owned Q8 are exclusive")
     if (successor_weights is not None) != bool(successor_prefetch_groups):
       raise ValueError("O successor weights and prefetch group lease must be supplied together")
     return _flash_llama_vec_wide_research_call(q, assigned_kv, _tc, binding, MAXC, split_size, output_fp16,
-                                                promoted=wide_promoted and not successor_prefetch_groups and not output_q8, token_bound=geom.get("token_bound"),
+                                                promoted=wide_promoted and not successor_prefetch_groups and not output_q8 and not output_q8_fine, token_bound=geom.get("token_bound"),
                                                 wide_q_f32=bool(geom.get("wide_q_f32", False)),
                                                 combine_register_weights=_flash_combine_register_weights_admitted(
                                                   wide_promoted, geom),
                                                 query_group_size=int(geom.get("query_group_size", 1)),
                                                 successor_weights=successor_weights,
-                                                successor_prefetch_groups=successor_prefetch_groups,output_q8=output_q8)
+                                                successor_prefetch_groups=successor_prefetch_groups,output_q8=output_q8,
+                                                output_q8_fine=output_q8_fine)
   return flash_decode_live_split_block_tile(q.reshape(binding.Hq, binding.Hd), assigned_kv, _tc,
     binding.Hd, binding.Hq, binding.Hkv, MAXC, split_size, staging=binding.staging,
     fused_combine=True, kv_scale=kv_scale, freqs=freqs, query_group_size=binding.query_group_size,

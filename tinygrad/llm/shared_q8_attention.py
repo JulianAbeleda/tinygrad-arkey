@@ -93,6 +93,10 @@ def _q8_d(packed, group):
 def _q8_s(packed, group):
   return packed[_Q8_PACKS+group].rshift(16).cast(dtypes.uint16).bitcast(dtypes.float16).cast(dtypes.float32)
 
+def _q8_fine_d(packed, group):
+  """Scale-per-16 research packet: 1024 int8x4 words plus 256 d|sum half2 metadata words."""
+  return packed[_Q8_PACKS+group].bitwise_and(0xffff).cast(dtypes.uint16).bitcast(dtypes.float16).cast(dtypes.float32)
+
 def _emit_q8_provider():
   """One-program llama-CUDA Q8_1 provider: 1024 int8x4 packets + 128 d|s half2 metadata.
 
@@ -284,6 +288,50 @@ def q4k_q8_o_call(admitted:bool, linear, packed:Tensor, residual:Tensor|None=Non
   program=KernelProgram("research.flash_o_q8","o.q8_owned",KernelProgramProvenance.RESEARCH_ONLY,
     _emit_q4_cooperative(_Q_ROWS,UOp.const(dtypes.weakint,4),direct_output=True,residual_add=True),
     output_spec=OutputSpec((_Q_ROWS,),dtypes.float32))
+  return execute_research_program(None,words,packed,rv,program=program).reshape(1,1,_Q_ROWS)
+
+
+def _emit_q4_cooperative_fine16_o():
+  """Quality-first Q4 O consumer for a scale-per-16 signed-Q8 activation packet."""
+  def kernel(out,w,xp,residual):
+    row,lid=UOp.special(_Q_ROWS,"gidx0"),UOp.special(128,"lidx0")
+    warp,lane=lid//32,lid%32; group,word_base=lane//4,(lane%4)*2
+    br=UOp.range(4,2,axis_type=AxisType.LOOP); block=warp*4+br
+    base=(row*(_K//256)+block)*Q4K_WORDS_PER_BLOCK
+    w0,w1,w2,w3=w[base],w[base+1],w[base+2],w[base+3]
+    d,dm=_f16_word(w0,False),_f16_word(w0,True); g4=group%4
+    b1=w1.rshift(g4*8).bitwise_and(0xff); b2=w2.rshift(g4*8).bitwise_and(0xff); hb=w3.rshift(g4*8).bitwise_and(0xff)
+    sc=(group<4).where(b1.bitwise_and(63),hb.bitwise_and(0xf).bitwise_or(b1.rshift(6).lshift(4)))
+    mn=(group<4).where(b2.bitwise_and(63),hb.rshift(4).bitwise_or(b2.rshift(6).lshift(4)))
+    c=UOp.const(dtypes.float32,0.0)
+    for ws in range(2):
+      word=word_base+ws; qw=w[base+4+(group//2)*8+word].rshift((group%2)*4).bitwise_and(0x0F0F0F0F)
+      xv=xp[block*64+group*8+word]; dot=int8x4_dot(UOp.const(dtypes.int32,0),qw,xv).cast(dtypes.float32)
+      sx=_i8lane(xv,0)+_i8lane(xv,1)+_i8lane(xv,2)+_i8lane(xv,3)
+      # A Q4 group covers 32 activations. Words 0..3 use its first
+      # scale-per-16 group and words 4..7 use its second.
+      xd=_q8_fine_d(xp,block*16+group*2+word//4)
+      c=c+xd*(d*sc.cast(dtypes.float32)*dot-dm*mn.cast(dtypes.float32)*sx.cast(dtypes.float32))
+    a=UOp.placeholder((1,),dtypes.float32,20,addrspace=AddrSpace.REG);a=a.after(a[0].store(0.0))
+    a=a.after(a[0].store(a.after(br)[0]+c).end(br));t=a[0]
+    for slot,off in enumerate((16,8,4,2,1),90):t=t+_staged_shfl(t,off,lane,slot)
+    smem=UOp.placeholder((4,),dtypes.float32,230,addrspace=AddrSpace.LOCAL)
+    published=smem[warp].store(t,lane.eq(0));ready=UOp.barrier(UOp.group(published));merged=UOp.const(dtypes.float32,0.0)
+    for wi in range(4):merged=merged+smem.after(ready)[wi]
+    merged=merged+residual[row].cast(dtypes.float32)
+    return out[row].store(merged,lid.eq(0)).sink(
+      arg=KernelInfo(name=f"q4k_warp_coop_q8f16_dp4a_direct_epi_resadd_{_Q_ROWS}_{_K}",opts_to_apply=()))
+  return kernel
+
+
+def q4k_q8_fine_o_call(admitted:bool, linear, packed:Tensor, residual:Tensor|None=None) -> Tensor|None:
+  """Closed research consumer; no model loader or route policy constructs this admission."""
+  if not admitted or not hasattr(linear,"q4k_storage") or getattr(linear,"route_role",None)!="attn_qo":return None
+  if (getattr(linear,"out_features",None),getattr(linear,"in_features",None)) != (_Q_ROWS,_K):return None
+  if packed.shape != (1280,) or packed.dtype != dtypes.uint32 or residual is None:return None
+  words=linear.q4k_storage.words.to(packed.device);rv=residual.reshape(_Q_ROWS).cast(dtypes.float32)
+  program=KernelProgram("research.flash_o_q8_fine16","o.q8_fine16_owned",KernelProgramProvenance.RESEARCH_ONLY,
+    _emit_q4_cooperative_fine16_o(),output_spec=OutputSpec((_Q_ROWS,),dtypes.float32))
   return execute_research_program(None,words,packed,rv,program=program).reshape(1,1,_Q_ROWS)
 
 

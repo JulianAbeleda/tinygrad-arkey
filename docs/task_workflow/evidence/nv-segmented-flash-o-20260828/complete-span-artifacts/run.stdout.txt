@@ -1,0 +1,22 @@
+score_bitwise=1
+combine_bitwise=1
+final_bitwise=1
+timeline flash1_start=5.664000 flash1_end=12.672000 o0_start=13.408000 o0_end=19.424002 overlap=0.000000
+rep=0 arm=0 hot=11.774000 cold=24.928000
+rep=0 arm=1 hot=26.298000 cold=31.951999
+rep=1 arm=1 hot=26.140000 cold=31.048000
+rep=1 arm=0 hot=12.442000 cold=24.896000
+rep=2 arm=0 hot=12.084000 cold=25.320000
+rep=2 arm=1 hot=27.152000 cold=30.920000
+rep=3 arm=1 hot=27.990000 cold=31.512001
+rep=3 arm=0 hot=11.882000 cold=24.976001
+rep=4 arm=0 hot=12.052000 cold=24.312000
+rep=4 arm=1 hot=27.042000 cold=32.344000
+rep=5 arm=1 hot=26.102000 cold=30.896000
+rep=5 arm=0 hot=11.686000 cold=24.992001
+rep=6 arm=0 hot=11.858000 cold=24.880000
+rep=6 arm=1 hot=26.062000 cold=30.544000
+rep=7 arm=1 hot=25.900000 cold=30.832001
+rep=7 arm=0 hot=11.960000 cold=25.296000
+rep=8 arm=0 hot=12.006000 cold=24.704000
+rep=8 arm=1 hot=26.020000 cold=31.472000
