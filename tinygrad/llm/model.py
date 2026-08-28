@@ -22,7 +22,7 @@ from tinygrad.llm.decode_routes import (FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_
                                         should_use_flash_decode as _route_should_use_flash_decode)
 from tinygrad.llm.decode_kernels import DecodeRMSNormSpec, emit_decode_rmsnorm_kernel
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
-from tinygrad.llm.shared_q8_attention import SharedQ8AttentionAdmission, shared_q8_attention_call
+from tinygrad.llm.shared_q8_attention import SharedQ8AttentionAdmission, q4k_q8_o_call, shared_q8_attention_call
 from tinygrad.llm.packed_argmax import (make_native_argmax_host_mirror, native_argmax_finite_fp32,
                                         native_argmax_finite_fp32_host_mirror, packed_argmax_finite_fp32,
                                         read_native_argmax_host_mirror)
@@ -63,6 +63,7 @@ from tinygrad.llm.model_route_plan import (build_model_route_plan, decode_norm_f
   decode_q6_direct_shared_q8_attention_promoted, decode_q4_direct_shared_q8_attention_promoted,
   decode_shared_q8_q4kv_pair_promoted, decode_shared_q8_q4q6_kv_pair_promoted,
   decode_shared_q8_q4q4_qkv_full_promoted, decode_q4k_q4q4_qkv_full_promoted,
+  decode_flash_llama_vec_wide_promoted,
   decode_q4k_ffn_down_fp16_geometry_promoted,
   decode_q6k_ffn_down_fp16_geometry_promoted, decode_q6k_ffn_down_packed_lanemap_promoted,
   decode_q6k_ffn_down_unroll_promoted,
@@ -92,6 +93,28 @@ def _should_use_flash_attention(ring_freqs:Tensor|None, start_pos:int|UOp, T:int
 def _adaptive_flash_split_count(enabled:bool,start_pos:int,max_context:int)->int|None:
   """Measured G4 context band: S48 wins through Tc=768; S64 wins for Tc=769..1024."""
   return 64 if enabled and max_context <= 1024 and 768 <= start_pos < max_context else None
+
+def _active_horizon_flash_split_count(enabled:bool,start_pos:int,max_context:int)->int|None:
+  """Closed-lease wide-Flash selector: S6 through Tc=768, then the installed S8 graph.
+
+  ``start_pos`` is the zero-based KV position written by this decode call, so
+  its active context is Tc=start_pos+1. The lease is deliberately exact to
+  the measured 1024-token dense-decode workload and never changes the default
+  graph when disabled.
+  """
+  return 6 if enabled and max_context == 1024 and 512 <= start_pos < 768 else None
+
+def _flash_decode_geometry_for_split(base:dict, split_count:int|None) -> dict:
+  """Translate a graph-identity split into the geometry lease it was qualified for."""
+  geometry = dict(base)
+  if split_count == 6:
+    geometry.update(split_count=6, llama_vec_wide=True, token_bound=768)
+  elif split_count is not None:
+    geometry["split_count"] = split_count
+  return geometry
+
+def _flash_jit_variant(split_count:int|None, default, s6, s64):
+  return s6 if split_count == 6 else s64 if split_count == 64 else default
 
 def _request_static_flash_split_count(prompt_len:int, expected_output_tokens:int|None, max_context:int)->int|None:
   """Select the measured single-graph S64 crossing route from an explicit request horizon."""
@@ -996,16 +1019,25 @@ class TransformerBlock(FFNBlock):
     # The model owns two separately captured decode graphs. The immutable
     # candidate binding selects the flash graph upstream; ring decode always
     # uses it because its wrapped write slot is not a logical context length.
+    _o_q8 = None
     if _should_use_flash_attention(_ring_freqs, start_pos, T, getattr(self, "_use_flash", False)):
       Hq, Hkv, Hd = self.config.n_heads, self.config.n_kv_heads, self.config.head_dim
+      _flash_geom = getattr(self, "_flash_decode_tile_geometry_lease", None)
+      _o_prefetch_groups = int((_flash_geom or {}).get("o_successor_prefetch_groups", 0))
+      _o_successor_weights = None
+      if _o_prefetch_groups:
+        if not isinstance(self.attn_output, Q4KPrimitiveLinear) or not hasattr(self.attn_output, "q4k_storage"):
+          raise ValueError("Flash O successor prefetch requires a Q4_K attention-output projection")
+        _o_successor_weights = self.attn_output.q4k_storage.words.to(x.device)
       # M2d combine-fp16 lease (nv-epilogue-absorption-route-scope-20260810.md): harness-installed
       # on the model and every block; fail-closed absent keeps the closed-default policy answer
       # (fp32 combine, byte-identical legacy graph).
-      out = flash_decode_attention_route(q, assigned_kv, start_pos, T, B, Hq, Hkv, Hd, self.config.max_context,
+      _flash_result = flash_decode_attention_route(q, assigned_kv, start_pos, T, B, Hq, Hkv, Hd, self.config.max_context,
                                          kv_scale=assigned_scale, freqs=(_fr if _rope_read else None),
                                          ring_full=_ring_full,
                                          combine_fp16=bool(getattr(self, "_flash_combine_fp16_lease", False)),
-                                         tile_geometry=getattr(self, "_flash_decode_tile_geometry_lease", None))
+                                         tile_geometry=_flash_geom, successor_weights=_o_successor_weights)
+      out,_o_q8 = _flash_result if isinstance(_flash_result,tuple) else (_flash_result,None)
       attn = out.reshape(B, Hq, T, Hd).cast(q.dtype)
     elif self.config.prefill_custom_kernel_attn and getattr(self, '_prefill_v2', False) and isinstance(start_pos, int) and resolve(T != 1):
       # P5b: the proven custom-kernel-injection route's OWN independent eligibility boundary
@@ -1078,6 +1110,10 @@ class TransformerBlock(FFNBlock):
       out = _pf16(self.attn_output, out_in)
       return _prefill_semantic(_prefill, prefill_activation, out.contiguous())
     if _has_residual:
+      if _o_q8 is not None:
+        _q8_o=q4k_q8_o_call(True,self.attn_output,_o_q8,residual_for_output)
+        if _q8_o is None: raise RuntimeError("combine-owned Q8 O route failed after admission")
+        return _prefill_semantic(_prefill,prefill_activation,_q8_o)
       return _prefill_semantic(_prefill, prefill_activation,
         self.attn_output(out_in, residual=residual_for_output))
     return _prefill_semantic(_prefill, prefill_activation, self.attn_output(out_in))
@@ -1271,11 +1307,13 @@ class Transformer:
     self.prefill_jit = TinyJit(self.forward)
     self.rollout_jit = TinyJit(self.forward)
     self.rollout_jit_flash = TinyJit(self.forward)
+    self.rollout_jit_flash_s6 = TinyJit(self.forward)
     self.rollout_jit_flash_s64 = TinyJit(self.forward)
     self.prefill_greedy_jit = TinyJit(self.forward_greedy)
     self.prefill_v2_greedy_jit = TinyJit(self.forward_greedy)
     self.rollout_greedy_jit = TinyJit(self.forward_greedy)
     self.rollout_greedy_jit_flash = TinyJit(self.forward_greedy)
+    self.rollout_greedy_jit_flash_s6 = TinyJit(self.forward_greedy)
     self.rollout_greedy_jit_flash_s64 = TinyJit(self.forward_greedy)
     # Closed-default P5 experiment: two captures can form an alias-free
     # device-resident feedback ring.  A harness must explicitly promote the
@@ -1283,18 +1321,22 @@ class Transformer:
     # single-capture path and CapturedJit's generic written-input firewall.
     self.rollout_greedy_pingpong_jits = tuple(TinyJit(self.forward_greedy) for _ in range(2))
     self.rollout_greedy_pingpong_jits_flash = tuple(TinyJit(self.forward_greedy) for _ in range(2))
+    self.rollout_greedy_pingpong_jits_flash_s6 = tuple(TinyJit(self.forward_greedy) for _ in range(2))
     self.rollout_greedy_pingpong_jits_flash_s64 = tuple(TinyJit(self.forward_greedy) for _ in range(2))
     # Diagnostic-only captures return the already-computed decode logits beside
     # the sampled token. They are separate so the production sampled graph's
     # return/lifetime contract remains byte-for-byte unchanged.
     self.rollout_logits_jit = TinyJit(self.forward_with_logits)
     self.rollout_logits_jit_flash = TinyJit(self.forward_with_logits)
+    self.rollout_logits_jit_flash_s6 = TinyJit(self.forward_with_logits)
     self.rollout_logits_jit_flash_s64 = TinyJit(self.forward_with_logits)
     self.rollout_greedy_logits_jit = TinyJit(self.forward_greedy_with_logits)
     self.rollout_greedy_logits_jit_flash = TinyJit(self.forward_greedy_with_logits)
+    self.rollout_greedy_logits_jit_flash_s6 = TinyJit(self.forward_greedy_with_logits)
     self.rollout_greedy_logits_jit_flash_s64 = TinyJit(self.forward_greedy_with_logits)
     self.rollout_greedy_logits_pingpong_jits = tuple(TinyJit(self.forward_greedy_with_logits) for _ in range(2))
     self.rollout_greedy_logits_pingpong_jits_flash = tuple(TinyJit(self.forward_greedy_with_logits) for _ in range(2))
+    self.rollout_greedy_logits_pingpong_jits_flash_s6 = tuple(TinyJit(self.forward_greedy_with_logits) for _ in range(2))
     self.rollout_greedy_logits_pingpong_jits_flash_s64 = tuple(TinyJit(self.forward_greedy_with_logits) for _ in range(2))
     self.rollout_jit_ring = TinyJit(self.forward_ring)        # ring FILL phase (ctx<N): read [0:start_pos+T], identity freqs
     self.rollout_jit_ring_full = TinyJit(self.forward_ring)   # ring FULL phase (ctx>=N): read [0:N], wrapped write slot + gathered freqs
@@ -1550,21 +1592,24 @@ class Transformer:
     if resolve(tokens.shape[1] != 1): raise ValueError("decode_with_logits only supports one-token decode")
     if _GENERIC_LLM_CONTROL.get(): raise ValueError("decode_with_logits does not support generic-control routing")
     for q4k_linear in self._q4k_linears.linears: q4k_linear.decode_enabled = True
-    flash_geometry = dict(getattr(self, "_flash_decode_tile_geometry_lease", None) or {})
-    if flash_split_count is not None: flash_geometry["split_count"] = flash_split_count
+    flash_geometry = _flash_decode_geometry_for_split(
+      getattr(self, "_flash_decode_tile_geometry_lease", None) or {}, flash_split_count)
     for block in self.blk:
       block._use_flash, block._prefill_v2, block._is_prefill, block._ring_freqs, block._ring_full = use_flash, False, False, None, False
       block._flash_decode_tile_geometry_lease = flash_geometry or None
     if feedback_slot not in (None, 0, 1): raise ValueError("feedback_slot must be None, 0, or 1")
     pingpong = bool(getattr(self, "_decode_feedback_pingpong_promoted", False)) and feedback_slot is not None
-    greedy_flash_pair = self.rollout_greedy_logits_pingpong_jits_flash_s64 if flash_split_count == 64 else self.rollout_greedy_logits_pingpong_jits_flash
-    greedy_flash = self.rollout_greedy_logits_jit_flash_s64 if flash_split_count == 64 else self.rollout_greedy_logits_jit_flash
+    greedy_flash_pair = _flash_jit_variant(flash_split_count, self.rollout_greedy_logits_pingpong_jits_flash,
+      self.rollout_greedy_logits_pingpong_jits_flash_s6, self.rollout_greedy_logits_pingpong_jits_flash_s64)
+    greedy_flash = _flash_jit_variant(flash_split_count, self.rollout_greedy_logits_jit_flash,
+      self.rollout_greedy_logits_jit_flash_s6, self.rollout_greedy_logits_jit_flash_s64)
     greedy_jit = ((greedy_flash_pair if use_flash else self.rollout_greedy_logits_pingpong_jits)[feedback_slot]
                   if pingpong else (greedy_flash if use_flash else self.rollout_greedy_logits_jit))
     direct_greedy = bool(getattr(self, "_decode_direct_greedy_promoted", False))
     jit = greedy_jit if direct_greedy and float(temperature.item()) == 0.0 else \
-          ((self.rollout_logits_jit_flash_s64 if flash_split_count == 64 else self.rollout_logits_jit_flash) if use_flash else self.rollout_logits_jit)
-    with prefill_route_scope(False), self._decode_callify_substrate():
+          (_flash_jit_variant(flash_split_count, self.rollout_logits_jit_flash, self.rollout_logits_jit_flash_s6,
+                              self.rollout_logits_jit_flash_s64) if use_flash else self.rollout_logits_jit)
+    with prefill_route_scope(False), self._decode_callify_substrate(), self._decode_flash_load_schedule_substrate(use_flash):
       return jit(tokens, start_pos, temperature)
 
   @contextlib.contextmanager
@@ -1583,6 +1628,22 @@ class Transformer:
     with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
       yield
 
+  @contextlib.contextmanager
+  def _decode_flash_load_schedule_substrate(self, use_flash:bool):
+    """Contain the measured NV Flash compiler and graph-layout contract.
+
+    The score kernel needs the two-argument launch bound to expose its K/V
+    request wall.  The corresponding token-wall qualification used an initial
+    graph cap of 33 so score/combine do not straddle the first arbitrary
+    doubling seam.  Apply both as one admitted capture lease: changing either
+    independently reproduces the measured conversion failure.
+    """
+    if not use_flash or not getattr(self, "_decode_flash_load_schedule_promoted", False):
+      yield
+      return
+    from tinygrad.helpers import Context
+    with Context(NV_FLASH_LOAD_SCHEDULE=1, JIT_BATCH_SIZE=33): yield
+
   def __call__(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, use_flash:bool=False,
                ring_freqs:Tensor|None=None, ring_full:bool=False, greedy:bool=False, feedback_slot:int|None=None,
                flash_split_count:int|None=None) -> Tensor:
@@ -1597,8 +1658,8 @@ class Transformer:
     # context-aware flash: each block reads _use_flash at trace time; rollout_jit (SDPA) and
     # rollout_jit_flash bake distinct attention -- each is only ever called with its own use_flash, so
     # capture is consistent. The decode-only T==1 guard in _attention ignores it during prefill.
-    flash_geometry = dict(getattr(self, "_flash_decode_tile_geometry_lease", None) or {})
-    if flash_split_count is not None: flash_geometry["split_count"] = flash_split_count
+    flash_geometry = _flash_decode_geometry_for_split(
+      getattr(self, "_flash_decode_tile_geometry_lease", None) or {}, flash_split_count)
     for block in self.blk:
       block._use_flash, block._prefill_v2, block._is_prefill, block._ring_freqs, block._ring_full = \
         use_flash, is_prefill_v2, is_prefill, None, ring_full
@@ -1615,18 +1676,21 @@ class Transformer:
       jit = self.prefill_v2_jits.setdefault((start_pos, greedy), TinyJit(self.forward_greedy if greedy else self.forward))
     else:
       pingpong = bool(getattr(self, "_decode_feedback_pingpong_promoted", False)) and feedback_slot is not None
-      greedy_flash_pair = self.rollout_greedy_pingpong_jits_flash_s64 if flash_split_count == 64 else self.rollout_greedy_pingpong_jits_flash
-      greedy_flash = self.rollout_greedy_jit_flash_s64 if flash_split_count == 64 else self.rollout_greedy_jit_flash
+      greedy_flash_pair = _flash_jit_variant(flash_split_count, self.rollout_greedy_pingpong_jits_flash,
+        self.rollout_greedy_pingpong_jits_flash_s6, self.rollout_greedy_pingpong_jits_flash_s64)
+      greedy_flash = _flash_jit_variant(flash_split_count, self.rollout_greedy_jit_flash,
+        self.rollout_greedy_jit_flash_s6, self.rollout_greedy_jit_flash_s64)
       rollout_greedy = ((greedy_flash_pair if use_flash else self.rollout_greedy_pingpong_jits)[feedback_slot]
                         if pingpong else (greedy_flash if use_flash else self.rollout_greedy_jit))
       jit = ((self.prefill_v2_greedy_jit if greedy else self.prefill_v2_jit) if is_prefill_v2 else (self.prefill_greedy_jit if greedy else self.prefill_jit)) if is_prefill else \
             (rollout_greedy if greedy else
-             ((self.rollout_jit_flash_s64 if flash_split_count == 64 else self.rollout_jit_flash) if use_flash else self.rollout_jit))
+             (_flash_jit_variant(flash_split_count, self.rollout_jit_flash, self.rollout_jit_flash_s6,
+                                 self.rollout_jit_flash_s64) if use_flash else self.rollout_jit))
     if not is_prefill_v2:
       if not is_prefill:
         # Decode captures under the M2c callify substrate when a promoted policy
         # requires it; prefill graphs always stay on the closed-graph spelling.
-        with prefill_route_scope(is_prefill), self._decode_callify_substrate():
+        with prefill_route_scope(is_prefill), self._decode_callify_substrate(), self._decode_flash_load_schedule_substrate(use_flash):
           return jit(tokens, start_pos, temperature)
       with prefill_route_scope(is_prefill): return jit(tokens, start_pos, temperature)
     # contain the ambient codegen power: install the warmstart table ONLY around the prefill-v2 forward (it's
@@ -1874,6 +1938,24 @@ class Transformer:
     # (backend, arch) the QK primitives use), never from a target-string guess. Blocks read
     # their own copy so the traced norm call sites need no transformer back-reference.
     _norm_cap = qk_primitive_capability_from_device_facts(_device_facts)
+    # Dense S8 Flash load-schedule promotion.  The substrate itself is generic
+    # (capture-scoped launch bounds + graph cap), while admission remains at
+    # the exact topology qualified at token wall.  Quantization is deliberately
+    # absent from this predicate: the Flash graph shape, not the weight format,
+    # owns the contract.  MoE stays closed until it receives its own lifecycle
+    # qualification.
+    model._decode_flash_load_schedule_promoted = bool(
+      decode_flash_llama_vec_wide_promoted((_norm_cap.backend, _norm_cap.architecture)) and
+      not getenv("TINYGRAD_FLASH_LOAD_SCHEDULE_DISABLE", 0) and config.num_experts == 0 and
+      config.num_blocks == 36 and config.n_heads == 32 and config.n_kv_heads == 8 and
+      config.head_dim == 128 and config.max_context == 1024)
+    # Active-horizon selection is inseparable from explicit capture placement:
+    # without both S6/S8 ping-pong pairs prewarmed, the Tc=769 lazy capture
+    # spike erases the steady-state saving. `generate` therefore activates
+    # the selector only after `_prewarm_active_horizon_flash_pairs` succeeds.
+    model._flash_decode_active_horizon_lease = bool(
+      model._decode_flash_load_schedule_promoted and
+      not getenv("TINYGRAD_FLASH_ACTIVE_HORIZON_DISABLE", 0))
     _norm_promoted = decode_norm_fusion_promoted((_norm_cap.backend, _norm_cap.architecture))
     model._decode_norm_fusion_promoted = _norm_promoted
     for _b in model.blk: _b._decode_norm_fusion_promoted = _norm_promoted
@@ -2321,6 +2403,29 @@ class Transformer:
       try: self(dummy, v_sp.bind(ctx), temp, use_flash=True).realize()
       except Exception: return
 
+  def _prewarm_active_horizon_flash_pairs(self) -> None:
+    """Capture the qualified S6/S8 greedy ping-pong pairs once per model.
+
+    The selector crosses from S6 to S8 at Tc=769. Letting either pair capture
+    at that crossing converts compilation into a token-latency spike, so the
+    booked throughput policy explicitly moves both captures to request warmup.
+    The dummy KV writes are overwritten by the following prompt.
+    """
+    if getattr(self, "_flash_decode_active_horizon_prewarmed", False): return
+    if not getattr(self, "_flash_decode_active_horizon_lease", False) or self.max_context != 1024: return
+    if not getattr(self, "_decode_direct_greedy_promoted", False) or \
+       not getattr(self, "_decode_feedback_pingpong_promoted", False): return
+    v_sp = UOp.variable("start_pos", 0, self.max_context-1)
+    dummy = Tensor([[0]], dtype="int32").contiguous()
+    temp = Tensor([0.0]).contiguous()
+    for split_count, ctx in ((6, 700), (None, 800)):
+      for slot in (0, 1):
+        for _ in range(3):
+          self(dummy, v_sp.bind(ctx), temp, use_flash=True, greedy=True,
+               feedback_slot=slot, flash_split_count=split_count).realize()
+    self.reset_generation_state()
+    self._flash_decode_active_horizon_prewarmed = True
+
   def _decode_submit_ahead_eligible(self) -> bool:
     """Closed-default launch-hiding gate for the steady-decode pipeline.
 
@@ -2354,6 +2459,8 @@ class Transformer:
       raise RuntimeError(f"prompt is {len(tokens)} tokens but the streaming window is N={self.max_context}: streaming "
                          f"evicts during generation, not prefill. Shorten the prompt to <={self.max_context} tokens, or "
                          f"use a model/quant that admits a larger window.")
+    if not _ring and not diagnostic_full_logits and temperature == 0.0:
+      self._prewarm_active_horizon_flash_pairs()
     for _b in self.blk: _b._ring_active = _ring   # make prefill ALSO store un-roped K when the ring is on
     v_start_pos = UOp.variable("start_pos", 0, self.max_context-1)
     v_toks = UOp.variable("toks", 1, chunk_size)
@@ -2449,6 +2556,10 @@ class Transformer:
         _flash_split = request_flash_split if _uf else None
         if _flash_split is None:
           _flash_split = _adaptive_flash_split_count(_uf and getattr(self,"_flash_decode_adaptive_s64_lease",False),start_pos,self.max_context)
+        if _flash_split is None:
+          _flash_split = _active_horizon_flash_split_count(
+            _uf and getattr(self,"_flash_decode_active_horizon_lease",False) and
+            getattr(self,"_flash_decode_active_horizon_prewarmed",False),start_pos,self.max_context)
         if submit_ahead and ntv == 1 and start_pos >= prompt_len and _uf and out is not None:
           # Submit token start_pos+1's graph now; its input is the previous
           # output (the token we yield this iteration).  The host-side prep of

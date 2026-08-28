@@ -17,7 +17,7 @@ from tinygrad.dtype import AddrSpace
 from tinygrad.llm.decode_kernels import (Q4K_WORDS_PER_BLOCK, Q6K_HALFWORDS_PER_BLOCK, _f16_half, _f16_word, _i8,
   _q6k_byte, _q4k_group_params, _staged_shfl)
 from tinygrad.llm.kernel_program import (KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program,
-  execute_promoted_program_outputs)
+  execute_promoted_program_outputs, execute_research_program)
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, ReduceOutputSpec, UOp
 
 _K, _Q_ROWS, _KV_ROWS = 4096, 4096, 1024
@@ -241,10 +241,11 @@ def _emit_q4(rows, rt=2):
     return out[row].store(t).end(ro,ri,p4).sink(arg=KernelInfo(name=f"q4k_q8_dp4a_{rows}_{_K}",opts_to_apply=()))
   return kernel
 
-def _emit_q4_cooperative(rows, block_count:UOp, *, direct_output:bool=False):
+def _emit_q4_cooperative(rows, block_count:UOp, *, direct_output:bool=False, residual_add:bool=False):
   """Closed-lease four-warp Q4/Q8 consumer, with optional exact in-CTA partial merge."""
   if rows not in (_Q_ROWS,_KV_ROWS): raise ValueError("cooperative Q4 requires a production attention shape")
-  def kernel(out,w,xp):
+  def kernel(out,w,xp,*residual):
+    if bool(residual) != residual_add: raise ValueError("Q8 direct residual argument mismatch")
     row,lid=UOp.special(rows,"gidx0"),UOp.special(128,"lidx0")
     warp,lane=lid//32,lid%32; group,word_base=lane//4,(lane%4)*2
     br=UOp.range(block_count,2,axis_type=AxisType.LOOP); block=warp*4+br
@@ -267,11 +268,23 @@ def _emit_q4_cooperative(rows, block_count:UOp, *, direct_output:bool=False):
       published=smem[warp].store(t,lane.eq(0)); ready=UOp.barrier(UOp.group(published))
       merged=UOp.const(dtypes.float32,0.0)
       for wi in range(4): merged=merged+smem.after(ready)[wi]
+      if residual_add: merged=merged+residual[0][row].cast(dtypes.float32)
       return out[row].store(merged,lid.eq(0)).sink(
-        arg=KernelInfo(name=f"q4k_warp_coop_q8_dp4a_direct_{rows}_{_K}",opts_to_apply=()))
+        arg=KernelInfo(name=f"q4k_warp_coop_q8_dp4a_direct{'_epi_resadd' if residual_add else ''}_{rows}_{_K}",opts_to_apply=()))
     return out[row,warp].store(t,lane.eq(0)).sink(
       arg=KernelInfo(name=f"q4k_warp_coop_q8_dp4a_partial_{rows}_{_K}",opts_to_apply=()))
   return kernel
+
+def q4k_q8_o_call(admitted:bool, linear, packed:Tensor, residual:Tensor|None=None) -> Tensor|None:
+  if not admitted or not hasattr(linear,"q4k_storage") or getattr(linear,"route_role",None)!="attn_qo": return None
+  if (getattr(linear,"out_features",None),getattr(linear,"in_features",None)) != (_Q_ROWS,_K): return None
+  if packed.shape != (1152,) or packed.dtype != dtypes.uint32 or residual is None: return None
+  words=linear.q4k_storage.words.to(packed.device)
+  rv=residual.reshape(_Q_ROWS).cast(dtypes.float32)
+  program=KernelProgram("research.flash_o_q8","o.q8_owned",KernelProgramProvenance.RESEARCH_ONLY,
+    _emit_q4_cooperative(_Q_ROWS,UOp.const(dtypes.weakint,4),direct_output=True,residual_add=True),
+    output_spec=OutputSpec((_Q_ROWS,),dtypes.float32))
+  return execute_research_program(None,words,packed,rv,program=program).reshape(1,1,_Q_ROWS)
 
 
 def _emit_q4_cooperative_pair(rows:int, block_count:UOp):

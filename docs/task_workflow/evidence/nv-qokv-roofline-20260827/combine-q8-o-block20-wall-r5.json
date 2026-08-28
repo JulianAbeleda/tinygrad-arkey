@@ -1,0 +1,194 @@
+{
+  "all_token_hashes_equal": true,
+  "arm_order": [
+    "control_a",
+    "candidate",
+    "control_c"
+  ],
+  "arms": [
+    {
+      "arm": "control_a",
+      "combine_register_weights": true,
+      "count": 24,
+      "depth": 512,
+      "installed_route": false,
+      "matched_explicit_geometry": true,
+      "max_context": 768,
+      "o_q8_blocks": 0,
+      "o_q8_owned": false,
+      "o_successor_prefetch_groups": 0,
+      "reps": 5,
+      "schema": "tinygrad.nv_flash_combine_register_wall.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          3.9813676666666664,
+          3.973061625,
+          3.9689084583333334,
+          3.9664785,
+          3.96320025
+        ],
+        "external_contention_high_limit_ms": 4.218908458333333,
+        "median_ms_per_token": 3.9689084583333334,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          3.9813676666666664,
+          3.973061625,
+          3.9689084583333334,
+          3.9664785,
+          3.96320025
+        ],
+        "timed_token_count": 120,
+        "token_hashes": [
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809"
+        ],
+        "token_stream_hash": "c1e09fb43ae8295fa7cc8c18b63529447ba5b3254fa50be2c155aa0b89344a20",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "split_count": 6
+    },
+    {
+      "arm": "candidate",
+      "combine_register_weights": true,
+      "count": 24,
+      "depth": 512,
+      "installed_route": false,
+      "matched_explicit_geometry": true,
+      "max_context": 768,
+      "o_q8_blocks": 20,
+      "o_q8_owned": true,
+      "o_successor_prefetch_groups": 0,
+      "reps": 5,
+      "schema": "tinygrad.nv_flash_combine_register_wall.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          3.9491064166666665,
+          3.958044875,
+          3.9617050833333334,
+          3.96255375,
+          3.9617122083333336
+        ],
+        "external_contention_high_limit_ms": 4.211705083333333,
+        "median_ms_per_token": 3.9617050833333334,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          3.9491064166666665,
+          3.958044875,
+          3.9617050833333334,
+          3.96255375,
+          3.9617122083333336
+        ],
+        "timed_token_count": 120,
+        "token_hashes": [
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809"
+        ],
+        "token_stream_hash": "c1e09fb43ae8295fa7cc8c18b63529447ba5b3254fa50be2c155aa0b89344a20",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "split_count": 6
+    },
+    {
+      "arm": "control_c",
+      "combine_register_weights": true,
+      "count": 24,
+      "depth": 512,
+      "installed_route": false,
+      "matched_explicit_geometry": true,
+      "max_context": 768,
+      "o_q8_blocks": 0,
+      "o_q8_owned": false,
+      "o_successor_prefetch_groups": 0,
+      "reps": 5,
+      "schema": "tinygrad.nv_flash_combine_register_wall.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          3.9760828333333333,
+          3.966847125,
+          3.9681662916666665,
+          3.965667,
+          3.960008875
+        ],
+        "external_contention_high_limit_ms": 4.216847125,
+        "median_ms_per_token": 3.966847125,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          3.9760828333333333,
+          3.966847125,
+          3.9681662916666665,
+          3.965667,
+          3.960008875
+        ],
+        "timed_token_count": 120,
+        "token_hashes": [
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809"
+        ],
+        "token_stream_hash": "c1e09fb43ae8295fa7cc8c18b63529447ba5b3254fa50be2c155aa0b89344a20",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "split_count": 6
+    }
+  ],
+  "count": 24,
+  "depth": 512,
+  "installed_route": false,
+  "max_context": 768,
+  "mode": "reverse-bracket-unprofiled",
+  "o_q8_blocks": 20,
+  "o_q8_owned": true,
+  "o_successor_prefetch_groups": 0,
+  "reps": 5,
+  "schema": "tinygrad.nv_flash_combine_register_wall.v1",
+  "split_count": 6,
+  "token_stream_hashes": [
+    "c1e09fb43ae8295fa7cc8c18b63529447ba5b3254fa50be2c155aa0b89344a20"
+  ],
+  "tokens_per_second": {
+    "candidate": 252.4165678578506,
+    "candidate_delta": 0.3926768750690428,
+    "control": 252.02389098278155
+  },
+  "verdict": "COMBINE_REGISTER_WALL_PASS",
+  "walls_us_per_token": {
+    "arm_a": 3968.9084583333333,
+    "arm_b": 3961.7050833333333,
+    "arm_c": 3966.8471250000002,
+    "candidate": 3961.7050833333333,
+    "candidate_delta": -6.172708333333503,
+    "control": 3967.877791666667
+  }
+}

@@ -214,6 +214,19 @@ def test_adaptive_s64_context_band_is_bounded():
   assert _adaptive_flash_split_count(False, 800, 1024) is None
   assert _adaptive_flash_split_count(True, 800, 2048) is None
 
+def test_active_horizon_s6_selector_and_geometry_are_bounded():
+  from tinygrad.llm.model import _active_horizon_flash_split_count, _flash_decode_geometry_for_split
+  assert _active_horizon_flash_split_count(True, 511, 1024) is None
+  assert _active_horizon_flash_split_count(True, 512, 1024) == 6    # Tc=513
+  assert _active_horizon_flash_split_count(True, 767, 1024) == 6    # Tc=768
+  assert _active_horizon_flash_split_count(True, 768, 1024) is None # Tc=769 -> installed S8
+  assert _active_horizon_flash_split_count(False, 700, 1024) is None
+  assert _active_horizon_flash_split_count(True, 700, 2048) is None
+  assert _flash_decode_geometry_for_split({}, 6) == {
+    "split_count":6, "llama_vec_wide":True, "token_bound":768}
+  assert _flash_decode_geometry_for_split({"sentinel":1}, None) == {"sentinel":1}
+  assert _flash_decode_geometry_for_split({}, 64) == {"split_count":64}
+
 def test_adaptive_s64_kernel_lease_is_narrow():
   assert _adaptive_split_lease_admitted(FLASH_DECODE_G4, 64, None, "KV_BOTH", 1024)
   assert not _adaptive_split_lease_admitted(FLASH_DECODE_G4, 32, None, "KV_BOTH", 1024)

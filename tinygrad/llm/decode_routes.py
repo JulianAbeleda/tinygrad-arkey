@@ -13,6 +13,7 @@ from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G
 from tinygrad.llm.kernel_program import (ActivationViewRequest, DeclaredTypedOutput, KernelProgram,
                                          KernelProgramProvenance, OutputSpec, ResidualViewRequest, TypedLayout,
                                          TypedViewRequest, execute_promoted_program, execute_research_program)
+from tinygrad.llm.kernel_program import execute_research_program_outputs
 from tinygrad.llm.model_route_plan import (decode_epilogue_fusion_promoted, decode_flash_combine_fusion_promoted,
                                            decode_flash_llama_vec_wide_promoted)
 from tinygrad.llm.packed_argmax import packed_argmax_from_tile_keys
@@ -653,7 +654,9 @@ FLASH_DECODE_G5_CANDIDATE = _FlashDecodeCandidate(FLASH_DECODE_G5)
 def _flash_llama_vec_wide_research_call(q:Tensor, assigned_kv:Tensor, Tc:UOp, binding:_FlashDecodeBinding,
                                          MAXC:int, S:int, output_fp16:bool, *, promoted:bool=False,
                                          token_bound:int|None=None, wide_q_f32:bool=False,
-                                         combine_register_weights:bool=False, query_group_size:int=1) -> Tensor:
+                                         combine_register_weights:bool=False, query_group_size:int=1,
+                                         successor_weights:Tensor|None=None, successor_prefetch_groups:int=0,
+                                         output_q8:bool=False) -> Tensor|tuple[Tensor,Tensor]:
   """Extent-derived wide-KV flash at the approved research/promotion admission boundary."""
   extent_split = MAXC // 128 if MAXC % 128 == 0 else None
   bounded = token_bound is not None and token_bound % 128 == 0 and token_bound <= MAXC and \
@@ -678,9 +681,16 @@ def _flash_llama_vec_wide_research_call(q:Tensor, assigned_kv:Tensor, Tc:UOp, bi
   combine_program = KernelProgram(binding.route_id, f"{binding.candidate_id}.llama_vec_wide.combine",
     provenance,
     flash_fused_gmax_combine_kernel(binding.Hd, binding.Hq, S, output_fp16=output_fp16, lane_width=128,
-                                    register_weights=combine_register_weights),
+                                    register_weights=combine_register_weights,
+                                    successor_prefetch_groups=successor_prefetch_groups,output_q8=output_q8),
     output_spec=OutputSpec((binding.Hq * binding.Hd,), dtypes.float16 if output_fp16 else dtypes.float32))
-  return execute(None, partial, program=combine_program).reshape(binding.Hq, binding.Hd)
+  if output_q8:
+    out=Tensor.empty((binding.Hq*binding.Hd,),dtype=dtypes.float16,device=q.device)
+    q8=Tensor.empty((1152,),dtype=dtypes.uint32,device=q.device)
+    results=execute_research_program_outputs(out,q8,partial,program=combine_program)
+    return results[0].reshape(binding.Hq,binding.Hd),results[1]
+  combine_args=(partial,) if successor_weights is None else (partial,successor_weights)
+  return execute(None, *combine_args, program=combine_program).reshape(binding.Hq, binding.Hd)
 
 
 def _flash_llama_vec_wide_installed_admitted(promoted:bool, geom:dict, max_context:int) -> bool:
@@ -702,7 +712,8 @@ def _flash_combine_register_weights_admitted(wide_promoted:bool, geom:dict, gete
 def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp, T:int|UOp, B:int,
                                  Hq:int, Hkv:int, Hd:int, max_context:int, kv_scale:Tensor|None=None,
                                  freqs:Tensor|None=None, ring_full:bool=False,
-                                 combine_fp16:bool|None=None, tile_geometry:dict|None=None) -> Tensor:
+                                 combine_fp16:bool|None=None, tile_geometry:dict|None=None,
+                                 successor_weights:Tensor|None=None) -> Tensor:
   MAXC = max_context
   vsp = UOp.variable("start_pos", 0, MAXC - 1)  # unbound twin of start_pos (for kernel ranges)
   # full-ring (ctx>=N): the ring buffer is full and start_pos is the wrapped WRITE slot, so the live read length is the
@@ -747,12 +758,19 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
   if wide_lease or wide_promoted:
     if kv_scale is not None or freqs is not None:
       raise ValueError("llama_vec_wide research route requires plain, pre-rotated fp16 KV")
+    successor_prefetch_groups=int(geom.get("o_successor_prefetch_groups",0))
+    output_q8=bool(geom.get("o_q8_owned",False))
+    if output_q8 and successor_prefetch_groups: raise ValueError("O prefetch and combine-owned Q8 are exclusive")
+    if (successor_weights is not None) != bool(successor_prefetch_groups):
+      raise ValueError("O successor weights and prefetch group lease must be supplied together")
     return _flash_llama_vec_wide_research_call(q, assigned_kv, _tc, binding, MAXC, split_size, output_fp16,
-                                                promoted=wide_promoted, token_bound=geom.get("token_bound"),
+                                                promoted=wide_promoted and not successor_prefetch_groups and not output_q8, token_bound=geom.get("token_bound"),
                                                 wide_q_f32=bool(geom.get("wide_q_f32", False)),
                                                 combine_register_weights=_flash_combine_register_weights_admitted(
                                                   wide_promoted, geom),
-                                                query_group_size=int(geom.get("query_group_size", 1)))
+                                                query_group_size=int(geom.get("query_group_size", 1)),
+                                                successor_weights=successor_weights,
+                                                successor_prefetch_groups=successor_prefetch_groups,output_q8=output_q8)
   return flash_decode_live_split_block_tile(q.reshape(binding.Hq, binding.Hd), assigned_kv, _tc,
     binding.Hd, binding.Hq, binding.Hkv, MAXC, split_size, staging=binding.staging,
     fused_combine=True, kv_scale=kv_scale, freqs=freqs, query_group_size=binding.query_group_size,

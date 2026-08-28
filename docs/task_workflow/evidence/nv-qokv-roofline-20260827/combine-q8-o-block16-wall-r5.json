@@ -1,0 +1,194 @@
+{
+  "all_token_hashes_equal": true,
+  "arm_order": [
+    "control_a",
+    "candidate",
+    "control_c"
+  ],
+  "arms": [
+    {
+      "arm": "control_a",
+      "combine_register_weights": true,
+      "count": 24,
+      "depth": 512,
+      "installed_route": false,
+      "matched_explicit_geometry": true,
+      "max_context": 768,
+      "o_q8_blocks": 0,
+      "o_q8_owned": false,
+      "o_successor_prefetch_groups": 0,
+      "reps": 5,
+      "schema": "tinygrad.nv_flash_combine_register_wall.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          3.980169375,
+          3.9707729583333333,
+          3.9714722083333336,
+          3.9604114166666666,
+          3.964976625
+        ],
+        "external_contention_high_limit_ms": 4.220772958333333,
+        "median_ms_per_token": 3.9707729583333333,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          3.980169375,
+          3.9707729583333333,
+          3.9714722083333336,
+          3.9604114166666666,
+          3.964976625
+        ],
+        "timed_token_count": 120,
+        "token_hashes": [
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809"
+        ],
+        "token_stream_hash": "c1e09fb43ae8295fa7cc8c18b63529447ba5b3254fa50be2c155aa0b89344a20",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "split_count": 6
+    },
+    {
+      "arm": "candidate",
+      "combine_register_weights": true,
+      "count": 24,
+      "depth": 512,
+      "installed_route": false,
+      "matched_explicit_geometry": true,
+      "max_context": 768,
+      "o_q8_blocks": 16,
+      "o_q8_owned": true,
+      "o_successor_prefetch_groups": 0,
+      "reps": 5,
+      "schema": "tinygrad.nv_flash_combine_register_wall.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          3.9855162916666664,
+          3.973075,
+          3.9653129166666665,
+          3.9664822083333333,
+          3.967335875
+        ],
+        "external_contention_high_limit_ms": 4.217335875,
+        "median_ms_per_token": 3.967335875,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          3.9855162916666664,
+          3.973075,
+          3.9653129166666665,
+          3.9664822083333333,
+          3.967335875
+        ],
+        "timed_token_count": 120,
+        "token_hashes": [
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809"
+        ],
+        "token_stream_hash": "c1e09fb43ae8295fa7cc8c18b63529447ba5b3254fa50be2c155aa0b89344a20",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "split_count": 6
+    },
+    {
+      "arm": "control_c",
+      "combine_register_weights": true,
+      "count": 24,
+      "depth": 512,
+      "installed_route": false,
+      "matched_explicit_geometry": true,
+      "max_context": 768,
+      "o_q8_blocks": 0,
+      "o_q8_owned": false,
+      "o_successor_prefetch_groups": 0,
+      "reps": 5,
+      "schema": "tinygrad.nv_flash_combine_register_wall.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          3.985086875,
+          3.97468775,
+          3.972675625,
+          3.970833,
+          3.968526125
+        ],
+        "external_contention_high_limit_ms": 4.222675625,
+        "median_ms_per_token": 3.972675625,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          3.985086875,
+          3.97468775,
+          3.972675625,
+          3.970833,
+          3.968526125
+        ],
+        "timed_token_count": 120,
+        "token_hashes": [
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809"
+        ],
+        "token_stream_hash": "c1e09fb43ae8295fa7cc8c18b63529447ba5b3254fa50be2c155aa0b89344a20",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "split_count": 6
+    }
+  ],
+  "count": 24,
+  "depth": 512,
+  "installed_route": false,
+  "max_context": 768,
+  "mode": "reverse-bracket-unprofiled",
+  "o_q8_blocks": 16,
+  "o_q8_owned": true,
+  "o_successor_prefetch_groups": 0,
+  "reps": 5,
+  "schema": "tinygrad.nv_flash_combine_register_wall.v1",
+  "split_count": 6,
+  "token_stream_hashes": [
+    "c1e09fb43ae8295fa7cc8c18b63529447ba5b3254fa50be2c155aa0b89344a20"
+  ],
+  "tokens_per_second": {
+    "candidate": 252.05831608598052,
+    "candidate_delta": 0.27850294583754476,
+    "control": 251.77981314014298
+  },
+  "verdict": "COMBINE_REGISTER_WALL_PASS",
+  "walls_us_per_token": {
+    "arm_a": 3970.7729583333335,
+    "arm_b": 3967.3358749999998,
+    "arm_c": 3972.675625,
+    "candidate": 3967.3358749999998,
+    "candidate_delta": -4.3884166666666715,
+    "control": 3971.7242916666664
+  }
+}

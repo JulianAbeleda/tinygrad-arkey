@@ -1,0 +1,39 @@
+{
+  "arm": "candidate",
+  "combine_register_weights": true,
+  "count": 2,
+  "depth": 512,
+  "installed_route": false,
+  "matched_explicit_geometry": true,
+  "max_context": 768,
+  "o_q8_owned": true,
+  "o_successor_prefetch_groups": 0,
+  "reps": 1,
+  "schema": "tinygrad.nv_flash_combine_register_wall.v1",
+  "settled": {
+    "accepted_samples_ms_per_token": [
+      3.819176
+    ],
+    "external_contention_high_limit_ms": 4.069176000000001,
+    "median_ms_per_token": 3.819176,
+    "prelude_token": 13876,
+    "rejected_high_samples_ms_per_token": [],
+    "samples_ms_per_token": [
+      3.819176
+    ],
+    "timed_token_count": 2,
+    "token_hashes": [
+      "b2a7f89586e9e491db0ea0760121cab281d174b12ff74f4e0795bbfbcf11d96a"
+    ],
+    "token_stream_hash": "b2a7f89586e9e491db0ea0760121cab281d174b12ff74f4e0795bbfbcf11d96a",
+    "warmup_tokens": [
+      87408,
+      47945,
+      26529,
+      38127,
+      151936,
+      151936
+    ]
+  },
+  "split_count": 6
+}

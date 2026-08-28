@@ -1,0 +1,212 @@
+{
+  "all_token_hashes_equal": true,
+  "arm_order": [
+    "control_a",
+    "candidate",
+    "control_c"
+  ],
+  "arms": [
+    {
+      "arm": "control_a",
+      "combine_register_weights": true,
+      "count": 24,
+      "depth": 512,
+      "installed_route": false,
+      "matched_explicit_geometry": true,
+      "max_context": 768,
+      "o_q8_blocks": 0,
+      "o_q8_owned": false,
+      "o_successor_prefetch_groups": 0,
+      "reps": 7,
+      "schema": "tinygrad.nv_flash_combine_register_wall.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          3.9574579583333334,
+          3.9659459583333336,
+          3.9737965833333333,
+          3.974798875,
+          3.9677139166666664,
+          3.97237975,
+          3.973152875
+        ],
+        "external_contention_high_limit_ms": 4.22237975,
+        "median_ms_per_token": 3.97237975,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          3.9574579583333334,
+          3.9659459583333336,
+          3.9737965833333333,
+          3.974798875,
+          3.9677139166666664,
+          3.97237975,
+          3.973152875
+        ],
+        "timed_token_count": 168,
+        "token_hashes": [
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809"
+        ],
+        "token_stream_hash": "7efb6e975be0a4eefb80faba1316f8c942575f83a95d8be7ef547b244f2b8c0c",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "split_count": 6
+    },
+    {
+      "arm": "candidate",
+      "combine_register_weights": true,
+      "count": 24,
+      "depth": 512,
+      "installed_route": false,
+      "matched_explicit_geometry": true,
+      "max_context": 768,
+      "o_q8_blocks": 8,
+      "o_q8_owned": true,
+      "o_successor_prefetch_groups": 0,
+      "reps": 7,
+      "schema": "tinygrad.nv_flash_combine_register_wall.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          3.9792799166666666,
+          3.9664767083333334,
+          3.9595611666666666,
+          3.9589107916666664,
+          3.9621092916666667,
+          3.9684195,
+          3.9652230833333335
+        ],
+        "external_contention_high_limit_ms": 4.215223083333333,
+        "median_ms_per_token": 3.9652230833333335,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          3.9792799166666666,
+          3.9664767083333334,
+          3.9595611666666666,
+          3.9589107916666664,
+          3.9621092916666667,
+          3.9684195,
+          3.9652230833333335
+        ],
+        "timed_token_count": 168,
+        "token_hashes": [
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809"
+        ],
+        "token_stream_hash": "7efb6e975be0a4eefb80faba1316f8c942575f83a95d8be7ef547b244f2b8c0c",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "split_count": 6
+    },
+    {
+      "arm": "control_c",
+      "combine_register_weights": true,
+      "count": 24,
+      "depth": 512,
+      "installed_route": false,
+      "matched_explicit_geometry": true,
+      "max_context": 768,
+      "o_q8_blocks": 0,
+      "o_q8_owned": false,
+      "o_successor_prefetch_groups": 0,
+      "reps": 7,
+      "schema": "tinygrad.nv_flash_combine_register_wall.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          3.9775915416666665,
+          3.9652458333333334,
+          3.9644935833333337,
+          3.9589214583333336,
+          3.9610775416666666,
+          3.9671560833333337,
+          3.9792450833333337
+        ],
+        "external_contention_high_limit_ms": 4.215245833333333,
+        "median_ms_per_token": 3.9652458333333334,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          3.9775915416666665,
+          3.9652458333333334,
+          3.9644935833333337,
+          3.9589214583333336,
+          3.9610775416666666,
+          3.9671560833333337,
+          3.9792450833333337
+        ],
+        "timed_token_count": 168,
+        "token_hashes": [
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+          "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809"
+        ],
+        "token_stream_hash": "7efb6e975be0a4eefb80faba1316f8c942575f83a95d8be7ef547b244f2b8c0c",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "split_count": 6
+    }
+  ],
+  "count": 24,
+  "depth": 512,
+  "installed_route": false,
+  "max_context": 768,
+  "mode": "reverse-bracket-unprofiled",
+  "o_q8_blocks": 8,
+  "o_q8_owned": true,
+  "o_successor_prefetch_groups": 0,
+  "reps": 7,
+  "schema": "tinygrad.nv_flash_combine_register_wall.v1",
+  "split_count": 6,
+  "token_stream_hashes": [
+    "7efb6e975be0a4eefb80faba1316f8c942575f83a95d8be7ef547b244f2b8c0c"
+  ],
+  "tokens_per_second": {
+    "candidate": 252.19262043621464,
+    "candidate_delta": 0.22810296144126596,
+    "control": 251.96451747477337
+  },
+  "verdict": "COMBINE_REGISTER_WALL_PASS",
+  "walls_us_per_token": {
+    "arm_a": 3972.37975,
+    "arm_b": 3965.2230833333333,
+    "arm_c": 3965.2458333333334,
+    "candidate": 3965.2230833333333,
+    "candidate_delta": -3.5897083333334194,
+    "control": 3968.8127916666667
+  }
+}

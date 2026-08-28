@@ -9,7 +9,8 @@ from tinygrad.llm.model_route_plan import (decode_epilogue_fusion_promoted, deco
   decode_norm_fusion_promoted, decode_q4k_epilogue_fusion_promoted, load_decode_flash_combine_fusion_promotion,
   load_decode_flash_llama_vec_wide_promotion, _DECODE_FLASH_COMBINE_FUSION_PROMOTED_TARGETS,
   _DECODE_FLASH_LLAMA_VEC_WIDE_PROMOTED_TARGETS)
-from tinygrad.llm.decode_routes import _flash_llama_vec_wide_installed_admitted
+from tinygrad.llm.decode_routes import (_flash_combine_register_weights_admitted,
+                                        _flash_llama_vec_wide_installed_admitted)
 
 
 def _write_policy(path, *, targets="absent"):
@@ -62,3 +63,11 @@ def test_wide_flash_installed_admission_is_extent_bounded_and_geometry_yields():
   assert not _flash_llama_vec_wide_installed_admitted(True, {}, 40960)
   assert not _flash_llama_vec_wide_installed_admitted(True, {"split_count":64}, 1024)
   assert not _flash_llama_vec_wide_installed_admitted(False, {}, 1024)
+
+
+def test_wide_flash_register_combine_is_installed_with_rollback():
+  assert _flash_combine_register_weights_admitted(True, {}, lambda *_: 0)
+  assert not _flash_combine_register_weights_admitted(True, {}, lambda *_: 1)
+  assert not _flash_combine_register_weights_admitted(False, {}, lambda *_: 0)
+  assert not _flash_combine_register_weights_admitted(False, {"combine_register_weights": True}, lambda *_: 1)
+  assert _flash_combine_register_weights_admitted(False, {"combine_register_weights": True}, lambda *_: 0)
