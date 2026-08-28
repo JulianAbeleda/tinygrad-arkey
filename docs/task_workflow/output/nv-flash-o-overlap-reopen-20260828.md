@@ -45,6 +45,25 @@ combine launches.  It must be bit-exact, retain the 192-CTA score population,
 avoid spills, and not regress the cold score/combine span.  Only a passing
 precursor justifies adding resident O workers.
 
+## Full-grid readiness precursor result
+
+The precursor passes.  Each score CTA writes the unchanged partial ABI and
+increments a per-head release counter.  The sixth CTA for that head performs
+the existing six-split combine in the existing operand order, writes FP16, and
+resets the epoch.  The score launch remains 192 CTAs.
+
+The independent-ring, reversed-order R9 result is bit-exact.  The score body
+remains at 56 registers with zero spills; shared memory rises by only four
+bytes.  Hot score+combine falls from 4.862 to 4.452 us.  Independently rotated
+cold service is neutral within dispersion, 7.716 versus 7.668 us.  The earlier
+same-allocation cold result is rejected because it let the candidate inherit
+the control's cache state.
+
+This books no token recovery by itself.  It establishes the missing substrate:
+head readiness can be exposed without splitting or slowing the Flash producer.
+The next complete-span gate attaches a bounded persistent O consumer to these
+head-ready epochs.
+
 ## Other reopened Q/O/K/V tests
 
 The repaired static Q/K/V stripe uses legal finite Q4_K blocks.  All arms are
@@ -61,3 +80,4 @@ Primary evidence:
 - `docs/task_workflow/evidence/nv-qokv-stripe-legal-20260828/gate-r9.json`
 - `docs/task_workflow/evidence/nv-q4k-qdata-transpose-u2-20260828/gate-r9.json`
 - `docs/task_workflow/evidence/nv-flash-o-tax-decomposition-20260828/gate-r9.json`
+- `docs/task_workflow/evidence/nv-flash-last-cta-combine-20260828/gate-independent-r9.json`
