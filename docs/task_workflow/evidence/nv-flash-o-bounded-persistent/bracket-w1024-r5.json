@@ -1,0 +1,82 @@
+{
+  "commit": "c77e08af2a66afdfcaaf039dc4ac1623b4097a6c",
+  "exact": true,
+  "median": {
+    "candidate_span_cold_us": 18.864,
+    "candidate_span_hot_us": 17.77,
+    "control_span_cold_us": 14.934,
+    "control_span_hot_us": 13.514,
+    "installed_cold_us": 10.774,
+    "installed_hot_us": 8.742,
+    "o_cold_recovery_us": 0.14999999999999858,
+    "persistent_cold_us": 10.624,
+    "persistent_hot_us": 8.848,
+    "span_cold_recovery_us": -3.9300000000000015
+  },
+  "names": {
+    "control_o": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+    "flash": "flash_vec_llama_score_pv_32_128_6_widekv16_vtail1_lastcta",
+    "persistent_o": "q4k_o_bounded_persistent_w1024"
+  },
+  "ptxas": "/tmp/nv_flash_o_bounded_72rwe1n1/gate.cu:9: warning: \"INFINITY\" redefined\n    9 | #define INFINITY (__int_as_float(0x7f800000))\n      | \nIn file included from /usr/include/c++/13/cmath:47,\n                 from /usr/include/c++/13/math.h:36,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/math_functions.h:4627,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/common_functions.h:303,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/cuda_runtime.h:117,\n                 from <command-line>:\n/usr/include/math.h:91: note: this is the location of the previous definition\n   91 | #  define INFINITY (__builtin_inff ())\n      | \n/tmp/nv_flash_o_bounded_72rwe1n1/gate.cu:10: warning: \"NAN\" redefined\n   10 | #define NAN (__int_as_float(0x7fffffff))\n      | \n/usr/include/math.h:98: note: this is the location of the previous definition\n   98 | #  define NAN (__builtin_nanf (\"\"))\n      | \n/tmp/nv_flash_o_bounded_72rwe1n1/gate.cu:9: warning: \"INFINITY\" redefined\n    9 | #define INFINITY (__int_as_float(0x7f800000))\n      | \nIn file included from /usr/include/c++/13/cmath:47,\n                 from /usr/include/c++/13/math.h:36,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/math_functions.h:4627,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/common_functions.h:303,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/cuda_runtime.h:117,\n                 from <command-line>:\n/usr/include/math.h:91: note: this is the location of the previous definition\n   91 | #  define INFINITY (__builtin_inff ())\n      | \n/tmp/nv_flash_o_bounded_72rwe1n1/gate.cu:10: warning: \"NAN\" redefined\n   10 | #define NAN (__int_as_float(0x7fffffff))\n      | \n/usr/include/math.h:98: note: this is the location of the previous definition\n   98 | #  define NAN (__builtin_nanf (\"\"))\n      | \n/tmp/nv_flash_o_bounded_72rwe1n1/gate.cu:9: warning: \"INFINITY\" redefined\n    9 | #define INFINITY (__int_as_float(0x7f800000))\n      | \nIn file included from /usr/include/c++/13/cmath:47,\n                 from /usr/include/c++/13/math.h:36,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/math_functions.h:4627,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/common_functions.h:303,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/cuda_runtime.h:117,\n                 from <command-line>:\n/usr/include/math.h:91: note: this is the location of the previous definition\n   91 | #  define INFINITY (__builtin_inff ())\n      | \n/tmp/nv_flash_o_bounded_72rwe1n1/gate.cu:10: warning: \"NAN\" redefined\n   10 | #define NAN (__int_as_float(0x7fffffff))\n      | \n/usr/include/math.h:98: note: this is the location of the previous definition\n   98 | #  define NAN (__builtin_nanf (\"\"))\n      | \nptxas info    : 0 bytes gmem\nptxas info    : Compiling entry function 'q4k_o_bounded_persistent_w1024' for 'sm_120a'\nptxas info    : Function properties for q4k_o_bounded_persistent_w1024\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 39 registers, used 1 barriers\nptxas info    : Compile time = 10.505 ms\nptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096' for 'sm_120a'\nptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 43 registers, used 0 barriers\nptxas info    : Compile time = 9.043 ms\nptxas info    : Compiling entry function 'flash_vec_llama_score_pv_32_128_6_widekv16_vtail1_lastcta' for 'sm_120a'\nptxas info    : Function properties for flash_vec_llama_score_pv_32_128_6_widekv16_vtail1_lastcta\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 56 registers, used 1 barriers, 2084 bytes smem\nptxas info    : Compile time = 55.555 ms\n",
+  "samples": [
+    {
+      "candidate_span_cold_us": 18.956,
+      "candidate_span_hot_us": 17.892,
+      "control_span_cold_us": 15.038,
+      "control_span_hot_us": 13.48,
+      "installed_cold_us": 11.74,
+      "installed_hot_us": 8.694,
+      "persistent_cold_us": 10.604,
+      "persistent_hot_us": 8.956,
+      "rep": 0
+    },
+    {
+      "candidate_span_cold_us": 18.8,
+      "candidate_span_hot_us": 17.82,
+      "control_span_cold_us": 15.092,
+      "control_span_hot_us": 13.514,
+      "installed_cold_us": 10.774,
+      "installed_hot_us": 8.744,
+      "persistent_cold_us": 10.624,
+      "persistent_hot_us": 9.152,
+      "rep": 1
+    },
+    {
+      "candidate_span_cold_us": 18.864,
+      "candidate_span_hot_us": 17.77,
+      "control_span_cold_us": 14.66,
+      "control_span_hot_us": 13.462,
+      "installed_cold_us": 10.774,
+      "installed_hot_us": 8.69,
+      "persistent_cold_us": 10.574,
+      "persistent_hot_us": 8.64,
+      "rep": 2
+    },
+    {
+      "candidate_span_cold_us": 18.814,
+      "candidate_span_hot_us": 17.636,
+      "control_span_cold_us": 14.934,
+      "control_span_hot_us": 13.544,
+      "installed_cold_us": 10.68,
+      "installed_hot_us": 8.742,
+      "persistent_cold_us": 10.636,
+      "persistent_hot_us": 8.816,
+      "rep": 3
+    },
+    {
+      "candidate_span_cold_us": 19.184,
+      "candidate_span_hot_us": 17.342,
+      "control_span_cold_us": 14.768,
+      "control_span_hot_us": 13.536,
+      "installed_cold_us": 11.12,
+      "installed_hot_us": 8.908,
+      "persistent_cold_us": 10.634,
+      "persistent_hot_us": 8.848,
+      "rep": 4
+    }
+  ],
+  "schema": "tinygrad.nv_flash_o_bounded_persistent_emitter.v1",
+  "stdout": "validate exact=1 finite=1\nrep=0 installed_hot=8.694000 persistent_hot=8.956000 installed_cold=11.740000 persistent_cold=10.604000 control_span_hot=13.480000 candidate_span_hot=17.892000 control_span_cold=15.038000 candidate_span_cold=18.956000\nrep=1 installed_hot=8.744000 persistent_hot=9.152000 installed_cold=10.774000 persistent_cold=10.624000 control_span_hot=13.514000 candidate_span_hot=17.820000 control_span_cold=15.092000 candidate_span_cold=18.800000\nrep=2 installed_hot=8.690000 persistent_hot=8.640000 installed_cold=10.774000 persistent_cold=10.574000 control_span_hot=13.462000 candidate_span_hot=17.770000 control_span_cold=14.660000 candidate_span_cold=18.864000\nrep=3 installed_hot=8.742000 persistent_hot=8.816000 installed_cold=10.680000 persistent_cold=10.636000 control_span_hot=13.544000 candidate_span_hot=17.636000 control_span_cold=14.934000 candidate_span_cold=18.814000\nrep=4 installed_hot=8.908000 persistent_hot=8.848000 installed_cold=11.120000 persistent_cold=10.634000 control_span_hot=13.536000 candidate_span_hot=17.342000 control_span_cold=14.768000 candidate_span_cold=19.184000\n",
+  "workers": 1024
+}

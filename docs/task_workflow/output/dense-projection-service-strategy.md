@@ -90,7 +90,7 @@ remaining exposure.
 | Rank | Mechanism | What changes | Current disposition |
 | ---: | --- | --- | --- |
 | 1 | Cluster-level QKV-attention-O fusion | Keeps intermediate collectives on-chip and schedules producer/consumer tiles together | Exact current-Q4_K O ownership gate failed; do not build the full span from this spelling |
-| 2 | Static SM-level persistent task graph | Amortizes physical stream and launch boundaries across dependent operators without polling | Still open, but requires a first-class persistent O emitter/runtime substrate |
+| 2 | Static SM-level persistent task graph | Amortizes physical stream and launch boundaries across dependent operators without polling | First-class bounded O gate completed; current exact ownership loses when launched ahead |
 | 3 | Artifact-plus-kernel quantized pipeline | Co-designs stored layout, dequantization, asynchronous movement, and hardware math | Promising, but changes the format and may change numerics |
 | 4 | Lower material weight bytes or structured sparsity | Reduces compulsory DRAM traffic | Strongest physical lever; requires model-quality qualification |
 | 5 | Cross-request nano-batching | Supplies independent work from other requests | Serving-throughput lever, not strict one-token latency |
@@ -184,19 +184,17 @@ Authority:
 
 The next work should proceed in the following order.
 
-1. **First-class persistent O emitter.** Implement an explicit UOp/emitter
-   whose resident workers execute the complete installed Q4_K O arithmetic.
-   Test direct producer publication to those workers against the standalone O
-   kernel. Text-wrapping the generated kernel is not a valid construction;
-   the emitter currently returns before it can participate in a persistent
-   loop.
-2. **One-layer static task graph.** Only if the persistent O primitive wins,
-   schedule Q/K/V, attention, and O with compile-time ownership and no polling,
-   then compare the complete dependent span hot and rotated-cold.
-3. **Full-token reverse bracket.** Only if the one-layer span wins, integrate
-   it with graph replay and require identical token hashes plus a win over
-   both controls.
-4. **Artifact-plus-kernel co-design.** If the persistent primitive loses,
+1. **First-class persistent O emitter.** Completed. The UOp emitter is exact,
+   finite, spill-free, and reaches standalone O body parity at 1,024 workers.
+   Launching it ahead of Flash regresses the complete span because the waiting
+   population slows the producer. Do not integrate it into production.
+2. **One-layer static task graph.** Closed for the current full-readiness O
+   ownership. A same-grid spelling cannot expose material full-row O work
+   before all Flash heads are ready; the exact partial-readiness construction
+   already lost to scratch and synchronization tax.
+3. **Full-token reverse bracket.** Not justified for persistent O because the
+   one-layer prerequisite failed.
+4. **Artifact-plus-kernel co-design.** Now the next strict-token mechanism:
    test a genuinely new stored layout and matching dequantization/compute
    pipeline. Do not reopen byte-preserving qdata transpose, cache hints, or
    row-local asynchronous staging; their exact cold gates already failed.
