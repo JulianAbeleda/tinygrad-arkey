@@ -1,0 +1,78 @@
+{
+  "commit": "7c2b6707b6ce02257cc69f2d748a32c7d440ed20",
+  "exact": true,
+  "median": {
+    "persistent_cold_us": 15.476,
+    "persistent_hot_us": 15.366,
+    "standalone_cold_us": 12.574,
+    "standalone_hot_us": 9.567
+  },
+  "ptxas": "ptxas info    : 0 bytes gmem\nptxas info    : Compiling entry function 'standalone_qkv' for 'sm_120a'\nptxas info    : Function properties for standalone_qkv\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 43 registers, used 0 barriers\nptxas info    : Compile time = 9.775 ms\nptxas info    : Compiling entry function 'persistent_qkv_live' for 'sm_120a'\nptxas info    : Function properties for persistent_qkv_live\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 37 registers, used 1 barriers\nptxas info    : Compile time = 12.815 ms\n",
+  "samples": [
+    {
+      "persistent_cold_us": 15.748,
+      "persistent_hot_us": 15.426,
+      "rep": 0,
+      "standalone_cold_us": 12.768,
+      "standalone_hot_us": 9.689
+    },
+    {
+      "persistent_cold_us": 15.446,
+      "persistent_hot_us": 15.811,
+      "rep": 1,
+      "standalone_cold_us": 12.574,
+      "standalone_hot_us": 9.5
+    },
+    {
+      "persistent_cold_us": 14.89,
+      "persistent_hot_us": 15.404,
+      "rep": 2,
+      "standalone_cold_us": 12.566,
+      "standalone_hot_us": 9.432
+    },
+    {
+      "persistent_cold_us": 15.472,
+      "persistent_hot_us": 15.45,
+      "rep": 3,
+      "standalone_cold_us": 12.562,
+      "standalone_hot_us": 9.567
+    },
+    {
+      "persistent_cold_us": 15.476,
+      "persistent_hot_us": 15.25,
+      "rep": 4,
+      "standalone_cold_us": 12.622,
+      "standalone_hot_us": 9.475
+    },
+    {
+      "persistent_cold_us": 14.998,
+      "persistent_hot_us": 15.366,
+      "rep": 5,
+      "standalone_cold_us": 12.446,
+      "standalone_hot_us": 9.597
+    },
+    {
+      "persistent_cold_us": 15.594,
+      "persistent_hot_us": 15.02,
+      "rep": 6,
+      "standalone_cold_us": 12.614,
+      "standalone_hot_us": 9.712
+    },
+    {
+      "persistent_cold_us": 15.658,
+      "persistent_hot_us": 15.188,
+      "rep": 7,
+      "standalone_cold_us": 12.888,
+      "standalone_hot_us": 9.799
+    },
+    {
+      "persistent_cold_us": 15.558,
+      "persistent_hot_us": 15.28,
+      "rep": 8,
+      "standalone_cold_us": 12.226,
+      "standalone_hot_us": 9.51
+    }
+  ],
+  "schema": "tinygrad.nv_persistent_qkv_live_ring.v1",
+  "stdout": "sm=170 resident_blocks=339 warps=2712\nbitwise=1 finite=1\nrep=0 standalone_hot=9.689000 persistent_hot=15.426000 standalone_cold=12.768000 persistent_cold=15.748000\nrep=1 standalone_hot=9.500000 persistent_hot=15.811000 standalone_cold=12.574000 persistent_cold=15.446000\nrep=2 standalone_hot=9.432000 persistent_hot=15.404000 standalone_cold=12.566000 persistent_cold=14.890000\nrep=3 standalone_hot=9.567000 persistent_hot=15.450000 standalone_cold=12.562000 persistent_cold=15.472000\nrep=4 standalone_hot=9.475000 persistent_hot=15.250000 standalone_cold=12.622000 persistent_cold=15.476000\nrep=5 standalone_hot=9.597000 persistent_hot=15.366000 standalone_cold=12.446000 persistent_cold=14.998000\nrep=6 standalone_hot=9.712000 persistent_hot=15.020000 standalone_cold=12.614000 persistent_cold=15.594000\nrep=7 standalone_hot=9.799000 persistent_hot=15.188000 standalone_cold=12.888000 persistent_cold=15.658000\nrep=8 standalone_hot=9.510000 persistent_hot=15.280000 standalone_cold=12.226000 persistent_cold=15.558000\n"
+}

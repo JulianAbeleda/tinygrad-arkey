@@ -7,7 +7,9 @@ The candidate changes only the packed-Q storage inside each 36-word Q4_K block:
   control:   qdata[group_pair][word_col] at base + 4 + group_pair*8 + word_col
   candidate: qdata[word_col][group_pair] at base + 4 + word_col*4 + group_pair
 
-The four qdata words owned by one lane are consequently one aligned uint4 load.
+The four qdata words owned by one lane are consumed as two near-use aligned
+uint2 loads.  This is the lower-live-range discriminator left open after the
+earlier uint4 transpose gate.
 Headers, activation loads, dequantization, accumulation order, warp reduction,
 output type, residual epilogue, launch geometry, and total weight bytes stay fixed.
 No production route or model storage is modified by this experiment.
@@ -38,11 +40,11 @@ ROTATIONS = 16
 CUDA_BIN = "/usr/local/cuda-13.2/bin"
 NCU = "/usr/local/bin/ncu"
 CONTROL = f"q4k_g3_lanemap_gemv_vec_epi_resadd_{ROWS}_{K}"
-CANDIDATE = f"q4k_g3_lanemap_gemv_qdata_t_epi_resadd_{ROWS}_{K}"
+CANDIDATE = f"q4k_g3_lanemap_gemv_qdata_t_u2_epi_resadd_{ROWS}_{K}"
 
 
 def emit_qdata_transposed_o():
-  """Exact installed O body with qdata [4][8] repacked as [8][4]."""
+  """Exact installed O body with transposed qdata loaded two words near use."""
   lm = Q4KGateUpLaneMap(k=K, n=ROWS)
   lm.validate()
 
@@ -53,11 +55,12 @@ def emit_qdata_transposed_o():
     blk = part.block_group * lm.blocks_per_group + lblk
     base = (row * lm.k_blocks + blk) * Q4K_WORDS_PER_BLOCK
     hdr = words.index(base).load(dtype=dtypes.uint32.vec(4))
-    qdata = words.index(base + 4 + part.word_col * 4).load(dtype=dtypes.uint32.vec(4))
     contrib = UOp.const(dtypes.float32, 0.0)
     # This loop order is deliberately identical to _q4k_block_dot_packed_load_vec.
     for group_pair in range(4):
-      qw = qdata.gep(group_pair)
+      if group_pair % 2 == 0:
+        qdata = words.index(base + 4 + part.word_col * 4 + group_pair).load(dtype=dtypes.uint32.vec(2))
+      qw = qdata.gep(group_pair % 2)
       for pair_member in range(2):
         grp = 2 * group_pair + pair_member
         d, dmin, sc, mn = _q4k_group_params_from_words(hdr.gep(0), hdr.gep(1), hdr.gep(2), hdr.gep(3), grp)
@@ -151,7 +154,7 @@ static void fill_fixture(uint32_t* w,half* x,float* residual,int fixture) {
 
 static void launch(int arm,float* out,uint32_t* w,half* x,float* residual,cudaStream_t s=0) {
   if(arm==0) q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096<<<ROWS,32,0,s>>>(out,w,x,residual);
-  else q4k_g3_lanemap_gemv_qdata_t_epi_resadd_4096_4096<<<ROWS,32,0,s>>>(out,w,x,residual);
+  else q4k_g3_lanemap_gemv_qdata_t_u2_epi_resadd_4096_4096<<<ROWS,32,0,s>>>(out,w,x,residual);
 }
 
 static double hot(int arm,float* out,uint32_t* w,half* x,float* residual,int passes,cudaEvent_t start,cudaEvent_t stop) {

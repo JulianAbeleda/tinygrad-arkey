@@ -78,6 +78,7 @@ HARNESS=r'''
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cmath>
 #define Q_ROWS 4096
 #define KV_ROWS 1024
 #define TOTAL_ROWS 6144
@@ -91,6 +92,28 @@ struct __align__(8) half4 { half x,y,z,w; };
 __device__ half4 make_half4(half x,half y,half z,half w) { half4 r={x,y,z,w}; return r; }
 __BODIES__
 static void ck(cudaError_t e,const char* what) { if(e!=cudaSuccess){fprintf(stderr,"%s: %s\n",what,cudaGetErrorString(e));exit(2);} }
+static unsigned int step(unsigned int& s) { s=1664525u*s+1013904223u; return s; }
+// Produce structurally legal Q4_K blocks: finite positive fp16 d/dmin,
+// packed 6-bit scales/mins, and arbitrary packed nibbles.
+static void fill_legal(unsigned int* w,int fixture) {
+  unsigned int state=0x1234567u ^ (unsigned(fixture)*0x9e3779b9u);
+  const unsigned short dbits[4]={0x2c00u,0x3000u,0x3400u,0x3800u};
+  const unsigned short mbits[4]={0x2800u,0x2c00u,0x3000u,0x3400u};
+  for(size_t b=0;b<(size_t)TOTAL_ROWS*(K/256);b++) {
+    size_t base=b*36; int p=int((b+fixture)&3);
+    w[base]=unsigned(dbits[p]) | (unsigned(mbits[(p+1)&3])<<16);
+    if(fixture==0) {
+      w[base+1]=step(state); w[base+2]=step(state); w[base+3]=step(state);
+      for(int i=4;i<36;i++) w[base+i]=step(state);
+    } else if(fixture==1) {
+      w[base+1]=0x01020304u^unsigned(b); w[base+2]=0x10203040u+unsigned(b); w[base+3]=0x3f2f1f0fu;
+      for(int i=4;i<36;i++) w[base+i]=0x01234567u*unsigned(i)+unsigned(b)*0x11111111u;
+    } else {
+      w[base+1]=0x3f3f3f3fu; w[base+2]=0x15151515u; w[base+3]=0x2a2a2a2au;
+      for(int i=4;i<36;i++) w[base+i]=(i&1)?0xfedcba98u:0x76543210u;
+    }
+  }
+}
 static void launch(int arm,float* out,unsigned int* group,half* x) {
   if(arm==0) {
     q4k_g3_lanemap_gemv_vec_4096_4096<<<Q_ROWS,32>>>(out,group,x);
@@ -121,15 +144,18 @@ int main(int argc,char** argv) {
   for(int a=0;a<4;a++) ck(cudaMalloc(&outs[a],TOTAL_ROWS*sizeof(float)),"out");
   ck(cudaMalloc(&groups,(size_t)ROTATIONS*GROUP_WORDS*sizeof(unsigned int)),"groups"); ck(cudaMalloc(&x,K*sizeof(half)),"x");
   unsigned int* hw=(unsigned int*)malloc((size_t)ROTATIONS*GROUP_WORDS*sizeof(unsigned int)); half* hx=(half*)malloc(K*sizeof(half));
-  for(size_t i=0;i<(size_t)ROTATIONS*GROUP_WORDS;i++) hw[i]=(unsigned int)((i*2654435761u)^0x9e3779b9u);
+  for(int r=0;r<ROTATIONS;r++) fill_legal(hw+(size_t)r*GROUP_WORDS,r%3);
   for(int i=0;i<K;i++) hx[i]=__float2half(((i%257)-128)*0.03125f);
   ck(cudaMemcpy(groups,hw,(size_t)ROTATIONS*GROUP_WORDS*sizeof(unsigned int),cudaMemcpyHostToDevice),"weights");
   ck(cudaMemcpy(x,hx,K*sizeof(half),cudaMemcpyHostToDevice),"x"); free(hw); free(hx);
   for(int a=0;a<4;a++) launch(a,outs[a],groups,x); ck(cudaDeviceSynchronize(),"warmup");
   float *ref=(float*)malloc(TOTAL_ROWS*sizeof(float)),*got=(float*)malloc(TOTAL_ROWS*sizeof(float));
   ck(cudaMemcpy(ref,outs[0],TOTAL_ROWS*sizeof(float),cudaMemcpyDeviceToHost),"ref");
+  int finite=1; for(int i=0;i<TOTAL_ROWS;i++) finite &= isfinite(ref[i]);
+  printf("finite_ref=%d\n",finite);
   for(int a=1;a<4;a++) { ck(cudaMemcpy(got,outs[a],TOTAL_ROWS*sizeof(float),cudaMemcpyDeviceToHost),"got");
-    printf("bitwise_arm%d=%d\n",a,memcmp(ref,got,TOTAL_ROWS*sizeof(float))==0); } free(ref); free(got);
+    int afinite=1; for(int i=0;i<TOTAL_ROWS;i++) afinite &= isfinite(got[i]);
+    printf("bitwise_arm%d=%d finite_arm%d=%d\n",a,memcmp(ref,got,TOTAL_ROWS*sizeof(float))==0,a,afinite); } free(ref); free(got);
   for(int r=0;r<reps;r++) for(int a=0;a<4;a++) {
     double h=hot(a,outs[a],groups,x,hot_passes),c=rotated(a,outs[a],groups,x,cold_passes);
     printf("rep=%d arm=%d hot=%.6f cold=%.6f\n",r,a,h,c);
@@ -163,7 +189,7 @@ def main() -> int:
   for arm,name in enumerate(("installed","q_first_full","phased_one_task","interleaved_one_task")):
     vals=[r for r in rows if r["arm"]==arm]
     med[name]={"hot_us":statistics.median(r["hot_us"] for r in vals),"cold_us":statistics.median(r["cold_us"] for r in vals)}
-  exact=all(f"bitwise_arm{a}=1" in run.stdout for a in (1,2,3))
+  exact=("finite_ref=1" in run.stdout and all(f"bitwise_arm{a}=1" in run.stdout and f"finite_arm{a}=1" in run.stdout for a in (1,2,3)))
   out={"schema":"tinygrad.q4k_striped_projection_group_microgate.v1","commit":subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip(),
     "shape":{"q_rows":Q_ROWS,"k_rows":KV_ROWS,"v_rows":KV_ROWS,"input_width":K,"weight_bytes":GROUP_WORDS*4},
     "arms":["installed","q_first_full","phased_one_task","interleaved_one_task"],"bitwise_identical":exact,

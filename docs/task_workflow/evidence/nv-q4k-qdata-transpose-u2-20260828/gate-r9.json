@@ -1,0 +1,206 @@
+{
+  "commit": "7c2b6707b6ce02257cc69f2d748a32c7d440ed20",
+  "correctness": {
+    "bitwise_all": true,
+    "fixtures": [
+      {
+        "finite": true,
+        "fixture": 0,
+        "max_abs": 0.0,
+        "mismatched_words": 0
+      },
+      {
+        "finite": true,
+        "fixture": 1,
+        "max_abs": 0.0,
+        "mismatched_words": 0
+      },
+      {
+        "finite": true,
+        "fixture": 2,
+        "max_abs": 0.0,
+        "mismatched_words": 0
+      }
+    ]
+  },
+  "method": "production-rendered installed residual-fused FP16 O control versus exact qdata-only [4][8]->[8][4] repack; cudaEvent hot and 16-copy rotated-cold r9",
+  "ptxas": [
+    "ptxas info    : 0 bytes gmem",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_qdata_t_u2_epi_resadd_4096_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_gemv_qdata_t_u2_epi_resadd_4096_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 44 registers, used 0 barriers",
+    "ptxas info    : Compile time = 9.723 ms",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 43 registers, used 0 barriers",
+    "ptxas info    : Compile time = 8.741 ms"
+  ],
+  "sass": {
+    "candidate": {
+      "available": true,
+      "instructions": 344,
+      "ldg": 12,
+      "ldg_128": 1,
+      "ldg_64": 10,
+      "opcodes": {
+        "BRA": 1,
+        "BRA.U": 1,
+        "EXIT": 1,
+        "FADD": 6,
+        "FFMA": 64,
+        "FMUL": 16,
+        "HADD2.F32": 34,
+        "HFMA2": 1,
+        "I2FP.F32.U32": 48,
+        "IADD": 2,
+        "IADD.64": 7,
+        "IMAD.SHL.U32": 1,
+        "IMAD.WIDE.U32": 8,
+        "LDC": 1,
+        "LDC.64": 2,
+        "LDCU.64": 4,
+        "LDG.E": 1,
+        "LDG.E.128": 1,
+        "LDG.E.64": 10,
+        "LEA": 1,
+        "LEA.HI": 1,
+        "LEA.HI.X": 1,
+        "LOP3.LUT": 54,
+        "NOP": 16,
+        "S2R": 2,
+        "SHF.L.U64.HI": 1,
+        "SHF.R.U32.HI": 48,
+        "SHF.R.U64": 1,
+        "SHFL.BFLY": 5,
+        "STG.E": 1,
+        "UIADD3": 1,
+        "UISETP.NE.U32.AND": 1,
+        "UMOV": 2
+      }
+    },
+    "control": {
+      "available": true,
+      "instructions": 344,
+      "ldg": 14,
+      "ldg_128": 1,
+      "ldg_64": 8,
+      "opcodes": {
+        "BRA": 1,
+        "BRA.U": 1,
+        "EXIT": 1,
+        "FADD": 6,
+        "FFMA": 64,
+        "FMUL": 16,
+        "HADD2.F32": 34,
+        "HFMA2": 1,
+        "I2FP.F32.U32": 48,
+        "IADD": 2,
+        "IADD.64": 7,
+        "IMAD.SHL.U32": 1,
+        "IMAD.WIDE.U32": 7,
+        "LDC": 1,
+        "LDC.64": 2,
+        "LDCU.64": 4,
+        "LDG.E": 5,
+        "LDG.E.128": 1,
+        "LDG.E.64": 8,
+        "LEA": 1,
+        "LEA.HI": 1,
+        "LEA.HI.X": 1,
+        "LOP3.LUT": 55,
+        "NOP": 14,
+        "S2R": 2,
+        "SHF.L.U64.HI": 1,
+        "SHF.R.U32.HI": 48,
+        "SHF.R.U64": 1,
+        "SHFL.BFLY": 5,
+        "STG.E": 1,
+        "UIADD3": 1,
+        "UISETP.NE.U32.AND": 1,
+        "UMOV": 2
+      }
+    }
+  },
+  "schema": "tinygrad.nv_q4k_qdata_transpose_o_microgate.v1",
+  "shape": {
+    "k": 4096,
+    "q4k_blocks": 65536,
+    "rotated_weight_bytes_per_arm": 150994944,
+    "rows": 4096,
+    "weight_bytes": 9437184
+  },
+  "storage_contract": {
+    "bytes_changed": 0,
+    "metadata": "unchanged words 0..3",
+    "qdata_candidate": "[8 word-cols][4 group-pairs]",
+    "qdata_control": "[4 group-pairs][8 word-cols]"
+  },
+  "threshold": {
+    "cold_recovery_us_per_call": 0.15
+  },
+  "timing": {
+    "candidate_cold_rate_tb_s": 0.968512315270936,
+    "cold_passes": 32,
+    "cold_recovery_us": 0.0259999999999998,
+    "control_cold_rate_tb_s": 0.965934902763562,
+    "hot_passes": 300,
+    "hot_recovery_us": 0.21056000000000008,
+    "medians": {
+      "cold_candidate": 9.744,
+      "cold_control": 9.77,
+      "hot_candidate": 4.777493,
+      "hot_control": 4.988053
+    },
+    "reps": 9,
+    "samples": {
+      "cold_candidate": [
+        9.882,
+        9.961,
+        9.809,
+        9.632,
+        9.743,
+        9.721,
+        10.557,
+        9.744,
+        9.734
+      ],
+      "cold_control": [
+        9.697,
+        9.84,
+        9.77,
+        9.845,
+        9.761,
+        9.724,
+        9.933,
+        9.861,
+        9.701
+      ],
+      "hot_candidate": [
+        4.76,
+        4.779413,
+        4.777493,
+        4.786133,
+        4.770773,
+        4.771307,
+        4.76736,
+        4.80032,
+        4.79136
+      ],
+      "hot_control": [
+        4.97984,
+        4.975787,
+        4.994027,
+        4.982187,
+        4.988053,
+        4.975573,
+        4.99136,
+        4.999573,
+        5.011626
+      ]
+    },
+    "unit": "us_per_call"
+  },
+  "verdict": "STOP"
+}
