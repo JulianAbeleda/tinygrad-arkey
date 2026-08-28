@@ -1,0 +1,310 @@
+{
+  "commit": "b8b21e02fc4a125c1db14bc226cc609565a37c30",
+  "correctness": {
+    "contract": "independent double host oracle; abs <= 0.02 + 2e-5*abs(reference)",
+    "fixtures": [
+      {
+        "bad": 0,
+        "finite": true,
+        "fixture": 0,
+        "guards": true,
+        "max_abs": 0.0,
+        "max_rel": 0.0,
+        "readonly": true
+      },
+      {
+        "bad": 0,
+        "finite": true,
+        "fixture": 1,
+        "guards": true,
+        "max_abs": 0.0,
+        "max_rel": 0.0,
+        "readonly": true
+      },
+      {
+        "bad": 0,
+        "finite": true,
+        "fixture": 2,
+        "guards": true,
+        "max_abs": 0.0,
+        "max_rel": 0.0,
+        "readonly": true
+      }
+    ],
+    "pass": true
+  },
+  "method": "production-rendered Q4_K residual O control versus numerical U4Z8_G64_P256; cudaEvent hot and 16-copy rotated-cold r3",
+  "ncu": {
+    "candidate": {
+      "returncode": 0,
+      "rows": [
+        {
+          "metric": "dram__bytes.sum",
+          "unit": "byte",
+          "value": "8944384"
+        },
+        {
+          "metric": "dram__bytes_op_read.sum",
+          "unit": "byte",
+          "value": "8944384"
+        },
+        {
+          "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "54.43"
+        },
+        {
+          "metric": "gpu__time_duration.sum",
+          "unit": "ns",
+          "value": "9344"
+        },
+        {
+          "metric": "launch__registers_per_thread",
+          "unit": "register/thread",
+          "value": "38"
+        },
+        {
+          "metric": "lts__t_bytes.sum",
+          "unit": "byte",
+          "value": "10795840"
+        },
+        {
+          "metric": "lts__t_sector_op_read_hit_rate.pct",
+          "unit": "%",
+          "value": "15.06"
+        },
+        {
+          "metric": "sm__inst_executed.sum",
+          "unit": "inst",
+          "value": "4050944"
+        },
+        {
+          "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "27.25"
+        },
+        {
+          "metric": "smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct",
+          "unit": "%",
+          "value": "82.38"
+        }
+      ],
+      "stderr_tail": ""
+    },
+    "control": {
+      "returncode": 0,
+      "rows": [
+        {
+          "metric": "dram__bytes.sum",
+          "unit": "byte",
+          "value": "9469440"
+        },
+        {
+          "metric": "dram__bytes_op_read.sum",
+          "unit": "byte",
+          "value": "9469440"
+        },
+        {
+          "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "55.15"
+        },
+        {
+          "metric": "gpu__time_duration.sum",
+          "unit": "ns",
+          "value": "9760"
+        },
+        {
+          "metric": "launch__registers_per_thread",
+          "unit": "register/thread",
+          "value": "43"
+        },
+        {
+          "metric": "lts__t_bytes.sum",
+          "unit": "byte",
+          "value": "11348384"
+        },
+        {
+          "metric": "lts__t_sector_op_read_hit_rate.pct",
+          "unit": "%",
+          "value": "14.47"
+        },
+        {
+          "metric": "sm__inst_executed.sum",
+          "unit": "inst",
+          "value": "4800512"
+        },
+        {
+          "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "32.76"
+        },
+        {
+          "metric": "smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct",
+          "unit": "%",
+          "value": "77.51"
+        }
+      ],
+      "stderr_tail": ""
+    }
+  },
+  "ptxas": [
+    "ptxas info    : 0 bytes gmem",
+    "ptxas info    : Compiling entry function 'u4z8_g64_p256_lanemap_gemv_vec_epi_resadd_4096_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for u4z8_g64_p256_lanemap_gemv_vec_epi_resadd_4096_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 38 registers, used 0 barriers",
+    "ptxas info    : Compile time = 8.646 ms",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 43 registers, used 0 barriers",
+    "ptxas info    : Compile time = 9.068 ms"
+  ],
+  "sass": {
+    "candidate": {
+      "available": true,
+      "instructions": 296,
+      "ldg": 14,
+      "ldg_128": 0,
+      "ldg_64": 9,
+      "opcodes": {
+        "BRA": 1,
+        "BRA.U": 1,
+        "EXIT": 1,
+        "FADD": 6,
+        "FFMA": 32,
+        "FMUL": 32,
+        "HADD2.F32": 36,
+        "HFMA2": 1,
+        "I2FP.F32.S32": 32,
+        "IADD": 30,
+        "IADD.64": 7,
+        "IMAD.SHL.U32": 1,
+        "IMAD.WIDE.U32": 7,
+        "LDC": 1,
+        "LDC.64": 2,
+        "LDCU.64": 4,
+        "LDG.E": 5,
+        "LDG.E.64": 9,
+        "LEA": 1,
+        "LEA.HI": 4,
+        "LEA.HI.X": 1,
+        "LOP3.LUT": 32,
+        "MOV": 1,
+        "NOP": 11,
+        "S2R": 2,
+        "SHF.L.U64.HI": 1,
+        "SHF.R.U32.HI": 24,
+        "SHF.R.U64": 1,
+        "SHFL.BFLY": 5,
+        "STG.E": 1,
+        "UIADD3": 1,
+        "UISETP.NE.U32.AND": 1,
+        "UMOV": 2
+      }
+    },
+    "control": {
+      "available": true,
+      "instructions": 344,
+      "ldg": 14,
+      "ldg_128": 1,
+      "ldg_64": 8,
+      "opcodes": {
+        "BRA": 1,
+        "BRA.U": 1,
+        "EXIT": 1,
+        "FADD": 6,
+        "FFMA": 64,
+        "FMUL": 16,
+        "HADD2.F32": 34,
+        "HFMA2": 1,
+        "I2FP.F32.U32": 48,
+        "IADD": 2,
+        "IADD.64": 7,
+        "IMAD.SHL.U32": 1,
+        "IMAD.WIDE.U32": 7,
+        "LDC": 1,
+        "LDC.64": 2,
+        "LDCU.64": 4,
+        "LDG.E": 5,
+        "LDG.E.128": 1,
+        "LDG.E.64": 8,
+        "LEA": 1,
+        "LEA.HI": 1,
+        "LEA.HI.X": 1,
+        "LOP3.LUT": 55,
+        "NOP": 14,
+        "S2R": 2,
+        "SHF.L.U64.HI": 1,
+        "SHF.R.U32.HI": 48,
+        "SHF.R.U64": 1,
+        "SHFL.BFLY": 5,
+        "STG.E": 1,
+        "UIADD3": 1,
+        "UISETP.NE.U32.AND": 1,
+        "UMOV": 2
+      }
+    }
+  },
+  "schema": "tinygrad.nv_u4z8_g64_p256_o_microgate.v1",
+  "shape": {
+    "blocks_per_row": 16,
+    "candidate_rotated_weight_bytes": 142606336,
+    "candidate_weight_bytes": 8912896,
+    "candidate_words_per_block": 34,
+    "control_rotated_weight_bytes": 150994944,
+    "control_weight_bytes": 9437184,
+    "control_words_per_block": 36,
+    "k": 4096,
+    "rows": 4096
+  },
+  "storage_contract": {
+    "byte_reduction_fraction": 0.05555555555555558,
+    "bytes_per_256": 136,
+    "codes": "words 2..33: unsigned nibbles decoded as q-8 [4 group-pairs][8 word-cols]",
+    "scales": "words 0..1: four FP16 via uint16 bitcast"
+  },
+  "threshold": {
+    "cold_recovery_us_per_call": 0.15
+  },
+  "timing": {
+    "candidate_cold_rate_tb_s": 0.9218965659908979,
+    "cold_passes": 16,
+    "cold_recovery_us": 0.07200000000000095,
+    "control_cold_rate_tb_s": 0.9689100616016426,
+    "hot_passes": 100,
+    "hot_recovery_us": 0.32992000000000044,
+    "medians": {
+      "cold_candidate": 9.668,
+      "cold_control": 9.74,
+      "hot_candidate": 4.6784,
+      "hot_control": 5.00832
+    },
+    "reps": 3,
+    "samples": {
+      "cold_candidate": [
+        9.752,
+        9.668,
+        9.64
+      ],
+      "cold_control": [
+        9.858,
+        9.74,
+        9.724
+      ],
+      "hot_candidate": [
+        4.64672,
+        4.69376,
+        4.6784
+      ],
+      "hot_control": [
+        5.00864,
+        5.00608,
+        5.00832
+      ]
+    },
+    "unit": "us_per_call"
+  },
+  "verdict": "STOP"
+}
