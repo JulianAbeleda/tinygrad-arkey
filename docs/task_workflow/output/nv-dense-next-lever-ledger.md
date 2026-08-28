@@ -113,3 +113,10 @@ limit. The representation lane is therefore closed for post-hoc conversion of
 the installed Q4_K checkpoint. It books zero recovery. Reopening requires a
 higher-precision source and calibrated or training-aware quantization, not
 another kernel spelling.
+
+The higher-precision-source prerequisite has since been tested. Official BF16
+shard streaming fits the machine and raw BF16 block-0 substitution is stable.
+However, BF16-derived symmetric U4Z8 diverges, affine U4 reaches only 0.003799
+stacked relative L2, and a single captured activation vector overfits at
+0.004259. The remaining open work is specifically a multi-prompt held-out
+activation calibration pipeline. This still books zero recovery.

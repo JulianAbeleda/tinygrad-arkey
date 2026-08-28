@@ -1,0 +1,30 @@
+{
+  "bf16_shard": "/home/ubuntu/models/qwen3-8b-bf16-stream/model-00001-of-00005.safetensors",
+  "blocks": [
+    0
+  ],
+  "commit": "98f66b34ec6bc0926ff457baa31255c8045160b7",
+  "count": 3,
+  "depth": 128,
+  "finite": true,
+  "format": "u4affineh",
+  "installed": [
+    {
+      "block": 0,
+      "gate_candidate_bytes": 27525120,
+      "gate_source_bytes": 28311552,
+      "gate_weight_rel_l2": 0.1004885882139206,
+      "up_candidate_bytes": 27525120,
+      "up_source_bytes": 28311552,
+      "up_weight_rel_l2": 0.1001049056649208
+    }
+  ],
+  "logits_sha256": "c043c7b9328755984204f0d6b5fcfa56099b52f506deb45a1e8d7873807df63c",
+  "schema": "tinygrad.nv_u4z8_gate_up_quality.v3",
+  "source": "bf16",
+  "tokens": [
+    4710,
+    279,
+    4710
+  ]
+}
