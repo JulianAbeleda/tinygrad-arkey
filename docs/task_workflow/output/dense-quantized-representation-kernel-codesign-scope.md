@@ -200,8 +200,10 @@ Its larger group increases quantization error, so activation-aware scale
 selection and recurrent quality are mandatory.
 
 R2 is tested only after R1 establishes that the simple symmetric kernel is a
-competitive consumer. Otherwise a lower-byte version of a slow grammar has
-no production path.
+competitive cold consumer. A same-byte service win is not required for Lane
+B, but any measured R1 tax must be charged against R2's byte floor. A material
+R1 cold regression stops the grammar; a cold-neutral R1 result closes Lane A
+while leaving byte reduction conditional on source quality.
 
 ### R3: symmetric Q5 for sensitive Q6_K roles
 
@@ -821,8 +823,10 @@ Deliver:
 - real Q/O, K/V, gate/up, and down fixtures;
 - SASS, NCU, hot, and rotated-cold evidence.
 
-Exit: material cold service-rate win. If R1 fails, stop the symmetric grammar
-before building lower-byte variants.
+Exit for Lane A: material cold service-rate win. A cold-neutral result books
+zero same-byte recovery but may support a lower-byte Gate-0 candidate if its
+byte exposure pays the measured tax. A material cold regression stops the
+symmetric grammar before lower-byte work.
 
 ### WP3 — lower-byte calibrated candidates
 
@@ -893,9 +897,11 @@ artifact:
 5. Compare SASS dependency classes and R9 hot/rotated-cold timing.
 6. Run NCU and require unchanged 144-byte/block DRAM plus a material duration
    or achieved-rate win.
-7. Stop the grammar if the result is hot-only or cold-neutral.
-8. If it passes, acquire/use higher-precision weights and proceed to
-   calibrated R2/R3 quality—not before.
+7. Stop the same-byte claim if the result is hot-only or cold-neutral; stop
+   the grammar entirely if it materially regresses cold.
+8. Proceed to calibrated R2/R3 only if R1 is at least cold-competitive, the
+   lower-byte exposure pays any measured tax, and higher-precision weights are
+   available.
 
 This gate answers the key uncertainty cheaply: does removing Q4_K's affine
 metadata dependency create a better cold kernel, or is the stream already so
@@ -905,8 +911,9 @@ memory-dominated that only fewer bytes can matter?
 
 ```text
 R1 simpler format wins cold?
-  no  -> stop same-byte co-design; pursue byte reduction only
-  yes -> build calibrated R2/R3
+  yes      -> book primitive evidence; build calibrated R2/R3
+  neutral  -> book zero for Lane A; R2/R3 only if byte floor pays the tax
+  regresses-> stop this symmetric grammar
 
 R2/R3 pass recurrent quality at useful dose?
   no  -> try one bounded R4 correction design

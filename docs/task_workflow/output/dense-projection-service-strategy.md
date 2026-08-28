@@ -235,6 +235,18 @@ The complete generic scope, artifact contract, role matrix, test ladder, and
 promotion rules are recorded in
 `docs/task_workflow/output/dense-quantized-representation-kernel-codesign-scope.md`.
 
+The discriminator has now run on the production-shaped residual O body. The
+candidate passed its numerical oracle and memory-safety gates but was slower
+hot and neutral/slightly slower under rotated-cold conditioning. This closes
+the same-byte metadata-simplification claim and books zero recovery. The next
+representation step must obtain value from fewer material bytes, with any
+measured decode tax and the full recurrent quality contract charged first.
+
+Authority:
+
+- `docs/task_workflow/output/nv-s4-g32-p256-o-gate2-result.md`
+- `docs/task_workflow/output/nv-s4-g32-p256-o-gate2.json`
+
 ## Arithmetic exposure
 
 The recorded Q/O/K/V pool contains roughly 0.87 GB of material weights and
