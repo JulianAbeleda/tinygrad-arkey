@@ -651,6 +651,11 @@ class _FlashDecodeCandidate:
 FLASH_DECODE_CANDIDATE = _FlashDecodeCandidate(FLASH_DECODE_G4)
 FLASH_DECODE_G5_CANDIDATE = _FlashDecodeCandidate(FLASH_DECODE_G5)
 
+def _flash_combine_q8_outputs_emitter(base):
+  """Adapt base ``(fp16_out, partial, q8_out)`` to outputs-first program ABI."""
+  def outputs_first(fp16_out, q8_out, partial): return base(fp16_out, partial, q8_out)
+  return outputs_first
+
 def _flash_llama_vec_wide_research_call(q:Tensor, assigned_kv:Tensor, Tc:UOp, binding:_FlashDecodeBinding,
                                          MAXC:int, S:int, output_fp16:bool, *, promoted:bool=False,
                                          token_bound:int|None=None, wide_q_f32:bool=False,
@@ -678,11 +683,13 @@ def _flash_llama_vec_wide_research_call(q:Tensor, assigned_kv:Tensor, Tc:UOp, bi
                                     v_pipeline_tail=getenv("NV_FLASH_V_PIPELINE_TAIL", 1)),
     output_spec=OutputSpec((binding.Hq * S * (binding.Hd + 2),), dtypes.float32))
   partial = execute(None, q_arg.reshape(binding.Hq * binding.Hd), cache_bits, program=tile_program)
+  combine_emitter=flash_fused_gmax_combine_kernel(binding.Hd, binding.Hq, S, output_fp16=output_fp16, lane_width=128,
+                                    register_weights=combine_register_weights,
+                                    successor_prefetch_groups=successor_prefetch_groups,output_q8=output_q8)
+  if output_q8: combine_emitter=_flash_combine_q8_outputs_emitter(combine_emitter)
   combine_program = KernelProgram(binding.route_id, f"{binding.candidate_id}.llama_vec_wide.combine",
     provenance,
-    flash_fused_gmax_combine_kernel(binding.Hd, binding.Hq, S, output_fp16=output_fp16, lane_width=128,
-                                    register_weights=combine_register_weights,
-                                    successor_prefetch_groups=successor_prefetch_groups,output_q8=output_q8),
+    combine_emitter,
     output_spec=OutputSpec((binding.Hq * binding.Hd,), dtypes.float16 if output_fp16 else dtypes.float32))
   if output_q8:
     out=Tensor.empty((binding.Hq*binding.Hd,),dtype=dtypes.float16,device=q.device)

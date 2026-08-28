@@ -227,6 +227,20 @@ def test_active_horizon_s6_selector_and_geometry_are_bounded():
   assert _flash_decode_geometry_for_split({"sentinel":1}, None) == {"sentinel":1}
   assert _flash_decode_geometry_for_split({}, 64) == {"split_count":64}
 
+def test_flash_block_geometry_override_is_merged_last():
+  from tinygrad.llm.model import _flash_block_geometry
+  class M: pass
+  model=M(); model._flash_decode_block_geometry_overrides={1:{"o_q8_owned":True,"split_count":7}}
+  assert _flash_block_geometry(model,0,{"split_count":6}) == {"split_count":6}
+  assert _flash_block_geometry(model,1,{"split_count":6}) == {"split_count":7,"o_q8_owned":True}
+
+def test_flash_q8_multi_output_adapter_reorders_only_emitter_arguments():
+  from tinygrad.llm.decode_routes import _flash_combine_q8_outputs_emitter
+  seen=[]
+  def base(out,partial,q8): seen.append((out,partial,q8)); return "sink"
+  assert _flash_combine_q8_outputs_emitter(base)("out","q8","partial") == "sink"
+  assert seen == [("out","partial","q8")]
+
 def test_adaptive_s64_kernel_lease_is_narrow():
   assert _adaptive_split_lease_admitted(FLASH_DECODE_G4, 64, None, "KV_BOTH", 1024)
   assert not _adaptive_split_lease_admitted(FLASH_DECODE_G4, 32, None, "KV_BOTH", 1024)

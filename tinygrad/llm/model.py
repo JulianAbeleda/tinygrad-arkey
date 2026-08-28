@@ -116,6 +116,16 @@ def _flash_decode_geometry_for_split(base:dict, split_count:int|None) -> dict:
 def _flash_jit_variant(split_count:int|None, default, s6, s64):
   return s6 if split_count == 6 else s64 if split_count == 64 else default
 
+def _flash_block_geometry(model, index:int, base:dict) -> dict:
+  """Merge research block-local Flash geometry after the model-wide lease.
+
+  The model entry points refresh block state before every capture/replay.  A
+  separate override map keeps dose-limited experiments from being silently
+  erased by that refresh while leaving the production path unchanged.
+  """
+  override=getattr(model,"_flash_decode_block_geometry_overrides",{}).get(index,{})
+  return {**base,**override}
+
 def _request_static_flash_split_count(prompt_len:int, expected_output_tokens:int|None, max_context:int)->int|None:
   """Select the measured single-graph S64 crossing route from an explicit request horizon."""
   if expected_output_tokens is None: return None
@@ -1594,9 +1604,9 @@ class Transformer:
     for q4k_linear in self._q4k_linears.linears: q4k_linear.decode_enabled = True
     flash_geometry = _flash_decode_geometry_for_split(
       getattr(self, "_flash_decode_tile_geometry_lease", None) or {}, flash_split_count)
-    for block in self.blk:
+    for index,block in enumerate(self.blk):
       block._use_flash, block._prefill_v2, block._is_prefill, block._ring_freqs, block._ring_full = use_flash, False, False, None, False
-      block._flash_decode_tile_geometry_lease = flash_geometry or None
+      block._flash_decode_tile_geometry_lease = _flash_block_geometry(self,index,flash_geometry) or None
     if feedback_slot not in (None, 0, 1): raise ValueError("feedback_slot must be None, 0, or 1")
     pingpong = bool(getattr(self, "_decode_feedback_pingpong_promoted", False)) and feedback_slot is not None
     greedy_flash_pair = _flash_jit_variant(flash_split_count, self.rollout_greedy_logits_pingpong_jits_flash,
@@ -1660,10 +1670,10 @@ class Transformer:
     # capture is consistent. The decode-only T==1 guard in _attention ignores it during prefill.
     flash_geometry = _flash_decode_geometry_for_split(
       getattr(self, "_flash_decode_tile_geometry_lease", None) or {}, flash_split_count)
-    for block in self.blk:
+    for index,block in enumerate(self.blk):
       block._use_flash, block._prefill_v2, block._is_prefill, block._ring_freqs, block._ring_full = \
         use_flash, is_prefill_v2, is_prefill, None, ring_full
-      block._flash_decode_tile_geometry_lease = flash_geometry or None
+      block._flash_decode_tile_geometry_lease = _flash_block_geometry(self,index,flash_geometry) or None
     # StreamingLLM ring decode: distinct captured graphs with `freqs` as a per-step JIT input (rebound each token). The
     # FULL-phase graph (ring_full, ctx>=N) reads the whole [0:N] cache and writes at the wrapped slot; the FILL-phase
     # graph reads [0:start_pos+T] like normal decode. block._ring_full (baked bool) selects the read mode in _attention.

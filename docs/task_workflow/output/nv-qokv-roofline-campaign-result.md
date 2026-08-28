@@ -8,9 +8,9 @@ Three previously open constructions were tested through their relevant boundarie
 
 1. A static one-row-per-CTA Q/K/V stripe was exact but slower in the cold regime and did not improve the measured DRAM service signature.
 2. Flash-combine successor prefetch improved the isolated combine-to-O chain, but regressed the full token wall.
-3. Flash-combine-owned Q8 construction was bit-exact relative to the existing Q8 O route and improved isolated/incremental tests, but its apparent small wall win did not survive the promotion-grade bracket.
+3. The first Flash-combine-owned Q8 production campaign was invalid: block-local admission was overwritten and candidate/control captured the same graph. After repairing admission and a reversed multi-output ABI, the genuine route is finite but fails the recurrent full-logit quality contract even at one-layer coverage.
 
-These are composition closures, not primitive failures. The work-saving mechanisms are real; the current graph cannot translate them into stable token latency.
+The stripe and prefetch results are composition closures. Combine-owned Q8 is instead a numerical-admissibility closure for the present Q8_1 representation. No valid Q8 token-wall result exists because quality correctly stopped the campaign first.
 
 ## Baseline and accounting
 
@@ -55,15 +55,24 @@ The cause is composition: moving weight traffic into combine changes the graph/c
 
 Flash combine emitted both its normal FP16 attention output and the exact Q8_1 packet consumed by the existing Q8 O body. This removes the standalone Q8 producer boundary while retaining the same rounding point.
 
-Qualification results:
+The original qualification and wall results in this directory are retained as provenance but are **invalid for policy judgment**. Two substrate defects were found:
 
-- Q8 packet and O output were bitwise equal to the standalone-provider control in the native microgate.
-- Full-vocabulary recurrent logits were bitwise equal for both 8 and all 36 owned layers: max absolute error 0, relative L2 0, identical argmax and top-10 ordering.
-- Eight owned layers passed an R7 exploratory bracket by 3.590 us/token.
-- R5 exploration found 16 layers at -4.388 us, 20 at -6.173 us, 24 at -1.727 us, while 36 regressed by +26.995 us.
-- The promotion-grade 20-layer R7 bracket reversed to **+12.090 us/token**, or **-0.767 tok/s**, with identical recurrent token hashes.
+- Model entry refreshed every block from the model-wide geometry, silently erasing block-local `o_q8_owned` admission. Candidate and control were identical.
+- After admission was repaired, the multi-output program passed `(out,q8,partial)` to an emitter expecting `(out,partial,q8)`. This caused out-of-bounds partial reads and consumed an unwritten Q8 packet.
 
-The R5 curve is therefore not stable enough to promote. The full-ownership regression proves that larger combine bodies impose a graph cost; the r7 reversal proves the apparent interior optimum is below the reliable wall resolution or sensitive to run state.
+Both defects now have regression coverage. A live one-block census proves one `_q8o` combine, one Q8 residual O consumer, and 35 ordinary O consumers. The corrected route is recurrently finite.
+
+Corrected qualification results:
+
+- All 36 layers: relative L2 0.00460, max absolute 0.21860; argmax/tokens stable but top-10 membership changed. Fail.
+- Prefix eight layers: relative L2 0.00172; top-10 membership stable. Fail.
+- Prefix four layers: relative L2 0.00331. Fail, demonstrating non-monotonic layer sensitivity.
+- Block 0 only: relative L2 0.00267. Fail.
+- Block 1 only: relative L2 0.00190. Fail.
+
+The contract limit is relative L2 0.001 plus stable argmax/top-10 membership and bounded decision-margin perturbation. Since even a single tested layer fails and its gross arithmetic exposure is below 0.8 us/token, further layer-sensitivity search is not economically justified now. The correct production-equivalent timing gate and Q8-only combine optimization were deliberately not run after the quality stop.
+
+The earlier R5/R7 layer-count wall curves measured identical graphs and are null-bracket noise. They must not be cited as either a win or a graph-resource regression.
 
 ## SASS audit
 
@@ -77,7 +86,7 @@ The current exact FP16 Q/O body is dominated by instruction classes required for
 | Flash-combine O prefetch | Exact; isolated cold positive | +19.391 us regression | 0 us |
 | Exact FP16 instruction lowering | No separable redundant class found | Not advanced | 0 us |
 | Shared-Q8 stripe | Conditional on rejected stripe | Closed by prerequisite | 0 us |
-| Flash-combine-owned Q8 O | Bit-exact; isolated positive | R7 +12.090 us regression | 0 us |
+| Flash-combine-owned Q8 O | Corrected route finite; useful coverage fails quality | Wall not admissible | 0 us |
 
 ## What remains open
 

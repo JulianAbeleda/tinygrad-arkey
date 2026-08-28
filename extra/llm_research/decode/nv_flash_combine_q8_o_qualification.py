@@ -12,16 +12,14 @@ from extra.llm_research.decode.nv_flash_llama_vec_wide_qualification import MODE
 from extra.llm_research.decode.nv_shared_q8_progressive_qualification import _semantic_comparison
 
 
-def child(arm:str, depth:int, count:int, max_context:int, blocks:int, out:pathlib.Path):
+def child(arm:str, depth:int, count:int, max_context:int, blocks:int, start_block:int, out:pathlib.Path):
   os.environ.update(DEV="NV",PROFILE="0")
   from extra.llm_research.decode.nv_predispatch_full_logits_qualification import _load, _prompt
   model=_load(MODEL,max_context)
   geometry={"split_count":6,"llama_vec_wide":True,"token_bound":768,"combine_register_weights":True}
   model._flash_decode_tile_geometry_lease=geometry
-  for index,block in enumerate(model.blk):
-    block_geometry=dict(geometry)
-    if arm == "candidate" and index < blocks: block_geometry["o_q8_owned"]=True
-    block._flash_decode_tile_geometry_lease=block_geometry
+  model._flash_decode_block_geometry_overrides={index:{"o_q8_owned":True}
+    for index in range(start_block,start_block+blocks)} if arm == "candidate" else {}
   model._decode_direct_greedy_promoted=True; model._decode_feedback_pingpong_promoted=True
   gen=model.generate(_prompt(MODEL,depth),chunk_size=32,temperature=0.0,diagnostic_full_logits=True)
   tokens=[]; logits=[]
@@ -30,12 +28,15 @@ def child(arm:str, depth:int, count:int, max_context:int, blocks:int, out:pathli
       token,full=next(gen)
       if full is None: continue
       arr=full.numpy().reshape(-1)
-      if int(token) != int(arr.argmax()): raise RuntimeError("sample/logit binding mismatch")
+      if not np.isfinite(arr).all():
+        raise RuntimeError(f"non-finite logits step={len(tokens)} token={int(token)} finite={int(np.isfinite(arr).sum())}/{arr.size}")
+      if int(token) != int(arr.argmax()):
+        raise RuntimeError(f"sample/logit binding mismatch step={len(tokens)} token={int(token)} argmax={int(arr.argmax())}")
       tokens.append(int(token)); logits.append(arr)
   finally: gen.close()
   values=np.stack(logits)
   row={"schema":"tinygrad.nv_flash_combine_q8_o_qualification.v1","arm":arm,"depth":depth,
-       "count":len(tokens),"blocks":blocks if arm == "candidate" else 0,"tokens":tokens,
+       "count":len(tokens),"blocks":blocks if arm == "candidate" else 0,"start_block":start_block,"tokens":tokens,
        "finite":bool(np.isfinite(values).all()),"shape":list(values.shape)}
   out.parent.mkdir(parents=True,exist_ok=True); out.write_text(json.dumps(row,indent=2,sort_keys=True)+"\n")
   np.savez_compressed(out.with_suffix(".npz"),logits=values)
@@ -49,12 +50,12 @@ def driver(args):
     out=root/f"{arm}.json"
     cmd=["timeout",str(args.timeout),"flock","-w","600",LOCK,str(PYTHON),str(pathlib.Path(__file__).resolve()),
          "--arm",arm,"--depth",str(args.depth),"--count",str(args.count),"--max-context",str(args.max_context),
-         "--blocks",str(args.blocks),"--out",str(out)]
+         "--blocks",str(args.blocks),"--start-block",str(args.start_block),"--out",str(out)]
     run=subprocess.run(cmd,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env={**os.environ,"PYTHONPATH":str(ROOT)})
     if run.returncode: raise RuntimeError(f"{arm} failed rc={run.returncode}: {run.stderr[-6000:]}")
     rows[arm]=json.loads(out.read_text()); arrays[arm]=np.load(out.with_suffix(".npz"))["logits"]
   comparison=_semantic_comparison(arrays["control"],arrays["candidate"],rows["control"],rows["candidate"])
-  result={"schema":"tinygrad.nv_flash_combine_q8_o_qualification.v1","blocks":args.blocks,
+  result={"schema":"tinygrad.nv_flash_combine_q8_o_qualification.v1","blocks":args.blocks,"start_block":args.start_block,
           "rows":rows,"comparison":comparison,"verdict":"PASS" if comparison["semantic_pass"] else "FAIL"}
   args.out.write_text(json.dumps(result,indent=2,sort_keys=True)+"\n"); return result
 
@@ -63,8 +64,11 @@ def main():
   ap=argparse.ArgumentParser(description=__doc__); ap.add_argument("--arm",choices=("control","candidate"))
   ap.add_argument("--depth",type=int,default=512); ap.add_argument("--count",type=int,default=12)
   ap.add_argument("--max-context",type=int,default=768); ap.add_argument("--blocks",type=int,default=8)
+  ap.add_argument("--start-block",type=int,default=0)
   ap.add_argument("--timeout",type=int,default=1800); ap.add_argument("--out",type=pathlib.Path,required=True)
-  args=ap.parse_args(); result=child(args.arm,args.depth,args.count,args.max_context,args.blocks,args.out) if args.arm else driver(args)
+  args=ap.parse_args()
+  if args.start_block < 0 or args.start_block+args.blocks > 36: raise ValueError("selected block range is outside 0..35")
+  result=child(args.arm,args.depth,args.count,args.max_context,args.blocks,args.start_block,args.out) if args.arm else driver(args)
   print(json.dumps(result,indent=2,sort_keys=True))
 
 if __name__ == "__main__": main()

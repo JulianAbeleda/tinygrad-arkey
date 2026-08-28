@@ -28,10 +28,8 @@ def run_child(arm:str, depth:int, count:int, max_context:int, reps:int, out:path
     if candidate or o_prefetch_groups or o_q8_owned: geometry["combine_register_weights"]=True
     if candidate and o_prefetch_groups: geometry["o_successor_prefetch_groups"]=o_prefetch_groups
     model._flash_decode_tile_geometry_lease=geometry
-    for index,block in enumerate(model.blk):
-      block_geometry=dict(geometry)
-      if candidate and o_q8_owned and index < o_q8_blocks: block_geometry["o_q8_owned"]=True
-      block._flash_decode_tile_geometry_lease=block_geometry
+    model._flash_decode_block_geometry_overrides={index:{"o_q8_owned":True}
+      for index in range(o_q8_blocks)} if candidate and o_q8_owned else {}
   model._decode_direct_greedy_promoted=True; model._decode_feedback_pingpong_promoted=True
   gen=model.generate(_prompt(MODEL,depth),chunk_size=32,temperature=0.0)
   try: settled=_settled_continuous_windows(gen,dev,count,reps)
