@@ -208,25 +208,32 @@ single-token latency test.
 
 ## Next exact discriminator
 
-The next high-information test is now a one-layer statically scheduled
-persistent span with these properties:
+The persistent-span discriminator has now failed at its required O building
+block. The next high-information test is representation-and-kernel co-design:
 
-1. Cover Q, K, V, decode attention, and O as a dependent task graph.
-2. Retain the installed weight formats and exact row-reduction associations.
-3. Preserve the production-sized Q/K/V and O worker populations.
-4. Use event/barrier publication, not resident spin polling.
-5. Keep attention intermediates on-chip when ownership permits it.
-6. Measure the complete span against the installed multi-kernel chain under
-   hot and rotated-cold conditioning.
-7. Stop before production integration unless the exact gate predicts a
-   material full-token recovery.
-8. Promote only after an exact full-token reverse bracket beats both controls.
+1. Define a fixed-size symmetric four-bit representation with the same
+   144-byte block cost as Q4_K but a simpler metadata dependency graph.
+2. Convert real tensors offline as a non-promotable plumbing/performance
+   artifact.
+3. Consume existing FP16 activations so activation quantization is not mixed
+   into the first causal test.
+4. Require deterministic decode, finite numerical output, SASS evidence, and
+   a material rotated-cold service-rate win before building a model artifact.
+5. Only after that pass, derive lower-byte candidates from higher-precision
+   weights and qualify recurrent full-logit quality.
+6. Integrate through model facts and fail-closed route admission, then book
+   recovery only from a complete token reverse bracket.
 
 This discriminator separates two outcomes cleanly:
 
-- A pass means the missing lever was service topology and runtime ownership.
-- A fail means the exact current-format path is near its construction wall,
-  and the remaining large levers require byte or representation changes.
+- A same-byte cold pass means Q4_K's decode dependency graph leaves service
+  rate available even though its byte floor is unchanged.
+- A same-byte cold failure means fewer compulsory bytes, rather than another
+  decode spelling, are required for material recovery.
+
+The complete generic scope, artifact contract, role matrix, test ladder, and
+promotion rules are recorded in
+`docs/task_workflow/output/dense-quantized-representation-kernel-codesign-scope.md`.
 
 ## Arithmetic exposure
 
