@@ -1,0 +1,43 @@
+{
+  "schema": "tinygrad.nv_gate_up_representation_quality_summary.v1",
+  "admission_limit_stack_relative_l2": 0.001,
+  "dose_blocks": [0],
+  "recurrent_rows": 3,
+  "contracts": [
+    {
+      "name": "u4z8_g64",
+      "bytes_per_block": 136,
+      "row_relative_l2": [0.077515475, 0.432444, 0.47099975],
+      "tokens": [4710, 198, 198],
+      "verdict": "STOP"
+    },
+    {
+      "name": "u4_affine_g64",
+      "bytes_per_block": 140,
+      "stack_relative_l2": 0.0028077012,
+      "row_relative_l2": [0.0012177108, 0.0031169443, 0.0039697401],
+      "tokens": [4710, 279, 4710],
+      "verdict": "STOP"
+    },
+    {
+      "name": "q4_codes_meta4",
+      "bytes_per_block": 140,
+      "stack_relative_l2": 0.0014585657,
+      "row_relative_l2": [0.0009349993, 0.0018165187, 0.0017316142],
+      "tokens": [4710, 279, 4710],
+      "verdict": "STOP"
+    },
+    {
+      "name": "q4_codes_meta5",
+      "bytes_per_block": 142,
+      "stack_relative_l2": 0.0020944835,
+      "row_relative_l2": [0.0009557562, 0.001642234, 0.0032976642],
+      "tokens": [4710, 279, 4710],
+      "verdict": "STOP"
+    }
+  ],
+  "booked_recovery_us_per_token": 0.0,
+  "endpoint_us_per_token": 4065.897,
+  "endpoint_tok_s": 245.948,
+  "final_verdict": "BLOCKED_REPRESENTATION_QUALITY"
+}

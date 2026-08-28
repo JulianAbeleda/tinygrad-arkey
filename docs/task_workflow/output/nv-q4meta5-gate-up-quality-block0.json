@@ -1,0 +1,28 @@
+{
+  "blocks": [
+    0
+  ],
+  "commit": "b1d8e72e00d64348f0bdadc03888dfdf83cffc49",
+  "count": 3,
+  "depth": 128,
+  "finite": true,
+  "format": "q4meta5",
+  "installed": [
+    {
+      "block": 0,
+      "gate_candidate_bytes": 27918336,
+      "gate_source_bytes": 28311552,
+      "gate_weight_rel_l2": 0.03690002113580704,
+      "up_candidate_bytes": 27918336,
+      "up_source_bytes": 28311552,
+      "up_weight_rel_l2": 0.03463572636246681
+    }
+  ],
+  "logits_sha256": "eeb6349b4e1e317f75f07136f2c1457f7cade5029f3539471583a57f6dc648e2",
+  "schema": "tinygrad.nv_u4z8_gate_up_quality.v2",
+  "tokens": [
+    4710,
+    279,
+    4710
+  ]
+}

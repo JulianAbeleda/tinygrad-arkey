@@ -104,8 +104,12 @@ At 36 layers, the conservative paired observation exposes about 46.8 us/token.
 If completely transferred, that changes 4065.897 us to about 4019.1 us, or
 roughly 248.8 tok/s. This is an exposure estimate, not a booked endpoint result.
 
-The representation lane is therefore admitted to the next investment stage.
-The next required work is a fused paired emitter with nonzero semantic
-qualification, followed by a predecessor-conditioned replay. Only after those
-pass should a calibrated model artifact be produced for recurrent-logit quality
-qualification and a strict batch-1 endpoint bracket.
+The subsequent full gate changed this disposition. A fused paired emitter
+passed finite nonzero composition and recovered 3.625 us/layer at R9, but every
+post-hoc byte-reducing contract failed recurrent-logit quality at the minimum
+one-layer dose. U4Z8 diverged severely; three 140--142 byte affine/metadata
+contracts preserved sampled tokens but missed the 0.001 stacked-relative-L2
+limit. The representation lane is therefore closed for post-hoc conversion of
+the installed Q4_K checkpoint. It books zero recovery. Reopening requires a
+higher-precision source and calibrated or training-aware quantization, not
+another kernel spelling.

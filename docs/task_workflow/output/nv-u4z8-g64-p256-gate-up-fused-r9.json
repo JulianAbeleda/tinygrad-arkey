@@ -1,0 +1,54 @@
+{
+  "commit": "b1d8e72e00d64348f0bdadc03888dfdf83cffc49",
+  "composition": {
+    "bad": 0,
+    "max_abs": 0.0,
+    "pass": true,
+    "raw_bitwise": false
+  },
+  "construction": "installed fused Q4_K versus conservative two U4Z8 projections plus separate finish and fused U4Z8",
+  "schema": "tinygrad.nv_u4z8_gate_up_chain.v3",
+  "semantic_scope": "nonzero legal U4Z8 fixture; fused result compared with two independently oracle-qualified projections plus finish; FP16 abs <= 0.002",
+  "timing": {
+    "conservative": [
+      38.816,
+      38.733001,
+      38.868001,
+      38.726001,
+      38.991,
+      38.586001,
+      38.670001,
+      38.560001,
+      38.979
+    ],
+    "conservative_median": 38.733001,
+    "conservative_recovery_us": 1.4989989999999977,
+    "control": [
+      40.258,
+      40.245,
+      40.305001,
+      40.034,
+      40.603,
+      40.132001,
+      40.019,
+      40.232,
+      40.197
+    ],
+    "control_median": 40.232,
+    "fused": [
+      36.414,
+      36.607,
+      36.612,
+      36.505999,
+      36.881,
+      36.616,
+      36.275,
+      36.337,
+      36.665
+    ],
+    "fused_median": 36.607,
+    "fused_recovery_us": 3.625,
+    "unit": "us_per_pair_per_call_sync"
+  },
+  "verdict": "PASS_FUSED"
+}
