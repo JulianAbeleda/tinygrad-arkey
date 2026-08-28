@@ -1,0 +1,73 @@
+{
+  "schema": "tinygrad.nv_prefill_kv_native_streamk.v1",
+  "shape": {
+    "m": 512,
+    "n": 1024,
+    "k": 4096
+  },
+  "stream_blocks": 170,
+  "fixup_blocks": 32,
+  "rows": [
+    {
+      "rep": 0,
+      "control_a_us": 23765.633,
+      "stream_us": 4817.312,
+      "control_c_us": 23727.713
+    },
+    {
+      "rep": 1,
+      "control_a_us": 23728.607,
+      "stream_us": 4816.64,
+      "control_c_us": 23714.881
+    },
+    {
+      "rep": 2,
+      "control_a_us": 23761.346,
+      "stream_us": 4831.136,
+      "control_c_us": 23731.326
+    },
+    {
+      "rep": 3,
+      "control_a_us": 23735.936,
+      "stream_us": 4814.496,
+      "control_c_us": 23716.543
+    },
+    {
+      "rep": 4,
+      "control_a_us": 23729.984,
+      "stream_us": 4813.408,
+      "control_c_us": 23754.336
+    },
+    {
+      "rep": 5,
+      "control_a_us": 23730.943,
+      "stream_us": 4815.36,
+      "control_c_us": 23730.432
+    },
+    {
+      "rep": 6,
+      "control_a_us": 23728.928,
+      "stream_us": 4813.696,
+      "control_c_us": 23729.857
+    },
+    {
+      "rep": 7,
+      "control_a_us": 23725.504,
+      "stream_us": 4812.512,
+      "control_c_us": 23728.416
+    },
+    {
+      "rep": 8,
+      "control_a_us": 23739.201,
+      "stream_us": 4817.536,
+      "control_c_us": 23717.729
+    }
+  ],
+  "correctness": {
+    "finite": true,
+    "max_abs": 0.00192260742,
+    "mean_abs": 0.00187767169
+  },
+  "ptxas": "ptxas info    : 0 bytes gmem\nptxas info    : Compiling entry function 'stream_fixup' for 'sm_120a'\nptxas info    : Function properties for stream_fixup\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 20 registers, used 0 barriers\nptxas info    : Compile time = 3.804 ms\nptxas info    : Compiling entry function 'stream_main' for 'sm_120a'\nptxas info    : Function properties for stream_main\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 40 registers, used 0 barriers\nptxas info    : Compile time = 11.532 ms\nptxas info    : Compiling entry function 'control32' for 'sm_120a'\nptxas info    : Function properties for control32\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 37 registers, used 0 barriers\nptxas info    : Compile time = 4.260 ms",
+  "stdout": "correct finite=1 max_abs=0.00192260742 mean_abs=0.00187767169 tiles=32 stream_blocks=170\nrep=0 control_a_us=23765.633 stream_us=4817.312 control_c_us=23727.713\nrep=1 control_a_us=23728.607 stream_us=4816.640 control_c_us=23714.881\nrep=2 control_a_us=23761.346 stream_us=4831.136 control_c_us=23731.326\nrep=3 control_a_us=23735.936 stream_us=4814.496 control_c_us=23716.543\nrep=4 control_a_us=23729.984 stream_us=4813.408 control_c_us=23754.336\nrep=5 control_a_us=23730.943 stream_us=4815.360 control_c_us=23730.432\nrep=6 control_a_us=23728.928 stream_us=4813.696 control_c_us=23729.857\nrep=7 control_a_us=23725.504 stream_us=4812.512 control_c_us=23728.416\nrep=8 control_a_us=23739.201 stream_us=4817.536 control_c_us=23717.729\n"
+}

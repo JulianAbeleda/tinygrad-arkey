@@ -1,0 +1,65 @@
+{
+  "schema": "tinygrad.nv_q8_prefill_producer_lifecycle.v1",
+  "workload": {
+    "m": 512,
+    "k": 4096,
+    "layers": 36,
+    "final_ffn_pruned": true
+  },
+  "abi": {
+    "record_values": 128,
+    "record_bytes": 144,
+    "qs_bytes": 128,
+    "metadata_bytes": 16,
+    "DS4": "four half2(d,sum), one per 32 values; Q4_K/Q5_K",
+    "D4": "four float32 d, one per 32 values; Q6_K",
+    "quant": "d=amax/127; q=round(x/d); DS4 sum is raw pre-quant fp32 subgroup sum",
+    "layout": "records are transposed by activation column; each record is one column's 128-K slice"
+  },
+  "packet": {
+    "bytes_per_512x4096": 2359296,
+    "MiB_per_512x4096": 2.25,
+    "input_fp32_bytes": 8388608,
+    "compression_vs_fp32": 3.5555555555555554
+  },
+  "observed": {
+    "DS4": {
+      "calls": 214,
+      "total_ns": 680651,
+      "avg_ns": 3180.6
+    },
+    "D4": {
+      "calls": 35,
+      "total_ns": 177955,
+      "avg_ns": 5084.4
+    }
+  },
+  "ordinary": {
+    "producer_calls": 249,
+    "consumer_calls": 249
+  },
+  "abi_preserving_shared": {
+    "producer_calls": 160,
+    "consumer_calls": 249,
+    "avoided_calls": 89,
+    "groups": {
+      "attention_qkv": 54,
+      "attention_o": 36,
+      "ffn_gate_up": 35,
+      "ffn_down": 35
+    },
+    "saved_ms_estimate": 0.2830734,
+    "llama_wall_ms_estimate": 36.3249266,
+    "prompt_tok_s_estimate": 14095.00439293386,
+    "avoided_ctas": 364544,
+    "avoided_input_read_bytes": 746586112,
+    "avoided_packet_write_bytes": 209977344,
+    "compressed_dense_lifecycle_ms_estimate": 26.979926600000002
+  },
+  "constraints": [
+    "DS4 and D4 records have equal size but incompatible metadata interpretation",
+    "Q4 gate and up may share one DS4 packet",
+    "Q/K/V may share one DS4 packet only when all three weights use DS4",
+    "mixed Q4/Q4/Q6 QKV needs one DS4 plus one D4 producer unless Q6 consumer ABI is generalized"
+  ]
+}

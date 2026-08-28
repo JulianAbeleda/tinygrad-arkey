@@ -306,8 +306,11 @@ class NVArgsState(CLikeArgsState):
     super().__init__(buf, prg, bufs, vals=vals, prefix=prg.cbuf_0 or None)
 
 class NVProgram(HCQProgram['NVDevice']):
-  def __init__(self, dev:NVDevice, name:str, lib:bytes, **kwargs):
+  def __init__(self, dev:NVDevice, name:str, lib:bytes, shared_mem:int=0, **kwargs):
     self.dev, self.name, self.lib = dev, name, lib
+    # shared_mem is positional as well as keyword so finalized PROGRAM UOps can
+    # transport it through ProgramInfo.aux/get_runtime without a side channel.
+    requested_shmem = shared_mem
     self.constbufs: dict[int, tuple[int, int]] = {0: (0, 0x160)} # dict[constbuf index, tuple[va_addr, size]]
 
     if (NAK:=isinstance(dev.renderer, NAKRenderer)):
@@ -343,6 +346,10 @@ class NVProgram(HCQProgram['NVDevice']):
       # Minimum cbuf_0 size for driver params: Blackwell needs index 223 (224 entries), older GPUs need index 11 (12 entries)
       min_cbuf0_entries = 224 if dev.iface.compute_class >= nv_gpu.BLACKWELL_COMPUTE_A else 12
       self.cbuf_0 = [0] * max(cbuf0_size // 4, min_cbuf0_entries)
+
+    # CUDA kernels with extern shared memory have a zero-sized ELF shared section.
+    # Let native callers opt into the launch-time allocation recorded in the QMD.
+    self.shmem_usage = max(self.shmem_usage, round_up(requested_shmem, 128))
 
     # Ensure device has enough local memory to run the program
     self.dev._ensure_has_local_memory(self.lcmem_usage)

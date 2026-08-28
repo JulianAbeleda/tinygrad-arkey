@@ -633,6 +633,20 @@ class FFNBlock:
     route-scope-20260810.md). Prefill/MoE paths ignore the kwarg."""
     _prefill = getattr(self, "_is_prefill", False)
     if getattr(self, '_prefill_v2', False) and not hasattr(self, 'ffn_gate_exps') and not hasattr(self, 'ffn_gateup'):
+      # Default-off research overlay for the qualified Qwen3-8B pp512 packed
+      # gate/up lifecycle. The finalized native programs participate in the
+      # ordinary TinyJit graph; every miss preserves the corrected fp16
+      # fallback unchanged.
+      if getenv("NV_Q4_IMMA_PP512", 0) and isinstance(getattr(self, "ffn_gate", None), Q4KPrimitiveLinear) \
+          and isinstance(getattr(self, "ffn_up", None), Q4KPrimitiveLinear) and x.device == "NV" \
+          and x.numel() == 512*4096:
+        _binding, _flat = self._nv_q4_imma_pp512_binding, x.reshape(512,4096)
+        g = _prefill_semantic(_prefill, prefill_activation,
+          _binding.project(_flat, self.ffn_gate.prefill_packed_weight(), model_family="qwen3_8b", role="ffn_gate"))
+        u = _prefill_semantic(_prefill, prefill_activation,
+          _binding.project(_flat, self.ffn_up.prefill_packed_weight(), model_family="qwen3_8b", role="ffn_up"))
+        h = _prefill_semantic(_prefill, prefill_activation, (g.silu() * u).contiguous())
+        return _prefill_semantic(_prefill, prefill_activation, _pf16(self.ffn_down, h.reshape(x.shape[:-1]+(12288,))).contiguous())
       # prefill v2 (dense): fp16 + .contiguous()-isolated matmuls so each is a clean, warmstart-matchable TC
       # kernel (mirrors the gated chained-FFN prefill authority shape). MoE/fused fall through.
       g = _prefill_semantic(_prefill, prefill_activation, _pf16(self.ffn_gate, x).contiguous())
@@ -716,7 +730,6 @@ class FFNBlock:
     # input -- reading it off self inside _run would bake it at _run's compile time (attributes don't rebind).
     _rf = getattr(self, "_ring_freqs", None)
     # we pass in the weights implicitly so we unpack the GGUF on the fly
-    @function(precompile=True, allow_implicit=True)
     def _run(x:Tensor, start_pos:int|UOp, ring_freqs):
       _prefill = getattr(self, "_is_prefill", False)
       _fused_norm = not _prefill and getattr(self, "_decode_norm_fusion_promoted", False)
@@ -751,6 +764,10 @@ class FFNBlock:
         _nh = _decode_rmsnorm(self.ffn_norm, h, _fused_norm, dtypes.float16)
         normed_h = _prefill_semantic(_prefill, prefill_scratch,
           _nh if _nh is not None else _decode_reduce_output_rmsnorm_fp16_consumer(self.ffn_norm, h, _reduce_output_norm))
+      # Research-only ownership split: expose the residual and exact fp16 norm
+      # result as distinct precompiled outputs. The native Q8 producer owns
+      # normed_h directly; h remains the residual input to the ordinary tail.
+      if _prefill and getenv("NV_Q4_IMMA_PP512", 0): return h, normed_h
       # L1 M4: ffn_down silu*mul prelude + residual epilogue absorption. When the gate is open,
       # the down GEMV reads gate_out and up_out directly and computes silu(gate)*up inline (no
       # E_128_32_3 elementwise kernel), then adds h as an in-kernel epilogue (no E_32_32_4
@@ -815,7 +832,11 @@ class FFNBlock:
           ffn_out if _ffn_absorbed else (h + ffn_out).contiguous())
     # @function wraps the traced return in a call/gettuple node. Mark that concrete block-output boundary as well as
     # its residual creation site so callification cannot hide the allocation identity from the manifest.
-    return _prefill_semantic(getattr(self, "_is_prefill", False), prefill_activation, _run(x, start_pos, _rf).contiguous())
+    _runner = function(precompile=True, allow_implicit=True)(_run)
+    if getattr(self, "_is_prefill", False) and getenv("NV_Q4_IMMA_PP512", 0):
+      h, normed_h = _runner(x, start_pos, _rf)
+      return _prefill_semantic(True, prefill_activation, (h + self._feed_forward(normed_h)).contiguous())
+    return _prefill_semantic(getattr(self, "_is_prefill", False), prefill_activation, _runner(x, start_pos, _rf).contiguous())
 
 class TransformerBlock(FFNBlock):
   def __init__(self, config:TransformerConfig):
@@ -1675,6 +1696,12 @@ class Transformer:
       block._use_flash, block._prefill_v2, block._is_prefill, block._ring_freqs, block._ring_full = \
         use_flash, is_prefill_v2, is_prefill, None, ring_full
       block._flash_decode_tile_geometry_lease = _flash_block_geometry(self,index,flash_geometry) or None
+    if is_prefill_v2 and getenv("NV_Q4_IMMA_PP512", 0):
+      from extra.llm_research.prefill.nv_q4_imma_pp512_binding import binding_for
+      _nv_binding = binding_for("NV")
+      _nv_binding.prepare_outputs(len(self.blk)*2)
+      _nv_binding.begin_trace()
+      for block in self.blk: block._nv_q4_imma_pp512_binding = _nv_binding
     # StreamingLLM ring decode: distinct captured graphs with `freqs` as a per-step JIT input (rebound each token). The
     # FULL-phase graph (ring_full, ctx>=N) reads the whole [0:N] cache and writes at the wrapped slot; the FILL-phase
     # graph reads [0:start_pos+T] like normal decode. block._ring_full (baked bool) selects the read mode in _attention.

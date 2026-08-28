@@ -1,0 +1,57 @@
+{
+  "schema": "tinygrad.nv_q8_compact_producer_gate.v1",
+  "shape": {
+    "M": 512,
+    "K": 4096
+  },
+  "grid": [
+    512,
+    8,
+    1
+  ],
+  "block": [
+    128,
+    1,
+    1
+  ],
+  "ctas": 4096,
+  "warps_per_cta": 4,
+  "timing": {
+    "n": 9,
+    "min_us": 3.552,
+    "median_us": 3.552,
+    "max_us": 3.68,
+    "samples_us": [
+      3.584,
+      3.552,
+      3.552,
+      3.552,
+      3.552,
+      3.68,
+      3.552,
+      3.584,
+      3.584
+    ]
+  },
+  "correctness": {
+    "finite": true,
+    "values_exact": false,
+    "values_mismatch": 278,
+    "scales_max_abs": 1.862645149230957e-09,
+    "scales_mismatch": 2972,
+    "scales_exact": false,
+    "sums_max_abs": 0.0,
+    "sums_exact": true,
+    "hashes": {
+      "q": "ff4e81e6b22a99ddbc9a66e3729b3aea6c596b06e2b33ad3780d61aac4884d52",
+      "scales": "458c24713468e8eafc5780cea3f7d0b9f2cdba27470f54d68502a73a9e62a168",
+      "sums": "c41ce86ba7e325bbed3d828199102d277a304249a3432eb0491439a9f8c4d6af"
+    }
+  },
+  "resources": {
+    "registers": 26,
+    "shared_bytes": 1024,
+    "local_bytes": 576
+  },
+  "source": "llama quantize_mmq_q8_1 topology: float4/thread, 128 threads, 8 K-segment CTAs per row"
+}

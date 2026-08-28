@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field, replace
 from tinygrad.dtype import dtypes, AddrSpace, PtrDType, ImageDType
-from tinygrad.uop.ops import (AxisType, UOp, UPat, PatternMatcher, Ops, GroupOp, ScheduleHints, ParamArg, ReduceOutputSpec, CallInfo,
+from tinygrad.uop.ops import (AxisType, UOp, UPat, PatternMatcher, Ops, GroupOp, ScheduleHints, ParamArg, ReduceOutputSpec, CallInfo, ProgramInfo,
                              bind_memory_semantic_owner, memory_semantic_owner, propagate_memory_semantic, graph_rewrite, track_rewrites)
 from tinygrad.uop import MemorySemanticOwner, MemorySemanticClass
 from tinygrad.helpers import VIZ, Context, ContextVar, pluralize, all_int
@@ -154,6 +154,26 @@ _ACTIVE_REDUCE_OUTPUT_ROUTE_FUNCTIONS = ContextVar("_ACTIVE_REDUCE_OUTPUT_ROUTE_
 # (the production per-block ``_run`` residual stream) keep the closed-graph
 # spelling so their residual kernel identities cannot shift.
 _ACTIVE_REDUCE_OUTPUT_OUT_ROUTE_FUNCTIONS = ContextVar("_ACTIVE_REDUCE_OUTPUT_OUT_ROUTE_FUNCTIONS", frozenset())
+_ACTIVE_NATIVE_INPUT_OUTPUTS = ContextVar("_ACTIVE_NATIVE_INPUT_OUTPUTS", frozenset())
+
+def _native_input_output_routes(sink:UOp) -> frozenset[tuple[int,int]]:
+  """Raw-graph precompiled outputs consumed directly by one finalized native input."""
+  found:list[tuple[int,int]]=[]
+  transparent={Ops.RESHAPE, Ops.MEMORY_SEMANTIC, Ops.CONTIGUOUS}
+  for call in sink.toposort():
+    if call.op is not Ops.CALL or call.src[0].op is not Ops.PROGRAM or not isinstance(call.src[0].arg, ProgramInfo): continue
+    if not any(s.op is Ops.BINARY for s in call.src[0].src): continue
+    for i,arg in enumerate(call.src[1:]):
+      if i not in call.src[0].arg.ins: continue
+      original=arg
+      while arg.op in transparent and len(arg.src)>=1:
+        if arg.numel()!=original.numel() or arg.dtype!=original.dtype: break
+        arg=arg.src[0]
+      if arg.op is Ops.GETTUPLE and arg.src[0].op is Ops.FUNCTION and arg.src[0].arg.precompile:
+        found.append((id(arg.src[0]),arg.arg))
+  # Multiple finalized consumers are deliberately not admitted.
+  return frozenset(x for x in found if found.count(x)==1)
+
 
 
 def _reduce_output_route_function_ids(sink:UOp) -> tuple[frozenset[int], frozenset[int]]:
@@ -583,6 +603,7 @@ def transform_precompiled_call(c:UOp) -> UOp|None:
     _body_output_carries_reduce_output_marker(c.src[0].src) or
     _body_output_is_declared_after(c.src[0].src) or
     bool(out_active and id(c) in out_active))
+  native_output_idxs={idx for fid,idx in _ACTIVE_NATIVE_INPUT_OUTPUTS.value if fid==id(c)}
   # An exact prior precompiled output already has a fresh contiguous output
   # allocation.  Retain its invocation spelling so the nested producer can
   # become AFTER(output, CALL); adding another transport CONTIGUOUS here would
@@ -603,12 +624,12 @@ def transform_precompiled_call(c:UOp) -> UOp|None:
 
   subs:dict[UOp, UOp] = {}
   items:list[UOp] = []
-  for s, t in zip(srcs, targets):
+  for output_idx,(s, t) in enumerate(zip(srcs, targets)):
     after_deps:list[UOp] = []
     while s.op is Ops.AFTER:
       after_deps.extend(s.src[1:])
       s = s.src[0]
-    if (placed := _precompiled_output_redirect(s, t, out_route)) is not None and s not in subs:
+    if (placed := _precompiled_output_redirect(s, t, out_route or output_idx in native_output_idxs)) is not None and s not in subs:
       subs[s] = placed
       # M2c output-slot rebind: the declared AFTER's nested CALL writes this
       # invocation's output slot directly (proven fail-closed by the helper),
@@ -623,7 +644,7 @@ def transform_precompiled_call(c:UOp) -> UOp|None:
   _trace_reduce_output_markers(fxn.src, "after_callify")
 
   # body switches from TUPLE to SINK, so the node becomes an opaque CALL (not FUNCTION)
-  output_slots = tuple(range(len(input_buffers), len(input_buffers)+len(outs))) if ro_route else ()
+  output_slots = tuple(len(input_buffers)+i for i in range(len(outs)) if ro_route or i in native_output_idxs)
   new_call = UOp(Ops.CALL, c.dtype, (fxn, *input_buffers, *outs), replace(c.arg, precompiled_output_slots=output_slots))
   rets = tuple(o.after(new_call) for o in outs)
   # Output ownership is invocation side data. Keep the executable result as a
@@ -842,8 +863,10 @@ def transform_to_call(big_sink:UOp) -> tuple[UOp, dict[UOp, UOp]]:
   # passes below consult it so only route functions take the owned-redirect
   # contract; every other precompiled family transforms byte-identically.
   route_ids, out_route_ids = _reduce_output_route_function_ids(big_sink)
+  native_input_outputs = _native_input_output_routes(big_sink)
   with Context(_ACTIVE_REDUCE_OUTPUT_ROUTE_FUNCTIONS=route_ids,
-               _ACTIVE_REDUCE_OUTPUT_OUT_ROUTE_FUNCTIONS=out_route_ids):
+               _ACTIVE_REDUCE_OUTPUT_OUT_ROUTE_FUNCTIONS=out_route_ids,
+               _ACTIVE_NATIVE_INPUT_OUTPUTS=native_input_outputs):
     big_sink = graph_rewrite(big_sink, pm_semantic_materialization, name="semantic materialization boundary")
     rewritten_outputs = big_sink.src
     # uop list is a list in the original_sink graph and we can map to the tags later

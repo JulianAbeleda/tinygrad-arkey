@@ -1,0 +1,130 @@
+{
+  "schema": "tinygrad.nv_prefill_kv_splitk_discriminator.v1",
+  "shape": {
+    "m": 512,
+    "n": 1024,
+    "k": 4096
+  },
+  "target": "<tinygrad.runtime.ops_nv.NVDevice object at 0x725ea57f0ec0>",
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "correctness_contract": "finite and allclose(atol=.125,rtol=.002) to installed FP16 candidate",
+  "scope": "isolated one K projection; full split partial+reduction lifecycle; no routing edits",
+  "arms": {
+    "control_32cta": {
+      "cta_count": 32,
+      "k_parts": 1,
+      "timing": {
+        "n": 9,
+        "min_ms": 0.278413,
+        "median_ms": 0.281789,
+        "max_ms": 0.294041,
+        "samples_ms": [
+          0.294041,
+          0.292217,
+          0.2828,
+          0.281428,
+          0.280436,
+          0.280406,
+          0.284053,
+          0.278413,
+          0.281789
+        ]
+      },
+      "speedup_vs_control_min": 1.0,
+      "role_tmac_per_s_min": 7.713302352979206
+    },
+    "splitk2_full_lifecycle": {
+      "nominal_cta_count": 64,
+      "k_parts": 2,
+      "partial_k": 2048,
+      "correctness": {
+        "finite": true,
+        "max_abs": 0.00048828125,
+        "mean_abs": 9.194216545438394e-06,
+        "allclose_atol_0p125_rtol_0p002": true,
+        "sha256": "9b5238378730109b3df31bcddbebd631c29f3ad1cb2bc8a05508d9fbefc9abdf"
+      },
+      "timing": {
+        "n": 9,
+        "min_ms": 0.501173,
+        "median_ms": 0.504178,
+        "max_ms": 0.563206,
+        "samples_ms": [
+          0.563206,
+          0.507905,
+          0.504208,
+          0.504509,
+          0.501383,
+          0.501173,
+          0.502785,
+          0.503436,
+          0.504178
+        ]
+      },
+      "speedup_vs_control_min": 0.5555227436434126,
+      "role_tmac_per_s_min": 4.2849148856782
+    },
+    "splitk4_full_lifecycle": {
+      "nominal_cta_count": 128,
+      "k_parts": 4,
+      "partial_k": 1024,
+      "correctness": {
+        "finite": true,
+        "max_abs": 0.0003662109375,
+        "mean_abs": 9.447561751585454e-06,
+        "allclose_atol_0p125_rtol_0p002": true,
+        "sha256": "2b1a223faf33e939e4c95ecf3c5a4cf135977b1266590ec90636e20c22655c3f"
+      },
+      "timing": {
+        "n": 9,
+        "min_ms": 0.568597,
+        "median_ms": 0.573996,
+        "max_ms": 0.619731,
+        "samples_ms": [
+          0.619731,
+          0.581981,
+          0.578043,
+          0.570159,
+          0.573265,
+          0.571282,
+          0.573996,
+          0.574397,
+          0.568597
+        ]
+      },
+      "speedup_vs_control_min": 0.489649083621616,
+      "role_tmac_per_s_min": 3.776811428832723
+    },
+    "splitk8_full_lifecycle": {
+      "nominal_cta_count": 256,
+      "k_parts": 8,
+      "partial_k": 512,
+      "correctness": {
+        "finite": true,
+        "max_abs": 0.0003662109375,
+        "mean_abs": 9.395900633535348e-06,
+        "allclose_atol_0p125_rtol_0p002": true,
+        "sha256": "4d4b5324614d83dd526b53d9212f2eb8f105e86eadbcbc4c2b4ddc5900605cc8"
+      },
+      "timing": {
+        "n": 9,
+        "min_ms": 0.606797,
+        "median_ms": 0.609993,
+        "max_ms": 0.658321,
+        "samples_ms": [
+          0.658321,
+          0.614431,
+          0.610423,
+          0.60838,
+          0.606897,
+          0.609392,
+          0.606797,
+          0.609993,
+          0.610324
+        ]
+      },
+      "speedup_vs_control_min": 0.4588239559523202,
+      "role_tmac_per_s_min": 3.5390478990502587
+    }
+  }
+}

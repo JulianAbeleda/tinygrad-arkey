@@ -1,0 +1,56 @@
+{
+  "schema": "tinygrad.nv_q4_imma_complete_chain_gate.v1",
+  "abi": "tinygrad.nv_q4_imma_chain_abi.v1",
+  "shape": {
+    "M": 512,
+    "N": 12288,
+    "K": 4096
+  },
+  "fixture": {
+    "tensor": "blk.0.ffn_gate.weight",
+    "q4_words_sha256": "1380e2e8f956f72418e18fe12d40ec163814fe228a2205e02d29c7a98a937ad8",
+    "activation_sha256": "a256c7e8e2021d1d82653bdbc7192174c403547646d2d4f26d6ea206208da7bd",
+    "real_model_boundary": true
+  },
+  "guards": {
+    "q8_values_shape": true,
+    "q8_scales_shape": true,
+    "q8_sums_shape": true,
+    "q4_words": true
+  },
+  "q8_producer": {
+    "timing": {
+      "n": 7,
+      "min_ms": 0.105609,
+      "median_ms": 0.110287,
+      "max_ms": 0.123843,
+      "samples_ms": [
+        0.123843,
+        0.117422,
+        0.110287,
+        0.110909,
+        0.105609,
+        0.105909,
+        0.109766
+      ]
+    },
+    "finite": true,
+    "values_exact": true,
+    "scales_exact": true,
+    "sums_max_abs": 0.0,
+    "hashes": {
+      "values": "70da3febbf773cdd6bb72be2938e5c092ffe72007f07164ee714ea2226dd2eed",
+      "scales": "bf9183061b2a9f953ffaf0c597d9ebedeb07ebecd22566d0d83da78c0c4b41d5",
+      "sums": "c41ce86ba7e325bbed3d828199102d277a304249a3432eb0491439a9f8c4d6af"
+    }
+  },
+  "provider": {
+    "status": "BLOCKED",
+    "reason": "provider_manifest_not_supplied"
+  },
+  "control": {
+    "corrected_fp16_us": 569.7,
+    "source": "nv-llama-prefill-lifecycle-audit.md"
+  },
+  "promotion": "CLOSED_UNTIL_PROVIDER_EXECUTES_MAIN_PLUS_FIXUP_AND_QUALIFIES"
+}

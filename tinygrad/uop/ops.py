@@ -2290,7 +2290,11 @@ class ProgramInfo:
     local_size = tuple([sym_infer(sz, var_vals) for sz in self.local_size]) if self.local_size is not None else None
     return global_size, local_size
 
-  def vals(self, var_vals:dict[str, int]): return tuple(var_vals[k.expr] if k.expr not in self.runtimevars else None for k in self.vars)
+  def vals(self, var_vals:dict[str, int]):
+    # Finalized native PROGRAMs may carry ABI scalars as degenerate variables
+    # (vmin == vmax). They are compile-time launch metadata and need no graph
+    # binding; ordinary symbolic vars retain the existing lookup contract.
+    return tuple(None if k.expr in self.runtimevars else (k.vmin if k.vmin == k.vmax else var_vals[k.expr]) for k in self.vars)
 
   @staticmethod
   def from_sink(sink:UOp, aux:tuple=()) -> ProgramInfo:

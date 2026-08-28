@@ -1,0 +1,66 @@
+{
+  "schema": "nv.prefill.q4_imma_gate_discriminator.v1",
+  "date": "2026-08-28",
+  "target": "NVIDIA RTX 5090 sm_120",
+  "shape": {"M": 512, "N": 12288, "K": 4096, "role": "ffn_gate_up"},
+  "production_routing_changed": false,
+  "tinygrad_fp16": {
+    "candidate_identity": "fcc738029cd7357fe9574e421f2d0f8874aad12a8fdaa5f798e255c14013d558",
+    "output_shape": [1, 512, 12288],
+    "output_dtype": "float16",
+    "finite": true,
+    "sha256": "399c360939348210afd4bd077fba9f4662d6e5e2ebcffc8f1cf74b9e797c22f3",
+    "generic_sha256": "399c360939348210afd4bd077fba9f4662d6e5e2ebcffc8f1cf74b9e797c22f3",
+    "bit_exact_to_generic": true,
+    "profiled_population_calls": 72,
+    "profiled_population_ms": 41.020,
+    "profiled_mean_us": 569.7,
+    "ctas_per_call": 384,
+    "weight_format": "FP16 overlay",
+    "tiled_weight_bytes_per_call": 402653184,
+    "profiled_useful_tmac_s": 45.2
+  },
+  "llama_q8_q4": {
+    "source_capture": "/tmp/llama_cuda_pp512_audit.nsys-rep",
+    "full_batch_gate_up_projection_count": 70,
+    "main_ms_estimate": 11.670766,
+    "quantize_ms_estimate": 0.288356,
+    "fixup_ms_estimate": 0.582805,
+    "complete_lifecycle_ms_estimate": 12.541927,
+    "complete_mean_us_estimate": 179.170,
+    "main_mean_us_estimate": 166.725,
+    "grid_ctas": 170,
+    "threads_per_cta": 256,
+    "registers_per_thread": 251,
+    "dynamic_shared_bytes": 57856,
+    "static_shared_bytes": 1024,
+    "stack_bytes": 0,
+    "local_spill_bytes": 0,
+    "sass": {"instruction": "IMMA.16832.S8.S8", "captured_b0_function_count": 256, "hmma_count": 0, "idp4a_count": 0},
+    "packed_tiled_weight_bytes_per_call": 113246208,
+    "complete_useful_tmac_s_estimate": 143.84,
+    "analytic_packed_byte_rate_tb_s": 0.632
+  },
+  "roofline": {
+    "device_peak_dram_tb_s": 1.792,
+    "packed_algorithmic_mac_per_byte": 227.556,
+    "packed_bandwidth_roof_tmac_s": 407.65,
+    "llama_complete_fraction_of_analytic_bandwidth_roof": 0.353,
+    "llama_complete_distance_to_analytic_bandwidth_roof_x": 2.835,
+    "warning": "Tiled bytes are analytic requested payload, not NCU DRAM counters; cache reuse can change physical traffic."
+  },
+  "whole_prefill_translation": {
+    "authority_ms": 84.025,
+    "profiled_device_ms": 95.810,
+    "gate_up_profile_recovery_ms_estimate": 28.478,
+    "authority_scaled_recovery_ms_estimate": 24.975,
+    "resulting_wall_ms_estimate": 59.050,
+    "resulting_tok_s_estimate": 8670
+  },
+  "tinygrad_native_q8_q4": {
+    "status": "BLOCKED_PRE_EMISSION",
+    "reason": "The logical MMQ spec emitter raises NotImplementedError and the CUDA tensor-core registry has no signed-int8 to int32 TensorCore descriptor/lowering.",
+    "first_required_change": "Add NV signed-int8 TensorCore descriptor plus PTX/CUDA IMMA fragment lowering, then implement the packed Q8_1/Q4_K emitter and lifecycle harness."
+  },
+  "verdict": "INVEST_IN_NV_INT8_TENSOR_CORE_SUBSTRATE"
+}

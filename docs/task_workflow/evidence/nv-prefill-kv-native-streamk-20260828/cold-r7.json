@@ -1,0 +1,62 @@
+{
+  "schema": "tinygrad.nv_prefill_kv_native_streamk.v1",
+  "shape": {
+    "m": 512,
+    "n": 1024,
+    "k": 4096
+  },
+  "stream_blocks": 170,
+  "fixup_blocks": 32,
+  "rows": [
+    {
+      "rep": 0,
+      "control_a_us": 24047.072,
+      "stream_us": 4840.288,
+      "control_c_us": 23882.561
+    },
+    {
+      "rep": 1,
+      "control_a_us": 23930.592,
+      "stream_us": 5124.448,
+      "control_c_us": 24203.969
+    },
+    {
+      "rep": 2,
+      "control_a_us": 23896.354,
+      "stream_us": 4829.856,
+      "control_c_us": 23880.801
+    },
+    {
+      "rep": 3,
+      "control_a_us": 23890.111,
+      "stream_us": 4984.224,
+      "control_c_us": 23879.455
+    },
+    {
+      "rep": 4,
+      "control_a_us": 24282.527,
+      "stream_us": 4837.92,
+      "control_c_us": 24491.488
+    },
+    {
+      "rep": 5,
+      "control_a_us": 24573.281,
+      "stream_us": 4838.048,
+      "control_c_us": 24076.703
+    },
+    {
+      "rep": 6,
+      "control_a_us": 23890.816,
+      "stream_us": 4829.728,
+      "control_c_us": 23871.361
+    }
+  ],
+  "correctness": {
+    "finite": true,
+    "max_abs": 0.00192260742,
+    "mean_abs": 0.00187767169
+  },
+  "ptxas": "ptxas info    : 0 bytes gmem\nptxas info    : Compiling entry function 'stream_fixup' for 'sm_120a'\nptxas info    : Function properties for stream_fixup\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 20 registers, used 0 barriers\nptxas info    : Compile time = 3.801 ms\nptxas info    : Compiling entry function 'stream_main' for 'sm_120a'\nptxas info    : Function properties for stream_main\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 40 registers, used 0 barriers\nptxas info    : Compile time = 11.596 ms\nptxas info    : Compiling entry function 'control32' for 'sm_120a'\nptxas info    : Function properties for control32\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 37 registers, used 0 barriers\nptxas info    : Compile time = 4.461 ms",
+  "sass_path": "docs/task_workflow/evidence/nv-prefill-kv-native-streamk-20260828/artifacts/gate.sass",
+  "stdout": "correct finite=1 max_abs=0.00192260742 mean_abs=0.00187767169 tiles=32 stream_blocks=170\nrep=0 control_a_us=24047.072 stream_us=4840.288 control_c_us=23882.561\nrep=1 control_a_us=23930.592 stream_us=5124.448 control_c_us=24203.969\nrep=2 control_a_us=23896.354 stream_us=4829.856 control_c_us=23880.801\nrep=3 control_a_us=23890.111 stream_us=4984.224 control_c_us=23879.455\nrep=4 control_a_us=24282.527 stream_us=4837.920 control_c_us=24491.488\nrep=5 control_a_us=24573.281 stream_us=4838.048 control_c_us=24076.703\nrep=6 control_a_us=23890.816 stream_us=4829.728 control_c_us=23871.361\n"
+}

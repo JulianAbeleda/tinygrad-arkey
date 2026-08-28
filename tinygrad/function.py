@@ -30,6 +30,10 @@ def _ancestor_kinds(x:UOp, *ops:Ops) -> tuple[bool, ...]:
   return tuple(found)
 
 def _maybe_add_to_ctx(ctx, x:UOp):
+  # A finalized native PROGRAM's AFTER is its dependency edge, not an already
+  # computed implicit input. Parameterizing that AFTER severs consumers from
+  # the native write while leaving a dead CALL in the body.
+  if any(u.op is Ops.PROGRAM and any(s.op is Ops.BINARY for s in u.src) for u in x.toposort()): return None
   has_param, has_buffer = _ancestor_kinds(x, Ops.PARAM, Ops.BUFFER)
   return add_to_ctx(ctx, x) if not has_param and has_buffer else None
 

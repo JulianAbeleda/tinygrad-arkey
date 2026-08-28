@@ -121,6 +121,14 @@ cuda_81632_f8 = [TensorCore(dims=(8,16,32), threads=32, elements_per_thread=(16,
   swizzle=((('r2', 'r3', 'l2', 'l3', 'l4'), ('u1', 'r4'), ('l0', 'l1', 'u0', 'r0', 'r1')),
            (('r2', 'r3', 'u0', 'l0', 'l1'), ('r1', 'r4'), ('l2', 'l3', 'l4', 'u1', 'r0'))))
   for di,do in [(dtypes.fp8e4m3,dtypes.float),(dtypes.fp8e5m2,dtypes.float)]]
+# PTX m16n8k32 signed-int8 MMA has the same per-lane register cardinality as
+# m16n8k32 fp8: A=16 bytes, B=8 bytes and C/D=4 int32 values per lane.  Keep it
+# as a distinct descriptor so integer accumulation can never be selected by a
+# floating-point matmul accidentally.
+cuda_81632_i8 = [TensorCore(dims=(8,16,32), threads=32, elements_per_thread=(16,8,4), dtype_in=dtypes.char, dtype_out=dtypes.int,
+  opts=cuda_tc_opts,
+  swizzle=((('r2', 'r3', 'l2', 'l3', 'l4'), ('u1', 'r4'), ('l0', 'l1', 'u0', 'r0', 'r1')),
+           (('r2', 'r3', 'u0', 'l0', 'l1'), ('r1', 'r4'), ('l2', 'l3', 'l4', 'u1', 'r0'))))]
 cuda_8168_f16 = [TensorCore(dims=(8,16,8), threads=32, elements_per_thread=(4,2,4), dtype_in=di, dtype_out=do, opts=cuda_tc_opts,
   swizzle=((('r1', 'r2', 'l2', 'l3', 'l4'), ('r0', 'u1'), ('l0', 'l1', 'u0')),
            (('r1', 'r2', 'u0', 'l0', 'l1'), ('u1', 'r0'), ('l2', 'l3', 'l4'))))
@@ -130,7 +138,7 @@ cuda_8168_tf32 = [TensorCore(dims=(8,16,8), threads=32, elements_per_thread=(4,2
            (('r0', 'r1', 'u0', 'l0', 'l1'), ('u1', 'r2'), ('l2', 'l3', 'l4'))))]
 cuda_sm75: list[TensorCore] = cuda_8168_f16
 cuda_sm80: list[TensorCore] = cuda_81616 + cuda_8168_f16 + cuda_8168_tf32
-cuda_sm89: list[TensorCore] = cuda_sm80 + cuda_81632_f8
+cuda_sm89: list[TensorCore] = cuda_sm80 + cuda_81632_f8 + cuda_81632_i8
 
 def get_cuda(arch):
   # Accept both the runtime's "sm_120" spelling (ops_nv.py) and the campaign's "sm120" spelling.
