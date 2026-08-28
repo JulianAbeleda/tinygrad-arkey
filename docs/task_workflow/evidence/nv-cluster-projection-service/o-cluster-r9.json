@@ -1,0 +1,122 @@
+{
+  "commit": "f37279e3b983c7727e9816b3bb9243eadf269051",
+  "exact": true,
+  "median": {
+    "candidate2_cold_recovery_us": -1.798,
+    "candidate2_cold_us": 11.228,
+    "candidate2_hot_recovery_us": -4.0714239999999995,
+    "candidate2_hot_us": 9.04256,
+    "candidate4_cold_recovery_us": -2.2119999999999997,
+    "candidate4_cold_us": 11.642,
+    "candidate4_hot_recovery_us": -5.174656,
+    "candidate4_hot_us": 10.145792,
+    "control_cold_us": 9.43,
+    "control_hot_us": 4.971136
+  },
+  "ptxas": "/tmp/nv_q4k_o_cluster_wqv04yk3/gate.cu:1: warning: \"INFINITY\" redefined\n    1 | #define INFINITY (__int_as_float(0x7f800000))\n      | \nIn file included from /usr/include/c++/13/cmath:47,\n                 from /usr/include/c++/13/math.h:36,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/math_functions.h:4627,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/common_functions.h:303,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/cuda_runtime.h:117,\n                 from <command-line>:\n/usr/include/math.h:91: note: this is the location of the previous definition\n   91 | #  define INFINITY (__builtin_inff ())\n      | \n/tmp/nv_q4k_o_cluster_wqv04yk3/gate.cu:2: warning: \"NAN\" redefined\n    2 | #define NAN (__int_as_float(0x7fffffff))\n      | \n/usr/include/math.h:98: note: this is the location of the previous definition\n   98 | #  define NAN (__builtin_nanf (\"\"))\n      | \n/tmp/nv_q4k_o_cluster_wqv04yk3/gate.cu:1: warning: \"INFINITY\" redefined\n    1 | #define INFINITY (__int_as_float(0x7f800000))\n      | \nIn file included from /usr/include/c++/13/cmath:47,\n                 from /usr/include/c++/13/math.h:36,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/math_functions.h:4627,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/common_functions.h:303,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/cuda_runtime.h:117,\n                 from <command-line>:\n/usr/include/math.h:91: note: this is the location of the previous definition\n   91 | #  define INFINITY (__builtin_inff ())\n      | \n/tmp/nv_q4k_o_cluster_wqv04yk3/gate.cu:2: warning: \"NAN\" redefined\n    2 | #define NAN (__int_as_float(0x7fffffff))\n      | \n/usr/include/math.h:98: note: this is the location of the previous definition\n   98 | #  define NAN (__builtin_nanf (\"\"))\n      | \n/tmp/nv_q4k_o_cluster_wqv04yk3/gate.cu:1: warning: \"INFINITY\" redefined\n    1 | #define INFINITY (__int_as_float(0x7f800000))\n      | \nIn file included from /usr/include/c++/13/cmath:47,\n                 from /usr/include/c++/13/math.h:36,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/math_functions.h:4627,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/common_functions.h:303,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/cuda_runtime.h:117,\n                 from <command-line>:\n/usr/include/math.h:91: note: this is the location of the previous definition\n   91 | #  define INFINITY (__builtin_inff ())\n      | \n/tmp/nv_q4k_o_cluster_wqv04yk3/gate.cu:2: warning: \"NAN\" redefined\n    2 | #define NAN (__int_as_float(0x7fffffff))\n      | \n/usr/include/math.h:98: note: this is the location of the previous definition\n   98 | #  define NAN (__builtin_nanf (\"\"))\n      | \nptxas info    : 5 bytes gmem\nptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096_cluster4_r16' for 'sm_120a'\nptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096_cluster4_r16\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 45 registers, used 0 barriers, 512 bytes smem\nptxas info    : Compile time = 12.545 ms\nptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096_cluster2_r8' for 'sm_120a'\nptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096_cluster2_r8\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 45 registers, used 0 barriers, 512 bytes smem\nptxas info    : Compile time = 10.699 ms\nptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096' for 'sm_120a'\nptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 43 registers, used 0 barriers\nptxas info    : Compile time = 8.528 ms\n",
+  "samples": [
+    {
+      "candidate2_cold_us": 11.22,
+      "candidate2_hot_us": 9.003648,
+      "candidate4_cold_us": 11.506,
+      "candidate4_hot_us": 10.10176,
+      "control_cold_us": 9.61,
+      "control_hot_us": 4.951008,
+      "rep": 0
+    },
+    {
+      "candidate2_cold_us": 11.036,
+      "candidate2_hot_us": 9.02208,
+      "candidate4_cold_us": 11.772,
+      "candidate4_hot_us": 10.145792,
+      "control_cold_us": 9.348,
+      "control_hot_us": 4.94896,
+      "rep": 1
+    },
+    {
+      "candidate2_cold_us": 11.394,
+      "candidate2_hot_us": 9.042912,
+      "candidate4_cold_us": 11.598,
+      "candidate4_hot_us": 10.145312,
+      "control_cold_us": 9.408,
+      "control_hot_us": 4.973184,
+      "rep": 2
+    },
+    {
+      "candidate2_cold_us": 11.27,
+      "candidate2_hot_us": 9.044608,
+      "candidate4_cold_us": 11.694,
+      "candidate4_hot_us": 10.149888,
+      "control_cold_us": 9.502,
+      "control_hot_us": 4.97152,
+      "rep": 3
+    },
+    {
+      "candidate2_cold_us": 11.02,
+      "candidate2_hot_us": 9.048576,
+      "candidate4_cold_us": 11.49,
+      "candidate4_hot_us": 10.141696,
+      "control_cold_us": 9.834,
+      "control_hot_us": 4.971136,
+      "rep": 4
+    },
+    {
+      "candidate2_cold_us": 11.316,
+      "candidate2_hot_us": 9.039872,
+      "candidate4_cold_us": 11.642,
+      "candidate4_hot_us": 10.149504,
+      "control_cold_us": 9.332,
+      "control_hot_us": 4.971168,
+      "rep": 5
+    },
+    {
+      "candidate2_cold_us": 11.206,
+      "candidate2_hot_us": 9.04256,
+      "candidate4_cold_us": 11.542,
+      "candidate4_hot_us": 10.139648,
+      "control_cold_us": 9.43,
+      "control_hot_us": 4.971488,
+      "rep": 6
+    },
+    {
+      "candidate2_cold_us": 11.33,
+      "candidate2_hot_us": 9.04256,
+      "candidate4_cold_us": 11.964,
+      "candidate4_hot_us": 10.151424,
+      "control_cold_us": 9.9,
+      "control_hot_us": 4.971008,
+      "rep": 7
+    },
+    {
+      "candidate2_cold_us": 11.228,
+      "candidate2_hot_us": 9.049728,
+      "candidate4_cold_us": 11.942,
+      "candidate4_hot_us": 10.145792,
+      "control_cold_us": 9.244,
+      "control_hot_us": 4.971136,
+      "rep": 8
+    }
+  ],
+  "schema": "tinygrad.nv_q4k_o_cluster_geometry_gate.v2",
+  "shape": {
+    "candidate2": {
+      "blocks": 1024,
+      "cluster_size": 2,
+      "rows_per_cluster": 8,
+      "threads": 128
+    },
+    "candidate4": {
+      "blocks": 1024,
+      "cluster_size": 4,
+      "rows_per_cluster": 16,
+      "threads": 128
+    },
+    "control": {
+      "blocks": 4096,
+      "threads": 32
+    },
+    "k": 4096,
+    "rows": 4096
+  },
+  "stdout": "validate exact2=1 finite2=1 exact4=1 finite4=1\nsample rep=0 control_hot_us=4.951008 candidate2_hot_us=9.003648 candidate4_hot_us=10.101760 control_cold_us=9.610000 candidate2_cold_us=11.220000 candidate4_cold_us=11.506000\nsample rep=1 control_hot_us=4.948960 candidate2_hot_us=9.022080 candidate4_hot_us=10.145792 control_cold_us=9.348000 candidate2_cold_us=11.036000 candidate4_cold_us=11.772000\nsample rep=2 control_hot_us=4.973184 candidate2_hot_us=9.042912 candidate4_hot_us=10.145312 control_cold_us=9.408000 candidate2_cold_us=11.394000 candidate4_cold_us=11.598000\nsample rep=3 control_hot_us=4.971520 candidate2_hot_us=9.044608 candidate4_hot_us=10.149888 control_cold_us=9.502000 candidate2_cold_us=11.270000 candidate4_cold_us=11.694000\nsample rep=4 control_hot_us=4.971136 candidate2_hot_us=9.048576 candidate4_hot_us=10.141696 control_cold_us=9.834000 candidate2_cold_us=11.020000 candidate4_cold_us=11.490000\nsample rep=5 control_hot_us=4.971168 candidate2_hot_us=9.039872 candidate4_hot_us=10.149504 control_cold_us=9.332000 candidate2_cold_us=11.316000 candidate4_cold_us=11.642000\nsample rep=6 control_hot_us=4.971488 candidate2_hot_us=9.042560 candidate4_hot_us=10.139648 control_cold_us=9.430000 candidate2_cold_us=11.206000 candidate4_cold_us=11.542000\nsample rep=7 control_hot_us=4.971008 candidate2_hot_us=9.042560 candidate4_hot_us=10.151424 control_cold_us=9.900000 candidate2_cold_us=11.330000 candidate4_cold_us=11.964000\nsample rep=8 control_hot_us=4.971136 candidate2_hot_us=9.049728 candidate4_hot_us=10.145792 control_cold_us=9.244000 candidate2_cold_us=11.228000 candidate4_cold_us=11.942000\n"
+}

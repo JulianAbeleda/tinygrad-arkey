@@ -1,0 +1,307 @@
+{
+  "commit": "f37279e3b983c7727e9816b3bb9243eadf269051",
+  "device": {
+    "cluster_launch": true,
+    "compute_capability": "12.0",
+    "name": "NVIDIA GeForce RTX 5090",
+    "sm_count": 170
+  },
+  "medians": {
+    "2": {
+      "barrier_us": 1.750304,
+      "direct_global_us": 3.26656,
+      "dsm_minus_direct_us": 0.1930559999999999,
+      "dsm_minus_global_us": -1.6358080000000004,
+      "dsm_us": 3.459616,
+      "global_handoff_us": 5.095424
+    },
+    "4": {
+      "barrier_us": 1.750688,
+      "direct_global_us": 3.20512,
+      "dsm_minus_direct_us": 2.141184,
+      "dsm_minus_global_us": 1.4274559999999998,
+      "dsm_us": 5.346304,
+      "global_handoff_us": 3.918848
+    },
+    "8": {
+      "barrier_us": 1.762304,
+      "direct_global_us": 3.196928,
+      "dsm_minus_direct_us": 4.364288,
+      "dsm_minus_global_us": 4.179968000000001,
+      "dsm_us": 7.561216,
+      "global_handoff_us": 3.381248
+    }
+  },
+  "ptxas": "ptxas info    : 5 bytes gmem\nptxas info    : Compiling entry function '_Z15cluster_barrierILi8EEvPf' for 'sm_120a'\nptxas info    : Function properties for _Z15cluster_barrierILi8EEvPf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 8 registers, used 0 barriers\nptxas info    : Compile time = 2.058 ms\nptxas info    : Compiling entry function '_Z13direct_globalILi8EEvPfPKf' for 'sm_120a'\nptxas info    : Function properties for _Z13direct_globalILi8EEvPfPKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 24 registers, used 0 barriers\nptxas info    : Compile time = 4.080 ms\nptxas info    : Compiling entry function '_Z14global_handoffILi8EEvPfS0_PKf' for 'sm_120a'\nptxas info    : Function properties for _Z14global_handoffILi8EEvPfS0_PKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 34 registers, used 0 barriers\nptxas info    : Compile time = 6.026 ms\nptxas info    : Compiling entry function '_Z11dsm_handoffILi8EEvPfPKf' for 'sm_120a'\nptxas info    : Function properties for _Z11dsm_handoffILi8EEvPfPKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 34 registers, used 0 barriers, 2048 bytes smem\nptxas info    : Compile time = 6.455 ms\nptxas info    : Compiling entry function '_Z15cluster_barrierILi4EEvPf' for 'sm_120a'\nptxas info    : Function properties for _Z15cluster_barrierILi4EEvPf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 8 registers, used 0 barriers\nptxas info    : Compile time = 0.775 ms\nptxas info    : Compiling entry function '_Z13direct_globalILi4EEvPfPKf' for 'sm_120a'\nptxas info    : Function properties for _Z13direct_globalILi4EEvPfPKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 24 registers, used 0 barriers\nptxas info    : Compile time = 3.753 ms\nptxas info    : Compiling entry function '_Z14global_handoffILi4EEvPfS0_PKf' for 'sm_120a'\nptxas info    : Function properties for _Z14global_handoffILi4EEvPfS0_PKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 32 registers, used 0 barriers\nptxas info    : Compile time = 5.459 ms\nptxas info    : Compiling entry function '_Z11dsm_handoffILi4EEvPfPKf' for 'sm_120a'\nptxas info    : Function properties for _Z11dsm_handoffILi4EEvPfPKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 34 registers, used 0 barriers, 4096 bytes smem\nptxas info    : Compile time = 6.234 ms\nptxas info    : Compiling entry function '_Z15cluster_barrierILi2EEvPf' for 'sm_120a'\nptxas info    : Function properties for _Z15cluster_barrierILi2EEvPf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 8 registers, used 0 barriers\nptxas info    : Compile time = 0.730 ms\nptxas info    : Compiling entry function '_Z13direct_globalILi2EEvPfPKf' for 'sm_120a'\nptxas info    : Function properties for _Z13direct_globalILi2EEvPfPKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 24 registers, used 0 barriers\nptxas info    : Compile time = 3.353 ms\nptxas info    : Compiling entry function '_Z14global_handoffILi2EEvPfS0_PKf' for 'sm_120a'\nptxas info    : Function properties for _Z14global_handoffILi2EEvPfS0_PKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 32 registers, used 0 barriers\nptxas info    : Compile time = 4.749 ms\nptxas info    : Compiling entry function '_Z11dsm_handoffILi2EEvPfPKf' for 'sm_120a'\nptxas info    : Function properties for _Z11dsm_handoffILi2EEvPfPKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 34 registers, used 0 barriers, 8192 bytes smem\nptxas info    : Compile time = 5.585 ms\n",
+  "samples": [
+    {
+      "barrier_us": 1.778272,
+      "cluster_size": 2,
+      "clusters": 85,
+      "direct_global_us": 3.258368,
+      "dsm_us": 3.459072,
+      "global_handoff_us": 5.094368,
+      "rep": 0
+    },
+    {
+      "barrier_us": 1.748672,
+      "cluster_size": 2,
+      "clusters": 85,
+      "direct_global_us": 3.26656,
+      "dsm_us": 3.457024,
+      "global_handoff_us": 5.094368,
+      "rep": 1
+    },
+    {
+      "barrier_us": 1.752672,
+      "cluster_size": 2,
+      "clusters": 85,
+      "direct_global_us": 3.26656,
+      "dsm_us": 3.460096,
+      "global_handoff_us": 5.096448,
+      "rep": 2
+    },
+    {
+      "barrier_us": 1.759296,
+      "cluster_size": 2,
+      "clusters": 85,
+      "direct_global_us": 3.265536,
+      "dsm_us": 3.459616,
+      "global_handoff_us": 5.097472,
+      "rep": 3
+    },
+    {
+      "barrier_us": 1.75232,
+      "cluster_size": 2,
+      "clusters": 85,
+      "direct_global_us": 3.26656,
+      "dsm_us": 3.46112,
+      "global_handoff_us": 5.095424,
+      "rep": 4
+    },
+    {
+      "barrier_us": 1.747744,
+      "cluster_size": 2,
+      "clusters": 85,
+      "direct_global_us": 3.266528,
+      "dsm_us": 3.46112,
+      "global_handoff_us": 5.0944,
+      "rep": 5
+    },
+    {
+      "barrier_us": 1.750304,
+      "cluster_size": 2,
+      "clusters": 85,
+      "direct_global_us": 3.26656,
+      "dsm_us": 3.459072,
+      "global_handoff_us": 5.095936,
+      "rep": 6
+    },
+    {
+      "barrier_us": 1.744608,
+      "cluster_size": 2,
+      "clusters": 85,
+      "direct_global_us": 3.264544,
+      "dsm_us": 3.459072,
+      "global_handoff_us": 5.096416,
+      "rep": 7
+    },
+    {
+      "barrier_us": 1.741696,
+      "cluster_size": 2,
+      "clusters": 85,
+      "direct_global_us": 3.26656,
+      "dsm_us": 3.460096,
+      "global_handoff_us": 5.092352,
+      "rep": 8
+    },
+    {
+      "barrier_us": 1.748448,
+      "cluster_size": 4,
+      "clusters": 43,
+      "direct_global_us": 3.20512,
+      "dsm_us": 5.346304,
+      "global_handoff_us": 3.920896,
+      "rep": 0
+    },
+    {
+      "barrier_us": 1.750688,
+      "cluster_size": 4,
+      "clusters": 43,
+      "direct_global_us": 3.203072,
+      "dsm_us": 5.344256,
+      "global_handoff_us": 3.918848,
+      "rep": 1
+    },
+    {
+      "barrier_us": 1.758336,
+      "cluster_size": 4,
+      "clusters": 43,
+      "direct_global_us": 3.20512,
+      "dsm_us": 5.346304,
+      "global_handoff_us": 3.918848,
+      "rep": 2
+    },
+    {
+      "barrier_us": 1.7616,
+      "cluster_size": 4,
+      "clusters": 43,
+      "direct_global_us": 3.20512,
+      "dsm_us": 5.348352,
+      "global_handoff_us": 3.918848,
+      "rep": 3
+    },
+    {
+      "barrier_us": 1.749152,
+      "cluster_size": 4,
+      "clusters": 43,
+      "direct_global_us": 3.20512,
+      "dsm_us": 5.346304,
+      "global_handoff_us": 3.918368,
+      "rep": 4
+    },
+    {
+      "barrier_us": 1.748128,
+      "cluster_size": 4,
+      "clusters": 43,
+      "direct_global_us": 3.203072,
+      "dsm_us": 5.342208,
+      "global_handoff_us": 3.918848,
+      "rep": 5
+    },
+    {
+      "barrier_us": 1.762176,
+      "cluster_size": 4,
+      "clusters": 43,
+      "direct_global_us": 3.20512,
+      "dsm_us": 5.347328,
+      "global_handoff_us": 3.918848,
+      "rep": 6
+    },
+    {
+      "barrier_us": 1.761984,
+      "cluster_size": 4,
+      "clusters": 43,
+      "direct_global_us": 3.203072,
+      "dsm_us": 5.358592,
+      "global_handoff_us": 3.918848,
+      "rep": 7
+    },
+    {
+      "barrier_us": 1.748064,
+      "cluster_size": 4,
+      "clusters": 43,
+      "direct_global_us": 3.205088,
+      "dsm_us": 5.3504,
+      "global_handoff_us": 3.918848,
+      "rep": 8
+    },
+    {
+      "barrier_us": 1.756512,
+      "cluster_size": 8,
+      "clusters": 22,
+      "direct_global_us": 3.196896,
+      "dsm_us": 7.550464,
+      "global_handoff_us": 3.381248,
+      "rep": 0
+    },
+    {
+      "barrier_us": 1.746944,
+      "cluster_size": 8,
+      "clusters": 22,
+      "direct_global_us": 3.196928,
+      "dsm_us": 7.564288,
+      "global_handoff_us": 3.382272,
+      "rep": 1
+    },
+    {
+      "barrier_us": 1.745728,
+      "cluster_size": 8,
+      "clusters": 22,
+      "direct_global_us": 3.196416,
+      "dsm_us": 7.56224,
+      "global_handoff_us": 3.3792,
+      "rep": 2
+    },
+    {
+      "barrier_us": 1.777056,
+      "cluster_size": 8,
+      "clusters": 22,
+      "direct_global_us": 3.195904,
+      "dsm_us": 7.555072,
+      "global_handoff_us": 3.381248,
+      "rep": 3
+    },
+    {
+      "barrier_us": 1.767488,
+      "cluster_size": 8,
+      "clusters": 22,
+      "direct_global_us": 3.196928,
+      "dsm_us": 7.561216,
+      "global_handoff_us": 3.37872,
+      "rep": 4
+    },
+    {
+      "barrier_us": 1.758848,
+      "cluster_size": 8,
+      "clusters": 22,
+      "direct_global_us": 3.196928,
+      "dsm_us": 7.561216,
+      "global_handoff_us": 3.381248,
+      "rep": 5
+    },
+    {
+      "barrier_us": 1.762304,
+      "cluster_size": 8,
+      "clusters": 22,
+      "direct_global_us": 3.195904,
+      "dsm_us": 7.553024,
+      "global_handoff_us": 3.382272,
+      "rep": 6
+    },
+    {
+      "barrier_us": 1.775648,
+      "cluster_size": 8,
+      "clusters": 22,
+      "direct_global_us": 3.196928,
+      "dsm_us": 7.56224,
+      "global_handoff_us": 3.381248,
+      "rep": 7
+    },
+    {
+      "barrier_us": 1.771808,
+      "cluster_size": 8,
+      "clusters": 22,
+      "direct_global_us": 3.197952,
+      "dsm_us": 7.563264,
+      "global_handoff_us": 3.3792,
+      "rep": 8
+    }
+  ],
+  "schema": "tinygrad.nv_cluster_projection_service_gate.v1",
+  "shape": {
+    "activation_width": 4096,
+    "threads_per_block": 128
+  },
+  "stdout": "device name=NVIDIA GeForce RTX 5090 cc=12.0 sm=170 cluster_launch=1\nvalidate cs=2 clusters=85 exact=1 finite=1\nsample cs=2 clusters=85 rep=0 barrier_us=1.778272 dsm_us=3.459072 global_us=5.094368 direct_us=3.258368\nsample cs=2 clusters=85 rep=1 barrier_us=1.748672 dsm_us=3.457024 global_us=5.094368 direct_us=3.266560\nsample cs=2 clusters=85 rep=2 barrier_us=1.752672 dsm_us=3.460096 global_us=5.096448 direct_us=3.266560\nsample cs=2 clusters=85 rep=3 barrier_us=1.759296 dsm_us=3.459616 global_us=5.097472 direct_us=3.265536\nsample cs=2 clusters=85 rep=4 barrier_us=1.752320 dsm_us=3.461120 global_us=5.095424 direct_us=3.266560\nsample cs=2 clusters=85 rep=5 barrier_us=1.747744 dsm_us=3.461120 global_us=5.094400 direct_us=3.266528\nsample cs=2 clusters=85 rep=6 barrier_us=1.750304 dsm_us=3.459072 global_us=5.095936 direct_us=3.266560\nsample cs=2 clusters=85 rep=7 barrier_us=1.744608 dsm_us=3.459072 global_us=5.096416 direct_us=3.264544\nsample cs=2 clusters=85 rep=8 barrier_us=1.741696 dsm_us=3.460096 global_us=5.092352 direct_us=3.266560\nvalidate cs=4 clusters=43 exact=1 finite=1\nsample cs=4 clusters=43 rep=0 barrier_us=1.748448 dsm_us=5.346304 global_us=3.920896 direct_us=3.205120\nsample cs=4 clusters=43 rep=1 barrier_us=1.750688 dsm_us=5.344256 global_us=3.918848 direct_us=3.203072\nsample cs=4 clusters=43 rep=2 barrier_us=1.758336 dsm_us=5.346304 global_us=3.918848 direct_us=3.205120\nsample cs=4 clusters=43 rep=3 barrier_us=1.761600 dsm_us=5.348352 global_us=3.918848 direct_us=3.205120\nsample cs=4 clusters=43 rep=4 barrier_us=1.749152 dsm_us=5.346304 global_us=3.918368 direct_us=3.205120\nsample cs=4 clusters=43 rep=5 barrier_us=1.748128 dsm_us=5.342208 global_us=3.918848 direct_us=3.203072\nsample cs=4 clusters=43 rep=6 barrier_us=1.762176 dsm_us=5.347328 global_us=3.918848 direct_us=3.205120\nsample cs=4 clusters=43 rep=7 barrier_us=1.761984 dsm_us=5.358592 global_us=3.918848 direct_us=3.203072\nsample cs=4 clusters=43 rep=8 barrier_us=1.748064 dsm_us=5.350400 global_us=3.918848 direct_us=3.205088\nvalidate cs=8 clusters=22 exact=1 finite=1\nsample cs=8 clusters=22 rep=0 barrier_us=1.756512 dsm_us=7.550464 global_us=3.381248 direct_us=3.196896\nsample cs=8 clusters=22 rep=1 barrier_us=1.746944 dsm_us=7.564288 global_us=3.382272 direct_us=3.196928\nsample cs=8 clusters=22 rep=2 barrier_us=1.745728 dsm_us=7.562240 global_us=3.379200 direct_us=3.196416\nsample cs=8 clusters=22 rep=3 barrier_us=1.777056 dsm_us=7.555072 global_us=3.381248 direct_us=3.195904\nsample cs=8 clusters=22 rep=4 barrier_us=1.767488 dsm_us=7.561216 global_us=3.378720 direct_us=3.196928\nsample cs=8 clusters=22 rep=5 barrier_us=1.758848 dsm_us=7.561216 global_us=3.381248 direct_us=3.196928\nsample cs=8 clusters=22 rep=6 barrier_us=1.762304 dsm_us=7.553024 global_us=3.382272 direct_us=3.195904\nsample cs=8 clusters=22 rep=7 barrier_us=1.775648 dsm_us=7.562240 global_us=3.381248 direct_us=3.196928\nsample cs=8 clusters=22 rep=8 barrier_us=1.771808 dsm_us=7.563264 global_us=3.379200 direct_us=3.197952\n",
+  "validations": [
+    {
+      "cluster_size": 2,
+      "clusters": 85,
+      "exact": true,
+      "finite": true
+    },
+    {
+      "cluster_size": 4,
+      "clusters": 43,
+      "exact": true,
+      "finite": true
+    },
+    {
+      "cluster_size": 8,
+      "clusters": 22,
+      "exact": true,
+      "finite": true
+    }
+  ]
+}

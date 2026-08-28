@@ -1,0 +1,78 @@
+{
+  "commit": "f37279e3b983c7727e9816b3bb9243eadf269051",
+  "median": {
+    "atomic_half_us": 26.417152,
+    "direct_us": 1.687552,
+    "scratch_exact_tax_us": 1.721344,
+    "scratch_exact_us": 3.408896
+  },
+  "ptxas": "ptxas info    : 0 bytes gmem\nptxas info    : Compiling entry function '_Z11atomic_halfP6__halfPKf' for 'sm_120a'\nptxas info    : Function properties for _Z11atomic_halfP6__halfPKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 32 registers, used 0 barriers\nptxas info    : Compile time = 6.674 ms\nptxas info    : Compiling entry function '_Z13combine_exactPfPKf' for 'sm_120a'\nptxas info    : Function properties for _Z13combine_exactPfPKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 39 registers, used 0 barriers\nptxas info    : Compile time = 2.869 ms\nptxas info    : Compiling entry function '_Z13write_scratchPfPKf' for 'sm_120a'\nptxas info    : Function properties for _Z13write_scratchPfPKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 14 registers, used 0 barriers\nptxas info    : Compile time = 0.991 ms\nptxas info    : Compiling entry function '_Z12direct_exactPfPKf' for 'sm_120a'\nptxas info    : Function properties for _Z12direct_exactPfPKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 39 registers, used 0 barriers\nptxas info    : Compile time = 2.417 ms\n",
+  "samples": [
+    {
+      "atomic_half_us": 26.413055,
+      "direct_us": 1.750464,
+      "rep": 0,
+      "scratch_exact_us": 3.497696
+    },
+    {
+      "atomic_half_us": 26.42944,
+      "direct_us": 1.687552,
+      "rep": 1,
+      "scratch_exact_us": 3.459104
+    },
+    {
+      "atomic_half_us": 26.406912,
+      "direct_us": 1.714464,
+      "rep": 2,
+      "scratch_exact_us": 3.430368
+    },
+    {
+      "atomic_half_us": 26.417152,
+      "direct_us": 1.685312,
+      "rep": 3,
+      "scratch_exact_us": 3.396832
+    },
+    {
+      "atomic_half_us": 26.40896,
+      "direct_us": 1.703648,
+      "rep": 4,
+      "scratch_exact_us": 3.408896
+    },
+    {
+      "atomic_half_us": 26.423264,
+      "direct_us": 1.677312,
+      "rep": 5,
+      "scratch_exact_us": 3.421152
+    },
+    {
+      "atomic_half_us": 26.417152,
+      "direct_us": 1.675264,
+      "rep": 6,
+      "scratch_exact_us": 3.395584
+    },
+    {
+      "atomic_half_us": 26.411009,
+      "direct_us": 1.688576,
+      "rep": 7,
+      "scratch_exact_us": 3.4048
+    },
+    {
+      "atomic_half_us": 26.427391,
+      "direct_us": 1.671552,
+      "rep": 8,
+      "scratch_exact_us": 3.402176
+    }
+  ],
+  "schema": "tinygrad.nv_clusterfusion_o_exactness_gate.v1",
+  "shape": {
+    "heads": 32,
+    "partial_bytes": 524288,
+    "rows": 4096
+  },
+  "stdout": "validate exact_bitwise=1 atomic_max_abs=0.00390625 atomic_rel_l2=0.000453788608\nsample rep=0 direct_us=1.750464 scratch_exact_us=3.497696 atomic_half_us=26.413055\nsample rep=1 direct_us=1.687552 scratch_exact_us=3.459104 atomic_half_us=26.429440\nsample rep=2 direct_us=1.714464 scratch_exact_us=3.430368 atomic_half_us=26.406912\nsample rep=3 direct_us=1.685312 scratch_exact_us=3.396832 atomic_half_us=26.417152\nsample rep=4 direct_us=1.703648 scratch_exact_us=3.408896 atomic_half_us=26.408960\nsample rep=5 direct_us=1.677312 scratch_exact_us=3.421152 atomic_half_us=26.423264\nsample rep=6 direct_us=1.675264 scratch_exact_us=3.395584 atomic_half_us=26.417152\nsample rep=7 direct_us=1.688576 scratch_exact_us=3.404800 atomic_half_us=26.411009\nsample rep=8 direct_us=1.671552 scratch_exact_us=3.402176 atomic_half_us=26.427391\n",
+  "validation": {
+    "atomic_half_max_abs": 0.00390625,
+    "atomic_half_rel_l2": 0.000453788608,
+    "exact_scratch_bitwise": true
+  }
+}
