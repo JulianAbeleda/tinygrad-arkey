@@ -426,6 +426,17 @@ class CStyleLanguage(Renderer):
       l = cast(str, self.string_rewrite.rewrite(u, ctx=self))
       assert l is not None, f"failed to render {u.op} {u.dtype} {[(x.op,x.dtype) for x in u.src]} {u.arg}"
 
+      # A lane STORE into a vector LOAD must address the backing allocation,
+      # not the loaded C temporary.  The ordinary INDEX spelling (``val.x``)
+      # silently drops the publication.  This form is exposed by vectorized
+      # local-memory staging, including precontract WMMA tiles.
+      if u.op is Ops.INDEX and u in store_addrs and len(u.src) == 2 and u.src[0].op is Ops.LOAD:
+        l = f"(*(({self.render_scalar_dtype(u.dtype)}*)({self[u.src[0].src[0]]}) + {self[u.src[1]]}))"
+      elif u.op is Ops.LOAD and u in store_addrs and len(u.src) >= 1:
+        l = self.render_access(u.src[0])
+        r[u] = l
+        continue
+
       if u.op in {Ops.ENDIF, Ops.END}: depth -= 1
       # PREFILL_SOFTMAX_REDUCE_FUSE: Ops.CUSTOMI is normally inlined UNCONDITIONALLY, ignoring
       # child_count. For the attention row-softmax butterfly -- built entirely from CUSTOMI (ds_bpermute

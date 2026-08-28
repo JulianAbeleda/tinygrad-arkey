@@ -153,6 +153,12 @@ class CUDARenderer(CStyleLanguage):
     # (target-capability-policy-decoupling-scope-20260730.md section 3.3): that rule bars inventing a value for
     # an unknown target, and this one is known. Same discipline as Metal's `self.wave_size = 32` (cstyle.py).
     self.wave_size = 32
+    # Fused prefill attention is a renderer capability, not an nvcc-compiler
+    # capability.  Both NVRTC (the production DEV=NV renderer) and NVCC lower
+    # the same CUDA source after these typed native-attention ops are expanded.
+    # Historically this binding lived only on NVCCRenderer, which made the
+    # measured fast path depend on the undocumented DEV=NV:CC selection.
+    if arch.split(":")[0] == "sm_120": _install_native_attention_bindings(self)
 
   kernel_typedef = 'extern "C" __global__ void __launch_bounds__({launch_bounds})'
   smem_prefix = "__shared__ __align__(16) "
@@ -264,8 +270,3 @@ class CUDARenderer(CStyleLanguage):
 class NVCCRenderer(CUDARenderer):
   def __init__(self, target:Target):
     super().__init__(target, use_nvcc=True)
-    if target.arch.split(":")[0] == "sm_120":
-      # The fused-prefill-attention native matchers, bound on NVCC exactly as HIP binds them on gfx1100
-      # (same shared install function -- see cstyle.py). Literal-first: the lane math is still AMD-shaped
-      # until the fragment-model package (P3); this proves the NVCC path can consume the same expansions.
-      _install_native_attention_bindings(self)

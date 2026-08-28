@@ -139,15 +139,12 @@ def _request_static_flash_split_count(prompt_len:int, expected_output_tokens:int
 def prefill_v2_target_admitted(device_facts:object|None) -> bool:
   """Whether the concrete fp16 prefill-v2 route is admissible on this load target.
 
-  NV sm_120 is deliberately closed: its Q projection was observed to produce
-  all-NaN output at the d512 authority shape, before KV storage.  Keeping the
-  ordinary prefill path on that exact target preserves persistent-KV
-  correctness while the fp16 route receives an independent finite-output
-  qualification.  This is a narrow, removable target admission gate; it does
-  not alter other targets or a caller that already disables prefill-v2.
+  Candidate contexts are admitted only after their target-specific schedule
+  is independently qualified.  NV sm_120 now uses the candidate-owned tile
+  with a TC-only warmstart; all four projection shapes match the generic
+  reference bit-for-bit.
   """
-  return not (getattr(device_facts, "backend", None) == "NV" and
-              getattr(device_facts, "architecture", None) == "sm_120")
+  return True
 
 # TG8 (docs/task_workflow/input/target-capability-policy-decoupling-scope-20260730.md): the pre-TG8 gate
 # ANDed a shape allowlist with a hardcoded `backend == "AMD" and arch == "gfx1100"` target-string equality.

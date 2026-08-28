@@ -748,9 +748,15 @@ def instantiate_precontract_producer(geometry:KernelTileGeometry, *, tc, allocat
         if isinstance(operand, PackedPrecontractOperandTemplate) else UOp(Ops.STACK,tc.dtype_in.vec(vector_elements),tuple(operand.source.substitute({
           operand.row_axis:logical_row, operand.k_axis:epoch*geometry.tile[2]+logical_k+elem}) for elem in range(vector_elements)))
       tag=("kernel_tile_store",operand.role,row_iteration,epoch,slot)
-      idx=allocation.index(slot_base+(window.base+row*window.stride_bytes+logical_k*item_bytes)//item_bytes,
-                           dtype=tc.dtype_in.vec(vector_elements)).replace(tag=tag)
-      stores.append(idx.store(value).replace(tag=tag).end())
+      # Keep lane ownership explicit.  A vector pointer with a vectorized
+      # logical index can be lowered as INDEX(LOAD(ptr), lane); that turns the
+      # destination into a loaded temporary and, for repeated index lanes,
+      # silently aliases distinct K elements.  Scalar addresses preserve the
+      # producer's exact one-writer cover; the backend may still regroup the
+      # adjacent stores after their addresses are proven.
+      base=slot_base+(window.base+row*window.stride_bytes+logical_k*item_bytes)//item_bytes
+      stores.append(UOp.group(*(allocation.index(base+elem).store(value.gep(elem)).replace(tag=tag).end()
+                               for elem in range(vector_elements))))
     role_nodes.append(UOp.group(*stores))
   return PrecontractProducerInstance(epoch,slot,(role_nodes[0],role_nodes[1]))
 
@@ -864,8 +870,8 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
           operand.row_axis: logical_row, operand.k_axis: k_axis.tile_base + logical_k + elem}) for elem in range(vector_elements)))
       index = slot_base + (window.base + row * window.stride_bytes + logical_k * item_bytes) // item_bytes
       store_tag = ("kernel_tile_store", operand.role, row_iteration)
-      store_idx = store_allocation.index(index, dtype=tc.dtype_in.vec(vector_elements)).replace(tag=store_tag)
-      stores.append(store_idx.store(value).replace(tag=store_tag).end())
+      stores.append(UOp.group(*(store_allocation.index(index+elem).store(value.gep(elem)).replace(tag=store_tag).end()
+                               for elem in range(vector_elements))))
   producer = UOp.group(*stores)
   barrier = UOp.barrier(producer)
   wave_m, wave_n, lane = threads.wave_m, threads.wave_n, threads.lane

@@ -21,12 +21,13 @@ from tinygrad.uop.ops import Ops
 _CANDIDATE_ROUTE_CENSUS: ContextVar[dict[str, Any] | None] = ContextVar("candidate_route_census", default=None)
 
 # Measured per-target warmstart schedule for admitted fp16 overlay GEMMs, keyed by the same declared
-# (backend, arch, wave_size) triple the compact artifacts use. NV sm_120 was measured 2026-08-02 on the
-# campaign's 5090: UPCAST(1,4)+UPCAST(0,2) after TC drops warm pp512 from 117ms to 46ms (~4.4k -> ~11.1k
-# tok/s) with byte-identical output (first-token digits and decode sha256 unmoved). An undeclared target
-# keeps the TC-only default -- the same fail-safe shape as other declared per-target facts.
+# (backend, arch, wave_size) triple the compact artifacts use.  The candidate
+# context owns its complete output tile.  Applying generic output UPCASTs on
+# top of that tile makes several logical rows alias the same LDS slots; the
+# old apparent 46 ms result was therefore not correctness-qualified.  The
+# exact sm_120 gate is TC-only, which matches the generic reference bitwise.
 _CANDIDATE_WARMSTART_OPTS: tuple[tuple[tuple[str, str, int], tuple[Opt, ...]], ...] = (
-  (("NV", "sm_120", 32), (Opt(OptOps.TC, 0, (-1, 2, 1)), Opt(OptOps.UPCAST, 1, 4), Opt(OptOps.UPCAST, 0, 2))),
+  (("NV", "sm_120", 32), (Opt(OptOps.TC, 0, (-1, 2, 1)),)),
 )
 
 

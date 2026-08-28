@@ -1,0 +1,20 @@
+{
+  "schema": "tinygrad.nv_prefill_corrected_tile_correctness.v1",
+  "status": "PASS",
+  "target": "NV:sm_120",
+  "model": "Qwen3-8B-Q4_K_M",
+  "shape": "pp512",
+  "projection_results": {
+    "attn_qo": {"finite": true, "bit_exact": true, "sha256": "214f2f2917e5b34856f1f965f8c00b856b417e57ee9f0ee9355c654db159915b"},
+    "attn_kv": {"finite": true, "bit_exact": true, "sha256": "e2fe214c439c61cd870903667dfffc97e05aa56f3bbe89681cd634cefec9197c"},
+    "ffn_gate_up": {"finite": true, "bit_exact": true, "sha256": "399c360939348210afd4bd077fba9f4662d6e5e2ebcffc8f1cf74b9e797c22f3"},
+    "ffn_down_nonzero": {"finite": true, "bit_exact": true, "sha256": "93fdf56370e7ef3bd712720f4afb678b66cfb2c2da4c0f10fb0e03dc278d6d71"}
+  },
+  "whole_model": {
+    "finite": true,
+    "candidate_sha256": "022d3df8af2053d7881aeee28592026a2442c9ef44e66d3d3aaf847507c058ae",
+    "safe_path_sha256": "022d3df8af2053d7881aeee28592026a2442c9ef44e66d3d3aaf847507c058ae",
+    "argmax": 140537
+  },
+  "focused_tests": {"passed": 54, "failed": 0}
+}

@@ -16,7 +16,7 @@ ROOT = Path(__file__).parents[2]
 FACTS = {"backend":"AMD", "architecture":"gfx1100", "capabilities":{"wave_size":32}}
 NV_FACTS = {"backend":"NV", "architecture":"sm_120", "capabilities":{"wave_size":32}}
 _TC_ONLY = (Opt(OptOps.TC, 0, (-1, 2, 1)),)
-_NV_MEASURED = (Opt(OptOps.TC, 0, (-1, 2, 1)), Opt(OptOps.UPCAST, 1, 4), Opt(OptOps.UPCAST, 0, 2))
+_NV_MEASURED = _TC_ONLY
 EXPECTED = {
   "attn_kv":((512, 1024, 4096), "51b0562291285f98693f5320a5dce21673a32813c507377d0436afa53fe3b006"),
   "attn_qo":((512, 4096, 4096), "7508432bc2ab86532eb07bea71fb4f518e82dc259252a704f60131b2aa608d24"),
@@ -26,8 +26,9 @@ EXPECTED = {
 
 
 def test_candidate_warmstart_opts_are_target_declared_with_safe_default():
-  # NV sm_120 wave32 carries the measured schedule (campaign P1, 2026-08-02); every other target keeps
-  # the TC-only default, including AMD gfx1100 whose behavior must not move without its own measurement.
+  # Candidate contexts own the complete output tile.  NV sm_120 therefore uses
+  # the correctness-qualified TC-only schedule; generic output UPCASTs may not
+  # be layered on top of the candidate geometry.
   assert prefill_graph_gemm._candidate_warmstart_opts("NV", "sm_120", 32) == _NV_MEASURED
   assert prefill_graph_gemm._candidate_warmstart_opts("AMD", "gfx1100", 32) == _TC_ONLY
   assert prefill_graph_gemm._candidate_warmstart_opts("NV", "sm_90", 32) == _TC_ONLY
