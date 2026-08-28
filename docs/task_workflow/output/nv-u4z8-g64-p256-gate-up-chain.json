@@ -1,0 +1,36 @@
+{
+  "commit": "5e11f5a4777cc9577e1c7c182c802ef5a3e4a7e1",
+  "construction": "installed fused Q4_K versus conservative two U4Z8 projections plus separate finish",
+  "schema": "tinygrad.nv_u4z8_gate_up_chain.v1",
+  "semantic_scope": "zero-data composition smoke; each nonzero U4Z8 projection is independently oracle-qualified by the FFN projection gate",
+  "timing": {
+    "candidate": [
+      38.695,
+      38.690001,
+      38.771001,
+      38.613001,
+      39.138,
+      38.646001,
+      39.039001,
+      38.886001,
+      38.74
+    ],
+    "candidate_median": 38.74,
+    "control": [
+      40.487001,
+      40.241001,
+      39.951,
+      40.039001,
+      40.091,
+      39.993,
+      40.167001,
+      39.842,
+      39.989001
+    ],
+    "control_median": 40.039001,
+    "recovery_us": 1.299000999999997,
+    "unit": "us_per_pair_per_call_sync"
+  },
+  "verdict": "PASS_PERFORMANCE_SEMANTIC_SMOKE",
+  "zero_fixture_bitwise": true
+}

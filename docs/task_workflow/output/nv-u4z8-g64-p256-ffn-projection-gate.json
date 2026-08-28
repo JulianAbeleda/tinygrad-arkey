@@ -1,0 +1,193 @@
+{
+  "commit": "5e11f5a4777cc9577e1c7c182c802ef5a3e4a7e1",
+  "correctness": {
+    "fixtures": [
+      {
+        "bad": 0,
+        "finite": true,
+        "fixture": 0,
+        "guards": true,
+        "max_abs": 0.0,
+        "max_rel": 0.0,
+        "readonly": true
+      },
+      {
+        "bad": 0,
+        "finite": true,
+        "fixture": 1,
+        "guards": true,
+        "max_abs": 0.0,
+        "max_rel": 0.0,
+        "readonly": true
+      },
+      {
+        "bad": 0,
+        "finite": true,
+        "fixture": 2,
+        "guards": true,
+        "max_abs": 0.0,
+        "max_rel": 0.0,
+        "readonly": true
+      }
+    ],
+    "pass": true
+  },
+  "method": "single gate/up-shaped projection; continuous 16-copy rotated-cold service; no production edits",
+  "sass": {
+    "candidate": {
+      "available": true,
+      "instructions": 296,
+      "ldg": 14,
+      "ldg_128": 0,
+      "ldg_64": 9,
+      "opcodes": {
+        "BRA": 1,
+        "BRA.U": 1,
+        "EXIT": 1,
+        "FADD": 6,
+        "FFMA": 32,
+        "FMUL": 32,
+        "HADD2.F32": 36,
+        "HFMA2": 1,
+        "I2FP.F32.S32": 32,
+        "IADD": 30,
+        "IADD.64": 7,
+        "IMAD.SHL.U32": 1,
+        "IMAD.WIDE.U32": 7,
+        "LDC": 1,
+        "LDC.64": 2,
+        "LDCU.64": 4,
+        "LDG.E": 5,
+        "LDG.E.64": 9,
+        "LEA": 1,
+        "LEA.HI": 4,
+        "LEA.HI.X": 1,
+        "LOP3.LUT": 32,
+        "MOV": 1,
+        "NOP": 11,
+        "S2R": 2,
+        "SHF.L.U64.HI": 1,
+        "SHF.R.U32.HI": 24,
+        "SHF.R.U64": 1,
+        "SHFL.BFLY": 5,
+        "STG.E": 1,
+        "UIADD3": 1,
+        "UISETP.NE.U32.AND": 1,
+        "UMOV": 2
+      }
+    },
+    "control": {
+      "available": true,
+      "instructions": 344,
+      "ldg": 14,
+      "ldg_128": 1,
+      "ldg_64": 8,
+      "opcodes": {
+        "BRA": 1,
+        "BRA.U": 1,
+        "EXIT": 1,
+        "FADD": 6,
+        "FFMA": 64,
+        "FMUL": 16,
+        "HADD2.F32": 34,
+        "HFMA2": 1,
+        "I2FP.F32.U32": 48,
+        "IADD": 2,
+        "IADD.64": 7,
+        "IMAD.SHL.U32": 1,
+        "IMAD.WIDE.U32": 7,
+        "LDC": 1,
+        "LDC.64": 2,
+        "LDCU.64": 4,
+        "LDG.E": 5,
+        "LDG.E.128": 1,
+        "LDG.E.64": 8,
+        "LEA": 1,
+        "LEA.HI": 1,
+        "LEA.HI.X": 1,
+        "LOP3.LUT": 55,
+        "NOP": 14,
+        "S2R": 2,
+        "SHF.L.U64.HI": 1,
+        "SHF.R.U32.HI": 48,
+        "SHF.R.U64": 1,
+        "SHFL.BFLY": 5,
+        "STG.E": 1,
+        "UIADD3": 1,
+        "UISETP.NE.U32.AND": 1,
+        "UMOV": 2
+      }
+    }
+  },
+  "schema": "tinygrad.nv_u4z8_g64_p256_ffn_projection_gate.v1",
+  "shape": {
+    "byte_reduction_fraction": 0.05555555555555558,
+    "candidate_weight_bytes": 26738688,
+    "control_weight_bytes": 28311552,
+    "k": 4096,
+    "rows": 12288
+  },
+  "threshold": {
+    "cold_recovery_us_per_projection": 0.3
+  },
+  "timing": {
+    "candidate_cold_rate_tb_s": 1.5004874578851033,
+    "cold_recovery_us": 1.0779979999999973,
+    "control_cold_rate_tb_s": 1.4981243252261789,
+    "hot_recovery_us": 1.7350000000000012,
+    "medians": {
+      "cold_candidate": 17.820001,
+      "cold_control": 18.897999,
+      "hot_candidate": 9.745,
+      "hot_control": 11.48
+    },
+    "samples": {
+      "cold_candidate": [
+        17.868999,
+        17.557999,
+        17.854,
+        17.622,
+        17.826,
+        17.574999,
+        17.843001,
+        17.633,
+        17.820001
+      ],
+      "cold_control": [
+        18.948,
+        18.897999,
+        18.611001,
+        18.974001,
+        18.742001,
+        18.985,
+        18.642001,
+        18.917,
+        18.756
+      ],
+      "hot_candidate": [
+        9.6866,
+        9.743,
+        9.745,
+        9.7354,
+        9.7454,
+        9.7186,
+        9.7482,
+        9.7494,
+        9.759
+      ],
+      "hot_control": [
+        11.4816,
+        11.4604,
+        11.461,
+        11.48,
+        11.4606,
+        11.4846,
+        11.459,
+        11.4922,
+        11.4858
+      ]
+    },
+    "unit": "us_per_projection"
+  },
+  "verdict": "PASS"
+}

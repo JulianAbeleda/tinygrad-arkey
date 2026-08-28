@@ -92,8 +92,20 @@ into a material dense-model lever.
 
 ## Decision
 
-Do not productionize O-only compression now. Preserve it as a proven primitive
-and use gate/up as the low-cost go/no-go test for the general representation
-lane. If gate/up does not win under cold continuous service, close this lane.
-If it does, the available byte exposure is large enough to justify the quality
-artifact and production integration work.
+The gate/up discriminator passed after this ledger was opened. One independently
+oracle-qualified 12288x4096 projection recovered 1.078 us under continuous
+rotated-cold service. A deliberately conservative pair—two separate U4Z8
+projections plus a separate SiLU-times-up finish—then recovered 1.299 us/layer
+against the installed fused Q4_K control despite paying two additional launches.
+The pair currently has a zero-data composition smoke check; its two component
+projections have the full nonzero packet oracle.
+
+At 36 layers, the conservative paired observation exposes about 46.8 us/token.
+If completely transferred, that changes 4065.897 us to about 4019.1 us, or
+roughly 248.8 tok/s. This is an exposure estimate, not a booked endpoint result.
+
+The representation lane is therefore admitted to the next investment stage.
+The next required work is a fused paired emitter with nonzero semantic
+qualification, followed by a predecessor-conditioned replay. Only after those
+pass should a calibrated model artifact be produced for recurrent-logit quality
+qualification and a strict batch-1 endpoint bracket.
