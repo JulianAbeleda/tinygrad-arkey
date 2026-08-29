@@ -1,0 +1,50 @@
+{
+  "schema": "tinygrad.nv_prefill_hcq_trace_provenance.v1",
+  "repository": "/home/ubuntu/tinygrad-arkey",
+  "git_head": "4d117c8e018573986e6b61600dbdff7959bb0139",
+  "git_diff_sha256": "e5cc7f807f131f531e14210b9e4fd99de25125ee9295ed321b213f67de8099b1",
+  "source_state_note": "The compiler-packed prefill substrate is commit-pinned, but the working tree also contains pre-existing uncommitted NV HCQ queue/timestamp work. The exact executed relevant-file hashes are authoritative for this trace.",
+  "workload": {
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "model_sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+    "prompt_tokens": 512,
+    "model_context": 4608,
+    "flash_attention": true,
+    "token": 198
+  },
+  "machine": {
+    "gpu": "NVIDIA GeForce RTX 5090",
+    "gpu_uuid": "GPU-c800ade9-21ea-2e55-f75c-6d7a458fb186",
+    "driver": "595.84",
+    "power_limit_w": 600.0
+  },
+  "environment": {
+    "PYTHONPATH": ".",
+    "PROFILE": "1",
+    "NV_COMPILER_Q4_IMMA_PP512": "1",
+    "NV_COMPILER_Q4_IMMA_K_PP512": "1",
+    "NV_COMPILER_Q4_IMMA_QO_PP512": "1",
+    "HCQ_NUM_COMPUTE": "2",
+    "HCQ_NV_READY_PLACEMENT": "0",
+    "HCQ_NV_MULTI_QUEUE_CUT_POLICY": "docs/task_workflow/evidence/nv-compiler-q4k-gkqo-20260828/combined-flash-direct-deps-cut-v2.json"
+  },
+  "file_sha256": {
+    "extra/llm_research/prefill/nv_compiler_q4k_gkqo_model_arm.py": "bc442d53ca7a321accb362fd8e2bfc5024b535b13a9f0c5be983075a134d59c8",
+    "extra/llm_research/prefill/nv_compiler_q4k_pp512_binding.py": "9076287e5f6debf909d3d1b1d648132b3bbe209d615961d97b6c3ab9f68165fa",
+    "extra/llm_research/prefill/nv_compiler_q4k_k_pp512_binding.py": "e4d68cab40f79336488a5b3d82b182c35f9eb167ec65932d25db5c40091e8f65",
+    "extra/llm_research/prefill/nv_compiler_q4k_qo_binding.py": "7f29e3d778b2af793868c67386cef320bc533a34a706d337d17ed784ce20b8d0",
+    "tinygrad/runtime/graph/hcq.py": "64d1fcd5cde6126cac7b222ed14589cf8d99550bba9beb9120f04b158e76096e",
+    "docs/task_workflow/evidence/nv-compiler-q4k-gkqo-20260828/combined-flash-direct-deps-cut-v2.json": "253ffe2fcfda1b23d89cd7a6ec0aba7fc391a9146f1a5a279c49fc261e874dcf",
+    "tinygrad-safe-cut.profile.jsonl": "ec6985104ac4198f72ba83d7e164e5347b8fd944acac8c75e76a36a7b071a15a",
+    "tinygrad-safe-cut.census.jsonl": "e2b278714ac8f4fa5035ce75d17fffbf78735cd9ca5f1f0397a540fcacc26bc2"
+  },
+  "capture": {
+    "command": "flock -w 1200 /tmp/gpu-bench.lock env PYTHONPATH=. PROFILE=1 NV_COMPILER_Q4_IMMA_PP512=1 NV_COMPILER_Q4_IMMA_K_PP512=1 NV_COMPILER_Q4_IMMA_QO_PP512=1 HCQ_NUM_COMPUTE=2 HCQ_NV_READY_PLACEMENT=0 HCQ_NV_MULTI_QUEUE_CUT_POLICY=docs/task_workflow/evidence/nv-compiler-q4k-gkqo-20260828/combined-flash-direct-deps-cut-v2.json HCQ_GRAPH_PROFILE_JSON=docs/task_workflow/evidence/nv-prefill-exact-cross-runtime-trace/tinygrad/tinygrad-safe-cut.profile.jsonl HCQ_MULTI_QUEUE_CENSUS_JSON=docs/task_workflow/evidence/nv-prefill-exact-cross-runtime-trace/tinygrad/tinygrad-safe-cut.census.jsonl .venv/bin/python extra/llm_research/prefill/nv_compiler_q4k_gkqo_model_arm.py --arm candidate --warmups 1 --rounds 3 --replay-cycles 1 --out docs/task_workflow/evidence/nv-prefill-exact-cross-runtime-trace/tinygrad/tinygrad-safe-cut-profile-run.json --logits-npz docs/task_workflow/evidence/nv-prefill-exact-cross-runtime-trace/tinygrad/tinygrad-safe-cut-profile-logits.npz",
+    "profile_groups": 9,
+    "segments_per_group": 6,
+    "selected_group": 7,
+    "selected_group_note": "The graph exports a completed invocation when the next invocation begins. Group 7 is timed call 1 and corresponds to the first recorded profiled wall sample, 74.685731 ms.",
+    "selected_launches": 1449,
+    "unknown_launches": 0
+  }
+}

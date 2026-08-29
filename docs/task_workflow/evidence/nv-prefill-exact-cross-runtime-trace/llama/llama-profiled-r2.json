@@ -1,0 +1,30 @@
+[
+  {
+    "build_commit": "ac4cddeb0",
+    "build_number": 9592,
+    "cpu_info": "AMD Ryzen 7 5800X 8-Core Processor",
+    "gpu_info": "NVIDIA GeForce RTX 5090",
+    "backends": "CUDA",
+    "model_filename": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "model_type": "qwen3 8B Q4_K - Medium",
+    "model_size": 5021827072,
+    "model_n_params": 8190735360,
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "n_threads": 8,
+    "n_gpu_layers": 99,
+    "flash_attn": 1,
+    "n_prompt": 512,
+    "n_gen": 0,
+    "n_depth": 0,
+    "test_time": "2026-08-29T03:58:37Z",
+    "avg_ns": 42855694,
+    "stddev_ns": 10501404,
+    "avg_ts": 12316.853597,
+    "stddev_ts": 3018.133621,
+    "samples_ns": [50281306, 35430083],
+    "samples_ts": [10182.7, 14451.0],
+    "selected_trace_sample_index": 1,
+    "instrumentation": "Nsight Systems CUDA+NVTX node trace plus preload-only system_clock marker shim"
+  }
+]
