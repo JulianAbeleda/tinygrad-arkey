@@ -1,0 +1,24 @@
+{
+  "authority": {
+    "candidate": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/model-k-candidate-r9-v3.json",
+    "control": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/model-k-control-r9-v3.json"
+  },
+  "correctness": {
+    "allclose_rtol_0p02_atol_0p5": true,
+    "candidate_token": 198,
+    "control_token": 198,
+    "finite": true,
+    "max_abs": 0.08652806282043457,
+    "mean_abs": 0.019550733268260956,
+    "same_token": true
+  },
+  "schema": "tinygrad.nv_compiler_q4k_k_model_compare.v1",
+  "status": "PASS",
+  "wall": {
+    "candidate_min_ms": 70.390585,
+    "candidate_minus_control_ms": -4.004704000000004,
+    "candidate_tok_s": 7273.700026786252,
+    "control_min_ms": 74.395289,
+    "control_tok_s": 6882.156207498569
+  }
+}

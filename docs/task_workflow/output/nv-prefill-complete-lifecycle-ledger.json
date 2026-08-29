@@ -1,0 +1,224 @@
+{
+  "schema": "nv-prefill-complete-lifecycle-ledger.v1",
+  "scope": {
+    "workload": "Qwen3-8B Q4_K_M pp512/ubatch512 prefill",
+    "device": "RTX 5090 sm_120",
+    "excludes": ["decode-token accounting", "MoE", "cross-device AMD timing comparison"]
+  },
+  "decision": {
+    "status": "SUBSTRATE_PASS_Q4_GATE_UP_K_Q_O_LIFECYCLE_PASS",
+    "physical_primitive": "PASS",
+    "compiler_gate_up_integration": "PASS_DEFAULT_OFF",
+    "production_generic": "NOT_YET",
+    "reason": "exact Q4 gate/up, K, Q, and O paths are compiler-owned, canonical, copy/fixup free, replay exact, and faster than FP16; V/down and graph-generic queue ownership remain open"
+  },
+  "authority_walls": [
+    {"arm":"tinygrad_fp16_original_r7","wall_ms":84.025,"reported_tok_s":6093,"reciprocal_tok_s":6093.425,"class":"measured","evidence":"nv-prefill-corrected-tile-20260828/authority-complete-r7.json"},
+    {"arm":"tinygrad_fp16_current","wall_ms":83.793,"reciprocal_tok_s":6110.296,"class":"measured","evidence":"nv-q4-imma-combined-chain-integration-20260828.md"},
+    {"arm":"llama_cuda_mmq_r5","wall_ms":36.608,"reported_tok_s":14074,"reciprocal_tok_s":13986.014,"class":"measured","evidence":"nv-prefill-restoration-20260828/llama-pp512-r5.json"},
+    {"arm":"tinygrad_packed_v4","wall_ms":93.200,"reciprocal_tok_s":5493.562,"class":"measured","evidence":"nv-q4-imma-combined-chain-integration-20260828.md"},
+    {"arm":"tinygrad_compiler_packed_gate_up","wall_ms":74.694977,"reciprocal_tok_s":6854.544,"class":"measured","evidence":"nv-compiler-packed-fragment-20260828/model_candidate_r9.json"},
+    {"arm":"tinygrad_compiler_packed_gate_up_K_control","wall_ms":70.173,"median_ms":70.353,"reciprocal_tok_s":7296.254,"class":"measured","evidence":"nv-compiler-q4k-gkqo-20260828 combined control"},
+    {"arm":"tinygrad_compiler_packed_gate_up_K_Q_O_safe_cut","wall_ms":69.378,"median_ms":69.492,"reciprocal_tok_s":7379.861,"class":"measured","evidence":"nv-compiler-q4k-gkqo-combined-result.md"},
+    {"arm":"tinygrad_compiler_packed_gate_up_K_Q6_V_down","wall_ms_range":[72.1744,72.2844],"reciprocal_tok_s_range":[7093.93,7083.14],"class":"measured_rejected","evidence":"nv-compiler-q6k-model-lifecycle-result.md"},
+    {"arm":"tinygrad_fresh_fp16_control","wall_ms":83.502737,"reciprocal_tok_s":6131.536,"class":"measured","evidence":"nv-compiler-packed-fragment-20260828/model_fp16_r9.json"}
+  ],
+  "wall_deltas_ms": {
+    "original_fp16_minus_llama": 47.417,
+    "current_fp16_minus_llama": 47.185,
+    "packed_v4_minus_fp16": 9.407,
+    "packed_v4_minus_llama": 56.592,
+    "compiler_packed_minus_fresh_fp16": -8.807760,
+    "compiler_packed_minus_llama": 38.086977,
+    "compiler_Q4_stack_minus_fresh_fp16": -14.124737,
+    "compiler_Q4_stack_minus_llama": 32.770,
+    "combined_Q_O_minus_gate_up_K": -0.795
+  },
+  "profile_regions": [
+    {"region":"dense","tiny_ms":85.981,"tiny_calls":252,"llama_ms":27.263,"llama_mmq_calls":249,"class":"measured","note":"different profiler regimes; exposure only"},
+    {"region":"attention","tiny_ms":3.286,"llama_ms":1.714,"class":"measured","note":"different profiler regimes; exposure only"},
+    {"region":"vocabulary","tiny_ms":2.880,"llama_ms":0.311,"class":"measured","note":"M=1 on both sides"},
+    {"region":"support","tiny_ms":3.662,"llama_ms":3.808,"class":"measured"},
+    {"region":"total","tiny_ms":95.810,"llama_gpu_busy_ms":33.096,"class":"measured","note":"not wall authority"}
+  ],
+  "dense_roles": [
+    {"role":"Q","calls":36,"M":512,"N":4096,"K":4096,"formats":{"Q4_K":36},"tiny_fp16_total_ms":6.605,"tiny_fp16_algorithmic_bytes_per_call":134200000,"llama_packed_bytes_per_call":{"Q4_K":37750000},"llama_complete_us_per_call_estimate":{"Q4_K":61.5},"packed_v4_covered":false,"class":"measured_and_derived","evidence":"nv-llama-prefill-lifecycle-audit.md"},
+    {"role":"K","calls":36,"M":512,"N":1024,"K":4096,"formats":{"Q4_K":36},"tiny_fp16_total_ms":6.3845,"tiny_fp16_algorithmic_bytes_per_call":33550000,"llama_packed_bytes_per_call":{"Q4_K":9440000},"llama_complete_us_per_call_estimate":{"Q4_K":20.0},"packed_v4_covered":false,"class":"measured_and_derived","evidence":"nv-llama-prefill-lifecycle-audit.md"},
+    {"role":"V","calls":36,"M":512,"N":1024,"K":4096,"formats":{"Q4_K":"mixed","Q6_K":"mixed"},"tiny_fp16_total_ms":6.3845,"tiny_fp16_algorithmic_bytes_per_call":33550000,"llama_packed_bytes_per_call":{"Q4_K":9440000,"Q6_K":13760000},"llama_complete_us_per_call_estimate":{"Q4_K":20.0,"Q6_K":31.0},"packed_v4_covered":false,"class":"measured_and_derived","evidence":"nv-llama-prefill-lifecycle-audit.md"},
+    {"role":"O","calls":36,"M":512,"N":4096,"K":4096,"formats":{"Q4_K":36},"tiny_fp16_total_ms":6.605,"tiny_fp16_algorithmic_bytes_per_call":134200000,"llama_packed_bytes_per_call":{"Q4_K":37750000},"llama_complete_us_per_call_estimate":{"Q4_K":61.5},"packed_v4_covered":false,"class":"measured_and_derived","evidence":"nv-llama-prefill-lifecycle-audit.md"},
+    {"role":"gate","calls":36,"M":512,"N":12288,"K":4096,"formats":{"Q4_K":36},"tiny_fp16_total_ms":20.510,"tiny_fp16_algorithmic_bytes_per_call":402700000,"llama_packed_bytes_per_call":{"Q4_K":113200000},"llama_complete_us_per_call_estimate":{"Q4_K":177.5},"packed_v4_covered":true,"class":"measured_and_derived","evidence":"nv-llama-prefill-lifecycle-audit.md; nv-prefill-q4-imma-gate-result-20260828.md"},
+    {"role":"up","calls":36,"M":512,"N":12288,"K":4096,"formats":{"Q4_K":36},"tiny_fp16_total_ms":20.510,"tiny_fp16_algorithmic_bytes_per_call":402700000,"llama_packed_bytes_per_call":{"Q4_K":113200000},"llama_complete_us_per_call_estimate":{"Q4_K":177.5},"packed_v4_covered":true,"class":"measured_and_derived","evidence":"nv-llama-prefill-lifecycle-audit.md; nv-prefill-q4-imma-gate-result-20260828.md"},
+    {"role":"down","calls":36,"M":512,"N":4096,"K":12288,"formats":{"Q4_K":"mixed","Q6_K":"mixed"},"tiny_fp16_total_ms":18.982,"tiny_fp16_algorithmic_bytes_per_call":402700000,"llama_packed_bytes_per_call":{"Q4_K":113200000,"Q6_K":165200000},"llama_complete_us_per_call_estimate":{"Q4_K":177.5,"Q6_K":228.5},"packed_v4_covered":false,"class":"measured_and_derived","evidence":"nv-llama-prefill-lifecycle-audit.md"}
+  ],
+  "llama_dense_components": [
+    {"component":"Q4 main","calls":214,"total_ms":20.057,"class":"measured"},
+    {"component":"Q6 main","calls":35,"total_ms":4.253,"class":"measured"},
+    {"component":"Q4 fixup","calls":214,"total_ms":1.782,"class":"measured"},
+    {"component":"Q6 fixup","calls":35,"total_ms":0.312,"class":"measured"},
+    {"component":"Q8_1 producer","calls":249,"total_ms":0.859,"class":"measured"},
+    {"component":"complete dense lifecycle","total_ms":27.263,"class":"measured"}
+  ],
+  "representation": {
+    "tiny_fp16_overlay_resident_gb": 13.89,
+    "mixed_packed_projection_resident_gb": 4.41,
+    "Q4_fp16_byte_ratio": 3.56,
+    "Q6_fp16_byte_ratio": 2.44,
+    "class": "derived",
+    "note": "resident population; per-call algorithmic requests are listed by role"
+  },
+  "vocabulary": {
+    "calls": 1,
+    "M": 1,
+    "N": 151936,
+    "K": 4096,
+    "format": "Q6_K",
+    "packed_weight_bytes": 510504960,
+    "tiny_profile_ms": 2.880,
+    "llama_profile_ms": 0.311,
+    "class": "measured_and_derived"
+  },
+  "packed_v4": {
+    "coverage": ["gate","up"],
+    "calls_each": 72,
+    "profile": {
+      "q8_total_ms": 0.229536,
+      "q8_us_per_call": 3.188,
+      "main_total_ms": 39.842176,
+      "main_us_per_call": 553.364,
+      "fixup_total_ms": 1.863392,
+      "fixup_us_per_call": 25.880,
+      "native_lifecycle_total_ms": 41.935104
+    },
+    "isolated": {
+      "chain_min_us": 470.112,
+      "chain_median_us": 470.976,
+      "main_min_us": 455.040,
+      "complete_outputs": 6291456,
+      "max_abs_error": 0.0000016689300537109375,
+      "direct_tile_max_abs_error": 0,
+      "readonly_inputs": true,
+      "finite": true,
+      "complete_sentinel_coverage": true
+    },
+    "kernel": {"static_IMMA_sites":256,"static_LDSM_sites":32,"registers_per_thread":255,"local_spill_instructions":0,"main_grid_ctas":170,"block_threads":256,"requested_shared_bytes":58880},
+    "scratch": {"partial_slots":340,"partial_slot_shape":[128,128],"partial_dtype":"fp32","bytes_per_projection":22282240,"partial_bytes_72_approx_gib":1.57,"all_retained_workspace_approx_gib":3.6},
+    "ownership": "finalized native PROGRAM adapter, not compiler-generated PackedWeightTransform/postrange",
+    "class": "measured"
+  },
+  "compiler_packed_gate_up": {
+    "coverage": ["gate","up"],
+    "calls": {"compact_q8_producer":72,"compiler_generated_main":72,"old_fixup":0,"packed_transport_copy":0},
+    "primitive": {"tile_k":64,"generated_min_us":465.025,"v4_reference_us":463.968,"ratio":1.00228,"registers_per_thread":222,"shared_bytes":21504,"local_spill_instructions":0,"static_IMMA_sites":32},
+    "model": {"candidate_r9_min_ms":74.694977,"candidate_r9_median_ms":74.916905,"candidate_tok_s":6854.544,"fp16_control_ms":83.502737,"fp16_control_tok_s":6131.536,"recovery_ms":8.807760,"throughput_gain_percent":11.79},
+    "correctness": {"same_token":198,"finite":true,"allclose_rtol":0.02,"allclose_atol":0.5,"max_abs":0.114424,"mean_abs":0.008292,"replay_exact":true,"distinct_input_fresh":true},
+    "ownership": {"canonical_weight_bases":"72/72","expanded_gate_up_fp16_bytes":0,"partial_workspace_bytes":0,"q8_records":72,"compiler_program_finalized_from_ordinary_matmul":true},
+    "binding_ownership": {"immutable_program_cached_per_device":true,"mutable_capture_state_per_model_and_jit":true,"retained_tensor_pool":false,"lazy_scheduler_owned_buffers":true,"measured_physical_capture_saving_bytes":307306752,"fresh_process_environment_required":true},
+    "class": "measured",
+    "evidence": "nv-compiler-packed-prefill-model-integration.md; nv-compiler-packed-fragment-20260828/model_candidate_r9.json"
+  },
+  "compiler_packed_K": {
+    "coverage": ["K"],
+    "calls": {"compact_q8_producer":36,"compiler_generated_main":36,"old_fixup":0,"packed_transport_copy":0},
+    "primitive": {"tile":[64,32,64],"threads":128,"grid_ctas":256,"real_role_min_us":59.328,"registers_per_thread":96,"shared_bytes":8704,"local_spill_instructions":0,"static_IMMA_sites":8},
+    "model": {"candidate_r9_min_ms":70.390585,"matched_gate_up_control_ms":74.395289,"recovery_ms":4.004704,"candidate_tok_s":7273.70,"throughput_gain_percent":5.69},
+    "correctness": {"same_token":198,"finite":true,"allclose_rtol":0.02,"allclose_atol":0.5,"max_abs":0.08653,"mean_abs":0.01955,"replay_exact":true},
+    "ownership": {"canonical_weight_bases":"36/36","expanded_K_fp16_bytes":0,"partial_workspace_bytes":0},
+    "class":"measured",
+    "evidence":"nv-prefill-compiler-q4k-kv-role-result-20260828.md"
+  },
+  "compiler_packed_Q_O_combined": {
+    "coverage":["Q","O"],
+    "combined_calls":{"compact_q8_producer":180,"compiler_generated_main":180,"old_fixup":0,"packed_transport_copy":0},
+    "population":{"gate_up":72,"K":36,"Q_O":72,"canonical_weight_bases":"180/180","remaining_V_down_fp16_overlays":72},
+    "model":{"candidate_r9_min_ms":69.378,"candidate_r9_median_ms":69.492,"matched_gate_up_K_control_min_ms":70.173,"matched_control_median_ms":70.353,"recovery_ms":0.795,"candidate_tok_s":7379.861,"control_tok_s":7296.254,"wall_gain_percent":1.13},
+    "correctness":{"same_token":198,"finite":true,"allclose_rtol":0.02,"allclose_atol":0.5,"max_abs":0.083171,"mean_abs":0.014305,"deep_replay_cycles":20,"all_cycles_exact":true,"live_KV_slices_exact":36},
+    "queue_policy":{"safe_cut":"PASS","default_ready":{"wall_ms":68.965,"exact_cycles":"19/20","status":"REJECT"},"primary_only":{"wall_ms":74.074,"status":"PASS_SLOW"},"one_queue":{"wall_ms":74.075,"status":"PASS_SLOW"}},
+    "class":"measured",
+    "evidence":"nv-compiler-q4k-gkqo-combined-result.md"
+  },
+  "compiler_Q6": {
+    "primitive":{"V":{"shape":[512,1024,4096],"min_us":69.824,"grid_ctas":256,"max_abs":0.000305},"down":{"shape":[512,4096,12288],"min_us":638.752,"grid_ctas":1024,"max_abs":0.001221},"registers_per_thread":96,"shared_bytes":8704,"local_spill_instructions":0},
+    "model":{"matched_control_ms":70.3326,"V_only_ms":70.2086,"V_only_recovery_ms":0.124,"down_only_ms":71.9439,"down_regression_ms":1.6113,"combined_ms_range":[72.1744,72.2844],"combined_regression_ms_range":[1.8418,1.9518],"status":"PERFORMANCE_FAIL_ZERO_BOOKED"},
+    "correctness":{"canonical_weights":true,"no_expanded_weights":true,"no_fixup_or_partials":true,"replay_exact":true,"same_token":198,"allclose":true},
+    "class":"measured",
+    "evidence":"nv-compiler-q6k-imma-substrate-result.md; nv-compiler-q6k-model-lifecycle-result.md"
+  },
+  "lifecycle_stages": [
+    {"stage":1,"name":"model representation","tiny":"one-time Q4/Q6 to persistent FP16 overlay","llama":"packed Q4/Q6 retained","packed_v4":"packed Q4 retained","time":"one-time load excluded","class":"source_proven"},
+    {"stage":2,"name":"RMS normalization","tiny":"compiler/scheduler owned","llama":"graph kernel","packed_v4":"compiler output becomes native input","time":"included in support regions","class":"measured"},
+    {"stage":3,"name":"activation conversion","tiny":"FP16 HMMA input","llama":"249 Q8_1 conversions","packed_v4":"72 exact compact Q8 conversions","compiler_packed":"72 exact compact Q8 conversions","time":{"llama_ms":0.859,"packed_v4_ms":0.229536},"class":"measured"},
+    {"stage":4,"name":"packed global load","tiny":"FP16 overlay","llama":"packed Q4/Q6","packed_v4":"canonical packed Q4 words","bytes":"per-role derived table; physical counters unavailable for HCQ","class":"derived"},
+    {"stage":5,"name":"decode and fragment formation","tiny":"FP16 shared fragments","llama":"cooperative Q4/Q6 decode to int8 shared fragments","packed_v4":"native Q4 nibble/metadata decode and LDSM","class":"source_proven"},
+    {"stage":6,"name":"tensor core and correction","tiny":"HMMA FP16","llama":"signed-int8 IMMA plus scale/min correction","packed_v4":"signed-int8 IMMA plus exact Q4 correction","class":"measured_and_source_proven"},
+    {"stage":7,"name":"work ownership","tiny":"static output tiles; K/V only 32 CTAs","llama":"170-owner Stream-K","packed_v4":"170-owner specialized Stream-K","class":"source_proven"},
+    {"stage":8,"name":"partials and fixup","tiny":"none for FP16 route","llama":"bounded partials plus fixup","packed_v4":"340 FP32 slots/projection plus fixup","time":{"packed_v4_profile_ms":1.863392},"class":"measured"},
+    {"stage":9,"name":"projection publication","tiny":"scheduler-owned tensor","llama":"CUDA graph value","packed_v4":"native PROGRAM AFTER dependency","compiler_packed":"direct compiler PROGRAM output with nested computed/canonical input ownership passing","class":"measured"},
+    {"stage":10,"name":"support operations","operations":["RoPE","q/k norm","KV write","SiLU","multiply","residual"],"time":{"tiny_profile_ms":3.662,"llama_profile_ms":3.808},"class":"measured"},
+    {"stage":11,"name":"Flash Attention","calls":36,"time":{"tiny_profile_ms":3.286,"llama_profile_ms":1.714},"class":"measured"},
+    {"stage":12,"name":"final requested-row liveness","tiny":"last FFN remains M=512","llama":"gather after final attention; final FFN M=1","estimated_tiny_recovery_ms":[1,2],"class":"source_proven_and_derived"},
+    {"stage":13,"name":"vocabulary","shape":[1,151936,4096],"time":{"tiny_profile_ms":2.880,"llama_profile_ms":0.311},"class":"measured"},
+    {"stage":14,"name":"capture replay and synchronization","tiny":"HCQ graph","llama":"serialized CUDA graph","packed_v4":"216 native calls captured but scratch and callification ownership incomplete","compiler_packed":"72 producer plus 72 generated main, zero fixup/copy, replay exact/fresh","wall_residual":"unknown across unmatched profiler regimes","class":"measured_and_unknown"}
+  ],
+  "substrate_status": [
+    {"item":"generated packed fragment and K32 correction ownership","status":"closed_gate_up"},
+    {"item":"computed and canonical input callification","status":"closed","evidence":"single/nested replay and 72 canonical model buffers"},
+    {"item":"packed transport copies","status":"closed","before":70,"after":0},
+    {"item":"gate/up partial scratch and fixup","status":"closed_by_direct_compiler_output","bytes":0,"calls":0},
+    {"item":"role coverage","status":"partial","covered":["gate","up","K","Q","O"],"uncovered":["V","down"]},
+    {"item":"Q6 typed arithmetic","status":"closed_primitive_open_lifecycle","covered_primitive":["V","down"],"model_decision":"NO_GO_CURRENT_SPELLING"},
+    {"item":"binding storage","status":"partial_research_substrate","detail":"gate/up and K assets separate immutable programs from per-model captures; admitted combined K/Q/O wrapper uses lazy graph-owned buffers; standalone Q/O binding still caches mutable per-device record/output pools and cursor"},
+    {"item":"Q_O_queue_ownership","status":"exact_graph_cut_only","issue":"default ready placement is intermittent; generic dependency-owned admission remains open"}
+  ],
+  "amd_transfer": [
+    {"asset":"exact route admission and shape guards","disposition":"reuse contract; qualify NVIDIA rows"},
+    {"asset":"PackedWeightTransform buffer identity","disposition":"reuse"},
+    {"asset":"movement-only packed carrier","disposition":"reuse logical ownership"},
+    {"asset":"postrange decode at fragment producer","disposition":"implemented for exact Q4_K/Q8 K64"},
+    {"asset":"scheduler-generated a@b.T","disposition":"reuse compiler entry"},
+    {"asset":"single PROGRAM with output/A/B ownership","disposition":"reuse ownership principle; NVIDIA may expose Q8 metadata and fixup values"},
+    {"asset":"canary, binary identity, fail-closed promotion","disposition":"reuse"},
+    {"asset":"AMD wave32/WMMA/LDS geometry","disposition":"do not reuse; replace with warp32/LDSM/IMMA"},
+    {"asset":"frozen AMD 14B geometries","disposition":"do not transfer as generic NVIDIA shapes"}
+  ],
+  "recovery_planning": [
+    {"lever":"compiler_packed_gate_up","recovery_ms":8.807760,"resulting_wall_ms":74.694977,"resulting_tok_s":6854.544,"class":"measured"},
+    {"lever":"compiler_packed_K","booked_wall_recovery_ms":4.004704,"resulting_wall_ms":70.390585,"resulting_tok_s":7273.70,"class":"measured_matched_role_bracket"},
+    {"lever":"compiler_packed_Q_O_composed","booked_wall_recovery_ms":0.795,"resulting_wall_ms":69.378,"resulting_tok_s":7379.861,"class":"measured_combined_bracket"},
+    {"lever":"Q6_V_down_current","booked_wall_recovery_ms":0,"regression_ms_range":[1.8418,1.9518],"class":"measured_rejected"},
+    {"lever":"V_packed_service_and_topology","booked_wall_recovery":null,"class":"open_role_lifecycle"},
+    {"lever":"down_packed_service","profile_exposure_ms_approx":12.1,"booked_wall_recovery":null,"class":"derived_role_estimate"},
+    {"lever":"llama_bound_remaining","recovery_ms":32.770,"resulting_wall_ms":36.608,"resulting_tok_s":13986.014,"class":"arithmetic_bound"},
+    {"lever":"final_row_prune","recovery_ms_range":[1,2],"resulting_wall_ms_range":[68.378,67.378],"resulting_tok_s_range":[7487.79,7598.92],"class":"derived"},
+    {"lever":"attention_parity","profile_exposure_bound_ms":1.572,"booked_wall_recovery":null,"class":"measured_profile_bound"},
+    {"lever":"vocabulary_parity","profile_exposure_bound_ms":2.569,"booked_wall_recovery":null,"class":"measured_profile_bound"}
+  ],
+  "next_gates": [
+    {"name":"Q4_V_role_gate","shape":[512,1024,4096],"requirements":["real Q4 V model integration","reuse only qualified 256-CTA geometry","fresh composed bracket"]},
+    {"name":"Q4_down_role_gate","shape":[512,4096,12288],"requirements":["typed Q4 correction contract","full role oracle","fresh composed bracket"]},
+    {"name":"Q6_lifecycle_reopen","requirements":["explain down model regression despite primitive pass","stronger V-only bracket","no primitive-to-wall inference"]},
+    {"name":"generic_queue_ownership","requirements":["dependency-scoped Flash cut","fail closed on graph drift","20-cycle replay"]}
+  ],
+  "unknowns": [
+    "physical HCQ DRAM/L2/shared counters because current CUPTI route cannot observe HCQ kernels",
+    "wall conversion of profile-only attention and vocabulary bounds",
+    "performance and quality of packed Q4 V/down before exact-role qualification",
+    "generality outside Qwen3-8B pp512",
+    "production-safe multi-model storage ownership for compiler-packed binding"
+    ,"operand-scoped packed warmstart matching; current whole-AST dtype key can fail closed on unrelated packed parameters"
+  ],
+  "evidence": [
+    "docs/task_workflow/output/nv-llama-prefill-lifecycle-audit.md",
+    "docs/task_workflow/output/nv-q4-imma-combined-chain-integration-20260828.md",
+    "docs/task_workflow/output/nv-llama-mmq-warp-ownership-audit.md",
+    "docs/task_workflow/output/nv-prefill-q4-imma-gate-result-20260828.md",
+    "docs/task_workflow/output/nv-compiler-packed-fragment-gate-result.md",
+    "docs/task_workflow/output/nv-compiler-packed-prefill-model-integration.md",
+    "docs/task_workflow/output/nv-prefill-compiler-q4k-kv-role-result-20260828.md",
+    "docs/task_workflow/output/nv-compiler-q4k-qo-qualification-result.md",
+    "docs/task_workflow/output/nv-compiler-q4k-gkqo-combined-result.md",
+    "docs/task_workflow/output/nv-compiler-q6k-imma-substrate-result.md",
+    "docs/task_workflow/output/nv-compiler-q6k-model-lifecycle-result.md",
+    "docs/task_workflow/evidence/nv-q4-imma-combined-chain-20260828/full-real-both8-r9.json",
+    "docs/task_workflow/evidence/nv-q4-imma-combined-chain-20260828/full-real-both8-readonly-pass.json"
+  ]
+}

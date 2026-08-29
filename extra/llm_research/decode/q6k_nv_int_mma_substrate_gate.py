@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """CPU/compiler-only gate for native CUDA signed-int8 TensorCore support.
 
-The hardware/compiler syntax probe is intentionally independent from the
-tinygrad descriptor and renderer probes.  Passing the first and failing the
-other two localizes the blocker to tinygrad's generic substrate rather than
-sm_120, NVRTC, or Q6 schedule choice.
+The generic TensorCore descriptor deliberately remains fail-closed: int8
+WMMA is admitted only by an exact typed compiler candidate.  The renderer
+probe separately proves that such a qualified candidate can lower the native
+instruction once its lane/fragment contract has been established.
 """
 from __future__ import annotations
 
@@ -52,8 +52,9 @@ def _tinygrad_descriptor_probe() -> dict:
 
 
 def _tinygrad_render_probe() -> dict:
-  # Exercise render_wmma rather than inferring support from source text.  The
-  # current renderer packs fragments, then fails at its float/half-only maps.
+  # Exercise render_wmma rather than inferring support from source text.  This
+  # is the lowering used only after an exact candidate supplied the fragment
+  # ABI; it is not ambient generic TensorCore admission.
   a=UOp(Ops.NOOP,dtypes.int8.vec(16)); b=UOp(Ops.NOOP,dtypes.int8.vec(8)); c=UOp(Ops.NOOP,dtypes.int32.vec(4))
   w=UOp(Ops.WMMA,dtypes.int32.vec(4),(a,b,c),arg=("int_mma_probe",(8,16,32),dtypes.int8,dtypes.int32))
   ctx=SimpleNamespace(wmma_r=[[f"a{i}" for i in range(4)],[f"b{i}" for i in range(2)],[f"c{i}" for i in range(4)]],
@@ -65,10 +66,13 @@ def _tinygrad_render_probe() -> dict:
 
 def audit() -> dict:
   hardware=_nvrtc_int_mma_probe(); descriptor=_tinygrad_descriptor_probe(); renderer=_tinygrad_render_probe()
-  localized=hardware["pass"] and not descriptor["cuda_descriptor_present"] and not descriptor["ptx_renderer_admits"] and not renderer["pass"]
-  return {"schema":"tinygrad.q6k_nv_int_mma_substrate_gate.v1","hardware_compiler":hardware,
-    "tinygrad_descriptor":descriptor,"tinygrad_renderer":renderer,"blocker_localized_to_tinygrad_substrate":localized,
-    "next_gate":"add generic CUDA s8->s32 TensorCore descriptor, validated fragment lane map, and PTX dtype/register lowering; then run exact int MMA value test before Q6 integration"}
+  generic_closed=not descriptor["cuda_descriptor_present"] and not descriptor["ptx_renderer_admits"]
+  qualified_ready=hardware["pass"] and generic_closed and renderer["pass"]
+  return {"schema":"tinygrad.q6k_nv_int_mma_substrate_gate.v2","hardware_compiler":hardware,
+    "tinygrad_descriptor":descriptor,"tinygrad_renderer":renderer,
+    "generic_descriptor_remains_fail_closed":generic_closed,"qualified_candidate_substrate_ready":qualified_ready,
+    "blocker_localized_to_tinygrad_substrate":False,
+    "next_gate":"retain exact typed fragment/provider admission and run adversarial value, real-shape, SASS, and lifecycle gates"}
 
 
 if __name__ == "__main__": print(json.dumps(audit(),indent=2,sort_keys=True))

@@ -1,3 +1,4 @@
+from collections import Counter
 from types import SimpleNamespace
 
 import pytest
@@ -60,7 +61,15 @@ def test_exact_rdna3_int8_descriptor_and_dense_k256_stage_abi():
                                       k_axis=k_axis, subtile_m=sm, subtile_n=sn, contracts=contracts)
   assert stage.fragment_a.dtype == stage.fragment_b.dtype == dtypes.char.vec(16)
   stores = [x for x in stage.producer.backward_slice_with_self if x.op is Ops.STORE]
-  assert len(stores) == 16 and all(x.src[1].dtype == dtypes.char.vec(16) for x in stores)
+  # Each of the 16 logical b128 packets is deliberately spelled as 16 scalar
+  # stores.  A vectorized LDS INDEX used to lower through a loaded temporary
+  # and could alias distinct K lanes; scalar destinations retain the exact
+  # one-writer cover while preserving packet ownership in the store tag.
+  expected_packets = Counter(("kernel_tile_store", role, iteration)
+                             for role in ("A", "B") for iteration in range(8))
+  assert len(stores) == 16*16 and all(x.src[1].dtype == dtypes.char for x in stores)
+  assert Counter(x.tag for x in stores) == Counter({tag:16 for tag in expected_packets})
+  assert len({x.src[0] for x in stores}) == 16*16
   node = _wmma((stage.fragment_a, stage.fragment_b), contracts)
   validate_precontract_wmma_abi(node)
   assert node.dtype == node.src[2].dtype == dtypes.int.vec(8)

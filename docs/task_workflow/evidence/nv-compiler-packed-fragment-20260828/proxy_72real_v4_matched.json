@@ -1,0 +1,14 @@
+{
+  "schema": "tinygrad.nv_q4_imma_72main_proxy.retained.v1",
+  "command": "PYTHONPATH=. .venv/bin/python extra/llm_research/prefill/nv_q4_imma_72main_proxy.py --rounds 7",
+  "captured_main_calls": 72,
+  "real_weight_buffers": 72,
+  "distinct_scratch": true,
+  "sample_replay_exact": true,
+  "sample_finite": true,
+  "r_ms": [37.0315860491246, 37.042645970359445, 38.45060500316322, 37.02267911285162, 37.00334299355745, 37.05050190910697, 37.0336698833853],
+  "wall_min_ms": 37.00334299355745,
+  "wall_median_ms": 37.0336698833853,
+  "per_main_wall_us": 513.9353193549646,
+  "status": "PASS"
+}

@@ -4,7 +4,8 @@ import numpy as np
 import pytest
 
 from tinygrad import Tensor, dtypes
-from tinygrad.codegen.opt.packed_weight import PackedWeightTile, PackedWeightTransform
+from tinygrad.codegen.opt.packed_weight import (PackedInt8Fragment, PackedWeightTile, PackedWeightTransform,
+                                                Q4KInt8FragmentProvider)
 from tinygrad.uop.ops import KernelInfo, Ops, UOp
 from extra.llm_research.kernel_vocabulary import KernelCandidateContext, KernelLDSWindow, KernelTileGeometry
 from extra.llm_research.layout import Q4_K_BLOCK_BYTES, Q6_K_BLOCK_BYTES, q4_k_reference, q6_k_reference
@@ -113,6 +114,49 @@ def test_tile_width_and_interval_validation():
   desc = PackedWeightTransform("Q4_K", 1, 256)
   with pytest.raises(ValueError, match="width"): desc.dequant_tile(lambda _: UOp.const(dtypes.uint32, 0), 0, 0, 4)  # type: ignore[arg-type]
   with pytest.raises(IndexError, match="tile"): desc.dequant_tile(lambda _: UOp.const(dtypes.uint32, 0), 0, 249, 8)
+
+
+def test_typed_q4_int8_fragment_preserves_logical_group_parity_on_python():
+  # Alternating nibbles make every accidental group/permutation swap visible.
+  raw = np.zeros(144, dtype=np.uint8)
+  raw[16:] = 0xD2
+  words = Tensor(raw.copy(), device="PYTHON").bitcast(dtypes.uint32).contiguous().realize()
+  desc, provider = PackedWeightTransform("Q4_K", 1, 256), Q4KInt8FragmentProvider(PackedWeightTransform("Q4_K", 1, 256))
+  assert provider.transform == desc and provider.logical_shape == (1, 256)
+  def kernel(out:UOp, source:UOp) -> UOp:
+    stores = []
+    for group in range(8):
+      fragment = provider.fragment(source, 0, group*32, 16)
+      assert isinstance(fragment, PackedInt8Fragment) and fragment.logical_shape == (1, 256)
+      stores.append(out.index(UOp.const(dtypes.weakint, group*16), dtype=dtypes.char.vec(16)).store(fragment.value))
+    return UOp.sink(*stores, arg=KernelInfo(name="q4_k_typed_s8_fragment"))
+  got = Tensor.empty(128, dtype=dtypes.int8, device="PYTHON").uop_program(words, fxn=kernel)[0].numpy().reshape(8, 16)
+  np.testing.assert_array_equal(got[:, 0], np.array([2, 13, 2, 13, 2, 13, 2, 13], dtype=np.int8))
+  assert np.all(got[::2] == 2) and np.all(got[1::2] == 13)
+
+
+def test_typed_q4_int8_fragment_retains_symbolic_nk_ownership_and_bounds():
+  desc, provider = PackedWeightTransform("Q4_K", 2, 512), Q4KInt8FragmentProvider(PackedWeightTransform("Q4_K", 2, 512))
+  row, base = UOp.range(2, 190), UOp.range(32, 191)*16
+  source = UOp.placeholder((desc.packed_bytes//desc.storage_width,), dtypes.uint32, 192)
+  fragment = provider.fragment(source, row, base, 16)
+  assert fragment.value.dtype == dtypes.char.vec(16)
+  assert row in fragment.value.backward_slice_with_self and base in fragment.value.backward_slice_with_self
+  indexes = [u for u in fragment.value.toposort() if u.op is Ops.INDEX and source in u.backward_slice_with_self]
+  assert indexes and all(u.src[1].vmin >= 0 and u.src[1].vmax < desc.packed_bytes//desc.storage_width for u in indexes)
+
+
+def test_typed_q4_int8_fragment_fails_closed_for_wrong_format_or_interval():
+  with pytest.raises(ValueError, match="Q4_K"):
+    Q4KInt8FragmentProvider(PackedWeightTransform("Q6_K", 1, 256))
+  provider = Q4KInt8FragmentProvider(PackedWeightTransform("Q4_K", 1, 256))
+  with pytest.raises(ValueError, match="width"): provider.fragment(lambda _: UOp.const(dtypes.uint32, 0), 0, 0, 4)  # type: ignore[arg-type]
+  with pytest.raises(IndexError, match="fragment"): provider.fragment(lambda _: UOp.const(dtypes.uint32, 0), 0, 249, 8)
+  with pytest.raises(ValueError, match="K32 metadata boundary"):
+    provider.fragment(lambda _: UOp.const(dtypes.uint32, 0), 0, 24, 16)
+  bad_symbolic_base = UOp.range(8, 193)*32+24
+  with pytest.raises(ValueError, match="K32 metadata boundary"):
+    provider.fragment(lambda _: UOp.const(dtypes.uint32, 0), 0, bad_symbolic_base, 16)
 
 
 def test_addresses_follow_canonical_blocks_and_units():

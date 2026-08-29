@@ -1,0 +1,29 @@
+{
+  "schema": "tinygrad.nv_compiler_q4k_72real_proxy.v1",
+  "shape": {
+    "M": 512,
+    "N": 12288,
+    "K": 4096,
+    "tile_k": 64
+  },
+  "real_weight_buffers": 72,
+  "captured_calls": 72,
+  "identity": "c0d2b181a6de5751180a48cc5c1b1d1c8977770845951d3196a6596877493d28",
+  "sample_replay_exact": true,
+  "sample_distinct_real_weights": true,
+  "sample_finite": true,
+  "timing": {
+    "r_ms": [
+      19.438525,
+      19.457822,
+      19.555425
+    ],
+    "wall_min_ms": 19.438525,
+    "wall_median_ms": 19.457822,
+    "per_call_wall_us": 269.97951388888885,
+    "qualified_v4_in_model_per_call_us": 513.9353193549646,
+    "generated_over_v4": 0.525318077433825
+  },
+  "v4_authority": "proxy_72real_v4_matched.json reverse-order captured graph wall",
+  "passed": true
+}

@@ -1,0 +1,59 @@
+{
+  "schema": "tinygrad.nv_compiler_q4k_k_population_proxy.v1",
+  "shape": {
+    "M": 512,
+    "N": 1024,
+    "K": 4096,
+    "tile": [
+      64,
+      64,
+      64
+    ],
+    "ctas_per_call": 128
+  },
+  "real_weight_buffers": 36,
+  "captured_calls": 36,
+  "identity": "2e38c172f6009f3feb2c6802b2b4617aad4b184c131cdd080e82c4a1937c5744",
+  "correctness": {
+    "sample_replay_exact": true,
+    "sample_distinct_real_weights": true,
+    "sample_finite": true,
+    "record_readonly": true,
+    "weight_samples_readonly": true
+  },
+  "timing": {
+    "serial_samples_ms": [
+      2.719192,
+      2.720344,
+      2.718411,
+      2.724412,
+      2.719763,
+      2.719232,
+      2.717629,
+      2.725143,
+      2.717519
+    ],
+    "serial_wall_min_ms": 2.717519,
+    "serial_wall_median_ms": 2.719232,
+    "independent_graph_samples_ms": [
+      2.663217,
+      2.661113,
+      1.556385,
+      2.54193,
+      1.550433,
+      2.534587,
+      1.550994,
+      1.545334,
+      1.546005
+    ],
+    "independent_graph_min_ms": 1.545334,
+    "independent_graph_median_ms": 1.556385,
+    "independent_graph_is_not_layer_ordered": true,
+    "per_call_wall_us": 75.48663888888888,
+    "retained_fp16_population_ms": 6.3845,
+    "recovery_vs_fp16_ms": 3.6669810000000003,
+    "speedup_vs_fp16": 2.3493855976719944,
+    "fp16_authority": "nv-prefill-complete-lifecycle-ledger.json, profiled K population"
+  },
+  "passed": true
+}

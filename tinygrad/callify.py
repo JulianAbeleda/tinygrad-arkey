@@ -325,6 +325,35 @@ def _declared_after_output_slot_rebind(s:UOp, t:UOp) -> tuple[UOp, UOp]|None:
   return param, t.reshape(param.shape)
 
 
+def _program_after_output_slot_rebind(s:UOp, t:UOp) -> tuple[UOp, UOp]|None:
+  """Rebind an exact PROGRAM-written result to its FUNCTION output slot.
+
+  This is the generic counterpart of the declared LLM epilogue contract.  A
+  direct ``AFTER(base, CALL(PROGRAM, ...))`` proves ownership when ProgramInfo
+  declares exactly one write-only argument backed by ``base``.  Read/write
+  slots fail closed because replacing them with a fresh FUNCTION output would
+  discard their incoming value.
+  """
+  if s.op is not Ops.AFTER or len(s.src) != 2 or s.dtype != t.dtype or s.numel() != t.numel(): return None
+  base, call = s.src
+  if call.op is not Ops.CALL or call.src[0].op is not Ops.PROGRAM or not isinstance(call.src[0].arg, ProgramInfo): return None
+  try: base_buf = base.buf_uop
+  except RuntimeError: return None
+  matches = []
+  for slot in call.src[0].arg.outs:
+    if slot in call.src[0].arg.ins or slot >= len(call.src)-1: continue
+    try:
+      if call.src[slot+1].buf_uop is base_buf: matches.append(slot)
+    except RuntimeError: pass
+  if len(matches) != 1: return None
+  # The base must name only that one argument.  Aliased invocation slots have
+  # a different mutation contract and remain on the conservative copy path.
+  try:
+    if sum(arg.buf_uop is base_buf for arg in call.src[1:]) != 1: return None
+  except RuntimeError: return None
+  return base, t.reshape(base.shape)
+
+
 def _body_output_is_declared_after(srcs:tuple[UOp, ...]) -> bool:
   """Whether one body RESULT bottoms at an epilogue-absorbing declared AFTER.
 
@@ -583,6 +612,150 @@ def callify_typed_semantic_call_inputs(c:UOp) -> UOp|None:
     replacements[arg] = producer
   return c.replace(src=(c.src[0], *(replacements.get(arg, arg) for arg in c.src[1:]))) if replacements else None
 
+def _function_body_invocation_nodes(srcs:tuple[UOp, ...]) -> tuple[UOp, ...]:
+  """One FUNCTION's value graph, excluding nested PARAM namespaces."""
+  seen:set[UOp] = set()
+  stack = list(srcs)
+  while stack:
+    x = stack.pop()
+    if x in seen: continue
+    seen.add(x)
+    # Finalized PROGRAM executables and nested FUNCTION bodies each own a
+    # separate PARAM namespace.  Only their invocation arguments belong to the
+    # FUNCTION currently being transformed; descending into src[0] aliases
+    # equal integer slots across scopes and can incorrectly disqualify every
+    # read-only carrier in a deeply nested model.
+    opaque_program = x.op is Ops.CALL and x.src and x.src[0].op is Ops.PROGRAM
+    nested_function = x.op is Ops.FUNCTION and x.src
+    stack.extend(x.src[1:] if opaque_program or nested_function else x.src)
+  return tuple(seen)
+
+def _readonly_program_input_param_slots(srcs:tuple[UOp, ...], _memo:dict[tuple[UOp, ...], frozenset[int]]|None=None) -> frozenset[int]:
+  """FUNCTION PARAM slots used exclusively as read-only opaque PROGRAM inputs.
+
+  This is deliberately a whole-use proof.  A PARAM which also reaches ordinary
+  tensor math, a writable PROGRAM slot, or an unknown wrapper is not eligible
+  for direct invocation ownership even if one of its uses is read-only.
+  """
+  if _memo is None: _memo = {}
+  if srcs in _memo: return _memo[srcs]
+  # Break malformed/cyclic nesting fail-closed while recursively proving
+  # ordinary forwarding through child FUNCTION invocation ABIs.
+  _memo[srcs] = frozenset()
+  nodes = _function_body_invocation_nodes(srcs)
+  uses:dict[UOp, list[UOp]] = {x: [] for x in nodes}
+  for user in nodes:
+    opaque_program = user.op is Ops.CALL and user.src and user.src[0].op is Ops.PROGRAM
+    nested_function = user.op is Ops.FUNCTION and user.src
+    children = user.src[1:] if opaque_program or nested_function else user.src
+    for child in children:
+      if child in uses: uses[child].append(user)
+
+  # CONTIGUOUS is admitted only as a use-chain spelling here.  The caller-side
+  # ownership proof below still has to establish that the invocation argument
+  # is one full canonical model allocation before that request can be erased.
+  transparent = {Ops.RESHAPE, Ops.BITCAST, Ops.MEMORY_SEMANTIC, Ops.CONTIGUOUS}
+  candidates:dict[int, UOp] = {}
+  for call in nodes:
+    if call.op is Ops.CALL and call.src and call.src[0].op is Ops.PROGRAM and isinstance(call.src[0].arg, ProgramInfo):
+      info = call.src[0].arg
+      input_idxs = tuple(idx for idx in info.ins if idx not in info.outs and idx < len(call.src)-1)
+    elif call.op is Ops.FUNCTION and call.src and call.src[0].op is Ops.TUPLE:
+      input_idxs = tuple(idx for idx in _readonly_program_input_param_slots(call.src[0].src, _memo) if idx < len(call.src)-1)
+    else: continue
+    for idx in input_idxs:
+      arg, expected_bytes = call.src[idx+1], call.src[idx+1].numel() * call.src[idx+1].dtype.itemsize
+      while arg.op in transparent and len(arg.src) == 1:
+        source = arg.src[0]
+        if source.numel() * source.dtype.itemsize != expected_bytes: break
+        arg = source
+      if arg.op is Ops.PARAM and isinstance(arg.arg, ParamArg): candidates[arg.arg.slot] = arg
+
+  admitted:set[int] = set()
+  for slot, param in candidates.items():
+    stack, visited, valid, program_reads = [param], set(), True, 0
+    while stack and valid:
+      value = stack.pop()
+      if value in visited: continue
+      visited.add(value)
+      for user in uses.get(value, ()):
+        if user.op in transparent and len(user.src) == 1 and \
+           user.numel() * user.dtype.itemsize == value.numel() * value.dtype.itemsize:
+          stack.append(user)
+          continue
+        if user.op is Ops.CALL and user.src and user.src[0].op is Ops.PROGRAM and isinstance(user.src[0].arg, ProgramInfo):
+          info = user.src[0].arg
+          positions = tuple(i for i,arg in enumerate(user.src[1:]) if arg is value)
+          if positions and all(i in info.ins and i not in info.outs for i in positions):
+            program_reads += len(positions)
+            continue
+        if user.op is Ops.FUNCTION and user.src and user.src[0].op is Ops.TUPLE:
+          positions = tuple(i for i,arg in enumerate(user.src[1:]) if arg is value)
+          nested_readonly = _readonly_program_input_param_slots(user.src[0].src, _memo)
+          if positions and all(i in nested_readonly for i in positions):
+            program_reads += len(positions)
+            continue
+        valid = False
+        break
+    if valid and program_reads: admitted.add(slot)
+  _memo[srcs] = frozenset(admitted)
+  return _memo[srcs]
+
+def _writable_function_param_slots(srcs:tuple[UOp, ...], _memo:dict[tuple[UOp, ...], frozenset[int]]|None=None) -> frozenset[int]:
+  """PARAM slots which may be written in this FUNCTION or a nested callee."""
+  if _memo is None: _memo = {}
+  if srcs in _memo: return _memo[srcs]
+  _memo[srcs] = frozenset()
+  nodes = _function_body_invocation_nodes(srcs)
+  writable:set[int] = set()
+  transparent = {Ops.RESHAPE, Ops.BITCAST, Ops.MEMORY_SEMANTIC, Ops.CONTIGUOUS}
+  def param_slot(value:UOp) -> int|None:
+    while value.op in transparent and len(value.src) == 1: value = value.src[0]
+    return value.arg.slot if value.op is Ops.PARAM and isinstance(value.arg, ParamArg) else None
+  for user in nodes:
+    if user.op is Ops.CALL and user.src and user.src[0].op is Ops.PROGRAM and isinstance(user.src[0].arg, ProgramInfo):
+      for idx in user.src[0].arg.outs:
+        if idx < len(user.src)-1 and (slot := param_slot(user.src[idx+1])) is not None: writable.add(slot)
+    elif user.op is Ops.FUNCTION and user.src and user.src[0].op is Ops.TUPLE:
+      for idx in _writable_function_param_slots(user.src[0].src, _memo):
+        if idx < len(user.src)-1 and (slot := param_slot(user.src[idx+1])) is not None: writable.add(slot)
+    elif user.op is Ops.STORE and user.src:
+      # STORE destinations may carry INDEX/view nodes rather than a direct
+      # PARAM. Any enclosing PARAM in that destination address is writable.
+      for value in user.src[0].toposort():
+        if value.op is Ops.PARAM and isinstance(value.arg, ParamArg): writable.add(value.arg.slot)
+  _memo[srcs] = frozenset(writable)
+  return _memo[srcs]
+
+def _exact_readonly_model_parameter_carrier(x:UOp) -> bool:
+  """Whether x names one complete canonical model-parameter allocation.
+
+  Only zero-offset, byte-preserving wrappers are transparent.  Partial slices,
+  computed values, materializations and dependency-bearing values all retain
+  the conservative copy boundary.
+  """
+  owner = memory_semantic_owner(x)
+  if owner is None or owner.semantic_class is not MemorySemanticClass.MODEL_PARAMETER: return False
+  original_bytes = x.numel() * x.dtype.itemsize
+  cur = x
+  while cur.op in {Ops.MEMORY_SEMANTIC, Ops.RESHAPE, Ops.BITCAST} and len(cur.src) == 1:
+    source = cur.src[0]
+    if source.numel() * source.dtype.itemsize != original_bytes: return False
+    cur = source
+  if cur.op is Ops.SLICE:
+    if len(cur.src) != 2 or cur.src[0].op is not Ops.BUFFER or cur.src[1].op is not Ops.CONST or cur.src[1].arg != 0: return False
+    cur = cur.src[0]
+  if cur.op is not Ops.BUFFER or cur.numel() * cur.dtype.itemsize != original_bytes: return False
+  try: return x.buf_uop is cur
+  except RuntimeError: return False
+
+def _direct_readonly_model_parameter_carrier(x:UOp) -> UOp|None:
+  """Remove only redundant CONTIGUOUS requests around an exact carrier."""
+  direct = x
+  while direct.op is Ops.CONTIGUOUS and len(direct.src) == 1 and direct.dtype == x.dtype and direct.numel() == x.numel():
+    direct = direct.src[0]
+  return direct if _exact_readonly_model_parameter_carrier(direct) else None
+
 def transform_precompiled_call(c:UOp) -> UOp|None:
   if not c.arg.precompile: return None
   assert c.src[0].op is Ops.TUPLE, f"expected TUPLE body for precompiled FUNCTION, got {c.src[0].op}"
@@ -604,13 +777,17 @@ def transform_precompiled_call(c:UOp) -> UOp|None:
     _body_output_is_declared_after(c.src[0].src) or
     bool(out_active and id(c) in out_active))
   native_output_idxs={idx for fid,idx in _ACTIVE_NATIVE_INPUT_OUTPUTS.value if fid==id(c)}
+  writable_inputs = _writable_function_param_slots(c.src[0].src)
   # An exact prior precompiled output already has a fresh contiguous output
   # allocation.  Retain its invocation spelling so the nested producer can
   # become AFTER(output, CALL); adding another transport CONTIGUOUS here would
   # create the first of two identity copies at a consumer FUNCTION boundary.
+  direct_model_inputs = {i:direct for i,x in enumerate(c.src[1:])
+                         if i not in writable_inputs and (direct := _direct_readonly_model_parameter_carrier(x)) is not None}
   input_buffers = tuple(_direct_owned_precompiled_input_view(x) if
                         out_route and _exact_precompiled_output_argument(x)
-                        else x if x.op in {Ops.AFTER, Ops.BIND} else x.contiguous() for x in c.src[1:])
+                        else direct_model_inputs[i] if i in direct_model_inputs
+                        else x if x.op in {Ops.AFTER, Ops.BIND} else x.contiguous() for i,x in enumerate(c.src[1:]))
 
   # add the outputs to the call
   # Qualify against the original invocation arguments. input_buffers may add
@@ -624,7 +801,14 @@ def transform_precompiled_call(c:UOp) -> UOp|None:
 
   subs:dict[UOp, UOp] = {}
   items:list[UOp] = []
+  program_output_idxs:set[int] = set()
   for output_idx,(s, t) in enumerate(zip(srcs, targets)):
+    original_s = s
+    if (program_rebind := _program_after_output_slot_rebind(original_s, t)) is not None:
+      subs[program_rebind[0]] = program_rebind[1]
+      items.append(original_s)
+      program_output_idxs.add(output_idx)
+      continue
     after_deps:list[UOp] = []
     while s.op is Ops.AFTER:
       after_deps.extend(s.src[1:])
@@ -644,7 +828,7 @@ def transform_precompiled_call(c:UOp) -> UOp|None:
   _trace_reduce_output_markers(fxn.src, "after_callify")
 
   # body switches from TUPLE to SINK, so the node becomes an opaque CALL (not FUNCTION)
-  output_slots = tuple(len(input_buffers)+i for i in range(len(outs)) if ro_route or i in native_output_idxs)
+  output_slots = tuple(len(input_buffers)+i for i in range(len(outs)) if ro_route or i in native_output_idxs or i in program_output_idxs)
   new_call = UOp(Ops.CALL, c.dtype, (fxn, *input_buffers, *outs), replace(c.arg, precompiled_output_slots=output_slots))
   rets = tuple(o.after(new_call) for o in outs)
   # Output ownership is invocation side data. Keep the executable result as a
@@ -658,6 +842,40 @@ def transform_precompiled_call(c:UOp) -> UOp|None:
   rets = tuple(r.shrink_to(rs.shape) for r,rs in zip(rets, resolved))
 
   return UOp.maketuple(*rets)
+
+def _resolve_precompiled_gettuple(g:UOp, t:UOp) -> UOp:
+  """Resolve GETTUPLE without dropping a proven output's allocation tag.
+
+  Callification numbers requested Tensor results on GETTUPLE.  Replacing the
+  nested FUNCTION with a TUPLE normally discards that wrapper and therefore
+  its tag.  Retain it only when the selected value is the exact invocation
+  output whose slot was established from the nested PROGRAM's declared
+  write-only ``ProgramInfo.outs`` contract.  Ordinary tuple values keep the
+  legacy untagged resolution.
+  """
+  selected = t.src[g.arg]
+  if g.tag is None: return selected
+  # Special PROGRAM results carry the immutable output-slot declaration made
+  # above.  An ordinary enclosing FUNCTION may then forward that result via
+  # its explicit fallback STORE; validate that exact write while the SINK body
+  # is still visible.  This is what makes nested outer(inner(v)) retain the
+  # requested Tensor identity without declaring unrelated tuple values owned.
+  proven = _exact_precompiled_output_argument(selected)
+  if not proven:
+    original, cur = selected, selected
+    while cur.op is Ops.RESHAPE and len(cur.src) == 1 and cur.src[0].numel() == original.numel(): cur = cur.src[0]
+    if cur.op is Ops.AFTER and len(cur.src) == 2 and cur.src[1].op is Ops.CALL and cur.src[1].arg.precompile and cur.src[1].src[0].op is Ops.SINK:
+      base, call = cur.src
+      try:
+        matches = [slot for slot,arg in enumerate(call.src[1:]) if arg.buf_uop is base.buf_uop]
+      except RuntimeError: matches = []
+      if len(matches) == 1:
+        slot = matches[0]
+        proven = any(store.op is Ops.STORE and _candidate_param_slot(store.src[0]) == slot and
+                     store.src[0].dtype == original.dtype and store.src[0].numel() == original.numel()
+                     for store in call.src[0].toposort())
+  if not proven: return selected
+  return selected.replace(tag=(selected.tag or ())+g.tag)
 
 def collapse_owned_precompiled_output_contiguous(c:UOp) -> UOp|None:
   """Remove one caller materialization around an exact precompiled output.
@@ -697,7 +915,7 @@ pm_early_transform_tensor_graph = PatternMatcher([
   (UPat(Ops.FUNCTION, name="c"), transform_precompiled_call),
 
   # resolve TUPLE+GETTUPLE (for precompiled calls)
-  (UPat(Ops.GETTUPLE, src=(UPat(Ops.TUPLE, name="t"),), name="g"), lambda g,t: t.src[g.arg]),
+  (UPat(Ops.GETTUPLE, src=(UPat(Ops.TUPLE, name="t"),), name="g"), _resolve_precompiled_gettuple),
 
   # Exact owned caller view of a precompiled invocation output. This runs only
   # after FUNCTION->CALL exposes the concrete output buffer and dependency.
@@ -736,7 +954,7 @@ pm_typed_semantic_call_input = PatternMatcher([
 # bottom-up early pass reaches their CONTIGUOUS children.
 pm_precompile_function_boundary = PatternMatcher([
   (UPat(Ops.FUNCTION, name="c"), transform_precompiled_call),
-  (UPat(Ops.GETTUPLE, src=(UPat(Ops.TUPLE, name="t"),), name="g"), lambda g,t: t.src[g.arg]),
+  (UPat(Ops.GETTUPLE, src=(UPat(Ops.TUPLE, name="t"),), name="g"), _resolve_precompiled_gettuple),
 ])
 
 def finalize_after(ctx:AllocCtx, x:UOp):

@@ -1,0 +1,552 @@
+{
+  "schema": "tinygrad.nv_compiler_q4k_k_role_gate.v1",
+  "shape": {
+    "M": 512,
+    "N": 1024,
+    "K": 4096
+  },
+  "fixture": {
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "weight": "blk.0.attn_k.weight",
+    "format": "Q4_K"
+  },
+  "static_oracle": {
+    "topology": "32 CTAs, correctness-only, performance claim rejected",
+    "timing": {
+      "samples_us": [
+        435.072,
+        430.592,
+        430.656,
+        430.432,
+        430.176,
+        430.208,
+        430.528,
+        430.464,
+        430.016
+      ],
+      "first_us": 435.072,
+      "min_us": 430.016,
+      "median_us": 430.464,
+      "max_us": 435.072
+    }
+  },
+  "readonly": {
+    "words": true,
+    "record": true
+  },
+  "arms": {
+    "underfilled_128x128": {
+      "geometry": {
+        "tile": [
+          128,
+          128,
+          64
+        ],
+        "waves": [
+          2,
+          4
+        ],
+        "threads": 256,
+        "global_size": [
+          8,
+          4,
+          1
+        ],
+        "local_size": [
+          32,
+          2,
+          4
+        ],
+        "ctas": 32
+      },
+      "identity": "ec64ef1d1256048f8a5fba5cd6c61463ae345cff5576f2cd0999c1152e798e86",
+      "compiler": {
+        "programs": 1,
+        "ordinary_matmul": true,
+        "expanded_global_weight_allocation": false,
+        "candidate_identity_exact": true,
+        "source": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/strict-hot-artifacts/underfilled_128x128.cu",
+        "signed_imma_ptx": true,
+        "sass": {
+          "cubin": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/strict-hot-artifacts/underfilled_128x128.cubin",
+          "sass": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/strict-hot-artifacts/underfilled_128x128.sass",
+          "cuobjdump_returncode": 0,
+          "imma_16832_s8": 32,
+          "bar_sync": 2,
+          "ldsm": 0,
+          "local_load": 0,
+          "local_store": 0
+        }
+      },
+      "correctness": {
+        "finite": true,
+        "unwritten_sentinels": 0,
+        "nonzero": 524288,
+        "max_abs": 0.00030517578125,
+        "mean_abs": 1.043652264343109e-05,
+        "allclose_rtol2e5_atol2e3": true,
+        "tensor_path_matches_direct": true
+      },
+      "timing": {
+        "samples_us": [
+          115.872,
+          115.584,
+          115.68,
+          115.232,
+          115.616,
+          115.456,
+          115.36,
+          115.232,
+          115.744
+        ],
+        "first_us": 115.872,
+        "min_us": 115.232,
+        "median_us": 115.584,
+        "max_us": 115.872
+      },
+      "occupancy_safe": false,
+      "production_claim_admissible": false,
+      "passed": false
+    },
+    "underfilled_64x64_2warp": {
+      "geometry": {
+        "tile": [
+          64,
+          64,
+          64
+        ],
+        "waves": [
+          1,
+          2
+        ],
+        "threads": 64,
+        "global_size": [
+          16,
+          8,
+          1
+        ],
+        "local_size": [
+          32,
+          2,
+          1
+        ],
+        "ctas": 128
+      },
+      "identity": "433a3a55f0502e0ecba8b46265d40fccc3126ddc5feaee4206426331359c4376",
+      "compiler": {
+        "programs": 1,
+        "ordinary_matmul": true,
+        "expanded_global_weight_allocation": false,
+        "candidate_identity_exact": true,
+        "source": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/strict-hot-artifacts/underfilled_64x64_2warp.cu",
+        "signed_imma_ptx": true,
+        "sass": {
+          "cubin": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/strict-hot-artifacts/underfilled_64x64_2warp.cubin",
+          "sass": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/strict-hot-artifacts/underfilled_64x64_2warp.sass",
+          "cuobjdump_returncode": 0,
+          "imma_16832_s8": 32,
+          "bar_sync": 2,
+          "ldsm": 0,
+          "local_load": 0,
+          "local_store": 0
+        }
+      },
+      "correctness": {
+        "finite": true,
+        "unwritten_sentinels": 0,
+        "nonzero": 524288,
+        "max_abs": 0.00030517578125,
+        "mean_abs": 1.043652264343109e-05,
+        "allclose_rtol2e5_atol2e3": true,
+        "tensor_path_matches_direct": true
+      },
+      "timing": {
+        "samples_us": [
+          73.6,
+          73.184,
+          73.12,
+          73.12,
+          73.024,
+          73.12,
+          73.12,
+          73.344,
+          73.152
+        ],
+        "first_us": 73.6,
+        "min_us": 73.024,
+        "median_us": 73.12,
+        "max_us": 73.6
+      },
+      "occupancy_safe": false,
+      "production_claim_admissible": false,
+      "passed": false
+    },
+    "underfilled_64x64_4warp": {
+      "geometry": {
+        "tile": [
+          64,
+          64,
+          64
+        ],
+        "waves": [
+          2,
+          2
+        ],
+        "threads": 128,
+        "global_size": [
+          16,
+          8,
+          1
+        ],
+        "local_size": [
+          32,
+          2,
+          2
+        ],
+        "ctas": 128
+      },
+      "identity": "2e38c172f6009f3feb2c6802b2b4617aad4b184c131cdd080e82c4a1937c5744",
+      "compiler": {
+        "programs": 1,
+        "ordinary_matmul": true,
+        "expanded_global_weight_allocation": false,
+        "candidate_identity_exact": true,
+        "source": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/strict-hot-artifacts/underfilled_64x64_4warp.cu",
+        "signed_imma_ptx": true,
+        "sass": {
+          "cubin": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/strict-hot-artifacts/underfilled_64x64_4warp.cubin",
+          "sass": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/strict-hot-artifacts/underfilled_64x64_4warp.sass",
+          "cuobjdump_returncode": 0,
+          "imma_16832_s8": 16,
+          "bar_sync": 2,
+          "ldsm": 0,
+          "local_load": 0,
+          "local_store": 0
+        }
+      },
+      "correctness": {
+        "finite": true,
+        "unwritten_sentinels": 0,
+        "nonzero": 524288,
+        "max_abs": 0.00030517578125,
+        "mean_abs": 1.043652264343109e-05,
+        "allclose_rtol2e5_atol2e3": true,
+        "tensor_path_matches_direct": true
+      },
+      "timing": {
+        "samples_us": [
+          61.536,
+          61.40800000000001,
+          61.312,
+          61.40800000000001,
+          61.471999999999994,
+          61.376000000000005,
+          61.279999999999994,
+          61.21600000000001,
+          61.21600000000001
+        ],
+        "first_us": 61.536,
+        "min_us": 61.21600000000001,
+        "median_us": 61.376000000000005,
+        "max_us": 61.536
+      },
+      "occupancy_safe": false,
+      "production_claim_admissible": false,
+      "passed": false
+    },
+    "safe_32x64_2warp": {
+      "geometry": {
+        "tile": [
+          32,
+          64,
+          64
+        ],
+        "waves": [
+          1,
+          2
+        ],
+        "threads": 64,
+        "global_size": [
+          16,
+          16,
+          1
+        ],
+        "local_size": [
+          32,
+          2,
+          1
+        ],
+        "ctas": 256
+      },
+      "identity": "2001816efba9e7357629c02c5df52b9f75ee0b98c40f68b55a8ee6851bdfdc76",
+      "compiler": {
+        "programs": 1,
+        "ordinary_matmul": true,
+        "expanded_global_weight_allocation": false,
+        "candidate_identity_exact": true,
+        "source": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/strict-hot-artifacts/safe_32x64_2warp.cu",
+        "signed_imma_ptx": true,
+        "sass": {
+          "cubin": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/strict-hot-artifacts/safe_32x64_2warp.cubin",
+          "sass": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/strict-hot-artifacts/safe_32x64_2warp.sass",
+          "cuobjdump_returncode": 0,
+          "imma_16832_s8": 16,
+          "bar_sync": 2,
+          "ldsm": 0,
+          "local_load": 0,
+          "local_store": 0
+        }
+      },
+      "correctness": {
+        "finite": true,
+        "unwritten_sentinels": 0,
+        "nonzero": 524288,
+        "max_abs": 0.00030517578125,
+        "mean_abs": 1.043652264343109e-05,
+        "allclose_rtol2e5_atol2e3": true,
+        "tensor_path_matches_direct": true
+      },
+      "timing": {
+        "samples_us": [
+          80.32,
+          74.144,
+          74.144,
+          74.24,
+          73.952,
+          74.272,
+          73.888,
+          74.016,
+          73.984
+        ],
+        "first_us": 80.32,
+        "min_us": 73.888,
+        "median_us": 74.144,
+        "max_us": 80.32
+      },
+      "occupancy_safe": true,
+      "production_claim_admissible": true,
+      "passed": true
+    },
+    "safe_64x32_2warp": {
+      "geometry": {
+        "tile": [
+          64,
+          32,
+          64
+        ],
+        "waves": [
+          2,
+          1
+        ],
+        "threads": 64,
+        "global_size": [
+          32,
+          8,
+          1
+        ],
+        "local_size": [
+          32,
+          2,
+          1
+        ],
+        "ctas": 256
+      },
+      "identity": "6151b8f94b1e1ffc3581cb68a36c84cd5836c6cdad7684e13615381a80664093",
+      "compiler": {
+        "programs": 1,
+        "ordinary_matmul": true,
+        "expanded_global_weight_allocation": false,
+        "candidate_identity_exact": true,
+        "source": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/strict-hot-artifacts/safe_64x32_2warp.cu",
+        "signed_imma_ptx": true,
+        "sass": {
+          "cubin": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/strict-hot-artifacts/safe_64x32_2warp.cubin",
+          "sass": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/strict-hot-artifacts/safe_64x32_2warp.sass",
+          "cuobjdump_returncode": 0,
+          "imma_16832_s8": 16,
+          "bar_sync": 2,
+          "ldsm": 0,
+          "local_load": 0,
+          "local_store": 0
+        }
+      },
+      "correctness": {
+        "finite": true,
+        "unwritten_sentinels": 0,
+        "nonzero": 524288,
+        "max_abs": 0.00030517578125,
+        "mean_abs": 1.043652264343109e-05,
+        "allclose_rtol2e5_atol2e3": true,
+        "tensor_path_matches_direct": true
+      },
+      "timing": {
+        "samples_us": [
+          64.896,
+          64.704,
+          64.992,
+          65.024,
+          64.768,
+          64.96,
+          65.088,
+          65.12,
+          64.864
+        ],
+        "first_us": 64.896,
+        "min_us": 64.704,
+        "median_us": 64.96,
+        "max_us": 65.12
+      },
+      "occupancy_safe": true,
+      "production_claim_admissible": true,
+      "passed": true
+    },
+    "safe_64x32_4warp": {
+      "geometry": {
+        "tile": [
+          64,
+          32,
+          64
+        ],
+        "waves": [
+          2,
+          2
+        ],
+        "threads": 128,
+        "global_size": [
+          32,
+          8,
+          1
+        ],
+        "local_size": [
+          32,
+          2,
+          2
+        ],
+        "ctas": 256
+      },
+      "identity": "50c7576b59193b8ecedf58701515f45e288ce8dde993db3a492badebbead057e",
+      "compiler": {
+        "programs": 1,
+        "ordinary_matmul": true,
+        "expanded_global_weight_allocation": false,
+        "candidate_identity_exact": true,
+        "source": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/strict-hot-artifacts/safe_64x32_4warp.cu",
+        "signed_imma_ptx": true,
+        "sass": {
+          "cubin": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/strict-hot-artifacts/safe_64x32_4warp.cubin",
+          "sass": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/strict-hot-artifacts/safe_64x32_4warp.sass",
+          "cuobjdump_returncode": 0,
+          "imma_16832_s8": 8,
+          "bar_sync": 2,
+          "ldsm": 0,
+          "local_load": 0,
+          "local_store": 0
+        }
+      },
+      "correctness": {
+        "finite": true,
+        "unwritten_sentinels": 0,
+        "nonzero": 524288,
+        "max_abs": 0.00030517578125,
+        "mean_abs": 1.043652264343109e-05,
+        "allclose_rtol2e5_atol2e3": true,
+        "tensor_path_matches_direct": true
+      },
+      "timing": {
+        "samples_us": [
+          59.744,
+          59.36,
+          59.232,
+          58.944,
+          59.072,
+          59.264,
+          59.264,
+          59.136,
+          59.008
+        ],
+        "first_us": 59.744,
+        "min_us": 58.944,
+        "median_us": 59.232,
+        "max_us": 59.744
+      },
+      "occupancy_safe": true,
+      "production_claim_admissible": true,
+      "passed": true
+    },
+    "safe_32x32_1warp": {
+      "geometry": {
+        "tile": [
+          32,
+          32,
+          64
+        ],
+        "waves": [
+          1,
+          1
+        ],
+        "threads": 32,
+        "global_size": [
+          32,
+          16,
+          1
+        ],
+        "local_size": [
+          32,
+          1,
+          1
+        ],
+        "ctas": 512
+      },
+      "identity": "7739f2fa7ed81851bf374f7ec14472f660a49b1ea88af69c863c8cf4cb96caf9",
+      "compiler": {
+        "programs": 1,
+        "ordinary_matmul": true,
+        "expanded_global_weight_allocation": false,
+        "candidate_identity_exact": true,
+        "source": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/strict-hot-artifacts/safe_32x32_1warp.cu",
+        "signed_imma_ptx": true,
+        "sass": {
+          "cubin": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/strict-hot-artifacts/safe_32x32_1warp.cubin",
+          "sass": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/strict-hot-artifacts/safe_32x32_1warp.sass",
+          "cuobjdump_returncode": 0,
+          "imma_16832_s8": 16,
+          "bar_sync": 2,
+          "ldsm": 0,
+          "local_load": 0,
+          "local_store": 0
+        }
+      },
+      "correctness": {
+        "finite": true,
+        "unwritten_sentinels": 0,
+        "nonzero": 524288,
+        "max_abs": 0.00030517578125,
+        "mean_abs": 1.043652264343109e-05,
+        "allclose_rtol2e5_atol2e3": true,
+        "tensor_path_matches_direct": true
+      },
+      "timing": {
+        "samples_us": [
+          73.12,
+          71.68,
+          72.288,
+          72.672,
+          73.024,
+          72.224,
+          72.16,
+          72.64,
+          71.104
+        ],
+        "first_us": 73.12,
+        "min_us": 71.104,
+        "median_us": 72.288,
+        "max_us": 73.12
+      },
+      "occupancy_safe": true,
+      "production_claim_admissible": true,
+      "passed": true
+    }
+  },
+  "winner": "safe_64x32_4warp",
+  "passed": true
+}

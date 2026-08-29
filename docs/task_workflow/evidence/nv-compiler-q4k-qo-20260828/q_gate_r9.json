@@ -1,0 +1,76 @@
+{
+  "schema": "tinygrad.nv_compiler_q4k_qo_gate.v1",
+  "role": "q",
+  "shape": {
+    "M": 512,
+    "N": 4096,
+    "K": 4096,
+    "tile_k": 64
+  },
+  "fixture": {
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "weight": "blk.0.attn_q.weight"
+  },
+  "identity": "fc3b6e588b4dc162749e50ef060e3e2312f8560463e8a7219bcc99cc7fb0627a",
+  "correctness": {
+    "finite": true,
+    "reference_finite": true,
+    "unwritten_sentinels": 0,
+    "nonzero": 2097152,
+    "max_abs": 0.00048828125,
+    "mean_abs": 9.134983883996028e-06,
+    "allclose_rtol2e5_atol2e3": true
+  },
+  "readonly": {
+    "words": true,
+    "record": true
+  },
+  "compiler": {
+    "ordinary_matmul": true,
+    "expanded_global_weight_allocation": false,
+    "programs": 1,
+    "signed_imma": true,
+    "candidate_identity_exact": true,
+    "source": "docs/task_workflow/evidence/nv-compiler-q4k-qo-20260828/q_gate_r9.cu",
+    "sass": {
+      "path": "docs/task_workflow/evidence/nv-compiler-q4k-qo-20260828/q_gate_r9.sass",
+      "imma": 32,
+      "bar": 2,
+      "ldsm": 0,
+      "local_load": 0,
+      "local_store": 0
+    }
+  },
+  "geometry": {
+    "grid": [
+      32,
+      4,
+      1
+    ],
+    "block": [
+      256,
+      1,
+      1
+    ],
+    "shared_bytes": 21504
+  },
+  "timing": {
+    "r9_hot_us": [
+      247.004,
+      242.456,
+      248.477,
+      238.639,
+      235.473,
+      235.643,
+      241.184,
+      232.357,
+      233.85
+    ],
+    "min_us": 232.357,
+    "median_us": 238.639,
+    "static_oracle_min_us": 432.608,
+    "static_oracle_median_us": 432.96
+  },
+  "passed_correctness": true,
+  "passed": true
+}

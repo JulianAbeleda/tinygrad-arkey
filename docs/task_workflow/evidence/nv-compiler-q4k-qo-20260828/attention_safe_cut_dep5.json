@@ -1,0 +1,2201 @@
+{
+  "schema": "tinygrad.nv_multi_queue_cut_policy.v1",
+  "graphs": [
+    {
+      "prefix_count": 32,
+      "prefix_name_digest": "2ef3b2046ece983b7fe53610fe59a5c30d29265a63bb075cbbabe7c1fe9b58e9",
+      "selected": [
+        {
+          "index": 3,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 6,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 8,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 10,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 11,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 12,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 13,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 15,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 17,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 19,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 21,
+          "identity": "E_1024_8_16_4"
+        }
+      ],
+      "diagnostic": {
+        "default_aux": 11,
+        "attention_direct_inputs_pinned": 1,
+        "pin_dep_positions": [
+          5
+        ],
+        "selected_aux": 11
+      }
+    },
+    {
+      "prefix_count": 64,
+      "prefix_name_digest": "75a07a67ad5414b5ed8c63f3d40fc26a767ec7b105fdabef5742a25c93c4f6f0",
+      "selected": [
+        {
+          "index": 1,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 9,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 12,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 14,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 16,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 17,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 18,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 19,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 20,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 21,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 22,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 23,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 25,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 27,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 39,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 47,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 50,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 52,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 54,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 55,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 56,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 57,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 58,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 59,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 60,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 61,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 63,
+          "identity": "E_32_16_2_8_16_4_4"
+        }
+      ],
+      "diagnostic": {
+        "default_aux": 27,
+        "attention_direct_inputs_pinned": 1,
+        "pin_dep_positions": [
+          5
+        ],
+        "selected_aux": 27
+      }
+    },
+    {
+      "prefix_count": 128,
+      "prefix_name_digest": "b1811c0d2bbce532327873b67551b001700b6059ddb41e60230afb6d2f5487bf",
+      "selected": [
+        {
+          "index": 1,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 13,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 21,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 24,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 26,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 28,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 29,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 30,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 31,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 32,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 33,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 34,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 35,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 37,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 39,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 40,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 51,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 59,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 62,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 64,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 66,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 67,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 68,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 69,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 70,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 71,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 72,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 73,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 75,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 77,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 78,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 89,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 97,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 100,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 102,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 104,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 105,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 106,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 107,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 108,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 109,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 110,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 111,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 113,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 115,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 116,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 127,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        }
+      ],
+      "diagnostic": {
+        "default_aux": 47,
+        "attention_direct_inputs_pinned": 3,
+        "pin_dep_positions": [
+          5
+        ],
+        "selected_aux": 47
+      }
+    },
+    {
+      "prefix_count": 256,
+      "prefix_name_digest": "208cd60c851c90d40e6be0d2cad38c37b39ce45dc2661b3f412c6f449d373112",
+      "selected": [
+        {
+          "index": 7,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 10,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 12,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 14,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 15,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 16,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 17,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 18,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 19,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 20,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 21,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 23,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 25,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 37,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 45,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 48,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 50,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 52,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 53,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 54,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 55,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 56,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 57,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 58,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 59,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 61,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 63,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 64,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 75,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 83,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 86,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 88,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 90,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 91,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 92,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 93,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 94,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 95,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 96,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 97,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 99,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 101,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 102,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 113,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 121,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 124,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 126,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 128,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 129,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 130,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 131,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 132,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 133,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 134,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 135,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 137,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 139,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 140,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 151,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 159,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 162,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 164,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 166,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 167,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 168,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 169,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 170,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 171,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 172,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 173,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 175,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 177,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 178,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 189,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 197,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 200,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 202,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 204,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 205,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 206,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 207,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 208,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 209,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 210,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 211,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 213,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 215,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 216,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 227,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 235,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 238,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 240,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 242,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 243,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 244,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 245,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 246,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 247,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 248,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 249,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 251,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 253,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 254,
+          "identity": "E_2048_4_8_16_2"
+        }
+      ],
+      "diagnostic": {
+        "default_aux": 103,
+        "attention_direct_inputs_pinned": 7,
+        "pin_dep_positions": [
+          5
+        ],
+        "selected_aux": 103
+      }
+    },
+    {
+      "prefix_count": 512,
+      "prefix_name_digest": "6e8cc5a376d90d7e51c4147a5b15d7f31691d1ea93e367f555c132309fdca6ab",
+      "selected": [
+        {
+          "index": 9,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 17,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 20,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 22,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 24,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 25,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 26,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 27,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 28,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 29,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 30,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 31,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 33,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 35,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 36,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 47,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 55,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 58,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 60,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 62,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 63,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 64,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 65,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 66,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 67,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 68,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 69,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 71,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 73,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 74,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 85,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 93,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 96,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 98,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 100,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 101,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 102,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 103,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 104,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 105,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 106,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 107,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 109,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 111,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 112,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 123,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 131,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 134,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 136,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 138,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 139,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 140,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 141,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 142,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 143,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 144,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 145,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 147,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 149,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 150,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 161,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 169,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 172,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 174,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 176,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 177,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 178,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 179,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 180,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 181,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 182,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 183,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 185,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 187,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 188,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 199,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 207,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 210,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 212,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 214,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 215,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 216,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 217,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 218,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 219,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 220,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 221,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 223,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 225,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 226,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 237,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 245,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 248,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 250,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 252,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 253,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 254,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 255,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 256,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 257,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 258,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 259,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 261,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 263,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 264,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 275,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 283,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 286,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 288,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 290,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 291,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 292,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 293,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 294,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 295,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 296,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 297,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 299,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 301,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 302,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 313,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 321,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 324,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 326,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 328,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 329,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 330,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 331,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 332,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 333,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 334,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 335,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 337,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 339,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 340,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 351,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 359,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 362,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 364,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 366,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 367,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 368,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 369,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 370,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 371,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 372,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 373,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 375,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 377,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 378,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 389,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 397,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 400,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 402,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 404,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 405,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 406,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 407,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 408,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 409,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 410,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 411,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 413,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 415,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 416,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 427,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 435,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 438,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 440,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 442,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 443,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 444,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 445,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 446,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 447,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 448,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 449,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 451,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 453,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 454,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 465,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 473,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 476,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 478,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 480,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 481,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 482,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 483,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 484,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 485,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 486,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 487,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 489,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 491,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 492,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 503,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 511,
+          "identity": "E_64_64_8_16_4"
+        }
+      ],
+      "diagnostic": {
+        "default_aux": 197,
+        "attention_direct_inputs_pinned": 13,
+        "pin_dep_positions": [
+          5
+        ],
+        "selected_aux": 197
+      }
+    },
+    {
+      "prefix_count": 385,
+      "prefix_name_digest": "d057590124c0cbf0d8c48a9c94c3383c772a7c022e0b349d6e2870133ab46d4f",
+      "selected": [
+        {
+          "index": 2,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 4,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 6,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 7,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 9,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 11,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 13,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 15,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 17,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 29,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 37,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 40,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 42,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 44,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 45,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 46,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 47,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 48,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 49,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 50,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 51,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 53,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 55,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 56,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 67,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 75,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 78,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 80,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 82,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 83,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 84,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 85,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 86,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 87,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 88,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 89,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 91,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 93,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 94,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 105,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 113,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 116,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 118,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 120,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 121,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 122,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 123,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 124,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 125,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 126,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 127,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 129,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 131,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 132,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 143,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 151,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 154,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 156,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 158,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 159,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 160,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 161,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 162,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 163,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 164,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 165,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 167,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 169,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 170,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 181,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 189,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 192,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 194,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 196,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 197,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 198,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 199,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 200,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 201,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 202,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 203,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 205,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 207,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 208,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 219,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 227,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 230,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 232,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 234,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 235,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 236,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 237,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 238,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 239,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 240,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 241,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 243,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 245,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 246,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 257,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 265,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 268,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 270,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 272,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 273,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 274,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 275,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 276,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 277,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 278,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 279,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 281,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 283,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 284,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 295,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 303,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 306,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 308,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 310,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 311,
+          "identity": "q8_compact_record_fp16"
+        },
+        {
+          "index": 312,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 313,
+          "identity": "r_4_32_32_2_4_2_2_4_4_64_2_2_2"
+        },
+        {
+          "index": 314,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 315,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 316,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 317,
+          "identity": "r_2_512_8_4_4_16"
+        },
+        {
+          "index": 319,
+          "identity": "E_32_16_2_8_16_4_4"
+        },
+        {
+          "index": 321,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 322,
+          "identity": "E_2048_4_8_16_2"
+        },
+        {
+          "index": 333,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 341,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 344,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 346,
+          "identity": "E_64_64_8_16_4"
+        },
+        {
+          "index": 348,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 349,
+          "identity": "E_4_8_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 351,
+          "identity": "E_8_64_2_8_16_4"
+        },
+        {
+          "index": 353,
+          "identity": "r_8_32_8_4_4_16"
+        },
+        {
+          "index": 355,
+          "identity": "E_8_16_2_8_16_4_4"
+        },
+        {
+          "index": 357,
+          "identity": "E_512_8_8_16_2"
+        },
+        {
+          "index": 359,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 360,
+          "identity": "E_1024_8_16_4"
+        },
+        {
+          "index": 371,
+          "identity": "E_4_96_32_4_2_2_2_8_2_127_2"
+        },
+        {
+          "index": 382,
+          "identity": "E_1187_32_4"
+        }
+      ],
+      "diagnostic": {
+        "default_aux": 143,
+        "attention_direct_inputs_pinned": 9,
+        "pin_dep_positions": [
+          5
+        ],
+        "selected_aux": 143
+      }
+    }
+  ]
+}

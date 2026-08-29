@@ -1,0 +1,39 @@
+{
+  "schema": "tinygrad.nv_compiler_packed_fragment_gate.v1",
+  "shape": {
+    "M": 32,
+    "N": 16,
+    "K": 256
+  },
+  "identity": "514884456015ebbc1c9b6f03c406f0a894ab5d498e417337fa951e4e3995a55d",
+  "ordinary_matmul": true,
+  "packed_global_bytes": 2304,
+  "expanded_global_weight_allocation": false,
+  "raw_dot": {
+    "exact": true,
+    "max_abs": 0,
+    "nonzero": 512
+  },
+  "dense_precontract_control": {
+    "exact": true,
+    "max_abs": 0,
+    "nonzero": 512,
+    "programs": 1,
+    "diagnostic_expanded_weight": true
+  },
+  "source": {
+    "programs": 1,
+    "path": "docs/task_workflow/evidence/nv-compiler-packed-fragment-20260828/raw-imma-gate.cu",
+    "signed_imma": true,
+    "candidate_identity_exact": true
+  },
+  "sass": {
+    "path": "docs/task_workflow/evidence/nv-compiler-packed-fragment-20260828/raw-imma-gate.sass",
+    "imma_16832_s8": 8,
+    "hmma": 0,
+    "idp4a": 0
+  },
+  "complete_q4_projection": false,
+  "complete_projection_wall": "ordinary two-input int matmul has no Q8 scale/raw-sum inputs and no per-K32 Q4 scale/min accumulator boundary",
+  "passed": true
+}

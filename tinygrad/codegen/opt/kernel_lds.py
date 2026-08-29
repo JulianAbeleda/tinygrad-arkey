@@ -5,7 +5,8 @@ import functools, math
 from dataclasses import dataclass
 from typing import Callable, TypeAlias, TYPE_CHECKING
 
-from tinygrad.codegen.opt.packed_weight import PackedWeightTransform
+from tinygrad.codegen.opt.packed_weight import (PackedWeightTransform, Q4KInt8FragmentProvider, Q6KInt8FragmentProvider,
+                                                Q8ActivationRecordTransform, Q8Int8FragmentProvider)
 from tinygrad.codegen.opt.tc import LaneMap
 from tinygrad.dtype import AddrSpace, PtrDType, dtypes
 from tinygrad.uop.ops import AxisType, Ops, UOp
@@ -290,13 +291,14 @@ class PrecontractOperandTemplate:
 
 @dataclass(frozen=True)
 class PackedPrecontractOperandTemplate:
-  """Packed B source decoded to fp16 at cooperative tile-production coordinates."""
+  """Packed B source decoded at logical cooperative tile-production coordinates."""
   role: str
   source: UOp
-  transform: PackedWeightTransform
+  transform: PackedWeightTransform|Q8ActivationRecordTransform
   row_axis: UOp
   k_axis: UOp
   row_tile_base: UOp
+  fragment_provider: Q4KInt8FragmentProvider|Q6KInt8FragmentProvider|Q8Int8FragmentProvider|None = None
 
 
 PrecontractOperand: TypeAlias = PrecontractOperandTemplate | PackedPrecontractOperandTemplate
@@ -329,6 +331,7 @@ class PrecontractLDSStage:
   barrier: UOp
   fragment_a: UOp
   fragment_b: UOp
+  fragment_b_k16: tuple[UOp, UOp]|None = None
 
 
 
@@ -411,7 +414,23 @@ class PrecontractCandidateContract:
       tag = ("kernel_tile_lds", geometry) if self.pipeline is None else ("kernel_tile_lds", geometry, self.pipeline)
       allocation = UOp.placeholder((total_bytes//tc.dtype_in.itemsize,), tc.dtype_in, allocation_id(), addrspace=AddrSpace.LOCAL).replace(tag=tag)
 
-    operand_a = PrecontractOperandTemplate("A", in0, original_axes[1], original_axes[2], outer_m*geometry.tile[0])
+    packed_activation = getattr(self.context, "packed_activation", None)
+    activation_provider = getattr(self.context, "packed_activation_provider", None)
+    if packed_activation is None:
+      operand_a:PrecontractOperand = PrecontractOperandTemplate("A", in0, original_axes[1], original_axes[2], outer_m*geometry.tile[0])
+    else:
+      if (not isinstance(packed_activation, Q8ActivationRecordTransform) or
+          not isinstance(activation_provider, Q8Int8FragmentProvider) or activation_provider.transform != packed_activation):
+        raise ValueError("packed activation provider does not own the admitted Q8 record transform")
+      if (original_axes[1].vmax+1, original_axes[2].vmax+1) != packed_activation.logical_shape:
+        raise ValueError("packed activation row/K ownership does not match admitted transform")
+      packed_a_params = [u for u in in0.toposort() if u.op is Ops.PARAM and isinstance(u.dtype, PtrDType) and
+                         u.ptrdtype.base == packed_activation.storage_dtype]
+      if len(packed_a_params) != 1: raise ValueError(f"packed A carrier must reach exactly one canonical Q8 PARAM, found {len(packed_a_params)}")
+      if getattr(packed_a_params[0].arg, "slot", packed_a_params[0].arg) != 1:
+        raise ValueError(f"packed A carrier must own ABI slot 1, got PARAM {packed_a_params[0].arg!r}")
+      operand_a = PackedPrecontractOperandTemplate("A", packed_a_params[0], packed_activation, original_axes[1], original_axes[2],
+                                                   outer_m*geometry.tile[0], activation_provider)
     packed_weight = getattr(self.context, "packed_weight", None)
     if packed_weight is None:
       operand_b:PrecontractOperand = PrecontractOperandTemplate("B", in1, original_axes[0], original_axes[2], outer_n*geometry.tile[1])
@@ -426,7 +445,12 @@ class PrecontractCandidateContract:
         f"packed-weight B carrier must own ABI slot 2, got PARAM {packed_params[0].arg!r}")
       if any(u.op is Ops.PARAM and isinstance(u.dtype, PtrDType) and u.ptrdtype.base == dtypes.half for u in in1.toposort()): raise ValueError(
         "packed-weight B carrier unexpectedly reaches a dense fp16 PARAM")
-      operand_b = PackedPrecontractOperandTemplate("B", packed_params[0], packed_weight, original_axes[0], original_axes[2], outer_n*geometry.tile[1])
+      fragment_provider = getattr(self.context, "packed_fragment_provider", None)
+      if fragment_provider is not None and (not isinstance(fragment_provider, (Q4KInt8FragmentProvider, Q6KInt8FragmentProvider)) or
+                                             fragment_provider.transform != packed_weight):
+        raise ValueError("packed fragment provider does not own the admitted packed-weight transform")
+      operand_b = PackedPrecontractOperandTemplate("B", packed_params[0], packed_weight, original_axes[0], original_axes[2],
+                                                   outer_n*geometry.tile[1], fragment_provider)
     operands:tuple[PrecontractOperand, ...] = (operand_a, operand_b)
     validate_precontract_operand_templates(operands, dtype_in=tc.dtype_in, context="candidate")
     return operands, PrecontractThreadAxes(wave_m, wave_n, lane), contracts, allocation
@@ -468,11 +492,19 @@ def validate_precontract_operand_templates(operands:tuple[PrecontractOperand, ..
     if operand.row_axis.op is not Ops.RANGE or operand.k_axis.op is not Ops.RANGE:
       raise ValueError(f"{context} {operand.role} template does not retain row/K ownership")
     if isinstance(operand, PackedPrecontractOperandTemplate):
-      if dtype_in != dtypes.half:
-        raise ValueError(f"{context} packed templates currently produce only scalar fp16 values")
-      if (operand.role != "B" or not isinstance(operand.source.dtype, PtrDType) or
+      if dtype_in == dtypes.half and operand.fragment_provider is not None:
+        raise ValueError(f"{context} fp16 packed template cannot carry an int8 fragment provider")
+      if dtype_in == dtypes.char and operand.fragment_provider is None:
+        raise ValueError(f"{context} int8 packed template requires a typed logical fragment provider")
+      if dtype_in not in (dtypes.half, dtypes.char):
+        raise ValueError(f"{context} packed template cannot produce {dtype_in.name} values")
+      if (operand.role not in ("A", "B") or not isinstance(operand.source.dtype, PtrDType) or
           operand.source.ptrdtype.base != operand.transform.storage_dtype):
-        raise ValueError(f"{context} packed template must be a B operand with canonical packed storage dtype")
+        raise ValueError(f"{context} packed template must use canonical packed storage dtype")
+      if isinstance(operand.transform, PackedWeightTransform) != (operand.role == "B"):
+        raise ValueError(f"{context} packed weight transform must own B and Q8 record transform must own A")
+      if operand.fragment_provider is not None and operand.fragment_provider.logical_shape != (operand.transform.rows, operand.transform.k):
+        raise ValueError(f"{context} packed fragment provider logical ownership does not match the transform")
       # The packed carrier no longer contains the dense source expression, so
       # these two ranges are the only remaining proof of logical ownership.
       # Keep the transform and carrier bounds in the same contract as the
@@ -744,8 +776,12 @@ def instantiate_precontract_producer(geometry:KernelTileGeometry, *, tc, allocat
                                 stride_bytes=window.stride_bytes,vector_bytes=vector_bytes)
       logical_k=vector*vector_elements
       logical_row = operand.row_tile_base + row
-      value = operand.transform.dequant_tile(operand.source, logical_row, epoch*geometry.tile[2]+logical_k, vector_elements).value \
-        if isinstance(operand, PackedPrecontractOperandTemplate) else UOp(Ops.STACK,tc.dtype_in.vec(vector_elements),tuple(operand.source.substitute({
+      if isinstance(operand, PackedPrecontractOperandTemplate):
+        value = operand.fragment_provider.fragment(operand.source, logical_row, epoch*geometry.tile[2]+logical_k, vector_elements).value \
+          if operand.fragment_provider is not None else \
+          operand.transform.dequant_tile(operand.source, logical_row, epoch*geometry.tile[2]+logical_k, vector_elements).value
+      else:
+        value = UOp(Ops.STACK,tc.dtype_in.vec(vector_elements),tuple(operand.source.substitute({
           operand.row_axis:logical_row, operand.k_axis:epoch*geometry.tile[2]+logical_k+elem}) for elem in range(vector_elements)))
       tag=("kernel_tile_store",operand.role,row_iteration,epoch,slot)
       # Keep lane ownership explicit.  A vector pointer with a vectorized
@@ -853,6 +889,16 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
   # the rendered source, exactly the ordering llama.cpp's own loop-entry barrier provides.
   needs_entry_barrier = pipeline_plan is None and lds_read_before_next_write_ordered is not True
   store_allocation = allocation.after(k_axis.tile_owner.barrier()) if needs_entry_barrier else allocation
+  staged_group_metadata = (tc.dtype_in == dtypes.char and len(operands) == 2 and
+    isinstance(operands[0], PackedPrecontractOperandTemplate) and isinstance(operands[0].fragment_provider, Q8Int8FragmentProvider) and
+    isinstance(operands[1], PackedPrecontractOperandTemplate) and
+    isinstance(operands[1].fragment_provider, (Q4KInt8FragmentProvider, Q6KInt8FragmentProvider)))
+  if staged_group_metadata:
+    metadata_bytes_per_row = factors.vectors_per_row * 4
+    for operand in operands:
+      window = _window(geometry, operand.role)
+      if window.stride_bytes < geometry.tile[2] + metadata_bytes_per_row:
+        raise ValueError("typed K-quant/Q8_1 staging requires one half2 metadata packet per cooperative vector owner")
   for operand in operands:
     window = _window(geometry, operand.role)
     loads = factors.loads_a if operand.role == "A" else factors.loads_b
@@ -865,13 +911,41 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
                                   bank_dwords=lds_bank_dwords, bank_cycle_lanes=lds_bank_cycle_lanes)
       logical_k = vector * vector_elements
       logical_row = operand.row_tile_base + row
-      value = operand.transform.dequant_tile(operand.source, logical_row, k_axis.tile_base + logical_k, vector_elements).value \
-        if isinstance(operand, PackedPrecontractOperandTemplate) else UOp(Ops.STACK, tc.dtype_in.vec(vector_elements), tuple(operand.source.substitute({
+      if isinstance(operand, PackedPrecontractOperandTemplate):
+        value = operand.fragment_provider.fragment(operand.source, logical_row, k_axis.tile_base + logical_k, vector_elements).value \
+          if operand.fragment_provider is not None else \
+          operand.transform.dequant_tile(operand.source, logical_row, k_axis.tile_base + logical_k, vector_elements).value
+      else:
+        value = UOp(Ops.STACK, tc.dtype_in.vec(vector_elements), tuple(operand.source.substitute({
           operand.row_axis: logical_row, operand.k_axis: k_axis.tile_base + logical_k + elem}) for elem in range(vector_elements)))
       index = slot_base + (window.base + row * window.stride_bytes + logical_k * item_bytes) // item_bytes
       store_tag = ("kernel_tile_store", operand.role, row_iteration)
       stores.append(UOp.group(*(store_allocation.index(index+elem).store(value.gep(elem)).replace(tag=store_tag).end()
                                for elem in range(vector_elements))))
+      if staged_group_metadata:
+        if operand.role == "A":
+          scale, raw_sum, _ = operand.transform.metadata(operand.source, logical_row, k_axis.tile_base+logical_k)
+          metadata = UOp(Ops.STACK, dtypes.half.vec(2), (scale.cast(dtypes.half), raw_sum.cast(dtypes.half)))
+        elif isinstance(operand.fragment_provider, Q4KInt8FragmentProvider):
+          d, dmin, scale, minimum, _ = operand.fragment_provider.metadata(operand.source, logical_row, k_axis.tile_base+logical_k)
+          metadata = UOp(Ops.STACK, dtypes.half.vec(2),
+            ((d*scale.cast(dtypes.float)).cast(dtypes.half), (-dmin*minimum.cast(dtypes.float)).cast(dtypes.half)))
+        else:
+          # Every cooperative vector owns one K16 Q6 fragment, but every K32
+          # correction consumes the pair.  Duplicate the pair in both vector
+          # packets so the accumulator can select the even owner exactly like
+          # the Q4 K32 packet path while retaining both independent scales.
+          k32_base = k_axis.tile_base+(logical_k//32)*32
+          d, scale0, scale1, _ = operand.fragment_provider.k32_metadata(operand.source, logical_row, k32_base)
+          metadata = UOp(Ops.STACK, dtypes.half.vec(2),
+            ((d*scale0.cast(dtypes.float)).cast(dtypes.half), (d*scale1.cast(dtypes.float)).cast(dtypes.half)))
+        metadata_index = slot_base + window.base + row*window.stride_bytes + geometry.tile[2] + vector*4
+        metadata_tag = ("kernel_tile_group_metadata_store", operand.role, row_iteration)
+        metadata_bits = tuple(metadata.gep(part).bitcast(dtypes.uint16) for part in range(2))
+        metadata_bytes = tuple(metadata_bits[part//2].rshift((part%2)*8).bitwise_and(0xff).cast(dtypes.uint8).bitcast(dtypes.char)
+                               for part in range(4))
+        stores.append(UOp.group(*(store_allocation.index(metadata_index+elem).store(metadata_bytes[elem]).replace(tag=metadata_tag).end()
+                                 for elem in range(4))))
   producer = UOp.group(*stores)
   barrier = UOp.barrier(producer)
   wave_m, wave_n, lane = threads.wave_m, threads.wave_n, threads.lane
@@ -883,7 +957,8 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
   # bit permutation), see `derive_wmma_operand_lane_layout`'s docstring for the two independent
   # grounds truth this was checked against before being wired in.
   operand_layouts = derive_wmma_operand_lane_layout(tc)
-  def _fragment(role:str, subtile:UOp, wave:UOp, subtiles:int, contract:PrecontractContractSpec) -> UOp:
+  def _fragment(role:str, subtile:UOp, wave:UOp, subtiles:int, contract:PrecontractContractSpec,
+                k16_half:int|None=None) -> UOp:
     window = _window(geometry, role)
     # The per-subtile row extent is the descriptor's own M dim (`tc.dims[1]`) for role A and N dim
     # (`tc.dims[0]`) for role B -- the exact same per-role dim `derive_precontract_shape_factors`
@@ -895,7 +970,15 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
     logical_k = k_axis.substep * tc.dims[2] + _fold_operand_axis(layout.k_contract_terms, layout.k_lane_terms, lane, contract.element, layout.element_bits)
     index = slot_base + (window.base + row * window.stride_bytes + logical_k * item_bytes) // item_bytes
     load = ordered.index(index, dtype=tc.dtype_in).replace(tag=("kernel_tile_fragment_load", role)).load()
+    if k16_half is not None:
+      if role != "B" or k16_half not in (0,1): raise ValueError("K16 fragment mask is only valid for Q6_K B")
+      in_half = ((logical_k%32)<16) if k16_half == 0 else ((logical_k%32)>=16)
+      load = in_half.where(load, UOp.const(tc.dtype_in,0))
     return UOp(Ops.CONTRACT, tc.dtype_in.vec(tc.elements_per_thread[operand_idx]), (load,), contract.arg,
                tag=("kernel_tile_fragment", role))
-  return PrecontractLDSStage(allocation, producer, barrier, _fragment("A", subtile_m, wave_m, factors.subtiles_m, contracts[0]),
-                             _fragment("B", subtile_n, wave_n, factors.subtiles_n, contracts[1]))
+  fragment_a=_fragment("A",subtile_m,wave_m,factors.subtiles_m,contracts[0])
+  fragment_b=_fragment("B",subtile_n,wave_n,factors.subtiles_n,contracts[1])
+  q6_b = isinstance(operands[1], PackedPrecontractOperandTemplate) and \
+    isinstance(operands[1].fragment_provider,Q6KInt8FragmentProvider)
+  fragment_b_k16 = tuple(_fragment("B",subtile_n,wave_n,factors.subtiles_n,contracts[1],half) for half in (0,1)) if q6_b else None
+  return PrecontractLDSStage(allocation,producer,barrier,fragment_a,fragment_b,fragment_b_k16)

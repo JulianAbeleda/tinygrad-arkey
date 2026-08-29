@@ -612,11 +612,82 @@ class Scheduler:
                 UOp(Ops.CONTRACT, dtype=srcs[0].dtype.vec(tc.elements_per_thread[0]), src=(srcs[0],), arg=tc_upcast_axes[0], tag=1),
                 UOp(Ops.CONTRACT, dtype=srcs[1].dtype.vec(tc.elements_per_thread[1]), src=(srcs[1],), arg=tc_upcast_axes[1], tag=1),
               ]
+            group_accumulator = getattr(getattr(self.ast.arg, "candidate_context", None), "group_accumulator", None)
+            q6_half_tc_uops = None
             if candidate_axes is not None and pipeline_tc_uop is not None: tc_uop = pipeline_tc_uop
             else:
-              wmma = UOp(Ops.WMMA, dtype=tc.dtype_out.vec(tc.elements_per_thread[2]), src=(
-                wmma_srcs[0], wmma_srcs[1], UOp.const(tc.dtype_out.vec(tc.elements_per_thread[2]), 0.0)), arg=wmma_arg, tag=1)
-              tc_uop = UOp(Ops.UNROLL, tc.dtype_out, (wmma,), arg=tc_upcast_axes[2], tag=1)
+              from tinygrad.codegen.opt.packed_weight import Q6KQ8SubgroupAccumulatorContract
+              if isinstance(group_accumulator, Q6KQ8SubgroupAccumulatorContract):
+                # Mask before CONTRACT, while logical K is still explicit.
+                # Masking carrier GEPs here is invalid: later output-axis
+                # UNROLL substitution can permute those vector lanes.
+                if candidate_axes is None or candidate_pipeline is not None or register_mode or stage.fragment_b_k16 is None:
+                  raise KernelOptError("Q6_K paired K16 IMMA requires logical-K-masked LDS B fragments")
+                low_b,high_b=stage.fragment_b_k16
+                def _half_imma(b:UOp, tag:str) -> UOp:
+                  wmma = UOp(Ops.WMMA, dtype=tc.dtype_out.vec(tc.elements_per_thread[2]), src=(wmma_srcs[0], b,
+                    UOp.const(tc.dtype_out.vec(tc.elements_per_thread[2]), 0.0)), arg=wmma_arg, tag=("q6_k16",tag))
+                  return UOp(Ops.UNROLL, tc.dtype_out, (wmma,), arg=tc_upcast_axes[2], tag=("q6_k16",tag))
+                q6_half_tc_uops = (_half_imma(low_b, "low"), _half_imma(high_b, "high"))
+                tc_uop = q6_half_tc_uops[0]
+              else:
+                wmma = UOp(Ops.WMMA, dtype=tc.dtype_out.vec(tc.elements_per_thread[2]), src=(
+                  wmma_srcs[0], wmma_srcs[1], UOp.const(tc.dtype_out.vec(tc.elements_per_thread[2]), 0.0)), arg=wmma_arg, tag=1)
+                tc_uop = UOp(Ops.UNROLL, tc.dtype_out, (wmma,), arg=tc_upcast_axes[2], tag=1)
+
+            # The direct Q4_K/Q8_1 path deliberately makes one candidate K tile
+            # exactly one IMMA K32 group. Apply its affine metadata correction
+            # here, while every accumulator scalar still owns its precise
+            # logical (M,N,K32) coordinate, and only then reduce outer K. This
+            # avoids both a global [groups,M,N] materialization and the invalid
+            # alternative of first combining differently-scaled int32 groups.
+            if candidate_axes is not None and group_accumulator is not None:
+              from tinygrad.codegen.opt.kernel_lds import PackedPrecontractOperandTemplate, binary_axis_count, fold_binary_axes
+              from tinygrad.codegen.opt.packed_weight import Q4KQ8GroupAccumulatorContract, Q6KQ8SubgroupAccumulatorContract
+              if not isinstance(group_accumulator, (Q4KQ8GroupAccumulatorContract, Q6KQ8SubgroupAccumulatorContract)):
+                raise KernelOptError("candidate group accumulator must use a typed K-quant/Q8_1 ABI")
+              is_q6 = isinstance(group_accumulator, Q6KQ8SubgroupAccumulatorContract)
+              if (self.ren.target.device not in ("NV", "CUDA") or tc.dims != (8, 16, 32) or tc.dtype_in != dtypes.char or
+                  tc.dtype_out != dtypes.int or tc.elements_per_thread != (16, 8, 4) or tc.threads != 32):
+                raise KernelOptError("K-quant/Q8_1 group accumulator requires NVIDIA m16n8k32 s8 IMMA")
+              if (candidate_geometry.tile[2] % 32 or factors.k_substeps != candidate_geometry.tile[2]//32 or
+                  candidate_pipeline is not None or register_mode):
+                raise KernelOptError("K-quant/Q8_1 correction requires a non-pipelined LDS tile made of exact K32 substeps")
+              if not (isinstance(operands[0], PackedPrecontractOperandTemplate) and
+                      isinstance(operands[1], PackedPrecontractOperandTemplate)):
+                raise KernelOptError("K-quant/Q8_1 correction requires typed packed A and B operands")
+              if (operands[0].fragment_provider != group_accumulator.activation or
+                  operands[1].fragment_provider != group_accumulator.weight):
+                raise KernelOptError("K-quant/Q8_1 correction providers do not match staged operands")
+              if is_q6 and q6_half_tc_uops is None:
+                raise KernelOptError("Q6_K/Q8_1 correction requires paired masked K16 IMMA subtotals")
+              c_axes = tuple(range_by_id[a] for a, size in tc_upcast_axes[2] if size == 2)
+              if len(c_axes) != binary_axis_count(tc, 2):
+                raise KernelOptError("K-quant/Q8_1 accumulator does not retain the descriptor output axes")
+              c_elem = fold_binary_axes(c_axes)
+              local_m = wave_m*(factors.subtiles_m*tc.dims[1]) + subtile_m*tc.dims[1] + lane//4 + 8*(c_elem//2)
+              local_n = wave_n*(factors.subtiles_n*tc.dims[0]) + subtile_n*tc.dims[0] + 2*(lane%4) + c_elem%2
+              logical_m, logical_n = outer_m*candidate_geometry.tile[0]+local_m, outer_n*candidate_geometry.tile[1]+local_n
+              metadata_bytes_per_row = factors.vectors_per_row*4
+              windows = {window.role:window for window in candidate_geometry.lds_windows}
+              if all(windows[role].stride_bytes >= candidate_geometry.tile[2]+metadata_bytes_per_row for role in ("A", "B")):
+                ordered_metadata = stage.allocation.after(stage.barrier)
+                def _metadata(role, local_row):
+                  window = windows[role]
+                  byte_index = window.base + local_row*window.stride_bytes + candidate_geometry.tile[2] + k_substep*8
+                  byte_values = tuple(ordered_metadata.index(byte_index+i).load().bitcast(dtypes.uint8).cast(dtypes.uint16) for i in range(4))
+                  halves = tuple(byte_values[2*part].bitwise_or(byte_values[2*part+1].lshift(8)).bitcast(dtypes.half) for part in range(2))
+                  return UOp(Ops.STACK, dtypes.half.vec(2), halves)
+                integer_result = q6_half_tc_uops if is_q6 else tc_uop
+                tc_uop = group_accumulator.combine_staged(integer_result, _metadata("B", local_n), _metadata("A", local_m))
+              else:
+                k_base = outer_k*candidate_geometry.tile[2]+k_substep*32
+                if is_q6:
+                  tc_uop = group_accumulator.correct(operands[1].source, operands[0].source, row=logical_m, column=logical_n,
+                                                     k_base=k_base, integer_dots=q6_half_tc_uops)
+                else:
+                  tc_uop = group_accumulator.correct(operands[1].source, operands[0].source, row=logical_m, column=logical_n,
+                                                     k_base=k_base, integer_dot=tc_uop)
 
             # preserve extra reduces
             reduce_ranges = [x for x in UOp.sink(*reduceop.src[1:]).toposort() if x.op is Ops.RANGE and x.arg[0] not in tc_reduce_axes]
@@ -819,7 +890,11 @@ def warmstart_key(out_dims, reduce, packed_dtype=None):
   precomputation) that don't have a live Scheduler/AST to derive the discriminator from directly.
   `packed_dtype` is the packed-weight PARAM's storage dtype (e.g. dtypes.uint16/uint32) for a
   packed-weight candidate, or None for the plain dense (non-packed) path."""
-  return (frozenset(out_dims), reduce, frozenset((packed_dtype,)) if packed_dtype is not None else frozenset())
+  packed_dtypes = frozenset(packed_dtype) if isinstance(packed_dtype, (tuple, list, set, frozenset)) else \
+    frozenset((packed_dtype,)) if packed_dtype is not None else frozenset()
+  if not packed_dtypes.issubset(_PACKED_STORAGE_DTYPES):
+    raise ValueError(f"packed warmstart dtype discriminator must use canonical packed storage dtypes, got {packed_dtypes}")
+  return (frozenset(out_dims), reduce, packed_dtypes)
 
 def _warmstart_key(k):
   # match on CONCRETE dims only (the forward's batch dim is a symbolic JIT variable); key = (out-dims, reduce,

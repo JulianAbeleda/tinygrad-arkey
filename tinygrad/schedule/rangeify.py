@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field, replace
 import itertools
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace, Invalid
-from tinygrad.uop.ops import PatternMatcher, UPat, Ops, UOp, resolve, GroupOp, _substitute, KernelInfo, ParamArg, ScheduleHints, NativeAttentionRequest
+from tinygrad.uop.ops import PatternMatcher, UPat, Ops, UOp, resolve, GroupOp, _substitute, KernelInfo, ParamArg, ProgramInfo, ScheduleHints, NativeAttentionRequest
 from tinygrad.uop.ops import graph_rewrite, sint, AxisType, BottomUpGate, profile_matches, identity_element, memory_semantic_owner, AccumulatorSlot, CompositeReduce, CompositeInputSpec, CompositeTileCarrier, AttentionSpec, RMSNormSpec, ReduceOutputSpec, NativeRowSoftmaxRepackSpec, composite_reduce_provenance
 from tinygrad.uop.symbolic import symbolic
 from tinygrad.helpers import prod, all_same, getenv, dedup, all_int, DEBUG, SPLIT_REDUCEOP, DEBUG_RANGEIFY, VIZ, MAX_KERNEL_BUFFERS
@@ -31,6 +31,109 @@ def _has_after_for_buf(x:UOp, buf:UOp) -> bool:
     seen.add(n)
     stack.extend(n.src)
   return False
+
+def _depends_on(x:UOp, dependency:UOp) -> bool:
+  """Identity reachability used by repeated-write epoch validation.
+
+  This intentionally does not use ``backward_slice``: like ``_has_after_for_buf``
+  above, the graphs reaching this pass can contain large precompiled bodies and
+  retaining one cached slice per epoch turns a bounded scratch chain into an
+  accidental quadratic memory cost.
+  """
+  stack, seen = [x], set()
+  while stack:
+    n = stack.pop()
+    if n is dependency: return True
+    if n in seen: continue
+    seen.add(n)
+    stack.extend(n.src)
+  return False
+
+def _call_arg_uops(call:UOp) -> tuple[UOp, ...]:
+  return tuple(s for s in call.src[1:] if s.op is not Ops.BIND)
+
+def _call_output_slots(call:UOp) -> tuple[int, ...]:
+  """Return the declared writable slots of an opaque call.
+
+  Finalized native PROGRAMs already carry this ABI.  An unfinalized custom
+  SINK carries the same information in its PARAM-backed STOREs, so derive the
+  ProgramInfo without changing the program or its call identity.
+  """
+  body = call.src[0]
+  if body.op is Ops.PROGRAM: return tuple(body.arg.outs)
+  if body.op is Ops.SINK: return tuple(ProgramInfo.from_sink(body).outs)
+  if body.op in (Ops.COPY, Ops.SLICE): return (0,)
+  return ()
+
+def _after_writes_buffer(after:UOp, output_slot_cache:dict[UOp, tuple[int, ...]]|None=None) -> bool:
+  """Distinguish a writable AFTER epoch from a read-completion epoch.
+
+  ``UOp.custom_kernel`` deliberately returns an AFTER for every argument: a
+  read-only AFTER lets a later reuse wait until that read is complete.  Treating
+  every such carrier as a write was harmless while each buffer had one writer,
+  but makes a correctly threaded scratch chain look cyclic.  The opaque call's
+  output ABI is the authority for CALL-backed epochs; STORE-backed AFTERs retain
+  the ordinary assignment meaning.
+  """
+  saw_declared_call = False
+  for dependency in after.src[1:]:
+    if dependency.op is not Ops.CALL: continue
+    # Unknown opaque calls have no trustworthy access ABI, so retain the
+    # conservative legacy classification.  A finalized PROGRAM without
+    # ProgramInfo is likewise not evidence that the buffer is read-only.
+    body = dependency.src[0]
+    if body.op not in {Ops.PROGRAM, Ops.SINK, Ops.COPY, Ops.SLICE} or \
+       (body.op is Ops.PROGRAM and not isinstance(body.arg, ProgramInfo)):
+      return True
+    saw_declared_call = True
+    args = _call_arg_uops(dependency)
+    if output_slot_cache is None: outs = _call_output_slots(dependency)
+    else:
+      if dependency.src[0] not in output_slot_cache: output_slot_cache[dependency.src[0]] = _call_output_slots(dependency)
+      outs = output_slot_cache[dependency.src[0]]
+    if any(slot < len(args) and args[slot].buf_uop is after.buf_uop for slot in outs): return True
+  # All declared CALL accesses were read-only.  AFTERs without a declared CALL
+  # retain the ordinary STORE/assignment meaning and are classified writable.
+  return not saw_declared_call
+
+def _after_has_precise_call_access(after:UOp) -> bool:
+  """Whether this AFTER is an opaque-call argument with a declared access ABI."""
+  return any(dependency.op is Ops.CALL and dependency.src[0].op in {Ops.PROGRAM, Ops.SINK, Ops.COPY, Ops.SLICE}
+             for dependency in after.src[1:])
+
+def _validate_repeated_write_epochs(afters:list[UOp], write_afters:set[UOp]) -> set[UOp]:
+  """Prove buffers with repeated writers have one explicit ordered epoch chain.
+
+  A repeated physical scratch buffer is safe only when every write and every
+  read-completion epoch is comparable in the dependency graph.  This admits
+  ``main(write) -> fixup(read) -> next main(write)`` and fails closed for raw
+  aliasing.  The returned buffers need no inferred WAR repair: their ordering
+  is already explicit and adding a legacy single-writer edge would create the
+  assignment cycle this contract is designed to avoid.
+  """
+  # This contract is deliberately scoped to opaque calls whose ABI declares
+  # reads and writes. Ordinary STORE/assignment AFTERs keep the legacy WAR
+  # path; classifying those as epochs would change unrelated scheduling.
+  precise_afters = [after for after in afters if _after_has_precise_call_access(after)]
+  accesses:dict[UOp, list[UOp]] = {}
+  writers:dict[UOp, list[UOp]] = {}
+  for after in precise_afters:
+    accesses.setdefault(after.buf_uop, []).append(after)
+    if after in write_afters: writers.setdefault(after.buf_uop, []).append(after)
+
+  repeated:set[UOp] = set()
+  for buf, writes in writers.items():
+    if len(writes) < 2: continue
+    repeated.add(buf)
+    epochs = accesses[buf]
+    # ``afters`` is already in topological order.  Requiring every adjacent
+    # access to depend on its predecessor proves the entire chain transitively
+    # without an O(epoch^2) reachability walk on large captured graphs.
+    for previous, epoch in zip(epochs, epochs[1:]):
+      if not _depends_on(epoch, previous):
+        raise RuntimeError(f"unordered repeated write epochs for buffer {buf}")
+
+  return repeated
 
 def lower_attention_semantic(att:UOp) -> UOp:
   """Fail-closed semantic attention lowering.
@@ -1633,12 +1736,16 @@ def _get_kernel_graph(sink:UOp) -> UOp:
 
   # WAR deps: if kernel U reads buffer S, and S is also written by another kernel, S's write must wait for U to finish
   afters = [u for u in tsink.toposort() if u.op is Ops.AFTER]
-  kernel_assign: dict[UOp, UOp] = {u.buf_uop:u for u in afters}
+  output_slot_cache:dict[UOp, tuple[int, ...]] = {}
+  write_afters = {u for u in afters if _after_writes_buffer(u, output_slot_cache)}
+  repeated_write_bufs = _validate_repeated_write_epochs(afters, write_afters)
+  kernel_assign: dict[UOp, UOp] = {u.buf_uop:u for u in write_afters if u.buf_uop not in repeated_write_bufs}
   assign_rep: dict[UOp, UOp] = {}
   for u in afters:
+    if u not in write_afters: continue
     for s in u.src[1].src:
       # TODO: this is probably broken for MSELECT/MSTACK
-      if s.op not in {Ops.BUFFER, Ops.PARAM} or s is u.buf_uop or (a:=kernel_assign.get(s)) is None: continue
+      if s.op not in {Ops.BUFFER, Ops.PARAM} or s is u.buf_uop or s in repeated_write_bufs or (a:=kernel_assign.get(s)) is None: continue
       if a.src[1] is u.src[1]: continue  # same kernel (multi-output custom kernels)
       # The reader already depends on the writer's AFTER (precompiled-output identity): the read
       # is ordered after the write, so the WAR edge is redundant and would be a false cycle.

@@ -1,0 +1,27 @@
+{
+  "authority": {
+    "candidate": "docs/task_workflow/evidence/nv-compiler-q6k-model-20260828/final-candidate-a-r9.json",
+    "control": "docs/task_workflow/evidence/nv-compiler-q6k-model-20260828/final-control-r9.json"
+  },
+  "correctness": {
+    "allclose_rtol_0p02_atol_0p5": true,
+    "candidate_token": 198,
+    "control_token": 198,
+    "finite": true,
+    "max_abs": 0.1607046127319336,
+    "mean_abs": 0.031535085290670395,
+    "same_token": true
+  },
+  "performance": {
+    "candidate_faster": false
+  },
+  "schema": "tinygrad.nv_compiler_q6k_model_compare.v1",
+  "status": "FAIL",
+  "wall": {
+    "candidate_min_ms": 72.174425,
+    "candidate_minus_control_ms": 1.841813000000002,
+    "candidate_tok_s": 7093.9255837507535,
+    "control_min_ms": 70.332612,
+    "control_tok_s": 7279.695513085736
+  }
+}

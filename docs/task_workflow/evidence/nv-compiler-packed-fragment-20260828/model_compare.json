@@ -1,0 +1,24 @@
+{
+  "authority": {
+    "candidate": "docs/task_workflow/evidence/nv-compiler-packed-fragment-20260828/model_candidate_r9.json",
+    "fp16": "docs/task_workflow/evidence/nv-compiler-packed-fragment-20260828/model_fp16_r9.json"
+  },
+  "correctness": {
+    "allclose_rtol_0p02_atol_0p5": true,
+    "candidate_token": 198,
+    "finite": true,
+    "fp16_token": 198,
+    "max_abs": 0.11442422866821289,
+    "mean_abs": 0.008291592821478844,
+    "same_token": true
+  },
+  "schema": "tinygrad.nv_compiler_q4k_model_compare.v1",
+  "status": "PASS",
+  "wall": {
+    "candidate_min_ms": 74.694977,
+    "candidate_minus_fp16_ms": -8.807760000000002,
+    "candidate_tok_s": 6854.543913976973,
+    "fp16_min_ms": 83.502737,
+    "fp16_tok_s": 6131.535544757054
+  }
+}
