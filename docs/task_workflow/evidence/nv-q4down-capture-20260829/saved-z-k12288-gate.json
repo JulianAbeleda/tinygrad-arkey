@@ -1,0 +1,64 @@
+{
+  "schema": "tinygrad.nv_q8_saved_z_k12288_gate.v1",
+  "role": "blk.4.ffn_down.weight",
+  "ggml_type": 12,
+  "shape": {
+    "M": 512,
+    "K": 12288
+  },
+  "grid": [
+    512,
+    24,
+    1
+  ],
+  "block": [
+    128,
+    1,
+    1
+  ],
+  "correctness": {
+    "finite": true,
+    "q_exact": false,
+    "q_mismatch": 158,
+    "scale_exact": true,
+    "scale_mismatch": 0,
+    "sum_exact": true,
+    "sum_mismatch": 0,
+    "q_examples": [
+      80492,
+      135455,
+      185369,
+      252450,
+      258856,
+      293455,
+      356731,
+      374251
+    ],
+    "scale_examples": [],
+    "sum_examples": [],
+    "scale_first": []
+  },
+  "timing_us": {
+    "min": 7.488,
+    "median": 7.552,
+    "max": 7.68,
+    "samples": [
+      7.584,
+      7.552,
+      7.552,
+      7.68,
+      7.584,
+      7.52,
+      7.488,
+      7.52,
+      7.552
+    ]
+  },
+  "resources": {
+    "registers": 36,
+    "shared_bytes": 1024,
+    "local_bytes": 576
+  },
+  "source": "source_k12288 float4/thread, 128 threads, 24 K-segment CTAs per row",
+  "passed": false
+}

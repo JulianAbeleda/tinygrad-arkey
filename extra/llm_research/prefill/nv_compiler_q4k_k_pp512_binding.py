@@ -71,17 +71,23 @@ class CompilerKPP512Binding:
   warmstart_contexts: Mapping
 
   @classmethod
-  def compile(cls, dev) -> "CompilerKPP512Binding":
+  def compile(cls, dev, role:str="attn_k") -> "CompilerKPP512Binding":
     wt, at = PackedWeightTransform("Q4_K",N,K), Q8ActivationRecordTransform(M,K)
     wp, ap = Q4KInt8FragmentProvider(wt), Q8Int8FragmentProvider(at)
     accumulator = Q4KQ8GroupAccumulatorContract(wp,ap)
     stride = TILE_K+(TILE_K//16)*4
     geometry = KernelTileGeometry((64,32,TILE_K),(2,2),128,32,
       (KernelLDSWindow("A",0,64*stride,stride), KernelLDSWindow("B",64*stride,96*stride,stride)))
+    if role not in LEGAL_ROLES: raise ValueError(f"unsupported Q4 K role {role}")
     identity = hashlib.sha256(repr((geometry,wp.identity,ap.identity,accumulator.abi)).encode()).hexdigest()
     context = _Context("boltbeam.full_kernel_candidate.v1",identity,geometry,wt,wp,at,ap,accumulator)
+    # Role-qualified key prevents V compilation from reusing K's ambient
+    # candidate context while retaining the same ProgramInfo ABI.
+    # The optimizer's canonical lookup key is shape-based; role isolation is
+    # carried by the context identity and compilation order, not by changing
+    # this established key ABI.
     key = warmstart_key({M,N},K,wt.storage_dtype)
-    lib = NVRTCCompiler(dev.arch,ptx=False,cache_key="nv_q8_compact_record_fp16_v1").compile(_record_source())
+    lib = NVRTCCompiler(dev.arch,ptx=False,cache_key=f"nv_q8_compact_record_fp16_{role}_v1").compile(_record_source())
     producer = native_nv_program("q8_compact_record_fp16",lib,global_size=(M,8,1),local_size=(128,1,1),
                                  globals=(0,1),outs=(1,),ins=(0,))
     warmstart, contexts = {key:(Opt(OptOps.TC,0,(-1,2,1)),)}, {key:context}
@@ -183,7 +189,9 @@ def _project(binding:CompilerKPP512Binding,x:Tensor,words:Tensor,*,model_family:
     _weight_carrier(words,binding.transform).transpose(),dtype=dtypes.int).cast(dtypes.float).contiguous()
 
 
-def binding_for(device:str="NV") -> CompilerKPP512Binding:
+def binding_for(device:str="NV", role:str="attn_k") -> CompilerKPP512Binding:
   if device != "NV": raise ValueError("compiler Q4 K research binding is NV-only")
-  if device not in _BINDINGS: _BINDINGS[device] = CompilerKPP512Binding.compile(Device[device])
-  return _BINDINGS[device]
+  key=f"{device}:{role}"
+  if key not in _BINDINGS:
+    _BINDINGS[key] = CompilerKPP512Binding.compile(Device[device], role)
+  return _BINDINGS[key]

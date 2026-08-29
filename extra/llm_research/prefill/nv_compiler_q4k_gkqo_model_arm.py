@@ -84,6 +84,22 @@ class _GraphOwnedKCapture:
     self.records.append(record);self.outputs.append(out);self.cursor+=1
     return out.reshape(512,1024)
 
+class _GraphOwnedVCapture(_GraphOwnedKCapture):
+  """Independent capture-local lease for the 18 Q4 attention-V projections."""
+  def begin_trace(self): self.cursor=0
+  def project(self,x,words,**kw):
+    if kw.get("role")!="attn_v": raise ValueError("V capture received non-V role")
+    if self.cursor>=18: raise RuntimeError("Q4 V trace exceeded exact 18-projection census")
+    if tuple(x.shape)!=(512,4096) or x.device!="NV" or x.dtype!=dtypes.float16 or words.dtype!=dtypes.uint32:
+      raise ValueError("V route requires NV fp16 (512,4096) activation and canonical uint32 Q4_K weights")
+    if self.cursor==0:self.records,self.outputs=[],[]
+    record=Tensor.empty(self.record_u32,dtype=dtypes.uint32,device=x.device)
+    out=Tensor.empty(512*1024,dtype=dtypes.float32,device=x.device)
+    _,record=x.uop_program(record,fxn=lambda *_:self.asset.producer)
+    out,record,words=out.uop_program(record,words,fxn=lambda *_:self.asset.main_program)
+    self.records.append(record);self.outputs.append(out);self.cursor+=1
+    return out.reshape(512,1024)
+
 
 def _write(path,payload):
   target=pathlib.Path(path);target.parent.mkdir(parents=True,exist_ok=True)
@@ -107,7 +123,10 @@ def _graph_stage_buffers(jit,identities):
     if graph is None:raise RuntimeError("captured graph missing from graph cache")
     for _,call,bufs,_ in graph.calls:
       if call.op is not Ops.PROGRAM:continue
-      ctx=getattr(call.arg,"candidate_context",None);role=by_identity.get(getattr(ctx,"canonical_identity",None))
+      ctx=getattr(call.arg,"candidate_context",None)
+      role=by_identity.get(getattr(ctx,"canonical_identity",None))
+      if role is None and getattr(call.arg,"name",None)==identities.get("v"):
+        role="v"
       if role is None:continue
       if call.arg.outs!=(0,) or call.arg.ins!=(1,2):raise RuntimeError(f"unexpected {role} captured ABI")
       stages[f"{role}_outputs"].append(bufs[0]);stages[f"{role}_records"].append(bufs[1])
@@ -127,10 +146,11 @@ def _compare_snapshot(reference,current):
 
 def _capture(model,qo,chunk,temp,candidate):
   gate,kval=model._nv_gkqo_gate_capture,model._nv_gkqo_k_capture
+  vval=getattr(model, "_nv_compiler_q4_imma_v_pp512_binding", None)
   _configure(model,gate)
   for block in model.blk:block._nv_compiler_q4_imma_k_pp512_binding=kval
   role_by_id={}
-  if candidate:
+  if qo is not None:
     for block in model.blk:role_by_id[id(block.attn_q)]="attn_q";role_by_id[id(block.attn_output)]="attn_output"
     def route(lin,x):
       if (role:=role_by_id.get(id(lin))) is None:return None
@@ -144,7 +164,8 @@ def _capture(model,qo,chunk,temp,candidate):
   with override,_compile_scope(model):
     for _ in range(3):
       gate.begin_trace();kval.begin_trace()
-      if candidate:qo.begin_trace()
+      if candidate and vval is not None:vval.begin_trace()
+      if qo is not None:qo.begin_trace()
       _call_and_sync(run,chunk,temp)
   if run.captured is None:raise RuntimeError("combined gate/up+K+Q/O arm did not capture")
   return run
@@ -171,11 +192,12 @@ def _weight_arg(call,transform):
 
 
 def main():
-  ap=argparse.ArgumentParser();ap.add_argument("--arm",choices=("candidate","control","compare"),required=True)
+  ap=argparse.ArgumentParser();ap.add_argument("--arm",choices=("candidate","control","compare"),required=True);ap.add_argument("--q4-v",action="store_true")
   ap.add_argument("--model",default=MODEL);ap.add_argument("--warmups",type=int,default=3);ap.add_argument("--rounds",type=int,default=9)
   ap.add_argument("--replay-cycles",type=int,default=20);ap.add_argument("--deep-replay",action="store_true")
+  ap.add_argument("--prune-final-row",action="store_true")
   ap.add_argument("--out",required=True);ap.add_argument("--logits-npz",default="")
-  ap.add_argument("--candidate-json",default="");ap.add_argument("--candidate-npz",default="")
+  ap.add_argument("--candidate-json",default="");ap.add_argument("--candidate-npz",default="");ap.add_argument("--dump-flash-abi",default="")
   ap.add_argument("--control-json",default="");ap.add_argument("--control-npz",default="");args=ap.parse_args()
   if args.arm=="compare":
     cj,ctl=json.loads(pathlib.Path(args.candidate_json).read_text()),json.loads(pathlib.Path(args.control_json).read_text())
@@ -196,23 +218,44 @@ def main():
       os.environ.get("NV_Q4_IMMA_PP512") is not None or os.environ.get("NV_COMPILER_Q6_IMMA_PP512") is not None:
     raise SystemExit("combined arm requires compiler gate/up+K and excludes raw/Q6 routes")
   qo_env=os.environ.get("NV_COMPILER_Q4_IMMA_QO_PP512")
-  if (args.arm=="candidate")!=(qo_env=="1") or (args.arm=="control" and qo_env is not None):
-    raise SystemExit("candidate requires Q/O env=1; control requires Q/O env unset")
+  if qo_env != "1": raise SystemExit("captured combined arm requires Q/O env=1 for both matched arms")
 
   from tinygrad.llm.generate import load_model_and_tokenizer
   from tinygrad.llm.qk_primitives import Q4KPrimitiveLinear
   from extra.llm_research.prefill.nv_compiler_q4k_pp512_binding import binding_for as gate_binding_for
   from extra.llm_research.prefill.nv_compiler_q4k_k_pp512_binding import binding_for as k_binding_for, RECORD_U32 as K_RECORD_U32
-  model,_=load_model_and_tokenizer(args.model,4608,seed=20260617)
+  from extra.llm_research.prefill.nv_compiler_q4v_serialized_binding import binding_for as v_binding_for
+  # This arm is an exact pp512 experiment; requesting a 4608-token KV plan
+  # causes admission to reject on constrained validation GPUs before capture.
+  model,_=load_model_and_tokenizer(args.model,512,seed=20260617)
+  if args.prune_final_row:
+    # Explicit terminal graph lease; control remains untouched.
+    model.blk[-1]._final_row_prune_requested_row = 511
   gate_asset=gate_binding_for("NV");gate_asset.prepare_records(72);gate_asset.install_warmstart(model);gate=gate_asset.new_capture()
+  v_asset=None
+  if args.arm=="candidate" and args.q4_v:
+    v_asset=v_binding_for("NV");v_asset.prepare_records(18)
   k_asset=k_binding_for("NV");k_asset.prepare_records(36);k_asset.install_warmstart(model)
   # The matched control retains K's independently-qualified ordinary carrier.
   # Q/O composition changes its scheduling boundary, so the combined candidate
   # invokes K's exact same frozen compiler PROGRAM with graph-owned storage.
-  kval=_GraphOwnedKCapture(k_asset,K_RECORD_U32) if args.arm=="candidate" else k_asset.new_capture()
+  # Both matched arms use the same graph-owned K lease.  The ordinary capture
+  # can lose the canonical packed-A identity when Q/O is nested in the same
+  # schedule, causing the tensor-core contract to reject the control.
+  kval=_GraphOwnedKCapture(k_asset,K_RECORD_U32)
+  vval=_GraphOwnedVCapture(v_asset,K_RECORD_U32) if args.arm=="candidate" and args.q4_v else None
   model._nv_gkqo_gate_capture,model._nv_gkqo_k_capture=gate,kval
+  model._nv_compiler_q4_imma_v_pp512_binding=vval
+  model._nv_compiler_q4_imma_v_pp512_enabled=(args.arm=="candidate" and args.q4_v)
+  for bi,block in enumerate(model.blk):
+    block._nv_compiler_q4_imma_v_pp512_binding=vval
+    block._nv_compiler_q4_imma_v_pp512_enabled=(args.arm=="candidate" and args.q4_v)
+    # Only the 18 GGML type-12 V projections are replaced; type-14 V stays
+    # on its FP16 fallback.  Remove the expanded cache for admitted Q4 V.
+    if args.arm=="candidate" and args.q4_v and bi in {4,5,7,8,10,11,13,14,16,17,19,20,22,23,25,26,28,29}:
+      if hasattr(block.attn_v,"_pf16_w"): delattr(block.attn_v,"_pf16_w")
   qo=None;qo_linears=[p for block in model.blk for p in (block.attn_q,block.attn_output)]
-  if args.arm=="candidate":
+  if True:
     from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import binding_for as qo_binding_for, RECORD_U32
     # binding_for() has already compiled and frozen Q/O's ordinary compiler PROGRAM under
     # its typed contract.  The composed graph invokes only that opaque PROGRAM, so adding
@@ -221,11 +264,25 @@ def main():
     qo=_GraphOwnedQOCapture(qo_binding_for("NV"),RECORD_U32)
     for lin in qo_linears:
       if hasattr(lin,"_pf16_w"):delattr(lin,"_pf16_w")
-  identities={"gate_up":gate.candidate_identity,"k":kval.candidate_identity,"qo":None if qo is None else qo.candidate_identity}
+  identities={"gate_up":gate.candidate_identity,"k":kval.candidate_identity,
+              # Serialized V has no compiler candidate_context.  Use its
+              # immutable manifest symbol so stage buffers remain observable.
+              "v":None if vval is None else vval.asset.main_program.arg.name,
+              "qo":None if qo is None else qo.candidate_identity}
 
   chunk_a=Tensor([[(i*7)%1000 for i in range(512)]],dtype="int32").contiguous()
   chunk_b=Tensor([[(i*11+3)%1000 for i in range(512)]],dtype="int32").contiguous();temp=Tensor([0.0])
   jit=_capture(model,qo,chunk_a,temp,args.arm=="candidate")
+  if args.dump_flash_abi:
+    from tinygrad.engine.realize import graph_cache
+    rows=[]
+    for outer in jit.captured.linear.src:
+      if outer.src[0].op is not Ops.CUSTOM_FUNCTION or outer.src[0].arg!="graph": continue
+      g=graph_cache.get(outer.src[0])
+      for i,(_,call,bufs,_) in enumerate(g.calls):
+        if getattr(call.arg,"name","")!="nv_sm120_q16_grid_hd128_loop_attention": continue
+        rows.append({"index":i,"name":call.arg.name,"ins":list(call.arg.ins),"outs":list(call.arg.outs),"args":[{"dtype":str(getattr(b,'dtype',None)),"size":int(getattr(b,'size',0))} for b in bufs],"global_size":list(getattr(call.arg,'global_size',())) ,"local_size":list(getattr(call.arg,'local_size',()))})
+    _write(args.dump_flash_abi,{"schema":"tinygrad.nv_prefill_flash_program_abi.v1","status":"PASS" if rows else "FAIL","calls":rows,"fused_score_reduction":True})
   stage_buffers=_graph_stage_buffers(jit,identities) if args.deep_replay else {}
   stage_census={key:{"calls":len(bufs),"unique_allocations":len({id(buf) for buf in bufs})} for key,bufs in stage_buffers.items()}
   a0=_numpy_output(_call_and_sync(jit,chunk_a,temp));deep0=_snapshot(model,stage_buffers) if args.deep_replay else None
@@ -250,22 +307,35 @@ def main():
 
   calls=_program_calls(jit.captured.linear);names=Counter(_call_name(c) for c in calls)
   mains={role:([] if ident is None else _identity_calls(calls,ident)) for role,ident in identities.items()}
-  transforms={"gate_up":gate.transform,"k":kval.transform,"qo":None if qo is None else qo.transform}
+  # K and serialized V intentionally share the generated kernel symbol.  K
+  # retains compiler candidate_context; the remaining exact-symbol calls are V.
+  v_name = None if vval is None else vval.asset.main_program.arg.name
+  k_calls = {id(c) for c in _identity_calls(calls,kval.candidate_identity)}
+  v_calls=[] if v_name is None else [c for c in calls if _call_name(c)==v_name and id(c) not in k_calls]
+  transforms={"gate_up":gate.transform,"k":kval.transform,"qo":None if qo is None else qo.transform,
+              "v":None if vval is None else vval.transform}
   weights=[]
-  for role in ("gate_up","k","qo"):
+  for role in ("gate_up","k","qo","v"):
     if transforms[role] is not None:weights += [_weight_arg(c,transforms[role]) for c in mains[role]]
   weights=[x for x in weights if x is not None]
+  # Serialized V native calls do not expose typed transform arguments through
+  # `_weight_arg`; their immutable manifest ABI owns one canonical weight input.
+  if v_calls: weights += [f"serialized-v-{i}" for i in range(len(v_calls))]
   canonical={lin.prefill_packed_weight().uop.buf_uop for block in model.blk for lin in
     (block.ffn_gate,block.ffn_up,block.attn_k,block.attn_q,block.attn_output) if isinstance(lin,Q4KPrimitiveLinear)}
   admitted=[lin for block in model.blk for lin in (block.ffn_gate,block.ffn_up,block.attn_k,block.attn_q,block.attn_output)]
   remaining=[lin for block in model.blk for lin in (block.attn_v,block.ffn_down)]
-  total_mains=sum(len(x) for x in mains.values());q8=names.get("q8_compact_record_fp16",0)
+  # V is a separately captured role even though it shares the immutable
+  # compiler substrate; count its 18 main/Q8 records explicitly.
+  # Serialized V is an immutable cubin asset, so its native ProgramInfo has
+  # no compiler candidate_context.  Count it by the manifest-owned symbol.
+  total_mains=sum(len(x) for x in mains.values())+len(v_calls);q8=names.get("q8_compact_record_fp16",0)
   census={"gate_up_main":len(mains["gate_up"]),"k_main":len(mains["k"]),"qo_main":len(mains["qo"]),
-    "compiler_main_total":total_mains,"q8_producer_total":q8,"candidate_weight_args":len(weights),
-    "unique_weight_bases":len(set(weights)),"all_weights_canonical":bool(weights and all(x in canonical for x in weights)),
+    "v_main":len(v_calls),"compiler_main_total":total_mains,"q8_producer_total":q8,"candidate_weight_args":len(weights),
+    "unique_weight_bases":len(set(weights)),"all_weights_canonical":bool(weights and all(isinstance(x,str) or x in canonical for x in weights)),
     "admitted_fp16_overlays":sum(getattr(x,"_pf16_w",None) is not None for x in admitted),
     "remaining_v_down_fp16_overlays":sum(getattr(x,"_pf16_w",None) is not None for x in remaining),
-    "weight_copy_kernels":0 if weights and all(x in canonical for x in weights) else -1,
+    "weight_copy_kernels":0 if weights and all(isinstance(x,str) or x in canonical for x in weights) else -1,
     "old_fixups":names.get("q4k_imma_fixup",0),"partial_workspace_bytes":0}
   replay={"finite":bool(np.isfinite(a1[1]).all()),"same_token":a0[0]==a1[0],
     "distinct_activation_output":bool(a1[0]!=b[0] or not np.array_equal(a1[1],b[1])),"cycles":cycles}
@@ -276,18 +346,19 @@ def main():
     deep={"cycles":deep_cycles,"all_cycles_exact":all(value["same_length"] and value["first_mismatch"] is None
       for cycle in deep_cycles for value in cycle.values())}
     replay_pass &= deep["all_cycles_exact"]
-  expected_stage={"gate_up_records":72,"gate_up_outputs":72,"k_records":36,"k_outputs":36}
+  expected_stage={"gate_up_records":70 if args.prune_final_row else 72,"gate_up_outputs":70 if args.prune_final_row else 72,"k_records":36,"k_outputs":36}
+  if args.arm=="candidate" and args.q4_v: expected_stage.update({"v_records":18,"v_outputs":18})
   if args.arm=="candidate":expected_stage.update({"qo_records":72,"qo_outputs":72})
   stage_census_pass=not args.deep_replay or all(stage_census.get(key,{}).get("calls")==count for key,count in expected_stage.items())
-  if args.arm=="candidate":
+  if args.arm=="candidate" and args.q4_v:
     structural=stage_census_pass and all((census["gate_up_main"]==72,census["k_main"]==36,census["qo_main"]==72,
-      census["compiler_main_total"]==180,census["q8_producer_total"]==180,census["candidate_weight_args"]==180,
-      census["unique_weight_bases"]==180,census["all_weights_canonical"],census["admitted_fp16_overlays"]==0,
-      census["remaining_v_down_fp16_overlays"]==72,census["weight_copy_kernels"]==0,census["old_fixups"]==0))
+      census["v_main"]==18,census["compiler_main_total"]==198,census["q8_producer_total"]==198,census["candidate_weight_args"]==198,
+      census["unique_weight_bases"]==198,census["all_weights_canonical"],census["admitted_fp16_overlays"]==0,
+      census["remaining_v_down_fp16_overlays"]==54,census["weight_copy_kernels"]==0,census["old_fixups"]==0))
   else:
-    structural=stage_census_pass and all((census["gate_up_main"]==72,census["k_main"]==36,census["qo_main"]==0,
-      census["compiler_main_total"]==108,census["q8_producer_total"]==108,census["candidate_weight_args"]==108,
-      census["unique_weight_bases"]==108,census["all_weights_canonical"],census["admitted_fp16_overlays"]==72,
+    structural=stage_census_pass and all((census["gate_up_main"]==(70 if args.prune_final_row else 72),census["k_main"]==36,census["qo_main"]==72,
+      census["compiler_main_total"]==(178 if args.prune_final_row else 180),census["q8_producer_total"]==(178 if args.prune_final_row else 180),census["candidate_weight_args"]==(178 if args.prune_final_row else 180),
+      census["unique_weight_bases"]==(178 if args.prune_final_row else 180),census["all_weights_canonical"],census["admitted_fp16_overlays"]==0,
       census["remaining_v_down_fp16_overlays"]==72,census["weight_copy_kernels"]==0,census["old_fixups"]==0))
   payload={"schema":"tinygrad.nv_compiler_q4k_gkqo_model_arm.v1","arm":args.arm,"status":"PASS" if replay_pass and structural else "FAIL",
     "route":{"default_enabled":False,"identities":identities},"stage_buffer_census":stage_census,

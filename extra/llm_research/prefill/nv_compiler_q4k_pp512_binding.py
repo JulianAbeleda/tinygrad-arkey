@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import os
 from types import MappingProxyType
 from typing import Mapping
 
@@ -30,6 +31,7 @@ LEGAL_ROLES = frozenset(("ffn_gate", "ffn_up"))
 RECORD_BYTES = M*K + 2*M*(K//32)*4
 RECORD_U32 = RECORD_BYTES//4
 _BINDINGS: dict[str, "CompilerPP512Binding"] = {}
+_UNROLL_LOOP = "  for (int Ridx0 = 0; Ridx0 < 64; Ridx0++) {"
 
 
 def supports(*, model_family:str, role:str, weight_type:str, m:int, n:int, k:int, device:str) -> bool:
@@ -73,6 +75,26 @@ def _record_source() -> str:
   return SRC_FP16.replace(old, new)
 
 
+def _research_unroll_program(program:UOp, dev) -> UOp:
+  """Apply the counter-selected source scheduling discriminator.
+
+  This is nested behind the already-default-off compiler route and accepts one
+  exact factor.  Source and binary are replaced together; ProgramInfo, launch
+  ABI, candidate context, and symbol remain compiler-owned.
+  """
+  raw = os.environ.get("NV_COMPILER_Q4_IMMA_UNROLL")
+  if raw is None: return program
+  if raw != "4": raise RuntimeError("NV_COMPILER_Q4_IMMA_UNROLL only admits the qualified factor 4")
+  sources = [u for u in program.src if u.op is Ops.SOURCE and isinstance(u.arg, str)]
+  binaries = [u for u in program.src if u.op is Ops.BINARY and isinstance(u.arg, bytes)]
+  if len(sources) != 1 or len(binaries) != 1 or sources[0].arg.count(_UNROLL_LOOP) != 1:
+    raise RuntimeError("compiler Q4 main source no longer has the exact unroll discriminator ABI")
+  source = sources[0].arg.replace(_UNROLL_LOOP, f"  #pragma unroll {raw}\n{_UNROLL_LOOP}")
+  binary = NVRTCCompiler(dev.arch, ptx=False, cache_key="nv_compiler_q4_gateup_k64_unroll4_v1").compile(source)
+  return program.replace(src=tuple(u.replace(arg=source) if u is sources[0] else
+    u.replace(arg=binary) if u is binaries[0] else u for u in program.src))
+
+
 @dataclass(frozen=True)
 class CompilerPP512Binding:
   producer: object
@@ -113,7 +135,7 @@ class CompilerPP512Binding:
                 getattr(program.src[0].arg, "candidate_context", None) is not None and
                 program.src[0].arg.candidate_context.canonical_identity == identity]
     if len(set(matching)) != 1: raise RuntimeError(f"expected one compiler-generated Q4_K PROGRAM, found {len(set(matching))}")
-    compiled_program = matching[0]
+    compiled_program = _research_unroll_program(matching[0], dev)
     # A cached compiler PROGRAM retains its lowered SINK for diagnostics.  A
     # reusable invocation must be opaque to the next scheduling pass, while
     # retaining the exact compiler-emitted ProgramInfo/source/binary and the

@@ -1,0 +1,28 @@
+{
+  "schema": "tinygrad.nv_prefill_flash_s6_vector_substrate.v1",
+  "status": "PRIMITIVE_ONLY",
+  "shape": {
+    "Hq": 32,
+    "Hkv": 8,
+    "Hd": 128,
+    "q_tokens": 512,
+    "kv_extent": 768,
+    "partitions": 1,
+    "partition_tokens": 128,
+    "launched_heads": 1,
+    "launched_queries": 1
+  },
+  "timing_us": {
+    "score": 14.272,
+    "combine": null
+  },
+  "finite": true,
+  "max_abs": 0.1416015625,
+  "allclose": false,
+  "resources": {
+    "score_regs": 40,
+    "score_shared": 1024,
+    "combine_regs": 39,
+    "combine_shared": 1024
+  }
+}

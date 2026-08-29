@@ -82,6 +82,16 @@ from tinygrad.engine.jit import GraphRunner, MultiGraphRunner
 class HCQGraph(MultiGraphRunner):
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
+    # Research-only observation seam: graph construction is the first point at
+    # which CALL arguments have been resolved to the actual allocated buffers.
+    # Keep this entirely out of scheduling; observers are opt-in and may retain
+    # the immutable construction records for attribution/capture.
+    try:
+      from tinygrad.engine.jit import _GRAPH_ADMISSION_OBSERVER
+      if (observer:=_GRAPH_ADMISSION_OBSERVER.get()) is not None and hasattr(observer, "bind_graph_calls"):
+        observer.bind_graph_calls(tuple(self.calls))
+    except Exception:
+      raise
     self.devices = list({cast(HCQCompiled, Device[b.device]) for (_,_,bufs,_) in self.calls for b in bufs})
 
     # CPU Device is always last

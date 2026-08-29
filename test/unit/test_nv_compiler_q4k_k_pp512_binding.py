@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 
 from extra.llm_research.prefill.nv_compiler_q4k_k_pp512_binding import (
-  K, M, N, PROJECTIONS_PER_MODEL, RECORD_BYTES, RECORD_U32, CompilerKPP512Capture, supports)
+  K, M, N, PROJECTIONS_PER_MODEL, RECORD_BYTES, RECORD_U32, CompilerKPP512Binding, CompilerKPP512Capture, supports)
 from tinygrad.llm.model import _nv_compiler_q4_imma_k_capture
 
 
@@ -17,6 +17,11 @@ class TestNVCompilerQ4KKPP512Binding(unittest.TestCase):
   def test_record_is_exact_compact_packet(self):
     self.assertEqual(RECORD_BYTES, M*K + 2*M*(K//32)*4)
     self.assertEqual(RECORD_U32*4, RECORD_BYTES)
+
+  def test_k_population_rejects_v_sized_census(self):
+    CompilerKPP512Binding.prepare_records(SimpleNamespace(), PROJECTIONS_PER_MODEL)
+    with self.assertRaisesRegex(ValueError, "exact K route"):
+      CompilerKPP512Binding.prepare_records(SimpleNamespace(), 18)
 
   def test_capture_epoch_and_census_fail_closed(self):
     capture = CompilerKPP512Capture(SimpleNamespace())

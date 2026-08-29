@@ -1,0 +1,119 @@
+{
+  "schema": "tinygrad.nv_q4down_population.v3",
+  "weights": [
+    "blk.4.ffn_down.weight",
+    "blk.5.ffn_down.weight",
+    "blk.7.ffn_down.weight",
+    "blk.8.ffn_down.weight",
+    "blk.10.ffn_down.weight",
+    "blk.11.ffn_down.weight",
+    "blk.13.ffn_down.weight",
+    "blk.14.ffn_down.weight",
+    "blk.16.ffn_down.weight",
+    "blk.17.ffn_down.weight",
+    "blk.19.ffn_down.weight",
+    "blk.20.ffn_down.weight",
+    "blk.22.ffn_down.weight",
+    "blk.23.ffn_down.weight",
+    "blk.25.ffn_down.weight",
+    "blk.26.ffn_down.weight",
+    "blk.28.ffn_down.weight",
+    "blk.29.ffn_down.weight"
+  ],
+  "census": {
+    "expected": 18,
+    "producers": 18,
+    "mains": 18,
+    "distinct_outputs": 18,
+    "records": 18
+  },
+  "correctness": {
+    "finite": true,
+    "distinct_values": false,
+    "shape": true,
+    "checksums": [
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ]
+    ]
+  },
+  "timing_ms": {
+    "min": 22.407994,
+    "median": 23.464203,
+    "samples": [
+      57.395238,
+      22.407994,
+      23.464203
+    ]
+  },
+  "verdict": "FAIL"
+}

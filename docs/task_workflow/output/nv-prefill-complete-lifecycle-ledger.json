@@ -10,7 +10,7 @@
     "physical_primitive": "PASS",
     "compiler_gate_up_integration": "PASS_DEFAULT_OFF",
     "production_generic": "NOT_YET",
-    "reason": "exact Q4 gate/up, K, Q, and O paths are compiler-owned, canonical, copy/fixup free, replay exact, and faster than FP16; V/down and graph-generic queue ownership remain open"
+    "reason": "exact Q4 gate/up, K, Q, O, and Q4-V paths are compiler-owned, canonical, copy/fixup free, replay exact; composed unroll4+Q4-V is retained default-off after a matched whole-model win; current Q4-down and Flash S6 spellings are stopped"
   },
   "authority_walls": [
     {"arm":"tinygrad_fp16_original_r7","wall_ms":84.025,"reported_tok_s":6093,"reciprocal_tok_s":6093.425,"class":"measured","evidence":"nv-prefill-corrected-tile-20260828/authority-complete-r7.json"},
@@ -19,7 +19,9 @@
     {"arm":"tinygrad_packed_v4","wall_ms":93.200,"reciprocal_tok_s":5493.562,"class":"measured","evidence":"nv-q4-imma-combined-chain-integration-20260828.md"},
     {"arm":"tinygrad_compiler_packed_gate_up","wall_ms":74.694977,"reciprocal_tok_s":6854.544,"class":"measured","evidence":"nv-compiler-packed-fragment-20260828/model_candidate_r9.json"},
     {"arm":"tinygrad_compiler_packed_gate_up_K_control","wall_ms":70.173,"median_ms":70.353,"reciprocal_tok_s":7296.254,"class":"measured","evidence":"nv-compiler-q4k-gkqo-20260828 combined control"},
-    {"arm":"tinygrad_compiler_packed_gate_up_K_Q_O_safe_cut","wall_ms":69.378,"median_ms":69.492,"reciprocal_tok_s":7379.861,"class":"measured","evidence":"nv-compiler-q4k-gkqo-combined-result.md"},
+    {"arm":"tinygrad_compiler_packed_gate_up_K_Q_O_unroll4","wall_ms":69.205220,"median_ms":69.342578,"reciprocal_tok_s":7398.286,"class":"measured_precursor","evidence":"nv-prefill-gateup-unroll4-result-20260829.md"},
+    {"arm":"tinygrad_compiler_packed_gate_up_K_Q_O_Q4_V","wall_ms":72.116495,"median_ms":72.137084,"class":"measured_precursor_isolated_no_unroll","evidence":"nv-prefill-q4v-result-20260829.md","note":"superseded as current best by composed result"},
+    {"arm":"tinygrad_compiler_packed_gate_up_K_Q_O_unroll4_Q4_V","wall_ms":67.153915,"median_ms":67.235719,"reciprocal_tok_s":7624.276,"class":"measured_retained_default_off","evidence":"nv-prefill-composed-unroll4-q4v-result-20260829.md","note":"198/198/canonical198, overlays54, exact deep20/logits/token"},
     {"arm":"tinygrad_compiler_packed_gate_up_K_Q6_V_down","wall_ms_range":[72.1744,72.2844],"reciprocal_tok_s_range":[7093.93,7083.14],"class":"measured_rejected","evidence":"nv-compiler-q6k-model-lifecycle-result.md"},
     {"arm":"tinygrad_fresh_fp16_control","wall_ms":83.502737,"reciprocal_tok_s":6131.536,"class":"measured","evidence":"nv-compiler-packed-fragment-20260828/model_fp16_r9.json"}
   ],
@@ -30,6 +32,8 @@
     "packed_v4_minus_llama": 56.592,
     "compiler_packed_minus_fresh_fp16": -8.807760,
     "compiler_packed_minus_llama": 38.086977,
+    "composed_unroll4_q4v_minus_llama_min": 32.473548,
+    "composed_unroll4_q4v_minus_llama_median": 32.216320,
     "compiler_Q4_stack_minus_fresh_fp16": -14.124737,
     "compiler_Q4_stack_minus_llama": 32.770,
     "combined_Q_O_minus_gate_up_K": -0.795
@@ -155,7 +159,7 @@
     {"stage":9,"name":"projection publication","tiny":"scheduler-owned tensor","llama":"CUDA graph value","packed_v4":"native PROGRAM AFTER dependency","compiler_packed":"direct compiler PROGRAM output with nested computed/canonical input ownership passing","class":"measured"},
     {"stage":10,"name":"support operations","operations":["RoPE","q/k norm","KV write","SiLU","multiply","residual"],"time":{"tiny_profile_ms":3.662,"llama_profile_ms":3.808},"class":"measured"},
     {"stage":11,"name":"Flash Attention","calls":36,"time":{"tiny_profile_ms":3.286,"llama_profile_ms":1.714},"class":"measured"},
-    {"stage":12,"name":"final requested-row liveness","tiny":"last FFN remains M=512","llama":"gather after final attention; final FFN M=1","estimated_tiny_recovery_ms":[1,2],"class":"source_proven_and_derived"},
+    {"stage":12,"name":"final requested-row liveness","tiny":"last FFN remains M=512","llama":"gather after final attention; final FFN M=1","estimated_tiny_recovery_ms":[1,2],"class":"source_proven_and_derived_unbooked"},
     {"stage":13,"name":"vocabulary","shape":[1,151936,4096],"time":{"tiny_profile_ms":2.880,"llama_profile_ms":0.311},"class":"measured"},
     {"stage":14,"name":"capture replay and synchronization","tiny":"HCQ graph","llama":"serialized CUDA graph","packed_v4":"216 native calls captured but scratch and callification ownership incomplete","compiler_packed":"72 producer plus 72 generated main, zero fixup/copy, replay exact/fresh","wall_residual":"unknown across unmatched profiler regimes","class":"measured_and_unknown"}
   ],
@@ -164,7 +168,10 @@
     {"item":"computed and canonical input callification","status":"closed","evidence":"single/nested replay and 72 canonical model buffers"},
     {"item":"packed transport copies","status":"closed","before":70,"after":0},
     {"item":"gate/up partial scratch and fixup","status":"closed_by_direct_compiler_output","bytes":0,"calls":0},
-    {"item":"role coverage","status":"partial","covered":["gate","up","K","Q","O"],"uncovered":["V","down"]},
+    {"item":"role coverage","status":"partial","covered":["gate","up","K","Q","O","Q4_V"],"uncovered":["Q6_V","Q4_down","Q6_down"]},
+    {"item":"Q4_V model lifecycle","status":"retained_default_off","evidence":"nv-prefill-q4v-result-20260829.md","note":"isolated precursor; composed result is authoritative"},
+    {"item":"Q4_down model lifecycle","status":"STOP_correctness_and_performance","evidence":"evidence/nv-q4down-matched-ab-20260829/result.json","note":"max_abs 2.695646; candidate slower"},
+    {"item":"Flash S6 current spellings","status":"STOP_not_integrated","evidence":"nv-prefill-flash-s6-cooperative-installed-ab-20260829.md"},
     {"item":"Q6 typed arithmetic","status":"closed_primitive_open_lifecycle","covered_primitive":["V","down"],"model_decision":"NO_GO_CURRENT_SPELLING"},
     {"item":"binding storage","status":"partial_research_substrate","detail":"gate/up and K assets separate immutable programs from per-model captures; admitted combined K/Q/O wrapper uses lazy graph-owned buffers; standalone Q/O binding still caches mutable per-device record/output pools and cursor"},
     {"item":"Q_O_queue_ownership","status":"exact_graph_cut_only","issue":"default ready placement is intermittent; generic dependency-owned admission remains open"}
@@ -184,24 +191,27 @@
     {"lever":"compiler_packed_gate_up","recovery_ms":8.807760,"resulting_wall_ms":74.694977,"resulting_tok_s":6854.544,"class":"measured"},
     {"lever":"compiler_packed_K","booked_wall_recovery_ms":4.004704,"resulting_wall_ms":70.390585,"resulting_tok_s":7273.70,"class":"measured_matched_role_bracket"},
     {"lever":"compiler_packed_Q_O_composed","booked_wall_recovery_ms":0.795,"resulting_wall_ms":69.378,"resulting_tok_s":7379.861,"class":"measured_combined_bracket"},
+    {"lever":"composed_unroll4_Q4_V","booked_wall_recovery_ms":2.011928,"median_recovery_ms":2.079995,"resulting_wall_ms":67.153915,"resulting_median_ms":67.235719,"resulting_tok_s":7624.276,"class":"measured_retained_default_off","evidence":"nv-prefill-composed-unroll4-q4v-result-20260829.md"},
     {"lever":"Q6_V_down_current","booked_wall_recovery_ms":0,"regression_ms_range":[1.8418,1.9518],"class":"measured_rejected"},
-    {"lever":"V_packed_service_and_topology","booked_wall_recovery":null,"class":"open_role_lifecycle"},
-    {"lever":"down_packed_service","profile_exposure_ms_approx":12.1,"booked_wall_recovery":null,"class":"derived_role_estimate"},
-    {"lever":"llama_bound_remaining","recovery_ms":32.770,"resulting_wall_ms":36.608,"resulting_tok_s":13986.014,"class":"arithmetic_bound"},
-    {"lever":"final_row_prune","recovery_ms_range":[1,2],"resulting_wall_ms_range":[68.378,67.378],"resulting_tok_s_range":[7487.79,7598.92],"class":"derived"},
+    {"lever":"Q4_down_current","booked_wall_recovery_ms":0,"candidate_minus_control_min_ms":2.197365,"candidate_minus_control_median_ms":1.755232,"max_abs":2.695646,"class":"measured_rejected_correctness_and_performance"},
+    {"lever":"Flash_S6_current","booked_wall_recovery_ms":0,"class":"measured_rejected_performance"},
+    {"lever":"final_row_prune","booked_wall_recovery_ms":0,"candidate_minus_control_min_ms":0.277480,"candidate_minus_control_median_ms":0.166220,"class":"measured_rejected_performance"},
+    {"lever":"exact_llama_settled_gap","tiny_min_ms":67.153915,"tiny_median_ms":67.235719,"llama_min_ms":34.680367,"llama_median_ms":35.019399,"minimum_gap_ms":32.473548,"median_gap_ms":32.216320,"class":"measured_not_recovery_estimate"},
     {"lever":"attention_parity","profile_exposure_bound_ms":1.572,"booked_wall_recovery":null,"class":"measured_profile_bound"},
     {"lever":"vocabulary_parity","profile_exposure_bound_ms":2.569,"booked_wall_recovery":null,"class":"measured_profile_bound"}
   ],
   "next_gates": [
-    {"name":"Q4_V_role_gate","shape":[512,1024,4096],"requirements":["real Q4 V model integration","reuse only qualified 256-CTA geometry","fresh composed bracket"]},
-    {"name":"Q4_down_role_gate","shape":[512,4096,12288],"requirements":["typed Q4 correction contract","full role oracle","fresh composed bracket"]},
-    {"name":"Q6_lifecycle_reopen","requirements":["explain down model regression despite primitive pass","stronger V-only bracket","no primitive-to-wall inference"]},
-    {"name":"generic_queue_ownership","requirements":["dependency-scoped Flash cut","fail closed on graph drift","20-cycle replay"]}
+    {"name":"current_composed_role_accounting","substrate":"missing","requirements":["low-perturbation HCQ-native timestamps on the exact 67.153915-ms graph","complete call-to-role census","wall closure without PROFILE=1 scaling","no conversion from historical role percentages"]},
+    {"name":"gate_up_register_safe_schedule","substrate":"ready","requirements":["real full-output oracle","matched executed-path counters","deep20/logits/token","matched composed R9"]},
+    {"name":"Flash_vectorized_topology","substrate":"missing","requirements":["query-tiled vectorized 192-CTA or equivalent design","live installed-buffer oracle","installed population A/B","deep replay before integration"]},
+    {"name":"vocabulary_new_full_logit_service","substrate":"missing","requirements":["preserve full-logit API","real model weight oracle","matched end-to-end wall","do not reuse rejected decode M1/top1 assets"]},
+    {"name":"down_new_lifecycle","substrate":"missing","requirements":["new Q4/Q6 producer-correction-epilogue design","full 18-role oracle","must replace rather than tune rejected spellings"]},
+    {"name":"generic_queue_ownership","substrate":"partial","requirements":["dependency-scoped Flash cut","fail closed on graph drift","20-cycle replay"]}
   ],
   "unknowns": [
     "physical HCQ DRAM/L2/shared counters because current CUPTI route cannot observe HCQ kernels",
     "wall conversion of profile-only attention and vocabulary bounds",
-    "performance and quality of packed Q4 V/down before exact-role qualification",
+    "performance and quality of packed Q4 V/down outside the qualified Q4-V role gate and rejected Q4-down matched A/B",
     "generality outside Qwen3-8B pp512",
     "production-safe multi-model storage ownership for compiler-packed binding"
     ,"operand-scoped packed warmstart matching; current whole-AST dtype key can fail closed on unrelated packed parameters"

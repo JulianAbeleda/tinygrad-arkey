@@ -696,14 +696,20 @@ class FFNBlock:
           return _prefill_semantic(_prefill, prefill_activation,
             self._nv_compiler_q6_imma_pp512_binding.project(down_input, self.ffn_down.prefill_packed_weight(),
               model_family="qwen3_8b", role="ffn_down").reshape(x.shape[:-1]+(4096,)))
-        return _prefill_semantic(_prefill, prefill_activation,
-          _pf16(self.ffn_down, h.reshape(x.shape[:-1]+(12288,))).contiguous())
+        _down_in = h.reshape(x.shape[:-1]+(12288,))
+        _down_out = _pf16(self.ffn_down, _down_in).contiguous()
+        if getattr(self, "_research_capture_down_io", False) and tuple(_down_in.shape[-2:]) == (512,12288):
+          self._research_down_input, self._research_down_output = _down_in, _down_out
+        return _prefill_semantic(_prefill, prefill_activation, _down_out)
       # prefill v2 (dense): fp16 + .contiguous()-isolated matmuls so each is a clean, warmstart-matchable TC
       # kernel (mirrors the gated chained-FFN prefill authority shape). MoE/fused fall through.
       g = _prefill_semantic(_prefill, prefill_activation, _pf16(self.ffn_gate, x).contiguous())
       u = _prefill_semantic(_prefill, prefill_activation, _pf16(self.ffn_up, x).contiguous())
       h = _prefill_semantic(_prefill, prefill_activation, (g.silu() * u).contiguous())
-      return _prefill_semantic(_prefill, prefill_activation, _pf16(self.ffn_down, h).contiguous())
+      _down_in, _down_out = h, _pf16(self.ffn_down, h).contiguous()
+      if getattr(self, "_research_capture_down_io", False) and tuple(_down_in.shape[-2:]) == (512,12288):
+        self._research_down_input, self._research_down_output = _down_in, _down_out
+      return _prefill_semantic(_prefill, prefill_activation, _down_out)
     if hasattr(self, 'ffn_gate_exps'):
       h = x.unsqueeze(2)  # (B, T, 1, D) - add expert dim for broadcasting
       logits = self.ffn_gate_inp(x)
@@ -815,10 +821,31 @@ class FFNBlock:
         _nh = _decode_rmsnorm(self.ffn_norm, h, _fused_norm, dtypes.float16)
         normed_h = _prefill_semantic(_prefill, prefill_scratch,
           _nh if _nh is not None else _decode_reduce_output_rmsnorm_fp16_consumer(self.ffn_norm, h, _reduce_output_norm))
+      # Terminal prefill research lease also applies to the ordinary (non
+      # compiler-primitive) path.  Gather before any FFN work so this cannot
+      # silently benchmark a dense fallback.
+      _row = getattr(self, "_final_row_prune_requested_row", None) if _prefill else None
+      if _row is not None and not (_prefill and _nv_q4_imma_pp512_mode() is not None):
+        # Captured compiler arms may flatten (B,T,D) to (T,D); gather the
+        # token axis in either rank without ever producing an empty view.
+        def _terminal_row(t):
+          if len(t.shape) == 3: return t[:, _row:_row+1, :]
+          if len(t.shape) == 2: return t.reshape(1, t.shape[0], t.shape[1])[:, _row:_row+1, :]
+          raise RuntimeError(f"final-row prune requires rank-2/3 hidden, got {t.shape}")
+        if _row < 0 or _row >= (h.shape[1] if len(h.shape) == 3 else h.shape[0]):
+          raise RuntimeError(f"final-row prune requested row {_row} outside hidden shape {h.shape}")
+        h, normed_h = _terminal_row(h), _terminal_row(normed_h)
       # Research-only ownership split: expose the residual and exact fp16 norm
       # result as distinct precompiled outputs. The native Q8 producer owns
       # normed_h directly; h remains the residual input to the ordinary tail.
-      if _prefill and _nv_q4_imma_pp512_mode() is not None: return h, normed_h
+      if _prefill and _nv_q4_imma_pp512_mode() is not None:
+        # Closed research hook: after the terminal attention block, only the
+        # requested row is live.  The model installs this attribute explicitly;
+        # absent it, preserve the dense graph spelling exactly.
+        _row = getattr(self, "_final_row_prune_requested_row", None)
+        if _row is not None:
+          h, normed_h = h[:, _row:_row+1], normed_h[:, _row:_row+1]
+        return h, normed_h
       # L1 M4: ffn_down silu*mul prelude + residual epilogue absorption. When the gate is open,
       # the down GEMV reads gate_out and up_out directly and computes silu(gate)*up inline (no
       # E_128_32_3 elementwise kernel), then adds h as an in-kernel epilogue (no E_32_32_4
@@ -886,6 +913,10 @@ class FFNBlock:
     _runner = function(precompile=True, allow_implicit=True)(_run)
     if getattr(self, "_is_prefill", False) and _nv_q4_imma_pp512_mode() is not None:
       h, normed_h = _runner(x, start_pos, _rf)
+      _row = getattr(self, "_final_row_prune_requested_row", None)
+      if _row is not None:
+        if len(h.shape) != 3 or h.shape[1] != 1:
+          raise RuntimeError(f"final-row prune callify returned invalid shape {h.shape}; expected [B,1,D]")
       return _prefill_semantic(True, prefill_activation, (h + self._feed_forward(normed_h)).contiguous())
     return _prefill_semantic(getattr(self, "_is_prefill", False), prefill_activation, _runner(x, start_pos, _rf).contiguous())
 
@@ -912,7 +943,11 @@ class TransformerBlock(FFNBlock):
         q = _prefill_semantic(_prefill,prefill_scratch,_pf16(self.attn_q,x).contiguous())
         k = _prefill_semantic(_prefill,prefill_scratch,
           binding.project(flat,self.attn_k.prefill_packed_weight(),model_family="qwen3_8b",role="attn_k"))
-        if _nv_compiler_q6_imma_role_enabled(self.config,"attn_v") and isinstance(self.attn_v,Q6KPrimitiveLinear):
+        if getattr(self, "_nv_compiler_q4_imma_v_pp512_enabled", False) and x.device == "NV" and isinstance(self.attn_v, Q4KPrimitiveLinear):
+          v = _prefill_semantic(_prefill,prefill_scratch,
+            self._nv_compiler_q4_imma_v_pp512_binding.project(flat,self.attn_v.prefill_packed_weight(),
+              model_family="qwen3_8b",role="attn_v"))
+        elif _nv_compiler_q6_imma_role_enabled(self.config,"attn_v") and isinstance(self.attn_v,Q6KPrimitiveLinear):
           v = _prefill_semantic(_prefill,prefill_scratch,
             self._nv_compiler_q6_imma_pp512_binding.project(flat,self.attn_v.prefill_packed_weight(),
               model_family="qwen3_8b",role="attn_v"))
@@ -1637,7 +1672,9 @@ class Transformer:
     # being realized by JIT input preparation as a separate per-token copy and synchronization.
     tokens = _runtime_input_boundary(tokens)
     _vv = Transformer._bound_position_var_vals(start_pos)
-    logits = self.logits(tokens, start_pos)[:, -1, :]
+    _logits = self.logits(tokens, start_pos)
+    # Pruned prefill graphs already return the requested terminal row.
+    logits = _logits[:, 0, :] if _logits.shape[1] == 1 else _logits[:, -1, :]
     # Gumbel-max trick: argmax(logits/temp - log(-log(uniform))) is equivalent to sampling from softmax(logits/temp)
     scores = logits / temperature.maximum(1e-12) - (Tensor.rand_like(logits).maximum(1e-12).log().neg()).log()
     native_threads = getattr(self, "_decode_native_argmax_lease", getattr(self, "_decode_native_argmax_threads", 0))
@@ -1663,7 +1700,8 @@ class Transformer:
       if sampled is not None:
         return Transformer._stamp_position_var_vals(_prefill_semantic(_prefill, prefill_output, sampled),
                                                     Transformer._bound_position_var_vals(start_pos))
-    logits = self.logits(tokens, start_pos)[:, -1, :]
+    _logits = self.logits(tokens, start_pos)
+    logits = _logits if _logits.shape[1] == 1 else _logits[:, -1, :]
     native_threads = getattr(self, "_decode_native_argmax_lease", getattr(self, "_decode_native_argmax_threads", 0))
     _host_mirror = getattr(self, "_decode_host_argmax_mirror", None)
     sampled = native_argmax_finite_fp32_host_mirror(logits, _host_mirror, native_threads)[0] if native_threads and _host_mirror is not None else \
@@ -1675,7 +1713,8 @@ class Transformer:
 
   def forward_greedy_with_logits(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> tuple[Tensor, Tensor]:
     tokens = _runtime_input_boundary(tokens)
-    logits = self.logits(tokens, start_pos)[:, -1, :]
+    _logits = self.logits(tokens, start_pos)
+    logits = _logits[:, 0, :] if _logits.shape[1] == 1 else _logits[:, -1, :]
     native_threads = getattr(self, "_decode_native_argmax_lease", getattr(self, "_decode_native_argmax_threads", 0))
     _host_mirror = getattr(self, "_decode_host_argmax_mirror", None)
     sampled = native_argmax_finite_fp32_host_mirror(logits, _host_mirror, native_threads)[0] if native_threads and _host_mirror is not None else \

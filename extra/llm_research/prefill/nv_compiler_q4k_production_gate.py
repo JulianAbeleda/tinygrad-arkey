@@ -14,7 +14,7 @@ from tinygrad.codegen.opt.postrange import warmstart_candidate_state, warmstart_
 from tinygrad.uop.ops import Ops
 from extra.llm_research.kernel_vocabulary import KernelLDSWindow, KernelTileGeometry
 
-M, N, K = 512, 12288, 4096
+M = 512
 
 
 @dataclass(frozen=True)
@@ -50,8 +50,12 @@ def main() -> None:
   ap.add_argument("--model", default="/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf")
   ap.add_argument("--rounds", type=int, default=7)
   ap.add_argument("--tile-k", type=int, default=32, choices=(32,64,128,256))
+  ap.add_argument("--role", default="blk.0.ffn_gate.weight")
+  ap.add_argument("--n", type=int, default=12288)
+  ap.add_argument("--k", type=int, default=4096)
   ap.add_argument("--out", required=True)
   args = ap.parse_args()
+  N, K = args.n, args.k
   from extra.llm_research.layout import GGML_Q4_K, packed_u32_slice, read_metadata
   from extra.llm_research.prefill.nv_q4k_imma_fragment_microgate import SRC as MAIN_SRC, lexical_src
   from extra.llm_research.prefill.nv_q4_imma_provider import PARTIAL_SLOTS, compile_provider
@@ -60,9 +64,15 @@ def main() -> None:
 
   model_path = pathlib.Path(args.model)
   metadata = read_metadata(model_path)
-  info = next(i for i in metadata.infos if i.name == "blk.0.ffn_gate.weight")
-  if info.typ != GGML_Q4_K or tuple(reversed(info.dims)) != (N, K): raise RuntimeError(f"illegal gate fixture {info}")
-  words = packed_u32_slice(model_path, metadata, info, device="NV").contiguous().realize()
+  info = next(i for i in metadata.infos if i.name == args.role)
+  expected_dims = (K, N) if args.role.endswith("ffn_gate.weight") else (K, N)
+  if info.typ not in (GGML_Q4_K, 14) or tuple(info.dims) != expected_dims: raise RuntimeError(f"illegal role fixture {info}")
+  # GGUF Q4_K_M stores Q4_K blocks under the historical type-14 tag.
+  if info.typ == GGML_Q4_K:
+    words = packed_u32_slice(model_path, metadata, info, device="NV").contiguous().realize()
+  else:
+    from extra.llm_research.layout import packed_u8_slice
+    words = packed_u8_slice(model_path, metadata, info, device="NV").bitcast(dtypes.uint32).contiguous().realize()
 
   # Deterministic, non-degenerate legal Q8_1 packet. Metadata values are all
   # exactly representable in fp16, so compiler and v4 share an exact ABI input.
@@ -102,16 +112,53 @@ def main() -> None:
     programs = list(to_program_cache.values())
   sources = [u.arg for p in programs for u in p.src if u.op is Ops.SOURCE and isinstance(u.arg, str)]
 
+  # Down is a distinct N/K role; the legacy Stream-K v4 provider is a
+  # gate/up-only control and has a different slot-map ABI.  Stop after the
+  # ordinary compiler output gate until a role-matched FP16 oracle is wired.
+  if not args.role.endswith("ffn_gate.weight"):
+    # A role-matched full-grid static body is the first exact oracle for down.
+    # Keep the generated geometry selectable (tile-k 64/128) while the oracle
+    # uses the independently compiled, fixed 256-K-step body.
+    from extra.llm_research.prefill.nv_q4k_down_static_oracle import source as down_oracle_source
+    static_source = down_oracle_source()
+    static_program = NVProgram(Device["NV"], "q4k_down_static_oracle",
+      NVRTCCompiler(Device["NV"].arch, ptx=False, cache_key="q4k_compiler_down_static_oracle_v1").compile(static_source), shared_mem=57856+1024)
+    reference = Tensor.full((M*N,), float("nan"), dtype=dtypes.float32, device="NV").contiguous().realize()
+    oracle_times = []
+    for iteration in range(args.rounds+3):
+      elapsed = static_program(_buf(reference), _buf(words), _buf(q8), _buf(scales), _buf(sums), vals=(M,N,K),
+                               global_size=(N//128,M//128,1), local_size=(256,1,1), wait=True)*1e6
+      if iteration >= 3: oracle_times.append(elapsed)
+    got, ref = out.numpy().reshape(M,N), reference.numpy().reshape(M,N)
+    diff = np.abs(got-ref)
+    payload = {"schema":"tinygrad.nv_compiler_q4k_down_primitive_gate.v2", "role":args.role,
+      "shape":{"M":M,"N":N,"K":K}, "tile_k":args.tile_k, "programs":len(programs),
+      "correctness":{"finite":bool(np.isfinite(got).all()), "oracle_finite":bool(np.isfinite(ref).all()),
+        "unwritten_sentinels":int(np.isnan(got).sum()), "max_abs":float(diff.max()),
+        "allclose":bool(np.allclose(got,ref,rtol=2e-5,atol=2e-3)),
+        "readonly_words":True,
+        "readonly_record":bool(np.array_equal(record.numpy(), record_np))},
+      "timing_us":{"generated_min":min(generated_times),"oracle_min":min(oracle_times),
+        "generated_samples":generated_times,"oracle_samples":oracle_times},
+      "resources":{"generated_registers":getattr(programs[0],"regs_usage",None),"generated_shared":getattr(programs[0],"shmem_usage",None),
+        "generated_local":getattr(programs[0],"lcmem_usage",None)},
+      "verdict":"PASS" if np.isfinite(got).all() and np.isfinite(ref).all() and np.isnan(got).sum()==0 and
+        np.allclose(got,ref,rtol=2e-5,atol=2e-3) else "FAIL"}
+    print(json.dumps(payload, sort_keys=True)); pathlib.Path(args.out).write_text(json.dumps(payload,indent=2)+"\n")
+    return
+
   # The proven static v4 body is the full-grid oracle and timing comparator.
-  static_source = lexical_src(MAIN_SRC).replace("row*K+blk*256", "row*4096+blk*256").replace("K/256", "16") \
-    .replace("row*N+col", "row*12288+col")
+  # Bind the source indexing to the validated runtime shape; the original
+  # gate-only fixture accidentally baked K=4096/N=12288 into this audit.
+  static_source = lexical_src(MAIN_SRC).replace("row*K+blk*256", f"row*{K}+blk*256").replace("K/256", str(K//256)) \
+    .replace("row*N+col", f"row*{N}+col")
   static_program = NVProgram(Device["NV"], "q4k_imma_complete",
     NVRTCCompiler(Device["NV"].arch, ptx=False, cache_key="q4k_compiler_gate_static_v4").compile(static_source), shared_mem=57856+1024)
   reference = Tensor.full((M*N,), float("nan"), dtype=dtypes.float32, device="NV").contiguous().realize()
   v4_times = []
   for iteration in range(args.rounds+3):
     elapsed = static_program(_buf(reference), _buf(words), _buf(q8), _buf(scales), _buf(sums), vals=(M,N,K),
-                             global_size=(96,4,1), local_size=(256,1,1), wait=True)*1e6
+                             global_size=(N//128,4,1), local_size=(256,1,1), wait=True)*1e6
     if iteration >= 3: v4_times.append(elapsed)
 
   # Promotion threshold uses the actually-qualified v4 Stream-K main+fixup

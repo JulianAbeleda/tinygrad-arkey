@@ -1,0 +1,12 @@
+{
+  "schema": "tinygrad.nv_prefill_flash_s6_vector_substrate_gate.v1",
+  "status": "FAIL",
+  "gate": "1x1x1",
+  "launch": {"global_size": [1, 1, 1], "local_size": [128, 1, 1]},
+  "shape": {"Hq": 32, "Hkv": 8, "Hd": 128, "q_tokens": 512, "kv_extent": 768, "partitions": 6, "partition_tokens": 128},
+  "execution": "actual CUDA launch under flock -w 600 /tmp/gpu-bench.lock",
+  "error": "RuntimeError: SM 0 fault: esr=4 warp_esr=0x1000d warp_pc=0x200d701540",
+  "symptom": "HCQ timeline wait timed out at 30000 ms (signal 9, expected 10)",
+  "larger_gates_attempted": false,
+  "disposition": "STOP: primitive has a reproducible kernel-level failure at the smallest gate"
+}

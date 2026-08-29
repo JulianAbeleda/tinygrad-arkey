@@ -1,0 +1,9 @@
+{
+  "schema": "tinygrad.nv_prefill_flash_program_extract.v1",
+  "status": "FAIL",
+  "program": null,
+  "fused_score_reduction": true,
+  "calls": 0,
+  "launches": [],
+  "abi": "graph-owned opaque PROGRAM; raw buffer slots unavailable in profile-only artifact"
+}

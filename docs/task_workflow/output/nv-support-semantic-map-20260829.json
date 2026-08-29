@@ -1,0 +1,21 @@
+{
+  "schema": "nv-support-semantic-map.v1",
+  "source": "tinygrad-safe-cut-accounting.json",
+  "total_active_us": "3118.624",
+  "total_launches": 829,
+  "families": [
+    {
+      "prefix": "r_",
+      "semantic": "reshape/view or reduction staging",
+      "classification": "transport/materialization",
+      "launches": 108
+    },
+    {
+      "prefix": "E_",
+      "semantic": "elementwise residual/RoPE/KV pack-unpack",
+      "classification": "required math + transport",
+      "launches": 721
+    }
+  ],
+  "unknown_launches": 0
+}
