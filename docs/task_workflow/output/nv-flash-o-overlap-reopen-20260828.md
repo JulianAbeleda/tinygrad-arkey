@@ -81,3 +81,18 @@ Primary evidence:
 - `docs/task_workflow/evidence/nv-q4k-qdata-transpose-u2-20260828/gate-r9.json`
 - `docs/task_workflow/evidence/nv-flash-o-tax-decomposition-20260828/gate-r9.json`
 - `docs/task_workflow/evidence/nv-flash-last-cta-combine-20260828/gate-independent-r9.json`
+
+## Llama edge mechanism audit
+
+The retained wait-exit ring closes the specific Flash-to-O question. Over 252
+llama layer edges, the O GEMV grid launched early but its earliest useful wait
+exit occurred after Flash combine on every edge (median +0.584 us). The early
+interval is grid residence and dependency wait, not concurrent O weight
+streaming. Tinygrad has a zero score-to-combine gap and zero combine-to-O gap
+at p10/median/p90 over 8,910 retained production edges.
+
+Therefore the full-grid persistent and segmented constructions are new
+algorithmic overlap attempts, not missing copies of llama's scheduling. The
+llama-like launch-shadow lever is already absent at this boundary. See
+`docs/task_workflow/output/nv-flash-o-edge-overlap-result.md` and
+`docs/task_workflow/evidence/nv-flash-o-edge-overlap-20260828/summary.json`.

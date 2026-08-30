@@ -1,0 +1,476 @@
+{
+  "gap": {
+    "additive_sum_us": 634.334,
+    "exposure_delta_mean_us": 17.62,
+    "exposure_delta_us": 634.334,
+    "llama_overlap_mean_us": 9.059,
+    "llama_overlap_us": 326.134,
+    "note": "tinygrad body delta is in-window mass; llama work hidden behind Q/O anchors is not in its S1 window, so this term is exposed-body delta, not total-work delta",
+    "tinygrad_dead_mean_us": 3.049,
+    "tinygrad_dead_us": 109.75,
+    "tinygrad_minus_llama_body_mean_us": 5.512,
+    "tinygrad_minus_llama_body_us": 198.45
+  },
+  "llama": {
+    "body_mean_us": 23.446,
+    "body_total_us": 844.05,
+    "dead_or_overlap_mean_us": -9.059,
+    "dead_or_overlap_total_us": -326.134,
+    "exposure_max_us": 16.416,
+    "exposure_mean_us": 14.387,
+    "exposure_median_us": 14.447,
+    "exposure_min_us": 13.472,
+    "exposure_total_us": 517.916,
+    "layers": 36,
+    "per_layer": [
+      {
+        "exposure_us": 16.416,
+        "layer": 0,
+        "on_path_spine_us": 18.208,
+        "weighted_dependency_us": 18.208
+      },
+      {
+        "exposure_us": 14.848,
+        "layer": 1,
+        "on_path_spine_us": 18.4,
+        "weighted_dependency_us": 18.4
+      },
+      {
+        "exposure_us": 14.816,
+        "layer": 2,
+        "on_path_spine_us": 18.72,
+        "weighted_dependency_us": 18.72
+      },
+      {
+        "exposure_us": 14.848,
+        "layer": 3,
+        "on_path_spine_us": 18.336,
+        "weighted_dependency_us": 18.336
+      },
+      {
+        "exposure_us": 14.208,
+        "layer": 4,
+        "on_path_spine_us": 18.944,
+        "weighted_dependency_us": 18.944
+      },
+      {
+        "exposure_us": 13.472,
+        "layer": 5,
+        "on_path_spine_us": 18.208,
+        "weighted_dependency_us": 18.208
+      },
+      {
+        "exposure_us": 14.528,
+        "layer": 6,
+        "on_path_spine_us": 18.272,
+        "weighted_dependency_us": 18.272
+      },
+      {
+        "exposure_us": 13.824,
+        "layer": 7,
+        "on_path_spine_us": 18.301,
+        "weighted_dependency_us": 18.301
+      },
+      {
+        "exposure_us": 13.791,
+        "layer": 8,
+        "on_path_spine_us": 18.271,
+        "weighted_dependency_us": 18.271
+      },
+      {
+        "exposure_us": 14.495,
+        "layer": 9,
+        "on_path_spine_us": 18.144,
+        "weighted_dependency_us": 18.144
+      },
+      {
+        "exposure_us": 13.952,
+        "layer": 10,
+        "on_path_spine_us": 18.56,
+        "weighted_dependency_us": 18.56
+      },
+      {
+        "exposure_us": 13.696,
+        "layer": 11,
+        "on_path_spine_us": 18.464,
+        "weighted_dependency_us": 18.464
+      },
+      {
+        "exposure_us": 15.008,
+        "layer": 12,
+        "on_path_spine_us": 18.72,
+        "weighted_dependency_us": 18.72
+      },
+      {
+        "exposure_us": 14.144,
+        "layer": 13,
+        "on_path_spine_us": 18.176,
+        "weighted_dependency_us": 18.176
+      },
+      {
+        "exposure_us": 14.016,
+        "layer": 14,
+        "on_path_spine_us": 18.112,
+        "weighted_dependency_us": 18.112
+      },
+      {
+        "exposure_us": 14.496,
+        "layer": 15,
+        "on_path_spine_us": 18.56,
+        "weighted_dependency_us": 18.56
+      },
+      {
+        "exposure_us": 13.824,
+        "layer": 16,
+        "on_path_spine_us": 18.176,
+        "weighted_dependency_us": 18.176
+      },
+      {
+        "exposure_us": 13.664,
+        "layer": 17,
+        "on_path_spine_us": 18.72,
+        "weighted_dependency_us": 18.72
+      },
+      {
+        "exposure_us": 14.592,
+        "layer": 18,
+        "on_path_spine_us": 18.528,
+        "weighted_dependency_us": 18.528
+      },
+      {
+        "exposure_us": 14.272,
+        "layer": 19,
+        "on_path_spine_us": 19.04,
+        "weighted_dependency_us": 19.04
+      },
+      {
+        "exposure_us": 14.4,
+        "layer": 20,
+        "on_path_spine_us": 18.784,
+        "weighted_dependency_us": 18.784
+      },
+      {
+        "exposure_us": 14.752,
+        "layer": 21,
+        "on_path_spine_us": 19.328,
+        "weighted_dependency_us": 19.328
+      },
+      {
+        "exposure_us": 13.888,
+        "layer": 22,
+        "on_path_spine_us": 18.464,
+        "weighted_dependency_us": 18.464
+      },
+      {
+        "exposure_us": 13.984,
+        "layer": 23,
+        "on_path_spine_us": 18.848,
+        "weighted_dependency_us": 18.848
+      },
+      {
+        "exposure_us": 14.656,
+        "layer": 24,
+        "on_path_spine_us": 18.72,
+        "weighted_dependency_us": 18.72
+      },
+      {
+        "exposure_us": 13.855,
+        "layer": 25,
+        "on_path_spine_us": 18.432,
+        "weighted_dependency_us": 18.432
+      },
+      {
+        "exposure_us": 13.983,
+        "layer": 26,
+        "on_path_spine_us": 18.24,
+        "weighted_dependency_us": 18.24
+      },
+      {
+        "exposure_us": 14.751,
+        "layer": 27,
+        "on_path_spine_us": 18.208,
+        "weighted_dependency_us": 18.208
+      },
+      {
+        "exposure_us": 13.76,
+        "layer": 28,
+        "on_path_spine_us": 17.984,
+        "weighted_dependency_us": 17.984
+      },
+      {
+        "exposure_us": 13.888,
+        "layer": 29,
+        "on_path_spine_us": 18.144,
+        "weighted_dependency_us": 18.144
+      },
+      {
+        "exposure_us": 15.04,
+        "layer": 30,
+        "on_path_spine_us": 18.816,
+        "weighted_dependency_us": 18.816
+      },
+      {
+        "exposure_us": 15.008,
+        "layer": 31,
+        "on_path_spine_us": 18.624,
+        "weighted_dependency_us": 18.624
+      },
+      {
+        "exposure_us": 15.2,
+        "layer": 32,
+        "on_path_spine_us": 18.624,
+        "weighted_dependency_us": 18.624
+      },
+      {
+        "exposure_us": 14.752,
+        "layer": 33,
+        "on_path_spine_us": 18.24,
+        "weighted_dependency_us": 18.24
+      },
+      {
+        "exposure_us": 14.56,
+        "layer": 34,
+        "on_path_spine_us": 18.272,
+        "weighted_dependency_us": 18.272
+      },
+      {
+        "exposure_us": 14.529,
+        "layer": 35,
+        "on_path_spine_us": 18.336,
+        "weighted_dependency_us": 18.336
+      }
+    ]
+  },
+  "schema": "tinygrad.nv_s1_body_gap_split.v1",
+  "source_ledger": "docs/task_workflow/output/nv-weighted-inter-anchor-ledger-20260820.json",
+  "tinygrad": {
+    "body_mean_us": 28.958,
+    "body_total_us": 1042.5,
+    "dead_or_overlap_mean_us": 3.049,
+    "dead_or_overlap_total_us": 109.75,
+    "exposure_max_us": 41.5,
+    "exposure_mean_us": 32.007,
+    "exposure_median_us": 31.75,
+    "exposure_min_us": 29.25,
+    "exposure_total_us": 1152.25,
+    "layers": 36,
+    "per_layer": [
+      {
+        "exposure_us": 36.25,
+        "layer": 0,
+        "on_path_spine_us": 17.728,
+        "weighted_dependency_us": 17.728
+      },
+      {
+        "exposure_us": 34.0,
+        "layer": 1,
+        "on_path_spine_us": 17.984,
+        "weighted_dependency_us": 17.984
+      },
+      {
+        "exposure_us": 33.0,
+        "layer": 2,
+        "on_path_spine_us": 16.448,
+        "weighted_dependency_us": 16.448
+      },
+      {
+        "exposure_us": 32.75,
+        "layer": 3,
+        "on_path_spine_us": 15.776,
+        "weighted_dependency_us": 15.776
+      },
+      {
+        "exposure_us": 33.75,
+        "layer": 4,
+        "on_path_spine_us": 16.64,
+        "weighted_dependency_us": 16.64
+      },
+      {
+        "exposure_us": 41.5,
+        "layer": 5,
+        "on_path_spine_us": 17.632,
+        "weighted_dependency_us": 17.632
+      },
+      {
+        "exposure_us": 31.75,
+        "layer": 6,
+        "on_path_spine_us": 15.808,
+        "weighted_dependency_us": 15.808
+      },
+      {
+        "exposure_us": 30.75,
+        "layer": 7,
+        "on_path_spine_us": 15.424,
+        "weighted_dependency_us": 15.424
+      },
+      {
+        "exposure_us": 33.0,
+        "layer": 8,
+        "on_path_spine_us": 15.872,
+        "weighted_dependency_us": 15.872
+      },
+      {
+        "exposure_us": 30.0,
+        "layer": 9,
+        "on_path_spine_us": 15.776,
+        "weighted_dependency_us": 15.776
+      },
+      {
+        "exposure_us": 32.75,
+        "layer": 10,
+        "on_path_spine_us": 15.712,
+        "weighted_dependency_us": 15.712
+      },
+      {
+        "exposure_us": 32.0,
+        "layer": 11,
+        "on_path_spine_us": 15.648,
+        "weighted_dependency_us": 15.648
+      },
+      {
+        "exposure_us": 31.75,
+        "layer": 12,
+        "on_path_spine_us": 18.976,
+        "weighted_dependency_us": 18.976
+      },
+      {
+        "exposure_us": 33.75,
+        "layer": 13,
+        "on_path_spine_us": 16.576,
+        "weighted_dependency_us": 16.576
+      },
+      {
+        "exposure_us": 34.25,
+        "layer": 14,
+        "on_path_spine_us": 16.192,
+        "weighted_dependency_us": 16.192
+      },
+      {
+        "exposure_us": 30.5,
+        "layer": 15,
+        "on_path_spine_us": 15.488,
+        "weighted_dependency_us": 15.488
+      },
+      {
+        "exposure_us": 30.75,
+        "layer": 16,
+        "on_path_spine_us": 15.872,
+        "weighted_dependency_us": 15.872
+      },
+      {
+        "exposure_us": 32.25,
+        "layer": 17,
+        "on_path_spine_us": 16.128,
+        "weighted_dependency_us": 16.128
+      },
+      {
+        "exposure_us": 31.25,
+        "layer": 18,
+        "on_path_spine_us": 15.168,
+        "weighted_dependency_us": 15.168
+      },
+      {
+        "exposure_us": 29.25,
+        "layer": 19,
+        "on_path_spine_us": 14.272,
+        "weighted_dependency_us": 14.272
+      },
+      {
+        "exposure_us": 32.0,
+        "layer": 20,
+        "on_path_spine_us": 14.88,
+        "weighted_dependency_us": 14.88
+      },
+      {
+        "exposure_us": 30.25,
+        "layer": 21,
+        "on_path_spine_us": 14.944,
+        "weighted_dependency_us": 14.944
+      },
+      {
+        "exposure_us": 33.5,
+        "layer": 22,
+        "on_path_spine_us": 14.4,
+        "weighted_dependency_us": 14.4
+      },
+      {
+        "exposure_us": 30.25,
+        "layer": 23,
+        "on_path_spine_us": 14.816,
+        "weighted_dependency_us": 14.816
+      },
+      {
+        "exposure_us": 29.75,
+        "layer": 24,
+        "on_path_spine_us": 14.24,
+        "weighted_dependency_us": 14.24
+      },
+      {
+        "exposure_us": 31.5,
+        "layer": 25,
+        "on_path_spine_us": 14.592,
+        "weighted_dependency_us": 14.592
+      },
+      {
+        "exposure_us": 30.25,
+        "layer": 26,
+        "on_path_spine_us": 14.528,
+        "weighted_dependency_us": 14.528
+      },
+      {
+        "exposure_us": 30.25,
+        "layer": 27,
+        "on_path_spine_us": 14.208,
+        "weighted_dependency_us": 14.208
+      },
+      {
+        "exposure_us": 30.0,
+        "layer": 28,
+        "on_path_spine_us": 14.112,
+        "weighted_dependency_us": 14.112
+      },
+      {
+        "exposure_us": 32.25,
+        "layer": 29,
+        "on_path_spine_us": 15.232,
+        "weighted_dependency_us": 15.232
+      },
+      {
+        "exposure_us": 32.0,
+        "layer": 30,
+        "on_path_spine_us": 14.432,
+        "weighted_dependency_us": 14.432
+      },
+      {
+        "exposure_us": 32.0,
+        "layer": 31,
+        "on_path_spine_us": 14.496,
+        "weighted_dependency_us": 14.496
+      },
+      {
+        "exposure_us": 30.0,
+        "layer": 32,
+        "on_path_spine_us": 14.624,
+        "weighted_dependency_us": 14.624
+      },
+      {
+        "exposure_us": 31.75,
+        "layer": 33,
+        "on_path_spine_us": 15.04,
+        "weighted_dependency_us": 15.04
+      },
+      {
+        "exposure_us": 31.5,
+        "layer": 34,
+        "on_path_spine_us": 14.528,
+        "weighted_dependency_us": 14.528
+      },
+      {
+        "exposure_us": 29.75,
+        "layer": 35,
+        "on_path_spine_us": 14.72,
+        "weighted_dependency_us": 14.72
+      }
+    ]
+  }
+}

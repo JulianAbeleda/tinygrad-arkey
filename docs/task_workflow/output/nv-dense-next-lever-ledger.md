@@ -8,9 +8,22 @@ silently become a token-rate claim.
 
 | Item | Time per token | Rate | Status |
 |---|---:|---:|---|
-| tinygrad, strict batch 1 | 4065.897 us | 245.948 tok/s | installed authority |
+| tinygrad, strict batch 1 | 4057.790 us | 246.440 tok/s | fresh installed R9 authority |
 | llama.cpp, charged greedy path | 4058.359 us | 246.405 tok/s | comparison authority |
-| Remaining difference | 7.538 us | 0.457 tok/s | measured endpoint debt |
+| Tinygrad minus retained llama | -0.569 us | +0.035 tok/s | effective parity; llama not freshly rerun |
+
+Fresh 2026-08-28 re-bracket: the installed tinygrad path measured 4057.790
+us/token (246.440 tok/s) across nine settled token-exact windows. This is
+0.569 us/token ahead of the retained llama authority, but llama was not freshly
+rerun because its exact measurement-only greedy binary was not retained. Treat
+this as effective parity, not a new same-session cross-runtime win claim. See
+`nv-strict-rebracket-and-vocab-gates.md`.
+
+The subsequent vocabulary campaign closes the two low-cost constructions.
+Reusing the four-warp Q6/Q8 attention consumer at full vocabulary shape lost
+1043.235 us/body. Four accumulator streams passed recurrent-logit quality but
+lost 5.876 us/token in a strict R7 A/B/A wall bracket. Both book zero; further
+vocabulary work requires a new many-row Q8 service topology.
 
 The batched-delivery result is intentionally excluded from this comparison.
 It is a throughput mode, not token-at-a-time delivery.
@@ -20,15 +33,15 @@ It is a throughput mode, not token-at-a-time delivery.
 | Region or lever | Measured fact | Token translation | State |
 |---|---|---:|---|
 | Installed projection bodies | tinygrad is faster in aggregate on the common protocol | already included | closed as the source of the endpoint gap |
-| Vocabulary body | llama is about 15.8 us faster | at most about 1 tok/s if fully recovered | open debt, but exact staging and structural-tail spellings already failed |
+| Vocabulary body | llama is about 15.8 us faster | at most about 1 tok/s if fully recovered | low-cost spellings closed; a new many-row Q8 topology is research-scale |
 | O body | llama is about 3.0 us faster in the body comparison | at most about 0.2 tok/s at that boundary | open debt; exact same-format constructions are exhausted |
 | Flash score | about 31 us absolute body debt in the lifecycle ledger | not additive with the endpoint gap | current exact spelling exhausted; lifecycle charges overlap/reconcile elsewhere |
-| Host/delivery boundary | strict endpoint debt is 7.538 us | 0.457 tok/s | direct mirror and submit-ahead candidates were neutral |
+| Host/delivery boundary | fresh tinygrad is within 0.569 us of retained llama | effective parity | direct mirror and submit-ahead candidates were neutral |
 | Q/O/K/V service spellings | transpose, cache hints, async staging, segmentation, and persistent service were tested | zero booked | closed for the tested spellings, not a claim of physical impossibility |
 
 The important reconciliation is that body rows are not independently additive.
-The strict endpoint is the only authority for the final rate, and its entire
-remaining observed difference is just 7.538 us.
+The strict endpoint is the only authority for the final rate. The fresh
+tinygrad endpoint is effectively tied with the retained llama authority.
 
 ## New 136-byte representation result
 

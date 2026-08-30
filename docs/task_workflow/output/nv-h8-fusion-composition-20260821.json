@@ -1,0 +1,55 @@
+{
+  "schema": "tinygrad.nv_h8_fusion_composition.v1",
+  "date": "2026-08-21",
+  "source": "docs/task_workflow/output/nv-rmsnorm-phaseB-control-20260820.json",
+  "locked": {
+    "critical_path_us": 4249.216,
+    "s1_gap_us": 634.334,
+    "wall_gap_us": 717.505
+  },
+  "base_critical_path_us": 4249.216,
+  "q4_down": {
+    "q4_blocks": 18,
+    "mean_us": 20.9,
+    "llama_floor_us": 19.232,
+    "per_node_floor_delta_us": 1.668
+  },
+  "scenarios": {
+    "residual_only": {
+      "cp_us": 4100.48,
+      "ceiling_us": 148.736
+    },
+    "reduce_only": {
+      "cp_us": 4045.536,
+      "ceiling_us": 203.68
+    },
+    "residual_plus_reduce": {
+      "cp_us": 3896.8,
+      "ceiling_us": 352.416
+    },
+    "vocab_tail_only": {
+      "cp_us": 3935.584,
+      "ceiling_us": 313.632
+    },
+    "max_fusion_residual_reduce_vocab": {
+      "cp_us": 3583.168,
+      "ceiling_us": 666.048
+    },
+    "q4_down_at_llama_floor": {
+      "cp_us": 4219.2,
+      "ceiling_us": 30.016
+    },
+    "fusion_plus_q4_floor": {
+      "cp_us": 3553.152,
+      "ceiling_us": 696.064
+    }
+  },
+  "accounting": {
+    "additive_raw_ceiling_us": 696.064,
+    "recomputed_composition_us": 696.064,
+    "takeover_and_interference_us": -0.0,
+    "wall_gap_remaining_after_zero_cost_composition_us": 21.441,
+    "s1_gap_remaining_after_zero_cost_composition_us": -61.73
+  },
+  "note": "Zero-cost ceilings only. LLAMA_Q4_DOWN_US uses the corrected 19.232 us/node floor (nv-gemv-core-deficit-correction-20260813.md; 11.776 us is attention-O). Measured wall conversion is far lower for every row (see nv-reduce-output-ffn-residual-bind-outcome-20260813.md, nv-vocab-top1-fusion-head-recheck-20260816.md, nv-q4-down-dp4a-resadd-18block-gate-20260814.md), so this is the upper envelope, not a bookable recovery."
+}
