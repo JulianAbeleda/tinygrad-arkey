@@ -456,9 +456,12 @@ class _Q6KDecodeCandidate:
                   and (bool(getattr(linear, "_ffn_down_resadd_lease", False))
                        or bool(getattr(linear, "_decode_ffn_down_resadd_promoted", False))))
     epilogue = "ffn_down_resadd" if (m2b_resadd and reduction == "in_kernel") else ""
-    spec = q6k_spec_for_role(binding.N, binding.K, parts=binding.parts, row_tile=binding.row_tile,
-                            use_coop=binding.use_coop, opts=linear.opts, target=target, reduction=reduction,
-                            epilogue=epilogue)
+    accumulators = (int(getattr(linear, "_decode_vocab_accumulators_lease", 1))
+                    if route_role == "lm_head" and reduction == "in_kernel" else 1)
+    spec_kwargs = dict(parts=binding.parts, row_tile=binding.row_tile, use_coop=binding.use_coop,
+                       opts=linear.opts, target=target, reduction=reduction, epilogue=epilogue)
+    if accumulators != 1: spec_kwargs["accumulators"] = accumulators
+    spec = q6k_spec_for_role(binding.N, binding.K, **spec_kwargs)
     # M2 epilogue-absorption boundary (nv-epilogue-absorption-route-scope-20260810.md): the shared-block
     # ffn_down Q6K GEMV consumes the fused w1+w3 fp16 store directly when the producer declared its
     # fp16 layout under the harness-installed lease. Same fail-closed validator as Q4K: no declaration,
@@ -544,6 +547,22 @@ def q6k_vocab_top1_call(linear:Any, x:Tensor, arch_ok:bool) -> Tensor | None:
   # tail from +25.8 us slower to ~-11 us faster than the legacy chain.
   keys = keys.clone()
   return packed_argmax_from_tile_keys(keys, binding.N, axis=0, keepdim=True).reshape(1, 1).clone()
+
+def generated_q6k_vocab_logits(linear:Any, x:Tensor) -> Tensor | None:
+  """Research-only complete Q6_K vocabulary logits using the generated GEMV ABI."""
+  binding = Q6K_DECODE_CANDIDATE.bind(linear, x, True)
+  if binding is None or getattr(linear, "route_role", "") != "lm_head": return None
+  if not binding.use_coop or binding.row_tile * Q6K_POS_EXTENT > 32: return None
+  x_vec = x[:, 0, :].reshape(binding.K).cast(dtypes.float16).contiguous()
+  capability = getattr(getattr(linear, "route_admission", None), "capability", None)
+  target = f"{capability.backend}:{capability.architecture}" if capability is not None and getattr(capability, "backend", None) is not None else Q6K_DECODE_CANDIDATE.target
+  spec = q6k_spec_for_role(binding.N, binding.K, parts=binding.parts, row_tile=binding.row_tile,
+                           use_coop=True, opts=linear.opts, target=target, reduction="in_kernel")
+  program = KernelProgram("decode_q6k_vocab_logits", f"{binding.candidate_id}.vocab_logits",
+                          KernelProgramProvenance.RESEARCH_ONLY, emit_q6k_gemv_kernel(spec),
+                          output_spec=OutputSpec((binding.N,), dtypes.float32))
+  return execute_research_program(Tensor.empty((binding.N,), dtype=dtypes.float32, device=x.device),
+    linear.q6k_storage.halfs.to(x.device), x_vec, program=program).reshape(1, 1, binding.N)
 
 def q6k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], Tensor], arch_ok:bool,
                               epilogue_inputs:dict[str, Tensor]|None=None) -> Tensor:

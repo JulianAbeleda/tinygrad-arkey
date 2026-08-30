@@ -164,7 +164,9 @@ def _cstyle_expand_attention_output_drain(x:UOp) -> UOp:
   if len(x.src) != (3+x.arg.blocks if grid is not None else 2+x.arg.blocks) or x.dtype != dtypes.void: raise ValueError("HIP attention output drain has malformed sources")
   out, *rest=x.src
   group, l, acc = (rest[0],rest[1],rest[2:]) if grid is not None else (None,rest[0],rest[1:])
-  lane=UOp.special(32,"lidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); half=lane.alu(Ops.SHR,UOp.const(dtypes.weakint,4))
+  nv_grouped = getattr(x.arg, "native_abi", "").startswith("nv_sm120_") and getattr(grid, "local_size", 32) == 128
+  lane=UOp.special(128 if nv_grouped else 32,"lidx0"); lane = lane.alu(Ops.AND,UOp.const(dtypes.weakint,31)) if nv_grouped else lane
+  col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); half=lane.alu(Ops.SHR,UOp.const(dtypes.weakint,4))
   stores=[]
   # The drain lane convention is NOT restated here: c_e/c_half/c_j/c_col come from the spec's
   # `drain_lane_coeffs`, which is its single authority (see AttentionOutputDrainSpec).

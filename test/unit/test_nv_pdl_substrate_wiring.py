@@ -14,7 +14,9 @@ kernel source and every QMD byte-identical, which the no-match cases assert.
 """
 import os
 
-from tinygrad.renderer.cuda import _nv_pdl_body, _nv_pdl_match
+from tinygrad.helpers import Context, JIT_BATCH_SIZE, NV_FLASH_LOAD_SCHEDULE
+from tinygrad.llm.model import Transformer
+from tinygrad.renderer.cuda import _nv_min_blocks_source, _nv_pdl_body, _nv_pdl_match
 from tinygrad.runtime.ops_nv import QMD, NVComputeQueue, _nv_pdl_arm_pair
 
 
@@ -28,6 +30,36 @@ def test_match_exact_and_prefix():
   assert _nv_pdl_match("E_1187_16_4", spec)
   assert not _nv_pdl_match("r_1187_16_4", spec)
   assert not _nv_pdl_match("exact_name_suffix", spec)
+
+
+def test_min_blocks_source_is_exact_name_gated_and_default_closed(monkeypatch):
+  source = 'extern "C" __global__ void __launch_bounds__(128) flash_target() {}'
+  monkeypatch.delenv("NV_MIN_BLOCKS_PROGRAMS", raising=False)
+  assert _nv_min_blocks_source("flash_target", source) == source
+  monkeypatch.setenv("NV_MIN_BLOCKS_PROGRAMS", "flash_other,prefix:flash_vec_")
+  assert _nv_min_blocks_source("flash_target", source) == source
+  monkeypatch.setenv("NV_MIN_BLOCKS_PROGRAMS", "flash_target")
+  assert "__launch_bounds__(128, 1)" in _nv_min_blocks_source("flash_target", source)
+
+
+def test_flash_load_schedule_context_only_marks_score_program(monkeypatch):
+  monkeypatch.delenv("NV_MIN_BLOCKS_PROGRAMS", raising=False)
+  score = 'extern "C" __global__ void __launch_bounds__(128) flash_vec_llama_score_pv_32_128_8_widekv16() {}'
+  combine = 'extern "C" __global__ void __launch_bounds__(128) flash_fused_gmax_combine_f16_32_128_s8_lw128() {}'
+  with Context(NV_FLASH_LOAD_SCHEDULE=1):
+    assert "__launch_bounds__(128, 1)" in _nv_min_blocks_source("flash_vec_llama_score_pv_32_128_8_widekv16", score)
+    assert _nv_min_blocks_source("flash_fused_gmax_combine_f16_32_128_s8_lw128", combine) == combine
+
+
+def test_flash_load_schedule_capture_scope_is_closed_and_restores_context():
+  model = object.__new__(Transformer)
+  model._decode_flash_load_schedule_promoted = True
+  before = (NV_FLASH_LOAD_SCHEDULE.value, JIT_BATCH_SIZE.value)
+  with model._decode_flash_load_schedule_substrate(True):
+    assert (NV_FLASH_LOAD_SCHEDULE.value, JIT_BATCH_SIZE.value) == (1, 33)
+  assert (NV_FLASH_LOAD_SCHEDULE.value, JIT_BATCH_SIZE.value) == before
+  with model._decode_flash_load_schedule_substrate(False):
+    assert (NV_FLASH_LOAD_SCHEDULE.value, JIT_BATCH_SIZE.value) == before
 
 
 def test_renderer_consumer_gets_wait_at_top(monkeypatch):

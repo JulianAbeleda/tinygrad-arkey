@@ -94,6 +94,9 @@ def _nv_q4_imma_pp512_mode() -> str|None:
   if sum((raw,compiler,llama)) > 1: raise RuntimeError("NV Q4 IMMA research bindings are mutually exclusive")
   return "llama" if llama else "compiler" if compiler else "raw" if raw else None
 
+def _nv_compiler_q4_gate_only_pp512_enabled(config) -> bool:
+  return bool(getenv("NV_COMPILER_Q4_GATE_ONLY_PP512", 0)) and Device.DEFAULT == "NV" and _nv_compiler_q4_imma_pp512_qualified(config)
+
 def _nv_compiler_q4_imma_pp512_qualified(config) -> bool:
   """Fail-closed model/shape identity for the compiler-owned research arm."""
   return (config.prefill_ubatch, config.num_blocks, config.dim, config.hidden_dim, config.n_heads,
@@ -729,12 +732,16 @@ class FFNBlock:
       # gate/up lifecycle. The finalized native programs participate in the
       # ordinary TinyJit graph; every miss preserves the corrected fp16
       # fallback unchanged.
-      if (_mode := ("llama" if _nv_llama_full_packed_pp512_enabled(self.config) else _nv_q4_imma_pp512_mode())) is not None and (_mode not in ("compiler","llama") or _nv_compiler_q4_imma_pp512_qualified(self.config)) \
+      if (_mode := ("gate_only" if _nv_compiler_q4_gate_only_pp512_enabled(self.config) else ("llama" if _nv_llama_full_packed_pp512_enabled(self.config) else _nv_q4_imma_pp512_mode()))) is not None and (_mode not in ("compiler","llama","gate_only") or _nv_compiler_q4_imma_pp512_qualified(self.config)) \
           and isinstance(getattr(self, "ffn_gate", None), Q4KPrimitiveLinear) \
           and isinstance(getattr(self, "ffn_up", None), Q4KPrimitiveLinear) and x.device == "NV" \
           and x.numel() == 512*4096:
         _binding, _flat = self._nv_q4_imma_pp512_binding, x.reshape(512,4096)
-        if _mode == "llama":
+        _gate_binding = getattr(self, "_nv_compiler_q4_gate_only_pp512_binding", None)
+        if _mode == "gate_only":
+          g = _prefill_semantic(_prefill, prefill_activation, _gate_binding.project(_flat, self.ffn_gate.prefill_packed_weight(), model_family="qwen3_8b", role="ffn_gate"))
+          u = _prefill_semantic(_prefill, prefill_activation, _binding.project(_flat, self.ffn_up.prefill_packed_weight(), model_family="qwen3_8b", role="ffn_up"))
+        elif _mode == "llama":
           if _nv_llama_packed_gate_up_epilogue_enabled(self.config):
             h=_binding.project_pair_epilogue(_flat,self.ffn_gate.prefill_packed_weight(),self.ffn_up.prefill_packed_weight(),model_family="qwen3_8b")
             h=_prefill_semantic(_prefill,prefill_activation,h)
@@ -1909,7 +1916,7 @@ class Transformer:
       block._use_flash, block._prefill_v2, block._is_prefill, block._ring_freqs, block._ring_full = \
         use_flash, is_prefill_v2, is_prefill, None, ring_full
       block._flash_decode_tile_geometry_lease = _flash_block_geometry(self,index,flash_geometry) or None
-    _nv_compiler_binding = _nv_llama_binding = _nv_llama_q6_down_binding = _nv_llama_q4_down_binding = _nv_compiler_k_binding = _nv_compiler_q6_binding = _nv_qkv_binding = _nv_o_binding = _nv_compiler_o_binding = None
+    _nv_compiler_binding = _nv_gate_only_binding = _nv_llama_binding = _nv_llama_q6_down_binding = _nv_llama_q4_down_binding = _nv_compiler_k_binding = _nv_compiler_q6_binding = _nv_qkv_binding = _nv_o_binding = _nv_compiler_o_binding = None
     if is_prefill_v2 and _nv_compiler_q4_imma_o_pp512_enabled(self.config):
       from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import binding_for as compiler_o_binding_for
       _nv_compiler_o_binding=compiler_o_binding_for("NV"); _nv_compiler_o_binding.prepare(len(self.blk))
@@ -1921,17 +1928,25 @@ class Transformer:
       if not _nv_compiler_q4_imma_pp512_qualified(self.config): raise RuntimeError("NV packed O requires exact Qwen3-8B pp512 topology")
       from extra.llm_research.prefill.nv_llama_packed_q4k_o_pp512_binding import binding_for as o_binding_for
       _nv_o_binding=o_binding_for("NV"); _nv_o_binding.prepare_records(len(self.blk))
-    if is_prefill_v2 and (nv_q4_mode := ("llama" if _nv_llama_full_packed_pp512_enabled(self.config) else _nv_q4_imma_pp512_mode())) is not None:
+    if is_prefill_v2 and (nv_q4_mode := ("gate_only" if _nv_compiler_q4_gate_only_pp512_enabled(self.config) else ("llama" if _nv_llama_full_packed_pp512_enabled(self.config) else _nv_q4_imma_pp512_mode()))) is not None:
       if nv_q4_mode in ("compiler","llama") and not _nv_compiler_q4_imma_pp512_qualified(self.config):
         raise RuntimeError("NV packed Q4 IMMA pp512 routes only admit the exact dense Qwen3-8B topology")
-      if nv_q4_mode == "compiler":
+      if nv_q4_mode in ("compiler", "gate_only"):
         from extra.llm_research.prefill.nv_compiler_q4k_pp512_binding import binding_for
       elif nv_q4_mode == "llama":
         from extra.llm_research.prefill.nv_llama_packed_q4k_pp512_binding import binding_for
       else:
         from extra.llm_research.prefill.nv_q4_imma_pp512_binding import binding_for
       _nv_binding = binding_for("NV")
-      if nv_q4_mode == "compiler":
+      if nv_q4_mode == "gate_only":
+        _nv_gate_only_binding = _nv_binding
+        _nv_gate_only_binding.prepare_records(len(self.blk))
+        _nv_gate_only_binding.install_warmstart(self)
+        from extra.llm_research.prefill.nv_llama_packed_q4k_pp512_binding import binding_for as llama_binding_for
+        _nv_binding = llama_binding_for("NV")
+        _nv_binding.prepare_pairs(len(self.blk))
+        _nv_llama_binding = _nv_binding
+      elif nv_q4_mode == "compiler":
         _nv_binding.prepare_records(len(self.blk)*2)
         _nv_binding.install_warmstart(self)
         _nv_compiler_binding = _nv_binding
@@ -1993,6 +2008,10 @@ class Transformer:
       capture = _nv_compiler_q4_imma_capture(self, jit, _nv_compiler_binding)
       capture.begin_trace()
       for block in self.blk: block._nv_q4_imma_pp512_binding = capture
+    if _nv_gate_only_binding is not None:
+      capture = _nv_compiler_q4_imma_capture(self, jit, _nv_gate_only_binding)
+      capture.begin_trace()
+      for block in self.blk: block._nv_compiler_q4_gate_only_pp512_binding = capture
     if _nv_llama_binding is not None:
       capture=_nv_llama_packed_q4k_capture(self,jit,_nv_llama_binding)
       capture.begin_trace()

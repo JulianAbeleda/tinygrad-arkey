@@ -69,7 +69,7 @@ class Ops(FastEnum):
   MEMORY_SEMANTIC = auto()
   # Scheduler-only logical element with explicit owner-axis mapping. It is
   # consumed by a stateful reduction before program lowering.
-  SCOPED_VALUE = auto(); TILE_GATHER = auto(); ROW_SOFTMAX_REPACK = auto(); NATIVE_ROW_SOFTMAX_REPACK = auto(); ROW_SOFTMAX_SLOT = auto(); AMD_PV_C_LANE = auto(); PACKED_FRAGMENT_LOAD = auto(); ATTENTION_LOOP_STATE = auto(); ATTENTION_OUTPUT_DRAIN = auto(); AMD_ATTENTION_STATS_DRAIN = auto()
+  SCOPED_VALUE = auto(); TILE_GATHER = auto(); ROW_SOFTMAX_REPACK = auto(); NATIVE_ROW_SOFTMAX_REPACK = auto(); ROW_SOFTMAX_SLOT = auto(); AMD_PV_C_LANE = auto(); PACKED_FRAGMENT_LOAD = auto(); PACKED_ACTIVATION_CARRIER = auto(); ATTENTION_LOOP_STATE = auto(); ATTENTION_OUTPUT_DRAIN = auto(); AMD_ATTENTION_STATS_DRAIN = auto()
   # FUNCTION has a TUPLE body and is gradient-able; CALL is an opaque kernel invocation
   PARAM = auto(); FUNCTION = auto(); CALL = auto()
 
@@ -163,6 +163,7 @@ class Ops(FastEnum):
   # enclosing STORE with one ordinary CALL only when every input is already a
   # concrete index-preserving buffer view.
   REDUCE_OUTPUT = auto()
+  COOPERATIVE_TILE_LOAD = auto()
 
   # multi-output reduce slot access: REDUCE_SLOT(composite_reduce, i) returns slot i
   REDUCE_SLOT = auto()

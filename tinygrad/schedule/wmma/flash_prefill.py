@@ -49,6 +49,7 @@ class FlashPrefillAttentionSpec:
   acc_blocks: int | None = None
   output_block_base: int = 0
   phase_abi_v1: bool = False
+  warps_per_cta: int = 1
   target: str = "amd_gfx1100"
 
   def __post_init__(self):
@@ -74,6 +75,7 @@ class FlashPrefillAttentionSpec:
         raise ValueError("output_block_base must be aligned to acc_blocks")
       if not 0 <= self.output_block_base <= 8 - self.acc_blocks:
         raise ValueError("output_block_base is outside the accumulator-slice range")
+    if self.warps_per_cta not in {1, 4}: raise ValueError("warps_per_cta must be 1 or 4")
     return self
 
   def emit(self, kernel_info=None):
@@ -105,7 +107,7 @@ class FlashPrefillAttentionSpec:
         kv_heads=self.Hkv, kv_tokens=self.kv_tokens, scale=self.scale, causal=self.causal,
         valid_kv=self.valid_kv, query_start=self.query_start,
         output_block_base=self.output_block_base, acc_blocks=self.acc_blocks,
-        phase_abi_v1=self.phase_abi_v1, head_dim=self.Hd, kernel_info=ki, fragment_model=fragment_model)
+        phase_abi_v1=self.phase_abi_v1, head_dim=self.Hd, warps_per_cta=self.warps_per_cta, kernel_info=ki, fragment_model=fragment_model)
     return fxn
 
   @property

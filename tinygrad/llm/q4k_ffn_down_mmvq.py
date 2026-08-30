@@ -71,11 +71,13 @@ def ownership_coordinates() -> list[tuple[int,int,int,int,int]]:
           for block_rel in range(BLOCKS_PER_WARP) for slot in range(2)]
 
 
-def emit_q8_provider(source_dtype=dtypes.float16) -> callable:
+def emit_q8_provider(source_dtype=dtypes.float16, *, k:int=K) -> callable:
   """Production Q8_1 provider with the fp16 boundary explicit or owned."""
   if source_dtype not in (dtypes.float16,dtypes.float32): raise ValueError("Q8 provider source must be fp16 or fp32")
+  if not isinstance(k, int) or k <= 0 or k % 32: raise ValueError("Q8 provider k must be a positive multiple of 32")
+  q8_payload_words, q8_groups = k // 4, k // 32
   def kernel(out:UOp, x:UOp) -> UOp:
-    block=UOp.special(Q8_GROUPS//8,"gidx0"); lid=UOp.special(8*WARP,"lidx0")
+    block=UOp.special(q8_groups//8,"gidx0"); lid=UOp.special(8*WARP,"lidx0")
     warp,lane=lid//WARP,lid%WARP; group=block*8+warp
     rounded=x[group*WARP+lane].cast(dtypes.float16).cast(dtypes.float32)
     amax=warp_reduce_max(rounded.abs(),lane,WARP,100); d=amax/UOp.const(dtypes.float32,127.)
@@ -89,9 +91,9 @@ def emit_q8_provider(source_dtype=dtypes.float16) -> callable:
     raw_sum=_warp_reduce_sum_staged(rounded,lane,WARP,120)
     dh=d.cast(dtypes.float16).bitcast(dtypes.uint16).cast(dtypes.uint32)
     sh=raw_sum.cast(dtypes.float16).bitcast(dtypes.uint16).cast(dtypes.uint32)
-    lane0=lane.eq(0); metadata_index=lane0.where(Q8_PAYLOAD_WORDS+group,UOp.const(dtypes.weakint,0))
+    lane0=lane.eq(0); metadata_index=lane0.where(q8_payload_words+group,UOp.const(dtypes.weakint,0))
     metadata=out[metadata_index].store(dh.bitwise_or(sh.lshift(16)),lane0)
-    return UOp.group(payload,metadata).sink(arg=KernelInfo(name="q8_1_llama_provider_12288",opts_to_apply=()))
+    return UOp.group(payload,metadata).sink(arg=KernelInfo(name=f"q8_1_llama_provider_{k}",opts_to_apply=()))
   return kernel
 
 

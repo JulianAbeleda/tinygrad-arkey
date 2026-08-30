@@ -57,6 +57,25 @@ def _nv_pdl_arm_pair(active_qmd:QMD, new_qmd:QMD, active_name:str, new_name:str)
   new_qmd.write(wait_on_latch_valid=1, wait_on_latch_id=getenv("NV_PDL_LATCH_ID", 7))
   return True
 
+def _nv_split_phase_arm(active_qmd:QMD, new_qmd:QMD, producer_plan:dict|None, consumer_plan:dict|None) -> None:
+  """Write scheduler-owned split-phase latch fields onto a chained NV QMD pair.
+
+  Only called behind NV_SPLIT_PHASE=1; it replaces the env name-pinned
+  `_nv_pdl_arm_pair` on that path. `producer_plan` arms the previous
+  (producer) QMD with arrive-at-latch plus program pre-exit; `consumer_plan`
+  makes the new (consumer) QMD wait on that latch. The dependent_qmd0
+  execution-order chain is written by the caller before this runs and is
+  untouched here. A None plan leaves that QMD's PDL fields byte-identical.
+  """
+  if producer_plan is not None:
+    active_qmd.write(arrive_at_latch_valid=producer_plan["arrive_at_latch_valid"],
+                     arrive_at_latch_id=producer_plan["arrive_at_latch_id"],
+                     enable_program_pre_exit=producer_plan["enable_program_pre_exit"],
+                     pre_exit_at_last_cta_launch=producer_plan["pre_exit_at_last_cta_launch"])
+  if consumer_plan is not None:
+    new_qmd.write(wait_on_latch_valid=consumer_plan["wait_on_latch_valid"],
+                  wait_on_latch_id=consumer_plan["wait_on_latch_id"])
+
 
 @dataclass(frozen=True)
 class ProfilePMAEvent(ProfileEvent): device:str; kern:str; blob:bytes; exec_tag:int # noqa: E702
@@ -218,7 +237,9 @@ class NVComputeQueue(NVCommandQueue):
       # host/device completion visibility, but allow internal same-queue edges to avoid paying a full L1
       # system barrier. NV_RELAX_INTERNAL_QMD_MEMBAR=0 is the qualified rollback.
       _nv_relax_internal_membar(self.active_qmd)
-      if self.active_prg_name is not None:
+      if os.environ.get("NV_SPLIT_PHASE", "") not in ("", "0"):
+        _nv_split_phase_arm(self.active_qmd, qmd, getattr(self, "nv_split_producer_plan", None), getattr(self, "nv_split_consumer_plan", None))
+      elif self.active_prg_name is not None:
         _nv_pdl_arm_pair(self.active_qmd, qmd, self.active_prg_name, prg.name)
 
     self.active_prg_name = prg.name
@@ -398,6 +419,12 @@ class NVProgram(HCQProgram['NVDevice']):
       typ, param, sz = struct.unpack_from("BBH", sh.content, start_off)
       yield typ, param, sh.content[start_off+4:start_off+sz+4] if typ == 0x4 else sz
       start_off += (sz if typ == 0x4 else 0) + 4
+
+  def resource_audit(self) -> dict:
+    if not os.environ.get("NV_PROGRAM_RESOURCE_AUDIT"): return {}
+    return {"name":self.name,"regs_usage":self.regs_usage,"shared_size_bytes":self.shmem_usage,
+            "local_size_bytes":self.lcmem_usage,"max_threads":self.max_threads,
+            "lib_bytes":len(self.lib)}
 
   def __call__(self, *bufs, global_size:tuple[int,int,int]=(1,1,1), local_size:tuple[int,int,int]=(1,1,1), vals:tuple[int|None, ...]=(),
                wait=False, timeout:int|None=None):

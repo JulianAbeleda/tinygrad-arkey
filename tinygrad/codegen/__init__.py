@@ -491,6 +491,10 @@ def do_assemble(ctx:Renderer, prg:UOp, lin:UOp) -> UOp:
 
 def do_render(ctx:Renderer, prg:UOp, lin:UOp) -> UOp:
   src = ctx.render(list(lin.src))
+  if __import__('os').getenv('NV_F2_SOURCE_DUMP'):
+    import re
+    name = re.sub(r'[^A-Za-z0-9_.-]', '_', getattr(getattr(prg, "arg", None), "name", "kernel"))
+    open(f'/tmp/nv1-generated-{name}.cu','w').write(src)
   new_arg = replace(prg.arg, aux=tuple(ctx.aux(list(lin.src)))) if ctx.has_aux else prg.arg
   return prg.replace(src=prg.src + (UOp(Ops.SOURCE, arg=src),), arg=new_arg)
 
@@ -527,6 +531,20 @@ def do_to_program(ast:UOp, renderer:Renderer) -> UOp:
   elif ast.op is Ops.SINK:
     assert isinstance(ast.arg, KernelInfo), "requires KernelInfo on arg to to_program"
     full_sink = full_rewrite_to_sink(ast, renderer, optimize=ast.tag is None)
+    if __import__('os').getenv('NV_F2_POST_CENSUS'):
+      ss=[{'id':id(u),'name':str(u.arg),'dtype':str(u.dtype),'op':str(u.op)} for u in full_sink.toposort() if u.op is Ops.SPECIAL]
+      print('NV_F2_POST_CENSUS '+__import__('json').dumps(ss, sort_keys=True))
+    # NV grouped attention carries a physical 128-thread lidx.  Fragment
+    # expansion can leave a legacy 32-thread lidx with the same C identifier;
+    # make that lane source consume the physical special instead of declaring a
+    # second CUDA variable.  Other programs retain their original specials.
+    nv_lidx = [u for u in full_sink.toposort() if u.op is Ops.SPECIAL and str(u.arg) == "lidx0" and u.dtype == dtypes.int]
+    _extent = lambda u: getattr(getattr(u, "src", (None,))[0], "arg", None)
+    nv_physical = next((u for u in nv_lidx if _extent(u) == 128), None)
+    if nv_physical is not None and any(_extent(u) == 32 for u in nv_lidx):
+      full_sink = graph_rewrite(full_sink, PatternMatcher([
+        (UPat(Ops.SPECIAL, name="s"), lambda s: nv_physical if str(s.arg) == "lidx0" and _extent(s) == 32 else s),
+      ]), name="canonicalize grouped NV lidx", bottom_up=True)
     declared_roles = []
     for u in full_sink.toposort():
       if u.op is not Ops.WMMA: continue

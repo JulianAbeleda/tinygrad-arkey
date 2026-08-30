@@ -1,5 +1,5 @@
 from __future__ import annotations
-import contextlib, math, itertools
+import contextlib, math, itertools, os
 from dataclasses import replace
 from typing import cast, Callable
 from tinygrad.uop.ops import Ops, UOp, KernelInfo, NativeAttentionRequest, graph_rewrite, AxisType, ssimplify, GroupOp, remove_all_tags
@@ -454,6 +454,8 @@ class Scheduler:
           axes = list(axis_choices[axis])
           original_axes = tuple(axes)
           candidate_geometry = getattr(getattr(self.ast.arg, "candidate_context", None), "geometry", None)
+          if _Q6_TC_AXIS_HOOK is not None and candidate_geometry is not None:
+            _Q6_TC_AXIS_HOOK(self, tuple(axes), candidate_geometry)
 
           # tag the reduceop
           self.ast = self.ast.substitute({reduceop: reduceop.replace(tag="TC")})
@@ -467,7 +469,10 @@ class Scheduler:
                 # apply_opt should return the updated range?
                 self.apply_opt(Opt(OptOps.PADTO, idx, tc.dims[i]), append_opt=False) # PADTO might fail
                 axes[i] = self.rngs[idx]
-          except KernelOptError: continue
+          except KernelOptError as exc:
+            if os.environ.get("TINYGRAD_Q6_CANDIDATE_DIAGNOSTICS"):
+              print(f"Q6 candidate rejected before warp lowering: {type(exc).__name__}: {exc}", flush=True)
+            continue
 
           # we create the warp as a whole thing, in case some of these ranges are moved/removed later
           warp = UOp.range(tc.threads, -1, AxisType.WARP)
@@ -885,6 +890,21 @@ def _candidate_lds_buffer_id(k:Scheduler) -> int:
 # apply_opts time, before any candidate_context is attached, so it's what the key uses to tell them apart.
 _PACKED_STORAGE_DTYPES = (dtypes.uint16, dtypes.uint32)
 
+# Research-only seam: callers may inspect the packed-fragment scheduler AST before
+# final lowering.  No callback is installed by default and the AST is never mutated.
+_Q6_PRE_SCHEDULER_HOOK = None
+_Q6_PRE_GLOBAL_HOOK = None
+_Q6_TC_AXIS_HOOK = None
+def set_q6_pre_scheduler_hook(callback):
+  global _Q6_PRE_SCHEDULER_HOOK
+  _Q6_PRE_SCHEDULER_HOOK = callback
+def set_q6_pre_global_hook(callback):
+  global _Q6_PRE_GLOBAL_HOOK
+  _Q6_PRE_GLOBAL_HOOK = callback
+def set_q6_tc_axis_hook(callback):
+  global _Q6_TC_AXIS_HOOK
+  _Q6_TC_AXIS_HOOK = callback
+
 def warmstart_key(out_dims, reduce, packed_dtype=None):
   """Public key builder mirroring `_warmstart_key`, for callers (e.g. model-init warmstart-table
   precomputation) that don't have a live Scheduler/AST to derive the discriminator from directly.
@@ -915,6 +935,8 @@ def _warmstart_match(k):
 def apply_opts(ast:UOp, ren:Renderer) -> UOp:
   if ast.tag is not None: return ast
   k = Scheduler(ast, ren)
+  if _Q6_PRE_GLOBAL_HOOK is not None:
+    _Q6_PRE_GLOBAL_HOOK(ast, k)
   k.convert_loop_to_global()
   required_native = ast.arg.required_native_attention if isinstance(ast.arg,KernelInfo) else None
   if required_native is not None:
@@ -949,4 +971,8 @@ def apply_opts(ast:UOp, ren:Renderer) -> UOp:
     if not any(u.op is Ops.STAGE for u in ast.backward_slice):
       k = hand_coded_optimizations(k)
   k.bound_expanded_reduction_pressure()
-  return k.get_optimized_ast(name_override=ast.arg.name if ast.arg is not None and ast.arg.name != "test" else None)
+  optimized = k.get_optimized_ast(name_override=ast.arg.name if ast.arg is not None and ast.arg.name != "test" else None)
+  if _Q6_PRE_SCHEDULER_HOOK is not None and getattr(k.ast.arg, "candidate_context", None) is not None:
+    replacement = _Q6_PRE_SCHEDULER_HOOK(optimized)
+    if replacement is not None: optimized = replacement
+  return optimized

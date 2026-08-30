@@ -414,6 +414,30 @@ class DepsTracker:
       if i in write: wait_nodes += [dep for st,en,dep in self.r_dependency_map[key] if st < e and s < en]
     return list({id(x):x for x in wait_nodes}.values())
 
+  def access_records(self, bufs:list[Buffer], write:list[int], new_dependency:Any) -> list[dict[str, Any]]:
+    """Read-only typed overlap census for the same access ``access_resources`` would mutate.
+
+    The returned records carry the access kind and the exact overlapping byte
+    span for every buffer this access would depend on.  This is only called by
+    the feature-gated edge-aware split-phase plan and by the standalone DAG
+    capture; it does not participate in dependency mutation or ordering.
+    """
+    records: list[dict[str, Any]] = []
+    for i, buf in enumerate(bufs):
+      key, s, e = self._buf_key(buf), buf.offset, buf.offset + buf.nbytes
+      if i in write:
+        for st, en, dep in self.w_dependency_map[key]:
+          if st < e and s < en:
+            records.append({"dep": dep, "kind": "WAW", "span": [max(st, s), min(en, e)], "buf_key": key})
+        for st, en, dep in self.r_dependency_map[key]:
+          if st < e and s < en:
+            records.append({"dep": dep, "kind": "WAR", "span": [max(st, s), min(en, e)], "buf_key": key})
+      else:
+        for st, en, dep in self.w_dependency_map[key]:
+          if st < e and s < en:
+            records.append({"dep": dep, "kind": "RAW", "span": [max(st, s), min(en, e)], "buf_key": key})
+    return records
+
 class GraphRunner:
   def __init__(self, linear:UOp, input_uops:tuple[UOp, ...]=()):
     self.linear = linear.src[0]

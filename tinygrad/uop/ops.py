@@ -318,6 +318,8 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
         return (self.arg.pv_a_lanes,)
       case Ops.ROW_SOFTMAX_SLOT: return (self.arg.lanes,)
       case Ops.PACKED_FRAGMENT_LOAD: return (self.arg.fragment_lanes,)
+      case Ops.PACKED_ACTIVATION_CARRIER: return self.arg.logical_shape
+      case Ops.COOPERATIVE_TILE_LOAD: return (self.arg.tile_shape[0]*self.arg.tile_shape[1],)
       case Ops.ATTENTION_LOOP_STATE: return (self.dtype.count,) if self.dtype != dtypes.void and self.dtype.count != 1 else ()
       case Ops.ATTENTION_OUTPUT_DRAIN | Ops.AMD_ATTENTION_STATS_DRAIN: return self.src[0]._shape
       case Ops.AMD_PV_C_LANE: return ()
@@ -450,6 +452,8 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     if self.op in GroupOp.Broadcastable:
       input_shapes = [x._shape for x in self.src]
       assert len(self.src) > 0 and all(x is not None for x in input_shapes), f"None input shape not supported for {self.op}"
+      if self.op is Ops.MUL and any(s.op is Ops.PACKED_ACTIVATION_CARRIER for s in self.src) and any(x == () for x in input_shapes):
+        return next(x for x in input_shapes if x != ())
       if DISALLOW_BROADCAST and not all_same(input_shapes):
         # Loud, specific diagnostic for the shared-attention "class-2" collapse:
         # one operand is a fused-attention composite input (carries a
@@ -688,6 +692,20 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     return UOp(Ops.RANGE, dtype=dtype, src=(sint_to_uop(end, dtype),)+src, arg=(axis_id, axis_type)+arg, **kwargs)
   @staticmethod
   def special(end:sint, name:str, dtype=dtypes.weakint): return UOp(Ops.SPECIAL, dtype=dtype, src=(sint_to_uop(end, dtype),), arg=name)
+  @staticmethod
+  def cooperative_tile_load(owner:UOp, tile_base:UOp, spec):
+    from tinygrad.uop.ops import CooperativeTileLoadSpec
+    if not isinstance(spec, CooperativeTileLoadSpec): raise TypeError("cooperative tile load requires CooperativeTileLoadSpec")
+    spec.validate()
+    return UOp(Ops.COOPERATIVE_TILE_LOAD, dtypes.half.ptr(2048, AddrSpace.LOCAL), (owner, tile_base), arg=spec)
+  @staticmethod
+  def packed_activation_carrier(record:UOp, spec):
+    """Construct a typed logical int8 view over a packed activation record."""
+    if not isinstance(record, UOp): record = getattr(record, "uop", None)
+    if not isinstance(record, UOp): raise TypeError("packed activation carrier requires a record UOp")
+    if not hasattr(spec, "logical_shape") or not hasattr(spec, "transform"):
+      raise TypeError("packed activation carrier requires a record spec")
+    return UOp(Ops.PACKED_ACTIVATION_CARRIER, spec.logical_dtype, (record,), arg=spec)
   def _rop(self, op:Ops, axis:tuple[int, ...]):
     axis = tuple(sorted([x for x in axis if resolve(self.shape[x] != 1)]))
     return UOp(Ops.REDUCE, self.dtype, (self,), (op, axis)) if len(axis) else self
@@ -2038,6 +2056,43 @@ class LoopStateSpec(NamedTuple):
       raise ValueError("AMD attention loop state has an invalid owner")
     return self
 
+class CooperativeTileLoadSpec(NamedTuple):
+  """Fail-closed NV research contract for one cooperative 16x128 half tile."""
+  native_abi: str = "nv_sm120_cooperative_tile_load_v1"
+  storage: str = "shared"
+  tile_shape: tuple[int,int] = (16, 128)
+  threads: int = 128
+  elems_per_thread: int = 16
+  shared_stride: int = 128
+  tile_base: Any = None
+  phase_abi: str = "single_buffer_barrier_v1"
+  loop_axis: Any = None
+  stage_generation: int = 0
+  end_barrier_token: Any = None
+  def validate(self):
+    if self.native_abi != "nv_sm120_cooperative_tile_load_v1" or self.storage != "shared": raise ValueError("invalid NV cooperative tile ABI")
+    if self.tile_shape != (16,128) or self.threads != 128 or self.elems_per_thread != 16 or self.shared_stride != 128: raise ValueError("NV cooperative tile requires exact 16x128/128-thread geometry")
+    if self.phase_abi != "single_buffer_barrier_v1" or self.tile_base is None: raise ValueError("NV cooperative tile requires a tile base and phase ABI")
+    if not isinstance(self.stage_generation, int) or self.stage_generation < 0: raise ValueError("NV cooperative tile stage generation must be non-negative")
+    if self.loop_axis is None and self.end_barrier_token is not None: raise ValueError("NV tile end barrier requires a loop axis")
+    return self
+
+class SharedTileOwnerSpec(NamedTuple):
+  native_abi: str = "nv_sm120_shared_tile_owner_v1"
+  shape: tuple[int,int] = (16,128)
+  dtype: Any = dtypes.half
+  phase_token: str = "single_buffer_barrier_v1"
+  threads: int = 128
+  tile_stride: int = 128
+  loop_axis: Any = None
+  stage_generation: int = 0
+  end_barrier_token: Any = None
+  def validate(self):
+    if self.native_abi != "nv_sm120_shared_tile_owner_v1" or self.shape != (16,128) or self.dtype is not dtypes.half or self.phase_token != "single_buffer_barrier_v1" or self.threads != 128 or self.tile_stride != 128: raise ValueError("invalid NV shared tile owner")
+    if not isinstance(self.stage_generation, int) or self.stage_generation < 0: raise ValueError("invalid NV shared tile generation")
+    if self.loop_axis is None and self.end_barrier_token is not None: raise ValueError("NV shared tile end barrier requires loop axis")
+    return self
+
 class PackedFragmentLoopSpec(NamedTuple):
   """Exact Hd128 fragment role plus a runtime KV-tile RANGE source."""
   native_abi: str = "amd_gfx1100_packed_fragment_hd128_loop_v1"
@@ -2048,15 +2103,23 @@ class PackedFragmentLoopSpec(NamedTuple):
   fragment_lanes: int = 16
   call: int = 0
   fragment_model: Any|None = None
+  physical_local_size: int = 32
+  storage: str = "global"
+  shared_phase_abi: str|None = None
 
   def validate(self):
+    if self.storage not in {"global", "shared"}: raise ValueError("packed fragment storage must be global or shared")
+    if self.storage == "shared" and (not self.native_abi.startswith("nv_sm120_") or self.shared_phase_abi != "single_buffer_barrier_v1"):
+      raise ValueError("shared packed fragments require NV single-buffer phase ABI")
     if self.fragment_model is not None:
       if self.native_abi != self.fragment_model.abi("packed_fragment_hd128_loop_v1") or \
          self.role not in {"Q", "K", "V"} or self.fragment_lanes != self.fragment_model.fragment_lanes(self.role):
         raise ValueError("loop fragment has an unsupported fragment-model ABI or role")
       if not isinstance(self.call, int) or isinstance(self.call, bool) or not 0 <= self.call < self.fragment_model.calls_per_tile:
         raise ValueError("loop fragment call is outside its fragment model's tile composition")
-    elif self.native_abi != "amd_gfx1100_packed_fragment_hd128_loop_v1" or self.role not in {"Q", "K", "V"} or self.fragment_lanes != 16:
+    elif (self.native_abi != "amd_gfx1100_packed_fragment_hd128_loop_v1" and
+          not (self.storage == "shared" and self.native_abi == "nv_sm120_packed_fragment_hd128_loop_v1")) or \
+         self.role not in {"Q", "K", "V"} or self.fragment_lanes != 16:
       raise ValueError("AMD loop fragment has an unsupported ABI or role")
     if self.grid is None and self.call != 0:
       raise ValueError("loop fragment call requires a grid")
@@ -2066,6 +2129,8 @@ class PackedFragmentLoopSpec(NamedTuple):
     if not isinstance(self.head_block, int) or isinstance(self.head_block, bool) or not 0 <= self.head_block < hdb:
       raise ValueError("AMD loop fragment has an invalid head block")
     if self.grid is not None: self.grid.validate()
+    if not isinstance(self.physical_local_size, int) or self.physical_local_size <= 0 or self.physical_local_size % 32:
+      raise ValueError("loop fragment physical_local_size must be a positive wave32 multiple")
     return self
 
 class CompositeInputSpec(NamedTuple):

@@ -182,7 +182,7 @@ def amd_gfx1100_q16_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, s
   def state_read(reg, init, role, block=0, offset=0, final=False):
     return loop_state_read(reg, init, rng, role=role, owner=state_owner, block=block, final=final)
   def fragment(owner, role, block):
-    spec = PackedFragmentLoopSpec(role=role,head_block=block)
+    spec = PackedFragmentLoopSpec(role=role,head_block=block,grid=grid,physical_local_size=32*warps_per_cta)
     return UOp(Ops.PACKED_FRAGMENT_LOAD,dtypes.half.vec(spec.fragment_lanes),(owner,lane,col,rng),arg=spec)
   old_m,old_l=state_read(mreg,m_init,"m"),state_read(lreg,l_init,"l")
   qk=zero
@@ -247,7 +247,7 @@ def amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:
   drain=UOp(Ops.ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,final_l,*final_c),arg=AttentionOutputDrainSpec(grid=grid))
   return UOp.sink(m_init,l_init,c_init,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_v1",))
 
-def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,causal:bool=False,valid_kv:int|None=None,query_start:int|None=None,output_block_base:int=0,acc_blocks:int=8,phase_abi_v1:bool=False,head_dim:int=128,fragment_model=None)->UOp:
+def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,causal:bool=False,valid_kv:int|None=None,query_start:int|None=None,output_block_base:int=0,acc_blocks:int=8,phase_abi_v1:bool=False,head_dim:int=128,warps_per_cta:int=1,fragment_model=None)->UOp:
   """Fixed 16-WMMA attention wave with compile-time model geometry."""
   from tinygrad.uop.ops import AttentionOutputDrainSpec, AttentionGridSpec, LoopStateSpec, PackedFragmentLoopSpec, AxisType
   # head_dim is now THREADED (not just the grid's own default): the descriptor genuinely owns it.
@@ -256,7 +256,7 @@ def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_toke
   if fragment_model is None:
     from tinygrad.codegen.opt.attention_fragment import attention_fragment_model
     fragment_model = attention_fragment_model("amd_gfx1100")
-  grid=AttentionGridSpec(q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,group_ratio=q_heads//kv_heads,kv_tokens=kv_tokens,head_dim=head_dim,native_abi=fragment_model.abi("attention_grid_hd128_v1"),fragment_model=fragment_model); grid.validate()
+  grid=AttentionGridSpec(q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,group_ratio=q_heads//kv_heads,kv_tokens=kv_tokens,head_dim=head_dim,local_size=32*warps_per_cta,native_abi=fragment_model.abi("attention_grid_hd128_v1"),fragment_model=fragment_model); grid.validate()
   hd=grid.head_dim; hd_blocks=hd//16
   owners=(q,k,v,out); sizes=(q_heads*q_tokens*hd,kv_heads*kv_tokens*hd,kv_heads*kv_tokens*hd,q_heads*q_tokens*hd)
   if any(x.op is not Ops.PARAM or not isinstance(x.dtype,PtrDType) for x in owners) or tuple(x.arg.slot for x in owners)!=(1,2,3,0) or tuple(x.ptrdtype.size for x in owners)!=sizes: raise ValueError(f"grid loop requires Q1/K2/V3/out0 sized {sizes}")
@@ -265,7 +265,9 @@ def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_toke
   if not isinstance(valid_kv,int) or isinstance(valid_kv,bool) or not 0<=valid_kv<=kv_tokens: raise ValueError("valid_kv is outside KV geometry")
   if (output_block_base,acc_blocks) != (0,hd_blocks) and (acc_blocks not in {1,2,4} or not 0 <= output_block_base <= hd_blocks-acc_blocks or output_block_base % acc_blocks): raise ValueError("grid loop requires a full or aligned accumulator slice")
   if query_start is None: query_start=valid_kv-q_tokens
-  lane=UOp.special(32,"lidx0"); group=UOp.special(q_heads*grid.q_tiles,"gidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); zero=UOp.const(dtypes.float.vec(8),(0.0,)*8); zero_wmma=UOp.const(dtypes.float.vec(fragment_model.c_carrier),(0.0,)*fragment_model.c_carrier); warg=fragment_model.wmma_warg
+  if warps_per_cta not in {1,4}: raise ValueError("unsupported warps_per_cta")
+  thread=UOp.special(32*warps_per_cta,"lidx0"); lane=thread.alu(Ops.AND,UOp.const(dtypes.weakint,31)); warp=thread.alu(Ops.SHR,UOp.const(dtypes.weakint,5)); group=UOp.special((q_heads*grid.q_tiles+warps_per_cta-1)//warps_per_cta,"gidx0").alu(Ops.MUL,UOp.const(dtypes.weakint,warps_per_cta)).alu(Ops.ADD,warp) if warps_per_cta==4 else UOp.special(q_heads*grid.q_tiles,"gidx0")
+  col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); zero=UOp.const(dtypes.float.vec(8),(0.0,)*8); zero_wmma=UOp.const(dtypes.float.vec(fragment_model.c_carrier),(0.0,)*fragment_model.c_carrier); warg=fragment_model.wmma_warg
   full_kv_tiles=(kv_tokens+15)//16
   # THEORY 3 (docs/prefill-needle-theories-20260724.md): causal_v1 masks every KV tile fully past
   # this wave's last query row, but the loop always ran the full extent. Since a fully-masked tile
@@ -301,7 +303,7 @@ def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_toke
     mi=UOp.group(*wr(mreg,"m",UOp.const(dtypes.float.vec(8),(-float("inf"),)*8),a="init")); li=UOp.group(*wr(lreg,"l",zero,a="init"))
   ci=UOp.group(*(x for b in range(acc_blocks) for x in wr(creg,"acc",zero,b,b*8,"init")))
   def rd(reg,init,role,b=0,o=0,final=False): return loop_state_read(reg, init, rng, role=role, owner=9604, block=b, final=final)
-  def fr(owner,role,b,call=0): return packed_fragment_load(owner, role=role, head_block=b, grid=grid, lane=lane, col=col, rng=rng, group=group, call=call, fragment_model=fragment_model)
+  def fr(owner,role,b,call=0): return packed_fragment_load(owner, role=role, head_block=b, grid=grid, lane=lane, col=col, rng=rng, group=group, call=call, fragment_model=fragment_model, physical_local_size=32*warps_per_cta)
   if not phase_abi_v1: om,ol=rd(mreg,mi,"m"),rd(lreg,li,"l")
   qk=zero_wmma
   for b in range(hd_blocks):

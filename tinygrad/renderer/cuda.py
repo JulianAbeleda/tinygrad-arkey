@@ -105,6 +105,38 @@ def _nv_l2_q6_payload_source(name:str, source:str) -> str:
   return "\n".join(out)
 
 
+def _nv_flash_kv_evict_last_source(name:str, source:str) -> str:
+  """Research gate for explicit evict-last policy on wide Flash K/V vectors.
+
+  HCQ submits native QMDs and therefore cannot consume CUDA stream access
+  policy windows.  This source lease tests the closest dispatch-independent
+  mechanism: a cache-hinted load policy carried by each K/V instruction.
+  """
+  dynamic=bool(os.environ.get("NV_FLASH_KV_EVICT_LAST", ""));static_raw=os.environ.get("NV_FLASH_KV_STATIC_PERSISTING", "");static=bool(static_raw)
+  if not (dynamic or static) or not name.startswith("flash_vec_llama_score_pv_"): return source
+  if static:
+    numerator=int(static_raw,0);assert 0 <= numerator <= 15
+    descriptor=0x1400000000000000 | (numerator<<52)
+  setup=(f'unsigned long long policy = 0x{descriptor:016X}ull;' if static else
+    'unsigned long long policy; asm volatile("createpolicy.fractional.L2::evict_last.b64 %0, 1.0;" : "=l"(policy));')
+  helper=f'''__device__ __forceinline__ uint4 tg_nv_ld_evict_last(const uint4 *p) {{
+  uint4 v; {setup}
+  asm volatile("ld.global.L2::cache_hint.v4.u32 {{%0, %1, %2, %3}}, [%4], %5;"
+    : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p), "l"(policy));
+  return v;
+}}
+'''
+  out,replaced=[],0
+  for line in source.splitlines():
+    if " = (*" in line and "data2_" in line and "uint4" in line and line.endswith(";"):
+      lhs,rhs=line.rsplit(" = ",1);expr=rhs[:-1]
+      if expr.startswith("(*") and expr.endswith(")"):
+        line=f"{lhs} = tg_nv_ld_evict_last({expr[2:-1]});";replaced+=1
+    out.append(line)
+  if replaced == 0: raise RuntimeError(f"NV Flash K/V evict-last policy matched {name!r} but rewrote no wide loads")
+  return helper+"\n"+"\n".join(out)
+
+
 def _nv_fast_math_source(name:str, source:str) -> str:
   """Research lease for program-scoped NVRTC fast math.
 
@@ -261,7 +293,8 @@ class CUDARenderer(CStyleLanguage):
 
     source = super().render_kernel(function_name, kernel, bufs, uops, prefix=prefix)
     return _nv_min_blocks_source(function_name,
-      _nv_fast_math_source(function_name, _nv_l2_q6_payload_source(function_name, _nv_l2_streaming_weight_source(function_name, source))))
+      _nv_fast_math_source(function_name, _nv_flash_kv_evict_last_source(function_name,
+        _nv_l2_q6_payload_source(function_name, _nv_l2_streaming_weight_source(function_name, source)))))
 
   def supported_dtypes(self):
     ver = int(self.target.arch[3:])

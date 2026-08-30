@@ -666,6 +666,10 @@ class DecodeRMSNormSpec:
   # boundary (`rmsnorm_native_*`); the M3 opaque path keeps `decode_rmsnorm_*`
   # byte-identical (pg3 pins: 2f3b80f7b426 / 9cf696d384ba / 061dd2e554d0).
   native: bool = False
+  # Research discriminator: retain each lane's reduction inputs for the
+  # epilogue instead of issuing a second activation-buffer read. Default-off
+  # until a complete native-NV resource/timing/wall gate admits it.
+  retain_input: bool = False
 
   @property
   def kernel_name(self) -> str:
@@ -712,7 +716,13 @@ def emit_decode_rmsnorm_kernel(spec:DecodeRMSNormSpec):
             x[UOp.const(dtypes.int, 0), base] if spec.x_rank == 2 else x[base]
     acc = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG)
     acc = acc.after(acc[0].store(0.0))
-    xv = x_sel.cast(dtypes.float32)
+    retained = None
+    if spec.retain_input:
+      retained = UOp.placeholder((per_lane,), spec.x_dtype, 21, addrspace=AddrSpace.REG)
+      retained_ready = UOp.group(*[retained[i].store(x[row * dim + warp * (per_lane * lane) + laneid + i * lane]) for i in range(per_lane)])
+      xv = retained.after(retained_ready)[red].cast(dtypes.float32)
+    else:
+      xv = x_sel.cast(dtypes.float32)
     acc = acc.after(acc[0].store(acc.after(red)[0] + xv * xv).end(red))
     warp_total = _warp_reduce_sum_staged(acc[0], laneid, lane, slot_base=90)
     if warps > 1:
@@ -728,7 +738,8 @@ def emit_decode_rmsnorm_kernel(spec:DecodeRMSNormSpec):
     epi = UOp.range(per_lane, 3)
     obase = row * dim + warp * (per_lane * lane) + laneid + epi * lane
     wv = w[warp * (per_lane * lane) + laneid + epi * lane].cast(dtypes.float32)
-    x_epi = x[UOp.const(dtypes.int, 0), UOp.const(dtypes.int, 0), obase] if spec.x_rank == 3 else x[obase]
+    x_epi = retained.after(retained_ready)[epi] if retained is not None else \
+            x[UOp.const(dtypes.int, 0), UOp.const(dtypes.int, 0), obase] if spec.x_rank == 3 else x[obase]
     # The Path 3 semantic marker's fallback is the ordinary nn.RMSNorm graph,
     # which rounds `(x * rsqrt) ` through x.dtype BEFORE the fp32 weight
     # multiply. The native epilogue replicates that intermediate cast so the
@@ -759,6 +770,7 @@ class Q6KGEMVRouteSpec:
   epilogue: str = ""  # "", "ffn_down_resadd" (M2b: total + h[row] in-kernel, fp32 store),
                      # "vocab_top1" (P1: per-tile packed (max, index) key + in-kernel warp reduce)
   storage: str = "packed_u16"
+  accumulators: int = 1
   quant: QuantFormat = Q6_K
   opts: tuple = field(default_factory=tuple)
 
@@ -773,8 +785,9 @@ class Q6KGEMVRouteSpec:
     suffix = "_inkernel" if self.reduction == "in_kernel" else ""
     if self.epilogue == "ffn_down_resadd": suffix += "_epi_ffnresadd"
     if self.epilogue == "vocab_top1": suffix += "_epi_vocabtop1"
-    return (f"q6k_gen_coop_{self.rows}_{self.k}" if self.route_family == "q6k_coop"
-            else f"q6k_gen_partial_{self.rows}_{self.k}_{self.parts}") + suffix
+    acc_suffix = f"_nacc{self.accumulators}" if self.accumulators != 1 else ""
+    return ((f"q6k_gen_coop_{self.rows}_{self.k}" if self.route_family == "q6k_coop"
+            else f"q6k_gen_partial_{self.rows}_{self.k}_{self.parts}") + suffix + acc_suffix)
 
   def validate(self) -> None:
     if self.quant is not Q6_K: raise ValueError(f"Q6KGEMVRouteSpec quant must be Q6_K, got {self.quant!r}")
@@ -792,6 +805,8 @@ class Q6KGEMVRouteSpec:
       if self.reduction != "in_kernel": raise ValueError("vocab_top1 epilogue requires in_kernel reduction")
       if self.route_family != "q6k_coop": raise ValueError("vocab_top1 epilogue requires the coop route family")
     if self.storage != "packed_u16": raise ValueError(f"unsupported storage {self.storage!r}")
+    if self.accumulators not in (1, 2, 4): raise ValueError(f"unsupported accumulators={self.accumulators}")
+    if self.k_blocks % self.accumulators != 0: raise ValueError("k_blocks must divide evenly across accumulators")
     if self.k % Q6_K_BLOCK_ELEMS != 0: raise ValueError(f"k={self.k} must be a multiple of {Q6_K_BLOCK_ELEMS}")
     if self.lane_extent != Q6K_POS_EXTENT: raise ValueError(f"lane_extent must be {Q6K_POS_EXTENT}, got {self.lane_extent}")
     if self.route_family == "q6k_coop":
@@ -809,17 +824,17 @@ class Q6KGEMVRouteSpec:
     return {"quant": self.quant.name, "rows": self.rows, "k": self.k, "role": self.role, "route_family": self.route_family,
             "target": self.target, "row_tile": self.row_tile, "lane_extent": self.lane_extent, "parts": self.parts,
             "pos_axis": self.pos_axis, "block_axis": self.block_axis, "reduction": self.reduction,
-            "epilogue": self.epilogue, "storage": self.storage}
+            "epilogue": self.epilogue, "storage": self.storage, "accumulators": self.accumulators}
 
 
 def q6k_spec_for_role(rows:int, k:int, *, role:str="", parts:int=1, row_tile:int=4, use_coop:bool=True,
                       target:str="amd_gfx1100", opts:tuple=(), reduction:str="external_sum",
-                      epilogue:str="") -> Q6KGEMVRouteSpec:
+                      epilogue:str="", accumulators:int=1) -> Q6KGEMVRouteSpec:
   if use_coop and parts == 1:
     return Q6KGEMVRouteSpec(rows=rows, k=k, role=role, route_family="q6k_coop", row_tile=row_tile,
-                            pos_axis="local", target=target, reduction=reduction, epilogue=epilogue)
+                            pos_axis="local", target=target, reduction=reduction, epilogue=epilogue, accumulators=accumulators)
   return Q6KGEMVRouteSpec(rows=rows, k=k, role=role, route_family="q6k_partial", parts=parts,
-                          pos_axis="reduce", target=target, opts=opts, reduction=reduction, epilogue=epilogue)
+                          pos_axis="reduce", target=target, opts=opts, reduction=reduction, epilogue=epilogue, accumulators=accumulators)
 
 
 def emit_q6k_gemv_kernel(spec:Q6KGEMVRouteSpec):
@@ -871,10 +886,23 @@ def _emit_q6k_coop(spec:Q6KGEMVRouteSpec):
     row, base = row_o * row_tile + row_i, ((row_o * row_tile + row_i) * k_blocks + blk) * Q6K_HALFWORDS_PER_BLOCK
     contrib = _q6k_block_dot(halfs, x, base, blk, pos)
     if in_kernel:
-      acc = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG)
-      acc = acc.after(acc[0].store(0.0))
-      acc = acc.after(acc[0].store(acc.after(blk)[0] + contrib).end(blk))
-      total = _q6k_coop_pos_reduce_sum(acc[0], pos, row_tile)
+      if spec.accumulators == 1:
+        acc = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG)
+        acc = acc.after(acc[0].store(0.0))
+        acc = acc.after(acc[0].store(acc.after(blk)[0] + contrib).end(blk))
+        lane_total = acc[0]
+      else:
+        lane_total = UOp.const(dtypes.float32, 0.0)
+        for stage in range(spec.accumulators):
+          blk_stage = UOp.range(k_blocks // spec.accumulators, 30 + stage, axis_type=AxisType.REDUCE)
+          staged_blk = stage + spec.accumulators * blk_stage
+          staged_base = (row * k_blocks + staged_blk) * Q6K_HALFWORDS_PER_BLOCK
+          staged_contrib = _q6k_block_dot(halfs, x, staged_base, staged_blk, pos)
+          staged_acc = UOp.placeholder((1,), dtypes.float32, 20 + stage, addrspace=AddrSpace.REG)
+          staged_acc = staged_acc.after(staged_acc[0].store(0.0))
+          staged_acc = staged_acc.after(staged_acc[0].store(staged_acc.after(blk_stage)[0] + staged_contrib).end(blk_stage))
+          lane_total = lane_total + staged_acc[0]
+      total = _q6k_coop_pos_reduce_sum(lane_total, pos, row_tile)
       # P1 vocab-head aux scatter-chain fusion (nv-vocab-aux-chain-fusion-scope-20260812.md):
       # carry the per-tile (max, index) as one u64 key instead of the 151936-row logits
       # scatter.  Each lane owns its row's total (replicated over the 16 pos lanes), so the

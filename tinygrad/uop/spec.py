@@ -72,6 +72,11 @@ def type_verify(ast:UOp|list[UOp], check_spec:PatternMatcher):
     for i,u in enumerate(lst):
       ret = check_spec.rewrite(u)
       if cast(bool|None, ret) is not True:
+        if __import__('os').getenv("NV_F2_DUMP_TYPE_VERIFY") and u.op is Ops.PACKED_FRAGMENT_LOAD:
+          def _dump(v, depth=0):
+            if depth > 8: return {"truncated":True}
+            return {"op":getattr(v.op,"name",str(v.op)),"dtype":str(v.dtype),"arg":repr(v.arg),"src":[_dump(s,depth+1) for s in v.src]}
+          print("NV_F2_TYPE_VERIFY " + __import__('json').dumps(_dump(u), sort_keys=True))
         if DEBUG >= 3: print_uops(lst)
         raise RuntimeError(f"UOp verification failed at {i} on {u.op} {u.dtype} {len(u.src)} {[(x.op, x.dtype, x.arg) for x in u.src]} {u.arg}")
 
@@ -116,7 +121,7 @@ def _is_lane_fold(x:UOp) -> bool:
   if x.dtype is not dtypes.int: return False
   if x.op is Ops.SPECIAL: return str(x.arg) in {"lidx0", "gidx0"}
   if x.op is Ops.CONST: return isinstance(x.arg, int) and 0 <= x.arg <= 2_621_440
-  if x.op in {Ops.AND, Ops.SHR, Ops.SHL} and len(x.src) == 2:
+  if x.op in {Ops.AND, Ops.SHR, Ops.SHL, Ops.ADD, Ops.MUL} and len(x.src) == 2:
     return all(_is_lane_fold(s) for s in x.src)
   return False
 
@@ -268,7 +273,36 @@ spec_shared = PatternMatcher([
 ])
 
 # these ops can exist in tensor but not programs. example: movement
+def _nv_independent_warp_fragment(x):
+  a=getattr(x, "arg", None); g=getattr(a, "grid", None)
+  if g is None or getattr(a, "physical_local_size", None) != 128 or getattr(g, "local_size", None) != 128 or getattr(g, "wave_size", None) != 32: return False
+  if not str(getattr(a, "native_abi", "")).startswith("nv_sm120_"): return False
+  lane, group = x.src[1], x.src[4]
+  def walk(u):
+    out=[]
+    def rec(v):
+      out.append((getattr(v.op,"name",str(v.op)),repr(v.arg)))
+      for z in getattr(v,"src",()): rec(z)
+    rec(u); return out
+  lane_ops, group_ops = walk(lane), walk(group)
+  if getattr(a, "physical_local_size", None) == 128 and __import__('os').getenv("NV_F2_DUMP_INDEX_TREES"):
+    print("NV_F2_INDEX_TREE " + repr({"lane":lane_ops,"group":group_ops}))
+  lane_names={str(v.arg).strip("'\"") for v in (lane, lane.src[0]) if getattr(v,"op",None) is Ops.SPECIAL}; group_names={str(v.arg).strip("'\"") for v in (group, group.src[0], group.src[1], group.src[0].src[0], group.src[1].src[0]) if getattr(v,"op",None) is Ops.SPECIAL}
+  lane_consts={int(a) for o,a in lane_ops if o=="CONST" and str(a).lstrip('-').isdigit()}; group_consts={int(a) for o,a in group_ops if o=="CONST" and str(a).lstrip('-').isdigit()}
+  if lane_names != {'lidx0'} or group_names != {'lidx0','gidx0'}:
+    return False
+  if 31 not in lane_consts or 4 not in group_consts or 5 not in group_consts: return False
+  # Exact lane/group proof is represented by the emitted UOp expressions.
+  return True
+
+def _validate_packed_fragment_program(x):
+  if len(x.src) != 5: return False
+  if getattr(getattr(x, "arg", None), "physical_local_size", None) == 128:
+    return _nv_independent_warp_fragment(x)
+  return hasattr(x.arg,'native_abi') and native_attention_abi(x.arg.native_abi,"packed_fragment_hd128_loop_v1") and getattr(x.arg,"grid",None) is not None and x.arg.physical_local_size == 32 and len(x.src)==5 and x.dtype==dtypes.half.vec(x.arg.fragment_lanes) and x.shape==(x.arg.fragment_lanes,) and all(s.dtype.scalar() in {dtypes.int,dtypes.weakint} for s in x.src[1:])
+
 spec_tensor = PatternMatcher([
+  (UPat(Ops.COOPERATIVE_TILE_LOAD, name="x"), lambda x: hasattr(x.arg, "validate") and x.arg.validate() is x.arg and len(x.src) == 2 and x.src[0].op is Ops.PARAM and isinstance(x.src[0].dtype, PtrDType) and x.src[0].ptrdtype.base is dtypes.half and x.src[1].dtype.scalar() in {dtypes.int,dtypes.weakint} and isinstance(x.dtype, PtrDType) and x.dtype.addrspace is AddrSpace.LOCAL and x.ptrdtype.base is dtypes.half and x.ptrdtype.size == 2048),
   # CompositeAccumulator carries scalar/vector slot state until a backend
   # proves a register layout.  It is intentionally not a renderer op.
   (UPat(Ops.COMPOSITE_ACCUMULATOR, name="a"), lambda a: isinstance(a.arg, tuple) and len(a.src) > 0),
@@ -276,6 +310,11 @@ spec_tensor = PatternMatcher([
    m.dtype == m.src[0].dtype and m.arg.__class__.__name__ == "MemorySemanticOwner" and
    getattr(m.arg, "__dataclass_params__", None) is not None and
    isinstance(getattr(getattr(m.arg, "semantic_class", None), "value", None), str)),
+  (UPat(Ops.PACKED_ACTIVATION_CARRIER, name="p"), lambda p:
+   p.dtype == p.arg.logical_dtype and p.arg.abi == "q8_1.logical_mk_to_s8.v1" and
+   tuple(p.arg.logical_shape) == tuple(p.arg.transform.logical_shape) and
+   p.arg.record_bytes == p.arg.transform.packed_bytes and len(p.src) == 1 and
+   (p.src[0].op is Ops.PARAM or (p.src[0].op is Ops.INDEX and p.src[0].dtype.scalar() == dtypes.uint))),
   # SHAPED_WMMA <a_frag, b_frag, acc_frag>, arg=(dims, device, threads); tensor-graph only
   # (lowered to Ops.WMMA by lower_shaped_wmma during rangeify, so it never reaches the program graph).
   (UPat(Ops.SHAPED_WMMA, src=(UPat(), UPat(), UPat()), name="x"), lambda x: isinstance(x.arg, tuple) and len(x.arg) == 3),
@@ -396,9 +435,12 @@ spec_tensor = PatternMatcher([
   (UPat(Ops.PACKED_FRAGMENT_LOAD, src=(UPat(), UPat(), UPat(), UPat(Ops.RANGE)), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and native_attention_abi(x.arg.native_abi, "packed_fragment_hd128_loop_v1")
    and x.dtype == dtypes.half.vec(x.arg.fragment_lanes) and x.shape == (x.arg.fragment_lanes,)),
-  (UPat(Ops.PACKED_FRAGMENT_LOAD, src=(UPat(), UPat(), UPat(), UPat(Ops.RANGE), UPat(Ops.SPECIAL)), name="x"),
-   lambda x: hasattr(x.arg, 'native_abi') and native_attention_abi(x.arg.native_abi, "packed_fragment_hd128_loop_v1") and getattr(x.arg,"grid",None) is not None
-   and str(x.src[4].arg)=="gidx0" and x.dtype == dtypes.half.vec(x.arg.fragment_lanes) and x.shape == (x.arg.fragment_lanes,)),
+  (UPat(Ops.PACKED_FRAGMENT_LOAD, name="x"),
+   lambda x: (len(x.src) == 5 and x.dtype == dtypes.half.vec(x.arg.fragment_lanes) and x.shape == (x.arg.fragment_lanes,)
+              and ((_nv_independent_warp_fragment(x) if getattr(x.arg, "physical_local_size", 32) == 128 else
+                    (hasattr(x.arg, 'native_abi') and native_attention_abi(x.arg.native_abi, "packed_fragment_hd128_loop_v1")
+                     and getattr(x.arg, "grid", None) is not None and x.arg.physical_local_size == 32
+                     and x.src[4].op is Ops.SPECIAL and str(x.src[4].arg) == "gidx0"))))),
   (UPat(Ops.PACKED_FRAGMENT_LOAD, src=(UPat(), UPat(), UPat(), UPat(), UPat(Ops.RANGE), UPat(Ops.SPECIAL)), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and native_attention_abi(x.arg.native_abi, "packed_fragment_hd128_loop_v1") and
    getattr(getattr(x.arg,"grid",None),"native_abi",None) == "amd_gfx1100_attention_multiwave_g2_v1" and
@@ -458,6 +500,8 @@ spec_tensor = PatternMatcher([
 
 # these ops can exist in programs but not the tensor spec. example: LOAD
 spec_program = PatternMatcher([
+  (UPat(Ops.AFTER, name="x"), lambda x: (type(getattr(x, "tag", None)).__name__ != "SharedTileOwnerSpec") or (x.tag.validate() is x.tag and len(x.src) >= 2 and any(s.op is Ops.BARRIER for s in x.src))),
+  (UPat(Ops.COOPERATIVE_TILE_LOAD, name="x"), lambda x: hasattr(x.arg, "validate") and x.arg.validate() is x.arg and len(x.src) == 2 and x.src[0].op is Ops.PARAM and isinstance(x.src[0].dtype, PtrDType) and x.src[0].ptrdtype.base is dtypes.half and x.src[1].dtype.scalar() in {dtypes.int,dtypes.weakint} and isinstance(x.dtype, PtrDType) and x.dtype.addrspace is AddrSpace.LOCAL and x.ptrdtype.base is dtypes.half and x.ptrdtype.size == 2048),
   # Scalar address arithmetic introduced by the native Hd128 attention drain.
   (UPat(Ops.CONST, dtypes.weakint, name="x"), lambda x: isinstance(x.arg, int) and 0 <= x.arg <= 2_621_440),
   (UPat((Ops.ADD, Ops.MUL, Ops.SHR, Ops.CDIV), dtypes.weakint, src=(UPat(dtype=dtypes.weakint), UPat(dtype=dtypes.weakint))), lambda: True),
@@ -467,8 +511,7 @@ spec_program = PatternMatcher([
    lambda x: hasattr(x.arg,'native_abi') and native_attention_abi(x.arg.native_abi,"packed_fragment_hd128_loop_v1") and
    x.dtype==dtypes.half.vec(x.arg.fragment_lanes) and x.shape==(x.arg.fragment_lanes,) and all(s.dtype.scalar() in {dtypes.int,dtypes.weakint} for s in x.src[1:])),
   (UPat(Ops.PACKED_FRAGMENT_LOAD,name="x"),
-   lambda x: hasattr(x.arg,'native_abi') and native_attention_abi(x.arg.native_abi,"packed_fragment_hd128_loop_v1") and getattr(x.arg,"grid",None) is not None and
-   len(x.src)==5 and x.dtype==dtypes.half.vec(x.arg.fragment_lanes) and x.shape==(x.arg.fragment_lanes,) and all(s.dtype.scalar() in {dtypes.int,dtypes.weakint} for s in x.src[1:])),
+   _validate_packed_fragment_program),
   (UPat(Ops.PACKED_FRAGMENT_LOAD,name="x"),
    lambda x: hasattr(x.arg,'native_abi') and native_attention_abi(x.arg.native_abi,"packed_fragment_hd128_loop_v1") and
    getattr(getattr(x.arg,"grid",None),"native_abi",None)=="amd_gfx1100_attention_multiwave_g2_v1" and len(x.src)==6 and

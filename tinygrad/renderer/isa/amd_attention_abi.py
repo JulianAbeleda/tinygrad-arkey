@@ -31,11 +31,42 @@ instruction encoder.
 """
 from __future__ import annotations
 from tinygrad.uop.ops import UOp, UPat, PatternMatcher, Ops
-from tinygrad.dtype import dtypes, AddrSpace
+from tinygrad.dtype import dtypes, AddrSpace, PtrDType
 from tinygrad.helpers import getenv
 from tinygrad.renderer.isa.amd_physical_regs import _fixed_alias
 from tinygrad.renderer.isa.amd_register_contracts import AMD_ATTENTION_LOOP_STATE
 from tinygrad.codegen.late.warp_reduce import warp_bpermute
+
+def lower_cooperative_tile_load(x:UOp) -> UOp:
+  from tinygrad.uop.ops import CooperativeTileLoadSpec
+  if x.op is not Ops.COOPERATIVE_TILE_LOAD or not isinstance(x.arg, CooperativeTileLoadSpec): raise ValueError("invalid cooperative tile load")
+  x.arg.validate(); owner, tile_base = x.src
+  if owner.op is not Ops.PARAM or not isinstance(owner.dtype, PtrDType) or owner.ptrdtype.base is not dtypes.half: raise ValueError("cooperative tile owner must be fp16 global PARAM")
+  thread=UOp.special(128, "lidx0"); shared=UOp(Ops.DEFINE_LOCAL,dtypes.half.ptr(2048,AddrSpace.LOCAL),arg=("nv2a_shared",x.arg.phase_abi))
+  stores=[]
+  for i in range(16):
+    idx=thread.alu(Ops.ADD,UOp.const(dtypes.weakint,i*128))
+    stores.append(shared.index(idx,ptr=True).store(owner.index(tile_base+idx)))
+  barrier=UOp(Ops.BARRIER,dtypes.void,(UOp.group(*stores),),arg=("nv2a_tile_barrier",x.arg.phase_abi))
+  from tinygrad.uop.ops import SharedTileOwnerSpec
+  return shared.after(barrier).replace(tag=SharedTileOwnerSpec(phase_token=x.arg.phase_abi,
+    loop_axis=x.arg.loop_axis, stage_generation=x.arg.stage_generation,
+    end_barrier_token=x.arg.end_barrier_token))
+
+def _shared_tile_owner(owner:UOp) -> tuple[UOp,UOp]:
+  """Validate and return the single-buffer local tile with its publication edge."""
+  from tinygrad.uop.ops import SharedTileOwnerSpec
+  if owner.op is not Ops.AFTER or not isinstance(owner.tag, SharedTileOwnerSpec):
+    raise ValueError("shared packed fragment requires tagged AFTER owner")
+  owner.tag.validate()
+  if len(owner.src) != 2 or owner.src[0].op is not Ops.DEFINE_LOCAL or owner.src[1].op is not Ops.BARRIER:
+    raise ValueError("shared tile owner must be DEFINE_LOCAL AFTER matching BARRIER")
+  local, barrier = owner.src
+  if local.dtype != dtypes.half.ptr(2048, AddrSpace.LOCAL) or barrier.arg != ("nv2a_tile_barrier", owner.tag.phase_token):
+    raise ValueError("shared tile owner has invalid local tile or barrier")
+  if len(barrier.src) != 1 or barrier.src[0].op not in {Ops.GROUP, Ops.STORE}:
+    raise ValueError("shared tile owner barrier must publish one store group")
+  return local, barrier
 
 
 def drain_lane_encoding(head_dim:int, e:int, j:int, output_block_base:int) -> tuple[int, int, int]:
@@ -105,6 +136,10 @@ def expand_loop_fragment(x:UOp) -> UOp:
   from tinygrad.uop.ops import PackedFragmentLoopSpec, AMDMultiWaveAttentionGridSpec
   if not isinstance(x.arg, PackedFragmentLoopSpec): raise ValueError("loop fragment is malformed")
   x.arg.validate(); role,block=x.arg.role,x.arg.head_block
+  shared_storage = x.arg.storage == "shared"
+  if shared_storage:
+    shared_local, shared_barrier = _shared_tile_owner(x.src[0])
+    shared_owner = x.src[0]
   if isinstance(x.arg.grid, AMDMultiWaveAttentionGridSpec):
     if len(x.src) != 6: raise ValueError("multiwave loop fragment requires owner/lane/wave/column/range/group")
     owner,lane,wave_id,col,rng,*grid_src=x.src
@@ -124,6 +159,7 @@ def expand_loop_fragment(x:UOp) -> UOp:
   # fixed grid-less kv64_hd128_loop kernel (no head_dim kwarg exists there, per P-B2) -- hd stays the
   # literal 128 constant for that specific kernel family, not derived.
   hd = x.arg.grid.head_dim if x.arg.grid is not None else 128
+  if shared_storage: grid_src=[]
   if not grid_src: gbase=UOp.const(dtypes.weakint,0)
   elif isinstance(x.arg.grid, AMDMultiWaveAttentionGridSpec):
     grid,group=x.arg.grid,grid_src[0]
@@ -164,6 +200,16 @@ def expand_loop_fragment(x:UOp) -> UOp:
   grid_kv_tokens=x.arg.grid.kv_tokens if x.arg.grid is not None else None
   def _row_ok(token): return None if grid_kv_tokens is None else token < grid_kv_tokens
   model=getattr(x.arg,"fragment_model",None)
+  if shared_storage:
+    if role not in {"K", "V"}: raise ValueError("shared packed fragments currently require K/V role")
+    if model is not None:
+      lanes=model.fragment_lanes(role)
+      offs=tuple((model.operand_k(1,i,lane)*128 + block*16 + model.operand_row(1,0,lane)) for i in range(lanes))
+    else:
+      offs=tuple(col*128 + block*16+i for i in range(16))
+    return UOp(Ops.STACK,dtypes.half.vec(model.fragment_lanes(role) if model is not None else 16),
+      tuple(shared_owner.index(off).load() for off in offs),
+      tag=("amd_gfx1100_fragment_load_hd128_loop_v1",role,block,x.arg,*x.src))
   if model is not None:
     # Fragment-model path: per-element load addresses derive from the target's own operand lane
     # layouts. The call offset is added only when this fragment belongs to a later WMMA call of a
@@ -240,13 +286,15 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
   if not initial_state and any(s.dtype != state_dt or s.shape != state_shape for s in (m, l)):
     raise ValueError("AMD row-softmax repack state dtype does not match descriptor mode")
   multiwave = isinstance(x.arg.grid, AMDMultiWaveAttentionGridSpec)
-  tid = UOp.special(x.arg.grid.local_size if multiwave else 32, "lidx0")
+  nv_grouped = getattr(x.arg, "native_abi", "").startswith("nv_sm120_") and getattr(x.arg.grid, "local_size", 32) == 128
+  tid = UOp.special(128 if nv_grouped else (x.arg.grid.local_size if multiwave else 32), "lidx0")
   lane = tid.alu(Ops.AND, UOp.const(dtypes.weakint, 31)) if multiwave else tid
-  wave_id = tid.alu(Ops.SHR, UOp.const(dtypes.weakint, 5)) if multiwave else UOp.const(dtypes.weakint, 0)
+  wave_id = tid.alu(Ops.SHR, UOp.const(dtypes.weakint, 5)) if (multiwave or nv_grouped) else UOp.const(dtypes.weakint, 0)
   wave_base = wave_id.alu(Ops.MUL, UOp.const(dtypes.weakint, 256))
   lane_hw = lane.cast(dtypes.int)
   halfwave, col = lane.alu(Ops.SHR, UOp.const(dtypes.weakint, 4)), lane.alu(Ops.AND, UOp.const(dtypes.weakint, 15))
-  lds = UOp(Ops.DEFINE_LOCAL, dtypes.half.ptr(512 if multiwave else 256, AddrSpace.LOCAL), arg=next(ctx))
+  lds_size = (1024 if nv_grouped else 512) if multiwave or nv_grouped else 256
+  lds = UOp(Ops.DEFINE_LOCAL, dtypes.half.ptr(lds_size, AddrSpace.LOCAL), arg=next(ctx))
   state_owner = next(ctx) if stateful and native_state else None
   state_writes_m, state_writes_l, state_writes_alpha = [], [], []
   stores, new_ms, new_ls, alphas, log2e = [], [], [], [], UOp.const(dtypes.float, 1.4426950408889634)

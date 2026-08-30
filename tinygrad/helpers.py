@@ -238,6 +238,10 @@ class _DEV(ContextVar):
 DEV, DEBUG, NOOPT = _DEV("DEV", ""), ContextVar("DEBUG", 0), ContextVar("NOOPT", 0)
 IMAGE, FLOAT16, OPENPILOT_HACKS = ContextVar("IMAGE", 0), ContextVar("FLOAT16", 0), ContextVar("OPENPILOT_HACKS", 0)
 JIT, JIT_BATCH_SIZE = ContextVar("JIT", 2 if OSX and ARCH_X86 else 1), ContextVar("JIT_BATCH_SIZE", 32)
+# Compiler/capture lease for the measured dense NV Flash load schedule.  The
+# model admission owns its lifetime; outside that scope rendering and graph
+# partitioning retain their ordinary defaults.
+NV_FLASH_LOAD_SCHEDULE = ContextVar("NV_FLASH_LOAD_SCHEDULE", 0)
 WINO, CAPTURING, TRACEMETA, NO_COLOR = ContextVar("WINO", 0), ContextVar("CAPTURING", 1), ContextVar("TRACEMETA", 1), ContextVar("NO_COLOR", 0)
 USE_TC, TC_SELECT, TC_OPT = ContextVar("TC", 1), ContextVar("TC_SELECT", -1), ContextVar("TC_OPT", 0)
 TRANSCENDENTAL, NOLOCALS = ContextVar("TRANSCENDENTAL", 1), ContextVar("NOLOCALS", 0)

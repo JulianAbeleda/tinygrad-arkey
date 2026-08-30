@@ -110,6 +110,16 @@ def test_provider_is_one_production_shape_q8_kernel():
   assert Q8_WORDS == 3456
 
 
+def test_provider_supports_vocab_k4096_packet_abi():
+  vocab_k, vocab_words = 4096, 4096 // 4 + 4096 // 32
+  ast=emit_q8_provider(k=vocab_k)(UOp.placeholder((vocab_words,),dtypes.uint32,0),
+                                  UOp.placeholder((vocab_k,),dtypes.float16,1))
+  program,source,_ptx=_render(ast,"q6k_vocab_manyrow_q8_provider_4096")
+  assert program.arg.global_size == (16,1,1)
+  assert program.arg.local_size == (256,1,1)
+  assert "q8_1_llama_provider_4096" in source
+
+
 def test_scalar_packet_producer_renders_1024_threads_and_packed_q8_abi():
   gate_words=ROWS*Q4_BLOCKS*36
   ast=emit_ffn_w1w3_q8_scalar_packet()(
