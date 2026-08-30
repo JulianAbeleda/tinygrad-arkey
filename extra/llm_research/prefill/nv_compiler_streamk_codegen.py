@@ -11,6 +11,58 @@ from typing import Any
 
 from tinygrad.uop.ops import Ops, UOp
 
+STREAMK_RANGE_PROVENANCE: dict[str, dict[str, tuple[bytes, ...]]] = {}
+
+
+def one_pass_substitute(root: UOp, substitutions: dict[UOp, UOp]) -> UOp:
+  """Memoized substitution that never descends into a replacement expression."""
+  memo: dict[UOp, UOp] = {}
+  def visit(node: UOp) -> UOp:
+    if node in substitutions: return substitutions[node]
+    if node in memo: return memo[node]
+    src = tuple(visit(x) for x in node.src)
+    ret = node if src == node.src else node.replace(src=src)
+    memo[node] = ret
+    return ret
+  return visit(root)
+
+
+def select_reversed_output_n(ast: UOp, scheduler: Any) -> dict[bytes, UOp]:
+  """Select and reverse the unique output range proven to belong to packed B."""
+  direct = getattr(getattr(scheduler.ast.arg, "candidate_context", None), "streamk", None)
+  direct_key = getattr(direct, "selected_n_key", None)
+  if direct_key is not None:
+    matches = [r for r in scheduler._output_rngs() if r.key == direct_key]
+    if len(matches) != 1: raise ValueError(f"captured output-N range disappeared ({len(matches)})")
+    rng = matches[0]
+    physical = rng.replace(tag=("streamk_physical", rng.key))
+    return {direct_key: rng.vmax - physical}
+  rec = STREAMK_RANGE_PROVENANCE.get("current", {})
+  outputs = set(rec.get("output", ()))
+  b_ranges = set(rec.get("B", ()))
+  a_ranges = set(rec.get("A", ()))
+  lineage = rec.get("lineage", {})
+  for source, produced in lineage.items():
+    if source in b_ranges: b_ranges.update(produced)
+    if source in a_ranges: a_ranges.update(produced)
+  matches = [r for r in scheduler._output_rngs() if r.key in outputs & b_ranges and r.key not in a_ranges]
+  if len(matches) != 1: raise ValueError(f"expected one output-N range, found {len(matches)}")
+  rng = matches[0]
+  physical = rng.replace(tag=("streamk_physical", rng.key))
+  return {rng.key: rng.vmax - physical}
+
+
+def record_range_provenance(operands: tuple[Any, ...], *, output_ranges: tuple[UOp, ...] = ()) -> None:
+  """Publish role/range provenance for the gated post-AST selector."""
+  for operand in operands:
+    role = getattr(operand, "role", None)
+    if role not in ("A", "B"): continue
+    source = getattr(operand, "source", None)
+    ranges = tuple(x.key for x in source.ranges) if source is not None else ()
+    STREAMK_RANGE_PROVENANCE.setdefault("current", {})[role] = ranges
+  if output_ranges:
+    STREAMK_RANGE_PROVENANCE.setdefault("current", {})["output"] = tuple(x.key for x in output_ranges)
+
 
 @dataclass(frozen=True)
 class StreamKGeometry:
@@ -122,6 +174,7 @@ class StreamKCandidateContext:
   research_only: bool = True
   main_grid: tuple[int, int, int] = (170, 1, 1)
   fixup_grid: tuple[int, int, int] = (170, 1, 1)
+  selected_n_key: bytes|None = None
 
   def __post_init__(self):
     self.schedule.validate()
@@ -281,6 +334,20 @@ def adapt_precontract_operands(operands: tuple[Any, ...], output_tile: UOp, k_bl
     else:
       out.append(operand)
   return tuple(out)
+
+
+def output_role_row_base(output_tile: UOp, *, tile_n: int, offset: int = 0) -> UOp:
+  """Derive packed-B's transform-scaled row base from a logical output tile."""
+  if not isinstance(output_tile, UOp) or not isinstance(tile_n, int) or tile_n <= 0:
+    raise TypeError("output-role mapping requires a UOp tile and positive tile extent")
+  return output_tile * tile_n + offset
+
+
+def assert_identity_output_role_base(output_tile: UOp, existing: UOp, *, tile_n: int, offset: int = 0) -> None:
+  """Fail closed unless the mapped expression is exactly the established identity base."""
+  mapped = output_role_row_base(output_tile, tile_n=tile_n, offset=offset)
+  if mapped is not existing and mapped.key != existing.key:
+    raise ValueError("Stream-K output-role identity base does not match packed transform base")
 
 
 def program_census(program: UOp) -> dict[str, Any]:

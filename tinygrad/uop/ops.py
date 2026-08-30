@@ -163,7 +163,10 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
   tag:Any = None
   def __del__(self):
     if Ops is not None and self.op is Ops.BUFFER and (buffer:=buffers.get(self)) is not None: buffer.ref(-1)
-    try: del UOpMetaClass.ucache[(self.op, self.dtype, self.src, self.arg, self.tag)]
+    try:
+      key = (self.op, self.dtype, self.src, self.arg, self.tag)
+      cached = UOpMetaClass.ucache.get(key)
+      if cached is not None and cached() is self: del UOpMetaClass.ucache[key]
     except AttributeError: pass
   def __reduce__(self):
     args = [self.op, self.dtype, self.src, self.arg, self.tag, self.metadata]
@@ -320,6 +323,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
       case Ops.PACKED_FRAGMENT_LOAD: return (self.arg.fragment_lanes,)
       case Ops.PACKED_ACTIVATION_CARRIER: return self.arg.logical_shape
       case Ops.COOPERATIVE_TILE_LOAD: return (self.arg.tile_shape[0]*self.arg.tile_shape[1],)
+      case Ops.COOPERATIVE_STAGE_BEGIN: return ()
       case Ops.ATTENTION_LOOP_STATE: return (self.dtype.count,) if self.dtype != dtypes.void and self.dtype.count != 1 else ()
       case Ops.ATTENTION_OUTPUT_DRAIN | Ops.AMD_ATTENTION_STATS_DRAIN: return self.src[0]._shape
       case Ops.AMD_PV_C_LANE: return ()
@@ -698,6 +702,12 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     if not isinstance(spec, CooperativeTileLoadSpec): raise TypeError("cooperative tile load requires CooperativeTileLoadSpec")
     spec.validate()
     return UOp(Ops.COOPERATIVE_TILE_LOAD, dtypes.half.ptr(2048, AddrSpace.LOCAL), (owner, tile_base), arg=spec)
+  @staticmethod
+  def cooperative_stage_begin(loop_axis:UOp, stage_generation:UOp, spec):
+    from tinygrad.uop.ops import CooperativeStageBeginSpec
+    if not isinstance(spec, CooperativeStageBeginSpec): raise TypeError("cooperative stage begin requires CooperativeStageBeginSpec")
+    spec.validate()
+    return UOp(Ops.COOPERATIVE_STAGE_BEGIN, dtypes.void, (loop_axis, stage_generation), arg=spec)
   @staticmethod
   def packed_activation_carrier(record:UOp, spec):
     """Construct a typed logical int8 view over a packed activation record."""
@@ -2069,12 +2079,30 @@ class CooperativeTileLoadSpec(NamedTuple):
   loop_axis: Any = None
   stage_generation: int = 0
   end_barrier_token: Any = None
+  slots: int = 1
+  slot_index: Any = 0
+  pre_barrier: bool = False
   def validate(self):
     if self.native_abi != "nv_sm120_cooperative_tile_load_v1" or self.storage != "shared": raise ValueError("invalid NV cooperative tile ABI")
     if self.tile_shape != (16,128) or self.threads != 128 or self.elems_per_thread != 16 or self.shared_stride != 128: raise ValueError("NV cooperative tile requires exact 16x128/128-thread geometry")
     if self.phase_abi != "single_buffer_barrier_v1" or self.tile_base is None: raise ValueError("NV cooperative tile requires a tile base and phase ABI")
     if not isinstance(self.stage_generation, int) or self.stage_generation < 0: raise ValueError("NV cooperative tile stage generation must be non-negative")
+    if not isinstance(self.slots, int) or self.slots < 1: raise ValueError("NV cooperative tile slots must be positive")
+    if not isinstance(self.pre_barrier, bool): raise ValueError("NV cooperative tile pre_barrier must be bool")
     if self.loop_axis is None and self.end_barrier_token is not None: raise ValueError("NV tile end barrier requires a loop axis")
+    return self
+
+class CooperativeStageBeginSpec(NamedTuple):
+  """NV cooperative KV iteration entry; exactly one CTA barrier per iteration."""
+  native_abi: str = "nv_sm120_cooperative_stage_begin_v1"
+  loop_axis: Any = None
+  stage_generation: int = 0
+  ordering_token: str = "single_buffer_barrier_v1"
+  def validate(self):
+    if self.native_abi != "nv_sm120_cooperative_stage_begin_v1" or self.ordering_token != "single_buffer_barrier_v1":
+      raise ValueError("invalid NV cooperative stage-begin ABI")
+    if self.loop_axis is None or not isinstance(self.stage_generation, int) or isinstance(self.stage_generation, bool) or self.stage_generation < 0:
+      raise ValueError("cooperative stage begin requires a loop axis and non-negative generation")
     return self
 
 class SharedTileOwnerSpec(NamedTuple):
@@ -2087,8 +2115,11 @@ class SharedTileOwnerSpec(NamedTuple):
   loop_axis: Any = None
   stage_generation: int = 0
   end_barrier_token: Any = None
+  slots: int = 1
+  slot_index: Any = 0
   def validate(self):
     if self.native_abi != "nv_sm120_shared_tile_owner_v1" or self.shape != (16,128) or self.dtype is not dtypes.half or self.phase_token != "single_buffer_barrier_v1" or self.threads != 128 or self.tile_stride != 128: raise ValueError("invalid NV shared tile owner")
+    if not isinstance(self.slots, int) or self.slots < 1: raise ValueError("invalid NV shared tile slots")
     if not isinstance(self.stage_generation, int) or self.stage_generation < 0: raise ValueError("invalid NV shared tile generation")
     if self.loop_axis is None and self.end_barrier_token is not None: raise ValueError("NV shared tile end barrier requires loop axis")
     return self
@@ -2106,6 +2137,7 @@ class PackedFragmentLoopSpec(NamedTuple):
   physical_local_size: int = 32
   storage: str = "global"
   shared_phase_abi: str|None = None
+  stage_wait: Any = None
 
   def validate(self):
     if self.storage not in {"global", "shared"}: raise ValueError("packed fragment storage must be global or shared")
@@ -2129,6 +2161,8 @@ class PackedFragmentLoopSpec(NamedTuple):
     if not isinstance(self.head_block, int) or isinstance(self.head_block, bool) or not 0 <= self.head_block < hdb:
       raise ValueError("AMD loop fragment has an invalid head block")
     if self.grid is not None: self.grid.validate()
+    if self.stage_wait is not None and getattr(self.stage_wait, "op", None) is not Ops.BARRIER:
+      raise ValueError("shared packed fragment stage_wait must be a barrier")
     if not isinstance(self.physical_local_size, int) or self.physical_local_size <= 0 or self.physical_local_size % 32:
       raise ValueError("loop fragment physical_local_size must be a positive wave32 multiple")
     return self

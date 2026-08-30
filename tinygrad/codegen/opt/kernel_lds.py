@@ -759,7 +759,7 @@ def cooperative_store_row(raw_row, *, vectors_per_row:int, rows:int, stride_byte
 
 def instantiate_precontract_producer(geometry:KernelTileGeometry, *, tc, allocation:UOp,
                                      operands:tuple[PrecontractOperand,...], threads:PrecontractThreadAxes,
-                                     epoch:UOp, slot:UOp, logical_output_tile:UOp|None=None,
+                                     epoch:UOp, slot:UOp, logical_row_tile_bases:tuple[UOp|None,UOp|None]|dict[str,UOp|None]|None=None,
                                      logical_k_block:UOp|None=None) -> PrecontractProducerInstance:
   factors=derive_precontract_factors(geometry,tc)
   item_bytes, vector_bytes = tc.dtype_in.itemsize, 16
@@ -776,7 +776,8 @@ def instantiate_precontract_producer(geometry:KernelTileGeometry, *, tc, allocat
       row=cooperative_store_row(row,vectors_per_row=factors.vectors_per_row,rows=rows,
                                 stride_bytes=window.stride_bytes,vector_bytes=vector_bytes)
       logical_k=vector*vector_elements
-      logical_row = (logical_output_tile if logical_output_tile is not None else operand.row_tile_base) + row
+      logical_base = (logical_row_tile_bases.get(operand.role) if isinstance(logical_row_tile_bases, dict) else logical_row_tile_bases[0 if operand.role == "A" else 1]) if logical_row_tile_bases is not None else None
+      logical_row = (logical_base if logical_base is not None else operand.row_tile_base) + row
       if isinstance(operand, PackedPrecontractOperandTemplate):
         value = operand.fragment_provider.fragment(operand.source, logical_row, epoch*geometry.tile[2]+logical_k, vector_elements).value \
           if operand.fragment_provider is not None else \
@@ -800,7 +801,7 @@ def instantiate_precontract_producer(geometry:KernelTileGeometry, *, tc, allocat
 def instantiate_precontract_fragments(geometry:KernelTileGeometry, *, tc, allocation:UOp, threads:PrecontractThreadAxes,
                                       k_substep:UOp, subtile_m:UOp, subtile_n:UOp,
                                       contracts:tuple[PrecontractContractSpec,...], epoch:UOp, slot:UOp,
-                                      ready:UOp, logical_output_tile:UOp|None=None,
+                                      ready:UOp, logical_row_tile_bases:tuple[UOp|None,UOp|None]|dict[str,UOp|None]|None=None,
                                       logical_k_block:UOp|None=None) -> PrecontractFragmentInstance:
   factors=derive_precontract_factors(geometry,tc); item_bytes=tc.dtype_in.itemsize
   slot_base=slot*(geometry.lds_windows[-1].end//item_bytes)
@@ -833,7 +834,7 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
                                 contracts:tuple[PrecontractContractSpec, ...], pipeline_plan=None,
                                 lds_bank_dwords:int|None=None, lds_bank_cycle_lanes:int|None=None,
                                 lds_read_before_next_write_ordered:bool|None=None,
-                                logical_output_tile:UOp|None=None) -> PrecontractLDSStage:
+                                logical_row_tile_bases:tuple[UOp|None,UOp|None]|dict[str,UOp|None]|None=None) -> PrecontractLDSStage:
   """Build an unwired vector cooperative stage while full operand index templates still exist.
 
   ``lds_bank_dwords``/``lds_bank_cycle_lanes`` are the calling renderer's declared bank facts
@@ -853,6 +854,11 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
   """
   factors = derive_precontract_factors(geometry, tc)
   validate_precontract_operand_templates(operands, dtype_in=tc.dtype_in, context="precontract")
+  try:
+    from extra.llm_research.prefill.nv_compiler_streamk_codegen import record_range_provenance
+    record_range_provenance(operands)
+  except ImportError:
+    pass
   for operand in operands:
     if operand.row_tile_base.dtype.scalar() not in (dtypes.int, dtypes.weakint): raise ValueError("precontract row tile base must be integer")
   validate_precontract_thread_axes(geometry, factors, threads, subtile_m, subtile_n, context="precontract")
@@ -913,7 +919,8 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
                                   stride_bytes=window.stride_bytes, vector_bytes=vector_bytes,
                                   bank_dwords=lds_bank_dwords, bank_cycle_lanes=lds_bank_cycle_lanes)
       logical_k = vector * vector_elements
-      logical_row = (logical_output_tile if logical_output_tile is not None else operand.row_tile_base) + row
+      logical_base = (logical_row_tile_bases.get(operand.role) if isinstance(logical_row_tile_bases, dict) else logical_row_tile_bases[0 if operand.role == "A" else 1]) if logical_row_tile_bases is not None else None
+      logical_row = (logical_base if logical_base is not None else operand.row_tile_base) + row
       if isinstance(operand, PackedPrecontractOperandTemplate):
         value = operand.fragment_provider.fragment(operand.source, logical_row, k_axis.tile_base + logical_k, vector_elements).value \
           if operand.fragment_provider is not None else \

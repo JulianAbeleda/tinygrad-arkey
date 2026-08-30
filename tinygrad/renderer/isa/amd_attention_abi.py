@@ -42,16 +42,28 @@ def lower_cooperative_tile_load(x:UOp) -> UOp:
   if x.op is not Ops.COOPERATIVE_TILE_LOAD or not isinstance(x.arg, CooperativeTileLoadSpec): raise ValueError("invalid cooperative tile load")
   x.arg.validate(); owner, tile_base = x.src
   if owner.op is not Ops.PARAM or not isinstance(owner.dtype, PtrDType) or owner.ptrdtype.base is not dtypes.half: raise ValueError("cooperative tile owner must be fp16 global PARAM")
-  thread=UOp.special(128, "lidx0"); shared=UOp(Ops.DEFINE_LOCAL,dtypes.half.ptr(2048,AddrSpace.LOCAL),arg=("nv2a_shared",x.arg.phase_abi))
+  thread=UOp.special(128, "lidx0"); tile_elements=16*128; shared=UOp(Ops.DEFINE_LOCAL,dtypes.half.ptr(tile_elements*x.arg.slots,AddrSpace.LOCAL),arg=("nv2a_shared",x.arg.phase_abi,x.arg.slots))
+  pre=UOp(Ops.BARRIER,dtypes.void,(UOp.group(),),arg=("nv2a_pre_tile_barrier",x.arg.phase_abi)) if x.arg.pre_barrier else None
   stores=[]
   for i in range(16):
     idx=thread.alu(Ops.ADD,UOp.const(dtypes.weakint,i*128))
-    stores.append(shared.index(idx,ptr=True).store(owner.index(tile_base+idx)))
+    src=owner.index(tile_base+idx).load(); src=src.after(pre) if pre is not None else src
+    stores.append(shared.index(x.arg.slot_index*tile_elements+idx,ptr=True).store(src))
   barrier=UOp(Ops.BARRIER,dtypes.void,(UOp.group(*stores),),arg=("nv2a_tile_barrier",x.arg.phase_abi))
   from tinygrad.uop.ops import SharedTileOwnerSpec
   return shared.after(barrier).replace(tag=SharedTileOwnerSpec(phase_token=x.arg.phase_abi,
     loop_axis=x.arg.loop_axis, stage_generation=x.arg.stage_generation,
-    end_barrier_token=x.arg.end_barrier_token))
+    end_barrier_token=x.arg.end_barrier_token, slots=x.arg.slots, slot_index=x.arg.slot_index))
+
+def lower_cooperative_stage_begin(x:UOp) -> UOp:
+  from tinygrad.uop.ops import CooperativeStageBeginSpec
+  if x.op is not Ops.COOPERATIVE_STAGE_BEGIN or not isinstance(x.arg, CooperativeStageBeginSpec):
+    raise ValueError("invalid cooperative stage begin")
+  x.arg.validate()
+  if len(x.src) != 2 or x.src[0] != x.arg.loop_axis: raise ValueError("stage begin axis mismatch")
+  # The barrier is deliberately independent of lane/load predicates. Its arg is
+  # the typed ordering token consumed by the staged shared-tile owner.
+  return UOp(Ops.BARRIER, dtypes.void, (UOp.group(),), arg=("nv_sm120_cooperative_stage_begin_v1", x.arg.ordering_token, x.arg.loop_axis, x.arg.stage_generation))
 
 def _shared_tile_owner(owner:UOp) -> tuple[UOp,UOp]:
   """Validate and return the single-buffer local tile with its publication edge."""
@@ -62,7 +74,7 @@ def _shared_tile_owner(owner:UOp) -> tuple[UOp,UOp]:
   if len(owner.src) != 2 or owner.src[0].op is not Ops.DEFINE_LOCAL or owner.src[1].op is not Ops.BARRIER:
     raise ValueError("shared tile owner must be DEFINE_LOCAL AFTER matching BARRIER")
   local, barrier = owner.src
-  if local.dtype != dtypes.half.ptr(2048, AddrSpace.LOCAL) or barrier.arg != ("nv2a_tile_barrier", owner.tag.phase_token):
+  if local.dtype != dtypes.half.ptr(2048*owner.tag.slots, AddrSpace.LOCAL) or barrier.arg != ("nv2a_tile_barrier", owner.tag.phase_token):
     raise ValueError("shared tile owner has invalid local tile or barrier")
   if len(barrier.src) != 1 or barrier.src[0].op not in {Ops.GROUP, Ops.STORE}:
     raise ValueError("shared tile owner barrier must publish one store group")
@@ -161,6 +173,7 @@ def expand_loop_fragment(x:UOp) -> UOp:
   hd = x.arg.grid.head_dim if x.arg.grid is not None else 128
   if shared_storage: grid_src=[]
   if not grid_src: gbase=UOp.const(dtypes.weakint,0)
+  if shared_storage: gbase=x.src[0].tag.slot_index*2048
   elif isinstance(x.arg.grid, AMDMultiWaveAttentionGridSpec):
     grid,group=x.arg.grid,grid_src[0]
     kv_head,q_tile=group//grid.q_tiles,group%grid.q_tiles
@@ -560,6 +573,7 @@ native_repack_matcher = PatternMatcher([
   (UPat(Ops.GEP, src=(UPat(Ops.STACK, name="s"),), name="x"), lower_native_row_state_gep),
 ])
 native_loop_fragment_matcher=PatternMatcher([(UPat(Ops.PACKED_FRAGMENT_LOAD,name="x"),expand_loop_fragment)])
+native_stage_begin_matcher=PatternMatcher([(UPat(Ops.COOPERATIVE_STAGE_BEGIN,name="x"),lower_cooperative_stage_begin)])
 
 def lower_native_pv_c_lane(x:UOp) -> UOp:
   x.arg.validate()

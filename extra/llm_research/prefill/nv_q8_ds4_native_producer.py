@@ -46,7 +46,13 @@ def realize_ds4_metadata(x: Tensor, spec: DS4ProducerSpec = DS4ProducerSpec()) -
   peak = v.abs().max(axis=1)
   d = (peak != 0).where(peak / 127.0, 1.0)
   sm = v.sum(axis=1)
-  return Tensor.stack(d.cast(dtypes.float16), sm.cast(dtypes.float16), dim=1).reshape(records, 8).contiguous()
+  # The packed ABI is segment-major (seg * rows + row), unlike the input's
+  # natural row-major traversal.
+  return Tensor.stack(d, sm, dim=1).reshape(spec.M, spec.K//128, 4, 2).permute(1, 0, 2, 3).reshape(records, 8).contiguous()
+
+def flat_ds4_inputs(x: Tensor, meta: Tensor) -> tuple[Tensor, Tensor]:
+  """Bind stage-2 inputs as scalar flat global buffers, avoiding shaped loads."""
+  return x.contiguous().reshape(-1), meta.contiguous().reshape(-1)
 
 def emit_ds4_metadata_stage(spec: DS4ProducerSpec = DS4ProducerSpec()):
   spec.validate()
@@ -69,19 +75,18 @@ def emit_ds4_metadata_stage(spec: DS4ProducerSpec = DS4ProducerSpec()):
 def emit_ds4_pack_stage(spec: DS4ProducerSpec = DS4ProducerSpec()):
   spec.validate()
   def kernel(out: UOp, x: UOp, meta: UOp) -> UOp:
-    row, seg = UOp.range(spec.M, 0), UOp.range(spec.K//128, 1)
-    word = UOp.range(72, 2)
-    is_q = word >= 8
-    qword = is_q.where(word-8, 0)
-    i = qword*2; subgroup = i//32
-    d = meta[(seg*spec.M + row)*8 + subgroup*2].cast(dtypes.float32)
-    base = row*spec.K + seg*128 + i
-    q0 = (x[base].cast(dtypes.float32)/d).round().maximum(-128).minimum(127).cast(dtypes.int16).cast(dtypes.uint16)
-    q1 = (x[base+1].cast(dtypes.float32)/d).round().maximum(-128).minimum(127).cast(dtypes.int16).cast(dtypes.uint16)
-    packed = (q0 & 255) | ((q1 & 255) << 8)
-    meta_word = meta[(seg*spec.M+row)*8 + (word % 8)].bitcast(dtypes.uint16)
-    value = (word < 8).where(meta_word, packed)
-    return out[(seg*spec.M+row)*72 + word].store(value).end(row,seg,word).sink(
+    record = UOp.range(spec.M*(spec.K//128), 0)
+    row, seg = record % spec.M, record // spec.M
+    # Metadata uses the same segment-major record order as the packed output
+    # and llama's producer: record = seg * M + row.
+    meta_record = seg*spec.M + row
+    word=UOp.range(72,1); is_q=word>=8; qword=is_q.where(word-8,0); i=qword*2
+    d=meta[meta_record*8+(i//32)*2]; base=row*spec.K+seg*128+i
+    invd=d.reciprocal()
+    q0=(x[base].cast(dtypes.float32)*invd).round().maximum(-128).minimum(127).cast(dtypes.int16).cast(dtypes.uint16)
+    q1=(x[base+1].cast(dtypes.float32)*invd).round().maximum(-128).minimum(127).cast(dtypes.int16).cast(dtypes.uint16)
+    packed=(q0&255)|((q1&255)<<8); mw=meta[meta_record*8+(word%8)].cast(dtypes.float16).bitcast(dtypes.uint16)
+    return out[record*72+word].store(is_q.where(packed,mw)).end(record,word).sink(
       arg=KernelInfo(name="q8_ds4_pack_stage", opts_to_apply=()))
   return kernel
 
@@ -138,4 +143,4 @@ def emit_ds4_q8_producer(spec: DS4ProducerSpec = DS4ProducerSpec()):
     return body.sink(arg=KernelInfo(name="q8_ds4_native_scheduler", opts_to_apply=()))
   return kernel
 
-__all__ = ["NativeDS4Schedule", "DS4MetadataWorkspace", "metadata_workspace", "realize_ds4_metadata", "SCHEDULE", "cpu_pack_ds4", "emit_ds4_q8_producer", "emit_ds4_metadata_stage", "emit_ds4_pack_stage"]
+__all__ = ["NativeDS4Schedule", "DS4MetadataWorkspace", "metadata_workspace", "realize_ds4_metadata", "flat_ds4_inputs", "SCHEDULE", "cpu_pack_ds4", "emit_ds4_q8_producer", "emit_ds4_metadata_stage", "emit_ds4_pack_stage"]

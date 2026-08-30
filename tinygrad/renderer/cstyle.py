@@ -28,7 +28,8 @@ def _render_hip_wait(x:UOp) -> str:
 def _render_hip_barrier(ctx, x:UOp) -> str:
   from tinygrad.codegen.opt.compiler_policies import WaveLDSFence
   if isinstance(x.arg,WaveLDSFence): return _render_hip_wait(x)
-  if x.arg is not None: raise ValueError("HIP BARRIER has an unsupported typed payload")
+  if x.arg is not None and not (isinstance(x.arg, tuple) and x.arg[:1] == ("nv_sm120_cooperative_stage_begin_v1",)):
+    raise ValueError("HIP BARRIER has an unsupported typed payload")
   return ctx.barrier
 
 
@@ -228,8 +229,10 @@ def _install_native_attention_bindings(ren) -> None:
     (UPat(Ops.NATIVE_ROW_SOFTMAX_REPACK, name="x"), _cstyle_expand_native_row_softmax)]) + native_repack_matcher
   ren.native_state_lane_matcher = PatternMatcher([
     (UPat(Ops.ATTENTION_LOOP_STATE, name="x"), _cstyle_expand_attention_loop_state)]) + native_state_lane_matcher
+  from tinygrad.renderer.isa.amd_attention_abi import lower_cooperative_stage_begin
   ren.native_loop_fragment_matcher = PatternMatcher([
-    (UPat(Ops.PACKED_FRAGMENT_LOAD, name="x"), _cstyle_expand_loop_fragment)])
+    (UPat(Ops.PACKED_FRAGMENT_LOAD, name="x"), _cstyle_expand_loop_fragment),
+    (UPat(Ops.COOPERATIVE_STAGE_BEGIN, name="x"), lower_cooperative_stage_begin)])
 
 def create_non_native_float_pats(dts:tuple[DType, ...], casting:bool=True):
   patterns = PatternMatcher([

@@ -467,13 +467,21 @@ def nv_sm120_q16_grid_hd128_cooperative_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_
     mi=UOp.group(*wr(mreg,"m",UOp.const(dtypes.float.vec(8),(-float("inf"),)*8),a="init")); li=UOp.group(*wr(lreg,"l",zero,a="init"))
   ci=UOp.group(*(x for b in range(acc_blocks) for x in wr(creg,"acc",zero,b,b*8,"init")))
   import os
-  from tinygrad.uop.ops import CooperativeTileLoadSpec
-  from tinygrad.renderer.isa.amd_attention_abi import lower_cooperative_tile_load
+  from tinygrad.uop.ops import CooperativeTileLoadSpec, CooperativeStageBeginSpec
+  from tinygrad.renderer.isa.amd_attention_abi import lower_cooperative_tile_load, lower_cooperative_stage_begin
+  # The cooperative tile is a loop-carried resource.  Keep the initial owners
+  # behind the CTA-uniform initialization token; the reduction end token below
+  # is then the dependency returned by this stage for the next trip.  In
+  # particular, do not let a later cooperative owner become visible while a
+  # prior trip still has a fragment consumer in flight.
+  slots=int(os.getenv("NV2C_SLOTS", "2"))
   tile_base=rng*UOp.const(dtypes.weakint,16*head_dim)
-  k_shared=lower_cooperative_tile_load(UOp.cooperative_tile_load(k,tile_base,CooperativeTileLoadSpec(tile_base=tile_base,loop_axis=rng))) if os.getenv("NV2C_K_STAGE", os.getenv("NV2C_K", "1")) == "1" else k
-  v_shared=lower_cooperative_tile_load(UOp.cooperative_tile_load(v,tile_base,CooperativeTileLoadSpec(tile_base=tile_base,loop_axis=rng))) if os.getenv("NV2C_V", "1") == "1" else v
+  slot=rng%UOp.const(dtypes.weakint,slots)
+  stage_begin=lower_cooperative_stage_begin(UOp.cooperative_stage_begin(rng, UOp.const(dtypes.weakint, 0), CooperativeStageBeginSpec(loop_axis=rng)))
+  k_shared=lower_cooperative_tile_load(UOp.cooperative_tile_load(k,tile_base,CooperativeTileLoadSpec(tile_base=tile_base,loop_axis=rng,slots=slots,slot_index=slot,pre_barrier=True))) if os.getenv("NV2C_K_STAGE", os.getenv("NV2C_K", "1")) == "1" else k
+  v_shared=lower_cooperative_tile_load(UOp.cooperative_tile_load(v,tile_base,CooperativeTileLoadSpec(tile_base=tile_base,loop_axis=rng,slots=slots,slot_index=slot,pre_barrier=False))) if os.getenv("NV2C_V", "1") == "1" else v
   def rd(reg,init,role,b=0,o=0,final=False): return loop_state_read(reg, init, rng, role=role, owner=9604, block=b, final=final)
-  def fr(owner,role,b,call=0): return packed_fragment_load(k_shared if role=="K" and os.getenv("NV2C_K_CONSUME", os.getenv("NV2C_K", "1")) == "1" else v_shared if role=="V" and os.getenv("NV2C_V", "1") == "1" else owner, role=role, head_block=b, grid=grid, lane=lane, col=col, rng=rng, group=group, call=call, fragment_model=fragment_model, physical_local_size=32*warps_per_cta)
+  def fr(owner,role,b,call=0): return packed_fragment_load(k_shared if role=="K" and os.getenv("NV2C_K_CONSUME", os.getenv("NV2C_K", "1")) == "1" else v_shared if role=="V" and os.getenv("NV2C_V", "1") == "1" else owner, role=role, head_block=b, grid=grid, lane=lane, col=col, rng=rng, group=group, call=call, fragment_model=fragment_model, physical_local_size=32*warps_per_cta, storage="shared" if role in {"K","V"} else "global", shared_phase_abi="single_buffer_barrier_v1" if role in {"K","V"} else None, stage_wait=stage_begin if role in {"K","V"} else None)
   if not phase_abi_v1: om,ol=rd(mreg,mi,"m"),rd(lreg,li,"l")
   qk=zero_wmma
   for b in range(hd_blocks):
@@ -505,6 +513,7 @@ def nv_sm120_q16_grid_hd128_cooperative_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_
   # Gate V's PARAM owner, which makes the PV fragment load wait for the commit
   # while keeping p/alpha as direct slot values.
   pv_v=v.after(ml_commit) if ml_commit is not None else v
+  pv_endpoints=[]
   for b in range(acc_blocks):
     oc=rd(creg,ci,"acc",b,b*8)
     if fragment_model.calls_per_tile == 1:
@@ -517,11 +526,14 @@ def nv_sm120_q16_grid_hd128_cooperative_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_
           tuple(oc.gep(fragment_model.c_carrier*c+i).alu(Ops.MUL,alpha.gep(fragment_model.c_carrier*c+i)) for i in range(fragment_model.c_carrier)))),
         warg,tag=("attention_wmma","PV",b,c)) for c in range(fragment_model.calls_per_tile))
       pv=UOp(Ops.STACK,dtypes.float.vec(fragment_model.score_elements),tuple(x.gep(i) for x in pv_calls for i in range(fragment_model.c_carrier)))
+    pv_endpoints.append(pv)
     writes.extend(wr(creg,"acc",pv,b,b*8))
   # NEWLY DE-WELDED: AttentionOutputDrainSpec previously took no head_dim/address_expr here, so it
   # silently rode the drain spec's own default (128 / "e*256+halfwave*128+j*16+col") regardless of the
   # threaded grid -- masked because the grid always defaulted to 128 too. Now both are derived from the
   # SAME threaded `hd`, matching cstyle.py's P-B3 formula exactly. Byte-identical at hd=128
   # (2*128==256, hd==128 -> "e*256+halfwave*128+j*16+col", the exact previous default string).
-  end=UOp.group(*writes).end(rng).replace(tag=(fragment_model.abi("attention_grid_loop_end_v1"),rng)); final_token=end if phase_abi_v1 else None; fl=(UOp(Ops.STACK,dtypes.float.vec(8),tuple(ml.loop_read(8+i,final_token) for i in range(8))) if phase_abi_v1 else rd(lreg,end,"l",final=True)); fc=tuple(rd(creg,end,"acc",b,b*8,final=True) for b in range(acc_blocks)); drain=UOp(Ops.ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AttentionOutputDrainSpec(native_abi=fragment_model.abi("attention_output_drain_v1" if acc_blocks==hd_blocks else "attention_output_drain_acc_slice_v2"),head_dim=hd,blocks=acc_blocks,address_expr=fragment_model.drain_address_expr(hd),grid=grid,output_block_base=output_block_base,fragment_model=fragment_model))
+  # Include both WMMA consumer endpoints and recurrence writes in the single
+  # CTA-uniform completion.  This token is the next iteration dependency.
+  end=UOp.group(*writes).barrier().end(rng).replace(tag=(fragment_model.abi("attention_grid_loop_end_v1"),rng)); final_token=end if phase_abi_v1 else None; fl=(UOp(Ops.STACK,dtypes.float.vec(8),tuple(ml.loop_read(8+i,final_token) for i in range(8))) if phase_abi_v1 else rd(lreg,end,"l",final=True)); fc=tuple(rd(creg,end,"acc",b,b*8,final=True) for b in range(acc_blocks)); drain=UOp(Ops.ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AttentionOutputDrainSpec(native_abi=fragment_model.abi("attention_output_drain_v1" if acc_blocks==hd_blocks else "attention_output_drain_acc_slice_v2"),head_dim=hd,blocks=acc_blocks,address_expr=fragment_model.drain_address_expr(hd),grid=grid,output_block_base=output_block_base,fragment_model=fragment_model))
   return UOp.sink(mi,li,ci,end,drain,arg=kernel_info).replace(tag=(fragment_model.abi("q16_grid_hd128_loop_v1"),))

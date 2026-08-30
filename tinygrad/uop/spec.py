@@ -302,6 +302,7 @@ def _validate_packed_fragment_program(x):
   return hasattr(x.arg,'native_abi') and native_attention_abi(x.arg.native_abi,"packed_fragment_hd128_loop_v1") and getattr(x.arg,"grid",None) is not None and x.arg.physical_local_size == 32 and len(x.src)==5 and x.dtype==dtypes.half.vec(x.arg.fragment_lanes) and x.shape==(x.arg.fragment_lanes,) and all(s.dtype.scalar() in {dtypes.int,dtypes.weakint} for s in x.src[1:])
 
 spec_tensor = PatternMatcher([
+  (UPat(Ops.COOPERATIVE_STAGE_BEGIN, dtypes.void, name="x"), lambda x: hasattr(x.arg, "validate") and x.arg.validate() is x.arg and len(x.src) == 2 and x.src[0] == x.arg.loop_axis and x.src[1].dtype.scalar() in {dtypes.int,dtypes.weakint}),
   (UPat(Ops.COOPERATIVE_TILE_LOAD, name="x"), lambda x: hasattr(x.arg, "validate") and x.arg.validate() is x.arg and len(x.src) == 2 and x.src[0].op is Ops.PARAM and isinstance(x.src[0].dtype, PtrDType) and x.src[0].ptrdtype.base is dtypes.half and x.src[1].dtype.scalar() in {dtypes.int,dtypes.weakint} and isinstance(x.dtype, PtrDType) and x.dtype.addrspace is AddrSpace.LOCAL and x.ptrdtype.base is dtypes.half and x.ptrdtype.size == 2048),
   # CompositeAccumulator carries scalar/vector slot state until a backend
   # proves a register layout.  It is intentionally not a renderer op.
@@ -500,6 +501,7 @@ spec_tensor = PatternMatcher([
 
 # these ops can exist in programs but not the tensor spec. example: LOAD
 spec_program = PatternMatcher([
+  (UPat(Ops.COOPERATIVE_STAGE_BEGIN, dtypes.void, name="x"), lambda x: hasattr(x.arg, "validate") and x.arg.validate() is x.arg and len(x.src) == 2 and x.src[0] == x.arg.loop_axis and x.src[1].dtype.scalar() in {dtypes.int,dtypes.weakint}),
   (UPat(Ops.AFTER, name="x"), lambda x: (type(getattr(x, "tag", None)).__name__ != "SharedTileOwnerSpec") or (x.tag.validate() is x.tag and len(x.src) >= 2 and any(s.op is Ops.BARRIER for s in x.src))),
   (UPat(Ops.COOPERATIVE_TILE_LOAD, name="x"), lambda x: hasattr(x.arg, "validate") and x.arg.validate() is x.arg and len(x.src) == 2 and x.src[0].op is Ops.PARAM and isinstance(x.src[0].dtype, PtrDType) and x.src[0].ptrdtype.base is dtypes.half and x.src[1].dtype.scalar() in {dtypes.int,dtypes.weakint} and isinstance(x.dtype, PtrDType) and x.dtype.addrspace is AddrSpace.LOCAL and x.ptrdtype.base is dtypes.half and x.ptrdtype.size == 2048),
   # Scalar address arithmetic introduced by the native Hd128 attention drain.

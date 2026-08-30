@@ -163,7 +163,7 @@ class Ops(FastEnum):
   # enclosing STORE with one ordinary CALL only when every input is already a
   # concrete index-preserving buffer view.
   REDUCE_OUTPUT = auto()
-  COOPERATIVE_TILE_LOAD = auto()
+  COOPERATIVE_TILE_LOAD = auto(); COOPERATIVE_STAGE_BEGIN = auto()
 
   # multi-output reduce slot access: REDUCE_SLOT(composite_reduce, i) returns slot i
   REDUCE_SLOT = auto()
