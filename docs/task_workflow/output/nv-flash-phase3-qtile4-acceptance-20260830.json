@@ -1,0 +1,17 @@
+{
+  "schema": "tinygrad.nv.flash_phase3_qtile4_acceptance.v1",
+  "status": "REJECT",
+  "source": "extra/llm_research/prefill/nv_pp512_flash_phase3_qtile4.cu",
+  "fixture": "/tmp/nv-cleanroom-flash-fixture/manifest.json",
+  "geometry": {"S": 512, "D": 128, "Hq": 32, "Hkv": 8, "gqa": 4},
+  "timing_gate": {"reject_at_or_above_us_per_layer": 79.8, "measured_us_per_layer": null, "pass": false},
+  "correctness": {"finite": false, "allclose": false, "max_abs": null, "mean_abs": null, "relative_l2": null, "canaries": null},
+  "launch_census": null,
+  "rejection_reasons": [
+    "kernel couples head and query tile indices as h=h0+r and t=t0+r",
+    "kernel loads only one Q element per lane rather than a complete query row tile",
+    "shared Q tile is reused across independent head/query rows",
+    "no standalone executable/output adapter was produced because required full-output semantics are absent"
+  ],
+  "next_action": "redesign_query_tiled_kernel"
+}
