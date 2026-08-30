@@ -1,0 +1,14 @@
+{
+  "replays": 1000,
+  "rows": [
+    {
+      "kernel": "rmsnorm_native_1_4096",
+      "mode": "all_threads"
+    },
+    {
+      "kernel": "rmsnorm_native_1_4096_warp0merge",
+      "mode": "warp0"
+    }
+  ],
+  "schema": "tinygrad.nv_rmsnorm_warp0_merge.v1"
+}

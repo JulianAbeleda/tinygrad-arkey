@@ -1,0 +1,279 @@
+{
+  "all_token_hashes_equal": false,
+  "argmax_device": {
+    "candidate_name": "native_finite_fp32_argmax_151936_t1024",
+    "candidate_us_per_token": 8.8,
+    "control_tail_names": [
+      "r_128_16_8_1187",
+      "r_16_8",
+      "r_32_4_1187"
+    ],
+    "control_us_per_token": 53.12,
+    "recovery_us_per_token": 44.32
+  },
+  "arms": [
+    {
+      "arm": "control_a",
+      "complete_replay_count": 165,
+      "count": 32,
+      "depth": 512,
+      "gpu_state": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2722",
+        "name": "NVIDIA GeForce RTX 5090",
+        "persistence_mode": "Enabled",
+        "power.draw": "314.02",
+        "temperature.gpu": "57"
+      },
+      "group_size_histogram": {
+        "128": 180,
+        "256": 180,
+        "32": 180,
+        "37": 165,
+        "394": 15,
+        "64": 180
+      },
+      "ledger": {
+        "node_sum_us": 4391.824,
+        "overlap_us": 4.213,
+        "span_us": 5655.0,
+        "union_us": 4388.75
+      },
+      "max_context": 1024,
+      "native_names": [],
+      "profile_jsonl": "docs/task_workflow/evidence/nv-native-argmax-20260824/profile/control_a.profile.jsonl",
+      "reps": 5,
+      "schema": "tinygrad.nv_native_argmax_profile.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          6.37746734375,
+          6.31379740625,
+          6.3279461875,
+          6.37823640625,
+          6.38013978125
+        ],
+        "external_contention_high_limit_ms": 6.62746734375,
+        "median_ms_per_token": 6.37746734375,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          6.37746734375,
+          6.31379740625,
+          6.3279461875,
+          6.37823640625,
+          6.38013978125
+        ],
+        "timed_token_count": 160,
+        "token_hashes": [
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+          "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4"
+        ],
+        "token_stream_hash": "f25083e5d0a754131283b40c03f52e688fee9f175bea7ae106805e7d628d7905",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "steady_replay_count": 162,
+      "tail_names": [
+        "r_128_16_8_1187",
+        "r_16_8",
+        "r_32_4_1187"
+      ],
+      "threads": 1024
+    },
+    {
+      "arm": "candidate",
+      "complete_replay_count": 165,
+      "count": 32,
+      "depth": 512,
+      "gpu_state": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2775",
+        "name": "NVIDIA GeForce RTX 5090",
+        "persistence_mode": "Enabled",
+        "power.draw": "119.44",
+        "temperature.gpu": "52"
+      },
+      "group_size_histogram": {
+        "128": 180,
+        "256": 180,
+        "32": 180,
+        "35": 165,
+        "394": 15,
+        "64": 180
+      },
+      "ledger": {
+        "node_sum_us": 4345.984,
+        "overlap_us": 3.595,
+        "span_us": 6139.375,
+        "union_us": 4343.375
+      },
+      "max_context": 1024,
+      "native_names": [
+        "native_finite_fp32_argmax_151936_t1024"
+      ],
+      "profile_jsonl": "docs/task_workflow/evidence/nv-native-argmax-20260824/profile/candidate.profile.jsonl",
+      "reps": 5,
+      "schema": "tinygrad.nv_native_argmax_profile.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          44.52104559375,
+          44.32323075,
+          44.44432684375,
+          44.54054359375
+        ],
+        "external_contention_high_limit_ms": 44.98135809375003,
+        "median_ms_per_token": 44.482686218750004,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [
+          58.747444625
+        ],
+        "samples_ms_per_token": [
+          58.747444625,
+          44.52104559375,
+          44.32323075,
+          44.44432684375,
+          44.54054359375
+        ],
+        "timed_token_count": 160,
+        "token_hashes": [
+          "a0838a308ae995059cdf43cdfb9e7b3a0005919ef8fbd278b6161c808dfa8499",
+          "3bc7491dceafb9d67d40be07cf988d5acd3cbd31f0545250eaa85c8dd5c9ac8d",
+          "9fee0bf676700e0a0cb6beb968c0616d23dc2724ba9ca93b47c0e89c63babe79",
+          "a0838a308ae995059cdf43cdfb9e7b3a0005919ef8fbd278b6161c808dfa8499",
+          "3bc7491dceafb9d67d40be07cf988d5acd3cbd31f0545250eaa85c8dd5c9ac8d"
+        ],
+        "token_stream_hash": "5e63cf45dab17d7511fa04559ce2374978326cfcf9dee9e74fd528953db2836b",
+        "warmup_tokens": [
+          38835,
+          38835,
+          34208,
+          13,
+          279,
+          3974
+        ]
+      },
+      "steady_replay_count": 162,
+      "tail_names": [],
+      "threads": 1024
+    },
+    {
+      "arm": "control_c",
+      "complete_replay_count": 165,
+      "count": 32,
+      "depth": 512,
+      "gpu_state": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2715",
+        "name": "NVIDIA GeForce RTX 5090",
+        "persistence_mode": "Enabled",
+        "power.draw": "313.48",
+        "temperature.gpu": "60"
+      },
+      "group_size_histogram": {
+        "128": 180,
+        "256": 180,
+        "32": 180,
+        "37": 165,
+        "394": 15,
+        "64": 180
+      },
+      "ledger": {
+        "node_sum_us": 4392.0,
+        "overlap_us": 3.743,
+        "span_us": 5363.875,
+        "union_us": 4389.375
+      },
+      "max_context": 1024,
+      "native_names": [],
+      "profile_jsonl": "docs/task_workflow/evidence/nv-native-argmax-20260824/profile/control_c.profile.jsonl",
+      "reps": 5,
+      "schema": "tinygrad.nv_native_argmax_profile.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          6.14386621875,
+          6.0355669375,
+          6.04520496875,
+          6.137649375,
+          6.11468865625
+        ],
+        "external_contention_high_limit_ms": 6.36468865625,
+        "median_ms_per_token": 6.11468865625,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          6.14386621875,
+          6.0355669375,
+          6.04520496875,
+          6.137649375,
+          6.11468865625
+        ],
+        "timed_token_count": 160,
+        "token_hashes": [
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+          "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4"
+        ],
+        "token_stream_hash": "f25083e5d0a754131283b40c03f52e688fee9f175bea7ae106805e7d628d7905",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "steady_replay_count": 162,
+      "tail_names": [
+        "r_128_16_8_1187",
+        "r_16_8",
+        "r_32_4_1187"
+      ],
+      "threads": 1024
+    }
+  ],
+  "closure": {
+    "node_sum_delta_us": -45.928,
+    "union_delta_us": -45.688,
+    "wall_delta_us": 38236.608
+  },
+  "count": 32,
+  "depth": 512,
+  "ledger_candidate": {
+    "node_sum_us": 4345.984,
+    "overlap_us": 3.595,
+    "span_us": 6139.375,
+    "union_us": 4343.375
+  },
+  "ledger_control": {
+    "node_sum_us": 4391.912,
+    "overlap_us": 3.9779999999999998,
+    "span_us": 5509.4375,
+    "union_us": 4389.0625
+  },
+  "mode": "reverse-bracket-profile",
+  "reps": 5,
+  "schema": "tinygrad.nv_native_argmax_profile.v1",
+  "threads": 1024,
+  "token_stream_hash": [
+    "5e63cf45dab17d7511fa04559ce2374978326cfcf9dee9e74fd528953db2836b",
+    "f25083e5d0a754131283b40c03f52e688fee9f175bea7ae106805e7d628d7905"
+  ],
+  "walls_us_per_token": {
+    "candidate": 44482.68621875,
+    "control_a": 6377.4673437500005,
+    "control_c": 6114.68865625,
+    "control_midpoint": 6246.078
+  }
+}

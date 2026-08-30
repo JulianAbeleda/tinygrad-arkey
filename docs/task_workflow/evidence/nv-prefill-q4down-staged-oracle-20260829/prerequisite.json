@@ -1,0 +1,35 @@
+{
+  "schema": "tinygrad.nv_q4down_debug_main_prerequisite.v1",
+  "status": "BLOCKED",
+  "diagnostic_identity": "nv_q4k_down_debug_main_type12_v1",
+  "production_abi_preserved": true,
+  "launchable": false,
+  "abi": {
+    "program_name": "r_8_128_32_2_2_2_2_2_2_192_2_2_2_f23db3d5b438a5c0de38a4dab681ab4798be792cbdb4231eac6f01d1ea2a00a7",
+    "global_size": [
+      128,
+      8,
+      1
+    ],
+    "local_size": [
+      32,
+      2,
+      2
+    ],
+    "outs": [
+      0
+    ],
+    "ins": [
+      1,
+      2
+    ]
+  },
+  "requested_buffers": {
+    "decoded_q4_metadata": false,
+    "per_k32_corrected_subtotals": false,
+    "pre_epilogue_fp32": false,
+    "final_output": true
+  },
+  "reason": "compiler path exposes only the precompiled ELF main; decoded metadata and accumulators are register-local and no source/ABI hook exists",
+  "next_command": null
+}

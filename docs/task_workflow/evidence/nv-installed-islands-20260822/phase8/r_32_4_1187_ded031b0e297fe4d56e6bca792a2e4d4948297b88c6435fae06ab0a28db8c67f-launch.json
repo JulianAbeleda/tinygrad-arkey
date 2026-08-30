@@ -1,0 +1,25 @@
+{
+  "block": [
+    32,
+    1,
+    1
+  ],
+  "buf_bytes": 67108864,
+  "buf_sizes": [
+    512,
+    607744
+  ],
+  "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-installed-islands-20260822/phase8/r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f.cubin",
+  "cubin_sha256": "b44a77ebeab0e95d1ba9573bbb3c9f804aa77f685ae4f37a59296c09a8fa009f",
+  "grid": [
+    1,
+    1,
+    1
+  ],
+  "n_bufs": 2,
+  "reps": 2000,
+  "schema": "tinygrad.nv_cubin_ncu_launcher.v1",
+  "symbol": "r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f",
+  "vals": [],
+  "verdict": "CUDA_LAUNCH_OK"
+}

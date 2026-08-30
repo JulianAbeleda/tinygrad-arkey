@@ -1,0 +1,23 @@
+{
+  "arms": {
+    "candidate_1": [],
+    "control_0": [],
+    "control_2": []
+  },
+  "census": {
+    "observed": null,
+    "predicted": {
+      "candidate": 36,
+      "installed": 36
+    }
+  },
+  "decision": "STOP: exact 36-call route adapter was not supplied; no installed or candidate launch is inferred",
+  "exact_population": 36,
+  "full_outputs": [],
+  "manifest": "docs/task_workflow/evidence/nv-prefill-f1-20260829-r4/flash-f1-population.json",
+  "manifest_sha256": "51628fc492b1a1a3ef5e6cde3176d430b65747bac7b8b53a7e3b8db3612ebcb1",
+  "next_packet": null,
+  "packet": "F1.2",
+  "schema": "tinygrad.nv_prefill_flash_f1_2_r9.v1",
+  "status": "STOP"
+}

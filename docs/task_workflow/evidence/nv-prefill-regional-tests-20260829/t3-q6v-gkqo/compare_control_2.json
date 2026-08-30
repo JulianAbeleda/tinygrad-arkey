@@ -1,0 +1,21 @@
+{
+  "correctness": {
+    "allclose_rtol_0p02_atol_0p5": true,
+    "candidate_token": 198,
+    "control_token": 198,
+    "finite": true,
+    "max_abs": 0.1362781524658203,
+    "mean_abs": 0.03120071440935135,
+    "same_token": true
+  },
+  "performance_pass": true,
+  "schema": "tinygrad.nv_compiler_q4k_gkqo_compare.v1",
+  "status": "PASS",
+  "wall": {
+    "candidate_min_ms": 65.345419,
+    "candidate_minus_control_ms": -1.8333889999999968,
+    "candidate_tok_s": 7835.285286027472,
+    "control_min_ms": 67.178808,
+    "control_tok_s": 7621.451098090338
+  }
+}

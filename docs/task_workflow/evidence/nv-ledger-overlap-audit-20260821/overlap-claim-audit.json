@@ -1,0 +1,87 @@
+{
+  "anchor_union": {
+    "delta_tiny_minus_llama_us": -50.177,
+    "llama_us": 2997.927,
+    "mechanism": "llama MMQ anchor bodies are larger; llama is slower here",
+    "row": "Q/O/gate_up/down anchor union",
+    "tinygrad_us": 2947.75
+  },
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "date": "2026-08-21",
+  "gates": {
+    "G1_llama_overlap_real": true,
+    "G2_tinygrad_near_serial": true,
+    "G3_identity_closes": true,
+    "G4_location_is_S1": true,
+    "G5_anchor_bodies": true,
+    "G6_roofline": true
+  },
+  "identity": {
+    "delta_node_sum_us": -281.359,
+    "delta_overlap_us": -1124.041,
+    "delta_union_us": 842.682,
+    "identity_union_error_us": 0.0,
+    "identity_union_us": 842.682,
+    "identity_wall_error_us": 0.0,
+    "identity_wall_us": 703.452
+  },
+  "inputs": {
+    "ledger": "docs/task_workflow/evidence/nv-ledger-overlap-audit-20260821/ledger.json",
+    "llama_dag": "docs/task_workflow/evidence/nv-ledger-overlap-audit-20260821/llama-dag.json",
+    "llama_unprofiled": "docs/task_workflow/evidence/nv-ledger-overlap-audit-20260821/llama-unprofiled.json",
+    "tinygrad_capture": "docs/task_workflow/evidence/nv-ledger-overlap-audit-20260821/tinygrad-capture.json"
+  },
+  "largest_segment": "S1",
+  "overlap_census": {
+    "llama": {
+      "max_pair_overlap_us": 4.96,
+      "min_inter_kernel_gap_us": -4.96,
+      "node_count": 762,
+      "overlapping_pairs": 870
+    },
+    "tinygrad": {
+      "max_pair_overlap_us": 2.75,
+      "min_inter_kernel_gap_us": -3.0,
+      "node_count": 596,
+      "overlapping_pairs": 7
+    }
+  },
+  "overlap_share_of_node_sum_pct": {
+    "llama": 22.56,
+    "tinygrad": 0.19
+  },
+  "roofline": {
+    "bytes_per_token_estimate_gb": {
+      "llama": 4.7,
+      "tinygrad": 5.04
+    },
+    "effective_gbs": {
+      "llama": 1166.7,
+      "tinygrad": 1065.1
+    },
+    "measured_peak_read_gbs_range": [
+      1700.0,
+      1792.0
+    ],
+    "note": "bytes are accounting estimates from the 20260820 roofline brief; peak is carried from the same brief"
+  },
+  "schema": "tinygrad.nv_ledger_overlap_claim_audit.v1",
+  "segment_deltas": {
+    "S0": 148.958,
+    "S1": 632.595,
+    "S2": 154.145,
+    "S3": -15.969,
+    "S4": 138.592,
+    "tail_after_vocab": 56.25
+  },
+  "serialization_counterfactual": {
+    "actual_llama_wall_us": 4028.503,
+    "llama_overlap_mass_us": 1133.255,
+    "serialized_llama_wall_us": 5161.758,
+    "tok_s_actual": 248.231,
+    "tok_s_serialized": 193.732,
+    "tok_s_value": 54.499
+  },
+  "useful_body_note": "kernel interval overlap only; useful-body concurrency remains unmeasured without per-kernel wait-exit timestamps",
+  "verdict": "supported"
+}

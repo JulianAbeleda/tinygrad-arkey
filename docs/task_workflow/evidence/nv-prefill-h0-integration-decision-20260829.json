@@ -1,0 +1,51 @@
+{
+  "schema": "tinygrad.nv_prefill_h0_integration_decision.v1",
+  "date": "2026-08-29",
+  "packet": "H0.2",
+  "status": "STOP",
+  "integration_authorized": false,
+  "authority": {
+    "s0": {
+      "status": "PASS",
+      "path": "docs/task_workflow/output/nv-prefill-post-substrate-authority-20260829-r4.md",
+      "next_packet": null
+    },
+    "bf_ledger": "docs/task_workflow/evidence/nv-prefill-bf-parity-ledger-20260829.json",
+    "c_aggregate": {
+      "status": "PASS",
+      "continuation": "STOP",
+      "path": "docs/task_workflow/evidence/nv-prefill-q4down-staged-oracle-20260829/c0-aggregate-18.json",
+      "report": "docs/task_workflow/output/nv-prefill-q4down-c0-aggregate-report-20260829.md"
+    }
+  },
+  "lanes": {
+    "B": {"status": "STOP", "packet": "B0.3", "next_packet": null},
+    "C": {"status": "PASS", "continuation": "STOP", "packet": "C0.2", "next_packet": null},
+    "D": {
+      "status": "STOP",
+      "packet": "D0.4",
+      "d03": "docs/task_workflow/evidence/nv-prefill-q6down-boundary-r9-real-20260829/d03-attribution.json",
+      "verdict": "docs/task_workflow/evidence/nv-prefill-q6down-boundary-r9-real-20260829/verdict.json",
+      "report": "docs/task_workflow/output/nv-prefill-q6down-boundary-attribution-20260829.md",
+      "d05": "UNAUTHORIZED",
+      "reason": "No exposure independently clears noise; lifecycle capabilities are UNAVAILABLE; no removable mechanism is observer-supported."
+    },
+    "F": {"status": "STOP", "packet": "F1.4", "next_packet": null}
+  },
+  "accepted_implementations_frozen": false,
+  "remaining_parity_gaps": [
+    "B counter movement did not clear noise for tensor duty, long scoreboard, or fragment service.",
+    "C production ABI cannot localize producer, weight, dot, correction, and epilogue stages.",
+    "D allocation/copy/graph-copy/materialization observers are UNAVAILABLE, preventing independent lifecycle attribution.",
+    "F functionally exact Flash vector candidate misses matched-R9 minimum and median performance gates.",
+    "No B/C/D/F implementation is accepted for composition."
+  ],
+  "authorization": {
+    "P0": {"status": "AUTHORIZED", "scope": "H0.1 support census and exact unknown-interval union only; no implementation or lane reopening."},
+    "P1": {"status": "AUTHORIZED", "scope": "H0.2 ranked family ledger and gap ordering from frozen evidence only; no promotion."},
+    "P2": {"status": "UNAUTHORIZED", "scope": "Any source edit, primitive integration, lifecycle implementation, composition, or promotion; requires a fresh lane-specific PASS gate."},
+    "order": ["P0", "P1", "P2"]
+  },
+  "authorized_next_packet": "H0.1",
+  "final_authority": "docs/task_workflow/evidence/nv-prefill-h0-integration-decision-20260829.json"
+}

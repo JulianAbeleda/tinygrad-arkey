@@ -1,0 +1,184 @@
+{
+  "all_token_hashes_equal": true,
+  "arms": [
+    {
+      "admitted_blocks": [
+        13,
+        19,
+        20,
+        22,
+        23,
+        25,
+        26,
+        28,
+        29
+      ],
+      "arm": "control",
+      "complete_replay_count": 15,
+      "count": 4,
+      "depth": 512,
+      "gpu_state": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "name": "NVIDIA GeForce RTX 5090",
+        "persistence_mode": "Disabled",
+        "power.draw": "87.60",
+        "temperature.gpu": "46"
+      },
+      "group_pattern": [
+        64,
+        128,
+        256,
+        394,
+        32
+      ],
+      "ledger": {
+        "node_count": 874.0,
+        "node_sum_us": 896074.368,
+        "overlap_us": 331.699,
+        "span_us": 896019.875,
+        "union_us": 895893.5
+      },
+      "max_context": 1024,
+      "mode": "profile-child",
+      "reps": 1,
+      "schema": "tinygrad.nv_q4k_kv_pair_qualification.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          6.02111875
+        ],
+        "external_contention_high_limit_ms": 6.27111875,
+        "median_ms_per_token": 6.02111875,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          6.02111875
+        ],
+        "timed_token_count": 4,
+        "token_hashes": [
+          "5512bfc1f74c1ee1e244d71fb3a23025d0c4e11859056318cf6697d4be840a21"
+        ],
+        "token_stream_hash": "5512bfc1f74c1ee1e244d71fb3a23025d0c4e11859056318cf6697d4be840a21",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "steady_replay_count": 12,
+      "triple": true
+    },
+    {
+      "admitted_blocks": [
+        13,
+        19,
+        20,
+        22,
+        23,
+        25,
+        26,
+        28,
+        29
+      ],
+      "arm": "candidate",
+      "complete_replay_count": 15,
+      "count": 4,
+      "depth": 512,
+      "gpu_state": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2640",
+        "name": "NVIDIA GeForce RTX 5090",
+        "persistence_mode": "Disabled",
+        "power.draw": "96.85",
+        "temperature.gpu": "52"
+      },
+      "group_pattern": [
+        64,
+        128,
+        256,
+        394,
+        32
+      ],
+      "ledger": {
+        "node_count": 874.0,
+        "node_sum_us": 896572.256,
+        "overlap_us": 329.237,
+        "span_us": 896358.75,
+        "union_us": 896232.625
+      },
+      "max_context": 1024,
+      "mode": "profile-child",
+      "reps": 1,
+      "schema": "tinygrad.nv_q4k_kv_pair_qualification.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          5.9683475
+        ],
+        "external_contention_high_limit_ms": 6.2183475,
+        "median_ms_per_token": 5.9683475,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          5.9683475
+        ],
+        "timed_token_count": 4,
+        "token_hashes": [
+          "5512bfc1f74c1ee1e244d71fb3a23025d0c4e11859056318cf6697d4be840a21"
+        ],
+        "token_stream_hash": "5512bfc1f74c1ee1e244d71fb3a23025d0c4e11859056318cf6697d4be840a21",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "steady_replay_count": 12,
+      "triple": true
+    }
+  ],
+  "ledger_delta": {
+    "node_count": 0.0,
+    "node_sum_us": 497.888,
+    "overlap_us": -2.462,
+    "span_us": 338.875,
+    "union_us": 339.125
+  },
+  "mode": "profile",
+  "schema": "tinygrad.nv_q4k_kv_pair_qualification.v1",
+  "structural": {
+    "admitted_blocks": [
+      13,
+      19,
+      20,
+      22,
+      23,
+      25,
+      26,
+      28,
+      29
+    ],
+    "candidate_nodes": 874.0,
+    "candidate_pattern": [
+      64,
+      128,
+      256,
+      394,
+      32
+    ],
+    "control_nodes": 874.0,
+    "control_pattern": [
+      64,
+      128,
+      256,
+      394,
+      32
+    ],
+    "pair_names": {}
+  }
+}

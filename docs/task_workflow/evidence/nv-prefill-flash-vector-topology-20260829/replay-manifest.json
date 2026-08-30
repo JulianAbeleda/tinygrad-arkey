@@ -1,0 +1,28 @@
+{
+  "schema": "tinygrad.nv_prefill_flash_vector_replay_manifest.v1",
+  "fixture": "fixture.json",
+  "buffers": "buffers.npz",
+  "oracle": "../nv-prefill-flash-20260829/oracle.npz",
+  "exact_population": 36,
+  "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+  "launch": {
+    "grid": [
+      32,
+      8,
+      1
+    ],
+    "block": [
+      128,
+      1,
+      1
+    ]
+  },
+  "replay_steps": [
+    "load buffers.npz",
+    "verify buffer hashes and finite values",
+    "bind out,q,k,v in declared order",
+    "launch exact ABI geometry",
+    "verify q/k/v unchanged",
+    "compare all out elements to oracle out with retained allclose gate"
+  ]
+}

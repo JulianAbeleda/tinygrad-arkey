@@ -1,0 +1,201 @@
+{
+  "assignment_notes": [
+    "q4k_g3_lanemap_gemv_1024_4096 K/V from tensor_name metadata (attn_k vs attn_v).",
+    "q4k_warp_coop_q8_dp4a_partial_1024_4096 K/V from its r_8_32_4_4 completion consumer: K completion feeds E_8_8_16_2 (K store, no norm), V completion feeds reduce_output_rmsnorm_8_128 (V norm).",
+    "Manifest correction: q6k_q8_warp_direct_1024_4096 is the K projection (Q6_K K), not V; the phase2 I_V bucket mislabeled it v_proj_shared_q8."
+  ],
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "island_id": "I_KV_MIXED",
+  "kernels": {
+    "q4_coop_1024": {
+      "B_us": 2.016,
+      "C_us": 2.31,
+      "D_us": 0.294,
+      "K_count": 9,
+      "K_sum_us": 29.856,
+      "P_median_us": 3.712,
+      "R_us": 1.402,
+      "V_count": 17,
+      "V_sum_us": 63.84,
+      "block": [
+        128,
+        1,
+        1
+      ],
+      "buf_sizes": [
+        16384,
+        2359296,
+        8192
+      ],
+      "grid": [
+        1024,
+        1,
+        1
+      ],
+      "llama_K_median_us": 3.2,
+      "llama_V_median_us": 2.784,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "role": "K/V shared-Q8 cooperative DP4A partial",
+      "vals": [
+        512
+      ]
+    },
+    "q4_g3_1024": {
+      "B_us": 3.328,
+      "C_us": 3.798,
+      "D_us": 0.47,
+      "K_count": 19,
+      "K_sum_us": 90.432,
+      "P_median_us": 4.768,
+      "R_us": 0.97,
+      "V_count": 9,
+      "V_sum_us": 38.08,
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "buf_sizes": [
+        4096,
+        2359296,
+        8192
+      ],
+      "grid": [
+        1024,
+        1,
+        1
+      ],
+      "llama_K_median_us": 3.2,
+      "llama_V_median_us": 2.784,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "role": "K/V Q4 g3 lanemap GEMV"
+    },
+    "q6_q8_1024": {
+      "B_us": 2.112,
+      "C_us": 2.394,
+      "D_us": 0.282,
+      "K_count": 8,
+      "K_sum_us": 30.048,
+      "P_median_us": 3.808,
+      "R_us": 1.414,
+      "V_count": 0,
+      "V_sum_us": 0.0,
+      "block": [
+        128,
+        1,
+        1
+      ],
+      "buf_sizes": [
+        4096,
+        3440640,
+        8192
+      ],
+      "grid": [
+        1024,
+        1,
+        1
+      ],
+      "llama_K_median_us": 3.2,
+      "llama_V_median_us": 2.784,
+      "name": "q6k_q8_warp_direct_1024_4096",
+      "role": "K Q6_K warp direct"
+    },
+    "r8_completion": {
+      "B_us": 0.576,
+      "C_us": 0.899,
+      "D_us": 0.323,
+      "K_count": 9,
+      "K_sum_us": 12.16,
+      "P_median_us": 1.12,
+      "R_us": 0.221,
+      "V_count": 17,
+      "V_sum_us": 18.688,
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "buf_sizes": [
+        4096,
+        16384
+      ],
+      "grid": [
+        8,
+        1,
+        1
+      ],
+      "llama_K_median_us": 3.2,
+      "llama_V_median_us": 2.784,
+      "name": "r_8_32_4_4",
+      "note": "two hashed cubin variants (K-completion and V-completion) with identical geometry; B/C measured on the 0187 variant",
+      "role": "K/V shared-Q8 completion reduce"
+    },
+    "v_four_1024": {
+      "B_us": 3.104,
+      "C_us": 3.439,
+      "D_us": 0.335,
+      "K_count": 0,
+      "K_sum_us": 0.0,
+      "P_median_us": 4.48,
+      "R_us": 1.041,
+      "V_count": 10,
+      "V_sum_us": 44.128,
+      "block": [
+        128,
+        1,
+        1
+      ],
+      "buf_sizes": [
+        4096,
+        3440640,
+        8192
+      ],
+      "grid": [
+        1024,
+        1,
+        1
+      ],
+      "llama_K_median_us": 3.2,
+      "llama_V_median_us": 2.784,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "role": "V four-warp fp16 direct"
+    }
+  },
+  "method": "K/V assignment from tensor metadata (attn_k/attn_v) and DAG completion consumers; P=PROFILE=1 HCQ command median; B=nsys exact cubin 2000 reps; C=clean HCQ plain drain slope; D=C-B; R=P-C",
+  "partition": {
+    "K": {
+      "completion_count": 9,
+      "completion_sum_us": 12.16,
+      "delta_us": 47.904,
+      "llama_K_body_sum_us": 114.592,
+      "projection_count": 36,
+      "projection_sum_us": 150.336,
+      "total_us": 162.496
+    },
+    "V": {
+      "completion_count": 17,
+      "completion_sum_us": 18.688,
+      "delta_us": 64.319,
+      "llama_V_body_sum_us": 100.417,
+      "projection_count": 36,
+      "projection_sum_us": 146.048,
+      "total_us": 164.736
+    },
+    "combined_delta_us": 112.223
+  },
+  "per_route_tinygrad_vs_llama": {
+    "K": {
+      "delta_us": 47.904,
+      "llama_K_body_us": 114.592,
+      "tinygrad_completion_us": 12.16,
+      "tinygrad_projection_us": 150.336
+    },
+    "V": {
+      "delta_us": 64.319,
+      "llama_V_body_us": 100.417,
+      "tinygrad_completion_us": 18.688,
+      "tinygrad_projection_us": 146.048
+    }
+  },
+  "schema": "tinygrad.nv_kv_projection_partition.v1"
+}

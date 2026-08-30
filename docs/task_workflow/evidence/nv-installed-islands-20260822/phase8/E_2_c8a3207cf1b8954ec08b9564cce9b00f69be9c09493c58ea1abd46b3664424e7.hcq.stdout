@@ -1,0 +1,10 @@
+{
+  "slopes": {
+    "plain_drain_us_per_kernel": 0.9734304781965769,
+    "plain_drain_intercept_us": 2.4582620804901865,
+    "plain_host_enqueue_us_per_kernel": 29.931068632972075,
+    "timestamp_drain_us_per_kernel": 0.8037309611834097,
+    "timestamp_drain_intercept_us": 6.500222670937191,
+    "timestamp_host_enqueue_us_per_kernel": 54.14148883478355
+  }
+}

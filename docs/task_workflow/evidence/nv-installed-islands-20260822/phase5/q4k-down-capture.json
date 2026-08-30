@@ -1,0 +1,278 @@
+{
+  "captured": [
+    {
+      "calls": [
+        {
+          "buf_meta": [
+            {
+              "size": 16384,
+              "va_addr": 157978562560
+            },
+            {
+              "size": 28311552,
+              "va_addr": 139037681472
+            },
+            {
+              "size": 24576,
+              "va_addr": 157978537984
+            },
+            {
+              "size": 16384,
+              "va_addr": 157978509312
+            }
+          ],
+          "global_size": [
+            4096,
+            1,
+            1
+          ],
+          "local_size": [
+            128,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 16384,
+              "va_addr": 157979996160
+            },
+            {
+              "size": 28311552,
+              "va_addr": 139146242880
+            },
+            {
+              "size": 24576,
+              "va_addr": 157979971584
+            },
+            {
+              "size": 16384,
+              "va_addr": 157979942912
+            }
+          ],
+          "global_size": [
+            4096,
+            1,
+            1
+          ],
+          "local_size": [
+            128,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 16384,
+              "va_addr": 157982822400
+            },
+            {
+              "size": 28311552,
+              "va_addr": 139377423168
+            },
+            {
+              "size": 24576,
+              "va_addr": 157982797824
+            },
+            {
+              "size": 16384,
+              "va_addr": 157982769152
+            }
+          ],
+          "global_size": [
+            4096,
+            1,
+            1
+          ],
+          "local_size": [
+            128,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 16384,
+              "va_addr": 157984243712
+            },
+            {
+              "size": 28311552,
+              "va_addr": 139485984576
+            },
+            {
+              "size": 24576,
+              "va_addr": 157984219136
+            },
+            {
+              "size": 16384,
+              "va_addr": 157984190464
+            }
+          ],
+          "global_size": [
+            4096,
+            1,
+            1
+          ],
+          "local_size": [
+            128,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 16384,
+              "va_addr": 157987069952
+            },
+            {
+              "size": 28311552,
+              "va_addr": 139717164864
+            },
+            {
+              "size": 24576,
+              "va_addr": 157987045376
+            },
+            {
+              "size": 16384,
+              "va_addr": 157987016704
+            }
+          ],
+          "global_size": [
+            4096,
+            1,
+            1
+          ],
+          "local_size": [
+            128,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 16384,
+              "va_addr": 157988491264
+            },
+            {
+              "size": 28311552,
+              "va_addr": 139825726272
+            },
+            {
+              "size": 24576,
+              "va_addr": 157988466688
+            },
+            {
+              "size": 16384,
+              "va_addr": 157988438016
+            }
+          ],
+          "global_size": [
+            4096,
+            1,
+            1
+          ],
+          "local_size": [
+            128,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 16384,
+              "va_addr": 157991227392
+            },
+            {
+              "size": 28311552,
+              "va_addr": 140056906560
+            },
+            {
+              "size": 24576,
+              "va_addr": 157991202816
+            },
+            {
+              "size": 16384,
+              "va_addr": 157991174144
+            }
+          ],
+          "global_size": [
+            4096,
+            1,
+            1
+          ],
+          "local_size": [
+            128,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 16384,
+              "va_addr": 157992648704
+            },
+            {
+              "size": 28311552,
+              "va_addr": 140165467968
+            },
+            {
+              "size": 24576,
+              "va_addr": 157992624128
+            },
+            {
+              "size": 16384,
+              "va_addr": 157992595456
+            }
+          ],
+          "global_size": [
+            4096,
+            1,
+            1
+          ],
+          "local_size": [
+            128,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        }
+      ],
+      "cubin_bytes": 12896,
+      "cubin_path": "/tmp/q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd.cubin",
+      "cubin_sha256": "666d23a9ebcda52e40089f42f7cc1bbae90a9fbeff59f502e7171d12bfe77250",
+      "lcmem_usage": 576,
+      "max_threads": 1536,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "regs_usage": 40,
+      "shmem_usage": 2432
+    }
+  ],
+  "depth": 64,
+  "prefixes": [
+    "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd"
+  ],
+  "schema": "tinygrad.nv_cubin_capture.v1",
+  "verdict": "CAPTURED"
+}

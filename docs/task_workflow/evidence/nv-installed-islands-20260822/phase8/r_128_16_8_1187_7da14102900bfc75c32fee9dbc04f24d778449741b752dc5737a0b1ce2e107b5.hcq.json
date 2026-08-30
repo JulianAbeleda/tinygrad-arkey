@@ -1,0 +1,527 @@
+{
+  "block": [
+    16,
+    1,
+    1
+  ],
+  "buf_sizes": [
+    512,
+    607744,
+    512
+  ],
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-installed-islands-20260822/phase8/r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5.cubin",
+  "cubin_sha256": "1ccaf75a7a2d936a67ec74c68aaa2e61e6d3f58e76585e3c8ff1c3c593c35ea4",
+  "grid": [
+    128,
+    1,
+    1
+  ],
+  "method": "NVComputeQueue chained QMD replay of a caller-supplied production cubin; plain = unprofiled, timestamp = 2 HCQ timestamps/kernel",
+  "ns": [
+    1,
+    2,
+    4,
+    8,
+    16,
+    32,
+    64,
+    128,
+    256,
+    512
+  ],
+  "reps": 3,
+  "rows": [
+    {
+      "arm": "plain",
+      "drain_us_median": 14.918,
+      "enqueue_us_median": 39.935,
+      "n": 1,
+      "samples": [
+        {
+          "drain_us": 16.04,
+          "enqueue_us": 41.568,
+          "submit_us": 4.378
+        },
+        {
+          "drain_us": 14.918,
+          "enqueue_us": 39.234,
+          "submit_us": 4.418
+        },
+        {
+          "drain_us": 14.878,
+          "enqueue_us": 39.935,
+          "submit_us": 4.719
+        }
+      ],
+      "submit_us_median": 4.418
+    },
+    {
+      "arm": "plain",
+      "drain_us_median": 26.439,
+      "enqueue_us_median": 75.833,
+      "n": 2,
+      "samples": [
+        {
+          "drain_us": 26.439,
+          "enqueue_us": 75.833,
+          "submit_us": 4.559
+        },
+        {
+          "drain_us": 26.48,
+          "enqueue_us": 77.767,
+          "submit_us": 4.548
+        },
+        {
+          "drain_us": 26.209,
+          "enqueue_us": 74.23,
+          "submit_us": 4.388
+        }
+      ],
+      "submit_us_median": 4.548
+    },
+    {
+      "arm": "plain",
+      "drain_us_median": 47.729,
+      "enqueue_us_median": 136.867,
+      "n": 4,
+      "samples": [
+        {
+          "drain_us": 47.729,
+          "enqueue_us": 138.821,
+          "submit_us": 4.669
+        },
+        {
+          "drain_us": 48.321,
+          "enqueue_us": 136.867,
+          "submit_us": 5.11
+        },
+        {
+          "drain_us": 47.469,
+          "enqueue_us": 136.357,
+          "submit_us": 4.358
+        }
+      ],
+      "submit_us_median": 4.669
+    },
+    {
+      "arm": "plain",
+      "drain_us_median": 91.562,
+      "enqueue_us_median": 259.839,
+      "n": 8,
+      "samples": [
+        {
+          "drain_us": 91.562,
+          "enqueue_us": 261.522,
+          "submit_us": 4.689
+        },
+        {
+          "drain_us": 90.901,
+          "enqueue_us": 259.829,
+          "submit_us": 4.809
+        },
+        {
+          "drain_us": 91.743,
+          "enqueue_us": 259.839,
+          "submit_us": 5.34
+        }
+      ],
+      "submit_us_median": 4.809
+    },
+    {
+      "arm": "plain",
+      "drain_us_median": 177.433,
+      "enqueue_us_median": 510.56,
+      "n": 16,
+      "samples": [
+        {
+          "drain_us": 178.135,
+          "enqueue_us": 511.252,
+          "submit_us": 4.699
+        },
+        {
+          "drain_us": 177.384,
+          "enqueue_us": 510.56,
+          "submit_us": 4.799
+        },
+        {
+          "drain_us": 177.433,
+          "enqueue_us": 506.042,
+          "submit_us": 4.499
+        }
+      ],
+      "submit_us_median": 4.699
+    },
+    {
+      "arm": "plain",
+      "drain_us_median": 350.108,
+      "enqueue_us_median": 987.318,
+      "n": 32,
+      "samples": [
+        {
+          "drain_us": 350.108,
+          "enqueue_us": 985.955,
+          "submit_us": 5.22
+        },
+        {
+          "drain_us": 350.931,
+          "enqueue_us": 991.997,
+          "submit_us": 5.019
+        },
+        {
+          "drain_us": 350.078,
+          "enqueue_us": 987.318,
+          "submit_us": 5.45
+        }
+      ],
+      "submit_us_median": 5.22
+    },
+    {
+      "arm": "plain",
+      "drain_us_median": 697.282,
+      "enqueue_us_median": 2016.243,
+      "n": 64,
+      "samples": [
+        {
+          "drain_us": 696.991,
+          "enqueue_us": 2044.336,
+          "submit_us": 5.941
+        },
+        {
+          "drain_us": 697.703,
+          "enqueue_us": 2016.243,
+          "submit_us": 6.232
+        },
+        {
+          "drain_us": 697.282,
+          "enqueue_us": 2014.17,
+          "submit_us": 6.221
+        }
+      ],
+      "submit_us_median": 6.221
+    },
+    {
+      "arm": "plain",
+      "drain_us_median": 1388.462,
+      "enqueue_us_median": 3914.715,
+      "n": 128,
+      "samples": [
+        {
+          "drain_us": 1388.402,
+          "enqueue_us": 3877.035,
+          "submit_us": 6.612
+        },
+        {
+          "drain_us": 1389.014,
+          "enqueue_us": 3914.715,
+          "submit_us": 6.352
+        },
+        {
+          "drain_us": 1388.462,
+          "enqueue_us": 3944.621,
+          "submit_us": 6.883
+        }
+      ],
+      "submit_us_median": 6.612
+    },
+    {
+      "arm": "plain",
+      "drain_us_median": 2729.515,
+      "enqueue_us_median": 7943.275,
+      "n": 256,
+      "samples": [
+        {
+          "drain_us": 2729.515,
+          "enqueue_us": 7943.275,
+          "submit_us": 14.096
+        },
+        {
+          "drain_us": 2728.002,
+          "enqueue_us": 7870.216,
+          "submit_us": 10.079
+        },
+        {
+          "drain_us": 2729.676,
+          "enqueue_us": 7994.671,
+          "submit_us": 11.371
+        }
+      ],
+      "submit_us_median": 11.371
+    },
+    {
+      "arm": "plain",
+      "drain_us_median": 5541.075,
+      "enqueue_us_median": 15784.577,
+      "n": 512,
+      "samples": [
+        {
+          "drain_us": 5452.207,
+          "enqueue_us": 16098.717,
+          "submit_us": 15.67
+        },
+        {
+          "drain_us": 5541.075,
+          "enqueue_us": 15784.577,
+          "submit_us": 15.338
+        },
+        {
+          "drain_us": 5542.147,
+          "enqueue_us": 15727.238,
+          "submit_us": 13.806
+        }
+      ],
+      "submit_us_median": 15.338
+    },
+    {
+      "arm": "timestamp",
+      "drain_us_median": 15.238,
+      "enqueue_us_median": 69.12,
+      "n": 1,
+      "samples": [
+        {
+          "drain_us": 15.238,
+          "enqueue_us": 69.12,
+          "submit_us": 5.521
+        },
+        {
+          "drain_us": 14.878,
+          "enqueue_us": 67.607,
+          "submit_us": 4.809
+        },
+        {
+          "drain_us": 16.051,
+          "enqueue_us": 69.15,
+          "submit_us": 4.608
+        }
+      ],
+      "submit_us_median": 4.809
+    },
+    {
+      "arm": "timestamp",
+      "drain_us_median": 27.632,
+      "enqueue_us_median": 124.995,
+      "n": 2,
+      "samples": [
+        {
+          "drain_us": 27.632,
+          "enqueue_us": 124.995,
+          "submit_us": 4.839
+        },
+        {
+          "drain_us": 27.221,
+          "enqueue_us": 123.452,
+          "submit_us": 4.709
+        },
+        {
+          "drain_us": 27.833,
+          "enqueue_us": 128.582,
+          "submit_us": 4.769
+        }
+      ],
+      "submit_us_median": 4.769
+    },
+    {
+      "arm": "timestamp",
+      "drain_us_median": 48.611,
+      "enqueue_us_median": 234.291,
+      "n": 4,
+      "samples": [
+        {
+          "drain_us": 48.611,
+          "enqueue_us": 242.557,
+          "submit_us": 4.849
+        },
+        {
+          "drain_us": 48.652,
+          "enqueue_us": 234.291,
+          "submit_us": 4.558
+        },
+        {
+          "drain_us": 48.341,
+          "enqueue_us": 233.82,
+          "submit_us": 4.619
+        }
+      ],
+      "submit_us_median": 4.619
+    },
+    {
+      "arm": "timestamp",
+      "drain_us_median": 91.903,
+      "enqueue_us_median": 466.848,
+      "n": 8,
+      "samples": [
+        {
+          "drain_us": 92.023,
+          "enqueue_us": 457.982,
+          "submit_us": 4.819
+        },
+        {
+          "drain_us": 91.903,
+          "enqueue_us": 466.848,
+          "submit_us": 4.969
+        },
+        {
+          "drain_us": 91.883,
+          "enqueue_us": 467.68,
+          "submit_us": 4.849
+        }
+      ],
+      "submit_us_median": 4.849
+    },
+    {
+      "arm": "timestamp",
+      "drain_us_median": 177.825,
+      "enqueue_us_median": 911.245,
+      "n": 16,
+      "samples": [
+        {
+          "drain_us": 177.584,
+          "enqueue_us": 909.24,
+          "submit_us": 5.14
+        },
+        {
+          "drain_us": 177.825,
+          "enqueue_us": 932.565,
+          "submit_us": 5.57
+        },
+        {
+          "drain_us": 179.037,
+          "enqueue_us": 911.245,
+          "submit_us": 5.099
+        }
+      ],
+      "submit_us_median": 5.14
+    },
+    {
+      "arm": "timestamp",
+      "drain_us_median": 351.351,
+      "enqueue_us_median": 1788.905,
+      "n": 32,
+      "samples": [
+        {
+          "drain_us": 351.491,
+          "enqueue_us": 1794.506,
+          "submit_us": 5.43
+        },
+        {
+          "drain_us": 351.351,
+          "enqueue_us": 1788.714,
+          "submit_us": 5.17
+        },
+        {
+          "drain_us": 350.85,
+          "enqueue_us": 1788.905,
+          "submit_us": 5.26
+        }
+      ],
+      "submit_us_median": 5.26
+    },
+    {
+      "arm": "timestamp",
+      "drain_us_median": 686.541,
+      "enqueue_us_median": 3568.453,
+      "n": 64,
+      "samples": [
+        {
+          "drain_us": 686.571,
+          "enqueue_us": 3612.918,
+          "submit_us": 6.753
+        },
+        {
+          "drain_us": 686.471,
+          "enqueue_us": 3551.221,
+          "submit_us": 6.072
+        },
+        {
+          "drain_us": 686.541,
+          "enqueue_us": 3568.453,
+          "submit_us": 7.044
+        }
+      ],
+      "submit_us_median": 6.753
+    },
+    {
+      "arm": "timestamp",
+      "drain_us_median": 1367.403,
+      "enqueue_us_median": 6972.949,
+      "n": 128,
+      "samples": [
+        {
+          "drain_us": 1366.962,
+          "enqueue_us": 7048.47,
+          "submit_us": 9.138
+        },
+        {
+          "drain_us": 1367.403,
+          "enqueue_us": 6972.949,
+          "submit_us": 8.876
+        },
+        {
+          "drain_us": 1367.834,
+          "enqueue_us": 6902.395,
+          "submit_us": 7.895
+        }
+      ],
+      "submit_us_median": 8.876
+    },
+    {
+      "arm": "timestamp",
+      "drain_us_median": 2729.455,
+      "enqueue_us_median": 14094.397,
+      "n": 256,
+      "samples": [
+        {
+          "drain_us": 2729.455,
+          "enqueue_us": 14147.296,
+          "submit_us": 12.844
+        },
+        {
+          "drain_us": 2729.014,
+          "enqueue_us": 14094.397,
+          "submit_us": 12.393
+        },
+        {
+          "drain_us": 2729.515,
+          "enqueue_us": 13948.192,
+          "submit_us": 15.259
+        }
+      ],
+      "submit_us_median": 12.844
+    },
+    {
+      "arm": "timestamp",
+      "drain_us_median": 5452.458,
+      "enqueue_us_median": 28297.558,
+      "n": 512,
+      "samples": [
+        {
+          "drain_us": 5452.458,
+          "enqueue_us": 28270.386,
+          "submit_us": 16.621
+        },
+        {
+          "drain_us": 5453.029,
+          "enqueue_us": 28297.558,
+          "submit_us": 16.361
+        },
+        {
+          "drain_us": 5452.208,
+          "enqueue_us": 28369.092,
+          "submit_us": 17.513
+        }
+      ],
+      "submit_us_median": 16.621
+    }
+  ],
+  "schema": "tinygrad.nv_hcq_dispatch_slope_general.v1",
+  "slopes": {
+    "plain_drain_intercept_us": 3.0119798078260374,
+    "plain_drain_us_per_kernel": 10.786317890441582,
+    "plain_host_enqueue_us_per_kernel": 30.824787880693634,
+    "timestamp_drain_intercept_us": 6.7909855173375036,
+    "timestamp_drain_us_per_kernel": 10.63588186200061,
+    "timestamp_host_enqueue_us_per_kernel": 55.177202628229196
+  },
+  "symbol": "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5",
+  "warmup": 2
+}

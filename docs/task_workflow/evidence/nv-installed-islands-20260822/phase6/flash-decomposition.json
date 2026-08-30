@@ -1,0 +1,192 @@
+{
+  "cardinality": {
+    "flash_combine": 36,
+    "flash_score": 36,
+    "llama": 108,
+    "tinygrad": 72
+  },
+  "closed_candidates": [
+    "coarse split S=4 and S=2",
+    "geometry-only variants failing token SHA",
+    "overlap projections from llama PDL node_sum shadow",
+    "single-stage ceiling without installed wall arm"
+  ],
+  "combine": {
+    "cardinality": {
+      "llama": 36,
+      "tinygrad": 36
+    },
+    "clean_hcq": {
+      "intercept_us": 4.049288260687888,
+      "slope_us": 2.6058373581555436,
+      "timestamp_slope_us": 2.6068257827249415
+    },
+    "commit": "6570abc025514273faa100c66b979e531585a1e1",
+    "counters_cold_ncu": {
+      "achieved_occupancy_pct": 2.08,
+      "achieved_warps_per_sm": 1.0,
+      "dram_kbyte": 808.19,
+      "dram_throughput_pct": 8.5,
+      "dram_write_byte": 0.0,
+      "issue_pct": 6.2,
+      "l1tex_mb": 3.42,
+      "lts_mb": 1.0,
+      "lts_read_sectors": 28407,
+      "lts_write_sectors": 412,
+      "ncu_duration_us": 5.18,
+      "note": "cache-control all (flushed) replay; grid 32 blocks / 32 threads, 0.01 waves, latency-bound single-warp shape",
+      "sm_pct": 0.79,
+      "warps_pct": 2.08
+    },
+    "decomposition": {
+      "body_delta_vs_llama_us": 1.28,
+      "body_us": 2.304,
+      "clean_dispatch_us": 0.302,
+      "clean_hcq_us": 2.606,
+      "installed_delta_vs_llama_body_us": 1.856,
+      "note": "body is the dominant term (2.304/2.880 = 80% of production P); NCU is latency-bound (0.79% SM, 2.08% warps).",
+      "production_residual_us": 0.274
+    },
+    "depth": 512,
+    "exact_binary": {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "buf_sizes": [
+        8192,
+        798720
+      ],
+      "grid": [
+        32,
+        1,
+        1
+      ],
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "regs": 79,
+      "sha256": "885232287deb30e3b491bd212f563c10b4eeefe013892ce24be6c0303edbe9b6",
+      "shmem_bytes": 192,
+      "vals": []
+    },
+    "island_id": "I_ATTN",
+    "kernel": "flash_fused_gmax_combine_f16_32_128",
+    "model_sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+    "production": {
+      "llama_body_median_us": 1.024,
+      "llama_body_sum_us": 37.057,
+      "llama_installed_span_us": null,
+      "tiny_command_median_us": 2.88,
+      "tiny_command_p10_us": 2.752,
+      "tiny_command_p90_us": 2.976,
+      "tiny_command_sum_us": 104.0
+    },
+    "pure_body": {
+      "llama_us": 1.024,
+      "method": "nsys exact cubin 2000 reps vs llama PDL0 nsys body",
+      "tiny_max_us": 4.801,
+      "tiny_mean_us": 2.309,
+      "tiny_min_us": 2.272,
+      "tiny_us": 2.304
+    },
+    "schema": "tinygrad.nv_installed_island.v1",
+    "semantic_role": "flash combine",
+    "verdict": "BODY_DOMINANT",
+    "verdict_reason": "body term accounts for 80% of production interval and 69% of the installed delta vs llama; a body-shape/latency problem, not dispatch"
+  },
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "flash_score": {
+    "cardinality": {
+      "llama": 36,
+      "tinygrad": 36
+    },
+    "clean_hcq": {
+      "intercept_us": 12.864474655340473,
+      "slope_us": 3.6582617335743843,
+      "timestamp_slope_us": 3.733542103204081
+    },
+    "commit": "6570abc025514273faa100c66b979e531585a1e1",
+    "counters_cold_ncu": {
+      "achieved_occupancy_pct": 16.79,
+      "achieved_warps_per_sm": 8.06,
+      "dram_mb": 2.13,
+      "dram_throughput_pct": 19.07,
+      "dram_write_byte": 0.0,
+      "issue_pct": 19.65,
+      "l1tex_mb": 8.06,
+      "lts_mb": 4.14,
+      "lts_read_sectors": 95047,
+      "lts_write_sectors": 30294,
+      "ncu_duration_us": 6.08,
+      "note": "cache-control all (flushed) replay; grid 384 blocks / 128 threads, 0.21 waves",
+      "sm_pct": 21.65,
+      "warps_pct": 16.66
+    },
+    "decomposition": {
+      "body_delta_vs_llama_us": -0.672,
+      "body_us": 3.84,
+      "clean_dispatch_us": 0.0,
+      "clean_hcq_us": 3.658,
+      "installed_delta_vs_llama_body_us": 1.76,
+      "note": "clean HCQ C (3.658) sits below the CUDA-runtime-replayed body B (3.840), so D=C-B is clamped to 0 and the delta is assigned to instrumentation; R=P-C=2.614 is the production-conditioned residual (DRAM-cold/back-to-back/predecessor, not clean dispatch).",
+      "production_residual_us": 2.614
+    },
+    "depth": 512,
+    "exact_binary": {
+      "block": [
+        32,
+        4,
+        1
+      ],
+      "buf_sizes": [
+        798720,
+        16384,
+        18874368
+      ],
+      "grid": [
+        48,
+        8,
+        1
+      ],
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "regs": 40,
+      "sha256": "2b974ac133ccc23faeb95420041da0d86f0c08e6873addbd4f376caa7688a6d7",
+      "shmem_bytes": 8192,
+      "vals": [
+        512
+      ]
+    },
+    "island_id": "I_ATTN",
+    "kernel": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+    "model_sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+    "production": {
+      "llama_body_median_us": 4.512,
+      "llama_body_sum_us": 162.948,
+      "llama_installed_span_us": null,
+      "tiny_command_median_us": 6.272,
+      "tiny_command_p10_us": 6.016,
+      "tiny_command_p90_us": 6.528,
+      "tiny_command_sum_us": 227.488
+    },
+    "pure_body": {
+      "llama_us": 4.512,
+      "method": "nsys exact cubin 2000 reps vs llama PDL0 nsys body",
+      "tiny_max_us": 6.304,
+      "tiny_mean_us": 3.837,
+      "tiny_min_us": 3.744,
+      "tiny_us": 3.84
+    },
+    "schema": "tinygrad.nv_installed_island.v1",
+    "semantic_role": "flash score",
+    "verdict": "INSTALL_DOMINANT",
+    "verdict_reason": "body is faster than llama (-0.672 us/call); the positive installed delta is production-conditioned residual, not arithmetic or clean dispatch"
+  },
+  "island_id": "I_ATTN",
+  "island_node_sum_us": {
+    "delta": 107.451,
+    "llama": 224.037,
+    "tinygrad": 331.488
+  },
+  "method": "B=nsys exact cubin (2000 reps); C=clean HCQ plain chained-QMD drain slope; P=PROFILE=1 HCQ command interval median (14436 samples); NCU=cache-control all flushed replay",
+  "schema": "tinygrad.nv_flash_decomposition.v1"
+}

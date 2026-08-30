@@ -1,0 +1,40 @@
+{
+  "method": "ncu exact cubin, --target-processes all, 1 launch",
+  "reduce_output_rmsnorm_32_128": {
+    "block": [
+      4,
+      8,
+      1
+    ],
+    "dram_bytes_read_kbyte": 22.78,
+    "dram_write_byte": 0,
+    "grid": [
+      32,
+      1,
+      1
+    ],
+    "issue_active_pct": 1.47,
+    "lts_bytes_kbyte": 179.97,
+    "ncu_duration_us": 4.16,
+    "warps_active_pct": 2.08
+  },
+  "reduce_output_rmsnorm_8_128": {
+    "block": [
+      2,
+      16,
+      1
+    ],
+    "dram_bytes_read_kbyte": 9.98,
+    "dram_write_byte": 0,
+    "grid": [
+      8,
+      1,
+      1
+    ],
+    "issue_active_pct": 1.63,
+    "lts_bytes_kbyte": 147.81,
+    "ncu_duration_us": 3.71,
+    "warps_active_pct": 2.08
+  },
+  "schema": "tinygrad.nv_qk_norm_counters.v1"
+}

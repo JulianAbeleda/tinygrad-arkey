@@ -1,0 +1,281 @@
+{
+  "model_json": "docs/task_workflow/evidence/nv-prefill-q6down-d0-20260829/profiled-model.json",
+  "note": "real HCQ timestamps; first temporal direct successor selected per main; full fanout retained; allocator/copy/materialization events and paired hot/rotated-cold controls are unavailable, so D0 cannot close",
+  "profile_perturbed": true,
+  "records": [
+    {
+      "active_us": 138.304,
+      "allocations": {
+        "bytes": null,
+        "count": null,
+        "source": "hcq_graph_profile",
+        "status": "UNAVAILABLE"
+      },
+      "boundary": "compact_q8_producer",
+      "copies": {
+        "bytes": null,
+        "count": null,
+        "source": "hcq_graph_profile",
+        "status": "UNAVAILABLE"
+      },
+      "dependency_wait_us": 0.0,
+      "device_begin_us": 1788044096973913.2,
+      "device_end_us": 1788044097043748.0,
+      "materializations": {
+        "bytes": null,
+        "count": null,
+        "source": "hcq_graph_profile",
+        "status": "UNAVAILABLE"
+      },
+      "records": 18,
+      "status": "OBSERVED"
+    },
+    {
+      "active_us": 11592.48,
+      "allocations": {
+        "bytes": null,
+        "count": null,
+        "source": "hcq_graph_profile",
+        "status": "UNAVAILABLE"
+      },
+      "boundary": "q6_main",
+      "copies": {
+        "bytes": null,
+        "count": null,
+        "source": "hcq_graph_profile",
+        "status": "UNAVAILABLE"
+      },
+      "dependency_wait_us": 5.0,
+      "device_begin_us": 1788044096973923.5,
+      "device_end_us": 1788044097044392.0,
+      "materializations": {
+        "bytes": null,
+        "count": null,
+        "source": "hcq_graph_profile",
+        "status": "UNAVAILABLE"
+      },
+      "records": 18,
+      "status": "OBSERVED"
+    },
+    {
+      "active_us": 0.0,
+      "allocations": {
+        "bytes": null,
+        "count": null,
+        "source": "hcq_graph_profile",
+        "status": "UNAVAILABLE"
+      },
+      "boundary": "output_publication",
+      "copies": {
+        "bytes": null,
+        "count": null,
+        "source": "hcq_graph_profile",
+        "status": "UNAVAILABLE"
+      },
+      "dependency_wait_us": 0.0,
+      "device_begin_us": 1788044097044392.0,
+      "device_end_us": 1788044097044392.0,
+      "materializations": {
+        "bytes": null,
+        "count": null,
+        "source": "hcq_graph_profile",
+        "status": "UNAVAILABLE"
+      },
+      "ownership": "direct compiler output; publication is the q6_main completion",
+      "records": 18,
+      "status": "OBSERVED"
+    },
+    {
+      "active_us": 122.27199999999999,
+      "allocations": {
+        "bytes": null,
+        "count": null,
+        "source": "hcq_graph_profile",
+        "status": "UNAVAILABLE"
+      },
+      "boundary": "residual_epilogue",
+      "copies": {
+        "bytes": null,
+        "count": null,
+        "source": "hcq_graph_profile",
+        "status": "UNAVAILABLE"
+      },
+      "dependency_wait_us": 0.0,
+      "device_begin_us": 1788044096974568.0,
+      "device_end_us": 1788044097044398.8,
+      "materializations": {
+        "bytes": null,
+        "count": null,
+        "source": "hcq_graph_profile",
+        "status": "UNAVAILABLE"
+      },
+      "records": 18,
+      "status": "OBSERVED"
+    }
+  ],
+  "residual_fanout": [
+    {
+      "main_index": 14,
+      "successors": [
+        "E_64_64_8_16_4_655332ee325f66bbd19a0a9f7ca8e8da98665ae71ce0894dae6e08a7a1de8e63",
+        "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+        "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561",
+        "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f"
+      ]
+    },
+    {
+      "main_index": 46,
+      "successors": [
+        "E_64_64_8_16_4_655332ee325f66bbd19a0a9f7ca8e8da98665ae71ce0894dae6e08a7a1de8e63",
+        "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+        "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561",
+        "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f"
+      ]
+    },
+    {
+      "main_index": 78,
+      "successors": [
+        "E_64_64_8_16_4_655332ee325f66bbd19a0a9f7ca8e8da98665ae71ce0894dae6e08a7a1de8e63",
+        "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+        "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561",
+        "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f"
+      ]
+    },
+    {
+      "main_index": 110,
+      "successors": [
+        "E_64_64_8_16_4_655332ee325f66bbd19a0a9f7ca8e8da98665ae71ce0894dae6e08a7a1de8e63",
+        "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+        "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561",
+        "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f"
+      ]
+    },
+    {
+      "main_index": 141,
+      "successors": [
+        "E_64_64_8_16_4_655332ee325f66bbd19a0a9f7ca8e8da98665ae71ce0894dae6e08a7a1de8e63",
+        "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+        "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561",
+        "r_1187_32_4_16_2_2_2_4_8_5d34671e0b37cb71be07bf75d934e83829c4a02061eec3504cbb6cba4e7a88d6"
+      ]
+    },
+    {
+      "main_index": 24,
+      "successors": [
+        "E_64_64_8_16_4_655332ee325f66bbd19a0a9f7ca8e8da98665ae71ce0894dae6e08a7a1de8e63",
+        "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+        "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561",
+        "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f"
+      ]
+    },
+    {
+      "main_index": 118,
+      "successors": [
+        "E_64_64_8_16_4_655332ee325f66bbd19a0a9f7ca8e8da98665ae71ce0894dae6e08a7a1de8e63",
+        "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+        "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561",
+        "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f"
+      ]
+    },
+    {
+      "main_index": 212,
+      "successors": [
+        "E_64_64_8_16_4_655332ee325f66bbd19a0a9f7ca8e8da98665ae71ce0894dae6e08a7a1de8e63",
+        "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+        "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561",
+        "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f"
+      ]
+    },
+    {
+      "main_index": 306,
+      "successors": [
+        "E_64_64_8_16_4_655332ee325f66bbd19a0a9f7ca8e8da98665ae71ce0894dae6e08a7a1de8e63",
+        "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+        "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561",
+        "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f"
+      ]
+    },
+    {
+      "main_index": 400,
+      "successors": [
+        "E_64_64_8_16_4_655332ee325f66bbd19a0a9f7ca8e8da98665ae71ce0894dae6e08a7a1de8e63",
+        "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+        "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561",
+        "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f"
+      ]
+    },
+    {
+      "main_index": 494,
+      "successors": [
+        "E_64_64_8_16_4_655332ee325f66bbd19a0a9f7ca8e8da98665ae71ce0894dae6e08a7a1de8e63",
+        "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+        "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561",
+        "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f"
+      ]
+    },
+    {
+      "main_index": 92,
+      "successors": [
+        "E_64_64_8_16_4_655332ee325f66bbd19a0a9f7ca8e8da98665ae71ce0894dae6e08a7a1de8e63",
+        "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+        "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561",
+        "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f"
+      ]
+    },
+    {
+      "main_index": 186,
+      "successors": [
+        "E_64_64_8_16_4_655332ee325f66bbd19a0a9f7ca8e8da98665ae71ce0894dae6e08a7a1de8e63",
+        "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+        "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561",
+        "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f"
+      ]
+    },
+    {
+      "main_index": 0,
+      "successors": [
+        "E_64_64_8_16_4_655332ee325f66bbd19a0a9f7ca8e8da98665ae71ce0894dae6e08a7a1de8e63",
+        "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+        "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561",
+        "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f"
+      ]
+    },
+    {
+      "main_index": 32,
+      "successors": [
+        "E_64_64_8_16_4_655332ee325f66bbd19a0a9f7ca8e8da98665ae71ce0894dae6e08a7a1de8e63",
+        "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+        "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561",
+        "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f"
+      ]
+    },
+    {
+      "main_index": 126,
+      "successors": [
+        "E_64_64_8_16_4_655332ee325f66bbd19a0a9f7ca8e8da98665ae71ce0894dae6e08a7a1de8e63"
+      ]
+    },
+    {
+      "main_index": 0,
+      "successors": [
+        "E_64_64_8_16_4_655332ee325f66bbd19a0a9f7ca8e8da98665ae71ce0894dae6e08a7a1de8e63",
+        "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+        "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561",
+        "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f"
+      ]
+    },
+    {
+      "main_index": 32,
+      "successors": [
+        "E_64_64_8_16_4_655332ee325f66bbd19a0a9f7ca8e8da98665ae71ce0894dae6e08a7a1de8e63",
+        "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+        "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561",
+        "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f"
+      ]
+    }
+  ],
+  "role": "ffn_down",
+  "schema": "tinygrad.nv_q6down_graph_profile_observer.v1",
+  "source_profile": "docs/task_workflow/evidence/nv-prefill-q6down-d0-20260829/hcq-profile.jsonl",
+  "status": "BLOCKED"
+}

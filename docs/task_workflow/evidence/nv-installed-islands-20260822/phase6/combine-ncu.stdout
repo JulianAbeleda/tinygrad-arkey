@@ -1,0 +1,49 @@
+==WARNING== Note: Running with unmodified GPU clocks. If not controlled otherwise, profiling results may be inconsistent.
+==PROF== Connected to process 2387302 (/usr/bin/python3.12)
+==PROF== Profiling "flash_fused_gmax_combine_f16_..." - 0 (1/1): 0%....50%....100% - 9 passes
+{
+  "block": [
+    32,
+    1,
+    1
+  ],
+  "buf_bytes": 67108864,
+  "buf_sizes": [
+    8192,
+    798720
+  ],
+  "cubin": "docs/task_workflow/evidence/nv-catch-llama-ledger-20260822/phase1/flash_fused_gmax_combine_f16_32_128.cubin",
+  "cubin_sha256": "885232287deb30e3b491bd212f563c10b4eeefe013892ce24be6c0303edbe9b6",
+  "grid": [
+    32,
+    1,
+    1
+  ],
+  "n_bufs": 2,
+  "reps": 5,
+  "schema": "tinygrad.nv_cubin_ncu_launcher.v1",
+  "symbol": "flash_fused_gmax_combine_f16_32_128",
+  "vals": [],
+  "verdict": "CUDA_LAUNCH_OK"
+}
+==PROF== Disconnected from process 2387302
+[2387302] python3.12@127.0.0.1
+  flash_fused_gmax_combine_f16_32_128 (32, 1, 1)x(32, 1, 1), Context 1, Stream 13, Device 0, CC 12.0
+    Warning: Data collection happened without fixed GPU frequencies. Profiling results may be inconsistent.
+    Section: Command line profiler metrics
+    --------------------------------------------------- ----------- ------------
+    Metric Name                                         Metric Unit Metric Value
+    --------------------------------------------------- ----------- ------------
+    dram__bytes.sum                                           Kbyte       808.19
+    dram__bytes_op_read.sum                                   Kbyte       808.19
+    dram__bytes_op_write.sum                                   byte            0
+    gpu__time_duration.sum                                       us         5.18
+    l1tex__t_bytes.sum                                        Mbyte         3.42
+    lts__t_bytes.sum                                          Mbyte         1.00
+    lts__t_sectors_op_read.sum                               sector        28407
+    lts__t_sectors_op_write.sum                              sector          412
+    sm__throughput.avg.pct_of_peak_sustained_elapsed              %         0.79
+    sm__warps_active.avg.pct_of_peak_sustained_active             %         2.08
+    smsp__issue_active.avg.pct_of_peak_sustained_active           %         6.20
+    --------------------------------------------------- ----------- ------------
+

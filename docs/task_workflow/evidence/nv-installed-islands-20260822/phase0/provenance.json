@@ -1,0 +1,103 @@
+{
+  "schema": "tinygrad.nv_installed_island.phase0_provenance.v1",
+  "scope": "docs/task_workflow/input/nv-first-principles-installed-island-sequential-scope-20260822.md",
+  "session_started_utc": "2026-08-22T22:30Z",
+  "timezone": "America/New_York",
+  "repo": {
+    "path": "/home/ubuntu/tinygrad-arkey",
+    "branch": "nvidia-bringup-20260731",
+    "head": "6570abc025514273faa100c66b979e531585a1e1",
+    "dirty": true,
+    "git_diff_check": "PASS",
+    "pre_existing_tracked_modifications": [
+      "extra/llm_research/decode/full_token_dag_capture.py",
+      "extra/llm_research/decode/nv_norm_native_wall_ab.py",
+      "tinygrad/engine/jit.py",
+      "tinygrad/llm/decode_routes.py",
+      "tinygrad/renderer/cuda.py",
+      "tinygrad/runtime/graph/hcq.py",
+      "tinygrad/runtime/ops_nv.py"
+    ],
+    "note": "All listed modifications are pre-existing user work and were not changed by this scope."
+  },
+  "python": {
+    "interpreter": "/home/ubuntu/tinygrad-arkey/.venv/bin/python",
+    "version": "3.12.3 (main, Jun 19 2026, 12:46:00) [GCC 13.3.0]"
+  },
+  "gpu": {
+    "name": "NVIDIA GeForce RTX 5090",
+    "uuid": "GPU-c800ade9-21ea-2e55-f75c-6d7a458fb186",
+    "arch": "sm_120",
+    "driver": "595.84",
+    "cuda": "13.2",
+    "pstate": "P8",
+    "persistence_mode": "Disabled",
+    "compute_mode": "Default",
+    "graphics_clock_mhz_idle": 225,
+    "memory_clock_mhz_idle": 405,
+    "max_graphics_clock_mhz": 3135,
+    "max_memory_clock_mhz": 14001,
+    "power_limit_w": 600.0,
+    "power_draw_w_idle": 18.88,
+    "temperature_c_idle": 34,
+    "active_compute_processes": "none",
+    "clock_lock_command": "sudo nvidia-smi -pm 1 && sudo nvidia-smi -lgc 2850 && sudo nvidia-smi -lmc 14001",
+    "clock_lock_supported": true,
+    "prior_locked_reference": "SM 2850 MHz (observed hold 2842 MHz), memory 14001 MHz, persistence enabled, P0 held (nv-endpoint-tight-bracket-result-20260821.md)"
+  },
+  "model": {
+    "path": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+    "size_bytes": 5027783488,
+    "depth": 512,
+    "workload": "single-token decode, fixed context depth 512"
+  },
+  "tools": {
+    "nsys": "2026.1.3.425-261338342291v0",
+    "ncu": "2026.2.1.0 (build 38283040)",
+    "nvcc": "/usr/local/cuda-13.2/bin/nvcc (release 13.2, V13.2.86)"
+  },
+  "env": {
+    "DEV": "NV",
+    "QK_MODEL": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "lock": "/tmp/gpu-bench.lock"
+  },
+  "phase0_reconstruction": {
+    "role_census": {
+      "path": "docs/task_workflow/evidence/nv-full-token-role-census-20260822/role-census.json",
+      "expected_sha256": "0326f0d21e10059a92196a439431f5bd58fb04353a6b20d972e94b3cece494cf",
+      "regenerated_sha256": "0326f0d21e10059a92196a439431f5bd58fb04353a6b20d972e94b3cece494cf",
+      "byte_identical": true,
+      "script": "extra/llm_research/decode/nv_full_token_role_census.py"
+    },
+    "qk_cubin_hashes": {
+      "verified": true,
+      "sha256sum_check_exit": 0
+    },
+    "hcq_slope_hashes": {
+      "verified": true,
+      "sha256sum_check_exit": 0
+    },
+    "hcq_ols_recompute": {
+      "qk_cubin_plain_drain_us_per_kernel": 1.697644,
+      "qk_cubin_plain_intercept_us": 4.973165,
+      "qk_cubin_plain_r2": 0.99998918,
+      "floor_noop_plain_drain_us_per_kernel": 0.649032,
+      "floor_noop_plain_intercept_us": 5.102149,
+      "floor_noop_plain_r2": 0.99980662,
+      "qk_cubin_timestamp_drain_us_per_kernel": 1.495254,
+      "floor_noop_timestamp_drain_us_per_kernel": 0.651298,
+      "pass_plain_noop_slope_0p649": true,
+      "pass_qk_slope_1p698": true
+    },
+    "qk_exact_body": {
+      "q_mean_us": 1.190,
+      "q_median_us": 1.184,
+      "k_mean_us": 1.1962,
+      "k_median_us": 1.184,
+      "faithful_per_kernel_hcq_profile_median_us": 1.696
+    },
+    "unauthorized_source_paths_changed": false
+  },
+  "phase0_verdict": "PASS"
+}

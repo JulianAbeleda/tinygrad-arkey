@@ -1,0 +1,304 @@
+{
+  "conclusion": {
+    "ffn_eviction_and_latency_are_proportional": false,
+    "first_actual_residency_loss": "ffn",
+    "first_large_llama_service_step": "through_q",
+    "replacement_law": "threshold_then_plateau_not_one_to_one",
+    "source_cache_policy": "ordinary CUDA caching; no explicit per-layer L2 clear or evict-first/last hint found in MMVQ or Flash source",
+    "synthetic_knee_mib": "between 90 and 92",
+    "why": "FFN makes roughly the full 3 MiB llama K/V horizon refetch from DRAM but adds only 0.128 us; Q adds almost no target DRAM bytes but raises CUPTI service 0.864 us; completion gives 0.224 us back"
+  },
+  "cross_runtime_penalty_comparison": [
+    {
+      "checkpoint": "hot",
+      "llama_penalty_us": 0.0,
+      "tinygrad_minus_llama_penalty_us": 0.0,
+      "tinygrad_penalty_us": 0.0
+    },
+    {
+      "checkpoint": "gate",
+      "llama_penalty_us": 0.0,
+      "tinygrad_minus_llama_penalty_us": 0.192,
+      "tinygrad_penalty_us": 0.192
+    },
+    {
+      "checkpoint": "ffn_down",
+      "llama_penalty_us": 0.128,
+      "tinygrad_minus_llama_penalty_us": 0.896,
+      "tinygrad_penalty_us": 1.024
+    },
+    {
+      "checkpoint": "attention_input",
+      "llama_penalty_us": 0.128,
+      "tinygrad_minus_llama_penalty_us": 0.896,
+      "tinygrad_penalty_us": 1.024
+    },
+    {
+      "checkpoint": "q_projection",
+      "llama_penalty_us": 0.992,
+      "tinygrad_minus_llama_penalty_us": 0.304,
+      "tinygrad_penalty_us": 1.296
+    },
+    {
+      "checkpoint": "full_entry",
+      "llama_penalty_us": 0.768,
+      "tinygrad_minus_llama_penalty_us": 0.432,
+      "tinygrad_penalty_us": 1.2
+    }
+  ],
+  "llama_reverse_repeat": {
+    "ffn": {
+      "cupti_median_us": 4.224,
+      "delta_from_r1_us": 0.0
+    },
+    "full_entry": {
+      "cupti_median_us": 4.864,
+      "delta_from_r1_us": 0.0
+    },
+    "hot": {
+      "cupti_median_us": 4.096,
+      "delta_from_r1_us": 0.0
+    },
+    "through_q": {
+      "cupti_median_us": 5.088,
+      "delta_from_r1_us": 0.0
+    },
+    "through_qdone": {
+      "cupti_median_us": 4.848,
+      "delta_from_r1_us": -0.016
+    }
+  },
+  "llama_rows": [
+    {
+      "checkpoint": "hot",
+      "cupti_max_us": 4.192,
+      "cupti_mean_us": 4.108,
+      "cupti_median_us": 4.096,
+      "cupti_min_us": 4.032,
+      "cupti_n": 100,
+      "dram_read_bytes": 256,
+      "dram_write_bytes": 246016,
+      "increment_from_prior_us": 0,
+      "instructions": 894720,
+      "l1_bytes": 13473792,
+      "l2_bytes": 13202208,
+      "l2_read_hit_rate_pct": 100.0,
+      "long_scoreboard_pct": 50.32,
+      "score_minus_hot_us": 0.0
+    },
+    {
+      "checkpoint": "gate",
+      "cupti_max_us": 4.16,
+      "cupti_mean_us": 4.098,
+      "cupti_median_us": 4.096,
+      "cupti_min_us": 4.032,
+      "cupti_n": 100,
+      "dram_read_bytes": 768,
+      "dram_write_bytes": 246272,
+      "increment_from_prior_us": 0.0,
+      "instructions": 894720,
+      "l1_bytes": 13473792,
+      "l2_bytes": 13202432,
+      "l2_read_hit_rate_pct": 100.0,
+      "long_scoreboard_pct": 50.7,
+      "score_minus_hot_us": 0.0
+    },
+    {
+      "checkpoint": "ffn",
+      "cupti_max_us": 4.576,
+      "cupti_mean_us": 4.229,
+      "cupti_median_us": 4.224,
+      "cupti_min_us": 4.128,
+      "cupti_n": 100,
+      "dram_read_bytes": 3180800,
+      "dram_write_bytes": 0,
+      "increment_from_prior_us": 0.128,
+      "instructions": 894720,
+      "l1_bytes": 13473792,
+      "l2_bytes": 13203712,
+      "l2_read_hit_rate_pct": 75.46,
+      "long_scoreboard_pct": 59.46,
+      "score_minus_hot_us": 0.128
+    },
+    {
+      "checkpoint": "attn_input",
+      "cupti_max_us": 4.48,
+      "cupti_mean_us": 4.23,
+      "cupti_median_us": 4.224,
+      "cupti_min_us": 4.096,
+      "cupti_n": 100,
+      "dram_read_bytes": 3182336,
+      "dram_write_bytes": 0,
+      "increment_from_prior_us": 0.0,
+      "instructions": 894720,
+      "l1_bytes": 13473792,
+      "l2_bytes": 13204896,
+      "l2_read_hit_rate_pct": 75.44,
+      "long_scoreboard_pct": 61.03,
+      "score_minus_hot_us": 0.128
+    },
+    {
+      "checkpoint": "through_q",
+      "cupti_max_us": 5.44,
+      "cupti_mean_us": 5.098,
+      "cupti_median_us": 5.088,
+      "cupti_min_us": 4.768,
+      "cupti_n": 100,
+      "dram_read_bytes": 3187200,
+      "dram_write_bytes": 0,
+      "increment_from_prior_us": 0.864,
+      "instructions": 894720,
+      "l1_bytes": 13473792,
+      "l2_bytes": 13203168,
+      "l2_read_hit_rate_pct": 75.4,
+      "long_scoreboard_pct": 60.25,
+      "score_minus_hot_us": 0.992
+    },
+    {
+      "checkpoint": "through_qdone",
+      "cupti_max_us": 5.248,
+      "cupti_mean_us": 4.887,
+      "cupti_median_us": 4.864,
+      "cupti_min_us": 4.704,
+      "cupti_n": 100,
+      "dram_read_bytes": 3170560,
+      "dram_write_bytes": 0,
+      "increment_from_prior_us": -0.224,
+      "instructions": 894720,
+      "l1_bytes": 13473792,
+      "l2_bytes": 13202176,
+      "l2_read_hit_rate_pct": 75.54,
+      "long_scoreboard_pct": 57.56,
+      "score_minus_hot_us": 0.768
+    },
+    {
+      "checkpoint": "through_k",
+      "cupti_max_us": 5.12,
+      "cupti_mean_us": 4.851,
+      "cupti_median_us": 4.832,
+      "cupti_min_us": 4.672,
+      "cupti_n": 100,
+      "dram_read_bytes": 3170816,
+      "dram_write_bytes": 0,
+      "increment_from_prior_us": -0.032,
+      "instructions": 894720,
+      "l1_bytes": 13473792,
+      "l2_bytes": 13202912,
+      "l2_read_hit_rate_pct": 75.53,
+      "long_scoreboard_pct": 58.41,
+      "score_minus_hot_us": 0.736
+    },
+    {
+      "checkpoint": "through_v",
+      "cupti_max_us": 5.217,
+      "cupti_mean_us": 4.884,
+      "cupti_median_us": 4.864,
+      "cupti_min_us": 4.672,
+      "cupti_n": 100,
+      "dram_read_bytes": 3170560,
+      "dram_write_bytes": 0,
+      "increment_from_prior_us": 0.032,
+      "instructions": 894720,
+      "l1_bytes": 13473792,
+      "l2_bytes": 13204704,
+      "l2_read_hit_rate_pct": 75.54,
+      "long_scoreboard_pct": 56.8,
+      "score_minus_hot_us": 0.768
+    },
+    {
+      "checkpoint": "full_entry",
+      "cupti_max_us": 5.248,
+      "cupti_mean_us": 4.876,
+      "cupti_median_us": 4.864,
+      "cupti_min_us": 4.704,
+      "cupti_n": 100,
+      "dram_read_bytes": 3166464,
+      "dram_write_bytes": 0,
+      "increment_from_prior_us": 0.0,
+      "instructions": 894720,
+      "l1_bytes": 13473792,
+      "l2_bytes": 13203136,
+      "l2_read_hit_rate_pct": 75.56,
+      "long_scoreboard_pct": 58.2,
+      "score_minus_hot_us": 0.768
+    }
+  ],
+  "llama_synthetic_capacity_curve": [
+    {
+      "condition_mib": 0,
+      "cupti_median_us": 4.032,
+      "minus_hot_us": 0.0
+    },
+    {
+      "condition_mib": 54,
+      "cupti_median_us": 4.032,
+      "minus_hot_us": 0.0
+    },
+    {
+      "condition_mib": 90,
+      "cupti_median_us": 4.192,
+      "minus_hot_us": 0.16
+    },
+    {
+      "condition_mib": 92,
+      "cupti_median_us": 4.672,
+      "minus_hot_us": 0.64
+    },
+    {
+      "condition_mib": 93,
+      "cupti_median_us": 4.64,
+      "minus_hot_us": 0.608
+    },
+    {
+      "condition_mib": 94,
+      "cupti_median_us": 4.672,
+      "minus_hot_us": 0.64
+    },
+    {
+      "condition_mib": 95,
+      "cupti_median_us": 4.672,
+      "minus_hot_us": 0.64
+    },
+    {
+      "condition_mib": 96,
+      "cupti_median_us": 4.672,
+      "minus_hot_us": 0.64
+    },
+    {
+      "condition_mib": 100,
+      "cupti_median_us": 4.64,
+      "minus_hot_us": 0.608
+    },
+    {
+      "condition_mib": 102,
+      "cupti_median_us": 4.672,
+      "minus_hot_us": 0.64
+    },
+    {
+      "condition_mib": 108,
+      "cupti_median_us": 4.672,
+      "minus_hot_us": 0.64
+    }
+  ],
+  "method": {
+    "llama_counters": "NCU application replay, cache control none, nine conditioning repetitions, final target captured",
+    "llama_high_volume_hops": "exact current llama MMVQ cubin and llama Flash source body",
+    "llama_timing": "CUPTI kernel duration, second Flash in each reheat/prefix/target pair, 100 retained observations",
+    "small_hop_caveat": "small norm/quant/completion hops use production-sized touches/copies; full-entry replay is not an exact cubin replay of those small kernels",
+    "tinygrad_timing": "native HCQ timestamp ledger"
+  },
+  "schema": "tinygrad.nv_flash_entry_cross_runtime_summary.v1",
+  "status": {
+    "classification": "historical_no_fast_math_replay",
+    "reason": "the first standalone Flash target omitted llama's production -use_fast_math release flag; cache-knee shape remains evidence, absolute hot/entry times and translation are superseded",
+    "superseded_by": "docs/task_workflow/evidence/nv-flash-kernel-to-production-conversion/summary.json"
+  },
+  "translation": {
+    "booked_recovery_us_per_token": 0.0,
+    "ceiling_tok_s": 245.161,
+    "excess_us_per_layer": 0.432,
+    "excess_us_per_token": 15.552,
+    "llama_replayed_full_entry_penalty_us_per_layer": 0.768,
+    "tinygrad_full_entry_penalty_us_per_layer": 1.2
+  }
+}

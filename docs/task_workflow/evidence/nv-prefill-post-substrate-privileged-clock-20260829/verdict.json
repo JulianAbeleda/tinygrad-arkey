@@ -1,0 +1,37 @@
+{
+  "schema": "tinygrad.nv_prefill_privileged_clock_probe.v1",
+  "packet": "S0-privileged-clock-probe",
+  "decision": "STOP",
+  "reason": "Correctness passed, but median exceeds the 67.235719 ms authority by more than 1%.",
+  "sudo_noninteractive": true,
+  "clock_control": {
+    "requested_graphics_mhz": 3090,
+    "lock_command": "sudo -n nvidia-smi -lgc 3090",
+    "lock_result": "accepted",
+    "observed_graphics_mhz_during": {"min": 2797, "max": 2947, "samples": 865},
+    "restore": "sudo -n nvidia-smi -rgc; sudo -n nvidia-smi -rmc; restore persistence mode",
+    "post_persistence_mode": "Disabled",
+    "post_clock_lock": "not active"
+  },
+  "protocol": {
+    "flock": "/tmp/gpu-bench.lock",
+    "profile": 0,
+    "warmups": 3,
+    "rounds": 9,
+    "deep_replay": true,
+    "hcq_num_compute": 2,
+    "ready_placement": 0
+  },
+  "result": {
+    "status": "PASS",
+    "median_ms": 72.109481,
+    "min_ms": 72.070646,
+    "samples_ms": [72.103998, 72.070646, 72.121643, 72.079867, 72.109481, 72.107778, 72.133305, 72.139357, 72.136782],
+    "token": 198,
+    "deep_replay_exact": true,
+    "finite": true,
+    "role_count": 198,
+    "default_enabled": false
+  },
+  "evidence_dir": "docs/task_workflow/evidence/nv-prefill-post-substrate-privileged-clock-20260829"
+}

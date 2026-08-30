@@ -1,0 +1,9 @@
+{"boundary": "main", "device_time": {"begin_ns": null, "end_ns": null, "status": "UNAVAILABLE"}, "marker_abi": "tinygrad.nv_compiler_q6k_boundary_marker.v1:main:v1", "packet": "D0.2", "sample": 0, "type": "cut"}
+{"boundary": "main", "device_time": {"begin_ns": null, "end_ns": null, "status": "UNAVAILABLE"}, "marker_abi": "tinygrad.nv_compiler_q6k_boundary_marker.v1:main:v1", "packet": "D0.2", "sample": 1, "type": "cut"}
+{"boundary": "main", "device_time": {"begin_ns": null, "end_ns": null, "status": "UNAVAILABLE"}, "marker_abi": "tinygrad.nv_compiler_q6k_boundary_marker.v1:main:v1", "packet": "D0.2", "sample": 2, "type": "cut"}
+{"boundary": "main", "device_time": {"begin_ns": null, "end_ns": null, "status": "UNAVAILABLE"}, "marker_abi": "tinygrad.nv_compiler_q6k_boundary_marker.v1:main:v1", "packet": "D0.2", "sample": 3, "type": "cut"}
+{"boundary": "main", "device_time": {"begin_ns": null, "end_ns": null, "status": "UNAVAILABLE"}, "marker_abi": "tinygrad.nv_compiler_q6k_boundary_marker.v1:main:v1", "packet": "D0.2", "sample": 4, "type": "cut"}
+{"boundary": "main", "device_time": {"begin_ns": null, "end_ns": null, "status": "UNAVAILABLE"}, "marker_abi": "tinygrad.nv_compiler_q6k_boundary_marker.v1:main:v1", "packet": "D0.2", "sample": 5, "type": "cut"}
+{"boundary": "main", "device_time": {"begin_ns": null, "end_ns": null, "status": "UNAVAILABLE"}, "marker_abi": "tinygrad.nv_compiler_q6k_boundary_marker.v1:main:v1", "packet": "D0.2", "sample": 6, "type": "cut"}
+{"boundary": "main", "device_time": {"begin_ns": null, "end_ns": null, "status": "UNAVAILABLE"}, "marker_abi": "tinygrad.nv_compiler_q6k_boundary_marker.v1:main:v1", "packet": "D0.2", "sample": 7, "type": "cut"}
+{"boundary": "main", "device_time": {"begin_ns": null, "end_ns": null, "status": "UNAVAILABLE"}, "marker_abi": "tinygrad.nv_compiler_q6k_boundary_marker.v1:main:v1", "packet": "D0.2", "sample": 8, "type": "cut"}

@@ -1,0 +1,41 @@
+{
+  "arm": "candidate",
+  "count": 24,
+  "depth": 512,
+  "max_context": 768,
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "relax_internal_membar": true,
+  "reps": 3,
+  "schema": "tinygrad.nv_qmd_membar_wall.v1",
+  "settled": {
+    "accepted_samples_ms_per_token": [
+      4.093609791666666,
+      4.098292333333333,
+      4.092228041666666
+    ],
+    "external_contention_high_limit_ms": 4.343609791666666,
+    "median_ms_per_token": 4.093609791666666,
+    "prelude_token": 13876,
+    "rejected_high_samples_ms_per_token": [],
+    "samples_ms_per_token": [
+      4.093609791666666,
+      4.098292333333333,
+      4.092228041666666
+    ],
+    "timed_token_count": 72,
+    "token_hashes": [
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809"
+    ],
+    "token_stream_hash": "a36ea30db8c5a092f5a3b560fd4f84801dc23e272d2598f3d96f6b8af1e84c42",
+    "warmup_tokens": [
+      38835,
+      34208,
+      13,
+      279,
+      3974,
+      13876
+    ]
+  }
+}

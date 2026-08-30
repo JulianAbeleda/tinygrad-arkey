@@ -1,0 +1,31 @@
+{
+  "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+  "binary_bytes": 13632,
+  "block": [
+    128,
+    1,
+    1
+  ],
+  "correctness": {
+    "allclose_rtol_0p02_atol_0p5": true,
+    "finite": true,
+    "inputs_readonly": true,
+    "max_abs": 3.0197203159332275e-05,
+    "mean_abs": 4.702976639237022e-07,
+    "unwritten": 0
+  },
+  "global_partials": false,
+  "grid": [
+    32,
+    8,
+    1
+  ],
+  "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1.d1cfc3f01c0d5d6d",
+  "schema": "tinygrad.nv_flash_vkv_primitive.v1",
+  "shared_bytes": 32768,
+  "status": "PASS",
+  "timing": {
+    "single_call_us": 6664.032
+  },
+  "vector_bytes": 16
+}

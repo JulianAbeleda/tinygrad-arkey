@@ -1,0 +1,36 @@
+{
+  "schema": "tinygrad.nv_prefill_post_substrate_authority_clock.v1",
+  "packet": "S0-clock-control",
+  "status": "STOP",
+  "decision": "STOP: legal graphics-clock lock unavailable due to insufficient NVIDIA permission; candidate correctness passed but median outside 1% authority band",
+  "clock_control": {
+    "requested_graphics_mhz": 3090,
+    "supported_memory_mhz": 14001,
+    "lock_attempt": "rejected: The current user does not have permission to change clocks",
+    "prior_persistence": "Disabled",
+    "restore_attempt": "nvidia-smi -pm 0; insufficient permission/legacy behavior recorded in restore.log"
+  },
+  "candidate": {
+    "status": "PASS",
+    "token": 198,
+    "finite": null,
+    "deep_replay_exact": true,
+    "median_ms": 72.161919,
+    "min_ms": 71.955681,
+    "samples_ms": [
+      71.955681,
+      72.104692,
+      72.172249,
+      72.17812,
+      72.165326,
+      72.161919,
+      72.173902,
+      72.160947,
+      72.160387
+    ],
+    "authority_median_ms": 67.235719,
+    "within_1pct": false
+  },
+  "evidence_dir": "docs/task_workflow/evidence/nv-prefill-post-substrate-authority-clock-20260829",
+  "generated_utc": "2026-08-30T00:02:15.551724+00:00"
+}

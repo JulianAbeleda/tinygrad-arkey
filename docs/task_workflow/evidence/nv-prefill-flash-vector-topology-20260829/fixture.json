@@ -1,0 +1,114 @@
+{
+  "schema": "tinygrad.nv_prefill_flash_vector_fixture.v1",
+  "status": "PASS",
+  "source": "docs/task_workflow/evidence/nv-prefill-flash-20260829/oracle.npz",
+  "source_oracle": "docs/task_workflow/evidence/nv-prefill-flash-20260829/oracle.npz",
+  "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+  "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1",
+  "buffers": "buffers.npz",
+  "buffer_order": [
+    "out",
+    "q",
+    "k",
+    "v"
+  ],
+  "shapes": {
+    "out": [
+      1,
+      32,
+      512,
+      128
+    ],
+    "q": [
+      1,
+      32,
+      512,
+      128
+    ],
+    "k": [
+      1,
+      8,
+      512,
+      128
+    ],
+    "v": [
+      1,
+      8,
+      512,
+      128
+    ]
+  },
+  "dtypes": {
+    "out": "<class 'numpy.float16'>",
+    "q": "<class 'numpy.float16'>",
+    "k": "<class 'numpy.float16'>",
+    "v": "<class 'numpy.float16'>"
+  },
+  "logical_shapes": {
+    "out": [
+      1,
+      32,
+      512,
+      128
+    ],
+    "q": [
+      1,
+      32,
+      512,
+      128
+    ],
+    "k": [
+      1,
+      8,
+      512,
+      128
+    ],
+    "v": [
+      1,
+      8,
+      512,
+      128
+    ]
+  },
+  "layout": "row-major [batch,head,token,hd], contiguous hd; out/q/k/v FP16",
+  "causal": true,
+  "start_pos": 0,
+  "gqa_group": 4,
+  "score_dtype": "fp32",
+  "reduction_dtype": "fp32",
+  "grid": [
+    32,
+    8,
+    1
+  ],
+  "block": [
+    128,
+    1,
+    1
+  ],
+  "readonly_inputs": [
+    "q",
+    "k",
+    "v"
+  ],
+  "sentinels": {
+    "output_before": "0xA5",
+    "output_after": "0x5A",
+    "inputs_guard": "unchanged_sha256"
+  },
+  "sentinel_policy": "guards are external to payload; verify q/k/v hashes before and after replay and output full element coverage",
+  "oracle": "../nv-prefill-flash-20260829/oracle.npz",
+  "oracle_output_key": "out",
+  "population": {
+    "exact_calls": 36,
+    "authority": "../nv-prefill-flash-20260829/live-qualification.json",
+    "program": "nv_sm120_q16_grid_hd128_loop_attention"
+  },
+  "bundle_sha256": "dc0e38b62a5c78e01fbd4b7a43dc7c3e4ab39fe914dece0245875a81305f95ab",
+  "sha256": {
+    "out": "29fdda826ec3ac5c1a59919d7a80a0540b20df9f7c54ddfdc172c9b3675b7195",
+    "q": "164d52950f5a12a2ec3eb035db347383b59fc46a6764008507baaec14390f224",
+    "k": "805dcc0d7ce92721c83c41b023a844e52312a6ca2a45580c00b7cf70c115a6ab",
+    "v": "fbe97d8ba3e7039b703c142b12e48507603c9deed55a8768fd3bf0bc028cdb31"
+  }
+}

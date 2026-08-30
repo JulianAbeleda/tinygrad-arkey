@@ -1,0 +1,116 @@
+{
+  "schema": "tinygrad.nv_q4down_staged_independent_oracle.v3",
+  "packet": "C0.2",
+  "status": "STOP",
+  "authority": {
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "fixture": "docs/task_workflow/evidence/nv-prefill-q4down-localize-20260829/activation.npy",
+    "gpu": "NVIDIA GeForce RTX 5090, sm_120",
+    "driver": "595.84"
+  },
+  "correctness": {
+    "roles": 18,
+    "mirror_producer_and_decode_completed": true,
+    "mirror_final_compared_to_live": true,
+    "all_final_allclose": false,
+    "first_divergence": {
+      "stage": "final_gate",
+      "role": "blk.4.ffn_down.weight",
+      "index": [
+        274,
+        1838
+      ],
+      "mirror": -2082.93798828125,
+      "live": 9.390905380249023,
+      "abs_error": 2092.328857421875
+    }
+  },
+  "census": {
+    "expected_roles": 18,
+    "observed_roles": 3,
+    "live_records": 3
+  },
+  "stages": {
+    "input": {
+      "status": "PASS",
+      "exact_indices": []
+    },
+    "producer": {
+      "status": "MIRROR_VERIFIED"
+    },
+    "weight": {
+      "status": "MIRROR_VERIFIED"
+    },
+    "dot": {
+      "status": "MIRROR_VERIFIED"
+    },
+    "correction": {
+      "status": "MIRROR_VERIFIED"
+    },
+    "epilogue": {
+      "status": "MIRROR_VERIFIED"
+    }
+  },
+  "roles": [
+    {
+      "ordinal": 0,
+      "role": "blk.4.ffn_down.weight",
+      "producer": {
+        "q_sha256": "6b2390f85a3dbce8936c71aa59e0d4358079250fda3b30ad1f784fd8ea27933a",
+        "scales_sha256": "c491f873a53aa785e41f26fc2dee66e9a7ee6a50aa7969ceb2b5039722e08e3f",
+        "sums_sha256": "071b5073a11743c849e9a641ca145f826b9079b42c8d6e15938bde8149729184"
+      },
+      "weight": {
+        "bytes": 28311552,
+        "sha256": "4df2b0be632f10c77aec8040c1d64bbf307dbc01412f728fbc54304fda8747f4"
+      },
+      "mirror_final_sha256": "5c639b2f68ff6fa91c41c15936c4e106cda4a63f225a52745e952cdcef4b8b95",
+      "live_final_sha256": "0ef42c33e24985c91cf090eb89feca9e894db9a32b85aa02a043eac71e658f59",
+      "final_bitwise_equal": false,
+      "final_allclose": false,
+      "max_abs": 2092.328857421875,
+      "finite": true
+    },
+    {
+      "ordinal": 1,
+      "role": "blk.5.ffn_down.weight",
+      "producer": {
+        "q_sha256": "6b2390f85a3dbce8936c71aa59e0d4358079250fda3b30ad1f784fd8ea27933a",
+        "scales_sha256": "c491f873a53aa785e41f26fc2dee66e9a7ee6a50aa7969ceb2b5039722e08e3f",
+        "sums_sha256": "071b5073a11743c849e9a641ca145f826b9079b42c8d6e15938bde8149729184"
+      },
+      "weight": {
+        "bytes": 28311552,
+        "sha256": "af422d57d977bf326dc582be69d9f976137802fac2864038ecc42b864c67268e"
+      },
+      "mirror_final_sha256": "4db2d79aa9193cfc457bd76f656eda232b133706412b20f0e2d6bf7bdd170e37",
+      "live_final_sha256": "fbe192ca005c8babb25630f7dac1ad9574e2a56cb999056ed475756c1ff316a6",
+      "final_bitwise_equal": false,
+      "final_allclose": false,
+      "max_abs": 2954.5224609375,
+      "finite": true
+    },
+    {
+      "ordinal": 2,
+      "role": "blk.7.ffn_down.weight",
+      "producer": {
+        "q_sha256": "6b2390f85a3dbce8936c71aa59e0d4358079250fda3b30ad1f784fd8ea27933a",
+        "scales_sha256": "c491f873a53aa785e41f26fc2dee66e9a7ee6a50aa7969ceb2b5039722e08e3f",
+        "sums_sha256": "071b5073a11743c849e9a641ca145f826b9079b42c8d6e15938bde8149729184"
+      },
+      "weight": {
+        "bytes": 28311552,
+        "sha256": "a002df067f35fc8f1f7b4a5b78ae7297d102081658ed4ffdd05f9397df5a96d7"
+      },
+      "mirror_final_sha256": "e10ba1bb5bdeecb6d4fe2467960baa492922a8041963b7548725e66a1dfb0623",
+      "live_final_sha256": "bfa156a7ab9839b874a8bc8512f21780ec03ae8ca27634a76a5c5f1731569d7a",
+      "final_bitwise_equal": false,
+      "final_allclose": false,
+      "max_abs": 1602.3875732421875,
+      "finite": true
+    }
+  ],
+  "decision": "STOP: live final differs from mirror before stage localization.",
+  "next_packet": null,
+  "c0_3_authorized": false
+}

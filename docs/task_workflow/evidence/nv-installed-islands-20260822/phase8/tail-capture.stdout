@@ -1,0 +1,482 @@
+max_context=explicit -> 4608 (free 34.1GB, budget 34.0GB with scanned reserve 0.1GB, weights 18.9GB, KV 0.15GB/1k, prefill-peak 0.07GB/1k, trained 40960, fp16-cap 71001, q8-cap 107700)
+{
+  "captured": [
+    {
+      "calls": [
+        {
+          "buf_meta": [
+            {
+              "size": 4096,
+              "va_addr": 156970860544
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            1,
+            1,
+            1
+          ],
+          "n_bufs": 1,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 4096,
+              "va_addr": 156970860544
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            1,
+            1,
+            1
+          ],
+          "n_bufs": 1,
+          "vals": []
+        }
+      ],
+      "cubin_bytes": 5840,
+      "cubin_path": "docs/task_workflow/evidence/nv-installed-islands-20260822/phase8/E_2_c8a3207cf1b8954ec08b9564cce9b00f69be9c09493c58ea1abd46b3664424e7.cubin",
+      "cubin_sha256": "fbd86f6dfecbb0e195d8fd09ea8810f6478002df732b8dcfec64e3f721c9ebac",
+      "lcmem_usage": 576,
+      "max_threads": 4096,
+      "name": "E_2_c8a3207cf1b8954ec08b9564cce9b00f69be9c09493c58ea1abd46b3664424e7",
+      "regs_usage": 10,
+      "shmem_usage": 1024
+    },
+    {
+      "calls": [
+        {
+          "buf_meta": [
+            {
+              "size": 610304,
+              "va_addr": 157083660288
+            },
+            {
+              "size": 4096,
+              "va_addr": 156970860544
+            },
+            {
+              "size": 4096,
+              "va_addr": 156970319872
+            }
+          ],
+          "global_size": [
+            1187,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 610304,
+              "va_addr": 157083660288
+            },
+            {
+              "size": 4096,
+              "va_addr": 156970860544
+            },
+            {
+              "size": 4096,
+              "va_addr": 156970319872
+            }
+          ],
+          "global_size": [
+            1187,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        }
+      ],
+      "cubin_bytes": 19128,
+      "cubin_path": "docs/task_workflow/evidence/nv-installed-islands-20260822/phase8/E_1187_32_4_76d37a73a646ec3a4b5e32ab783e0ace496f5855bbba7492c8c7fe87bbff5f1f.cubin",
+      "cubin_sha256": "d9ff6b6e3089ad4bf7945fceb9cc0a7d731eaa15e0ffc3448ac3a3e68b3381ca",
+      "lcmem_usage": 576,
+      "max_threads": 2688,
+      "name": "E_1187_32_4_76d37a73a646ec3a4b5e32ab783e0ace496f5855bbba7492c8c7fe87bbff5f1f",
+      "regs_usage": 24,
+      "shmem_usage": 1024
+    },
+    {
+      "calls": [
+        {
+          "buf_meta": [
+            {
+              "size": 512,
+              "va_addr": 157820125184
+            },
+            {
+              "size": 607744,
+              "va_addr": 157821174016
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 512,
+              "va_addr": 158008485376
+            },
+            {
+              "size": 607744,
+              "va_addr": 158007877632
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        }
+      ],
+      "cubin_bytes": 9840,
+      "cubin_path": "docs/task_workflow/evidence/nv-installed-islands-20260822/phase8/r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f.cubin",
+      "cubin_sha256": "b44a77ebeab0e95d1ba9573bbb3c9f804aa77f685ae4f37a59296c09a8fa009f",
+      "lcmem_usage": 576,
+      "max_threads": 768,
+      "name": "r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f",
+      "regs_usage": 77,
+      "shmem_usage": 1024
+    },
+    {
+      "calls": [
+        {
+          "buf_meta": [
+            {
+              "size": 512,
+              "va_addr": 157820125696
+            },
+            {
+              "size": 607744,
+              "va_addr": 157821174016
+            },
+            {
+              "size": 512,
+              "va_addr": 157820125184
+            }
+          ],
+          "global_size": [
+            128,
+            1,
+            1
+          ],
+          "local_size": [
+            16,
+            1,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 512,
+              "va_addr": 158008485888
+            },
+            {
+              "size": 607744,
+              "va_addr": 158007877632
+            },
+            {
+              "size": 512,
+              "va_addr": 158008485376
+            }
+          ],
+          "global_size": [
+            128,
+            1,
+            1
+          ],
+          "local_size": [
+            16,
+            1,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        }
+      ],
+      "cubin_bytes": 11144,
+      "cubin_path": "docs/task_workflow/evidence/nv-installed-islands-20260822/phase8/r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5.cubin",
+      "cubin_sha256": "1ccaf75a7a2d936a67ec74c68aaa2e61e6d3f58e76585e3c8ff1c3c593c35ea4",
+      "lcmem_usage": 576,
+      "max_threads": 768,
+      "name": "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5",
+      "regs_usage": 76,
+      "shmem_usage": 2176
+    },
+    {
+      "calls": [
+        {
+          "buf_meta": [
+            {
+              "size": 4096,
+              "va_addr": 157821841408
+            },
+            {
+              "size": 512,
+              "va_addr": 157820125696
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            16,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 4096,
+              "va_addr": 158008500224
+            },
+            {
+              "size": 512,
+              "va_addr": 158008485888
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            16,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        }
+      ],
+      "cubin_bytes": 7384,
+      "cubin_path": "docs/task_workflow/evidence/nv-installed-islands-20260822/phase8/r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c.cubin",
+      "cubin_sha256": "667fee5c1786062ac7ece49b69403b0e239f2c68e0a6d1346b02c914ecf61cb7",
+      "lcmem_usage": 576,
+      "max_threads": 2688,
+      "name": "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c",
+      "regs_usage": 20,
+      "shmem_usage": 2176
+    },
+    {
+      "calls": [
+        {
+          "buf_meta": [
+            {
+              "size": 4096,
+              "va_addr": 157821841408
+            },
+            {
+              "size": 4096,
+              "va_addr": 157970223104
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            1,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        }
+      ],
+      "cubin_bytes": 5760,
+      "cubin_path": "docs/task_workflow/evidence/nv-installed-islands-20260822/phase8/E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346.cubin",
+      "cubin_sha256": "97e7a09c1349c886cba9cb5a38e091cd624b4fa315089a6d9faa02d361a2a8fa",
+      "lcmem_usage": 576,
+      "max_threads": 8192,
+      "name": "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346",
+      "regs_usage": 8,
+      "shmem_usage": 1024
+    },
+    {
+      "calls": [
+        {
+          "buf_meta": [
+            {
+              "size": 1048576,
+              "va_addr": 157970235392
+            },
+            {
+              "size": 4096,
+              "va_addr": 157821841408
+            },
+            {
+              "size": 350060544,
+              "va_addr": 138173535040
+            }
+          ],
+          "global_size": [
+            2,
+            4,
+            16
+          ],
+          "local_size": [
+            8,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        }
+      ],
+      "cubin_bytes": 27192,
+      "cubin_path": "docs/task_workflow/evidence/nv-installed-islands-20260822/phase8/E_16_4_2_8_16_2_4_4_35a6fe556c331254f920c4212fdc0c33244d8269d7c93cb1897349f36a254aee.cubin",
+      "cubin_sha256": "12acf0a3a6307b0c6561171b6c8c8b1bad28b3a7d8a026bf9ee5a05bdb08234c",
+      "lcmem_usage": 576,
+      "max_threads": 640,
+      "name": "E_16_4_2_8_16_2_4_4_35a6fe556c331254f920c4212fdc0c33244d8269d7c93cb1897349f36a254aee",
+      "regs_usage": 96,
+      "shmem_usage": 1024
+    },
+    {
+      "calls": [
+        {
+          "buf_meta": [
+            {
+              "size": 16384,
+              "va_addr": 157971308544
+            },
+            {
+              "size": 1048576,
+              "va_addr": 157970235392
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        }
+      ],
+      "cubin_bytes": 7888,
+      "cubin_path": "docs/task_workflow/evidence/nv-installed-islands-20260822/phase8/r_32_32_4_32_4_b7c5eeb3ced63845c64b323fd8e5e923a69c1e162de001a94b565dcd96e9293f.cubin",
+      "cubin_sha256": "5cfcbeef58d3b648de1fea8a72e1ac77d2ba577ba39bee0e61e571d8bfcccf74",
+      "lcmem_usage": 576,
+      "max_threads": 1280,
+      "name": "r_32_32_4_32_4_b7c5eeb3ced63845c64b323fd8e5e923a69c1e162de001a94b565dcd96e9293f",
+      "regs_usage": 46,
+      "shmem_usage": 1024
+    },
+    {
+      "calls": [
+        {
+          "buf_meta": [
+            {
+              "size": 607744,
+              "va_addr": 158007877632
+            },
+            {
+              "size": 610304,
+              "va_addr": 158007255040
+            },
+            {
+              "size": 4096,
+              "va_addr": 156764229632
+            },
+            {
+              "size": 610304,
+              "va_addr": 157083660288
+            }
+          ],
+          "global_size": [
+            1187,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        }
+      ],
+      "cubin_bytes": 11696,
+      "cubin_path": "docs/task_workflow/evidence/nv-installed-islands-20260822/phase8/E_1187_32_4_e1ccc42612aa8f28b20a61db46f51dbe08ce7e41f6c77f3966e2be8e85e1f10e.cubin",
+      "cubin_sha256": "a1a4ea230289ca45dbd62d6424ec22bbd3c34ee34200ec684f2b2764d8a06c4e",
+      "lcmem_usage": 576,
+      "max_threads": 2048,
+      "name": "E_1187_32_4_e1ccc42612aa8f28b20a61db46f51dbe08ce7e41f6c77f3966e2be8e85e1f10e",
+      "regs_usage": 28,
+      "shmem_usage": 1024
+    }
+  ],
+  "depth": 512,
+  "prefixes": [
+    "r_32_4_1187",
+    "r_128_16_8_1187",
+    "E_1187_32_4",
+    "E_16_4_2_8_16_2_4_4",
+    "r_32_32_4_32_4",
+    "E_c9699af0",
+    "E_2_c8a3207c",
+    "r_16_8_b4bb03fa"
+  ],
+  "schema": "tinygrad.nv_cubin_capture.v1",
+  "verdict": "CAPTURED"
+}

@@ -1,0 +1,39 @@
+{
+  "block": [
+    16,
+    1,
+    1
+  ],
+  "buf_bytes": 67108864,
+  "buf_sizes": [
+    512,
+    607744,
+    512
+  ],
+  "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-installed-islands-20260822/phase8/r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5.cubin",
+  "cubin_sha256": "1ccaf75a7a2d936a67ec74c68aaa2e61e6d3f58e76585e3c8ff1c3c593c35ea4",
+  "grid": [
+    128,
+    1,
+    1
+  ],
+  "n_bufs": 3,
+  "reps": 2000,
+  "schema": "tinygrad.nv_cubin_ncu_launcher.v1",
+  "symbol": "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5",
+  "vals": [],
+  "verdict": "CUDA_LAUNCH_OK"
+}
+Collecting data...
+Generating '/tmp/nsys-report-7297.qdstrm'
+
+[1/1] [0%                          ] r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5.nsys-rep
+[1/1] [0%                          ] r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5.nsys-rep
+[1/1] [=======36%                  ] r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5.nsys-rep
+[1/1] [==========49%               ] r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5.nsys-rep
+[1/1] [==============62%           ] r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5.nsys-rep
+[1/1] [==============63%           ] r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5.nsys-rep
+[1/1] [========================100%] r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5.nsys-rep
+[1/1] [========================100%] r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5.nsys-rep
+Generated:
+	/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-installed-islands-20260822/phase8/r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5.nsys-rep

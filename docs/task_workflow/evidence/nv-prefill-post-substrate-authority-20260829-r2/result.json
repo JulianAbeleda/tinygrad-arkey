@@ -1,0 +1,105 @@
+{
+  "schema": "tinygrad.nv_prefill_post_substrate_authority.v1",
+  "packet": "S0",
+  "status": "STOP",
+  "authority": {
+    "run_id": "7330dcc71b744fbfa8f72e97e88be776",
+    "source_manifest": {
+      "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+      "/home/ubuntu/env/llama.cpp/build-cuda/bin/llama-bench": "947eb29052871f151719762c2fc265024e14f833b98df7801af9eb09da1625a8",
+      "extra/llm_research/prefill/nv_compiler_q4k_gkqo_model_arm.py": "312e34391d65f2f179b908697f0fbd27d676d6b27a7d6b7f48e78324aade221a",
+      "extra/llm_research/prefill/nv_compiler_q4k_pp512_binding.py": "c55d6d923e0b1f04b10d6d8576a30d7722ed4a6adcad73c5dbebf6e4684f7c8e",
+      "extra/llm_research/prefill/nv_compiler_q4v_serialized_binding.py": "59d053e2d47f0601e6a65b76fae58c9c6fc9d1d651b581daa00ff415434f4ae0",
+      "tinygrad/llm/model.py": "6df12badd3b3c70f8340b9346f7203d3ea34d0fde2073579c84c36468c424ddb",
+      "tinygrad/runtime/graph/hcq.py": "433a280dc47229a9b04161ef269b47c6bd0562a8c8b6e46e98529c18476d0a1d",
+      "tinygrad/device.py": "6a9a272ea17804cbcf4a3131dfe44760f03c3d5fd360cac68fab51119f29b450"
+    },
+    "model": {
+      "path": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+      "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+    },
+    "prompt": {
+      "tokens": 512,
+      "fixture": "inline:(i*7)%1000",
+      "sha256": "a5c0ff15a507ce75deed857fad4571bb1643247650948b146cd0df167cbe0c0a"
+    },
+    "gpu": "NVIDIA GeForce RTX 5090, 12.0, 595.84",
+    "driver": "595.84",
+    "environment": {
+      "python": "3.12.3 (main, Jun 19 2026, 12:46:00) [GCC 13.3.0]",
+      "platform": "Linux-6.8.0-136-generic-x86_64-with-glibc2.39",
+      "HCQ_NUM_COMPUTE": "2",
+      "HCQ_NV_MULTI_QUEUE_CUT_POLICY": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-compiler-q4k-gkqo-20260828/combined-flash-direct-deps-cut-v2.json",
+      "HCQ_NV_READY_PLACEMENT": "0"
+    },
+    "profile": false
+  },
+  "correctness": {
+    "tinygrad_status": "PASS",
+    "token": 198,
+    "finite": null,
+    "deep_replay_exact": true,
+    "first_mismatch": null
+  },
+  "census": {
+    "predicted": {
+      "q8_producer": 198,
+      "compiler_main": 198,
+      "canonical_weights": 198,
+      "unknown": 0
+    },
+    "observed": {
+      "admitted_fp16_overlays": 0,
+      "all_weights_canonical": true,
+      "candidate_weight_args": 198,
+      "compiler_main_total": 198,
+      "gate_up_main": 72,
+      "k_main": 36,
+      "old_fixups": 0,
+      "partial_workspace_bytes": 0,
+      "q8_producer_total": 198,
+      "qo_main": 72,
+      "remaining_v_down_fp16_overlays": 54,
+      "unique_weight_bases": 198,
+      "v_main": 18,
+      "weight_copy_kernels": 0
+    }
+  },
+  "samples": {
+    "tinygrad": [
+      71.970995,
+      72.056435,
+      72.17692,
+      72.19322,
+      72.135573,
+      72.163434,
+      72.159387,
+      72.160399,
+      72.148757
+    ]
+  },
+  "wall": {
+    "tinygrad": {
+      "median_ms": 72.159387,
+      "min_ms": 71.970995,
+      "samples_ms": [
+        71.970995,
+        72.056435,
+        72.17692,
+        72.19322,
+        72.135573,
+        72.163434,
+        72.159387,
+        72.160399,
+        72.148757
+      ],
+      "tok_s": 7113.976956967178
+    }
+  },
+  "observer": {
+    "enabled": false,
+    "overhead": "not measured"
+  },
+  "decision": "recurrent correctness drift or baseline outside 1% authority band",
+  "next_packet": null
+}

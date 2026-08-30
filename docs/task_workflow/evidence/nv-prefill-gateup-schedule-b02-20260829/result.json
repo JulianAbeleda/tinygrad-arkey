@@ -1,0 +1,139 @@
+{
+  "authority": {
+    "dependency": "docs/task_workflow/evidence/nv-prefill-gateup-schedule-locator-20260829/result.json",
+    "driver": "595.84",
+    "environment": {
+      "HCQ_NUM_COMPUTE": "2",
+      "HCQ_NV_READY_PLACEMENT": "0",
+      "PROFILE": "0"
+    },
+    "gpu": "NVIDIA GeForce RTX 5090, sm_120",
+    "source": "docs/task_workflow/evidence/nv-compiler-packed-fragment-20260828/production_gate_guarded_k64.cu"
+  },
+  "decision": "PASS: all three default-off variants compiled; counters and model composition are reserved for B0.3.",
+  "invariants": [
+    "K64 arithmetic",
+    "tile",
+    "CTA ownership",
+    "IMMA count",
+    "correction arithmetic",
+    "queue placement",
+    "cp.async",
+    "TMA",
+    "fusion"
+  ],
+  "next_packet": "B0.3",
+  "packet": "B0.2",
+  "schema": "tinygrad.nv_prefill_gateup_schedule_b02.v1",
+  "status": "PASS",
+  "variants": [
+    {
+      "block": [
+        32,
+        2,
+        4
+      ],
+      "cubin": "docs/task_workflow/evidence/nv-prefill-gateup-schedule-b02-20260829/control.cubin",
+      "cubin_sha256": "d6a991491ff8b39ee76b1848d69878c6f900a9f1924216db34191ce342b4ff5b",
+      "default_enabled": false,
+      "flag": "HCQ_NV_GATEUP_B02_VARIANT=control",
+      "grid": [
+        96,
+        4,
+        1
+      ],
+      "program_identity": "6706fa911555f9f6ee3830e928474faefe20160779fbd82aa41d1ae544af6c85",
+      "roles": 72,
+      "shape": {
+        "K": 4096,
+        "M": 512,
+        "N": 12288,
+        "tile_k": 64
+      },
+      "source": "docs/task_workflow/evidence/nv-prefill-gateup-schedule-b02-20260829/control.cu",
+      "source_sha256": "b9a5ccf842f182f19a6ce9a5c70c027ad6e5376975be54276450281015f19e47",
+      "variant": "control"
+    },
+    {
+      "block": [
+        32,
+        2,
+        4
+      ],
+      "cubin": "docs/task_workflow/evidence/nv-prefill-gateup-schedule-b02-20260829/fragment_distance.cubin",
+      "cubin_sha256": "43406cb2f1cf43037a025ff662a55b6c49e172ca9a1ae7cf7fc2ce08cb1e7d4a",
+      "default_enabled": false,
+      "flag": "HCQ_NV_GATEUP_B02_FRAGMENT_DISTANCE=1",
+      "grid": [
+        96,
+        4,
+        1
+      ],
+      "program_identity": "b4ec1656394078a8702def42257e6555e2c9785338a72a8711511a390fb6e396",
+      "roles": 72,
+      "shape": {
+        "K": 4096,
+        "M": 512,
+        "N": 12288,
+        "tile_k": 64
+      },
+      "source": "docs/task_workflow/evidence/nv-prefill-gateup-schedule-b02-20260829/fragment_distance.cu",
+      "source_sha256": "08248a38753fab28efbdd02cb395264c4f3730b8f8a180d9b2105b7bcb1b82bf",
+      "variant": "fragment_distance"
+    },
+    {
+      "block": [
+        32,
+        2,
+        4
+      ],
+      "cubin": "docs/task_workflow/evidence/nv-prefill-gateup-schedule-b02-20260829/metadata_distance.cubin",
+      "cubin_sha256": "d6a991491ff8b39ee76b1848d69878c6f900a9f1924216db34191ce342b4ff5b",
+      "default_enabled": false,
+      "flag": "HCQ_NV_GATEUP_B02_METADATA_DISTANCE=1",
+      "grid": [
+        96,
+        4,
+        1
+      ],
+      "program_identity": "7b615c0d1ead178140d4ffe2df746acff7c8eeada8f78ded582f2ffb95358c15",
+      "roles": 72,
+      "shape": {
+        "K": 4096,
+        "M": 512,
+        "N": 12288,
+        "tile_k": 64
+      },
+      "source": "docs/task_workflow/evidence/nv-prefill-gateup-schedule-b02-20260829/metadata_distance.cu",
+      "source_sha256": "b9a5ccf842f182f19a6ce9a5c70c027ad6e5376975be54276450281015f19e47",
+      "variant": "metadata_distance"
+    },
+    {
+      "block": [
+        32,
+        2,
+        4
+      ],
+      "cubin": "docs/task_workflow/evidence/nv-prefill-gateup-schedule-b02-20260829/double_buffer.cubin",
+      "cubin_sha256": "d6a991491ff8b39ee76b1848d69878c6f900a9f1924216db34191ce342b4ff5b",
+      "default_enabled": false,
+      "flag": "HCQ_NV_GATEUP_B02_DOUBLE_BUFFER=1",
+      "grid": [
+        96,
+        4,
+        1
+      ],
+      "program_identity": "810c420504ad698597fac6b3b582a3de741ea80de93de6b0e5147ba4019d0d05",
+      "roles": 72,
+      "shape": {
+        "K": 4096,
+        "M": 512,
+        "N": 12288,
+        "tile_k": 64
+      },
+      "source": "docs/task_workflow/evidence/nv-prefill-gateup-schedule-b02-20260829/double_buffer.cu",
+      "source_sha256": "ed43ed6fecd17f620401b10454cea9f9199f7786c0d3ab62a55c34f9a51fe799",
+      "variant": "double_buffer"
+    }
+  ]
+}

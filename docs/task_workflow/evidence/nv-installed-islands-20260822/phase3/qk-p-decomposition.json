@@ -1,0 +1,128 @@
+{
+  "constants": {
+    "body_us": {
+      "k": 1.196,
+      "q": 1.19
+    },
+    "clean_chained_hcq_us": 1.698
+  },
+  "k": {
+    "all": {
+      "max_us": 3.904,
+      "median_us": 2.496,
+      "min_us": 2.24,
+      "n": 14436,
+      "p10_us": 2.4,
+      "p90_us": 2.656
+    },
+    "decomposition": {
+      "B_us": 1.196,
+      "D_us": 0.502,
+      "P_us": 2.496,
+      "R_us": 0.798,
+      "identity_residual_us": 0.0
+    },
+    "per_layer_median_us": [
+      2.624,
+      2.528,
+      2.752,
+      2.432,
+      2.432,
+      2.592,
+      2.432,
+      2.432,
+      2.432,
+      2.4,
+      2.432,
+      2.592,
+      2.56,
+      2.624,
+      2.56,
+      2.464,
+      2.496,
+      2.496,
+      2.432,
+      2.464,
+      2.496,
+      2.464,
+      2.464,
+      2.528,
+      2.4,
+      2.432,
+      2.4,
+      2.528,
+      2.624,
+      2.592,
+      2.528,
+      2.368,
+      2.464,
+      2.464,
+      2.4,
+      2.56
+    ]
+  },
+  "q": {
+    "all": {
+      "max_us": 3.68,
+      "median_us": 2.56,
+      "min_us": 2.272,
+      "n": 14436,
+      "p10_us": 2.4,
+      "p90_us": 2.72
+    },
+    "decomposition": {
+      "B_us": 1.19,
+      "D_us": 0.508,
+      "P_us": 2.56,
+      "R_us": 0.862,
+      "identity_residual_us": 0.0
+    },
+    "per_layer_median_us": [
+      2.56,
+      2.496,
+      2.624,
+      2.56,
+      2.368,
+      3.008,
+      2.464,
+      2.4,
+      2.464,
+      2.4,
+      2.4,
+      2.432,
+      2.56,
+      2.592,
+      2.592,
+      2.56,
+      2.432,
+      2.464,
+      2.496,
+      2.528,
+      2.592,
+      2.656,
+      2.656,
+      2.624,
+      2.72,
+      2.592,
+      2.688,
+      2.528,
+      2.496,
+      2.528,
+      2.528,
+      2.624,
+      2.688,
+      2.656,
+      2.592,
+      2.56
+    ]
+  },
+  "replay_count": 401,
+  "schema": "tinygrad.nv_qk_installed_p_decomposition.v1",
+  "verdict": {
+    "k_body": "BODY_PARITY",
+    "k_installation_mechanism": "UNMEASURED_RESIDUAL",
+    "note": "D is clean front-end; R is production-conditioned residual and is not assigned to cache/serialization/placement without counters.",
+    "q_body": "BODY_PARITY",
+    "q_installation_mechanism": "UNMEASURED_RESIDUAL"
+  }
+}

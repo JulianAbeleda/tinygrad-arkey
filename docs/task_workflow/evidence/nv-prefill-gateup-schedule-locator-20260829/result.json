@@ -1,0 +1,33 @@
+{
+  "schema": "tinygrad.nv_prefill_gateup_schedule_locator.v1",
+  "packet": "B0.1",
+  "status": "PASS",
+  "authority": {
+    "source": "docs/task_workflow/evidence/nv-prefill-post-substrate-authority-20260829/result.json",
+    "source_status": "PASS",
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "model_sha256": "retained in S0 candidate arms",
+    "prompt_fixture": "inline:(i*7)%1000, tokens=512",
+    "gpu": "NVIDIA GeForce RTX 5090, sm_120",
+    "driver": "595.84",
+    "clocks_session": "graphics=435 MHz, sm=435 MHz, memory=7001 MHz, P3; flock GPU session",
+    "environment": {"HCQ_NUM_COMPUTE":"2", "HCQ_NV_READY_PLACEMENT":"0", "PROFILE":"0"}
+  },
+  "source_manifest": [
+    {"path":"extra/llm_research/prefill/nv_prefill_gateup_ncu_bridge.py","sha256":"d7cf989a1e5af7e38145a69a56540d730357bd898220062d4a7bda9bb30d32ec"},
+    {"path":"extra/llm_research/prefill/nv_prefill_gateup_unroll_discriminator.py","sha256":"d598dfe161abffbb5ee8acb70b222fc3f117c97b67fba74a0832e81e865db797"},
+    {"path":"extra/llm_research/prefill/nv_compiler_q4k_gkqo_model_arm.py","sha256":"312e34391d65f2f179b908697f0fbd27d676d6b27a7d6b7f48e78324aade221a"},
+    {"path":"docs/task_workflow/evidence/nv-compiler-packed-fragment-20260828/production_gate_guarded_k64.cu","sha256":"b9a5ccf842f182f19a6ce9a5c70c027ad6e5376975be54276450281015f19e47"}
+  ],
+  "executed_path": {"function":"extern \"C\" __global__ r_4_96_32_2_4_2_2_4_4_64_2_2_2_8cefca4b229d8048634693df0dd2614ca8c3df3f9d8527d95c0d4432b3a5a49e", "roles":72, "shape":{"M":512,"N":12288,"K":4096,"tile_k":64}, "program_identity":"r_4_96_32_2_4_2_2_4_4_64_2_2_2_8cefca4b229d8048634693df0dd2614ca8c3df3f9d8527d95c0d4432b3a5a49e", "grid":[96,4,1], "block":[32,2,4]},
+  "baseline": {"cubin":"docs/task_workflow/evidence/nv-prefill-gateup-unroll-20260829/gateup-k64-unroll4.cubin", "cubin_sha256":"03b44392b20cc879d6b4f78f8f6fa5d4b43ca5913eb73fbe2051f9293e0ef389", "registers":255, "spills":{"stack":8,"local":0}, "shared_bytes":21504, "launch_geometry":{"grid":[96,4,1],"block":[32,2,4]}, "occupancy":{"limits":{"registers":1,"shared_mem":1,"warps":6},"active_warps_pct":16.58}, "tensor_duty_inst_per_cycle":0.01, "eligible_warps":0.62, "long_scoreboard_pct":16.43, "issue_rate_pct":41.22, "instruction_count":1049901.18, "counter_profiler":{"path":"/usr/local/bin/ncu","version":"2026.2.1.0","attach":"PASS via sudo -n -E","report":"docs/task_workflow/evidence/nv-prefill-gateup-schedule-locator-20260829-r1/ncu-root2.ncu-rep","details":"docs/task_workflow/evidence/nv-prefill-gateup-schedule-locator-20260829-r1/ncu-root2.txt"}},
+  "fixture": {"role":"blk.0.ffn_gate.weight", "weight_bytes":28311552, "record_bytes":2621440, "output_bytes":25165824, "oracle":{"finite":true,"unwritten":0,"nonzero":6291456,"readonly":{"record":true,"words":true},"output_sha256":"26ae24b2b60fb98d0317b2f3969334169e9b3b1ca68019348d78f59d38e7c57e"}, "direct_harness":{"path":"docs/task_workflow/evidence/nv-prefill-gateup-schedule-locator-20260829-r1/harness.json","status":"PASS","median_us":290.5920147895813,"min_us":290.5920147895813}, "median_us":285.12001037597656, "min_us":283.00800919532776},
+  "variants": {"fragment_distance":{"mutation":"reorder existing fragment loads only to increase load-to-use distance","forbidden":["tile","CTA ownership","IMMA count","correction arithmetic","queue placement","cp.async","TMA","fusion"]}, "metadata_distance":{"mutation":"move only scale/min metadata loads relative to fragment loads","forbidden":["fragment load order","tile","CTA ownership","IMMA count","correction arithmetic","queue placement","cp.async","TMA","fusion"]}, "double_buffer":{"mutation":"one register-safe alternating fragment buffer; unchanged K64 arithmetic","forbidden":["tile","CTA ownership","IMMA count","correction arithmetic","queue placement","cp.async","TMA","fusion"]}},
+  "correctness": {"status":"PASS for retained real fixture", "tolerance":"not applicable to isolated finite/sentinel/read-only gate", "sentinels":"PASS"},
+  "census": {"predicted":{"gate":36,"up":36,"total":72},"observed":"not re-run; S0 canonical census 198 producers/mains, unknown=0"},
+  "samples": {"source":"retained gateup unroll artifact","warmup":10,"reps":9,"raw_samples_us":[289.15199637413025,287.200003862381,285.72800755500793,283.00800919532776,285.2480113506317,285.12001037597656,284.2560112476349,284.64001417160034,284.7679853439331]},
+  "wall": {"min_us":283.00800919532776,"median_us":285.12001037597656},
+  "observer": {"enabled":false,"overhead":"S0 0.578%", "perturbation":"not applicable"},
+  "decision":"PASS: complete static and root-NCU dynamic baseline obtained from one directly launchable real gate; no source edit",
+  "next_packet":"B0.2"
+}

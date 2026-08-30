@@ -1,0 +1,52 @@
+{
+  "arm": "candidate",
+  "candidate_contract": "GPU greedy feedback unchanged; host Tensor.item replaced by constant after six warm tokens",
+  "count": 24,
+  "depth": 512,
+  "max_context": 768,
+  "reps": 7,
+  "schema": "tinygrad.nv_token_readback_wall.child.v1",
+  "settled": {
+    "accepted_samples_ms_per_token": [
+      3.8241973333333337,
+      3.826345125,
+      3.8274084166666666,
+      3.8241297083333334,
+      3.8218245416666665,
+      3.824676125,
+      3.82535825
+    ],
+    "external_contention_high_limit_ms": 4.074676125,
+    "median_ms_per_token": 3.824676125,
+    "prelude_token": 3974,
+    "rejected_high_samples_ms_per_token": [],
+    "samples_ms_per_token": [
+      3.8241973333333337,
+      3.826345125,
+      3.8274084166666666,
+      3.8241297083333334,
+      3.8218245416666665,
+      3.824676125,
+      3.82535825
+    ],
+    "timed_token_count": 168,
+    "token_hashes": [
+      "0d168883463a775bcc6209332ec44c2b7b8f9a61580a1844a0e1de2e78476d2d",
+      "0d168883463a775bcc6209332ec44c2b7b8f9a61580a1844a0e1de2e78476d2d",
+      "0d168883463a775bcc6209332ec44c2b7b8f9a61580a1844a0e1de2e78476d2d",
+      "0d168883463a775bcc6209332ec44c2b7b8f9a61580a1844a0e1de2e78476d2d",
+      "0d168883463a775bcc6209332ec44c2b7b8f9a61580a1844a0e1de2e78476d2d",
+      "0d168883463a775bcc6209332ec44c2b7b8f9a61580a1844a0e1de2e78476d2d",
+      "0d168883463a775bcc6209332ec44c2b7b8f9a61580a1844a0e1de2e78476d2d"
+    ],
+    "token_stream_hash": "f7f151b397527e7a68234a999bbf1a4658b7b3d06cc9549868556e5191187f35",
+    "warmup_tokens": [
+      3974,
+      3974,
+      3974,
+      3974,
+      3974,
+      3974
+    ]
+  }
+}

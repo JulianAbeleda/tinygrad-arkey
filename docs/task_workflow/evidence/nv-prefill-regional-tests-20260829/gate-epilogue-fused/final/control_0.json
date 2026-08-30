@@ -1,0 +1,121 @@
+{
+  "arm": "candidate",
+  "census": {
+    "admitted_fp16_overlays": 0,
+    "all_weights_canonical": true,
+    "candidate_weight_args": 216,
+    "compiler_main_total": 216,
+    "down_oracle_all_weights_overlay": false,
+    "down_oracle_main": 0,
+    "down_oracle_unique_weight_bases": 0,
+    "down_oracle_weight_args": 0,
+    "gate_epilogue_main": 0,
+    "gate_oracle_main": 0,
+    "gate_q8_record_allocations": 0,
+    "gate_up_main": 72,
+    "k_main": 36,
+    "old_fixups": 0,
+    "old_gate_fp16_cast": 36,
+    "old_gate_silu_mul": 36,
+    "partial_workspace_bytes": 0,
+    "q6_old_fixups": 0,
+    "q6_v_main": 18,
+    "q6_v_producer": 18,
+    "q8_producer_total": 216,
+    "qo_main": 72,
+    "remaining_v_down_fp16_overlays": 36,
+    "unique_weight_bases": 216,
+    "v_main": 18,
+    "weight_copy_kernels": 0
+  },
+  "deep_replay": null,
+  "environment": {
+    "HCQ_NUM_COMPUTE": "2",
+    "HCQ_NV_MULTI_QUEUE_CUT_POLICY": "docs/task_workflow/evidence/nv-compiler-q4k-gkqo-20260828/combined-flash-direct-deps-cut-v2.json",
+    "HCQ_NV_READY_PLACEMENT": "0"
+  },
+  "program_names": {
+    "E_1187_32_4_f4beb3197f89422fc17cc43ac33fb098f9c26058821e6e2828cc2932988e44da": 2,
+    "E_16_64_8_16_4_4_4ea2955fdd8af23b169ada2876a30ed724fe52d9315e1adef62c66827b05f700": 36,
+    "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f": 36,
+    "E_16_64_8_16_4_4_f3ac2d79aacaf9549697ec0413fcd425b8f5c163259e88d53787a393b07091af": 1,
+    "E_2048_4_8_16_2_82263f3d7c6516dd0d8b78f8d75f712cfb3098cdcd6c9a1b11ff2c17e7eeb030": 36,
+    "E_32_16_2_8_16_4_4_92835f632441c3fec3dc836c82ac95d56874ada4f189a323c7bd556288c46000": 36,
+    "E_4096_32_4_5a86e3920e805a3a101a901d317f8e77ce35e37c5c5673e0ab78d740016ef947": 36,
+    "E_4096_32_4_65918f72cc4abae74467a085e56cffc4ecd7f3949482f83e291d3ca7c856b6e9": 36,
+    "E_4_32_32_4_2_2_2_8_2_383_2_e1b756a0093f26f96af0ea5db74fc3b41e6a44ae02968e01214c238e807d7a9e": 36,
+    "E_4_32_4_3a39b1a8ecb491ce70bff135129041430248b04e874e29e2e6fd3dbecfcf6703": 1,
+    "E_512_16_8_2_4_4_2e162bdabfe040283cb257ced27118633de4e59e1679a9699f9c54996923a749": 1,
+    "E_512_4_2_8_16_4_284de8f2c9c98fcb873331166e5366c16b6d3ea5594fe638257749ba7f83929d": 36,
+    "E_512_8_8_16_2_e65e4e0519f77b09b963c1e36720f9d6658b3aed58d893fd3d3cd43452d988f0": 36,
+    "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5": 36,
+    "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c": 36,
+    "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14": 72,
+    "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d": 179,
+    "E_64_64_8_16_4_4ca7d648d46b86ea510ec6bddd0cc0ae3bd58b49b538dfa160729cc7630bc50b": 73,
+    "E_64_64_8_16_4_6fbbb79c268af5049ba63c1085bc9fceeed2ba0dfed78a06bb342965de3c6d85": 36,
+    "E_64_64_8_16_4_dfb4f4f505716533c80c2fbef495f94d8affe282e39b40d96f3fdc5b8649c948": 36,
+    "E_8_16_2_8_16_4_4_bfb7c071f7fb3ecd1ad8447888e9dff1f8e4a365777018ee630985cd76194445": 36,
+    "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936": 36,
+    "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346": 1,
+    "native_finite_fp32_argmax_151936_t1024": 1,
+    "nv_sm120_q16_grid_hd128_loop_attention": 36,
+    "q8_compact_record_fp16": 198,
+    "q8_compact_record_fp16_q6_attn_v": 18,
+    "r_1187_32_4_16_2_2_2_4_8_5d34671e0b37cb71be07bf75d934e83829c4a02061eec3504cbb6cba4e7a88d6": 1,
+    "r_2_512_8_4_4_16_b17914008932ba19317731d2df1ce96ef3bd1e77dd7e329b26bc33993dd8991a": 36,
+    "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561": 73,
+    "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b": 72,
+    "r_4_96_32_2_4_2_2_4_4_64_2_2_2_8cefca4b229d8048634693df0dd2614ca8c3df3f9d8527d95c0d4432b3a5a49e": 72,
+    "r_8_32_32_2_2_2_2_2_2_64_2_2_2_16b68e06c3ae78a7a2268b570f8b1b25a2d6565bbe49eaee035f420e67629580": 54,
+    "r_8_32_32_2_2_2_2_2_2_64_2_2_2_ba40701e00ba0d8764b731dad769e053f047d8120dd76fe7ec21abc3fd063220": 18,
+    "r_8_32_8_4_4_16_5534b419e310bcfa1ca9a84206065c075d335e64050b4b299203989888b6d11f": 36
+  },
+  "replay": {
+    "cycles": [
+      {
+        "cycle": 0,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "same_logits_exact": true,
+        "same_token": true
+      }
+    ],
+    "distinct_activation_output": true,
+    "finite": true,
+    "same_token": true
+  },
+  "route": {
+    "default_enabled": false,
+    "identities": {
+      "down_oracle": null,
+      "gate_epilogue": null,
+      "gate_oracle": null,
+      "gate_up": "c0d2b181a6de5751180a48cc5c1b1d1c8977770845951d3196a6596877493d28",
+      "k": "50c7576b59193b8ecedf58701515f45e288ce8dde993db3a492badebbead057e",
+      "q6_v": "c16114d2797f68777892f24fe77a146153266241366f1c0210a33f7372758565",
+      "qo": "fc3b6e588b4dc162749e50ef060e3e2312f8560463e8a7219bcc99cc7fb0627a",
+      "v": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_16b68e06c3ae78a7a2268b570f8b1b25a2d6565bbe49eaee035f420e67629580"
+    }
+  },
+  "schema": "tinygrad.nv_compiler_q4k_gkqo_model_arm.v1",
+  "stage_buffer_census": {},
+  "status": "PASS",
+  "token": 198,
+  "wall": {
+    "median_ms": 65.330881,
+    "min_ms": 65.313698,
+    "samples_ms": [
+      65.333055,
+      65.313698,
+      65.317646,
+      65.337734,
+      65.320071,
+      65.336191,
+      65.324911,
+      65.330881,
+      65.333025
+    ],
+    "tok_s": 7839.09066058394
+  }
+}

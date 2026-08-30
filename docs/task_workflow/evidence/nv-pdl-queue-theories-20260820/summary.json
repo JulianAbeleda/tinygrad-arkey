@@ -1,0 +1,260 @@
+{
+  "schema": "tinygrad.nv-pdl-queue-theories.v1",
+  "date": "2026-08-20",
+  "commit": "6570abc02",
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "route": "DEV=NV",
+  "depth": 512,
+  "count": 24,
+  "reps": 4,
+  "theory_b_queue_bracket": {
+    "arm": "2q control vs HCQ_NUM_COMPUTE=1",
+    "control_2q_ms": 4.715511375,
+    "control_a_ms": 4.717691729166667,
+    "control_b_ms": 4.713331020833333,
+    "candidate_1q_ms": 4.828730791666667,
+    "delta_us": -113.21941666666646,
+    "token_hashes_equal": true
+  },
+  "theory_a_pdl_2q_bracket": {
+    "arm": "2q control vs PDL producer(q4k_/q6k_) to support consumers",
+    "control_ms": 4.725949729166667,
+    "control_a_ms": 4.731251833333333,
+    "control_b_ms": 4.720647625,
+    "candidate_pdl_ms": 4.7375904375,
+    "delta_us": -11.640708333333194,
+    "token_hashes_equal": true
+  },
+  "theory_a_pdl_1q_bracket": {
+    "arm": "1q control vs 1q PDL producer(q4k_/q6k_) to support consumers",
+    "control_ms": 4.845295260416667,
+    "control_a_ms": 4.841433708333334,
+    "control_b_ms": 4.8491568125,
+    "candidate_pdl_ms": 4.853496041666666,
+    "delta_us": -8.200781249999345,
+    "token_hashes_equal": true
+  },
+  "pdl_env": {
+    "NV_PDL_PRODUCER_PROGRAMS": "prefix:q4k_,prefix:q6k_",
+    "NV_PDL_CONSUMER_PROGRAMS": "prefix:reduce_output_rmsnorm,prefix:E_,prefix:r_,prefix:flash_,prefix:rmsnorm_q8_1_llama_provider",
+    "NV_PDL_TRIGGER_POSITION": "end (default)"
+  },
+  "rows": [
+    {
+      "arm": "control",
+      "median_ms_per_token": 4.717691729166667,
+      "native_promoted_sample": {
+        "attn": false,
+        "ffn": false,
+        "k": false,
+        "output": false,
+        "q": false
+      },
+      "rejected_high_samples_ms_per_token": [],
+      "samples_ms_per_token": [
+        4.710852916666667,
+        4.7140615,
+        4.723377125,
+        4.721321958333333
+      ],
+      "schema": "tinygrad.nv_norm_native_wall_ab.v1",
+      "sites": [
+        "ffn"
+      ],
+      "timed_token_count": 96,
+      "token_stream_hash": "1e73e557e48b0c2f0792318e1a306f06a1412cd9800ba7a1e667b9c09c4a1254"
+    },
+    {
+      "arm": "control",
+      "median_ms_per_token": 4.828730791666667,
+      "native_promoted_sample": {
+        "attn": false,
+        "ffn": false,
+        "k": false,
+        "output": false,
+        "q": false
+      },
+      "rejected_high_samples_ms_per_token": [],
+      "samples_ms_per_token": [
+        4.835937208333333,
+        4.826358208333333,
+        4.827593833333333,
+        4.82986775
+      ],
+      "schema": "tinygrad.nv_norm_native_wall_ab.v1",
+      "sites": [
+        "ffn"
+      ],
+      "timed_token_count": 96,
+      "token_stream_hash": "1e73e557e48b0c2f0792318e1a306f06a1412cd9800ba7a1e667b9c09c4a1254"
+    },
+    {
+      "arm": "control",
+      "median_ms_per_token": 4.713331020833333,
+      "native_promoted_sample": {
+        "attn": false,
+        "ffn": false,
+        "k": false,
+        "output": false,
+        "q": false
+      },
+      "rejected_high_samples_ms_per_token": [],
+      "samples_ms_per_token": [
+        4.7146675,
+        4.711337416666667,
+        4.711994541666667,
+        4.7156385
+      ],
+      "schema": "tinygrad.nv_norm_native_wall_ab.v1",
+      "sites": [
+        "ffn"
+      ],
+      "timed_token_count": 96,
+      "token_stream_hash": "1e73e557e48b0c2f0792318e1a306f06a1412cd9800ba7a1e667b9c09c4a1254"
+    },
+    {
+      "arm": "control",
+      "median_ms_per_token": 4.731251833333333,
+      "native_promoted_sample": {
+        "attn": false,
+        "ffn": false,
+        "k": false,
+        "output": false,
+        "q": false
+      },
+      "rejected_high_samples_ms_per_token": [],
+      "samples_ms_per_token": [
+        4.7251845,
+        4.735228541666667,
+        4.727275125,
+        4.738357833333333
+      ],
+      "schema": "tinygrad.nv_norm_native_wall_ab.v1",
+      "sites": [
+        "ffn"
+      ],
+      "timed_token_count": 96,
+      "token_stream_hash": "1e73e557e48b0c2f0792318e1a306f06a1412cd9800ba7a1e667b9c09c4a1254"
+    },
+    {
+      "arm": "control",
+      "median_ms_per_token": 4.7375904375,
+      "native_promoted_sample": {
+        "attn": false,
+        "ffn": false,
+        "k": false,
+        "output": false,
+        "q": false
+      },
+      "rejected_high_samples_ms_per_token": [],
+      "samples_ms_per_token": [
+        4.743853125,
+        4.738424166666667,
+        4.731230333333333,
+        4.736756708333333
+      ],
+      "schema": "tinygrad.nv_norm_native_wall_ab.v1",
+      "sites": [
+        "ffn"
+      ],
+      "timed_token_count": 96,
+      "token_stream_hash": "1e73e557e48b0c2f0792318e1a306f06a1412cd9800ba7a1e667b9c09c4a1254"
+    },
+    {
+      "arm": "control",
+      "median_ms_per_token": 4.720647625,
+      "native_promoted_sample": {
+        "attn": false,
+        "ffn": false,
+        "k": false,
+        "output": false,
+        "q": false
+      },
+      "rejected_high_samples_ms_per_token": [],
+      "samples_ms_per_token": [
+        4.708865708333333,
+        4.719167625,
+        4.722127625,
+        4.726239708333333
+      ],
+      "schema": "tinygrad.nv_norm_native_wall_ab.v1",
+      "sites": [
+        "ffn"
+      ],
+      "timed_token_count": 96,
+      "token_stream_hash": "1e73e557e48b0c2f0792318e1a306f06a1412cd9800ba7a1e667b9c09c4a1254"
+    },
+    {
+      "arm": "control",
+      "median_ms_per_token": 4.841433708333334,
+      "native_promoted_sample": {
+        "attn": false,
+        "ffn": false,
+        "k": false,
+        "output": false,
+        "q": false
+      },
+      "rejected_high_samples_ms_per_token": [],
+      "samples_ms_per_token": [
+        4.84850425,
+        4.840588583333333,
+        4.841344166666667,
+        4.84152325
+      ],
+      "schema": "tinygrad.nv_norm_native_wall_ab.v1",
+      "sites": [
+        "ffn"
+      ],
+      "timed_token_count": 96,
+      "token_stream_hash": "1e73e557e48b0c2f0792318e1a306f06a1412cd9800ba7a1e667b9c09c4a1254"
+    },
+    {
+      "arm": "control",
+      "median_ms_per_token": 4.853496041666666,
+      "native_promoted_sample": {
+        "attn": false,
+        "ffn": false,
+        "k": false,
+        "output": false,
+        "q": false
+      },
+      "rejected_high_samples_ms_per_token": [],
+      "samples_ms_per_token": [
+        4.836815875,
+        4.849117375,
+        4.857874708333333,
+        4.860972291666667
+      ],
+      "schema": "tinygrad.nv_norm_native_wall_ab.v1",
+      "sites": [
+        "ffn"
+      ],
+      "timed_token_count": 96,
+      "token_stream_hash": "1e73e557e48b0c2f0792318e1a306f06a1412cd9800ba7a1e667b9c09c4a1254"
+    },
+    {
+      "arm": "control",
+      "median_ms_per_token": 4.8491568125,
+      "native_promoted_sample": {
+        "attn": false,
+        "ffn": false,
+        "k": false,
+        "output": false,
+        "q": false
+      },
+      "rejected_high_samples_ms_per_token": [],
+      "samples_ms_per_token": [
+        4.858008708333333,
+        4.8426760416666665,
+        4.846116291666667,
+        4.852197333333333
+      ],
+      "schema": "tinygrad.nv_norm_native_wall_ab.v1",
+      "sites": [
+        "ffn"
+      ],
+      "timed_token_count": 96,
+      "token_stream_hash": "1e73e557e48b0c2f0792318e1a306f06a1412cd9800ba7a1e667b9c09c4a1254"
+    }
+  ]
+}

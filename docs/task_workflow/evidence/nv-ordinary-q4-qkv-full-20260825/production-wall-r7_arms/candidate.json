@@ -1,0 +1,70 @@
+{
+  "accepted_samples_ms_per_token": [
+    4.40064025,
+    4.41238075,
+    4.41369415625,
+    4.41725271875,
+    4.41847409375,
+    4.41881940625,
+    4.4221904375
+  ],
+  "admitted_blocks": [
+    13,
+    19,
+    20,
+    22,
+    23,
+    25,
+    26,
+    28,
+    29
+  ],
+  "arm": "candidate",
+  "count": 32,
+  "depth": 512,
+  "external_contention_high_limit_ms": 4.66725271875,
+  "gpu_state": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2887",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Disabled",
+    "power.draw": "552.61",
+    "temperature.gpu": "63"
+  },
+  "max_context": 1024,
+  "median_ms_per_token": 4.41725271875,
+  "mode": "timing-child",
+  "prelude_token": 13876,
+  "rejected_high_samples_ms_per_token": [],
+  "reps": 7,
+  "samples_ms_per_token": [
+    4.40064025,
+    4.41238075,
+    4.41369415625,
+    4.41725271875,
+    4.41847409375,
+    4.41881940625,
+    4.4221904375
+  ],
+  "schema": "tinygrad.nv_q4k_kv_pair_qualification.v1",
+  "timed_token_count": 224,
+  "token_hashes": [
+    "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+    "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+    "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+    "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+    "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+    "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+    "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46"
+  ],
+  "token_stream_hash": "975fd9af23443fd04f2ce79230399334ccdd3fa6cb77e3903cd25dca58a4348a",
+  "triple": true,
+  "warmup_tokens": [
+    38835,
+    34208,
+    13,
+    279,
+    3974,
+    13876
+  ]
+}

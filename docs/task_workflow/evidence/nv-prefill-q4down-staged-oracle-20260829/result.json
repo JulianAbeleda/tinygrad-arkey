@@ -1,0 +1,41 @@
+{
+  "schema": "tinygrad.nv_q4down_staged_independent_oracle.v1",
+  "packet": "C0.2",
+  "status": "STOP",
+  "authority": {
+    "dependency": "docs/task_workflow/evidence/nv-prefill-q4down-localize-20260829/result.json",
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "gpu": "NVIDIA GeForce RTX 5090, sm_120",
+    "driver": "595.84",
+    "clocks_session": "graphics=435 MHz, sm=435 MHz, memory=7001 MHz, P3; flock GPU session"
+  },
+  "correctness": {
+    "dependency_pass": true,
+    "input_fixture_available": true,
+    "staged_comparison_completed": false,
+    "reason": "The installed compiler-generated Q4-down main exposes only final output; decoded Q4 metadata, dot accumulator, correction terms, and pre-epilogue publication are register-local and unavailable through its ABI."
+  },
+  "census": {
+    "roles": 18,
+    "production_abi": {"outs": [0], "ins": [1, 2]},
+    "intermediate_buffers": 0,
+    "final_output_buffers": 1
+  },
+  "stages": {
+    "input": {"status": "UNREACHED", "reason": "No live activation capture was performed by the diagnostic probe."},
+    "producer": {"status": "UNOBSERVABLE", "exact_indices": [], "exact_bytes": [], "expected_values": [], "observed_values": []},
+    "weight": {"status": "UNOBSERVABLE", "exact_indices": [], "exact_bytes": [], "expected_values": [], "observed_values": []},
+    "dot": {"status": "UNOBSERVABLE", "exact_indices": [], "exact_bytes": [], "expected_values": [], "observed_values": []},
+    "correction": {"status": "UNOBSERVABLE", "exact_indices": [], "exact_bytes": [], "expected_values": [], "observed_values": []},
+    "epilogue": {"status": "UNOBSERVABLE", "exact_indices": [], "exact_bytes": [], "expected_values": [], "observed_values": []}
+  },
+  "observer": {
+    "diagnostic_identity": "nv_q4k_down_debug_main_type12_v1",
+    "launchable": false,
+    "production_abi_preserved": true,
+    "prerequisite_evidence": "prerequisite.json"
+  },
+  "decision": "STOP: first divergent stage cannot be localized because the production main has no intermediate diagnostic ABI; do not infer a root cause or modify the primitive.",
+  "next_packet": null,
+  "c0_3_authorized": false
+}

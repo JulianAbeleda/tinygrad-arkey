@@ -1,0 +1,153 @@
+{
+  "rows": [
+    {
+      "block": [
+        16,
+        1,
+        1
+      ],
+      "body_b_us": 2.816,
+      "buf_sizes": [
+        4,
+        16384
+      ],
+      "clean_dispatch_d_us": 0.4498,
+      "clean_hcq_c_us": 3.2658,
+      "cubin_sha256": "d15723e0f5fe0ba1535e28d9c4a7ed49f5dd85c999f7647e3f87dd1d26947707",
+      "grid": [
+        1,
+        1,
+        1
+      ],
+      "identity_residual_us": 0.0,
+      "island_id": "I_NORM",
+      "production_p_us": 3.232,
+      "production_residual_r_us": -0.0338,
+      "regs_usage": 76,
+      "schema": "tinygrad.nv_installed_island.v1",
+      "semantic_role": "norm_4096",
+      "shmem_usage": 2176,
+      "symbol": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "body_b_us": 0.608,
+      "buf_sizes": [
+        8192,
+        16384,
+        4,
+        16384
+      ],
+      "clean_dispatch_d_us": 0.4567,
+      "clean_hcq_c_us": 1.0647,
+      "cubin_sha256": "52c701a0bc8c78081144884976cc263fde3ee2806d6aba2cbdfe46a09bf7e161",
+      "grid": [
+        32,
+        1,
+        1
+      ],
+      "identity_residual_us": 0.0,
+      "island_id": "I_NORM",
+      "production_p_us": 1.792,
+      "production_residual_r_us": 0.7273,
+      "regs_usage": 28,
+      "schema": "tinygrad.nv_installed_island.v1",
+      "semantic_role": "norm_4096",
+      "shmem_usage": 1024,
+      "symbol": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077"
+    },
+    {
+      "block": [
+        32,
+        16,
+        1
+      ],
+      "body_b_us": 1.184,
+      "buf_sizes": [
+        8192,
+        16384,
+        8192
+      ],
+      "clean_dispatch_d_us": 0.4491,
+      "clean_hcq_c_us": 1.6331,
+      "cubin_sha256": "70505ad1fc1b66b0329d5f794881da5f2b0e9196f019a146e912ce6a5f32c6cb",
+      "grid": [
+        8,
+        1,
+        1
+      ],
+      "identity_residual_us": 0.0,
+      "island_id": "I_NORM",
+      "production_p_us": 1.728,
+      "production_residual_r_us": 0.0949,
+      "regs_usage": 30,
+      "schema": "tinygrad.nv_installed_island.v1",
+      "semantic_role": "norm_4096",
+      "shmem_usage": 2176,
+      "symbol": "rmsnorm_q8_1_llama_provider_4096"
+    },
+    {
+      "block": [
+        32,
+        16,
+        1
+      ],
+      "body_b_us": 4.864,
+      "buf_sizes": [
+        8192,
+        16384,
+        8192
+      ],
+      "clean_dispatch_d_us": 0.4743,
+      "clean_hcq_c_us": 5.3383,
+      "cubin_sha256": "134a288c715c54bbc3e46e3bff1d3d46d2719395a12c6fb46c81b309fb33823d",
+      "grid": [
+        1,
+        1,
+        1
+      ],
+      "identity_residual_us": 0.0,
+      "island_id": "I_NORM",
+      "production_p_us": 7.008,
+      "production_residual_r_us": 1.6697,
+      "regs_usage": 40,
+      "schema": "tinygrad.nv_installed_island.v1",
+      "semantic_role": "norm_4096",
+      "shmem_usage": 2176,
+      "symbol": "reduce_output_rmsnorm_1_4096"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "body_b_us": 0.576,
+      "buf_sizes": [
+        8192,
+        16384
+      ],
+      "clean_dispatch_d_us": 0.4445,
+      "clean_hcq_c_us": 1.0205,
+      "cubin_sha256": "fcfe16554c8a96117fdae6a4f3beae2b16f1aca56633aeea0a54608d81c7ef7a",
+      "grid": [
+        32,
+        1,
+        1
+      ],
+      "identity_residual_us": 0.0,
+      "island_id": "I_NORM",
+      "production_p_us": 1.152,
+      "production_residual_r_us": 0.1315,
+      "regs_usage": 14,
+      "schema": "tinygrad.nv_installed_island.v1",
+      "semantic_role": "norm_4096",
+      "shmem_usage": 1024,
+      "symbol": "E_32_32_4_5a5673a44c51a85d2e73b347238640218966a387a0c3b168f5ef5dc11a3e0798"
+    }
+  ]
+}

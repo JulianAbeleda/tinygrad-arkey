@@ -1,0 +1,39 @@
+{
+  "block": [
+    32,
+    2,
+    4
+  ],
+  "buffer_bytes": [
+    25165824,
+    2621440,
+    28311552
+  ],
+  "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-prefill-gateup-unroll-20260829/gateup-k64-unroll4.cubin",
+  "cubin_sha256": "03b44392b20cc879d6b4f78f8f6fa5d4b43ca5913eb73fbe2051f9293e0ef389",
+  "finite": true,
+  "grid": [
+    96,
+    4,
+    1
+  ],
+  "median_us": 1130.5279731750488,
+  "min_us": 1130.5279731750488,
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "nonzero": 6291456,
+  "output_sha256": "26ae24b2b60fb98d0317b2f3969334169e9b3b1ca68019348d78f59d38e7c57e",
+  "passed": true,
+  "readonly": {
+    "record": true,
+    "words": true
+  },
+  "reps": 1,
+  "role": "blk.0.ffn_gate.weight",
+  "samples_us": [
+    1130.5279731750488
+  ],
+  "schema": "tinygrad.nv_prefill_gateup_ncu_bridge.v1",
+  "symbol": "r_4_96_32_2_4_2_2_4_4_64_2_2_2_8cefca4b229d8048634693df0dd2614ca8c3df3f9d8527d95c0d4432b3a5a49e",
+  "unwritten": 0,
+  "warmup": 0
+}

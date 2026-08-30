@@ -1,0 +1,30 @@
+{
+  "calls": [],
+  "candidate": {
+    "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+    "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+  },
+  "census": {
+    "observed": {
+      "candidate": 0,
+      "installed": 0
+    },
+    "predicted": {
+      "candidate": 36,
+      "installed": 36
+    }
+  },
+  "decision": "BLOCKED: capture does not contain exact 36 finalized installed calls",
+  "exact_population": 36,
+  "graph_owned_slice_semantics": {
+    "full_t512_relaunch": false,
+    "required": true
+  },
+  "installed_program": "nv_sm120_q16_grid_hd128_loop_attention",
+  "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "next_packet": null,
+  "packet": "F1.1",
+  "schema": "tinygrad.nv_prefill_flash_f1_population.v1",
+  "source_capture": "docs/task_workflow/evidence/nv-prefill-flash-f1-population/live-capture.json",
+  "status": "BLOCKED"
+}

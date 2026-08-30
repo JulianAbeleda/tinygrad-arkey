@@ -1,0 +1,19 @@
+{
+  "ordinal": 0,
+  "role": "blk.4.ffn_down.weight",
+  "producer": {
+    "q_sha256": "6b2390f85a3dbce8936c71aa59e0d4358079250fda3b30ad1f784fd8ea27933a",
+    "scales_sha256": "c491f873a53aa785e41f26fc2dee66e9a7ee6a50aa7969ceb2b5039722e08e3f",
+    "sums_sha256": "071b5073a11743c849e9a641ca145f826b9079b42c8d6e15938bde8149729184"
+  },
+  "weight": {
+    "bytes": 28311552,
+    "sha256": "4df2b0be632f10c77aec8040c1d64bbf307dbc01412f728fbc54304fda8747f4"
+  },
+  "mirror_final_sha256": "5c639b2f68ff6fa91c41c15936c4e106cda4a63f225a52745e952cdcef4b8b95",
+  "live_final_sha256": "0ef42c33e24985c91cf090eb89feca9e894db9a32b85aa02a043eac71e658f59",
+  "final_bitwise_equal": false,
+  "final_allclose": false,
+  "max_abs": 2092.328857421875,
+  "finite": true
+}

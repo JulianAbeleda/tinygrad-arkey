@@ -1,0 +1,105 @@
+{
+  "body_verdict": "BODY_PARITY",
+  "cardinality": {
+    "llama": 36,
+    "tinygrad": 36
+  },
+  "clean_hcq": {
+    "intercept_us": 15.697461425985239,
+    "method": "NVComputeQueue plain chained QMD drain slope",
+    "slope_us": 7.697904580391152,
+    "timestamp_slope_us": 7.7738327367633975
+  },
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "counters": {
+    "dram_bytes": {
+      "unit": "Mbyte",
+      "value": 9.47
+    },
+    "dram_read_bytes": {
+      "unit": "Mbyte",
+      "value": 9.47
+    },
+    "dram_write_bytes": {
+      "unit": "byte",
+      "value": 0.0
+    },
+    "issue_active_pct": {
+      "unit": "%",
+      "value": 39.75
+    },
+    "l1tex_bytes": {
+      "unit": "Mbyte",
+      "value": 155.45
+    },
+    "lts_bytes": {
+      "unit": "Mbyte",
+      "value": 11.34
+    },
+    "lts_read_sectors": {
+      "unit": "sector",
+      "value": 345777.0
+    },
+    "lts_write_sectors": {
+      "unit": "sector",
+      "value": 4312.0
+    },
+    "ncu_duration_us": {
+      "unit": "us",
+      "value": 10.75
+    },
+    "sm_throughput_pct": {
+      "unit": "%",
+      "value": 32.22
+    },
+    "warps_active_pct": {
+      "unit": "%",
+      "value": 39.8
+    }
+  },
+  "decomposition": {
+    "body_delta_us": 0.3519999999999994,
+    "body_us": 7.584,
+    "clean_dispatch_us": 0.1139045803911527,
+    "identity_residual_us": 0.0,
+    "installed_delta_us": 1.5999999999999996,
+    "production_residual_us": 1.486095419608847,
+    "residual_share_of_installed_delta": 0.9288096372555296
+  },
+  "depth": 512,
+  "exact_binary": {
+    "block": [
+      32,
+      1,
+      1
+    ],
+    "buf_sizes": [
+      16384,
+      9437184,
+      8192,
+      16384
+    ],
+    "grid": [
+      4096,
+      1,
+      1
+    ],
+    "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+    "sha256": "3e7c9b9e6792c7d0b6d9db53106b9033aaf3d79113b88e469f8ffdb1067fdcda"
+  },
+  "island_id": "I_O",
+  "production": {
+    "llama_body_mean_us": 7.216916666666667,
+    "llama_body_median_us": 7.232,
+    "tiny_command_mean_us": 9.202848434469383,
+    "tiny_command_median_us": 9.184
+  },
+  "pure_body": {
+    "llama_us": 7.232,
+    "method": "nsys exact cubin vs llama PDL0 nsys body",
+    "tiny_us": 7.584
+  },
+  "schema": "tinygrad.nv_installed_island.v1",
+  "semantic_role": "O projection / residual (attn->o), q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+  "verdict": "INSTALL_DOMINANT"
+}

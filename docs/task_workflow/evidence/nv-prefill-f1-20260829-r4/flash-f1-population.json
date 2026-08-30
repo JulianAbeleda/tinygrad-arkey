@@ -1,0 +1,3127 @@
+{
+  "calls": [
+    {
+      "buffer_hashes": [
+        "19a50fb5de3868845bdbd5d0f60c3fb7ad5b65414fea74815b55075057f73950",
+        "e26cc61f2c36fdb37602e97d8e81baf489c065d8ae94e546ae76d2f9746b40c0",
+        "5617c973fcea6ce801c616c7c1aff16685292666a757ac7aee677cfb22b7688e",
+        "900e37575dd267b2caf42df952c3f995f00049084006a9234f86cdac1ef25426"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "19a50fb5de3868845bdbd5d0f60c3fb7ad5b65414fea74815b55075057f73950",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "e26cc61f2c36fdb37602e97d8e81baf489c065d8ae94e546ae76d2f9746b40c0",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "5617c973fcea6ce801c616c7c1aff16685292666a757ac7aee677cfb22b7688e",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "900e37575dd267b2caf42df952c3f995f00049084006a9234f86cdac1ef25426",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 23,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 0,
+      "ordinal": 0,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "01a3be5d3bce027fe7893b3c553cd732f5afaffc1b8773db406e2e1ee469fc57",
+        "d63a78ec7688f8145beed444a6dfb89cfdbc97d1b9ded62d90a02af635745fdf",
+        "b7c30d74a0f87bad0a5550f495c6de68390d5ca4d6e1f9a5021fd2d6119b7204",
+        "f3bd07802b4e03554c97b4e8864a1291ea22ca3030240b31630f9c0b0b97a95b"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "01a3be5d3bce027fe7893b3c553cd732f5afaffc1b8773db406e2e1ee469fc57",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "d63a78ec7688f8145beed444a6dfb89cfdbc97d1b9ded62d90a02af635745fdf",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "b7c30d74a0f87bad0a5550f495c6de68390d5ca4d6e1f9a5021fd2d6119b7204",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "f3bd07802b4e03554c97b4e8864a1291ea22ca3030240b31630f9c0b0b97a95b",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 31,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 1,
+      "ordinal": 1,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "2f67df86fadb427601c973ef5d37bd4b83f148bcabb17e12996cc04b8657b38d",
+        "63c798b8cd1860edeea59ca1facd31f0b231f0269c256f4f498b436f28896574",
+        "0a800361bde4621e884b117691729b2b7f102cdf19d0e23e2917c9d5b6252a58",
+        "af96b7bec2e6d0727d5310777852a8ee94909d2cbbfdf6a816be47d86f12a173"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "2f67df86fadb427601c973ef5d37bd4b83f148bcabb17e12996cc04b8657b38d",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "63c798b8cd1860edeea59ca1facd31f0b231f0269c256f4f498b436f28896574",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "0a800361bde4621e884b117691729b2b7f102cdf19d0e23e2917c9d5b6252a58",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "af96b7bec2e6d0727d5310777852a8ee94909d2cbbfdf6a816be47d86f12a173",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 7,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 2,
+      "ordinal": 2,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "be2d135f9f9078b3faf4d582cb9a823add7707a0b1e47688074cffa4bcd10fee",
+        "de79ee3d0eef2c59864e5559a4f36c2edb99e3535b7925c8ef4b1a6e43d78598",
+        "a91b60f599ae522e867af62a5f0603825746c630a2a6ffebf2116e026dfe059a",
+        "f1ecb3e1ba0107e24db0c4dfb4f45f5a58b86dcb304e24e36415a2fec35fe2ed"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "be2d135f9f9078b3faf4d582cb9a823add7707a0b1e47688074cffa4bcd10fee",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "de79ee3d0eef2c59864e5559a4f36c2edb99e3535b7925c8ef4b1a6e43d78598",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "a91b60f599ae522e867af62a5f0603825746c630a2a6ffebf2116e026dfe059a",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "f1ecb3e1ba0107e24db0c4dfb4f45f5a58b86dcb304e24e36415a2fec35fe2ed",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 47,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 3,
+      "ordinal": 3,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "21405969a5be665991702c850dbf77962742e34425a57feb1126839b016c5740",
+        "949610fac817acc1a94986d6ab02d84659493e36be859c35e0de8fd27dd318d6",
+        "c9d1927be700f95f9907bea74d2695ca40c0e49bf915904aaf393e9c9ac1aa79",
+        "1beaeb552edd964a2d8ee7117e3ebb04ca3e15b64866a3852eb86f8d8a857a9e"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "21405969a5be665991702c850dbf77962742e34425a57feb1126839b016c5740",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "949610fac817acc1a94986d6ab02d84659493e36be859c35e0de8fd27dd318d6",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "c9d1927be700f95f9907bea74d2695ca40c0e49bf915904aaf393e9c9ac1aa79",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "1beaeb552edd964a2d8ee7117e3ebb04ca3e15b64866a3852eb86f8d8a857a9e",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 88,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 4,
+      "ordinal": 4,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "1cbd629394f114fa4f2f7f55304d4a480beff6e6d90d596ca04c9fe732c62277",
+        "aa60a5f2deb0baeb84b15f5c33f3df87dcb4ecd1a9f081f0bd85edf4787cc8c3",
+        "487984f6694f58deb24ab40b01c9de35a8339628c15530a2f8720dc592043507",
+        "2175046b178aab029f09663a76190349dc970b51ac7e56f305104995af636d55"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "1cbd629394f114fa4f2f7f55304d4a480beff6e6d90d596ca04c9fe732c62277",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "aa60a5f2deb0baeb84b15f5c33f3df87dcb4ecd1a9f081f0bd85edf4787cc8c3",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "487984f6694f58deb24ab40b01c9de35a8339628c15530a2f8720dc592043507",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "2175046b178aab029f09663a76190349dc970b51ac7e56f305104995af636d55",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 1,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 5,
+      "ordinal": 5,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "89bbc70ecd49f7d22e03d43a4437cf911b9742fb63150376f19e4c4e20d368c1",
+        "3902a5eba416d0a713c7cf4562b0496be8471db872021e4a6e8fc8a17e980549",
+        "29afa67b460aaf44419fa428bcf40ac250dae4142d16c8213ca54efdb15598e0",
+        "aa092d7c4ca7d14f5cc8df7d9d28d238e9bb0e195f543dee6ab710d3b3cdbc18"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "89bbc70ecd49f7d22e03d43a4437cf911b9742fb63150376f19e4c4e20d368c1",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "3902a5eba416d0a713c7cf4562b0496be8471db872021e4a6e8fc8a17e980549",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "29afa67b460aaf44419fa428bcf40ac250dae4142d16c8213ca54efdb15598e0",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "aa092d7c4ca7d14f5cc8df7d9d28d238e9bb0e195f543dee6ab710d3b3cdbc18",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 41,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 6,
+      "ordinal": 6,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "2c0e2193dc7495b8af89973bf796138eb91724560caece3c729e245f461d6f81",
+        "4b478da9862442bfe8a40c0f79e087e61635bf3c16e0adcfe423cfc8713718c6",
+        "17542dc7781e00e58e8c802377150d13bab75a85187be3bd4839e777c770ae8e",
+        "fb5d6053ccfff5e1c0b0305867006a38ef06ce67dc873a5f1cb630a4d85da87d"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "2c0e2193dc7495b8af89973bf796138eb91724560caece3c729e245f461d6f81",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "4b478da9862442bfe8a40c0f79e087e61635bf3c16e0adcfe423cfc8713718c6",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "17542dc7781e00e58e8c802377150d13bab75a85187be3bd4839e777c770ae8e",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "fb5d6053ccfff5e1c0b0305867006a38ef06ce67dc873a5f1cb630a4d85da87d",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 82,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 7,
+      "ordinal": 7,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "445e687c544cd18326851bd2051c08bfbce18774ebd8200fde3feb63d554ff6c",
+        "67b5636a1dedb687f013890e5e3282d69b028e62fdd06b0ae6fd2a0b979f923f",
+        "fc6b7f480e490ac1e2fabfc68e1773494e3a8d962cf1ec71e35f1cbca216424e",
+        "6cd890d417ad3f1b78a16f6bc09628f9abbb0d7a7d7c6c32f974bae6464eef78"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "445e687c544cd18326851bd2051c08bfbce18774ebd8200fde3feb63d554ff6c",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "67b5636a1dedb687f013890e5e3282d69b028e62fdd06b0ae6fd2a0b979f923f",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "fc6b7f480e490ac1e2fabfc68e1773494e3a8d962cf1ec71e35f1cbca216424e",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "6cd890d417ad3f1b78a16f6bc09628f9abbb0d7a7d7c6c32f974bae6464eef78",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 123,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 8,
+      "ordinal": 8,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "025095bd84297ae403ba5fe5c697ea4db1d05893da59bd59c8937f1312a52d52",
+        "5bcfda603d09382855b4de63f70ce017b498dc67d13105ff5d5d1623039755fd",
+        "66551416193a9250bbdd8b87f667c3ae4bfd6c14fdf7721ef4394decb3e8d87c",
+        "586969d945636b62444e2db3e7b7434b23b41342c9029bf1f3c6ae5c7f374ab8"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "025095bd84297ae403ba5fe5c697ea4db1d05893da59bd59c8937f1312a52d52",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "5bcfda603d09382855b4de63f70ce017b498dc67d13105ff5d5d1623039755fd",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "66551416193a9250bbdd8b87f667c3ae4bfd6c14fdf7721ef4394decb3e8d87c",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "586969d945636b62444e2db3e7b7434b23b41342c9029bf1f3c6ae5c7f374ab8",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 163,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 9,
+      "ordinal": 9,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "9ed0d8210804a514df211781ca2b64c6cc922350a1fb1cedfab224f8e02d1d11",
+        "bf088e7bc3e30bc3b136bd55323c746aa6f805aeed924cbd8d5ee92c2c921122",
+        "cd6bcae472652a74b13b7b13adbdec8d2df20b27abc2ad3047fa1b279dfbccb7",
+        "6aadca9d2dd7c4700dd206fe9bde7c7ac28ffba59f6a9e8f2e6e9fd598711ca1"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "9ed0d8210804a514df211781ca2b64c6cc922350a1fb1cedfab224f8e02d1d11",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "bf088e7bc3e30bc3b136bd55323c746aa6f805aeed924cbd8d5ee92c2c921122",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "cd6bcae472652a74b13b7b13adbdec8d2df20b27abc2ad3047fa1b279dfbccb7",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "6aadca9d2dd7c4700dd206fe9bde7c7ac28ffba59f6a9e8f2e6e9fd598711ca1",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 204,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 10,
+      "ordinal": 10,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "4a6460bf33821fa3ed4ab980beb7feb60cb5c6fcc7db1e8ecd5343c353a17beb",
+        "d13d21d28b3e56b9dcab6fa26f796f53760cf8cfb520d90fd84dd714cbd726a0",
+        "7089bf447c971c2a1347875cbd219c753e5d3713eef45e6c0ea3524e6902d60c",
+        "727f68e28188866ff78342c47a118d995456568abdd1e268b31be8e054ea03e5"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "4a6460bf33821fa3ed4ab980beb7feb60cb5c6fcc7db1e8ecd5343c353a17beb",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "d13d21d28b3e56b9dcab6fa26f796f53760cf8cfb520d90fd84dd714cbd726a0",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "7089bf447c971c2a1347875cbd219c753e5d3713eef45e6c0ea3524e6902d60c",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "727f68e28188866ff78342c47a118d995456568abdd1e268b31be8e054ea03e5",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 245,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 11,
+      "ordinal": 11,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "9ed1f9c883ed79026c848a14c3375ad683c1cd47c1ff50d47c5abda4b768e8a8",
+        "2d0cbd8f616bd2347018b91a302523a251bf69ac6ae29d01a6f1e346634c14e1",
+        "8ad551ba4a1733df7d12daf5d287bebda3e67b60f7d10fba35596f4194d1e8e2",
+        "a2f0ce621202a7fb6a59254cb46cf6528e8dbd3d057eae209a9ff1ab19f4e547"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "9ed1f9c883ed79026c848a14c3375ad683c1cd47c1ff50d47c5abda4b768e8a8",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "2d0cbd8f616bd2347018b91a302523a251bf69ac6ae29d01a6f1e346634c14e1",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "8ad551ba4a1733df7d12daf5d287bebda3e67b60f7d10fba35596f4194d1e8e2",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "a2f0ce621202a7fb6a59254cb46cf6528e8dbd3d057eae209a9ff1ab19f4e547",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 29,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 12,
+      "ordinal": 12,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "fc0b1efd4f91622d1a6c234ec6fb0153d7341a3bb70386303e3e8ff51b8b60cf",
+        "dfaf49583bf9dfdc3aed2ed4444077bcfd4fe2f2b2b3b7aee79331b5e42a8df8",
+        "7b40efa1f16eff03cc8b3f20c3dcd83e83cd50dcf236ee20cbc8ed70a7c612a4",
+        "c1616dadd2f7ceba6680beb5bdbf5c65348558b6b8ddfa66a68506fb52c8260f"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "fc0b1efd4f91622d1a6c234ec6fb0153d7341a3bb70386303e3e8ff51b8b60cf",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "dfaf49583bf9dfdc3aed2ed4444077bcfd4fe2f2b2b3b7aee79331b5e42a8df8",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "7b40efa1f16eff03cc8b3f20c3dcd83e83cd50dcf236ee20cbc8ed70a7c612a4",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "c1616dadd2f7ceba6680beb5bdbf5c65348558b6b8ddfa66a68506fb52c8260f",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 70,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 13,
+      "ordinal": 13,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "85bfdce66e59c6411ec94dd977152b3d96aab736ffd663d142725cc8b98658ec",
+        "6c533511bd0ca1efc3d49b21aad1c0e919552716781b187efe0135613eccb6bf",
+        "97bfd433f43df80ba7de17536429c133b209e4538e3569187ef407d7a56cb1ff",
+        "84680e408d8d9e2b35a81bcb9477eb420f33dcdfb3e32a5f7295758d1a9148fa"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "85bfdce66e59c6411ec94dd977152b3d96aab736ffd663d142725cc8b98658ec",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "6c533511bd0ca1efc3d49b21aad1c0e919552716781b187efe0135613eccb6bf",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "97bfd433f43df80ba7de17536429c133b209e4538e3569187ef407d7a56cb1ff",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "84680e408d8d9e2b35a81bcb9477eb420f33dcdfb3e32a5f7295758d1a9148fa",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 111,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 14,
+      "ordinal": 14,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "7ba9f61416c9ad7d832ac455a77b3003a00e284487116eb20591147bc8cf753b",
+        "b1274d73b7fd5333f3504731951927a93ec75ea49da019cd5974536a94d840e5",
+        "b7185b615c2bf453b0c2bba1e50aeb5c1d55cb1f70cd6fd7dda658aca348c1bd",
+        "2546ad9a147110d3573cef090c85d14be70fbdabaf662609e46aa62e7b8a7700"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "7ba9f61416c9ad7d832ac455a77b3003a00e284487116eb20591147bc8cf753b",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "b1274d73b7fd5333f3504731951927a93ec75ea49da019cd5974536a94d840e5",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "b7185b615c2bf453b0c2bba1e50aeb5c1d55cb1f70cd6fd7dda658aca348c1bd",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "2546ad9a147110d3573cef090c85d14be70fbdabaf662609e46aa62e7b8a7700",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 151,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 15,
+      "ordinal": 15,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "c4c312b6ed1abedd98b41be2720a671c519d6578e10aafb55f3fa2acfab9af30",
+        "870fc3a903ab6b4323e961a93632c9d180dd90556db62a7f9f1d08647a0bb058",
+        "dad25368585da28dcd575236cd24c5b9084dc4468d382dd0946507028f6caf2a",
+        "9c601f623112a805e55ed44cd9cb1fc7c5e8c286a6513fe44994e6d321cbdd4f"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "c4c312b6ed1abedd98b41be2720a671c519d6578e10aafb55f3fa2acfab9af30",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "870fc3a903ab6b4323e961a93632c9d180dd90556db62a7f9f1d08647a0bb058",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "dad25368585da28dcd575236cd24c5b9084dc4468d382dd0946507028f6caf2a",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "9c601f623112a805e55ed44cd9cb1fc7c5e8c286a6513fe44994e6d321cbdd4f",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 192,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 16,
+      "ordinal": 16,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "8915495a23f473d0972a5eca14709c4e56e49ea91e7df4b28a3c61bfc1830032",
+        "af5302a14ea9eb7250cb7a811f36f07ce061ed64b174bcab81eb11097d64ed67",
+        "e32605681c57f241cc038d36f6ee21ae342c84891b5b5963109cbc2cff15d4e2",
+        "3e30a4ba664534b221b8229237a68a7a03b07e2863cd8ff148e389009729602a"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "8915495a23f473d0972a5eca14709c4e56e49ea91e7df4b28a3c61bfc1830032",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "af5302a14ea9eb7250cb7a811f36f07ce061ed64b174bcab81eb11097d64ed67",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "e32605681c57f241cc038d36f6ee21ae342c84891b5b5963109cbc2cff15d4e2",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "3e30a4ba664534b221b8229237a68a7a03b07e2863cd8ff148e389009729602a",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 233,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 17,
+      "ordinal": 17,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "3e5b60e167fb8d7b2e96be3afc731693731c2ef793f6602d14bfe5d72ad6ea73",
+        "401b0171252eb2c10cf419569e456041c0cd04bfe0e6ec55f0023aaba1bc30ad",
+        "ab513d344860092d4c4882dd0babe78b7e046586521197ed39f08031a1d49f81",
+        "ff81d62b59a0ec1d93c3ecb1b5b361d7947ec726b43d1b580aada9c3238b06be"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "3e5b60e167fb8d7b2e96be3afc731693731c2ef793f6602d14bfe5d72ad6ea73",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "401b0171252eb2c10cf419569e456041c0cd04bfe0e6ec55f0023aaba1bc30ad",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "ab513d344860092d4c4882dd0babe78b7e046586521197ed39f08031a1d49f81",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "ff81d62b59a0ec1d93c3ecb1b5b361d7947ec726b43d1b580aada9c3238b06be",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 273,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 18,
+      "ordinal": 18,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "382cb0f99bd651c0e7e35cfcd914ab06f5dce07533ed73e1cd8d978068fd67f1",
+        "646c1727536436f8db6982103d09154d02f7f59a02b92285179ed1950268ba6d",
+        "032a6db94d0f6f986b96f21db949101a39e4bc0276be040e4b791b478f09345a",
+        "360904fa4d51f7eef6bd9c6e51499c71732f9bd53a96b4dda48a6c94d84e6b70"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "382cb0f99bd651c0e7e35cfcd914ab06f5dce07533ed73e1cd8d978068fd67f1",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "646c1727536436f8db6982103d09154d02f7f59a02b92285179ed1950268ba6d",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "032a6db94d0f6f986b96f21db949101a39e4bc0276be040e4b791b478f09345a",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "360904fa4d51f7eef6bd9c6e51499c71732f9bd53a96b4dda48a6c94d84e6b70",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 314,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 19,
+      "ordinal": 19,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "1a4d7a5a870e6619d87ff2946e5d918f71d7b34dd1501f1f6bd7852ad5cd2c45",
+        "95477a6291207409134fe8fb82a4d8d65d8235adedee725f9ef84be9040a756a",
+        "b42657b95704151553a55778000cc0a5fa2a3071b6e635f0549ec2913b1dd2c3",
+        "de32865ff8e754c779f7d0d46b8794052f74e719b59e49cd47946a45dd941972"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "1a4d7a5a870e6619d87ff2946e5d918f71d7b34dd1501f1f6bd7852ad5cd2c45",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "95477a6291207409134fe8fb82a4d8d65d8235adedee725f9ef84be9040a756a",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "b42657b95704151553a55778000cc0a5fa2a3071b6e635f0549ec2913b1dd2c3",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "de32865ff8e754c779f7d0d46b8794052f74e719b59e49cd47946a45dd941972",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 355,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 20,
+      "ordinal": 20,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "72a275dea2808b9beb2752c8be305638c5bd441128be617e945f93ef0bdb7a43",
+        "b1128d8e37daecea9cb8f997ad815b35547ce00f2fe1bfb8bf5b005c5e1bc71a",
+        "1ed505dce7b632685cbda65016cd4d9126e90063a8ce4f61c7b07047ff02f016",
+        "6dd759fdc2cfc6710b14afe552edec9ac34560ab273e00ee4b77a71250cd3afe"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "72a275dea2808b9beb2752c8be305638c5bd441128be617e945f93ef0bdb7a43",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "b1128d8e37daecea9cb8f997ad815b35547ce00f2fe1bfb8bf5b005c5e1bc71a",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "1ed505dce7b632685cbda65016cd4d9126e90063a8ce4f61c7b07047ff02f016",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "6dd759fdc2cfc6710b14afe552edec9ac34560ab273e00ee4b77a71250cd3afe",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 395,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 21,
+      "ordinal": 21,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "282150ea6adcbf00297057107167a96953d6495166bfed4ad1e77961784e71d9",
+        "7fa6016cec4205949338d2486822ae5361e2eadd606bc98338b7a6c19893866a",
+        "5400519e4924a5dfb920f85469d90cb64356d2c2bd89969da6cbaeaf0b6efddb",
+        "aa46eb77529dda2df4dad7ef925629984f517cdd7636062ea53cd78d60347ff6"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "282150ea6adcbf00297057107167a96953d6495166bfed4ad1e77961784e71d9",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "7fa6016cec4205949338d2486822ae5361e2eadd606bc98338b7a6c19893866a",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "5400519e4924a5dfb920f85469d90cb64356d2c2bd89969da6cbaeaf0b6efddb",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "aa46eb77529dda2df4dad7ef925629984f517cdd7636062ea53cd78d60347ff6",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 436,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 22,
+      "ordinal": 22,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "194a9ee32518f9ab57bf085d17927a6ac1bf90df406bd24aafd86d5d22490278",
+        "ac2c5817d80336dba0bf559346df24b4aba92040680ba8e799f38d5407a56885",
+        "9aa42952a437ccb17253f7df04e7f9f3030a3cccaae8927b7a563835de91d726",
+        "8be15552318409e74798570644771f2c68e8ba9b7d1fa6aff1c919894ec25b8d"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "194a9ee32518f9ab57bf085d17927a6ac1bf90df406bd24aafd86d5d22490278",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "ac2c5817d80336dba0bf559346df24b4aba92040680ba8e799f38d5407a56885",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "9aa42952a437ccb17253f7df04e7f9f3030a3cccaae8927b7a563835de91d726",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "8be15552318409e74798570644771f2c68e8ba9b7d1fa6aff1c919894ec25b8d",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 477,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 23,
+      "ordinal": 23,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "fafce916337a6044e91d898ffd122d74dbe8d8f139fb1b37e5ed316834de4a36",
+        "ebc39474e77bddb37dafcf5e0892a5b4613a1a0cfec71f195d799e1ac5099765",
+        "9679dcf0e2b634052cd172d1be6d0c377b35596a278a7bd6624ff4d66cb1825c",
+        "98a13a2984e9feec2b483bf66e95813388a314b57047436eb9e2ffa8f5b4495e"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "fafce916337a6044e91d898ffd122d74dbe8d8f139fb1b37e5ed316834de4a36",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "ebc39474e77bddb37dafcf5e0892a5b4613a1a0cfec71f195d799e1ac5099765",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "9679dcf0e2b634052cd172d1be6d0c377b35596a278a7bd6624ff4d66cb1825c",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "98a13a2984e9feec2b483bf66e95813388a314b57047436eb9e2ffa8f5b4495e",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 5,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 24,
+      "ordinal": 24,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "caaec373328b23c699fc4928ea05892d55c2bf4b9c04bd9940b82a5a9c66e29a",
+        "2fd35f0f59bc66b1c565b41423f141c41dc6f210226a3e6cd083069106097446",
+        "e1db8ae38f2dd5f2d9d8d9e91c4c184ddf25eac67e3406a52da88be4f975bf3e",
+        "59300935c9bdc004aa44a3bf778c23f749b444de8a738c6de3ef204884b0f952"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "caaec373328b23c699fc4928ea05892d55c2bf4b9c04bd9940b82a5a9c66e29a",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "2fd35f0f59bc66b1c565b41423f141c41dc6f210226a3e6cd083069106097446",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "e1db8ae38f2dd5f2d9d8d9e91c4c184ddf25eac67e3406a52da88be4f975bf3e",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "59300935c9bdc004aa44a3bf778c23f749b444de8a738c6de3ef204884b0f952",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 46,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 25,
+      "ordinal": 25,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "ef994449150a13b1a040bc3b5ec7630e88c1f3d3c29d2021e4e31f1957f00e7f",
+        "dfacd5cd4edbac5f515706fac9e80da39a148854295115d9d66116092ecd9828",
+        "be5180d7d2d4dfa95c4ccce36ca86b97159cc8cc6ca5c7c8f1b8081e116856e9",
+        "2b49ef2ef31112d8b0fef563a2e1da0d62d721efef803a478445a283de4c256c"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "ef994449150a13b1a040bc3b5ec7630e88c1f3d3c29d2021e4e31f1957f00e7f",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "dfacd5cd4edbac5f515706fac9e80da39a148854295115d9d66116092ecd9828",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "be5180d7d2d4dfa95c4ccce36ca86b97159cc8cc6ca5c7c8f1b8081e116856e9",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "2b49ef2ef31112d8b0fef563a2e1da0d62d721efef803a478445a283de4c256c",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 87,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 26,
+      "ordinal": 26,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "bd0bfa91734c00d4d445a6bf9306f5fdafef59dd3bb914583c8cab325f8c8b85",
+        "6c9e76e4b520f214d9804b3e01f9e3fc32bb51b37d5c9f87831c1cb1200c0b8e",
+        "42d3d44eb180d5294c85eb873359b319541f909c504957af444068f07113f3c0",
+        "4cd189f40a5b556797a053941e76d6f2fafc3a4b2c2c8737f219f51da0bbaf90"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "bd0bfa91734c00d4d445a6bf9306f5fdafef59dd3bb914583c8cab325f8c8b85",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "6c9e76e4b520f214d9804b3e01f9e3fc32bb51b37d5c9f87831c1cb1200c0b8e",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "42d3d44eb180d5294c85eb873359b319541f909c504957af444068f07113f3c0",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "4cd189f40a5b556797a053941e76d6f2fafc3a4b2c2c8737f219f51da0bbaf90",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 127,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 27,
+      "ordinal": 27,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "87083aa876ade052fda9e1539d2e87ff7143b9953572a0375627474a8156dbe9",
+        "4c2da71db61c5cd457c9e0d9b12bfca65ff21c4140d6e560123bc98799591abc",
+        "e5a60606dab36f3a1b6e1e6736fc563b236032ab2904ade767220170cdd120c7",
+        "e42ed98ca7455ec132a65a5f5cca0f699aee2739b787fa278ab45d5c87fb1acc"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "87083aa876ade052fda9e1539d2e87ff7143b9953572a0375627474a8156dbe9",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "4c2da71db61c5cd457c9e0d9b12bfca65ff21c4140d6e560123bc98799591abc",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "e5a60606dab36f3a1b6e1e6736fc563b236032ab2904ade767220170cdd120c7",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "e42ed98ca7455ec132a65a5f5cca0f699aee2739b787fa278ab45d5c87fb1acc",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 168,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 28,
+      "ordinal": 28,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "906fbba5f45bcca65a7b399dd4d4268f1ff38f9eaea287128c8bc8f4a5c24d43",
+        "becba79f1be446f2534e2fed86292f5b0e2e1f5598b65f54a52c3b7b577463f9",
+        "8720a82725778456fe5e7c3f9a90a6859f8bfc00261daef07439ce16a9f1b5d8",
+        "d1897389bb09c8307f87e8590cd97ea3ab0e9686477909592462b84d4edf8203"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "906fbba5f45bcca65a7b399dd4d4268f1ff38f9eaea287128c8bc8f4a5c24d43",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "becba79f1be446f2534e2fed86292f5b0e2e1f5598b65f54a52c3b7b577463f9",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "8720a82725778456fe5e7c3f9a90a6859f8bfc00261daef07439ce16a9f1b5d8",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "d1897389bb09c8307f87e8590cd97ea3ab0e9686477909592462b84d4edf8203",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 209,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 29,
+      "ordinal": 29,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "cf2fcc6cdd38e4c721ab590f44a32fc18c42343021d79199f50af2514cfbf062",
+        "dbe4b9c4d83eba77869c91844bac9de546e2dd5456cc60e186c0381f0cbf3af1",
+        "9e6d205e544392238800b5a785bbce080b9d9ef6f1c0367a86530df7f2396164",
+        "f63a453b992e7851bdac7e1c0163cda695f53ffda48bd450ce9c3ac5a744e75b"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "cf2fcc6cdd38e4c721ab590f44a32fc18c42343021d79199f50af2514cfbf062",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "dbe4b9c4d83eba77869c91844bac9de546e2dd5456cc60e186c0381f0cbf3af1",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "9e6d205e544392238800b5a785bbce080b9d9ef6f1c0367a86530df7f2396164",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "f63a453b992e7851bdac7e1c0163cda695f53ffda48bd450ce9c3ac5a744e75b",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 249,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 30,
+      "ordinal": 30,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "44bc1d55f1ac340b3543ca50a9f6cffbb4ced3eae790182e6fbb40c85f81ef94",
+        "1a79155f71a8ef7fa8d3740e9f64ffb161952b9adb288aaba183086b42aa4535",
+        "9ce39765a54e07c5375a3cf0caa99d4061b565b73730e210ce26c32f3209cbac",
+        "90b4c84717efd948498d9754933b7941a8727bb8ff7585c368961666292d711d"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "44bc1d55f1ac340b3543ca50a9f6cffbb4ced3eae790182e6fbb40c85f81ef94",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "1a79155f71a8ef7fa8d3740e9f64ffb161952b9adb288aaba183086b42aa4535",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "9ce39765a54e07c5375a3cf0caa99d4061b565b73730e210ce26c32f3209cbac",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "90b4c84717efd948498d9754933b7941a8727bb8ff7585c368961666292d711d",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 289,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 31,
+      "ordinal": 31,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "5ccd270c74975f3364540006b5c65fc9ab24d5e91cadd59d04561378267fcc36",
+        "c9895b92822536abb80a10f687803ca048828413a476a00da9685bd5f4b02314",
+        "24f41a8b2189638775fe7ac0f4a08459433b20813ffd3fd4df3ebf713cf77df5",
+        "1c5b00605badf13ea249e65ae10b35c89892350d48800dd77a73958df21d974e"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "5ccd270c74975f3364540006b5c65fc9ab24d5e91cadd59d04561378267fcc36",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "c9895b92822536abb80a10f687803ca048828413a476a00da9685bd5f4b02314",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "24f41a8b2189638775fe7ac0f4a08459433b20813ffd3fd4df3ebf713cf77df5",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "1c5b00605badf13ea249e65ae10b35c89892350d48800dd77a73958df21d974e",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 329,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 32,
+      "ordinal": 32,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "3525a8cab428861b6441305e5a773e213ac67f0f65984d39f4e91dd5b02d4b7b",
+        "2fdcae2cba83bfaeb12cf994fe54d184c9ea8b6e17762220aaa6030cc51ad607",
+        "c32ce81fd610d604820cd499cc68fba457554ae9afa193533857dc34fb0e2b05",
+        "fbe5734b5cc9ed2151df90a40e46f18daad9b6f653adef36446661b1b712123f"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "3525a8cab428861b6441305e5a773e213ac67f0f65984d39f4e91dd5b02d4b7b",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "2fdcae2cba83bfaeb12cf994fe54d184c9ea8b6e17762220aaa6030cc51ad607",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "c32ce81fd610d604820cd499cc68fba457554ae9afa193533857dc34fb0e2b05",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "fbe5734b5cc9ed2151df90a40e46f18daad9b6f653adef36446661b1b712123f",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 369,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 33,
+      "ordinal": 33,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "8105abb3eabb51acf166c48862311c8d3944af2d6da06fa8a98a9558f1a84cbd",
+        "45d80c2660a9ebb771dce64f56b95dafbac70e72fee17b130754d0ab6c8a4383",
+        "53ded69f87b98f18687f3f221b0503e1ccaa741e0f1d07684d8fa57981b77223",
+        "63358d669e094b8a54d51e7b046187379af7f1d037c4cf743c51b0a4b813541d"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "8105abb3eabb51acf166c48862311c8d3944af2d6da06fa8a98a9558f1a84cbd",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:23592960 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "45d80c2660a9ebb771dce64f56b95dafbac70e72fee17b130754d0ab6c8a4383",
+          "offset": 8454144,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "53ded69f87b98f18687f3f221b0503e1ccaa741e0f1d07684d8fa57981b77223",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:75497472 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "63358d669e094b8a54d51e7b046187379af7f1d037c4cf743c51b0a4b813541d",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 409,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 34,
+      "ordinal": 34,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "buffer_hashes": [
+        "b0181cfef9b40303556c8ba86461d606753c01c29794eb8783e6ce020a4829a6",
+        "498fc1fd49da89199457f4df3ff107430f432ea905beb5b8dfbbda726a1f34dc",
+        "65af93bc11dea3f658ba766d854749fde14ef5627092957370a2b6138e742dce",
+        "69289b13ef67b6d17aaf00153745f94cae72baabc555ef60a7387616c6dea1e7"
+      ],
+      "buffers": [
+        {
+          "base": "<buf real:True device:NV size:37748736 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "b0181cfef9b40303556c8ba86461d606753c01c29794eb8783e6ce020a4829a6",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:37748736 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "498fc1fd49da89199457f4df3ff107430f432ea905beb5b8dfbbda726a1f34dc",
+          "offset": 8388608,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:50331648 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "65af93bc11dea3f658ba766d854749fde14ef5627092957370a2b6138e742dce",
+          "offset": 1048576,
+          "shape": null,
+          "strides": null
+        },
+        {
+          "base": "<buf real:True device:NV size:50331648 dtype:dtypes.char>",
+          "dtype": "dtypes.half",
+          "hash": "69289b13ef67b6d17aaf00153745f94cae72baabc555ef60a7387616c6dea1e7",
+          "offset": 0,
+          "shape": null,
+          "strides": null
+        }
+      ],
+      "candidate": {
+        "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+        "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+      },
+      "causal_length": 512,
+      "dtypes": [
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half",
+        "dtypes.half"
+      ],
+      "graph_owned_slice": {
+        "buffer_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "call_index": 449,
+        "contract": "finalized-TinyJit-view",
+        "source": "graph-owned"
+      },
+      "installed": {
+        "identity": null,
+        "program": "nv_sm120_q16_grid_hd128_loop_attention"
+      },
+      "kv_head": 8,
+      "layer": 35,
+      "ordinal": 35,
+      "output_shape": null,
+      "q_head": 32,
+      "same_logical_call": true,
+      "shapes": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "strides": [
+        null,
+        null,
+        null,
+        null
+      ]
+    }
+  ],
+  "candidate": {
+    "abi": "nv_sm120_vkv_h4_t64_w4_online128_v1",
+    "identity": "flash.nv_sm120.vkv_h4_t64_w4_online128.v1.swizzle16.v1"
+  },
+  "census": {
+    "observed": {
+      "candidate": 36,
+      "installed": 36
+    },
+    "predicted": {
+      "candidate": 36,
+      "installed": 36
+    }
+  },
+  "decision": "PASS: exact 36 graph-owned calls captured; comparator manifest ready for F1.2",
+  "exact_population": 36,
+  "graph_owned_slice_semantics": {
+    "full_t512_relaunch": false,
+    "required": true
+  },
+  "installed_program": "nv_sm120_q16_grid_hd128_loop_attention",
+  "manifest_sha256": "51628fc492b1a1a3ef5e6cde3176d430b65747bac7b8b53a7e3b8db3612ebcb1",
+  "next_packet": null,
+  "packet": "F1.1",
+  "schema": "tinygrad.nv_prefill_flash_f1_population.v1",
+  "source_capture": "docs/task_workflow/evidence/nv-prefill-f1-20260829-r4/flash-f1-capture.json",
+  "status": "PASS"
+}

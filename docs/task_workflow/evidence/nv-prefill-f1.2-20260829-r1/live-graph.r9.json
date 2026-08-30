@@ -1,0 +1,764 @@
+{
+  "arms": [
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 104.672,
+      "ordinal": 0,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 100.672,
+      "ordinal": 1,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 103.104,
+      "ordinal": 2,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 104.704,
+      "ordinal": 3,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 101.696,
+      "ordinal": 4,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 99.328,
+      "ordinal": 5,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 103.872,
+      "ordinal": 6,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 103.904,
+      "ordinal": 7,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 102.688,
+      "ordinal": 8,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 105.6,
+      "ordinal": 9,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 102.656,
+      "ordinal": 10,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 106.528,
+      "ordinal": 11,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 101.952,
+      "ordinal": 12,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 106.4,
+      "ordinal": 13,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 104.736,
+      "ordinal": 14,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 103.84,
+      "ordinal": 15,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 102.624,
+      "ordinal": 16,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 99.84,
+      "ordinal": 17,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 104.544,
+      "ordinal": 18,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 103.2,
+      "ordinal": 19,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 107.424,
+      "ordinal": 20,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 101.152,
+      "ordinal": 21,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 104.512,
+      "ordinal": 22,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 104.384,
+      "ordinal": 23,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 104.096,
+      "ordinal": 24,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 106.624,
+      "ordinal": 25,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 105.44,
+      "ordinal": 26,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 103.36,
+      "ordinal": 27,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 105.792,
+      "ordinal": 28,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 103.552,
+      "ordinal": 29,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 104.0,
+      "ordinal": 30,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 105.152,
+      "ordinal": 31,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 104.608,
+      "ordinal": 32,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 103.84,
+      "ordinal": 33,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 104.96,
+      "ordinal": 34,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_0",
+      "buffers": 4,
+      "elapsed_us": 103.52,
+      "ordinal": 35,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6715.168,
+      "ordinal": 0,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6712.96,
+      "ordinal": 1,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6716.0,
+      "ordinal": 2,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6703.552,
+      "ordinal": 3,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6720.32,
+      "ordinal": 4,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6714.496,
+      "ordinal": 5,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6711.264,
+      "ordinal": 6,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6713.696,
+      "ordinal": 7,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6718.944,
+      "ordinal": 8,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6719.168,
+      "ordinal": 9,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6718.4,
+      "ordinal": 10,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6711.904,
+      "ordinal": 11,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6706.144,
+      "ordinal": 12,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6714.112,
+      "ordinal": 13,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6714.656,
+      "ordinal": 14,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6716.096,
+      "ordinal": 15,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6717.504,
+      "ordinal": 16,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6716.448,
+      "ordinal": 17,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6716.224,
+      "ordinal": 18,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6710.848,
+      "ordinal": 19,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6718.112,
+      "ordinal": 20,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6716.352,
+      "ordinal": 21,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6713.984,
+      "ordinal": 22,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6716.736,
+      "ordinal": 23,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6713.472,
+      "ordinal": 24,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6719.776,
+      "ordinal": 25,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6722.048,
+      "ordinal": 26,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6719.424,
+      "ordinal": 27,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6713.632,
+      "ordinal": 28,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6712.288,
+      "ordinal": 29,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6715.264,
+      "ordinal": 30,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6718.112,
+      "ordinal": 31,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6720.576,
+      "ordinal": 32,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6721.536,
+      "ordinal": 33,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6721.568,
+      "ordinal": 34,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "candidate_1",
+      "buffers": 4,
+      "elapsed_us": 6208.288,
+      "ordinal": 35,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 104.768,
+      "ordinal": 0,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 102.176,
+      "ordinal": 1,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 103.712,
+      "ordinal": 2,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 104.128,
+      "ordinal": 3,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 102.624,
+      "ordinal": 4,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 100.768,
+      "ordinal": 5,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 105.312,
+      "ordinal": 6,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 103.072,
+      "ordinal": 7,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 99.552,
+      "ordinal": 8,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 102.88,
+      "ordinal": 9,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 100.288,
+      "ordinal": 10,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 105.664,
+      "ordinal": 11,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 101.344,
+      "ordinal": 12,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 103.168,
+      "ordinal": 13,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 103.744,
+      "ordinal": 14,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 104.064,
+      "ordinal": 15,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 102.528,
+      "ordinal": 16,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 99.136,
+      "ordinal": 17,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 104.864,
+      "ordinal": 18,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 102.112,
+      "ordinal": 19,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 103.776,
+      "ordinal": 20,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 101.76,
+      "ordinal": 21,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 105.28,
+      "ordinal": 22,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 104.32,
+      "ordinal": 23,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 102.144,
+      "ordinal": 24,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 105.6,
+      "ordinal": 25,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 102.848,
+      "ordinal": 26,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 102.944,
+      "ordinal": 27,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 105.216,
+      "ordinal": 28,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 102.624,
+      "ordinal": 29,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 103.488,
+      "ordinal": 30,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 105.024,
+      "ordinal": 31,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 101.888,
+      "ordinal": 32,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 103.36,
+      "ordinal": 33,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 103.072,
+      "ordinal": 34,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    },
+    {
+      "arm": "control_2",
+      "buffers": 4,
+      "elapsed_us": 101.856,
+      "ordinal": 35,
+      "program": "nv_sm120_q16_grid_hd128_loop_attention"
+    }
+  ],
+  "default_enabled": false,
+  "exact_population": 36,
+  "schema": "tinygrad.nv_prefill_flash_f1_2_r9.v1",
+  "status": "PASS"
+}
