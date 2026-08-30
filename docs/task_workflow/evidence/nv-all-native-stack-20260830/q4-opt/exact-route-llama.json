@@ -1,0 +1,558 @@
+{
+  "schema": "tinygrad.nv_llama_packed_q4k_model_arm.v1",
+  "arm": "candidate",
+  "status": "FAIL",
+  "token": 198,
+  "compiler_gate": {
+    "producer": 0,
+    "main": 0,
+    "identity": "llama-single-role"
+  },
+  "final_row_prune": {
+    "enabled": false,
+    "requested_row": null,
+    "last_down_type": "Q6KPrimitiveLinear"
+  },
+  "replay": {
+    "finite": true,
+    "same_activation_exact": true,
+    "distinct_activation_output": true
+  },
+  "census": {
+    "producer": 72,
+    "q4_main_total": 216,
+    "q4_fixup_total": 216,
+    "q6_down_producer": 18,
+    "q6_main_total": 36,
+    "q6_fixup_total": 36,
+    "q4_down_producer": 18,
+    "qkv_ds4_producer": 36,
+    "qkv_d4_producer": 18,
+    "o_producer": 36,
+    "compiler_o_producer": 0,
+    "gate_up_epilogue": 0,
+    "flash_mma_pp512": 36,
+    "roles": {
+      "compiler_gate": {
+        "producer": 0,
+        "main": 0
+      },
+      "llama_up": {
+        "main": 36,
+        "fixup": 36
+      },
+      "llama_other_q4": {
+        "main": 144,
+        "fixup": 144
+      }
+    }
+  },
+  "resources": [
+    {
+      "name": "E_4_32_4_3a39b1a8ecb491ce70bff135129041430248b04e874e29e2e6fd3dbecfcf6703",
+      "regs_usage": 18,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 2688,
+      "lib_bytes": 6336,
+      "program": "E_4_32_4_3a39b1a8ecb491ce70bff135129041430248b04e874e29e2e6fd3dbecfcf6703",
+      "identity": null
+    },
+    {
+      "name": "E_64_72_8_16_4_395e6cf03b22fc5cdf903e0187ce8d28c3b357f66d63517f398106bed93bef5e",
+      "regs_usage": 10,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 4096,
+      "lib_bytes": 6224,
+      "program": "E_64_72_8_16_4_395e6cf03b22fc5cdf903e0187ce8d28c3b357f66d63517f398106bed93bef5e",
+      "identity": null
+    },
+    {
+      "name": "E_512_16_8_2_4_4_2e162bdabfe040283cb257ced27118633de4e59e1679a9699f9c54996923a749",
+      "regs_usage": 47,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 1280,
+      "lib_bytes": 12336,
+      "program": "E_512_16_8_2_4_4_2e162bdabfe040283cb257ced27118633de4e59e1679a9699f9c54996923a749",
+      "identity": null
+    },
+    {
+      "name": "E_64_8_8_16_4_a68bc50f9e7c9af40cc6f41876f6d0816b6c50a02d6a82b38b3888fa9df805c2",
+      "regs_usage": 14,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 4096,
+      "lib_bytes": 6536,
+      "program": "E_64_8_8_16_4_a68bc50f9e7c9af40cc6f41876f6d0816b6c50a02d6a82b38b3888fa9df805c2",
+      "identity": null
+    },
+    {
+      "name": "E_64_64_8_16_4_4ca7d648d46b86ea510ec6bddd0cc0ae3bd58b49b538dfa160729cc7630bc50b",
+      "regs_usage": 14,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 4096,
+      "lib_bytes": 6208,
+      "program": "E_64_64_8_16_4_4ca7d648d46b86ea510ec6bddd0cc0ae3bd58b49b538dfa160729cc7630bc50b",
+      "identity": null
+    },
+    {
+      "name": "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561",
+      "regs_usage": 77,
+      "shared_size_bytes": 2560,
+      "local_size_bytes": 576,
+      "max_threads": 768,
+      "lib_bytes": 14664,
+      "program": "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561",
+      "identity": null
+    },
+    {
+      "name": "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f",
+      "regs_usage": 40,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 1536,
+      "lib_bytes": 8032,
+      "program": "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f",
+      "identity": null
+    },
+    {
+      "name": "q8_d4_fp16_qkv_pp512",
+      "regs_usage": 21,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 2688,
+      "lib_bytes": 10840,
+      "program": "q8_d4_fp16_qkv_pp512",
+      "identity": null
+    },
+    {
+      "name": "q8_ds4_fp16_qkv_pp512",
+      "regs_usage": 21,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 2688,
+      "lib_bytes": 11120,
+      "program": "q8_ds4_fp16_qkv_pp512",
+      "identity": null
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type14ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "regs_usage": 255,
+      "shared_size_bytes": 58880,
+      "local_size_bytes": 648,
+      "max_threads": 256,
+      "lib_bytes": 195720,
+      "program": "_Z15dense_mul_mat_qIL9ggml_type14ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "identity": null
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "regs_usage": 251,
+      "shared_size_bytes": 58880,
+      "local_size_bytes": 576,
+      "max_threads": 256,
+      "lib_bytes": 173928,
+      "program": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "identity": null
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type14ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "regs_usage": 84,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 640,
+      "lib_bytes": 51640,
+      "program": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type14ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "identity": null
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "regs_usage": 251,
+      "shared_size_bytes": 58880,
+      "local_size_bytes": 576,
+      "max_threads": 256,
+      "lib_bytes": 173928,
+      "program": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "identity": null
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "regs_usage": 84,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 640,
+      "lib_bytes": 51640,
+      "program": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "identity": null
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "regs_usage": 84,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 640,
+      "lib_bytes": 51640,
+      "program": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "identity": null
+    },
+    {
+      "name": "r_2_512_8_4_4_16_b17914008932ba19317731d2df1ce96ef3bd1e77dd7e329b26bc33993dd8991a",
+      "regs_usage": 74,
+      "shared_size_bytes": 2560,
+      "local_size_bytes": 576,
+      "max_threads": 768,
+      "lib_bytes": 14848,
+      "program": "r_2_512_8_4_4_16_b17914008932ba19317731d2df1ce96ef3bd1e77dd7e329b26bc33993dd8991a",
+      "identity": null
+    },
+    {
+      "name": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "regs_usage": 14,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 4096,
+      "lib_bytes": 6288,
+      "program": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "identity": null
+    },
+    {
+      "name": "E_32_16_2_8_16_4_4_92835f632441c3fec3dc836c82ac95d56874ada4f189a323c7bd556288c46000",
+      "regs_usage": 40,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 1536,
+      "lib_bytes": 8048,
+      "program": "E_32_16_2_8_16_4_4_92835f632441c3fec3dc836c82ac95d56874ada4f189a323c7bd556288c46000",
+      "identity": null
+    },
+    {
+      "name": "r_8_32_8_4_4_16_5534b419e310bcfa1ca9a84206065c075d335e64050b4b299203989888b6d11f",
+      "regs_usage": 74,
+      "shared_size_bytes": 2560,
+      "local_size_bytes": 576,
+      "max_threads": 768,
+      "lib_bytes": 14360,
+      "program": "r_8_32_8_4_4_16_5534b419e310bcfa1ca9a84206065c075d335e64050b4b299203989888b6d11f",
+      "identity": null
+    },
+    {
+      "name": "E_512_8_8_16_4_3beb6e672d667ab025b462a8a349e9410f0a7a355c75a193e0102ffe614e61ae",
+      "regs_usage": 36,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 1536,
+      "lib_bytes": 7768,
+      "program": "E_512_8_8_16_4_3beb6e672d667ab025b462a8a349e9410f0a7a355c75a193e0102ffe614e61ae",
+      "identity": null
+    },
+    {
+      "name": "E_8_16_2_8_16_4_4_bfb7c071f7fb3ecd1ad8447888e9dff1f8e4a365777018ee630985cd76194445",
+      "regs_usage": 40,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 1536,
+      "lib_bytes": 8048,
+      "program": "E_8_16_2_8_16_4_4_bfb7c071f7fb3ecd1ad8447888e9dff1f8e4a365777018ee630985cd76194445",
+      "identity": null
+    },
+    {
+      "name": "E_512_8_8_16_2_b670c5708399356dcdffdef578139073da2690540fe3a08097726bf6aa662b66",
+      "regs_usage": 26,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 2048,
+      "lib_bytes": 6960,
+      "program": "E_512_8_8_16_2_b670c5708399356dcdffdef578139073da2690540fe3a08097726bf6aa662b66",
+      "identity": null
+    },
+    {
+      "name": "E_8_64_2_8_16_4_3811b7bfac2b07dd7368a464a1fddd9ef556da0fb5b26e9a48c08094016a846c",
+      "regs_usage": 12,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 4096,
+      "lib_bytes": 6288,
+      "program": "E_8_64_2_8_16_4_3811b7bfac2b07dd7368a464a1fddd9ef556da0fb5b26e9a48c08094016a846c",
+      "identity": null
+    },
+    {
+      "name": "E_8_64_2_8_16_4_fc998831c49c4e2c9d9fae72b5e4ec1c2a8781bc292d4a4796d9a120820b5d3a",
+      "regs_usage": 10,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 4096,
+      "lib_bytes": 6288,
+      "program": "E_8_64_2_8_16_4_fc998831c49c4e2c9d9fae72b5e4ec1c2a8781bc292d4a4796d9a120820b5d3a",
+      "identity": null
+    },
+    {
+      "name": "nv_llama_fattn_mma_pp512",
+      "regs_usage": 255,
+      "shared_size_bytes": 38144,
+      "local_size_bytes": 600,
+      "max_threads": 256,
+      "lib_bytes": 197328,
+      "program": "nv_llama_fattn_mma_pp512",
+      "identity": null
+    },
+    {
+      "name": "E_64_64_8_16_4_5361cb456fed9cef2355a716696c409941ed1e2d444343bdd8596b747bb8376f",
+      "regs_usage": 14,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 4096,
+      "lib_bytes": 6272,
+      "program": "E_64_64_8_16_4_5361cb456fed9cef2355a716696c409941ed1e2d444343bdd8596b747bb8376f",
+      "identity": null
+    },
+    {
+      "name": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "regs_usage": 10,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 4096,
+      "lib_bytes": 6272,
+      "program": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "identity": null
+    },
+    {
+      "name": "q8_ds4_fp16_o_pp512",
+      "regs_usage": 21,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 2688,
+      "lib_bytes": 11120,
+      "program": "q8_ds4_fp16_o_pp512",
+      "identity": null
+    },
+    {
+      "name": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "regs_usage": 14,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 4096,
+      "lib_bytes": 6208,
+      "program": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "identity": null
+    },
+    {
+      "name": "E_64_64_8_16_4_dfb4f4f505716533c80c2fbef495f94d8affe282e39b40d96f3fdc5b8649c948",
+      "regs_usage": 22,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 2688,
+      "lib_bytes": 6592,
+      "program": "E_64_64_8_16_4_dfb4f4f505716533c80c2fbef495f94d8affe282e39b40d96f3fdc5b8649c948",
+      "identity": null
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "regs_usage": 21,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 2688,
+      "lib_bytes": 11120,
+      "program": "q8_ds4_fp16_pp512",
+      "identity": null
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "regs_usage": 251,
+      "shared_size_bytes": 58880,
+      "local_size_bytes": 576,
+      "max_threads": 256,
+      "lib_bytes": 173928,
+      "program": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "identity": null
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "regs_usage": 84,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 640,
+      "lib_bytes": 51640,
+      "program": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "identity": null
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "regs_usage": 20,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 2688,
+      "lib_bytes": 9976,
+      "program": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "identity": null
+    },
+    {
+      "name": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "regs_usage": 14,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 4096,
+      "lib_bytes": 6272,
+      "program": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "identity": null
+    },
+    {
+      "name": "q8_d4_fp16_down_pp512",
+      "regs_usage": 21,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 2688,
+      "lib_bytes": 10840,
+      "program": "q8_d4_fp16_down_pp512",
+      "identity": null
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type14ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "regs_usage": 255,
+      "shared_size_bytes": 58880,
+      "local_size_bytes": 648,
+      "max_threads": 256,
+      "lib_bytes": 195720,
+      "program": "_Z15dense_mul_mat_qIL9ggml_type14ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "identity": null
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type14ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "regs_usage": 84,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 640,
+      "lib_bytes": 51640,
+      "program": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type14ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "identity": null
+    },
+    {
+      "name": "E_64_64_8_16_4_655332ee325f66bbd19a0a9f7ca8e8da98665ae71ce0894dae6e08a7a1de8e63",
+      "regs_usage": 22,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 2688,
+      "lib_bytes": 6592,
+      "program": "E_64_64_8_16_4_655332ee325f66bbd19a0a9f7ca8e8da98665ae71ce0894dae6e08a7a1de8e63",
+      "identity": null
+    },
+    {
+      "name": "q8_ds4_fp16_down_pp512",
+      "regs_usage": 21,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 2688,
+      "lib_bytes": 11120,
+      "program": "q8_ds4_fp16_down_pp512",
+      "identity": null
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "regs_usage": 251,
+      "shared_size_bytes": 58880,
+      "local_size_bytes": 576,
+      "max_threads": 256,
+      "lib_bytes": 173928,
+      "program": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "identity": null
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "regs_usage": 84,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 640,
+      "lib_bytes": 51640,
+      "program": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "identity": null
+    },
+    {
+      "name": "E_32_32_4_b40df518db73306f86383beaaac2e8a9626cf76088ae278b79304430f5ebf3b2",
+      "regs_usage": 30,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 2048,
+      "lib_bytes": 7128,
+      "program": "E_32_32_4_b40df518db73306f86383beaaac2e8a9626cf76088ae278b79304430f5ebf3b2",
+      "identity": null
+    },
+    {
+      "name": "q8_vocab_fp32",
+      "regs_usage": 19,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 2688,
+      "lib_bytes": 9568,
+      "program": "q8_vocab_fp32",
+      "identity": null
+    },
+    {
+      "name": "q6k_vocab_hcq",
+      "regs_usage": 36,
+      "shared_size_bytes": 2432,
+      "local_size_bytes": 576,
+      "max_threads": 1536,
+      "lib_bytes": 37312,
+      "program": "q6k_vocab_hcq",
+      "identity": null
+    },
+    {
+      "name": "E_1187_32_4_1f3be8c704fca4f7027f54e56f61fc8985ee837bc19d3f7b6f5875c98824e63e",
+      "regs_usage": 14,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 4096,
+      "lib_bytes": 6112,
+      "program": "E_1187_32_4_1f3be8c704fca4f7027f54e56f61fc8985ee837bc19d3f7b6f5875c98824e63e",
+      "identity": null
+    },
+    {
+      "name": "E_1187_32_4_f4beb3197f89422fc17cc43ac33fb098f9c26058821e6e2828cc2932988e44da",
+      "regs_usage": 14,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 4096,
+      "lib_bytes": 6112,
+      "program": "E_1187_32_4_f4beb3197f89422fc17cc43ac33fb098f9c26058821e6e2828cc2932988e44da",
+      "identity": null
+    },
+    {
+      "name": "native_finite_fp32_argmax_151936_t1024",
+      "regs_usage": 31,
+      "shared_size_bytes": 2304,
+      "local_size_bytes": 576,
+      "max_threads": 2048,
+      "lib_bytes": 11712,
+      "program": "native_finite_fp32_argmax_151936_t1024",
+      "identity": null
+    },
+    {
+      "name": "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346",
+      "regs_usage": 8,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 8192,
+      "lib_bytes": 5760,
+      "program": "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346",
+      "identity": null
+    }
+  ],
+  "wall": {
+    "samples_ms": [
+      35.326032,
+      35.330812,
+      35.560864,
+      35.693463,
+      35.734962,
+      35.708902,
+      35.749578,
+      35.724973,
+      35.815002
+    ],
+    "min_ms": 35.326032,
+    "median_ms": 35.708902,
+    "tok_s": 14493.561009059835
+  }
+}

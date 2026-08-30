@@ -1,0 +1,80 @@
+{
+  "device": "NV",
+  "identity_sha256": "0e54d3bc96763ded73bd7edd95ff7f8fee748e886ffbd851f60d6498082e1933",
+  "llama_dependency": false,
+  "old_fixup_programs": 0,
+  "one_owner": true,
+  "partial_workspace_bytes": 0,
+  "roles": [
+    {
+      "candidate_identity": "c16114d2797f68777892f24fe77a146153266241366f1c0210a33f7372758565",
+      "canonical_weight": true,
+      "copies": null,
+      "expanded_weight_copy": false,
+      "materializations": null,
+      "note": "binding exposes producer/main as one scheduler graph; split device events unavailable",
+      "producer_main_split_us": null,
+      "program_identity": {
+        "main": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_ba40701e00ba0d8764b731dad769e053f047d8120dd76fe7ec21abc3fd063220",
+        "producer": "q8_compact_record_fp16_q6_attn_v"
+      },
+      "reps": 9,
+      "role": "attn_v",
+      "shape": {
+        "K": 4096,
+        "M": 512,
+        "N": 1024
+      },
+      "timing_us": {
+        "median": 9.558,
+        "samples": [
+          22.843,
+          11.902,
+          10.029,
+          9.588,
+          9.558,
+          8.836,
+          8.175,
+          7.934,
+          7.955
+        ]
+      }
+    },
+    {
+      "candidate_identity": "77d681357cdf89ae284fd64344eb192f37377ff39108418b15e52615af25cb3e",
+      "canonical_weight": true,
+      "copies": null,
+      "expanded_weight_copy": false,
+      "materializations": null,
+      "note": "binding exposes producer/main as one scheduler graph; split device events unavailable",
+      "producer_main_split_us": null,
+      "program_identity": {
+        "main": "r_8_128_32_2_2_2_2_2_2_192_2_2_2_e7b50137881894b03e7c8a05e6d8f1cd1d1f2effd185e444406c3532cf771c74",
+        "producer": "q8_compact_record_fp16_q6_ffn_down"
+      },
+      "reps": 9,
+      "role": "ffn_down",
+      "shape": {
+        "K": 12288,
+        "M": 512,
+        "N": 4096
+      },
+      "timing_us": {
+        "median": 8.957,
+        "samples": [
+          22.232,
+          11.662,
+          9.868,
+          9.007,
+          8.957,
+          8.285,
+          8.086,
+          7.654,
+          7.735
+        ]
+      }
+    }
+  ],
+  "schema": "tinygrad.nv_compiler_q6k_pp512_included_microgate.v1",
+  "status": "PASS"
+}

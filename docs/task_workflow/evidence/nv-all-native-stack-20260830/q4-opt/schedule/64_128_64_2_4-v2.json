@@ -1,0 +1,66 @@
+{
+  "schema": "tinygrad.nv_llama_packed_q4k_model_arm.v1",
+  "arm": "candidate",
+  "status": "PASS",
+  "token": 198,
+  "compiler_gate": {
+    "producer": 36,
+    "main": 36,
+    "identity": "97f24c7e6d6e00b44df5ac702d3624b85b6d1811ad2e1ac3e535902af3300c16"
+  },
+  "final_row_prune": {
+    "enabled": false,
+    "requested_row": null,
+    "last_down_type": "Q6KPrimitiveLinear"
+  },
+  "replay": {
+    "finite": true,
+    "same_activation_exact": true,
+    "distinct_activation_output": true
+  },
+  "census": {
+    "producer": 36,
+    "q4_main_total": 180,
+    "q4_fixup_total": 180,
+    "q6_down_producer": 18,
+    "q6_main_total": 36,
+    "q6_fixup_total": 36,
+    "q4_down_producer": 18,
+    "qkv_ds4_producer": 36,
+    "qkv_d4_producer": 18,
+    "o_producer": 36,
+    "compiler_o_producer": 36,
+    "gate_up_epilogue": 0,
+    "flash_mma_pp512": 36,
+    "roles": {
+      "compiler_gate": {
+        "producer": 36,
+        "main": 36
+      },
+      "llama_up": {
+        "main": 36,
+        "fixup": 36
+      },
+      "llama_other_q4": {
+        "main": 144,
+        "fixup": 144
+      }
+    }
+  },
+  "wall": {
+    "samples_ms": [
+      43.26091,
+      43.599225,
+      43.417894,
+      43.35687,
+      43.27726,
+      43.289704,
+      43.528763,
+      43.555042,
+      43.51653
+    ],
+    "min_ms": 43.26091,
+    "median_ms": 43.417894,
+    "tok_s": 11835.164817383637
+  }
+}

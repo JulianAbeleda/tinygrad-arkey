@@ -1,0 +1,65 @@
+{
+  "schema": "tinygrad.nv_q6_persistent_ast_probe.v3",
+  "status": "PASS",
+  "tc_axes": {
+    "role": "ffn_down",
+    "selected_axes": [
+      {
+        "op": "RANGE",
+        "dtype": "dtypes.weakint",
+        "arg": "(2, AxisType.GLOBAL)",
+        "src": 1
+      },
+      {
+        "op": "RANGE",
+        "dtype": "dtypes.weakint",
+        "arg": "(1, AxisType.GLOBAL)",
+        "src": 1
+      },
+      {
+        "op": "RANGE",
+        "dtype": "dtypes.weakint",
+        "arg": "(0, AxisType.REDUCE)",
+        "src": 1
+      }
+    ],
+    "geometry": "KernelTileGeometry(tile=(64, 32, 64), waves=(2, 2), threads=128, wave_size=32, lds_windows=(KernelLDSWindow(role='A', base=0, end=5120, stride_bytes=80), KernelLDSWindow(role='B', base=5120, end=7680, stride_bytes=80)), lds_components=(), lds_regions=())",
+    "scheduler_shape": [
+      "512",
+      "1024",
+      "4096"
+    ],
+    "axis_types": [
+      "AxisType.GLOBAL",
+      "AxisType.GLOBAL",
+      "AxisType.REDUCE"
+    ],
+    "scheduler_ranges": [
+      {
+        "op": "RANGE",
+        "dtype": "dtypes.weakint",
+        "arg": "(1, AxisType.GLOBAL)",
+        "src": 1
+      },
+      {
+        "op": "RANGE",
+        "dtype": "dtypes.weakint",
+        "arg": "(2, AxisType.GLOBAL)",
+        "src": 1
+      },
+      {
+        "op": "RANGE",
+        "dtype": "dtypes.weakint",
+        "arg": "(0, AxisType.REDUCE)",
+        "src": 1
+      }
+    ]
+  },
+  "owner_proof": {
+    "owners": 128,
+    "iterations": 8,
+    "tiles": 1024,
+    "bijection": true
+  },
+  "persistent_transform": "NOT_APPLIED: callback is observational; M-axis retag requires verified AxisType transition API"
+}

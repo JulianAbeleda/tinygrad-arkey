@@ -1,0 +1,35 @@
+{
+  "status": "PASS",
+  "compact_vs_llama": {
+    "max_abs": 4.291534423828125e-06,
+    "allclose": true,
+    "finite": true
+  },
+  "timing": {
+    "llama": {
+      "median_us": 247.755,
+      "samples_us": [
+        431.359,
+        258.816,
+        247.755,
+        246.052,
+        242.135
+      ]
+    },
+    "compact_with_llama_producer": {
+      "median_us": 414.648,
+      "samples_us": [
+        475.542,
+        414.648,
+        417.734,
+        409.428,
+        410.53
+      ]
+    }
+  },
+  "census": {
+    "llama_projections": 2,
+    "compact_mains": 2
+  },
+  "record_words": 594432
+}

@@ -1,0 +1,54 @@
+{
+  "status": "PASS",
+  "abi": "q8_1.logical_mk_to_s8.ds4.v2",
+  "block_bytes": 144,
+  "blocks": 16384,
+  "payload_bytes": 2359296,
+  "tail_bytes": 18432,
+  "record_bytes": 2377728,
+  "boundary_checks": [
+    {
+      "block": 0,
+      "lane": 0,
+      "q_byte": 16,
+      "d_byte": 0,
+      "s_byte": 8
+    },
+    {
+      "block": 0,
+      "lane": 31,
+      "q_byte": 47,
+      "d_byte": 0,
+      "s_byte": 8
+    },
+    {
+      "block": 0,
+      "lane": 32,
+      "q_byte": 48,
+      "d_byte": 4,
+      "s_byte": 12
+    },
+    {
+      "block": 0,
+      "lane": 127,
+      "q_byte": 143,
+      "d_byte": 12,
+      "s_byte": 20
+    },
+    {
+      "block": 1,
+      "lane": 0,
+      "q_byte": 160,
+      "d_byte": 144,
+      "s_byte": 152
+    },
+    {
+      "block": 16383,
+      "lane": 127,
+      "q_byte": 2359295,
+      "d_byte": 2359164,
+      "s_byte": 2359172
+    }
+  ],
+  "supersedes": "tile-major-q8-provider.json (incorrect 36-byte hypothesis)"
+}

@@ -1,0 +1,14 @@
+{
+  "census": {
+    "alloc": 2048,
+    "barriers": 1,
+    "coverage": 2048,
+    "loads": 16,
+    "stores": 16
+  },
+  "exact": true,
+  "finite": true,
+  "max_abs": 0.0,
+  "schema": "nv2a_readback/v1",
+  "status": "PASS"
+}

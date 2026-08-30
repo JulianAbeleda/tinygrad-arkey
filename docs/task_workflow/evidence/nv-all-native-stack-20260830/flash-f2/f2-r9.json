@@ -1,0 +1,99 @@
+{
+  "comparison": {
+    "allclose": true,
+    "finite": true,
+    "max_abs": 0.001953125,
+    "mean_abs": 0.00012636184692382812,
+    "requested": true
+  },
+  "program": {
+    "accumulator_dtype": "float32",
+    "census": {
+      "owners": 1,
+      "programs": 1
+    },
+    "identity": {
+      "program_id": "fixture_t512_start0",
+      "provenance": "tinygrad_scheduler_generated",
+      "route_id": "nv_native_flash_pp512"
+    },
+    "output_dtype": "float16",
+    "provenance": "tinygrad_scheduler_generated"
+  },
+  "r9": {
+    "bootstrap_ci95_ms": [
+      -34.938449738547206,
+      -24.41889396868646
+    ],
+    "candidate_median_ms": 8.036638144403696,
+    "candidate_ms": [
+      8.638169150799513,
+      8.092944044619799,
+      7.733477978035808,
+      8.054041070863605,
+      7.666711928322911,
+      8.10430501587689,
+      7.738908054307103,
+      8.036638144403696,
+      7.939145201817155
+    ],
+    "control_median_ms": 32.8463870100677,
+    "control_ms": [
+      43.57661888934672,
+      32.51183801330626,
+      32.8463870100677,
+      32.66870300285518,
+      32.83228981308639,
+      32.694672932848334,
+      33.09219889342785,
+      32.92630705982447,
+      33.08089799247682
+    ],
+    "delta_median_ms": -24.809748865664005,
+    "requested": true,
+    "samples": 9
+  },
+  "request": {
+    "k_shape": [
+      1,
+      8,
+      512,
+      128
+    ],
+    "q_shape": [
+      1,
+      32,
+      512,
+      128
+    ],
+    "scale": 0.08837890625,
+    "scale_dtype": "float16",
+    "v_shape": [
+      1,
+      8,
+      512,
+      128
+    ]
+  },
+  "schema": "nv_native_flash_pp512_gate/v1",
+  "spec": {
+    "abi": "tinygrad.native_flash_pp512.v1",
+    "accumulation_dtype": "float32",
+    "batch": 1,
+    "causal": true,
+    "head_dim": 128,
+    "k_dtype": "float16",
+    "kv_heads": 8,
+    "live_tokens": 512,
+    "output_dtype": "float16",
+    "output_layout": "B,Hq,T,Hd",
+    "q_dtype": "float16",
+    "query_group_size": 4,
+    "query_heads": 32,
+    "start_pos": 0,
+    "tokens": 512,
+    "v_dtype": "float16"
+  },
+  "stage": "complete",
+  "status": "CONSTRUCTED"
+}

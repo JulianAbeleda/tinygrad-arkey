@@ -1,0 +1,66 @@
+{
+  "schema": "tinygrad.nv_llama_packed_q4k_model_arm.v1",
+  "arm": "control",
+  "status": "PASS",
+  "token": 198,
+  "compiler_gate": {
+    "producer": 0,
+    "main": 0,
+    "identity": null
+  },
+  "final_row_prune": {
+    "enabled": false,
+    "requested_row": null,
+    "last_down_type": "Q6KPrimitiveLinear"
+  },
+  "replay": {
+    "finite": true,
+    "same_activation_exact": true,
+    "distinct_activation_output": true
+  },
+  "census": {
+    "producer": 0,
+    "q4_main_total": 0,
+    "q4_fixup_total": 0,
+    "q6_down_producer": 0,
+    "q6_main_total": 0,
+    "q6_fixup_total": 0,
+    "q4_down_producer": 0,
+    "qkv_ds4_producer": 0,
+    "qkv_d4_producer": 0,
+    "o_producer": 0,
+    "compiler_o_producer": 0,
+    "gate_up_epilogue": 0,
+    "flash_mma_pp512": 0,
+    "roles": {
+      "compiler_gate": {
+        "producer": 0,
+        "main": 0
+      },
+      "llama_up": {
+        "main": 36,
+        "fixup": 36
+      },
+      "llama_other_q4": {
+        "main": 144,
+        "fixup": 144
+      }
+    }
+  },
+  "wall": {
+    "samples_ms": [
+      83.924252,
+      83.725319,
+      84.165896,
+      83.876953,
+      83.896521,
+      83.704719,
+      83.86494,
+      84.04548,
+      84.055789
+    ],
+    "min_ms": 83.704719,
+    "median_ms": 83.896521,
+    "tok_s": 6116.7399654014735
+  }
+}

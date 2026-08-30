@@ -1,0 +1,56 @@
+{
+  "binary_provenance": "tinygrad UOp KernelProgram emitters",
+  "candidate_id": "nv_vocab_manyrow_q8_q6",
+  "census": {
+    "consumer_programs": 1,
+    "evidence_cubins": 0,
+    "llama_programs": 0,
+    "one_owner": true,
+    "physical_main_invocations": 1,
+    "producer_programs": 1
+  },
+  "consumer": {
+    "dtype": "float32",
+    "identity": "nv_vocab_manyrow/q6_mmvq",
+    "input_packet": [
+      1152
+    ],
+    "output": [
+      151936
+    ],
+    "weights": {
+      "dtype": "uint16",
+      "shape": [
+        151936,
+        4096
+      ]
+    }
+  },
+  "default_enabled": false,
+  "device": "NV",
+  "integration": "not_model_integrated",
+  "origin": "tinygrad_generated",
+  "output": {
+    "logits": 151936,
+    "shape": [
+      1,
+      1,
+      151936
+    ]
+  },
+  "producer": {
+    "dtype": "uint32",
+    "groups": 128,
+    "identity": "nv_vocab_manyrow/q8_provider",
+    "input": [
+      1,
+      1,
+      4096
+    ],
+    "output": [
+      1152
+    ]
+  },
+  "schema": "nv_q6k_vocab_manyrow_native_candidate/v1",
+  "violations": []
+}

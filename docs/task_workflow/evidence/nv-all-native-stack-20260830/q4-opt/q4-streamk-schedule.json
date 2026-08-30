@@ -1,0 +1,29 @@
+{
+  "status": "PASS",
+  "schema": "q4.streamk.schedule.v1",
+  "geometry": {
+    "M": 512,
+    "N": 12288,
+    "K": 4096,
+    "tile": [
+      128,
+      128,
+      64
+    ]
+  },
+  "output_tiles": 384,
+  "k_blocks": 64,
+  "total_work": 24576,
+  "owners": 170,
+  "partial_slots": 340,
+  "first_interval": [
+    0,
+    144
+  ],
+  "last_interval": [
+    24431,
+    24576
+  ],
+  "fixup_grid": 384,
+  "generic_interface": "StreamKScheduleSpec can parameterize Q4/Q6 tile body, owner partition, partial slots, and deterministic fixup map"
+}

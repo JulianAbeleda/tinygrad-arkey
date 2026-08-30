@@ -1,0 +1,45 @@
+{
+  "status": "PASS",
+  "correctness": {
+    "finite": true,
+    "allclose": true,
+    "max_abs": 5.7220458984375e-06
+  },
+  "timing": {
+    "compiler_main": {
+      "median_us": 483.548,
+      "samples_us": [
+        692.169,
+        569.86,
+        542.248,
+        496.602,
+        482.987,
+        483.548,
+        473.549,
+        478.237,
+        475.092
+      ]
+    },
+    "llama_main_fixup": {
+      "median_us": 237.817,
+      "samples_us": [
+        320.252,
+        250.3,
+        239.439,
+        244.639,
+        237.817,
+        236.785,
+        237.065,
+        234.691,
+        237.797
+      ]
+    }
+  },
+  "census": {
+    "compiler_calls": [
+      "r_4_96_32_2_4_2_2_4_4_64_2_2_2_935fa94582717016dc14adf226c254ef8614289ec52e39d198673c304b86e430"
+    ],
+    "llama_calls": [],
+    "record_producer_outside_timing": true
+  }
+}

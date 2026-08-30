@@ -1,0 +1,53 @@
+{
+  "schema": "tinygrad.nv_q6k_down_compiler_vs_llama_oracle.v1",
+  "status": "PASS",
+  "correctness": {
+    "finite_compiler": true,
+    "finite_llama": true,
+    "max_abs": 0.0,
+    "mean_abs": 0.0,
+    "allclose": true
+  },
+  "timing_ms": {
+    "compiler_samples": [
+      24.279173,
+      4.697419,
+      0.699934,
+      0.69781,
+      0.691499,
+      0.702388,
+      0.685597,
+      0.691509,
+      0.684965
+    ],
+    "llama_samples": [
+      7.263166,
+      0.313208,
+      0.299913,
+      0.294934,
+      0.290195,
+      0.293461,
+      0.291417,
+      0.29274,
+      0.292599
+    ],
+    "compiler_median": 0.69781,
+    "llama_median": 0.293461,
+    "delta": 0.404349
+  },
+  "census": {
+    "compiler_producer": 1,
+    "compiler_main": 1,
+    "compiler_fixup": 0,
+    "llama_producer": 1,
+    "llama_main": 1,
+    "llama_fixup": 1,
+    "compiler_partial_workspace": 0,
+    "llama_partial_workspace": "present"
+  },
+  "shape": [
+    512,
+    4096,
+    12288
+  ]
+}

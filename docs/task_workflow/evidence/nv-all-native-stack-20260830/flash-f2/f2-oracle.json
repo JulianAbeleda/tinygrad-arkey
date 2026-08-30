@@ -1,0 +1,107 @@
+{
+  "comparison": {
+    "allclose": true,
+    "finite": true,
+    "max_abs": 0.001953125,
+    "mean_abs": 0.00012636184692382812,
+    "oracle_allclose": true,
+    "oracle_max_abs": 0.0011930465698242188,
+    "requested": true
+  },
+  "program": {
+    "accumulator_dtype": "float32",
+    "census": {
+      "owners": 1,
+      "programs": 1
+    },
+    "identity": {
+      "program_id": "fixture_t512_start0",
+      "provenance": "tinygrad_scheduler_generated",
+      "route_id": "nv_native_flash_pp512"
+    },
+    "output_dtype": "float16",
+    "provenance": "tinygrad_scheduler_generated"
+  },
+  "provenance": {
+    "oracle": "cleanroom_prebuilt_oracle"
+  },
+  "r9": {
+    "bootstrap_ci95_ms": [
+      -34.920339938253164,
+      -23.734262911602855
+    ],
+    "budget_note": "compare this single attention layer against the ~35 ms full-model pp512 budget",
+    "candidate_median_ms": 8.468959014862776,
+    "candidate_ms": [
+      8.910038974136114,
+      9.355125017464161,
+      8.920687949284911,
+      8.689183043316007,
+      8.468959014862776,
+      8.243775926530361,
+      7.93784111738205,
+      8.219789946451783,
+      8.043439127504826
+    ],
+    "candidate_vs_oracle_ratio": 2.1650312523883026,
+    "control_median_ms": 33.2366949878633,
+    "control_ms": [
+      33.164147986099124,
+      33.089387929067016,
+      38.65584218874574,
+      43.60952298156917,
+      34.63578503578901,
+      34.35471607372165,
+      32.781149027869105,
+      32.72362006828189,
+      33.2366949878633
+    ],
+    "delta_median_ms": -24.767735973000526,
+    "oracle_ms": 3.9117028936743736,
+    "requested": true,
+    "samples": 9
+  },
+  "request": {
+    "k_shape": [
+      1,
+      8,
+      512,
+      128
+    ],
+    "q_shape": [
+      1,
+      32,
+      512,
+      128
+    ],
+    "scale": 0.08837890625,
+    "scale_dtype": "float16",
+    "v_shape": [
+      1,
+      8,
+      512,
+      128
+    ]
+  },
+  "schema": "nv_native_flash_pp512_gate/v1",
+  "spec": {
+    "abi": "tinygrad.native_flash_pp512.v1",
+    "accumulation_dtype": "float32",
+    "batch": 1,
+    "causal": true,
+    "head_dim": 128,
+    "k_dtype": "float16",
+    "kv_heads": 8,
+    "live_tokens": 512,
+    "output_dtype": "float16",
+    "output_layout": "B,Hq,T,Hd",
+    "q_dtype": "float16",
+    "query_group_size": 4,
+    "query_heads": 32,
+    "start_pos": 0,
+    "tokens": 512,
+    "v_dtype": "float16"
+  },
+  "stage": "complete",
+  "status": "CONSTRUCTED"
+}

@@ -1,0 +1,37 @@
+{
+  "schema": "q4.q8-record-contract.v1",
+  "status": "FAIL",
+  "canonical_spec": {
+    "M": 512,
+    "K": 4096,
+    "record_alignment_bytes": 16,
+    "zero_copy_required": true
+  },
+  "compiler": {
+    "shape_u32": [
+      655360
+    ],
+    "bytes": 2621440,
+    "q_bytes": 2097152,
+    "scale_bytes": 262144,
+    "sum_bytes": 262144,
+    "layout": "q[M*K] + scales[M*K/32] + sums[M*K/32]",
+    "signedness": "q signed int8, carrier uint32"
+  },
+  "llama": {
+    "shape_u32": [
+      594432
+    ],
+    "bytes": 2377728,
+    "payload_bytes": 2359296,
+    "tail_bytes": 18432,
+    "layout": "Q8_1 tile records (144-byte records), tile-major",
+    "signedness": "opaque packed Q8_1"
+  },
+  "mismatch": {
+    "bytes": 243712,
+    "reason": "different record ABI/layout; compiler main expects flat q/scales/sums carrier, llama main expects 144-byte Q8_1 tiles"
+  },
+  "mmu_cause": "Passing the smaller llama-owned allocation to compiler main causes out-of-bounds reads into unmapped memory.",
+  "required_change": "Make producer emit compiler flat carrier layout, or add an explicit repacking adapter; only the former permits zero-copy."
+}

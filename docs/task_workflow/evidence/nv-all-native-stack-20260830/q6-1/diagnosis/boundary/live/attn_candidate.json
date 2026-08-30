@@ -1,0 +1,9 @@
+{
+  "downstream_finite": true,
+  "families": [],
+  "limitation": "live runtime invocation requires scheduler-owned launch replacement and cannot be safely reconstructed by this probe",
+  "producer_consumer_edges": null,
+  "runtime_timings_us": null,
+  "schema": "tinygrad.nv_compiler_q6k_boundary_runtime_probe.live.v1",
+  "status": "BLOCKED"
+}

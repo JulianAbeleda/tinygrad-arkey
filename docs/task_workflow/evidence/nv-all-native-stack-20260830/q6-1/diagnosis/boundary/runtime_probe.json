@@ -1,0 +1,10 @@
+{
+  "device_durations_us": null,
+  "doubled_families": {},
+  "dtype_shape_edges": null,
+  "limitation": "TinyJit runtimes and buffer handles are process-local and absent from saved model-arm JSON; rerun must instrument the live process",
+  "pure_conversion_proven": false,
+  "runtime_invocation": "UNAVAILABLE",
+  "schema": "tinygrad.nv_compiler_q6k_boundary_runtime_probe.v1",
+  "status": "BLOCKED"
+}
