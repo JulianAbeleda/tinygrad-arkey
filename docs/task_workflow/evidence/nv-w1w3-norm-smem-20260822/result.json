@@ -1,0 +1,102 @@
+{
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "method": "render production CUDA -> nvcc sm_120a -> cudaEvent",
+  "norm_once_vs_m1_bitwise_identical": true,
+  "passes": 200,
+  "ptxas": [
+    "ptxas info    : 0 bytes gmem",
+    "ptxas info    : Compiling entry function 'q4k_w1w3_norm_smemv4_16_12288_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_w1w3_norm_smemv4_16_12288_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 57 registers, used 1 barriers, 8192 bytes smem",
+    "ptxas info    : Compile time = 25.775 ms",
+    "ptxas info    : Compiling entry function 'q4k_w1w3_norm_smem16_12288_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_w1w3_norm_smem16_12288_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 57 registers, used 1 barriers, 8192 bytes smem",
+    "ptxas info    : Compile time = 25.384 ms",
+    "ptxas info    : Compiling entry function 'q4k_w1w3_norm_once16_12288_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_w1w3_norm_once16_12288_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 80 registers, used 0 barriers",
+    "ptxas info    : Compile time = 28.174 ms",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_w1w3_rms_affine16_12288_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 80 registers, used 0 barriers",
+    "ptxas info    : Compile time = 28.221 ms",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_w1w3fused16_12288_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 74 registers, used 0 barriers",
+    "ptxas info    : Compile time = 22.413 ms"
+  ],
+  "raw_stdout": [
+    "smem_vs_norm_once_bitwise_identical=1",
+    "smemv4_vs_norm_once_bitwise_identical=1",
+    "norm_once_vs_m1_bitwise_identical=1",
+    "shape=12288x4096 passes=200 reps=5",
+    "rep=0 control=22.6341 m1=33.3824 norm_once=33.3496 smem_norm=37.3866 smem_v4=31.0296",
+    "rep=1 control=22.5330 m1=33.5213 norm_once=33.8541 smem_norm=37.8373 smem_v4=31.4219",
+    "rep=2 control=22.9240 m1=33.9205 norm_once=33.9357 smem_norm=37.8014 smem_v4=31.3782",
+    "rep=3 control=22.7979 m1=33.8694 norm_once=33.9200 smem_norm=37.9285 smem_v4=31.1920",
+    "rep=4 control=22.6330 m1=33.4651 norm_once=33.4957 smem_norm=37.4819 smem_v4=31.2939"
+  ],
+  "reps": 5,
+  "schema": "tinygrad.q4k_w1w3_norm_smem_microgate.v1",
+  "shape": {
+    "k": 4096,
+    "rows": 12288
+  },
+  "smem_vs_norm_once_bitwise_identical": true,
+  "smemv4_vs_norm_once_bitwise_identical": true,
+  "timing": {
+    "control": [
+      22.6341,
+      22.533,
+      22.924,
+      22.7979,
+      22.633
+    ],
+    "control_median": 22.6341,
+    "m1": [
+      33.3824,
+      33.5213,
+      33.9205,
+      33.8694,
+      33.4651
+    ],
+    "m1_median": 33.5213,
+    "m1_over_control": 1.4810087434446255,
+    "norm_once": [
+      33.3496,
+      33.8541,
+      33.9357,
+      33.92,
+      33.4957
+    ],
+    "norm_once_median": 33.8541,
+    "norm_once_over_control": 1.4957122218245922,
+    "smem_norm": [
+      37.3866,
+      37.8373,
+      37.8014,
+      37.9285,
+      37.4819
+    ],
+    "smem_norm_median": 37.8014,
+    "smem_norm_over_control": 1.6701083762994773,
+    "smem_norm_over_norm_once": 1.1165973988379545,
+    "smem_v4": [
+      31.0296,
+      31.4219,
+      31.3782,
+      31.192,
+      31.2939
+    ],
+    "smem_v4_median": 31.2939,
+    "smem_v4_over_control": 1.3825997057537078,
+    "smem_v4_over_norm_once": 0.9243754818471027,
+    "unit": "us_per_launch_cuda_event"
+  }
+}

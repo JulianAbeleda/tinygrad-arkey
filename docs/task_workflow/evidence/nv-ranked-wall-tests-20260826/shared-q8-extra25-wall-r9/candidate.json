@@ -1,0 +1,74 @@
+{
+  "accepted_samples_ms_per_token": [
+    4.149060375,
+    4.145670875,
+    4.151275125,
+    4.14502775,
+    4.143154875,
+    4.1461004375,
+    4.148657125,
+    4.1510898125,
+    4.1497535
+  ],
+  "block25_admitted": true,
+  "block25_flags": {
+    "block_index": 25,
+    "cooperative_q4": true,
+    "q4_direct_output": true,
+    "q4_kv_pair_output": true,
+    "q4_q6_kv_pair_output": false,
+    "q4_q6_qkv_triple_output": false,
+    "q4_qkv_triple_output": false,
+    "q6_direct_output": true,
+    "target": [
+      "NV",
+      "sm_120"
+    ]
+  },
+  "candidate": true,
+  "external_contention_high_limit_ms": 4.398657125,
+  "gpu_state": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2895",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Disabled",
+    "pstate": "P0",
+    "temperature.gpu": "60"
+  },
+  "median_ms_per_token": 4.148657125,
+  "prelude_token": 13876,
+  "rejected_high_samples_ms_per_token": [],
+  "samples_ms_per_token": [
+    4.149060375,
+    4.145670875,
+    4.151275125,
+    4.14502775,
+    4.143154875,
+    4.1461004375,
+    4.148657125,
+    4.1510898125,
+    4.1497535
+  ],
+  "schema": "tinygrad.nv_shared_q8_extra25_wall.v1",
+  "timed_token_count": 144,
+  "token_hashes": [
+    "cc523cc67a8622f6a0efc130c1ec7497faa0620448f7bc5ea59385273ac92fb6",
+    "6d602f7d7fffe9fce3658e4ec6c5ffefd6986c1dc6bcfe51c1e7493289d7d8a5",
+    "74d2d3505fd4789d1b7286ba7bc5bd250fb7975bad39364d83ac217fc46af2b1",
+    "cc523cc67a8622f6a0efc130c1ec7497faa0620448f7bc5ea59385273ac92fb6",
+    "6d602f7d7fffe9fce3658e4ec6c5ffefd6986c1dc6bcfe51c1e7493289d7d8a5",
+    "74d2d3505fd4789d1b7286ba7bc5bd250fb7975bad39364d83ac217fc46af2b1",
+    "cc523cc67a8622f6a0efc130c1ec7497faa0620448f7bc5ea59385273ac92fb6",
+    "6d602f7d7fffe9fce3658e4ec6c5ffefd6986c1dc6bcfe51c1e7493289d7d8a5",
+    "74d2d3505fd4789d1b7286ba7bc5bd250fb7975bad39364d83ac217fc46af2b1"
+  ],
+  "token_stream_hash": "3124253b6e5174fac25c6e66586562c116c463e4301cee477e45fe83dc3cca10",
+  "warmup_tokens": [
+    38835,
+    34208,
+    13,
+    279,
+    3974,
+    13876
+  ]
+}

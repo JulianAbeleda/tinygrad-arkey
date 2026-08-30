@@ -1,0 +1,323 @@
+{
+  "candidate_median_us": 4.944,
+  "candidate_us": [
+    5.0064,
+    4.944,
+    4.9376
+  ],
+  "control_median_us": 4.9584,
+  "control_us": [
+    5.0496,
+    4.9584,
+    4.9056
+  ],
+  "max_abs": 0.0,
+  "ncu": {
+    "kernels": {
+      "q4k_four_warp_vec_4096_4096": [
+        {
+          "metric": "dram__bytes.sum",
+          "unit": "byte",
+          "value": "9452800"
+        },
+        {
+          "metric": "dram__bytes_op_read.sum",
+          "unit": "byte",
+          "value": "9452800"
+        },
+        {
+          "metric": "dram__bytes_op_write.sum",
+          "unit": "byte",
+          "value": "0"
+        },
+        {
+          "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "55.85"
+        },
+        {
+          "metric": "gpu__time_duration.sum",
+          "unit": "ns",
+          "value": "9632"
+        },
+        {
+          "metric": "launch__registers_per_thread",
+          "unit": "register/thread",
+          "value": "40"
+        },
+        {
+          "metric": "lts__t_bytes.sum",
+          "unit": "byte",
+          "value": "11190816"
+        },
+        {
+          "metric": "lts__t_sector_op_read_hit_rate.pct",
+          "unit": "%",
+          "value": "13.41"
+        },
+        {
+          "metric": "sm__inst_executed.sum",
+          "unit": "inst",
+          "value": "5173248"
+        },
+        {
+          "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "33.99"
+        },
+        {
+          "metric": "smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct",
+          "unit": "%",
+          "value": "60.44"
+        },
+        {
+          "metric": "smsp__warp_issue_stalled_math_pipe_throttle_per_warp_active.pct",
+          "unit": "%",
+          "value": "5.16"
+        },
+        {
+          "metric": "smsp__warps_active.avg.pct_of_peak_sustained_active",
+          "unit": "%",
+          "value": "83.64"
+        }
+      ],
+      "q4k_g3_lanemap_gemv_vec_4096_4096": [
+        {
+          "metric": "dram__bytes.sum",
+          "unit": "byte",
+          "value": "9452800"
+        },
+        {
+          "metric": "dram__bytes_op_read.sum",
+          "unit": "byte",
+          "value": "9452800"
+        },
+        {
+          "metric": "dram__bytes_op_write.sum",
+          "unit": "byte",
+          "value": "0"
+        },
+        {
+          "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "58.87"
+        },
+        {
+          "metric": "gpu__time_duration.sum",
+          "unit": "ns",
+          "value": "9120"
+        },
+        {
+          "metric": "launch__registers_per_thread",
+          "unit": "register/thread",
+          "value": "43"
+        },
+        {
+          "metric": "lts__t_bytes.sum",
+          "unit": "byte",
+          "value": "11198272"
+        },
+        {
+          "metric": "lts__t_sector_op_read_hit_rate.pct",
+          "unit": "%",
+          "value": "13.55"
+        },
+        {
+          "metric": "sm__inst_executed.sum",
+          "unit": "inst",
+          "value": "4784128"
+        },
+        {
+          "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "34.98"
+        },
+        {
+          "metric": "smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct",
+          "unit": "%",
+          "value": "69.36"
+        },
+        {
+          "metric": "smsp__warp_issue_stalled_math_pipe_throttle_per_warp_active.pct",
+          "unit": "%",
+          "value": "3.47"
+        },
+        {
+          "metric": "smsp__warps_active.avg.pct_of_peak_sustained_active",
+          "unit": "%",
+          "value": "45.04"
+        }
+      ],
+      "q4k_warp_coop_q8_dp4a_direct_4096_4096": [
+        {
+          "metric": "dram__bytes.sum",
+          "unit": "byte",
+          "value": "9448704"
+        },
+        {
+          "metric": "dram__bytes_op_read.sum",
+          "unit": "byte",
+          "value": "9448704"
+        },
+        {
+          "metric": "dram__bytes_op_write.sum",
+          "unit": "byte",
+          "value": "0"
+        },
+        {
+          "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "64.33"
+        },
+        {
+          "metric": "gpu__time_duration.sum",
+          "unit": "ns",
+          "value": "8352"
+        },
+        {
+          "metric": "launch__registers_per_thread",
+          "unit": "register/thread",
+          "value": "40"
+        },
+        {
+          "metric": "lts__t_bytes.sum",
+          "unit": "byte",
+          "value": "10578624"
+        },
+        {
+          "metric": "lts__t_sector_op_read_hit_rate.pct",
+          "unit": "%",
+          "value": "8.31"
+        },
+        {
+          "metric": "sm__inst_executed.sum",
+          "unit": "inst",
+          "value": "4599808"
+        },
+        {
+          "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "44.82"
+        },
+        {
+          "metric": "smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct",
+          "unit": "%",
+          "value": "42.72"
+        },
+        {
+          "metric": "smsp__warp_issue_stalled_math_pipe_throttle_per_warp_active.pct",
+          "unit": "%",
+          "value": "2.75"
+        },
+        {
+          "metric": "smsp__warps_active.avg.pct_of_peak_sustained_active",
+          "unit": "%",
+          "value": "82.42"
+        }
+      ],
+      "q8_1_llama_provider_4096": [
+        {
+          "metric": "dram__bytes.sum",
+          "unit": "byte",
+          "value": "28928"
+        },
+        {
+          "metric": "dram__bytes_op_read.sum",
+          "unit": "byte",
+          "value": "28928"
+        },
+        {
+          "metric": "dram__bytes_op_write.sum",
+          "unit": "byte",
+          "value": "0"
+        },
+        {
+          "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "0.62"
+        },
+        {
+          "metric": "gpu__time_duration.sum",
+          "unit": "ns",
+          "value": "2688"
+        },
+        {
+          "metric": "launch__registers_per_thread",
+          "unit": "register/thread",
+          "value": "76"
+        },
+        {
+          "metric": "lts__t_bytes.sum",
+          "unit": "byte",
+          "value": "322816"
+        },
+        {
+          "metric": "lts__t_sector_op_read_hit_rate.pct",
+          "unit": "%",
+          "value": "89.52"
+        },
+        {
+          "metric": "sm__inst_executed.sum",
+          "unit": "inst",
+          "value": "138752"
+        },
+        {
+          "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "3.25"
+        },
+        {
+          "metric": "smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct",
+          "unit": "%",
+          "value": "23.55"
+        },
+        {
+          "metric": "smsp__warp_issue_stalled_math_pipe_throttle_per_warp_active.pct",
+          "unit": "%",
+          "value": "0.35"
+        },
+        {
+          "metric": "smsp__warps_active.avg.pct_of_peak_sustained_active",
+          "unit": "%",
+          "value": "8.33"
+        }
+      ]
+    },
+    "method": "cold cache, one post-warmup launch"
+  },
+  "ptxas": [
+    "ptxas info    : 0 bytes gmem",
+    "ptxas info    : Compiling entry function 'q4k_warp_coop_q8_dp4a_direct_4096_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_warp_coop_q8_dp4a_direct_4096_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 40 registers, used 1 barriers, 16 bytes smem",
+    "ptxas info    : Compile time = 10.149 ms",
+    "ptxas info    : Compiling entry function 'q8_1_llama_provider_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q8_1_llama_provider_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 76 registers, used 0 barriers",
+    "ptxas info    : Compile time = 36.705 ms",
+    "ptxas info    : Compiling entry function 'q4k_four_warp_vec_4096_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_four_warp_vec_4096_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 40 registers, used 1 barriers, 16 bytes smem",
+    "ptxas info    : Compile time = 8.246 ms",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_4096_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_4096_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 43 registers, used 0 barriers",
+    "ptxas info    : Compile time = 8.005 ms"
+  ],
+  "q8_included_median_us": 5.8544,
+  "q8_included_us": [
+    6.2,
+    5.8544,
+    5.8512
+  ],
+  "ratio": 0.9970958373668926,
+  "schema": "tinygrad.nv_q4k_4096_four_warp_vector_microgate.v2",
+  "shape": [
+    4096,
+    4096
+  ]
+}

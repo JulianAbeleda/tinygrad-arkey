@@ -1,0 +1,32 @@
+{
+  "arm": "candidate",
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "count": 32,
+  "depth": 512,
+  "first_tokens": [
+    38835,
+    38835,
+    38835,
+    38835,
+    38835
+  ],
+  "median_ms_per_token": 4.640491125,
+  "pair_captured": true,
+  "reps": 5,
+  "samples_ms_per_token": [
+    4.640491125,
+    4.634166875,
+    4.64379515625,
+    4.65336884375,
+    4.637808375
+  ],
+  "schema": "tinygrad.nv_submit_ahead_wall_audit.child.v1",
+  "submit_ahead_eligible": true,
+  "token_hashes": [
+    "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+    "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+    "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+    "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+    "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46"
+  ]
+}

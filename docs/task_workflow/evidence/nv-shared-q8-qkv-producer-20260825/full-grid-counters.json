@@ -1,0 +1,375 @@
+{
+  "bitwise_identical": true,
+  "cold_passes": 3,
+  "commit": "4a3c4d32cbd4e23e23e9dad3fd1fcd29bb6b9755",
+  "full_recovery_us": {
+    "cold_per_group": 2.048001000000001,
+    "cold_projected_9_groups": 18.432009000000008,
+    "hot_per_group": 1.4207999999999998,
+    "rotated_per_group": 2.2826660000000007,
+    "rotated_projected_9_groups": 20.543994000000005
+  },
+  "hot_passes": 20,
+  "medians_us": {
+    "cold_balanced": 18.432001,
+    "cold_candidate": 23.210667,
+    "cold_control": 17.749334,
+    "cold_full": 15.701333,
+    "hot_balanced": 6.1088,
+    "hot_candidate": 6.4144,
+    "hot_control": 7.5808,
+    "hot_full": 6.16,
+    "rotated_balanced": 16.405333,
+    "rotated_candidate": 19.008,
+    "rotated_control": 14.261333,
+    "rotated_full": 11.978667
+  },
+  "mismatched_words": {
+    "balanced": 0,
+    "collapsed": 0,
+    "full": 0
+  },
+  "ncu": {
+    "q4k_warp_coop_q8_dp4a_direct_4096_4096": {
+      "rows": [
+        {
+          "metric": "dram__bytes.sum",
+          "unit": "byte",
+          "value": "9448704"
+        },
+        {
+          "metric": "dram__bytes_op_read.sum",
+          "unit": "byte",
+          "value": "9448704"
+        },
+        {
+          "metric": "dram__bytes_op_write.sum",
+          "unit": "byte",
+          "value": "0"
+        },
+        {
+          "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "63.41"
+        },
+        {
+          "metric": "gpu__time_duration.sum",
+          "unit": "ns",
+          "value": "8480"
+        },
+        {
+          "metric": "lts__t_bytes.sum",
+          "unit": "byte",
+          "value": "10575872"
+        },
+        {
+          "metric": "lts__t_sector_op_read_hit_rate.pct",
+          "unit": "%",
+          "value": "8.30"
+        },
+        {
+          "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "44.36"
+        }
+      ],
+      "stderr": "",
+      "symbol": "q4k_warp_coop_q8_dp4a_direct_4096_4096"
+    },
+    "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096": {
+      "rows": [
+        {
+          "metric": "dram__bytes.sum",
+          "unit": "byte",
+          "value": "4728832"
+        },
+        {
+          "metric": "dram__bytes_op_read.sum",
+          "unit": "byte",
+          "value": "4728832"
+        },
+        {
+          "metric": "dram__bytes_op_write.sum",
+          "unit": "byte",
+          "value": "0"
+        },
+        {
+          "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "45.06"
+        },
+        {
+          "metric": "gpu__time_duration.sum",
+          "unit": "ns",
+          "value": "5952"
+        },
+        {
+          "metric": "lts__t_bytes.sum",
+          "unit": "byte",
+          "value": "5771872"
+        },
+        {
+          "metric": "lts__t_sector_op_read_hit_rate.pct",
+          "unit": "%",
+          "value": "15.09"
+        },
+        {
+          "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "24.85"
+        }
+      ],
+      "stderr": "",
+      "symbol": "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096"
+    },
+    "q4k_warp_coop_q8_dp4a_qkv_balanced_direct_4096_1024_4096": {
+      "rows": [
+        {
+          "metric": "dram__bytes.sum",
+          "unit": "byte",
+          "value": "14167296"
+        },
+        {
+          "metric": "dram__bytes_op_read.sum",
+          "unit": "byte",
+          "value": "14167296"
+        },
+        {
+          "metric": "dram__bytes_op_write.sum",
+          "unit": "byte",
+          "value": "0"
+        },
+        {
+          "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "52.26"
+        },
+        {
+          "metric": "gpu__time_duration.sum",
+          "unit": "ns",
+          "value": "15392"
+        },
+        {
+          "metric": "lts__t_bytes.sum",
+          "unit": "byte",
+          "value": "15407424"
+        },
+        {
+          "metric": "lts__t_sector_op_read_hit_rate.pct",
+          "unit": "%",
+          "value": "6.25"
+        },
+        {
+          "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "28.73"
+        }
+      ],
+      "stderr": "",
+      "symbol": "q4k_warp_coop_q8_dp4a_qkv_balanced_direct_4096_1024_4096"
+    },
+    "q4k_warp_coop_q8_dp4a_qkv_direct_4096_1024_4096": {
+      "rows": [
+        {
+          "metric": "dram__bytes.sum",
+          "unit": "byte",
+          "value": "14170112"
+        },
+        {
+          "metric": "dram__bytes_op_read.sum",
+          "unit": "byte",
+          "value": "14170112"
+        },
+        {
+          "metric": "dram__bytes_op_write.sum",
+          "unit": "byte",
+          "value": "0"
+        },
+        {
+          "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "60.54"
+        },
+        {
+          "metric": "gpu__time_duration.sum",
+          "unit": "ns",
+          "value": "13280"
+        },
+        {
+          "metric": "lts__t_bytes.sum",
+          "unit": "byte",
+          "value": "15334432"
+        },
+        {
+          "metric": "lts__t_sector_op_read_hit_rate.pct",
+          "unit": "%",
+          "value": "6.02"
+        },
+        {
+          "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "32.00"
+        }
+      ],
+      "stderr": "",
+      "symbol": "q4k_warp_coop_q8_dp4a_qkv_direct_4096_1024_4096"
+    },
+    "q4k_warp_coop_q8_dp4a_qkv_full_direct_4096_1024_4096": {
+      "rows": [
+        {
+          "metric": "dram__bytes.sum",
+          "unit": "byte",
+          "value": "14171904"
+        },
+        {
+          "metric": "dram__bytes_op_read.sum",
+          "unit": "byte",
+          "value": "14171904"
+        },
+        {
+          "metric": "dram__bytes_op_write.sum",
+          "unit": "byte",
+          "value": "0"
+        },
+        {
+          "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "70.30"
+        },
+        {
+          "metric": "gpu__time_duration.sum",
+          "unit": "ns",
+          "value": "11456"
+        },
+        {
+          "metric": "lts__t_bytes.sum",
+          "unit": "byte",
+          "value": "15419616"
+        },
+        {
+          "metric": "lts__t_sector_op_read_hit_rate.pct",
+          "unit": "%",
+          "value": "6.01"
+        },
+        {
+          "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "50.73"
+        }
+      ],
+      "stderr": "",
+      "symbol": "q4k_warp_coop_q8_dp4a_qkv_full_direct_4096_1024_4096"
+    }
+  },
+  "ptxas": [
+    "ptxas info    : 0 bytes gmem",
+    "ptxas info    : Compiling entry function 'q4k_warp_coop_q8_dp4a_qkv_full_direct_4096_1024_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_warp_coop_q8_dp4a_qkv_full_direct_4096_1024_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 40 registers, used 1 barriers, 32 bytes smem",
+    "ptxas info    : Compile time = 17.596 ms",
+    "ptxas info    : Compiling entry function 'q4k_warp_coop_q8_dp4a_qkv_balanced_direct_4096_1024_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_warp_coop_q8_dp4a_qkv_balanced_direct_4096_1024_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 40 registers, used 1 barriers, 48 bytes smem",
+    "ptxas info    : Compile time = 9.015 ms",
+    "ptxas info    : Compiling entry function 'q4k_warp_coop_q8_dp4a_qkv_direct_4096_1024_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_warp_coop_q8_dp4a_qkv_direct_4096_1024_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 40 registers, used 1 barriers, 96 bytes smem",
+    "ptxas info    : Compile time = 14.761 ms",
+    "ptxas info    : Compiling entry function 'q4k_warp_coop_q8_dp4a_pair_direct_1024_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 40 registers, used 1 barriers, 32 bytes smem",
+    "ptxas info    : Compile time = 6.232 ms",
+    "ptxas info    : Compiling entry function 'q4k_warp_coop_q8_dp4a_direct_4096_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_warp_coop_q8_dp4a_direct_4096_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 40 registers, used 1 barriers, 16 bytes smem",
+    "ptxas info    : Compile time = 8.022 ms"
+  ],
+  "recovery_us": {
+    "balanced_cold_per_group": -0.6826669999999986,
+    "balanced_cold_projected_9_groups": -6.144002999999987,
+    "balanced_hot_per_group": 1.4720000000000004,
+    "balanced_rotated_per_group": -2.1439999999999984,
+    "balanced_rotated_projected_9_groups": -19.295999999999985,
+    "cold_per_group": -5.461333,
+    "cold_projected_9_groups": -49.151996999999994,
+    "hot_per_group": 1.1664000000000003,
+    "rotated_per_group": -4.746666999999999,
+    "rotated_projected_9_groups": -42.72000299999999
+  },
+  "reps": 3,
+  "samples": {
+    "cold_balanced": [
+      19.104,
+      18.421334,
+      18.432001
+    ],
+    "cold_candidate": [
+      23.210667,
+      23.210667,
+      23.210667
+    ],
+    "cold_control": [
+      17.738667,
+      17.760001,
+      17.749334
+    ],
+    "cold_full": [
+      15.018667,
+      16.384,
+      15.701333
+    ],
+    "hot_balanced": [
+      6.0608,
+      6.2144,
+      6.1088
+    ],
+    "hot_candidate": [
+      6.416,
+      6.4144,
+      6.3648
+    ],
+    "hot_control": [
+      7.6816,
+      7.296,
+      7.5808
+    ],
+    "hot_full": [
+      6.16,
+      6.4336,
+      6.04
+    ],
+    "rotated_balanced": [
+      16.138667,
+      17.685333,
+      16.405333
+    ],
+    "rotated_candidate": [
+      19.061333,
+      18.005333,
+      19.008
+    ],
+    "rotated_control": [
+      14.261333,
+      14.037333,
+      14.336
+    ],
+    "rotated_full": [
+      11.978667,
+      12.938667,
+      11.882666
+    ]
+  },
+  "schema": "tinygrad.q4k_shared_q8_qkv_microgate.v1",
+  "shape": {
+    "k": 4096,
+    "kv_rows": 1024,
+    "q_rows": 4096,
+    "shared_q8_q4q4q4_groups_per_token": 9
+  },
+  "verdict": "ADVANCE_FULL"
+}

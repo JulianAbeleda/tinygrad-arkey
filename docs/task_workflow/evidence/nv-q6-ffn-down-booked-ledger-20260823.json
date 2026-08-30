@@ -1,0 +1,43 @@
+{
+  "schema": "tinygrad.nv_booked_recovery_ledger.v1",
+  "date": "2026-08-23",
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "candidate": "Q6_K FFN-down four-warp fp16 direct consumer (fp16_fma=true)",
+  "admission_module": "tinygrad/llm/q6k_ffn_down_mmvq.py",
+  "fresh_control_wall_us": 4771.423,
+  "target_240_us": 4166.666667,
+  "required_recovery_us": 604.756,
+  "booked_recovery_us": 52.873,
+  "remaining_to_240_us": 551.883,
+  "verdict": "240_UNMEASURED",
+  "depth_512_brackets": [
+    {
+      "label": "single-bracket-authority",
+      "control_midpoint_ms_per_token": 4.780930078125,
+      "candidate_ms_per_token": 4.728057375,
+      "delta_us_per_token": 52.873,
+      "verdict": "WALL_PASS",
+      "evidence": "docs/task_workflow/evidence/nv-ffn-next-q6-wall-20260823/"
+    },
+    {
+      "label": "confirmation-bracket",
+      "control_midpoint_ms_per_token": 4.816926140625,
+      "candidate_ms_per_token": 4.7580559375,
+      "delta_us_per_token": 58.870,
+      "verdict": "WALL_PASS",
+      "evidence": "docs/task_workflow/evidence/nv-q6-ffn-down-confirm-20260823/"
+    }
+  ],
+  "booked_delta_us_per_token": 52.873,
+  "booked_delta_rule": "floor of the two independent depth-512 reverse-bracket deltas",
+  "non_regression": {
+    "depth": 128,
+    "control_midpoint_ms_per_token": 6.266771125,
+    "candidate_ms_per_token": 6.22959584375,
+    "delta_us_per_token": 37.175,
+    "verdict": "WALL_PASS",
+    "token_sha_equal": true,
+    "evidence": "docs/task_workflow/evidence/nv-q6-ffn-down-depth128-20260823/"
+  },
+  "token_stream_sha256": "f25083e5d0a754131283b40c03f52e688fee9f175bea7ae106805e7d628d7905"
+}

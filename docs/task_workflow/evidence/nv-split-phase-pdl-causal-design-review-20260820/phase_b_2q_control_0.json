@@ -1,0 +1,7816 @@
+{
+  "arm": "control",
+  "armed_pairs": {
+    "by_bucket": {},
+    "data_edge": 0,
+    "incidental": 0,
+    "incidental_by_bucket": {},
+    "median_launch_shadow_us": null,
+    "median_overlap_us": null,
+    "positive_overlap_count": 0,
+    "real_by_bucket": {},
+    "total": 0
+  },
+  "assignments": [
+    {
+      "group": 0,
+      "id": 0,
+      "name": "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 1,
+      "name": "E_2_c8a3207cf1b8954ec08b9564cce9b00f69be9c09493c58ea1abd46b3664424e7",
+      "queue": 1
+    },
+    {
+      "group": 0,
+      "id": 2,
+      "name": "E_16_4_2_8_16_2_4_4_35a6fe556c331254f920c4212fdc0c33244d8269d7c93cb1897349f36a254aee",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 3,
+      "name": "E_1187_32_4_76d37a73a646ec3a4b5e32ab783e0ace496f5855bbba7492c8c7fe87bbff5f1f",
+      "queue": 1
+    },
+    {
+      "group": 0,
+      "id": 4,
+      "name": "r_32_32_4_32_4_b7c5eeb3ced63845c64b323fd8e5e923a69c1e162de001a94b565dcd96e9293f",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 5,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 6,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 7,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 8,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 0,
+      "id": 9,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 0,
+      "id": 10,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 11,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 0,
+      "id": 12,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 13,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 0,
+      "id": 14,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 15,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 16,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 17,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 18,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 19,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 20,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 21,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 22,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 23,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 0,
+      "id": 24,
+      "name": "q6k_q8_warp_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 0,
+      "id": 25,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 26,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "queue": 1
+    },
+    {
+      "group": 0,
+      "id": 27,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 28,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 0,
+      "id": 29,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 30,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 0,
+      "id": 31,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 32,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 33,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 34,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 35,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 36,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 37,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 38,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 39,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 40,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 41,
+      "name": "q6k_q8_warp_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 42,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 43,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 44,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 45,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 46,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 47,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 48,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 49,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 50,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 51,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 52,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 53,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 54,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 55,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 56,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 57,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 58,
+      "name": "q6k_q8_warp_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 59,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 60,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 61,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 62,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 63,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 64,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 65,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 66,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 67,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 68,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 69,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 70,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 71,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 72,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 73,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 74,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 75,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 76,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 77,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 78,
+      "name": "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 79,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 80,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 81,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 82,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 83,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 84,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 85,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 86,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 87,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 88,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 89,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 90,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 91,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 92,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 93,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 94,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 95,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 96,
+      "name": "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 97,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 98,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 99,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 100,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 101,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 102,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 103,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 104,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 105,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 106,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 107,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 108,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 109,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 110,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 111,
+      "name": "q6k_q8_warp_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 112,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 113,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 114,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 115,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 116,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 117,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 118,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 119,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 120,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 121,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 122,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 123,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 124,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 125,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 126,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 127,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 128,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 129,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 130,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 131,
+      "name": "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 132,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 133,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 134,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 135,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 136,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 137,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 138,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 139,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 140,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 141,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 142,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 143,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 144,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 145,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 146,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 147,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 148,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 149,
+      "name": "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 150,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 151,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 152,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 153,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 154,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 155,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 156,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 157,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 158,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 159,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 160,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 161,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 162,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 163,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 164,
+      "name": "q6k_q8_warp_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 165,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 166,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 167,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 168,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 169,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 170,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 171,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 172,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 173,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 174,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 175,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 176,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 177,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 178,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 179,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 180,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 181,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 182,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 183,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 184,
+      "name": "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 185,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 186,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 187,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 188,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 189,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 190,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 191,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 192,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 193,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 194,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 195,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 196,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 197,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 198,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 199,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 200,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 201,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 202,
+      "name": "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 203,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 204,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 205,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 206,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 207,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 208,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 209,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 210,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 211,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 212,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 213,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 214,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 215,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 216,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 217,
+      "name": "q6k_q8_warp_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 218,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 219,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 220,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 221,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 222,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 223,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 224,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 225,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 226,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 227,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 228,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 229,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 230,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 231,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 232,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 233,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 234,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 235,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 236,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 237,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 238,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 239,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 240,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 241,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 242,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 243,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 244,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 245,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 246,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 247,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 248,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 249,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 250,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 251,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 252,
+      "name": "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 253,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 254,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 255,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 256,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 257,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 258,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 259,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 260,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 261,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 262,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 263,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 264,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 265,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 266,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 267,
+      "name": "q6k_q8_warp_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 268,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 269,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 270,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 271,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 272,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 273,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 274,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 275,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 276,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 277,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 278,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 279,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 280,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 281,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 282,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 283,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 284,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 285,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 286,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 287,
+      "name": "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 288,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 289,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 290,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 291,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 292,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 293,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 294,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 295,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 296,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 297,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 298,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 299,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 300,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 301,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 302,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 303,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 304,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 305,
+      "name": "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 306,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 307,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 308,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 309,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 310,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 311,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 312,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 313,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 314,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 315,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 316,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 317,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 318,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 319,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 320,
+      "name": "q6k_q8_warp_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 321,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 322,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 323,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 324,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 325,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 326,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 327,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 328,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 329,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 330,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 331,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 332,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 333,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 334,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 335,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 336,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 337,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 338,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 339,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 340,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 341,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 342,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 343,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 344,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 345,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 346,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 347,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 348,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 349,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 350,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 351,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 352,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 353,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 354,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 355,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 356,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 357,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 358,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 359,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 360,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 361,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 362,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 363,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 364,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 365,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 366,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 367,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 368,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 369,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 370,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 371,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 372,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 373,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 374,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 375,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 376,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 377,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 378,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 379,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 380,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 381,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 382,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 383,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 384,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 385,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 386,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 387,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 388,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 389,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 390,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 391,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 392,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 393,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 394,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 395,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 396,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 397,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 398,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 399,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 400,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 401,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 402,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 403,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 404,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 405,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 406,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 407,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 408,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 409,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 410,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 411,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 412,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 413,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 414,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 415,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 416,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 417,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 418,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 419,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 420,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 421,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 422,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 423,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 424,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 425,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 426,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 427,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 428,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 429,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 430,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 431,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 432,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 433,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 434,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 435,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 436,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 437,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 438,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 439,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 440,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 441,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 442,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 443,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 444,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 445,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 446,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 447,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 448,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 449,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 450,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 451,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 452,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 453,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 454,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 455,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 456,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 457,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 458,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 459,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 460,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 461,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 462,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 463,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 464,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 465,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 466,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 467,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 468,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 469,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 470,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 471,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 472,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 473,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 474,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 475,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 476,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 477,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 478,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 479,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 480,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 481,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 482,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 483,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 484,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 485,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 486,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 487,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 488,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 489,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 490,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 491,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 492,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 493,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 494,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 495,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 496,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 497,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 498,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 499,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 500,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 501,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 502,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 503,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 504,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 505,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 506,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 507,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 508,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 509,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 510,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 511,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 512,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 513,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 514,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 515,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 516,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 517,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 518,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 519,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 520,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 521,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 522,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 523,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 524,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 525,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 526,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 527,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 528,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 529,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 530,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 531,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 532,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 533,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 534,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 535,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 536,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 537,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 538,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 539,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 540,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 541,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 542,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 543,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 544,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 545,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 546,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 547,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 548,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 549,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 550,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 551,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 552,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 553,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 554,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 555,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 556,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 557,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 558,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 559,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 560,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 561,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 562,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 563,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 564,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 565,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 566,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 567,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 568,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 569,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 570,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 571,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 572,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 573,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 574,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 575,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 576,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 577,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 578,
+      "name": "reduce_output_rmsnorm_32_128",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 579,
+      "name": "reduce_output_rmsnorm_8_128",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 580,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 581,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "queue": 1
+    },
+    {
+      "group": 4,
+      "id": 582,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 583,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 584,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 585,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 586,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 587,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 588,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 589,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 590,
+      "name": "E_32_32_4_5a5673a44c51a85d2e73b347238640218966a387a0c3b168f5ef5dc11a3e0798",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 591,
+      "name": "q6k_gen_coop_151936_4096_inkernel",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 592,
+      "name": "E_1187_32_4_e1ccc42612aa8f28b20a61db46f51dbe08ce7e41f6c77f3966e2be8e85e1f10e",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 593,
+      "name": "r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 594,
+      "name": "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5",
+      "queue": 0
+    },
+    {
+      "group": 4,
+      "id": 595,
+      "name": "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c",
+      "queue": 0
+    }
+  ],
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "depth": 512,
+  "endpoint_wall_note": "endpoint wall is the prior same-session nv-pdl-queue-theories bracket (2q -11.641 us, 1q -8.201 us); this record is the construction census",
+  "env": {
+    "HCQ_NUM_COMPUTE": "2",
+    "PROFILE": "1"
+  },
+  "graph_group_mapping": {
+    "0": 5,
+    "1": 6,
+    "2": 7,
+    "3": 8,
+    "4": 9
+  },
+  "invocation_by_group": {
+    "0": 6,
+    "1": 6,
+    "2": 6,
+    "3": 6,
+    "4": 6
+  },
+  "max_context": 1024,
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "node_count": 596,
+  "nodes": [
+    {
+      "end_us": 1.5,
+      "group_id": 0,
+      "id": 0,
+      "name": "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346",
+      "start_us": 0.0
+    },
+    {
+      "end_us": 2.0,
+      "group_id": 0,
+      "id": 1,
+      "name": "E_2_c8a3207cf1b8954ec08b9564cce9b00f69be9c09493c58ea1abd46b3664424e7",
+      "start_us": 0.0
+    },
+    {
+      "end_us": 4.75,
+      "group_id": 0,
+      "id": 2,
+      "name": "E_16_4_2_8_16_2_4_4_35a6fe556c331254f920c4212fdc0c33244d8269d7c93cb1897349f36a254aee",
+      "start_us": 1.5
+    },
+    {
+      "end_us": 4.5,
+      "group_id": 0,
+      "id": 3,
+      "name": "E_1187_32_4_76d37a73a646ec3a4b5e32ab783e0ace496f5855bbba7492c8c7fe87bbff5f1f",
+      "start_us": 2.0
+    },
+    {
+      "end_us": 9.25,
+      "group_id": 0,
+      "id": 4,
+      "name": "r_32_32_4_32_4_b7c5eeb3ced63845c64b323fd8e5e923a69c1e162de001a94b565dcd96e9293f",
+      "start_us": 4.75
+    },
+    {
+      "end_us": 12.5,
+      "group_id": 0,
+      "id": 5,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 9.25
+    },
+    {
+      "end_us": 14.25,
+      "group_id": 0,
+      "id": 6,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 12.5
+    },
+    {
+      "end_us": 23.25,
+      "group_id": 0,
+      "id": 7,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "start_us": 14.25
+    },
+    {
+      "end_us": 32.75,
+      "group_id": 0,
+      "id": 8,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 28.0
+    },
+    {
+      "end_us": 37.5,
+      "group_id": 0,
+      "id": 9,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "start_us": 32.75
+    },
+    {
+      "end_us": 26.0,
+      "group_id": 0,
+      "id": 10,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 23.25
+    },
+    {
+      "end_us": 40.25,
+      "group_id": 0,
+      "id": 11,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 37.5
+    },
+    {
+      "end_us": 27.5,
+      "group_id": 0,
+      "id": 12,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 26.0
+    },
+    {
+      "end_us": 41.5,
+      "group_id": 0,
+      "id": 13,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 40.25
+    },
+    {
+      "end_us": 51.5,
+      "group_id": 0,
+      "id": 14,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 44.75
+    },
+    {
+      "end_us": 54.25,
+      "group_id": 0,
+      "id": 15,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 51.5
+    },
+    {
+      "end_us": 63.75,
+      "group_id": 0,
+      "id": 16,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 54.25
+    },
+    {
+      "end_us": 67.0,
+      "group_id": 0,
+      "id": 17,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 63.75
+    },
+    {
+      "end_us": 68.25,
+      "group_id": 0,
+      "id": 18,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 67.0
+    },
+    {
+      "end_us": 107.5,
+      "group_id": 0,
+      "id": 19,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 68.25
+    },
+    {
+      "end_us": 138.75,
+      "group_id": 0,
+      "id": 20,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 107.5
+    },
+    {
+      "end_us": 140.75,
+      "group_id": 0,
+      "id": 21,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 138.75
+    },
+    {
+      "end_us": 149.0,
+      "group_id": 0,
+      "id": 22,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "start_us": 140.75
+    },
+    {
+      "end_us": 158.75,
+      "group_id": 0,
+      "id": 23,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 154.5
+    },
+    {
+      "end_us": 162.5,
+      "group_id": 0,
+      "id": 24,
+      "name": "q6k_q8_warp_direct_1024_4096",
+      "start_us": 158.75
+    },
+    {
+      "end_us": 150.25,
+      "group_id": 0,
+      "id": 25,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "start_us": 149.0
+    },
+    {
+      "end_us": 164.0,
+      "group_id": 0,
+      "id": 26,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "start_us": 162.5
+    },
+    {
+      "end_us": 152.5,
+      "group_id": 0,
+      "id": 27,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 150.25
+    },
+    {
+      "end_us": 166.25,
+      "group_id": 0,
+      "id": 28,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 164.0
+    },
+    {
+      "end_us": 154.25,
+      "group_id": 0,
+      "id": 29,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 152.5
+    },
+    {
+      "end_us": 167.5,
+      "group_id": 0,
+      "id": 30,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 166.25
+    },
+    {
+      "end_us": 175.0,
+      "group_id": 0,
+      "id": 31,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 168.75
+    },
+    {
+      "end_us": 479.5,
+      "group_id": 1,
+      "id": 32,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 476.0
+    },
+    {
+      "end_us": 489.0,
+      "group_id": 1,
+      "id": 33,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 479.5
+    },
+    {
+      "end_us": 492.25,
+      "group_id": 1,
+      "id": 34,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 489.0
+    },
+    {
+      "end_us": 494.0,
+      "group_id": 1,
+      "id": 35,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 492.25
+    },
+    {
+      "end_us": 532.0,
+      "group_id": 1,
+      "id": 36,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 494.0
+    },
+    {
+      "end_us": 563.5,
+      "group_id": 1,
+      "id": 37,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 532.0
+    },
+    {
+      "end_us": 565.5,
+      "group_id": 1,
+      "id": 38,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 563.5
+    },
+    {
+      "end_us": 573.75,
+      "group_id": 1,
+      "id": 39,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "start_us": 565.5
+    },
+    {
+      "end_us": 584.0,
+      "group_id": 1,
+      "id": 40,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 579.75
+    },
+    {
+      "end_us": 587.75,
+      "group_id": 1,
+      "id": 41,
+      "name": "q6k_q8_warp_direct_1024_4096",
+      "start_us": 584.0
+    },
+    {
+      "end_us": 574.75,
+      "group_id": 1,
+      "id": 42,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "start_us": 573.75
+    },
+    {
+      "end_us": 588.75,
+      "group_id": 1,
+      "id": 43,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "start_us": 587.75
+    },
+    {
+      "end_us": 577.5,
+      "group_id": 1,
+      "id": 44,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 574.75
+    },
+    {
+      "end_us": 591.5,
+      "group_id": 1,
+      "id": 45,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 588.75
+    },
+    {
+      "end_us": 579.5,
+      "group_id": 1,
+      "id": 46,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 577.5
+    },
+    {
+      "end_us": 593.0,
+      "group_id": 1,
+      "id": 47,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 591.5
+    },
+    {
+      "end_us": 603.25,
+      "group_id": 1,
+      "id": 48,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 596.75
+    },
+    {
+      "end_us": 606.0,
+      "group_id": 1,
+      "id": 49,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 603.25
+    },
+    {
+      "end_us": 615.25,
+      "group_id": 1,
+      "id": 50,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 606.0
+    },
+    {
+      "end_us": 618.75,
+      "group_id": 1,
+      "id": 51,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 615.25
+    },
+    {
+      "end_us": 620.0,
+      "group_id": 1,
+      "id": 52,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 618.75
+    },
+    {
+      "end_us": 657.5,
+      "group_id": 1,
+      "id": 53,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 620.0
+    },
+    {
+      "end_us": 687.25,
+      "group_id": 1,
+      "id": 54,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 657.5
+    },
+    {
+      "end_us": 689.0,
+      "group_id": 1,
+      "id": 55,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 687.25
+    },
+    {
+      "end_us": 697.25,
+      "group_id": 1,
+      "id": 56,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "start_us": 689.0
+    },
+    {
+      "end_us": 706.5,
+      "group_id": 1,
+      "id": 57,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 702.75
+    },
+    {
+      "end_us": 710.25,
+      "group_id": 1,
+      "id": 58,
+      "name": "q6k_q8_warp_direct_1024_4096",
+      "start_us": 706.5
+    },
+    {
+      "end_us": 698.25,
+      "group_id": 1,
+      "id": 59,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "start_us": 697.25
+    },
+    {
+      "end_us": 711.25,
+      "group_id": 1,
+      "id": 60,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "start_us": 710.25
+    },
+    {
+      "end_us": 700.75,
+      "group_id": 1,
+      "id": 61,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 698.25
+    },
+    {
+      "end_us": 713.75,
+      "group_id": 1,
+      "id": 62,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 711.25
+    },
+    {
+      "end_us": 702.25,
+      "group_id": 1,
+      "id": 63,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 700.75
+    },
+    {
+      "end_us": 715.0,
+      "group_id": 1,
+      "id": 64,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 713.75
+    },
+    {
+      "end_us": 723.75,
+      "group_id": 1,
+      "id": 65,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 717.5
+    },
+    {
+      "end_us": 726.5,
+      "group_id": 1,
+      "id": 66,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 723.75
+    },
+    {
+      "end_us": 735.5,
+      "group_id": 1,
+      "id": 67,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 726.5
+    },
+    {
+      "end_us": 738.75,
+      "group_id": 1,
+      "id": 68,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 735.5
+    },
+    {
+      "end_us": 740.0,
+      "group_id": 1,
+      "id": 69,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 738.75
+    },
+    {
+      "end_us": 778.25,
+      "group_id": 1,
+      "id": 70,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 740.0
+    },
+    {
+      "end_us": 808.75,
+      "group_id": 1,
+      "id": 71,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 778.25
+    },
+    {
+      "end_us": 810.5,
+      "group_id": 1,
+      "id": 72,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 808.75
+    },
+    {
+      "end_us": 818.25,
+      "group_id": 1,
+      "id": 73,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "start_us": 810.5
+    },
+    {
+      "end_us": 827.25,
+      "group_id": 1,
+      "id": 74,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 823.75
+    },
+    {
+      "end_us": 830.75,
+      "group_id": 1,
+      "id": 75,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 827.25
+    },
+    {
+      "end_us": 819.5,
+      "group_id": 1,
+      "id": 76,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "start_us": 818.25
+    },
+    {
+      "end_us": 831.75,
+      "group_id": 1,
+      "id": 77,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "start_us": 830.75
+    },
+    {
+      "end_us": 833.0,
+      "group_id": 1,
+      "id": 78,
+      "name": "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+      "start_us": 831.75
+    },
+    {
+      "end_us": 821.75,
+      "group_id": 1,
+      "id": 79,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 819.5
+    },
+    {
+      "end_us": 835.25,
+      "group_id": 1,
+      "id": 80,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 833.0
+    },
+    {
+      "end_us": 823.25,
+      "group_id": 1,
+      "id": 81,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 821.75
+    },
+    {
+      "end_us": 836.5,
+      "group_id": 1,
+      "id": 82,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 835.25
+    },
+    {
+      "end_us": 846.75,
+      "group_id": 1,
+      "id": 83,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 840.5
+    },
+    {
+      "end_us": 849.5,
+      "group_id": 1,
+      "id": 84,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 846.75
+    },
+    {
+      "end_us": 858.5,
+      "group_id": 1,
+      "id": 85,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 849.5
+    },
+    {
+      "end_us": 861.75,
+      "group_id": 1,
+      "id": 86,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 858.5
+    },
+    {
+      "end_us": 863.25,
+      "group_id": 1,
+      "id": 87,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 861.75
+    },
+    {
+      "end_us": 900.75,
+      "group_id": 1,
+      "id": 88,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 863.25
+    },
+    {
+      "end_us": 921.5,
+      "group_id": 1,
+      "id": 89,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 900.75
+    },
+    {
+      "end_us": 923.0,
+      "group_id": 1,
+      "id": 90,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 921.5
+    },
+    {
+      "end_us": 931.25,
+      "group_id": 1,
+      "id": 91,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "start_us": 923.0
+    },
+    {
+      "end_us": 936.25,
+      "group_id": 1,
+      "id": 92,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 932.5
+    },
+    {
+      "end_us": 939.5,
+      "group_id": 1,
+      "id": 93,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 936.25
+    },
+    {
+      "end_us": 932.25,
+      "group_id": 1,
+      "id": 94,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "start_us": 931.25
+    },
+    {
+      "end_us": 940.75,
+      "group_id": 1,
+      "id": 95,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "start_us": 939.5
+    },
+    {
+      "end_us": 1281.5,
+      "group_id": 2,
+      "id": 96,
+      "name": "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+      "start_us": 1280.0
+    },
+    {
+      "end_us": 1283.0,
+      "group_id": 2,
+      "id": 97,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 1280.0
+    },
+    {
+      "end_us": 1284.25,
+      "group_id": 2,
+      "id": 98,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 1281.5
+    },
+    {
+      "end_us": 1284.75,
+      "group_id": 2,
+      "id": 99,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 1283.0
+    },
+    {
+      "end_us": 1285.5,
+      "group_id": 2,
+      "id": 100,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 1284.25
+    },
+    {
+      "end_us": 1295.75,
+      "group_id": 2,
+      "id": 101,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 1289.5
+    },
+    {
+      "end_us": 1298.75,
+      "group_id": 2,
+      "id": 102,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 1295.75
+    },
+    {
+      "end_us": 1307.75,
+      "group_id": 2,
+      "id": 103,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 1298.75
+    },
+    {
+      "end_us": 1311.25,
+      "group_id": 2,
+      "id": 104,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 1307.75
+    },
+    {
+      "end_us": 1312.75,
+      "group_id": 2,
+      "id": 105,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 1311.25
+    },
+    {
+      "end_us": 1350.5,
+      "group_id": 2,
+      "id": 106,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 1312.75
+    },
+    {
+      "end_us": 1371.5,
+      "group_id": 2,
+      "id": 107,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 1350.5
+    },
+    {
+      "end_us": 1373.5,
+      "group_id": 2,
+      "id": 108,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 1371.5
+    },
+    {
+      "end_us": 1382.0,
+      "group_id": 2,
+      "id": 109,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "start_us": 1373.5
+    },
+    {
+      "end_us": 1391.25,
+      "group_id": 2,
+      "id": 110,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 1387.5
+    },
+    {
+      "end_us": 1395.25,
+      "group_id": 2,
+      "id": 111,
+      "name": "q6k_q8_warp_direct_1024_4096",
+      "start_us": 1391.25
+    },
+    {
+      "end_us": 1383.0,
+      "group_id": 2,
+      "id": 112,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "start_us": 1382.0
+    },
+    {
+      "end_us": 1396.5,
+      "group_id": 2,
+      "id": 113,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "start_us": 1395.25
+    },
+    {
+      "end_us": 1385.75,
+      "group_id": 2,
+      "id": 114,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 1383.0
+    },
+    {
+      "end_us": 1399.25,
+      "group_id": 2,
+      "id": 115,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 1396.5
+    },
+    {
+      "end_us": 1387.0,
+      "group_id": 2,
+      "id": 116,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 1385.75
+    },
+    {
+      "end_us": 1400.25,
+      "group_id": 2,
+      "id": 117,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 1399.25
+    },
+    {
+      "end_us": 1408.5,
+      "group_id": 2,
+      "id": 118,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 1402.0
+    },
+    {
+      "end_us": 1411.25,
+      "group_id": 2,
+      "id": 119,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 1408.5
+    },
+    {
+      "end_us": 1420.5,
+      "group_id": 2,
+      "id": 120,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 1411.25
+    },
+    {
+      "end_us": 1423.75,
+      "group_id": 2,
+      "id": 121,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 1420.5
+    },
+    {
+      "end_us": 1425.25,
+      "group_id": 2,
+      "id": 122,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 1423.75
+    },
+    {
+      "end_us": 1462.75,
+      "group_id": 2,
+      "id": 123,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 1425.25
+    },
+    {
+      "end_us": 1493.5,
+      "group_id": 2,
+      "id": 124,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 1462.75
+    },
+    {
+      "end_us": 1495.25,
+      "group_id": 2,
+      "id": 125,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 1493.5
+    },
+    {
+      "end_us": 1503.25,
+      "group_id": 2,
+      "id": 126,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "start_us": 1495.25
+    },
+    {
+      "end_us": 1512.25,
+      "group_id": 2,
+      "id": 127,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 1508.5
+    },
+    {
+      "end_us": 1515.5,
+      "group_id": 2,
+      "id": 128,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 1512.25
+    },
+    {
+      "end_us": 1504.25,
+      "group_id": 2,
+      "id": 129,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "start_us": 1503.25
+    },
+    {
+      "end_us": 1516.5,
+      "group_id": 2,
+      "id": 130,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "start_us": 1515.5
+    },
+    {
+      "end_us": 1517.75,
+      "group_id": 2,
+      "id": 131,
+      "name": "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+      "start_us": 1516.5
+    },
+    {
+      "end_us": 1506.5,
+      "group_id": 2,
+      "id": 132,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 1504.25
+    },
+    {
+      "end_us": 1520.25,
+      "group_id": 2,
+      "id": 133,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 1517.75
+    },
+    {
+      "end_us": 1508.0,
+      "group_id": 2,
+      "id": 134,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 1506.5
+    },
+    {
+      "end_us": 1521.5,
+      "group_id": 2,
+      "id": 135,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 1520.25
+    },
+    {
+      "end_us": 1529.25,
+      "group_id": 2,
+      "id": 136,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 1523.0
+    },
+    {
+      "end_us": 1532.0,
+      "group_id": 2,
+      "id": 137,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 1529.25
+    },
+    {
+      "end_us": 1541.0,
+      "group_id": 2,
+      "id": 138,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 1532.0
+    },
+    {
+      "end_us": 1544.5,
+      "group_id": 2,
+      "id": 139,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 1541.0
+    },
+    {
+      "end_us": 1546.0,
+      "group_id": 2,
+      "id": 140,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 1544.5
+    },
+    {
+      "end_us": 1583.75,
+      "group_id": 2,
+      "id": 141,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 1546.0
+    },
+    {
+      "end_us": 1604.0,
+      "group_id": 2,
+      "id": 142,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 1583.75
+    },
+    {
+      "end_us": 1605.75,
+      "group_id": 2,
+      "id": 143,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 1604.0
+    },
+    {
+      "end_us": 1614.25,
+      "group_id": 2,
+      "id": 144,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "start_us": 1605.75
+    },
+    {
+      "end_us": 1623.5,
+      "group_id": 2,
+      "id": 145,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 1619.5
+    },
+    {
+      "end_us": 1627.0,
+      "group_id": 2,
+      "id": 146,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 1623.5
+    },
+    {
+      "end_us": 1615.25,
+      "group_id": 2,
+      "id": 147,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "start_us": 1614.25
+    },
+    {
+      "end_us": 1628.0,
+      "group_id": 2,
+      "id": 148,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "start_us": 1627.0
+    },
+    {
+      "end_us": 1629.25,
+      "group_id": 2,
+      "id": 149,
+      "name": "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+      "start_us": 1628.0
+    },
+    {
+      "end_us": 1617.75,
+      "group_id": 2,
+      "id": 150,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 1615.25
+    },
+    {
+      "end_us": 1631.5,
+      "group_id": 2,
+      "id": 151,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 1629.25
+    },
+    {
+      "end_us": 1619.25,
+      "group_id": 2,
+      "id": 152,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 1617.75
+    },
+    {
+      "end_us": 1632.75,
+      "group_id": 2,
+      "id": 153,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 1631.5
+    },
+    {
+      "end_us": 1642.5,
+      "group_id": 2,
+      "id": 154,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 1636.25
+    },
+    {
+      "end_us": 1645.25,
+      "group_id": 2,
+      "id": 155,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 1642.5
+    },
+    {
+      "end_us": 1654.25,
+      "group_id": 2,
+      "id": 156,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 1645.25
+    },
+    {
+      "end_us": 1657.5,
+      "group_id": 2,
+      "id": 157,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 1654.25
+    },
+    {
+      "end_us": 1659.0,
+      "group_id": 2,
+      "id": 158,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 1657.5
+    },
+    {
+      "end_us": 1696.25,
+      "group_id": 2,
+      "id": 159,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 1659.0
+    },
+    {
+      "end_us": 1716.5,
+      "group_id": 2,
+      "id": 160,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 1696.25
+    },
+    {
+      "end_us": 1718.0,
+      "group_id": 2,
+      "id": 161,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 1716.5
+    },
+    {
+      "end_us": 1726.0,
+      "group_id": 2,
+      "id": 162,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "start_us": 1718.0
+    },
+    {
+      "end_us": 1735.5,
+      "group_id": 2,
+      "id": 163,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 1731.5
+    },
+    {
+      "end_us": 1739.0,
+      "group_id": 2,
+      "id": 164,
+      "name": "q6k_q8_warp_direct_1024_4096",
+      "start_us": 1735.5
+    },
+    {
+      "end_us": 1727.25,
+      "group_id": 2,
+      "id": 165,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "start_us": 1726.0
+    },
+    {
+      "end_us": 1740.25,
+      "group_id": 2,
+      "id": 166,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "start_us": 1739.0
+    },
+    {
+      "end_us": 1729.5,
+      "group_id": 2,
+      "id": 167,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 1727.25
+    },
+    {
+      "end_us": 1742.5,
+      "group_id": 2,
+      "id": 168,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 1740.25
+    },
+    {
+      "end_us": 1731.25,
+      "group_id": 2,
+      "id": 169,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 1729.5
+    },
+    {
+      "end_us": 1743.75,
+      "group_id": 2,
+      "id": 170,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 1742.5
+    },
+    {
+      "end_us": 1752.25,
+      "group_id": 2,
+      "id": 171,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 1746.0
+    },
+    {
+      "end_us": 1755.0,
+      "group_id": 2,
+      "id": 172,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 1752.25
+    },
+    {
+      "end_us": 1763.75,
+      "group_id": 2,
+      "id": 173,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 1755.0
+    },
+    {
+      "end_us": 1767.0,
+      "group_id": 2,
+      "id": 174,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 1763.75
+    },
+    {
+      "end_us": 1768.25,
+      "group_id": 2,
+      "id": 175,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 1767.0
+    },
+    {
+      "end_us": 1805.75,
+      "group_id": 2,
+      "id": 176,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 1768.25
+    },
+    {
+      "end_us": 1836.25,
+      "group_id": 2,
+      "id": 177,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 1805.75
+    },
+    {
+      "end_us": 1838.0,
+      "group_id": 2,
+      "id": 178,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 1836.25
+    },
+    {
+      "end_us": 1845.75,
+      "group_id": 2,
+      "id": 179,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "start_us": 1838.0
+    },
+    {
+      "end_us": 1854.75,
+      "group_id": 2,
+      "id": 180,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 1851.25
+    },
+    {
+      "end_us": 1858.25,
+      "group_id": 2,
+      "id": 181,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 1854.75
+    },
+    {
+      "end_us": 1847.0,
+      "group_id": 2,
+      "id": 182,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "start_us": 1845.75
+    },
+    {
+      "end_us": 1859.25,
+      "group_id": 2,
+      "id": 183,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "start_us": 1858.25
+    },
+    {
+      "end_us": 1860.5,
+      "group_id": 2,
+      "id": 184,
+      "name": "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+      "start_us": 1859.25
+    },
+    {
+      "end_us": 1849.25,
+      "group_id": 2,
+      "id": 185,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 1847.0
+    },
+    {
+      "end_us": 1863.0,
+      "group_id": 2,
+      "id": 186,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 1860.5
+    },
+    {
+      "end_us": 1850.75,
+      "group_id": 2,
+      "id": 187,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 1849.25
+    },
+    {
+      "end_us": 1864.0,
+      "group_id": 2,
+      "id": 188,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 1863.0
+    },
+    {
+      "end_us": 1873.25,
+      "group_id": 2,
+      "id": 189,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 1867.0
+    },
+    {
+      "end_us": 1876.0,
+      "group_id": 2,
+      "id": 190,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 1873.25
+    },
+    {
+      "end_us": 1884.75,
+      "group_id": 2,
+      "id": 191,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 1876.0
+    },
+    {
+      "end_us": 1888.0,
+      "group_id": 2,
+      "id": 192,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 1884.75
+    },
+    {
+      "end_us": 1889.25,
+      "group_id": 2,
+      "id": 193,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 1888.0
+    },
+    {
+      "end_us": 1926.5,
+      "group_id": 2,
+      "id": 194,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 1889.25
+    },
+    {
+      "end_us": 1947.25,
+      "group_id": 2,
+      "id": 195,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 1926.5
+    },
+    {
+      "end_us": 1949.0,
+      "group_id": 2,
+      "id": 196,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 1947.25
+    },
+    {
+      "end_us": 1957.25,
+      "group_id": 2,
+      "id": 197,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "start_us": 1949.0
+    },
+    {
+      "end_us": 1966.25,
+      "group_id": 2,
+      "id": 198,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 1962.75
+    },
+    {
+      "end_us": 1969.75,
+      "group_id": 2,
+      "id": 199,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 1966.25
+    },
+    {
+      "end_us": 1958.5,
+      "group_id": 2,
+      "id": 200,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "start_us": 1957.25
+    },
+    {
+      "end_us": 1970.75,
+      "group_id": 2,
+      "id": 201,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "start_us": 1969.75
+    },
+    {
+      "end_us": 1971.75,
+      "group_id": 2,
+      "id": 202,
+      "name": "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+      "start_us": 1970.75
+    },
+    {
+      "end_us": 1961.0,
+      "group_id": 2,
+      "id": 203,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 1958.5
+    },
+    {
+      "end_us": 1974.25,
+      "group_id": 2,
+      "id": 204,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 1971.75
+    },
+    {
+      "end_us": 1962.5,
+      "group_id": 2,
+      "id": 205,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 1961.0
+    },
+    {
+      "end_us": 1975.5,
+      "group_id": 2,
+      "id": 206,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 1974.25
+    },
+    {
+      "end_us": 1984.0,
+      "group_id": 2,
+      "id": 207,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 1977.5
+    },
+    {
+      "end_us": 1986.75,
+      "group_id": 2,
+      "id": 208,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 1984.0
+    },
+    {
+      "end_us": 1995.75,
+      "group_id": 2,
+      "id": 209,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 1986.75
+    },
+    {
+      "end_us": 1999.0,
+      "group_id": 2,
+      "id": 210,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 1995.75
+    },
+    {
+      "end_us": 2000.25,
+      "group_id": 2,
+      "id": 211,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 1999.0
+    },
+    {
+      "end_us": 2037.75,
+      "group_id": 2,
+      "id": 212,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 2000.25
+    },
+    {
+      "end_us": 2058.25,
+      "group_id": 2,
+      "id": 213,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 2037.75
+    },
+    {
+      "end_us": 2060.0,
+      "group_id": 2,
+      "id": 214,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 2058.25
+    },
+    {
+      "end_us": 2068.0,
+      "group_id": 2,
+      "id": 215,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "start_us": 2060.0
+    },
+    {
+      "end_us": 2077.0,
+      "group_id": 2,
+      "id": 216,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 2073.25
+    },
+    {
+      "end_us": 2080.5,
+      "group_id": 2,
+      "id": 217,
+      "name": "q6k_q8_warp_direct_1024_4096",
+      "start_us": 2077.0
+    },
+    {
+      "end_us": 2069.0,
+      "group_id": 2,
+      "id": 218,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "start_us": 2068.0
+    },
+    {
+      "end_us": 2081.75,
+      "group_id": 2,
+      "id": 219,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "start_us": 2080.5
+    },
+    {
+      "end_us": 2071.25,
+      "group_id": 2,
+      "id": 220,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 2069.0
+    },
+    {
+      "end_us": 2084.0,
+      "group_id": 2,
+      "id": 221,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 2081.75
+    },
+    {
+      "end_us": 2072.75,
+      "group_id": 2,
+      "id": 222,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 2071.25
+    },
+    {
+      "end_us": 2085.25,
+      "group_id": 2,
+      "id": 223,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 2084.0
+    },
+    {
+      "end_us": 2752.75,
+      "group_id": 3,
+      "id": 224,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 2746.25
+    },
+    {
+      "end_us": 2755.5,
+      "group_id": 3,
+      "id": 225,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 2752.75
+    },
+    {
+      "end_us": 2764.75,
+      "group_id": 3,
+      "id": 226,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 2755.5
+    },
+    {
+      "end_us": 2768.25,
+      "group_id": 3,
+      "id": 227,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 2764.75
+    },
+    {
+      "end_us": 2770.0,
+      "group_id": 3,
+      "id": 228,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 2768.25
+    },
+    {
+      "end_us": 2808.5,
+      "group_id": 3,
+      "id": 229,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 2770.0
+    },
+    {
+      "end_us": 2838.75,
+      "group_id": 3,
+      "id": 230,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 2808.5
+    },
+    {
+      "end_us": 2846.0,
+      "group_id": 3,
+      "id": 231,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 2838.75
+    },
+    {
+      "end_us": 2854.75,
+      "group_id": 3,
+      "id": 232,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "start_us": 2846.0
+    },
+    {
+      "end_us": 2864.5,
+      "group_id": 3,
+      "id": 233,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 2859.5
+    },
+    {
+      "end_us": 2868.75,
+      "group_id": 3,
+      "id": 234,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 2864.5
+    },
+    {
+      "end_us": 2857.25,
+      "group_id": 3,
+      "id": 235,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 2854.75
+    },
+    {
+      "end_us": 2871.5,
+      "group_id": 3,
+      "id": 236,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 2868.75
+    },
+    {
+      "end_us": 2859.25,
+      "group_id": 3,
+      "id": 237,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 2857.25
+    },
+    {
+      "end_us": 2872.75,
+      "group_id": 3,
+      "id": 238,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 2871.5
+    },
+    {
+      "end_us": 2882.5,
+      "group_id": 3,
+      "id": 239,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 2876.25
+    },
+    {
+      "end_us": 2885.5,
+      "group_id": 3,
+      "id": 240,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 2882.5
+    },
+    {
+      "end_us": 2894.5,
+      "group_id": 3,
+      "id": 241,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 2885.5
+    },
+    {
+      "end_us": 2897.75,
+      "group_id": 3,
+      "id": 242,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 2894.5
+    },
+    {
+      "end_us": 2899.0,
+      "group_id": 3,
+      "id": 243,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 2897.75
+    },
+    {
+      "end_us": 2936.75,
+      "group_id": 3,
+      "id": 244,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 2899.0
+    },
+    {
+      "end_us": 2957.75,
+      "group_id": 3,
+      "id": 245,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 2936.75
+    },
+    {
+      "end_us": 2959.5,
+      "group_id": 3,
+      "id": 246,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 2957.75
+    },
+    {
+      "end_us": 2968.25,
+      "group_id": 3,
+      "id": 247,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "start_us": 2959.5
+    },
+    {
+      "end_us": 2978.0,
+      "group_id": 3,
+      "id": 248,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 2974.25
+    },
+    {
+      "end_us": 2981.5,
+      "group_id": 3,
+      "id": 249,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 2978.0
+    },
+    {
+      "end_us": 2969.5,
+      "group_id": 3,
+      "id": 250,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "start_us": 2968.25
+    },
+    {
+      "end_us": 2982.75,
+      "group_id": 3,
+      "id": 251,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "start_us": 2981.5
+    },
+    {
+      "end_us": 2984.0,
+      "group_id": 3,
+      "id": 252,
+      "name": "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+      "start_us": 2982.75
+    },
+    {
+      "end_us": 2972.25,
+      "group_id": 3,
+      "id": 253,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 2969.5
+    },
+    {
+      "end_us": 2986.25,
+      "group_id": 3,
+      "id": 254,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 2984.0
+    },
+    {
+      "end_us": 2973.75,
+      "group_id": 3,
+      "id": 255,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 2972.25
+    },
+    {
+      "end_us": 2987.25,
+      "group_id": 3,
+      "id": 256,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 2986.25
+    },
+    {
+      "end_us": 2997.0,
+      "group_id": 3,
+      "id": 257,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 2990.75
+    },
+    {
+      "end_us": 2999.75,
+      "group_id": 3,
+      "id": 258,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 2997.0
+    },
+    {
+      "end_us": 3008.5,
+      "group_id": 3,
+      "id": 259,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 2999.75
+    },
+    {
+      "end_us": 3011.75,
+      "group_id": 3,
+      "id": 260,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 3008.5
+    },
+    {
+      "end_us": 3013.25,
+      "group_id": 3,
+      "id": 261,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 3011.75
+    },
+    {
+      "end_us": 3051.0,
+      "group_id": 3,
+      "id": 262,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 3013.25
+    },
+    {
+      "end_us": 3072.25,
+      "group_id": 3,
+      "id": 263,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 3051.0
+    },
+    {
+      "end_us": 3074.0,
+      "group_id": 3,
+      "id": 264,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 3072.25
+    },
+    {
+      "end_us": 3082.25,
+      "group_id": 3,
+      "id": 265,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "start_us": 3074.0
+    },
+    {
+      "end_us": 3092.5,
+      "group_id": 3,
+      "id": 266,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 3088.75
+    },
+    {
+      "end_us": 3096.5,
+      "group_id": 3,
+      "id": 267,
+      "name": "q6k_q8_warp_direct_1024_4096",
+      "start_us": 3092.5
+    },
+    {
+      "end_us": 3083.25,
+      "group_id": 3,
+      "id": 268,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "start_us": 3082.25
+    },
+    {
+      "end_us": 3097.5,
+      "group_id": 3,
+      "id": 269,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "start_us": 3096.5
+    },
+    {
+      "end_us": 3085.75,
+      "group_id": 3,
+      "id": 270,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 3083.25
+    },
+    {
+      "end_us": 3100.0,
+      "group_id": 3,
+      "id": 271,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 3097.5
+    },
+    {
+      "end_us": 3087.5,
+      "group_id": 3,
+      "id": 272,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 3085.75
+    },
+    {
+      "end_us": 3101.25,
+      "group_id": 3,
+      "id": 273,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 3100.0
+    },
+    {
+      "end_us": 3109.75,
+      "group_id": 3,
+      "id": 274,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 3103.5
+    },
+    {
+      "end_us": 3112.5,
+      "group_id": 3,
+      "id": 275,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 3109.75
+    },
+    {
+      "end_us": 3121.0,
+      "group_id": 3,
+      "id": 276,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 3112.5
+    },
+    {
+      "end_us": 3124.25,
+      "group_id": 3,
+      "id": 277,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 3121.0
+    },
+    {
+      "end_us": 3125.5,
+      "group_id": 3,
+      "id": 278,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 3124.25
+    },
+    {
+      "end_us": 3163.5,
+      "group_id": 3,
+      "id": 279,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 3125.5
+    },
+    {
+      "end_us": 3193.75,
+      "group_id": 3,
+      "id": 280,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 3163.5
+    },
+    {
+      "end_us": 3195.5,
+      "group_id": 3,
+      "id": 281,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 3193.75
+    },
+    {
+      "end_us": 3203.5,
+      "group_id": 3,
+      "id": 282,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "start_us": 3195.5
+    },
+    {
+      "end_us": 3212.75,
+      "group_id": 3,
+      "id": 283,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 3209.25
+    },
+    {
+      "end_us": 3216.0,
+      "group_id": 3,
+      "id": 284,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 3212.75
+    },
+    {
+      "end_us": 3204.75,
+      "group_id": 3,
+      "id": 285,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "start_us": 3203.5
+    },
+    {
+      "end_us": 3217.0,
+      "group_id": 3,
+      "id": 286,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "start_us": 3216.0
+    },
+    {
+      "end_us": 3218.25,
+      "group_id": 3,
+      "id": 287,
+      "name": "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+      "start_us": 3217.0
+    },
+    {
+      "end_us": 3207.25,
+      "group_id": 3,
+      "id": 288,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 3204.75
+    },
+    {
+      "end_us": 3220.5,
+      "group_id": 3,
+      "id": 289,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 3218.25
+    },
+    {
+      "end_us": 3208.75,
+      "group_id": 3,
+      "id": 290,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 3207.25
+    },
+    {
+      "end_us": 3221.75,
+      "group_id": 3,
+      "id": 291,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 3220.5
+    },
+    {
+      "end_us": 3230.0,
+      "group_id": 3,
+      "id": 292,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 3223.75
+    },
+    {
+      "end_us": 3232.75,
+      "group_id": 3,
+      "id": 293,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 3230.0
+    },
+    {
+      "end_us": 3241.75,
+      "group_id": 3,
+      "id": 294,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 3232.75
+    },
+    {
+      "end_us": 3245.0,
+      "group_id": 3,
+      "id": 295,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 3241.75
+    },
+    {
+      "end_us": 3246.5,
+      "group_id": 3,
+      "id": 296,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 3245.0
+    },
+    {
+      "end_us": 3283.5,
+      "group_id": 3,
+      "id": 297,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 3246.5
+    },
+    {
+      "end_us": 3304.75,
+      "group_id": 3,
+      "id": 298,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 3283.5
+    },
+    {
+      "end_us": 3306.5,
+      "group_id": 3,
+      "id": 299,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 3304.75
+    },
+    {
+      "end_us": 3314.5,
+      "group_id": 3,
+      "id": 300,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "start_us": 3306.5
+    },
+    {
+      "end_us": 3323.5,
+      "group_id": 3,
+      "id": 301,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 3319.75
+    },
+    {
+      "end_us": 3326.75,
+      "group_id": 3,
+      "id": 302,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 3323.5
+    },
+    {
+      "end_us": 3315.75,
+      "group_id": 3,
+      "id": 303,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "start_us": 3314.5
+    },
+    {
+      "end_us": 3328.0,
+      "group_id": 3,
+      "id": 304,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "start_us": 3326.75
+    },
+    {
+      "end_us": 3329.0,
+      "group_id": 3,
+      "id": 305,
+      "name": "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+      "start_us": 3328.0
+    },
+    {
+      "end_us": 3318.0,
+      "group_id": 3,
+      "id": 306,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 3315.75
+    },
+    {
+      "end_us": 3331.5,
+      "group_id": 3,
+      "id": 307,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 3329.0
+    },
+    {
+      "end_us": 3319.5,
+      "group_id": 3,
+      "id": 308,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 3318.0
+    },
+    {
+      "end_us": 3332.5,
+      "group_id": 3,
+      "id": 309,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 3331.5
+    },
+    {
+      "end_us": 3340.5,
+      "group_id": 3,
+      "id": 310,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 3334.25
+    },
+    {
+      "end_us": 3343.25,
+      "group_id": 3,
+      "id": 311,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 3340.5
+    },
+    {
+      "end_us": 3352.25,
+      "group_id": 3,
+      "id": 312,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 3343.25
+    },
+    {
+      "end_us": 3355.5,
+      "group_id": 3,
+      "id": 313,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 3352.25
+    },
+    {
+      "end_us": 3357.0,
+      "group_id": 3,
+      "id": 314,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 3355.5
+    },
+    {
+      "end_us": 3395.25,
+      "group_id": 3,
+      "id": 315,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 3357.0
+    },
+    {
+      "end_us": 3416.25,
+      "group_id": 3,
+      "id": 316,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 3395.25
+    },
+    {
+      "end_us": 3418.0,
+      "group_id": 3,
+      "id": 317,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 3416.25
+    },
+    {
+      "end_us": 3426.0,
+      "group_id": 3,
+      "id": 318,
+      "name": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "start_us": 3418.0
+    },
+    {
+      "end_us": 3436.0,
+      "group_id": 3,
+      "id": 319,
+      "name": "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "start_us": 3432.0
+    },
+    {
+      "end_us": 3439.75,
+      "group_id": 3,
+      "id": 320,
+      "name": "q6k_q8_warp_direct_1024_4096",
+      "start_us": 3436.0
+    },
+    {
+      "end_us": 3427.25,
+      "group_id": 3,
+      "id": 321,
+      "name": "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+      "start_us": 3426.0
+    },
+    {
+      "end_us": 3440.75,
+      "group_id": 3,
+      "id": 322,
+      "name": "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+      "start_us": 3439.75
+    },
+    {
+      "end_us": 3429.5,
+      "group_id": 3,
+      "id": 323,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 3427.25
+    },
+    {
+      "end_us": 3443.25,
+      "group_id": 3,
+      "id": 324,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 3440.75
+    },
+    {
+      "end_us": 3431.25,
+      "group_id": 3,
+      "id": 325,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 3429.5
+    },
+    {
+      "end_us": 3444.5,
+      "group_id": 3,
+      "id": 326,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 3443.25
+    },
+    {
+      "end_us": 3454.5,
+      "group_id": 3,
+      "id": 327,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 3448.0
+    },
+    {
+      "end_us": 3457.25,
+      "group_id": 3,
+      "id": 328,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 3454.5
+    },
+    {
+      "end_us": 3466.0,
+      "group_id": 3,
+      "id": 329,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 3457.25
+    },
+    {
+      "end_us": 3469.25,
+      "group_id": 3,
+      "id": 330,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 3466.0
+    },
+    {
+      "end_us": 3470.75,
+      "group_id": 3,
+      "id": 331,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 3469.25
+    },
+    {
+      "end_us": 3508.75,
+      "group_id": 3,
+      "id": 332,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 3470.75
+    },
+    {
+      "end_us": 3538.75,
+      "group_id": 3,
+      "id": 333,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 3508.75
+    },
+    {
+      "end_us": 3546.0,
+      "group_id": 3,
+      "id": 334,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 3538.75
+    },
+    {
+      "end_us": 3554.25,
+      "group_id": 3,
+      "id": 335,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "start_us": 3546.0
+    },
+    {
+      "end_us": 3563.75,
+      "group_id": 3,
+      "id": 336,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 3559.25
+    },
+    {
+      "end_us": 3568.25,
+      "group_id": 3,
+      "id": 337,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 3563.75
+    },
+    {
+      "end_us": 3556.75,
+      "group_id": 3,
+      "id": 338,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 3554.25
+    },
+    {
+      "end_us": 3570.5,
+      "group_id": 3,
+      "id": 339,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 3568.25
+    },
+    {
+      "end_us": 3558.25,
+      "group_id": 3,
+      "id": 340,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 3556.75
+    },
+    {
+      "end_us": 3571.75,
+      "group_id": 3,
+      "id": 341,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 3570.5
+    },
+    {
+      "end_us": 3580.5,
+      "group_id": 3,
+      "id": 342,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 3573.75
+    },
+    {
+      "end_us": 3583.5,
+      "group_id": 3,
+      "id": 343,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 3580.5
+    },
+    {
+      "end_us": 3592.75,
+      "group_id": 3,
+      "id": 344,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 3583.5
+    },
+    {
+      "end_us": 3596.0,
+      "group_id": 3,
+      "id": 345,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 3592.75
+    },
+    {
+      "end_us": 3597.5,
+      "group_id": 3,
+      "id": 346,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 3596.0
+    },
+    {
+      "end_us": 3634.5,
+      "group_id": 3,
+      "id": 347,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 3597.5
+    },
+    {
+      "end_us": 3656.25,
+      "group_id": 3,
+      "id": 348,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 3634.5
+    },
+    {
+      "end_us": 3663.25,
+      "group_id": 3,
+      "id": 349,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 3656.25
+    },
+    {
+      "end_us": 3672.0,
+      "group_id": 3,
+      "id": 350,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "start_us": 3663.25
+    },
+    {
+      "end_us": 3681.25,
+      "group_id": 3,
+      "id": 351,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 3676.5
+    },
+    {
+      "end_us": 3685.5,
+      "group_id": 3,
+      "id": 352,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 3681.25
+    },
+    {
+      "end_us": 3674.5,
+      "group_id": 3,
+      "id": 353,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 3672.0
+    },
+    {
+      "end_us": 3688.0,
+      "group_id": 3,
+      "id": 354,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 3685.5
+    },
+    {
+      "end_us": 3676.0,
+      "group_id": 3,
+      "id": 355,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 3674.5
+    },
+    {
+      "end_us": 3689.0,
+      "group_id": 3,
+      "id": 356,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 3688.0
+    },
+    {
+      "end_us": 3697.75,
+      "group_id": 3,
+      "id": 357,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 3691.5
+    },
+    {
+      "end_us": 3700.75,
+      "group_id": 3,
+      "id": 358,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 3697.75
+    },
+    {
+      "end_us": 3709.5,
+      "group_id": 3,
+      "id": 359,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 3700.75
+    },
+    {
+      "end_us": 3712.75,
+      "group_id": 3,
+      "id": 360,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 3709.5
+    },
+    {
+      "end_us": 3714.25,
+      "group_id": 3,
+      "id": 361,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 3712.75
+    },
+    {
+      "end_us": 3752.25,
+      "group_id": 3,
+      "id": 362,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 3714.25
+    },
+    {
+      "end_us": 3772.75,
+      "group_id": 3,
+      "id": 363,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 3752.25
+    },
+    {
+      "end_us": 3780.0,
+      "group_id": 3,
+      "id": 364,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 3772.75
+    },
+    {
+      "end_us": 3788.5,
+      "group_id": 3,
+      "id": 365,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "start_us": 3780.0
+    },
+    {
+      "end_us": 3798.0,
+      "group_id": 3,
+      "id": 366,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 3793.25
+    },
+    {
+      "end_us": 3802.25,
+      "group_id": 3,
+      "id": 367,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "start_us": 3798.0
+    },
+    {
+      "end_us": 3791.0,
+      "group_id": 3,
+      "id": 368,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 3788.5
+    },
+    {
+      "end_us": 3805.0,
+      "group_id": 3,
+      "id": 369,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 3802.25
+    },
+    {
+      "end_us": 3792.5,
+      "group_id": 3,
+      "id": 370,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 3791.0
+    },
+    {
+      "end_us": 3806.0,
+      "group_id": 3,
+      "id": 371,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 3805.0
+    },
+    {
+      "end_us": 3815.5,
+      "group_id": 3,
+      "id": 372,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 3809.0
+    },
+    {
+      "end_us": 3818.5,
+      "group_id": 3,
+      "id": 373,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 3815.5
+    },
+    {
+      "end_us": 3827.75,
+      "group_id": 3,
+      "id": 374,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 3818.5
+    },
+    {
+      "end_us": 3831.0,
+      "group_id": 3,
+      "id": 375,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 3827.75
+    },
+    {
+      "end_us": 3832.25,
+      "group_id": 3,
+      "id": 376,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 3831.0
+    },
+    {
+      "end_us": 3869.75,
+      "group_id": 3,
+      "id": 377,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 3832.25
+    },
+    {
+      "end_us": 3900.25,
+      "group_id": 3,
+      "id": 378,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 3869.75
+    },
+    {
+      "end_us": 3907.25,
+      "group_id": 3,
+      "id": 379,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 3900.25
+    },
+    {
+      "end_us": 3915.5,
+      "group_id": 3,
+      "id": 380,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "start_us": 3907.25
+    },
+    {
+      "end_us": 3925.25,
+      "group_id": 3,
+      "id": 381,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 3920.75
+    },
+    {
+      "end_us": 3929.5,
+      "group_id": 3,
+      "id": 382,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 3925.25
+    },
+    {
+      "end_us": 3918.25,
+      "group_id": 3,
+      "id": 383,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 3915.5
+    },
+    {
+      "end_us": 3932.0,
+      "group_id": 3,
+      "id": 384,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 3929.5
+    },
+    {
+      "end_us": 3919.75,
+      "group_id": 3,
+      "id": 385,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 3918.25
+    },
+    {
+      "end_us": 3933.0,
+      "group_id": 3,
+      "id": 386,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 3932.0
+    },
+    {
+      "end_us": 3941.5,
+      "group_id": 3,
+      "id": 387,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 3935.25
+    },
+    {
+      "end_us": 3944.5,
+      "group_id": 3,
+      "id": 388,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 3941.5
+    },
+    {
+      "end_us": 3953.25,
+      "group_id": 3,
+      "id": 389,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 3944.5
+    },
+    {
+      "end_us": 3956.5,
+      "group_id": 3,
+      "id": 390,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 3953.25
+    },
+    {
+      "end_us": 3958.0,
+      "group_id": 3,
+      "id": 391,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 3956.5
+    },
+    {
+      "end_us": 3995.25,
+      "group_id": 3,
+      "id": 392,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 3958.0
+    },
+    {
+      "end_us": 4015.5,
+      "group_id": 3,
+      "id": 393,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 3995.25
+    },
+    {
+      "end_us": 4022.75,
+      "group_id": 3,
+      "id": 394,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 4015.5
+    },
+    {
+      "end_us": 4031.25,
+      "group_id": 3,
+      "id": 395,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "start_us": 4022.75
+    },
+    {
+      "end_us": 4040.75,
+      "group_id": 3,
+      "id": 396,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 4035.75
+    },
+    {
+      "end_us": 4044.75,
+      "group_id": 3,
+      "id": 397,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 4040.75
+    },
+    {
+      "end_us": 4033.75,
+      "group_id": 3,
+      "id": 398,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 4031.25
+    },
+    {
+      "end_us": 4047.25,
+      "group_id": 3,
+      "id": 399,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 4044.75
+    },
+    {
+      "end_us": 4035.25,
+      "group_id": 3,
+      "id": 400,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 4033.75
+    },
+    {
+      "end_us": 4048.25,
+      "group_id": 3,
+      "id": 401,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 4047.25
+    },
+    {
+      "end_us": 4056.75,
+      "group_id": 3,
+      "id": 402,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 4050.5
+    },
+    {
+      "end_us": 4059.5,
+      "group_id": 3,
+      "id": 403,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 4056.75
+    },
+    {
+      "end_us": 4068.75,
+      "group_id": 3,
+      "id": 404,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 4059.5
+    },
+    {
+      "end_us": 4072.0,
+      "group_id": 3,
+      "id": 405,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 4068.75
+    },
+    {
+      "end_us": 4073.25,
+      "group_id": 3,
+      "id": 406,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 4072.0
+    },
+    {
+      "end_us": 4111.25,
+      "group_id": 3,
+      "id": 407,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 4073.25
+    },
+    {
+      "end_us": 4132.0,
+      "group_id": 3,
+      "id": 408,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 4111.25
+    },
+    {
+      "end_us": 4138.75,
+      "group_id": 3,
+      "id": 409,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 4132.0
+    },
+    {
+      "end_us": 4147.5,
+      "group_id": 3,
+      "id": 410,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "start_us": 4138.75
+    },
+    {
+      "end_us": 4156.75,
+      "group_id": 3,
+      "id": 411,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 4152.0
+    },
+    {
+      "end_us": 4161.0,
+      "group_id": 3,
+      "id": 412,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "start_us": 4156.75
+    },
+    {
+      "end_us": 4150.0,
+      "group_id": 3,
+      "id": 413,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 4147.5
+    },
+    {
+      "end_us": 4163.25,
+      "group_id": 3,
+      "id": 414,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 4161.0
+    },
+    {
+      "end_us": 4151.5,
+      "group_id": 3,
+      "id": 415,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 4150.0
+    },
+    {
+      "end_us": 4164.5,
+      "group_id": 3,
+      "id": 416,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 4163.25
+    },
+    {
+      "end_us": 4173.25,
+      "group_id": 3,
+      "id": 417,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 4167.0
+    },
+    {
+      "end_us": 4176.0,
+      "group_id": 3,
+      "id": 418,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 4173.25
+    },
+    {
+      "end_us": 4185.25,
+      "group_id": 3,
+      "id": 419,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 4176.0
+    },
+    {
+      "end_us": 4188.25,
+      "group_id": 3,
+      "id": 420,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 4185.25
+    },
+    {
+      "end_us": 4189.75,
+      "group_id": 3,
+      "id": 421,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 4188.25
+    },
+    {
+      "end_us": 4227.5,
+      "group_id": 3,
+      "id": 422,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 4189.75
+    },
+    {
+      "end_us": 4257.75,
+      "group_id": 3,
+      "id": 423,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 4227.5
+    },
+    {
+      "end_us": 4264.75,
+      "group_id": 3,
+      "id": 424,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 4257.75
+    },
+    {
+      "end_us": 4273.0,
+      "group_id": 3,
+      "id": 425,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "start_us": 4264.75
+    },
+    {
+      "end_us": 4282.5,
+      "group_id": 3,
+      "id": 426,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 4277.5
+    },
+    {
+      "end_us": 4287.0,
+      "group_id": 3,
+      "id": 427,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 4282.5
+    },
+    {
+      "end_us": 4275.5,
+      "group_id": 3,
+      "id": 428,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 4273.0
+    },
+    {
+      "end_us": 4289.25,
+      "group_id": 3,
+      "id": 429,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 4287.0
+    },
+    {
+      "end_us": 4277.25,
+      "group_id": 3,
+      "id": 430,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 4275.5
+    },
+    {
+      "end_us": 4290.5,
+      "group_id": 3,
+      "id": 431,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 4289.25
+    },
+    {
+      "end_us": 4300.75,
+      "group_id": 3,
+      "id": 432,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 4294.5
+    },
+    {
+      "end_us": 4303.5,
+      "group_id": 3,
+      "id": 433,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 4300.75
+    },
+    {
+      "end_us": 4312.75,
+      "group_id": 3,
+      "id": 434,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 4303.5
+    },
+    {
+      "end_us": 4316.0,
+      "group_id": 3,
+      "id": 435,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 4312.75
+    },
+    {
+      "end_us": 4317.25,
+      "group_id": 3,
+      "id": 436,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 4316.0
+    },
+    {
+      "end_us": 4354.25,
+      "group_id": 3,
+      "id": 437,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 4317.25
+    },
+    {
+      "end_us": 4374.75,
+      "group_id": 3,
+      "id": 438,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 4354.25
+    },
+    {
+      "end_us": 4381.75,
+      "group_id": 3,
+      "id": 439,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 4374.75
+    },
+    {
+      "end_us": 4390.5,
+      "group_id": 3,
+      "id": 440,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "start_us": 4381.75
+    },
+    {
+      "end_us": 4400.25,
+      "group_id": 3,
+      "id": 441,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 4395.5
+    },
+    {
+      "end_us": 4404.5,
+      "group_id": 3,
+      "id": 442,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 4400.25
+    },
+    {
+      "end_us": 4393.0,
+      "group_id": 3,
+      "id": 443,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 4390.5
+    },
+    {
+      "end_us": 4406.75,
+      "group_id": 3,
+      "id": 444,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 4404.5
+    },
+    {
+      "end_us": 4394.75,
+      "group_id": 3,
+      "id": 445,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 4393.0
+    },
+    {
+      "end_us": 4408.25,
+      "group_id": 3,
+      "id": 446,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 4406.75
+    },
+    {
+      "end_us": 4417.5,
+      "group_id": 3,
+      "id": 447,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 4411.25
+    },
+    {
+      "end_us": 4420.5,
+      "group_id": 3,
+      "id": 448,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 4417.5
+    },
+    {
+      "end_us": 4429.5,
+      "group_id": 3,
+      "id": 449,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 4420.5
+    },
+    {
+      "end_us": 4432.5,
+      "group_id": 3,
+      "id": 450,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 4429.5
+    },
+    {
+      "end_us": 4434.0,
+      "group_id": 3,
+      "id": 451,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 4432.5
+    },
+    {
+      "end_us": 4472.5,
+      "group_id": 3,
+      "id": 452,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 4434.0
+    },
+    {
+      "end_us": 4492.5,
+      "group_id": 3,
+      "id": 453,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 4472.5
+    },
+    {
+      "end_us": 4499.25,
+      "group_id": 3,
+      "id": 454,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 4492.5
+    },
+    {
+      "end_us": 4508.0,
+      "group_id": 3,
+      "id": 455,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "start_us": 4499.25
+    },
+    {
+      "end_us": 4517.25,
+      "group_id": 3,
+      "id": 456,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 4512.5
+    },
+    {
+      "end_us": 4521.75,
+      "group_id": 3,
+      "id": 457,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "start_us": 4517.25
+    },
+    {
+      "end_us": 4510.5,
+      "group_id": 3,
+      "id": 458,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 4508.0
+    },
+    {
+      "end_us": 4524.0,
+      "group_id": 3,
+      "id": 459,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 4521.75
+    },
+    {
+      "end_us": 4512.0,
+      "group_id": 3,
+      "id": 460,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 4510.5
+    },
+    {
+      "end_us": 4525.25,
+      "group_id": 3,
+      "id": 461,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 4524.0
+    },
+    {
+      "end_us": 4533.5,
+      "group_id": 3,
+      "id": 462,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 4527.25
+    },
+    {
+      "end_us": 4536.5,
+      "group_id": 3,
+      "id": 463,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 4533.5
+    },
+    {
+      "end_us": 4545.5,
+      "group_id": 3,
+      "id": 464,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 4536.5
+    },
+    {
+      "end_us": 4548.75,
+      "group_id": 3,
+      "id": 465,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 4545.5
+    },
+    {
+      "end_us": 4550.0,
+      "group_id": 3,
+      "id": 466,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 4548.75
+    },
+    {
+      "end_us": 4587.75,
+      "group_id": 3,
+      "id": 467,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 4550.0
+    },
+    {
+      "end_us": 4619.0,
+      "group_id": 3,
+      "id": 468,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 4587.75
+    },
+    {
+      "end_us": 4626.0,
+      "group_id": 3,
+      "id": 469,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 4619.0
+    },
+    {
+      "end_us": 4634.5,
+      "group_id": 3,
+      "id": 470,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "start_us": 4626.0
+    },
+    {
+      "end_us": 4644.25,
+      "group_id": 3,
+      "id": 471,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 4639.25
+    },
+    {
+      "end_us": 4648.5,
+      "group_id": 3,
+      "id": 472,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 4644.25
+    },
+    {
+      "end_us": 4637.0,
+      "group_id": 3,
+      "id": 473,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 4634.5
+    },
+    {
+      "end_us": 4651.25,
+      "group_id": 3,
+      "id": 474,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 4648.5
+    },
+    {
+      "end_us": 4638.5,
+      "group_id": 3,
+      "id": 475,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 4637.0
+    },
+    {
+      "end_us": 4652.5,
+      "group_id": 3,
+      "id": 476,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 4651.25
+    },
+    {
+      "end_us": 4660.25,
+      "group_id": 3,
+      "id": 477,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 4653.75
+    },
+    {
+      "end_us": 4663.25,
+      "group_id": 3,
+      "id": 478,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 4660.25
+    },
+    {
+      "end_us": 4672.5,
+      "group_id": 3,
+      "id": 479,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 4663.25
+    },
+    {
+      "end_us": 4679.25,
+      "group_id": 4,
+      "id": 480,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 4675.25
+    },
+    {
+      "end_us": 4680.75,
+      "group_id": 4,
+      "id": 481,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 4679.25
+    },
+    {
+      "end_us": 4718.75,
+      "group_id": 4,
+      "id": 482,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 4680.75
+    },
+    {
+      "end_us": 4738.75,
+      "group_id": 4,
+      "id": 483,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 4718.75
+    },
+    {
+      "end_us": 4745.75,
+      "group_id": 4,
+      "id": 484,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 4738.75
+    },
+    {
+      "end_us": 4754.75,
+      "group_id": 4,
+      "id": 485,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "start_us": 4745.75
+    },
+    {
+      "end_us": 4764.25,
+      "group_id": 4,
+      "id": 486,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 4759.5
+    },
+    {
+      "end_us": 4768.5,
+      "group_id": 4,
+      "id": 487,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 4764.25
+    },
+    {
+      "end_us": 4757.5,
+      "group_id": 4,
+      "id": 488,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 4754.75
+    },
+    {
+      "end_us": 4771.0,
+      "group_id": 4,
+      "id": 489,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 4768.5
+    },
+    {
+      "end_us": 4759.0,
+      "group_id": 4,
+      "id": 490,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 4757.5
+    },
+    {
+      "end_us": 4772.5,
+      "group_id": 4,
+      "id": 491,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 4771.0
+    },
+    {
+      "end_us": 4781.5,
+      "group_id": 4,
+      "id": 492,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 4775.0
+    },
+    {
+      "end_us": 4784.25,
+      "group_id": 4,
+      "id": 493,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 4781.5
+    },
+    {
+      "end_us": 4793.25,
+      "group_id": 4,
+      "id": 494,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 4784.25
+    },
+    {
+      "end_us": 4796.5,
+      "group_id": 4,
+      "id": 495,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 4793.25
+    },
+    {
+      "end_us": 4797.75,
+      "group_id": 4,
+      "id": 496,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 4796.5
+    },
+    {
+      "end_us": 4835.0,
+      "group_id": 4,
+      "id": 497,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 4797.75
+    },
+    {
+      "end_us": 4855.5,
+      "group_id": 4,
+      "id": 498,
+      "name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 4835.0
+    },
+    {
+      "end_us": 4862.5,
+      "group_id": 4,
+      "id": 499,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 4855.5
+    },
+    {
+      "end_us": 4871.25,
+      "group_id": 4,
+      "id": 500,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "start_us": 4862.5
+    },
+    {
+      "end_us": 4881.0,
+      "group_id": 4,
+      "id": 501,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 4876.0
+    },
+    {
+      "end_us": 4885.5,
+      "group_id": 4,
+      "id": 502,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "start_us": 4881.0
+    },
+    {
+      "end_us": 4873.75,
+      "group_id": 4,
+      "id": 503,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 4871.25
+    },
+    {
+      "end_us": 4888.25,
+      "group_id": 4,
+      "id": 504,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 4885.5
+    },
+    {
+      "end_us": 4875.25,
+      "group_id": 4,
+      "id": 505,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 4873.75
+    },
+    {
+      "end_us": 4889.25,
+      "group_id": 4,
+      "id": 506,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 4888.25
+    },
+    {
+      "end_us": 4897.0,
+      "group_id": 4,
+      "id": 507,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 4890.75
+    },
+    {
+      "end_us": 4899.75,
+      "group_id": 4,
+      "id": 508,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 4897.0
+    },
+    {
+      "end_us": 4908.75,
+      "group_id": 4,
+      "id": 509,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 4899.75
+    },
+    {
+      "end_us": 4912.0,
+      "group_id": 4,
+      "id": 510,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 4908.75
+    },
+    {
+      "end_us": 4913.5,
+      "group_id": 4,
+      "id": 511,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 4912.0
+    },
+    {
+      "end_us": 4951.25,
+      "group_id": 4,
+      "id": 512,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 4913.5
+    },
+    {
+      "end_us": 4982.0,
+      "group_id": 4,
+      "id": 513,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 4951.25
+    },
+    {
+      "end_us": 4989.0,
+      "group_id": 4,
+      "id": 514,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 4982.0
+    },
+    {
+      "end_us": 4997.75,
+      "group_id": 4,
+      "id": 515,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "start_us": 4989.0
+    },
+    {
+      "end_us": 5007.75,
+      "group_id": 4,
+      "id": 516,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 5003.25
+    },
+    {
+      "end_us": 5012.5,
+      "group_id": 4,
+      "id": 517,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "start_us": 5007.75
+    },
+    {
+      "end_us": 5000.5,
+      "group_id": 4,
+      "id": 518,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 4997.75
+    },
+    {
+      "end_us": 5014.75,
+      "group_id": 4,
+      "id": 519,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 5012.5
+    },
+    {
+      "end_us": 5002.0,
+      "group_id": 4,
+      "id": 520,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 5000.5
+    },
+    {
+      "end_us": 5016.0,
+      "group_id": 4,
+      "id": 521,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 5014.75
+    },
+    {
+      "end_us": 5025.5,
+      "group_id": 4,
+      "id": 522,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 5018.75
+    },
+    {
+      "end_us": 5028.5,
+      "group_id": 4,
+      "id": 523,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 5025.5
+    },
+    {
+      "end_us": 5037.75,
+      "group_id": 4,
+      "id": 524,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 5028.5
+    },
+    {
+      "end_us": 5041.0,
+      "group_id": 4,
+      "id": 525,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 5037.75
+    },
+    {
+      "end_us": 5042.5,
+      "group_id": 4,
+      "id": 526,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 5041.0
+    },
+    {
+      "end_us": 5080.0,
+      "group_id": 4,
+      "id": 527,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 5042.5
+    },
+    {
+      "end_us": 5111.0,
+      "group_id": 4,
+      "id": 528,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 5080.0
+    },
+    {
+      "end_us": 5118.25,
+      "group_id": 4,
+      "id": 529,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 5111.0
+    },
+    {
+      "end_us": 5126.75,
+      "group_id": 4,
+      "id": 530,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "start_us": 5118.25
+    },
+    {
+      "end_us": 5136.75,
+      "group_id": 4,
+      "id": 531,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 5131.75
+    },
+    {
+      "end_us": 5140.75,
+      "group_id": 4,
+      "id": 532,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "start_us": 5136.75
+    },
+    {
+      "end_us": 5129.5,
+      "group_id": 4,
+      "id": 533,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 5126.75
+    },
+    {
+      "end_us": 5143.25,
+      "group_id": 4,
+      "id": 534,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 5140.75
+    },
+    {
+      "end_us": 5131.0,
+      "group_id": 4,
+      "id": 535,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 5129.5
+    },
+    {
+      "end_us": 5144.5,
+      "group_id": 4,
+      "id": 536,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 5143.25
+    },
+    {
+      "end_us": 5153.5,
+      "group_id": 4,
+      "id": 537,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 5147.25
+    },
+    {
+      "end_us": 5156.5,
+      "group_id": 4,
+      "id": 538,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 5153.5
+    },
+    {
+      "end_us": 5165.5,
+      "group_id": 4,
+      "id": 539,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 5156.5
+    },
+    {
+      "end_us": 5168.75,
+      "group_id": 4,
+      "id": 540,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 5165.5
+    },
+    {
+      "end_us": 5170.0,
+      "group_id": 4,
+      "id": 541,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 5168.75
+    },
+    {
+      "end_us": 5208.0,
+      "group_id": 4,
+      "id": 542,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 5170.0
+    },
+    {
+      "end_us": 5238.0,
+      "group_id": 4,
+      "id": 543,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 5208.0
+    },
+    {
+      "end_us": 5245.0,
+      "group_id": 4,
+      "id": 544,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 5238.0
+    },
+    {
+      "end_us": 5253.75,
+      "group_id": 4,
+      "id": 545,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "start_us": 5245.0
+    },
+    {
+      "end_us": 5263.75,
+      "group_id": 4,
+      "id": 546,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 5259.0
+    },
+    {
+      "end_us": 5268.25,
+      "group_id": 4,
+      "id": 547,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "start_us": 5263.75
+    },
+    {
+      "end_us": 5256.25,
+      "group_id": 4,
+      "id": 548,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 5253.75
+    },
+    {
+      "end_us": 5270.75,
+      "group_id": 4,
+      "id": 549,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 5268.25
+    },
+    {
+      "end_us": 5258.0,
+      "group_id": 4,
+      "id": 550,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 5256.25
+    },
+    {
+      "end_us": 5272.0,
+      "group_id": 4,
+      "id": 551,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 5270.75
+    },
+    {
+      "end_us": 5280.5,
+      "group_id": 4,
+      "id": 552,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 5273.75
+    },
+    {
+      "end_us": 5283.25,
+      "group_id": 4,
+      "id": 553,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 5280.5
+    },
+    {
+      "end_us": 5292.75,
+      "group_id": 4,
+      "id": 554,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 5283.25
+    },
+    {
+      "end_us": 5296.0,
+      "group_id": 4,
+      "id": 555,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 5292.75
+    },
+    {
+      "end_us": 5297.25,
+      "group_id": 4,
+      "id": 556,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 5296.0
+    },
+    {
+      "end_us": 5335.0,
+      "group_id": 4,
+      "id": 557,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 5297.25
+    },
+    {
+      "end_us": 5365.75,
+      "group_id": 4,
+      "id": 558,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 5335.0
+    },
+    {
+      "end_us": 5372.75,
+      "group_id": 4,
+      "id": 559,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 5365.75
+    },
+    {
+      "end_us": 5381.25,
+      "group_id": 4,
+      "id": 560,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "start_us": 5372.75
+    },
+    {
+      "end_us": 5391.25,
+      "group_id": 4,
+      "id": 561,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 5386.25
+    },
+    {
+      "end_us": 5395.5,
+      "group_id": 4,
+      "id": 562,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "start_us": 5391.25
+    },
+    {
+      "end_us": 5384.0,
+      "group_id": 4,
+      "id": 563,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 5381.25
+    },
+    {
+      "end_us": 5398.0,
+      "group_id": 4,
+      "id": 564,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 5395.5
+    },
+    {
+      "end_us": 5385.5,
+      "group_id": 4,
+      "id": 565,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 5384.0
+    },
+    {
+      "end_us": 5399.0,
+      "group_id": 4,
+      "id": 566,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 5398.0
+    },
+    {
+      "end_us": 5407.25,
+      "group_id": 4,
+      "id": 567,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 5400.75
+    },
+    {
+      "end_us": 5410.0,
+      "group_id": 4,
+      "id": 568,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 5407.25
+    },
+    {
+      "end_us": 5419.0,
+      "group_id": 4,
+      "id": 569,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 5410.0
+    },
+    {
+      "end_us": 5422.25,
+      "group_id": 4,
+      "id": 570,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 5419.0
+    },
+    {
+      "end_us": 5423.5,
+      "group_id": 4,
+      "id": 571,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 5422.25
+    },
+    {
+      "end_us": 5461.25,
+      "group_id": 4,
+      "id": 572,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 5423.5
+    },
+    {
+      "end_us": 5491.5,
+      "group_id": 4,
+      "id": 573,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 5461.25
+    },
+    {
+      "end_us": 5498.5,
+      "group_id": 4,
+      "id": 574,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 5491.5
+    },
+    {
+      "end_us": 5507.25,
+      "group_id": 4,
+      "id": 575,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "start_us": 5498.5
+    },
+    {
+      "end_us": 5516.25,
+      "group_id": 4,
+      "id": 576,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "start_us": 5511.5
+    },
+    {
+      "end_us": 5520.5,
+      "group_id": 4,
+      "id": 577,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "start_us": 5516.25
+    },
+    {
+      "end_us": 5509.75,
+      "group_id": 4,
+      "id": 578,
+      "name": "reduce_output_rmsnorm_32_128",
+      "start_us": 5507.25
+    },
+    {
+      "end_us": 5523.0,
+      "group_id": 4,
+      "id": 579,
+      "name": "reduce_output_rmsnorm_8_128",
+      "start_us": 5520.5
+    },
+    {
+      "end_us": 5511.25,
+      "group_id": 4,
+      "id": 580,
+      "name": "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+      "start_us": 5509.75
+    },
+    {
+      "end_us": 5524.25,
+      "group_id": 4,
+      "id": 581,
+      "name": "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+      "start_us": 5523.0
+    },
+    {
+      "end_us": 5531.75,
+      "group_id": 4,
+      "id": 582,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 5525.25
+    },
+    {
+      "end_us": 5534.5,
+      "group_id": 4,
+      "id": 583,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 5531.75
+    },
+    {
+      "end_us": 5543.5,
+      "group_id": 4,
+      "id": 584,
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "start_us": 5534.5
+    },
+    {
+      "end_us": 5546.75,
+      "group_id": 4,
+      "id": 585,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "start_us": 5543.5
+    },
+    {
+      "end_us": 5548.25,
+      "group_id": 4,
+      "id": 586,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "start_us": 5546.75
+    },
+    {
+      "end_us": 5585.75,
+      "group_id": 4,
+      "id": 587,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "start_us": 5548.25
+    },
+    {
+      "end_us": 5616.75,
+      "group_id": 4,
+      "id": 588,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "start_us": 5585.75
+    },
+    {
+      "end_us": 5623.75,
+      "group_id": 4,
+      "id": 589,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 5616.75
+    },
+    {
+      "end_us": 5625.0,
+      "group_id": 4,
+      "id": 590,
+      "name": "E_32_32_4_5a5673a44c51a85d2e73b347238640218966a387a0c3b168f5ef5dc11a3e0798",
+      "start_us": 5623.75
+    },
+    {
+      "end_us": 5938.25,
+      "group_id": 4,
+      "id": 591,
+      "name": "q6k_gen_coop_151936_4096_inkernel",
+      "start_us": 5625.0
+    },
+    {
+      "end_us": 5941.0,
+      "group_id": 4,
+      "id": 592,
+      "name": "E_1187_32_4_e1ccc42612aa8f28b20a61db46f51dbe08ce7e41f6c77f3966e2be8e85e1f10e",
+      "start_us": 5938.25
+    },
+    {
+      "end_us": 5979.5,
+      "group_id": 4,
+      "id": 593,
+      "name": "r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f",
+      "start_us": 5941.0
+    },
+    {
+      "end_us": 5990.25,
+      "group_id": 4,
+      "id": 594,
+      "name": "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5",
+      "start_us": 5979.5
+    },
+    {
+      "end_us": 5991.25,
+      "group_id": 4,
+      "id": 595,
+      "name": "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c",
+      "start_us": 5990.25
+    }
+  ],
+  "pairs": [],
+  "pdl_placements": {},
+  "profile_records_total": 100,
+  "profiled_host_per_token_us": {
+    "median": 7529.883,
+    "note": "PROFILE=1 instrumentation tax included; not an endpoint wall"
+  },
+  "queues": 2,
+  "schema": "tinygrad.nv_pdl_phase_b.v1",
+  "timed_node_count": 596,
+  "token_evidence": {
+    "count": 9,
+    "first_token_ids": [
+      13876,
+      38835,
+      34208,
+      13,
+      279,
+      3974,
+      13876,
+      38835,
+      34208
+    ],
+    "sha256": "323f407295a70421c78d02bb0954c20dffc76a0020ce52f7bdba0e0901ba8332"
+  },
+  "token_span_us": 5991.25
+}

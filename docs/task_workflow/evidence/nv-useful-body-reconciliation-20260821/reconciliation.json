@@ -1,0 +1,588 @@
+{
+  "authority": {
+    "aggregate_delta_us": [
+      759.995,
+      799.71
+    ],
+    "llama_node_sum_us": 5023.823,
+    "llama_overlap_mass_us": 1133.255,
+    "llama_union_us": 3890.568,
+    "llama_useful_body_us": [
+      3942.754,
+      3982.469
+    ],
+    "shadow_bracket_us": [
+      1041.354,
+      1081.069
+    ],
+    "shadow_share_bracket": [
+      0.918905,
+      0.95395
+    ],
+    "tinygrad_node_sum_us": 4742.464,
+    "tinygrad_union_us": 4733.25,
+    "tinygrad_useful_body_us": 4742.464,
+    "useful_bracket_us": [
+      52.186,
+      91.901
+    ]
+  },
+  "captures": {
+    "final_subsampled": {
+      "families": {
+        "flash_combine": {
+          "critical_us_per_token": 46.816,
+          "shadow_lower_share": 0.126532,
+          "shadow_lower_us_per_token": 167.742,
+          "shadow_upper_share": 0.123187,
+          "shadow_upper_us_per_token": 168.311,
+          "useful_lower_share": 0.098113,
+          "useful_lower_us_per_token": 6.432,
+          "useful_upper_share": 0.065951,
+          "useful_upper_us_per_token": 7.002
+        },
+        "flash_score": {
+          "critical_us_per_token": 166.012,
+          "shadow_lower_share": 0.014439,
+          "shadow_lower_us_per_token": 19.142,
+          "shadow_upper_share": 0.01573,
+          "shadow_upper_us_per_token": 21.492,
+          "useful_lower_share": 0.051512,
+          "useful_lower_us_per_token": 3.377,
+          "useful_upper_share": 0.053932,
+          "useful_upper_us_per_token": 5.726
+        },
+        "gemv": {
+          "critical_us_per_token": 2651.802,
+          "shadow_lower_share": 0.350961,
+          "shadow_lower_us_per_token": 465.266,
+          "shadow_upper_share": 0.360648,
+          "shadow_upper_us_per_token": 492.756,
+          "useful_lower_share": 0.0,
+          "useful_lower_us_per_token": 0.0,
+          "useful_upper_share": 0.258924,
+          "useful_upper_us_per_token": 27.49
+        },
+        "gemv_kv": {
+          "critical_us_per_token": 224.177,
+          "shadow_lower_share": 0.066764,
+          "shadow_lower_us_per_token": 88.508,
+          "shadow_upper_share": 0.068952,
+          "shadow_upper_us_per_token": 94.21,
+          "useful_lower_share": 0.152692,
+          "useful_lower_us_per_token": 10.01,
+          "useful_upper_share": 0.147961,
+          "useful_upper_us_per_token": 15.709
+        },
+        "kv": {
+          "critical_us_per_token": 44.115,
+          "shadow_lower_share": 0.045539,
+          "shadow_lower_us_per_token": 60.371,
+          "shadow_upper_share": 0.045185,
+          "shadow_upper_us_per_token": 61.736,
+          "useful_lower_share": 0.099257,
+          "useful_lower_us_per_token": 6.507,
+          "useful_upper_share": 0.074145,
+          "useful_upper_us_per_token": 7.872
+        },
+        "quant_provider": {
+          "critical_us_per_token": 218.895,
+          "shadow_lower_share": 0.333454,
+          "shadow_lower_us_per_token": 442.057,
+          "shadow_upper_share": 0.324967,
+          "shadow_upper_us_per_token": 444.005,
+          "useful_lower_share": 0.399927,
+          "useful_lower_us_per_token": 26.218,
+          "useful_upper_share": 0.265282,
+          "useful_upper_us_per_token": 28.165
+        },
+        "residual": {
+          "critical_us_per_token": 0.882,
+          "shadow_lower_share": 0.001063,
+          "shadow_lower_us_per_token": 1.409,
+          "shadow_upper_share": 0.001031,
+          "shadow_upper_us_per_token": 1.409,
+          "useful_lower_share": 0.003539,
+          "useful_lower_us_per_token": 0.232,
+          "useful_upper_share": 0.002185,
+          "useful_upper_us_per_token": 0.232
+        },
+        "rmsnorm": {
+          "critical_us_per_token": 354.625,
+          "shadow_lower_share": 0.001498,
+          "shadow_lower_us_per_token": 1.986,
+          "shadow_upper_share": 0.001454,
+          "shadow_upper_us_per_token": 1.986,
+          "useful_lower_share": 0.00122,
+          "useful_lower_us_per_token": 0.08,
+          "useful_upper_share": 0.000754,
+          "useful_upper_us_per_token": 0.08
+        },
+        "rope": {
+          "critical_us_per_token": 64.288,
+          "shadow_lower_share": 0.057313,
+          "shadow_lower_us_per_token": 75.979,
+          "shadow_upper_share": 0.056333,
+          "shadow_upper_us_per_token": 76.968,
+          "useful_lower_share": 0.19374,
+          "useful_lower_us_per_token": 12.701,
+          "useful_upper_share": 0.128972,
+          "useful_upper_us_per_token": 13.693
+        },
+        "vocab": {
+          "critical_us_per_token": 301.537,
+          "shadow_lower_share": 0.002438,
+          "shadow_lower_us_per_token": 3.232,
+          "shadow_upper_share": 0.002513,
+          "shadow_upper_us_per_token": 3.433,
+          "useful_lower_share": 0.0,
+          "useful_lower_us_per_token": 0.0,
+          "useful_upper_share": 0.001893,
+          "useful_upper_us_per_token": 0.201
+        }
+      },
+      "node_sum_us_per_token": 5505.011,
+      "overlap_us_per_token": 1423.612,
+      "per_replay": [
+        {
+          "node_sum_us": 5502.95,
+          "overlap_us": 1423.384,
+          "ring_file": "h1-final-capture-00000071.jsonl",
+          "steady_index": 0,
+          "union_us": 4079.566
+        },
+        {
+          "node_sum_us": 5511.045,
+          "overlap_us": 1426.04,
+          "ring_file": "h1-final-capture-00000079.jsonl",
+          "steady_index": 1,
+          "union_us": 4085.005
+        },
+        {
+          "node_sum_us": 5501.794,
+          "overlap_us": 1421.172,
+          "ring_file": "h1-final-capture-00000087.jsonl",
+          "steady_index": 2,
+          "union_us": 4080.622
+        },
+        {
+          "node_sum_us": 5507.527,
+          "overlap_us": 1425.369,
+          "ring_file": "h1-final-capture-00000095.jsonl",
+          "steady_index": 3,
+          "union_us": 4082.158
+        },
+        {
+          "node_sum_us": 5510.599,
+          "overlap_us": 1424.057,
+          "ring_file": "h1-final-capture-00000103.jsonl",
+          "steady_index": 4,
+          "union_us": 4086.542
+        },
+        {
+          "node_sum_us": 5496.99,
+          "overlap_us": 1421.425,
+          "ring_file": "h1-final-capture-00000111.jsonl",
+          "steady_index": 5,
+          "union_us": 4075.565
+        },
+        {
+          "node_sum_us": 5504.171,
+          "overlap_us": 1423.837,
+          "ring_file": "h1-final-capture-00000119.jsonl",
+          "steady_index": 6,
+          "union_us": 4080.334
+        }
+      ],
+      "shadow_lower_total_us_per_token": 1325.692,
+      "shadow_upper_total_us_per_token": 1366.306,
+      "union_us_per_token": 4081.399,
+      "useful_lower_total_us_per_token": 65.557,
+      "useful_upper_total_us_per_token": 106.17
+    },
+    "full_sampling": {
+      "families": {
+        "flash_combine": {
+          "critical_us_per_token": 49.592,
+          "shadow_lower_share": 0.127047,
+          "shadow_lower_us_per_token": 161.659,
+          "shadow_upper_share": 0.124265,
+          "shadow_upper_us_per_token": 162.922,
+          "useful_lower_share": 0.08847,
+          "useful_lower_us_per_token": 6.451,
+          "useful_upper_share": 0.069145,
+          "useful_upper_us_per_token": 7.714
+        },
+        "flash_score": {
+          "critical_us_per_token": 161.296,
+          "shadow_lower_share": 0.013949,
+          "shadow_lower_us_per_token": 17.749,
+          "shadow_upper_share": 0.01671,
+          "shadow_upper_us_per_token": 21.908,
+          "useful_lower_share": 0.037275,
+          "useful_lower_us_per_token": 2.718,
+          "useful_upper_share": 0.061643,
+          "useful_upper_us_per_token": 6.877
+        },
+        "gemv": {
+          "critical_us_per_token": 2651.613,
+          "shadow_lower_share": 0.356212,
+          "shadow_lower_us_per_token": 453.257,
+          "shadow_upper_share": 0.367598,
+          "shadow_upper_us_per_token": 481.952,
+          "useful_lower_share": 0.0,
+          "useful_lower_us_per_token": 0.0,
+          "useful_upper_share": 0.257202,
+          "useful_upper_us_per_token": 28.694
+        },
+        "gemv_kv": {
+          "critical_us_per_token": 225.502,
+          "shadow_lower_share": 0.063719,
+          "shadow_lower_us_per_token": 81.078,
+          "shadow_upper_share": 0.064511,
+          "shadow_upper_us_per_token": 84.58,
+          "useful_lower_share": 0.160141,
+          "useful_lower_us_per_token": 11.677,
+          "useful_upper_share": 0.13605,
+          "useful_upper_us_per_token": 15.178
+        },
+        "kv": {
+          "critical_us_per_token": 44.645,
+          "shadow_lower_share": 0.04203,
+          "shadow_lower_us_per_token": 53.48,
+          "shadow_upper_share": 0.041449,
+          "shadow_upper_us_per_token": 54.343,
+          "useful_lower_share": 0.08869,
+          "useful_lower_us_per_token": 6.467,
+          "useful_upper_share": 0.065694,
+          "useful_upper_us_per_token": 7.329
+        },
+        "quant_provider": {
+          "critical_us_per_token": 205.473,
+          "shadow_lower_share": 0.341488,
+          "shadow_lower_us_per_token": 434.522,
+          "shadow_upper_share": 0.331422,
+          "shadow_upper_us_per_token": 434.522,
+          "useful_lower_share": 0.413978,
+          "useful_lower_us_per_token": 30.186,
+          "useful_upper_share": 0.270576,
+          "useful_upper_us_per_token": 30.186
+        },
+        "residual": {
+          "critical_us_per_token": 0.818,
+          "shadow_lower_share": 0.001152,
+          "shadow_lower_us_per_token": 1.466,
+          "shadow_upper_share": 0.001118,
+          "shadow_upper_us_per_token": 1.466,
+          "useful_lower_share": 0.002592,
+          "useful_lower_us_per_token": 0.189,
+          "useful_upper_share": 0.001694,
+          "useful_upper_us_per_token": 0.189
+        },
+        "rmsnorm": {
+          "critical_us_per_token": 343.499,
+          "shadow_lower_share": 0.001533,
+          "shadow_lower_us_per_token": 1.951,
+          "shadow_upper_share": 0.001488,
+          "shadow_upper_us_per_token": 1.951,
+          "useful_lower_share": 0.000631,
+          "useful_lower_us_per_token": 0.046,
+          "useful_upper_share": 0.000412,
+          "useful_upper_us_per_token": 0.046
+        },
+        "rope": {
+          "critical_us_per_token": 64.175,
+          "shadow_lower_share": 0.0504,
+          "shadow_lower_us_per_token": 64.131,
+          "shadow_upper_share": 0.048914,
+          "shadow_upper_us_per_token": 64.131,
+          "useful_lower_share": 0.208223,
+          "useful_lower_us_per_token": 15.183,
+          "useful_upper_share": 0.136095,
+          "useful_upper_us_per_token": 15.183
+        },
+        "vocab": {
+          "critical_us_per_token": 301.475,
+          "shadow_lower_share": 0.002471,
+          "shadow_lower_us_per_token": 3.144,
+          "shadow_upper_share": 0.002525,
+          "shadow_upper_us_per_token": 3.31,
+          "useful_lower_share": 0.0,
+          "useful_lower_us_per_token": 0.0,
+          "useful_upper_share": 0.001488,
+          "useful_upper_us_per_token": 0.166
+        }
+      },
+      "node_sum_us_per_token": 5432.09,
+      "overlap_us_per_token": 1375.72,
+      "per_replay": [
+        {
+          "node_sum_us": 5435.142,
+          "overlap_us": 1377.479,
+          "ring_file": "h1-full-sampling-capture-00000071.jsonl",
+          "steady_index": 0,
+          "union_us": 4057.663
+        },
+        {
+          "node_sum_us": 5429.885,
+          "overlap_us": 1374.621,
+          "ring_file": "h1-full-sampling-capture-00000079.jsonl",
+          "steady_index": 1,
+          "union_us": 4055.264
+        },
+        {
+          "node_sum_us": 5435.32,
+          "overlap_us": 1378.265,
+          "ring_file": "h1-full-sampling-capture-00000087.jsonl",
+          "steady_index": 2,
+          "union_us": 4057.055
+        },
+        {
+          "node_sum_us": 5423.717,
+          "overlap_us": 1371.461,
+          "ring_file": "h1-full-sampling-capture-00000095.jsonl",
+          "steady_index": 3,
+          "union_us": 4052.256
+        },
+        {
+          "node_sum_us": 5430.877,
+          "overlap_us": 1374.813,
+          "ring_file": "h1-full-sampling-capture-00000103.jsonl",
+          "steady_index": 4,
+          "union_us": 4056.064
+        },
+        {
+          "node_sum_us": 5441.338,
+          "overlap_us": 1378.682,
+          "ring_file": "h1-full-sampling-capture-00000111.jsonl",
+          "steady_index": 5,
+          "union_us": 4062.656
+        },
+        {
+          "node_sum_us": 5428.349,
+          "overlap_us": 1374.717,
+          "ring_file": "h1-full-sampling-capture-00000119.jsonl",
+          "steady_index": 6,
+          "union_us": 4053.632
+        }
+      ],
+      "shadow_lower_total_us_per_token": 1272.437,
+      "shadow_upper_total_us_per_token": 1311.085,
+      "union_us_per_token": 4056.37,
+      "useful_lower_total_us_per_token": 72.917,
+      "useful_upper_total_us_per_token": 111.562
+    }
+  },
+  "date": "2026-08-21",
+  "family_rows": [
+    {
+      "delta_tiny_minus_llama_us": [
+        47.744,
+        49.467
+      ],
+      "family": "flash_combine",
+      "llama_node_sum_us": 189.825,
+      "llama_shadow_bracket_us": [
+        132.033,
+        133.756
+      ],
+      "llama_useful_bracket_us": [
+        56.069,
+        57.792
+      ],
+      "tinygrad_node_sum_us": 105.536
+    },
+    {
+      "delta_tiny_minus_llama_us": [
+        109.02,
+        111.774
+      ],
+      "family": "flash_score",
+      "llama_node_sum_us": 173.537,
+      "llama_shadow_bracket_us": [
+        14.781,
+        17.535
+      ],
+      "llama_useful_bracket_us": [
+        156.002,
+        158.756
+      ],
+      "tinygrad_node_sum_us": 267.776
+    },
+    {
+      "delta_tiny_minus_llama_us": [
+        319.722,
+        345.155
+      ],
+      "family": "gemv",
+      "llama_node_sum_us": 2997.927,
+      "llama_shadow_bracket_us": [
+        368.209,
+        393.642
+      ],
+      "llama_useful_bracket_us": [
+        2604.285,
+        2629.718
+      ],
+      "tinygrad_node_sum_us": 2949.44
+    },
+    {
+      "delta_tiny_minus_llama_us": [
+        78.055,
+        82.257
+      ],
+      "family": "gemv_kv",
+      "llama_node_sum_us": 288.316,
+      "llama_shadow_bracket_us": [
+        67.939,
+        72.141
+      ],
+      "llama_useful_bracket_us": [
+        216.175,
+        220.377
+      ],
+      "tinygrad_node_sum_us": 298.432
+    },
+    {
+      "delta_tiny_minus_llama_us": [
+        -32.742,
+        -31.508
+      ],
+      "family": "kv",
+      "llama_node_sum_us": 78.337,
+      "llama_shadow_bracket_us": [
+        45.595,
+        46.829
+      ],
+      "llama_useful_bracket_us": [
+        31.508,
+        32.742
+      ],
+      "tinygrad_node_sum_us": 0.0
+    },
+    {
+      "delta_tiny_minus_llama_us": [
+        -170.239,
+        -166.865
+      ],
+      "family": "quant_provider",
+      "llama_node_sum_us": 552.546,
+      "llama_shadow_bracket_us": [
+        351.427,
+        354.801
+      ],
+      "llama_useful_bracket_us": [
+        197.745,
+        201.119
+      ],
+      "tinygrad_node_sum_us": 30.88
+    },
+    {
+      "delta_tiny_minus_llama_us": [
+        234.304,
+        234.304
+      ],
+      "family": "reduce",
+      "llama_node_sum_us": 0.0,
+      "llama_shadow_bracket_us": [
+        0.0,
+        0.0
+      ],
+      "llama_useful_bracket_us": [
+        0.0,
+        0.0
+      ],
+      "tinygrad_node_sum_us": 234.304
+    },
+    {
+      "delta_tiny_minus_llama_us": [
+        218.369,
+        218.378
+      ],
+      "family": "residual",
+      "llama_node_sum_us": 1.952,
+      "llama_shadow_bracket_us": [
+        1.153,
+        1.162
+      ],
+      "llama_useful_bracket_us": [
+        0.79,
+        0.799
+      ],
+      "tinygrad_node_sum_us": 219.168
+    },
+    {
+      "delta_tiny_minus_llama_us": [
+        15.367,
+        15.379
+      ],
+      "family": "rmsnorm",
+      "llama_node_sum_us": 309.603,
+      "llama_shadow_bracket_us": [
+        1.578,
+        1.59
+      ],
+      "llama_useful_bracket_us": [
+        308.013,
+        308.025
+      ],
+      "tinygrad_node_sum_us": 323.392
+    },
+    {
+      "delta_tiny_minus_llama_us": [
+        -71.95,
+        -71.144
+      ],
+      "family": "rope",
+      "llama_node_sum_us": 128.034,
+      "llama_shadow_bracket_us": [
+        56.084,
+        56.89
+      ],
+      "llama_useful_bracket_us": [
+        71.144,
+        71.95
+      ],
+      "tinygrad_node_sum_us": 0.0
+    },
+    {
+      "delta_tiny_minus_llama_us": [
+        12.346,
+        12.513
+      ],
+      "family": "vocab",
+      "llama_node_sum_us": 303.746,
+      "llama_shadow_bracket_us": [
+        2.556,
+        2.723
+      ],
+      "llama_useful_bracket_us": [
+        301.023,
+        301.19
+      ],
+      "tinygrad_node_sum_us": 313.536
+    }
+  ],
+  "identity": {
+    "delta_matches_aggregate": true,
+    "delta_row_sum_bracket_us": [
+      759.996,
+      799.71
+    ]
+  },
+  "inputs": {
+    "final_dump": "docs/task_workflow/evidence/nv-llama-useful-body-h1-20260821/h1-final-capture-graph.txt",
+    "final_dump_sha256": "aabaac217f5fa93a8a08f8151918fa262e85f8b061236f5681b54c7633c2a349",
+    "final_trace": "docs/task_workflow/evidence/nv-llama-useful-body-h1-20260821/h1-final-capture.sqlite",
+    "final_trace_sha256": "940c801d8e3cdbeefb38fc444051e964901c6a3e9941056ed74e624dfaf0d907",
+    "full_dump": "docs/task_workflow/evidence/nv-llama-useful-body-h1-20260821/h1-full-sampling-capture-graph.txt",
+    "full_dump_sha256": "0ee3060b89cfd60935a332ff83a177402a3867187a262996c29423ad9dfa061e",
+    "full_trace": "docs/task_workflow/evidence/nv-llama-useful-body-h1-20260821/h1-full-sampling-capture.sqlite",
+    "full_trace_sha256": "a6e9c3a011788b5ac6680f2690f96b70044d0c9b17c6c89a1a26c04787b58f68",
+    "graph_id": 5,
+    "ledger": "docs/task_workflow/evidence/nv-ledger-overlap-audit-20260821/ledger.json",
+    "ledger_sha256": "86081f929c4b53149da9824d97c6223a5750567c2fa41305a72de72a5c6ccfdb",
+    "warmup_replays_dropped": 2
+  },
+  "schema": "tinygrad.nv_useful_body_reconciliation.v1"
+}

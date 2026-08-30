@@ -1,0 +1,68 @@
+{
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "cond_iters": 200,
+  "eps": 1e-06,
+  "flush_mib": 128,
+  "hot_iters": 2000,
+  "method": "render production tinygrad CUDA + faithful llama norm.cu copy -> nvcc sm_120a -> cudaEvent",
+  "ptxas": [
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 8 registers, used 0 barriers",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 10 registers, used 0 barriers",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 10 registers, used 0 barriers",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 40 registers, used 1 barriers",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 30 registers, used 1 barriers, 64 bytes smem",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 38 registers, used 1 barriers, 32 bytes smem"
+  ],
+  "raw_stdout": [
+    "hot_loop tiny_q 1.8757",
+    "cond tiny_q none 3.2640",
+    "cond tiny_q fill 4.0960",
+    "cond tiny_q flush 6.1120",
+    "hot_loop tiny_k 1.8675",
+    "cond tiny_k none 3.2640",
+    "cond tiny_k fill 4.0960",
+    "cond tiny_k flush 6.1440",
+    "hot_loop llama_q 1.8026",
+    "cond llama_q none 3.2640",
+    "cond llama_q fill 4.0960",
+    "cond llama_q flush 4.4800",
+    "hot_loop llama_k 1.8108",
+    "cond llama_k none 3.2640",
+    "cond llama_k fill 4.0960",
+    "cond llama_k flush 4.4800"
+  ],
+  "reps": 5,
+  "schema": "tinygrad.nv_qk_head_norm_microgate.v1",
+  "timing": {
+    "llama_k": {
+      "cond_fill": 4.096,
+      "cond_flush": 4.48,
+      "cond_none": 3.264,
+      "hot_loop": 1.8108
+    },
+    "llama_q": {
+      "cond_fill": 4.096,
+      "cond_flush": 4.48,
+      "cond_none": 3.264,
+      "hot_loop": 1.8026
+    },
+    "tiny_k": {
+      "cond_fill": 4.096,
+      "cond_flush": 6.144,
+      "cond_none": 3.264,
+      "hot_loop": 1.8675
+    },
+    "tiny_q": {
+      "cond_fill": 4.096,
+      "cond_flush": 6.112,
+      "cond_none": 3.264,
+      "hot_loop": 1.8757
+    }
+  }
+}

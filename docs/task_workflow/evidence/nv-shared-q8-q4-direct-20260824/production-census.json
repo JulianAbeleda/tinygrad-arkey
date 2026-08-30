@@ -1,0 +1,36 @@
+{
+  "coop_q4_count": 0,
+  "cooperative_q4_completion": {},
+  "cooperative_q4_completion_count": 0,
+  "cooperative_q4_direct": {
+    "q4k_warp_coop_q8_dp4a_direct_1024_4096": 26,
+    "q4k_warp_coop_q8_dp4a_direct_4096_4096": 17
+  },
+  "cooperative_q4_direct_count": 43,
+  "cooperative_q4_partial": {},
+  "cooperative_q4_partial_count": 0,
+  "count": 4,
+  "depth": 128,
+  "ffn_down_scalar": {},
+  "ffn_down_scalar_count": 0,
+  "ffn_down_vector": {
+    "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd": 18
+  },
+  "ffn_down_vector_count": 18,
+  "legacy_shared_q4_count": 0,
+  "load_style": "vector",
+  "schema": "tinygrad.nv_single_vector_structural_census.v1",
+  "single_proj_scalar": {},
+  "single_proj_scalar_count": 0,
+  "single_proj_vector": {
+    "q4k_g3_lanemap_gemv_vec_1024_4096": 28,
+    "q4k_g3_lanemap_gemv_vec_4096_4096": 19,
+    "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096": 36
+  },
+  "single_proj_vector_count": 83,
+  "total_programs": 34,
+  "w1w3_scalar": {},
+  "w1w3_vector": {
+    "q4k_g3_lanemap_gemv_w1w3vec16_12288_4096": 36
+  }
+}

@@ -1,0 +1,146 @@
+{
+  "closure": {
+    "llama_node_sum_us": 3878.254,
+    "node_sum_delta_us": 515.506,
+    "tinygrad_node_sum_us": 4393.76
+  },
+  "fused_body_caveat": "reduce_output_rmsnorm_rope_{32,8}_128 fold RMSNorm AND RoPE into one kernel; llama reports q_norm/k_norm and q_rope/k_rope separately, so the q_norm/k_norm deltas are not like-for-like.",
+  "llama_source": "docs/task_workflow/evidence/nv-third-party-theory-audit-20260822/probe2-llama-pdl0-dag.json",
+  "representative_replay": {
+    "node_count": 517,
+    "node_sum_us": 4393.76,
+    "overlap_us": 0.76,
+    "span_us": 5403.75,
+    "union_us": 4393.0
+  },
+  "rows": [
+    {
+      "delta_us": 115.423,
+      "label": "attn/ffn/final 4096 norm",
+      "llama_count": 73,
+      "llama_us": 203.361,
+      "role": "norm_4096",
+      "tinygrad_count": 94,
+      "tinygrad_us": 318.784
+    },
+    {
+      "delta_us": 82.236,
+      "label": "flash score",
+      "llama_count": 36,
+      "llama_us": 162.948,
+      "role": "flash_score",
+      "tinygrad_count": 36,
+      "tinygrad_us": 245.184
+    },
+    {
+      "delta_us": 73.119,
+      "label": "K/V projections + completion",
+      "llama_count": 72,
+      "llama_us": 215.009,
+      "role": "kv_proj",
+      "tinygrad_count": 72,
+      "tinygrad_us": 288.128
+    },
+    {
+      "delta_us": 66.687,
+      "label": "flash combine",
+      "llama_count": 36,
+      "llama_us": 37.057,
+      "role": "flash_combine",
+      "tinygrad_count": 36,
+      "tinygrad_us": 103.744
+    },
+    {
+      "delta_us": 65.436,
+      "label": "vocab main + tail",
+      "llama_count": 2,
+      "llama_us": 303.908,
+      "role": "vocab",
+      "tinygrad_count": 5,
+      "tinygrad_us": 369.344
+    },
+    {
+      "delta_us": 57.911,
+      "label": "down GEMV",
+      "llama_count": 36,
+      "llama_us": 855.817,
+      "role": "down",
+      "tinygrad_count": 36,
+      "tinygrad_us": 913.728
+    },
+    {
+      "delta_us": 53.646,
+      "label": "gate/up GEMV",
+      "llama_count": 36,
+      "llama_us": 1268.37,
+      "role": "gate_up",
+      "tinygrad_count": 36,
+      "tinygrad_us": 1322.016
+    },
+    {
+      "delta_us": 51.42,
+      "label": "Q projection + completion",
+      "llama_count": 36,
+      "llama_us": 249.092,
+      "role": "q_proj",
+      "tinygrad_count": 36,
+      "tinygrad_us": 300.512
+    },
+    {
+      "delta_us": 48.863,
+      "label": "O projection",
+      "llama_count": 36,
+      "llama_us": 259.809,
+      "role": "o_proj",
+      "tinygrad_count": 36,
+      "tinygrad_us": 308.672
+    },
+    {
+      "delta_us": 28.256,
+      "label": "K head norm",
+      "llama_count": 36,
+      "llama_us": 40.832,
+      "role": "k_norm",
+      "tinygrad_count": 36,
+      "tinygrad_us": 69.088
+    },
+    {
+      "delta_us": 27.711,
+      "label": "Q head norm",
+      "llama_count": 36,
+      "llama_us": 41.281,
+      "role": "q_norm",
+      "tinygrad_count": 36,
+      "tinygrad_us": 68.992
+    },
+    {
+      "delta_us": 6.784,
+      "label": "misc / embedding",
+      "llama_count": 3,
+      "llama_us": 2.784,
+      "role": "other",
+      "tinygrad_count": 4,
+      "tinygrad_us": 9.568
+    },
+    {
+      "delta_us": -48.002,
+      "label": "rope + K/V store",
+      "llama_count": 108,
+      "llama_us": 92.866,
+      "role": "rope_store",
+      "tinygrad_count": 37,
+      "tinygrad_us": 44.864
+    },
+    {
+      "delta_us": -113.984,
+      "label": "activation quant",
+      "llama_count": 216,
+      "llama_us": 145.12,
+      "role": "quant",
+      "tinygrad_count": 17,
+      "tinygrad_us": 31.136
+    }
+  ],
+  "schema": "tinygrad.nv_phase0_llama_reconcile.v1",
+  "source_profile_jsonl": "docs/task_workflow/evidence/nv-shared-q8-q4-direct-20260824/installed-ledger/production.profile.jsonl"
+}

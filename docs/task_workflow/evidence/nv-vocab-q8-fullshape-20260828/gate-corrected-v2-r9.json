@@ -1,0 +1,72 @@
+{
+  "contract": {
+    "candidate": "Q8 provider + four-warp Q6_K/Q8_1 direct output",
+    "control": "installed Q6_K FP16 in-kernel reduction",
+    "production_route_changed": false,
+    "quality_credit": false
+  },
+  "correctness": {
+    "nonzero_primitive_authority": "q6k_q8_warp_direct_microgate",
+    "zero_input_exact": true
+  },
+  "git_commit": "7c29ef7320f4934baddbef359d843017feee7122",
+  "schema": "tinygrad.nv_q6k_vocab_q8_fullshape_gate.v1",
+  "shape": {
+    "k": 4096,
+    "rows": 151936,
+    "weight_bytes": 510504960
+  },
+  "timing": {
+    "candidate_b": [
+      1353.2423125,
+      1353.73075,
+      1368.710125,
+      1368.0670625,
+      1368.658125,
+      1368.7664375,
+      1368.34575,
+      1367.9336875,
+      1368.1246875
+    ],
+    "candidate_median_us": 1368.1246875,
+    "control_a": [
+      323.6165625,
+      322.0699375,
+      322.4656875,
+      323.235875,
+      323.3516875,
+      322.1638125,
+      322.8150625,
+      322.99225,
+      322.4299375
+    ],
+    "control_c": [
+      325.43375,
+      326.681125,
+      325.771875,
+      326.626625,
+      326.4475,
+      326.1225625,
+      327.4068125,
+      326.56025,
+      326.8426875
+    ],
+    "control_midpoint_median_us": 324.63631250000003,
+    "delta_us": 1043.2348124999999,
+    "gate": "STOP",
+    "paired_candidate_minus_control": [
+      1028.71715625,
+      1029.35521875,
+      1044.59134375,
+      1043.1358125000002,
+      1043.75853125,
+      1044.6232499999999,
+      1043.2348124999999,
+      1043.1574375,
+      1043.488375
+    ],
+    "replays": 16,
+    "reps": 9
+  },
+  "verdict": "NO_GO_FULLSHAPE"
+}

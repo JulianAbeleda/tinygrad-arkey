@@ -1,0 +1,21 @@
+{
+  "candidate": true,
+  "finite": true,
+  "schema": "tinygrad.nv_shared_q8_extra25_semantic.v1",
+  "shape": [
+    8,
+    1,
+    151936
+  ],
+  "tokens": [
+    1,
+    334,
+    334,
+    334,
+    334,
+    334,
+    334,
+    334
+  ],
+  "tokens_sha256": "e102559f9d74beb8907941fbfcf686a9285473b6a59741c5d2091f6f4fe3273e"
+}

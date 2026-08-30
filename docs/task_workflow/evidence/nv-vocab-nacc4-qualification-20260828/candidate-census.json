@@ -1,0 +1,17 @@
+{
+  "argmax_tokens": [
+    38835
+  ],
+  "arm": "candidate",
+  "mode": "logits",
+  "schema": "tinygrad.nv_vocab_nacc4_qualification.v1",
+  "sha256": "46b38260df47f76c355a2c1993dad87dc8432c0ac962ea679a821d5d8b5fdd7a",
+  "shape": [
+    1,
+    1,
+    151936
+  ],
+  "tokens": [
+    38835
+  ]
+}

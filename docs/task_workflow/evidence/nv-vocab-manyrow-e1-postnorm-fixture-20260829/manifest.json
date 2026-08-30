@@ -1,0 +1,46 @@
+{
+  "depth": 512,
+  "final_hidden_row": {
+    "bytes": 16384,
+    "dtype": "float32",
+    "path": "docs/task_workflow/evidence/nv-vocab-manyrow-e1-postnorm-fixture-20260829/final-hidden-row.f32",
+    "sentinels": {
+      "first": -3.2084197998046875,
+      "last": -1.0661219358444214,
+      "middle": -0.8017600178718567
+    },
+    "sha256": "b04adfc129794cf0d0c37328ee56d955dcd137137c4c7854bc2963dcbbb20c41",
+    "shape": [
+      1,
+      4096
+    ]
+  },
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "model_sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+  "q6_weight": {
+    "bytes": 510504960,
+    "dtype": "Q6_K packed",
+    "path": "docs/task_workflow/evidence/nv-vocab-manyrow-e1-postnorm-fixture-20260829/output.weight.q6_k.bin",
+    "sha256": "05d7a76c29a32e067f41ad91df565341b21f4bedeeffbbf9e10957aaa9f78cc1",
+    "shape": [
+      151936,
+      4096
+    ]
+  },
+  "reference_logits": {
+    "dtype": "float32",
+    "path": "docs/task_workflow/evidence/nv-vocab-manyrow-e1-postnorm-fixture-20260829/reference-logits.f32",
+    "sha256": "ba506b6ec83b639a0a22704eb07345626e96b0e6f02375b7cc78e66f22e84bae",
+    "shape": [
+      1,
+      151936
+    ]
+  },
+  "replay_command": "python3 /home/ubuntu/tinygrad-arkey/extra/llm_research/prefill/nv_vocab_e0_fixture_extract.py --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --depth 512 --out-dir docs/task_workflow/evidence/nv-vocab-manyrow-e1-postnorm-fixture-20260829",
+  "route": "current Transformer.logits composed prefill",
+  "schema": "tinygrad.nv_vocab_e0_fixture.v1",
+  "tolerance": {
+    "atol": 0.5,
+    "rtol": 0.02
+  }
+}

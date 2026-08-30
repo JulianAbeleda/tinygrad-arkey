@@ -1,0 +1,381 @@
+{
+  "arm": "candidate",
+  "complete_replay_count": 16,
+  "count": 4,
+  "depth": 128,
+  "eligible_blocks": [
+    4,
+    5,
+    7,
+    8,
+    10,
+    11,
+    14,
+    16,
+    17
+  ],
+  "gpu_state": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2572",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Disabled",
+    "power.draw": "95.81",
+    "temperature.gpu": "48"
+  },
+  "group_pattern": [
+    32,
+    64,
+    128,
+    256
+  ],
+  "ledger": {
+    "node_count": 480.0,
+    "node_sum_us": 3867.2,
+    "overlap_us": 4.466,
+    "span_us": 4664.0,
+    "union_us": 3863.0
+  },
+  "max_context": 512,
+  "mode": "profile-child",
+  "per_name_table": {
+    "E": {
+      "mean_us": 1.784,
+      "median_us": 1.696,
+      "per_replay_count": 1.0,
+      "replay_samples": 12
+    },
+    "E_1187_32_4": {
+      "mean_us": 2.528,
+      "median_us": 2.464,
+      "per_replay_count": 1,
+      "replay_samples": 13
+    },
+    "E_16_4_2_8_16_2_4_4": {
+      "mean_us": 3.539,
+      "median_us": 3.04,
+      "per_replay_count": 1.0,
+      "replay_samples": 12
+    },
+    "E_2": {
+      "mean_us": 2.068,
+      "median_us": 1.984,
+      "per_replay_count": 1,
+      "replay_samples": 13
+    },
+    "E_28start_pos2B129_8_4": {
+      "mean_us": 41.155,
+      "median_us": 41.008,
+      "per_replay_count": 30.0,
+      "replay_samples": 12
+    },
+    "E_2_8_16_4": {
+      "mean_us": 15.44,
+      "median_us": 15.312,
+      "per_replay_count": 9.0,
+      "replay_samples": 12
+    },
+    "E_32_32_4": {
+      "mean_us": 45.248,
+      "median_us": 44.288,
+      "per_replay_count": 31.0,
+      "replay_samples": 12
+    },
+    "E_4_8_8_16_4": {
+      "mean_us": 36.608,
+      "median_us": 36.608,
+      "per_replay_count": 36,
+      "replay_samples": 1
+    },
+    "E_8_2_16_4": {
+      "mean_us": 12.008,
+      "median_us": 12.016,
+      "per_replay_count": 9.0,
+      "replay_samples": 12
+    },
+    "E_8_8_16_2": {
+      "mean_us": 11.403,
+      "median_us": 10.944,
+      "per_replay_count": 9.0,
+      "replay_samples": 12
+    },
+    "E_toks": {
+      "mean_us": 1.952,
+      "median_us": 1.952,
+      "per_replay_count": 1,
+      "replay_samples": 1
+    },
+    "E_toks_28start_pos2Btoks29_8_4": {
+      "mean_us": 91.712,
+      "median_us": 91.712,
+      "per_replay_count": 19,
+      "replay_samples": 1
+    },
+    "E_toks_2_2_8_16_2_4": {
+      "mean_us": 2.048,
+      "median_us": 2.048,
+      "per_replay_count": 1,
+      "replay_samples": 1
+    },
+    "E_toks_2_8_16_4_4": {
+      "mean_us": 36.544,
+      "median_us": 36.544,
+      "per_replay_count": 19,
+      "replay_samples": 1
+    },
+    "E_toks_64_16_4": {
+      "mean_us": 193.12,
+      "median_us": 193.12,
+      "per_replay_count": 96,
+      "replay_samples": 1
+    },
+    "E_toks_8_2_16_4": {
+      "mean_us": 28.096,
+      "median_us": 28.096,
+      "per_replay_count": 19,
+      "replay_samples": 1
+    },
+    "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd": {
+      "mean_us": 354.299,
+      "median_us": 354.24,
+      "per_replay_count": 18.0,
+      "replay_samples": 12
+    },
+    "q4k_g3_lanemap_gemv_pair_vec_1024_4096": {
+      "mean_us": 52.813,
+      "median_us": 52.752,
+      "per_replay_count": 9.0,
+      "replay_samples": 12
+    },
+    "q4k_g3_lanemap_gemv_vec_1024_4096": {
+      "mean_us": 17.56,
+      "median_us": 17.552,
+      "per_replay_count": 4.0,
+      "replay_samples": 12
+    },
+    "q4k_g3_lanemap_gemv_vec_4096_4096": {
+      "mean_us": 116.696,
+      "median_us": 116.528,
+      "per_replay_count": 14.0,
+      "replay_samples": 12
+    },
+    "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096": {
+      "mean_us": 255.381,
+      "median_us": 255.504,
+      "per_replay_count": 30.0,
+      "replay_samples": 12
+    },
+    "q4k_gate_up_four_warp_vec_fp16_12288_4096": {
+      "mean_us": 1064.403,
+      "median_us": 1063.856,
+      "per_replay_count": 30.0,
+      "replay_samples": 12
+    },
+    "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096": {
+      "mean_us": 48.939,
+      "median_us": 48.896,
+      "per_replay_count": 8.0,
+      "replay_samples": 12
+    },
+    "q4k_warp_coop_q8_dp4a_direct_4096_4096": {
+      "mean_us": 66.213,
+      "median_us": 66.24,
+      "per_replay_count": 8.0,
+      "replay_samples": 12
+    },
+    "q4k_warp_coop_q8_dp4a_qkv_full_direct_4096_1024_4096": {
+      "mean_us": 96.864,
+      "median_us": 96.464,
+      "per_replay_count": 9.0,
+      "replay_samples": 12
+    },
+    "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd": {
+      "mean_us": 326.245,
+      "median_us": 325.92,
+      "per_replay_count": 12.0,
+      "replay_samples": 12
+    },
+    "q6k_v_four_warp_fp16_direct_1024_4096": {
+      "mean_us": 17.805,
+      "median_us": 17.84,
+      "per_replay_count": 4.0,
+      "replay_samples": 12
+    },
+    "r_16_256": {
+      "mean_us": 101.923,
+      "median_us": 101.904,
+      "per_replay_count": 31.0,
+      "replay_samples": 12
+    },
+    "r_2_8_toks_128_16_2_2_2_32": {
+      "mean_us": 8127.36,
+      "median_us": 8127.36,
+      "per_replay_count": 9,
+      "replay_samples": 1
+    },
+    "r_2_8_toks_128_16_4_2_32": {
+      "mean_us": 7019.744,
+      "median_us": 7019.744,
+      "per_replay_count": 10,
+      "replay_samples": 1
+    },
+    "r_2_toks_8_4_4_16": {
+      "mean_us": 32.288,
+      "median_us": 32.288,
+      "per_replay_count": 19,
+      "replay_samples": 1
+    },
+    "r_32_28start_pos2B129_16_8": {
+      "mean_us": 114.592,
+      "median_us": 114.512,
+      "per_replay_count": 30.0,
+      "replay_samples": 12
+    },
+    "r_32_32_4_32_4": {
+      "mean_us": 4.445,
+      "median_us": 4.416,
+      "per_replay_count": 1.0,
+      "replay_samples": 12
+    },
+    "r_32_toks_28start_pos2Btoks29_16_8": {
+      "mean_us": 1210.496,
+      "median_us": 1210.496,
+      "per_replay_count": 19,
+      "replay_samples": 1
+    },
+    "r_4_2_8_16_4_28start_pos2B129": {
+      "mean_us": 437.328,
+      "median_us": 438.528,
+      "per_replay_count": 30.0,
+      "replay_samples": 12
+    },
+    "r_4_toks_2_8_16_4_16_4_2_4_8": {
+      "mean_us": 44466.848,
+      "median_us": 44466.848,
+      "per_replay_count": 20,
+      "replay_samples": 1
+    },
+    "r_4_toks_2_8_16_4_28start_pos2Btoks29": {
+      "mean_us": 257.568,
+      "median_us": 257.568,
+      "per_replay_count": 19,
+      "replay_samples": 1
+    },
+    "r_8_16_8": {
+      "mean_us": 11.029,
+      "median_us": 10.992,
+      "per_replay_count": 9.0,
+      "replay_samples": 12
+    },
+    "r_8_4_28start_pos2B129": {
+      "mean_us": 417.035,
+      "median_us": 417.936,
+      "per_replay_count": 60.0,
+      "replay_samples": 12
+    },
+    "r_8_toks_128_16_4_2_32": {
+      "mean_us": 6341.184,
+      "median_us": 6341.184,
+      "per_replay_count": 19,
+      "replay_samples": 1
+    },
+    "r_8_toks_16_8": {
+      "mean_us": 26.432,
+      "median_us": 26.432,
+      "per_replay_count": 19,
+      "replay_samples": 1
+    },
+    "r_toks_16_256": {
+      "mean_us": 142.176,
+      "median_us": 142.176,
+      "per_replay_count": 39,
+      "replay_samples": 1
+    },
+    "r_toks_256_16_3_16_4_2_2_16": {
+      "mean_us": 227653.504,
+      "median_us": 227653.504,
+      "per_replay_count": 38,
+      "replay_samples": 1
+    },
+    "r_toks_64_16_4_16_2_2_2_4_8": {
+      "mean_us": 27533.824,
+      "median_us": 27533.824,
+      "per_replay_count": 19,
+      "replay_samples": 1
+    },
+    "r_toks_64_16_4_48_2_2_2_4_8": {
+      "mean_us": 99297.6,
+      "median_us": 99297.6,
+      "per_replay_count": 9,
+      "replay_samples": 1
+    },
+    "r_toks_64_16_4_48_4_2_4_8": {
+      "mean_us": 44822.048,
+      "median_us": 44822.048,
+      "per_replay_count": 10,
+      "replay_samples": 1
+    },
+    "r_toks_8_4_28start_pos2Btoks29": {
+      "mean_us": 284.384,
+      "median_us": 284.384,
+      "per_replay_count": 38,
+      "replay_samples": 1
+    },
+    "reduce_output_rmsnorm_1_4096": {
+      "mean_us": 91.541,
+      "median_us": 91.584,
+      "per_replay_count": 13.0,
+      "replay_samples": 12
+    },
+    "reduce_output_rmsnorm_rope_32_128": {
+      "mean_us": 56.04,
+      "median_us": 55.888,
+      "per_replay_count": 30.0,
+      "replay_samples": 12
+    },
+    "reduce_output_rmsnorm_rope_kv_cache_8_128": {
+      "mean_us": 40.4,
+      "median_us": 39.872,
+      "per_replay_count": 21.0,
+      "replay_samples": 12
+    },
+    "rmsnorm_q8_1_llama_provider_4096": {
+      "mean_us": 29.835,
+      "median_us": 29.712,
+      "per_replay_count": 17.0,
+      "replay_samples": 12
+    }
+  },
+  "reps": 2,
+  "schema": "tinygrad.nv_shared_q8_kv_pair_qualification.v1",
+  "settled": {
+    "accepted_samples_ms_per_token": [
+      6.4877865,
+      6.5990085
+    ],
+    "external_contention_high_limit_ms": 6.877063499999999,
+    "median_ms_per_token": 6.5433975,
+    "prelude_token": 13876,
+    "rejected_high_samples_ms_per_token": [],
+    "samples_ms_per_token": [
+      6.4877865,
+      6.5990085
+    ],
+    "timed_token_count": 8,
+    "token_hashes": [
+      "5512bfc1f74c1ee1e244d71fb3a23025d0c4e11859056318cf6697d4be840a21",
+      "319a3b0e7548fba1fbb96a878b811e54ea88b0575ccb98148a1af6bd7c16b65f"
+    ],
+    "token_stream_hash": "9e6664fd1d67a6124e786daaa1d895bdb64b972c3991c54dd5fcc6cea16f6881",
+    "warmup_tokens": [
+      38835,
+      34208,
+      13,
+      279,
+      3974,
+      13876
+    ]
+  },
+  "steady_replay_count": 13,
+  "triple": true,
+  "variant": "q4q4"
+}

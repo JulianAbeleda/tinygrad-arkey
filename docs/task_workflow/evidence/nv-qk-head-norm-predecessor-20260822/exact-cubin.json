@@ -1,0 +1,65 @@
+{
+  "schema": "tinygrad.nv_qk_head_norm_exact_cubin.v1",
+  "date": "2026-08-22",
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "method": "Capture production NV cubin + exact launch geometry, then cuModuleLoad/cuLaunchKernel in a CUDA driver context under nsys (2000 reps, L2-hot loop)",
+  "capture": {
+    "source": "nv_cubin_capture.py",
+    "depth": 64,
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "prefixes": [
+      "reduce_output_rmsnorm_32_128",
+      "reduce_output_rmsnorm_8_128"
+    ]
+  },
+  "kernels": {
+    "reduce_output_rmsnorm_32_128": {
+      "cubin": "reduce_output_rmsnorm_32_128.cubin",
+      "cubin_sha256": "2bf8934ba5633fa670fc4c9c2ebdaa446cf2ac86f224b18cea8c44d44c2a99fc",
+      "grid": [32, 1, 1],
+      "block": [4, 8, 1],
+      "buf_sizes": [16384, 16384, 4096],
+      "nsys_mean_ns": 1190.0,
+      "nsys_median_ns": 1184.0,
+      "nsys_min_ns": 1184,
+      "nsys_max_ns": 2336,
+      "nsys_stddev_ns": 28.8,
+      "nsys_instances": 2000
+    },
+    "reduce_output_rmsnorm_8_128": {
+      "cubin": "reduce_output_rmsnorm_8_128.cubin",
+      "cubin_sha256": "de0a8e53c34ce5f5d8ced7848e016f838ae03606795803c194a61c82d48b90b5",
+      "grid": [8, 1, 1],
+      "block": [2, 16, 1],
+      "buf_sizes": [4096, 4096, 4096],
+      "nsys_mean_ns": 1196.2,
+      "nsys_median_ns": 1184.0,
+      "nsys_min_ns": 1184,
+      "nsys_max_ns": 2560,
+      "nsys_stddev_ns": 34.3,
+      "nsys_instances": 2000
+    }
+  },
+  "comparison": {
+    "production_profile_wall_us": {
+      "tinygrad_q_norm": 2.687111,
+      "tinygrad_k_norm": 2.505778,
+      "llama_q_norm": 1.146694,
+      "llama_k_norm": 1.134222
+    },
+    "exact_cubin_pure_gpu_us": {
+      "tinygrad_q_norm": 1.19,
+      "tinygrad_k_norm": 1.1962
+    },
+    "decomposition_us": {
+      "q_launch_dispatch_overhead_per_kernel": 1.497111,
+      "k_launch_dispatch_overhead_per_kernel": 1.309578,
+      "q_residual_body_gap_per_kernel": 0.043306,
+      "k_residual_body_gap_per_kernel": 0.061978,
+      "launch_dispatch_total_72_kernels": 101.0408,
+      "residual_body_total_72_kernels": 3.7902,
+      "reconciled_qk_gap": 104.831
+    }
+  },
+  "verdict": "NVRTC_COMPILER_HYPOTHESIS_REJECTED_LAUNCH_DISPATCH_DOMINANT"
+}

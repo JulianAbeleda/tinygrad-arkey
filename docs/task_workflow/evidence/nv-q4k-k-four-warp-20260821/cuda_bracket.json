@@ -1,0 +1,154 @@
+{
+  "candidate": {
+    "block": 128,
+    "blocks_per_warp": 4,
+    "grid": 1024,
+    "id": "q4k_exact_four_warp_1024_4096",
+    "warps_per_row": 4
+  },
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "control": {
+    "block": 32,
+    "grid": 1024,
+    "id": "q4k_g3_lanemap_gemv_1024_4096",
+    "warps_per_row": 1
+  },
+  "method": "render production CUDA -> nvcc sm_120a -> cudaEvent control/candidate/control",
+  "ncu": {
+    "candidate": {
+      "name": "q4k_exact_four_warp_1024_4096",
+      "rows": [
+        {
+          "metric": "dram__bytes_read.sum",
+          "unit": "",
+          "value": "n/a"
+        },
+        {
+          "metric": "dram__bytes_write.sum",
+          "unit": "",
+          "value": "n/a"
+        },
+        {
+          "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "25.95"
+        },
+        {
+          "metric": "gpu__time_duration.sum",
+          "unit": "ns",
+          "value": "5216"
+        },
+        {
+          "metric": "launch__registers_per_thread",
+          "unit": "register/thread",
+          "value": "34"
+        },
+        {
+          "metric": "sm__warps_active.avg.pct_of_peak_sustained_active",
+          "unit": "%",
+          "value": "47.96"
+        }
+      ]
+    },
+    "control": {
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "rows": [
+        {
+          "metric": "dram__bytes_read.sum",
+          "unit": "",
+          "value": "n/a"
+        },
+        {
+          "metric": "dram__bytes_write.sum",
+          "unit": "",
+          "value": "n/a"
+        },
+        {
+          "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "22.17"
+        },
+        {
+          "metric": "gpu__time_duration.sum",
+          "unit": "ns",
+          "value": "6112"
+        },
+        {
+          "metric": "launch__registers_per_thread",
+          "unit": "register/thread",
+          "value": "61"
+        },
+        {
+          "metric": "sm__warps_active.avg.pct_of_peak_sustained_active",
+          "unit": "%",
+          "value": "11.98"
+        }
+      ]
+    }
+  },
+  "passes": 1000,
+  "ptxas": [
+    "ptxas info    : 0 bytes gmem",
+    "ptxas info    : Compiling entry function 'q4k_exact_four_warp_1024_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_exact_four_warp_1024_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 34 registers, used 1 barriers, 16 bytes smem",
+    "ptxas info    : Compile time = 6.569 ms",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_1024_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_gemv_1024_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 61 registers, used 0 barriers",
+    "ptxas info    : Compile time = 10.104 ms"
+  ],
+  "raw_stdout": [
+    "shape=1024x4096 control=1warp/row candidate=4warps/row passes=1000 reps=7",
+    "rep=0 control_a=3.4428 candidate_b=2.9584 control_c=3.4384",
+    "rep=1 control_a=3.4408 candidate_b=2.9592 control_c=3.4406",
+    "rep=2 control_a=3.4429 candidate_b=2.9615 control_c=3.4417",
+    "rep=3 control_a=3.4429 candidate_b=2.9605 control_c=3.4418",
+    "rep=4 control_a=3.4422 candidate_b=2.9599 control_c=3.4417",
+    "rep=5 control_a=3.4427 candidate_b=2.9574 control_c=3.4407",
+    "rep=6 control_a=3.4411 candidate_b=2.9646 control_c=3.4396"
+  ],
+  "reps": 7,
+  "schema": "tinygrad.q4k_k_four_warp_cuda_bracket.v1",
+  "shape": {
+    "k": 4096,
+    "rows": 1024
+  },
+  "timing": {
+    "candidate_b": [
+      2.9584,
+      2.9592,
+      2.9615,
+      2.9605,
+      2.9599,
+      2.9574,
+      2.9646
+    ],
+    "candidate_median": 2.9599,
+    "control_a": [
+      3.4428,
+      3.4408,
+      3.4429,
+      3.4429,
+      3.4422,
+      3.4427,
+      3.4411
+    ],
+    "control_c": [
+      3.4384,
+      3.4406,
+      3.4417,
+      3.4418,
+      3.4417,
+      3.4407,
+      3.4396
+    ],
+    "control_midpoint_median": 3.4417,
+    "delta": -0.4817999999999998,
+    "gate": "PASS",
+    "ratio": 0.8600110410552925,
+    "unit": "us_per_launch_cuda_event"
+  }
+}

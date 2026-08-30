@@ -1,0 +1,522 @@
+{
+  "adjudication": {
+    "position_only_C6_minus_C3_us": -0.032,
+    "real_prefix_minus_position_C5_minus_C6_us": 0.656
+  },
+  "arm_medians_us": {
+    "C0": 6.112,
+    "C2": 5.712,
+    "C3": 7.728,
+    "C4": 7.616,
+    "C5": 8.352,
+    "C6": 7.696
+  },
+  "arm_output_checksums": {
+    "C0": "f957b6531dbd0fd302fc5d59ae925e8f0dd4f36130f93e069c3559567d6bc9a1",
+    "C2": "f957b6531dbd0fd302fc5d59ae925e8f0dd4f36130f93e069c3559567d6bc9a1",
+    "C3": "f957b6531dbd0fd302fc5d59ae925e8f0dd4f36130f93e069c3559567d6bc9a1",
+    "C4": "f957b6531dbd0fd302fc5d59ae925e8f0dd4f36130f93e069c3559567d6bc9a1",
+    "C5": "f957b6531dbd0fd302fc5d59ae925e8f0dd4f36130f93e069c3559567d6bc9a1",
+    "C6": "f957b6531dbd0fd302fc5d59ae925e8f0dd4f36130f93e069c3559567d6bc9a1"
+  },
+  "arm_runs": [
+    {
+      "arm": "C5",
+      "durations_us": [
+        8.384,
+        8.416,
+        8.704,
+        8.288,
+        8.352,
+        8.256,
+        8.448,
+        8.32,
+        8.32,
+        8.352,
+        8.48,
+        8.448,
+        8.384,
+        8.416,
+        8.32,
+        8.288,
+        8.448,
+        8.128,
+        8.16,
+        8.384
+      ],
+      "median_us": 8.368
+    },
+    {
+      "arm": "C6",
+      "durations_us": [
+        7.776,
+        7.488,
+        8.0,
+        7.68,
+        7.424,
+        7.808,
+        7.616,
+        7.808,
+        7.936,
+        7.776,
+        7.744,
+        7.808,
+        7.456,
+        7.712,
+        7.776,
+        7.68,
+        7.744,
+        7.872,
+        7.776,
+        7.648
+      ],
+      "median_us": 7.76
+    },
+    {
+      "arm": "C4",
+      "durations_us": [
+        7.584,
+        7.68,
+        7.552,
+        7.488,
+        7.84,
+        7.616,
+        7.744,
+        7.456,
+        7.744,
+        7.68,
+        7.488,
+        7.744,
+        7.488,
+        7.52,
+        7.808,
+        7.392,
+        7.712,
+        7.904,
+        7.776,
+        7.84
+      ],
+      "median_us": 7.68
+    },
+    {
+      "arm": "C3",
+      "durations_us": [
+        7.808,
+        7.904,
+        7.744,
+        7.872,
+        7.648,
+        7.712,
+        7.776,
+        7.52,
+        7.776,
+        7.552,
+        7.456,
+        7.84,
+        7.744,
+        7.872,
+        7.808,
+        7.872,
+        7.712,
+        7.712,
+        7.808,
+        7.968
+      ],
+      "median_us": 7.776
+    },
+    {
+      "arm": "C2",
+      "durations_us": [
+        5.728,
+        5.664,
+        5.728,
+        5.76,
+        5.728,
+        5.664,
+        5.76,
+        5.696,
+        5.696,
+        5.696,
+        5.728,
+        5.664,
+        5.664,
+        5.696,
+        5.728,
+        5.696,
+        5.696,
+        5.728,
+        5.728,
+        5.664
+      ],
+      "median_us": 5.696
+    },
+    {
+      "arm": "C0",
+      "durations_us": [
+        6.08,
+        6.112,
+        6.144,
+        6.272,
+        6.08,
+        6.08,
+        6.112,
+        6.08,
+        6.176,
+        6.176,
+        6.144,
+        6.112,
+        6.08,
+        6.112,
+        6.112,
+        6.112,
+        6.048,
+        6.112,
+        6.08,
+        6.144
+      ],
+      "median_us": 6.112
+    },
+    {
+      "arm": "C2",
+      "durations_us": [
+        5.664,
+        5.76,
+        5.76,
+        5.728,
+        5.792,
+        5.728,
+        5.696,
+        5.728,
+        5.728,
+        5.664,
+        5.664,
+        5.696,
+        5.792,
+        5.696,
+        5.696,
+        5.728,
+        5.76,
+        5.728,
+        5.696,
+        5.664
+      ],
+      "median_us": 5.728
+    },
+    {
+      "arm": "C3",
+      "durations_us": [
+        7.552,
+        7.52,
+        7.456,
+        7.552,
+        7.776,
+        7.488,
+        7.648,
+        7.52,
+        7.648,
+        7.68,
+        7.776,
+        7.744,
+        7.808,
+        7.616,
+        7.52,
+        7.456,
+        7.52,
+        7.744,
+        7.776,
+        7.84
+      ],
+      "median_us": 7.632
+    },
+    {
+      "arm": "C4",
+      "durations_us": [
+        7.936,
+        7.488,
+        7.488,
+        7.584,
+        7.584,
+        7.52,
+        7.776,
+        7.808,
+        7.744,
+        8.0,
+        7.712,
+        7.552,
+        7.52,
+        7.488,
+        7.904,
+        7.488,
+        7.552,
+        7.616,
+        7.712,
+        7.616
+      ],
+      "median_us": 7.6
+    },
+    {
+      "arm": "C6",
+      "durations_us": [
+        7.52,
+        7.68,
+        7.552,
+        7.712,
+        7.872,
+        7.68,
+        7.68,
+        7.712,
+        7.36,
+        7.808,
+        7.648,
+        7.712,
+        7.36,
+        7.488,
+        7.84,
+        7.744,
+        7.52,
+        7.68,
+        7.616,
+        7.648
+      ],
+      "median_us": 7.68
+    },
+    {
+      "arm": "C5",
+      "durations_us": [
+        8.416,
+        8.192,
+        8.16,
+        8.096,
+        8.256,
+        8.064,
+        8.352,
+        8.352,
+        8.416,
+        8.416,
+        8.288,
+        8.128,
+        8.544,
+        8.512,
+        8.16,
+        8.416,
+        8.48,
+        8.384,
+        8.352,
+        8.32
+      ],
+      "median_us": 8.352
+    }
+  ],
+  "buffer_sizes": {
+    "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096": [
+      24576,
+      28311552,
+      28311552,
+      8192
+    ],
+    "q4k_warp_coop_q8_dp4a_partial_4096_4096": [
+      65536,
+      9437184,
+      8192
+    ],
+    "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd": [
+      16384,
+      41287680,
+      24576,
+      16384
+    ],
+    "rmsnorm_q8_1_llama_provider_4096": [
+      8192,
+      16384,
+      8192
+    ]
+  },
+  "buffer_vas": {
+    "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096": [
+      157972373504,
+      138589574976,
+      138617902912,
+      157972361472
+    ],
+    "q4k_warp_coop_q8_dp4a_partial_4096_4096": [
+      157972590592,
+      138658027840,
+      157972537344
+    ],
+    "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd": [
+      157972451328,
+      138548287296,
+      157972373504,
+      157972332544
+    ],
+    "rmsnorm_q8_1_llama_provider_4096": [
+      157972537344,
+      157972451328,
+      142858915840
+    ]
+  },
+  "capture_identity": {
+    "dependencies": {
+      "down_out_to_provider_in": true,
+      "gateup_out_to_down_in": true,
+      "provider_out_to_target_in": true
+    },
+    "family_occurrence": 0,
+    "prefix_contiguous": true,
+    "prefix_count": 19,
+    "prefix_names": [
+      "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346",
+      "E_2_c8a3207cf1b8954ec08b9564cce9b00f69be9c09493c58ea1abd46b3664424e7",
+      "E_16_4_2_8_16_2_4_4_35a6fe556c331254f920c4212fdc0c33244d8269d7c93cb1897349f36a254aee",
+      "E_1187_32_4_76d37a73a646ec3a4b5e32ab783e0ace496f5855bbba7492c8c7fe87bbff5f1f",
+      "r_32_32_4_32_4_b7c5eeb3ced63845c64b323fd8e5e923a69c1e162de001a94b565dcd96e9293f",
+      "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "q4k_g3_lanemap_gemv_4096_4096",
+      "q4k_g3_lanemap_gemv_1024_4096",
+      "q6k_v_four_warp_fp16_direct_1024_4096",
+      "reduce_output_rmsnorm_32_128",
+      "reduce_output_rmsnorm_8_128",
+      "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+      "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b",
+      "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "flash_fused_gmax_combine_f16_32_128",
+      "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077"
+    ],
+    "prefix_sequence": [
+      1451,
+      1452,
+      1453,
+      1454,
+      1455,
+      1456,
+      1457,
+      1458,
+      1459,
+      1460,
+      1461,
+      1462,
+      1463,
+      1464,
+      1465,
+      1466,
+      1467,
+      1468,
+      1469
+    ],
+    "sequence": {
+      "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096": 1470,
+      "q4k_warp_coop_q8_dp4a_partial_4096_4096": 1473,
+      "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd": 1471,
+      "rmsnorm_q8_1_llama_provider_4096": 1472
+    }
+  },
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "cubin_sha256": {
+    "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096": "5642ea229b93e1f40dd00b9965212529751865d1697b76a2098e6ca3e3e6a3af",
+    "q4k_warp_coop_q8_dp4a_partial_4096_4096": "94cf0d6ac72135e6d520675e88ad9047c8c19597e8a34d5178bc12322e738702",
+    "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd": "e1685b51941b066000e587aaa314ed5de975865ac52e08cb6a116f5a331746f0",
+    "rmsnorm_q8_1_llama_provider_4096": "70505ad1fc1b66b0329d5f794881da5f2b0e9196f019a146e912ce6a5f32c6cb"
+  },
+  "gpu_state_after": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2842",
+    "driver_version": "595.84",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Enabled",
+    "power.draw": "106.67",
+    "pstate": "P0",
+    "temperature.gpu": "51"
+  },
+  "gpu_state_before": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2842",
+    "driver_version": "595.84",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Enabled",
+    "power.draw": "91.07",
+    "pstate": "P0",
+    "temperature.gpu": "51"
+  },
+  "identity": {
+    "C2_minus_C0_us": -0.4,
+    "C3_minus_C2_us": 2.016,
+    "C4_minus_C3_us": -0.112,
+    "C5_minus_C4_us": 0.736,
+    "P_minus_C0_us": 2.272,
+    "P_minus_C5_us": 0.032,
+    "identity_residual_us": -0.0
+  },
+  "installed_P": {
+    "all_us": [
+      9.152,
+      9.248,
+      8.352,
+      8.512,
+      8.096,
+      8.48,
+      8.384,
+      8.256,
+      8.704
+    ],
+    "complete_replay_count": 9,
+    "median_us": 8.384,
+    "steady_us": [
+      8.352,
+      8.512,
+      8.096,
+      8.48,
+      8.384,
+      8.256,
+      8.704
+    ],
+    "target_counts": [
+      17,
+      17,
+      17,
+      17,
+      17,
+      17,
+      17,
+      17,
+      17
+    ],
+    "warmup_dropped": 2
+  },
+  "n_per_block": 24,
+  "occurrence": 0,
+  "order": [
+    "C5",
+    "C6",
+    "C4",
+    "C3",
+    "C2",
+    "C0",
+    "C2",
+    "C3",
+    "C4",
+    "C6",
+    "C5"
+  ],
+  "production_output_checksum": "f957b6531dbd0fd302fc5d59ae925e8f0dd4f36130f93e069c3559567d6bc9a1",
+  "schema": "tinygrad.nv_r_predecessor_conditioned_exact.v1",
+  "token_ids": [
+    13876,
+    38835,
+    34208,
+    13,
+    279,
+    3974,
+    13876,
+    38835,
+    34208,
+    13,
+    279,
+    3974
+  ],
+  "token_sha256": "fc90421da972a70fd043dd57f4d30e53c4dd78918a3292725bdb42e63750585a",
+  "verdict": "MEASURED_IDENTITY",
+  "warmup_per_block": 4
+}

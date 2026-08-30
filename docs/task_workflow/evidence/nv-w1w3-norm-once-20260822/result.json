@@ -1,0 +1,69 @@
+{
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "method": "render production CUDA -> nvcc sm_120a -> cudaEvent",
+  "norm_once_vs_m1_bitwise_identical": true,
+  "passes": 200,
+  "ptxas": [
+    "ptxas info    : 0 bytes gmem",
+    "ptxas info    : Compiling entry function 'q4k_w1w3_norm_once16_12288_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_w1w3_norm_once16_12288_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 80 registers, used 0 barriers",
+    "ptxas info    : Compile time = 28.957 ms",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_w1w3_rms_affine16_12288_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 80 registers, used 0 barriers",
+    "ptxas info    : Compile time = 27.266 ms",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_w1w3fused16_12288_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 74 registers, used 0 barriers",
+    "ptxas info    : Compile time = 21.082 ms"
+  ],
+  "raw_stdout": [
+    "norm_once_vs_m1_bitwise_identical=1",
+    "shape=12288x4096 passes=200 reps=5",
+    "rep=0 control=22.6453 m1=33.4309 norm_once=33.3955",
+    "rep=1 control=22.5549 m1=33.3653 norm_once=33.3562",
+    "rep=2 control=22.5322 m1=33.3333 norm_once=33.4499",
+    "rep=3 control=22.6389 m1=33.5077 norm_once=33.4939",
+    "rep=4 control=22.6299 m1=33.4891 norm_once=33.5114"
+  ],
+  "reps": 5,
+  "schema": "tinygrad.q4k_w1w3_norm_once_microgate.v1",
+  "shape": {
+    "k": 4096,
+    "rows": 12288
+  },
+  "timing": {
+    "control": [
+      22.6453,
+      22.5549,
+      22.5322,
+      22.6389,
+      22.6299
+    ],
+    "control_median": 22.6299,
+    "m1": [
+      33.4309,
+      33.3653,
+      33.3333,
+      33.5077,
+      33.4891
+    ],
+    "m1_median": 33.4309,
+    "m1_over_control": 1.477288896548372,
+    "norm_once": [
+      33.3955,
+      33.3562,
+      33.4499,
+      33.4939,
+      33.5114
+    ],
+    "norm_once_median": 33.4499,
+    "norm_once_over_control": 1.4781284937184875,
+    "norm_once_over_m1": 1.0005683364791256,
+    "unit": "us_per_launch_cuda_event"
+  }
+}

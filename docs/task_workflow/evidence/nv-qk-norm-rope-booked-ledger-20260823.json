@@ -1,0 +1,57 @@
+{
+  "schema": "tinygrad.nv_booked_recovery_ledger.v1",
+  "date": "2026-08-23",
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "fresh_control_wall_us": 4771.423,
+  "target_240_us": 4166.666667,
+  "required_recovery_us": 604.756,
+  "booked_recoveries": [
+    {
+      "candidate": "Q6_K FFN-down four-warp fp16 direct consumer (fp16_fma=true)",
+      "booked_delta_us_per_token": 52.873,
+      "booking_rule": "floor of two independent depth-512 reverse-bracket deltas",
+      "token_stream_sha256": "f25083e5d0a754131283b40c03f52e688fee9f175bea7ae106805e7d628d7905",
+      "evidence": "docs/task_workflow/evidence/nv-q6-ffn-down-booked-ledger-20260823.json"
+    },
+    {
+      "candidate": "semantic Q/K REDUCE_OUTPUT RMSNorm+RoPE epilogue",
+      "booked_delta_us_per_token": 40.556890625,
+      "booking_rule": "floor of three independent depth-512 reverse-bracket deltas; principal explicitly accepted below the normal 50 us/token bar",
+      "reverse_bracket_deltas_us_per_token": [46.56828125, 44.898359375, 40.556890625],
+      "token_stream_sha256": "f25083e5d0a754131283b40c03f52e688fee9f175bea7ae106805e7d628d7905",
+      "production_default_verified": true,
+      "production_default_node_count": 560,
+      "evidence": "docs/task_workflow/evidence/nv-qk-norm-rope-semantic-fix-20260823/"
+    }
+  ],
+  "component_booked_floor_us": 93.429890625,
+  "composition_reverse_bracket": {
+    "status": "MEASURED",
+    "verdict": "WALL_PASS",
+    "control_a_us_per_token": 4810.9811875,
+    "candidate_us_per_token": 4697.288625,
+    "control_c_us_per_token": 4824.558875,
+    "control_midpoint_us_per_token": 4817.77003125,
+    "recovery_us_per_token": 120.48140625,
+    "recovery_excess_over_component_floor_us": 27.051515625,
+    "speedup_pct": 2.5649138443137653,
+    "token_stream_sha256": "f25083e5d0a754131283b40c03f52e688fee9f175bea7ae106805e7d628d7905",
+    "evidence": "docs/task_workflow/evidence/nv-booked-composition-wall-20260823/"
+  },
+  "current_measured_wall_us": 4697.288625,
+  "current_measured_tok_per_s": 212.888770487251,
+  "remaining_to_240_us": 530.621958,
+  "current_baseline_status": "MEASURED_REVERSE_BRACKET_CANDIDATE",
+  "superseded_projection": {
+    "wall_us": 4677.993109375,
+    "tok_per_s": 213.766881784399,
+    "status": "INFERRED_FROM_OLD_FROZEN_CONTROL_AND_COMPONENT_FLOORS"
+  },
+  "reconciliation": {
+    "fresh_control_minus_old_frozen_control_us": 46.34703125,
+    "composed_recovery_minus_component_floor_us": 27.051515625,
+    "measured_current_minus_old_projection_us": 19.295515625,
+    "identity_residual_us": 0.0
+  },
+  "verdict": "240_UNMEASURED"
+}

@@ -1,0 +1,179 @@
+{
+  "adjudication": {
+    "position_only_C6_minus_C3_us": -0.04,
+    "real_prefix_minus_position_C5_minus_C6_us": 0.664
+  },
+  "arm_medians_us": {
+    "C0": 6.096,
+    "C2": 5.704,
+    "C3": 7.72,
+    "C4": 7.656,
+    "C5": 8.344,
+    "C6": 7.68
+  },
+  "authority_profiles": [
+    "session-e-profile.jsonl",
+    "session-f-profile.jsonl"
+  ],
+  "authority_sessions": [
+    "session-e.json",
+    "session-f.json"
+  ],
+  "clean_chain_bridge": {
+    "clean_C_to_C0_us_per_call": 0.7867,
+    "current_P_minus_clean_C_us_per_call": 3.0427,
+    "current_vs_frozen_P_drift_us_per_call": -0.064,
+    "frozen_P_minus_clean_C_us_per_call": 3.1067
+  },
+  "count_weighted_projection": {
+    "C2_minus_C0_us_per_token": -6.664,
+    "C3_minus_C2_us_per_token": 34.272,
+    "C4_minus_C3_us_per_token": -1.088,
+    "C5_minus_C4_us_per_token": 11.696,
+    "P_minus_C0_us_per_token": 38.352,
+    "P_minus_C5_us_per_token": 0.136,
+    "clean_C_to_C0_us_per_token": 13.374,
+    "current_P_minus_clean_C_us_per_token": 51.726,
+    "projection_only": true
+  },
+  "cubin_sha256": {
+    "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096": "5642ea229b93e1f40dd00b9965212529751865d1697b76a2098e6ca3e3e6a3af",
+    "q4k_warp_coop_q8_dp4a_partial_4096_4096": "94cf0d6ac72135e6d520675e88ad9047c8c19597e8a34d5178bc12322e738702",
+    "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd": "e1685b51941b066000e587aaa314ed5de975865ac52e08cb6a116f5a331746f0",
+    "rmsnorm_q8_1_llama_provider_4096": "70505ad1fc1b66b0329d5f794881da5f2b0e9196f019a146e912ce6a5f32c6cb"
+  },
+  "identity": {
+    "C2_minus_C0_us": -0.392,
+    "C3_minus_C2_us": 2.016,
+    "C4_minus_C3_us": -0.064,
+    "C5_minus_C4_us": 0.688,
+    "P_minus_C0_us": 2.256,
+    "P_minus_C5_us": 0.008,
+    "identity_residual_us": 0.0
+  },
+  "installed_P_median_us": 8.352,
+  "production_output_checksum": "f957b6531dbd0fd302fc5d59ae925e8f0dd4f36130f93e069c3559567d6bc9a1",
+  "profile_overlap": {
+    "overlapping_interval_count": 0,
+    "overlapping_names": [],
+    "rows": [
+      {
+        "overlap_names": [],
+        "profile": "session-e-profile.jsonl",
+        "replay": 0,
+        "target_us": 9.28
+      },
+      {
+        "overlap_names": [],
+        "profile": "session-e-profile.jsonl",
+        "replay": 1,
+        "target_us": 8.8
+      },
+      {
+        "overlap_names": [],
+        "profile": "session-e-profile.jsonl",
+        "replay": 2,
+        "target_us": 8.256
+      },
+      {
+        "overlap_names": [],
+        "profile": "session-e-profile.jsonl",
+        "replay": 3,
+        "target_us": 8.48
+      },
+      {
+        "overlap_names": [],
+        "profile": "session-e-profile.jsonl",
+        "replay": 4,
+        "target_us": 8.256
+      },
+      {
+        "overlap_names": [],
+        "profile": "session-e-profile.jsonl",
+        "replay": 5,
+        "target_us": 8.032
+      },
+      {
+        "overlap_names": [],
+        "profile": "session-e-profile.jsonl",
+        "replay": 6,
+        "target_us": 8.448
+      },
+      {
+        "overlap_names": [],
+        "profile": "session-e-profile.jsonl",
+        "replay": 7,
+        "target_us": 8.32
+      },
+      {
+        "overlap_names": [],
+        "profile": "session-e-profile.jsonl",
+        "replay": 8,
+        "target_us": 8.544
+      },
+      {
+        "overlap_names": [],
+        "profile": "session-f-profile.jsonl",
+        "replay": 0,
+        "target_us": 9.152
+      },
+      {
+        "overlap_names": [],
+        "profile": "session-f-profile.jsonl",
+        "replay": 1,
+        "target_us": 9.248
+      },
+      {
+        "overlap_names": [],
+        "profile": "session-f-profile.jsonl",
+        "replay": 2,
+        "target_us": 8.352
+      },
+      {
+        "overlap_names": [],
+        "profile": "session-f-profile.jsonl",
+        "replay": 3,
+        "target_us": 8.512
+      },
+      {
+        "overlap_names": [],
+        "profile": "session-f-profile.jsonl",
+        "replay": 4,
+        "target_us": 8.096
+      },
+      {
+        "overlap_names": [],
+        "profile": "session-f-profile.jsonl",
+        "replay": 5,
+        "target_us": 8.48
+      },
+      {
+        "overlap_names": [],
+        "profile": "session-f-profile.jsonl",
+        "replay": 6,
+        "target_us": 8.384
+      },
+      {
+        "overlap_names": [],
+        "profile": "session-f-profile.jsonl",
+        "replay": 7,
+        "target_us": 8.256
+      },
+      {
+        "overlap_names": [],
+        "profile": "session-f-profile.jsonl",
+        "replay": 8,
+        "target_us": 8.704
+      }
+    ],
+    "target_interval_count": 18
+  },
+  "schema": "tinygrad.nv_r_predecessor_conditioned_exact_merge.v1",
+  "scope": {
+    "all_occurrences_generalization": "UNMEASURED",
+    "family_count": 17,
+    "measured_occurrence": 0
+  },
+  "token_sha256": "fc90421da972a70fd043dd57f4d30e53c4dd78918a3292725bdb42e63750585a",
+  "verdict": "Q_OCCURRENCE0_CLOSED"
+}

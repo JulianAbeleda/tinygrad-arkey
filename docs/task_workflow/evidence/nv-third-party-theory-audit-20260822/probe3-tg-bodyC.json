@@ -1,0 +1,24 @@
+{
+  "device": "CUDA",
+  "git_commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "replays": 400,
+  "runs": {
+    "tile_s48_prod": {
+      "MAXC": 4608,
+      "NCHUNK": 1,
+      "S": 48,
+      "finite": true,
+      "nsys_marker": "START_tile_s48_prod_x400_END",
+      "replays": 400
+    }
+  },
+  "schema": "tinygrad.nv_flash_body_device_timing.v1",
+  "shape": {
+    "Hd": 128,
+    "Hkv": 8,
+    "Hq": 32,
+    "MAXC": 4608,
+    "Tc": 513
+  },
+  "warmup": 20
+}

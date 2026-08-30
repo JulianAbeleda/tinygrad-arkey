@@ -1,0 +1,197 @@
+{
+  "all_token_hashes_equal": true,
+  "arms": [
+    {
+      "arm": "control",
+      "complete_replay_count": 16,
+      "count": 4,
+      "depth": 128,
+      "eligible_blocks": [
+        4,
+        5,
+        7,
+        8,
+        10,
+        11,
+        14,
+        16,
+        17
+      ],
+      "gpu_state": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "name": "NVIDIA GeForce RTX 5090",
+        "persistence_mode": "Disabled",
+        "power.draw": "87.76",
+        "temperature.gpu": "44"
+      },
+      "group_pattern": [
+        32,
+        64,
+        128,
+        256
+      ],
+      "ledger": {
+        "node_count": 480.0,
+        "node_sum_us": 3920.064,
+        "overlap_us": 12.008,
+        "span_us": 4928.0,
+        "union_us": 3911.5
+      },
+      "max_context": 512,
+      "mode": "profile-child",
+      "reps": 2,
+      "schema": "tinygrad.nv_shared_q8_kv_pair_qualification.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          6.82357,
+          6.6897605
+        ],
+        "external_contention_high_limit_ms": 7.15809375,
+        "median_ms_per_token": 6.75666525,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          6.82357,
+          6.6897605
+        ],
+        "timed_token_count": 8,
+        "token_hashes": [
+          "5512bfc1f74c1ee1e244d71fb3a23025d0c4e11859056318cf6697d4be840a21",
+          "319a3b0e7548fba1fbb96a878b811e54ea88b0575ccb98148a1af6bd7c16b65f"
+        ],
+        "token_stream_hash": "9e6664fd1d67a6124e786daaa1d895bdb64b972c3991c54dd5fcc6cea16f6881",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "steady_replay_count": 13,
+      "triple": true,
+      "variant": "q4q4"
+    },
+    {
+      "arm": "candidate",
+      "complete_replay_count": 16,
+      "count": 4,
+      "depth": 128,
+      "eligible_blocks": [
+        4,
+        5,
+        7,
+        8,
+        10,
+        11,
+        14,
+        16,
+        17
+      ],
+      "gpu_state": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "name": "NVIDIA GeForce RTX 5090",
+        "persistence_mode": "Disabled",
+        "power.draw": "95.81",
+        "temperature.gpu": "48"
+      },
+      "group_pattern": [
+        32,
+        64,
+        128,
+        256
+      ],
+      "ledger": {
+        "node_count": 480.0,
+        "node_sum_us": 3867.2,
+        "overlap_us": 4.466,
+        "span_us": 4664.0,
+        "union_us": 3863.0
+      },
+      "max_context": 512,
+      "mode": "profile-child",
+      "reps": 2,
+      "schema": "tinygrad.nv_shared_q8_kv_pair_qualification.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          6.4877865,
+          6.5990085
+        ],
+        "external_contention_high_limit_ms": 6.877063499999999,
+        "median_ms_per_token": 6.5433975,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          6.4877865,
+          6.5990085
+        ],
+        "timed_token_count": 8,
+        "token_hashes": [
+          "5512bfc1f74c1ee1e244d71fb3a23025d0c4e11859056318cf6697d4be840a21",
+          "319a3b0e7548fba1fbb96a878b811e54ea88b0575ccb98148a1af6bd7c16b65f"
+        ],
+        "token_stream_hash": "9e6664fd1d67a6124e786daaa1d895bdb64b972c3991c54dd5fcc6cea16f6881",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "steady_replay_count": 13,
+      "triple": true,
+      "variant": "q4q4"
+    }
+  ],
+  "ledger_delta": {
+    "node_count": 0.0,
+    "node_sum_us": -52.864,
+    "overlap_us": -7.542,
+    "span_us": -264.0,
+    "union_us": -48.5
+  },
+  "mode": "profile",
+  "schema": "tinygrad.nv_shared_q8_kv_pair_qualification.v1",
+  "structural": {
+    "candidate_nodes": 480.0,
+    "candidate_pattern": [
+      32,
+      64,
+      128,
+      256
+    ],
+    "control_nodes": 480.0,
+    "control_pattern": [
+      32,
+      64,
+      128,
+      256
+    ],
+    "eligible_blocks": [
+      4,
+      5,
+      7,
+      8,
+      10,
+      11,
+      14,
+      16,
+      17
+    ],
+    "pair_names": {
+      "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096": {
+        "mean_us": 48.939,
+        "median_us": 48.896,
+        "per_replay_count": 8.0,
+        "replay_samples": 12
+      }
+    }
+  },
+  "triple": true,
+  "variant": "q4q4"
+}

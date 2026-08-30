@@ -1,0 +1,473 @@
+{
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "l2_mib": 96,
+  "method": "rotating disjoint working sets (aggregate > 2x 96 MiB L2) vs a single resident working set; reverse-bracketed H/C/H and C/H/C, warmup-discarded, last-instance median; positive 16 MiB read eviction control measured first",
+  "n_per_arm": 12,
+  "positive_mib": 16,
+  "rows": [
+    {
+      "aggregate_bytes": 218103808,
+      "block": [
+        256,
+        1,
+        1
+      ],
+      "control": "positive_eviction",
+      "copies": 13,
+      "grid": [
+        16384,
+        1,
+        1
+      ],
+      "key": "positive_l2_read_16mib",
+      "protocols": {
+        "C/H/C": {
+          "arms": [
+            {
+              "arm": "rot",
+              "durations_us": [
+                8.768,
+                8.768,
+                8.768,
+                8.768,
+                8.832,
+                8.8,
+                8.768,
+                8.8,
+                8.8,
+                8.8,
+                8.736,
+                8.8
+              ],
+              "kept_us": [
+                8.768,
+                8.768,
+                8.832,
+                8.8,
+                8.768,
+                8.8,
+                8.8,
+                8.8,
+                8.736,
+                8.8
+              ],
+              "mean_us": 8.787,
+              "median_us": 8.8
+            },
+            {
+              "arm": "hot",
+              "durations_us": [
+                8.832,
+                8.8,
+                8.736,
+                8.768,
+                8.8,
+                8.8,
+                8.8,
+                8.8,
+                8.768,
+                8.768,
+                8.736,
+                8.768
+              ],
+              "kept_us": [
+                8.736,
+                8.768,
+                8.8,
+                8.8,
+                8.8,
+                8.8,
+                8.768,
+                8.768,
+                8.736,
+                8.768
+              ],
+              "mean_us": 8.774,
+              "median_us": 8.768
+            },
+            {
+              "arm": "rot",
+              "durations_us": [
+                8.832,
+                8.8,
+                8.768,
+                8.768,
+                8.8,
+                8.736,
+                8.832,
+                8.8,
+                8.8,
+                8.768,
+                8.768,
+                8.832
+              ],
+              "kept_us": [
+                8.768,
+                8.768,
+                8.8,
+                8.736,
+                8.832,
+                8.8,
+                8.8,
+                8.768,
+                8.768,
+                8.832
+              ],
+              "mean_us": 8.787,
+              "median_us": 8.784
+            }
+          ],
+          "hot_median_us": 8.768,
+          "rotating_median_us": 8.784,
+          "working_set_state_us": 0.016
+        },
+        "H/C/H": {
+          "arms": [
+            {
+              "arm": "hot",
+              "durations_us": [
+                10.624,
+                9.76,
+                9.76,
+                9.312,
+                9.12,
+                9.152,
+                9.152,
+                9.28,
+                9.28,
+                9.152,
+                9.184,
+                9.216
+              ],
+              "kept_us": [
+                9.76,
+                9.312,
+                9.12,
+                9.152,
+                9.152,
+                9.28,
+                9.28,
+                9.152,
+                9.184,
+                9.216
+              ],
+              "mean_us": 9.261,
+              "median_us": 9.2
+            },
+            {
+              "arm": "rot",
+              "durations_us": [
+                9.184,
+                9.568,
+                9.408,
+                9.664,
+                9.408,
+                9.6,
+                9.44,
+                9.6,
+                9.216,
+                9.376,
+                9.12,
+                9.408
+              ],
+              "kept_us": [
+                9.408,
+                9.664,
+                9.408,
+                9.6,
+                9.44,
+                9.6,
+                9.216,
+                9.376,
+                9.12,
+                9.408
+              ],
+              "mean_us": 9.424,
+              "median_us": 9.408
+            },
+            {
+              "arm": "hot",
+              "durations_us": [
+                8.832,
+                8.768,
+                8.768,
+                8.768,
+                8.768,
+                8.768,
+                8.8,
+                8.768,
+                8.8,
+                8.736,
+                8.768,
+                8.768
+              ],
+              "kept_us": [
+                8.768,
+                8.768,
+                8.768,
+                8.768,
+                8.8,
+                8.768,
+                8.8,
+                8.736,
+                8.768,
+                8.768
+              ],
+              "mean_us": 8.771,
+              "median_us": 8.768
+            }
+          ],
+          "hot_median_us": 8.768,
+          "rotating_median_us": 9.408,
+          "working_set_state_us": 0.64
+        }
+      },
+      "readback_first8_words": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "symbol": "nv_r_rot_read_16mib",
+      "working_set_bytes": 16777216
+    },
+    {
+      "aggregate_bytes": 1048576,
+      "block": [
+        2,
+        16,
+        1
+      ],
+      "body_b_us": 1.196,
+      "buf_sizes": [
+        4096,
+        4096,
+        4096
+      ],
+      "clean_hcq_c_us": 1.698,
+      "control": true,
+      "copies": 256,
+      "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-qk-head-norm-predecessor-20260822/reduce_output_rmsnorm_8_128.cubin",
+      "cubin_sha256": "de0a8e53c34ce5f5d8ced7848e016f838ae03606795803c194a61c82d48b90b5",
+      "grid": [
+        8,
+        1,
+        1
+      ],
+      "key": "control_norm_8_128",
+      "production_p_us": null,
+      "protocols": {
+        "C/H/C": {
+          "arms": [
+            {
+              "arm": "rot",
+              "durations_us": [
+                1.792,
+                1.728,
+                1.76,
+                1.728,
+                1.76,
+                1.76,
+                1.728,
+                1.76,
+                1.792,
+                1.76,
+                1.76,
+                1.76
+              ],
+              "kept_us": [
+                1.76,
+                1.728,
+                1.76,
+                1.76,
+                1.728,
+                1.76,
+                1.792,
+                1.76,
+                1.76,
+                1.76
+              ],
+              "mean_us": 1.757,
+              "median_us": 1.76
+            },
+            {
+              "arm": "hot",
+              "durations_us": [
+                1.792,
+                1.76,
+                1.76,
+                1.76,
+                1.76,
+                1.76,
+                1.728,
+                1.728,
+                1.76,
+                1.728,
+                1.76,
+                1.76
+              ],
+              "kept_us": [
+                1.76,
+                1.76,
+                1.76,
+                1.76,
+                1.728,
+                1.728,
+                1.76,
+                1.728,
+                1.76,
+                1.76
+              ],
+              "mean_us": 1.75,
+              "median_us": 1.76
+            },
+            {
+              "arm": "rot",
+              "durations_us": [
+                1.792,
+                1.728,
+                1.76,
+                1.728,
+                1.76,
+                1.76,
+                1.728,
+                1.728,
+                1.76,
+                1.728,
+                1.76,
+                1.728
+              ],
+              "kept_us": [
+                1.76,
+                1.728,
+                1.76,
+                1.76,
+                1.728,
+                1.728,
+                1.76,
+                1.728,
+                1.76,
+                1.728
+              ],
+              "mean_us": 1.744,
+              "median_us": 1.744
+            }
+          ],
+          "hot_median_us": 1.76,
+          "rotating_median_us": 1.744,
+          "working_set_state_us": -0.016
+        },
+        "H/C/H": {
+          "arms": [
+            {
+              "arm": "hot",
+              "durations_us": [
+                2.528,
+                2.304,
+                2.336,
+                2.304,
+                2.336,
+                2.24,
+                2.272,
+                2.24,
+                2.336,
+                2.24,
+                2.24,
+                2.272
+              ],
+              "kept_us": [
+                2.336,
+                2.304,
+                2.336,
+                2.24,
+                2.272,
+                2.24,
+                2.336,
+                2.24,
+                2.24,
+                2.272
+              ],
+              "mean_us": 2.282,
+              "median_us": 2.272
+            },
+            {
+              "arm": "rot",
+              "durations_us": [
+                2.176,
+                2.144,
+                2.112,
+                2.144,
+                2.08,
+                2.24,
+                2.048,
+                2.08,
+                2.08,
+                2.112,
+                2.08,
+                2.112
+              ],
+              "kept_us": [
+                2.112,
+                2.144,
+                2.08,
+                2.24,
+                2.048,
+                2.08,
+                2.08,
+                2.112,
+                2.08,
+                2.112
+              ],
+              "mean_us": 2.109,
+              "median_us": 2.096
+            },
+            {
+              "arm": "hot",
+              "durations_us": [
+                1.824,
+                1.76,
+                1.76,
+                1.76,
+                1.728,
+                1.76,
+                1.76,
+                1.76,
+                1.76,
+                1.76,
+                1.728,
+                1.728
+              ],
+              "kept_us": [
+                1.76,
+                1.76,
+                1.728,
+                1.76,
+                1.76,
+                1.76,
+                1.76,
+                1.76,
+                1.728,
+                1.728
+              ],
+              "mean_us": 1.75,
+              "median_us": 1.76
+            }
+          ],
+          "hot_median_us": 1.76,
+          "rotating_median_us": 2.096,
+          "working_set_state_us": 0.336
+        }
+      },
+      "rotate_buf_idx": 0,
+      "symbol": "reduce_output_rmsnorm_8_128",
+      "working_set_bytes": 4096
+    }
+  ],
+  "schema": "tinygrad.nv_r_residual_rotation_probe.v1",
+  "two_x_l2_bytes": 201326592,
+  "warmup_discard": 2
+}
