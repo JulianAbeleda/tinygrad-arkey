@@ -105,6 +105,49 @@ an unconditional unsafe load, if isolated recovery is below `13.9 us/layer`,
 or if whole-model recovery is below `0.5 ms`. A favorable isolated kernel
 number is not sufficient evidence for promotion.
 
+## Revised competitive design decision
+
+The one-CTA-per-query implementation is rejected. Its corrected measurement is
+approximately `1337 us/layer` (about `84.9 ms` for the 36-layer model), not a
+competitive Flash implementation. The current production reference is about
+`93.7 us/layer`; therefore a candidate must be below `79.8 us/layer` to recover
+at least `0.5 ms` whole-model, with `~46 us/layer` as the preferred target.
+
+The lower-risk path is to adapt the existing production Flash kernel's score/PV
+body, not to start with a query-tiled tensor-core kernel. The llama source hook
+is `ggml/src/ggml-cuda/fattn-vec.cuh:flash_attn_ext_vec`; its already-proven
+online-softmax, GQA mapping, causal bounds, and fp32 PV ordering should remain
+unchanged. The tinygrad hook is the semantic attention boundary in
+`tinygrad/llm/flash_prefill_attention.py`, reached from `model.py` after Q/K/V
+are materialized and before the O projection.
+
+The adapted NV kernel should use the actual boundary ABI: fp16 Q with logical
+`[1,32,512,128]`, compact fp16 K/V `[1,8,512,128]` for the first chunk, fp32
+output `[1,32,512,128]`, and explicit strides/start position. Preserve the
+current llama-style CTA mapping (`grid=(query tiles, partials, heads/sequences)`
+with `block=(32,4,1)`) and add only aligned 16-byte K/V staging. A query-tiled
+tensor-core design is a separate fallback because it changes reduction order,
+requires a new fragment layout, and has a materially larger numerical and
+graph-integration surface.
+
+Bounded implementation order:
+
+1. Transcribe the current production score/PV kernel into a standalone NVRTC
+   source with explicit fp16 Q/K/V strides and no host-visible copies.
+2. Add K-only `cp.async` staging into `[2][32][128]` half tiles, using
+   `__cvta_generic_to_shared`, commit/wait, and barriers. Keep V global first so
+   K-only deltas are isolated.
+3. Add V-only, then double-buffered K+V staging only if each prior arm passes
+   the same full-output oracle and canary gate.
+4. Measure R20 per-layer body time. Reject any arm at or above `79.8 us/layer`.
+5. Run the exact production-boundary C/A/C with graph casts/layout cost,
+   logits/token hashes, and a minimum `0.5 ms` wall recovery before any seam.
+
+The existing `flash_vec_llama_score_pv_32_128_6_widekv16` cubin is not a safe
+starting point: it is decode-only, uses a different partition extent, and has
+an incompatible output/metadata contract. Reuse its load idioms only after
+ABI and geometry are independently transcribed.
+
 ## Local references
 
 - `tinygrad/llm/flash_prefill_attention.py`
