@@ -2,17 +2,18 @@
   "schema": "tinygrad.nv.llama_gap_closure_ledger.v1",
   "date": "2026-08-30",
   "tinygrad": {
-    "median_ms": 35.152125,
+    "median_ms": 35.1865905,
     "minimum_ms": 35.002284,
-    "median_tok_s": 14565.264547,
-    "authority": "settled_r9"
+    "median_tok_s": 14550.997773,
+    "authority": "fresh_tinygrad_llama_tinygrad_r9_bracket"
   },
   "llama": {
-    "median_ms": 35.019399,
-    "minimum_ms": 34.680367
+    "median_ms": 35.334424,
+    "minimum_ms": 34.765611,
+    "authority": "fresh_intervening_r9"
   },
-  "matched_median_difference_ms": 0.132726,
-  "interpretation": "tinygrad_median_is_0p132726ms_slower",
+  "matched_median_difference_ms": -0.1478335,
+  "interpretation": "tinygrad_median_is_0p1478335ms_faster",
   "latest_recovery": {
     "category": "opaque_program_single_owner_substrate",
     "wall_ms": 2.177346,
@@ -25,6 +26,6 @@
     "full_logits_bit_exact": true,
     "rollback_bit_exact": true
   },
-  "status": "NEAR_PARITY_NOT_CLOSED",
-  "next": "remeasure_the_remaining_0p132726ms_before_investing"
+  "status": "MATCHED_MEDIAN_GAP_CLOSED",
+  "next": "generalize_single_owner_PROGRAM_contract_without_regressing_the_endpoint"
 }

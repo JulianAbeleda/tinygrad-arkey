@@ -1,0 +1,76 @@
+{
+  "schema": "tinygrad.nv_pp512_fresh_cross_runtime_bracket.v1",
+  "status": "PASS",
+  "order": [
+    "tinygrad_r9",
+    "llama_r9",
+    "tinygrad_r9"
+  ],
+  "tinygrad": {
+    "first_samples_ms": [
+      35.152125,
+      35.049413,
+      35.002284,
+      35.072877,
+      35.112001,
+      35.161874,
+      35.222147,
+      35.205887,
+      35.245741
+    ],
+    "first_median_ms": 35.152125,
+    "rollback_samples_ms": [
+      35.028716,
+      35.067779,
+      35.122793,
+      35.221056,
+      35.183456,
+      35.263156,
+      35.258848,
+      35.24378,
+      35.252055
+    ],
+    "rollback_median_ms": 35.221056,
+    "mean_median_ms": 35.186590499999994,
+    "median_tok_s": 14550.997772858957,
+    "tokens": [
+      198,
+      198
+    ],
+    "rollback_logits_exact": true
+  },
+  "llama": {
+    "all_samples_ms": [
+      42.768578,
+      34.958623,
+      34.765611,
+      35.045947,
+      35.298111,
+      35.370737,
+      35.375186,
+      35.456418,
+      35.468541
+    ],
+    "settled_samples_ms": [
+      34.958623,
+      34.765611,
+      35.045947,
+      35.298111,
+      35.370737,
+      35.375186,
+      35.456418,
+      35.468541
+    ],
+    "first_use_excluded": true,
+    "settled_median_ms": 35.334424,
+    "settled_minimum_ms": 34.765611,
+    "median_tok_s": 14490.118757843627,
+    "build_commit": "ac4cddeb0",
+    "build_number": 9592
+  },
+  "comparison": {
+    "tinygrad_minus_llama_median_ms": -0.1478335000000044,
+    "tinygrad_faster_pct": 0.4201415877449266,
+    "result": "TINYGRAD_FASTER_AT_MATCHED_MEDIAN"
+  }
+}
