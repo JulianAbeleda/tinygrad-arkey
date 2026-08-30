@@ -7,7 +7,7 @@ lowering, barriers, and launch.  The ABI is one 144-byte record per
 from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
-from tinygrad import dtypes
+from tinygrad import dtypes, Tensor
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
 from .nv_q8_ds4_native_producer_spec import DS4ProducerSpec
 
@@ -38,22 +38,31 @@ class DS4MetadataWorkspace:
 def metadata_workspace(spec: DS4ProducerSpec = DS4ProducerSpec()):
   spec.validate(); return DS4MetadataWorkspace(spec.M, spec.K // 128).validate()
 
+def realize_ds4_metadata(x: Tensor, spec: DS4ProducerSpec = DS4ProducerSpec()) -> Tensor:
+  """Standard-scheduler stage 1: return aligned fp16 ``(d,sum)`` words."""
+  spec.validate()
+  v = x.reshape(spec.M, spec.K//128, 4, 32).cast(dtypes.float32)
+  peak = v.abs().max(axis=3)
+  d = (peak != 0).where(peak / 127.0, 1.0)
+  sm = v.sum(axis=3)
+  return Tensor.stack(d.cast(dtypes.float16), sm.cast(dtypes.float16), dim=3).reshape(spec.M, spec.K//128, 8).contiguous()
+
 def emit_ds4_metadata_stage(spec: DS4ProducerSpec = DS4ProducerSpec()):
   spec.validate()
   def kernel(meta: UOp, x: UOp) -> UOp:
     row, seg = UOp.range(spec.M, 0), UOp.range(spec.K//128, 1)
-    subgroup = UOp.range(4, 2)
+    word = UOp.range(8, 2)
+    subgroup = word//2
     lane = UOp.range(32, 3, axis_type=AxisType.REDUCE)
     idx = row*spec.K + seg*128 + subgroup*32 + lane
     v = x[idx].cast(dtypes.float32)
     peak = (v.abs()).reduce(lane, arg=Ops.MAX)
     d = (peak != 0).where(peak*(1.0/127.0), 1.0)
     sm = v.reduce(lane, arg=Ops.ADD)
-    base = (seg*spec.M + row)*8 + subgroup*2
-    st = meta[base].store(d.cast(dtypes.float16).bitcast(dtypes.uint16))
-    st2 = meta[base+1].store(sm.cast(dtypes.float16).bitcast(dtypes.uint16))
-    return UOp(Ops.SINK, src=(st.end(row,seg,subgroup,lane), st2.end(row,seg,subgroup,lane)),
-               arg=KernelInfo(name="q8_ds4_metadata_stage", opts_to_apply=()))
+    base = (seg*spec.M + row)*8 + word
+    value = (word % 2).eq(0).where(d, sm).cast(dtypes.float16).bitcast(dtypes.uint16)
+    return meta[base].store(value).end(row, seg, word, lane).sink(
+      arg=KernelInfo(name="q8_ds4_metadata_stage", opts_to_apply=()))
   return kernel
 
 def emit_ds4_pack_stage(spec: DS4ProducerSpec = DS4ProducerSpec()):

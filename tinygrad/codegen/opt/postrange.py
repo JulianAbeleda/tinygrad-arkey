@@ -388,6 +388,18 @@ class Scheduler:
                                       reduceops:list[UOp]) -> None|list[UOp]:
     """Generic tensor-core optimization: pick a TC-compatible dot-product reduce and lower it to WMMA.
     No composite/backend-substitution knowledge lives here -- callers have already ruled that out."""
+    # Research-only Stream-K admission seam.  This is intentionally a no-op in phase one:
+    # the exact packed Q4/Q6 body below remains the implementation, while a flag-on compile
+    # proves the candidate context can reach this point without changing the ordinary AST.
+    # Keep this branch before any candidate-local state is consumed and fail closed for malformed
+    # contexts; the flag is never consulted on the production/default path.
+    if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1":
+      streamk = getattr(getattr(self.ast.arg, "candidate_context", None), "streamk", None)
+      if streamk is not None:
+        validate = getattr(streamk, "validate", None)
+        if not callable(validate): raise KernelOptError("malformed Stream-K research context")
+        try: validate()
+        except (TypeError, ValueError) as exc: raise KernelOptError(str(exc)) from exc
     try:
       tensor_cores = self.ren.tensor_cores if tc_select == -1 else [self.ren.tensor_cores[tc_select]]
     except IndexError:
