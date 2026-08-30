@@ -1,0 +1,7 @@
+#include "nv_pp512_flash_phase2_kstage.cu"
+#include <cuda_runtime.h>
+#include <cstdio>
+#include <cstdlib>
+#include <vector>
+static void ck(cudaError_t e,const char*s){if(e){fprintf(stderr,"%s:%s\n",s,cudaGetErrorString(e));exit(2);}}
+int main(int ac,char**av){constexpr int D=128,S=512,H=32,K=8,N=S*H*D;std::vector<float>q(N);std::vector<half>k(S*K*D),v(S*K*D);for(int i=0;i<N;i++)q[i]=((i%17)-8)*.01f;for(size_t i=0;i<k.size();i++){k[i]=__float2half(((int)i%11-5)*.01f);v[i]=__float2half(((int)i%13-6)*.01f);}float*dq,*do_;half*dk,*dv;ck(cudaMalloc(&dq,N*4),"q");ck(cudaMalloc(&dk,k.size()*2),"k");ck(cudaMalloc(&dv,v.size()*2),"v");ck(cudaMalloc(&do_,N*4+64),"o");ck(cudaMemcpy(dq,q.data(),N*4,cudaMemcpyHostToDevice),"qc");ck(cudaMemcpy(dk,k.data(),k.size()*2,cudaMemcpyHostToDevice),"kc");ck(cudaMemcpy(dv,v.data(),v.size()*2,cudaMemcpyHostToDevice),"vc");cudaMemset(do_,0,N*4+64);nv_pp512_flash_phase2_kstage<<<dim3(S,H,1),dim3(128)>>>(dq,dk,dv,do_);ck(cudaGetLastError(),"launch");ck(cudaDeviceSynchronize(),"sync");cudaEvent_t a,b;cudaEventCreate(&a);cudaEventCreate(&b);for(int i=0;i<10;i++)nv_pp512_flash_phase2_kstage<<<dim3(S,H,1),dim3(128)>>>(dq,dk,dv,do_);cudaEventRecord(a);for(int i=0;i<20;i++)nv_pp512_flash_phase2_kstage<<<dim3(S,H,1),dim3(128)>>>(dq,dk,dv,do_);cudaEventRecord(b);ck(cudaEventSynchronize(b),"timing");float ms;cudaEventElapsedTime(&ms,a,b);printf("phase2=kstage full_launch_us=%.3f per_layer_us=%.3f\n",ms*1000/20,ms*1000/20/36);return 0;}
