@@ -41,11 +41,12 @@ def metadata_workspace(spec: DS4ProducerSpec = DS4ProducerSpec()):
 def realize_ds4_metadata(x: Tensor, spec: DS4ProducerSpec = DS4ProducerSpec()) -> Tensor:
   """Standard-scheduler stage 1: return aligned fp16 ``(d,sum)`` words."""
   spec.validate()
-  v = x.reshape(spec.M, spec.K//128, 4, 32).cast(dtypes.float32)
-  peak = v.abs().max(axis=3)
+  records = spec.M * (spec.K//128)
+  v = x.reshape(records*4, 32).cast(dtypes.float32)
+  peak = v.abs().max(axis=1)
   d = (peak != 0).where(peak / 127.0, 1.0)
-  sm = v.sum(axis=3)
-  return Tensor.stack(d.cast(dtypes.float16), sm.cast(dtypes.float16), dim=3).reshape(spec.M, spec.K//128, 8).contiguous()
+  sm = v.sum(axis=1)
+  return Tensor.stack(d.cast(dtypes.float16), sm.cast(dtypes.float16), dim=1).reshape(records, 8).contiguous()
 
 def emit_ds4_metadata_stage(spec: DS4ProducerSpec = DS4ProducerSpec()):
   spec.validate()
@@ -70,11 +71,13 @@ def emit_ds4_pack_stage(spec: DS4ProducerSpec = DS4ProducerSpec()):
   def kernel(out: UOp, x: UOp, meta: UOp) -> UOp:
     row, seg = UOp.range(spec.M, 0), UOp.range(spec.K//128, 1)
     word = UOp.range(72, 2)
-    i = (word.maximum(8)-8)*2; subgroup = i//32
+    is_q = word >= 8
+    qword = is_q.where(word-8, 0)
+    i = qword*2; subgroup = i//32
     d = meta[(seg*spec.M + row)*8 + subgroup*2].cast(dtypes.float32)
     base = row*spec.K + seg*128 + i
-    q0 = (x[base].cast(dtypes.float32)/d).round().maximum(-128).minimum(127).cast(dtypes.uint16)
-    q1 = (x[base+1].cast(dtypes.float32)/d).round().maximum(-128).minimum(127).cast(dtypes.uint16)
+    q0 = (x[base].cast(dtypes.float32)/d).round().maximum(-128).minimum(127).cast(dtypes.int16).cast(dtypes.uint16)
+    q1 = (x[base+1].cast(dtypes.float32)/d).round().maximum(-128).minimum(127).cast(dtypes.int16).cast(dtypes.uint16)
     packed = (q0 & 255) | ((q1 & 255) << 8)
     meta_word = meta[(seg*spec.M+row)*8 + (word % 8)].bitcast(dtypes.uint16)
     value = (word < 8).where(meta_word, packed)

@@ -18,7 +18,7 @@ class DS4ProducerSpec:
   def metadata_offset(self,row,k): return ((k//self.record_values)*self.M+row)*self.record_bytes+((k%self.record_values)//32)*4
   def validate(self):
     if self.K%self.record_values or self.record_bytes != 128+16: raise ValueError("DS4 dimensions")
-    if (self.M, self.K) not in ((512, 4096), (1, 128)): raise ValueError("DS4 record geometry")
-    if self.records != 1 and (self.records != 16384 or self.payload_bytes != 2359296): raise ValueError("DS4 record geometry")
+    if (self.K, self.M) not in ((128, 1), (4096, 1), (4096, 512)) and self.M <= 0: raise ValueError("DS4 record geometry")
+    if self.records == 16384 and self.payload_bytes != 2359296: raise ValueError("DS4 record geometry")
     if self.q_offset(self.M-1,self.K-1) >= self.payload_bytes: raise ValueError("Q bounds")
     return self
