@@ -1221,7 +1221,17 @@ class TransformerBlock(FFNBlock):
     # uses it because its wrapped write slot is not a logical context length.
     _o_q8 = None
     _o_q8_fine = False
-    if _should_use_flash_attention(_ring_freqs, start_pos, T, getattr(self, "_use_flash", False)):
+    if getenv("NV_LLAMA_FATTN_MMA_PP512", getenv("NV_LLAMA_FULL_PACKED_PP512", 1)) and Device.DEFAULT == "NV" and _ring_freqs is None and not _ring_full and \
+       not self.config.kv_quant and isinstance(start_pos, int) and start_pos == 0 and isinstance(B, int) and B == 1 and \
+       isinstance(T, int) and T == 512 and self.config.n_heads == 32 and self.config.n_kv_heads == 8 and \
+       self.config.head_dim == 128 and mask is not None:
+      # Exact llama whole-tile MMA boundary. The binding owns its output and
+      # records the native launch in the graph; every other shape stays on the
+      # established attention route.
+      from extra.llm_research.prefill.nv_llama_fattn_mma_pp512_binding import project
+      attn = project(q.contiguous(), k.cast(dtypes.float16).contiguous(), v.cast(dtypes.float16).contiguous(),
+                     mask.cast(dtypes.float16).contiguous()).cast(q.dtype)
+    elif _should_use_flash_attention(_ring_freqs, start_pos, T, getattr(self, "_use_flash", False)):
       Hq, Hkv, Hd = self.config.n_heads, self.config.n_kv_heads, self.config.head_dim
       _flash_geom = getattr(self, "_flash_decode_tile_geometry_lease", None)
       _o_q8_fine = bool((_flash_geom or {}).get("o_q8_fine_owned",False))

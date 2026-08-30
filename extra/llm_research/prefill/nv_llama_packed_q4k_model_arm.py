@@ -73,6 +73,7 @@ def main():
   qkv=promoted or bool(os.environ.get("NV_LLAMA_PACKED_QKV_PP512"));oproj=promoted or bool(os.environ.get("NV_LLAMA_PACKED_O_PP512"))
   gate_epi=bool(os.environ.get("NV_LLAMA_PACKED_GATE_UP_EPILOGUE_PP512"))
   compiler_o=bool(os.environ.get("NV_COMPILER_Q4_IMMA_O_PP512"))
+  flash_mma=os.environ.get("NV_LLAMA_FATTN_MMA_PP512",os.environ.get("NV_LLAMA_FULL_PACKED_PP512","1")) not in ("", "0")
   q4_main_total=sum(v for k,v in names.items() if k.startswith("_Z15dense_mul_mat_qIL9ggml_type12"))
   q4_fixup_total=sum(v for k,v in names.items() if k.startswith("_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12"))
   census={"producer":names.get("q8_ds4_fp16_pp512",0),
@@ -85,7 +86,8 @@ def main():
           "qkv_d4_producer":names.get("q8_d4_fp16_qkv_pp512",0),
           "o_producer":names.get("q8_ds4_fp16_o_pp512",0),
           "compiler_o_producer":names.get("q8_compact_record_fp16",0),
-          "gate_up_epilogue":names.get("nv_llama_gate_up_silu_mul_fp16",0)}
+          "gate_up_epilogue":names.get("nv_llama_gate_up_silu_mul_fp16",0),
+          "flash_mma_pp512":names.get("nv_llama_fattn_mma_pp512",0)}
   replay={"finite":bool(np.isfinite(a1[1]).all()),"same_activation_exact":bool(a0[0]==a1[0] and np.array_equal(a0[1],a1[1])),
           "distinct_activation_output":bool(a1[0]!=b[0] or not np.array_equal(a1[1],b[1]))}
   last_q6=final_row_prune and last_down_name=="Q6KPrimitiveLinear";last_q4=final_row_prune and last_down_name=="Q4KPrimitiveLinear"
@@ -93,7 +95,8 @@ def main():
     72+(18 if q4d else 0)+(90 if qkv else 0)+(36 if oproj and not compiler_o else 0)-2*int(final_row_prune)-int(last_q4),
     (18 if q6 else 0)-int(last_q6),(18 if q6 else 0)+(18 if qkv else 0)-int(last_q6),
     (18 if q6 else 0)+(18 if qkv else 0)-int(last_q6),(18 if q4d else 0)-int(last_q4),
-    36 if qkv else 0,18 if qkv else 0,36 if oproj and not compiler_o else 0,36 if compiler_o else 0,36 if gate_epi else 0) if a.arm=="candidate" else (0,)*12
+    36 if qkv else 0,18 if qkv else 0,36 if oproj and not compiler_o else 0,36 if compiler_o else 0,36 if gate_epi else 0,
+    36 if flash_mma else 0) if a.arm=="candidate" else (0,)*13
   passed=all(replay.values()) and tuple(census.values())==expected
   payload={"schema":"tinygrad.nv_llama_packed_q4k_model_arm.v1","arm":a.arm,"status":"PASS" if passed else "FAIL","token":a1[0],
            "final_row_prune":{"enabled":final_row_prune,"requested_row":511 if final_row_prune else None,"last_down_type":last_down_name},

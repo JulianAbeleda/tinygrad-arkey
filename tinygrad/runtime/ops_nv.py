@@ -190,6 +190,13 @@ class NVComputeQueue(NVCommandQueue):
   def exec(self, prg:NVProgram, args_state:NVArgsState, global_size:tuple[sint, ...], local_size:tuple[sint, ...]):
     self.bind_args_state(args_state)
 
+    # CUDA's Blackwell ABI reads blockDim.{x,y,z} and gridDim.{x,y,z} from cbuf0
+    # words 216..218 and 220..222. QMD fields schedule the CTAs and threads but
+    # do not populate those CUDA builtins.
+    if prg.cbuf_0 and prg.dev.iface.compute_class >= nv_gpu.BLACKWELL_COMPUTE_A:
+      self.bind_sints_to_mem(*local_size, mem=args_state.buf.cpu_view(), fmt='I', offset=216*4)
+      self.bind_sints_to_mem(*global_size, mem=args_state.buf.cpu_view(), fmt='I', offset=220*4)
+
     qmd_buf = args_state.buf.offset(round_up(prg.constbufs[0][1], 1 << 8))
     qmd_buf.cpu_view().view(size=prg.qmd.mv.nbytes, fmt='B')[:] = prg.qmd.mv
     assert qmd_buf.va_addr < (1 << 40), f"large qmd addr {qmd_buf.va_addr:x}"
