@@ -17,6 +17,7 @@ from tinygrad.codegen.opt.packed_weight import (PackedWeightTransform, Q6KInt8Fr
 from tinygrad.codegen.opt.postrange import warmstart_candidate_state, warmstart_key
 from tinygrad.uop.ops import Ops
 from extra.llm_research.kernel_vocabulary import KernelLDSWindow, KernelTileGeometry
+from extra.llm_research.prefill.nv_compiler_streamk_codegen import q6_down_candidate_context
 
 TILE_K = 64
 
@@ -32,6 +33,7 @@ class _Context:
   packed_activation_provider: Q8Int8FragmentProvider
   group_accumulator: Q6KQ8SubgroupAccumulatorContract
   pipeline: None = None
+  streamk: object|None = None
 
 
 def _context(m:int,n:int,k:int,tm:int,tn:int,wm:int,wn:int,threads:int):
@@ -42,7 +44,8 @@ def _context(m:int,n:int,k:int,tm:int,tn:int,wm:int,wn:int,threads:int):
   geometry=KernelTileGeometry((tm,tn,TILE_K),(wm,wn),threads,32,
     (KernelLDSWindow("A",0,tm*stride,stride),KernelLDSWindow("B",tm*stride,(tm+tn)*stride,stride)))
   identity=hashlib.sha256(repr((geometry,wp.identity,ap.identity,accumulator.abi)).encode()).hexdigest()
-  return wt,at,identity,_Context("boltbeam.full_kernel_candidate.v1",identity,geometry,wt,wp,at,ap,accumulator)
+  streamk = q6_down_candidate_context() if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1" else None
+  return wt,at,identity,_Context("boltbeam.full_kernel_candidate.v1",identity,geometry,wt,wp,at,ap,accumulator,streamk=streamk)
 
 
 def _weight_carrier(halfs:Tensor,t:PackedWeightTransform) -> Tensor:

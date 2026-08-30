@@ -466,13 +466,14 @@ def nv_sm120_q16_grid_hd128_cooperative_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_
   else:
     mi=UOp.group(*wr(mreg,"m",UOp.const(dtypes.float.vec(8),(-float("inf"),)*8),a="init")); li=UOp.group(*wr(lreg,"l",zero,a="init"))
   ci=UOp.group(*(x for b in range(acc_blocks) for x in wr(creg,"acc",zero,b,b*8,"init")))
+  import os
   from tinygrad.uop.ops import CooperativeTileLoadSpec
   from tinygrad.renderer.isa.amd_attention_abi import lower_cooperative_tile_load
   tile_base=rng*UOp.const(dtypes.weakint,16*head_dim)
-  k_shared=lower_cooperative_tile_load(UOp.cooperative_tile_load(k,tile_base,CooperativeTileLoadSpec(tile_base=tile_base,loop_axis=rng)))
-  v_shared=lower_cooperative_tile_load(UOp.cooperative_tile_load(v,tile_base,CooperativeTileLoadSpec(tile_base=tile_base,loop_axis=rng)))
+  k_shared=lower_cooperative_tile_load(UOp.cooperative_tile_load(k,tile_base,CooperativeTileLoadSpec(tile_base=tile_base,loop_axis=rng))) if os.getenv("NV2C_K_STAGE", os.getenv("NV2C_K", "1")) == "1" else k
+  v_shared=lower_cooperative_tile_load(UOp.cooperative_tile_load(v,tile_base,CooperativeTileLoadSpec(tile_base=tile_base,loop_axis=rng))) if os.getenv("NV2C_V", "1") == "1" else v
   def rd(reg,init,role,b=0,o=0,final=False): return loop_state_read(reg, init, rng, role=role, owner=9604, block=b, final=final)
-  def fr(owner,role,b,call=0): return packed_fragment_load(k_shared if role=="K" else v_shared if role=="V" else owner, role=role, head_block=b, grid=grid, lane=lane, col=col, rng=rng, group=group, call=call, fragment_model=fragment_model, physical_local_size=32*warps_per_cta)
+  def fr(owner,role,b,call=0): return packed_fragment_load(k_shared if role=="K" and os.getenv("NV2C_K_CONSUME", os.getenv("NV2C_K", "1")) == "1" else v_shared if role=="V" and os.getenv("NV2C_V", "1") == "1" else owner, role=role, head_block=b, grid=grid, lane=lane, col=col, rng=rng, group=group, call=call, fragment_model=fragment_model, physical_local_size=32*warps_per_cta)
   if not phase_abi_v1: om,ol=rd(mreg,mi,"m"),rd(lreg,li,"l")
   qk=zero_wmma
   for b in range(hd_blocks):

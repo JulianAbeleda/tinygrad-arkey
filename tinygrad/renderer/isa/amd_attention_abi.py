@@ -204,7 +204,10 @@ def expand_loop_fragment(x:UOp) -> UOp:
     if role not in {"K", "V"}: raise ValueError("shared packed fragments currently require K/V role")
     if model is not None:
       lanes=model.fragment_lanes(role)
-      offs=tuple((model.operand_k(1,i,lane)*128 + block*16 + model.operand_row(1,0,lane)) for i in range(lanes))
+      if role == "K":
+        offs=tuple((model.operand_row(1,0,lane)*128 + block*16 + model.operand_k(1,i,lane)) for i in range(lanes))
+      else:
+        offs=tuple((model.operand_k(1,i,lane)*128 + block*16 + model.operand_row(1,0,lane)) for i in range(lanes))
     else:
       offs=tuple(col*128 + block*16+i for i in range(16))
     return UOp(Ops.STACK,dtypes.half.vec(model.fragment_lanes(role) if model is not None else 16),

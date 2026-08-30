@@ -81,6 +81,36 @@ class StreamKWork:
   def direct_store(self) -> bool: return not self.partial
 
 
+@dataclass(frozen=True)
+class MappedLogicalRange:
+  """Expression-level carrier separating physical launch coordinates from logical TC coordinates."""
+  geometry: StreamKGeometry
+
+  def logical(self, owner: int, serial: int) -> StreamKWork:
+    start, end = self.geometry.interval(owner)
+    physical = start + serial
+    if physical < start or physical >= end: raise IndexError((owner, serial))
+    tile, kb = divmod(physical, self.geometry.k_blocks)
+    return StreamKWork(owner, tile, kb, kb + 1,
+      physical == start and start % self.geometry.k_blocks != 0,
+      physical + 1 == end and end % self.geometry.k_blocks != 0)
+
+  def owner_serials(self, owner: int) -> tuple[int, ...]:
+    start, end = self.geometry.interval(owner)
+    return tuple(range(end - start))
+
+  def logical_uops(self, owner: "UOp", serial: "UOp") -> tuple["UOp", "UOp"]:
+    """Return expression-backed ``(output_tile, k_block)`` carriers.
+
+    The owner/serial ranges stay physical launch axes; consumers such as packed
+    operand address builders use these carriers and therefore retain their
+    logical tile coordinates.  No RANGE is created or rewritten here.
+    """
+    if not isinstance(owner, UOp) or not isinstance(serial, UOp): raise TypeError("logical carriers require UOp expressions")
+    work = owner * self.geometry.work_units // self.geometry.owners + serial
+    return work // self.geometry.k_blocks, work % self.geometry.k_blocks
+
+
 Q4_STREAMK = StreamKGeometry("q4", 512, 12288, 4096, 128, 128, 64)
 Q6_DOWN_STREAMK = StreamKGeometry("q6_down", 512, 4096, 12288, 64, 32, 64)
 
@@ -100,6 +130,12 @@ class StreamKCandidateContext:
 
   @property
   def partial_slots(self) -> int: return 2 * self.schedule.owners
+
+  def validate(self) -> "StreamKCandidateContext":
+    self.schedule.validate()
+    if self.main_grid[0] != self.schedule.owners or self.fixup_grid[0] <= 0:
+      raise ValueError("invalid Stream-K launch grids")
+    return self
 
   def fixup_map(self) -> tuple[int, ...]:
     """Deterministic output-tile ownership map, one entry per output tile."""
@@ -225,6 +261,26 @@ def execute_synthetic_three_stage(*, device: str = "CPU") -> dict[str, Any]:
           "grids": {"producer": (170, 1, 1), "main": (170, 1, 1), "fixup": (1024, 1, 1)},
           "workspace": {"owners": 170, "tiles": geom.output_tiles, "elements": 170 * geom.output_tiles},
           "split_partials": split, "nonzero": bool(np.count_nonzero(got)), "exact": exact}
+
+
+def adapt_precontract_operands(operands: tuple[Any, ...], output_tile: UOp, k_block: UOp) -> tuple[Any, ...]:
+  """Research-only packed-template adapter for logical Stream-K coordinates.
+
+  ``owner``/``serial`` remain physical ranges in the enclosing program.  This
+  entry point accepts their derived logical carriers and updates only packed
+  operand tile/K bases, preserving the candidate contract and WMMA axes.
+  """
+  if not isinstance(output_tile, UOp) or not isinstance(k_block, UOp):
+    raise TypeError("logical packed coordinates must be UOp expressions")
+  from tinygrad.codegen.opt.kernel_lds import PackedPrecontractOperandTemplate
+  out = []
+  for operand in operands:
+    if isinstance(operand, PackedPrecontractOperandTemplate):
+      out.append(operand.__class__(operand.role, operand.source, operand.transform,
+        operand.row_axis, k_block, output_tile, operand.fragment_provider))
+    else:
+      out.append(operand)
+  return tuple(out)
 
 
 def program_census(program: UOp) -> dict[str, Any]:

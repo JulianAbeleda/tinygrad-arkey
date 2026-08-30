@@ -69,14 +69,16 @@ def emit_ds4_pack_stage(spec: DS4ProducerSpec = DS4ProducerSpec()):
   spec.validate()
   def kernel(out: UOp, x: UOp, meta: UOp) -> UOp:
     row, seg = UOp.range(spec.M, 0), UOp.range(spec.K//128, 1)
-    word = UOp.range(64, 2)
-    i = word*2; subgroup = i//32
+    word = UOp.range(72, 2)
+    i = (word.maximum(8)-8)*2; subgroup = i//32
     d = meta[(seg*spec.M + row)*8 + subgroup*2].cast(dtypes.float32)
     base = row*spec.K + seg*128 + i
     q0 = (x[base].cast(dtypes.float32)/d).round().maximum(-128).minimum(127).cast(dtypes.uint16)
     q1 = (x[base+1].cast(dtypes.float32)/d).round().maximum(-128).minimum(127).cast(dtypes.uint16)
     packed = (q0 & 255) | ((q1 & 255) << 8)
-    return out[(seg*spec.M+row)*72 + 8 + word].store(packed).end(row,seg,word).sink(
+    meta_word = meta[(seg*spec.M+row)*8 + (word % 8)].bitcast(dtypes.uint16)
+    value = (word < 8).where(meta_word, packed)
+    return out[(seg*spec.M+row)*72 + word].store(value).end(row,seg,word).sink(
       arg=KernelInfo(name="q8_ds4_pack_stage", opts_to_apply=()))
   return kernel
 
@@ -133,4 +135,4 @@ def emit_ds4_q8_producer(spec: DS4ProducerSpec = DS4ProducerSpec()):
     return body.sink(arg=KernelInfo(name="q8_ds4_native_scheduler", opts_to_apply=()))
   return kernel
 
-__all__ = ["NativeDS4Schedule", "DS4MetadataWorkspace", "metadata_workspace", "SCHEDULE", "cpu_pack_ds4", "emit_ds4_q8_producer", "emit_ds4_metadata_stage", "emit_ds4_pack_stage"]
+__all__ = ["NativeDS4Schedule", "DS4MetadataWorkspace", "metadata_workspace", "realize_ds4_metadata", "SCHEDULE", "cpu_pack_ds4", "emit_ds4_q8_producer", "emit_ds4_metadata_stage", "emit_ds4_pack_stage"]
