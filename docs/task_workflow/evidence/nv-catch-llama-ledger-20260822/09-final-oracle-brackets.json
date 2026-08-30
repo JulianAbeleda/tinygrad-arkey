@@ -1,0 +1,30 @@
+{
+  "schema": "tinygrad.nv_catch_llama_ledger.final_oracle_brackets.v1",
+  "phase": 5,
+  "status": "COMPLETE",
+  "orientation_note": "tinygrad control A -> tinygrad split-phase candidate -> tinygrad control B -> llama control A -> llama control B; all arms were fresh processes under the same /tmp/gpu-bench.lock",
+  "tinygrad": {
+    "control_a_us": 4720.4377,
+    "candidate_us": 4735.0832,
+    "control_b_us": 4774.6222,
+    "control_median_us": 4747.5300,
+    "control_mad_us": 27.0922,
+    "token_sha256": "dbd3026bb808fd57a5c7466963b0309168ee3d5ca58ccaf829cacdea9e0d491b"
+  },
+  "llama": {
+    "control_a_us": 4035.8020,
+    "control_b_us": 4032.2071,
+    "control_median_us": 4034.0045,
+    "control_mad_us": 1.7975,
+    "binary_sha256": "947eb29052871f151719762c2fc265024e14f833b98df7801af9eb09da1625a8"
+  },
+  "final_delta_us": {
+    "control_median_minus_llama_median": 713.5255,
+    "candidate_minus_llama_median": 701.0787,
+    "acceptance_condition_4_threshold_us": 10.0
+  },
+  "verdict": "NEED_MORE_INFO",
+  "caught_llama": false,
+  "parity_only": false,
+  "reason": "tinygrad remains 713.5us slower than the same-session llama median; the split-phase concurrency candidate is wall-neutral and was removed, so the production stack is unchanged"
+}

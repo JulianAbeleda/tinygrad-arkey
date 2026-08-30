@@ -1,0 +1,72 @@
+{
+  "arm": "control_a",
+  "count": 12,
+  "depth": 512,
+  "fast_math_policy": null,
+  "max_context": 1024,
+  "profile_jsonl": "docs/task_workflow/evidence/nv-flash-fast-math/profile-control-a.jsonl",
+  "profile_summary": {
+    "complete_replay_count": 64,
+    "flash_rows": {
+      "flash_fused_gmax_combine_f16_32_128_s8_lw128": {
+        "mean_us": 50.09,
+        "median_us": 50.08,
+        "per_replay_count": 36,
+        "replay_samples": 61
+      },
+      "flash_vec_llama_score_pv_32_128_8_widekv16": {
+        "mean_us": 222.618,
+        "median_us": 222.656,
+        "per_replay_count": 36,
+        "replay_samples": 61
+      }
+    },
+    "ledger": {
+      "node_sum_us": 3951.712,
+      "overlap_us": 0.1,
+      "span_us": 4777.5,
+      "union_us": 3952.25
+    },
+    "steady_replay_count": 61
+  },
+  "reps": 5,
+  "schema": "tinygrad.nv_flash_fast_math_wall.v1",
+  "settled": {
+    "accepted_samples_ms_per_token": [
+      5.299446583333333,
+      5.354227083333333,
+      5.343577083333333,
+      5.35063775
+    ],
+    "external_contention_high_limit_ms": 5.60063775,
+    "median_ms_per_token": 5.347107416666667,
+    "prelude_token": 13876,
+    "rejected_high_samples_ms_per_token": [
+      38.225620166666666
+    ],
+    "samples_ms_per_token": [
+      38.225620166666666,
+      5.299446583333333,
+      5.354227083333333,
+      5.343577083333333,
+      5.35063775
+    ],
+    "timed_token_count": 60,
+    "token_hashes": [
+      "f7cf348f26306df073f3f6360dc83e9369e5c97096f383d6f08d1a930b66ec19",
+      "f7cf348f26306df073f3f6360dc83e9369e5c97096f383d6f08d1a930b66ec19",
+      "f7cf348f26306df073f3f6360dc83e9369e5c97096f383d6f08d1a930b66ec19",
+      "f7cf348f26306df073f3f6360dc83e9369e5c97096f383d6f08d1a930b66ec19",
+      "f7cf348f26306df073f3f6360dc83e9369e5c97096f383d6f08d1a930b66ec19"
+    ],
+    "token_stream_hash": "6700c07ac628c8d6758a1b16144602fe55b82feae49741c4a3133ab10a091aa6",
+    "warmup_tokens": [
+      38835,
+      34208,
+      13,
+      279,
+      3974,
+      13876
+    ]
+  }
+}

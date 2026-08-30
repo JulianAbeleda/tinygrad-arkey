@@ -1,0 +1,11 @@
+{
+  "captured": [],
+  "depth": 512,
+  "max_context": 1024,
+  "note": "no production NVProgram matched the prefixes",
+  "prefixes": [
+    "flash_vec_llama_score_pv_32_128_6_widekv16_vtail1"
+  ],
+  "schema": "tinygrad.nv_cubin_capture.v1",
+  "verdict": "NO_MATCH"
+}

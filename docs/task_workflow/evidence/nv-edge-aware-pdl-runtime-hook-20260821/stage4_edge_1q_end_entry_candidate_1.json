@@ -1,0 +1,182 @@
+{
+  "arm": "edge_1q_end_entry",
+  "bracket_index": 1,
+  "bracket_wall_s": {
+    "label": "observed",
+    "value": 129.38
+  },
+  "census": {
+    "by_graph_size": {
+      "32": {
+        "candidate_armed": 2,
+        "graphs": 2,
+        "reasons": {
+          "adjacency": 24,
+          "alias_rejected": 3,
+          "candidate_armed": 2,
+          "multi_consumer_fallback": 4,
+          "multi_producer_fallback": 5,
+          "non_raw": 15
+        },
+        "rows": 53
+      },
+      "64": {
+        "candidate_armed": 11,
+        "graphs": 2,
+        "reasons": {
+          "adjacency": 91,
+          "alias_rejected": 14,
+          "candidate_armed": 11,
+          "multi_consumer_fallback": 18,
+          "multi_producer_fallback": 34,
+          "non_raw": 121
+        },
+        "rows": 289
+      },
+      "116": {
+        "candidate_armed": 21,
+        "graphs": 1,
+        "reasons": {
+          "adjacency": 78,
+          "alias_rejected": 15,
+          "candidate_armed": 21,
+          "multi_consumer_fallback": 15,
+          "multi_producer_fallback": 22,
+          "non_raw": 104
+        },
+        "rows": 255
+      },
+      "128": {
+        "candidate_armed": 28,
+        "graphs": 2,
+        "reasons": {
+          "adjacency": 190,
+          "alias_rejected": 23,
+          "candidate_armed": 28,
+          "multi_consumer_fallback": 40,
+          "multi_producer_fallback": 75,
+          "non_raw": 266
+        },
+        "rows": 622
+      },
+      "256": {
+        "candidate_armed": 58,
+        "graphs": 2,
+        "reasons": {
+          "adjacency": 386,
+          "alias_rejected": 44,
+          "candidate_armed": 58,
+          "multi_consumer_fallback": 87,
+          "multi_producer_fallback": 157,
+          "non_raw": 645
+        },
+        "rows": 1377
+      },
+      "394": {
+        "candidate_armed": 38,
+        "graphs": 1,
+        "reasons": {
+          "adjacency": 301,
+          "alias_rejected": 19,
+          "candidate_armed": 38,
+          "multi_consumer_fallback": 84,
+          "multi_producer_fallback": 169,
+          "non_raw": 740
+        },
+        "rows": 1351
+      }
+    },
+    "payloads": 10,
+    "total_candidate_armed": 158
+  },
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "date": "2026-08-21",
+  "depth": 512,
+  "device": "NV",
+  "env": {
+    "DEV": "NV",
+    "GRAPH_ONE_KERNEL": "",
+    "HCQ_GRAPH_PROFILE_JSON": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-edge-aware-pdl-runtime-hook-20260821/stage4_edge_1q_end_entry_candidate_1.profile.jsonl",
+    "HCQ_NUM_COMPUTE": "1",
+    "JIT_BATCH_SIZE": "",
+    "NV_PDL_CONSUMER_PROGRAMS": "",
+    "NV_PDL_LATCH_ID": "",
+    "NV_PDL_PRODUCER_PROGRAMS": "",
+    "NV_PDL_TRIGGER_POSITION": "",
+    "NV_SPLIT_PHASE": "1",
+    "NV_SPLIT_PHASE_CENSUS_JSON": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-edge-aware-pdl-runtime-hook-20260821/stage4_edge_1q_end_entry_candidate_1.census.jsonl",
+    "NV_SPLIT_PHASE_CENSUS_ONLY": "",
+    "NV_SPLIT_PHASE_LATCH_BASE": "",
+    "NV_SPLIT_PHASE_LATCH_COUNT": "",
+    "NV_SPLIT_PHASE_POLICY": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-edge-aware-pdl-runtime-hook-20260821/stage4_policy_edge_1q_end_entry.json",
+    "NV_SPLIT_PHASE_TRIGGER_POLICY": "end",
+    "NV_SPLIT_PHASE_WAIT_POSITION": "entry",
+    "NV_STAGE4_LOCK_SESSION": "1787323145-484715c16795",
+    "PROFILE": "1"
+  },
+  "graph_group_signature": [
+    32,
+    64,
+    128,
+    256,
+    116
+  ],
+  "ledger": {
+    "dead_device_time_us": {
+      "label": "observed",
+      "value": 1327.0
+    },
+    "node_count": {
+      "label": "observed",
+      "value": 596
+    },
+    "node_sum_us": {
+      "label": "observed",
+      "value": 4526.5
+    },
+    "overlap_mass_us": {
+      "label": "observed",
+      "value": 0.0
+    },
+    "span_us": {
+      "label": "observed",
+      "value": 5853.5
+    },
+    "union_us": {
+      "label": "observed",
+      "value": 4526.5
+    }
+  },
+  "lock": {
+    "child_pid": 2253666,
+    "session_id": "1787323145-484715c16795"
+  },
+  "max_context": 1024,
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "profile_records_total": 100,
+  "role": "candidate",
+  "s1": {
+    "layers": 36,
+    "note": null,
+    "s1_exposure_us": {
+      "label": "observed",
+      "value": 2233.5
+    },
+    "s1_positive_us": {
+      "label": "observed",
+      "value": 2233.5
+    }
+  },
+  "schema": "tinygrad.nv_edge_aware_pdl_stage4_endpoint.v1",
+  "timeline_node_count": 596,
+  "token_count": {
+    "label": "observed",
+    "value": 9
+  },
+  "token_sha256": "323f407295a70421c78d02bb0954c20dffc76a0020ce52f7bdba0e0901ba8332",
+  "wall_note": "PROFILE=1 instrumentation tax included; not an unprofiled token wall",
+  "wall_us": {
+    "label": "observed",
+    "value": 7119.827
+  }
+}

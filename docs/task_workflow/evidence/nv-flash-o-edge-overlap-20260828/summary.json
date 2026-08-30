@@ -1,0 +1,60 @@
+{
+  "schema": "tinygrad.nv_flash_o_edge_overlap.v1",
+  "date": "2026-08-28",
+  "llama": {
+    "source": "docs/task_workflow/evidence/nv-llama-useful-body-h1-20260821/h1-full-sampling-capture.sqlite plus its nine retained device-ring dumps",
+    "steady_replays": 7,
+    "layer_edges": 252,
+    "medians_us": {
+      "score_body": 5.152,
+      "combine_launch_ahead_vs_score_end": 4.673,
+      "combine_wait_exit_minus_score_end": -0.210,
+      "combine_post_wait_body": [1.563, 1.589],
+      "o_quant_launch_ahead_vs_combine_end": 5.664,
+      "o_quant_wait_exit_minus_combine_end": -0.2055,
+      "o_quant_post_wait_body": 1.014,
+      "o_gemv_launch_ahead_vs_quant_end": 6.048,
+      "o_gemv_earliest_wait_exit_minus_flash_combine_end": 0.584,
+      "o_gemv_latest_wait_exit_minus_flash_combine_end": 5.304,
+      "o_gemv_post_wait_body": [2.760, 7.531]
+    },
+    "distribution_us": {
+      "o_gemv_earliest_wait_exit_minus_flash_combine_end": {
+        "p10": 0.440,
+        "median": 0.584,
+        "p90": 0.726,
+        "negative_edges": 0,
+        "edges": 252
+      },
+      "o_quant_wait_exit_minus_combine_end": {
+        "p10": -0.339,
+        "median": -0.2055,
+        "p90": -0.062,
+        "negative_edges": 248,
+        "edges": 252
+      }
+    }
+  },
+  "tinygrad": {
+    "source": "docs/task_workflow/evidence/nv-post-membar-full-ledger-20260827/device-ledger/production.profile.jsonl",
+    "layer_edges": 8910,
+    "medians_us": {
+      "score_body": 5.120,
+      "combine_body": 1.088,
+      "o_body": 8.224,
+      "score_to_combine_gap": 0.0,
+      "combine_to_o_gap": 0.0
+    },
+    "gap_distribution_us": {
+      "score_to_combine": {"p10": 0.0, "median": 0.0, "p90": 0.0},
+      "combine_to_o": {"p10": 0.0, "median": 0.0, "p90": 0.0}
+    }
+  },
+  "verdict": {
+    "llama_o_gemv_usefully_overlaps_flash": false,
+    "tinygrad_has_flash_to_o_dispatch_bubble": false,
+    "transferable_llama_mechanism": "launch residency and dependency-wait shadow, not concurrent Flash and O weight-streaming work",
+    "remaining_exact_overlap_scope": "approximately 0.21 us/layer at the score/combine and combine/quant tails; tinygrad has no O-quant kernel",
+    "production_recovery_booked_us": 0.0
+  }
+}

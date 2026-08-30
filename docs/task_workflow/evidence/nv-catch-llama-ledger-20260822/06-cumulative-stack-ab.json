@@ -1,0 +1,30 @@
+{
+  "schema": "tinygrad.nv_catch_llama_ledger.cumulative_stack_ab.v1",
+  "phase": 5,
+  "status": "COMPLETE",
+  "rule": "S0 = fresh production control; S1 = S0 plus the only concurrency candidate built this session; a neutral or negative stack step is removed",
+  "stacks": [
+    {
+      "id": "S0",
+      "description": "fresh production control, DEV=NV flash route, d512",
+      "wall_us": 4747.530,
+      "wall_source": "median of phase5/control-A.json 4720.438 and phase5/control-B.json 4774.622",
+      "token_sha256_identical": true
+    },
+    {
+      "id": "S1",
+      "description": "S0 + NV_SPLIT_PHASE=1 edge-aware PDL arm, trigger=end, wait=entry, 2 queues",
+      "wall_us": 4735.083,
+      "incremental_stack_gain_us": -12.447,
+      "interaction_us": 0.0,
+      "interaction_note": "individual gain is measured against the control bracket median, so the single-step interaction is zero by construction",
+      "verdict": "WALL_NEUTRAL",
+      "promoted": false,
+      "reason": "not faster than control A (4720.438), so the candidate fails the per-control rule and is removed"
+    }
+  ],
+  "final_stack": "S0",
+  "final_candidate_wall_us": 4747.530,
+  "cumulative_gain_us": 0.0,
+  "note": "no production route change was promoted; the dirty split-phase scaffolding remains default-off and was not enabled for the final production control"
+}

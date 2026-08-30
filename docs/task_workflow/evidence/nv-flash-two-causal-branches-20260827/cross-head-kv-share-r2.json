@@ -1,0 +1,215 @@
+{
+  "device": "NV",
+  "exact": {
+    "qg1_control": {
+      "bitwise_equal_to_qg1": true,
+      "max_abs_delta": 0.0,
+      "mismatched_fp16_words": 0,
+      "sha256": "e79ba9fa860dc8df4c5dc2e8a762a8c80ec8c2858fe3e2815da41abfd6de29ed"
+    },
+    "qg2_control": {
+      "bitwise_equal_to_qg1": true,
+      "max_abs_delta": 0.0,
+      "mismatched_fp16_words": 0,
+      "sha256": "e79ba9fa860dc8df4c5dc2e8a762a8c80ec8c2858fe3e2815da41abfd6de29ed"
+    },
+    "qg2_shared": {
+      "bitwise_equal_to_qg1": true,
+      "max_abs_delta": 0.0,
+      "mismatched_fp16_words": 0,
+      "sha256": "e79ba9fa860dc8df4c5dc2e8a762a8c80ec8c2858fe3e2815da41abfd6de29ed"
+    },
+    "qg4_control": {
+      "bitwise_equal_to_qg1": false,
+      "max_abs_delta": 9.5367431640625e-07,
+      "mismatched_fp16_words": 1,
+      "sha256": "ffcee361af50f582909c2a4671fc35f131fe4f536bc185ee19616a2376e22a28"
+    },
+    "qg4_shared": {
+      "bitwise_equal_to_qg1": false,
+      "max_abs_delta": 9.5367431640625e-07,
+      "mismatched_fp16_words": 1,
+      "sha256": "ffcee361af50f582909c2a4671fc35f131fe4f536bc185ee19616a2376e22a28"
+    }
+  },
+  "geometry": {
+    "qg1_control": {
+      "ctas": 192,
+      "global_kv_request_fraction_vs_control": 1.0,
+      "query_group_size": 1,
+      "split_count": 6,
+      "warps": 768
+    },
+    "qg2_control": {
+      "ctas": 192,
+      "global_kv_request_fraction_vs_control": 1.0,
+      "query_group_size": 2,
+      "split_count": 12,
+      "warps": 768
+    },
+    "qg2_shared": {
+      "ctas": 192,
+      "global_kv_request_fraction_vs_control": 0.5,
+      "query_group_size": 2,
+      "split_count": 12,
+      "warps": 768
+    },
+    "qg4_control": {
+      "ctas": 192,
+      "global_kv_request_fraction_vs_control": 1.0,
+      "query_group_size": 4,
+      "split_count": 24,
+      "warps": 768
+    },
+    "qg4_shared": {
+      "ctas": 192,
+      "global_kv_request_fraction_vs_control": 0.25,
+      "query_group_size": 4,
+      "split_count": 24,
+      "warps": 768
+    }
+  },
+  "passing_query_groups": [
+    2
+  ],
+  "schema": "tinygrad.nv_flash_cross_head_kv_share_microgate.v1",
+  "shape": {
+    "hd": 128,
+    "hkv": 8,
+    "hq": 32,
+    "max_context": 1024,
+    "tc": 641,
+    "token_bound": 768
+  },
+  "timing": {
+    "medians": {
+      "qg2_control": 86.683273,
+      "qg2_shared": 85.20538775,
+      "qg4_control": 85.43363649999999,
+      "qg4_shared": 85.23122125
+    },
+    "replays": 2000,
+    "reps": 11,
+    "samples": {
+      "qg1_control": [],
+      "qg2_control": [
+        [
+          86.4847695,
+          84.410615,
+          85.396515,
+          87.610046,
+          87.1270315,
+          84.0035315,
+          86.577874,
+          87.62039250000001,
+          87.173382,
+          86.429537,
+          86.1980585
+        ],
+        [
+          86.8917245,
+          86.8817765,
+          87.3746345,
+          86.9772645,
+          83.4514825,
+          86.6914045,
+          86.479365,
+          83.9805075,
+          84.7594455,
+          87.0655735,
+          87.22104399999999
+        ]
+      ],
+      "qg2_shared": [
+        [
+          79.72397199999999,
+          80.0162885,
+          84.86594000000001,
+          84.1740425,
+          81.679867,
+          83.415357,
+          85.87263899999999,
+          86.739653,
+          83.65291599999999,
+          87.0568045,
+          87.52596550000001
+        ],
+        [
+          81.77844449999999,
+          85.996439,
+          86.494876,
+          86.69571499999999,
+          86.23673299999999,
+          83.12543550000001,
+          82.30016499999999,
+          84.571065,
+          86.455314,
+          86.68233900000001,
+          86.523617
+        ]
+      ],
+      "qg4_control": [
+        [
+          87.28554150000001,
+          85.5962545,
+          86.8365575,
+          86.0185015,
+          85.496344,
+          83.444913,
+          81.09383349999999,
+          85.6554445,
+          85.60366099999999,
+          85.7017585,
+          85.583645
+        ],
+        [
+          86.51686,
+          86.3746975,
+          83.805723,
+          80.73215450000001,
+          85.67970050000001,
+          85.321993,
+          85.104439,
+          85.2582225,
+          85.263612,
+          85.3716675,
+          85.2260885
+        ]
+      ],
+      "qg4_shared": [
+        [
+          85.86331,
+          81.5502455,
+          80.662774,
+          82.663468,
+          83.6957925,
+          85.478092,
+          83.1140965,
+          83.18785550000001,
+          85.46488000000001,
+          86.97821499999999,
+          87.052409
+        ],
+        [
+          86.838798,
+          86.9828235,
+          87.1241185,
+          87.3072325,
+          87.3725705,
+          86.687567,
+          86.76665,
+          86.402815,
+          86.55399700000001,
+          86.72120450000001,
+          86.5145205
+        ]
+      ]
+    },
+    "shared_recovery_us": {
+      "qg2": 1.47788525,
+      "qg4": 0.20241524999998717
+    },
+    "unit": "us_per_tile_plus_combine_host_synchronized"
+  },
+  "verdict": "PRIMITIVE_PASS"
+}

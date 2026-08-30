@@ -1,0 +1,65 @@
+{
+  "schema": "tinygrad.nv_catch_llama_ledger.corrected_wall_ledger.v1",
+  "phase": 5,
+  "status": "CLOSED_WITHIN_DECLARED_CROSS_DOMAIN_UNCERTAINTY",
+  "identity": {
+    "wall": "resident_union + host_gap",
+    "resident_union": "node_sum - resident_overlap"
+  },
+  "endpoints": [
+    {
+      "role": "final_production_control",
+      "endpoint": "tinygrad DEV=NV flash d512",
+      "wall_us": 4747.530,
+      "node_sum_us": 4677.920,
+      "resident_union_us": 4671.500,
+      "resident_overlap_us": 6.420,
+      "host_gap_us": 76.030,
+      "useful_body_us": "UNMEASURED",
+      "useful_overlap_us": "UNMEASURED",
+      "spin_only_union_us": "UNMEASURED"
+    },
+    {
+      "role": "removed_concurrency_candidate",
+      "endpoint": "tinygrad DEV=NV NV_SPLIT_PHASE=1",
+      "wall_us": 4735.083,
+      "node_sum_us": "UNMEASURED",
+      "resident_union_us": "UNMEASURED",
+      "resident_overlap_us": "UNMEASURED",
+      "host_gap_us": "UNMEASURED",
+      "useful_body_us": "UNMEASURED",
+      "useful_overlap_us": "UNMEASURED",
+      "spin_only_union_us": "UNMEASURED"
+    },
+    {
+      "role": "oracle",
+      "endpoint": "llama.cpp pinned binary, CUDA PDL-on",
+      "wall_us": 4034.0045,
+      "node_sum_us": 5008.638,
+      "resident_union_us": 3885.9585,
+      "resident_overlap_us": 1122.6795,
+      "host_gap_us": 148.046,
+      "useful_body_us": "UNMEASURED",
+      "useful_overlap_us": "UNMEASURED",
+      "spin_only_union_us": "UNMEASURED"
+    }
+  ],
+  "delta_tinygrad_minus_llama_us": {
+    "wall": 713.5255,
+    "node_sum": -330.718,
+    "resident_overlap": -1116.2595,
+    "resident_union": 785.5415,
+    "host_gap": -72.016,
+    "useful_body": "UNMEASURED",
+    "useful_overlap": "UNMEASURED",
+    "spin_only_union": "UNMEASURED"
+  },
+  "reconciliation_us": {
+    "device_union_delta": 785.5415,
+    "host_gap_delta": -72.016,
+    "sum": 713.5255,
+    "wall_delta": 713.5255,
+    "residual": 0.0
+  },
+  "cross_domain_note": "wall is unprofiled phase5; node_sum/union/overlap are the fresh same-commit audit profile values; host_gap is the inferred matched-route difference between the two domains"
+}

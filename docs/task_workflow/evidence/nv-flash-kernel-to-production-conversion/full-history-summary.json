@@ -1,0 +1,55 @@
+{
+  "schema": "tinygrad.nv_flash_full_history_summary.v1",
+  "endpoint": {
+    "ms_per_token": 4.094502,
+    "tok_per_s": 244.23
+  },
+  "production_layer_35": {
+    "max_us": 6.656,
+    "mean_us": 6.168941,
+    "median_us": 6.144,
+    "min_us": 5.92,
+    "n": 68
+  },
+  "replication": {
+    "exact_serial_median_us": [
+      5.696,
+      5.712,
+      5.712
+    ],
+    "exact_serial_reheat_median_us": [
+      4.608,
+      4.608,
+      4.608
+    ],
+    "hot_median_us": [
+      4.576,
+      4.576,
+      4.576
+    ]
+  },
+  "decisive_fork_join_run": {
+    "exact_serial_us": 5.712,
+    "fork_join_minus_production_median_us": 0.096,
+    "fork_join_minus_serial_us": 0.528,
+    "fork_join_reheat_recovery_us": 1.632,
+    "fork_join_reheat_us": 4.608,
+    "fork_join_us": 6.24,
+    "hot_us": 4.576,
+    "n_per_arm": 40,
+    "two_history_serial_us": 5.568
+  },
+  "translation": {
+    "booked_tok_per_s": 0.0,
+    "full_production_cold_counterfactual_ceiling_tok_per_s": 247.644,
+    "topology_increment_counterfactual_ceiling_tok_per_s": 245.369,
+    "topology_increment_exposure_us_per_token": 19.008,
+    "warning": "Counterfactual exposure only. Serializing Q and K/V gives back overlap; literal target reheat executes duplicate work."
+  },
+  "verdict": {
+    "accounting_closed": true,
+    "intrinsic_graph_launch_tax_supported": false,
+    "mechanism": "topology-conditioned target working-set residency",
+    "older_history_supported": false
+  }
+}

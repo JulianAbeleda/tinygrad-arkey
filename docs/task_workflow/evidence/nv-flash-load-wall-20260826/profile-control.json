@@ -1,0 +1,78 @@
+{
+  "arm": "control_a",
+  "count": 8,
+  "depth": 512,
+  "max_context": 1024,
+  "min_blocks_policy": null,
+  "profile_jsonl": "docs/task_workflow/evidence/nv-flash-load-wall-20260826/profile-control.jsonl",
+  "profile_summary": {
+    "complete_replay_count": 60,
+    "flash_rows": {
+      "flash_fused_gmax_combine_f16_32_128_s8_lw128": {
+        "mean_us": 50.163,
+        "median_us": 50.144,
+        "per_replay_count": 36,
+        "replay_samples": 57
+      },
+      "flash_vec_llama_score_pv_32_128_8_widekv16": {
+        "mean_us": 222.458,
+        "median_us": 222.368,
+        "per_replay_count": 36,
+        "replay_samples": 57
+      }
+    },
+    "ledger": {
+      "node_sum_us": 3949.856,
+      "overlap_us": 0.182,
+      "span_us": 4417.75,
+      "union_us": 3949.5
+    },
+    "steady_replay_count": 57
+  },
+  "reps": 7,
+  "schema": "tinygrad.nv_flash_min_blocks_wall.v1",
+  "settled": {
+    "accepted_samples_ms_per_token": [
+      5.11938075,
+      4.9202535,
+      4.911057375,
+      4.901688625,
+      4.956338875,
+      4.9548235
+    ],
+    "external_contention_high_limit_ms": 5.217420249999996,
+    "median_ms_per_token": 4.9375385000000005,
+    "prelude_token": 13876,
+    "rejected_high_samples_ms_per_token": [
+      54.465397875
+    ],
+    "samples_ms_per_token": [
+      5.11938075,
+      54.465397875,
+      4.9202535,
+      4.911057375,
+      4.901688625,
+      4.956338875,
+      4.9548235
+    ],
+    "timed_token_count": 56,
+    "token_hashes": [
+      "9e6664fd1d67a6124e786daaa1d895bdb64b972c3991c54dd5fcc6cea16f6881",
+      "09e23af5efdd347a236110c102ad9fd8d6881bdaa2d929dffac8ec50a28da44a",
+      "faf6becf355abfb3e205616ec6b89b045e0ab34702848f223d525e2ffed91891",
+      "9e6664fd1d67a6124e786daaa1d895bdb64b972c3991c54dd5fcc6cea16f6881",
+      "09e23af5efdd347a236110c102ad9fd8d6881bdaa2d929dffac8ec50a28da44a",
+      "faf6becf355abfb3e205616ec6b89b045e0ab34702848f223d525e2ffed91891",
+      "9e6664fd1d67a6124e786daaa1d895bdb64b972c3991c54dd5fcc6cea16f6881"
+    ],
+    "token_stream_hash": "f279f76d15319bcfff798697aefac01fbc0126d18e66124a15234ba6aea458c8",
+    "warmup_tokens": [
+      38835,
+      34208,
+      13,
+      279,
+      3974,
+      13876
+    ]
+  }
+}

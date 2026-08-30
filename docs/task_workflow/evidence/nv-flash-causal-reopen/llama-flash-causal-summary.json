@@ -1,0 +1,82 @@
+{
+  "schema": "tinygrad.nv_llama_flash_causal_reopen.v1",
+  "date": "2026-08-26",
+  "git_commit_tinygrad": "fdd687275",
+  "git_commit_llama": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a",
+  "endpoint": {
+    "canonical_promoted_flags_fresh_ms_per_token": 4.1727570625,
+    "canonical_promoted_flags_fresh_tok_s": 239.64970522412244,
+    "prior_post_landing_ms_per_token": 4.166708,
+    "prior_post_landing_tok_s": 239.9976192236173,
+    "projected_prior_endpoint_after_booked_block25_ms_per_token": 4.145970,
+    "projected_tok_s": 241.2,
+    "authority_note": "241.2 tok/s is a causal projection, not an observed endpoint. Two canonical promoted-path observations are approximately 239.65 and 240.00 tok/s."
+  },
+  "llama_selected_kernel": {
+    "name": "flash_attn_ext_vec<128,1,F16,F16,false>",
+    "grid": [1, 6, 32],
+    "block": [32, 4, 1],
+    "logical_query_heads": 32,
+    "parallel_kv_parts": 6,
+    "physical_kv_extent": 768,
+    "combine_name": "flash_attn_combine_results<128>",
+    "combine_grid": [1, 32, 1],
+    "combine_block": [128, 1, 1]
+  },
+  "llama_vec_partition_sweep": {
+    "method": "unmodified llama flash_attn_ext_vec body, CUDA-event back-to-back timing, 5000 launches per arm, reverse then forward order, tc=768",
+    "rows": [
+      {"grid_y": 1, "samples_us": [8.474432, 8.479079], "median_us": 8.4767555},
+      {"grid_y": 2, "samples_us": [5.657216, 5.662880], "median_us": 5.6600480},
+      {"grid_y": 3, "samples_us": [4.689754, 4.689261], "median_us": 4.6895075},
+      {"grid_y": 4, "samples_us": [4.661369, 4.660646], "median_us": 4.6610075},
+      {"grid_y": 5, "samples_us": [4.719584, 4.727098], "median_us": 4.7233410},
+      {"grid_y": 6, "samples_us": [4.323501, 4.325594], "median_us": 4.3245475}
+    ],
+    "logical_512_cross_check_us": {
+      "grid_y_1": 6.483190,
+      "grid_y_2": 4.449867,
+      "grid_y_3": 4.400747,
+      "grid_y_4": 3.388139,
+      "grid_y_5": 3.492256,
+      "grid_y_6": 3.962410
+    }
+  },
+  "corrected_llama_ncu_grid6_tc768": {
+    "gpu_duration_us": 6.30,
+    "dram_read_bytes": 418050,
+    "dram_peak_percent": 3.78,
+    "l2_bytes": 12790000,
+    "l1_bytes": 13470000,
+    "sm_peak_percent": 8.31,
+    "achieved_occupancy_percent": 9.52,
+    "thread_instructions": 894720,
+    "note": "Profiler-replay duration is not the unprofiled CUDA-event body time. Counters show a latency/occupancy kernel trading cached traffic for instruction reduction, not a DRAM-bound kernel."
+  },
+  "current_flash_ledger_us_per_token": {
+    "tinygrad_score": 230.112,
+    "tinygrad_combine": 102.192,
+    "tinygrad_role_sum": 332.304,
+    "llama_pdl_off_flash_raw": 164.130,
+    "llama_pdl_off_combine_raw": 37.056,
+    "llama_pdl_off_island_span_sum": 207.746,
+    "raw_island_span_difference": 124.558,
+    "ledger_adjusted_llama_score": 162.948,
+    "ledger_adjusted_llama_combine": 37.057,
+    "ledger_role_debt": 132.299
+  },
+  "llama_flash_pdl_island_us_per_token": {
+    "pdl_on_island_sum": 212.678,
+    "pdl_off_island_sum": 207.746,
+    "pdl_on_minus_off": 4.932,
+    "conclusion": "PDL does not explain llama's flash-island service advantage. It helps the complete llama lifecycle elsewhere, while the flash island itself is effectively neutral/slightly slower in the retained matched traces."
+  },
+  "ceiling_translation": {
+    "starting_from_prior_observed_ms_per_token": 4.166708,
+    "full_flash_role_debt_us": 132.299,
+    "projected_ms_per_token": 4.034409,
+    "projected_tok_s": 247.86777939470193,
+    "tok_s_gain": 7.87016017108464,
+    "classification": "ceiling, not booked recovery"
+  }
+}

@@ -1,0 +1,2 @@
+ctx   512: W   4.74ms (210.84 tok/s) | D   4.96ms (201.58 tok/s) | host-sync N/A (D slower than W) | flash
+artifact: /home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-catch-llama-ledger-20260822/phase0/tinygrad-wall.json

@@ -1,0 +1,68 @@
+{
+  "commit": "f37279e3b983c7727e9816b3bb9243eadf269051",
+  "exact": true,
+  "median": {
+    "candidate2_cold_recovery_us": -1.7579999999999991,
+    "candidate2_cold_us": 11.37,
+    "candidate2_hot_recovery_us": -4.052479999999999,
+    "candidate2_hot_us": 9.01888,
+    "candidate4_cold_recovery_us": -2.177999999999999,
+    "candidate4_cold_us": 11.79,
+    "candidate4_hot_recovery_us": -5.159039999999999,
+    "candidate4_hot_us": 10.12544,
+    "control_cold_us": 9.612,
+    "control_hot_us": 4.9664
+  },
+  "ptxas": "/tmp/nv_q4k_o_cluster_8b_oeood/gate.cu:1: warning: \"INFINITY\" redefined\n    1 | #define INFINITY (__int_as_float(0x7f800000))\n      | \nIn file included from /usr/include/c++/13/cmath:47,\n                 from /usr/include/c++/13/math.h:36,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/math_functions.h:4627,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/common_functions.h:303,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/cuda_runtime.h:117,\n                 from <command-line>:\n/usr/include/math.h:91: note: this is the location of the previous definition\n   91 | #  define INFINITY (__builtin_inff ())\n      | \n/tmp/nv_q4k_o_cluster_8b_oeood/gate.cu:2: warning: \"NAN\" redefined\n    2 | #define NAN (__int_as_float(0x7fffffff))\n      | \n/usr/include/math.h:98: note: this is the location of the previous definition\n   98 | #  define NAN (__builtin_nanf (\"\"))\n      | \n/tmp/nv_q4k_o_cluster_8b_oeood/gate.cu:1: warning: \"INFINITY\" redefined\n    1 | #define INFINITY (__int_as_float(0x7f800000))\n      | \nIn file included from /usr/include/c++/13/cmath:47,\n                 from /usr/include/c++/13/math.h:36,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/math_functions.h:4627,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/common_functions.h:303,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/cuda_runtime.h:117,\n                 from <command-line>:\n/usr/include/math.h:91: note: this is the location of the previous definition\n   91 | #  define INFINITY (__builtin_inff ())\n      | \n/tmp/nv_q4k_o_cluster_8b_oeood/gate.cu:2: warning: \"NAN\" redefined\n    2 | #define NAN (__int_as_float(0x7fffffff))\n      | \n/usr/include/math.h:98: note: this is the location of the previous definition\n   98 | #  define NAN (__builtin_nanf (\"\"))\n      | \n/tmp/nv_q4k_o_cluster_8b_oeood/gate.cu:1: warning: \"INFINITY\" redefined\n    1 | #define INFINITY (__int_as_float(0x7f800000))\n      | \nIn file included from /usr/include/c++/13/cmath:47,\n                 from /usr/include/c++/13/math.h:36,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/math_functions.h:4627,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/common_functions.h:303,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/cuda_runtime.h:117,\n                 from <command-line>:\n/usr/include/math.h:91: note: this is the location of the previous definition\n   91 | #  define INFINITY (__builtin_inff ())\n      | \n/tmp/nv_q4k_o_cluster_8b_oeood/gate.cu:2: warning: \"NAN\" redefined\n    2 | #define NAN (__int_as_float(0x7fffffff))\n      | \n/usr/include/math.h:98: note: this is the location of the previous definition\n   98 | #  define NAN (__builtin_nanf (\"\"))\n      | \nptxas info    : 5 bytes gmem\nptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096_cluster4_r16' for 'sm_120a'\nptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096_cluster4_r16\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 45 registers, used 0 barriers, 512 bytes smem\nptxas info    : Compile time = 12.658 ms\nptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096_cluster2_r8' for 'sm_120a'\nptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096_cluster2_r8\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 45 registers, used 0 barriers, 512 bytes smem\nptxas info    : Compile time = 10.793 ms\nptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096' for 'sm_120a'\nptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 43 registers, used 0 barriers\nptxas info    : Compile time = 8.679 ms\n",
+  "samples": [
+    {
+      "candidate2_cold_us": 11.262,
+      "candidate2_hot_us": 9.01808,
+      "candidate4_cold_us": 11.932,
+      "candidate4_hot_us": 10.10448,
+      "control_cold_us": 9.502,
+      "control_hot_us": 4.9664,
+      "rep": 0
+    },
+    {
+      "candidate2_cold_us": 11.574,
+      "candidate2_hot_us": 9.01888,
+      "candidate4_cold_us": 11.684,
+      "candidate4_hot_us": 10.12544,
+      "control_cold_us": 9.682,
+      "control_hot_us": 4.96432,
+      "rep": 1
+    },
+    {
+      "candidate2_cold_us": 11.37,
+      "candidate2_hot_us": 9.01952,
+      "candidate4_cold_us": 11.79,
+      "candidate4_hot_us": 10.13248,
+      "control_cold_us": 9.612,
+      "control_hot_us": 4.9664,
+      "rep": 2
+    }
+  ],
+  "schema": "tinygrad.nv_q4k_o_cluster_geometry_gate.v2",
+  "shape": {
+    "candidate2": {
+      "blocks": 1024,
+      "cluster_size": 2,
+      "rows_per_cluster": 8,
+      "threads": 128
+    },
+    "candidate4": {
+      "blocks": 1024,
+      "cluster_size": 4,
+      "rows_per_cluster": 16,
+      "threads": 128
+    },
+    "control": {
+      "blocks": 4096,
+      "threads": 32
+    },
+    "k": 4096,
+    "rows": 4096
+  },
+  "stdout": "validate exact2=1 finite2=1 exact4=1 finite4=1\nsample rep=0 control_hot_us=4.966400 candidate2_hot_us=9.018080 candidate4_hot_us=10.104480 control_cold_us=9.502000 candidate2_cold_us=11.262000 candidate4_cold_us=11.932000\nsample rep=1 control_hot_us=4.964320 candidate2_hot_us=9.018880 candidate4_hot_us=10.125440 control_cold_us=9.682000 candidate2_cold_us=11.574000 candidate4_cold_us=11.684000\nsample rep=2 control_hot_us=4.966400 candidate2_hot_us=9.019520 candidate4_hot_us=10.132480 control_cold_us=9.612000 candidate2_cold_us=11.370000 candidate4_cold_us=11.790000\n"
+}

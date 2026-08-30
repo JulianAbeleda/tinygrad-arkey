@@ -1,0 +1,53 @@
+{
+  "schema": "tinygrad.nv_catch_llama_ledger.provenance.v1",
+  "session_started_utc": "2026-08-22T21:39:01Z",
+  "timezone": "America/New_York",
+  "tinygrad": {
+    "repo": "/home/ubuntu/tinygrad-arkey",
+    "branch": "nvidia-bringup-20260731",
+    "head": "6570abc025514273faa100c66b979e531585a1e1",
+    "tracked_diff_sha256": "017935b7de60675857c624e71ae0e84b3839cbccb7c982706d194c865302c7a5",
+    "python": "/home/ubuntu/tinygrad-arkey/.venv/bin/python",
+    "python_sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118"
+  },
+  "model": {
+    "path": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "size_bytes": 5027783488,
+    "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+    "depth": 512
+  },
+  "gpu": {
+    "name": "NVIDIA GeForce RTX 5090",
+    "uuid": "GPU-c800ade9-21ea-2e55-f75c-6d7a458fb186",
+    "driver": "595.84",
+    "memory_used_mib": 41,
+    "memory_total_mib": 32607,
+    "pstate": "P8",
+    "power_limit_w": 600.0,
+    "sm_clock_mhz_idle": 225
+  },
+  "tools": {
+    "nsys": "2026.1.3.425-261338342291v0",
+    "ncu": "2026.2.1.0 (build 38283040)",
+    "nvcc": "/usr/local/cuda-13.2/bin/nvcc",
+    "nvcc_version": "Cuda compilation tools, release 13.2, V13.2.86"
+  },
+  "llama_oracle": {
+    "repo": "/home/ubuntu/env/llama.cpp",
+    "head": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a",
+    "dirty": true,
+    "tracked_diff_sha256": "94b128573b8366f5be9f6ff423bb9da3b0994c9a46c016f5b9c07cd7c173b7f0",
+    "bench_binary": "/home/ubuntu/env/llama.cpp/build-cuda/bin/llama-bench",
+    "bench_binary_sha256": "947eb29052871f151719762c2fc265024e14f833b98df7801af9eb09da1625a8"
+  },
+  "env": {
+    "DEV": "NV",
+    "PYTHONPATH": "/home/ubuntu/tinygrad-arkey",
+    "QK_MODEL": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "lock": "/tmp/gpu-bench.lock"
+  },
+  "phase0_start": {
+    "no_production_edits": true,
+    "evidence_dir": "docs/task_workflow/evidence/nv-catch-llama-ledger-20260822"
+  }
+}

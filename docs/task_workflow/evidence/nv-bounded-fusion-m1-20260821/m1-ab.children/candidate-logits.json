@@ -1,0 +1,423 @@
+{
+  "arm": "candidate",
+  "dtype": "float32",
+  "gates": {
+    "block_ffn_down_resadd_lease": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "block_flash_combine_fp16_lease": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "block_w1w3_fp16_store_lease": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "decode_direct_greedy_promoted": true,
+    "ffn_down_resadd_lease": true,
+    "flash_combine_fp16_lease": true,
+    "reduce_output_rmsnorm_promoted": true,
+    "rms_affine_gateup_lease_blocks": [
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      },
+      {
+        "dtype": "dtypes.half",
+        "is_fp16": true,
+        "shape": [
+          4096
+        ]
+      }
+    ],
+    "rms_affine_gateup_lease_model": false,
+    "w1w3_fp16_store_lease": true
+  },
+  "logits_sha256": "596c73cb4905676c92a91a62be5d1255606ccdfee38c59394e44d0619fed2d96",
+  "mode": "logits",
+  "prelude_token": 13876,
+  "schema": "tinygrad.nv_epilogue_absorption_m1_ab.logits.v1",
+  "shape": [
+    32,
+    1,
+    151936
+  ],
+  "tokens": [
+    64461,
+    4710,
+    64461,
+    1837,
+    64461,
+    1837,
+    64461,
+    64461,
+    64461,
+    3014,
+    64461,
+    1837,
+    64461,
+    1837,
+    1837,
+    3014,
+    64461,
+    3014,
+    64461,
+    64461,
+    15011,
+    3014,
+    3014,
+    3014,
+    3014,
+    3014,
+    3014,
+    3014,
+    3014,
+    3014,
+    3014,
+    3014
+  ]
+}

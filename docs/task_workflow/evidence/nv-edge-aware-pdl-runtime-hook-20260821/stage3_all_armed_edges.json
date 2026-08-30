@@ -1,0 +1,1675 @@
+{
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "count": 83,
+  "edges": [
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_1187_32_4_76d37a73a646ec3a4b5e32ab783e0ace496f5855bbba7492c8c7fe87bbff5f1f",
+      "from": 5,
+      "graph_id": 1,
+      "graph_size": 64,
+      "latch_id": 0,
+      "producer_name": "E_2_c8a3207cf1b8954ec08b9564cce9b00f69be9c09493c58ea1abd46b3664424e7",
+      "queue": 1,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          8
+        ]
+      ],
+      "to": 7,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 27,
+      "graph_id": 1,
+      "graph_size": 64,
+      "latch_id": 1,
+      "producer_name": "r_toks_64_16_4_48_2_2_2_4_8_e050e1ff88128260d157c1693e5c23375a91d635fc1f18173514302da04c8951",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          64615680,
+          65139968
+        ]
+      ],
+      "to": 28,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 28,
+      "graph_id": 1,
+      "graph_size": 64,
+      "latch_id": 2,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          65139968,
+          65664256
+        ]
+      ],
+      "to": 29,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 50,
+      "graph_id": 1,
+      "graph_size": 64,
+      "latch_id": 3,
+      "producer_name": "r_toks_64_16_4_48_2_2_2_4_8_e050e1ff88128260d157c1693e5c23375a91d635fc1f18173514302da04c8951",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          64615680,
+          65139968
+        ]
+      ],
+      "to": 51,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 51,
+      "graph_id": 1,
+      "graph_size": 64,
+      "latch_id": 4,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          607744,
+          1132032
+        ]
+      ],
+      "to": 52,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "r_4_toks_2_8_16_4_28start_pos2Btoks29_982d394aaac3071cb527878108d8ea1e2754d03b43420a08bb773a3016435ccd",
+      "from": 2,
+      "graph_id": 2,
+      "graph_size": 128,
+      "latch_id": 0,
+      "producer_name": "E_toks_28start_pos2Btoks29_8_4_3fc1a21ba7c7622ace2a32d1c451225c6acf06ec44769e35b29d58108e1b090a",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          41944320,
+          60945664
+        ]
+      ],
+      "to": 3,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "r_toks_64_16_4_16_2_2_2_4_8_f2d21044fc43f050118addd8d06843c08549a51ff71db6e79bfafef2707541e4",
+      "from": 3,
+      "graph_id": 2,
+      "graph_size": 128,
+      "latch_id": 1,
+      "producer_name": "r_4_toks_2_8_16_4_28start_pos2Btoks29_982d394aaac3071cb527878108d8ea1e2754d03b43420a08bb773a3016435ccd",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          8448,
+          532736
+        ]
+      ],
+      "to": 4,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 9,
+      "graph_id": 2,
+      "graph_size": 128,
+      "latch_id": 2,
+      "producer_name": "r_toks_64_16_4_48_2_2_2_4_8_e050e1ff88128260d157c1693e5c23375a91d635fc1f18173514302da04c8951",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          64615680,
+          65139968
+        ]
+      ],
+      "to": 10,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 10,
+      "graph_id": 2,
+      "graph_size": 128,
+      "latch_id": 3,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 11,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 32,
+      "graph_id": 2,
+      "graph_size": 128,
+      "latch_id": 4,
+      "producer_name": "r_toks_64_16_4_48_2_2_2_4_8_e050e1ff88128260d157c1693e5c23375a91d635fc1f18173514302da04c8951",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          64615680,
+          65139968
+        ]
+      ],
+      "to": 33,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 33,
+      "graph_id": 2,
+      "graph_size": 128,
+      "latch_id": 5,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 34,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 55,
+      "graph_id": 2,
+      "graph_size": 128,
+      "latch_id": 6,
+      "producer_name": "r_toks_64_16_4_48_4_2_4_8_1d7f803c21b1bf8ffa33a6f35dc7dd38f0d8469c6cd9fa6fb14c9436f6b62fee",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          44438784,
+          44963072
+        ]
+      ],
+      "to": 56,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 56,
+      "graph_id": 2,
+      "graph_size": 128,
+      "latch_id": 7,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          44963072,
+          45487360
+        ]
+      ],
+      "to": 57,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 78,
+      "graph_id": 2,
+      "graph_size": 128,
+      "latch_id": 0,
+      "producer_name": "r_toks_64_16_4_48_4_2_4_8_1d7f803c21b1bf8ffa33a6f35dc7dd38f0d8469c6cd9fa6fb14c9436f6b62fee",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          44438784,
+          44963072
+        ]
+      ],
+      "to": 79,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 79,
+      "graph_id": 2,
+      "graph_size": 128,
+      "latch_id": 1,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 80,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 101,
+      "graph_id": 2,
+      "graph_size": 128,
+      "latch_id": 2,
+      "producer_name": "r_toks_64_16_4_48_2_2_2_4_8_e050e1ff88128260d157c1693e5c23375a91d635fc1f18173514302da04c8951",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          64615680,
+          65139968
+        ]
+      ],
+      "to": 102,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 102,
+      "graph_id": 2,
+      "graph_size": 128,
+      "latch_id": 3,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 103,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 124,
+      "graph_id": 2,
+      "graph_size": 128,
+      "latch_id": 4,
+      "producer_name": "r_toks_64_16_4_48_4_2_4_8_1d7f803c21b1bf8ffa33a6f35dc7dd38f0d8469c6cd9fa6fb14c9436f6b62fee",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          44438784,
+          44963072
+        ]
+      ],
+      "to": 125,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 125,
+      "graph_id": 2,
+      "graph_size": 128,
+      "latch_id": 5,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 126,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_2437f5787b92ef880ea340a3f6defc9746039428398e7113e2cc0c58051416bc",
+      "from": 0,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 0,
+      "producer_name": "r_toks_16_256_9bea51c90e96722f78afa38994560b91a5209493ca06e07a50eb2d877dcfb23d",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          524288,
+          524416
+        ]
+      ],
+      "to": 1,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "r_toks_64_16_4_16_2_2_2_4_8_f2d21044fc43f050118addd8d06843c08549a51ff71db6e79bfafef2707541e4",
+      "from": 13,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 1,
+      "producer_name": "r_4_toks_2_8_16_4_28start_pos2Btoks29_982d394aaac3071cb527878108d8ea1e2754d03b43420a08bb773a3016435ccd",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          39720192,
+          40244480
+        ]
+      ],
+      "to": 14,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 19,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 2,
+      "producer_name": "r_toks_64_16_4_48_4_2_4_8_1d7f803c21b1bf8ffa33a6f35dc7dd38f0d8469c6cd9fa6fb14c9436f6b62fee",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          44438784,
+          44963072
+        ]
+      ],
+      "to": 20,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 20,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 3,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 21,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 42,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 4,
+      "producer_name": "r_toks_64_16_4_48_2_2_2_4_8_e050e1ff88128260d157c1693e5c23375a91d635fc1f18173514302da04c8951",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          64615680,
+          65139968
+        ]
+      ],
+      "to": 43,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 43,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 5,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 44,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 65,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 6,
+      "producer_name": "r_toks_64_16_4_48_4_2_4_8_1d7f803c21b1bf8ffa33a6f35dc7dd38f0d8469c6cd9fa6fb14c9436f6b62fee",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          44438784,
+          44963072
+        ]
+      ],
+      "to": 66,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 66,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 7,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 67,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 88,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 0,
+      "producer_name": "r_toks_64_16_4_48_4_2_4_8_1d7f803c21b1bf8ffa33a6f35dc7dd38f0d8469c6cd9fa6fb14c9436f6b62fee",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          44438784,
+          44963072
+        ]
+      ],
+      "to": 89,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 89,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 1,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 90,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 111,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 2,
+      "producer_name": "r_toks_64_16_4_48_2_2_2_4_8_e050e1ff88128260d157c1693e5c23375a91d635fc1f18173514302da04c8951",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          64615680,
+          65139968
+        ]
+      ],
+      "to": 112,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 112,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 3,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 113,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 134,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 4,
+      "producer_name": "r_toks_64_16_4_48_4_2_4_8_1d7f803c21b1bf8ffa33a6f35dc7dd38f0d8469c6cd9fa6fb14c9436f6b62fee",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          44438784,
+          44963072
+        ]
+      ],
+      "to": 135,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 135,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 5,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 136,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 157,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 6,
+      "producer_name": "r_toks_64_16_4_48_4_2_4_8_1d7f803c21b1bf8ffa33a6f35dc7dd38f0d8469c6cd9fa6fb14c9436f6b62fee",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          44438784,
+          44963072
+        ]
+      ],
+      "to": 158,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 158,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 7,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 159,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 180,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 0,
+      "producer_name": "r_toks_64_16_4_48_2_2_2_4_8_e050e1ff88128260d157c1693e5c23375a91d635fc1f18173514302da04c8951",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          64615680,
+          65139968
+        ]
+      ],
+      "to": 181,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 181,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 1,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 182,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 203,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 2,
+      "producer_name": "r_toks_64_16_4_48_4_2_4_8_1d7f803c21b1bf8ffa33a6f35dc7dd38f0d8469c6cd9fa6fb14c9436f6b62fee",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          44438784,
+          44963072
+        ]
+      ],
+      "to": 204,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 204,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 3,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 205,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 226,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 4,
+      "producer_name": "r_toks_64_16_4_48_4_2_4_8_1d7f803c21b1bf8ffa33a6f35dc7dd38f0d8469c6cd9fa6fb14c9436f6b62fee",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          44438784,
+          44963072
+        ]
+      ],
+      "to": 227,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 227,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 5,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 228,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 249,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 6,
+      "producer_name": "r_toks_64_16_4_48_2_2_2_4_8_e050e1ff88128260d157c1693e5c23375a91d635fc1f18173514302da04c8951",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          64615680,
+          65139968
+        ]
+      ],
+      "to": 250,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 250,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 7,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 251,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "r_4_toks_2_8_16_4_16_4_2_4_8_ad6acf16e299384bdf8ddf4d45508d48d5f5c1c318f32c0c418cb019619cad54",
+      "from": 254,
+      "graph_id": 3,
+      "graph_size": 256,
+      "latch_id": 0,
+      "producer_name": "E_toks_64_16_4_2437f5787b92ef880ea340a3f6defc9746039428398e7113e2cc0c58051416bc",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          524544,
+          1048832
+        ]
+      ],
+      "to": 255,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_2_8_16_4_4_04c8385a88d65cdce18ba26825e4e40b51350da26c07a126d9e754768b75708e",
+      "from": 1,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 0,
+      "producer_name": "r_2_toks_8_4_4_16_1a6f7f1a8298a3a32e1ae4103d0c091d4bf33cb345fc242f46181ce9332a9373",
+      "queue": 1,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          1048832,
+          1052928
+        ]
+      ],
+      "to": 3,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "r_2_8_toks_128_16_4_2_32_a399dfeaf44b17b7d1f42a8ad025ee453bfebbe2cdaa5358ced434a55034fa68",
+      "from": 4,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 1,
+      "producer_name": "E_toks_8_2_16_4_4d7b47c652c451d0f22b9997d461d32dbc50f8fcf06bf68b3c8f14af1ae96ded",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          1578240,
+          1709312
+        ]
+      ],
+      "to": 5,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "r_toks_64_16_4_16_2_2_2_4_8_f2d21044fc43f050118addd8d06843c08549a51ff71db6e79bfafef2707541e4",
+      "from": 10,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 2,
+      "producer_name": "r_4_toks_2_8_16_4_28start_pos2Btoks29_982d394aaac3071cb527878108d8ea1e2754d03b43420a08bb773a3016435ccd",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          39720192,
+          40244480
+        ]
+      ],
+      "to": 11,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 16,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 3,
+      "producer_name": "r_toks_64_16_4_48_4_2_4_8_1d7f803c21b1bf8ffa33a6f35dc7dd38f0d8469c6cd9fa6fb14c9436f6b62fee",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          44438784,
+          44963072
+        ]
+      ],
+      "to": 17,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 17,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 4,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 18,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 39,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 5,
+      "producer_name": "r_toks_64_16_4_48_4_2_4_8_1d7f803c21b1bf8ffa33a6f35dc7dd38f0d8469c6cd9fa6fb14c9436f6b62fee",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          44438784,
+          44963072
+        ]
+      ],
+      "to": 40,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 40,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 6,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 41,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 62,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 7,
+      "producer_name": "r_toks_64_16_4_48_2_2_2_4_8_e050e1ff88128260d157c1693e5c23375a91d635fc1f18173514302da04c8951",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          64615680,
+          65139968
+        ]
+      ],
+      "to": 63,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 63,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 0,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 64,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 85,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 1,
+      "producer_name": "r_toks_64_16_4_48_4_2_4_8_1d7f803c21b1bf8ffa33a6f35dc7dd38f0d8469c6cd9fa6fb14c9436f6b62fee",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          44438784,
+          44963072
+        ]
+      ],
+      "to": 86,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 86,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 2,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 87,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 108,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 3,
+      "producer_name": "r_toks_64_16_4_48_4_2_4_8_1d7f803c21b1bf8ffa33a6f35dc7dd38f0d8469c6cd9fa6fb14c9436f6b62fee",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          44438784,
+          44963072
+        ]
+      ],
+      "to": 109,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 109,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 4,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 110,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 131,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 5,
+      "producer_name": "r_toks_64_16_4_48_2_2_2_4_8_e050e1ff88128260d157c1693e5c23375a91d635fc1f18173514302da04c8951",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          64615680,
+          65139968
+        ]
+      ],
+      "to": 132,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 132,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 6,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 133,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 154,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 7,
+      "producer_name": "r_toks_64_16_4_48_4_2_4_8_1d7f803c21b1bf8ffa33a6f35dc7dd38f0d8469c6cd9fa6fb14c9436f6b62fee",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          44438784,
+          44963072
+        ]
+      ],
+      "to": 155,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 155,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 0,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 156,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 177,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 1,
+      "producer_name": "r_toks_64_16_4_48_4_2_4_8_1d7f803c21b1bf8ffa33a6f35dc7dd38f0d8469c6cd9fa6fb14c9436f6b62fee",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          44438784,
+          44963072
+        ]
+      ],
+      "to": 178,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 178,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 2,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 179,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 200,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 3,
+      "producer_name": "r_toks_64_16_4_48_2_2_2_4_8_e050e1ff88128260d157c1693e5c23375a91d635fc1f18173514302da04c8951",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          64615680,
+          65139968
+        ]
+      ],
+      "to": 201,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 201,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 4,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 202,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 223,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 5,
+      "producer_name": "r_toks_64_16_4_48_4_2_4_8_1d7f803c21b1bf8ffa33a6f35dc7dd38f0d8469c6cd9fa6fb14c9436f6b62fee",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          44438784,
+          44963072
+        ]
+      ],
+      "to": 224,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 224,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 6,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 225,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 246,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 7,
+      "producer_name": "r_toks_64_16_4_48_4_2_4_8_1d7f803c21b1bf8ffa33a6f35dc7dd38f0d8469c6cd9fa6fb14c9436f6b62fee",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          44438784,
+          44963072
+        ]
+      ],
+      "to": 247,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 247,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 0,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 248,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 269,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 1,
+      "producer_name": "r_toks_64_16_4_48_2_2_2_4_8_e050e1ff88128260d157c1693e5c23375a91d635fc1f18173514302da04c8951",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          64615680,
+          65139968
+        ]
+      ],
+      "to": 270,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 270,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 2,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 271,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 292,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 3,
+      "producer_name": "r_toks_64_16_4_48_2_2_2_4_8_e050e1ff88128260d157c1693e5c23375a91d635fc1f18173514302da04c8951",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          64615680,
+          65139968
+        ]
+      ],
+      "to": 293,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 293,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 4,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 294,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 315,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 5,
+      "producer_name": "r_toks_64_16_4_48_2_2_2_4_8_e050e1ff88128260d157c1693e5c23375a91d635fc1f18173514302da04c8951",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          64615680,
+          65139968
+        ]
+      ],
+      "to": 316,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 316,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 6,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 317,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 338,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 7,
+      "producer_name": "r_toks_64_16_4_48_2_2_2_4_8_e050e1ff88128260d157c1693e5c23375a91d635fc1f18173514302da04c8951",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          64615680,
+          65139968
+        ]
+      ],
+      "to": 339,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 339,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 0,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 340,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 361,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 1,
+      "producer_name": "r_toks_64_16_4_48_2_2_2_4_8_e050e1ff88128260d157c1693e5c23375a91d635fc1f18173514302da04c8951",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          64615680,
+          65139968
+        ]
+      ],
+      "to": 362,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 362,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 2,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 363,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 384,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 3,
+      "producer_name": "r_toks_64_16_4_48_2_2_2_4_8_e050e1ff88128260d157c1693e5c23375a91d635fc1f18173514302da04c8951",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          64615680,
+          65139968
+        ]
+      ],
+      "to": 385,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "from": 385,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 4,
+      "producer_name": "E_toks_64_16_4_69472d2d47c56b2dc08e2f6244ad50dc409c1a7181a40501164c537a6cedf544",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          524288
+        ]
+      ],
+      "to": 386,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "r_1187_32_4_16_2_2_2_4_8_54efefe3ad26e25281aee5c75ee8154fa590d907d5d7ce7203007b221aa9ce8c",
+      "from": 389,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 5,
+      "producer_name": "E_toks_64_16_4_2437f5787b92ef880ea340a3f6defc9746039428398e7113e2cc0c58051416bc",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          524544,
+          1048832
+        ]
+      ],
+      "to": 390,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c",
+      "from": 392,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 6,
+      "producer_name": "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          512,
+          1024
+        ]
+      ],
+      "to": 393,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    }
+  ],
+  "first_cycle_signature": [
+    32,
+    64,
+    128,
+    256,
+    394
+  ],
+  "schema": "tinygrad.nv_pdl_stage3_all_armed.v1",
+  "source_census": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-edge-aware-pdl-runtime-hook-20260821/phase_a_construction_census_v4.jsonl"
+}

@@ -1,0 +1,831 @@
+{
+  "arm_prediction_differences": {
+    "1": [
+      {
+        "construction": "candidate_armed",
+        "from": 37,
+        "static": "adjacency",
+        "to": 39
+      },
+      {
+        "construction": null,
+        "from": 55,
+        "static": "candidate_armed",
+        "to": 56
+      },
+      {
+        "construction": "candidate_armed",
+        "from": 98,
+        "static": "multi_producer_fallback",
+        "to": 99
+      },
+      {
+        "construction": "candidate_armed",
+        "from": 99,
+        "static": "multi_producer_fallback",
+        "to": 100
+      },
+      {
+        "construction": null,
+        "from": 132,
+        "static": "candidate_armed",
+        "to": 133
+      },
+      {
+        "construction": "candidate_armed",
+        "from": 224,
+        "static": "multi_producer_fallback",
+        "to": 225
+      },
+      {
+        "construction": "candidate_armed",
+        "from": 237,
+        "static": "multi_producer_fallback",
+        "to": 238
+      },
+      {
+        "construction": "candidate_armed",
+        "from": 478,
+        "static": "multi_consumer_fallback",
+        "to": 479
+      },
+      {
+        "construction": "candidate_armed",
+        "from": 481,
+        "static": "adjacency",
+        "to": 483
+      },
+      {
+        "construction": "candidate_armed",
+        "from": 484,
+        "static": "multi_producer_fallback",
+        "to": 485
+      },
+      {
+        "construction": "candidate_armed",
+        "from": 490,
+        "static": "multi_producer_fallback",
+        "to": 491
+      },
+      {
+        "construction": null,
+        "from": 868,
+        "static": "candidate_armed",
+        "to": 869
+      },
+      {
+        "construction": "candidate_armed",
+        "from": 869,
+        "static": "multi_producer_fallback",
+        "to": 870
+      }
+    ],
+    "2": [
+      {
+        "construction": null,
+        "from": 55,
+        "static": "candidate_armed",
+        "to": 56
+      },
+      {
+        "construction": "candidate_armed",
+        "from": 98,
+        "static": "multi_producer_fallback",
+        "to": 99
+      },
+      {
+        "construction": "candidate_armed",
+        "from": 99,
+        "static": "multi_producer_fallback",
+        "to": 100
+      },
+      {
+        "construction": null,
+        "from": 132,
+        "static": "candidate_armed",
+        "to": 133
+      },
+      {
+        "construction": "candidate_armed",
+        "from": 224,
+        "static": "multi_producer_fallback",
+        "to": 225
+      },
+      {
+        "construction": "candidate_armed",
+        "from": 237,
+        "static": "multi_producer_fallback",
+        "to": 238
+      },
+      {
+        "construction": "candidate_armed",
+        "from": 478,
+        "static": "multi_consumer_fallback",
+        "to": 479
+      },
+      {
+        "construction": "candidate_armed",
+        "from": 481,
+        "static": "multi_producer_fallback",
+        "to": 483
+      },
+      {
+        "construction": "candidate_armed",
+        "from": 484,
+        "static": "multi_producer_fallback",
+        "to": 485
+      },
+      {
+        "construction": "candidate_armed",
+        "from": 490,
+        "static": "multi_producer_fallback",
+        "to": 491
+      },
+      {
+        "construction": null,
+        "from": 868,
+        "static": "candidate_armed",
+        "to": 869
+      },
+      {
+        "construction": "candidate_armed",
+        "from": 869,
+        "static": "multi_producer_fallback",
+        "to": 870
+      }
+    ]
+  },
+  "arms": {
+    "actual_armed_edges": 83,
+    "latch_id_usage": {
+      "0": 12,
+      "1": 11,
+      "2": 11,
+      "3": 11,
+      "4": 11,
+      "5": 10,
+      "6": 9,
+      "7": 8
+    },
+    "latch_pool": {
+      "base": 0,
+      "count": 8
+    },
+    "latch_wrap_named_issue": "83 armed edges reuse the 8-ID sweep-proven pool (max per graph 12); wrap safety is deferred to the expanded Stage 2 latch sweep",
+    "static_1q_armed_edges": 76,
+    "static_2q_armed_edges": 77
+  },
+  "census_cycles": 1,
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "construction": {
+    "construction_reasons": {
+      "adjacency": 352,
+      "alias_rejected": 45,
+      "candidate_armed": 83,
+      "encoded_wait": 36,
+      "multi_consumer_fallback": 246,
+      "multi_producer_fallback": 390,
+      "queue_split": 140
+    },
+    "extra_raw_named_reason": "mixed_kind_dag_collapsed",
+    "extra_raw_rows": [
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 38,
+        "to": 40
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 49,
+        "to": 50
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 49,
+        "to": 51
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 54,
+        "to": 56
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 61,
+        "to": 62
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 84,
+        "to": 85
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 107,
+        "to": 108
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 130,
+        "to": 131
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 131,
+        "to": 132
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 131,
+        "to": 133
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 146,
+        "to": 147
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 153,
+        "to": 154
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 176,
+        "to": 177
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 199,
+        "to": 200
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 222,
+        "to": 223
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 245,
+        "to": 246
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 268,
+        "to": 269
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 291,
+        "to": 292
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 314,
+        "to": 315
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 337,
+        "to": 338
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 360,
+        "to": 361
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 383,
+        "to": 384
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 406,
+        "to": 407
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 429,
+        "to": 430
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 452,
+        "to": 453
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 475,
+        "to": 476
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 498,
+        "to": 499
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 521,
+        "to": 522
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 544,
+        "to": 545
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 567,
+        "to": 568
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 590,
+        "to": 591
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 613,
+        "to": 614
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 636,
+        "to": 637
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 659,
+        "to": 660
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 682,
+        "to": 683
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 705,
+        "to": 706
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 728,
+        "to": 729
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 751,
+        "to": 752
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 774,
+        "to": 775
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 797,
+        "to": 798
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 820,
+        "to": 821
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 843,
+        "to": 844
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 866,
+        "to": 867
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 867,
+        "to": 868
+      },
+      {
+        "construction_kind": "RAW",
+        "construction_reason": "alias_rejected",
+        "dag_kind": "WAR",
+        "from": 867,
+        "to": 869
+      }
+    ],
+    "extra_raw_rows_vs_dag": 45,
+    "raw_row_count": 1292,
+    "raw_rows_matched_to_dag_raw": 1247,
+    "raw_rows_missing_from_construction": [
+      {
+        "from": 0,
+        "named_reason": "cross_group",
+        "to": 38
+      },
+      {
+        "from": 1,
+        "named_reason": "cross_group",
+        "to": 49
+      },
+      {
+        "from": 2,
+        "named_reason": "cross_group",
+        "to": 72
+      },
+      {
+        "from": 3,
+        "named_reason": "cross_group",
+        "to": 95
+      },
+      {
+        "from": 4,
+        "named_reason": "cross_group",
+        "to": 118
+      },
+      {
+        "from": 5,
+        "named_reason": "cross_group",
+        "to": 141
+      },
+      {
+        "from": 6,
+        "named_reason": "cross_group",
+        "to": 164
+      },
+      {
+        "from": 7,
+        "named_reason": "cross_group",
+        "to": 187
+      },
+      {
+        "from": 8,
+        "named_reason": "cross_group",
+        "to": 210
+      },
+      {
+        "from": 9,
+        "named_reason": "cross_group",
+        "to": 233
+      },
+      {
+        "from": 10,
+        "named_reason": "cross_group",
+        "to": 256
+      },
+      {
+        "from": 11,
+        "named_reason": "cross_group",
+        "to": 279
+      },
+      {
+        "from": 12,
+        "named_reason": "cross_group",
+        "to": 302
+      },
+      {
+        "from": 13,
+        "named_reason": "cross_group",
+        "to": 325
+      },
+      {
+        "from": 14,
+        "named_reason": "cross_group",
+        "to": 348
+      },
+      {
+        "from": 15,
+        "named_reason": "cross_group",
+        "to": 371
+      },
+      {
+        "from": 16,
+        "named_reason": "cross_group",
+        "to": 394
+      },
+      {
+        "from": 17,
+        "named_reason": "cross_group",
+        "to": 417
+      },
+      {
+        "from": 18,
+        "named_reason": "cross_group",
+        "to": 440
+      },
+      {
+        "from": 19,
+        "named_reason": "cross_group",
+        "to": 463
+      },
+      {
+        "from": 20,
+        "named_reason": "cross_group",
+        "to": 486
+      },
+      {
+        "from": 21,
+        "named_reason": "cross_group",
+        "to": 509
+      },
+      {
+        "from": 22,
+        "named_reason": "cross_group",
+        "to": 532
+      },
+      {
+        "from": 23,
+        "named_reason": "cross_group",
+        "to": 555
+      },
+      {
+        "from": 24,
+        "named_reason": "cross_group",
+        "to": 578
+      },
+      {
+        "from": 25,
+        "named_reason": "cross_group",
+        "to": 601
+      },
+      {
+        "from": 26,
+        "named_reason": "cross_group",
+        "to": 624
+      },
+      {
+        "from": 27,
+        "named_reason": "cross_group",
+        "to": 647
+      },
+      {
+        "from": 28,
+        "named_reason": "cross_group",
+        "to": 670
+      },
+      {
+        "from": 29,
+        "named_reason": "cross_group",
+        "to": 693
+      },
+      {
+        "from": 30,
+        "named_reason": "cross_group",
+        "to": 716
+      },
+      {
+        "from": 31,
+        "named_reason": "cross_group",
+        "to": 739
+      },
+      {
+        "from": 32,
+        "named_reason": "cross_group",
+        "to": 762
+      },
+      {
+        "from": 33,
+        "named_reason": "cross_group",
+        "to": 785
+      },
+      {
+        "from": 34,
+        "named_reason": "cross_group",
+        "to": 808
+      },
+      {
+        "from": 35,
+        "named_reason": "cross_group",
+        "to": 831
+      },
+      {
+        "from": 36,
+        "named_reason": "cross_group",
+        "to": 854
+      },
+      {
+        "from": 39,
+        "named_reason": "cross_group",
+        "to": 870
+      },
+      {
+        "from": 85,
+        "named_reason": "cross_group",
+        "to": 100
+      },
+      {
+        "from": 94,
+        "named_reason": "cross_group",
+        "to": 99
+      },
+      {
+        "from": 95,
+        "named_reason": "cross_group",
+        "to": 96
+      },
+      {
+        "from": 95,
+        "named_reason": "cross_group",
+        "to": 97
+      },
+      {
+        "from": 95,
+        "named_reason": "cross_group",
+        "to": 98
+      },
+      {
+        "from": 223,
+        "named_reason": "cross_group",
+        "to": 224
+      },
+      {
+        "from": 223,
+        "named_reason": "cross_group",
+        "to": 225
+      },
+      {
+        "from": 223,
+        "named_reason": "cross_group",
+        "to": 238
+      },
+      {
+        "from": 476,
+        "named_reason": "cross_group",
+        "to": 491
+      },
+      {
+        "from": 478,
+        "named_reason": "cross_group",
+        "to": 480
+      },
+      {
+        "from": 478,
+        "named_reason": "cross_group",
+        "to": 485
+      },
+      {
+        "from": 479,
+        "named_reason": "cross_group",
+        "to": 481
+      },
+      {
+        "from": 479,
+        "named_reason": "cross_group",
+        "to": 483
+      }
+    ],
+    "row_count": 2745,
+    "unknown_reason_rows": []
+  },
+  "dag": {
+    "cross_group_raw_count": 51,
+    "edge_count": 3034,
+    "intra_group_raw_count": 1247,
+    "node_count": 874,
+    "raw_edge_count": 1298
+  },
+  "graph_signature": [
+    32,
+    64,
+    128,
+    256,
+    394
+  ],
+  "inputs": {
+    "census": "docs/task_workflow/evidence/nv-edge-aware-pdl-runtime-hook-20260821/phase_a_construction_census_v4.jsonl",
+    "dag": "docs/task_workflow/evidence/nv-edge-aware-pdl-runtime-hook-20260821/phase_a_control_spans.json",
+    "phase_d": "docs/task_workflow/evidence/nv-edge-aware-pdl-runtime-hook-20260821/phase_d_static_coverage_live.json"
+  },
+  "reconciliation": {
+    "every_construction_raw_row_has_named_reason": true,
+    "every_intra_group_raw_edge_has_named_reason": true,
+    "missing_raw_edges_all_cross_group": true,
+    "note": "Static replay is an approximation of the real queue placement and span-level producer/consumer counts. The construction census is the arming authority; the 83-vs-77 arm delta is explained by that approximation, not by an unexplained miss.",
+    "stage1_gate": "passed"
+  },
+  "schema": "tinygrad.nv_edge_aware_pdl_stage1_reconcile.v1",
+  "selected_cycle": 0,
+  "static_prediction": {
+    "1": {
+      "by_reason": {
+        "adjacency": 636,
+        "alias_rejected": 0,
+        "candidate_armed": 76,
+        "candidate_armed_unverified": 0,
+        "cross_group": 51,
+        "encoded_wait": 0,
+        "multi_consumer_fallback": 176,
+        "multi_producer_fallback": 359,
+        "queue_split": 0
+      },
+      "candidate_armed": 76,
+      "raw_total": 1298
+    },
+    "2": {
+      "by_reason": {
+        "adjacency": 352,
+        "alias_rejected": 0,
+        "candidate_armed": 77,
+        "candidate_armed_unverified": 0,
+        "cross_group": 51,
+        "encoded_wait": 36,
+        "multi_consumer_fallback": 247,
+        "multi_producer_fallback": 395,
+        "queue_split": 140
+      },
+      "candidate_armed": 77,
+      "raw_total": 1298
+    }
+  }
+}

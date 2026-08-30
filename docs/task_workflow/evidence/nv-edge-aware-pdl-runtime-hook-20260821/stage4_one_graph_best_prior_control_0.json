@@ -1,0 +1,99 @@
+{
+  "arm": "one_graph_best_prior",
+  "bracket_index": 0,
+  "bracket_wall_s": {
+    "label": "observed",
+    "value": 125.887
+  },
+  "census": null,
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "date": "2026-08-21",
+  "depth": 512,
+  "device": "NV",
+  "env": {
+    "DEV": "NV",
+    "GRAPH_ONE_KERNEL": "1",
+    "HCQ_GRAPH_PROFILE_JSON": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-edge-aware-pdl-runtime-hook-20260821/stage4_one_graph_best_prior_control_0.profile.jsonl",
+    "HCQ_NUM_COMPUTE": "2",
+    "JIT_BATCH_SIZE": "",
+    "NV_PDL_CONSUMER_PROGRAMS": "",
+    "NV_PDL_LATCH_ID": "",
+    "NV_PDL_PRODUCER_PROGRAMS": "",
+    "NV_PDL_TRIGGER_POSITION": "",
+    "NV_SPLIT_PHASE": "",
+    "NV_SPLIT_PHASE_CENSUS_JSON": "",
+    "NV_SPLIT_PHASE_CENSUS_ONLY": "",
+    "NV_SPLIT_PHASE_LATCH_BASE": "",
+    "NV_SPLIT_PHASE_LATCH_COUNT": "",
+    "NV_SPLIT_PHASE_POLICY": "",
+    "NV_SPLIT_PHASE_TRIGGER_POLICY": "",
+    "NV_SPLIT_PHASE_WAIT_POSITION": "",
+    "NV_STAGE4_LOCK_SESSION": "1787324778-62aba802ccf6",
+    "PROFILE": "1"
+  },
+  "graph_group_signature": [
+    32,
+    64,
+    128,
+    256,
+    116
+  ],
+  "ledger": {
+    "dead_device_time_us": {
+      "label": "observed",
+      "value": 1025.75
+    },
+    "node_count": {
+      "label": "observed",
+      "value": 596
+    },
+    "node_sum_us": {
+      "label": "observed",
+      "value": 4588.25
+    },
+    "overlap_mass_us": {
+      "label": "observed",
+      "value": 9.25
+    },
+    "span_us": {
+      "label": "observed",
+      "value": 5604.75
+    },
+    "union_us": {
+      "label": "observed",
+      "value": 4579.0
+    }
+  },
+  "lock": {
+    "child_pid": 2254435,
+    "session_id": "1787324778-62aba802ccf6"
+  },
+  "max_context": 1024,
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "profile_records_total": 100,
+  "role": "control",
+  "s1": {
+    "layers": 36,
+    "note": null,
+    "s1_exposure_us": {
+      "label": "observed",
+      "value": 1978.75
+    },
+    "s1_positive_us": {
+      "label": "observed",
+      "value": 1978.75
+    }
+  },
+  "schema": "tinygrad.nv_edge_aware_pdl_stage4_endpoint.v1",
+  "timeline_node_count": 596,
+  "token_count": {
+    "label": "observed",
+    "value": 9
+  },
+  "token_sha256": "323f407295a70421c78d02bb0954c20dffc76a0020ce52f7bdba0e0901ba8332",
+  "wall_note": "PROFILE=1 instrumentation tax included; not an unprofiled token wall",
+  "wall_us": {
+    "label": "observed",
+    "value": 7007.542
+  }
+}

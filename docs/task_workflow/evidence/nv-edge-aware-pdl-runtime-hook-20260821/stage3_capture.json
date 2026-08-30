@@ -1,0 +1,100 @@
+{
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "date": "2026-08-21",
+  "device": "NV",
+  "failed_gates": [],
+  "gate": {
+    "evidence": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-edge-aware-pdl-runtime-hook-20260821/stage2_semantic_gate.json",
+    "reason": "stage2 gate result='passed'"
+  },
+  "gates": {
+    "candidate_overlap_positive": true,
+    "census_selected_edges_match": true,
+    "control_no_launch_ahead": true,
+    "instrumented_slots_written": true,
+    "live_armed_count_matches_stage1": true,
+    "policy_covers_all_live_armed": true,
+    "probe_positive_overlap_count_gt_0": true,
+    "stage2_gate": true,
+    "tokens_equal": true,
+    "wait_exit_within_2us_of_producer_end": true
+  },
+  "overlap_gate_note": "positive launch-ahead overlap is taken from the scratch %globaltimer values on the probe subset. HCQ profile start-signal reuse makes the profile-derived producer_end - consumer_start zero for chained same-queue pairs, so that 83-edge counter is reported for contrast but is not gated",
+  "probe_positive_overlap_count": 2,
+  "results": {
+    "candidate_1": {
+      "fault": null,
+      "path": "stage3_candidate_1.json",
+      "sha": "51a6b5bb6e00b5ccc0cbc75622616a20ca9e806403d9c290ab44d664d6bb5ac1"
+    },
+    "control_0": {
+      "fault": null,
+      "path": "stage3_control_0.json",
+      "sha": "51a6b5bb6e00b5ccc0cbc75622616a20ca9e806403d9c290ab44d664d6bb5ac1"
+    },
+    "control_2": {
+      "fault": null,
+      "path": "stage3_control_2.json",
+      "sha": "51a6b5bb6e00b5ccc0cbc75622616a20ca9e806403d9c290ab44d664d6bb5ac1"
+    }
+  },
+  "schema": "tinygrad.nv_pdl_stage3_driver.v1",
+  "selection": {
+    "edges": [
+      {
+        "access_kind": "RAW",
+        "consumer_name": "E_1187_32_4_76d37a73a646ec3a4b5e32ab783e0ace496f5855bbba7492c8c7fe87bbff5f1f",
+        "from": 5,
+        "graph_id": 1,
+        "graph_size": 64,
+        "latch_id": 0,
+        "producer_name": "E_2_c8a3207cf1b8954ec08b9564cce9b00f69be9c09493c58ea1abd46b3664424e7",
+        "queue": 1,
+        "reason": "candidate_armed",
+        "spans": [
+          [
+            0,
+            8
+          ]
+        ],
+        "structural_consumer_name": "E_1187_32_4",
+        "structural_producer_name": "E_2",
+        "to": 7,
+        "trigger_policy": "end",
+        "wait_position": "entry"
+      },
+      {
+        "access_kind": "RAW",
+        "consumer_name": "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c",
+        "from": 392,
+        "graph_id": 4,
+        "graph_size": 394,
+        "latch_id": 6,
+        "producer_name": "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5",
+        "queue": 0,
+        "reason": "candidate_armed",
+        "spans": [
+          [
+            512,
+            1024
+          ]
+        ],
+        "structural_consumer_name": "r_16_8",
+        "structural_producer_name": "r_128_16_8_1187",
+        "to": 393,
+        "trigger_policy": "end",
+        "wait_position": "entry"
+      }
+    ],
+    "expected_armed_edges": 83,
+    "first_cycle_signature": [
+      32,
+      64,
+      128,
+      256,
+      394
+    ]
+  },
+  "verdict": "passed",
+  "wait_exit_gate_note": "a data-readiness wait exits at producer end plus a small propagation skew; the literal wait_exit < producer_end phrase is physically unsatisfiable on the CUDA reference path as well (Stage 2), so the Stage 3 gate is abs(wait_exit - producer_end) <= 2.0 us with positive launch-ahead overlap"
+}

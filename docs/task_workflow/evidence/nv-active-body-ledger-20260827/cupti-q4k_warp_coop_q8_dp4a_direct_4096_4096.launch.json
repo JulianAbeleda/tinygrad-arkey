@@ -1,0 +1,31 @@
+{
+  "block": [
+    128,
+    1,
+    1
+  ],
+  "buf_bytes": 67108864,
+  "buf_sizes": [
+    16384,
+    9437184,
+    8192
+  ],
+  "condition_mib": 96,
+  "cubin": "docs/task_workflow/evidence/nv-active-body-ledger-20260827/q4k_warp_coop_q8_dp4a_direct_4096_4096.cubin",
+  "cubin_sha256": "8333b53cff03bf17d26a41c3dfa1ab25685a5688a24556d77fe096e5894de27c",
+  "event_us_per_launch": 76.22400257322523,
+  "grid": [
+    4096,
+    1,
+    1
+  ],
+  "n_bufs": 3,
+  "reps": 9,
+  "schema": "tinygrad.nv_cubin_ncu_launcher.v1",
+  "symbol": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+  "vals": [
+    700
+  ],
+  "verdict": "CUDA_LAUNCH_OK",
+  "warmup": 2
+}

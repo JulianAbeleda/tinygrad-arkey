@@ -1,0 +1,180 @@
+{
+  "captured": [
+    {
+      "calls": [
+        {
+          "buf_va": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "global_size": [
+            12288,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        },
+        {
+          "buf_va": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "global_size": [
+            12288,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        },
+        {
+          "buf_va": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "global_size": [
+            12288,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        },
+        {
+          "buf_va": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "global_size": [
+            12288,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        },
+        {
+          "buf_va": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "global_size": [
+            12288,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        },
+        {
+          "buf_va": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "global_size": [
+            12288,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        },
+        {
+          "buf_va": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "global_size": [
+            12288,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        },
+        {
+          "buf_va": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "global_size": [
+            12288,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        }
+      ],
+      "cubin_bytes": 17984,
+      "cubin_path": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-catch-llama-ledger-20260822/phase1/q4k_g3_lanemap_gemv_w1w3fused16_12288_4096.cubin",
+      "cubin_sha256": "5642ea229b93e1f40dd00b9965212529751865d1697b76a2098e6ca3e3e6a3af",
+      "lcmem_usage": 576,
+      "max_threads": 768,
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "regs_usage": 74,
+      "shmem_usage": 1024
+    }
+  ],
+  "depth": 512,
+  "prefix": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+  "schema": "tinygrad.nv_cubin_capture.v1",
+  "verdict": "CAPTURED"
+}

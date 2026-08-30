@@ -1,0 +1,239 @@
+{
+  "arm": "control",
+  "complete_replay_count": 101,
+  "count": 32,
+  "depth": 512,
+  "eligible_blocks": [
+    1,
+    2,
+    3,
+    6,
+    9,
+    12,
+    15,
+    18
+  ],
+  "gpu_state": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2947",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Disabled",
+    "power.draw": "268.69",
+    "temperature.gpu": "51"
+  },
+  "group_pattern": [
+    32,
+    64,
+    128,
+    238
+  ],
+  "ledger": {
+    "node_count": 462.0,
+    "node_sum_us": 4126.624,
+    "overlap_us": 13.988,
+    "span_us": 4873.125,
+    "union_us": 4114.0
+  },
+  "max_context": 1024,
+  "mode": "profile-child",
+  "per_name_table": {
+    "E": {
+      "mean_us": 3.055,
+      "median_us": 3.04,
+      "per_replay_count": 2.0,
+      "replay_samples": 98
+    },
+    "E_1187_32_4": {
+      "mean_us": 4.713,
+      "median_us": 4.672,
+      "per_replay_count": 2.0,
+      "replay_samples": 98
+    },
+    "E_16_4_2_8_16_2_4_4": {
+      "mean_us": 3.242,
+      "median_us": 3.008,
+      "per_replay_count": 1.0,
+      "replay_samples": 98
+    },
+    "E_2": {
+      "mean_us": 2.003,
+      "median_us": 1.984,
+      "per_replay_count": 1.0,
+      "replay_samples": 98
+    },
+    "E_32_32_4": {
+      "mean_us": 53.388,
+      "median_us": 53.376,
+      "per_replay_count": 38.0,
+      "replay_samples": 98
+    },
+    "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": {
+      "mean_us": 232.482,
+      "median_us": 232.4,
+      "per_replay_count": 36.0,
+      "replay_samples": 98
+    },
+    "flash_fused_gmax_combine_f16_32_128": {
+      "mean_us": 99.927,
+      "median_us": 99.904,
+      "per_replay_count": 36.0,
+      "replay_samples": 98
+    },
+    "native_finite_fp32_argmax_151936_t1024": {
+      "mean_us": 8.512,
+      "median_us": 8.512,
+      "per_replay_count": 1.0,
+      "replay_samples": 98
+    },
+    "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd": {
+      "mean_us": 358.493,
+      "median_us": 358.4,
+      "per_replay_count": 18.0,
+      "replay_samples": 98
+    },
+    "q4k_g3_lanemap_gemv_pair_vec_1024_4096": {
+      "mean_us": 52.301,
+      "median_us": 52.32,
+      "per_replay_count": 9.0,
+      "replay_samples": 98
+    },
+    "q4k_g3_lanemap_gemv_vec_1024_4096": {
+      "mean_us": 43.287,
+      "median_us": 43.296,
+      "per_replay_count": 10.0,
+      "replay_samples": 98
+    },
+    "q4k_g3_lanemap_gemv_vec_4096_4096": {
+      "mean_us": 158.824,
+      "median_us": 158.864,
+      "per_replay_count": 19.0,
+      "replay_samples": 98
+    },
+    "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096": {
+      "mean_us": 304.78,
+      "median_us": 304.736,
+      "per_replay_count": 36.0,
+      "replay_samples": 98
+    },
+    "q4k_gate_up_four_warp_vec_fp16_12288_4096": {
+      "mean_us": 1272.764,
+      "median_us": 1272.864,
+      "per_replay_count": 36.0,
+      "replay_samples": 98
+    },
+    "q4k_warp_coop_q8_dp4a_direct_1024_4096": {
+      "mean_us": 31.365,
+      "median_us": 31.344,
+      "per_replay_count": 8.0,
+      "replay_samples": 98
+    },
+    "q4k_warp_coop_q8_dp4a_direct_4096_4096": {
+      "mean_us": 142.075,
+      "median_us": 142.08,
+      "per_replay_count": 17.0,
+      "replay_samples": 98
+    },
+    "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096": {
+      "mean_us": 51.165,
+      "median_us": 52.384,
+      "per_replay_count": 9.0,
+      "replay_samples": 98
+    },
+    "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd": {
+      "mean_us": 490.717,
+      "median_us": 490.784,
+      "per_replay_count": 18.0,
+      "replay_samples": 98
+    },
+    "q6k_gen_coop_151936_4096_inkernel": {
+      "mean_us": 314.471,
+      "median_us": 314.256,
+      "per_replay_count": 1.0,
+      "replay_samples": 98
+    },
+    "q6k_q8_warp_direct_1024_4096": {
+      "mean_us": 30.067,
+      "median_us": 30.016,
+      "per_replay_count": 8.0,
+      "replay_samples": 98
+    },
+    "q6k_v_four_warp_fp16_direct_1024_4096": {
+      "mean_us": 45.09,
+      "median_us": 45.056,
+      "per_replay_count": 10.0,
+      "replay_samples": 98
+    },
+    "r_16_256": {
+      "mean_us": 122.023,
+      "median_us": 122.016,
+      "per_replay_count": 37.0,
+      "replay_samples": 98
+    },
+    "r_32_32_4_32_4": {
+      "mean_us": 4.415,
+      "median_us": 4.416,
+      "per_replay_count": 1.0,
+      "replay_samples": 98
+    },
+    "reduce_output_rmsnorm_1_4096": {
+      "mean_us": 131.969,
+      "median_us": 131.952,
+      "per_replay_count": 19.0,
+      "replay_samples": 98
+    },
+    "reduce_output_rmsnorm_rope_32_128": {
+      "mean_us": 68.29,
+      "median_us": 68.192,
+      "per_replay_count": 36.0,
+      "replay_samples": 98
+    },
+    "reduce_output_rmsnorm_rope_kv_cache_8_128": {
+      "mean_us": 66.987,
+      "median_us": 66.944,
+      "per_replay_count": 36.0,
+      "replay_samples": 98
+    },
+    "rmsnorm_q8_1_llama_provider_4096": {
+      "mean_us": 30.006,
+      "median_us": 29.952,
+      "per_replay_count": 17.0,
+      "replay_samples": 98
+    }
+  },
+  "reps": 3,
+  "schema": "tinygrad.nv_shared_q8_kv_pair_qualification.v1",
+  "settled": {
+    "accepted_samples_ms_per_token": [
+      5.6387603125,
+      5.644741625,
+      5.5762933125
+    ],
+    "external_contention_high_limit_ms": 5.8887603125,
+    "median_ms_per_token": 5.6387603125,
+    "prelude_token": 13876,
+    "rejected_high_samples_ms_per_token": [],
+    "samples_ms_per_token": [
+      5.6387603125,
+      5.644741625,
+      5.5762933125
+    ],
+    "timed_token_count": 96,
+    "token_hashes": [
+      "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+      "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+      "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b"
+    ],
+    "token_stream_hash": "1e73e557e48b0c2f0792318e1a306f06a1412cd9800ba7a1e667b9c09c4a1254",
+    "warmup_tokens": [
+      38835,
+      34208,
+      13,
+      279,
+      3974,
+      13876
+    ]
+  },
+  "steady_replay_count": 98,
+  "triple": true,
+  "variant": "q4q6"
+}

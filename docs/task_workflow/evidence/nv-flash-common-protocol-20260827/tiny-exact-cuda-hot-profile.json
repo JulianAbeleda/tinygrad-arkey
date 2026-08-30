@@ -1,0 +1,30 @@
+{
+  "block": [
+    32,
+    4,
+    1
+  ],
+  "buf_bytes": 67108864,
+  "buf_sizes": [
+    102400,
+    16384,
+    4194304
+  ],
+  "cubin": "docs/task_workflow/evidence/nv-flash-common-protocol-20260827/tiny-exact-entry/cubins/flash_vec_llama_score_pv_32_128_6_widekv16_vtail1.cubin",
+  "cubin_sha256": "b18b18d244ae9f8b65e7bdb4627f2f1915b6b8eeb3a9b9cd1dc56b340eb14fbe",
+  "event_us_per_launch": 4.460000097751617,
+  "grid": [
+    6,
+    32,
+    1
+  ],
+  "n_bufs": 3,
+  "reps": 200,
+  "schema": "tinygrad.nv_cubin_ncu_launcher.v1",
+  "symbol": "flash_vec_llama_score_pv_32_128_6_widekv16_vtail1",
+  "vals": [
+    768
+  ],
+  "verdict": "CUDA_LAUNCH_OK",
+  "warmup": 40
+}

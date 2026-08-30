@@ -1,0 +1,213 @@
+{
+  "closure": {
+    "host_gap_us": -356815.703,
+    "identity_union_node_sum_overlap_residual_us": 0.0,
+    "identity_wall_union_host_gap_residual_us": 0.0,
+    "node_sum_us": 362020.816,
+    "overlap_us": 143.941,
+    "remaining_to_240_us": 894.505,
+    "span_us": 361946.375,
+    "target_240_us": 4166.666667,
+    "tok_per_s": 197.583,
+    "union_us": 361876.875,
+    "wall_us_per_token": 5061.172
+  },
+  "complete_replay_count": 15,
+  "group_size_histogram": {
+    "32": 15,
+    "33": 230,
+    "64": 15,
+    "66": 230,
+    "128": 15,
+    "132": 230,
+    "185": 230,
+    "256": 15,
+    "391": 15
+  },
+  "mode": "analyze",
+  "rows": [
+    {
+      "mean_us_per_replay": 147979.259,
+      "median_us_per_call": 3894.444632,
+      "median_us_per_replay": 147988.896,
+      "name": "r_toks_256_16_3_16_4_2_2_16",
+      "per_replay_count": 38,
+      "wall_us_per_replay": 147988.896
+    },
+    {
+      "mean_us_per_replay": 79256.688,
+      "median_us_per_call": 8806.092444,
+      "median_us_per_replay": 79254.832,
+      "name": "r_toks_64_16_4_48_2_2_2_4_8",
+      "per_replay_count": 9,
+      "wall_us_per_replay": 79254.832
+    },
+    {
+      "mean_us_per_replay": 41861.771,
+      "median_us_per_call": 4186.472,
+      "median_us_per_replay": 41864.72,
+      "name": "r_toks_64_16_4_48_4_2_4_8",
+      "per_replay_count": 10,
+      "wall_us_per_replay": 41864.72
+    },
+    {
+      "mean_us_per_replay": 38155.928,
+      "median_us_per_call": 1900.6872,
+      "median_us_per_replay": 38013.744,
+      "name": "r_4_toks_2_8_16_4_16_4_2_4_8",
+      "per_replay_count": 20,
+      "wall_us_per_replay": 38013.744
+    },
+    {
+      "mean_us_per_replay": 27458.749,
+      "median_us_per_call": 1445.279158,
+      "median_us_per_replay": 27460.304,
+      "name": "r_toks_64_16_4_16_2_2_2_4_8",
+      "per_replay_count": 19,
+      "wall_us_per_replay": 27460.304
+    },
+    {
+      "mean_us_per_replay": 7980.04,
+      "median_us_per_call": 886.689778,
+      "median_us_per_replay": 7980.208,
+      "name": "r_2_8_toks_128_16_2_2_2_32",
+      "per_replay_count": 9,
+      "wall_us_per_replay": 7980.208
+    },
+    {
+      "mean_us_per_replay": 7319.763,
+      "median_us_per_call": 356.6928,
+      "median_us_per_replay": 7133.856,
+      "name": "r_8_toks_128_16_4_2_32",
+      "per_replay_count": 20,
+      "wall_us_per_replay": 7133.856
+    },
+    {
+      "mean_us_per_replay": 7050.763,
+      "median_us_per_call": 705.0528,
+      "median_us_per_replay": 7050.528,
+      "name": "r_2_8_toks_128_16_4_2_32",
+      "per_replay_count": 10,
+      "wall_us_per_replay": 7050.528
+    },
+    {
+      "mean_us_per_replay": 3110.869,
+      "median_us_per_call": 163.691789,
+      "median_us_per_replay": 3110.144,
+      "name": "r_32_toks_28start_pos2Btoks29_16_8",
+      "per_replay_count": 19,
+      "wall_us_per_replay": 3110.144
+    },
+    {
+      "mean_us_per_replay": 662.859,
+      "median_us_per_call": 17.450526,
+      "median_us_per_replay": 663.12,
+      "name": "r_toks_8_4_28start_pos2Btoks29",
+      "per_replay_count": 38,
+      "wall_us_per_replay": 663.12
+    },
+    {
+      "mean_us_per_replay": 663.091,
+      "median_us_per_call": 34.831158,
+      "median_us_per_replay": 661.792,
+      "name": "r_4_toks_2_8_16_4_28start_pos2Btoks29",
+      "per_replay_count": 19,
+      "wall_us_per_replay": 661.792
+    },
+    {
+      "mean_us_per_replay": 193.213,
+      "median_us_per_call": 2.011833,
+      "median_us_per_replay": 193.136,
+      "name": "E_toks_64_16_4",
+      "per_replay_count": 96,
+      "wall_us_per_replay": 193.136
+    },
+    {
+      "mean_us_per_replay": 175.576,
+      "median_us_per_call": 9.338947,
+      "median_us_per_replay": 177.44,
+      "name": "E_toks_28start_pos2Btoks29_8_4",
+      "per_replay_count": 19,
+      "wall_us_per_replay": 177.44
+    },
+    {
+      "mean_us_per_replay": 141.533,
+      "median_us_per_call": 3.629128,
+      "median_us_per_replay": 141.536,
+      "name": "r_toks_16_256",
+      "per_replay_count": 39,
+      "wall_us_per_replay": 141.536
+    },
+    {
+      "mean_us_per_replay": 35.523,
+      "median_us_per_call": 0.986222,
+      "median_us_per_replay": 35.504,
+      "name": "E_4_16_8_16_4",
+      "per_replay_count": 36,
+      "wall_us_per_replay": 35.504
+    },
+    {
+      "mean_us_per_replay": 33.821,
+      "median_us_per_call": 1.778526,
+      "median_us_per_replay": 33.792,
+      "name": "E_toks_2_8_16_4_4",
+      "per_replay_count": 19,
+      "wall_us_per_replay": 33.792
+    },
+    {
+      "mean_us_per_replay": 33.667,
+      "median_us_per_call": 1.6848,
+      "median_us_per_replay": 33.696,
+      "name": "r_2_toks_8_4_4_16",
+      "per_replay_count": 20,
+      "wall_us_per_replay": 33.696
+    },
+    {
+      "mean_us_per_replay": 30.067,
+      "median_us_per_call": 1.560421,
+      "median_us_per_replay": 29.648,
+      "name": "E_toks_8_2_16_4",
+      "per_replay_count": 19,
+      "wall_us_per_replay": 29.648
+    },
+    {
+      "mean_us_per_replay": 26.645,
+      "median_us_per_call": 1.373474,
+      "median_us_per_replay": 26.096,
+      "name": "r_8_toks_16_8",
+      "per_replay_count": 19,
+      "wall_us_per_replay": 26.096
+    },
+    {
+      "mean_us_per_replay": 2.013,
+      "median_us_per_call": 1.968,
+      "median_us_per_replay": 1.968,
+      "name": "E_toks",
+      "per_replay_count": 1,
+      "wall_us_per_replay": 1.968
+    },
+    {
+      "mean_us_per_replay": 1.931,
+      "median_us_per_call": 1.92,
+      "median_us_per_replay": 1.92,
+      "name": "E_toks_2_2_8_16_2_4",
+      "per_replay_count": 1,
+      "wall_us_per_replay": 1.92
+    }
+  ],
+  "samples_ms_per_token": [
+    5.123186125,
+    5.0713375,
+    5.055958625,
+    5.0499995,
+    5.039780291666667,
+    5.05727525,
+    5.061172166666667,
+    5.0655102916666666,
+    5.066302625
+  ],
+  "schema": "tinygrad.nv_phase0_current_ledger.v1",
+  "steady_replay_count": 12,
+  "token_stream_hash": "7e0b38ec59adc79a268f665ee525b602869c1930794239eb45ba21e9e0a22e3e",
+  "warmup": 3
+}

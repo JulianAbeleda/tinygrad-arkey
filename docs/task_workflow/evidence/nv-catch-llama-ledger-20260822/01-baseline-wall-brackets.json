@@ -1,0 +1,32 @@
+{
+  "schema": "tinygrad.nv_catch_llama_ledger.baseline_wall.v1",
+  "session": "2026-08-22T21:39Z",
+  "depth": 512,
+  "lock": "/tmp/gpu-bench.lock",
+  "tinygrad": {
+    "command": "decode_runtime_overhead.py --ckpts 512 --max-context 4608 --nmeas 40 --reps 5",
+    "wall_ms_W": 4.742989095393568,
+    "tok_s": 210.83750771664404,
+    "route": "flash",
+    "generated_reps_identical": true,
+    "token_sha256": "dbd3026bb808fd57a5c7466963b0309168ee3d5ca58ccaf829cacdea9e0d491b"
+  },
+  "llama": {
+    "command": "llama-bench -m Qwen3-8B-Q4_K_M.gguf -ngl 99 -fa 1 -p 512 -n 20 -d 512 -r 5 -o json",
+    "binary": "/home/ubuntu/env/llama.cpp/build-cuda/bin/llama-bench",
+    "binary_sha256": "947eb29052871f151719762c2fc265024e14f833b98df7801af9eb09da1625a8",
+    "decode_avg_ns_20tok": 80595927,
+    "wall_ms_per_token": 4.02979635,
+    "tok_s": 248.231803,
+    "n_gen": 20
+  },
+  "gap": {
+    "wall_us_per_token": 713.192745393568,
+    "tinygrad_minus_llama_ms": 0.713192745393568,
+    "note": "same-session, unprofiled W-method tinygrad vs llama-bench tg"
+  },
+  "locked_reference": {
+    "prior_gap_us": 729.430,
+    "note": "07e9b2abe vs dirty llama; fresh gap is 16.2 us smaller than locked"
+  }
+}

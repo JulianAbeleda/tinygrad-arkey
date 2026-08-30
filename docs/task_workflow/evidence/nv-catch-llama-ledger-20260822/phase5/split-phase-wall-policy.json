@@ -1,0 +1,13 @@
+{
+  "schema": "tinygrad.nv_split_phase_policy.v1",
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "programs": [
+    {"match": "prefix:q4k_", "trigger_policy": "end", "wait_position": "entry"},
+    {"match": "prefix:q6k_", "trigger_policy": "end", "wait_position": "entry"},
+    {"match": "prefix:reduce_output_rmsnorm", "trigger_policy": "end", "wait_position": "entry"},
+    {"match": "prefix:E_", "trigger_policy": "end", "wait_position": "entry"},
+    {"match": "prefix:r_", "trigger_policy": "end", "wait_position": "entry"},
+    {"match": "prefix:flash_", "trigger_policy": "end", "wait_position": "entry"},
+    {"match": "prefix:rmsnorm_q8_1_llama_provider", "trigger_policy": "end", "wait_position": "entry"}
+  ]
+}

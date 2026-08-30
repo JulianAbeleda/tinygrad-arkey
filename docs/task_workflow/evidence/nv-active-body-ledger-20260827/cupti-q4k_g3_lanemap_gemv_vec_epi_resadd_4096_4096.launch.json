@@ -1,0 +1,30 @@
+{
+  "block": [
+    32,
+    1,
+    1
+  ],
+  "buf_bytes": 67108864,
+  "buf_sizes": [
+    16384,
+    9437184,
+    8192,
+    16384
+  ],
+  "condition_mib": 96,
+  "cubin": "docs/task_workflow/evidence/nv-active-body-ledger-20260827/q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096.cubin",
+  "cubin_sha256": "e4d5f5a2809e0f206fb54adfade2f2b88a314cb02b607b9e34399cc7ba5ac588",
+  "event_us_per_launch": 76.2524472342597,
+  "grid": [
+    4096,
+    1,
+    1
+  ],
+  "n_bufs": 4,
+  "reps": 9,
+  "schema": "tinygrad.nv_cubin_ncu_launcher.v1",
+  "symbol": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+  "vals": [],
+  "verdict": "CUDA_LAUNCH_OK",
+  "warmup": 2
+}

@@ -1,0 +1,106 @@
+{
+  "device": "NV",
+  "exact": {
+    "1": {
+      "bitwise_equal": true,
+      "max_abs_delta": NaN,
+      "mismatched_fp16_words": 0,
+      "sha256": "9a887382f5078aabec3e79763360319440d725c8ff4c522efd54b5931e4c2ca0"
+    },
+    "2": {
+      "bitwise_equal": true,
+      "max_abs_delta": NaN,
+      "mismatched_fp16_words": 0,
+      "sha256": "9a887382f5078aabec3e79763360319440d725c8ff4c522efd54b5931e4c2ca0"
+    },
+    "4": {
+      "bitwise_equal": true,
+      "max_abs_delta": NaN,
+      "mismatched_fp16_words": 0,
+      "sha256": "9a887382f5078aabec3e79763360319440d725c8ff4c522efd54b5931e4c2ca0"
+    }
+  },
+  "geometry": {
+    "1": {
+      "ctas": 192,
+      "split_count": 6,
+      "warps": 768
+    },
+    "2": {
+      "ctas": 192,
+      "split_count": 12,
+      "warps": 768
+    },
+    "4": {
+      "ctas": 192,
+      "split_count": 24,
+      "warps": 768
+    }
+  },
+  "schema": "tinygrad.nv_flash_wide_qgroup_microgate.v1",
+  "shape": {
+    "hd": 128,
+    "hkv": 8,
+    "hq": 32,
+    "max_context": 1024,
+    "tc": 641,
+    "token_bound": 768
+  },
+  "timing": {
+    "best_qg": 2,
+    "best_recovery_us": 1.2012370000000203,
+    "medians": {
+      "1": 72.35977700000001,
+      "2": 71.15853999999999,
+      "4": 71.569754
+    },
+    "replays": 500,
+    "reps": 7,
+    "samples": {
+      "1": [
+        [
+          73.074298,
+          73.290346,
+          73.261452,
+          72.986474,
+          72.175552,
+          71.806238,
+          71.482428
+        ],
+        [
+          71.73308,
+          71.624414,
+          71.612312,
+          71.976838,
+          72.06795,
+          71.48771799999999,
+          71.73548600000001
+        ]
+      ],
+      "2": [
+        [
+          71.57776799999999,
+          71.077328,
+          71.186614,
+          70.91887,
+          70.93636199999999,
+          71.15853999999999,
+          71.490666
+        ]
+      ],
+      "4": [
+        [
+          71.569754,
+          71.454678,
+          71.43169400000001,
+          71.36659,
+          71.65367,
+          71.82849800000001,
+          71.95876200000001
+        ]
+      ]
+    },
+    "unit": "us_per_tile_plus_combine_host_synchronized"
+  },
+  "verdict": "PRIMITIVE_PASS"
+}

@@ -1,0 +1,107 @@
+{
+  "boundary_correction": {
+    "corrected_hot_bracket_us": [
+      3.808,
+      3.872
+    ],
+    "corrected_llama_replay_compile": "-O3 -DNDEBUG -use_fast_math -extended-lambda -compress-mode=size",
+    "invalid_comparison": "tinygrad hot versus llama production; it mixes lifecycle boundaries",
+    "old_hot_us": 4.096,
+    "old_llama_replay_compile": "-O3 only; omitted llama production -use_fast_math/-compress-mode=size release flags"
+  },
+  "conclusion": {
+    "llama_drop_is_smaller_than_tinygrad": true,
+    "llama_has_kernel_to_production_drop": true,
+    "plain_language": "llama falls roughly 17-19% from hot to production while tinygrad falls 36%; llama's drop is real, about half as large, not absent",
+    "remaining_discriminator": "tinygrad's exact entry replay explains 1.200 of its 1.649 us/layer conversion; account for the remaining production-only state and then compare cold service at matched production flags/geometry"
+  },
+  "corrected_llama_entry_replay": {
+    "arms_us": {
+      "attn_input": 4.0,
+      "ffn": 4.0,
+      "full_entry": 4.608,
+      "gate": 3.872,
+      "hot": 3.872,
+      "through_k": 4.608,
+      "through_q": 4.832,
+      "through_qdone": 4.64,
+      "through_v": 4.608
+    },
+    "conditioner_cold96_us": 4.448,
+    "conditioner_hot_us": 3.808,
+    "conditioner_penalty_us": 0.64,
+    "full_minus_hot_us_per_layer": 0.736,
+    "tinygrad_full_minus_hot_us_per_layer": 1.2
+  },
+  "kernel_to_production": {
+    "llama": {
+      "hot_us_per_layer_bracket": [
+        3.808,
+        3.872
+      ],
+      "penalty_pct_of_hot_bracket": [
+        16.899,
+        18.864
+      ],
+      "penalty_us_per_layer_bracket": [
+        0.654333,
+        0.718333
+      ],
+      "penalty_us_per_token_bracket": [
+        23.556,
+        25.86
+      ],
+      "production_mean_us_per_layer": 4.526333,
+      "production_median_us_per_layer": 4.512
+    },
+    "tinygrad": {
+      "hot_us_per_layer": 4.536,
+      "penalty_pct_of_hot": 36.351,
+      "penalty_us_per_layer": 1.648889,
+      "penalty_us_per_token": 59.36,
+      "production_us_per_layer": 6.184889
+    }
+  },
+  "production_score_gap_decomposition": {
+    "booked_recovery_us_per_token": 0.0,
+    "conversion_gap_us_per_token_bracket": [
+      33.5,
+      35.804
+    ],
+    "conversion_only_endpoint_ceiling_tok_s_bracket": [
+      246.245,
+      246.384
+    ],
+    "conversion_share_pct_bracket": [
+      56.106,
+      59.965
+    ],
+    "hot_body_gap_us_per_token_bracket": [
+      23.904,
+      26.208
+    ],
+    "total_us_per_token": 59.708
+  },
+  "production_state_check": {
+    "actual_llama_graph_ncu": {
+      "dram_read_bytes": 3165696.0,
+      "dram_write_bytes": 0.0,
+      "instructions": 850944,
+      "l1_bytes": 13867008.0,
+      "l2_bytes": 13208256.0,
+      "l2_read_hit_rate_pct": 75.58044,
+      "long_scoreboard_pct": 61.029389
+    },
+    "conclusion": "llama production is cold and matches the corrected prefix replay in DRAM/L2/instruction state; it does not preserve a hot K/V target",
+    "corrected_full_prefix_ncu": {
+      "dram_read_bytes": 3162624.0,
+      "dram_write_bytes": 0.0,
+      "instructions": 850944,
+      "l1_bytes": 13473792.0,
+      "l2_bytes": 13160064.0,
+      "l2_read_hit_rate_pct": 75.51532,
+      "long_scoreboard_pct": 59.41522
+    }
+  },
+  "schema": "tinygrad.nv_flash_kernel_to_production_conversion.v1"
+}

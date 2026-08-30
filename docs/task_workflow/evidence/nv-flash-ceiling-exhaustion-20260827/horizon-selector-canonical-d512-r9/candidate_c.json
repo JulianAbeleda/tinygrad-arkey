@@ -1,0 +1,72 @@
+{
+  "arm": "candidate_c",
+  "captured_pairs": {
+    "s6": [
+      true,
+      true
+    ],
+    "s8": [
+      true,
+      true
+    ]
+  },
+  "count": 24,
+  "depth": 512,
+  "expected_policy": "S6 for 512<=start_pos<768; installed S8 otherwise",
+  "max_context": 1024,
+  "prewarmed_graph_pairs": false,
+  "profile_census": null,
+  "profile_jsonl": null,
+  "reps": 9,
+  "schema": "tinygrad.nv_flash_active_horizon_selector.v1",
+  "selector_enabled": true,
+  "settled": {
+    "accepted_samples_ms_per_token": [
+      4.0782636666666665,
+      4.061413666666667,
+      4.062329125,
+      4.060071541666667,
+      4.063682083333333,
+      4.068873541666666,
+      4.071713833333334,
+      4.065199125,
+      4.071829916666666
+    ],
+    "external_contention_high_limit_ms": 4.315199125,
+    "median_ms_per_token": 4.065199125,
+    "prelude_token": 13876,
+    "rejected_high_samples_ms_per_token": [],
+    "samples_ms_per_token": [
+      4.0782636666666665,
+      4.061413666666667,
+      4.062329125,
+      4.060071541666667,
+      4.063682083333333,
+      4.068873541666666,
+      4.071713833333334,
+      4.065199125,
+      4.071829916666666
+    ],
+    "timed_token_count": 216,
+    "token_hashes": [
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809"
+    ],
+    "token_stream_hash": "7e0b38ec59adc79a268f665ee525b602869c1930794239eb45ba21e9e0a22e3e",
+    "warmup_tokens": [
+      38835,
+      34208,
+      13,
+      279,
+      3974,
+      13876
+    ]
+  }
+}

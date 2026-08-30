@@ -1,0 +1,280 @@
+{
+  "closure": {
+    "known_llama_pdl0_node_sum_us": 3878.254,
+    "known_tinygrad_node_sum_us": 4677.92,
+    "known_union_delta_pdl0_us": 793.246,
+    "llama_node_sum_us": 3878.254,
+    "node_sum_delta_us": 799.666,
+    "tinygrad_node_sum_us": 4677.92,
+    "tinygrad_overlap_us": 6.42
+  },
+  "reconciliation": {
+    "named_nine_rows": [
+      {
+        "delta_us": 112.223,
+        "label": "K/V projections + completion",
+        "llama_count": 72,
+        "llama_us": 215.009,
+        "role": "kv_proj",
+        "tinygrad_count": 98,
+        "tinygrad_us": 327.232
+      },
+      {
+        "delta_us": 101.326,
+        "label": "gate/up GEMV",
+        "llama_count": 36,
+        "llama_us": 1268.37,
+        "role": "gate_up",
+        "tinygrad_count": 36,
+        "tinygrad_us": 1369.696
+      },
+      {
+        "delta_us": 84.412,
+        "label": "Q projection + completion",
+        "llama_count": 36,
+        "llama_us": 249.092,
+        "role": "q_proj",
+        "tinygrad_count": 53,
+        "tinygrad_us": 333.504
+      },
+      {
+        "delta_us": 75.231,
+        "label": "O projection",
+        "llama_count": 36,
+        "llama_us": 259.809,
+        "role": "o_proj",
+        "tinygrad_count": 36,
+        "tinygrad_us": 335.04
+      },
+      {
+        "delta_us": 74.551,
+        "label": "down GEMV",
+        "llama_count": 36,
+        "llama_us": 855.817,
+        "role": "down",
+        "tinygrad_count": 36,
+        "tinygrad_us": 930.368
+      },
+      {
+        "delta_us": 67.612,
+        "label": "vocab main + tail",
+        "llama_count": 2,
+        "llama_us": 303.908,
+        "role": "vocab",
+        "tinygrad_count": 5,
+        "tinygrad_us": 371.52
+      },
+      {
+        "delta_us": 66.943,
+        "label": "flash combine",
+        "llama_count": 36,
+        "llama_us": 37.057,
+        "role": "flash_combine",
+        "tinygrad_count": 36,
+        "tinygrad_us": 104.0
+      },
+      {
+        "delta_us": 64.54,
+        "label": "flash score",
+        "llama_count": 36,
+        "llama_us": 162.948,
+        "role": "flash_score",
+        "tinygrad_count": 36,
+        "tinygrad_us": 227.488
+      }
+    ],
+    "named_nine_sum_us": 646.838,
+    "remainder_node_sum_us": 152.828,
+    "remainder_rows": [
+      {
+        "delta_us": 125.439,
+        "label": "attn/ffn/final 4096 norm",
+        "llama_count": 73,
+        "llama_us": 203.361,
+        "role": "norm_4096",
+        "tinygrad_count": 94,
+        "tinygrad_us": 328.8
+      },
+      {
+        "delta_us": 55.455,
+        "label": "Q head norm",
+        "llama_count": 36,
+        "llama_us": 41.281,
+        "role": "q_norm",
+        "tinygrad_count": 36,
+        "tinygrad_us": 96.736
+      },
+      {
+        "delta_us": 49.376,
+        "label": "K head norm",
+        "llama_count": 36,
+        "llama_us": 40.832,
+        "role": "k_norm",
+        "tinygrad_count": 36,
+        "tinygrad_us": 90.208
+      },
+      {
+        "delta_us": 28.606,
+        "label": "rope + K/V store",
+        "llama_count": 108,
+        "llama_us": 92.866,
+        "role": "rope_store",
+        "tinygrad_count": 73,
+        "tinygrad_us": 121.472
+      },
+      {
+        "delta_us": 8.384,
+        "label": "misc / embedding",
+        "llama_count": 3,
+        "llama_us": 2.784,
+        "role": "other",
+        "tinygrad_count": 4,
+        "tinygrad_us": 11.168
+      },
+      {
+        "delta_us": -114.432,
+        "label": "activation quant",
+        "llama_count": 216,
+        "llama_us": 145.12,
+        "role": "quant",
+        "tinygrad_count": 17,
+        "tinygrad_us": 30.688
+      }
+    ]
+  },
+  "rows": [
+    {
+      "delta_us": 125.439,
+      "label": "attn/ffn/final 4096 norm",
+      "llama_count": 73,
+      "llama_us": 203.361,
+      "role": "norm_4096",
+      "tinygrad_count": 94,
+      "tinygrad_us": 328.8
+    },
+    {
+      "delta_us": 112.223,
+      "label": "K/V projections + completion",
+      "llama_count": 72,
+      "llama_us": 215.009,
+      "role": "kv_proj",
+      "tinygrad_count": 98,
+      "tinygrad_us": 327.232
+    },
+    {
+      "delta_us": 101.326,
+      "label": "gate/up GEMV",
+      "llama_count": 36,
+      "llama_us": 1268.37,
+      "role": "gate_up",
+      "tinygrad_count": 36,
+      "tinygrad_us": 1369.696
+    },
+    {
+      "delta_us": 84.412,
+      "label": "Q projection + completion",
+      "llama_count": 36,
+      "llama_us": 249.092,
+      "role": "q_proj",
+      "tinygrad_count": 53,
+      "tinygrad_us": 333.504
+    },
+    {
+      "delta_us": 75.231,
+      "label": "O projection",
+      "llama_count": 36,
+      "llama_us": 259.809,
+      "role": "o_proj",
+      "tinygrad_count": 36,
+      "tinygrad_us": 335.04
+    },
+    {
+      "delta_us": 74.551,
+      "label": "down GEMV",
+      "llama_count": 36,
+      "llama_us": 855.817,
+      "role": "down",
+      "tinygrad_count": 36,
+      "tinygrad_us": 930.368
+    },
+    {
+      "delta_us": 67.612,
+      "label": "vocab main + tail",
+      "llama_count": 2,
+      "llama_us": 303.908,
+      "role": "vocab",
+      "tinygrad_count": 5,
+      "tinygrad_us": 371.52
+    },
+    {
+      "delta_us": 66.943,
+      "label": "flash combine",
+      "llama_count": 36,
+      "llama_us": 37.057,
+      "role": "flash_combine",
+      "tinygrad_count": 36,
+      "tinygrad_us": 104.0
+    },
+    {
+      "delta_us": 64.54,
+      "label": "flash score",
+      "llama_count": 36,
+      "llama_us": 162.948,
+      "role": "flash_score",
+      "tinygrad_count": 36,
+      "tinygrad_us": 227.488
+    },
+    {
+      "delta_us": 55.455,
+      "label": "Q head norm",
+      "llama_count": 36,
+      "llama_us": 41.281,
+      "role": "q_norm",
+      "tinygrad_count": 36,
+      "tinygrad_us": 96.736
+    },
+    {
+      "delta_us": 49.376,
+      "label": "K head norm",
+      "llama_count": 36,
+      "llama_us": 40.832,
+      "role": "k_norm",
+      "tinygrad_count": 36,
+      "tinygrad_us": 90.208
+    },
+    {
+      "delta_us": 28.606,
+      "label": "rope + K/V store",
+      "llama_count": 108,
+      "llama_us": 92.866,
+      "role": "rope_store",
+      "tinygrad_count": 73,
+      "tinygrad_us": 121.472
+    },
+    {
+      "delta_us": 8.384,
+      "label": "misc / embedding",
+      "llama_count": 3,
+      "llama_us": 2.784,
+      "role": "other",
+      "tinygrad_count": 4,
+      "tinygrad_us": 11.168
+    },
+    {
+      "delta_us": -114.432,
+      "label": "activation quant",
+      "llama_count": 216,
+      "llama_us": 145.12,
+      "role": "quant",
+      "tinygrad_count": 17,
+      "tinygrad_us": 30.688
+    }
+  ],
+  "schema": "tinygrad.nv_full_token_role_census.v1",
+  "sources": {
+    "llama_pdl0_dag": "docs/task_workflow/evidence/nv-third-party-theory-audit-20260822/probe2-llama-pdl0-dag.json",
+    "llama_pdl0_dag_sha256": "1886109c5837ec546e0386bf20579cf2c53485a62b55548eda3b586f66a1407e",
+    "tinygrad_capture": "docs/task_workflow/evidence/nv-third-party-theory-audit-20260822/probe2-tinygrad-capture.json",
+    "tinygrad_capture_sha256": "c34b5752ef3bf3a0a092f410636d1feedda8b9db843c6b6f2fc44855e0a9e224"
+  }
+}

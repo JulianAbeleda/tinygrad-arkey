@@ -1,0 +1,41 @@
+{
+  "schema": "tinygrad.nv_catch_llama_ledger.counter_bridge.v1",
+  "phase": 1,
+  "status": "QUALIFIED_STRUCTURAL_EXACT_IMAGE",
+  "verdict": "production NV cubin images are loadable under NCU through the CUDA driver primary context; NCU reports the full counter set for 7 of 8 captured main-body rows",
+  "what_this_proves": "production DEV=NV cubins and their exact launch geometry were captured, and the same image bytes were re-launched through a CUDA driver context so NCU could see them",
+  "what_this_does_not_prove": "numeric output equality between the production QMD path and the replay harness was not measured; the replay harness allocates zeroed buffers and is counter-domain evidence only, not a semantic gate",
+  "capture_source": "extra/llm_research/decode/nv_cubin_capture.py --prefixes q4k_,q6k_,flash_ --depth 512",
+  "capture_artifact": "docs/task_workflow/evidence/nv-catch-llama-ledger-20260822/phase1/cubin-capture-all-rows.json",
+  "launcher_source": "extra/llm_research/decode/nv_cubin_ncu_launcher.py",
+  "counter_artifact": "docs/task_workflow/evidence/nv-catch-llama-ledger-20260822/phase2-row-counters.json",
+  "key_mechanics": [
+    "NVProgram.__init__/__call__ are monkeypatched measurement-only to retain the raw cubin, regs_usage, shmem_usage, lcmem_usage, max_threads, global_size, local_size, and HCQ buffer sizes",
+    "the captured cubin is loaded verbatim with cuModuleLoadData, not recompiled from source",
+    "cuMemAlloc_v2 returns CUDA_ERROR_INVALID_CONTEXT on a non-primary context; cuDevicePrimaryCtxRetain is used so the launch succeeds on this driver",
+    "NCU is run under sudo -E ncu because admin perf-counter access is required on this host"
+  ],
+  "exact_image_gate": {
+    "cubin_bytes_matched": true,
+    "grid_and_block_matched": true,
+    "buffer_sizes_matched": true,
+    "register_shmem_lcmem_metadata_captured": true,
+    "numeric_output_equality": "UNMEASURED",
+    "source_recompile_fallback": "NOT_USED"
+  },
+  "rows": {
+    "gate_up": {"symbol": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096", "ncu_returncode": 0},
+    "Q": {"symbol": "q4k_g3_lanemap_gemv_4096_4096", "ncu_returncode": 0},
+    "O": {"symbol": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096", "ncu_returncode": 0},
+    "V_q4": {"symbol": "q4k_g3_lanemap_gemv_1024_4096", "ncu_returncode": 0},
+    "V_q6": {"symbol": "q6k_v_four_warp_fp16_direct_1024_4096", "ncu_returncode": 0},
+    "down_q6": {"symbol": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd", "ncu_returncode": 0},
+    "vocab": {"symbol": "q6k_gen_coop_151936_4096_inkernel", "ncu_returncode": 0},
+    "flash_combine": {"symbol": "flash_fused_gmax_combine_f16_32_128", "ncu_returncode": 0},
+    "flash_score": {"symbol": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128", "ncu_returncode": 1, "reason": "CUDA Error 1 invalid argument in the replay harness; isolated body evidence reused from the prior audit instead"}
+  },
+  "llama_counter_reference": {
+    "artifact": "docs/task_workflow/evidence/nv-third-party-theory-audit-20260822/probe5-llama-full-token-bytes.ncu-rep",
+    "domain_note": "llama counter values are full-token NCU replay; tinygrad values are exact-image per-row replay; both are counter-domain, not wall"
+  }
+}

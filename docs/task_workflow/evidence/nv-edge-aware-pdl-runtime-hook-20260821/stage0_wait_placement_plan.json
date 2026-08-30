@@ -1,0 +1,113 @@
+{
+  "schema": "tinygrad.nv_edge_aware_pdl_stage0_wait_placement.v1",
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "date": "2026-08-21",
+  "scope": "Stage 0 no-GPU design audit; placement is planned, not emitted",
+  "current_hook": {
+    "renderer": "tinygrad/renderer/cuda.py:23-34",
+    "runtime": "tinygrad/runtime/ops_nv.py:38-51",
+    "wait": "griddepcontrol.wait prepended at instruction zero",
+    "trigger": "griddepcontrol.launch_dependents appended at body end by default, or prepended for start",
+    "name_pinning": "NV_PDL_CONSUMER_PROGRAMS / NV_PDL_PRODUCER_PROGRAMS process-wide prefixes"
+  },
+  "target_placement_rule": "after index/pointer/accumulator setup and immediately before the first access to the buffer owned by the split edge; for a consumer with several RAW producers this rule only becomes single-wait-safe after the multi-producer capability is proven",
+  "consumer_families": [
+    {
+      "family": "E_* elementwise/residual",
+      "programs": "E_32_4_*, E_2_8_16_4_*, E_16_32_4_2_*, E_8_8_16_2_*, and other ordinary elementwise programs",
+      "first_dependent_access": "first global load after gidx/lidx/address setup",
+      "anchor_source": "rendered sources in /tmp/e32_4_probe.log and /tmp/qk_ordinary_src32_full.log",
+      "example": "E_32_4_29b...: wait after `int lidx0` and `int alu0`, before `half4 val0 = (*((half4*)(data1_128+alu0)))`",
+      "placement": "before_first_dependent_access",
+      "trigger_policy_candidates": ["end", "start"],
+      "notes": "E_2_8_16_4_* kernels with a split producer must resolve which input buffer the edge owns before choosing the insertion point; the generic rule is the first load of that owned buffer"
+    },
+    {
+      "family": "r_* ordinary reductions",
+      "programs": "r_2_8_4_4_16_*, r_8_16_8_*, r_16_256_*, r_32_32_4_*_*, and other r_* reductions",
+      "first_dependent_access": "first load of the reduced activation inside the Ridx reduce loop",
+      "anchor_source": "/tmp/qk_ordinary_src32_full.log lines 7-19 and /tmp/qk_ordinary_src8_full.log lines 7-21",
+      "example": "r_2_8_4_4_16...: wait after the accumulator is zeroed, before `float val0 = (*(data1_4096+alu4));` in the Ridx loop",
+      "placement": "before_first_dependent_access",
+      "trigger_policy_candidates": ["end", "start"],
+      "notes": "the accumulator zeroing and address setup must remain outside the wait so the launched CTA can do useful setup while the producer finishes"
+    },
+    {
+      "family": "reduce_output_rmsnorm_*",
+      "programs": "reduce_output_rmsnorm_1_4096, reduce_output_rmsnorm_32_128, reduce_output_rmsnorm_8_128",
+      "first_dependent_access": "first x load in the sumsq loop",
+      "anchor_source": "tinygrad/codegen/late/reduce_output.py:76-162 (UOp body) and /tmp/e32_4_probe.log rendered sources",
+      "example": "reduce_output_rmsnorm_32_128: wait after `lidx1/lidx2`, `buf0 = 0`, and `alu1`, before `float val0 = (*(data1_4096+(lidx1+alu1+(Ridx2<<3))))`",
+      "placement": "before_first_dependent_access",
+      "trigger_policy_candidates": ["end"],
+      "notes": "the weight read occurs later in the epilogue; only the activation x span is the RAW edge, so the wait belongs before the first x load"
+    },
+    {
+      "family": "flash_block_tiled_xlane_score_pv_tile_whole_cache_*",
+      "programs": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "first_dependent_access": "first KV cache load in the staging loop (`kv_load(0,...)` feeding `kstore`)",
+      "anchor_source": "tinygrad/llm/flash_decode_attention.py:186-238",
+      "example": "wait after `ksh/vsh/acc/den/mx` setup and before `kstore = ksh[idx].store(kv_load(0, kvh, token_safe, elem_stage), *gate)`",
+      "placement": "before_first_dependent_access",
+      "trigger_policy_candidates": ["end"],
+      "notes": "the K and V E_* producers feed the cache span; wait must cover whichever cache span the split edge owns"
+    },
+    {
+      "family": "flash_fused_gmax_combine_f16_*",
+      "programs": "flash_fused_gmax_combine_f16_32_128",
+      "first_dependent_access": "first pout load in the max reduction",
+      "anchor_source": "tinygrad/llm/flash_decode_attention.py:295-341",
+      "example": "wait after `head/lane` setup and `max_init`, before `max_update = ... pout[(head * stride + split) * W + M_COL]`",
+      "placement": "before_first_dependent_access",
+      "trigger_policy_candidates": ["end"],
+      "notes": "combine reads the score kernel's pout partials; the wait must precede the first pout access"
+    },
+    {
+      "family": "rmsnorm_q8_1_llama_provider_4096",
+      "programs": "rmsnorm_q8_1_llama_provider_4096",
+      "first_dependent_access": "first x load in the sumsq reduction",
+      "anchor_source": "tinygrad/llm/shared_q8_attention.py:99-166",
+      "example": "wait after `lane/warp/red/base` setup, before `xv=x[base].cast(dtypes.float32)`",
+      "placement": "before_first_dependent_access",
+      "trigger_policy_candidates": ["end"],
+      "notes": "the weight and x spans are both RAW inputs; the x producer is the split edge, the weight is a materialized constant"
+    },
+    {
+      "family": "q8_1_llama_provider_4096",
+      "programs": "q8_1_llama_provider_4096",
+      "first_dependent_access": "first x load in the `rounded` prelude",
+      "anchor_source": "tinygrad/llm/shared_q8_attention.py:60-97",
+      "example": "wait after `group` setup, before the first `x[group*32+i]` load",
+      "placement": "before_first_dependent_access",
+      "trigger_policy_candidates": ["end"],
+      "notes": "the provider is a support producer, not a consumer in the Phase A name-pinned set, but is included for completeness of the edge-aware plan"
+    }
+  ],
+  "trigger_policies": [
+    {
+      "role": "anchor Q/K/V/G/D/vocab GEMVs",
+      "default_for_stage0": "end",
+      "candidate_variants": ["end", "start", "last_cta_launch"],
+      "evidence": "Phase C matched grid: native renderer trigger start 394.656/117.472 us shadow/overlap vs end 403.904/99.808 us; QMD pre-exit-at-last-CTA 403.712/99.808 us",
+      "decision_rule": "bracket on the real route in Stage 2/4; do not promote a start/end winner from the matched grid alone"
+    },
+    {
+      "role": "support norm/reduce/elementwise/flash/quant providers",
+      "default_for_stage0": "end",
+      "candidate_variants": ["end"],
+      "evidence": "support output bytes are produced at the body end; a start trigger would expose a producer-data race in the dependent access",
+      "decision_rule": "end trigger until a wait-position bracket proves otherwise"
+    }
+  ],
+  "open_questions": [
+    "the renderer must receive per-program split policy from graph metadata rather than process-wide prefixes",
+    "multi-producer consumers have no single wait position until the QMD multi-wait/merge question is answered",
+    "the wait instruction is SASS `griddepcontrol.wait`; its memory-fence strength and whether it must follow a producer-trigger flush must be verified in Stage 2",
+    "wait-placement insertion must be feature-gated so the off path stays byte-identical"
+  ],
+  "status": {
+    "stage0_plan_complete": true,
+    "production_emission_required": false,
+    "device_verification_required": true
+  }
+}

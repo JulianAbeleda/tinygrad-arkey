@@ -1,0 +1,3632 @@
+{
+  "census": {
+    "attention_cast_candidate": 0,
+    "attention_cast_control": 0,
+    "block_output_copy_candidate": 0,
+    "block_output_copy_control": 0,
+    "candidate_evidence": {
+      "arm": "candidate",
+      "attention_cast_count": 0,
+      "block_output_copy_count": 0,
+      "combine_copy_count": 0,
+      "ffn_down_resadd_count": 36,
+      "ffn_residual_add_count": 0,
+      "flash_combine_f16_count": 36,
+      "flash_combine_f32_count": 0,
+      "fused16_us": 0,
+      "gates": {
+        "block_ffn_down_resadd_lease": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "block_flash_combine_fp16_lease": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "block_w1w3_fp16_store_lease": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "decode_direct_greedy_promoted": true,
+        "ffn_down_resadd_lease": true,
+        "flash_combine_fp16_lease": true,
+        "reduce_output_rmsnorm_promoted": true,
+        "rms_affine_gateup_lease_blocks": [
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          }
+        ],
+        "rms_affine_gateup_lease_model": false,
+        "w1w3_fp16_store_lease": true
+      },
+      "histogram": [
+        [
+          "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+          37,
+          4.06
+        ],
+        [
+          "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+          36,
+          44.575
+        ],
+        [
+          "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+          36,
+          9.95
+        ],
+        [
+          "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+          36,
+          7.505
+        ],
+        [
+          "flash_fused_gmax_combine_f16_32_128",
+          36,
+          3.33
+        ],
+        [
+          "reduce_output_rmsnorm_32_128",
+          36,
+          3.28
+        ],
+        [
+          "reduce_output_rmsnorm_8_128",
+          36,
+          3.04
+        ],
+        [
+          "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+          36,
+          2.4
+        ],
+        [
+          "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+          36,
+          2.3
+        ],
+        [
+          "q4k_g3_lanemap_gemv_1024_4096",
+          28,
+          4.880000000000001
+        ],
+        [
+          "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+          26,
+          3.78
+        ],
+        [
+          "q4k_g3_lanemap_gemv_4096_4096",
+          19,
+          9.92
+        ],
+        [
+          "reduce_output_rmsnorm_1_4096",
+          19,
+          7.87
+        ],
+        [
+          "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+          18,
+          31.74
+        ],
+        [
+          "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+          18,
+          22.16
+        ],
+        [
+          "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+          17,
+          9.09
+        ],
+        [
+          "rmsnorm_q8_1_llama_provider_4096",
+          17,
+          2.75
+        ],
+        [
+          "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+          17,
+          1.82
+        ],
+        [
+          "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+          17,
+          1.66
+        ],
+        [
+          "q6k_v_four_warp_fp16_direct_1024_4096",
+          10,
+          5.04
+        ],
+        [
+          "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+          9,
+          1.98
+        ],
+        [
+          "q6k_q8_warp_direct_1024_4096",
+          8,
+          4.29
+        ],
+        [
+          "q6k_gen_coop_151936_4096_inkernel",
+          1,
+          322.91
+        ],
+        [
+          "r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f",
+          1,
+          39.17
+        ],
+        [
+          "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5",
+          1,
+          11.14
+        ],
+        [
+          "r_32_32_4_32_4_b7c5eeb3ced63845c64b323fd8e5e923a69c1e162de001a94b565dcd96e9293f",
+          1,
+          5.28
+        ],
+        [
+          "E_16_4_2_8_16_2_4_4_35a6fe556c331254f920c4212fdc0c33244d8269d7c93cb1897349f36a254aee",
+          1,
+          3.23
+        ],
+        [
+          "E_1187_32_4_1f3be8c704fca4f7027f54e56f61fc8985ee837bc19d3f7b6f5875c98824e63e",
+          1,
+          2.53
+        ],
+        [
+          "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c",
+          1,
+          1.89
+        ],
+        [
+          "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+          1,
+          1.79
+        ],
+        [
+          "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346",
+          1,
+          1.54
+        ],
+        [
+          "E_32_32_4_5a5673a44c51a85d2e73b347238640218966a387a0c3b168f5ef5dc11a3e0798",
+          1,
+          1.5
+        ]
+      ],
+      "kernel_us": 5269.69,
+      "kernels": 558,
+      "mode": "census",
+      "norm_epilogue_count": 1,
+      "norm_epilogue_us": 1.79,
+      "norms_kernels": 38,
+      "norms_roles": {
+        "rmsnorm_epilogue": 1,
+        "rmsnorm_reduce": 37
+      },
+      "population_counts": {
+        "flash": 72,
+        "norms": 38,
+        "other": 284,
+        "quant_core": 84,
+        "residual_cast_contiguous": 1,
+        "rope_kv": 72,
+        "vocab_feedback": 7
+      },
+      "program_counts": {
+        "E_1187_32_4_1f3be8c704fca4f7027f54e56f61fc8985ee837bc19d3f7b6f5875c98824e63e": 1,
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a": 36,
+        "E_16_4_2_8_16_2_4_4_35a6fe556c331254f920c4212fdc0c33244d8269d7c93cb1897349f36a254aee": 1,
+        "E_32_32_4_5a5673a44c51a85d2e73b347238640218966a387a0c3b168f5ef5dc11a3e0798": 1,
+        "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077": 1,
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d": 36,
+        "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346": 1,
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": 36,
+        "flash_fused_gmax_combine_f16_32_128": 36,
+        "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd": 18,
+        "q4k_g3_lanemap_gemv_1024_4096": 28,
+        "q4k_g3_lanemap_gemv_4096_4096": 19,
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096": 36,
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096": 36,
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096": 26,
+        "q4k_warp_coop_q8_dp4a_partial_4096_4096": 17,
+        "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd": 18,
+        "q6k_gen_coop_151936_4096_inkernel": 1,
+        "q6k_q8_warp_direct_1024_4096": 8,
+        "q6k_v_four_warp_fp16_direct_1024_4096": 10,
+        "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5": 1,
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc": 37,
+        "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c": 1,
+        "r_32_32_4_32_4_b7c5eeb3ced63845c64b323fd8e5e923a69c1e162de001a94b565dcd96e9293f": 1,
+        "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7": 17,
+        "r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f": 1,
+        "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81": 9,
+        "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785": 17,
+        "reduce_output_rmsnorm_1_4096": 19,
+        "reduce_output_rmsnorm_32_128": 36,
+        "reduce_output_rmsnorm_8_128": 36,
+        "rmsnorm_q8_1_llama_provider_4096": 17
+      },
+      "rms_affine16_us": 1617.51,
+      "scale_reduce_count": 37,
+      "scale_reduce_us": 158.43,
+      "schema": "tinygrad.nv_epilogue_absorption_m1_ab.census.v1",
+      "token": 38835,
+      "w1w3_fused16_count": 0,
+      "w1w3_rms_affine16_count": 36,
+      "w1w3_rms_affine32_count": 0
+    },
+    "combine_copy_candidate": 0,
+    "combine_copy_control": 0,
+    "conditions": {
+      "control_is_landed_m2d_candidate": true,
+      "m1_affine16_swap_backed": true,
+      "m1_ffn_epilogues_folded": true,
+      "m1_fused16_gone": true,
+      "m1_scale_reduce_identical": true,
+      "m2_families_identical": true,
+      "net_delta_matches_drop": true,
+      "no_unrelated_program_shift": true
+    },
+    "control_evidence": {
+      "arm": "control",
+      "attention_cast_count": 0,
+      "block_output_copy_count": 0,
+      "combine_copy_count": 0,
+      "ffn_down_resadd_count": 36,
+      "ffn_residual_add_count": 0,
+      "flash_combine_f16_count": 36,
+      "flash_combine_f32_count": 0,
+      "fused16_us": 1400.74,
+      "gates": {
+        "block_ffn_down_resadd_lease": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "block_flash_combine_fp16_lease": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "block_w1w3_fp16_store_lease": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "decode_direct_greedy_promoted": true,
+        "ffn_down_resadd_lease": true,
+        "flash_combine_fp16_lease": true,
+        "reduce_output_rmsnorm_promoted": true,
+        "rms_affine_gateup_lease_blocks": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "rms_affine_gateup_lease_model": false,
+        "w1w3_fp16_store_lease": true
+      },
+      "histogram": [
+        [
+          "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+          37,
+          4.1
+        ],
+        [
+          "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+          37,
+          2.34
+        ],
+        [
+          "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+          36,
+          38.78
+        ],
+        [
+          "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+          36,
+          9.985
+        ],
+        [
+          "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+          36,
+          7.615
+        ],
+        [
+          "reduce_output_rmsnorm_32_128",
+          36,
+          3.33
+        ],
+        [
+          "flash_fused_gmax_combine_f16_32_128",
+          36,
+          3.33
+        ],
+        [
+          "reduce_output_rmsnorm_8_128",
+          36,
+          3.0549999999999997
+        ],
+        [
+          "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+          36,
+          2.4450000000000003
+        ],
+        [
+          "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+          36,
+          2.3
+        ],
+        [
+          "q4k_g3_lanemap_gemv_1024_4096",
+          28,
+          4.83
+        ],
+        [
+          "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+          26,
+          3.81
+        ],
+        [
+          "q4k_g3_lanemap_gemv_4096_4096",
+          19,
+          9.95
+        ],
+        [
+          "reduce_output_rmsnorm_1_4096",
+          19,
+          7.87
+        ],
+        [
+          "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+          18,
+          31.825
+        ],
+        [
+          "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+          18,
+          21.86
+        ],
+        [
+          "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+          17,
+          9.15
+        ],
+        [
+          "rmsnorm_q8_1_llama_provider_4096",
+          17,
+          2.62
+        ],
+        [
+          "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+          17,
+          1.89
+        ],
+        [
+          "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+          17,
+          1.7
+        ],
+        [
+          "q6k_v_four_warp_fp16_direct_1024_4096",
+          10,
+          4.915
+        ],
+        [
+          "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+          9,
+          1.98
+        ],
+        [
+          "q6k_q8_warp_direct_1024_4096",
+          8,
+          4.48
+        ],
+        [
+          "q6k_gen_coop_151936_4096_inkernel",
+          1,
+          323.14
+        ],
+        [
+          "r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f",
+          1,
+          39.26
+        ],
+        [
+          "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5",
+          1,
+          11.07
+        ],
+        [
+          "r_32_32_4_32_4_b7c5eeb3ced63845c64b323fd8e5e923a69c1e162de001a94b565dcd96e9293f",
+          1,
+          5.31
+        ],
+        [
+          "E_16_4_2_8_16_2_4_4_35a6fe556c331254f920c4212fdc0c33244d8269d7c93cb1897349f36a254aee",
+          1,
+          3.2
+        ],
+        [
+          "E_1187_32_4_1f3be8c704fca4f7027f54e56f61fc8985ee837bc19d3f7b6f5875c98824e63e",
+          1,
+          2.08
+        ],
+        [
+          "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c",
+          1,
+          1.79
+        ],
+        [
+          "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346",
+          1,
+          1.54
+        ],
+        [
+          "E_32_32_4_5a5673a44c51a85d2e73b347238640218966a387a0c3b168f5ef5dc11a3e0798",
+          1,
+          1.5
+        ]
+      ],
+      "kernel_us": 5144.62,
+      "kernels": 594,
+      "mode": "census",
+      "norm_epilogue_count": 37,
+      "norm_epilogue_us": 87.94,
+      "norms_kernels": 74,
+      "norms_roles": {
+        "rmsnorm_epilogue": 37,
+        "rmsnorm_reduce": 37
+      },
+      "population_counts": {
+        "flash": 72,
+        "norms": 74,
+        "other": 248,
+        "quant_core": 120,
+        "residual_cast_contiguous": 1,
+        "rope_kv": 72,
+        "vocab_feedback": 7
+      },
+      "program_counts": {
+        "E_1187_32_4_1f3be8c704fca4f7027f54e56f61fc8985ee837bc19d3f7b6f5875c98824e63e": 1,
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a": 36,
+        "E_16_4_2_8_16_2_4_4_35a6fe556c331254f920c4212fdc0c33244d8269d7c93cb1897349f36a254aee": 1,
+        "E_32_32_4_5a5673a44c51a85d2e73b347238640218966a387a0c3b168f5ef5dc11a3e0798": 1,
+        "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077": 37,
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d": 36,
+        "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346": 1,
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": 36,
+        "flash_fused_gmax_combine_f16_32_128": 36,
+        "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd": 18,
+        "q4k_g3_lanemap_gemv_1024_4096": 28,
+        "q4k_g3_lanemap_gemv_4096_4096": 19,
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096": 36,
+        "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096": 36,
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096": 26,
+        "q4k_warp_coop_q8_dp4a_partial_4096_4096": 17,
+        "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd": 18,
+        "q6k_gen_coop_151936_4096_inkernel": 1,
+        "q6k_q8_warp_direct_1024_4096": 8,
+        "q6k_v_four_warp_fp16_direct_1024_4096": 10,
+        "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5": 1,
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc": 37,
+        "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c": 1,
+        "r_32_32_4_32_4_b7c5eeb3ced63845c64b323fd8e5e923a69c1e162de001a94b565dcd96e9293f": 1,
+        "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7": 17,
+        "r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f": 1,
+        "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81": 9,
+        "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785": 17,
+        "reduce_output_rmsnorm_1_4096": 19,
+        "reduce_output_rmsnorm_32_128": 36,
+        "reduce_output_rmsnorm_8_128": 36,
+        "rmsnorm_q8_1_llama_provider_4096": 17
+      },
+      "rms_affine16_us": 0,
+      "scale_reduce_count": 37,
+      "scale_reduce_us": 158.75,
+      "schema": "tinygrad.nv_epilogue_absorption_m1_ab.census.v1",
+      "token": 38835,
+      "w1w3_fused16_count": 36,
+      "w1w3_rms_affine16_count": 0,
+      "w1w3_rms_affine32_count": 0
+    },
+    "fail_closed": [],
+    "ffn_down_resadd_candidate": 36,
+    "ffn_down_resadd_control": 36,
+    "ffn_residual_add_candidate": 0,
+    "ffn_residual_add_control": 0,
+    "flash_combine_f16_candidate": 36,
+    "flash_combine_f16_control": 36,
+    "flash_combine_f32_candidate": 0,
+    "flash_combine_f32_control": 0,
+    "fused16_candidate": 0,
+    "fused16_control": 36,
+    "gate_pass": true,
+    "honest_net_program_delta": -36,
+    "non_norms_population_deltas": {
+      "other": 36,
+      "quant_core": -36
+    },
+    "norm_epilogue_candidate": 1,
+    "norm_epilogue_control": 37,
+    "note": "expected drops derived from the measured control arm; the rms_affine16 body applies (half)((h*s)*w) per packed-Q4 load with the bitwise-exact control scale rendered by the same r_16_256 reduce program; the fused16 -> rms_affine16 swap is 1:1; the fp16 store keeps the ffn-activation cast folded and the ffn_down fp16 ABI intact",
+    "program_side_effects": {
+      "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077": -36,
+      "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096": -36,
+      "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096": 36
+    },
+    "result": "PASS",
+    "rms_affine16_candidate": 36,
+    "rms_affine16_control": 0,
+    "rms_affine32_candidate": 0,
+    "run": true,
+    "scale_reduce_candidate": 37,
+    "scale_reduce_control": 37,
+    "unrelated_program_deltas": {}
+  },
+  "citations": [
+    "docs/task_workflow/input/nv-epilogue-absorption-route-scope-20260810.md",
+    "extra/llm_research/decode/nv_epilogue_absorption_ab.py",
+    "tinygrad/llm/decode_kernels.py",
+    "tinygrad/llm/decode_routes.py",
+    "tinygrad/llm/model.py"
+  ],
+  "construction": {
+    "census_target": "E_32_32_4_f14a5cc0 37 -> 1 (the 36 ffn epilogues fold; the one non-FFN chain stays); q4k_g3_lanemap_gemv_w1w3fused16_12288_4096 36 -> 0 swapped 1:1 with q4k_g3_lanemap_w1w3_rms_affine16_12288_4096 0 -> 36; r_16_256 stays 37 == 37 (36 route scale reduces + 1 remaining chain); all other program counts byte-identical to control; honest net program delta -36 (594 -> 558)",
+    "codegen_path": "both arms run the LANDED M2d candidate conditions (callify flags + _decode_reduce_output_rmsnorm_promoted + _decode_direct_greedy_promoted + _q4k_w1w3_fp16_store_lease + _ffn_down_resadd_lease + _flash_combine_fp16_lease on the model and every block); the candidate additionally installs _rms_affine_gateup_norm_weight on every block (an owned fp16 buffer of ffn_norm.weight), which opens q4k_gate_up_rms_affine_qualification_call -> q4k_g3_lanemap_gemv_w1w3_rms_affine_kernel(store_fp16=True); the model checks the M1 lease BEFORE the M2b branch and threads ffn_down(z, normed_h=h) so the M2b residual add is preserved",
+    "correctness_contract": {
+      "census": "E_32_32_4_f14a5cc0 dropped by exactly the control fused16 count (the 36 ffn epilogues), rms_affine16 bodies present 1:1 with the control fused16 count, fused16 at zero, r_16_256 counts identical, no other program-count shift; FAIL CLOSED on any unrelated delta",
+      "full_logit_fp32_sha256": "bitwise identical to control over the stacked rows",
+      "per_row_argmax": "equals the sampled token",
+      "promotion": "+50 us/token vs both bracketing controls (control / candidate / control)",
+      "token_stream": "identical to control"
+    },
+    "mechanism": "the fused gate/up GEMV applies the ordinary ffn-norm epilogue per packed-Q4 load: (half)((h*s)*w) with ONE fp16 RNE round at the end of the fp32 multiply chain (weight upcast fp16->fp32) and the bitwise-exact control scale (h.float().square().mean(-1,keepdim=True)+eps).rsqrt() rendered on the raw fp32 h (the SAME r_16_256 reduce program as control). The fp16 norm weight buffer is the loader's _decode_reduce_output_weight (or a fresh cast), i.e. the exact buffer the control epilogue reads. The fused z stores fp16 under q4k_g3_lanemap_w1w3_rms_affine16_* (mirroring the landed fused16 store), so the ffn-activation cast stays folded and the ffn_down consumer sees the same fp16 ABI as control. The M2b ffn_down residual add stays live: the block threads ffn_down(z, normed_h=h).",
+    "population": "norms (remaining ffn-norm chains)",
+    "question": "Does the M1 in-kernel ffn-norm absorption survive NV render (Xid 31 class), preserve exact full logits, remove exactly the 36 ffn-norm epilogues with the fused16 -> rms_affine16 1:1 swap and no r_16_256 shift, and book the remaining ffn-norm share of the norms row under the reverse wall bracket?",
+    "route": "M1 ffn-norm epilogue absorption into the fused w1+w3 gate/up GEMV (r_16_256 + E_32_32_4_f14a5cc0 per block fold away)"
+  },
+  "cost_prediction": {
+    "bracket_field_us": -82.07753125000039,
+    "contract": {
+      "arithmetic": {
+        "per_element_extra_ops": "2 FMUL + fp16 RNE cast + upcast per element per matrix",
+        "redundancy": 2,
+        "redundancy_note": "the norm epilogue re-executes once per matrix dot (gate and up each recompute (half)((h*s)*w))",
+        "scale_reduce_retained": "r_16_256 must stay (bitwise contract; llama keeps n_f32)",
+        "x_traffic": "fp32 16KB vs fp16 8KB per token per block"
+      },
+      "assumptions": {
+        "M_removed": "control census median of the folded epilogue family, measured per run before the bracket",
+        "launch_us": "1.5 (range 1.0-2.0), E_32_32_4 class floor, m4-resadd-landing-scope-20260806.md"
+      },
+      "contract": "before implementing, derive the predicted wall delta from the llama reference shape plus per-element instruction/traffic arithmetic; the wall bracket then either confirms it or explains the gap",
+      "formula": "blocks x [ (R - 1) x M_removed - R x launch_us ]; positive = candidate slower",
+      "llama_reference": "rms_norm_f32 = ONE fused reduce+affine kernel, fp32 out; norm never enters the matmul; matmul consumes quantize_q8_1 activation (llama_tinygrad_role_manifest.py)",
+      "tolerance_us": 20.0,
+      "unmodeled": [
+        "in-kernel critical path (occupancy/dependency chain)",
+        "activation traffic"
+      ]
+    },
+    "measured_delta_us": 82.07753125000039,
+    "note": "positive delta = candidate slower; CONTRADICTED fails the campaign closed",
+    "prediction": {
+      "assumptions": {
+        "launch_citation": "m4-resadd-landing-scope-20260806.md (E_32_32_4 class floor)",
+        "launch_us_range": [
+          1.0,
+          2.0
+        ],
+        "unmodeled": [
+          "in-kernel critical path (occupancy/dependency chain)",
+          "activation traffic (fp16 vs fp32 x bytes)"
+        ]
+      },
+      "blocks": 36,
+      "decisive": false,
+      "formula": "blocks x [ (R - 1) x M_removed - R x launch_us ]; positive = candidate slower",
+      "predicted_delta_us": -23.76,
+      "range_us": [
+        -59.76,
+        12.24
+      ],
+      "terms": {
+        "E_32_32_4_f14a5cc0": {
+          "median_us": 2.34,
+          "per_block_hi_us": 0.33999999999999986,
+          "per_block_lo_us": -1.6600000000000001,
+          "redundancy": 2
+        }
+      }
+    },
+    "reconciliation": {
+      "gap_us": 105.838,
+      "measured_delta_us": 82.078,
+      "note": "positive delta = candidate slower; CONTRADICTED fails the campaign closed",
+      "predicted_delta_us": -23.76,
+      "range_us": [
+        -59.76,
+        12.24
+      ],
+      "residual_causes": [
+        {
+          "cause": "in_kernel_critical_path",
+          "note": "absorbed epilogue re-executes on the reduction dependency chain (register pressure / occupancy); the standalone kernel median understates the in-kernel cost"
+        },
+        {
+          "cause": "activation_traffic",
+          "note": "x stream bytes changed (fp16 -> fp32 doubles the per-row activation reads across all rows)"
+        }
+      ],
+      "result": "CONTRADICTED",
+      "tolerance_us": 20.0
+    },
+    "result": "FAIL",
+    "run": true
+  },
+  "date": "2026-08-12",
+  "hard_stop_notes": [
+    "Every GPU arm runs as a fresh process under `timeout ... flock -w 90 /tmp/gpu-bench.lock`; no arm holds the lock across a wall-bracket step.",
+    "Phase 0 (NV render smoke) must survive on sm_120 (no Xid 31 MMU fault) with the rms_affine16 kernels (q4k_g3_lanemap_w1w3_rms_affine16_*) in the compiled program set, no fused16 kernel, the ffn-norm epilogue reduced to the non-FFN chain, no E_32_32_4_02a9738c residual add, no E_32_32_4_fab82d40 copy, no E_32_32_4_0a5eb0ac attention cast, no legacy fp32 combine, and no E_32_32_4_3b0fcfbc opaque copy.",
+    "The exact full-logit gate (fp32 SHA-256 over the stacked rows, token stream, shape, per-row argmax == sampled token) must pass before any census or bracket arm runs.",
+    "The census gate FAILS CLOSED if the ffn-norm epilogues do not drop by exactly the control fused16 count, if the fused16 kernels remain, if the rms_affine16 bodies do not swap 1:1, if the r_16_256 scale-reduce count shifts, if any M2 family shifts, or if any unrelated program count shifts; expected counts derive from the measured control arm.",
+    "The wall bracket requires identical token-stream hashes and a candidate median at least +50 us/token faster than BOTH bracketing controls.",
+    "The predicted-wall-delta gate (COST_PREDICTION + validate_cost_prediction) runs after the bracket: the measured delta must CONFIRM the llama-shaped prediction or EXPLAIN the gap with named residual causes; a CONTRADICTION (measured outside the predicted range on the opposite side of zero) FAILS CLOSED and the campaign cannot book.",
+    "No policy promotion: no route-policy record changes; the lease attribute is harness-installed only.",
+    "HARD STOP at Phase 4: predicted-wall-delta CONTRADICTION (measured delta outside the llama-shaped prediction range on the opposite side of zero); the premise was unbacked and cannot book even if the raw bracket numbers promoted."
+  ],
+  "isolation_notes": [
+    "The M1 control arm IS the LANDED M2d candidate (same callify flags, reduce-output promotion, the M2a fp16-store lease, the M2b ffn_down residual-add lease, and the M2d flash-combine fp16-store lease), so the only inter-arm delta is the M1 norm-epilogue lease.",
+    "The exact-logits gate runs the eager JIT=0 finite check inside the child before comparing stacked-row SHAs, and any non-finite row fails closed.",
+    "Unlike M2d, no eager lease-strip is needed: the M1 fp16 round is real in BOTH the eager JIT=0 pass and the captured decode graph (control renders E_32_32_4_f14a5cc0 in the eager pass too), and the fused values are bitwise-identical to control, so the cache written at `depth` is arm-invariant."
+  ],
+  "logits_gate": {
+    "candidate_evidence": {
+      "arm": "candidate",
+      "dtype": "float32",
+      "gates": {
+        "block_ffn_down_resadd_lease": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "block_flash_combine_fp16_lease": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "block_w1w3_fp16_store_lease": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "decode_direct_greedy_promoted": true,
+        "ffn_down_resadd_lease": true,
+        "flash_combine_fp16_lease": true,
+        "reduce_output_rmsnorm_promoted": true,
+        "rms_affine_gateup_lease_blocks": [
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          }
+        ],
+        "rms_affine_gateup_lease_model": false,
+        "w1w3_fp16_store_lease": true
+      },
+      "logits_sha256": "596c73cb4905676c92a91a62be5d1255606ccdfee38c59394e44d0619fed2d96",
+      "mode": "logits",
+      "prelude_token": 13876,
+      "schema": "tinygrad.nv_epilogue_absorption_m1_ab.logits.v1",
+      "shape": [
+        32,
+        1,
+        151936
+      ],
+      "tokens": [
+        64461,
+        4710,
+        64461,
+        1837,
+        64461,
+        1837,
+        64461,
+        64461,
+        64461,
+        3014,
+        64461,
+        1837,
+        64461,
+        1837,
+        1837,
+        3014,
+        64461,
+        3014,
+        64461,
+        64461,
+        15011,
+        3014,
+        3014,
+        3014,
+        3014,
+        3014,
+        3014,
+        3014,
+        3014,
+        3014,
+        3014,
+        3014
+      ]
+    },
+    "candidate_sha256": "596c73cb4905676c92a91a62be5d1255606ccdfee38c59394e44d0619fed2d96",
+    "control_evidence": {
+      "arm": "control",
+      "dtype": "float32",
+      "gates": {
+        "block_ffn_down_resadd_lease": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "block_flash_combine_fp16_lease": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "block_w1w3_fp16_store_lease": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "decode_direct_greedy_promoted": true,
+        "ffn_down_resadd_lease": true,
+        "flash_combine_fp16_lease": true,
+        "reduce_output_rmsnorm_promoted": true,
+        "rms_affine_gateup_lease_blocks": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "rms_affine_gateup_lease_model": false,
+        "w1w3_fp16_store_lease": true
+      },
+      "logits_sha256": "596c73cb4905676c92a91a62be5d1255606ccdfee38c59394e44d0619fed2d96",
+      "mode": "logits",
+      "prelude_token": 13876,
+      "schema": "tinygrad.nv_epilogue_absorption_m1_ab.logits.v1",
+      "shape": [
+        32,
+        1,
+        151936
+      ],
+      "tokens": [
+        64461,
+        4710,
+        64461,
+        1837,
+        64461,
+        1837,
+        64461,
+        64461,
+        64461,
+        3014,
+        64461,
+        1837,
+        64461,
+        1837,
+        1837,
+        3014,
+        64461,
+        3014,
+        64461,
+        64461,
+        15011,
+        3014,
+        3014,
+        3014,
+        3014,
+        3014,
+        3014,
+        3014,
+        3014,
+        3014,
+        3014,
+        3014
+      ]
+    },
+    "control_sha256": "596c73cb4905676c92a91a62be5d1255606ccdfee38c59394e44d0619fed2d96",
+    "gate_pass": true,
+    "logits_sha256_equal": true,
+    "result": "PASS",
+    "run": true,
+    "shape_equal": true,
+    "tokens_equal": true
+  },
+  "mode": "ab",
+  "question": "Does the M1 in-kernel ffn-norm absorption survive NV render (Xid 31 class), preserve exact full logits, remove exactly the 36 ffn-norm epilogues with the fused16 -> rms_affine16 1:1 swap and no r_16_256 shift, and book the remaining ffn-norm share of the norms row under the reverse wall bracket?",
+  "schema": "tinygrad.nv_epilogue_absorption_m1_ab.v1",
+  "smoke": {
+    "evidence": {
+      "arm": "candidate",
+      "attention_cast_count": 0,
+      "block_output_copy_count": 0,
+      "combine_copy_count": 0,
+      "combine_f16_count": 36,
+      "combine_f32_count": 0,
+      "decode_observation": "second decode token after the prelude (index 1 of 3), mirroring capture_decode_graph",
+      "device": "<tinygrad.runtime.ops_nv.NVDevice object at 0x7acf6066cd40>",
+      "ffn_down_resadd_count": 36,
+      "fused16_count": 0,
+      "gates": {
+        "block_ffn_down_resadd_lease": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "block_flash_combine_fp16_lease": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "block_w1w3_fp16_store_lease": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "decode_direct_greedy_promoted": true,
+        "ffn_down_resadd_lease": true,
+        "flash_combine_fp16_lease": true,
+        "reduce_output_rmsnorm_promoted": true,
+        "rms_affine_gateup_lease_blocks": [
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          },
+          {
+            "dtype": "dtypes.half",
+            "is_fp16": true,
+            "shape": [
+              4096
+            ]
+          }
+        ],
+        "rms_affine_gateup_lease_model": false,
+        "w1w3_fp16_store_lease": true
+      },
+      "mode": "smoke",
+      "norm_epilogue_count": 1,
+      "prelude_token": 13876,
+      "program_count": 558,
+      "program_names": [
+        "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346",
+        "E_16_4_2_8_16_2_4_4_35a6fe556c331254f920c4212fdc0c33244d8269d7c93cb1897349f36a254aee",
+        "r_32_32_4_32_4_b7c5eeb3ced63845c64b323fd8e5e923a69c1e162de001a94b565dcd96e9293f",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+        "q4k_g3_lanemap_gemv_4096_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "q6k_v_four_warp_fp16_direct_1024_4096",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "rmsnorm_q8_1_llama_provider_4096",
+        "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "q6k_q8_warp_direct_1024_4096",
+        "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+        "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "rmsnorm_q8_1_llama_provider_4096",
+        "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "q6k_q8_warp_direct_1024_4096",
+        "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+        "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "rmsnorm_q8_1_llama_provider_4096",
+        "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "q6k_q8_warp_direct_1024_4096",
+        "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+        "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "rmsnorm_q8_1_llama_provider_4096",
+        "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+        "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+        "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "rmsnorm_q8_1_llama_provider_4096",
+        "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+        "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+        "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "rmsnorm_q8_1_llama_provider_4096",
+        "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "q6k_q8_warp_direct_1024_4096",
+        "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+        "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "rmsnorm_q8_1_llama_provider_4096",
+        "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+        "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+        "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "rmsnorm_q8_1_llama_provider_4096",
+        "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+        "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+        "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "rmsnorm_q8_1_llama_provider_4096",
+        "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "q6k_q8_warp_direct_1024_4096",
+        "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+        "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "rmsnorm_q8_1_llama_provider_4096",
+        "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+        "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+        "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "rmsnorm_q8_1_llama_provider_4096",
+        "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+        "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+        "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "rmsnorm_q8_1_llama_provider_4096",
+        "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "q6k_q8_warp_direct_1024_4096",
+        "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+        "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "reduce_output_rmsnorm_1_4096",
+        "q4k_g3_lanemap_gemv_4096_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "rmsnorm_q8_1_llama_provider_4096",
+        "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+        "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+        "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "rmsnorm_q8_1_llama_provider_4096",
+        "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "q6k_q8_warp_direct_1024_4096",
+        "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+        "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "rmsnorm_q8_1_llama_provider_4096",
+        "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+        "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+        "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "rmsnorm_q8_1_llama_provider_4096",
+        "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+        "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+        "r_8_32_4_4_0187db79106373f74f8dfb2c7c462e006a6d17ae7fec16538a0201328f198b81",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "rmsnorm_q8_1_llama_provider_4096",
+        "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+        "q6k_q8_warp_direct_1024_4096",
+        "r_32_32_4_4_b248195950c8b6f47178e37b7fd947ccf7b49d6802809e05d62b9ee02c3c49c7",
+        "r_8_32_4_4_37811d44743bc147765661c0047945cf48d87454f05c20785e91cf8dc3511785",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "reduce_output_rmsnorm_1_4096",
+        "q4k_g3_lanemap_gemv_4096_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "reduce_output_rmsnorm_1_4096",
+        "q4k_g3_lanemap_gemv_4096_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "reduce_output_rmsnorm_1_4096",
+        "q4k_g3_lanemap_gemv_4096_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "q6k_v_four_warp_fp16_direct_1024_4096",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "reduce_output_rmsnorm_1_4096",
+        "q4k_g3_lanemap_gemv_4096_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "reduce_output_rmsnorm_1_4096",
+        "q4k_g3_lanemap_gemv_4096_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "reduce_output_rmsnorm_1_4096",
+        "q4k_g3_lanemap_gemv_4096_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "q6k_v_four_warp_fp16_direct_1024_4096",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "reduce_output_rmsnorm_1_4096",
+        "q4k_g3_lanemap_gemv_4096_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "reduce_output_rmsnorm_1_4096",
+        "q4k_g3_lanemap_gemv_4096_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "reduce_output_rmsnorm_1_4096",
+        "q4k_g3_lanemap_gemv_4096_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "q6k_v_four_warp_fp16_direct_1024_4096",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "reduce_output_rmsnorm_1_4096",
+        "q4k_g3_lanemap_gemv_4096_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "reduce_output_rmsnorm_1_4096",
+        "q4k_g3_lanemap_gemv_4096_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "reduce_output_rmsnorm_1_4096",
+        "q4k_g3_lanemap_gemv_4096_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "q6k_v_four_warp_fp16_direct_1024_4096",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "reduce_output_rmsnorm_1_4096",
+        "q4k_g3_lanemap_gemv_4096_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "q6k_v_four_warp_fp16_direct_1024_4096",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "reduce_output_rmsnorm_1_4096",
+        "q4k_g3_lanemap_gemv_4096_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "q6k_v_four_warp_fp16_direct_1024_4096",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "reduce_output_rmsnorm_1_4096",
+        "q4k_g3_lanemap_gemv_4096_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "q6k_v_four_warp_fp16_direct_1024_4096",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "reduce_output_rmsnorm_1_4096",
+        "q4k_g3_lanemap_gemv_4096_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "q6k_v_four_warp_fp16_direct_1024_4096",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "reduce_output_rmsnorm_1_4096",
+        "q4k_g3_lanemap_gemv_4096_4096",
+        "q4k_g3_lanemap_gemv_1024_4096",
+        "q6k_v_four_warp_fp16_direct_1024_4096",
+        "reduce_output_rmsnorm_32_128",
+        "reduce_output_rmsnorm_8_128",
+        "E_16_32_4_2_7a4bed434b15ae120080f2376dad1914418c6c8222f2fe87f6924a599de5f90a",
+        "E_8_8_16_2_34c2f47940519d1b4681fef5e49b7b3975f89e8426171ceec426c5a785cb1f1d",
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_fused_gmax_combine_f16_32_128",
+        "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+        "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+        "q4k_g3_lanemap_w1w3_rms_affine16_12288_4096",
+        "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "reduce_output_rmsnorm_1_4096",
+        "E_32_32_4_5a5673a44c51a85d2e73b347238640218966a387a0c3b168f5ef5dc11a3e0798",
+        "q6k_gen_coop_151936_4096_inkernel",
+        "E_1187_32_4_1f3be8c704fca4f7027f54e56f61fc8985ee837bc19d3f7b6f5875c98824e63e",
+        "r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f",
+        "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5",
+        "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c"
+      ],
+      "residual_add_count": 0,
+      "rms_affine16_count": 36,
+      "rms_affine32_count": 0,
+      "scale_reduce_count": 37,
+      "schema": "tinygrad.nv_epilogue_absorption_m1_ab.smoke.v1",
+      "survive": true,
+      "token": 34208
+    },
+    "result": "PASS",
+    "run": true
+  },
+  "target": {
+    "depth": 512,
+    "device": "NV sm_120",
+    "gpu": "RTX 5090",
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf"
+  },
+  "verdict": "NO-GO",
+  "wall_bracket": {
+    "all_token_hashes_equal": true,
+    "arms": [
+      {
+        "accepted_samples_ms_per_token": [
+          4.73308284375,
+          4.7311495625,
+          4.72965175,
+          4.73511575,
+          4.73537840625
+        ],
+        "arm": "control",
+        "external_contention_high_limit_ms": 4.98308284375,
+        "gates": {
+          "block_ffn_down_resadd_lease": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "block_flash_combine_fp16_lease": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "block_w1w3_fp16_store_lease": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "decode_direct_greedy_promoted": true,
+          "ffn_down_resadd_lease": true,
+          "flash_combine_fp16_lease": true,
+          "reduce_output_rmsnorm_promoted": true,
+          "rms_affine_gateup_lease_blocks": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "rms_affine_gateup_lease_model": false,
+          "w1w3_fp16_store_lease": true
+        },
+        "median_ms_per_token": 4.73308284375,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "reps": 5,
+        "samples_ms_per_token": [
+          4.73308284375,
+          4.7311495625,
+          4.72965175,
+          4.73511575,
+          4.73537840625
+        ],
+        "schema": "tinygrad.nv_epilogue_absorption_m1_ab.timing.v1",
+        "settled_continuous": true,
+        "timed_token_count": 160,
+        "token_hashes": [
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+          "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4"
+        ],
+        "token_stream_hash": "f25083e5d0a754131283b40c03f52e688fee9f175bea7ae106805e7d628d7905",
+        "tokens_per_rep": 32,
+        "warmup_decode_calls": 6,
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      {
+        "accepted_samples_ms_per_token": [
+          4.83008846875,
+          4.81908315625,
+          4.81161225,
+          4.81319271875,
+          4.815193375
+        ],
+        "arm": "candidate",
+        "external_contention_high_limit_ms": 5.065193375,
+        "gates": {
+          "block_ffn_down_resadd_lease": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "block_flash_combine_fp16_lease": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "block_w1w3_fp16_store_lease": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "decode_direct_greedy_promoted": true,
+          "ffn_down_resadd_lease": true,
+          "flash_combine_fp16_lease": true,
+          "reduce_output_rmsnorm_promoted": true,
+          "rms_affine_gateup_lease_blocks": [
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            },
+            {
+              "dtype": "dtypes.half",
+              "is_fp16": true,
+              "shape": [
+                4096
+              ]
+            }
+          ],
+          "rms_affine_gateup_lease_model": false,
+          "w1w3_fp16_store_lease": true
+        },
+        "median_ms_per_token": 4.815193375,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "reps": 5,
+        "samples_ms_per_token": [
+          4.83008846875,
+          4.81908315625,
+          4.81161225,
+          4.81319271875,
+          4.815193375
+        ],
+        "schema": "tinygrad.nv_epilogue_absorption_m1_ab.timing.v1",
+        "settled_continuous": true,
+        "timed_token_count": 160,
+        "token_hashes": [
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+          "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4"
+        ],
+        "token_stream_hash": "f25083e5d0a754131283b40c03f52e688fee9f175bea7ae106805e7d628d7905",
+        "tokens_per_rep": 32,
+        "warmup_decode_calls": 6,
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      {
+        "accepted_samples_ms_per_token": [
+          4.7309055625,
+          4.737709,
+          4.73314884375,
+          4.733456625,
+          4.72898228125
+        ],
+        "arm": "control",
+        "external_contention_high_limit_ms": 4.98314884375,
+        "gates": {
+          "block_ffn_down_resadd_lease": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "block_flash_combine_fp16_lease": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "block_w1w3_fp16_store_lease": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "decode_direct_greedy_promoted": true,
+          "ffn_down_resadd_lease": true,
+          "flash_combine_fp16_lease": true,
+          "reduce_output_rmsnorm_promoted": true,
+          "rms_affine_gateup_lease_blocks": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "rms_affine_gateup_lease_model": false,
+          "w1w3_fp16_store_lease": true
+        },
+        "median_ms_per_token": 4.73314884375,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "reps": 5,
+        "samples_ms_per_token": [
+          4.7309055625,
+          4.737709,
+          4.73314884375,
+          4.733456625,
+          4.72898228125
+        ],
+        "schema": "tinygrad.nv_epilogue_absorption_m1_ab.timing.v1",
+        "settled_continuous": true,
+        "timed_token_count": 160,
+        "token_hashes": [
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+          "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4"
+        ],
+        "token_stream_hash": "f25083e5d0a754131283b40c03f52e688fee9f175bea7ae106805e7d628d7905",
+        "tokens_per_rep": 32,
+        "warmup_decode_calls": 6,
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      }
+    ],
+    "candidate_minus_control_a_us": -82.11053124999967,
+    "candidate_minus_control_b_us": -82.04453125000022,
+    "candidate_minus_control_bracket_us": -82.07753125000039,
+    "candidate_ms": 4.815193375,
+    "control_a_ms": 4.73308284375,
+    "control_b_ms": 4.73314884375,
+    "control_bracket_median_ms": 4.733115843749999,
+    "mode": "wall-bracket",
+    "note": "wall evidence only; booking requires the exact-logits gate and the M1 census gate",
+    "promoted": false,
+    "promotion_us": 50.0,
+    "result": "NO-GO",
+    "run": true,
+    "schema": "tinygrad.nv_epilogue_absorption_m1_ab.v1",
+    "settled_continuous": true
+  }
+}

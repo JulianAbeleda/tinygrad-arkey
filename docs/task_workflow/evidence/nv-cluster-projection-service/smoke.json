@@ -1,0 +1,125 @@
+{
+  "commit": "f37279e3b983c7727e9816b3bb9243eadf269051",
+  "device": {
+    "cluster_launch": true,
+    "compute_capability": "12.0",
+    "name": "NVIDIA GeForce RTX 5090",
+    "sm_count": 170
+  },
+  "medians": {
+    "2": {
+      "barrier_us": 1.77696,
+      "direct_global_us": 3.2768,
+      "dsm_minus_direct_us": 0.19455999999999962,
+      "dsm_minus_global_us": -1.6383999999999999,
+      "dsm_us": 3.47136,
+      "global_handoff_us": 5.10976
+    },
+    "4": {
+      "barrier_us": 1.77664,
+      "direct_global_us": 3.21536,
+      "dsm_minus_direct_us": 2.1504,
+      "dsm_minus_global_us": 1.4335999999999998,
+      "dsm_us": 5.36576,
+      "global_handoff_us": 3.93216
+    },
+    "8": {
+      "barrier_us": 1.75232,
+      "direct_global_us": 3.20512,
+      "dsm_minus_direct_us": 4.36224,
+      "dsm_minus_global_us": 4.17792,
+      "dsm_us": 7.56736,
+      "global_handoff_us": 3.38944
+    }
+  },
+  "ptxas": "ptxas info    : 5 bytes gmem\nptxas info    : Compiling entry function '_Z15cluster_barrierILi8EEvPf' for 'sm_120a'\nptxas info    : Function properties for _Z15cluster_barrierILi8EEvPf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 8 registers, used 0 barriers\nptxas info    : Compile time = 2.020 ms\nptxas info    : Compiling entry function '_Z13direct_globalILi8EEvPfPKf' for 'sm_120a'\nptxas info    : Function properties for _Z13direct_globalILi8EEvPfPKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 24 registers, used 0 barriers\nptxas info    : Compile time = 4.097 ms\nptxas info    : Compiling entry function '_Z14global_handoffILi8EEvPfS0_PKf' for 'sm_120a'\nptxas info    : Function properties for _Z14global_handoffILi8EEvPfS0_PKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 34 registers, used 0 barriers\nptxas info    : Compile time = 6.088 ms\nptxas info    : Compiling entry function '_Z11dsm_handoffILi8EEvPfPKf' for 'sm_120a'\nptxas info    : Function properties for _Z11dsm_handoffILi8EEvPfPKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 34 registers, used 0 barriers, 2048 bytes smem\nptxas info    : Compile time = 6.399 ms\nptxas info    : Compiling entry function '_Z15cluster_barrierILi4EEvPf' for 'sm_120a'\nptxas info    : Function properties for _Z15cluster_barrierILi4EEvPf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 8 registers, used 0 barriers\nptxas info    : Compile time = 0.728 ms\nptxas info    : Compiling entry function '_Z13direct_globalILi4EEvPfPKf' for 'sm_120a'\nptxas info    : Function properties for _Z13direct_globalILi4EEvPfPKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 24 registers, used 0 barriers\nptxas info    : Compile time = 3.707 ms\nptxas info    : Compiling entry function '_Z14global_handoffILi4EEvPfS0_PKf' for 'sm_120a'\nptxas info    : Function properties for _Z14global_handoffILi4EEvPfS0_PKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 32 registers, used 0 barriers\nptxas info    : Compile time = 5.485 ms\nptxas info    : Compiling entry function '_Z11dsm_handoffILi4EEvPfPKf' for 'sm_120a'\nptxas info    : Function properties for _Z11dsm_handoffILi4EEvPfPKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 34 registers, used 0 barriers, 4096 bytes smem\nptxas info    : Compile time = 6.257 ms\nptxas info    : Compiling entry function '_Z15cluster_barrierILi2EEvPf' for 'sm_120a'\nptxas info    : Function properties for _Z15cluster_barrierILi2EEvPf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 8 registers, used 0 barriers\nptxas info    : Compile time = 0.716 ms\nptxas info    : Compiling entry function '_Z13direct_globalILi2EEvPfPKf' for 'sm_120a'\nptxas info    : Function properties for _Z13direct_globalILi2EEvPfPKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 24 registers, used 0 barriers\nptxas info    : Compile time = 3.364 ms\nptxas info    : Compiling entry function '_Z14global_handoffILi2EEvPfS0_PKf' for 'sm_120a'\nptxas info    : Function properties for _Z14global_handoffILi2EEvPfS0_PKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 32 registers, used 0 barriers\nptxas info    : Compile time = 4.792 ms\nptxas info    : Compiling entry function '_Z11dsm_handoffILi2EEvPfPKf' for 'sm_120a'\nptxas info    : Function properties for _Z11dsm_handoffILi2EEvPfPKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 34 registers, used 0 barriers, 8192 bytes smem\nptxas info    : Compile time = 5.652 ms\n",
+  "samples": [
+    {
+      "barrier_us": 1.76176,
+      "cluster_size": 2,
+      "clusters": 85,
+      "direct_global_us": 3.2768,
+      "dsm_us": 3.47136,
+      "global_handoff_us": 5.1096,
+      "rep": 0
+    },
+    {
+      "barrier_us": 1.77696,
+      "cluster_size": 2,
+      "clusters": 85,
+      "direct_global_us": 3.2768,
+      "dsm_us": 3.47136,
+      "global_handoff_us": 5.10976,
+      "rep": 1
+    },
+    {
+      "barrier_us": 1.78272,
+      "cluster_size": 2,
+      "clusters": 85,
+      "direct_global_us": 3.2768,
+      "dsm_us": 3.4712,
+      "global_handoff_us": 5.10976,
+      "rep": 2
+    },
+    {
+      "barrier_us": 1.77664,
+      "cluster_size": 4,
+      "clusters": 43,
+      "direct_global_us": 3.21536,
+      "dsm_us": 5.376,
+      "global_handoff_us": 3.92192,
+      "rep": 0
+    },
+    {
+      "barrier_us": 1.80048,
+      "cluster_size": 4,
+      "clusters": 43,
+      "direct_global_us": 3.21536,
+      "dsm_us": 5.35552,
+      "global_handoff_us": 3.93216,
+      "rep": 1
+    },
+    {
+      "barrier_us": 1.74272,
+      "cluster_size": 4,
+      "clusters": 43,
+      "direct_global_us": 3.21536,
+      "dsm_us": 5.36576,
+      "global_handoff_us": 3.93216,
+      "rep": 2
+    },
+    {
+      "barrier_us": 1.74912,
+      "cluster_size": 8,
+      "clusters": 22,
+      "direct_global_us": 3.20512,
+      "dsm_us": 7.56736,
+      "global_handoff_us": 3.38944,
+      "rep": 0
+    },
+    {
+      "barrier_us": 1.7544,
+      "cluster_size": 8,
+      "clusters": 22,
+      "direct_global_us": 3.20512,
+      "dsm_us": 7.5776,
+      "global_handoff_us": 3.38944,
+      "rep": 1
+    },
+    {
+      "barrier_us": 1.75232,
+      "cluster_size": 8,
+      "clusters": 22,
+      "direct_global_us": 3.20512,
+      "dsm_us": 7.56736,
+      "global_handoff_us": 3.38944,
+      "rep": 2
+    }
+  ],
+  "schema": "tinygrad.nv_cluster_projection_service_gate.v1",
+  "shape": {
+    "activation_width": 4096,
+    "threads_per_block": 128
+  },
+  "stdout": "device name=NVIDIA GeForce RTX 5090 cc=12.0 sm=170 cluster_launch=1\nsample cs=2 clusters=85 rep=0 barrier_us=1.761760 dsm_us=3.471360 global_us=5.109600 direct_us=3.276800\nsample cs=2 clusters=85 rep=1 barrier_us=1.776960 dsm_us=3.471360 global_us=5.109760 direct_us=3.276800\nsample cs=2 clusters=85 rep=2 barrier_us=1.782720 dsm_us=3.471200 global_us=5.109760 direct_us=3.276800\nsample cs=4 clusters=43 rep=0 barrier_us=1.776640 dsm_us=5.376000 global_us=3.921920 direct_us=3.215360\nsample cs=4 clusters=43 rep=1 barrier_us=1.800480 dsm_us=5.355520 global_us=3.932160 direct_us=3.215360\nsample cs=4 clusters=43 rep=2 barrier_us=1.742720 dsm_us=5.365760 global_us=3.932160 direct_us=3.215360\nsample cs=8 clusters=22 rep=0 barrier_us=1.749120 dsm_us=7.567360 global_us=3.389440 direct_us=3.205120\nsample cs=8 clusters=22 rep=1 barrier_us=1.754400 dsm_us=7.577600 global_us=3.389440 direct_us=3.205120\nsample cs=8 clusters=22 rep=2 barrier_us=1.752320 dsm_us=7.567360 global_us=3.389440 direct_us=3.205120\n"
+}

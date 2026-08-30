@@ -1,0 +1,114 @@
+{
+  "device": "NV",
+  "exact": {
+    "1": {
+      "bitwise_equal": true,
+      "max_abs_delta": 0.0,
+      "mismatched_fp16_words": 0,
+      "sha256": "e79ba9fa860dc8df4c5dc2e8a762a8c80ec8c2858fe3e2815da41abfd6de29ed"
+    },
+    "2": {
+      "bitwise_equal": true,
+      "max_abs_delta": 0.0,
+      "mismatched_fp16_words": 0,
+      "sha256": "e79ba9fa860dc8df4c5dc2e8a762a8c80ec8c2858fe3e2815da41abfd6de29ed"
+    },
+    "4": {
+      "bitwise_equal": false,
+      "max_abs_delta": 9.5367431640625e-07,
+      "mismatched_fp16_words": 1,
+      "sha256": "ffcee361af50f582909c2a4671fc35f131fe4f536bc185ee19616a2376e22a28"
+    }
+  },
+  "geometry": {
+    "1": {
+      "ctas": 192,
+      "split_count": 6,
+      "warps": 768
+    },
+    "2": {
+      "ctas": 192,
+      "split_count": 12,
+      "warps": 768
+    },
+    "4": {
+      "ctas": 192,
+      "split_count": 24,
+      "warps": 768
+    }
+  },
+  "schema": "tinygrad.nv_flash_wide_qgroup_microgate.v1",
+  "shape": {
+    "hd": 128,
+    "hkv": 8,
+    "hq": 32,
+    "max_context": 1024,
+    "tc": 641,
+    "token_bound": 768
+  },
+  "timing": {
+    "best_qg": 4,
+    "best_recovery_us": 0.2432514999999995,
+    "medians": {
+      "1": 71.3946885,
+      "2": 71.56956299999999,
+      "4": 71.151437
+    },
+    "replays": 1000,
+    "reps": 9,
+    "samples": {
+      "1": [
+        [
+          71.688536,
+          71.778625,
+          72.129375,
+          72.11136,
+          71.362724,
+          71.378654,
+          71.795226,
+          71.39761999999999,
+          71.532353
+        ],
+        [
+          70.67739599999999,
+          71.11058,
+          70.914061,
+          70.739694,
+          70.740284,
+          71.113005,
+          71.100841,
+          71.15228900000001,
+          71.217682
+        ]
+      ],
+      "2": [
+        [
+          71.584852,
+          71.405565,
+          71.544095,
+          71.424189,
+          71.594539,
+          71.467241,
+          76.312735,
+          71.56956299999999,
+          71.62986599999999
+        ]
+      ],
+      "4": [
+        [
+          71.51812600000001,
+          71.654623,
+          71.44234399999999,
+          71.585943,
+          71.151437,
+          71.037033,
+          71.007487,
+          71.103377,
+          71.000794
+        ]
+      ]
+    },
+    "unit": "us_per_tile_plus_combine_host_synchronized"
+  },
+  "verdict": "NO_GO_PRIMITIVE"
+}

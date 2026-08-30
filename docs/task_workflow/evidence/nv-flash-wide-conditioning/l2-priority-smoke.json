@@ -1,0 +1,111 @@
+{
+  "commit": "79b740fd997cf4b7c7ea25942daa6d1f29fa0cbf",
+  "gpu_state": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2572",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Disabled",
+    "pstate": "P0",
+    "temperature.gpu": "43"
+  },
+  "method": "native NV HCQ; aggregate 36-layer footprint; cold-standardize, prime, disturb, timestamp normal-policy reload only",
+  "model": {
+    "depth": 512,
+    "disturb_bytes": 268435456,
+    "disturb_mib": 256.0,
+    "footprint_bytes": 75497472,
+    "footprint_mib": 72.0,
+    "head_dim": 128,
+    "kv_heads": 8,
+    "layers": 36
+  },
+  "n_per_arm": 5,
+  "reconciliation": {
+    "candidate_recovery_us": {
+      "evict_last_prime__evict_first_stream": 33.408,
+      "evict_last_prime__normal_stream": 9.6,
+      "normal_prime__evict_first_stream": 33.568
+    },
+    "candidate_share_of_cold_penalty": {
+      "evict_last_prime__evict_first_stream": 0.994,
+      "evict_last_prime__normal_stream": 0.286,
+      "normal_prime__evict_first_stream": 0.999
+    },
+    "cold_penalty_us": 33.6,
+    "cold_us": 45.056,
+    "hot_us": 11.456
+  },
+  "rows": {
+    "evict_last_prime__evict_first_stream": {
+      "max_us": 11.648,
+      "mean_us": 11.622,
+      "median_us": 11.648,
+      "min_us": 11.552,
+      "n": 5,
+      "samples_us": [
+        11.616,
+        11.648,
+        11.648,
+        11.648,
+        11.552
+      ]
+    },
+    "evict_last_prime__normal_stream": {
+      "max_us": 35.616,
+      "mean_us": 35.45,
+      "median_us": 35.456,
+      "min_us": 35.328,
+      "n": 5,
+      "samples_us": [
+        35.36,
+        35.456,
+        35.488,
+        35.328,
+        35.616
+      ]
+    },
+    "hot_control": {
+      "max_us": 11.552,
+      "mean_us": 11.494,
+      "median_us": 11.456,
+      "min_us": 11.456,
+      "n": 5,
+      "samples_us": [
+        11.552,
+        11.456,
+        11.552,
+        11.456,
+        11.456
+      ]
+    },
+    "normal_prime__evict_first_stream": {
+      "max_us": 11.52,
+      "mean_us": 11.475,
+      "median_us": 11.488,
+      "min_us": 11.424,
+      "n": 5,
+      "samples_us": [
+        11.52,
+        11.456,
+        11.488,
+        11.488,
+        11.424
+      ]
+    },
+    "normal_prime__normal_stream": {
+      "max_us": 45.312,
+      "mean_us": 44.998,
+      "median_us": 45.056,
+      "min_us": 44.736,
+      "n": 5,
+      "samples_us": [
+        45.312,
+        45.056,
+        44.736,
+        44.8,
+        45.088
+      ]
+    }
+  },
+  "schema": "tinygrad.nv_flash_l2_priority_turnability.v1"
+}

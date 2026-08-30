@@ -1,0 +1,967 @@
+{
+  "capture": {
+    "matching_chain_count": 6,
+    "selected_call_count": 412,
+    "tokens": [
+      13876,
+      38835,
+      34208,
+      13,
+      279,
+      3974,
+      13876,
+      38835
+    ]
+  },
+  "chain_names": [
+    "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+    "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+    "rmsnorm_q8_1_llama_provider_4096",
+    "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+    "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+    "reduce_output_rmsnorm_rope_32_128",
+    "reduce_output_rmsnorm_rope_kv_cache_8_128",
+    "flash_vec_llama_score_pv_32_128_8_widekv16"
+  ],
+  "commit": "e1823c25c4ee071544209b8f1eac2805ba38a11a",
+  "gpu_state": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2655",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Disabled",
+    "pstate": "P0",
+    "temperature.gpu": "41"
+  },
+  "launch_manifest": [
+    {
+      "buf_meta": [
+        {
+          "size": 24576,
+          "va_addr": 157354557440
+        },
+        {
+          "size": 28311552,
+          "va_addr": 138834812736
+        },
+        {
+          "size": 28311552,
+          "va_addr": 138863140672
+        },
+        {
+          "size": 8192,
+          "va_addr": 157352579072
+        }
+      ],
+      "cubin": {
+        "path": "docs/task_workflow/evidence/nv-flash-entry-hop-ledger/entry-native-r1/cubins/q4k_gate_up_four_warp_vec_fp16_12288_4096.cubin",
+        "regs_usage": 47,
+        "sha256": "1c194fb341766114e36f2a9ac624922fdc90f7a3932f135deffdd08a1766afee",
+        "shmem_usage": 2176
+      },
+      "global_size": [
+        12288,
+        1,
+        1
+      ],
+      "local_size": [
+        128,
+        1,
+        1
+      ],
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "vals": []
+    },
+    {
+      "buf_meta": [
+        {
+          "size": 16384,
+          "va_addr": 157350547456
+        },
+        {
+          "size": 41287680,
+          "va_addr": 138793525056
+        },
+        {
+          "size": 24576,
+          "va_addr": 157354557440
+        },
+        {
+          "size": 16384,
+          "va_addr": 157350805504
+        }
+      ],
+      "cubin": {
+        "path": "docs/task_workflow/evidence/nv-flash-entry-hop-ledger/entry-native-r1/cubins/q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd.cubin",
+        "regs_usage": 40,
+        "sha256": "d62ff2aa5f6e09bce99ff96bb3e6485925310fb184b09aed7bfd502082b7443d",
+        "shmem_usage": 2176
+      },
+      "global_size": [
+        4096,
+        1,
+        1
+      ],
+      "local_size": [
+        128,
+        1,
+        1
+      ],
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "vals": []
+    },
+    {
+      "buf_meta": [
+        {
+          "size": 8192,
+          "va_addr": 157354582016
+        },
+        {
+          "size": 16384,
+          "va_addr": 157350547456
+        },
+        {
+          "size": 8192,
+          "va_addr": 142858932224
+        }
+      ],
+      "cubin": {
+        "path": "docs/task_workflow/evidence/nv-flash-entry-hop-ledger/entry-native-r1/cubins/rmsnorm_q8_1_llama_provider_4096.cubin",
+        "regs_usage": 30,
+        "sha256": "70505ad1fc1b66b0329d5f794881da5f2b0e9196f019a146e912ce6a5f32c6cb",
+        "shmem_usage": 2176
+      },
+      "global_size": [
+        8,
+        1,
+        1
+      ],
+      "local_size": [
+        32,
+        16,
+        1
+      ],
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "vals": []
+    },
+    {
+      "buf_meta": [
+        {
+          "size": 16384,
+          "va_addr": 157350289408
+        },
+        {
+          "size": 9437184,
+          "va_addr": 138903265600
+        },
+        {
+          "size": 8192,
+          "va_addr": 157354582016
+        }
+      ],
+      "cubin": {
+        "path": "docs/task_workflow/evidence/nv-flash-entry-hop-ledger/entry-native-r1/cubins/q4k_warp_coop_q8_dp4a_direct_4096_4096.cubin",
+        "regs_usage": 37,
+        "sha256": "8333b53cff03bf17d26a41c3dfa1ab25685a5688a24556d77fe096e5894de27c",
+        "shmem_usage": 2176
+      },
+      "global_size": [
+        4096,
+        1,
+        1
+      ],
+      "local_size": [
+        128,
+        1,
+        1
+      ],
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "vals": [
+        513
+      ]
+    },
+    {
+      "buf_meta": [
+        {
+          "size": 4096,
+          "va_addr": 157354590208
+        },
+        {
+          "size": 4096,
+          "va_addr": 157354594304
+        },
+        {
+          "size": 2359296,
+          "va_addr": 138891452224
+        },
+        {
+          "size": 3440640,
+          "va_addr": 138912703296
+        },
+        {
+          "size": 8192,
+          "va_addr": 157354582016
+        }
+      ],
+      "cubin": {
+        "path": "docs/task_workflow/evidence/nv-flash-entry-hop-ledger/entry-native-r1/cubins/q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096.cubin",
+        "regs_usage": 40,
+        "sha256": "b3a8d07028669f08f79d131f27adbd9d959cb1b1e24f5d88ad86b2a43ecc1e13",
+        "shmem_usage": 2176
+      },
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "local_size": [
+        128,
+        1,
+        1
+      ],
+      "name": "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "vals": [
+        513
+      ]
+    },
+    {
+      "buf_meta": [
+        {
+          "size": 16384,
+          "va_addr": 157350031360
+        },
+        {
+          "size": 16384,
+          "va_addr": 157350289408
+        },
+        {
+          "size": 4096,
+          "va_addr": 142858113024
+        },
+        {
+          "size": 524288,
+          "va_addr": 156852514816
+        }
+      ],
+      "cubin": {
+        "path": "docs/task_workflow/evidence/nv-flash-entry-hop-ledger/entry-native-r1/cubins/reduce_output_rmsnorm_rope_32_128.cubin",
+        "regs_usage": 38,
+        "sha256": "e3e8c872fbe3fd8dd570b8db49ccaf62c77d277e2dcdd7479f4572955cd4488e",
+        "shmem_usage": 2176
+      },
+      "global_size": [
+        32,
+        1,
+        1
+      ],
+      "local_size": [
+        4,
+        8,
+        1
+      ],
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "vals": [
+        513
+      ]
+    },
+    {
+      "buf_meta": [
+        {
+          "size": 4194304,
+          "va_addr": 157082980352
+        },
+        {
+          "size": 4096,
+          "va_addr": 157354590208
+        },
+        {
+          "size": 4096,
+          "va_addr": 142858117120
+        },
+        {
+          "size": 4096,
+          "va_addr": 157354594304
+        },
+        {
+          "size": 524288,
+          "va_addr": 156852514816
+        }
+      ],
+      "cubin": {
+        "path": "docs/task_workflow/evidence/nv-flash-entry-hop-ledger/entry-native-r1/cubins/reduce_output_rmsnorm_rope_kv_cache_8_128.cubin",
+        "regs_usage": 26,
+        "sha256": "50b238f0ebdb66f3460ad8305052362a7703c3748d063ac1dbcdae56b37287d3",
+        "shmem_usage": 2176
+      },
+      "global_size": [
+        8,
+        1,
+        1
+      ],
+      "local_size": [
+        2,
+        16,
+        1
+      ],
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "vals": [
+        513
+      ]
+    },
+    {
+      "buf_meta": [
+        {
+          "size": 135168,
+          "va_addr": 157354598400
+        },
+        {
+          "size": 16384,
+          "va_addr": 157350031360
+        },
+        {
+          "size": 4194304,
+          "va_addr": 157082980352
+        }
+      ],
+      "cubin": {
+        "path": "docs/task_workflow/evidence/nv-flash-entry-hop-ledger/entry-native-r1/cubins/flash_vec_llama_score_pv_32_128_8_widekv16.cubin",
+        "regs_usage": 56,
+        "sha256": "2b21ff99f7bd6b82b62b0259515864cfdc8aa09a0e43b591a0c356a4e248e920",
+        "shmem_usage": 4224
+      },
+      "global_size": [
+        8,
+        32,
+        1
+      ],
+      "local_size": [
+        32,
+        4,
+        1
+      ],
+      "name": "flash_vec_llama_score_pv_32_128_8_widekv16",
+      "vals": [
+        513
+      ]
+    }
+  ],
+  "method": "exact common-layer captured programs/live buffers; target reheat; cumulative prefix; only final score timestamped",
+  "n_per_arm": 40,
+  "reconciliation": {
+    "cumulative_hops": {
+      "full_entry_chain": {
+        "increment_from_prior_checkpoint_us": -0.048,
+        "score_minus_hot_us": 1.2
+      },
+      "previous_ffn": {
+        "increment_from_prior_checkpoint_us": 0.832,
+        "score_minus_hot_us": 1.024
+      },
+      "previous_ffn_provider": {
+        "increment_from_prior_checkpoint_us": 0.0,
+        "score_minus_hot_us": 1.024
+      },
+      "previous_gate_up": {
+        "increment_from_prior_checkpoint_us": 0.192,
+        "score_minus_hot_us": 0.192
+      },
+      "through_kv_projection": {
+        "increment_from_prior_checkpoint_us": 0.048,
+        "score_minus_hot_us": 1.344
+      },
+      "through_q_completion": {
+        "increment_from_prior_checkpoint_us": -0.096,
+        "score_minus_hot_us": 1.248
+      },
+      "through_q_projection": {
+        "increment_from_prior_checkpoint_us": 0.272,
+        "score_minus_hot_us": 1.296
+      }
+    },
+    "first_checkpoint_over_hot_0p25us": "previous_ffn",
+    "full_entry_minus_hot_us": 1.2,
+    "hot_midpoint_us": 4.576
+  },
+  "rows": {
+    "completions_only": {
+      "max_us": 4.672,
+      "mean_us": 4.574,
+      "median_us": 4.576,
+      "min_us": 4.512,
+      "samples_us": [
+        4.608,
+        4.608,
+        4.512,
+        4.576,
+        4.512,
+        4.576,
+        4.608,
+        4.576,
+        4.576,
+        4.512,
+        4.544,
+        4.576,
+        4.608,
+        4.544,
+        4.512,
+        4.576,
+        4.576,
+        4.64,
+        4.576,
+        4.544,
+        4.544,
+        4.608,
+        4.608,
+        4.576,
+        4.576,
+        4.576,
+        4.608,
+        4.544,
+        4.672,
+        4.576,
+        4.576,
+        4.544,
+        4.544,
+        4.576,
+        4.64,
+        4.576,
+        4.576,
+        4.576,
+        4.576,
+        4.512
+      ]
+    },
+    "full_entry_chain": {
+      "max_us": 6.016,
+      "mean_us": 5.774,
+      "median_us": 5.776,
+      "min_us": 5.536,
+      "samples_us": [
+        5.728,
+        5.952,
+        5.696,
+        5.664,
+        5.696,
+        5.632,
+        5.632,
+        5.824,
+        5.696,
+        5.76,
+        5.632,
+        5.536,
+        5.6,
+        5.664,
+        5.888,
+        5.92,
+        5.92,
+        5.888,
+        5.632,
+        5.792,
+        5.952,
+        5.568,
+        5.696,
+        5.6,
+        5.888,
+        5.792,
+        5.888,
+        5.824,
+        5.856,
+        5.6,
+        5.824,
+        5.792,
+        5.728,
+        5.888,
+        5.76,
+        5.952,
+        6.016,
+        5.92,
+        5.696,
+        5.984
+      ]
+    },
+    "hot_a": {
+      "max_us": 4.768,
+      "mean_us": 4.571,
+      "median_us": 4.576,
+      "min_us": 4.48,
+      "samples_us": [
+        4.576,
+        4.544,
+        4.576,
+        4.576,
+        4.544,
+        4.576,
+        4.576,
+        4.512,
+        4.544,
+        4.576,
+        4.768,
+        4.576,
+        4.544,
+        4.576,
+        4.576,
+        4.544,
+        4.544,
+        4.608,
+        4.544,
+        4.608,
+        4.544,
+        4.672,
+        4.576,
+        4.48,
+        4.576,
+        4.576,
+        4.576,
+        4.608,
+        4.544,
+        4.608,
+        4.544,
+        4.576,
+        4.544,
+        4.608,
+        4.576,
+        4.512,
+        4.512,
+        4.576,
+        4.576,
+        4.576
+      ]
+    },
+    "hot_c": {
+      "max_us": 4.672,
+      "mean_us": 4.578,
+      "median_us": 4.576,
+      "min_us": 4.512,
+      "samples_us": [
+        4.576,
+        4.64,
+        4.544,
+        4.608,
+        4.576,
+        4.608,
+        4.576,
+        4.576,
+        4.608,
+        4.608,
+        4.544,
+        4.576,
+        4.512,
+        4.544,
+        4.544,
+        4.608,
+        4.576,
+        4.608,
+        4.608,
+        4.544,
+        4.576,
+        4.544,
+        4.576,
+        4.544,
+        4.608,
+        4.608,
+        4.576,
+        4.576,
+        4.512,
+        4.608,
+        4.576,
+        4.576,
+        4.576,
+        4.576,
+        4.544,
+        4.672,
+        4.608,
+        4.576,
+        4.576,
+        4.544
+      ]
+    },
+    "previous_ffn": {
+      "max_us": 5.952,
+      "mean_us": 5.634,
+      "median_us": 5.6,
+      "min_us": 5.504,
+      "samples_us": [
+        5.536,
+        5.536,
+        5.6,
+        5.632,
+        5.632,
+        5.6,
+        5.664,
+        5.824,
+        5.568,
+        5.728,
+        5.536,
+        5.568,
+        5.6,
+        5.6,
+        5.824,
+        5.6,
+        5.6,
+        5.952,
+        5.664,
+        5.728,
+        5.696,
+        5.504,
+        5.536,
+        5.504,
+        5.632,
+        5.6,
+        5.76,
+        5.568,
+        5.536,
+        5.664,
+        5.888,
+        5.568,
+        5.632,
+        5.568,
+        5.664,
+        5.6,
+        5.632,
+        5.632,
+        5.664,
+        5.536
+      ]
+    },
+    "previous_ffn_provider": {
+      "max_us": 5.92,
+      "mean_us": 5.635,
+      "median_us": 5.6,
+      "min_us": 5.44,
+      "samples_us": [
+        5.504,
+        5.824,
+        5.824,
+        5.44,
+        5.6,
+        5.728,
+        5.6,
+        5.472,
+        5.632,
+        5.504,
+        5.6,
+        5.6,
+        5.824,
+        5.76,
+        5.536,
+        5.824,
+        5.792,
+        5.536,
+        5.664,
+        5.6,
+        5.76,
+        5.568,
+        5.664,
+        5.568,
+        5.472,
+        5.568,
+        5.568,
+        5.536,
+        5.696,
+        5.536,
+        5.472,
+        5.792,
+        5.472,
+        5.664,
+        5.504,
+        5.76,
+        5.92,
+        5.728,
+        5.536,
+        5.76
+      ]
+    },
+    "previous_gate_up": {
+      "max_us": 4.864,
+      "mean_us": 4.758,
+      "median_us": 4.768,
+      "min_us": 4.672,
+      "samples_us": [
+        4.672,
+        4.8,
+        4.768,
+        4.832,
+        4.736,
+        4.736,
+        4.768,
+        4.736,
+        4.8,
+        4.864,
+        4.704,
+        4.736,
+        4.672,
+        4.768,
+        4.8,
+        4.736,
+        4.736,
+        4.768,
+        4.736,
+        4.768,
+        4.704,
+        4.768,
+        4.768,
+        4.832,
+        4.736,
+        4.8,
+        4.768,
+        4.736,
+        4.736,
+        4.768,
+        4.768,
+        4.8,
+        4.768,
+        4.832,
+        4.704,
+        4.672,
+        4.672,
+        4.768,
+        4.736,
+        4.832
+      ]
+    },
+    "provider_only": {
+      "max_us": 4.64,
+      "mean_us": 4.562,
+      "median_us": 4.56,
+      "min_us": 4.512,
+      "samples_us": [
+        4.544,
+        4.512,
+        4.544,
+        4.576,
+        4.576,
+        4.608,
+        4.576,
+        4.512,
+        4.576,
+        4.608,
+        4.544,
+        4.544,
+        4.544,
+        4.576,
+        4.544,
+        4.544,
+        4.544,
+        4.544,
+        4.576,
+        4.576,
+        4.576,
+        4.544,
+        4.544,
+        4.576,
+        4.576,
+        4.544,
+        4.544,
+        4.544,
+        4.576,
+        4.576,
+        4.512,
+        4.544,
+        4.576,
+        4.576,
+        4.576,
+        4.576,
+        4.544,
+        4.544,
+        4.608,
+        4.64
+      ]
+    },
+    "qkv_only": {
+      "max_us": 4.736,
+      "mean_us": 4.643,
+      "median_us": 4.64,
+      "min_us": 4.544,
+      "samples_us": [
+        4.672,
+        4.672,
+        4.608,
+        4.576,
+        4.672,
+        4.736,
+        4.672,
+        4.704,
+        4.64,
+        4.672,
+        4.64,
+        4.64,
+        4.608,
+        4.672,
+        4.672,
+        4.608,
+        4.672,
+        4.64,
+        4.544,
+        4.672,
+        4.608,
+        4.64,
+        4.608,
+        4.64,
+        4.64,
+        4.64,
+        4.64,
+        4.608,
+        4.64,
+        4.64,
+        4.64,
+        4.608,
+        4.672,
+        4.672,
+        4.608,
+        4.64,
+        4.608,
+        4.672,
+        4.672,
+        4.64
+      ]
+    },
+    "through_kv_projection": {
+      "max_us": 6.176,
+      "mean_us": 5.909,
+      "median_us": 5.92,
+      "min_us": 5.696,
+      "samples_us": [
+        6.048,
+        6.112,
+        5.824,
+        6.048,
+        5.92,
+        6.016,
+        5.76,
+        5.92,
+        5.888,
+        5.696,
+        6.08,
+        6.048,
+        6.08,
+        5.92,
+        5.792,
+        5.92,
+        5.92,
+        5.728,
+        6.048,
+        5.76,
+        5.824,
+        5.952,
+        6.08,
+        5.76,
+        5.984,
+        5.76,
+        5.728,
+        5.76,
+        5.824,
+        6.176,
+        6.016,
+        5.888,
+        5.76,
+        5.92,
+        5.792,
+        5.76,
+        5.984,
+        6.048,
+        6.08,
+        5.728
+      ]
+    },
+    "through_q_completion": {
+      "max_us": 6.016,
+      "mean_us": 5.775,
+      "median_us": 5.824,
+      "min_us": 5.568,
+      "samples_us": [
+        5.856,
+        5.632,
+        5.824,
+        5.952,
+        5.632,
+        5.792,
+        5.92,
+        6.016,
+        5.728,
+        5.888,
+        5.728,
+        5.664,
+        5.6,
+        5.824,
+        5.568,
+        5.568,
+        5.632,
+        5.888,
+        5.888,
+        5.6,
+        5.856,
+        5.6,
+        5.728,
+        5.856,
+        5.888,
+        5.568,
+        5.696,
+        5.856,
+        5.632,
+        5.888,
+        5.984,
+        5.888,
+        5.92,
+        5.824,
+        5.92,
+        5.728,
+        5.856,
+        5.824,
+        5.632,
+        5.664
+      ]
+    },
+    "through_q_projection": {
+      "max_us": 6.176,
+      "mean_us": 5.898,
+      "median_us": 5.872,
+      "min_us": 5.696,
+      "samples_us": [
+        5.792,
+        5.792,
+        5.856,
+        5.696,
+        5.856,
+        5.856,
+        5.792,
+        5.792,
+        6.048,
+        6.016,
+        5.856,
+        6.176,
+        5.792,
+        5.728,
+        5.728,
+        5.984,
+        5.92,
+        6.016,
+        5.76,
+        5.856,
+        5.792,
+        5.76,
+        5.952,
+        5.952,
+        6.016,
+        6.048,
+        5.92,
+        5.696,
+        6.016,
+        6.016,
+        5.888,
+        6.048,
+        6.112,
+        5.824,
+        5.824,
+        5.952,
+        6.048,
+        5.856,
+        5.888,
+        5.984
+      ]
+    }
+  },
+  "schema": "tinygrad.nv_flash_entry_hop_ledger.v1",
+  "shape": {
+    "depth": 512,
+    "max_context": 1024
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "accepted_samples_ms_per_token": [
+    4.099731
+  ],
+  "candidate": true,
+  "count": 2,
+  "depth": 512,
+  "external_contention_high_limit_ms": 4.349731,
+  "gpu_state": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2572",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Disabled",
+    "pstate": "P0",
+    "temperature.gpu": "47"
+  },
+  "max_context": 768,
+  "median_ms_per_token": 4.099731,
+  "prelude_token": 13876,
+  "rejected_high_samples_ms_per_token": [],
+  "reps": 1,
+  "samples_ms_per_token": [
+    4.099731
+  ],
+  "schema": "tinygrad.nv_flash_l2_streaming_weight_wall.v1",
+  "scope": "whole_dense",
+  "targets": [
+    "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096@1",
+    "q4k_gate_up_four_warp_vec_fp16_12288_4096@1+2",
+    "q4k_g3_lanemap_gemv_vec_4096_4096@1",
+    "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd@1",
+    "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd@1",
+    "q4k_warp_coop_q8_dp4a_direct_4096_4096@1",
+    "q4k_g3_lanemap_gemv_vec_1024_4096@1",
+    "q6k_v_four_warp_fp16_direct_1024_4096@1",
+    "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096@2+3",
+    "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096@2+3",
+    "q4k_g3_lanemap_gemv_pair_vec_1024_4096@2+3",
+    "q6k_gen_coop_151936_4096_inkernel@1"
+  ],
+  "timed_token_count": 2,
+  "token_hashes": [
+    "49231545a8bedc0604b56aac0681e96208858834ddaf61fe014590f70c6baada"
+  ],
+  "token_stream_hash": "49231545a8bedc0604b56aac0681e96208858834ddaf61fe014590f70c6baada",
+  "warmup_tokens": [
+    38835,
+    34208,
+    13,
+    279,
+    3974,
+    13876
+  ]
+}

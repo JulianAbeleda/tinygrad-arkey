@@ -1,0 +1,143 @@
+{
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "programs": [
+    {
+      "emit_trigger": false,
+      "emit_wait": true,
+      "match": "prefix:E_1187_32_4_",
+      "profile": {
+        "grid_start_offset": 8,
+        "va": 137657057280,
+        "wait_exit_offset": 16
+      },
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "emit_trigger": true,
+      "emit_wait": false,
+      "match": "prefix:E_2_",
+      "profile": {
+        "trigger_offset": 0,
+        "va": 137657057280
+      },
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "emit_trigger": true,
+      "emit_wait": false,
+      "match": "prefix:E_toks_28start_pos2Btoks29_8_4_",
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "emit_trigger": false,
+      "emit_wait": true,
+      "match": "prefix:E_toks_2_8_16_4_4_",
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "emit_trigger": true,
+      "emit_wait": true,
+      "match": "prefix:E_toks_64_16_4_",
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "emit_trigger": true,
+      "emit_wait": false,
+      "match": "prefix:E_toks_8_2_16_4_",
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "emit_trigger": false,
+      "emit_wait": true,
+      "match": "prefix:r_1187_32_4_16_2_2_2_4_8_",
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "emit_trigger": true,
+      "emit_wait": false,
+      "match": "prefix:r_128_16_8_1187_",
+      "profile": {
+        "trigger_offset": 24,
+        "va": 137657057280
+      },
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "emit_trigger": false,
+      "emit_wait": true,
+      "match": "prefix:r_16_8_",
+      "profile": {
+        "grid_start_offset": 32,
+        "va": 137657057280,
+        "wait_exit_offset": 40
+      },
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "emit_trigger": false,
+      "emit_wait": true,
+      "match": "prefix:r_2_8_toks_128_16_4_2_32_",
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "emit_trigger": true,
+      "emit_wait": false,
+      "match": "prefix:r_2_toks_8_4_4_16_",
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "emit_trigger": false,
+      "emit_wait": true,
+      "match": "prefix:r_4_toks_2_8_16_4_16_4_2_4_8_",
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "emit_trigger": true,
+      "emit_wait": true,
+      "match": "prefix:r_4_toks_2_8_16_4_28start_pos2Btoks29_",
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "emit_trigger": true,
+      "emit_wait": false,
+      "match": "prefix:r_toks_16_256_",
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "emit_trigger": false,
+      "emit_wait": true,
+      "match": "prefix:r_toks_64_16_4_16_2_2_2_4_8_",
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "emit_trigger": true,
+      "emit_wait": false,
+      "match": "prefix:r_toks_64_16_4_48_2_2_2_4_8_",
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "emit_trigger": true,
+      "emit_wait": false,
+      "match": "prefix:r_toks_64_16_4_48_4_2_4_8_",
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    }
+  ],
+  "schema": "tinygrad.nv_split_phase_policy.v1"
+}

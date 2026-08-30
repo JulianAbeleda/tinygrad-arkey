@@ -1,0 +1,52 @@
+{
+  "commit": "f37279e3b983c7727e9816b3bb9243eadf269051",
+  "exact": true,
+  "median": {
+    "candidate_cold_us": 11.778,
+    "candidate_hot_us": 10.11536,
+    "cold_recovery_us": -2.276,
+    "control_cold_us": 9.502,
+    "control_hot_us": 4.9664,
+    "hot_recovery_us": -5.148960000000001
+  },
+  "ptxas": "/tmp/nv_q4k_o_cluster_hcdv2raf/gate.cu:1: warning: \"INFINITY\" redefined\n    1 | #define INFINITY (__int_as_float(0x7f800000))\n      | \nIn file included from /usr/include/c++/13/cmath:47,\n                 from /usr/include/c++/13/math.h:36,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/math_functions.h:4627,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/common_functions.h:303,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/cuda_runtime.h:117,\n                 from <command-line>:\n/usr/include/math.h:91: note: this is the location of the previous definition\n   91 | #  define INFINITY (__builtin_inff ())\n      | \n/tmp/nv_q4k_o_cluster_hcdv2raf/gate.cu:2: warning: \"NAN\" redefined\n    2 | #define NAN (__int_as_float(0x7fffffff))\n      | \n/usr/include/math.h:98: note: this is the location of the previous definition\n   98 | #  define NAN (__builtin_nanf (\"\"))\n      | \n/tmp/nv_q4k_o_cluster_hcdv2raf/gate.cu:1: warning: \"INFINITY\" redefined\n    1 | #define INFINITY (__int_as_float(0x7f800000))\n      | \nIn file included from /usr/include/c++/13/cmath:47,\n                 from /usr/include/c++/13/math.h:36,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/math_functions.h:4627,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/common_functions.h:303,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/cuda_runtime.h:117,\n                 from <command-line>:\n/usr/include/math.h:91: note: this is the location of the previous definition\n   91 | #  define INFINITY (__builtin_inff ())\n      | \n/tmp/nv_q4k_o_cluster_hcdv2raf/gate.cu:2: warning: \"NAN\" redefined\n    2 | #define NAN (__int_as_float(0x7fffffff))\n      | \n/usr/include/math.h:98: note: this is the location of the previous definition\n   98 | #  define NAN (__builtin_nanf (\"\"))\n      | \n/tmp/nv_q4k_o_cluster_hcdv2raf/gate.cu:1: warning: \"INFINITY\" redefined\n    1 | #define INFINITY (__int_as_float(0x7f800000))\n      | \nIn file included from /usr/include/c++/13/cmath:47,\n                 from /usr/include/c++/13/math.h:36,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/math_functions.h:4627,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/common_functions.h:303,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/cuda_runtime.h:117,\n                 from <command-line>:\n/usr/include/math.h:91: note: this is the location of the previous definition\n   91 | #  define INFINITY (__builtin_inff ())\n      | \n/tmp/nv_q4k_o_cluster_hcdv2raf/gate.cu:2: warning: \"NAN\" redefined\n    2 | #define NAN (__int_as_float(0x7fffffff))\n      | \n/usr/include/math.h:98: note: this is the location of the previous definition\n   98 | #  define NAN (__builtin_nanf (\"\"))\n      | \nptxas info    : 5 bytes gmem\nptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096_cluster4_r16' for 'sm_120a'\nptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096_cluster4_r16\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 45 registers, used 0 barriers, 512 bytes smem\nptxas info    : Compile time = 12.516 ms\nptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096' for 'sm_120a'\nptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 43 registers, used 0 barriers\nptxas info    : Compile time = 8.926 ms\n",
+  "samples": [
+    {
+      "candidate_cold_us": 11.516,
+      "candidate_hot_us": 10.115041,
+      "control_cold_us": 9.35,
+      "control_hot_us": 4.9664,
+      "rep": 0
+    },
+    {
+      "candidate_cold_us": 11.778,
+      "candidate_hot_us": 10.11536,
+      "control_cold_us": 9.502,
+      "control_hot_us": 4.9664,
+      "rep": 1
+    },
+    {
+      "candidate_cold_us": 11.844,
+      "candidate_hot_us": 10.12544,
+      "control_cold_us": 9.514,
+      "control_hot_us": 4.95616,
+      "rep": 2
+    }
+  ],
+  "schema": "tinygrad.nv_q4k_o_cluster_geometry_gate.v1",
+  "shape": {
+    "candidate": {
+      "blocks": 1024,
+      "cluster_size": 4,
+      "rows_per_cluster": 16,
+      "threads": 128
+    },
+    "control": {
+      "blocks": 4096,
+      "threads": 32
+    },
+    "k": 4096,
+    "rows": 4096
+  },
+  "stdout": "validate exact=1 finite=1\nsample rep=0 control_hot_us=4.966400 candidate_hot_us=10.115041 control_cold_us=9.350000 candidate_cold_us=11.516000\nsample rep=1 control_hot_us=4.966400 candidate_hot_us=10.115360 control_cold_us=9.502000 candidate_cold_us=11.778000\nsample rep=2 control_hot_us=4.956160 candidate_hot_us=10.125440 control_cold_us=9.514000 candidate_cold_us=11.844000\n"
+}

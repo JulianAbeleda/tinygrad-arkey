@@ -1,0 +1,60 @@
+{
+  "arm": "control",
+  "combine_register_weights": false,
+  "count": 24,
+  "depth": 512,
+  "installed_route": true,
+  "matched_explicit_geometry": false,
+  "max_context": 1024,
+  "reps": 9,
+  "schema": "tinygrad.nv_flash_combine_register_wall.v1",
+  "settled": {
+    "accepted_samples_ms_per_token": [
+      4.071167708333333,
+      4.082322791666667,
+      4.08096775,
+      4.082199666666667,
+      4.08313725,
+      4.08698825,
+      4.084523166666666,
+      4.09034875,
+      4.0864969166666665
+    ],
+    "external_contention_high_limit_ms": 4.33313725,
+    "median_ms_per_token": 4.08313725,
+    "prelude_token": 13876,
+    "rejected_high_samples_ms_per_token": [],
+    "samples_ms_per_token": [
+      4.071167708333333,
+      4.082322791666667,
+      4.08096775,
+      4.082199666666667,
+      4.08313725,
+      4.08698825,
+      4.084523166666666,
+      4.09034875,
+      4.0864969166666665
+    ],
+    "timed_token_count": 216,
+    "token_hashes": [
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+      "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809"
+    ],
+    "token_stream_hash": "7e0b38ec59adc79a268f665ee525b602869c1930794239eb45ba21e9e0a22e3e",
+    "warmup_tokens": [
+      38835,
+      34208,
+      13,
+      279,
+      3974,
+      13876
+    ]
+  }
+}

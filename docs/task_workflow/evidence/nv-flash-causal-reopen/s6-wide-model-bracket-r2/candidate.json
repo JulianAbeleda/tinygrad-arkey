@@ -1,0 +1,220 @@
+{
+  "arm": "candidate",
+  "complete_replay_count": 229,
+  "count": 32,
+  "depth": 512,
+  "gpu_state": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2910",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Disabled",
+    "power.draw": "370.87",
+    "temperature.gpu": "52"
+  },
+  "ledger": {
+    "node_sum_us": 3953.28,
+    "overlap_us": 4.941,
+    "span_us": 4577.75,
+    "union_us": 3947.75
+  },
+  "max_context": 768,
+  "per_name_table": {
+    "E": {
+      "mean_us": 2.843,
+      "median_us": 2.816,
+      "per_replay_count": 2.0,
+      "replay_samples": 226
+    },
+    "E_1187_32_4": {
+      "mean_us": 4.78,
+      "median_us": 4.736,
+      "per_replay_count": 2.0,
+      "replay_samples": 226
+    },
+    "E_16_4_2_8_16_2_4_4": {
+      "mean_us": 3.775,
+      "median_us": 3.168,
+      "per_replay_count": 1.0,
+      "replay_samples": 226
+    },
+    "E_2": {
+      "mean_us": 2.008,
+      "median_us": 2.048,
+      "per_replay_count": 1.0,
+      "replay_samples": 226
+    },
+    "E_32_32_4": {
+      "mean_us": 2.434,
+      "median_us": 2.432,
+      "per_replay_count": 2.0,
+      "replay_samples": 226
+    },
+    "flash_fused_gmax_combine_f16_32_128_s6_lw128": {
+      "mean_us": 48.581,
+      "median_us": 48.544,
+      "per_replay_count": 36.0,
+      "replay_samples": 226
+    },
+    "flash_vec_llama_score_pv_32_128_6_widekv16": {
+      "mean_us": 215.055,
+      "median_us": 215.072,
+      "per_replay_count": 36.0,
+      "replay_samples": 226
+    },
+    "native_finite_fp32_argmax_151936_t1024": {
+      "mean_us": 8.46,
+      "median_us": 8.448,
+      "per_replay_count": 1.0,
+      "replay_samples": 226
+    },
+    "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd": {
+      "mean_us": 354.173,
+      "median_us": 354.144,
+      "per_replay_count": 18.0,
+      "replay_samples": 226
+    },
+    "q4k_g3_lanemap_gemv_pair_vec_1024_4096": {
+      "mean_us": 46.485,
+      "median_us": 46.416,
+      "per_replay_count": 8.0,
+      "replay_samples": 226
+    },
+    "q4k_g3_lanemap_gemv_vec_1024_4096": {
+      "mean_us": 42.368,
+      "median_us": 42.368,
+      "per_replay_count": 10.0,
+      "replay_samples": 226
+    },
+    "q4k_g3_lanemap_gemv_vec_4096_4096": {
+      "mean_us": 148.935,
+      "median_us": 148.912,
+      "per_replay_count": 18.0,
+      "replay_samples": 226
+    },
+    "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096": {
+      "mean_us": 304.524,
+      "median_us": 304.464,
+      "per_replay_count": 36.0,
+      "replay_samples": 226
+    },
+    "q4k_gate_up_four_warp_vec_fp16_12288_4096": {
+      "mean_us": 1273.016,
+      "median_us": 1273.056,
+      "per_replay_count": 36.0,
+      "replay_samples": 226
+    },
+    "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096": {
+      "mean_us": 48.544,
+      "median_us": 48.544,
+      "per_replay_count": 8.0,
+      "replay_samples": 226
+    },
+    "q4k_warp_coop_q8_dp4a_direct_4096_4096": {
+      "mean_us": 146.831,
+      "median_us": 146.864,
+      "per_replay_count": 18.0,
+      "replay_samples": 226
+    },
+    "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096": {
+      "mean_us": 51.042,
+      "median_us": 51.04,
+      "per_replay_count": 10.0,
+      "replay_samples": 226
+    },
+    "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd": {
+      "mean_us": 486.327,
+      "median_us": 486.304,
+      "per_replay_count": 18.0,
+      "replay_samples": 226
+    },
+    "q6k_gen_coop_151936_4096_inkernel": {
+      "mean_us": 314.261,
+      "median_us": 313.76,
+      "per_replay_count": 1.0,
+      "replay_samples": 226
+    },
+    "q6k_v_four_warp_fp16_direct_1024_4096": {
+      "mean_us": 44.404,
+      "median_us": 44.384,
+      "per_replay_count": 10.0,
+      "replay_samples": 226
+    },
+    "r_32_32_4_32_4": {
+      "mean_us": 4.41,
+      "median_us": 4.384,
+      "per_replay_count": 1.0,
+      "replay_samples": 226
+    },
+    "reduce_output_rmsnorm_rope_32_128": {
+      "mean_us": 69.262,
+      "median_us": 69.216,
+      "per_replay_count": 36.0,
+      "replay_samples": 226
+    },
+    "reduce_output_rmsnorm_rope_kv_cache_8_128": {
+      "mean_us": 68.35,
+      "median_us": 68.336,
+      "per_replay_count": 36.0,
+      "replay_samples": 226
+    },
+    "rmsnorm_native_1_4096": {
+      "mean_us": 231.151,
+      "median_us": 231.152,
+      "per_replay_count": 55.0,
+      "replay_samples": 226
+    },
+    "rmsnorm_q8_1_llama_provider_4096": {
+      "mean_us": 31.184,
+      "median_us": 31.168,
+      "per_replay_count": 18.0,
+      "replay_samples": 226
+    }
+  },
+  "profile_jsonl": "docs/task_workflow/evidence/nv-flash-causal-reopen/s6-wide-model-bracket-r2/candidate.profile.jsonl",
+  "reps": 7,
+  "schema": "tinygrad.nv_flash_llama_vec_wide_qualification.v1",
+  "settled": {
+    "accepted_samples_ms_per_token": [
+      5.285897625,
+      5.341143125,
+      5.26822784375,
+      5.27232084375,
+      5.3339693125,
+      5.39707896875,
+      5.22940821875
+    ],
+    "external_contention_high_limit_ms": 5.574327750000001,
+    "median_ms_per_token": 5.285897625,
+    "prelude_token": 13876,
+    "rejected_high_samples_ms_per_token": [],
+    "samples_ms_per_token": [
+      5.285897625,
+      5.341143125,
+      5.26822784375,
+      5.27232084375,
+      5.3339693125,
+      5.39707896875,
+      5.22940821875
+    ],
+    "timed_token_count": 224,
+    "token_hashes": [
+      "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+      "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+      "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+      "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+      "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+      "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+      "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46"
+    ],
+    "token_stream_hash": "975fd9af23443fd04f2ce79230399334ccdd3fa6cb77e3903cd25dca58a4348a",
+    "warmup_tokens": [
+      38835,
+      34208,
+      13,
+      279,
+      3974,
+      13876
+    ]
+  },
+  "steady_replay_count": 226
+}

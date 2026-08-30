@@ -1,0 +1,59 @@
+{
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "edges": [
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_1187_32_4_76d37a73a646ec3a4b5e32ab783e0ace496f5855bbba7492c8c7fe87bbff5f1f",
+      "from": 5,
+      "graph_id": 1,
+      "graph_size": 64,
+      "latch_id": 0,
+      "producer_name": "E_2_c8a3207cf1b8954ec08b9564cce9b00f69be9c09493c58ea1abd46b3664424e7",
+      "queue": 1,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          8
+        ]
+      ],
+      "structural_consumer_name": "E_1187_32_4",
+      "structural_producer_name": "E_2",
+      "to": 7,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c",
+      "from": 392,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 6,
+      "producer_name": "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          512,
+          1024
+        ]
+      ],
+      "structural_consumer_name": "r_16_8",
+      "structural_producer_name": "r_128_16_8_1187",
+      "to": 393,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    }
+  ],
+  "first_cycle_signature": [
+    32,
+    64,
+    128,
+    256,
+    394
+  ],
+  "schema": "tinygrad.nv_pdl_stage3_selection.v1",
+  "selection_rule": "first-cycle candidate_armed RAW edges whose producer and consumer structural kernel names (64-hex process hash stripped) each occur at exactly one (graph, position); policy rules match the structural prefix",
+  "source_census": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-edge-aware-pdl-runtime-hook-20260821/phase_a_construction_census_v4.jsonl"
+}

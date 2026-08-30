@@ -1,0 +1,72 @@
+{
+  "arm": "control_c",
+  "count": 12,
+  "depth": 512,
+  "fast_math_policy": null,
+  "max_context": 1024,
+  "profile_jsonl": "docs/task_workflow/evidence/nv-flash-fast-math/profile-control-c.jsonl",
+  "profile_summary": {
+    "complete_replay_count": 64,
+    "flash_rows": {
+      "flash_fused_gmax_combine_f16_32_128_s8_lw128": {
+        "mean_us": 50.188,
+        "median_us": 50.144,
+        "per_replay_count": 36,
+        "replay_samples": 61
+      },
+      "flash_vec_llama_score_pv_32_128_8_widekv16": {
+        "mean_us": 222.65,
+        "median_us": 222.56,
+        "per_replay_count": 36,
+        "replay_samples": 61
+      }
+    },
+    "ledger": {
+      "node_sum_us": 3952.224,
+      "overlap_us": -0.026,
+      "span_us": 4455.25,
+      "union_us": 3952.25
+    },
+    "steady_replay_count": 61
+  },
+  "reps": 5,
+  "schema": "tinygrad.nv_flash_fast_math_wall.v1",
+  "settled": {
+    "accepted_samples_ms_per_token": [
+      5.029182583333333,
+      4.96985525,
+      4.980252333333333,
+      5.041784666666667
+    ],
+    "external_contention_high_limit_ms": 5.322764083333337,
+    "median_ms_per_token": 5.004717458333333,
+    "prelude_token": 13876,
+    "rejected_high_samples_ms_per_token": [
+      39.412730583333335
+    ],
+    "samples_ms_per_token": [
+      39.412730583333335,
+      5.029182583333333,
+      4.96985525,
+      4.980252333333333,
+      5.041784666666667
+    ],
+    "timed_token_count": 60,
+    "token_hashes": [
+      "f7cf348f26306df073f3f6360dc83e9369e5c97096f383d6f08d1a930b66ec19",
+      "f7cf348f26306df073f3f6360dc83e9369e5c97096f383d6f08d1a930b66ec19",
+      "f7cf348f26306df073f3f6360dc83e9369e5c97096f383d6f08d1a930b66ec19",
+      "f7cf348f26306df073f3f6360dc83e9369e5c97096f383d6f08d1a930b66ec19",
+      "f7cf348f26306df073f3f6360dc83e9369e5c97096f383d6f08d1a930b66ec19"
+    ],
+    "token_stream_hash": "6700c07ac628c8d6758a1b16144602fe55b82feae49741c4a3133ab10a091aa6",
+    "warmup_tokens": [
+      38835,
+      34208,
+      13,
+      279,
+      3974,
+      13876
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "allocation_count": 21,
+  "arm": "hot",
+  "prefix_names": [],
+  "reps": 1,
+  "schema": "tinygrad.nv_flash_entry_hop_cuda.v1",
+  "target": "flash_vec_llama_score_pv_32_128_8_widekv16",
+  "verdict": "CUDA_SEQUENCE_OK"
+}
