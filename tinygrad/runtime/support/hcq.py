@@ -329,9 +329,21 @@ class CLikeArgsState(HCQArgsState[ProgramType]):
 
     if prefix is not None: self.buf.cpu_view().view(size=len(prefix) * 4, fmt='I')[:] = array.array('I', prefix)
 
-    self.bind_sints_to_buf(*[b.va_addr for b in bufs], buf=self.buf, fmt='Q', offset=len(prefix or []) * 4)
-    assert None not in vals
-    self.bind_sints_to_buf(*cast(tuple[sint, ...], vals), buf=self.buf, fmt='I', offset=len(prefix or []) * 4 + len(bufs) * 8)
+    base = len(prefix or []) * 4
+    blobs = {i: (data, align) for i, data, align in getattr(prg, "arg_blobs", ())}
+    if not getattr(prg, "arg_layout", ()):
+      self.bind_sints_to_buf(*[b.va_addr for b in bufs], buf=self.buf, fmt='Q', offset=base)
+      assert None not in vals
+      self.bind_sints_to_buf(*cast(tuple[sint, ...], vals), buf=self.buf, fmt='I', offset=base + len(bufs) * 8)
+    else:
+      for kind, source, size, _alignment, off in prg.arg_layout:
+        if kind == 'ptr': data = struct.pack('<Q', 0 if source < 0 else bufs[source].va_addr)
+        elif kind == 'u32': data = struct.pack('<I', source)
+        elif kind == 'u64': data = struct.pack('<Q', source)
+        elif kind == 'blob': data = bytes(source)
+        else: raise ValueError(f"unknown native ABI slot kind {kind}")
+        if len(data) != size: raise ValueError(f"native ABI slot size mismatch at {off}")
+        self.buf.cpu_view().view(offset=base + off, size=size)[:] = data
 
 class HCQProgram(Generic[HCQDeviceType]):
   def __init__(self, args_state_t:Type[HCQArgsState], dev:HCQDeviceType, name:str, kernargs_alloc_size:int,

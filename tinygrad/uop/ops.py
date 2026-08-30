@@ -2278,6 +2278,11 @@ class ProgramInfo:
   wmma_roles: WMMARoleLedger = WMMARoleLedger()
   wmma_role_expectation: tuple[AttentionWMMARole, ...] = ()
   candidate_context: SharedAttentionCandidateContext|None = None
+  # Explicit by-value launch payloads for native kernels. Each entry is
+  # (argument index, raw bytes, alignment); ordinary globals/vals remain ABI
+  # compatible and occupy their usual slots when this is empty.
+  arg_blobs: tuple[tuple[int, bytes, int], ...] = ()
+  arg_layout: tuple[tuple[str, int, int, int], ...] = ()
 
   @property
   def function_name(self): return to_function_name(self.name)

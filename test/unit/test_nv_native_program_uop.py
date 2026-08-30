@@ -1,7 +1,7 @@
 import pytest
 from tinygrad import dtypes
 from tinygrad.uop.ops import CallInfo, Ops, UOp
-from extra.llm_research.prefill.nv_native_program_uop import native_nv_program
+from extra.llm_research.prefill.nv_native_program_uop import native_nv_program, native_arg_offsets
 from tinygrad.callify import _native_input_output_routes
 
 ELF=b"\x7fELF"+bytes(32)
@@ -32,3 +32,20 @@ def test_native_input_route_exact_slot_and_negatives():
   assert not _native_input_output_routes(UOp.sink(p.call(out,got.cast(dtypes.float)))) # dtype-changing carrier
   p2=native_nv_program("native2",ELF,global_size=(1,1,1),local_size=(32,1,1),globals=(0,1),outs=(0,),ins=(1,))
   assert not _native_input_output_routes(UOp.sink(p.call(out,got),p2.call(out,got))) # multiple consumers
+
+def test_exact_llama_q6_vocab_parameter_bank_layout():
+  sizes=(8,8,8,32,8,4,12,4,4,4,12,4,4,4,12,4,4,4,4)
+  offsets=(0,8,16,24,56,64,68,80,84,88,92,104,108,112,116,128,132,136,140)
+  layout=tuple(("blob" if i==3 else "ptr" if i in (0,1,2,4) else "u32",i,s,4,o) for i,(s,o) in enumerate(zip(sizes,offsets)))
+  assert native_arg_offsets(layout)==tuple(zip(offsets,sizes))
+  assert offsets[-1]+sizes[-1]==144
+
+def test_exact_llama_q8_producer_parameter_bank_layout():
+  layout=(
+    ("ptr",0,8,8,0), ("ptr",-1,8,8,8), ("ptr",1,8,8,16),
+    ("u64",4096,8,8,24), ("u64",4096,8,8,32), ("u64",4096,8,8,40),
+    ("u64",4096,8,8,48), ("u64",4096,8,8,56),
+    ("u32",1,4,4,64), ("u32",1,4,4,68),
+  )
+  assert native_arg_offsets(layout)[-1] == (68,4)
+  assert native_arg_offsets(layout)[-1][0]+4 == 72
