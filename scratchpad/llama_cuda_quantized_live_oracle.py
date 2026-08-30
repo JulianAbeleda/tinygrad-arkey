@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse, ctypes, hashlib, json, pathlib, statistics, sys
 import numpy as np
+import os, resource
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
@@ -172,21 +173,40 @@ def _copy_f32(buffer: Buffer) -> np.ndarray:
 
 
 def live(cubin: pathlib.Path, base: pathlib.Path, nrows: int, k: int, replays: int, timing_iters: int, timing_reps: int,
-         gpu_q8_cubin: pathlib.Path | None = None, quant: str = "Q6_K") -> dict:
+         gpu_q8_cubin: pathlib.Path | None = None, quant: str = "Q6_K", weight_fixture: pathlib.Path | None = None,
+         activation_fixture: pathlib.Path | None = None, reference_fixture: pathlib.Path | None = None) -> dict:
   if k % 512 or nrows <= 0: raise ValueError("K must be 512-aligned and nrows positive")
   if ctypes.sizeof(FusionArgs) != 32 or ctypes.sizeof(UInt3) != 12: raise RuntimeError("ABI struct size mismatch")
-  q4, q6, q8 = _cpu_quantizers(base)
+  def mark(s):
+    print(f"[vocab-replay] {s} rss_mb={resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024:.1f}", flush=True)
+  mark(f"start rows={nrows}")
+  q4, q6, q8 = _cpu_quantizers(base); mark("quantizers loaded")
   if quant not in ("Q4_K", "Q6_K"): raise ValueError(f"unsupported quant {quant}")
   pack_weight, decode_weight, weight_bytes, entry = ((pack_q4, decode_q4, Q4_BLOCK_BYTES, ENTRY_Q4) if quant == "Q4_K" else
                                                        (pack_q6, decode_q6, Q6_BLOCK_BYTES, ENTRY_Q6))
-  rng = np.random.default_rng(20260804)
-  weights_f32 = rng.normal(0, 0.2, size=(nrows, k)).astype(np.float32)
-  activation_f32 = rng.normal(0, 0.2, size=k).astype(np.float32)
-  weights_quant, activation_q8 = pack_weight(weights_f32, q4 if quant == "Q4_K" else q6), pack_q8(activation_f32, q8)
-  reference = decode_weight(weights_quant).reshape(nrows, k) @ decode_q8(activation_q8)
+  if (weight_fixture is None) != (activation_fixture is None): raise ValueError("weight and activation fixtures must be paired")
+  if weight_fixture is not None:
+    # tinygrad's CUDA copyin requires a writable buffer for its zero-copy address
+    # lookup; mmap the immutable fixture copy-on-write so host bytes stay unchanged.
+    weights_quant = np.memmap(weight_fixture, mode="c", dtype=np.uint8)
+    activation_f32 = np.memmap(activation_fixture, mode="c", dtype=np.float32)
+    expected_weight_bytes = nrows * (k // QK_K) * weight_bytes
+    if len(weights_quant) != expected_weight_bytes or activation_f32.size != k: raise ValueError("fixture shape mismatch")
+    activation_q8 = pack_q8(activation_f32, q8); mark("fixtures mapped and q8 packed")
+  else:
+    rng = np.random.default_rng(20260804)
+    weights_f32 = rng.normal(0, 0.2, size=(nrows, k)).astype(np.float32)
+    activation_f32 = rng.normal(0, 0.2, size=k).astype(np.float32)
+    weights_quant, activation_q8 = pack_weight(weights_f32, q4 if quant == "Q4_K" else q6), pack_q8(activation_f32, q8)
+  if reference_fixture is not None:
+    reference = np.fromfile(reference_fixture, dtype=np.float32)
+    if reference.size != nrows: raise ValueError("reference fixture shape mismatch")
+    mark("reference mapped")
+  else:
+    reference = decode_weight(weights_quant).reshape(nrows, k) @ decode_q8(activation_q8)
 
-  dev = Device["CUDA"]
-  weight = Buffer("CUDA", len(weights_quant), dtypes.uint8, initial_value=bytearray(weights_quant))
+  dev = Device["CUDA"]; mark("cuda device initialized")
+  weight = Buffer("CUDA", len(weights_quant), dtypes.uint8, initial_value=memoryview(weights_quant))
   activation_f32_buf = Buffer("CUDA", activation_f32.size, dtypes.float32, initial_value=bytearray(activation_f32.tobytes()))
   activation = Buffer("CUDA", len(activation_q8), dtypes.uint8,
                       preallocate=True if gpu_q8_cubin is not None else False,
@@ -194,7 +214,7 @@ def live(cubin: pathlib.Path, base: pathlib.Path, nrows: int, k: int, replays: i
   guard, sentinel = 32, np.float32(12345.25)
   output_init = np.full(nrows+2*guard, sentinel, dtype=np.float32)
   output = Buffer("CUDA", output_init.size, dtypes.float32, initial_value=bytearray(output_init.tobytes()))
-  dev.synchronize()
+  dev.synchronize(); mark("buffers allocated and uploaded")
 
   module, function, q8_module, q8_function, stream = cuda.CUmodule(), cuda.CUfunction(), cuda.CUmodule(), cuda.CUfunction(), cuda.CUstream()
   graph, instance = cuda.CUgraph(), cuda.CUgraphExec()
@@ -220,7 +240,8 @@ def live(cubin: pathlib.Path, base: pathlib.Path, nrows: int, k: int, replays: i
         check(cuda.cuLaunchKernel(q8_function, (k+255)//256, 1, 1, 256, 1, 1, 0, stream, q8_params, None))
       launch_kernel()
 
-    launch_sequence(); check(cuda.cuStreamSynchronize(stream))
+    mark("launching producer and consumer")
+    launch_sequence(); check(cuda.cuStreamSynchronize(stream)); mark("producer and consumer complete")
     direct = _copy_f32(output)
     direct_result = direct[guard:guard+nrows]
     max_abs = float(np.max(np.abs(direct_result-reference)))
@@ -240,7 +261,7 @@ def live(cubin: pathlib.Path, base: pathlib.Path, nrows: int, k: int, replays: i
 
     check(cuda.cuStreamBeginCapture_v2(stream, cuda.CU_STREAM_CAPTURE_MODE_THREAD_LOCAL))
     launch_sequence()
-    check(cuda.cuStreamEndCapture(stream, ctypes.byref(graph)))
+    check(cuda.cuStreamEndCapture(stream, ctypes.byref(graph))); mark("graph captured")
     node_count = ctypes.c_size_t(); check(cuda.cuGraphGetNodes(graph, None, ctypes.byref(node_count)))
     edge_count = ctypes.c_size_t(); check(cuda.cuGraphGetEdges(graph, None, None, ctypes.byref(edge_count)))
     graph_nodes = (cuda.CUgraphNode * node_count.value)(); check(cuda.cuGraphGetNodes(graph, graph_nodes, ctypes.byref(node_count)))
@@ -337,6 +358,9 @@ def main() -> int:
   p.add_argument("--timing-reps", type=int, default=5)
   p.add_argument("--gpu-q8-cubin", type=pathlib.Path)
   p.add_argument("--quant", choices=("Q4_K", "Q6_K"), default="Q6_K")
+  p.add_argument("--weight-fixture", type=pathlib.Path)
+  p.add_argument("--activation-fixture", type=pathlib.Path)
+  p.add_argument("--reference-fixture", type=pathlib.Path)
   p.add_argument("--inspect-only", action="store_true")
   args = p.parse_args()
   if not args.cubin.is_file() or not args.base_library.is_file(): raise FileNotFoundError("oracle artifacts missing")
@@ -346,7 +370,7 @@ def main() -> int:
               "cpu_library": {"path": str(args.base_library), "sha256": sha256(args.base_library)},
               "abi": {"entry": ENTRY_Q6, "argument_count": 19, "fusion_args_bytes": ctypes.sizeof(FusionArgs), "uint3_bytes": ctypes.sizeof(UInt3)}}
   else: report = live(args.cubin, args.base_library, args.nrows, args.k, args.replays, args.timing_iters, args.timing_reps,
-                      args.gpu_q8_cubin, args.quant)
+                      args.gpu_q8_cubin, args.quant, args.weight_fixture, args.activation_fixture, args.reference_fixture)
   print(json.dumps(report, sort_keys=True))
   return 0 if args.inspect_only or (report["correctness"]["pass"] and report["graph"]["capture_pass"]) else 1
 
