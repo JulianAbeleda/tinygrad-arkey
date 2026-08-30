@@ -1,0 +1,28 @@
+{
+  "schema": "tinygrad.nv.llama_gap_closure_ledger.v1",
+  "date": "2026-08-30",
+  "tinygrad": {
+    "median_ms": 34.963556,
+    "median_tok_s": 14643.81941
+  },
+  "llama": {
+    "median_ms": 35.019399,
+    "minimum_ms": 34.680367
+  },
+  "matched_median_difference_ms": -0.055843,
+  "interpretation": "tinygrad_median_is_0p055843ms_faster",
+  "latest_recovery": {
+    "category": "opaque_program_single_owner_substrate",
+    "wall_ms": 2.177346,
+    "physical_launch_delta": -36,
+    "q4_main_delta": -36,
+    "summed_active_delta_ms": -1.837952
+  },
+  "correctness": {
+    "token": 198,
+    "full_logits_bit_exact": true,
+    "rollback_bit_exact": true
+  },
+  "status": "MEDIAN_GAP_CLOSED",
+  "next": "confirm_settled_R9_and_generalize_single_owner_PROGRAM_contract"
+}

@@ -1,0 +1,12 @@
+{
+  "tokens": [
+    198,
+    198,
+    198
+  ],
+  "finite": true,
+  "control_candidate_max_abs": 0.0,
+  "control_candidate_mean_abs": 0.0,
+  "allclose_rtol_0p02_atol_0p5": true,
+  "control_rollback_exact": true
+}

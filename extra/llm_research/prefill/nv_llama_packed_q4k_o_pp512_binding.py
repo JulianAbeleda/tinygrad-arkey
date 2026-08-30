@@ -2,6 +2,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from tinygrad import Device, Tensor, dtypes
+from tinygrad.helpers import getenv
 from tinygrad.runtime.support.compiler_cuda import NVRTCCompiler
 from extra.llm_research.prefill.nv_native_program_uop import native_nv_program
 from extra.llm_research.prefill.nv_packed_q4k_q8_llama_candidate import (
@@ -17,6 +18,12 @@ PROJECTIONS_PER_MODEL = 36
 Q8_RECORD_BYTES = M * (K // 128) * 144 + MMQ_X * 144
 SCRATCH_FLOATS = MAIN_GRID[0] * MMQ_X * MMQ_X
 _BINDINGS = {}
+
+def _single_owner_main(words:Tensor, record:Tensor, out:Tensor, workspace:Tensor, main) -> tuple[Tensor,Tensor]:
+  # Keep one lazy AFTER owner. ProgramInfo.outs still declares both physical
+  # writes, so dependency/resource tracking owns the raw workspace correctly.
+  _,_,out,_=words.uop_program(record,out,workspace,fxn=lambda *_:main)
+  return out,workspace
 
 MAIN_SYMBOL = "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_"
 FIXUP_SYMBOL = "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_"
@@ -72,7 +79,14 @@ class Capture:
     if x.dtype != dtypes.float16 or words.dtype != dtypes.uint32: raise ValueError("Q4 attention-output requires fp16 and uint32")
     self.cursor += 1
     r=Tensor.empty(Q8_RECORD_BYTES//4,dtype=dtypes.uint32,device=x.device); o=Tensor.empty(M*N,dtype=dtypes.float32,device=x.device); s=Tensor.empty(SCRATCH_FLOATS,dtype=dtypes.float32,device=x.device)
-    _,r=x.uop_program(r,fxn=lambda *_:self.asset.producer); words,r,o,s=words.uop_program(r,o,s,fxn=lambda *_:self.asset.main); o,s=o.uop_program(s,fxn=lambda *_:self.asset.fixup)
+    _,r=x.uop_program(r,fxn=lambda *_:self.asset.producer)
+    if getenv("NV_LLAMA_O_SINGLE_OWNER_PP512", getenv("NV_LLAMA_FULL_PACKED_PP512", 1)):
+      # The PROGRAM declares o/s as writes. Retain one AFTER owner for the main
+      # and pass the raw workspace allocation to fixup; retaining both AFTERs
+      # can materialize the same opaque main once per result owner.
+      o,s=_single_owner_main(words,r,o,s,self.asset.main)
+    else: words,r,o,s=words.uop_program(r,o,s,fxn=lambda *_:self.asset.main)
+    o,s=o.uop_program(s,fxn=lambda *_:self.asset.fixup)
     out=o.reshape(M,N)
     return out if residual is None else out+residual
 
