@@ -1718,6 +1718,11 @@ class Transformer:
     with role_metadata("rms_norm"):
       x = _prefill_semantic(_prefill, prefill_scratch,
         _decode_reduce_output_rmsnorm(self.output_norm, x, _reduce_output_norm))
+    if _prefill and _os.environ.get("NV_LLAMA_Q6_VOCAB_PP512",_os.environ.get("NV_LLAMA_FULL_PACKED_PP512","1"))!="0" and Device.DEFAULT=="NV" and tuple(x.shape)==(1,512,4096) and \
+       self.config.vocab_size==151936 and isinstance(self.output,Q6KPrimitiveLinear):
+      from extra.llm_research.prefill.nv_llama_q6k_vocab_pp512_binding import binding_for
+      logits=binding_for("NV").project(x[0,-1].cast(dtypes.float32).contiguous(),self.output.prefill_packed_weight())
+      return Transformer._stamp_position_var_vals(_prefill_semantic(_prefill,prefill_output,logits.reshape(1,1,151936)),_vv)
     if self._lm_head_wants_pf16():
       return Transformer._stamp_position_var_vals(_prefill_semantic(_prefill, prefill_output, _pf16(self.output, x).contiguous()), _vv)
     # The lazy LM head is still the selected output tensor's actual runtime invocation.  Record it before Tensor's

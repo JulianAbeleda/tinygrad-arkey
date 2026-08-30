@@ -65,7 +65,7 @@ class Binding:
 class Capture:
   asset: Binding; trace_epoch: int = 0; cursor: int = 0
   def begin_trace(self): self.trace_epoch,self.cursor=self.trace_epoch+1,0
-  def project(self,x,words,*,model_family,role,weight_type="Q4_K"):
+  def project(self,x,words,residual=None,*,model_family,role,weight_type="Q4_K"):
     if self.trace_epoch == 0: raise RuntimeError("begin_trace required")
     if self.cursor >= PROJECTIONS_PER_MODEL: raise RuntimeError("Q4 attention-output census exceeded")
     if not supports(model_family=model_family,role=role,weight_type=weight_type,m=x.shape[0],n=N,k=x.shape[1],device=x.device): raise ValueError("unsupported Q4 attention-output route")
@@ -73,7 +73,8 @@ class Capture:
     self.cursor += 1
     r=Tensor.empty(Q8_RECORD_BYTES//4,dtype=dtypes.uint32,device=x.device); o=Tensor.empty(M*N,dtype=dtypes.float32,device=x.device); s=Tensor.empty(SCRATCH_FLOATS,dtype=dtypes.float32,device=x.device)
     _,r=x.uop_program(r,fxn=lambda *_:self.asset.producer); words,r,o,s=words.uop_program(r,o,s,fxn=lambda *_:self.asset.main); o,s=o.uop_program(s,fxn=lambda *_:self.asset.fixup)
-    return o.reshape(M,N)
+    out=o.reshape(M,N)
+    return out if residual is None else out+residual
 
 def binding_for(device="NV"):
   if device != "NV": raise ValueError("Q4 attention-output binding is NV-only")

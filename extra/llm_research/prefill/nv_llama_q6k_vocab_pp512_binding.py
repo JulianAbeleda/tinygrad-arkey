@@ -7,6 +7,8 @@ the Q8 producer -> Q6 consumer dependency.
 from pathlib import Path
 import struct
 from extra.llm_research.prefill.nv_native_program_uop import native_nv_program
+from tinygrad import Device, Tensor, dtypes
+from tinygrad.runtime.support.compiler_cuda import NVRTCCompiler
 
 ARTIFACTS = Path(__file__).resolve().parents[3] / "scratchpad/llama_cuda_quantized_oracle_dump"
 Q8_SYMBOL = "_Z17quantize_mmq_q8_1IL18mmq_q8_1_ds_layout2EEvPKfPKiPvlllllii"
@@ -16,11 +18,29 @@ Q6_SYMBOL = "_Z13mul_mat_vec_qIL9ggml_type14ELi1ELb0ELb0EEvPKvS2_PKi31ggml_cuda_
 Q6_ARG_OFFSETS = (0, 8, 16, 24, 56, 64, 68, 80, 84, 88, 92, 104, 108, 112, 116, 128, 132, 136, 140)
 Q6_ARG_SIZES = (8, 8, 8, 32, 8, 4, 12, 4, 4, 4, 12, 4, 4, 4, 12, 4, 4, 4, 4)
 
+Q8_SOURCE = r'''
+#include <cuda_fp16.h>
+struct __align__(4) block_q8_1 { __half d, s; signed char qs[32]; };
+extern "C" __global__ void q8_vocab_fp32(const float *x, block_q8_1 *out) {
+  const int lane=threadIdx.x, block=blockIdx.x;
+  const float value=x[block*32+lane];
+  float a=fabsf(value);
+  for (int off=16;off;off>>=1) a=fmaxf(a,__shfl_xor_sync(0xffffffff,a,off));
+  const float d=__shfl_sync(0xffffffff,a,0)/127.0f;
+  int q=d==0.0f ? 0 : (int)roundf(value/d);
+  q=max(-127,min(127,q));
+  out[block].qs[lane]=(signed char)q;
+  int sum=q;
+  for (int off=16;off;off>>=1) sum+=__shfl_xor_sync(0xffffffff,sum,off);
+  if (lane==0) { out[block].d=__float2half(d); out[block].s=__float2half(sum*d); }
+}
+'''
+
 def enabled(config) -> bool:
   return bool(getattr(config, "prefill_ubatch", None) == 512 and __import__("os").environ.get("NV_LLAMA_Q6_VOCAB_PP512") == "1")
 
 def artifacts() -> dict:
-  return {"q8": ARTIFACTS / "libggml-cuda.q8_1.sm_120a.cubin", "q6": Path(__file__).resolve().parents[3] / "docs/task_workflow/evidence/nv-llama-q6k-vocab-standalone-20260830/q6k-mmvq-nopdl.sm_120a.cubin"}
+  return {"q8": ARTIFACTS / "libggml-cuda.q8_1.sm_120a.cubin", "q6": Path(__file__).resolve().parents[3] / "docs/task_workflow/evidence/nv-llama-q6k-vocab-standalone-20260830/q6k-vocab-hcq.sm_120a.cubin"}
 
 def validate() -> None:
   a = artifacts()
@@ -29,24 +49,28 @@ def validate() -> None:
 
 def programs():
   validate()
-  q8_layout = (("ptr",0,8,8,0),("ptr",-1,8,8,8),("ptr",1,8,8,16)) + tuple(("u64",4096,8,8,24+i*8) for i in range(5)) + (("u32",1,4,4,64),("u32",1,4,4,68))
-  q8 = native_nv_program("llama_q8_1_vocab_4096", artifacts()["q8"].read_bytes(), global_size=(128,1,1), local_size=(256,1,1), globals=(0,1), outs=(1,), ins=(0,), arg_layout=q8_layout)
-  layout=[]
-  sizes=Q6_ARG_SIZES; offsets=Q6_ARG_OFFSETS
-  ptrs={0:0,1:1,2:-1,4:2}
-  for i,(size,off) in enumerate(zip(sizes,offsets)):
-    if i in ptrs: kind,src="ptr",ptrs[i]
-    elif i==3: kind,src="blob",bytes(32)
-    elif i in (6,10,14): kind,src= "blob", struct.pack('<III',1,1,1)
-    elif i in (8,): kind,src="u32",128
-    elif i in (9,): kind,src="u32",151936
-    elif i in (11,12,13): kind,src="u32",1
-    elif i in (15,16,17): kind,src="u32",1
-    elif i in (5,): kind,src="u32",4096
-    elif i in (7,): kind,src="u32",16
-    elif i in (9,13,17): kind,src="u32",151936
-    else: kind,src="u32",1
-    layout.append((kind,src,size,4,off))
+  q8_cubin=NVRTCCompiler(Device["NV"].arch,ptx=False,cache_key="nv_q8_vocab_fp32_v1").compile(Q8_SOURCE)
+  q8 = native_nv_program("q8_vocab_fp32",q8_cubin,global_size=(128,1,1),local_size=(32,1,1),globals=(0,1),outs=(1,),ins=(0,))
   import os
-  q6 = native_nv_program("llama_q6k_vocab_151936", artifacts()["q6"].read_bytes(), global_size=(int(os.environ.get("Q6_TEST_ROWS", "151936")),1,1), local_size=(32,4,1), globals=(0,1,2), arg_layout=tuple(layout))
+  rows=int(os.environ.get("Q6_TEST_ROWS", "151936"))
+  q6 = native_nv_program("q6k_vocab_hcq", artifacts()["q6"].read_bytes(), global_size=(rows,1,1), local_size=(32,4,1),
+                         globals=(0,1,2), outs=(2,), ins=(0,1), vals=(rows,))
   return q8, q6
+
+class Binding:
+  def __init__(self): self.q8,self.q6=programs()
+  def project(self,x:Tensor,weights:Tensor)->Tensor:
+    if tuple(x.shape)!=(4096,) or x.dtype!=dtypes.float32 or x.device!="NV": raise ValueError("Q6 vocabulary input must be NV fp32[4096]")
+    if weights.device!="NV" or weights.nbytes()!=151936*16*210: raise ValueError("Q6 vocabulary weight contract mismatch")
+    packet=Tensor.empty((1152,),dtype=dtypes.uint32,device="NV")
+    out=Tensor.empty((151936,),dtype=dtypes.float32,device="NV")
+    _,packet=x.uop_program(packet,fxn=lambda *_:self.q8)
+    weights,packet,out=weights.uop_program(packet,out,fxn=lambda *_:self.q6)
+    return out
+
+_BINDING=None
+def binding_for(device="NV"):
+  global _BINDING
+  if device!="NV": raise ValueError("Q6 vocabulary binding is NV-only")
+  if _BINDING is None:_BINDING=Binding()
+  return _BINDING
