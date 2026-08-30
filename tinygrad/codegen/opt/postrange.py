@@ -556,7 +556,18 @@ class Scheduler:
               subtile_m, subtile_n, wave_m, wave_n, k_substep, outer_n, outer_m, outer_k, lane = candidate_axes
               if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1":
                 streamk_ctx = getattr(getattr(self.ast.arg, "candidate_context", None), "streamk", None)
-                if streamk_ctx is not None: object.__setattr__(streamk_ctx, "selected_n_key", outer_n.key)
+                if streamk_ctx is not None:
+                  object.__setattr__(streamk_ctx, "selected_n_key", outer_n.key)
+                  if os.environ.get("TINYGRAD_STREAMK_OWNER") == "1" and outer_n.vmax + 1 in (32, 128):
+                    from extra.llm_research.prefill.nv_compiler_streamk_codegen import StreamKRangeState
+                    owners = 8 if outer_n.vmax + 1 == 32 else 32
+                    owner = UOp.range(owners, next(self.opt_range), AxisType.GLOBAL)
+                    serial = UOp.range(4, next(self.opt_range), AxisType.LOOP)
+                    mapped_outer_n = owner * 4 + serial
+                    self.ast = self.ast.substitute({outer_n: mapped_outer_n}, name="streamk owner serial N")
+                    object.__setattr__(streamk_ctx, "range_state", StreamKRangeState(owner, serial, mapped_outer_n))
+                    object.__setattr__(streamk_ctx, "selected_n_key", mapped_outer_n.key)
+                    outer_n = mapped_outer_n
               range_by_id = {r.arg[0]:r for r in self.rngs}
               try: operands, thread_axes, contracts, allocation = candidate_contract.assemble(
                 in0=in0, in1=in1, original_axes=original_axes, outer_n=outer_n, outer_m=outer_m, wave_m=wave_m, wave_n=wave_n, lane=lane,

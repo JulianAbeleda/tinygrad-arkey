@@ -478,10 +478,15 @@ def nv_sm120_q16_grid_hd128_cooperative_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_
   tile_base=rng*UOp.const(dtypes.weakint,16*head_dim)
   slot=rng%UOp.const(dtypes.weakint,slots)
   stage_begin=lower_cooperative_stage_begin(UOp.cooperative_stage_begin(rng, UOp.const(dtypes.weakint, 0), CooperativeStageBeginSpec(loop_axis=rng)))
-  k_shared=lower_cooperative_tile_load(UOp.cooperative_tile_load(k,tile_base,CooperativeTileLoadSpec(tile_base=tile_base,loop_axis=rng,slots=slots,slot_index=slot,pre_barrier=True))) if os.getenv("NV2C_K_STAGE", os.getenv("NV2C_K", "1")) == "1" else k
-  v_shared=lower_cooperative_tile_load(UOp.cooperative_tile_load(v,tile_base,CooperativeTileLoadSpec(tile_base=tile_base,loop_axis=rng,slots=slots,slot_index=slot,pre_barrier=False))) if os.getenv("NV2C_V", "1") == "1" else v
+  k_staged=os.getenv("NV2C_K_STAGE", os.getenv("NV2C_K", "1")) == "1"
+  v_staged=os.getenv("NV2C_V", "1") == "1"
+  k_shared=lower_cooperative_tile_load(UOp.cooperative_tile_load(k,tile_base,CooperativeTileLoadSpec(tile_base=tile_base,loop_axis=rng,slots=slots,slot_index=slot,pre_barrier=True))) if k_staged else k
+  v_shared=lower_cooperative_tile_load(UOp.cooperative_tile_load(v,tile_base,CooperativeTileLoadSpec(tile_base=tile_base,loop_axis=rng,slots=slots,slot_index=slot,pre_barrier=False))) if v_staged else v
   def rd(reg,init,role,b=0,o=0,final=False): return loop_state_read(reg, init, rng, role=role, owner=9604, block=b, final=final)
-  def fr(owner,role,b,call=0): return packed_fragment_load(k_shared if role=="K" and os.getenv("NV2C_K_CONSUME", os.getenv("NV2C_K", "1")) == "1" else v_shared if role=="V" and os.getenv("NV2C_V", "1") == "1" else owner, role=role, head_block=b, grid=grid, lane=lane, col=col, rng=rng, group=group, call=call, fragment_model=fragment_model, physical_local_size=32*warps_per_cta, storage="shared" if role in {"K","V"} else "global", shared_phase_abi="single_buffer_barrier_v1" if role in {"K","V"} else None, stage_wait=stage_begin if role in {"K","V"} else None)
+  def fr(owner,role,b,call=0):
+    staged = k_staged if role == "K" else v_staged if role == "V" else False
+    selected = k_shared if role=="K" and os.getenv("NV2C_K_CONSUME", os.getenv("NV2C_K", "1")) == "1" else v_shared if role=="V" and os.getenv("NV2C_V", "1") == "1" else owner
+    return packed_fragment_load(selected, role=role, head_block=b, grid=grid, lane=lane, col=col, rng=rng, group=group, call=call, fragment_model=fragment_model, physical_local_size=32*warps_per_cta, storage="shared" if staged else "global", shared_phase_abi="single_buffer_barrier_v1" if staged else None, stage_wait=stage_begin if staged else None)
   if not phase_abi_v1: om,ol=rd(mreg,mi,"m"),rd(lreg,li,"l")
   qk=zero_wmma
   for b in range(hd_blocks):

@@ -48,7 +48,8 @@ def realize_ds4_metadata(x: Tensor, spec: DS4ProducerSpec = DS4ProducerSpec()) -
   sm = v.sum(axis=1)
   # The packed ABI is segment-major (seg * rows + row), unlike the input's
   # natural row-major traversal.
-  return Tensor.stack(d, sm, dim=1).reshape(spec.M, spec.K//128, 4, 2).permute(1, 0, 2, 3).reshape(records, 8).contiguous()
+  dinv = (peak != 0).where(peak.const_like(127.0).alu(Ops.PRECISE_DIV, peak), peak.const_like(127.0))
+  return Tensor.stack(d, sm, dinv, dim=1).reshape(spec.M, spec.K//128, 4, 3).permute(1, 0, 2, 3).reshape(records, 12).contiguous()
 
 def flat_ds4_inputs(x: Tensor, meta: Tensor) -> tuple[Tensor, Tensor]:
   """Bind stage-2 inputs as scalar flat global buffers, avoiding shaped loads."""
@@ -81,11 +82,14 @@ def emit_ds4_pack_stage(spec: DS4ProducerSpec = DS4ProducerSpec()):
     # and llama's producer: record = seg * M + row.
     meta_record = seg*spec.M + row
     word=UOp.range(72,1); is_q=word>=8; qword=is_q.where(word-8,0); i=qword*2
-    d=meta[meta_record*8+(i//32)*2]; base=row*spec.K+seg*128+i
-    invd=d.reciprocal()
-    q0=(x[base].cast(dtypes.float32)*invd).round().maximum(-128).minimum(127).cast(dtypes.int16).cast(dtypes.uint16)
-    q1=(x[base+1].cast(dtypes.float32)*invd).round().maximum(-128).minimum(127).cast(dtypes.int16).cast(dtypes.uint16)
-    packed=(q0&255)|((q1&255)<<8); mw=meta[meta_record*8+(word%8)].cast(dtypes.float16).bitcast(dtypes.uint16)
+    d=meta[meta_record*12+(i//32)*3]; base=row*spec.K+seg*128+i
+    invd=meta[meta_record*12+(i//32)*3+2]
+    # CUDA roundf is ties-away-from-zero; tinygrad round() is ties-to-even.
+    def cuda_round(v):
+      return (v >= 0).where((v+0.5).floor(), (v-0.5).ceil())
+    q0=cuda_round(x[base].cast(dtypes.float32)*invd).maximum(-128).minimum(127).cast(dtypes.int16).cast(dtypes.uint16)
+    q1=cuda_round(x[base+1].cast(dtypes.float32)*invd).maximum(-128).minimum(127).cast(dtypes.int16).cast(dtypes.uint16)
+    packed=(q0&255)|((q1&255)<<8); mw=meta[meta_record*12+((word%8)//2)*3+(word%2)].cast(dtypes.float16).bitcast(dtypes.uint16)
     return out[record*72+word].store(is_q.where(packed,mw)).end(record,word).sink(
       arg=KernelInfo(name="q8_ds4_pack_stage", opts_to_apply=()))
   return kernel
@@ -102,10 +106,12 @@ def cpu_pack_ds4(x: np.ndarray) -> np.ndarray:
     for seg in range(k // 128):
       v = x[row, seg*128:(seg+1)*128].reshape(4, 32)
       for g, z in enumerate(v):
-        a = np.max(np.abs(z)); d = 1.0 if a == 0 else a / 127.0
-        q = np.clip(np.rint(z / d), -128, 127).astype(np.int8)
+        a = np.max(np.abs(z)); dinv = 127.0 if a == 0 else 127.0 / a
+        scaled = z * dinv
+        q = np.clip(np.where(scaled >= 0, np.floor(scaled + 0.5), np.ceil(scaled - 0.5)), -128, 127).astype(np.int8)
         rec = (seg * rows + row) * 144
         out[rec//144, 16 + g*32:16 + (g+1)*32] = q.view(np.uint8)
+        d = 1.0 if a == 0 else a / 127.0
         out[rec//144, g*4:g*4+2] = np.asarray([np.float16(d)], dtype=np.float16).view(np.uint8)
         out[rec//144, g*4+2:g*4+4] = np.asarray([np.float16(np.sum(z))], dtype=np.float16).view(np.uint8)
   return out

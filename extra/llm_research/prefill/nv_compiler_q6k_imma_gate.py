@@ -17,7 +17,7 @@ from tinygrad.codegen.opt.packed_weight import (PackedWeightTransform, Q6KInt8Fr
 from tinygrad.codegen.opt.postrange import warmstart_candidate_state, warmstart_key
 from tinygrad.uop.ops import Ops
 from extra.llm_research.kernel_vocabulary import KernelLDSWindow, KernelTileGeometry
-from extra.llm_research.prefill.nv_compiler_streamk_codegen import q6_down_candidate_context, select_reversed_output_n
+from extra.llm_research.prefill.nv_compiler_streamk_codegen import q6_down_candidate_context, select_reversed_output_n, StreamKRangeState, StreamKGeometry, StreamKCandidateContext
 
 TILE_K = 64
 
@@ -45,8 +45,11 @@ def _context(m:int,n:int,k:int,tm:int,tn:int,wm:int,wn:int,threads:int):
   geometry=KernelTileGeometry((tm,tn,TILE_K),(wm,wn),threads,32,
     (KernelLDSWindow("A",0,tm*stride,stride),KernelLDSWindow("B",tm*stride,(tm+tn)*stride,stride)))
   identity=hashlib.sha256(repr((geometry,wp.identity,ap.identity,accumulator.abi)).encode()).hexdigest()
-  streamk = q6_down_candidate_context() if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1" else None
-  mapper = select_reversed_output_n if streamk is not None and os.environ.get("TINYGRAD_STREAMK_PERMUTE") == "1" else None
+  owner_count = min(8, (m//tm)*(n//tn)*(k//TILE_K))
+  streamk = (StreamKCandidateContext(StreamKGeometry("q6_v", m, n, k, tm, tn, TILE_K, owner_count), main_grid=(owner_count,1,1))
+             if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1" else None)
+  if streamk is not None: object.__setattr__(streamk, "range_state", StreamKRangeState())
+  mapper = select_reversed_output_n if streamk is not None and os.environ.get("TINYGRAD_STREAMK_PERMUTE") == "1" and os.environ.get("TINYGRAD_STREAMK_OWNER") != "1" else None
   return wt,at,identity,_Context("boltbeam.full_kernel_candidate.v1",identity,geometry,wt,wp,at,ap,accumulator,streamk=streamk,
                                  logical_global_range_map=mapper)
 
@@ -157,6 +160,10 @@ def _run(name:str,m:int,n:int,k:int,halfs:Tensor,record:Tensor,rounds:int,artifa
   binaries=[u.arg for u in program.src if u.op is Ops.BINARY and isinstance(u.arg,bytes)]
   if len(sources)!=1 or len(binaries)!=1:raise RuntimeError(f"{name}: source/binary capture failed")
   (artifacts/f"{name}.cu").write_text(sources[0]);sass=_sass(binaries[0],artifacts/name)
+  if os.environ.get("TINYGRAD_STREAMK_REQUIRE_CANDIDATE") == "1" and sass["imma"] < 16:
+    raise RuntimeError(f"Q6 candidate admission failed for {name}: identity={getattr(pinfo.candidate_context,'canonical_identity',None)==identity}, "
+                       f"geometry={pinfo.global_size}/{pinfo.local_size}, sass_imma={sass['imma']}, "
+                       f"lds={sass['ldsm']}, local={sass['local_load']}/{sass['local_store']}")
 
   if reference_np is None:
     from tinygrad.runtime.ops_cuda import CUDAProgram

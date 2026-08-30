@@ -9,9 +9,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from tinygrad.uop.ops import Ops, UOp
+from tinygrad.uop.ops import AxisType, Ops, UOp
 
 STREAMK_RANGE_PROVENANCE: dict[str, dict[str, tuple[bytes, ...]]] = {}
+
+@dataclass(eq=False)
+class StreamKRangeState:
+  owner: UOp|None = None
+  serial: UOp|None = None
+  mapped_outer_n: UOp|None = None
 
 
 def one_pass_substitute(root: UOp, substitutions: dict[UOp, UOp]) -> UOp:
@@ -33,8 +39,18 @@ def select_reversed_output_n(ast: UOp, scheduler: Any) -> dict[bytes, UOp]:
   direct_key = getattr(direct, "selected_n_key", None)
   if direct_key is not None:
     matches = [r for r in scheduler._output_rngs() if r.key == direct_key]
+    if not matches:
+      state = getattr(direct, "range_state", None)
+      if state is not None and state.mapped_outer_n is not None:
+        matches = [state.mapped_outer_n]
+        direct_key = state.mapped_outer_n.key
     if len(matches) != 1: raise ValueError(f"captured output-N range disappeared ({len(matches)})")
     rng = matches[0]
+    if __import__("os").environ.get("TINYGRAD_STREAMK_OWNER") == "1" and rng.vmax + 1 in (32, 128):
+      owners = 8 if rng.vmax + 1 == 32 else 32
+      owner = UOp.range(owners, -7001, AxisType.GLOBAL)
+      serial = UOp.range(4, -7002, AxisType.LOOP)
+      return {direct_key: owner * 4 + serial}
     physical = rng.replace(tag=("streamk_physical", rng.key))
     return {direct_key: rng.vmax - physical}
   rec = STREAMK_RANGE_PROVENANCE.get("current", {})
@@ -50,6 +66,14 @@ def select_reversed_output_n(ast: UOp, scheduler: Any) -> dict[bytes, UOp]:
   rng = matches[0]
   physical = rng.replace(tag=("streamk_physical", rng.key))
   return {rng.key: rng.vmax - physical}
+
+
+def complete_tile_owner_map(owner: UOp, serial: UOp, *, tiles: int, owners: int) -> UOp:
+  """Map physical owner/serial coordinates to a bounded logical tile index."""
+  if not isinstance(owner, UOp) or not isinstance(serial, UOp) or tiles <= 0 or owners <= 0:
+    raise ValueError("invalid complete-tile owner map")
+  if tiles % owners: raise ValueError("complete-tile owner map requires an even owner partition")
+  return owner * (tiles // owners) + serial
 
 
 def record_range_provenance(operands: tuple[Any, ...], *, output_ranges: tuple[UOp, ...] = ()) -> None:
@@ -175,6 +199,7 @@ class StreamKCandidateContext:
   main_grid: tuple[int, int, int] = (170, 1, 1)
   fixup_grid: tuple[int, int, int] = (170, 1, 1)
   selected_n_key: bytes|None = None
+  range_state: StreamKRangeState|None = None
 
   def __post_init__(self):
     self.schedule.validate()
