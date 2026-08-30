@@ -1,0 +1,50 @@
+{
+  "commit": "2df5cde765706dc8783b5d2c952f52288bc9a1ae",
+  "eps": 1e-06,
+  "method": "render + NVRTC-compile installed norm/apply_rope/fused; run on real NV device; bitwise compare",
+  "results": [
+    {
+      "bit_exact": true,
+      "cand_sha256": "d81615b138ee14b8814563006f749c7ecc121257da3679529881ad50a4d13a20",
+      "ctrl_sha256": "d81615b138ee14b8814563006f749c7ecc121257da3679529881ad50a4d13a20",
+      "identity": false,
+      "max_abs_diff": 0.0,
+      "mismatch_count": 0,
+      "rows": 32
+    },
+    {
+      "bit_exact": true,
+      "cand_sha256": "cc463368f83b99b5f8940914a80a1174f1a5e6456fd1bf6b78ca75cb9ffe6269",
+      "ctrl_sha256": "cc463368f83b99b5f8940914a80a1174f1a5e6456fd1bf6b78ca75cb9ffe6269",
+      "identity": true,
+      "max_abs_diff": 0.0,
+      "mismatch_count": 0,
+      "rows": 32
+    },
+    {
+      "bit_exact": true,
+      "cand_sha256": "e9a187921d4dea8ca78e4e6d4eed274221b78eb4fed6c99a9e67c8fcc1da407c",
+      "ctrl_sha256": "e9a187921d4dea8ca78e4e6d4eed274221b78eb4fed6c99a9e67c8fcc1da407c",
+      "identity": false,
+      "max_abs_diff": 0.0,
+      "mismatch_count": 0,
+      "rows": 8
+    },
+    {
+      "bit_exact": true,
+      "cand_sha256": "a981b887324c8534e0c471f44bd1e5cf825591af589e164a158821d66f26906b",
+      "ctrl_sha256": "a981b887324c8534e0c471f44bd1e5cf825591af589e164a158821d66f26906b",
+      "identity": true,
+      "max_abs_diff": 0.0,
+      "mismatch_count": 0,
+      "rows": 8
+    }
+  ],
+  "schema": "tinygrad.nv_qk_norm_rope_nvrtc_bit_exact.v1",
+  "verdict": {
+    "32_identity_bit_exact": true,
+    "32_real_bit_exact": true,
+    "8_identity_bit_exact": true,
+    "8_real_bit_exact": true
+  }
+}

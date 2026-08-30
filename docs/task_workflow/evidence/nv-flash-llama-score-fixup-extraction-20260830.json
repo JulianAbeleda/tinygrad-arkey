@@ -1,0 +1,28 @@
+{
+  "schema": "tinygrad.nv_flash_llama_score_fixup_extraction.v1",
+  "date": "2026-08-30",
+  "requested_geometry": {"score_grid": [340, 1, 1], "score_block": [32, 4, 1], "fixup_grid": [340, 16, 4], "fixup_block": [128, 1, 1]},
+  "binary": {
+    "library": "/home/ubuntu/env/llama.cpp/build-cuda/bin/libggml-cuda.so.0.14.0",
+    "library_sha256": "ad59af8c8520cc52ed88496cbb568c61686d667f728b7d2434d8ce9da490ecdb",
+    "embedded_sm120a_cubins": 138,
+    "exported_flash_host_symbol": "ggml_cuda_flash_attn_ext_vec_case<128,(ggml_type)1,(ggml_type)1>",
+    "raw_flash_launcher_exported": false,
+    "raw_fixup_launcher_exported": false
+  },
+  "attempt": {
+    "flock": "/tmp/tinygrad-gpu.lock",
+    "probe": "scratchpad/llama_cuda_binary_kernel_probe.py",
+    "graph_owned_buffers": true,
+    "tested_symbol": "launch_mul_mat_vec_f_cuda<float,float,1,false>",
+    "tested_symbol_is_flash": false,
+    "direct_launch": {"ok": true, "max_abs_error": 4.76837158203125e-7},
+    "graph_capture_replay": {"ok": true, "nodes": 1, "max_abs_error": 4.76837158203125e-7}
+  },
+  "blocker": {
+    "kind": "ABI_UNAVAILABLE",
+    "details": "The Flash score and fixup entry points are local device symbols in embedded cubins. The only exported host function is a ggml_cuda_flash_attn_ext_vec_case wrapper taking ggml_backend_cuda_context and ggml_tensor, with internal tensor strides, scratch buffers, stream policy, and partition/fixup setup. No callable raw Q/K/V/output-buffer ABI exists for tinygrad graph-owned allocations.",
+    "consequence": "Cannot stage-isolate or safely launch the requested score+stream-K+fixup pair; no correctness/timing/full-model A/B claim is admissible."
+  },
+  "decision": "STOP_ABI_BLOCKED_NO_INTEGRATION"
+}
