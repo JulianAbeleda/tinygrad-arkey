@@ -410,3 +410,117 @@ def amd_gfx1100_q16_grid_pv_slice_stage(q:UOp,k:UOp,v:UOp,stats:UOp,out:UOp,*,q_
   # path, so it does not affect the spec-driven route's Hd-threading.
   end=UOp.group(*writes).end(rng); fc=tuple(rd(end,b,True) for b in range(2)); drain=UOp(Ops.ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AttentionOutputDrainSpec(native_abi="amd_gfx1100_attention_output_drain_acc_slice_v2",head_dim=hd,blocks=2,address_expr=f"e*{2*hd}+halfwave*{hd}+j*16+col",grid=grid,output_block_base=output_block_base))
   return UOp.sink(ci,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_pv_slice_stage_v1",))
+def nv_sm120_q16_grid_hd128_cooperative_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,causal:bool=False,valid_kv:int|None=None,query_start:int|None=None,output_block_base:int=0,acc_blocks:int=8,phase_abi_v1:bool=False,head_dim:int=128,warps_per_cta:int=1,fragment_model=None)->UOp:
+  """Fixed 16-WMMA attention wave with compile-time model geometry."""
+  # NV2c research-only copy; default AMD builder is intentionally separate.
+  from tinygrad.uop.ops import AttentionOutputDrainSpec, AttentionGridSpec, LoopStateSpec, PackedFragmentLoopSpec, AxisType
+  # head_dim is now THREADED (not just the grid's own default): the descriptor genuinely owns it.
+  # Everything downstream (hd/hd_blocks locals, packed_fragment_load's grid-derived hdb bound from
+  # P-B1/P-B2) already reads from grid.head_dim, so passing it here cascades correctly.
+  if fragment_model is None:
+    from tinygrad.codegen.opt.attention_fragment import attention_fragment_model
+    fragment_model = attention_fragment_model("amd_gfx1100")
+  grid=AttentionGridSpec(q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,group_ratio=q_heads//kv_heads,kv_tokens=kv_tokens,head_dim=head_dim,local_size=32*warps_per_cta,native_abi=fragment_model.abi("attention_grid_hd128_v1"),fragment_model=fragment_model); grid.validate()
+  hd=grid.head_dim; hd_blocks=hd//16
+  owners=(q,k,v,out); sizes=(q_heads*q_tokens*hd,kv_heads*kv_tokens*hd,kv_heads*kv_tokens*hd,q_heads*q_tokens*hd)
+  if any(x.op is not Ops.PARAM or not isinstance(x.dtype,PtrDType) for x in owners) or tuple(x.arg.slot for x in owners)!=(1,2,3,0) or tuple(x.ptrdtype.size for x in owners)!=sizes: raise ValueError(f"grid loop requires Q1/K2/V3/out0 sized {sizes}")
+  if tuple(x.ptrdtype.base for x in owners)!=(dtypes.half,)*4 or not isinstance(scale,float) or not math.isfinite(scale) or scale<=0: raise ValueError("grid loop requires fp16 and finite scale")
+  valid_kv=kv_tokens if valid_kv is None else valid_kv
+  if not isinstance(valid_kv,int) or isinstance(valid_kv,bool) or not 0<=valid_kv<=kv_tokens: raise ValueError("valid_kv is outside KV geometry")
+  if (output_block_base,acc_blocks) != (0,hd_blocks) and (acc_blocks not in {1,2,4} or not 0 <= output_block_base <= hd_blocks-acc_blocks or output_block_base % acc_blocks): raise ValueError("grid loop requires a full or aligned accumulator slice")
+  if query_start is None: query_start=valid_kv-q_tokens
+  if warps_per_cta not in {1,4}: raise ValueError("unsupported warps_per_cta")
+  thread=UOp.special(32*warps_per_cta,"lidx0"); lane=thread.alu(Ops.AND,UOp.const(dtypes.weakint,31)); warp=thread.alu(Ops.SHR,UOp.const(dtypes.weakint,5)); group=UOp.special((q_heads*grid.q_tiles+warps_per_cta-1)//warps_per_cta,"gidx0").alu(Ops.MUL,UOp.const(dtypes.weakint,warps_per_cta)).alu(Ops.ADD,warp) if warps_per_cta==4 else UOp.special(q_heads*grid.q_tiles,"gidx0")
+  col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); zero=UOp.const(dtypes.float.vec(8),(0.0,)*8); zero_wmma=UOp.const(dtypes.float.vec(fragment_model.c_carrier),(0.0,)*fragment_model.c_carrier); warg=fragment_model.wmma_warg
+  full_kv_tiles=(kv_tokens+15)//16
+  # THEORY 3 (docs/prefill-needle-theories-20260724.md): causal_v1 masks every KV tile fully past
+  # this wave's last query row, but the loop always ran the full extent. Since a fully-masked tile
+  # is a mathematical no-op (weight==0 everywhere -> zero PV contribution, old_m==new_m -> alpha==1,
+  # see amd_attention_abi.expand_native_row_softmax_repack), a wave can stop the moment its own last
+  # query row is covered without changing the result -- a genuine loop-trip-count reduction, not a
+  # masked-value skip. `group` (gidx0) is a runtime SPECIAL, so `q_tile` and the resulting extent are
+  # runtime UOp expressions; cstyle.py's RANGE rule (`for (...; idx < {ctx[x.src[0]]}; ...)`) already
+  # renders whatever UOp sits in the extent slot, so a dynamic bound needs no renderer change.
+  # Defensive clamp to full_kv_tiles: production query_start==valid_kv-q_tokens always keeps
+  # tiles_needed<=full_kv_tiles (valid_kv<=kv_tokens), but a caller-supplied query_start need not.
+  if getenv("PREFILL_CAUSAL_TILE_SKIP") and causal:
+    q_tile=group % grid.q_tiles
+    last_row_plus1=UOp.const(dtypes.weakint,query_start+16)+q_tile*UOp.const(dtypes.weakint,16)
+    tiles_needed=(last_row_plus1+UOp.const(dtypes.weakint,15))//UOp.const(dtypes.weakint,16)
+    over=(UOp.const(dtypes.weakint,full_kv_tiles)-tiles_needed).alu(Ops.MAX,UOp.const(dtypes.weakint,0))
+    rng=UOp.range(UOp.const(dtypes.weakint,full_kv_tiles)-over,9600,AxisType.REDUCE)
+  else:
+    rng=UOp.range(full_kv_tiles,9600,AxisType.REDUCE)
+  creg=UOp.placeholder((acc_blocks*8,),dtypes.float,9603,addrspace=AddrSpace.REG)
+  if phase_abi_v1:
+    from tinygrad.uop.ops import StateRegionSpec, PhaseBoundarySpec, StateHandle
+    phase_lds=UOp(Ops.DEFINE_LOCAL,dtypes.float.ptr(512,AddrSpace.LOCAL),arg=9610)
+    ml=StateHandle(StateRegionSpec("online_ml",dtypes.float,16),PhaseBoundarySpec("loop_init","loop_final"),0,phase_lds,lane,16)
+  else:
+    mreg=UOp.placeholder((8,),dtypes.float,9601,addrspace=AddrSpace.REG); lreg=UOp.placeholder((8,),dtypes.float,9602,addrspace=AddrSpace.REG)
+  def wr(reg,role,value,b=0,o=0,a="write"): return loop_state_write(reg, value, role=role, owner=9604, offset=o, block=b, access=a)
+  if phase_abi_v1:
+    mi=UOp.group(*(ml.loop_write(UOp.const(dtypes.float,-float("inf")),i) for i in range(8)))
+    li=UOp.group(*(ml.loop_write(UOp.const(dtypes.float,0.0),8+i) for i in range(8)))
+    init_token=UOp.group(mi,li)
+  else:
+    mi=UOp.group(*wr(mreg,"m",UOp.const(dtypes.float.vec(8),(-float("inf"),)*8),a="init")); li=UOp.group(*wr(lreg,"l",zero,a="init"))
+  ci=UOp.group(*(x for b in range(acc_blocks) for x in wr(creg,"acc",zero,b,b*8,"init")))
+  from tinygrad.uop.ops import CooperativeTileLoadSpec
+  from tinygrad.renderer.isa.amd_attention_abi import lower_cooperative_tile_load
+  tile_base=rng*UOp.const(dtypes.weakint,16*head_dim)
+  k_shared=lower_cooperative_tile_load(UOp.cooperative_tile_load(k,tile_base,CooperativeTileLoadSpec(tile_base=tile_base,loop_axis=rng)))
+  v_shared=lower_cooperative_tile_load(UOp.cooperative_tile_load(v,tile_base,CooperativeTileLoadSpec(tile_base=tile_base,loop_axis=rng)))
+  def rd(reg,init,role,b=0,o=0,final=False): return loop_state_read(reg, init, rng, role=role, owner=9604, block=b, final=final)
+  def fr(owner,role,b,call=0): return packed_fragment_load(k_shared if role=="K" else v_shared if role=="V" else owner, role=role, head_block=b, grid=grid, lane=lane, col=col, rng=rng, group=group, call=call, fragment_model=fragment_model, physical_local_size=32*warps_per_cta)
+  if not phase_abi_v1: om,ol=rd(mreg,mi,"m"),rd(lreg,li,"l")
+  qk=zero_wmma
+  for b in range(hd_blocks):
+    if fragment_model.calls_per_tile == 1:
+      qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q,"Q",b),fr(k,"K",b),qk),warg,tag=("attention_wmma","QK",b))
+    else:
+      # Multi-call tile: each call owns a column half of the 16-wide tile, so the
+      # calls do NOT accumulate; their C fragments concatenate into the score STACK.
+      calls=tuple(UOp(Ops.WMMA,fragment_model.c_dtype,(fr(q,"Q",b,c),fr(k,"K",b,c),zero_wmma),warg,tag=("attention_wmma","QK",b,c)) for c in range(fragment_model.calls_per_tile))
+      score=UOp(Ops.STACK,dtypes.float.vec(fragment_model.score_elements),tuple(x.gep(i) for x in calls for i in range(fragment_model.c_carrier)))
+      # The head-dim blocks accumulate into the same 16x16 score tile (each WMMA
+      # contracts one 16-wide head-dim slice), matching the AMD chain's C-seed
+      # accumulation; the calls' column halves concatenate, they do not add.
+      qk=score if b == 0 else UOp(Ops.STACK, dtypes.float.vec(fragment_model.score_elements),
+        tuple(qk.gep(i).alu(Ops.ADD, score.gep(i)) for i in range(fragment_model.score_elements)))
+  if phase_abi_v1:
+    om=UOp(Ops.STACK,dtypes.float.vec(8),tuple(ml.loop_read(i,init_token) for i in range(8)))
+    ol=UOp(Ops.STACK,dtypes.float.vec(8),tuple(ml.loop_read(8+i,init_token) for i in range(8)))
+  p,nm,nl,alpha=amd_gfx1100_row_softmax_state(qk,om,ol,spec=NativeRowSoftmaxRepackSpec(score_scale=scale,mode="loop_state_v1",validity_mode="causal_v1" if causal else "tail_v1",query_start=query_start,kv_start=-1,valid_kv=valid_kv,dynamic_kv_v1=True,grid=grid,native_abi=fragment_model.abi("online_softmax_qk_pv_v1"),target=fragment_model.arch,fragment_model=fragment_model,qk_c_lanes=fragment_model.score_elements,pv_a_lanes=fragment_model.pv_a_lanes),kv_tile=rng,grid_id=group)
+  # Phase ABI keeps m/l in LDS. Commit the next recurrence state before the
+  # PV body and make that body consume the commit token: p/alpha are already
+  # formed from the old state, so this preserves the recurrence while giving
+  # regalloc an earlier end to the next-m/l lease. The default register-state
+  # route deliberately retains its existing ordering.
+  ml_commit=UOp.group(*( [*(ml.loop_write(nm.gep(i),i,after=nm.gep(i)) for i in range(8)),
+                            *(ml.loop_write(nl.gep(i),8+i,after=nl.gep(i)) for i in range(8))] )) if phase_abi_v1 else None
+  writes=[ml_commit] if ml_commit is not None else [*wr(mreg,"m",nm),*wr(lreg,"l",nl)]
+  # ROW_SOFTMAX_SLOT is a verifier ABI value and cannot be wrapped in AFTER.
+  # Gate V's PARAM owner, which makes the PV fragment load wait for the commit
+  # while keeping p/alpha as direct slot values.
+  pv_v=v.after(ml_commit) if ml_commit is not None else v
+  for b in range(acc_blocks):
+    oc=rd(creg,ci,"acc",b,b*8)
+    if fragment_model.calls_per_tile == 1:
+      pv=UOp(Ops.WMMA,dtypes.float.vec(8),(p,fr(pv_v,"V",b+output_block_base),oc.alu(Ops.MUL,alpha)),warg,tag=("attention_wmma","PV",b))
+    else:
+      # Per-call C seed: the accumulator lane owns calls*c_carrier elements; each call
+      # consumes its own slice scaled by that call's alpha elements.
+      pv_calls=tuple(UOp(Ops.WMMA,fragment_model.c_dtype,(p,fr(pv_v,"V",b+output_block_base,c),
+        UOp(Ops.STACK,dtypes.float.vec(fragment_model.c_carrier),
+          tuple(oc.gep(fragment_model.c_carrier*c+i).alu(Ops.MUL,alpha.gep(fragment_model.c_carrier*c+i)) for i in range(fragment_model.c_carrier)))),
+        warg,tag=("attention_wmma","PV",b,c)) for c in range(fragment_model.calls_per_tile))
+      pv=UOp(Ops.STACK,dtypes.float.vec(fragment_model.score_elements),tuple(x.gep(i) for x in pv_calls for i in range(fragment_model.c_carrier)))
+    writes.extend(wr(creg,"acc",pv,b,b*8))
+  # NEWLY DE-WELDED: AttentionOutputDrainSpec previously took no head_dim/address_expr here, so it
+  # silently rode the drain spec's own default (128 / "e*256+halfwave*128+j*16+col") regardless of the
+  # threaded grid -- masked because the grid always defaulted to 128 too. Now both are derived from the
+  # SAME threaded `hd`, matching cstyle.py's P-B3 formula exactly. Byte-identical at hd=128
+  # (2*128==256, hd==128 -> "e*256+halfwave*128+j*16+col", the exact previous default string).
+  end=UOp.group(*writes).end(rng).replace(tag=(fragment_model.abi("attention_grid_loop_end_v1"),rng)); final_token=end if phase_abi_v1 else None; fl=(UOp(Ops.STACK,dtypes.float.vec(8),tuple(ml.loop_read(8+i,final_token) for i in range(8))) if phase_abi_v1 else rd(lreg,end,"l",final=True)); fc=tuple(rd(creg,end,"acc",b,b*8,final=True) for b in range(acc_blocks)); drain=UOp(Ops.ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AttentionOutputDrainSpec(native_abi=fragment_model.abi("attention_output_drain_v1" if acc_blocks==hd_blocks else "attention_output_drain_acc_slice_v2"),head_dim=hd,blocks=acc_blocks,address_expr=fragment_model.drain_address_expr(hd),grid=grid,output_block_base=output_block_base,fragment_model=fragment_model))
+  return UOp.sink(mi,li,ci,end,drain,arg=kernel_info).replace(tag=(fragment_model.abi("q16_grid_hd128_loop_v1"),))

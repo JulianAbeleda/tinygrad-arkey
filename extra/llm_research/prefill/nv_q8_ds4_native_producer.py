@@ -22,6 +22,55 @@ class NativeDS4Schedule:
       raise ValueError("DS4 producer requires CTA128/four K32 warps")
     return self
 
+@dataclass(frozen=True)
+class DS4MetadataWorkspace:
+  """Aligned stage-1 workspace: fp16 ``(d,sum)`` pairs per subgroup."""
+  rows: int
+  segments: int
+  @property
+  def words(self): return self.rows * self.segments * 8
+  @property
+  def bytes(self): return self.words * 2
+  def validate(self):
+    if self.rows <= 0 or self.segments <= 0: raise ValueError("workspace geometry")
+    return self
+
+def metadata_workspace(spec: DS4ProducerSpec = DS4ProducerSpec()):
+  spec.validate(); return DS4MetadataWorkspace(spec.M, spec.K // 128).validate()
+
+def emit_ds4_metadata_stage(spec: DS4ProducerSpec = DS4ProducerSpec()):
+  spec.validate()
+  def kernel(meta: UOp, x: UOp) -> UOp:
+    row, seg = UOp.range(spec.M, 0), UOp.range(spec.K//128, 1)
+    subgroup = UOp.range(4, 2)
+    lane = UOp.range(32, 3, axis_type=AxisType.REDUCE)
+    idx = row*spec.K + seg*128 + subgroup*32 + lane
+    v = x[idx].cast(dtypes.float32)
+    peak = (v.abs()).reduce(lane, arg=Ops.MAX)
+    d = (peak != 0).where(peak*(1.0/127.0), 1.0)
+    sm = v.reduce(lane, arg=Ops.ADD)
+    base = (seg*spec.M + row)*8 + subgroup*2
+    st = meta[base].store(d.cast(dtypes.float16).bitcast(dtypes.uint16))
+    st2 = meta[base+1].store(sm.cast(dtypes.float16).bitcast(dtypes.uint16))
+    return UOp(Ops.SINK, src=(st.end(row,seg,subgroup,lane), st2.end(row,seg,subgroup,lane)),
+               arg=KernelInfo(name="q8_ds4_metadata_stage", opts_to_apply=()))
+  return kernel
+
+def emit_ds4_pack_stage(spec: DS4ProducerSpec = DS4ProducerSpec()):
+  spec.validate()
+  def kernel(out: UOp, x: UOp, meta: UOp) -> UOp:
+    row, seg = UOp.range(spec.M, 0), UOp.range(spec.K//128, 1)
+    word = UOp.range(64, 2)
+    i = word*2; subgroup = i//32
+    d = meta[(seg*spec.M + row)*8 + subgroup*2].cast(dtypes.float32)
+    base = row*spec.K + seg*128 + i
+    q0 = (x[base].cast(dtypes.float32)/d).round().maximum(-128).minimum(127).cast(dtypes.uint16)
+    q1 = (x[base+1].cast(dtypes.float32)/d).round().maximum(-128).minimum(127).cast(dtypes.uint16)
+    packed = (q0 & 255) | ((q1 & 255) << 8)
+    return out[(seg*spec.M+row)*72 + 8 + word].store(packed).end(row,seg,word).sink(
+      arg=KernelInfo(name="q8_ds4_pack_stage", opts_to_apply=()))
+  return kernel
+
 SCHEDULE = NativeDS4Schedule()
 
 def cpu_pack_ds4(x: np.ndarray) -> np.ndarray:
@@ -59,15 +108,20 @@ def emit_ds4_q8_producer(spec: DS4ProducerSpec = DS4ProducerSpec()):
     d = (peak != 0.0).where(peak * (1.0/127.0), UOp.const(dtypes.float32, 1.0))
     q = (val / d).round().maximum(-128.0).minimum(127.0).cast(dtypes.int8)
     rec = seg*rows + row
-    body = out[rec*144 + 16 + lane].store(q)
+    # Aligned uint16 carrier: two signed q bytes per word.  The physical
+    # record remains 16 metadata bytes + 128 q bytes = 72 uint16 words.
+    q2 = (x[base+1].cast(dtypes.float32) / d).round().maximum(-128.0).minimum(127.0).cast(dtypes.int16)
+    packed = (q.cast(dtypes.uint16) & 255) | ((q2.cast(dtypes.uint16) & 255) << 8)
+    qword = rec*72 + 8 + (lane//2)
     # Metadata is emitted by the first lane of each 32-value subgroup.  The
     # scheduler lowers these gated stores to its shared-scratch/barrier plan.
     subgroup = lane // 32
     first = (lane % 32).eq(0)
-    meta = out.bitcast(dtypes.uint16.ptr(out.shape[0]//2))[rec*72 + subgroup*2].store(
-      d.cast(dtypes.float16).bitcast(dtypes.uint16), gate=first)
-    return UOp.group(body, meta).end(row, seg, lane).sink(
-      arg=KernelInfo(name="q8_ds4_native_scheduler", opts_to_apply=()))
+    mword = rec*72 + subgroup*2
+    addr = first.where(mword, qword)
+    value = first.where(d.cast(dtypes.float16).bitcast(dtypes.uint16), packed)
+    body = out[addr].store(value).end(row, seg, lane)
+    return body.sink(arg=KernelInfo(name="q8_ds4_native_scheduler", opts_to_apply=()))
   return kernel
 
-__all__ = ["NativeDS4Schedule", "SCHEDULE", "cpu_pack_ds4", "emit_ds4_q8_producer"]
+__all__ = ["NativeDS4Schedule", "DS4MetadataWorkspace", "metadata_workspace", "SCHEDULE", "cpu_pack_ds4", "emit_ds4_q8_producer", "emit_ds4_metadata_stage", "emit_ds4_pack_stage"]

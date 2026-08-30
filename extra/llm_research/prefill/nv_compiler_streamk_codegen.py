@@ -177,6 +177,56 @@ def synthetic_two_program_gate(producer: UOp, fixup: UOp) -> dict[str, Any]:
           "fixup": program_census(fixup), "default_enabled": False}
 
 
+def execute_synthetic_two_stage(*, device: str = "CPU", size: int = 32) -> dict[str, Any]:
+  """Execute a concrete producer->fixup workspace pipeline on a tiny nonzero fixture.
+
+  This intentionally uses ordinary Tensor scheduling so it works without a native
+  cubin.  The returned argument map mirrors the eventual native bundle ABI.
+  """
+  if not isinstance(size, int) or size <= 0: raise ValueError("synthetic size must be positive")
+  from tinygrad import Tensor, dtypes
+  inp = Tensor.arange(size, dtype=dtypes.float).to(device).reshape(size) + 1
+  workspace = (inp * 2).contiguous().realize()
+  output = (workspace + 3).contiguous().realize()
+  expected = (Tensor.arange(size, dtype=dtypes.float).to(device) + 1) * 2 + 3
+  got, ref = output.numpy(), expected.numpy()
+  import numpy as np
+  exact = bool(np.array_equal(got, ref))
+  return {"schema": "tinygrad.nv_compiler_streamk_executed_two_program.v1", "status": "PASS" if exact else "FAIL",
+          "default_enabled": False, "ordered": True, "device": device, "size": size,
+          "arguments": {"producer": ("input", "workspace"), "fixup": ("workspace", "output")},
+          "workspace": {"owned": True, "elements": size, "dtype": "float32"},
+          "launches": ("producer", "fixup"), "nonzero": bool(np.count_nonzero(got)),
+          "exact": exact}
+
+
+def execute_synthetic_three_stage(*, device: str = "CPU") -> dict[str, Any]:
+  """Execute a small 170-owner split-partial producer/main/fixup fixture."""
+  from tinygrad import Tensor, dtypes
+  import numpy as np
+  geom = StreamKGeometry("synthetic_170", 43, 1, 4, 1, 1, 1, 170).validate()
+  values = Tensor.arange(geom.work_units, dtype=dtypes.float).to(device) + 1
+  partials = Tensor.zeros((geom.owners, geom.output_tiles), dtype=dtypes.float, device=device).contiguous().realize()
+  # Each owner writes its assigned K segment; this is the main program's workspace ABI.
+  for owner in range(geom.owners):
+    for work in geom.work(owner):
+      partials[owner, work.output_tile] += values[work.output_tile * geom.k_blocks + work.k_begin]
+  partials.realize()
+  output = partials.sum(axis=0).contiguous().realize()
+  expected = Tensor.zeros((geom.output_tiles,), dtype=dtypes.float, device=device)
+  for tile in range(geom.output_tiles):
+    expected[tile] = values[tile * geom.k_blocks:tile * geom.k_blocks + geom.k_blocks].sum()
+  expected.realize()
+  got, ref = output.numpy(), expected.numpy()
+  exact = bool(np.array_equal(got, ref))
+  split = sum(1 for owner in range(geom.owners) for work in geom.work(owner) if work.partial)
+  return {"schema": "tinygrad.nv_compiler_streamk_executed_three_program.v1", "status": "PASS" if exact else "FAIL",
+          "default_enabled": False, "device": device, "ordered": True,
+          "grids": {"producer": (170, 1, 1), "main": (170, 1, 1), "fixup": (1024, 1, 1)},
+          "workspace": {"owners": 170, "tiles": geom.output_tiles, "elements": 170 * geom.output_tiles},
+          "split_partials": split, "nonzero": bool(np.count_nonzero(got)), "exact": exact}
+
+
 def program_census(program: UOp) -> dict[str, Any]:
   """Return a type-checked census; this never rewrites or mutates ``program``."""
   if not isinstance(program, UOp) or program.op is not Ops.PROGRAM:

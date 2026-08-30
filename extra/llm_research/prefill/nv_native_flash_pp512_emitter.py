@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 
 from tinygrad import dtypes
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec
+from tinygrad.uop.ops import KernelInfo
 from tinygrad.schedule.wmma.flash_prefill import FlashPrefillAttentionSpec
 from .nv_native_flash_pp512_spec import FlashEmitterRequest, NativeFlashPP512Spec
 
@@ -31,6 +33,17 @@ def _scheduler_spec(spec: NativeFlashPP512Spec) -> FlashPrefillAttentionSpec:
 def build_program(spec: NativeFlashPP512Spec = FIXTURE) -> KernelProgram:
   scheduler = _scheduler_spec(spec)
   raw_emit = scheduler.emit()
+  use_nv2c = os.getenv("NV2C_RESEARCH", "0") == "1"
+  if use_nv2c:
+    from tinygrad.schedule.wmma.kernels import nv_sm120_q16_grid_hd128_cooperative_attention
+    from tinygrad.codegen.opt.attention_fragment import attention_fragment_model
+    nv_model = attention_fragment_model("nv_sm120")
+    def raw_emit(out_ph, q_ph, k_ph, v_ph):
+      return nv_sm120_q16_grid_hd128_cooperative_attention(q_ph, k_ph, v_ph, out_ph,
+        q_tokens=spec.tokens, q_heads=spec.query_heads, kv_heads=spec.kv_heads,
+        kv_tokens=spec.live_tokens, scale=0.08837890625, causal=spec.causal,
+        valid_kv=spec.live_tokens, query_start=spec.start_pos, kernel_info=KernelInfo(name="nv2c"),
+        warps_per_cta=4, head_dim=spec.head_dim, fragment_model=nv_model)
   def diagnostic_emit(out_ph, q_ph, k_ph, v_ph):
     vals=[]
     for name,u in (("out",out_ph),("q",q_ph),("k",k_ph),("v",v_ph)):
