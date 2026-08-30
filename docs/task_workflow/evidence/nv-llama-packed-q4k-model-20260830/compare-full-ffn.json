@@ -1,0 +1,9 @@
+{
+  "schema": "tinygrad.nv_llama_packed_full_ffn_model_compare.v1",
+  "status": "PASS",
+  "candidate_token": 198,
+  "control_token": 198,
+  "max_abs": 0.17018532752990723,
+  "mean_abs": 0.03564564883708954,
+  "mismatch_count": 0
+}

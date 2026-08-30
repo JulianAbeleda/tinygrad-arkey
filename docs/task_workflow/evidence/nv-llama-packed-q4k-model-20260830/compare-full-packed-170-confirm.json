@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "token_control": 198,
+  "token_candidate": 198,
+  "finite": true,
+  "max_abs": 0.256314754486084,
+  "mean_abs": 0.03714298617571695,
+  "mismatch_count": 0,
+  "rtol": 0.02,
+  "atol": 0.5
+}

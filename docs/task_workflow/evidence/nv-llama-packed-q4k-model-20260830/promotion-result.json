@@ -1,0 +1,19 @@
+{
+  "schema": "tinygrad.nv_llama_full_packed_pp512_promotion.v1",
+  "status": "PASS",
+  "policy": {
+    "default": "promoted",
+    "opt_out": "NV_LLAMA_FULL_PACKED_PP512=0"
+  },
+  "token_control": 198,
+  "token_promoted": 198,
+  "finite": true,
+  "max_abs": 0.256314754486084,
+  "mean_abs": 0.03714298617571695,
+  "mismatch_count": 0,
+  "control_min_ms": 83.854128,
+  "promoted_min_ms": 40.910442,
+  "recovery_ms": 42.943686,
+  "speedup": 2.049699878578677,
+  "promoted_tok_s": 12515.142222125098
+}

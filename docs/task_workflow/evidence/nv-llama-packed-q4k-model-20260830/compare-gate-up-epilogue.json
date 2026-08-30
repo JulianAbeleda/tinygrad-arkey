@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "token_control": 198,
+  "token_candidate": 198,
+  "max_abs": 0.23231887817382812,
+  "mean_abs": 0.03531908389667499,
+  "mismatch_count": 0,
+  "performance_status": "REJECT",
+  "candidate_min_ms": 42.929184,
+  "retained_min_ms": 41.112815,
+  "delta_ms": 1.816369
+}

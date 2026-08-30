@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "token_control": 198,
+  "token_candidate": 198,
+  "max_abs": 0.17277860641479492,
+  "mean_abs": 0.030809015065051848,
+  "mismatch_count": 0,
+  "candidate_min_ms": 40.877617,
+  "promoted_min_ms": 40.910442,
+  "recovery_ms": 0.032825,
+  "investment_gate": "FAIL_LT_0.5_MS"
+}

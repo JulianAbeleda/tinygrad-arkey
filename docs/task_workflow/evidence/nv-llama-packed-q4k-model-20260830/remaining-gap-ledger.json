@@ -1,0 +1,24 @@
+{
+  "schema":"tinygrad.nv_llama_packed_q4k_remaining_gap_ledger.v1",
+  "date":"2026-08-30",
+  "status":"ITERATE",
+  "authority":{
+    "candidate":"docs/task_workflow/evidence/nv-llama-packed-q4k-model-20260830/candidate-full-packed-170-confirm.json",
+    "attention":"docs/task_workflow/evidence/nv-llama-packed-q4k-model-20260830/compare-attention-arms-170.json",
+    "tinygrad_min_ms":41.112815,
+    "tinygrad_median_ms":41.2644,
+    "llama_min_ms":34.680367,
+    "llama_median_ms":35.019399
+  },
+  "gap_ms":{"minimum":6.432448,"median":6.245001},
+  "correctness":{"token":198,"finite":true,"packed_status":"PASS","attention_arms_status":"PASS","mismatch_count":0},
+  "census":{"producer":36,"q4_main_total":216,"q4_fixup_total":216,"q6_down_producer":18,"q6_main_total":36,"q6_fixup_total":36,"q4_down_producer":18,"qkv_ds4_producer":36,"qkv_d4_producer":18,"o_producer":36},
+  "ranking":[
+    {"rank":1,"family":"attention core","status":"MEASURE_NEXT","exposure_ms":{"Q":4.480512,"K":2.205536,"V":3.199936,"Flash":3.341056,"O":4.492096},"basis":"current HCQ exact graph exposure; QKV/O arm correctness PASS","next_test":"matched native attention-core R9 with Q/K/V/Flash/O markers and no host synchronization; require full logits/token and per-role census; compare to llama attention classes"},
+    {"rank":2,"family":"norms/elementwise","status":"MEASURE_NEXT","exposure_ms":{"norm_conversion":1.424128,"activation_multiply":0.745696,"residual_RoPE_KV_support":4.224608},"basis":"current HCQ exact graph exposure","next_test":"low-perturbation fused norm/elementwise census, then isolated exact-shape kernels; reject unless whole-model minimum improves beyond control noise"},
+    {"rank":3,"family":"vocab/final row","status":"CANDIDATE_REQUIRES_GATE","exposure_ms":{"vocabulary":2.91136},"basis":"final-row prune previously regressed graph; packed route correctness is not a performance proof","next_test":"full-logit 512-row matched R9 with complete output, recurrent token, and launch census; no top-1 proxy"},
+    {"rank":4,"family":"launch/lifecycle","status":"SUBSTRATE_MEASURE","exposure_ms":{"host_graph_residual_estimate":0.569723},"basis":"HCQ device span closes with zero unknown; host/graph boundary remains","next_test":"HCQ-native timestamp/submit/allocation/materialization census on exact packed graph; overhead below 2%, zero unknown, no PROFILE wall booking"}
+  ],
+  "constraints":["Do not edit tinygrad/llm/model.py","Do not use git","No promotion from isolated kernel wins","Fresh GPU work must serialize under flock /tmp/gpu-bench.lock"],
+  "decision":"No family is promoted. Run attention-core census first, then norms/elementwise, vocab, and lifecycle tests; re-rank only from fresh matched whole-model evidence."
+}

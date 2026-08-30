@@ -90,9 +90,9 @@ def generic_llm_control():
 
 def _nv_q4_imma_pp512_mode() -> str|None:
   """Select exactly one default-off Qwen3-8B pp512 research binding."""
-  raw, compiler = bool(getenv("NV_Q4_IMMA_PP512", 0)), bool(getenv("NV_COMPILER_Q4_IMMA_PP512", 0))
-  if raw and compiler: raise RuntimeError("NV Q4 IMMA research bindings are mutually exclusive")
-  return "compiler" if compiler else "raw" if raw else None
+  raw,compiler,llama=bool(getenv("NV_Q4_IMMA_PP512",0)),bool(getenv("NV_COMPILER_Q4_IMMA_PP512",0)),bool(getenv("NV_LLAMA_PACKED_Q4K_PP512",0))
+  if sum((raw,compiler,llama)) > 1: raise RuntimeError("NV Q4 IMMA research bindings are mutually exclusive")
+  return "llama" if llama else "compiler" if compiler else "raw" if raw else None
 
 def _nv_compiler_q4_imma_pp512_qualified(config) -> bool:
   """Fail-closed model/shape identity for the compiler-owned research arm."""
@@ -106,9 +106,59 @@ def _nv_compiler_q4_imma_capture(model, jit, binding):
   if jit not in captures: captures[jit] = binding.new_capture()
   return captures[jit]
 
+def _nv_llama_packed_q4k_capture(model,jit,binding):
+  captures=getattr(model,"_nv_llama_packed_q4k_pp512_captures",None)
+  if captures is None: captures=model._nv_llama_packed_q4k_pp512_captures={}
+  if jit not in captures: captures[jit]=binding.new_capture()
+  return captures[jit]
+
+def _nv_llama_packed_gate_up_epilogue_enabled(config) -> bool:
+  return getenv("NV_LLAMA_PACKED_GATE_UP_EPILOGUE_PP512", 0) and _nv_compiler_q4_imma_pp512_qualified(config)
+
+def _nv_llama_full_packed_pp512_enabled(config) -> bool:
+  # Promoted exact-shape production route. One opt-out owns the complete
+  # gate/up + down + QKV + O stack so partial production configurations cannot
+  # arise accidentally. Research epilogues remain independently default-off.
+  return bool(getenv("NV_LLAMA_FULL_PACKED_PP512", 1)) and Device.DEFAULT == "NV" and _nv_compiler_q4_imma_pp512_qualified(config)
+
+def _nv_qkv_packed_capture(model,jit,binding):
+  captures=getattr(model,"_nv_qkv_packed_pp512_captures",None)
+  if captures is None: captures=model._nv_qkv_packed_pp512_captures={}
+  if jit not in captures: captures[jit]=binding.new_capture()
+  return captures[jit]
+
+def _nv_llama_packed_o_capture(model,jit,binding):
+  captures=getattr(model,"_nv_llama_packed_o_pp512_captures",None)
+  if captures is None: captures=model._nv_llama_packed_o_pp512_captures={}
+  if jit not in captures: captures[jit]=binding.new_capture()
+  return captures[jit]
+
+def _nv_llama_packed_q6k_down_enabled(config)->bool:
+  return (_nv_llama_full_packed_pp512_enabled(config) or
+          (bool(getenv("NV_LLAMA_PACKED_Q6K_DOWN_PP512",0)) and _nv_q4_imma_pp512_mode()=="llama" and _nv_compiler_q4_imma_pp512_qualified(config)))
+
+def _nv_llama_packed_q6k_down_capture(model,jit,binding):
+  captures=getattr(model,"_nv_llama_packed_q6k_down_pp512_captures",None)
+  if captures is None:captures=model._nv_llama_packed_q6k_down_pp512_captures={}
+  if jit not in captures:captures[jit]=binding.new_capture()
+  return captures[jit]
+
+def _nv_llama_packed_q4k_down_enabled(config)->bool:
+  return (_nv_llama_full_packed_pp512_enabled(config) or
+          (bool(getenv("NV_LLAMA_PACKED_Q4K_DOWN_PP512",0)) and _nv_q4_imma_pp512_mode()=="llama" and _nv_compiler_q4_imma_pp512_qualified(config)))
+
+def _nv_llama_packed_q4k_down_capture(model,jit,binding):
+  captures=getattr(model,"_nv_llama_packed_q4k_down_pp512_captures",None)
+  if captures is None:captures=model._nv_llama_packed_q4k_down_pp512_captures={}
+  if jit not in captures:captures[jit]=binding.new_capture()
+  return captures[jit]
+
 def _nv_compiler_q4_imma_k_pp512_enabled(config) -> bool:
   """Separate default-off lease for the exact Q4_K K projection population."""
   return bool(getenv("NV_COMPILER_Q4_IMMA_K_PP512", 0)) and _nv_compiler_q4_imma_pp512_qualified(config)
+
+def _nv_compiler_q4_imma_o_pp512_enabled(config) -> bool:
+  return bool(getenv("NV_COMPILER_Q4_IMMA_O_PP512", 0)) and _nv_compiler_q4_imma_pp512_qualified(config)
 
 def _nv_compiler_q4_imma_k_capture(model, jit, binding):
   captures = getattr(model, "_nv_compiler_q4_imma_k_pp512_captures", None)
@@ -679,16 +729,33 @@ class FFNBlock:
       # gate/up lifecycle. The finalized native programs participate in the
       # ordinary TinyJit graph; every miss preserves the corrected fp16
       # fallback unchanged.
-      if (_mode := _nv_q4_imma_pp512_mode()) is not None and (_mode != "compiler" or _nv_compiler_q4_imma_pp512_qualified(self.config)) \
+      if (_mode := ("llama" if _nv_llama_full_packed_pp512_enabled(self.config) else _nv_q4_imma_pp512_mode())) is not None and (_mode not in ("compiler","llama") or _nv_compiler_q4_imma_pp512_qualified(self.config)) \
           and isinstance(getattr(self, "ffn_gate", None), Q4KPrimitiveLinear) \
           and isinstance(getattr(self, "ffn_up", None), Q4KPrimitiveLinear) and x.device == "NV" \
           and x.numel() == 512*4096:
         _binding, _flat = self._nv_q4_imma_pp512_binding, x.reshape(512,4096)
-        g = _prefill_semantic(_prefill, prefill_activation,
-          _binding.project(_flat, self.ffn_gate.prefill_packed_weight(), model_family="qwen3_8b", role="ffn_gate"))
-        u = _prefill_semantic(_prefill, prefill_activation,
-          _binding.project(_flat, self.ffn_up.prefill_packed_weight(), model_family="qwen3_8b", role="ffn_up"))
-        h = _prefill_semantic(_prefill, prefill_activation, (g.silu() * u).contiguous())
+        if _mode == "llama":
+          if _nv_llama_packed_gate_up_epilogue_enabled(self.config):
+            h=_binding.project_pair_epilogue(_flat,self.ffn_gate.prefill_packed_weight(),self.ffn_up.prefill_packed_weight(),model_family="qwen3_8b")
+            h=_prefill_semantic(_prefill,prefill_activation,h)
+          else:
+            g,u=_binding.project_pair(_flat,self.ffn_gate.prefill_packed_weight(),self.ffn_up.prefill_packed_weight(),model_family="qwen3_8b")
+            g,u=_prefill_semantic(_prefill,prefill_activation,g),_prefill_semantic(_prefill,prefill_activation,u)
+        else:
+          g = _prefill_semantic(_prefill, prefill_activation,
+            _binding.project(_flat, self.ffn_gate.prefill_packed_weight(), model_family="qwen3_8b", role="ffn_gate"))
+          u = _prefill_semantic(_prefill, prefill_activation,
+            _binding.project(_flat, self.ffn_up.prefill_packed_weight(), model_family="qwen3_8b", role="ffn_up"))
+        if not (_mode == "llama" and _nv_llama_packed_gate_up_epilogue_enabled(self.config)):
+          h = _prefill_semantic(_prefill, prefill_activation, (g.silu() * u).contiguous())
+        if _nv_llama_packed_q6k_down_enabled(self.config) and isinstance(self.ffn_down,Q6KPrimitiveLinear):
+          down_input=h.reshape(512,12288).cast(dtypes.float16).contiguous()
+          return _prefill_semantic(_prefill,prefill_activation,self._nv_llama_packed_q6k_down_pp512_binding.project(
+            down_input,self.ffn_down.prefill_packed_weight(),model_family="qwen3_8b",role="ffn_down").reshape(x.shape[:-1]+(4096,)))
+        if _nv_llama_packed_q4k_down_enabled(self.config) and isinstance(self.ffn_down,Q4KPrimitiveLinear):
+          down_input=h.reshape(512,12288).cast(dtypes.float16).contiguous()
+          return _prefill_semantic(_prefill,prefill_activation,self._nv_llama_packed_q4k_down_pp512_binding.project(
+            down_input,self.ffn_down.prefill_packed_weight(),model_family="qwen3_8b",role="ffn_down").reshape(x.shape[:-1]+(4096,)))
         if _nv_compiler_q6_imma_role_enabled(self.config,"ffn_down") and isinstance(self.ffn_down, Q6KPrimitiveLinear):
           # The ordinary overlay route casts this post-SiLU product before
           # GEMM. Preserve that exact boundary for the native fp16 producer.
@@ -810,7 +877,9 @@ class FFNBlock:
       # (decode-q4k-epilogue-resadd-route-policy.json, m4-resadd-landing-scope-20260806.md); the
       # combined M4 flag stays closed so the ffn_down prelude and fp16_cast cannot fire.
       _epi_resadd = not _prefill and getattr(self, "_decode_q4k_epilogue_resadd_promoted", False)
+      _epi_compiler_o = bool(getattr(self, "_nv_compiler_q4k_o_pp512_binding", None)) and _prefill
       _epi_residual = (isinstance(_attn_linear, Q4KPrimitiveLinear) and (
+        _epi_compiler_o or
         (_epi_fused and getattr(getattr(_attn_linear, "route_admission", None), "q4k_epilogue_fusion_admitted", False)) or
         (_epi_resadd and getattr(getattr(_attn_linear, "route_admission", None), "q4k_epilogue_resadd_admitted", False))))
       attn_out = self._attention(normed_x, start_pos, ring_freqs, residual_for_output=(x if _epi_residual else None))
@@ -825,7 +894,7 @@ class FFNBlock:
       # compiler-primitive) path.  Gather before any FFN work so this cannot
       # silently benchmark a dense fallback.
       _row = getattr(self, "_final_row_prune_requested_row", None) if _prefill else None
-      if _row is not None and not (_prefill and _nv_q4_imma_pp512_mode() is not None):
+      if _row is not None and not (_prefill and (_nv_llama_full_packed_pp512_enabled(self.config) or _nv_q4_imma_pp512_mode() is not None)):
         # Captured compiler arms may flatten (B,T,D) to (T,D); gather the
         # token axis in either rank without ever producing an empty view.
         def _terminal_row(t):
@@ -838,7 +907,7 @@ class FFNBlock:
       # Research-only ownership split: expose the residual and exact fp16 norm
       # result as distinct precompiled outputs. The native Q8 producer owns
       # normed_h directly; h remains the residual input to the ordinary tail.
-      if _prefill and _nv_q4_imma_pp512_mode() is not None:
+      if _prefill and (_nv_llama_full_packed_pp512_enabled(self.config) or _nv_q4_imma_pp512_mode() is not None):
         # Closed research hook: after the terminal attention block, only the
         # requested row is live.  The model installs this attribute explicitly;
         # absent it, preserve the dense graph spelling exactly.
@@ -911,7 +980,7 @@ class FFNBlock:
     # @function wraps the traced return in a call/gettuple node. Mark that concrete block-output boundary as well as
     # its residual creation site so callification cannot hide the allocation identity from the manifest.
     _runner = function(precompile=True, allow_implicit=True)(_run)
-    if getattr(self, "_is_prefill", False) and _nv_q4_imma_pp512_mode() is not None:
+    if getattr(self, "_is_prefill", False) and (_nv_llama_full_packed_pp512_enabled(self.config) or _nv_q4_imma_pp512_mode() is not None):
       h, normed_h = _runner(x, start_pos, _rf)
       _row = getattr(self, "_final_row_prune_requested_row", None)
       if _row is not None:
@@ -937,7 +1006,10 @@ class TransformerBlock(FFNBlock):
   def _attention(self, x:Tensor, start_pos:int|UOp, ring_freqs=None, residual_for_output:Tensor|None=None) -> Tensor:
     _prefill = getattr(self, "_is_prefill", False)
     if getattr(self, '_prefill_v2', False) and not hasattr(self, "attn_qkv"):  # prefill v2: fp16 isolated q/k/v
-      if _nv_compiler_q4_imma_k_pp512_enabled(self.config) and \
+      if getattr(self, "_nv_qkv_packed_pp512_binding", None) is not None and x.device == "NV" and x.numel() == 512*4096:
+        flat=x.reshape(512,4096); cap=self._nv_qkv_packed_pp512_binding
+        q,k,v=cap.project_qkv(flat,self.attn_q.prefill_packed_weight(),self.attn_k.prefill_packed_weight(),self.attn_v.prefill_packed_weight())
+      elif _nv_compiler_q4_imma_k_pp512_enabled(self.config) and \
           isinstance(getattr(self,"attn_k",None),Q4KPrimitiveLinear) and x.device == "NV" and x.numel() == 512*4096:
         binding, flat = self._nv_compiler_q4_imma_k_pp512_binding, x.reshape(512,4096)
         q = _prefill_semantic(_prefill,prefill_scratch,_pf16(self.attn_q,x).contiguous())
@@ -1237,8 +1309,12 @@ class TransformerBlock(FFNBlock):
     # elementwise kernel. The isinstance guard keeps an nn.Linear attn_output from seeing the kwarg.
     _has_residual = residual_for_output is not None and isinstance(self.attn_output, Q4KPrimitiveLinear)
     if getattr(self, '_prefill_v2', False):
-      out = _pf16(self.attn_output, out_in)
-      return _prefill_semantic(_prefill, prefill_activation, out.contiguous())
+      _o_binding = getattr(self, "_nv_compiler_q4k_o_pp512_binding", None) or getattr(self, "_nv_llama_packed_o_pp512_binding", None)
+      if _o_binding is not None and isinstance(self.attn_output,Q4KPrimitiveLinear) and out_in.numel() == 512*4096:
+        _res = getattr(self, "_nv_compiler_q4k_o_pp512_binding", None)
+        out=_o_binding.project(out_in.cast(dtypes.float16).contiguous().reshape(512,4096),self.attn_output.prefill_packed_weight(), residual_for_output.reshape(512,4096).cast(dtypes.float32) if _res is not None else None, model_family="qwen3_8b",role="attn_output")
+      else: out = _pf16(self.attn_output, out_in)
+      return _prefill_semantic(_prefill, prefill_activation, out.reshape(x.shape).contiguous())
     if _has_residual:
       if _o_q8 is not None:
         _q8_o=(q4k_q8_fine_o_call(True,self.attn_output,_o_q8,residual_for_output) if _o_q8_fine else
@@ -1818,12 +1894,25 @@ class Transformer:
       block._use_flash, block._prefill_v2, block._is_prefill, block._ring_freqs, block._ring_full = \
         use_flash, is_prefill_v2, is_prefill, None, ring_full
       block._flash_decode_tile_geometry_lease = _flash_block_geometry(self,index,flash_geometry) or None
-    _nv_compiler_binding = _nv_compiler_k_binding = _nv_compiler_q6_binding = None
-    if is_prefill_v2 and (nv_q4_mode := _nv_q4_imma_pp512_mode()) is not None:
-      if nv_q4_mode == "compiler" and not _nv_compiler_q4_imma_pp512_qualified(self.config):
-        raise RuntimeError("NV compiler Q4 IMMA pp512 route only admits the exact dense Qwen3-8B topology")
+    _nv_compiler_binding = _nv_llama_binding = _nv_llama_q6_down_binding = _nv_llama_q4_down_binding = _nv_compiler_k_binding = _nv_compiler_q6_binding = _nv_qkv_binding = _nv_o_binding = _nv_compiler_o_binding = None
+    if is_prefill_v2 and _nv_compiler_q4_imma_o_pp512_enabled(self.config):
+      from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import binding_for as compiler_o_binding_for
+      _nv_compiler_o_binding=compiler_o_binding_for("NV"); _nv_compiler_o_binding.prepare(len(self.blk))
+    if is_prefill_v2 and (_nv_llama_full_packed_pp512_enabled(self.config) or getenv("NV_LLAMA_PACKED_QKV_PP512",0)):
+      if not _nv_compiler_q4_imma_pp512_qualified(self.config): raise RuntimeError("NV packed QKV requires exact Qwen3-8B pp512 topology")
+      from extra.llm_research.prefill.nv_qkv_packed_pp512_binding import binding_for as qkv_binding_for
+      _nv_qkv_binding=qkv_binding_for("NV")
+    if is_prefill_v2 and (_nv_llama_full_packed_pp512_enabled(self.config) or getenv("NV_LLAMA_PACKED_O_PP512",0)):
+      if not _nv_compiler_q4_imma_pp512_qualified(self.config): raise RuntimeError("NV packed O requires exact Qwen3-8B pp512 topology")
+      from extra.llm_research.prefill.nv_llama_packed_q4k_o_pp512_binding import binding_for as o_binding_for
+      _nv_o_binding=o_binding_for("NV"); _nv_o_binding.prepare_records(len(self.blk))
+    if is_prefill_v2 and (nv_q4_mode := ("llama" if _nv_llama_full_packed_pp512_enabled(self.config) else _nv_q4_imma_pp512_mode())) is not None:
+      if nv_q4_mode in ("compiler","llama") and not _nv_compiler_q4_imma_pp512_qualified(self.config):
+        raise RuntimeError("NV packed Q4 IMMA pp512 routes only admit the exact dense Qwen3-8B topology")
       if nv_q4_mode == "compiler":
         from extra.llm_research.prefill.nv_compiler_q4k_pp512_binding import binding_for
+      elif nv_q4_mode == "llama":
+        from extra.llm_research.prefill.nv_llama_packed_q4k_pp512_binding import binding_for
       else:
         from extra.llm_research.prefill.nv_q4_imma_pp512_binding import binding_for
       _nv_binding = binding_for("NV")
@@ -1831,6 +1920,9 @@ class Transformer:
         _nv_binding.prepare_records(len(self.blk)*2)
         _nv_binding.install_warmstart(self)
         _nv_compiler_binding = _nv_binding
+      elif nv_q4_mode == "llama":
+        _nv_binding.prepare_pairs(len(self.blk))
+        _nv_llama_binding = _nv_binding
       else:
         _nv_binding.prepare_outputs(len(self.blk)*2)
         _nv_binding.begin_trace()
@@ -1842,6 +1934,14 @@ class Transformer:
       _nv_compiler_k_binding = k_binding_for("NV")
       _nv_compiler_k_binding.prepare_records(len(self.blk))
       _nv_compiler_k_binding.install_warmstart(self)
+    if is_prefill_v2 and getenv("NV_LLAMA_PACKED_Q6K_DOWN_PP512",0):
+      if not _nv_llama_packed_q6k_down_enabled(self.config):raise RuntimeError("llama Q6 down requires the exact llama Q4 gate/up Qwen3-8B arm")
+      from extra.llm_research.prefill.nv_llama_packed_q6k_down_pp512_binding import binding_for as q6_down_binding_for
+      _nv_llama_q6_down_binding=q6_down_binding_for("NV");_nv_llama_q6_down_binding.prepare_records(18)
+    if is_prefill_v2 and getenv("NV_LLAMA_PACKED_Q4K_DOWN_PP512",0):
+      if not _nv_llama_packed_q4k_down_enabled(self.config):raise RuntimeError("llama Q4 down requires the exact llama Q4 gate/up Qwen3-8B arm")
+      from extra.llm_research.prefill.nv_llama_packed_q4k_down_pp512_binding import binding_for as q4_down_binding_for
+      _nv_llama_q4_down_binding=q4_down_binding_for("NV");_nv_llama_q4_down_binding.prepare_records(18)
     if is_prefill_v2 and getenv("NV_COMPILER_Q6_IMMA_PP512",0):
       if _nv_q4_imma_pp512_mode() != "compiler" or not _nv_compiler_q6_imma_pp512_enabled(self.config):
         raise RuntimeError("NV compiler Q6 V/down pp512 route requires the exact compiler gate/up+K Qwen3-8B arm")
@@ -1878,6 +1978,26 @@ class Transformer:
       capture = _nv_compiler_q4_imma_capture(self, jit, _nv_compiler_binding)
       capture.begin_trace()
       for block in self.blk: block._nv_q4_imma_pp512_binding = capture
+    if _nv_llama_binding is not None:
+      capture=_nv_llama_packed_q4k_capture(self,jit,_nv_llama_binding)
+      capture.begin_trace()
+      for block in self.blk: block._nv_q4_imma_pp512_binding=capture
+    if _nv_qkv_binding is not None:
+      qkv_capture=_nv_qkv_packed_capture(self,jit,_nv_qkv_binding); qkv_capture.begin_trace()
+      for block in self.blk: block._nv_qkv_packed_pp512_binding=qkv_capture
+    if _nv_o_binding is not None:
+      o_capture=_nv_llama_packed_o_capture(self,jit,_nv_o_binding); o_capture.begin_trace()
+      for block in self.blk: block._nv_llama_packed_o_pp512_binding=o_capture
+    if _nv_compiler_o_binding is not None:
+      o_capture=_nv_compiler_q4_imma_capture(self,jit,_nv_compiler_o_binding)
+      o_capture.begin_trace()
+      for block in self.blk: block._nv_compiler_q4k_o_pp512_binding=o_capture
+    if _nv_llama_q6_down_binding is not None:
+      q6_capture=_nv_llama_packed_q6k_down_capture(self,jit,_nv_llama_q6_down_binding);q6_capture.begin_trace()
+      for block in self.blk:block._nv_llama_packed_q6k_down_pp512_binding=q6_capture
+    if _nv_llama_q4_down_binding is not None:
+      q4_down_capture=_nv_llama_packed_q4k_down_capture(self,jit,_nv_llama_q4_down_binding);q4_down_capture.begin_trace()
+      for block in self.blk:block._nv_llama_packed_q4k_down_pp512_binding=q4_down_capture
     if _nv_compiler_k_binding is not None:
       k_capture = _nv_compiler_q4_imma_k_capture(self,jit,_nv_compiler_k_binding)
       k_capture.begin_trace()

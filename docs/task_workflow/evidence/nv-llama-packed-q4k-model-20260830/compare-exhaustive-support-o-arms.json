@@ -1,0 +1,16 @@
+{
+  "compiler-direct-o-promoted": {
+    "token": 198,
+    "max_abs": 0.17277860641479492,
+    "mean_abs": 0.030809015065051848,
+    "mismatch_count": 0,
+    "status": "PASS"
+  },
+  "final-row-prune-promoted": {
+    "token": 198,
+    "max_abs": 0.0419154167175293,
+    "mean_abs": 0.01573394023424782,
+    "mismatch_count": 0,
+    "status": "PASS"
+  }
+}

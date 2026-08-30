@@ -1,0 +1,28 @@
+{
+  "schema": "tinygrad.nv_llama_packed_q4k_model_arm.v1",
+  "arm": "control",
+  "status": "PASS",
+  "token": 198,
+  "replay": {
+    "finite": true,
+    "same_activation_exact": true,
+    "distinct_activation_output": true
+  },
+  "census": {
+    "producer": 0,
+    "main": 0,
+    "fixup": 0
+  },
+  "wall": {
+    "samples_ms": [
+      83.711328,
+      84.067858,
+      83.69111,
+      84.05795,
+      83.665622
+    ],
+    "min_ms": 83.665622,
+    "median_ms": 83.711328,
+    "tok_s": 6119.598321996578
+  }
+}

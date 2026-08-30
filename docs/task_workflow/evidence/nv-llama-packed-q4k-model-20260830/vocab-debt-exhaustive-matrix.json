@@ -1,0 +1,81 @@
+{
+  "schema": "tinygrad.nv_vocab_debt_exhaustive_matrix.v1",
+  "status": "NO_GO_ALL_CANDIDATES",
+  "baseline": {
+    "fixture": "docs/task_workflow/evidence/nv-vocab-manyrow-e1-postnorm-fixture-20260829",
+    "weight_logical_shape": [151936, 4096],
+    "m": 1,
+    "outputs": "full logits",
+    "tinygrad_ms": 2.920064,
+    "llama_ms": 0.313154,
+    "debt_ms": 2.606910
+  },
+  "protocol": {
+    "gpu_lock": "flock -w 1200 /tmp/gpu-bench.lock",
+    "deterministic": true,
+    "finite_full_logits_required": true,
+    "top1_proxy_allowed": false,
+    "integration_threshold_whole_model_recovery_ms": 0.5,
+    "default_off": true
+  },
+  "arms": [
+    {
+      "id": "current_generated_service",
+      "scope": "existing production generated Q6_K vocabulary service",
+      "evidence": "docs/task_workflow/evidence/nv-llama-packed-q4k-model-20260830/promoted-cross-runtime-reground.json",
+      "correctness": "PASS",
+      "timing": "baseline; 2.920064 ms vocabulary service",
+      "whole_model_ab": "NOT_RUN",
+      "verdict": "CONTROL"
+    },
+    {
+      "id": "q6k_vocab_manyrow",
+      "scope": "Q8 provider + many-row Q6_K consumer, full lifecycle",
+      "evidence": "docs/task_workflow/evidence/nv-vocab-manyrow-e1-postnorm-fixture-20260829/lifecycle-rerun.json",
+      "correctness": "PASS: shape [1,1,151936], finite/nonzero, argmax 8503 matches control",
+      "timing": "candidate 15.611812 ms vs control 3.835487 ms; delta +11.776325 ms",
+      "whole_model_ab": "NOT_ELIGIBLE",
+      "verdict": "NO_GO_PERFORMANCE"
+    },
+    {
+      "id": "decode_fullshape_gate",
+      "scope": "Q8 provider + four-warp Q6_K/Q8_1 direct output",
+      "evidence": "docs/task_workflow/evidence/nv-vocab-manyrow-e1-postnorm-fixture-20260829/fullshape-rerun.json",
+      "correctness": "PASS zero-input exact; nonzero authority delegated to primitive microgate",
+      "timing": "candidate 1368.436 us vs control 320.427 us; delta +1047.673 us",
+      "whole_model_ab": "NOT_ELIGIBLE",
+      "verdict": "NO_GO_FULLSHAPE"
+    },
+    {
+      "id": "cooperative_persistent_probes",
+      "scope": "existing cooperative/persistent decode probes",
+      "evidence": [
+        "docs/task_workflow/evidence/nv-persistent-qkv-live-ring-20260828/gate-r9.json",
+        "docs/task_workflow/evidence/nv-flash-o-persistent-native-20260828/fullgrid-lowfirst-nofence-pw1024-components.json"
+      ],
+      "correctness": "NOT_VOCAB_FULL_LOGIT",
+      "timing": "not admissible for this Q6_K vocab debt",
+      "whole_model_ab": "NOT_ELIGIBLE",
+      "verdict": "NO_GO_SCOPE"
+    },
+    {
+      "id": "extracted_static_llama_mul_mat_vec_q",
+      "scope": "llama-like extracted/static implementation",
+      "evidence": "extra/llm_research/research/llama_mmq",
+      "correctness": "NO_COMPLETE_LOCAL_M1_FULL_LOGIT_ARM_FOUND",
+      "timing": "not measured as a runnable matched fixture",
+      "whole_model_ab": "NOT_ELIGIBLE",
+      "verdict": "NO_GO_UNAVAILABLE"
+    },
+    {
+      "id": "final_row_full_logit_lifecycle",
+      "scope": "final-row hidden fixture to full vocabulary logits",
+      "evidence": "docs/task_workflow/evidence/nv-vocab-manyrow-e1-postnorm-fixture-20260829/lifecycle-rerun.json",
+      "correctness": "PASS",
+      "timing": "same many-row result; +11.776325 ms",
+      "whole_model_ab": "NOT_ELIGIBLE",
+      "verdict": "NO_GO_PERFORMANCE"
+    }
+  ],
+  "decision": "No candidate satisfies correctness plus >=0.5 ms whole-model recovery; production remains unchanged and default-off."
+}
