@@ -19,17 +19,20 @@ class FlashFixture:
 def _head_major(a: np.ndarray, heads: int) -> np.ndarray:
   if a.shape != (heads, S, D) or not a.flags.c_contiguous:
     raise AssertionError(f"expected contiguous ({heads},{S},{D}), got {a.shape} {a.strides}")
-  if a.strides != (S * D * 4, D * 4, 4): raise AssertionError(f"bad fp32 strides: {a.strides}")
+  item = a.dtype.itemsize
+  if a.strides != (S * D * item, D * item, item): raise AssertionError(f"bad head-major strides: {a.strides}")
   return a
 
 def make_fixture(seed: int = 20260830) -> FlashFixture:
   rng = np.random.default_rng(seed)
-  q = np.ascontiguousarray(rng.standard_normal((HQ, S, D), dtype=np.float32) * .125)
-  k = np.ascontiguousarray(rng.standard_normal((HKV, S, D), dtype=np.float32) * .125)
-  v = np.ascontiguousarray(rng.standard_normal((HKV, S, D), dtype=np.float32) * .125)
+  # Persist the exact half-rounded producer values; the oracle then promotes
+  # these values to fp32, matching the production fp16 Q/K/V boundary.
+  q = np.ascontiguousarray((rng.standard_normal((HQ, S, D), dtype=np.float32) * .125).astype(np.float16))
+  k = np.ascontiguousarray((rng.standard_normal((HKV, S, D), dtype=np.float32) * .125).astype(np.float16))
+  v = np.ascontiguousarray((rng.standard_normal((HKV, S, D), dtype=np.float32) * .125).astype(np.float16))
   _head_major(q, HQ); _head_major(k, HKV); _head_major(v, HKV)
   mask = np.tril(np.ones((S, S), dtype=np.bool_))
-  out = np.empty_like(q)
+  out = np.empty((HQ, S, D), dtype=np.float32)
   scale = np.float32(1.0 / np.sqrt(D))
   for h in range(HQ):
     kvh = h // G
