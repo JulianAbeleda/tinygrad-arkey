@@ -24,8 +24,15 @@ from tinygrad.uop.ops import Ops, UOp
 from extra.llm_research.kernel_vocabulary import KernelLDSWindow, KernelTileGeometry
 from extra.llm_research.prefill.nv_native_program_uop import native_nv_program
 from extra.llm_research.prefill.nv_q8_compact_producer_gate import SRC_FP16
+from extra.llm_research.prefill.nv_tile_major_q8_1_record import TileMajorQ8ActivationRecordTransform, TileMajorActivationCarrierSpec, tile_major_q8_carrier
 
 M, N, K, TILE_K = 512, 12288, 4096, 64
+@dataclass(frozen=True)
+class CompilerQ4ScheduleConfig:
+  tile_m:int=128; tile_n:int=128; tile_k:int=64; warp_m:int=2; warp_n:int=4; threads:int=256
+  def validate(self):
+    if self.tile_m<=0 or self.tile_n<=0 or self.tile_k<=0 or self.warp_m*self.warp_n!=8 or self.threads!=256 or M%self.tile_m or N%self.tile_n or K%self.tile_k: raise ValueError("invalid Q4 schedule")
+DEFAULT_SCHEDULE=CompilerQ4ScheduleConfig()
 PROJECTIONS_PER_MODEL = 72
 LEGAL_ROLES = frozenset(("ffn_gate", "ffn_up"))
 RECORD_BYTES = M*K + 2*M*(K//32)*4
@@ -105,14 +112,18 @@ class CompilerPP512Binding:
   warmstart: Mapping
   warmstart_contexts: Mapping
   @classmethod
-  def compile(cls, dev) -> "CompilerPP512Binding":
-    wt, at = PackedWeightTransform("Q4_K", N, K), Q8ActivationRecordTransform(M, K)
+  def compile(cls, dev, config:CompilerQ4ScheduleConfig=DEFAULT_SCHEDULE, *, compact_q8:bool=False) -> "CompilerPP512Binding":
+    config.validate()
+    wt = PackedWeightTransform("Q4_K", N, K)
+    at = TileMajorQ8ActivationRecordTransform(M, K) if compact_q8 else Q8ActivationRecordTransform(M, K)
     wp, ap = Q4KInt8FragmentProvider(wt), Q8Int8FragmentProvider(at)
     accum = Q4KQ8GroupAccumulatorContract(wp, ap)
     stride = 80
-    geometry = KernelTileGeometry((128, 128, TILE_K), (2, 4), 256, 32,
-      (KernelLDSWindow("A", 0, 128*stride, stride), KernelLDSWindow("B", 128*stride, 256*stride, stride)))
-    identity = hashlib.sha256(repr((geometry, wp.identity, ap.identity, accum.abi)).encode()).hexdigest()
+    a_end=config.tile_m*stride; b_end=(config.tile_m+config.tile_n)*stride
+    if b_end > 256*stride: raise ValueError("Q4 schedule exceeds shared LDS window budget")
+    geometry = KernelTileGeometry((config.tile_m, config.tile_n, config.tile_k), (config.warp_m, config.warp_n), config.threads, 32,
+      (KernelLDSWindow("A", 0, a_end, stride), KernelLDSWindow("B", a_end, b_end, stride)))
+    identity = hashlib.sha256(repr(("compact_q8" if compact_q8 else "flat_q8", config, geometry, wp.identity, ap.identity, accum.abi)).encode()).hexdigest()
     context = _Context("boltbeam.full_kernel_candidate.v1", identity, geometry, wt, wp, at, ap, accum)
     key = warmstart_key({M, N}, K, wt.storage_dtype)
     lib = NVRTCCompiler(dev.arch, ptx=False, cache_key="nv_q8_compact_record_fp16_v1").compile(_record_source())
@@ -126,11 +137,12 @@ class CompilerPP512Binding:
     # identity all come from the normal tinygrad compiler.
     from tinygrad.codegen import to_program_cache
     from tinygrad.codegen.opt.postrange import warmstart_candidate_state
-    record_probe = Tensor.empty(RECORD_U32, dtype=dtypes.uint32, device="NV").realize()
+    record_probe = Tensor.empty(at.storage_units, dtype=dtypes.uint32, device="NV").realize()
     words_probe = Tensor.empty(wt.packed_bytes//4, dtype=dtypes.uint32, device="NV").realize()
     with warmstart_candidate_state(warmstart, warmstart_contexts):
-      _activation_carrier(record_probe, at).matmul(_weight_carrier(words_probe, wt).transpose(), dtype=dtypes.int) \
-        .cast(dtypes.float).contiguous().realize()
+      activation_probe = tile_major_q8_carrier(record_probe, TileMajorActivationCarrierSpec(at)) if compact_q8 else record_probe
+      activation_probe = activation_probe if compact_q8 else _activation_carrier(activation_probe, at)
+      activation_probe.matmul(_weight_carrier(words_probe, wt).transpose(), dtype=dtypes.int).cast(dtypes.float).contiguous().realize()
     matching = [program for program in to_program_cache.values() if program.op is Ops.PROGRAM and program.src and
                 getattr(program.src[0].arg, "candidate_context", None) is not None and
                 program.src[0].arg.candidate_context.canonical_identity == identity]
@@ -167,7 +179,8 @@ class CompilerPP512Binding:
   # no longer reserve device buffers or mutate the device-global compiled
   # asset; production model attachment uses ``new_capture`` below.
   def prepare_records(self, count:int) -> None:
-    if count != PROJECTIONS_PER_MODEL: raise ValueError(f"exact route requires {PROJECTIONS_PER_MODEL} projections")
+    if count not in (PROJECTIONS_PER_MODEL, PROJECTIONS_PER_MODEL//2):
+      raise ValueError(f"exact route requires {PROJECTIONS_PER_MODEL} projections (or isolated gate-only {PROJECTIONS_PER_MODEL//2})")
 
   @property
   def records(self) -> range: return range(PROJECTIONS_PER_MODEL)
@@ -220,6 +233,24 @@ class CompilerPP512Capture:
     if self.cursor >= PROJECTIONS_PER_MODEL: raise RuntimeError("compiler Q4 IMMA trace exceeded exact 72-projection census")
     self.cursor += 1
     return _project(self.asset, x, words, model_family=model_family, role=role, weight_type=weight_type, wait=wait)
+
+  def project_pair(self, x:Tensor, gate_words:Tensor, up_words:Tensor, *, model_family:str,
+                   weight_type:str="Q4_K") -> tuple[Tensor, Tensor]:
+    return (self.project(x, gate_words, model_family=model_family, role="ffn_gate", weight_type=weight_type),
+            self.project(x, up_words, model_family=model_family, role="ffn_up", weight_type=weight_type))
+
+  def project_from_record(self, record:Tensor, words:Tensor, *, model_family:str,
+                          role:str, weight_type:str="Q4_K") -> Tensor:
+    """Research-only main entry for an externally produced canonical Q8 record."""
+    if self.trace_epoch == 0: raise RuntimeError("begin_trace must establish a capture-local epoch before projection")
+    if self.cursor >= PROJECTIONS_PER_MODEL: raise RuntimeError("compiler Q4 IMMA trace exceeded exact census")
+    if record.dtype != dtypes.uint32 or words.dtype != dtypes.uint32:
+      raise ValueError("external record route requires uint32 record and Q4 words")
+    if role not in ("ffn_gate", "ffn_up"): raise ValueError("unsupported role")
+    self.cursor += 1
+    out = Tensor.empty(M*N, dtype=dtypes.float32, device=words.device)
+    out, record, words = out.uop_program(record, words, fxn=lambda *_: self.asset.main_program)
+    return out.reshape(M, N)
 
 
 def _project(binding:CompilerPP512Binding, x:Tensor, words:Tensor, *, model_family:str, role:str,

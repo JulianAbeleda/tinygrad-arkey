@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
   const char* cubin_path = argc > 1 ? argv[1] :
     "/home/ubuntu/tinygrad-arkey/scratchpad/llama_cuda_quantized_oracle_dump/libggml-cuda.so.0.14.36.sm_120a.cubin";
   int passes = argc > 2 ? atoi(argv[2]) : 200;
-  const int nrows = 4096, k = 12288, qk = 256;
+  const int nrows = 4096, k = argc > 3 ? atoi(argv[3]) : 12288, qk = 256;
   const char* entry = "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj";
 
   CUdevice dev; CUcontext ctx; CUmodule mod; CUfunction fn;

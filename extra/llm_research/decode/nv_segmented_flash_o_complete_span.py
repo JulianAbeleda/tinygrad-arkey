@@ -51,18 +51,37 @@ def _head_slice(src: str, name: str, *, axis: str, offset: int, count: int) -> t
   return sliced, body
 
 
-def _o_half_emitter(*, first_half: bool):
+def _o_half_emitter(*, first_half: bool, persistent_workers: int|None = None, wait_group:int|None=None,
+                    low_first: bool = False):
   """Two rows/warp, sixteen physical lanes/row, exact installed lane grammar."""
   lm = Q4KGateUpLaneMap(k=K, n=ROWS)
   lm.validate()
   # The high-priority producer owns heads 16..31. Store that half first, then
   # let the low-half finisher spell the installed low + high offset-16 add.
-  lane_base = 16 if first_half else 0
-  name = "q4k_o_segment16_high_first" if first_half else "q4k_o_segment16_low_finish_epi_resadd"
+  lane_base = (0 if first_half else 16) if low_first else (16 if first_half else 0)
+  if low_first:
+    name = "q4k_o_segment16_low_first" if first_half else "q4k_o_segment16_high_finish_epi_resadd"
+  else:
+    name = "q4k_o_segment16_high_first" if first_half else "q4k_o_segment16_low_finish_epi_resadd"
 
   def kernel(out: UOp, words: UOp, x: UOp, *extra: UOp) -> UOp:
-    if len(extra) != (0 if first_half else 2): raise ValueError("segmented O argument mismatch")
-    row_pair, lane = UOp.special(ROWS // 2, "gidx0"), UOp.special(32, "lidx0")
+    expected = (0 if first_half else 2) + int(wait_group is not None)
+    if len(extra) != expected: raise ValueError("segmented O argument mismatch")
+    wait = None
+    if wait_group is not None:
+      ready = extra[-1]
+      wait = UOp(Ops.CUSTOMI, dtypes.uint32, (ready.index(UOp.const(dtypes.int, wait_group), ptr=True),),
+        arg='([&](){{ while (atomicAdd((unsigned int*){0}, 0u) == 0u) __nanosleep(64); return 0u; }})()')
+    lane = UOp.special(32, "lidx0")
+    task_loop = None
+    if persistent_workers is None:
+      row_pair = UOp.special(ROWS // 2, "gidx0")
+    else:
+      if persistent_workers <= 0 or persistent_workers > ROWS//2: raise ValueError("invalid persistent O worker count")
+      worker = UOp.special(persistent_workers, "gidx0")
+      task_loop = UOp.range((ROWS//2 + persistent_workers-1)//persistent_workers, 18, axis_type=AxisType.LOOP)
+      row_pair = worker + task_loop * persistent_workers
+    if wait is not None: row_pair = row_pair + wait.cast(dtypes.weakint)
     lane16, row = lane.bitwise_and(15), row_pair * 2 + lane.rshift(4)
     logical_lane = lane16 + lane_base
     part = LanePartition(logical_lane, lane_extent=lm.lane_extent, words_per_group=lm.words_per_group)
@@ -71,17 +90,24 @@ def _o_half_emitter(*, first_half: bool):
     base = (row * lm.k_blocks + blk) * Q4K_WORDS_PER_BLOCK
     contrib = _q4k_block_dot_packed_load_vec(words, x, base, blk, part.word_col)
     acc = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG)
-    acc = acc.after(acc[0].store(0.0))
+    init_deps = tuple(x for x in (wait, task_loop) if x is not None)
+    acc = acc.after(acc.after(*init_deps)[0].store(0.0) if init_deps else acc[0].store(0.0))
     acc = acc.after(acc[0].store(acc.after(lblk)[0] + contrib).end(lblk))
     partial = acc[0]
     if first_half:
-      return out[row * 16 + lane16].store(partial).sink(arg=KernelInfo(name=name, opts_to_apply=()))
-    scratch, residual = extra
+      result = out[row * 16 + lane16].store(partial)
+      if task_loop is not None: result = result.end(task_loop)
+      return result.sink(arg=KernelInfo(name=name + (f"_pw{persistent_workers}" if persistent_workers else ""), opts_to_apply=()))
+    scratch, residual = extra[:2]
     # Installed offset-16 semantics for each low logical lane are low + high.
-    paired = partial + scratch[row * 16 + lane16]
+    # Preserve the installed low + high operand order in either production
+    # schedule.  In the low-first spelling scratch is the left operand.
+    paired = scratch[row * 16 + lane16] + partial if low_first else partial + scratch[row * 16 + lane16]
     total = _warp_reduce_sum_staged(paired, lane, 16, slot_base=90)
     result = total + residual[row].cast(dtypes.float32)
-    return out[row].store(result, lane16.eq(0)).sink(arg=KernelInfo(name=name, opts_to_apply=()))
+    stored = out[row].store(result, lane16.eq(0))
+    if task_loop is not None: stored = stored.end(task_loop)
+    return stored.sink(arg=KernelInfo(name=name + (f"_pw{persistent_workers}" if persistent_workers else ""), opts_to_apply=()))
   return kernel
 
 
@@ -95,7 +121,7 @@ def _preambles(*sources: str) -> str:
   return "\n".join(lines) + "\n"
 
 
-def _build_source() -> tuple[str, dict[str, str]]:
+def _build_source(persistent_workers:int|None=None) -> tuple[str, dict[str, str]]:
   p = UOp.placeholder
   score_name, score_src = _render(flash_vec_llama_score_pv_kernel(
     HD, H, HKV, MAXC, S, UOp.const(dtypes.int, TC), wide_kv=True, wide_q=False,
@@ -109,9 +135,9 @@ def _build_source() -> tuple[str, dict[str, str]]:
     ROWS, K, epilogue=Q4KGEMVEpilogue("residual_add"), load_style="vector")(
       p((ROWS,), dtypes.float32, 0), p((O_WORDS,), dtypes.uint32, 1),
       p((K,), dtypes.float16, 2), p((ROWS,), dtypes.float32, 3)))
-  first_name, first_src = _render(_o_half_emitter(first_half=True)(
+  first_name, first_src = _render(_o_half_emitter(first_half=True, persistent_workers=persistent_workers)(
     p((ROWS*16,), dtypes.float32, 0), p((O_WORDS,), dtypes.uint32, 1), p((K,), dtypes.float16, 2)))
-  finish_name, finish_src = _render(_o_half_emitter(first_half=False)(
+  finish_name, finish_src = _render(_o_half_emitter(first_half=False, persistent_workers=persistent_workers)(
     p((ROWS,), dtypes.float32, 0), p((O_WORDS,), dtypes.uint32, 1), p((K,), dtypes.float16, 2),
     p((ROWS*16,), dtypes.float32, 3), p((ROWS,), dtypes.float32, 4)))
   score0, score0_src = _head_slice(score_src, score_name, axis="gidx1", offset=0, count=16)
@@ -127,7 +153,7 @@ def _build_source() -> tuple[str, dict[str, str]]:
   return _preambles(*sources) + "\n".join(functions), names
 
 
-def _harness(kernels: str, n: dict[str, str]) -> str:
+def _harness(kernels: str, n: dict[str, str], persistent_workers:int|None=None) -> str:
   return kernels + f'''
 #include <algorithm>
 #include <cstdio>
@@ -141,6 +167,7 @@ def _harness(kernels: str, n: dict[str, str]) -> str:
 #define ROWS {ROWS}
 #define O_WORDS {O_WORDS}
 #define ROTATIONS {ROTATIONS}
+#define O_WORKERS {persistent_workers if persistent_workers is not None else ROWS//2}
 #define CACHE_WORDS {2*HKV*MAXC*HD//2}
 static void ck(cudaError_t e,const char*w){{if(e!=cudaSuccess){{fprintf(stderr,"%s: %s\\n",w,cudaGetErrorString(e));exit(2);}}}}
 struct Ctx {{ cudaStream_t hi,lo; cudaEvent_t start,done,low_ready,f1s,f1e,o0s,o0e; }};
@@ -162,11 +189,11 @@ static double candidate(Ctx&c,float*out,half*attn,float*partial,float*q,unsigned
   ck(cudaEventRecord(c.start,c.hi),"start");ck(cudaStreamWaitEvent(c.lo,c.start),"lo-start");
   {n['score1']}<<<dim3(SPLITS,16,1),dim3(32,4,1),0,c.hi>>>(partial,q,cache);
   {n['combine1']}<<<16,128,0,c.hi>>>(attn,partial);
-  {n['first']}<<<ROWS/2,32,0,c.hi>>>(scratch,w,attn);
+  {n['first']}<<<O_WORKERS,32,0,c.hi>>>(scratch,w,attn);
   {n['score0']}<<<dim3(SPLITS,16,1),dim3(32,4,1),0,c.lo>>>(partial,q,cache);
   {n['combine0']}<<<16,128,0,c.lo>>>(attn,partial);ck(cudaEventRecord(c.low_ready,c.lo),"low-ready");
   ck(cudaStreamWaitEvent(c.hi,c.low_ready),"wait-low-ready");
-  {n['finish']}<<<ROWS/2,32,0,c.hi>>>(out,w,attn,scratch,res);
+  {n['finish']}<<<O_WORKERS,32,0,c.hi>>>(out,w,attn,scratch,res);
   ck(cudaGetLastError(),"candidate-launch");ck(cudaEventRecord(c.done,c.hi),"done");ck(cudaEventSynchronize(c.done),"sync");
   return elapsed(c.start,c.done);
 }}
@@ -184,20 +211,20 @@ static double split_o_only(Ctx&c,float*out,half*attn,float*partial,float*q,unsig
   ck(cudaEventRecord(c.start,c.hi),"so-start");
   {n['score']}<<<dim3(SPLITS,HQ,1),dim3(32,4,1),0,c.hi>>>(partial,q,cache);
   {n['combine']}<<<HQ,128,0,c.hi>>>(attn,partial);
-  {n['first']}<<<ROWS/2,32,0,c.hi>>>(scratch,w,attn);
-  {n['finish']}<<<ROWS/2,32,0,c.hi>>>(out,w,attn,scratch,res);
+  {n['first']}<<<O_WORKERS,32,0,c.hi>>>(scratch,w,attn);
+  {n['finish']}<<<O_WORKERS,32,0,c.hi>>>(out,w,attn,scratch,res);
   ck(cudaEventRecord(c.done,c.hi),"so-done");ck(cudaEventSynchronize(c.done),"so-sync");return elapsed(c.start,c.done);
 }}
 static void candidate_trace(Ctx&c,float*out,half*attn,float*partial,float*q,unsigned int*cache,unsigned int*w,float*scratch,float*res){{
   ck(cudaEventRecord(c.start,c.hi),"trace-start");ck(cudaStreamWaitEvent(c.lo,c.start),"trace-lo-start");
   {n['score1']}<<<dim3(SPLITS,16,1),dim3(32,4,1),0,c.hi>>>(partial,q,cache);
   {n['combine1']}<<<16,128,0,c.hi>>>(attn,partial);ck(cudaEventRecord(c.o0s,c.hi),"trace-o-start");
-  {n['first']}<<<ROWS/2,32,0,c.hi>>>(scratch,w,attn);ck(cudaEventRecord(c.o0e,c.hi),"trace-o-end");
+  {n['first']}<<<O_WORKERS,32,0,c.hi>>>(scratch,w,attn);ck(cudaEventRecord(c.o0e,c.hi),"trace-o-end");
   ck(cudaEventRecord(c.f1s,c.lo),"trace-low-start");
   {n['score0']}<<<dim3(SPLITS,16,1),dim3(32,4,1),0,c.lo>>>(partial,q,cache);
   {n['combine0']}<<<16,128,0,c.lo>>>(attn,partial);ck(cudaEventRecord(c.f1e,c.lo),"trace-low-end");ck(cudaEventRecord(c.low_ready,c.lo),"trace-low-ready");
   ck(cudaStreamWaitEvent(c.hi,c.low_ready),"trace-wait");
-  {n['finish']}<<<ROWS/2,32,0,c.hi>>>(out,w,attn,scratch,res);
+  {n['finish']}<<<O_WORKERS,32,0,c.hi>>>(out,w,attn,scratch,res);
   ck(cudaEventRecord(c.done,c.hi),"trace-done");ck(cudaEventSynchronize(c.done),"trace-sync");
   double f1a=elapsed(c.start,c.f1s),f1b=elapsed(c.start,c.f1e),oa=elapsed(c.start,c.o0s),ob=elapsed(c.start,c.o0e);
   double ov=std::max(0.0,std::min(f1b,ob)-std::max(f1a,oa));printf("timeline flash1_start=%.6f flash1_end=%.6f o0_start=%.6f o0_end=%.6f overlap=%.6f\\n",f1a,f1b,oa,ob,ov);
@@ -234,11 +261,12 @@ def main() -> int:
   ap.add_argument("--reps", type=int, default=9)
   ap.add_argument("--out", type=Path, required=True)
   ap.add_argument("--artifacts", type=Path, required=True)
+  ap.add_argument("--persistent-workers", type=int)
   args = ap.parse_args()
   args.artifacts.mkdir(parents=True, exist_ok=True)
-  kernels, names = _build_source()
+  kernels, names = _build_source(args.persistent_workers)
   cu, binary = args.artifacts / "gate.cu", args.artifacts / "gate"
-  cu.write_text(_harness(kernels, names))
+  cu.write_text(_harness(kernels, names, args.persistent_workers))
   build = subprocess.run([NVCC, "-O3", "-std=c++17", "-arch=sm_120a", "--ptxas-options=-v", str(cu), "-o", str(binary)],
                          text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
   (args.artifacts / "build.stdout.txt").write_text(build.stdout)

@@ -25,9 +25,8 @@ def _head_major(a: np.ndarray, heads: int) -> np.ndarray:
 
 def make_fixture(seed: int = 20260830) -> FlashFixture:
   rng = np.random.default_rng(seed)
-  # Persist the exact half-rounded producer values; the oracle then promotes
-  # these values to fp32, matching the production fp16 Q/K/V boundary.
-  q = np.ascontiguousarray((rng.standard_normal((HQ, S, D), dtype=np.float32) * .125).astype(np.float16))
+  # Production Flash receives fp32 Q and half-rounded fp16 K/V.
+  q = np.ascontiguousarray(rng.standard_normal((HQ, S, D), dtype=np.float32) * .125)
   k = np.ascontiguousarray((rng.standard_normal((HKV, S, D), dtype=np.float32) * .125).astype(np.float16))
   v = np.ascontiguousarray((rng.standard_normal((HKV, S, D), dtype=np.float32) * .125).astype(np.float16))
   _head_major(q, HQ); _head_major(k, HKV); _head_major(v, HKV)

@@ -7,6 +7,21 @@ from collections import Counter
 import numpy as np
 
 from tinygrad import Device, Tensor, TinyJit
+_buffer_observer_state = {"phase":"startup", "sample":None, "arm":os.environ.get("NV_Q6DOWN_OBSERVER_ARM"),
+  "cut":os.environ.get("NV_Q6DOWN_FORCED_CUT")}
+
+def _set_buffer_observer_phase(phase:str, sample:int|None=None, **context) -> None:
+  _buffer_observer_state.update({"phase":phase, "sample":sample, **context})
+
+if os.environ.get("BUFFER_OBSERVER") == "1" and os.environ.get("BUFFER_OBSERVER_JSON"):
+  from tinygrad.device import install_buffer_observer
+  _buffer_observer_path = pathlib.Path(os.environ["BUFFER_OBSERVER_JSON"])
+  _buffer_observer_path.parent.mkdir(parents=True, exist_ok=True)
+  _buffer_observer_file = _buffer_observer_path.open("a", encoding="utf-8")
+  def _record_buffer_event(**event) -> None:
+    _buffer_observer_file.write(json.dumps({**event, "pid":os.getpid(), "context":dict(_buffer_observer_state)}, default=str) + "\n")
+    _buffer_observer_file.flush()
+  install_buffer_observer(_record_buffer_event)
 from extra.llm_research.prefill.nv_compiler_q4k_model_gate import (_call_and_sync, _call_name, _compile_scope,
   _configure, _numpy_output, _program_calls)
 
@@ -48,16 +63,36 @@ def _buf_uop(arg):
   except (RuntimeError,AttributeError):return None
 
 
+def _runner_boundary_observations(calls, *, phase:str) -> dict:
+  """Return only observations owned by this runner; never synthesize device time.
+
+  PROGRAM capture is a graph description, not a submission trace.  Keep the
+  distinction explicit so D0 cannot accidentally promote host timestamps or
+  marker launches as measurements of the real cuts.
+  """
+  names=[_call_name(call) for call in calls]
+  q6=[name for name in names if name.startswith("q8_compact_record_fp16_q6_")]
+  return {"phase":phase, "observed_producer_records":len(q6),
+    "exact_role_census":len(q6)==36,
+    "device_begin_ns":None, "device_end_ns":None, "queue_ready_ns":None,
+    "dependency_wait_ns":None,
+    "allocations":{"status":"UNAVAILABLE","count":None,"bytes":None},
+    "copies":{"status":"UNAVAILABLE","count":None,"bytes":None},
+    "materializations":{"status":"UNAVAILABLE","count":None,"bytes":None},
+    "limitation":"runner has no per-submission HCQ event handles or allocator/copy/materialization observer"}
+
+
 def main() -> None:
   ap=argparse.ArgumentParser();ap.add_argument("--arm",choices=("candidate","control","compare"),required=True)
   ap.add_argument("--model",default=MODEL);ap.add_argument("--max-context",type=int,default=4608)
   ap.add_argument("--warmups",type=int,default=3);ap.add_argument("--rounds",type=int,default=9)
   ap.add_argument("--roles",default="attn_v,ffn_down")
   ap.add_argument("--structural-only",action="store_true")
-  ap.add_argument("--out",required=True);ap.add_argument("--logits-npz",default="")
+  ap.add_argument("--out",required=True);ap.add_argument("--logits-npz",default="");ap.add_argument("--boundary-probe-out",default="")
   ap.add_argument("--candidate-json",default="");ap.add_argument("--candidate-npz",default="")
   ap.add_argument("--control-json",default="");ap.add_argument("--control-npz",default="")
   args=ap.parse_args()
+  _set_buffer_observer_phase("argument_validation", arm=args.arm, cut=os.environ.get("NV_Q6DOWN_FORCED_CUT"))
   if args.rounds<9 and args.arm!="compare" and not args.structural_only:raise SystemExit("model authority requires R9 or greater")
   if args.structural_only and args.arm!="candidate":raise SystemExit("structural-only requalification is candidate-only")
 
@@ -99,25 +134,38 @@ def main() -> None:
   from tinygrad.llm.qk_primitives import Q4KPrimitiveLinear,Q6KPrimitiveLinear
   from extra.llm_research.prefill.nv_compiler_q4k_pp512_binding import binding_for as gate_binding_for
   from extra.llm_research.prefill.nv_compiler_q4k_k_pp512_binding import binding_for as k_binding_for
+  _set_buffer_observer_phase("model_load")
   model,_=load_model_and_tokenizer(args.model,args.max_context,seed=20260617)
+  _set_buffer_observer_phase("asset_prepare")
   gate_asset=gate_binding_for("NV");gate_asset.prepare_records(72);gate_asset.install_warmstart(model);gate_capture=gate_asset.new_capture()
   k_asset=k_binding_for("NV");k_asset.prepare_records(36);k_asset.install_warmstart(model);k_capture=k_asset.new_capture()
   q6_asset=q6_capture=None
   if args.arm=="candidate":
     from extra.llm_research.prefill.nv_compiler_q6k_pp512_binding import binding_for as q6_binding_for
-    q6_asset=q6_binding_for("NV");q6_asset.prepare_records(36);q6_asset.install_warmstart(model);q6_capture=q6_asset.new_capture()
+    from tinygrad import dtypes
+    fp16_q6 = os.environ.get("NV_COMPILER_Q6_FP16_V") == "1" or os.environ.get("NV_COMPILER_Q6_FP16_DOWN") == "1"
+    q6_asset=(q6_binding_for("NV") if not fp16_q6 else
+              __import__("extra.llm_research.prefill.nv_compiler_q6k_pp512_binding", fromlist=["CompilerQ6PP512Binding"]).CompilerQ6PP512Binding.compile_research_output_dtype(Device["NV"], dtypes.float16))
+    q6_asset.prepare_records(36);q6_asset.install_warmstart(model);q6_capture=q6_asset.new_capture()
 
+  _set_buffer_observer_phase("input_prepare")
   chunk_a=Tensor([[(i*7)%1000 for i in range(512)]],dtype="int32").contiguous()
   chunk_b=Tensor([[(i*11+3)%1000 for i in range(512)]],dtype="int32").contiguous();temp=Tensor([0.0])
+  _set_buffer_observer_phase("capture")
   jit=_capture(model,gate_capture,k_capture,q6_capture,chunk_a,temp)
+  _set_buffer_observer_phase("correctness")
   a0=_numpy_output(_call_and_sync(jit,chunk_a,temp));b=_numpy_output(_call_and_sync(jit,chunk_b,temp));a1=_numpy_output(_call_and_sync(jit,chunk_a,temp))
   if args.logits_npz:
     target=pathlib.Path(args.logits_npz);target.parent.mkdir(parents=True,exist_ok=True);np.savez(target,token=np.int64(a1[0]),logits=a1[1])
-  for _ in range(args.warmups):_call_and_sync(jit,chunk_a,temp)
+  for warmup in range(args.warmups):
+    _set_buffer_observer_phase("warmup", warmup)
+    _call_and_sync(jit,chunk_a,temp)
   samples=[]
-  for _ in range(args.rounds):
+  for sample in range(args.rounds):
+    _set_buffer_observer_phase("timed", sample)
     Device[Device.DEFAULT].synchronize();started=time.perf_counter_ns();_call_and_sync(jit,chunk_a,temp)
     samples.append((time.perf_counter_ns()-started)/1e6)
+  _set_buffer_observer_phase("postprocess")
   replay_diff=np.abs(a0[1]-a1[1])
   replay={"finite":bool(np.isfinite(a1[1]).all()),"first_token":a0[0],"replay_token":a1[0],
     "same_token":bool(a0[0]==a1[0]),"same_logits_exact":bool(np.array_equal(a0[1],a1[1])),
@@ -126,6 +174,15 @@ def main() -> None:
     "distinct_activation_output":bool(a1[0]!=b[0] or not np.array_equal(a1[1],b[1]))}
 
   calls=_program_calls(jit.captured.linear);names=Counter(_call_name(call) for call in calls)
+  if args.boundary_probe_out:
+    from extra.llm_research.prefill.nv_compiler_q6k_boundary_runtime_probe import probe_live
+    probe_live(out=args.boundary_probe_out, downstream_finite=bool(np.isfinite(a1[1]).all()), program_calls=calls)
+  boundary_capture=None
+  if q6_asset is not None and os.environ.get("NV_COMPILER_Q6_BOUNDARY_CAPTURE") == "1":
+    from extra.llm_research.prefill.nv_compiler_q6k_pp512_binding import new_boundary_replay
+    boundary_capture=new_boundary_replay(Device["NV"]).capture(calls)
+    boundary_capture["runner_observations"]={"hot":_runner_boundary_observations(calls,phase="hot"),
+      "rotated_cold":_runner_boundary_observations(calls,phase="rotated_cold")}
   def _identity_calls(identity):
     return [c for c in calls if c.src[0].src and getattr(c.src[0].src[0].arg,"candidate_context",None) is not None and
             c.src[0].src[0].arg.candidate_context.canonical_identity==identity]
@@ -158,7 +215,14 @@ def main() -> None:
     "q6_v_all_256cta":bool(geometries["attn_v"] and all(g==((32,8,1),(32,2,2)) for g in geometries["attn_v"])),
     "q6_down_all_1024cta":bool(geometries["ffn_down"] and all(g==((128,8,1),(32,2,2)) for g in geometries["ffn_down"]))}
   replay_pass=all(replay[k] for k in ("finite","same_token","same_logits_exact","same_activation_exact","distinct_activation_output"))
-  if args.arm=="candidate":
+  forced_cut = os.environ.get("NV_Q6DOWN_FORCED_CUT") in ("producer", "main", "publication", "residual")
+  if args.arm=="candidate" and forced_cut:
+    passed=replay_pass and all((census["gate_up_main"]==72,census["k_main"]==36,census["total_q8_producer"]==126,
+      census["q6_v_producer"]==0,census["q6_down_producer"]==18,census["q6_v_main"]==0,census["q6_down_main"]==18,
+      census["q6_candidate_weight_args"]==18,census["q6_unique_weight_bases"]==18,census["q6_all_weights_canonical"],
+      census["q6_records"]==18,census["q6_down_fp16_overlays"]==0,census["q6_weight_copy_kernels"]==0,
+      census["q6_old_fixup"]==0,census["q6_partial_workspace_bytes"]==0,census["q6_down_all_1024cta"]))
+  elif args.arm=="candidate":
     expected={role:(18 if role in active_roles else 0) for role in ("attn_v","ffn_down")};expected_total=sum(expected.values())
     passed=replay_pass and all((census["gate_up_main"]==72,census["k_main"]==36,census["total_q8_producer"]==108+expected_total,
       census["q6_v_producer"]==expected["attn_v"],census["q6_down_producer"]==expected["ffn_down"],
@@ -166,7 +230,7 @@ def main() -> None:
       census["q6_candidate_weight_args"]==expected_total,census["q6_unique_weight_bases"]==expected_total,census["q6_all_weights_canonical"],
       census["q6_records"]==expected_total,census["q6_v_fp16_overlays"]==18-expected["attn_v"],
       census["q6_down_fp16_overlays"]==18-expected["ffn_down"],
-      census["q4_v_down_fp16_overlays"]==36,census["q6_weight_copy_kernels"]==0,census["q6_old_fixup"]==0,
+      census["q4_v_down_fp16_overlays"]==(0 if forced_cut and os.environ.get("NV_Q6DOWN_FORCED_CUT")=="residual" else 36),census["q6_weight_copy_kernels"]==0,census["q6_old_fixup"]==0,
       census["q6_partial_workspace_bytes"]==0,
       census["q6_v_all_256cta"]==(expected["attn_v"]>0),census["q6_down_all_1024cta"]==(expected["ffn_down"]>0)))
   else:
@@ -182,6 +246,7 @@ def main() -> None:
       "HCQ_NV_MULTI_QUEUE_PROGRAMS":os.environ.get("HCQ_NV_MULTI_QUEUE_PROGRAMS",""),
       "HCQ_NV_MULTI_QUEUE_INDICES":os.environ.get("HCQ_NV_MULTI_QUEUE_INDICES",""),
       "HCQ_NV_MULTI_QUEUE_CUT_POLICY":os.environ.get("HCQ_NV_MULTI_QUEUE_CUT_POLICY","")},
+    "boundary_capture":boundary_capture,
     "authority":{"structural_only":args.structural_only,"source_manifest":_source_manifest()},
     "program_names":dict(sorted(names.items())),"token":a1[0]}
   _write(args.out,payload)

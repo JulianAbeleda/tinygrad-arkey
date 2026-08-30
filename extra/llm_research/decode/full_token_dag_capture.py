@@ -159,6 +159,11 @@ def validate_schema(dag: dict) -> None:
         raise FullTokenDagError("edge kind must be one of %r, got %r" % (KINDS, e.get("kind")))
       if not isinstance(e.get("crosses_group"), bool):
         raise FullTokenDagError("edge crosses_group must be a bool")
+      if "spans" in e:
+        if not isinstance(e["spans"], list) or any(
+            not isinstance(span, list) or len(span) != 2 or not all(isinstance(v, int) and not isinstance(v, bool) for v in span)
+            or span[0] < 0 or span[1] < span[0] for span in e["spans"]):
+          raise FullTokenDagError("edge spans must be a list of non-decreasing [lo, hi) integer pairs")
   summary = dag.get("summary")
   if summary is not None:
     if not isinstance(summary, dict):
@@ -485,9 +490,18 @@ class RecordingDepsTracker:
     from tinygrad.engine.jit import DepsTracker
     self._tracker = DepsTracker()
     self.edges: list[tuple[int, int, str]] = []
+    self.span_edges: dict[tuple[int, int], list[tuple[int, int]]] = {}
+    self.span_skipped: list[tuple[int, int, Any, Any]] = []
+
+  def _span(self, lo: Any, hi: Any) -> tuple[int, int] | None:
+    if all(isinstance(v, int) and not isinstance(v, bool) for v in (lo, hi)) and lo <= hi:
+      return int(lo), int(hi)
+    self.span_skipped.append((lo, hi, type(lo).__name__, type(hi).__name__))
+    return None
 
   def access_resources(self, bufs: list[Any], write: list[int], new_dependency: int) -> list[Any]:
     kinds: dict[tuple[int, int], str] = {}
+    spans: dict[tuple[int, int], list[tuple[int, int]]] = {}
     for i, buf in enumerate(bufs):
       key = id(buf.base)
       s, e = buf.offset, buf.offset + buf.nbytes
@@ -495,16 +509,24 @@ class RecordingDepsTracker:
         for st, en, dep in self._tracker.w_dependency_map[key]:
           if st < e and s < en:
             kinds.setdefault((id(dep), id(new_dependency)), "WAW")
+            if (span := self._span(max(st, s), min(en, e))) is not None:
+              spans.setdefault((id(dep), id(new_dependency)), []).append(span)
         for st, en, dep in self._tracker.r_dependency_map[key]:
           if st < e and s < en:
             kinds.setdefault((id(dep), id(new_dependency)), "WAR")
+            if (span := self._span(max(st, s), min(en, e))) is not None:
+              spans.setdefault((id(dep), id(new_dependency)), []).append(span)
       else:
         for st, en, dep in self._tracker.w_dependency_map[key]:
           if st < e and s < en:
             kinds.setdefault((id(dep), id(new_dependency)), "RAW")
+            if (span := self._span(max(st, s), min(en, e))) is not None:
+              spans.setdefault((id(dep), id(new_dependency)), []).append(span)
     wait_nodes = self._tracker.access_resources(bufs, write, new_dependency)
     for dep in wait_nodes:
-      self.edges.append((int(dep), int(new_dependency), kinds.get((id(dep), id(new_dependency)), UNKNOWN)))
+      edge_key = (id(dep), id(new_dependency))
+      self.edges.append((int(dep), int(new_dependency), kinds.get(edge_key, UNKNOWN)))
+      self.span_edges[(int(dep), int(new_dependency))] = spans.get(edge_key, [])
     return wait_nodes
 
 
@@ -632,16 +654,30 @@ def _build_full_token_dag(linear: Any, input_uops: tuple[Any, ...], group_map: d
   for dep, new, kind in tracker.edges:
     dep_group = next((n["group_id"] for n in nodes if n["id"] == dep), None)
     new_group = next((n["group_id"] for n in nodes if n["id"] == new), None)
-    edges.append({"from": dep, "to": new, "kind": kind,
-                  "crosses_group": dep_group is not None and new_group is not None and dep_group != new_group})
-  return {"schema": SCHEMA, "nodes": nodes, "edges": edges}
+    edge_row = {"from": dep, "to": new, "kind": kind,
+                "crosses_group": dep_group is not None and new_group is not None and dep_group != new_group}
+    edge_spans = tracker.span_edges.get((dep, new))
+    if edge_spans:
+      edge_row["spans"] = sorted([list(span) for span in set(edge_spans)])
+    edges.append(edge_row)
+  span_skip_samples = []
+  seen_skips: set[tuple[Any, Any, str, str]] = set()
+  for lo, hi, lot, hit in tracker.span_skipped:
+    key = (repr(lo), repr(hi), lot, hit)
+    if key in seen_skips or len(span_skip_samples) >= 20: continue
+    seen_skips.add(key)
+    span_skip_samples.append({"lo": repr(lo), "hi": repr(hi), "lo_type": lot, "hi_type": hit})
+  return {"schema": SCHEMA, "nodes": nodes, "edges": edges,
+          "span_skip_summary": {"count": len(tracker.span_skipped), "samples": span_skip_samples}}
 
 
 def _select_dag(dags: list[dict]) -> dict:
-  """Pick the decode-token DAG: prefer the 32/64/128/256/468 shape, else the largest."""
+  """Pick the decode-token DAG by its semantic 36-layer flash population."""
   if not dags:
     raise FullTokenDagError("no pre-split linear was captured; the jit_lower/graph_split_rewrite seam did not fire")
-  decode_sizes = [32, 64, 128, 256, 468]
+  # Retain the historical signature and recognize the current composed decode
+  # graph after completion/cache-sink/node-elimination promotions.
+  decode_signatures = ([32, 64, 128, 228], [32, 64, 128, 256, 468])
 
   def sizes(dag: dict) -> list[int]:
     counts: dict[Any, int] = {}
@@ -654,10 +690,26 @@ def _select_dag(dags: list[dict]) -> dict:
       counts[g] += 1
     return [counts[g] for g in order]
 
-  for dag in dags:
-    if sizes(dag) == decode_sizes:
-      return dag
-  return max(dags, key=lambda d: len(d.get("nodes", [])))
+  def flash_count(dag: dict) -> int:
+    return sum(str(n.get("name", "")).startswith("flash_block_tiled_xlane_score_pv_tile_whole_cache")
+               for n in dag.get("nodes", []))
+
+  semantic = [dag for dag in dags if flash_count(dag) == 36]
+  if len(semantic) == 1:
+    return semantic[0]
+  if len(semantic) > 1:
+    for signature in decode_signatures:
+      for dag in semantic:
+        if sizes(dag) == signature:
+          return dag
+    return min(semantic, key=lambda d: len(d.get("nodes", [])))
+
+  for signature in decode_signatures:
+    for dag in dags:
+      if sizes(dag) == signature:
+        return dag
+  raise FullTokenDagError("no semantic decode DAG (36 flash-score nodes); candidates=%r" %
+    [{"sizes":sizes(d), "nodes":len(d.get("nodes", [])), "flash":flash_count(d)} for d in dags])
 
 
 def _apply_profile_durations(dag: dict, jsonl_path: str) -> dict:

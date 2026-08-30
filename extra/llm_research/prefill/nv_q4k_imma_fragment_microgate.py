@@ -191,15 +191,19 @@ extern "C" __global__ void q4k_imma_stream(float *out, float *partials, int *ids
 }}
 '''
 
-def production_slotmap() -> np.ndarray:
+def production_slotmap(owners:int=170, total_work:int=6144, fixup_tiles:int=384) -> np.ndarray:
   """Map each production output tile to its one or two Stream-K boundary slots."""
-  slotmap=np.full((384,2),-1,np.int32)
-  for cid in range(170):
-    u=(cid*6144)//170;ue=((cid+1)*6144)//170;piece=0
+  if owners <= 0 or total_work <= 0 or fixup_tiles <= 0: raise ValueError("invalid slotmap geometry")
+  slotmap=np.full((fixup_tiles,2),-1,np.int32)
+  for cid in range(owners):
+    u=(cid*total_work)//owners;ue=((cid+1)*total_work)//owners;piece=0
     while u<ue:
       tile=u//16;b0=u%16;end=min(ue,(tile+1)*16);b1=end-tile*16
       if not (b0==0 and b1==16):
-        j=0 if slotmap[tile,0]<0 else 1;slotmap[tile,j]=cid*2+piece;piece+=1
+        if piece >= 2: raise ValueError("owner interval crosses more than two tile boundaries")
+        j=0 if slotmap[tile,0]<0 else 1
+        if slotmap[tile,j] >= 0: raise ValueError("slotmap tile has more than two partial owners")
+        slotmap[tile,j]=cid*2+piece; piece+=1
       u=end
   return slotmap
 

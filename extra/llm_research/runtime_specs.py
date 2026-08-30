@@ -120,6 +120,21 @@ NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY = FullKernelCapability(
   instruction_family=_instruction_family_for("CUDA", "sm120", dtypes.half, dtypes.float),
   fragment_layout="cuda_mma_f32_8x16x16_f16_lds2_static", transport="lds",
   lane_ownership="cuda_mma_f32_8x16x16_f16_lds2_static", waitcnt=(("vm", None), ("lgkm", None)))
+# tinygrad's live NV renderer reports the target as NV:sm_120, while retained
+# CUDA compiler artifacts use CUDA:sm120.  Keep both exact spellings typed:
+# admission remains fail-closed and the hardware facts are identical.
+NV_SM_120_RUNTIME_SINGLE_BUFFER_CAPABILITY = FullKernelCapability(
+  capability_id="nvidia.sm_120.prefill.wmma_lds.single_buffer.runtime.v1", backend="NV", arch="sm_120",
+  wave_size=_wave_size_for_arch("sm_120"), max_lds_bytes=49152, vector_bytes=16,
+  instruction_family=_instruction_family_for("CUDA", "sm_120", dtypes.half, dtypes.float),
+  fragment_layout="cuda_mma_f32_8x16x16_f16_lds2_static", transport="lds",
+  lane_ownership="cuda_mma_f32_8x16x16_f16_lds2_static", waitcnt=(("vm", None), ("lgkm", None)))
+NV_SM_120_RUNTIME_TWO_BUFFER_STAGE1_CAPABILITY = FullKernelCapability(
+  capability_id="nvidia.sm_120.prefill.wmma_lds.two_buffer_stage1.runtime.v1", backend="NV", arch="sm_120",
+  wave_size=_wave_size_for_arch("sm_120"), max_lds_bytes=49152, vector_bytes=16, buffer_count=2, stage_count=1,
+  instruction_family=_instruction_family_for("CUDA", "sm_120", dtypes.half, dtypes.float),
+  fragment_layout="cuda_mma_f32_8x16x16_f16_lds2_static", transport="lds",
+  lane_ownership="cuda_mma_f32_8x16x16_f16_lds2_static", waitcnt=(("vm", None), ("lgkm", None)))
 METAL_M4_10C_SINGLE_BUFFER_CAPABILITY = FullKernelCapability(
   capability_id="apple.m4_10c.prefill.wmma_lds.single_buffer.v1", backend="Metal", arch="m4_10c",
   wave_size=_wave_size_for_arch("m4_10c"), max_lds_bytes=32768, vector_bytes=16,
@@ -146,6 +161,10 @@ _CAPABILITY_ROWS: dict[tuple[str, str], dict[str, "FullKernelCapability"]] = {
   ("CUDA", "sm120"): {
     "single_buffer": NV_SM120_SINGLE_BUFFER_CAPABILITY,
     "two_buffer_stage1": NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY,
+  },
+  ("NV", "sm_120"): {
+    "single_buffer": NV_SM_120_RUNTIME_SINGLE_BUFFER_CAPABILITY,
+    "two_buffer_stage1": NV_SM_120_RUNTIME_TWO_BUFFER_STAGE1_CAPABILITY,
   },
   ("Metal", "m4_10c"): {
     "single_buffer": METAL_M4_10C_SINGLE_BUFFER_CAPABILITY,
@@ -479,7 +498,7 @@ def admit_full_kernel_candidate_set(candidate_set:FullKernelCandidateSet) -> Adm
     role,m,n,k,backend,arch,wave_size=entry.exact_key
     admissions.append(admit_full_kernel_candidate(entry.payload,entry.canonical_identity,profile=full_kernel_workload(entry.payload).profile,role=role,
       shape=(m,n,k),target={"backend":backend,"arch":arch,"wave_size":wave_size},
-      capability=full_kernel_candidate_capability(entry.payload)))
+      capability=full_kernel_candidate_capability(entry.payload),device=backend))
   return AdmittedFullKernelCandidateSet(candidate_set,tuple(admissions))
 
 def full_kernel_candidate_set_from_legacy(payload:dict[str,Any],canonical_identity:str) -> FullKernelCandidateSet:
@@ -497,7 +516,7 @@ def full_kernel_candidate_set_from_legacy(payload:dict[str,Any],canonical_identi
 # row per backend, not a branch: a new backend is a new row, never new logic here.
 def _tensor_core_family_by_device() -> dict[str, Callable[[str], list]]:
   from tinygrad.codegen.opt import tc
-  return {"AMD": tc.get_amd, "CUDA": tc.get_cuda, "METAL": lambda arch: tc.metal}
+  return {"AMD": tc.get_amd, "CUDA": tc.get_cuda, "NV": tc.get_cuda, "METAL": lambda arch: tc.metal}
 
 def _resolve_tensor_core(device:str, arch:str, dtype_in, dtype_out):
   """Device-aware replacement for the old hardcoded `from tinygrad.codegen.opt.tc import amd_rdna3` import."""

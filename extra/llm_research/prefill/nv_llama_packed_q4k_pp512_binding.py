@@ -100,6 +100,13 @@ class LlamaPackedQ4KPP512Capture:
 
   def begin_trace(self) -> None: self.trace_epoch,self.cursor=self.trace_epoch+1,0
 
+  def produce(self, x:Tensor) -> Tensor:
+    """Research-only producer entry exposing the canonical Q8 record."""
+    if self.trace_epoch == 0: raise RuntimeError("begin_trace must establish a capture-local epoch before projection")
+    record=Tensor.empty(Q8_RECORD_BYTES//4,dtype=dtypes.uint32,device=x.device)
+    _, record=x.uop_program(record,fxn=lambda *_: self.asset.producer)
+    return record
+
   def project_pair(self,x:Tensor,gate_words:Tensor,up_words:Tensor,*,model_family:str,weight_type:str="Q4_K") -> tuple[Tensor,Tensor]:
     if self.trace_epoch == 0: raise RuntimeError("begin_trace must establish a capture-local epoch before projection")
     if self.cursor >= PAIRS_PER_MODEL: raise RuntimeError("llama packed Q4_K trace exceeded exact 36-pair census")
@@ -118,6 +125,32 @@ class LlamaPackedQ4KPP512Capture:
     up_words,record,up,workspace=up_words.uop_program(record,up,workspace,fxn=lambda *_:self.asset.main)
     up,workspace=up.uop_program(workspace,fxn=lambda *_:self.asset.fixup)
     return gate.reshape(M,N),up.reshape(M,N)
+
+  def project(self,x:Tensor,words:Tensor,*,model_family:str,role:str,weight_type:str="Q4_K") -> Tensor:
+    """Single-role adapter over the existing llama main/fixup ABI."""
+    if self.trace_epoch == 0: raise RuntimeError("begin_trace must establish a capture-local epoch before projection")
+    if self.cursor >= 2*PAIRS_PER_MODEL: raise RuntimeError("llama packed Q4_K trace exceeded exact 72-projection census")
+    if role not in ("ffn_gate", "ffn_up") or not supports(model_family=model_family,weight_type=weight_type,m=x.shape[0],n=N,k=x.shape[1],device=x.device):
+      raise ValueError("unsupported llama packed Q4_K single-role route")
+    if x.dtype != dtypes.float16 or words.dtype != dtypes.uint32: raise ValueError("llama packed Q4_K route requires fp16 activation and canonical uint32 weights")
+    self.cursor += 1
+    record=Tensor.empty(Q8_RECORD_BYTES//4,dtype=dtypes.uint32,device=x.device)
+    out=Tensor.empty(M*N,dtype=dtypes.float32,device=x.device)
+    workspace=Tensor.empty(SCRATCH_FLOATS,dtype=dtypes.float32,device=x.device)
+    _,record=x.uop_program(record,fxn=lambda *_:self.asset.producer)
+    words,record,out,workspace=words.uop_program(record,out,workspace,fxn=lambda *_:self.asset.main)
+    out,workspace=out.uop_program(workspace,fxn=lambda *_:self.asset.fixup)
+    return out.reshape(M,N)
+
+  def project_from_record(self, record:Tensor, words:Tensor, *, model_family:str, role:str, weight_type:str="Q4_K") -> Tensor:
+    """Research-only llama main/fixup consumer for an already-realized DS4 record."""
+    if self.trace_epoch == 0: raise RuntimeError("begin_trace must establish a capture-local epoch before projection")
+    if role not in ("ffn_gate", "ffn_up"): raise ValueError("unsupported llama Q4 role")
+    self.cursor += 1
+    out=Tensor.empty(M*N,dtype=dtypes.float32,device=words.device); workspace=Tensor.empty(SCRATCH_FLOATS,dtype=dtypes.float32,device=words.device)
+    words,record,out,workspace=words.uop_program(record,out,workspace,fxn=lambda *_:self.asset.main)
+    out,workspace=out.uop_program(workspace,fxn=lambda *_:self.asset.fixup)
+    return out.reshape(M,N)
 
   def project_pair_epilogue(self,x:Tensor,gate_words:Tensor,up_words:Tensor,*,model_family:str,weight_type:str="Q4_K") -> Tensor:
     gate,up=self.project_pair(x,gate_words,up_words,model_family=model_family,weight_type=weight_type)

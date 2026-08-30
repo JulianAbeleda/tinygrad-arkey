@@ -1,0 +1,4 @@
+#include "nv_pp512_flash_phase2_variants.cu"
+#include <cuda_runtime.h>
+#include <cstdio>
+int main(int ac,char**av){constexpr int N=512*32*128,KV=512*8*128;float*q,*o;half*k,*v;cudaMalloc(&q,N*4);cudaMalloc(&o,N*4+64);cudaMalloc(&k,KV*2);cudaMalloc(&v,KV*2);cudaMemset(q,0,N*4);cudaMemset(k,0,KV*2);cudaMemset(v,0,KV*2);cudaMemset(o,0,N*4+64);auto f=ac>1&&av[1][0]=='k'?nv_pp512_flash_phase2_kvstage:nv_pp512_flash_phase2_vstage;for(int i=0;i<3;i++)f<<<dim3(512,32),128>>>(q,k,v,o);cudaEvent_t a,b;cudaEventCreate(&a);cudaEventCreate(&b);cudaEventRecord(a);for(int i=0;i<20;i++)f<<<dim3(512,32),128>>>(q,k,v,o);cudaEventRecord(b);cudaEventSynchronize(b);float ms;cudaEventElapsedTime(&ms,a,b);printf("phase2=%s full_launch_us=%.3f per_layer_us=%.3f\n",ac>1?av[1]:"v",ms*1000/20,ms*1000/20/36);return 0;}

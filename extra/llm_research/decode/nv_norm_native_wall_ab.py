@@ -20,15 +20,20 @@ from extra.llm_research.decode.nv_shared_q8_progressive_qualification import _se
 SITES = ("attn", "ffn", "q", "k", "output")
 
 
-def _configure_native(model, sites: tuple[str, ...]) -> None:
+def _configure_native(model, sites: tuple[str, ...], enabled: bool = True) -> None:
+  from tinygrad.dtype import dtypes
   for block in model.blk:
-    if "attn" in sites: block.attn_norm._rmsnorm_native_promoted = True
-    if "ffn" in sites: block.ffn_norm._rmsnorm_native_promoted = True
+    if "attn" in sites:
+      block.attn_norm._rmsnorm_native_promoted = enabled
+      block.attn_norm._rmsnorm_native_output_dtype = dtypes.float16
+    if "ffn" in sites:
+      block.ffn_norm._rmsnorm_native_promoted = enabled
+      block.ffn_norm._rmsnorm_native_output_dtype = dtypes.float16
     if "q" in sites and getattr(block, "attn_q_norm", None) is not None:
-      block.attn_q_norm._rmsnorm_native_promoted = True
+      block.attn_q_norm._rmsnorm_native_promoted = enabled
     if "k" in sites and getattr(block, "attn_k_norm", None) is not None:
-      block.attn_k_norm._rmsnorm_native_promoted = True
-  if "output" in sites: model.output_norm._rmsnorm_native_promoted = True
+      block.attn_k_norm._rmsnorm_native_promoted = enabled
+  if "output" in sites: model.output_norm._rmsnorm_native_promoted = enabled
 
 
 def run(arm: str, sites: tuple[str, ...], model_path: str, depth: int, count: int,
@@ -37,7 +42,9 @@ def run(arm: str, sites: tuple[str, ...], model_path: str, depth: int, count: in
   model = _load(model_path, max_context)
   if arm == "candidate":
     _configure_native(model, sites)
-  elif arm != "control":
+  elif arm == "control":
+    _configure_native(model, sites, False)
+  else:
     raise ValueError(f"unknown arm {arm!r}")
   gen = model.generate(_prompt(model_path, depth), chunk_size=32, temperature=0.0)
   try:

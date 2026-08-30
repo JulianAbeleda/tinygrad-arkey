@@ -13,13 +13,28 @@ MAIN_GRID, FIXUP_GRID, BLOCK = (170, 1, 1), (384, 1, 1), (256, 1, 1)
 DYNAMIC_SHARED_BYTES, NV_RUNTIME_SHARED_BYTES = 57856, 1024
 PARTIAL_SLOTS = 340
 
+@dataclass(frozen=True)
+class Geometry:
+  owners: int = 170
+  total_work: int = 6144
+  partial_slots: int = 0
+  fixup_grid: int = 384
+  def __post_init__(self):
+    if self.partial_slots == 0: object.__setattr__(self, "partial_slots", 2*self.owners)
+  def validate(self):
+    if self.partial_slots != 2*self.owners or self.owners <= 0 or self.owners > self.total_work:
+      raise ValueError("invalid Q4 owner/slot geometry")
 
-def main_source() -> str:
+DEFAULT_GEOMETRY = Geometry()
+
+
+def main_source(geometry:Geometry=DEFAULT_GEOMETRY) -> str:
+  geometry.validate()
   src = lexical_src(SRC, True)
   src = src.replace("int ntx=(N+127)/128,mb=(tile/ntx)*128,nb=(tile%ntx)*128,blocks=K/256;",
                     "int ntx=96,mb=(tile/96)*128,nb=(tile%96)*128,blocks=16;")
   src = src.replace("row*K+blk*256", "row*4096+blk*256")
-  src = src.replace("total=(M/128)*(N/128)*(K/256),owners=min(170,total)", "total=6144,owners=170").replace("K/256", "16")
+  src = src.replace("total=(M/128)*(N/128)*(K/256),owners=min(170,total)", f"total={geometry.total_work},owners=min({geometry.owners},total)").replace("K/256", "16")
   src = src.replace("if(col<N) { unsigned raw=", "{ unsigned raw=").replace("w0=col<N?words[base]:0;", "w0=words[base];")
   src = src.replace("if(col<N) {", "{").replace("if(row<M) v=", "v=").replace("if(row<M) { int xm=", "{ int xm=")
   src = src.replace("if(row<M&&col<N) {", "{").replace("row*N+col", "row*12288+col")
@@ -40,38 +55,43 @@ class Provider:
   main: NVProgram
   fixup: NVProgram
   slotmap: np.ndarray
+  geometry: Geometry = DEFAULT_GEOMETRY
 
   def validate_buffers(self, out, partials, ids, words, q8, scales, sums, map_buffer) -> None:
-    expected = (M*N*4, PARTIAL_SLOTS*128*128*4, PARTIAL_SLOTS*4, N*(K//256)*36*4,
+    slots=self.geometry.partial_slots
+    expected = (M*N*4, slots*128*128*4, slots*4, N*(K//256)*36*4,
                 M*K, M*(K//32)*4, M*(K//32)*4, 384*2*4)
     actual = tuple(x.size for x in (out, partials, ids, words, q8, scales, sums, map_buffer))
     if any(got < need for got,need in zip(actual, expected)):
       raise ValueError(f"Q4 IMMA provider ABI mismatch: {actual=} expected_minimum={expected}")
 
   def launch(self, out, partials, ids, words, q8, scales, sums, map_buffer, *, wait=False):
+    if self.geometry.owners != int(self.geometry.owners) or self.slotmap.shape != (FIXUP_GRID[0], 2):
+      raise ValueError("Q4 geometry identity mismatch")
     self.validate_buffers(out, partials, ids, words, q8, scales, sums, map_buffer)
     main_t = self.main(out, partials, ids, words, q8, scales, sums, vals=(M,N,K),
-                       global_size=MAIN_GRID, local_size=BLOCK, wait=wait)
+                       global_size=(self.geometry.owners,1,1), local_size=BLOCK, wait=wait)
     fix_t = self.fixup(out, partials, map_buffer, vals=(M,N), global_size=FIXUP_GRID, local_size=BLOCK, wait=wait)
     return main_t, fix_t
 
 
-def compile_provider(dev) -> Provider:
+def compile_provider(dev, geometry:Geometry=DEFAULT_GEOMETRY) -> Provider:
+  geometry.validate()
   # Separate cubins are mandatory: combined entry-point ELF modules can corrupt
   # native dynamic-shared QMD state on sm_120.
   # v4 fully unrolls the two K128 panels and four K32 groups: 256 static
   # IMMA / 32 LDSM sites, full-real-qualified with no local spill traffic.
-  main_lib = NVRTCCompiler(dev.arch, ptx=False, cache_key="q4_imma_provider_main_v4").compile(main_source())
+  main_lib = NVRTCCompiler(dev.arch, ptx=False, cache_key=f"q4_imma_provider_main_v4_o{geometry.owners}").compile(main_source(geometry))
   fix_lib = NVRTCCompiler(dev.arch, ptx=False, cache_key="q4_imma_provider_fix_v1").compile(fixup_source())
   main = NVProgram(dev, "q4k_imma_stream", main_lib, shared_mem=DYNAMIC_SHARED_BYTES+NV_RUNTIME_SHARED_BYTES)
   fixup = NVProgram(dev, "q4k_imma_fixup", fix_lib)
-  return Provider(main, fixup, production_slotmap())
+  return Provider(main, fixup, production_slotmap(geometry.owners, geometry.total_work, geometry.fixup_grid), geometry)
 
 
 def provider_programs(provider:Provider):
   """Return finalized, TinyJit-capturable PROGRAM UOps for the fixed ABI."""
   from extra.llm_research.prefill.nv_native_program_uop import native_nv_program
-  main = native_nv_program("q4k_imma_stream", provider.main.lib, global_size=MAIN_GRID, local_size=BLOCK,
+  main = native_nv_program("q4k_imma_stream", provider.main.lib, global_size=(provider.geometry.owners,1,1), local_size=BLOCK,
     globals=tuple(range(7)), outs=(0,1,2), ins=(3,4,5,6), vals=(M,N,K),
     shared_mem=DYNAMIC_SHARED_BYTES+NV_RUNTIME_SHARED_BYTES)
   # out is both an input (direct tiles already written by main) and output.
