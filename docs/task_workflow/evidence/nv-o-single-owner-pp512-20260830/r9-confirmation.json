@@ -1,0 +1,25 @@
+{
+  "schema": "tinygrad.nv_o_single_owner_pp512_r9_confirmation.v1",
+  "status": "PASS",
+  "token": 198,
+  "finite": true,
+  "r3_r9_logits_exact": true,
+  "samples_ms": [
+    35.152125,
+    35.049413,
+    35.002284,
+    35.072877,
+    35.112001,
+    35.161874,
+    35.222147,
+    35.205887,
+    35.245741
+  ],
+  "median_ms": 35.152125,
+  "minimum_ms": 35.002284,
+  "median_tok_s": 14565.26454659569,
+  "llama_median_ms": 35.019399,
+  "remaining_gap_ms": 0.13272599999999812,
+  "remaining_gap_pct": 0.37900707547835477,
+  "gap_status": "NEAR_PARITY_NOT_CLOSED"
+}
