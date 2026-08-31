@@ -118,11 +118,10 @@ def q6_streamk_owner_kernel(partials,tile_ids,blocks,b,dB,total_k_blocks=48,owne
        b[(phase_base+i*4+3)*512+mt*128+qcol].cast(dtypes.uint32).bitwise_and(255).lshift(24)),gate=(lane<16)) for i in range(32))
    qscales=tuple(ydst[qcol*36+i].store(dB[(abs_blk*8+kphase*4+i)*512+mt*128+qcol].bitcast(dtypes.uint32),gate=(lane<16)) for i in range(4))
    ready_y=UOp.barrier(UOp.group(*qwords,*qscales))
-   phase_sx=sh.after(ready_q6).after(update) if update is not None else sh.after(ready_q6)
-   phase_sy=shq.after(ready_y).after(update) if update is not None else shq.after(ready_y)
    def mma(cg,n,g,dep):
-    av=native_fragment_x2(phase_sx,(band*32+n*16+(lane&15))*76+(kphase*8+g)*4).bitcast(dtypes.char.vec(8))
-    lcol=cg*16+warp_phase*8+lr; qv=phase_sy[lcol*36+4+g*4+lc]
+    sx=sh.after(ready_q6).after(dep) if dep is not None else sh.after(ready_q6); sy=shq.after(ready_y).after(dep) if dep is not None else shq.after(ready_y)
+    av=native_fragment_x2(sx,(band*32+n*16+(lane&15))*76+(kphase*8+g)*4).bitcast(dtypes.char.vec(8))
+    lcol=cg*16+warp_phase*8+lr; qv=sy[lcol*36+4+g*4+lc]
     bv=UOp(Ops.STACK,dtypes.char.vec(4),tuple(qv.rshift(8*q).bitwise_and(255).cast(dtypes.char) for q in range(4)))
     axes=(tuple((900+i,2) for i in range(3)),tuple((910+i,2) for i in range(2)),tuple((920+i,2) for i in range(2)))
     return UOp(Ops.WMMA,dtypes.int.vec(4),(av,bv,UOp.const(dtypes.int.vec(4),0)),("WMMA_8_16_16_signed_char_int",(8,16,16),dtypes.char,dtypes.int,"NV",32,axes,()))
@@ -131,11 +130,12 @@ def q6_streamk_owner_kernel(partials,tile_ids,blocks,b,dB,total_k_blocks=48,owne
      cs=[mma(cg,n,g,update) for g in range(8)]
      for r in range(4):
       ai=cg*8+n*4+r; lrow=band*32+n*16+lr+8*(r>>1); lcol=cg*16+warp_phase*8+2*lc+(r&1)
-      wd=phase_sx[lrow*76+64].bitwise_and(0xffff).cast(dtypes.uint16).bitcast(dtypes.half).cast(dtypes.float32); term=UOp.const(dtypes.float32,0.0)
+      sx=sh.after(ready_q6).after(update) if update is not None else sh.after(ready_q6); sy=shq.after(ready_y).after(update) if update is not None else shq.after(ready_y)
+      wd=sx[lrow*76+64].bitwise_and(0xffff).cast(dtypes.uint16).bitcast(dtypes.half).cast(dtypes.float32); term=UOp.const(dtypes.float32,0.0)
       for p in range(4):
-       sp=kphase*4+p; sw=phase_sx[lrow*76+65+sp//2]
+       sp=kphase*4+p; sw=sx[lrow*76+65+sp//2]
        s0=sw.rshift((2*sp%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.float32); s1=sw.rshift(((2*sp+1)%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.float32)
-       term=term+wd*phase_sy[lcol*36+p].bitcast(dtypes.float32)*(s0*cs[2*p].gep(r).cast(dtypes.float32)+s1*cs[2*p+1].gep(r).cast(dtypes.float32))
+       term=term+wd*sy[lcol*36+p].bitcast(dtypes.float32)*(s0*cs[2*p].gep(r).cast(dtypes.float32)+s1*cs[2*p+1].gep(r).cast(dtypes.float32))
       carrier=acc[ai].after(blk if update is None else update); outidx=owner*2*16384+lrow*128+lcol
       flush=partials[outidx].store(carrier[0],gate=boundary)
       update=carrier.after(flush)[0].store(boundary.where(term,carrier[0]+term))
