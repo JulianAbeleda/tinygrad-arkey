@@ -167,3 +167,15 @@ Explicitly sequencing the two bodies while aliasing their register allocation
 still spills 4,568 bytes/thread and takes approximately 8.82 ms. That experiment
 is rejected. The required next body is one dynamic 36-37-unit loop with a single
 accumulator bank, an in-loop tile-boundary flush/reset, and one final write.
+
+## Generated owner qualification
+
+The isolated one-bank owner kernel is now qualified against the exact 340-slot
+producer by `extra/llm_research/prefill/bench_nv_generated_q6k_streamk_owner.py`.
+With canonical Q6 `d=0.03125` inputs at `M=512,N=4096,K=12288`, all 5,570,560
+FP32 partial values and all 340 tile IDs match exactly (`max_abs=0`). The route
+is therefore numerically correct but not promoted for performance: measured
+owner-main minimum is 689.157 us (median 715.477 us), versus llama main 201.216
+us and the 5% gate 211.277 us. Resources are 255 registers/thread, 58,880
+shared bytes, and 984 local bytes/thread. The next optimization target is the
+single-bank owner's staging/occupancy and memory path; correctness is closed.

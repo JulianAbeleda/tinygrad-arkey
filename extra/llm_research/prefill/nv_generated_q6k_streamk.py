@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from tinygrad import dtypes
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
 from extra.llm_research.prefill.nv_native_fragment_k16_gate import q6_packed_cta_kernel
+from extra.llm_research.prefill.nv_generated_q6k_streamk_slots import q6_streamk_owner_kernel
 
 OWNERS, SLOTS, ACTIVE_SLOTS, TILES, K_BLOCKS = 170, 340, 294, 128, 48
 TILE_M, TILE_N = 4, 32
@@ -84,21 +85,8 @@ def generated_q6k_streamk_owner_partials(partials, tile_ids, blocks, b, dB):
   optional second segment. A later writeback/fixup pass decides direct output
   versus reduction ownership; no inactive fixed-length MMA loop is emitted.
   """
-  owner=UOp.special(OWNERS,"gidx0"); total=UOp.const(dtypes.int32,TILES*K_BLOCKS)
-  lo=(owner*total)//OWNERS; hi=((owner+1)*total)//OWNERS
-  tile0=lo//K_BLOCKS; tile0_stop=(tile0+1)*K_BLOCKS
-  first_stop=(hi<tile0_stop).where(hi,tile0_stop); first_len=first_stop-lo
-  tile1=first_stop//K_BLOCKS; second_len=hi-first_stop
-  mt0,nt0=tile0//TILE_N,tile0%TILE_N; mt1,nt1=tile1//TILE_N,tile1%TILE_N
-  out0=partials.index(owner*2*16384,ptr=True); out1=partials.index((owner*2+1)*16384,ptr=True)
-  rows0=blocks.index(nt0*128*K_BLOCKS*105,ptr=True); rows1=blocks.index(nt1*128*K_BLOCKS*105,ptr=True)
-  body0=q6_packed_cta_kernel(out0,rows0,b,dB,K_BLOCKS,col_groups=8,block_start=lo%K_BLOCKS,
-    segment_blocks=first_len,total_k_blocks=K_BLOCKS,activation_stride=512,activation_offset=mt0*128,allocation_base=0,axis_base=0)
-  body1=q6_packed_cta_kernel(out1,rows1,b,dB,K_BLOCKS,col_groups=8,block_start=UOp.const(dtypes.int32,0),
-    segment_blocks=second_len,total_k_blocks=K_BLOCKS,activation_stride=512,activation_offset=mt1*128,
-    allocation_base=0,register_base=10,axis_base=2)
-  meta=UOp.group(tile_ids[owner*2].store(tile0),tile_ids[owner*2+1].store((second_len>0).where(tile1,-1)))
-  return UOp.sink(*(body0.src+body1.src+meta.src),arg=KernelInfo(name="nv_generated_q6k_streamk_owner_partials",opts_to_apply=()))
+  return q6_streamk_owner_kernel(partials,tile_ids,blocks,b,dB,total_k_blocks=K_BLOCKS,owners=OWNERS,
+    kernel_name="nv_generated_q6k_streamk_owner_partials")
 
 __all__=["OWNERS","SLOTS","ACTIVE_SLOTS","TILES","K_BLOCKS","OwnerSegment","owner_bounds","owner_work_units","streamk_segments",
          "tile_coordinates","owner_metadata","fixup_slot_map","generated_owner_boundary_gate","generated_q6k_streamk_owner_partials"]

@@ -82,4 +82,70 @@ def q6_streamk_slot_kernel(partials, tile_ids, descriptors, blocks, b, dB,
   stores.append(tile_ids[slot].store(valid.where(tile,UOp.const(dtypes.int32,-1))))
   return UOp.sink(*stores,arg=KernelInfo(name="nv_generated_q6k_streamk_slots",opts_to_apply=()))
 
-__all__=["q6_streamk_slot_kernel"]
+def q6_streamk_owner_kernel(partials,tile_ids,blocks,b,dB,total_k_blocks=48,owners=170,
+                            kernel_name="nv_generated_q6k_streamk_owner"):
+  """One-bank 170-owner Q6_K Stream-K main for M512,N4096,K12288."""
+  owner=UOp.special(owners,"gidx0"); lid=UOp.special(256,"lidx0")
+  warp,lane=lid//32,lid%32; lr,lc=lane>>2,lane&3; band,phase=warp>>1,warp&1
+  total=UOp.const(dtypes.int32,128*total_k_blocks); lo=(owner*total)//owners; hi=((owner+1)*total)//owners
+  blk=UOp.range(hi-lo,50,axis_type=AxisType.REDUCE); linear=lo+blk; tile=linear//total_k_blocks; abs_blk=linear%total_k_blocks
+  previous=(linear-1)//total_k_blocks; transition=(blk>0)&(tile!=previous); mt,nt=tile//32,tile%32
+  q8_base=128*76; arena=UOp.placeholder((q8_base+128*36,),dtypes.uint32,550,addrspace=AddrSpace.LOCAL).replace(
+    tag=RuntimeLocalAllocation((q8_base+128*36)*dtypes.uint32.itemsize))
+  sh,shq=arena,arena[q8_base:]
+  sr=UOp.range(16,51,axis_type=AxisType.LOOP); srow=warp+8*sr; grow=nt*128+srow; hbase=(grow*total_k_blocks+abs_blk)*105; txi=lane
+  ql=blocks[hbase+2*txi].cast(dtypes.uint32).bitwise_or(blocks[hbase+2*txi+1].cast(dtypes.uint32).lshift(16))
+  qhi=(txi//16)*8+txi%8; qh=blocks[hbase+64+2*qhi].cast(dtypes.uint32).bitwise_or(blocks[hbase+64+2*qhi+1].cast(dtypes.uint32).lshift(16))
+  qshift=txi.bitwise_and(8)>>2
+  q0=ql.bitwise_and(0x0f0f0f0f).bitwise_or(qh.rshift(qshift).lshift(4).bitwise_and(0x30303030))
+  q1=ql.rshift(4).bitwise_and(0x0f0f0f0f).bitwise_or(qh.rshift(qshift).bitwise_and(0x30303030)); kq0=2*txi-txi%16
+  staged=UOp.group(sh[srow*76+kq0].store(packed_i8_sub(q0,UOp.const(dtypes.uint32,0x20202020))),
+    sh[srow*76+kq0+16].store(packed_i8_sub(q1,UOp.const(dtypes.uint32,0x20202020))),
+    sh[srow*76+64].store(blocks[hbase+104].cast(dtypes.uint32),gate=(lane<1)),
+    *(sh[srow*76+65+i].store(blocks[hbase+96+2*i].cast(dtypes.uint32).bitwise_or(
+      blocks[hbase+97+2*i].cast(dtypes.uint32).lshift(16)),gate=((lane>=i)&(lane<i+1))) for i in range(4))).end(sr)
+  ready_q6=UOp.barrier(UOp.group(staged)); qcol=warp*16+(lane&15); warp_phase=phase
+  acc=[UOp.placeholder((1,),dtypes.float32,800+i,addrspace=AddrSpace.REG) for i in range(64)]
+  init=UOp.group(*(acc[i][0].store(0.0) for i in range(64))); acc=[x.after(init) for x in acc]; update=None
+  for kphase in range(2):
+   boundary=transition if kphase==0 else UOp.const(dtypes.bool,False)
+   phase_base=abs_blk*256+kphase*128; phase_gate=UOp.barrier(UOp.group(update)) if update is not None else None
+   ydst=shq.after(phase_gate) if phase_gate is not None else shq
+   qwords=tuple(ydst[qcol*36+4+i].store(
+     b[(phase_base+i*4+0)*512+mt*128+qcol].cast(dtypes.uint32).bitwise_and(255).bitwise_or(
+       b[(phase_base+i*4+1)*512+mt*128+qcol].cast(dtypes.uint32).bitwise_and(255).lshift(8)).bitwise_or(
+       b[(phase_base+i*4+2)*512+mt*128+qcol].cast(dtypes.uint32).bitwise_and(255).lshift(16)).bitwise_or(
+       b[(phase_base+i*4+3)*512+mt*128+qcol].cast(dtypes.uint32).bitwise_and(255).lshift(24)),gate=(lane<16)) for i in range(32))
+   qscales=tuple(ydst[qcol*36+i].store(dB[(abs_blk*8+kphase*4+i)*512+mt*128+qcol].bitcast(dtypes.uint32),gate=(lane<16)) for i in range(4))
+   ready_y=UOp.barrier(UOp.group(*qwords,*qscales))
+   def mma(cg,n,g,dep):
+    sx=sh.after(ready_q6).after(dep) if dep is not None else sh.after(ready_q6); sy=shq.after(ready_y).after(dep) if dep is not None else shq.after(ready_y)
+    av=native_fragment_x2(sx,(band*32+n*16+(lane&15))*76+(kphase*8+g)*4).bitcast(dtypes.char.vec(8))
+    lcol=cg*16+warp_phase*8+lr; qv=sy[lcol*36+4+g*4+lc]
+    bv=UOp(Ops.STACK,dtypes.char.vec(4),tuple(qv.rshift(8*q).bitwise_and(255).cast(dtypes.char) for q in range(4)))
+    axes=(tuple((900+i,2) for i in range(3)),tuple((910+i,2) for i in range(2)),tuple((920+i,2) for i in range(2)))
+    return UOp(Ops.WMMA,dtypes.int.vec(4),(av,bv,UOp.const(dtypes.int.vec(4),0)),("WMMA_8_16_16_signed_char_int",(8,16,16),dtypes.char,dtypes.int,"NV",32,axes,()))
+   for cg in range(8):
+    for n in range(2):
+     cs=[mma(cg,n,g,update) for g in range(8)]
+     for r in range(4):
+      ai=cg*8+n*4+r; lrow=band*32+n*16+lr+8*(r>>1); lcol=cg*16+warp_phase*8+2*lc+(r&1)
+      sx=sh.after(ready_q6).after(update) if update is not None else sh.after(ready_q6); sy=shq.after(ready_y).after(update) if update is not None else shq.after(ready_y)
+      wd=sx[lrow*76+64].bitwise_and(0xffff).cast(dtypes.uint16).bitcast(dtypes.half).cast(dtypes.float32); term=UOp.const(dtypes.float32,0.0)
+      for p in range(4):
+       sp=kphase*4+p; sw=sx[lrow*76+65+sp//2]
+       s0=sw.rshift((2*sp%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.float32); s1=sw.rshift(((2*sp+1)%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.float32)
+       term=term+wd*sy[lcol*36+p].bitcast(dtypes.float32)*(s0*cs[2*p].gep(r).cast(dtypes.float32)+s1*cs[2*p+1].gep(r).cast(dtypes.float32))
+      carrier=acc[ai].after(blk if update is None else update); outidx=owner*2*16384+lrow*128+lcol
+      flush=partials[outidx].store(carrier[0],gate=boundary)
+      update=carrier.after(flush)[0].store(boundary.where(term,carrier[0]+term))
+  done=update.end(blk); crossed=(lo//total_k_blocks)!=((hi-1)//total_k_blocks); stores=[]
+  for cg in range(8):
+   for n in range(2):
+    for r in range(4):
+     ai=cg*8+n*4+r; lrow=band*32+n*16+lr+8*(r>>1); lcol=cg*16+phase*8+2*lc+(r&1)
+     stores.append(partials[(owner*2+crossed.cast(dtypes.int32))*16384+lrow*128+lcol].store(acc[ai].after(done)[0]))
+  stores.extend((tile_ids[owner*2].store(lo//total_k_blocks),tile_ids[owner*2+1].store(crossed.where((hi-1)//total_k_blocks,-1))))
+  return UOp.sink(*stores,arg=KernelInfo(name=kernel_name,opts_to_apply=()))
+
+__all__=["q6_streamk_slot_kernel","q6_streamk_owner_kernel"]
