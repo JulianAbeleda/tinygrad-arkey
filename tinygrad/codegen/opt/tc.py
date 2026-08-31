@@ -138,7 +138,7 @@ cuda_8168_tf32 = [TensorCore(dims=(8,16,8), threads=32, elements_per_thread=(4,2
            (('r0', 'r1', 'u0', 'l0', 'l1'), ('u1', 'r2'), ('l2', 'l3', 'l4'))))]
 cuda_sm75: list[TensorCore] = cuda_8168_f16
 cuda_sm80: list[TensorCore] = cuda_81616 + cuda_8168_f16 + cuda_8168_tf32
-cuda_81616_i8 = [TensorCore(dims=(8,16,16), threads=32, elements_per_thread=(8,4,4), dtype_in=dtypes.char, dtype_out=dtypes.int,
+cuda_81616_i8 = [TensorCore(dims=(8,16,16), threads=32, elements_per_thread=(8,4,2), dtype_in=dtypes.char, dtype_out=dtypes.int,
   opts=("u0","l0","l0","l1","l1","l1","u1"),
   swizzle=((('r1', 'r2', 'l2', 'l3', 'l4'), ('u1', 'r3'), ('l0', 'l1', 'u0', 'r0')),
            (('r1', 'r2', 'u0', 'l0', 'l1'), ('r0', 'r3'), ('l2', 'l3', 'l4', 'u1'))))]
