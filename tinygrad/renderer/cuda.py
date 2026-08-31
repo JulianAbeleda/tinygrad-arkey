@@ -2,7 +2,7 @@ import os
 
 from tinygrad.codegen.opt import tc
 from tinygrad.dtype import DType, dtypes
-from tinygrad.helpers import NV_FLASH_LOAD_SCHEDULE, Target, prod
+from tinygrad.helpers import NV_FLASH_LOAD_SCHEDULE, Target, dedup, prod
 from tinygrad.renderer.cstyle import CStyleLanguage, base_rewrite, create_non_native_float_pats, uops_to_dtypes, wmma_args, _install_native_attention_bindings
 from tinygrad.uop.ops import Ops, PatternMatcher, UPat, UOp
 
@@ -217,6 +217,9 @@ class CUDARenderer(CStyleLanguage):
     arg="({0}) + float({1}.x) * float({2}.x) + float({1}.y) * float({2}.y)"))
   int8x4_dot = staticmethod(lambda acc, a, b: UOp(Ops.CUSTOMI, dtypes.int32, (acc, a, b),
     arg="__dp4a((int){1}, (int){2}, {0})"))
+  native_fragment_x4 = staticmethod(lambda buffer,index: UOp(Ops.CUSTOMI, dtypes.uint32.vec(4), (buffer,index),
+    arg="tg_ldmatrix_x4((const void*)({0}+{1}))"))
+  native_fragment_bitcast = staticmethod(lambda value,dtype: UOp(Ops.CUSTOMI,dtype,(value,),arg="tg_bitcast<signed_char16>({0})"))
   code_for_op = { **CStyleLanguage.code_for_op,
     Ops.TRUNC: lambda x,dtype: f"htrunc({x})" if dtype in (dtypes.half, dtypes.bfloat16) else f"trunc({x})",
     Ops.SIN: lambda x,dtype: f"hsin({x})" if dtype in (dtypes.half, dtypes.bfloat16) else f"sin({x})",
@@ -260,6 +263,11 @@ class CUDARenderer(CStyleLanguage):
   def render_kernel(self, function_name, kernel, bufs, uops, prefix=None):
     prefix = ["#define INFINITY (__int_as_float(0x7f800000))", "#define NAN (__int_as_float(0x7fffffff))",
               "template <class T, class F> __device__ __forceinline__ T tg_bitcast(F v) { union U { F f; T t; }; U u; u.f = v; return u.t; }"]
+    if any(u.op is Ops.CUSTOMI and isinstance(u.arg,str) and "tg_ldmatrix_x4(" in u.arg for u in uops):
+      prefix.append('''__device__ __forceinline__ uint4 tg_ldmatrix_x4(const void *p) {
+  uint4 r; asm volatile("ldmatrix.sync.aligned.m8n8.x4.b16 {%0,%1,%2,%3},[%4];"
+    : "=r"(r.x),"=r"(r.y),"=r"(r.z),"=r"(r.w) : "l"(p)); return r;
+}''')
     if os.environ.get("NV_SPLIT_PHASE", "") not in ("", "0"):
       kernel = _nv_pdl_body_split_phase(function_name, kernel)
     else:
@@ -268,7 +276,11 @@ class CUDARenderer(CStyleLanguage):
     # (e.g. an fp16 KV cache stored from fp32 values) previously missed the header include and rendered
     # `half` undefined in the signature (NVRTC compile error). Body uops drive vector-prefix emission, so
     # keep that list first and append the param dtypes; scalar params are no-ops for both loops below.
-    used_dtypes = [*uops_to_dtypes(uops), *[u.dtype for _, (u, _) in bufs]]
+    wmma_vector_dtypes=[]
+    for _,_,dtype_in,dtype_out,_,_,upcast_axes,_ in wmma_args(uops):
+      sizes=[prod(size for _,size in axes) for axes in upcast_axes]
+      wmma_vector_dtypes += [dtype.vec(size) for dtype,size in zip((dtype_in,dtype_in,dtype_out),sizes)]
+    used_dtypes = dedup([*uops_to_dtypes(uops), *wmma_vector_dtypes, *[u.dtype for _, (u, _) in bufs]])
     if any(dt.scalar() in dtypes.fp8s for dt in used_dtypes): prefix.append("#include <cuda_fp8.h>")
     if any(dt.scalar() == dtypes.half for dt in used_dtypes): prefix.append("#include <cuda_fp16.h>")
     if any(dt.scalar() == dtypes.bfloat16 for dt in used_dtypes): prefix.append("#include <cuda_bf16.h>")

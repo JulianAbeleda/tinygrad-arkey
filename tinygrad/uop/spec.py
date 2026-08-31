@@ -165,7 +165,8 @@ def validate_state_loop_write(x:UOp):
 def validate_state_reload_gep(gep:UOp, reload:UOp):
   """Permit scalar lanes from the typed generic reload carrier only."""
   if reload.op is Ops.CUSTOMI:
-    return isinstance(reload.arg, tuple) and reload.arg[:1] == ("state_reload_v1",) and validate_state_transfer(reload) and validate_scalar_gep(gep, reload)
+    if not (isinstance(reload.arg, tuple) and reload.arg[:1] == ("state_reload_v1",)): return None
+    return validate_state_transfer(reload) and validate_scalar_gep(gep, reload)
   if reload.op is not Ops.STACK or not (isinstance(reload.tag, tuple) and len(reload.tag) == 2 and reload.tag[0] == "state_reload_v1"):
     return False
   handle=reload.tag[1]
@@ -272,6 +273,10 @@ spec_shared = PatternMatcher([
   # Generic phase-state reloads are typed carriers. Their vector lanes may be
   # projected without teaching consumers any scheduler or backend-specific ABI.
   (UPat(Ops.CUSTOMI, name="reload").f(Ops.GEP, name="gep"), validate_state_reload_gep),
+  # Renderer capabilities may return native vector register tuples (for
+  # example one four-register tensor-core fragment load). Lane projection has
+  # the same backend-independent type/bounds contract as WMMA results.
+  (UPat(Ops.CUSTOMI, name="value").f(Ops.GEP, name="gep"), lambda gep,value: validate_scalar_gep(gep,value)),
 ])
 
 # these ops can exist in tensor but not programs. example: movement

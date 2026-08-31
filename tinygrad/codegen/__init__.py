@@ -28,6 +28,7 @@ from tinygrad.codegen.late.fdot2 import pm_fdot2, line_lower_fdot2
 from tinygrad.codegen.late.warp_reduce import pm_warp_reduce, pm_lower_warp_shfl_xor, pm_lower_warp_bpermute
 from tinygrad.codegen.late.flash_decode_intrinsics import pm_lower_flash_decode_intrinsics
 from tinygrad.codegen.late.int8_dot import pm_lower_int8x4_dot
+from tinygrad.codegen.late.native_fragment import pm_lower_native_fragment
 from tinygrad.codegen.plan import PLAN_GATES, observed_gate_values  # noqa: F401  (PLAN_GATES re-exported for callers)
 from tinygrad.codegen.opt.postrange import apply_opts
 from tinygrad.codegen.late.gater import pm_move_gates_from_index
@@ -117,6 +118,7 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   # identical pipeline position the old inline AMD strings occupied.
   ast = graph_rewrite(ast, pm_lower_flash_decode_intrinsics, ctx=ren, name="lower flash_decode intrinsics")
   ast = graph_rewrite(ast, pm_lower_int8x4_dot, ctx=ren, name="lower int8x4 dot")
+  ast = graph_rewrite(ast, pm_lower_native_fragment, ctx=ren, name="lower native fragments")
   if (_u:=getenv("SCHED_UNROLL")) > 1 and ren.target.device == "AMD":
     # recurrence-aware loop-unroll primitive (default-off codegen scheduling capability)
     ast = unroll_recurrence(ast, _u)
@@ -531,6 +533,7 @@ def do_to_program(ast:UOp, renderer:Renderer) -> UOp:
   elif ast.op is Ops.SINK:
     assert isinstance(ast.arg, KernelInfo), "requires KernelInfo on arg to to_program"
     full_sink = full_rewrite_to_sink(ast, renderer, optimize=ast.tag is None)
+    full_sink = graph_rewrite(full_sink, pm_lower_native_fragment, ctx=renderer, name="lower materialized native fragments")
     if __import__('os').getenv('NV_F2_POST_CENSUS'):
       ss=[{'id':id(u),'name':str(u.arg),'dtype':str(u.dtype),'op':str(u.op)} for u in full_sink.toposort() if u.op is Ops.SPECIAL]
       print('NV_F2_POST_CENSUS '+__import__('json').dumps(ss, sort_keys=True))

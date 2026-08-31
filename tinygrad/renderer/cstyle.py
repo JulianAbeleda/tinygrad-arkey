@@ -86,6 +86,8 @@ base_rewrite = PatternMatcher([
 
   # alu/gep
   (UPat(Ops.WMMA, name="x"), lambda ctx,x: f"__{x.arg[0]}({ctx[x.src[0]]}, {ctx[x.src[1]]}, {ctx[x.src[2]]})"),
+  (UPat(Ops.GEP, src=(UPat(Ops.CUSTOMI, name="value"),), name="x"),
+   lambda ctx,x,value: f"({ctx[value]}).{_nms[x.arg[0]]}" if len(x.arg)==1 and value.dtype.count <= len(_nms) else None),
   (UPat(GroupOp.ALU, name="x"), lambda ctx,x: ctx.code_for_op[x.op](
     *([strip_parens(ctx[v]) if v.op == x.op and x.op in {Ops.ADD, Ops.MUL, Ops.XOR, Ops.OR, Ops.AND} else ctx[v] for v in x.src]), x.dtype)),
 
@@ -268,7 +270,7 @@ def uops_to_dtypes(uops:list[UOp]) -> list[DType]:
   for u in uops:
     if u.addrspace in (AddrSpace.REG, None) and u.dtype != dtypes.void and u._shape is not None and (key:=(u.dtype, u.max_numel())) not in seen:
       # TODO: this eventually needs to be removed
-      ret.append(u.dtype.vec(u.max_numel()))
+      ret.append(u.dtype if u.dtype.count > 1 else u.dtype.vec(u.max_numel()))
       seen.add(key)
   return ret
 
@@ -459,8 +461,8 @@ class CStyleLanguage(Renderer):
       # verified rather than assumed: extra/llm_research/decode/decode_codegen_identity_check.py compiles the real decode
       # graph both ways and compares code-object sha256 for both decode-admitted geometries (8B Hq=32 and
       # 14B Hq=40) -- byte-identical. Re-run it if you touch this predicate.
-      customi_inline = u.op is not Ops.CUSTOMI or not (getenv("PREFILL_SOFTMAX_REDUCE_FUSE", 1) and
-                                                      u.dtype is dtypes.float and child_count[u] > 1)
+      customi_inline = u.op is not Ops.CUSTOMI or not (child_count[u] > 1 and (u.dtype.count > 1 or
+        (getenv("PREFILL_SOFTMAX_REDUCE_FUSE", 1) and u.dtype is dtypes.float)))
       if (u.op is not Ops.CAST or u.dtype.vcount == 1) and ((u.op in {Ops.CONST, Ops.GEP, Ops.INDEX, Ops.SHRINK, Ops.CUSTOMI} and customi_inline) or \
         (u.op is Ops.LOAD and u.src[0].addrspace == AddrSpace.REG) or \
         (u.op is Ops.CAST and u.addrspace in (AddrSpace.GLOBAL, AddrSpace.LOCAL)) or \
