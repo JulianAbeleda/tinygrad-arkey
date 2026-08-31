@@ -4,6 +4,17 @@ import struct
 from tinygrad import Tensor,dtypes,Device
 from tinygrad.codegen.late.native_fragment import native_fragment_x2,packed_i8_sub
 from tinygrad.uop.ops import AxisType,KernelInfo,Ops,UOp
+
+def _fragment_x2_i8(buffer, native_index, scalar_index, style:str):
+ """Return the exact eight-byte MMA-A carrier through native or scalar LDS."""
+ if style == "native": return native_fragment_x2(buffer,native_index).bitcast(dtypes.char.vec(8))
+ if style == "scalar":
+  # ldmatrix.x2 takes row addresses from lanes 0..15, then redistributes two
+  # words to every lane.  The destination ownership is (row,word)=(lane>>2,
+  # lane&3) in matrix 0 and the same word in row+8 in matrix 1.
+  words=(buffer[scalar_index],buffer[scalar_index+32])
+  return UOp(Ops.STACK,dtypes.char.vec(8),tuple(words[q//4].rshift((q%4)*8).bitwise_and(255).cast(dtypes.char) for q in range(8)))
+ raise ValueError(f"unknown fragment load style {style!r}")
 def kernel(out, a, b):
  lane=UOp.special(32,"lidx0"); sh=UOp.placeholder((64,),dtypes.uint32,20,addrspace=__import__('tinygrad.dtype',fromlist=['AddrSpace']).AddrSpace.LOCAL)
  ready=UOp.barrier(UOp.group(*(sh[lane+32*i].store(a[lane+32*i]) for i in range(2))))
@@ -92,9 +103,17 @@ def q6_packed_two_k16_kernel(out, dot0, dot1, blocks, b0, b1, dB):
   writes += [dot0[idx].store(z0),dot1[idx].store(z1),out[idx].store(value)]
  return UOp.sink(*writes,arg=KernelInfo(name='nv_native_fragment_q6_packed_two_k16',opts_to_apply=()))
 
-def q6_packed_k256_kernel(out, dot, blocks, b, dB):
- """Full one-block Q6_K K=256 gate, unrolled as sixteen K16 MMAs."""
- lane=UOp.special(32,"lidx0"); lr,lc=lane>>2,lane&3
+def q6_packed_k256_kernel(out, dot, blocks, b, dB, *, fragment_load:str="native", replicas:int=1):
+ """Full one-block Q6_K K=256 gate, unrolled as sixteen K16 MMAs.
+
+ ``scalar`` is the apples-to-apples control for the native x2 fragment load:
+ it reads the same two adjacent shared words into the same eight-byte WMMA-A
+ carrier.  ``replicas`` only gives the timing gate enough independent CTAs to
+ rise above launch latency; every CTA executes the identical K256 body.
+ """
+ if fragment_load not in ("native","scalar"): raise ValueError("fragment_load must be native or scalar")
+ if replicas < 1: raise ValueError("replicas must be positive")
+ lane=UOp.special(32,"lidx0"); bid=UOp.special(replicas,"gidx0") if replicas > 1 else UOp.const(dtypes.int32,0); lr,lc=lane>>2,lane&3
  def byte(off): return blocks[off//2].cast(dtypes.uint32).rshift((off%2)*8).bitwise_and(255)
  def group(g):
   sh=UOp.placeholder((64,),dtypes.uint32,100+g,addrspace=__import__('tinygrad.dtype',fromlist=['AddrSpace']).AddrSpace.LOCAL)
@@ -106,7 +125,8 @@ def q6_packed_k256_kernel(out, dot, blocks, b, dB):
     vals.append(lo.rshift(4 if g%8>=4 else 0).bitwise_and(15).bitwise_or(hi.rshift(qh_shift).bitwise_and(3).lshift(4)).alu(
       Ops.SUB,UOp.const(dtypes.uint32,32)).cast(dtypes.char))
    stores.append(sh[z].store(UOp(Ops.STACK,dtypes.char.vec(4),tuple(vals)).bitcast(dtypes.uint32)))
-  ready=UOp.barrier(UOp.group(*stores)); av=native_fragment_x2(sh.after(ready),(lane&15)*4+(lane>>4)*2).bitcast(dtypes.char.vec(8))
+  ready=UOp.barrier(UOp.group(*stores)); frag_index=(lane&15)*4+(lane>>4)*2
+  av=_fragment_x2_i8(sh.after(ready),frag_index,lane,fragment_load)
   bv=UOp(Ops.STACK,dtypes.char.vec(4),tuple(b[(g*16+4*lc+q)*8+lr] for q in range(4)))
   axes=(tuple((300+i,2) for i in range(3)),tuple((310+i,2) for i in range(2)),tuple((320+i,2) for i in range(2)))
   arg=("WMMA_8_16_16_signed_char_int",(8,16,16),dtypes.char,dtypes.int,"NV",32,axes,())
@@ -120,9 +140,10 @@ def q6_packed_k256_kernel(out, dot, blocks, b, dB):
    s0=byte(base+192+2*p).cast(dtypes.char).cast(dtypes.float32); s1=byte(base+193+2*p).cast(dtypes.char).cast(dtypes.float32)
    term=(s0*z.cast(dtypes.float32)+s1*z1.cast(dtypes.float32))*(blocks[(base+208)//2].bitcast(dtypes.half).cast(dtypes.float32)*dB[p*8+col])
    acc=term if acc is None else acc+term
-  writes.append(dot[idx].store(acc))
-  writes.append(out[idx].store(acc))
- return UOp.sink(*writes,arg=KernelInfo(name='nv_native_fragment_q6_packed_k256',opts_to_apply=()))
+  writes.append(dot[bid*128+idx].store(acc))
+  writes.append(out[bid*128+idx].store(acc))
+ name='nv_native_fragment_q6_packed_k256' if fragment_load == "native" and replicas == 1 else f'nv_{fragment_load}_fragment_q6_packed_k256_ab'
+ return UOp.sink(*writes,arg=KernelInfo(name=name,opts_to_apply=()))
 
 def q6_packed_kblocks_kernel(k_blocks:int):
  """Looped 16x8 Q6_K x Q8 body for an integral number of canonical K=256 blocks."""

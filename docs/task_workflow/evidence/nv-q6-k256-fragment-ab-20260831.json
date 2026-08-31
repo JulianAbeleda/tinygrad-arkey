@@ -1,0 +1,101 @@
+{
+  "schema": "nv.q6_k256.fragment_load_ab.v1",
+  "passed": false,
+  "replicas": 5440,
+  "rounds": 15,
+  "exact_cross": true,
+  "structural_gate": true,
+  "move_needle_gate": false,
+  "native_speedup": 0.9772117962466488,
+  "native_saved_us": -0.27200000000000024,
+  "rows": {
+    "scalar": {
+      "exact_reference": true,
+      "exact_dot": true,
+      "finite": true,
+      "max_abs": 0.0,
+      "sass": {
+        "ldsm": 0,
+        "lds": 32,
+        "imma": 16,
+        "bar": 16,
+        "ldl": 0,
+        "stl": 0,
+        "prmt": 16
+      },
+      "resources": {
+        "registers": 96,
+        "shared_bytes": 6144,
+        "local_bytes": 576
+      },
+      "source": "docs/task_workflow/evidence/nv-q6-k256-fragment-ab-20260831/scalar.cu",
+      "cubin": "docs/task_workflow/evidence/nv-q6-k256-fragment-ab-20260831/scalar.cubin",
+      "disassembly": "docs/task_workflow/evidence/nv-q6-k256-fragment-ab-20260831/scalar.sass",
+      "timing_us": {
+        "min": 11.616,
+        "median": 11.664,
+        "samples": [
+          15.456,
+          11.648,
+          11.648,
+          11.616,
+          11.712,
+          11.68,
+          11.712,
+          11.648,
+          11.616,
+          11.744,
+          11.648,
+          11.648,
+          11.712,
+          11.712,
+          11.648
+        ]
+      }
+    },
+    "native": {
+      "exact_reference": true,
+      "exact_dot": true,
+      "finite": true,
+      "max_abs": 0.0,
+      "sass": {
+        "ldsm": 16,
+        "lds": 0,
+        "imma": 16,
+        "bar": 16,
+        "ldl": 0,
+        "stl": 0,
+        "prmt": 16
+      },
+      "resources": {
+        "registers": 96,
+        "shared_bytes": 6144,
+        "local_bytes": 576
+      },
+      "source": "docs/task_workflow/evidence/nv-q6-k256-fragment-ab-20260831/native.cu",
+      "cubin": "docs/task_workflow/evidence/nv-q6-k256-fragment-ab-20260831/native.cubin",
+      "disassembly": "docs/task_workflow/evidence/nv-q6-k256-fragment-ab-20260831/native.sass",
+      "timing_us": {
+        "min": 11.872,
+        "median": 11.936,
+        "samples": [
+          11.872,
+          11.936,
+          11.936,
+          11.872,
+          11.936,
+          11.904,
+          11.936,
+          11.872,
+          11.936,
+          11.936,
+          11.904,
+          11.936,
+          11.904,
+          11.936,
+          11.936
+        ]
+      }
+    }
+  }
+}
