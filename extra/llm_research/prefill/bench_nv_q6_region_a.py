@@ -11,7 +11,7 @@ from extra.llm_research.prefill.nv_compiler_q6k_streamk_transform import transfo
 
 M,N,K=512,4096,12288
 
-def region_a_source(source: str, *, bulk_readback: bool = True) -> str:
+def region_a_source(source: str, *, bulk_readback: bool = True, variant: str = 'full') -> str:
   # The first barrier terminates the producer publication prefix in the direct
   # compiler kernel. Checksum shared bytes after it to force materialization.
   start=source.find('  (*(buf0+0)) = 0.0f;')
@@ -26,6 +26,11 @@ def region_a_source(source: str, *, bulk_readback: bool = True) -> str:
   # Direct byte readback prevents cancellation and makes the published shared
   # payload observable without an accumulator or MMA/FP32 epilogue.
   body = ('''\n    for (int z=lidx0+32*lidx1+64*lidx2; z<20480; z+=256)\n      data0_2097152[(blockIdx.x+32*blockIdx.y)*20480 + z] = (float)((unsigned char)buf1[z]);\n  }\n  }\n''' if bulk_readback else '''\n    if (lidx0==0 && lidx1==0 && lidx2==0)\n      data0_2097152[blockIdx.x+32*blockIdx.y] = (float)((unsigned char)buf1[64]);\n  }\n  }\n''')
+  if variant == 'q6_decode_no_q8':
+    prefix = re.sub(r'(unsigned int val\d+ = )\(\*\([^;]+\);', r'\g<1>0;', prefix)
+  elif variant == 'q8_only':
+    prefix = re.sub(r'(unsigned short val\d+ = )\(\*\([^;]+\);', r'\g<1>0;', prefix)
+  elif variant != 'full': raise ValueError(f'unknown variant: {variant}')
   return prefix+body
 
 def region_a_loads_source(source: str) -> str:
@@ -55,6 +60,7 @@ def region_a_loads_source(source: str) -> str:
 def main() -> int:
   ap=argparse.ArgumentParser(); ap.add_argument('--model',default='/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf')
   ap.add_argument('--loads-only', action='store_true')
+  ap.add_argument('--variant', choices=('full','q6_decode_no_q8','q8_only'), default='full')
   ap.add_argument('--rounds',type=int,default=9); ap.add_argument('--out',required=True); ap.add_argument('--artifacts',required=True)
   a=ap.parse_args();
   if a.rounds<9: raise ValueError('R9 required')
@@ -63,13 +69,13 @@ def main() -> int:
   if info.typ != GGML_Q6_K: raise RuntimeError('fixture is not Q6_K')
   halfs=packed_u16_slice(model,meta,info,device='NV').contiguous().realize(); record=Tensor(_record(M,K)[0],device='NV').contiguous().realize()
   direct=_run('region_a_base',M,N,K,halfs,record,a.rounds,art,(128,128,2,4,256))
-  src=region_a_loads_source((art/'region_a_base.cu').read_text()) if a.loads_only else region_a_source((art/'region_a_base.cu').read_text()); (art/'region_a.cu').write_text(src)
+  src=region_a_loads_source((art/'region_a_base.cu').read_text()) if a.loads_only else region_a_source((art/'region_a_base.cu').read_text(),variant=a.variant); (art/'region_a.cu').write_text(src)
   binary=Device['NV'].compiler.compile(src); sass=_sass(binary,art/'region_a')
   name=re.search(r'__launch_bounds__\(256\) (\w+)\(',src).group(1); p=NVProgram(Device['NV'],name,binary)
   out=Tensor.full((128 if a.loads_only else 128*20480,),float('nan'),device='NV').contiguous().realize(); buf=out.uop.buffer.get_buf('NV')
   samples=[p(buf,record.uop.buffer.get_buf('NV'),halfs.uop.buffer.get_buf('NV'),global_size=(32,4,1),local_size=(32,2,4),wait=True)*1e6 for _ in range(a.rounds)]
   got=out.numpy(); checksum_slots=np.arange(128,dtype=np.int64) if a.loads_only else np.arange(128*20480,dtype=np.int64)
-  timing_src=region_a_loads_source((art/'region_a_base.cu').read_text()) if a.loads_only else region_a_source((art/'region_a_base.cu').read_text(),bulk_readback=False); (art/'region_a_timing.cu').write_text(timing_src)
+  timing_src=region_a_loads_source((art/'region_a_base.cu').read_text()) if a.loads_only else region_a_source((art/'region_a_base.cu').read_text(),bulk_readback=False,variant=a.variant); (art/'region_a_timing.cu').write_text(timing_src)
   timing_binary=Device['NV'].compiler.compile(timing_src); timing_sass=_sass(timing_binary,art/'region_a_timing')
   timing_name=re.search(r'__launch_bounds__\(256\) (\w+)\(',timing_src).group(1); timing_p=NVProgram(Device['NV'],timing_name,timing_binary)
   timing_out=Tensor.full((128,),float('nan'),device='NV').contiguous().realize(); timing_buf=timing_out.uop.buffer.get_buf('NV')
