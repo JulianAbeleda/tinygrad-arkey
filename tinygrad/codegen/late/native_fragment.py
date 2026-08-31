@@ -4,6 +4,10 @@ from tinygrad.uop.ops import Ops, PatternMatcher, UOp, UPat
 
 NATIVE_FRAGMENT_X4 = "native_fragment_x4_v1"
 NATIVE_FRAGMENT_X2 = "native_fragment_x2_v1"
+PACKED_I8_SUB = "packed_i8_sub_v1"
+def packed_i8_sub(value:UOp, bias:UOp) -> UOp:
+  if value.dtype != dtypes.uint32 or bias.dtype != dtypes.uint32: raise TypeError("packed i8 subtraction requires uint32 operands")
+  return UOp(Ops.CUSTOMI,dtypes.uint32,(value,bias),arg=(PACKED_I8_SUB,))
 def native_fragment_x2(buffer:UOp, index:UOp) -> UOp:
   if not hasattr(buffer.dtype,"addrspace") or buffer.dtype.addrspace is None: raise TypeError("native fragment load requires an address-space pointer")
   return UOp(Ops.CUSTOMI, dtypes.uint32.vec(2), (buffer,index), arg=(NATIVE_FRAGMENT_X2,))
@@ -15,6 +19,10 @@ def native_fragment_x4(buffer:UOp, index:UOp) -> UOp:
   return UOp(Ops.CUSTOMI, dtypes.uint32.vec(4), (buffer,index), arg=(NATIVE_FRAGMENT_X4,))
 
 def _lower(ctx, x:UOp) -> UOp|None:
+  if x.arg == (PACKED_I8_SUB,):
+    provider=getattr(ctx,"packed_i8_sub",None)
+    if provider is None: raise NotImplementedError(f"packed i8 subtraction is unavailable on {type(ctx).__name__}")
+    return provider(*x.src)
   if x.arg not in ((NATIVE_FRAGMENT_X4,),(NATIVE_FRAGMENT_X2,)): return None
   width=4 if x.arg==(NATIVE_FRAGMENT_X4,) else 2; provider=getattr(ctx,f"native_fragment_x{width}",None)
   if provider is None: raise NotImplementedError(f"native x{width} fragment loads are unavailable on {type(ctx).__name__}")
@@ -38,4 +46,4 @@ pm_lower_native_fragment = PatternMatcher([
   (UPat(Ops.CUSTOMI, name="x"), _lower),
 ])
 
-__all__ = ["native_fragment_x2", "native_fragment_x4", "pm_lower_native_fragment"]
+__all__ = ["native_fragment_x2", "native_fragment_x4", "packed_i8_sub", "pm_lower_native_fragment"]

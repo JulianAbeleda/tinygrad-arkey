@@ -2,7 +2,7 @@
 import numpy as np
 import struct
 from tinygrad import Tensor,dtypes,Device
-from tinygrad.codegen.late.native_fragment import native_fragment_x2
+from tinygrad.codegen.late.native_fragment import native_fragment_x2,packed_i8_sub
 from tinygrad.uop.ops import AxisType,KernelInfo,Ops,UOp
 def kernel(out, a, b):
  lane=UOp.special(32,"lidx0"); sh=UOp.placeholder((64,),dtypes.uint32,20,addrspace=__import__('tinygrad.dtype',fromlist=['AddrSpace']).AddrSpace.LOCAL)
@@ -131,14 +131,16 @@ def q6_packed_kblocks_kernel(k_blocks:int):
   lane=UOp.special(32,"lidx0"); lr,lc=lane>>2,lane&3; blk=UOp.range(k_blocks,0,axis_type=AxisType.REDUCE)
   def byte(off): return blocks[off//2].cast(dtypes.uint32).rshift((off%2)*8).bitwise_and(255)
   sh=UOp.placeholder((16*76,),dtypes.uint32,200,addrspace=__import__('tinygrad.dtype',fromlist=['AddrSpace']).AddrSpace.LOCAL)
-  st=UOp.range(32,1,axis_type=AxisType.LOOP); z=lane+32*st; srow=z//64; word=z%64; g=word//4; win=word%4
-  pgrp=g%8; base=(srow*k_blocks+blk)*210; ql_off=(g//8)*64+(g%4)*16; qh_off=(g//8)*32+(g%2)*16
-  vals=[]
-  for q in range(4):
-   lo=byte(base+ql_off+4*win+q); hi=byte(base+128+qh_off+4*win+q)
-   vals.append(lo.rshift((pgrp//4)*4).bitwise_and(15).bitwise_or(hi.rshift((pgrp//2)*2).bitwise_and(3).lshift(4)).alu(
-     Ops.SUB,UOp.const(dtypes.uint32,32)).cast(dtypes.char))
-  staged=sh[srow*76+word].store(UOp(Ops.STACK,dtypes.char.vec(4),tuple(vals)).bitcast(dtypes.uint32)).end(st)
+  st=UOp.range(16,1,axis_type=AxisType.LOOP); hbase=(st*k_blocks+blk)*105; txi=lane
+  ql=blocks[hbase+2*txi].cast(dtypes.uint32).bitwise_or(blocks[hbase+2*txi+1].cast(dtypes.uint32).lshift(16))
+  qhi=(txi//16)*8+txi%8
+  qh=blocks[hbase+64+2*qhi].cast(dtypes.uint32).bitwise_or(blocks[hbase+64+2*qhi+1].cast(dtypes.uint32).lshift(16))
+  qshift=(txi.bitwise_and(8))>>2
+  q0=ql.bitwise_and(0x0f0f0f0f).bitwise_or(qh.rshift(qshift).lshift(4).bitwise_and(0x30303030))
+  q1=ql.rshift(4).bitwise_and(0x0f0f0f0f).bitwise_or(qh.rshift(qshift).bitwise_and(0x30303030))
+  kq0=2*txi-txi%16
+  staged=UOp.group(sh[st*76+kq0].store(packed_i8_sub(q0,UOp.const(dtypes.uint32,0x20202020))),
+    sh[st*76+kq0+16].store(packed_i8_sub(q1,UOp.const(dtypes.uint32,0x20202020)))).end(st)
   ready=UOp.barrier(UOp.group(staged))
   def group(g):
    av=native_fragment_x2(sh.after(ready),(lane&15)*76+g*4).bitcast(dtypes.char.vec(8))
