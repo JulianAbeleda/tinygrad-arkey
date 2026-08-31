@@ -13,6 +13,15 @@ from tinygrad.codegen.opt.kernel_pipeline import validate_scheduler_tile_loop_pr
 from tinygrad.codegen.simplify import pm_flatten_range
 from tinygrad.renderer import Renderer
 
+def _build_q4_q6_tc_uops(*, tc, wmma_srcs:tuple[UOp, UOp], tc_upcast_axes, wmma_arg,
+                          bounded_k_carriers:tuple[UOp, UOp]|None) -> tuple[tuple[UOp, UOp]|None, UOp]:
+  """Build the Q4 full-range IMMA or paired Q6 K16 tensor-core carrier."""
+  if bounded_k_carriers is not None:
+    return bounded_k_carriers, bounded_k_carriers[0]
+  wmma = UOp(Ops.WMMA, dtype=tc.dtype_out.vec(tc.elements_per_thread[2]), src=(
+    wmma_srcs[0], wmma_srcs[1], UOp.const(tc.dtype_out.vec(tc.elements_per_thread[2]), 0.0)), arg=wmma_arg, tag=1)
+  return None, UOp(Ops.UNROLL, tc.dtype_out, (wmma,), arg=tc_upcast_axes[2], tag=1)
+
 def _split_range_axis(u:UOp) -> UOp|None:
   """Recover the RANGE that `pm_split_ranges` (tinygrad/codegen/simplify.py:72-75) leaves behind in place
   of a reduce-owning RANGE `k` that is referenced somewhere under `RANGE % CONST` (Q4_K's 256-element
@@ -670,6 +679,7 @@ class Scheduler:
             if candidate_axes is not None and pipeline_tc_uop is not None: tc_uop = pipeline_tc_uop
             else:
               from tinygrad.codegen.opt.packed_weight import Q6KQ8SubgroupAccumulatorContract
+              bounded_k_carriers = None
               if isinstance(group_accumulator, Q6KQ8SubgroupAccumulatorContract):
                 # Mask before CONTRACT, while logical K is still explicit.
                 # Masking carrier GEPs here is invalid: later output-axis
@@ -681,12 +691,9 @@ class Scheduler:
                   wmma = UOp(Ops.WMMA, dtype=tc.dtype_out.vec(tc.elements_per_thread[2]), src=(wmma_srcs[0], b,
                     UOp.const(tc.dtype_out.vec(tc.elements_per_thread[2]), 0.0)), arg=wmma_arg, tag=("q6_k16",tag))
                   return UOp(Ops.UNROLL, tc.dtype_out, (wmma,), arg=tc_upcast_axes[2], tag=("q6_k16",tag))
-                q6_half_tc_uops = (_half_imma(low_b, "low"), _half_imma(high_b, "high"))
-                tc_uop = q6_half_tc_uops[0]
-              else:
-                wmma = UOp(Ops.WMMA, dtype=tc.dtype_out.vec(tc.elements_per_thread[2]), src=(
-                  wmma_srcs[0], wmma_srcs[1], UOp.const(tc.dtype_out.vec(tc.elements_per_thread[2]), 0.0)), arg=wmma_arg, tag=1)
-                tc_uop = UOp(Ops.UNROLL, tc.dtype_out, (wmma,), arg=tc_upcast_axes[2], tag=1)
+                bounded_k_carriers = (_half_imma(low_b, "low"), _half_imma(high_b, "high"))
+              q6_half_tc_uops, tc_uop = _build_q4_q6_tc_uops(tc=tc, wmma_srcs=wmma_srcs,
+                tc_upcast_axes=tc_upcast_axes, wmma_arg=wmma_arg, bounded_k_carriers=bounded_k_carriers)
 
             # The direct Q4_K/Q8_1 path deliberately makes one candidate K tile
             # exactly one IMMA K32 group. Apply its affine metadata correction
