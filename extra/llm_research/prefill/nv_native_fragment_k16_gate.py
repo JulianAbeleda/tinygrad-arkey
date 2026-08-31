@@ -194,12 +194,16 @@ def q6_packed_cta_kernel(out, blocks, b, dB, k_blocks:int, col_groups:int=1,
  if k_blocks < 1 or col_groups < 1: raise ValueError("k_blocks and col_groups must be positive")
  if segment_blocks is None: segment_blocks=k_blocks
  if total_k_blocks is None: total_k_blocks=k_blocks
- if block_start < 0 or segment_blocks < 1 or block_start+segment_blocks > total_k_blocks:
-  raise ValueError("invalid K-block segment")
+ # Stream-K owner scheduling supplies runtime scalar bounds. Retain the
+ # static validation when they are compile-time integers, but let RANGE carry
+ # a symbolic uniform endpoint for the generated owner loop.
+ if isinstance(block_start,int) and isinstance(segment_blocks,int):
+  if block_start < 0 or segment_blocks < 1 or block_start+segment_blocks > total_k_blocks:
+   raise ValueError("invalid K-block segment")
  cols=16*col_groups
  lid=UOp.special(256,"lidx0"); warp,lane=lid//32,lid%32; lr,lc=lane>>2,lane&3; band,phase=warp>>1,warp&1
  blk=UOp.range(segment_blocks,0,axis_type=AxisType.REDUCE)
- abs_blk=UOp.const(dtypes.int32,block_start)+blk
+ abs_blk=(UOp.const(dtypes.int32,block_start) if isinstance(block_start,int) else block_start.cast(dtypes.int32))+blk
  sh=UOp.placeholder((Q6_CTA_ROWS*Q6_CTA_WEIGHT_STRIDE,),dtypes.uint32,500,
    addrspace=__import__('tinygrad.dtype',fromlist=['AddrSpace']).AddrSpace.LOCAL)
  sr=UOp.range(16,1,axis_type=AxisType.LOOP); srow=warp+8*sr; hbase=(srow*total_k_blocks+abs_blk)*105; txi=lane

@@ -12,7 +12,7 @@ from tinygrad.uop.ops import Ops,UOp
 from extra.llm_research.prefill.nv_native_fragment_k16_gate import (kernel,q6_two_k16_kernel,q6_packed_two_k16_kernel,
   q6_packed_k256_kernel,q6_first_two_k16_numpy)
 from extra.llm_research.prefill.nv_native_fragment_k16_gate import q6_packed_kblocks_kernel
-from extra.llm_research.prefill.nv_native_fragment_k16_gate import q6_packed_cta_k512_kernel
+from extra.llm_research.prefill.nv_native_fragment_k16_gate import q6_packed_cta_k512_kernel,q6_packed_cta_kernel
 def test_native_k16_descriptor():
   assert cuda_81616_i8[0].dims == (8,16,16)
   assert cuda_81616_i8[0].elements_per_thread == (8,4,4)
@@ -176,3 +176,13 @@ def test_q6_cta_nonzero_segment_numpy_exact():
   full=contribution(0)+contribution(1)
   segment=contribution(1)
   assert np.array_equal(segment,full-contribution(0))
+
+def test_q6_cta_accepts_runtime_uniform_segment_bounds():
+  """The Stream-K owner loop supplies scalar K bounds at runtime, not Python constants."""
+  ph=lambda n,dt,i:UOp.placeholder((n,),dt,i)
+  bound=ph(1,dtypes.int32,4)[0].load()
+  ast=q6_packed_cta_kernel(ph(128*128,dtypes.float32,0),ph(128*48*105,dtypes.uint16,1),
+    ph(48*256*128,dtypes.int8,2),ph(48*8*128,dtypes.float32,3),48,col_groups=8,
+    block_start=bound,segment_blocks=bound,total_k_blocks=48)
+  src=next(x.arg for x in to_program(ast,CUDARenderer(Target.parse('NV:CUDA:sm_120'))).src if x.op is Ops.SOURCE)
+  assert 'for (' in src and 'mma.sync.aligned.m16n8k16.row.col.s32.s8.s8.s32' in src
