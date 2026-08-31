@@ -21,7 +21,10 @@ def q6_streamk_slot_kernel(partials, tile_ids, descriptors, blocks, b, dB,
   q0=ql.bitwise_and(0x0f0f0f0f).bitwise_or(qh.rshift(qshift).lshift(4).bitwise_and(0x30303030))
   q1=ql.rshift(4).bitwise_and(0x0f0f0f0f).bitwise_or(qh.rshift(qshift).bitwise_and(0x30303030)); kq0=2*txi-txi%16
   staged=UOp.group(sh[srow*76+kq0].store(packed_i8_sub(q0,UOp.const(dtypes.uint32,0x20202020))),
-    sh[srow*76+kq0+16].store(packed_i8_sub(q1,UOp.const(dtypes.uint32,0x20202020)))).end(sr)
+    sh[srow*76+kq0+16].store(packed_i8_sub(q1,UOp.const(dtypes.uint32,0x20202020))),
+    sh[srow*76+64].store(blocks[hbase+104].cast(dtypes.uint32),gate=(lane<1)),
+    *(sh[srow*76+65+i].store(blocks[hbase+96+2*i].cast(dtypes.uint32).bitwise_or(
+      blocks[hbase+97+2*i].cast(dtypes.uint32).lshift(16)),gate=((lane>=i)&(lane<i+1))) for i in range(4))).end(sr)
   ready=UOp.barrier(UOp.group(staged)); mcols=512
   def mma(cg,n,g):
     row0=band*32+n*16; av=native_fragment_x2(sh.after(ready),(row0+(lane&15))*76+g*4).bitcast(dtypes.char.vec(8))
@@ -30,18 +33,20 @@ def q6_streamk_slot_kernel(partials, tile_ids, descriptors, blocks, b, dB,
     axes=(tuple((600+i,2) for i in range(3)),tuple((610+i,2) for i in range(2)),tuple((620+i,2) for i in range(2)))
     return UOp(Ops.WMMA,dtypes.int.vec(4),(av,bv,UOp.const(dtypes.int.vec(4),0)),
       ("WMMA_8_16_16_signed_char_int",(8,16,16),dtypes.char,dtypes.int,"NV",32,axes,()))
-  cs=[[[mma(cg,n,g) for g in range(16)] for n in range(2)] for cg in range(8)]
   acc=UOp.placeholder((64,),dtypes.float32,700,addrspace=AddrSpace.REG)
   init=UOp.group(*(acc[i].store(0.0) for i in range(64))); acc=acc.after(init); update=None
-  def byte(off): return blocks[off//2].cast(dtypes.uint32).rshift((off%2)*8).bitwise_and(255)
   for cg in range(8):
    for n in range(2):
+    cs=[mma(cg,n,g) for g in range(16)]
     for r in range(4):
      ai=cg*8+n*4+r; lrow=band*32+n*16+lr+8*(r>>1); lcol=cg*16+phase*8+2*lc+(r&1)
-     base=((nt*128+lrow)*total_k_blocks+abs_blk)*210; wd=blocks[(base+208)//2].bitcast(dtypes.half).cast(dtypes.float32); term=UOp.const(dtypes.float32,0.0)
+     shared=sh.after(ready)
+     wd=shared[lrow*76+64].bitwise_and(0xffff).cast(dtypes.uint16).bitcast(dtypes.half).cast(dtypes.float32); term=UOp.const(dtypes.float32,0.0)
      for p in range(8):
-      s0=byte(base+192+2*p).cast(dtypes.char).cast(dtypes.float32); s1=byte(base+193+2*p).cast(dtypes.char).cast(dtypes.float32)
-      dot=s0*cs[cg][n][2*p].gep(r).cast(dtypes.float32)+s1*cs[cg][n][2*p+1].gep(r).cast(dtypes.float32)
+      sw=shared[lrow*76+65+p//2]
+      s0=sw.rshift((2*p%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.float32)
+      s1=sw.rshift(((2*p+1)%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.float32)
+      dot=s0*cs[2*p].gep(r).cast(dtypes.float32)+s1*cs[2*p+1].gep(r).cast(dtypes.float32)
       term=term+(wd*dB[(abs_blk*8+p)*mcols+mt*128+lcol])*dot
      term=active.cast(dtypes.float32)*term
      update=acc.after(blk if update is None else update)[ai].store(acc.after(blk)[ai]+term)
