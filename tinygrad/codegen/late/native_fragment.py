@@ -3,6 +3,10 @@ from tinygrad.dtype import dtypes
 from tinygrad.uop.ops import Ops, PatternMatcher, UOp, UPat
 
 NATIVE_FRAGMENT_X4 = "native_fragment_x4_v1"
+NATIVE_FRAGMENT_X2 = "native_fragment_x2_v1"
+def native_fragment_x2(buffer:UOp, index:UOp) -> UOp:
+  if not hasattr(buffer.dtype,"addrspace") or buffer.dtype.addrspace is None: raise TypeError("native fragment load requires an address-space pointer")
+  return UOp(Ops.CUSTOMI, dtypes.uint32.vec(2), (buffer,index), arg=(NATIVE_FRAGMENT_X2,))
 
 def native_fragment_x4(buffer:UOp, index:UOp) -> UOp:
   if not hasattr(buffer.dtype,"addrspace") or buffer.dtype.addrspace is None:
@@ -11,8 +15,8 @@ def native_fragment_x4(buffer:UOp, index:UOp) -> UOp:
   return UOp(Ops.CUSTOMI, dtypes.uint32.vec(4), (buffer,index), arg=(NATIVE_FRAGMENT_X4,))
 
 def _lower(ctx, x:UOp) -> UOp|None:
-  if x.arg != (NATIVE_FRAGMENT_X4,): return None
-  provider=getattr(ctx,"native_fragment_x4",None)
+  if x.arg not in ((NATIVE_FRAGMENT_X4,),(NATIVE_FRAGMENT_X2,)): return None
+  width=4 if x.arg==(NATIVE_FRAGMENT_X4,) else 2; provider=getattr(ctx,f"native_fragment_x{width}",None)
   if provider is None: raise NotImplementedError(f"native x4 fragment loads are unavailable on {type(ctx).__name__}")
   return provider(*x.src)
 
@@ -32,4 +36,4 @@ pm_lower_native_fragment = PatternMatcher([
   (UPat(Ops.CUSTOMI, name="x"), _lower),
 ])
 
-__all__ = ["native_fragment_x4", "pm_lower_native_fragment"]
+__all__ = ["native_fragment_x2", "native_fragment_x4", "pm_lower_native_fragment"]

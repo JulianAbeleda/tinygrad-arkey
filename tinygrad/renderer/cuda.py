@@ -219,6 +219,8 @@ class CUDARenderer(CStyleLanguage):
     arg="__dp4a((int){1}, (int){2}, {0})"))
   native_fragment_x4 = staticmethod(lambda buffer,index: UOp(Ops.CUSTOMI, dtypes.uint32.vec(4), (buffer,index),
     arg="tg_ldmatrix_x4((const void*)({0}+{1}))"))
+  native_fragment_x2 = staticmethod(lambda buffer,index: UOp(Ops.CUSTOMI, dtypes.uint32.vec(2), (buffer,index),
+    arg="tg_ldmatrix_x2((const void*)({0}+{1}))"))
   native_fragment_bitcast = staticmethod(lambda value,dtype: UOp(Ops.CUSTOMI,dtype,(value,),arg="tg_bitcast<signed_char16>({0})"))
   code_for_op = { **CStyleLanguage.code_for_op,
     Ops.TRUNC: lambda x,dtype: f"htrunc({x})" if dtype in (dtypes.half, dtypes.bfloat16) else f"trunc({x})",
@@ -267,6 +269,11 @@ class CUDARenderer(CStyleLanguage):
       prefix.append('''__device__ __forceinline__ uint4 tg_ldmatrix_x4(const void *p) {
   uint4 r; asm volatile("ldmatrix.sync.aligned.m8n8.x4.b16 {%0,%1,%2,%3},[%4];"
     : "=r"(r.x),"=r"(r.y),"=r"(r.z),"=r"(r.w) : "l"(p)); return r;
+}''')
+    if any(u.op is Ops.CUSTOMI and isinstance(u.arg,str) and "tg_ldmatrix_x2(" in u.arg for u in uops):
+      prefix.append('''__device__ __forceinline__ uint2 tg_ldmatrix_x2(const void *p) {
+  uint2 r; asm volatile("ldmatrix.sync.aligned.m8n8.x2.b16 {%0,%1},[%2];"
+    : "=r"(r.x),"=r"(r.y) : "l"(p)); return r;
 }''')
     if os.environ.get("NV_SPLIT_PHASE", "") not in ("", "0"):
       kernel = _nv_pdl_body_split_phase(function_name, kernel)
