@@ -162,4 +162,82 @@ def q6_packed_kblocks_kernel(k_blocks:int):
     arg=KernelInfo(name=f'nv_native_fragment_q6_packed_k{k_blocks*256}',opts_to_apply=()))
  return kernel
 
-__all__=['kernel','q6_two_k16_kernel','q6_packed_two_k16_kernel','q6_packed_k256_kernel','q6_packed_kblocks_kernel','q6_first_two_k16_numpy']
+# Research-only CTA contract.  This is deliberately separate from the
+# single-warp gate above: it records the pinned llama geometry without making
+# it selectable by any production route.
+Q6_CTA_K_BLOCKS = 2
+Q6_CTA_ROWS, Q6_CTA_COLS = 128, 16
+Q6_CTA_WARPS, Q6_CTA_LANES = 8, 32
+Q6_CTA_WEIGHT_STRIDE = 76
+Q6_CTA_SHARED_BYTES = Q6_CTA_ROWS * Q6_CTA_WEIGHT_STRIDE * 4
+
+def q6_cta_ownership(warp:int, lane:int):
+ """Return the pinned (row, column) ownership for one CTA lane."""
+ if not (0 <= warp < Q6_CTA_WARPS and 0 <= lane < Q6_CTA_LANES):
+  raise ValueError("warp/lane outside the 8x32 CTA")
+ band, phase = warp >> 1, warp & 1
+ lr, lc = lane >> 2, lane & 3
+ return (band * 32 + lr, phase * 8 + 2 * lc)
+
+def q6_cta_geometry():
+ """Machine-readable research gate geometry; never used for route selection."""
+ return {"block": (32, 8), "rows": Q6_CTA_ROWS, "cols": Q6_CTA_COLS,
+         "k": Q6_CTA_K_BLOCKS * 256, "weight_stride": Q6_CTA_WEIGHT_STRIDE,
+         "warps": Q6_CTA_WARPS, "lanes": Q6_CTA_LANES,
+         "warp_rows": 16, "warp_band_rows": 32, "phase_cols": 8,
+         "barriers": 1, "shared_bytes": Q6_CTA_SHARED_BYTES,
+         "promotion": "research_only"}
+
+def q6_packed_cta_kernel(out, blocks, b, dB, k_blocks:int, col_groups:int=1,
+                         block_start:int=0, segment_blocks:int=None, total_k_blocks:int=None):
+ """Generated 128x(16*col_groups) eight-warp CTA gate matching llama warp ownership."""
+ if k_blocks < 1 or col_groups < 1: raise ValueError("k_blocks and col_groups must be positive")
+ if segment_blocks is None: segment_blocks=k_blocks
+ if total_k_blocks is None: total_k_blocks=k_blocks
+ if block_start < 0 or segment_blocks < 1 or block_start+segment_blocks > total_k_blocks:
+  raise ValueError("invalid K-block segment")
+ cols=16*col_groups
+ lid=UOp.special(256,"lidx0"); warp,lane=lid//32,lid%32; lr,lc=lane>>2,lane&3; band,phase=warp>>1,warp&1
+ blk=UOp.range(segment_blocks,0,axis_type=AxisType.REDUCE)
+ abs_blk=UOp.const(dtypes.int32,block_start)+blk
+ sh=UOp.placeholder((Q6_CTA_ROWS*Q6_CTA_WEIGHT_STRIDE,),dtypes.uint32,500,
+   addrspace=__import__('tinygrad.dtype',fromlist=['AddrSpace']).AddrSpace.LOCAL)
+ sr=UOp.range(16,1,axis_type=AxisType.LOOP); srow=warp+8*sr; hbase=(srow*total_k_blocks+abs_blk)*105; txi=lane
+ ql=blocks[hbase+2*txi].cast(dtypes.uint32).bitwise_or(blocks[hbase+2*txi+1].cast(dtypes.uint32).lshift(16))
+ qhi=(txi//16)*8+txi%8; qh=blocks[hbase+64+2*qhi].cast(dtypes.uint32).bitwise_or(blocks[hbase+64+2*qhi+1].cast(dtypes.uint32).lshift(16))
+ qshift=txi.bitwise_and(8)>>2
+ q0=ql.bitwise_and(0x0f0f0f0f).bitwise_or(qh.rshift(qshift).lshift(4).bitwise_and(0x30303030))
+ q1=ql.rshift(4).bitwise_and(0x0f0f0f0f).bitwise_or(qh.rshift(qshift).bitwise_and(0x30303030)); kq0=2*txi-txi%16
+ staged=UOp.group(sh[srow*76+kq0].store(packed_i8_sub(q0,UOp.const(dtypes.uint32,0x20202020))),
+   sh[srow*76+kq0+16].store(packed_i8_sub(q1,UOp.const(dtypes.uint32,0x20202020)))).end(sr)
+ ready=UOp.barrier(UOp.group(staged))
+ def mma(cg,n,g):
+  row0=band*32+n*16
+  av=native_fragment_x2(sh.after(ready),(row0+(lane&15))*76+g*4).bitcast(dtypes.char.vec(8))
+  bv=UOp(Ops.STACK,dtypes.char.vec(4),tuple(b[(abs_blk*256+g*16+4*lc+q)*cols+cg*16+phase*8+lr] for q in range(4)))
+  axes=(tuple((600+i,2) for i in range(3)),tuple((610+i,2) for i in range(2)),tuple((620+i,2) for i in range(2)))
+  arg=("WMMA_8_16_16_signed_char_int",(8,16,16),dtypes.char,dtypes.int,"NV",32,axes,())
+  return UOp(Ops.WMMA,dtypes.int.vec(4),(av,bv,UOp.const(dtypes.int.vec(4),0)),arg)
+ cs=[[[mma(cg,n,g) for g in range(16)] for n in range(2)] for cg in range(col_groups)]
+ acc=UOp.placeholder((8*col_groups,),dtypes.float32,700,addrspace=__import__('tinygrad.dtype',fromlist=['AddrSpace']).AddrSpace.REG)
+ init=UOp.group(*(acc[i].store(0.0) for i in range(8*col_groups))); acc=acc.after(init); update=None
+ for cg in range(col_groups):
+  for n in range(2):
+   for r in range(4):
+    ai=cg*8+n*4+r; row=band*32+n*16+lr+8*(r>>1); col=cg*16+phase*8+2*lc+(r&1); base=(row*total_k_blocks+abs_blk)*210; term=UOp.const(dtypes.float32,0.0)
+    wd=blocks[(base+208)//2].bitcast(dtypes.half).cast(dtypes.float32)
+    for p in range(8):
+     def byte(off): return blocks[off//2].cast(dtypes.uint32).rshift((off%2)*8).bitwise_and(255)
+     s0=byte(base+192+2*p).cast(dtypes.char).cast(dtypes.float32); s1=byte(base+193+2*p).cast(dtypes.char).cast(dtypes.float32)
+     term=term+(wd*dB[(abs_blk*8+p)*cols+col])*(s0*cs[cg][n][2*p].gep(r).cast(dtypes.float32)+s1*cs[cg][n][2*p+1].gep(r).cast(dtypes.float32))
+    update=acc.after(blk if update is None else update)[ai].store(acc.after(blk)[ai]+term)
+ done=update.end(blk)
+ return UOp.sink(*(out[(band*32+n*16+lr+8*(r>>1))*cols+cg*16+phase*8+2*lc+(r&1)].store(acc.after(done)[cg*8+n*4+r])
+   for cg in range(col_groups) for n in range(2) for r in range(4)),
+   arg=KernelInfo(name=f'nv_native_fragment_q6_cta_128x{cols}x{k_blocks*256}',opts_to_apply=()))
+
+def q6_packed_cta_k512_kernel(out, blocks, b, dB): return q6_packed_cta_kernel(out,blocks,b,dB,Q6_CTA_K_BLOCKS)
+
+__all__=['kernel','q6_two_k16_kernel','q6_packed_two_k16_kernel','q6_packed_k256_kernel','q6_packed_kblocks_kernel','q6_first_two_k16_numpy',
+         'Q6_CTA_K_BLOCKS','Q6_CTA_ROWS','Q6_CTA_COLS','Q6_CTA_WARPS','Q6_CTA_LANES','Q6_CTA_WEIGHT_STRIDE','Q6_CTA_SHARED_BYTES',
+         'q6_cta_ownership','q6_cta_geometry','q6_packed_cta_kernel','q6_packed_cta_k512_kernel']

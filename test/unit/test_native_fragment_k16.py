@@ -12,6 +12,7 @@ from tinygrad.uop.ops import Ops,UOp
 from extra.llm_research.prefill.nv_native_fragment_k16_gate import (kernel,q6_two_k16_kernel,q6_packed_two_k16_kernel,
   q6_packed_k256_kernel,q6_first_two_k16_numpy)
 from extra.llm_research.prefill.nv_native_fragment_k16_gate import q6_packed_kblocks_kernel
+from extra.llm_research.prefill.nv_native_fragment_k16_gate import q6_packed_cta_k512_kernel
 def test_native_k16_descriptor():
   assert cuda_81616_i8[0].dims == (8,16,16)
   assert cuda_81616_i8[0].elements_per_thread == (8,4,4)
@@ -126,3 +127,52 @@ def test_q6_looped_packed_k512():
     *bufs,global_size=(1,1,1),local_size=(32,1,1),wait=True)
   mv=memoryview(bytearray(bufs[0].size)); dev.allocator._copyout(mv,bufs[0]); got=np.frombuffer(mv,np.float32,count=128).reshape(16,8)
   assert np.array_equal(got,ref)
+
+def test_q6_cta_128x16x512():
+  kb=2; ph=lambda n,dt,i:UOp.placeholder((n,),dt,i)
+  args=(ph(128*16,dtypes.float32,0),ph(128*kb*105,dtypes.uint16,1),ph(kb*256*16,dtypes.int8,2),ph(kb*8*16,dtypes.float32,3))
+  p=to_program(q6_packed_cta_k512_kernel(*args),CUDARenderer(Target.parse('NV:CUDA:sm_120'))); src=next(x.arg for x in p.src if x.op is Ops.SOURCE)
+  assert src.count('__WMMA_8_16_16_signed_char_int(')==33
+  rng=np.random.default_rng(20260905); blocks=rng.integers(0,256,(128,kb,210),dtype=np.uint8)
+  blocks[:,:,208:210]=np.frombuffer(np.float16(.03125).tobytes(),np.uint8); b=rng.integers(-4,5,(kb*256,16),dtype=np.int8)
+  db=np.full((kb,8,16),.0625,np.float32); ref=np.zeros((128,16),np.float32)
+  for bi in range(kb):
+    raw=blocks[:,bi]; q=np.empty((128,16,16),np.int8)
+    for g in range(16):
+      half,pgrp=g//8,g%8; qi=half*64+(pgrp%4)*16; hi=half*32+(pgrp%2)*16
+      q[:,g]=((((raw[:,qi:qi+16]>>(4 if pgrp>=4 else 0))&15)|
+        (((raw[:,128+hi:128+hi+16]>>((pgrp//2)*2))&3)<<4)).astype(np.int16)-32).astype(np.int8)
+    scales=raw[:,192:208].view(np.int8)
+    for pi in range(8):
+      z0=q[:,2*pi].astype(np.int32)@b[bi*256+32*pi:bi*256+32*pi+16].astype(np.int32)
+      z1=q[:,2*pi+1].astype(np.int32)@b[bi*256+32*pi+16:bi*256+32*pi+32].astype(np.int32)
+      ref += (.03125*db[bi,pi])*(scales[:,2*pi,None].astype(np.float32)*z0+scales[:,2*pi+1,None].astype(np.float32)*z1)
+  dev=Device['NV']; host=(np.empty(128*16,np.float32),blocks,b,db); bufs=[dev.allocator._alloc(x.nbytes,BufferSpec()) for x in host]
+  for buf,x in zip(bufs[1:],host[1:]): dev.allocator._copyin(buf,memoryview(x.tobytes()))
+  NVProgram(dev,'nv_native_fragment_q6_cta_128x16x512',NVRTCCompiler(dev.arch,ptx=False,cache_key='q6_cta_128x16x512').compile(src))(
+    *bufs,global_size=(1,1,1),local_size=(256,1,1),wait=True)
+  mv=memoryview(bytearray(bufs[0].size)); dev.allocator._copyout(mv,bufs[0]); got=np.frombuffer(mv,np.float32,count=128*16).reshape(128,16)
+  assert np.array_equal(got,ref)
+
+def test_q6_cta_nonzero_segment_numpy_exact():
+  """A block-1 segment uses absolute packed/Q8/dB indexing and exact FP32 scaling."""
+  rng=np.random.default_rng(20260906); total=2
+  blocks=rng.integers(0,256,(128,total,210),dtype=np.uint8)
+  blocks[:,:,208:210]=np.frombuffer(np.float16(.03125).tobytes(),np.uint8)
+  b=rng.integers(-4,5,(total*256,16),dtype=np.int8); db=np.full((total,8,16),.0625,np.float32)
+  def contribution(bi):
+    raw=blocks[:,bi]; q=np.empty((128,16,16),np.int8)
+    for g in range(16):
+      half,pgrp=g//8,g%8; qi=half*64+(pgrp%4)*16; hi=half*32+(pgrp%2)*16
+      q[:,g]=((((raw[:,qi:qi+16]>>(4 if pgrp>=4 else 0))&15)|
+        (((raw[:,128+hi:128+hi+16]>>((pgrp//2)*2))&3)<<4)).astype(np.int16)-32).astype(np.int8)
+    scales=raw[:,192:208].view(np.int8); out=np.zeros((128,16),np.float32)
+    for pi in range(8):
+      z0=q[:,2*pi].astype(np.int32)@b[bi*256+32*pi:bi*256+32*pi+16].astype(np.int32)
+      z1=q[:,2*pi+1].astype(np.int32)@b[bi*256+32*pi+16:bi*256+32*pi+32].astype(np.int32)
+      out += (.03125*db[bi,pi])*(scales[:,2*pi,None].astype(np.float32)*z0+
+        scales[:,2*pi+1,None].astype(np.float32)*z1)
+    return out
+  full=contribution(0)+contribution(1)
+  segment=contribution(1)
+  assert np.array_equal(segment,full-contribution(0))
