@@ -1,8 +1,12 @@
+import numpy as np
 from extra.llm_research.prefill.nv_generated_q6k_streamk import *
-from tinygrad import dtypes
+from tinygrad import Device,dtypes
 from tinygrad.codegen import to_program
 from tinygrad.helpers import Target
 from tinygrad.renderer.cuda import CUDARenderer
+from tinygrad.device import BufferSpec
+from tinygrad.runtime.ops_nv import NVProgram
+from tinygrad.runtime.support.compiler_cuda import NVRTCCompiler
 from tinygrad.uop.ops import Ops,UOp
 
 def test_streamk_owner_partition_and_two_segment_bound():
@@ -28,3 +32,19 @@ def test_generated_170_owner_partials_compile_with_dynamic_segments():
   src=next(x.arg for x in to_program(ast,CUDARenderer(Target.parse('NV:CUDA:sm_120'))).src if x.op is Ops.SOURCE)
   assert 'nv_generated_q6k_streamk_owner_partials' in src
   assert 'mma.sync.aligned.m16n8k16.row.col.s32.s8.s8.s32' in src
+
+def test_generated_owner_boundary_gate_compiles_as_one_dynamic_loop():
+  ph=lambda n,dt,i: UOp.placeholder((n,),dt,i)
+  ast=generated_owner_boundary_gate(ph(OWNERS*2,dtypes.float32,0),ph(TILES*K_BLOCKS,dtypes.float32,1))
+  src=next(x.arg for x in to_program(ast,CUDARenderer(Target.parse('NV:CUDA:sm_120'))).src if x.op is Ops.SOURCE)
+  assert 'nv_generated_q6_owner_boundary_gate' in src and src.count('for (') == 1
+  values=np.arange(1,TILES*K_BLOCKS+1,dtype=np.float32); expected=np.zeros(OWNERS*2,np.float32)
+  for seg in owner_metadata():
+    if seg.tile_id >= 0: expected[seg.slot]=values[seg.tile_id*K_BLOCKS+seg.begin:seg.tile_id*K_BLOCKS+seg.end].sum()
+  dev=Device['NV']; host=(np.zeros(OWNERS*2,np.float32),values)
+  bufs=[dev.allocator._alloc(x.nbytes,BufferSpec()) for x in host]
+  for buf,x in zip(bufs,host): dev.allocator._copyin(buf,memoryview(x.tobytes()))
+  NVProgram(dev,'nv_generated_q6_owner_boundary_gate',NVRTCCompiler(dev.arch,ptx=False,cache_key='q6_owner_boundary_gate_v1').compile(src))(
+    *bufs,global_size=(OWNERS,1,1),local_size=(1,1,1),wait=True)
+  mv=memoryview(bytearray(bufs[0].size)); dev.allocator._copyout(mv,bufs[0]); got=np.frombuffer(mv,np.float32,count=OWNERS*2)
+  assert np.array_equal(got,expected)

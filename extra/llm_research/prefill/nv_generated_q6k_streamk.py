@@ -62,6 +62,21 @@ def fixup_slot_map():
     raise AssertionError("representative Q6 tile contributor bound changed")
   return tuple(tuple(slots+[-1]*(3-len(slots))) for slots in by_tile)
 
+def generated_owner_boundary_gate(out, values):
+  """Single-register executable gate for owner boundary flush/reset semantics."""
+  owner=UOp.special(OWNERS,"gidx0"); total=UOp.const(dtypes.int32,TILES*K_BLOCKS)
+  lo=(owner*total)//OWNERS; hi=((owner+1)*total)//OWNERS
+  blk=UOp.range(hi-lo,40,axis_type=AxisType.REDUCE); linear=lo+blk
+  tile=linear//K_BLOCKS; previous=(linear-1)//K_BLOCKS
+  transition=(blk>0)&(tile!=previous)
+  acc=UOp.placeholder((1,),dtypes.float32,940,addrspace=__import__('tinygrad.dtype',fromlist=['AddrSpace']).AddrSpace.REG)
+  init=acc[0].store(0.0); state=acc.after(init).after(blk)
+  flush=out[owner*2].store(state[0],gate=transition)
+  update=state.after(flush)[0].store(transition.where(values[linear],state[0]+values[linear]))
+  done=update.end(blk); crossed=(lo//K_BLOCKS)!=((hi-1)//K_BLOCKS)
+  final=out[owner*2+crossed.cast(dtypes.int32)].store(acc.after(done)[0])
+  return UOp.sink(final,arg=KernelInfo(name="nv_generated_q6_owner_boundary_gate",opts_to_apply=()))
+
 def generated_q6k_streamk_owner_partials(partials, tile_ids, blocks, b, dB):
   """170-CTA exact Stream-K main which emits at most two ordered tile partials.
 
@@ -86,4 +101,4 @@ def generated_q6k_streamk_owner_partials(partials, tile_ids, blocks, b, dB):
   return UOp.sink(*(body0.src+body1.src+meta.src),arg=KernelInfo(name="nv_generated_q6k_streamk_owner_partials",opts_to_apply=()))
 
 __all__=["OWNERS","SLOTS","ACTIVE_SLOTS","TILES","K_BLOCKS","OwnerSegment","owner_bounds","owner_work_units","streamk_segments",
-         "tile_coordinates","owner_metadata","fixup_slot_map","generated_q6k_streamk_owner_partials"]
+         "tile_coordinates","owner_metadata","fixup_slot_map","generated_owner_boundary_gate","generated_q6k_streamk_owner_partials"]
