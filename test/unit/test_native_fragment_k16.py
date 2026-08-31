@@ -9,7 +9,7 @@ from tinygrad.device import BufferSpec
 from tinygrad.runtime.ops_nv import NVProgram
 from tinygrad.runtime.support.compiler_cuda import NVRTCCompiler
 from tinygrad.uop.ops import Ops,UOp
-from extra.llm_research.prefill.nv_native_fragment_k16_gate import kernel
+from extra.llm_research.prefill.nv_native_fragment_k16_gate import kernel,q6_two_k16_kernel
 def test_native_k16_descriptor():
   assert cuda_81616_i8[0].dims == (8,16,16)
   assert cuda_81616_i8[0].elements_per_thread == (8,4,4)
@@ -29,3 +29,24 @@ def test_native_k16_renders_and_compiles():
     ob,ab,bb,global_size=(1,1,1),local_size=(32,1,1),wait=True)
   out=memoryview(bytearray(ob.size)); d.allocator._copyout(out,ob)
   assert np.array_equal(np.frombuffer(out,np.int32,count=128).reshape(16,8),av.astype(np.int32)@bv.astype(np.int32))
+
+def test_q6_two_k16_scale_semantics():
+  ph=lambda n,dt,i:UOp.placeholder((n,),dt,i)
+  args=(ph(128,dtypes.float32,0),ph(128,dtypes.int32,1),ph(128,dtypes.int32,2),ph(256,dtypes.int8,3),ph(128,dtypes.int8,4),
+        ph(1,dtypes.int8,5),ph(1,dtypes.float32,6),ph(256,dtypes.int8,7),ph(128,dtypes.int8,8),ph(1,dtypes.int8,9),ph(1,dtypes.float32,10))
+  p=to_program(q6_two_k16_kernel(*args),CUDARenderer(Target.parse('NV:CUDA:sm_120'))); src=next(x.arg for x in p.src if x.op is Ops.SOURCE)
+  assert src.count('mma.sync.aligned.m16n8k16.row.col.s32.s8.s8.s32')==1 and src.count('__WMMA_8_16_16_signed_char_int(')==3
+  rng=np.random.default_rng(20260901); a0=rng.integers(-32,32,(16,16),dtype=np.int8); a1=rng.integers(-32,32,(16,16),dtype=np.int8)
+  b0=rng.integers(-127,128,(16,8),dtype=np.int8); b1=rng.integers(-127,128,(16,8),dtype=np.int8)
+  sv0,sv1=np.array([-17],np.int8),np.array([23],np.int8); dv,dbv=np.array([.03125],np.float32),np.array([.0625],np.float32)
+  host=(np.empty(128,np.float32),np.empty(128,np.int32),np.empty(128,np.int32),a0,b0,sv0,dv,a1,b1,sv1,dbv)
+  dev=Device['NV']; bufs=[dev.allocator._alloc(x.nbytes,BufferSpec()) for x in host]
+  for buf,x in zip(bufs[3:],host[3:]): dev.allocator._copyin(buf,memoryview(x.tobytes()))
+  NVProgram(dev,'nv_native_fragment_q6_two_k16',NVRTCCompiler(dev.arch,ptx=False,cache_key='q6_two_k16_runtime').compile(src))(
+    *bufs,global_size=(1,1,1),local_size=(32,1,1),wait=True)
+  got=[]
+  for buf,dt in zip(bufs[:3],(np.float32,np.int32,np.int32)):
+    mv=memoryview(bytearray(buf.size)); dev.allocator._copyout(mv,buf); got.append(np.frombuffer(mv,dt,count=128).reshape(16,8))
+  ref0=a0.astype(np.int32)@b0.astype(np.int32); ref1=a1.astype(np.int32)@b1.astype(np.int32)
+  ref=(dv[0]*dbv[0])*(np.float32(sv0[0])*ref0.astype(np.float32)+np.float32(sv1[0])*ref1.astype(np.float32))
+  assert np.array_equal(got[1],ref0) and np.array_equal(got[2],ref1) and np.array_equal(got[0],ref)
