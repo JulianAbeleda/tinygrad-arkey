@@ -190,7 +190,8 @@ def q6_cta_geometry():
 
 def q6_packed_cta_kernel(out, blocks, b, dB, k_blocks:int, col_groups:int=1,
                          block_start:int=0, segment_blocks:int=None, total_k_blocks:int=None,
-                         activation_stride:int=None, activation_offset:int|UOp=0, allocation_base:int=0, axis_base:int=0):
+                         activation_stride:int=None, activation_offset:int|UOp=0, allocation_base:int=0,
+                         register_base:int|None=None, axis_base:int=0):
  """Generated 128x(16*col_groups) eight-warp CTA gate matching llama warp ownership."""
  if k_blocks < 1 or col_groups < 1: raise ValueError("k_blocks and col_groups must be positive")
  if segment_blocks is None: segment_blocks=k_blocks
@@ -203,6 +204,7 @@ def q6_packed_cta_kernel(out, blocks, b, dB, k_blocks:int, col_groups:int=1,
    raise ValueError("invalid K-block segment")
  cols=16*col_groups
  if activation_stride is None: activation_stride=cols
+ if register_base is None: register_base=allocation_base
  def access(buf, idx): return buf.index(idx) if buf.ndim == 0 else buf[idx]
  lid=UOp.special(256,"lidx0"); warp,lane=lid//32,lid%32; lr,lc=lane>>2,lane&3; band,phase=warp>>1,warp&1
  blk=UOp.range(segment_blocks,axis_base,axis_type=AxisType.REDUCE)
@@ -226,7 +228,7 @@ def q6_packed_cta_kernel(out, blocks, b, dB, k_blocks:int, col_groups:int=1,
   arg=("WMMA_8_16_16_signed_char_int",(8,16,16),dtypes.char,dtypes.int,"NV",32,axes,())
   return UOp(Ops.WMMA,dtypes.int.vec(4),(av,bv,UOp.const(dtypes.int.vec(4),0)),arg)
  cs=[[[mma(cg,n,g) for g in range(16)] for n in range(2)] for cg in range(col_groups)]
- acc=UOp.placeholder((8*col_groups,),dtypes.float32,700+allocation_base,addrspace=__import__('tinygrad.dtype',fromlist=['AddrSpace']).AddrSpace.REG)
+ acc=UOp.placeholder((8*col_groups,),dtypes.float32,700+register_base,addrspace=__import__('tinygrad.dtype',fromlist=['AddrSpace']).AddrSpace.REG)
  init=UOp.group(*(acc[i].store(0.0) for i in range(8*col_groups))); acc=acc.after(init); update=None
  for cg in range(col_groups):
   for n in range(2):
@@ -236,7 +238,7 @@ def q6_packed_cta_kernel(out, blocks, b, dB, k_blocks:int, col_groups:int=1,
     for p in range(8):
      def byte(off): return access(blocks,off//2).cast(dtypes.uint32).rshift((off%2)*8).bitwise_and(255)
      s0=byte(base+192+2*p).cast(dtypes.char).cast(dtypes.float32); s1=byte(base+193+2*p).cast(dtypes.char).cast(dtypes.float32)
-    term=term+(wd*access(dB,(abs_blk*8+p)*activation_stride+activation_offset+col))*(s0*cs[cg][n][2*p].gep(r).cast(dtypes.float32)+s1*cs[cg][n][2*p+1].gep(r).cast(dtypes.float32))
+     term=term+(wd*access(dB,(abs_blk*8+p)*activation_stride+activation_offset+col))*(s0*cs[cg][n][2*p].gep(r).cast(dtypes.float32)+s1*cs[cg][n][2*p+1].gep(r).cast(dtypes.float32))
     update=acc.after(blk if update is None else update)[ai].store(acc.after(blk)[ai]+term)
  done=update.end(blk)
  return UOp.sink(*(access(out,(band*32+n*16+lr+8*(r>>1))*cols+cg*16+phase*8+2*lc+(r&1)).store(acc.after(done)[cg*8+n*4+r])

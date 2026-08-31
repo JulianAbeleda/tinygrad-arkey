@@ -80,7 +80,8 @@ def generated_q6k_streamk_owner_partials(partials, tile_ids, blocks, b, dB):
   body0=q6_packed_cta_kernel(out0,rows0,b,dB,K_BLOCKS,col_groups=8,block_start=lo%K_BLOCKS,
     segment_blocks=first_len,total_k_blocks=K_BLOCKS,activation_stride=512,activation_offset=mt0*128,allocation_base=0,axis_base=0)
   body1=q6_packed_cta_kernel(out1,rows1,b,dB,K_BLOCKS,col_groups=8,block_start=UOp.const(dtypes.int32,0),
-    segment_blocks=second_len,total_k_blocks=K_BLOCKS,activation_stride=512,activation_offset=mt1*128,allocation_base=0,axis_base=2)
+    segment_blocks=second_len,total_k_blocks=K_BLOCKS,activation_stride=512,activation_offset=mt1*128,
+    allocation_base=0,register_base=10,axis_base=2)
   meta=UOp.group(tile_ids[owner*2].store(tile0),tile_ids[owner*2+1].store((second_len>0).where(tile1,-1)))
   return UOp.sink(*(body0.src+body1.src+meta.src),arg=KernelInfo(name="nv_generated_q6k_streamk_owner_partials",opts_to_apply=()))
 
