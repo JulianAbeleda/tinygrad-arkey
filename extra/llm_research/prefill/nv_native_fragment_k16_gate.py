@@ -3,7 +3,7 @@ import numpy as np
 import struct
 from tinygrad import Tensor,dtypes,Device
 from tinygrad.codegen.late.native_fragment import native_fragment_x2
-from tinygrad.uop.ops import KernelInfo,Ops,UOp
+from tinygrad.uop.ops import AxisType,KernelInfo,Ops,UOp
 def kernel(out, a, b):
  lane=UOp.special(32,"lidx0"); sh=UOp.placeholder((64,),dtypes.uint32,20,addrspace=__import__('tinygrad.dtype',fromlist=['AddrSpace']).AddrSpace.LOCAL)
  ready=UOp.barrier(UOp.group(*(sh[lane+32*i].store(a[lane+32*i]) for i in range(2))))
@@ -124,4 +124,40 @@ def q6_packed_k256_kernel(out, dot, blocks, b, dB):
   writes.append(out[idx].store(acc))
  return UOp.sink(*writes,arg=KernelInfo(name='nv_native_fragment_q6_packed_k256',opts_to_apply=()))
 
-__all__=['kernel','q6_two_k16_kernel','q6_packed_two_k16_kernel','q6_packed_k256_kernel','q6_first_two_k16_numpy']
+def q6_packed_kblocks_kernel(k_blocks:int):
+ """Looped 16x8 Q6_K x Q8 body for an integral number of canonical K=256 blocks."""
+ if k_blocks < 1: raise ValueError("k_blocks must be positive")
+ def kernel(out, blocks, b, dB):
+  lane=UOp.special(32,"lidx0"); lr,lc=lane>>2,lane&3; blk=UOp.range(k_blocks,0,axis_type=AxisType.REDUCE)
+  def byte(off): return blocks[off//2].cast(dtypes.uint32).rshift((off%2)*8).bitwise_and(255)
+  sh=UOp.placeholder((16*76,),dtypes.uint32,200,addrspace=__import__('tinygrad.dtype',fromlist=['AddrSpace']).AddrSpace.LOCAL)
+  st=UOp.range(32,1,axis_type=AxisType.LOOP); z=lane+32*st; srow=z//64; word=z%64; g=word//4; win=word%4
+  pgrp=g%8; base=(srow*k_blocks+blk)*210; ql_off=(g//8)*64+(g%4)*16; qh_off=(g//8)*32+(g%2)*16
+  vals=[]
+  for q in range(4):
+   lo=byte(base+ql_off+4*win+q); hi=byte(base+128+qh_off+4*win+q)
+   vals.append(lo.rshift((pgrp//4)*4).bitwise_and(15).bitwise_or(hi.rshift((pgrp//2)*2).bitwise_and(3).lshift(4)).alu(
+     Ops.SUB,UOp.const(dtypes.uint32,32)).cast(dtypes.char))
+  staged=sh[srow*76+word].store(UOp(Ops.STACK,dtypes.char.vec(4),tuple(vals)).bitcast(dtypes.uint32)).end(st)
+  ready=UOp.barrier(UOp.group(staged))
+  def group(g):
+   av=native_fragment_x2(sh.after(ready),(lane&15)*76+g*4).bitcast(dtypes.char.vec(8))
+   bv=UOp(Ops.STACK,dtypes.char.vec(4),tuple(b[(blk*256+g*16+4*lc+q)*8+lr] for q in range(4)))
+   axes=(tuple((400+i,2) for i in range(3)),tuple((410+i,2) for i in range(2)),tuple((420+i,2) for i in range(2)))
+   arg=("WMMA_8_16_16_signed_char_int",(8,16,16),dtypes.char,dtypes.int,"NV",32,axes,())
+   return UOp(Ops.WMMA,dtypes.int.vec(4),(av,bv,UOp.const(dtypes.int.vec(4),0)),arg)
+  cs=[group(g) for g in range(16)]; acc=UOp.placeholder((4,),dtypes.float32,300,addrspace=__import__('tinygrad.dtype',fromlist=['AddrSpace']).AddrSpace.REG)
+  init=UOp.group(*(acc[r].store(0.0) for r in range(4))); acc=acc.after(init); update=None
+  for r in range(4):
+   row=lr+8*(r>>1); col=2*lc+(r&1); base=(row*k_blocks+blk)*210; term=UOp.const(dtypes.float32,0.0)
+   wd=blocks[(base+208)//2].bitcast(dtypes.half).cast(dtypes.float32)
+   for p in range(8):
+    s0=byte(base+192+2*p).cast(dtypes.char).cast(dtypes.float32); s1=byte(base+193+2*p).cast(dtypes.char).cast(dtypes.float32)
+    term=term+(wd*dB[(blk*8+p)*8+col])*(s0*cs[2*p].gep(r).cast(dtypes.float32)+s1*cs[2*p+1].gep(r).cast(dtypes.float32))
+   update=acc.after(blk if update is None else update)[r].store(acc.after(blk)[r]+term)
+  done=update.end(blk)
+  return UOp.sink(*(out[(lr+8*(r>>1))*8+2*lc+(r&1)].store(acc.after(done)[r]) for r in range(4)),
+    arg=KernelInfo(name=f'nv_native_fragment_q6_packed_k{k_blocks*256}',opts_to_apply=()))
+ return kernel
+
+__all__=['kernel','q6_two_k16_kernel','q6_packed_two_k16_kernel','q6_packed_k256_kernel','q6_packed_kblocks_kernel','q6_first_two_k16_numpy']

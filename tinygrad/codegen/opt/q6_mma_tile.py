@@ -9,14 +9,14 @@ class Q6KMMATile:
   warp_size: int = 32
   nwarps: int = 2
   threads_per_row: int = 4
-  shared_stride_words: int = 77
+  shared_stride_words: int = 76
   ql_bytes: int = 128
   qh_bytes: int = 64
   scale_bytes: int = 16
   block_bytes: int = 210
 
   def validate(self) -> None:
-    if (self.rows,self.warp_size,self.nwarps,self.threads_per_row,self.shared_stride_words) != (64,32,2,4,77):
+    if (self.rows,self.warp_size,self.nwarps,self.threads_per_row,self.shared_stride_words) != (64,32,2,4,76):
       raise ValueError("unsupported Q6_K MMQ tile")
     if self.ql_bytes+self.qh_bytes+self.scale_bytes+2 != self.block_bytes: raise ValueError("invalid Q6_K block layout")
 
@@ -44,7 +44,7 @@ class Q6KMMATile:
         out[row*self.shared_stride_words+64]=struct.unpack("<I",struct.pack("<f",d))[0]
         for i0 in range(0,self.rows,8*self.nwarps):
           row=i0+y*8+x//4; base=row*self.block_bytes
-          out[row*self.shared_stride_words+66+x%4]=self._u32(blocks,base+self.ql_bytes+self.qh_bytes+4*(x%4))
+          out[row*self.shared_stride_words+65+x%4]=self._u32(blocks,base+self.ql_bytes+self.qh_bytes+4*(x%4))
     return tuple(out)
 
   def emit_cuda(self, name:str="q6k_stage_64") -> str:
@@ -70,7 +70,7 @@ extern "C" __global__ void {name}(const unsigned char *blocks, unsigned int *out
   ((float*)(tile+64))[row*{self.shared_stride_words}]=__half2float(*(const half*)(db+208));
   for (int i0=0;i0<{self.rows};i0+=16) {{
     row=i0+y*8+x/4; const unsigned char *sb=blocks+row*{self.block_bytes}+192;
-    tile[row*{self.shared_stride_words}+66+x%4]=q6_get_b2(sb,x%4);
+    tile[row*{self.shared_stride_words}+65+x%4]=q6_get_b2(sb,x%4);
   }}
   __syncthreads();
   for (int z=x+32*y;z<{self.rows*self.shared_stride_words};z+=64) out[z]=(unsigned int)tile[z];

@@ -6,7 +6,7 @@ def test_q6_mma_tile_stages_every_code_and_metadata_exactly():
   blocks=bytearray(rng.randbytes(tile.rows*tile.block_bytes))
   for row in range(tile.rows): struct.pack_into("<e",blocks,row*tile.block_bytes+208,(row-31)/16)
   staged=tile.stage_cpu(bytes(blocks))
-  assert len(staged)==64*77
+  assert len(staged)==64*76
   for row in range(64):
     base=row*210
     for txi in range(4):
@@ -15,10 +15,10 @@ def test_q6_mma_tile_stages_every_code_and_metadata_exactly():
       for word,q in ((2*txi,(ql&0x0f0f0f0f)|((qh<<4)&0x30303030)),
                      (2*txi+8,((ql>>4)&0x0f0f0f0f)|(qh&0x30303030))):
         want=sum((((q>>(8*j))&255)-32&255)<<(8*j) for j in range(4))
-        assert staged[row*77+word]==want
-    assert staged[row*77+64]==struct.unpack("<I",struct.pack("<f",(row-31)/16))[0]
-    for word in range(4): assert staged[row*77+66+word]==int.from_bytes(blocks[base+192+4*word:base+196+4*word],"little")
+        assert staged[row*76+word]==want
+    assert staged[row*76+64]==struct.unpack("<I",struct.pack("<f",(row-31)/16))[0]
+    for word in range(4): assert staged[row*76+65+word]==int.from_bytes(blocks[base+192+4*word:base+196+4*word],"little")
 
 def test_q6_mma_tile_cuda_lowering_uses_packed_lane_map():
   src=Q6KMMATile().emit_cuda()
-  assert src.count("__vsubss4") == 2 and "tile[4928]" in src and "row*77" in src
+  assert src.count("__vsubss4") == 2 and "tile[4864]" in src and "row*76" in src
