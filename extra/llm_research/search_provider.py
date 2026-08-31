@@ -623,6 +623,10 @@ def _flash_schema():
   from extra.llm_research import flash_candidate_schema as flash_schema
   return flash_schema
 
+def _primitive_plan_schema():
+  from extra.llm_research import generated_kernel_plan
+  return generated_kernel_plan
+
 
 def _nv_facts(payload: Mapping[str, Any]) -> dict[str, Any]:
   """Read and validate caller-supplied target facts; this adapter never autodetects a device."""
@@ -719,17 +723,39 @@ class CudaAdapter:
       raise ProtocolError("identity_mismatch", "candidate_hash does not match canonical flash descriptor bytes")
     return schema, descriptor, candidate
 
+  def _cuda_candidate(self, payload: Mapping[str, Any]) -> tuple[str, Any, Any, dict[str, Any]]:
+    candidate = payload.get("candidate")
+    if isinstance(candidate, Mapping) and candidate.get("schema_version") == "boltbeam.full_kernel_candidate.v3":
+      schema = _primitive_plan_schema()
+      try: descriptor = schema.validate(candidate, payload.get("candidate_hash"))
+      except schema.PlanError as exc: raise ProtocolError("admission_rejected", f"primitive plan is invalid: {exc}") from exc
+      return "primitive", schema, descriptor, dict(candidate)
+    schema, descriptor, candidate = self._flash_candidate(payload)
+    return "flash", schema, descriptor, candidate
+
   def describe(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
     facts = _nv_facts(payload)
     return {"provider_revision": _revision(), "target": facts, "backend_live": self.live_backend,
-            "supported_plan_kinds": [], "compiler_transforms": [],
+            "supported_plan_kinds": ["tinygrad_primitive_graph.v1"], "compiler_transforms": [],
             "limitations": ["flash geometry legality is fact-driven; this adapter owns no compiler Opt transforms",
                             "no model execution or route promotion"]}
 
   def admit(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
     _pinned_identity(payload)
-    schema, descriptor, candidate = self._flash_candidate(payload)
+    kind, schema, descriptor, candidate = self._cuda_candidate(payload)
     facts = _nv_facts(payload)
+    if kind == "primitive":
+      threads = descriptor.workgroup[0] * descriptor.workgroup[1] * descriptor.workgroup[2]
+      if threads > facts["max_threads_per_threadgroup"]:
+        raise ProtocolError("resource_limit", "primitive workgroup threads exceed target limit",
+                            details={"threads":threads, "limit":facts["max_threads_per_threadgroup"]})
+      shared = candidate["static_constraints"].get("max_workgroup_memory_bytes") or 0
+      if shared > facts["max_threadgroup_memory_bytes"]:
+        raise ProtocolError("resource_limit", "primitive shared-memory footprint exceeds target capacity",
+                            details={"shared_bytes":shared, "limit":facts["max_threadgroup_memory_bytes"]})
+      return {"admitted":True, "target":facts, "candidate_hash":schema.candidate_hash(candidate),
+              "plan_hash":schema.candidate_hash(candidate), "primitive_geometry":{"dispatch":list(descriptor.dispatch),
+              "workgroup":list(descriptor.workgroup), **dict(descriptor.parameters)}}
     tile = descriptor["tile"]
     threads = schema.derived_threads(tile)
     if threads > facts["max_threads_per_threadgroup"]:
@@ -752,8 +778,12 @@ class CudaAdapter:
     if not self.live_backend:
       raise ProtocolError("backend_unavailable", "no live NV/CUDA backend is available; compile fails closed",
                           details={"action": "compile"})
-    _, descriptor, _ = self._flash_candidate(payload)
+    kind, schema, descriptor, candidate = self._cuda_candidate(payload)
     admitted = self.admit(payload)
+    if kind == "primitive" and self.compile_fn is None:
+      canonical = schema.canonical_json(candidate)
+      return {**admitted, "compiler":"canned_fake_backend", "source_sha256":_sha256("tinygrad-plan:"+canonical),
+              "binary_sha256":_sha256("tinygrad-binary:"+canonical), "candidate_plan_hash":schema.candidate_hash(candidate)}
     fn = self.compile_fn if self.compile_fn is not None else _canned_cuda_compile
     return {**admitted, **dict(fn(payload, descriptor))}
 
@@ -761,8 +791,10 @@ class CudaAdapter:
     if not self.live_backend:
       raise ProtocolError("backend_unavailable", "no live NV/CUDA backend is available; check fails closed",
                           details={"action": "check"})
-    _, descriptor, _ = self._flash_candidate(payload)
+    kind, schema, descriptor, candidate = self._cuda_candidate(payload)
     self.admit(payload)
+    if kind == "primitive" and self.check_fn is None:
+      return {"correct":True, "oracle":"canned_fake_backend_no_gpu", "candidate_plan_hash":schema.candidate_hash(candidate)}
     fn = self.check_fn if self.check_fn is not None else _canned_cuda_check
     return dict(fn(payload, descriptor))
 
@@ -770,8 +802,14 @@ class CudaAdapter:
     if not self.live_backend:
       raise ProtocolError("backend_unavailable", "no live NV/CUDA backend is available; measure fails closed",
                           details={"action": "measure"})
-    _, descriptor, _ = self._flash_candidate(payload)
+    kind, schema, descriptor, candidate = self._cuda_candidate(payload)
     compiled = self.compile(payload)
+    if kind == "primitive" and self.measure_fn is None:
+      base = 1000 + int(schema.candidate_hash(candidate)[:6], 16) % 1000
+      return {**compiled, "timing_mode":"canned_fake_backend_deterministic_no_gpu", "samples_ns":[base,base+17,base+31],
+              "summary_ns":{"min":base,"mean":base+16,"max":base+31,"range":31},
+              "work_bytes":{"status":"estimated","provenance":"DS4 logical payload bytes; physical traffic unobserved",
+                            "bytes":candidate["memory_budget"]["bytes"]}}
     fn = self.measure_fn if self.measure_fn is not None else _canned_cuda_measure
     return {**compiled, **dict(fn(payload, descriptor))}
 
@@ -820,8 +858,12 @@ def serve(input_stream: TextIO = sys.stdin, output_stream: TextIO = sys.stdout, 
 def main() -> int:
   parser = argparse.ArgumentParser(description="tinygrad target-neutral search provider")
   parser.add_argument("--backend", choices=("METAL", "CUDA"), help="registered provider backend; omitted is fail-closed")
+  parser.add_argument("--live-generated", action="store_true", help="enable live tinygrad primitive-plan compile/check/measure")
   args = parser.parse_args()
-  adapter = MetalAdapter() if args.backend == "METAL" else CudaAdapter() if args.backend == "CUDA" else UnsupportedAdapter()
+  if args.backend == "CUDA" and args.live_generated:
+    generated = _primitive_plan_schema()
+    adapter = CudaAdapter(live_backend=True, compile_fn=generated.compile_ds4, check_fn=generated.check_ds4, measure_fn=generated.measure_ds4)
+  else: adapter = MetalAdapter() if args.backend == "METAL" else CudaAdapter() if args.backend == "CUDA" else UnsupportedAdapter()
   return serve(adapter=adapter)
 
 if __name__ == "__main__": raise SystemExit(main())

@@ -1,0 +1,1056 @@
+{
+  "boltbeam_revision": "7a2470dc8629dabd3d947e577c5630b00581e808",
+  "budget": {
+    "enumerated": 2,
+    "max_candidates": 2
+  },
+  "candidate_space_digest": "b4d5af01bd641adbd4d828a37b2639367251f39c2421bb904a9eba96e2946656",
+  "candidate_space_status": "FINITE",
+  "counts": {
+    "blocked": 0,
+    "measured_correct": 2,
+    "rejected_incorrect": 0,
+    "rejected_invalid": 0,
+    "rejected_static": 0,
+    "rejected_unsupported": 0,
+    "total": 2
+  },
+  "execution": {
+    "samples": 9,
+    "shape_mode": "exact_workload",
+    "warmups": 3
+  },
+  "execution_digest": "5d8275a9996ee26f2803b082fc50bbcb362f885b1b1fda5656a224ddf70c638e",
+  "objective": {
+    "direction": "minimize",
+    "metric": "median",
+    "tie_break": "candidate_hash"
+  },
+  "population": [
+    {
+      "candidate": {
+        "applicability": {
+          "exact_shape": true,
+          "profiles": [
+            "qwen3_8b_q4k_m"
+          ],
+          "roles": [
+            "activation_quantize"
+          ],
+          "targets": [
+            "nvidia_sm120:subgroup32"
+          ]
+        },
+        "correctness": {
+          "atol": 0.0,
+          "oracle": "llama_q8_ds4_fp16_byte_exact",
+          "rtol": 0.0
+        },
+        "memory_budget": {
+          "bytes": 2359296,
+          "status": "bounded"
+        },
+        "provenance": {
+          "generator_id": "boltbeam.primitive_plan",
+          "generator_revision": "boltbeam-primitive-plan-v1",
+          "schema_revision": "boltbeam.full_kernel_candidate.v3"
+        },
+        "schedule": {
+          "axes": [
+            {
+              "extent": 4096,
+              "kind": "dispatch",
+              "name": "workgroup_id"
+            },
+            {
+              "extent": 32,
+              "kind": "subgroup",
+              "name": "subgroup_lane"
+            },
+            {
+              "extent": 4,
+              "kind": "workgroup",
+              "name": "subgroup_id"
+            }
+          ],
+          "launch": {
+            "dispatch": [
+              4096,
+              1,
+              1
+            ],
+            "workgroup": [
+              32,
+              4,
+              1
+            ]
+          },
+          "nodes": [
+            {
+              "attrs": {
+                "dtype": "fp16"
+              },
+              "id": "activation",
+              "inputs": [
+                "x",
+                "workgroup_id",
+                "subgroup_id",
+                "subgroup_lane"
+              ],
+              "op": "global_load"
+            },
+            {
+              "attrs": {},
+              "id": "magnitude",
+              "inputs": [
+                "activation"
+              ],
+              "op": "abs"
+            },
+            {
+              "attrs": {
+                "width": "target_subgroup"
+              },
+              "id": "amax",
+              "inputs": [
+                "magnitude",
+                "subgroup_lane"
+              ],
+              "op": "subgroup_reduce_max"
+            },
+            {
+              "attrs": {
+                "numerator": 127.0,
+                "zero_value": 127.0
+              },
+              "id": "inverse_scale",
+              "inputs": [
+                "amax"
+              ],
+              "op": "precise_div"
+            },
+            {
+              "attrs": {},
+              "id": "scaled",
+              "inputs": [
+                "activation",
+                "inverse_scale"
+              ],
+              "op": "mul"
+            },
+            {
+              "attrs": {},
+              "id": "rounded",
+              "inputs": [
+                "scaled"
+              ],
+              "op": "round_away"
+            },
+            {
+              "attrs": {
+                "dtype": "int8",
+                "maximum": 127,
+                "minimum": -128
+              },
+              "id": "quantized",
+              "inputs": [
+                "rounded"
+              ],
+              "op": "clamp"
+            },
+            {
+              "attrs": {
+                "width": "target_subgroup"
+              },
+              "id": "sum",
+              "inputs": [
+                "activation",
+                "subgroup_lane"
+              ],
+              "op": "subgroup_reduce_sum"
+            },
+            {
+              "attrs": {
+                "metadata_bytes": 16,
+                "record_values": 128
+              },
+              "id": "packed",
+              "inputs": [
+                "quantized"
+              ],
+              "op": "pack_bytes"
+            },
+            {
+              "attrs": {
+                "region": "q"
+              },
+              "id": "q_store",
+              "inputs": [
+                "out",
+                "packed",
+                "workgroup_id",
+                "subgroup_id",
+                "subgroup_lane"
+              ],
+              "op": "global_store"
+            },
+            {
+              "attrs": {
+                "region": "metadata"
+              },
+              "id": "metadata_store",
+              "inputs": [
+                "out",
+                "amax",
+                "sum",
+                "workgroup_id",
+                "subgroup_id",
+                "subgroup_lane"
+              ],
+              "op": "global_store"
+            }
+          ],
+          "outputs": [
+            "q_store",
+            "metadata_store"
+          ],
+          "parameters": {
+            "record_order": "segment_major",
+            "records_per_workgroup": 4,
+            "store_width_bytes": 4,
+            "subgroups_per_record": 1,
+            "values_per_lane": 4
+          },
+          "plan_kind": "tinygrad_primitive_graph.v1"
+        },
+        "schema_version": "boltbeam.full_kernel_candidate.v3",
+        "static_constraints": {
+          "max_private_memory_bytes": 576,
+          "max_registers_per_thread": 64,
+          "max_workgroup_memory_bytes": 1024,
+          "spill_policy": "forbid"
+        },
+        "workload": {
+          "model_sha256": "e096b271688e66b2b3726f0f1c1f6c79227e31a59d1a299f41c0cec2aacf1f05",
+          "operands": {
+            "out": {
+              "direction": "out",
+              "dtype": "uint8",
+              "layout": "ds4_segment_major_144b",
+              "quantization": "q8_1"
+            },
+            "x": {
+              "direction": "in",
+              "dtype": "fp16",
+              "layout": "row_major",
+              "quantization": "none"
+            }
+          },
+          "operation": "quantize_q8_1_ds4",
+          "phase": "prefill",
+          "profile": "qwen3_8b_q4k_m",
+          "role": "activation_quantize",
+          "shape": {
+            "k": 4096,
+            "record_values": 128,
+            "rows": 512
+          },
+          "target": {
+            "arch": "sm_120",
+            "backend": "CUDA",
+            "resolved_target_hash": "dc48efeb45a941429f76753fac8131f8d9adaa91ec4c958edc2a8d721d1757da",
+            "subgroup_size": 32,
+            "target_id": "nvidia_sm120"
+          }
+        }
+      },
+      "candidate_hash": "9c46fb585dd4062b67d056842be5d6d4133b733cab4c49bc38a9a2d01afa400a",
+      "measurement": {
+        "max": 5783064,
+        "mean": 5129888.0,
+        "median": 5034812,
+        "min": 5011759,
+        "range": 771305
+      },
+      "rank": 2,
+      "score": 5034812,
+      "state": "MEASURED",
+      "worker": {
+        "candidate_hash": "9c46fb585dd4062b67d056842be5d6d4133b733cab4c49bc38a9a2d01afa400a",
+        "correctness": {
+          "evidence": {
+            "bytes": 2359296,
+            "candidate_plan_hash": "9c46fb585dd4062b67d056842be5d6d4133b733cab4c49bc38a9a2d01afa400a",
+            "correct": true,
+            "first_mismatch": null,
+            "mismatch_bytes": 0,
+            "oracle": "cpu_q8_1_ds4_byte_exact"
+          },
+          "evidence_hash": "98b5e3b289435da0858bd7dbe457e7fddab15bbdd2a9fe91a7ac54350f14c4d0",
+          "passed": true
+        },
+        "generated": {
+          "binary_hash": "4539c1ac392b84b668e13c19b599423c5db461f3b4f1b45455e9d02a4a455bc4",
+          "plan_hash": "9c46fb585dd4062b67d056842be5d6d4133b733cab4c49bc38a9a2d01afa400a",
+          "source_hash": "1405c5801431589cea35f8e18c55f84baecbb73a2d4293055b28f7bf316df599"
+        },
+        "hardware": {
+          "device_id": "NVIDIA sm_120",
+          "facts": {
+            "architecture": "sm_120",
+            "backend": "CUDA",
+            "matrix_mma_supported": true,
+            "max_threadgroup_memory_bytes": 232448,
+            "max_threads_per_threadgroup": 1024,
+            "name": "NVIDIA sm_120",
+            "shuffle_supported": true,
+            "subgroup_size": 32
+          },
+          "target": {
+            "arch": "sm_120",
+            "backend": "CUDA",
+            "resolved_target_hash": "dc48efeb45a941429f76753fac8131f8d9adaa91ec4c958edc2a8d721d1757da",
+            "subgroup_size": 32,
+            "target_id": "nvidia_sm120"
+          }
+        },
+        "performance": {
+          "evidence": {
+            "samples_ns": [
+              5177100,
+              5034812,
+              5021397,
+              5783064,
+              5016267,
+              5038258,
+              5011759,
+              5033439,
+              5052896
+            ],
+            "summary_ns": {
+              "max": 5783064,
+              "mean": 5129888.0,
+              "median": 5034812,
+              "min": 5011759,
+              "range": 771305
+            },
+            "timing_mode": "synchronized_wall_ns",
+            "warmups": 3,
+            "work_bytes": {
+              "bytes": 6553600,
+              "provenance": "DS4 144-byte output records plus fp16 activation input",
+              "status": "exact"
+            }
+          },
+          "evidence_hash": "52efd1d0a9f7d2a2fa7586103b103057cefbd86607627e68cd6727d02827aeea",
+          "measurement": {
+            "max": 5783064,
+            "mean": 5129888.0,
+            "median": 5034812,
+            "min": 5011759,
+            "range": 771305
+          }
+        },
+        "target": {
+          "arch": "sm_120",
+          "backend": "CUDA",
+          "resolved_target_hash": "dc48efeb45a941429f76753fac8131f8d9adaa91ec4c958edc2a8d721d1757da",
+          "subgroup_size": 32,
+          "target_id": "nvidia_sm120"
+        },
+        "workload": {
+          "model_sha256": "e096b271688e66b2b3726f0f1c1f6c79227e31a59d1a299f41c0cec2aacf1f05",
+          "operands": {
+            "out": {
+              "direction": "out",
+              "dtype": "uint8",
+              "layout": "ds4_segment_major_144b",
+              "quantization": "q8_1"
+            },
+            "x": {
+              "direction": "in",
+              "dtype": "fp16",
+              "layout": "row_major",
+              "quantization": "none"
+            }
+          },
+          "operation": "quantize_q8_1_ds4",
+          "phase": "prefill",
+          "profile": "qwen3_8b_q4k_m",
+          "role": "activation_quantize",
+          "shape": {
+            "k": 4096,
+            "record_values": 128,
+            "rows": 512
+          },
+          "target": {
+            "arch": "sm_120",
+            "backend": "CUDA",
+            "resolved_target_hash": "dc48efeb45a941429f76753fac8131f8d9adaa91ec4c958edc2a8d721d1757da",
+            "subgroup_size": 32,
+            "target_id": "nvidia_sm120"
+          }
+        }
+      }
+    },
+    {
+      "candidate": {
+        "applicability": {
+          "exact_shape": true,
+          "profiles": [
+            "qwen3_8b_q4k_m"
+          ],
+          "roles": [
+            "activation_quantize"
+          ],
+          "targets": [
+            "nvidia_sm120:subgroup32"
+          ]
+        },
+        "correctness": {
+          "atol": 0.0,
+          "oracle": "llama_q8_ds4_fp16_byte_exact",
+          "rtol": 0.0
+        },
+        "memory_budget": {
+          "bytes": 2359296,
+          "status": "bounded"
+        },
+        "provenance": {
+          "generator_id": "boltbeam.primitive_plan",
+          "generator_revision": "boltbeam-primitive-plan-v1",
+          "schema_revision": "boltbeam.full_kernel_candidate.v3"
+        },
+        "schedule": {
+          "axes": [
+            {
+              "extent": 16384,
+              "kind": "dispatch",
+              "name": "workgroup_id"
+            },
+            {
+              "extent": 32,
+              "kind": "subgroup",
+              "name": "subgroup_lane"
+            },
+            {
+              "extent": 4,
+              "kind": "workgroup",
+              "name": "subgroup_id"
+            }
+          ],
+          "launch": {
+            "dispatch": [
+              16384,
+              1,
+              1
+            ],
+            "workgroup": [
+              32,
+              4,
+              1
+            ]
+          },
+          "nodes": [
+            {
+              "attrs": {
+                "dtype": "fp16"
+              },
+              "id": "activation",
+              "inputs": [
+                "x",
+                "workgroup_id",
+                "subgroup_id",
+                "subgroup_lane"
+              ],
+              "op": "global_load"
+            },
+            {
+              "attrs": {},
+              "id": "magnitude",
+              "inputs": [
+                "activation"
+              ],
+              "op": "abs"
+            },
+            {
+              "attrs": {
+                "width": "target_subgroup"
+              },
+              "id": "amax",
+              "inputs": [
+                "magnitude",
+                "subgroup_lane"
+              ],
+              "op": "subgroup_reduce_max"
+            },
+            {
+              "attrs": {
+                "numerator": 127.0,
+                "zero_value": 127.0
+              },
+              "id": "inverse_scale",
+              "inputs": [
+                "amax"
+              ],
+              "op": "precise_div"
+            },
+            {
+              "attrs": {},
+              "id": "scaled",
+              "inputs": [
+                "activation",
+                "inverse_scale"
+              ],
+              "op": "mul"
+            },
+            {
+              "attrs": {},
+              "id": "rounded",
+              "inputs": [
+                "scaled"
+              ],
+              "op": "round_away"
+            },
+            {
+              "attrs": {
+                "dtype": "int8",
+                "maximum": 127,
+                "minimum": -128
+              },
+              "id": "quantized",
+              "inputs": [
+                "rounded"
+              ],
+              "op": "clamp"
+            },
+            {
+              "attrs": {
+                "width": "target_subgroup"
+              },
+              "id": "sum",
+              "inputs": [
+                "activation",
+                "subgroup_lane"
+              ],
+              "op": "subgroup_reduce_sum"
+            },
+            {
+              "attrs": {
+                "metadata_bytes": 16,
+                "record_values": 128
+              },
+              "id": "packed",
+              "inputs": [
+                "quantized"
+              ],
+              "op": "pack_bytes"
+            },
+            {
+              "attrs": {
+                "region": "q"
+              },
+              "id": "q_store",
+              "inputs": [
+                "out",
+                "packed",
+                "workgroup_id",
+                "subgroup_id",
+                "subgroup_lane"
+              ],
+              "op": "global_store"
+            },
+            {
+              "attrs": {
+                "region": "metadata"
+              },
+              "id": "metadata_store",
+              "inputs": [
+                "out",
+                "amax",
+                "sum",
+                "workgroup_id",
+                "subgroup_id",
+                "subgroup_lane"
+              ],
+              "op": "global_store"
+            }
+          ],
+          "outputs": [
+            "q_store",
+            "metadata_store"
+          ],
+          "parameters": {
+            "record_order": "segment_major",
+            "records_per_workgroup": 1,
+            "store_width_bytes": 4,
+            "subgroups_per_record": 4,
+            "values_per_lane": 1
+          },
+          "plan_kind": "tinygrad_primitive_graph.v1"
+        },
+        "schema_version": "boltbeam.full_kernel_candidate.v3",
+        "static_constraints": {
+          "max_private_memory_bytes": 576,
+          "max_registers_per_thread": 64,
+          "max_workgroup_memory_bytes": 1024,
+          "spill_policy": "forbid"
+        },
+        "workload": {
+          "model_sha256": "e096b271688e66b2b3726f0f1c1f6c79227e31a59d1a299f41c0cec2aacf1f05",
+          "operands": {
+            "out": {
+              "direction": "out",
+              "dtype": "uint8",
+              "layout": "ds4_segment_major_144b",
+              "quantization": "q8_1"
+            },
+            "x": {
+              "direction": "in",
+              "dtype": "fp16",
+              "layout": "row_major",
+              "quantization": "none"
+            }
+          },
+          "operation": "quantize_q8_1_ds4",
+          "phase": "prefill",
+          "profile": "qwen3_8b_q4k_m",
+          "role": "activation_quantize",
+          "shape": {
+            "k": 4096,
+            "record_values": 128,
+            "rows": 512
+          },
+          "target": {
+            "arch": "sm_120",
+            "backend": "CUDA",
+            "resolved_target_hash": "dc48efeb45a941429f76753fac8131f8d9adaa91ec4c958edc2a8d721d1757da",
+            "subgroup_size": 32,
+            "target_id": "nvidia_sm120"
+          }
+        }
+      },
+      "candidate_hash": "d3d753f3c4d69808b500c53b6c6ff15deecd429182abb51b15f5a774324a7069",
+      "measurement": {
+        "max": 2007980,
+        "mean": 1942793.5555555555,
+        "median": 1939090,
+        "min": 1911147,
+        "range": 96833
+      },
+      "rank": 1,
+      "score": 1939090,
+      "state": "MEASURED",
+      "worker": {
+        "candidate_hash": "d3d753f3c4d69808b500c53b6c6ff15deecd429182abb51b15f5a774324a7069",
+        "correctness": {
+          "evidence": {
+            "bytes": 2359296,
+            "candidate_plan_hash": "d3d753f3c4d69808b500c53b6c6ff15deecd429182abb51b15f5a774324a7069",
+            "correct": true,
+            "first_mismatch": null,
+            "mismatch_bytes": 0,
+            "oracle": "cpu_q8_1_ds4_byte_exact"
+          },
+          "evidence_hash": "e9cffa84f4f498e4147eed97016e5b754e81e4642c7dc293f62f07e169eadb1d",
+          "passed": true
+        },
+        "generated": {
+          "binary_hash": "3e3b18d20464f6756ba752bc4c1747fd738bbae221604e6914e03db5ece65ab1",
+          "plan_hash": "d3d753f3c4d69808b500c53b6c6ff15deecd429182abb51b15f5a774324a7069",
+          "source_hash": "d0ade4e35e7b70321adfac17d2062b13ef279f29f76328c091616e796592fa6c"
+        },
+        "hardware": {
+          "device_id": "NVIDIA sm_120",
+          "facts": {
+            "architecture": "sm_120",
+            "backend": "CUDA",
+            "matrix_mma_supported": true,
+            "max_threadgroup_memory_bytes": 232448,
+            "max_threads_per_threadgroup": 1024,
+            "name": "NVIDIA sm_120",
+            "shuffle_supported": true,
+            "subgroup_size": 32
+          },
+          "target": {
+            "arch": "sm_120",
+            "backend": "CUDA",
+            "resolved_target_hash": "dc48efeb45a941429f76753fac8131f8d9adaa91ec4c958edc2a8d721d1757da",
+            "subgroup_size": 32,
+            "target_id": "nvidia_sm120"
+          }
+        },
+        "performance": {
+          "evidence": {
+            "samples_ns": [
+              1939090,
+              1947295,
+              1944390,
+              1938989,
+              1947075,
+              1911147,
+              2007980,
+              1933580,
+              1915596
+            ],
+            "summary_ns": {
+              "max": 2007980,
+              "mean": 1942793.5555555555,
+              "median": 1939090,
+              "min": 1911147,
+              "range": 96833
+            },
+            "timing_mode": "synchronized_wall_ns",
+            "warmups": 3,
+            "work_bytes": {
+              "bytes": 6553600,
+              "provenance": "DS4 144-byte output records plus fp16 activation input",
+              "status": "exact"
+            }
+          },
+          "evidence_hash": "0755a00dcf0a0e9f4be07f452dde79ff629b908c6b506794a350f11735636024",
+          "measurement": {
+            "max": 2007980,
+            "mean": 1942793.5555555555,
+            "median": 1939090,
+            "min": 1911147,
+            "range": 96833
+          }
+        },
+        "target": {
+          "arch": "sm_120",
+          "backend": "CUDA",
+          "resolved_target_hash": "dc48efeb45a941429f76753fac8131f8d9adaa91ec4c958edc2a8d721d1757da",
+          "subgroup_size": 32,
+          "target_id": "nvidia_sm120"
+        },
+        "workload": {
+          "model_sha256": "e096b271688e66b2b3726f0f1c1f6c79227e31a59d1a299f41c0cec2aacf1f05",
+          "operands": {
+            "out": {
+              "direction": "out",
+              "dtype": "uint8",
+              "layout": "ds4_segment_major_144b",
+              "quantization": "q8_1"
+            },
+            "x": {
+              "direction": "in",
+              "dtype": "fp16",
+              "layout": "row_major",
+              "quantization": "none"
+            }
+          },
+          "operation": "quantize_q8_1_ds4",
+          "phase": "prefill",
+          "profile": "qwen3_8b_q4k_m",
+          "role": "activation_quantize",
+          "shape": {
+            "k": 4096,
+            "record_values": 128,
+            "rows": 512
+          },
+          "target": {
+            "arch": "sm_120",
+            "backend": "CUDA",
+            "resolved_target_hash": "dc48efeb45a941429f76753fac8131f8d9adaa91ec4c958edc2a8d721d1757da",
+            "subgroup_size": 32,
+            "target_id": "nvidia_sm120"
+          }
+        }
+      }
+    }
+  ],
+  "request_digest": "27ba02047d30418edd385b94f1a8626a6ac74ba7f0adc543b738d496594588ee",
+  "request_id": "nv-ds4-generated-v1",
+  "run_id": "nv-ds4-generated-20260830",
+  "schema": "boltbeam.full_kernel_search_result.v1",
+  "selected_shape_key_plans": [
+    {
+      "candidate": {
+        "applicability": {
+          "exact_shape": true,
+          "profiles": [
+            "qwen3_8b_q4k_m"
+          ],
+          "roles": [
+            "activation_quantize"
+          ],
+          "targets": [
+            "nvidia_sm120:subgroup32"
+          ]
+        },
+        "correctness": {
+          "atol": 0.0,
+          "oracle": "llama_q8_ds4_fp16_byte_exact",
+          "rtol": 0.0
+        },
+        "memory_budget": {
+          "bytes": 2359296,
+          "status": "bounded"
+        },
+        "provenance": {
+          "generator_id": "boltbeam.primitive_plan",
+          "generator_revision": "boltbeam-primitive-plan-v1",
+          "schema_revision": "boltbeam.full_kernel_candidate.v3"
+        },
+        "schedule": {
+          "axes": [
+            {
+              "extent": 16384,
+              "kind": "dispatch",
+              "name": "workgroup_id"
+            },
+            {
+              "extent": 32,
+              "kind": "subgroup",
+              "name": "subgroup_lane"
+            },
+            {
+              "extent": 4,
+              "kind": "workgroup",
+              "name": "subgroup_id"
+            }
+          ],
+          "launch": {
+            "dispatch": [
+              16384,
+              1,
+              1
+            ],
+            "workgroup": [
+              32,
+              4,
+              1
+            ]
+          },
+          "nodes": [
+            {
+              "attrs": {
+                "dtype": "fp16"
+              },
+              "id": "activation",
+              "inputs": [
+                "x",
+                "workgroup_id",
+                "subgroup_id",
+                "subgroup_lane"
+              ],
+              "op": "global_load"
+            },
+            {
+              "attrs": {},
+              "id": "magnitude",
+              "inputs": [
+                "activation"
+              ],
+              "op": "abs"
+            },
+            {
+              "attrs": {
+                "width": "target_subgroup"
+              },
+              "id": "amax",
+              "inputs": [
+                "magnitude",
+                "subgroup_lane"
+              ],
+              "op": "subgroup_reduce_max"
+            },
+            {
+              "attrs": {
+                "numerator": 127.0,
+                "zero_value": 127.0
+              },
+              "id": "inverse_scale",
+              "inputs": [
+                "amax"
+              ],
+              "op": "precise_div"
+            },
+            {
+              "attrs": {},
+              "id": "scaled",
+              "inputs": [
+                "activation",
+                "inverse_scale"
+              ],
+              "op": "mul"
+            },
+            {
+              "attrs": {},
+              "id": "rounded",
+              "inputs": [
+                "scaled"
+              ],
+              "op": "round_away"
+            },
+            {
+              "attrs": {
+                "dtype": "int8",
+                "maximum": 127,
+                "minimum": -128
+              },
+              "id": "quantized",
+              "inputs": [
+                "rounded"
+              ],
+              "op": "clamp"
+            },
+            {
+              "attrs": {
+                "width": "target_subgroup"
+              },
+              "id": "sum",
+              "inputs": [
+                "activation",
+                "subgroup_lane"
+              ],
+              "op": "subgroup_reduce_sum"
+            },
+            {
+              "attrs": {
+                "metadata_bytes": 16,
+                "record_values": 128
+              },
+              "id": "packed",
+              "inputs": [
+                "quantized"
+              ],
+              "op": "pack_bytes"
+            },
+            {
+              "attrs": {
+                "region": "q"
+              },
+              "id": "q_store",
+              "inputs": [
+                "out",
+                "packed",
+                "workgroup_id",
+                "subgroup_id",
+                "subgroup_lane"
+              ],
+              "op": "global_store"
+            },
+            {
+              "attrs": {
+                "region": "metadata"
+              },
+              "id": "metadata_store",
+              "inputs": [
+                "out",
+                "amax",
+                "sum",
+                "workgroup_id",
+                "subgroup_id",
+                "subgroup_lane"
+              ],
+              "op": "global_store"
+            }
+          ],
+          "outputs": [
+            "q_store",
+            "metadata_store"
+          ],
+          "parameters": {
+            "record_order": "segment_major",
+            "records_per_workgroup": 1,
+            "store_width_bytes": 4,
+            "subgroups_per_record": 4,
+            "values_per_lane": 1
+          },
+          "plan_kind": "tinygrad_primitive_graph.v1"
+        },
+        "schema_version": "boltbeam.full_kernel_candidate.v3",
+        "static_constraints": {
+          "max_private_memory_bytes": 576,
+          "max_registers_per_thread": 64,
+          "max_workgroup_memory_bytes": 1024,
+          "spill_policy": "forbid"
+        },
+        "workload": {
+          "model_sha256": "e096b271688e66b2b3726f0f1c1f6c79227e31a59d1a299f41c0cec2aacf1f05",
+          "operands": {
+            "out": {
+              "direction": "out",
+              "dtype": "uint8",
+              "layout": "ds4_segment_major_144b",
+              "quantization": "q8_1"
+            },
+            "x": {
+              "direction": "in",
+              "dtype": "fp16",
+              "layout": "row_major",
+              "quantization": "none"
+            }
+          },
+          "operation": "quantize_q8_1_ds4",
+          "phase": "prefill",
+          "profile": "qwen3_8b_q4k_m",
+          "role": "activation_quantize",
+          "shape": {
+            "k": 4096,
+            "record_values": 128,
+            "rows": 512
+          },
+          "target": {
+            "arch": "sm_120",
+            "backend": "CUDA",
+            "resolved_target_hash": "dc48efeb45a941429f76753fac8131f8d9adaa91ec4c958edc2a8d721d1757da",
+            "subgroup_size": 32,
+            "target_id": "nvidia_sm120"
+          }
+        }
+      },
+      "candidate_hash": "d3d753f3c4d69808b500c53b6c6ff15deecd429182abb51b15f5a774324a7069",
+      "measurement": {
+        "max": 2007980,
+        "mean": 1942793.5555555555,
+        "median": 1939090,
+        "min": 1911147,
+        "range": 96833
+      },
+      "objective": {
+        "direction": "minimize",
+        "metric": "median",
+        "tie_break": "candidate_hash"
+      },
+      "rank": 1,
+      "shape_key": {
+        "model_sha256": "e096b271688e66b2b3726f0f1c1f6c79227e31a59d1a299f41c0cec2aacf1f05",
+        "operands": {
+          "out": {
+            "direction": "out",
+            "dtype": "uint8",
+            "layout": "ds4_segment_major_144b",
+            "quantization": "q8_1"
+          },
+          "x": {
+            "direction": "in",
+            "dtype": "fp16",
+            "layout": "row_major",
+            "quantization": "none"
+          }
+        },
+        "operation": "quantize_q8_1_ds4",
+        "phase": "prefill",
+        "profile": "qwen3_8b_q4k_m",
+        "role": "activation_quantize",
+        "shape": {
+          "k": 4096,
+          "record_values": 128,
+          "rows": 512
+        },
+        "target": {
+          "arch": "sm_120",
+          "backend": "CUDA",
+          "resolved_target_hash": "dc48efeb45a941429f76753fac8131f8d9adaa91ec4c958edc2a8d721d1757da",
+          "subgroup_size": 32,
+          "target_id": "nvidia_sm120"
+        }
+      }
+    }
+  ],
+  "status": "COMPLETE",
+  "timestamp": "2026-08-30T00:00:00Z"
+}

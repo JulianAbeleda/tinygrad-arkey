@@ -238,6 +238,42 @@ def test_cuda_describe_and_admit_fail_closed_without_facts():
   assert malformed["error"]["code"] == "admission_rejected"
 
 
+def _primitive_ds4_payload(records_per_cta=4):
+  from extra.llm_research.generated_kernel_plan import candidate_hash
+  records = 16384; values_per_lane = 4 if records_per_cta == 4 else 1
+  candidate = {"schema_version":"boltbeam.full_kernel_candidate.v3", "workload":{"profile":"p", "model_sha256":"a"*64,
+    "phase":"prefill", "role":"activation_quantize", "operation":"quantize_q8_1_ds4",
+    "shape":{"rows":512,"k":4096,"record_values":128}, "operands":{"x":{"direction":"in","dtype":"fp16","layout":"row_major","quantization":"none"},
+    "out":{"direction":"out","dtype":"uint8","layout":"ds4_segment_major_144b","quantization":"q8_1"}},
+    "target":{"target_id":"nvidia_sm120","backend":"CUDA","arch":"sm_120","subgroup_size":32,"resolved_target_hash":"b"*64}},
+    "schedule":{"plan_kind":"tinygrad_primitive_graph.v1","launch":{"dispatch":[records//records_per_cta,1,1],"workgroup":[32,4,1]},
+    "axes":[{"name":"workgroup_id","kind":"dispatch","extent":records//records_per_cta},{"name":"subgroup_lane","kind":"subgroup","extent":32},{"name":"subgroup_id","kind":"workgroup","extent":4}],
+    "nodes":[{"id":"v","op":"global_load","inputs":["x","workgroup_id","subgroup_id","subgroup_lane"],"attrs":{}},
+             {"id":"q","op":"round_away","inputs":["v"],"attrs":{}},
+             {"id":"s","op":"global_store","inputs":["out","q","workgroup_id","subgroup_id","subgroup_lane"],"attrs":{}}],"outputs":["s"],
+    "parameters":{"records_per_workgroup":records_per_cta,"subgroups_per_record":1 if records_per_cta==4 else 4,
+      "values_per_lane":values_per_lane,"store_width_bytes":4,"record_order":"segment_major"}},
+    "static_constraints":{"max_workgroup_memory_bytes":1024,"max_private_memory_bytes":576,"max_registers_per_thread":64,"spill_policy":"forbid"},
+    "correctness":{"oracle":"llama","atol":0,"rtol":0},"memory_budget":{"status":"bounded","bytes":2359296},
+    "provenance":{"generator_id":"test","generator_revision":"test","schema_revision":"boltbeam.full_kernel_candidate.v3"},
+    "applicability":{"exact_shape":True,"profiles":["p"],"roles":["activation_quantize"],"targets":["nvidia_sm120:subgroup32"]}}
+  return {"candidate":candidate,"candidate_hash":candidate_hash(candidate),"target_facts":_nv_facts(architecture="sm_120",backend="CUDA")}
+
+
+def test_cuda_adapter_admits_and_preserves_generated_primitive_plan_identity():
+  adapter = provider.CudaAdapter(live_backend=True)
+  payload = _primitive_ds4_payload()
+  admitted = provider.process(request("admit", payload), adapter=adapter)
+  assert admitted["status"] == "ok" and admitted["result"]["primitive_geometry"]["records_per_workgroup"] == 4
+  compiled = provider.process(request("compile", payload), adapter=adapter)
+  checked = provider.process(request("check", payload), adapter=adapter)
+  measured = provider.process(request("measure", payload), adapter=adapter)
+  assert compiled["status"] == checked["status"] == measured["status"] == "ok"
+  assert checked["result"]["correct"] is True
+  assert len(compiled["result"]["source_sha256"]) == len(compiled["result"]["binary_sha256"]) == 64
+  assert measured["result"]["samples_ns"]
+
+
 def test_cuda_admit_validates_geometry_against_supplied_facts():
   adapter = provider.CudaAdapter()
   out = provider.process(request("admit", _flash_payload()), adapter=adapter)
