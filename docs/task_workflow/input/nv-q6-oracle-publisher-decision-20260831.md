@@ -54,6 +54,13 @@ wide route.
 
 `CAUSAL_PASS_ORACLE_PUBLISHER`; `NO_GO_BROAD_ROUTE_INTEGRATION`.
 
+This decision is superseded by the persistent-depth and full-route qualifier
+recorded in `nv-q6-oracle-depth-full-route-decision-20260831.md`. The earlier
+absolute projection multiplied a launch-dominated one-CTA time and was not a
+valid model of persistent K depth. Its final no-go happened to be correct, but
+the projection is withdrawn. The corrected process fits `T(depth)` and then
+measures the real 170-owner route.
+
 The publisher is the largest proven oracle-derived lever. Preserve the exact
 implementation and apply its three-loop ownership topology to the existing
 wide Stream-K producer. Do not promote the broad screening CTA itself.

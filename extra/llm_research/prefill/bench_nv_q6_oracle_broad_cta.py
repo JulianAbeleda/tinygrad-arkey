@@ -42,6 +42,7 @@ def _arm(prefetch:bool, rounds:int, replicas:int, root:pathlib.Path, combined_in
   if combined_initial_publish: name += "_combined_publish"
   if factor_dA: name += "_factor_da"
   if oracle_publisher: name += "_oracle_publisher"
+  name += "_d1"
   arm_dir=root/name; arm_dir.mkdir(parents=True,exist_ok=True); source_path=arm_dir/f"{name}.cu"; source_path.write_text(source)
   compile_start=time.perf_counter(); binary=Device["NV"].compiler.compile(source); compile_ms=(time.perf_counter()-compile_start)*1e3
   cubin_path=arm_dir/f"{name}.cubin"; cubin_path.write_bytes(binary); census=analyze_cubin(cubin_path,arm_dir/"sass",name)["summary"]

@@ -1,0 +1,1283 @@
+{
+  "schema": "tinygrad.nv_q6_oracle_depth.v1",
+  "depths": [
+    1,
+    2,
+    4,
+    8,
+    16,
+    36,
+    37
+  ],
+  "rounds": 31,
+  "contract": {
+    "publisher": "straight_line_oracle",
+    "q8": "rolling_prefetch",
+    "arithmetic": "direct",
+    "combined_initial_publish": false,
+    "timing_model": "T(depth)=intercept+slope*depth; never T(1)*depth"
+  },
+  "fit": {
+    "method": "theil_sen_pairwise_median",
+    "intercept_us": 3.161599999999993,
+    "slope_us_per_k256": 5.2064,
+    "ols_intercept_us": 3.195919421083535,
+    "ols_slope_us_per_k256": 5.205197731273227,
+    "max_abs_residual_us": 0.21760000000000623,
+    "median_abs_residual_us": 0.05119999999999436
+  },
+  "gate": {
+    "llama_gross_epoch_us": 5.57,
+    "passed": false,
+    "decision": "NO_GO_PERSISTENT_BROAD_ROUTE"
+  },
+  "arms": [
+    {
+      "depth": 1,
+      "shape": {
+        "M": 128,
+        "N": 128,
+        "K": 256,
+        "block": [
+          256,
+          1,
+          1
+        ],
+        "grid": [
+          1,
+          1,
+          1
+        ]
+      },
+      "correctness": {
+        "exact": true,
+        "finite": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0
+      },
+      "timing": {
+        "samples_us": [
+          8.288,
+          8.288,
+          8.288,
+          8.16,
+          8.256,
+          8.192,
+          8.224,
+          8.224,
+          8.192,
+          8.352,
+          8.448,
+          8.256,
+          8.352,
+          8.192,
+          8.256,
+          8.352,
+          8.288,
+          8.256,
+          8.448,
+          8.32,
+          8.288,
+          8.192,
+          8.128,
+          8.288,
+          8.224,
+          8.288,
+          8.192,
+          8.256,
+          8.128,
+          8.192,
+          8.192
+        ],
+        "min_us": 8.128,
+        "median_us": 8.256,
+        "max_us": 8.448
+      },
+      "compiler": {
+        "render_ms": 7551.5518030151725,
+        "compile_wall_ms": 141.16408582776785,
+        "source": "docs/task_workflow/evidence/nv-q6-oracle-depth-no_da-20260831/artifacts/depth_1/nv_q6_oracle_broad_cta_prefetch_oracle_publisher_d1.cu",
+        "source_bytes": 138544,
+        "cubin": "docs/task_workflow/evidence/nv-q6-oracle-depth-no_da-20260831/artifacts/depth_1/nv_q6_oracle_broad_cta_prefetch_oracle_publisher_d1.cubin",
+        "cubin_sha256": "c5ed00be85bef6168d935b06c11d4762826e8f786bb37626104b41fd26fe82a2"
+      },
+      "sass": {
+        "instruction_total": 3968,
+        "families": {
+          "BAR": 5,
+          "BRA": 1,
+          "EXIT": 1,
+          "FFMA": 512,
+          "FMUL": 512,
+          "HADD2": 4,
+          "I2FP": 512,
+          "IADD": 65,
+          "IDP": 1,
+          "IMAD": 1042,
+          "IMMA": 256,
+          "LDC": 4,
+          "LDCU": 1,
+          "LDG": 105,
+          "LDS": 168,
+          "LDSM": 32,
+          "LEA": 44,
+          "LOP3": 205,
+          "MOV": 120,
+          "NOP": 14,
+          "PRMT": 86,
+          "S2R": 4,
+          "SHF": 139,
+          "STG": 64,
+          "STS": 71
+        },
+        "resources": {
+          "registers": 255,
+          "stack_bytes": 0,
+          "shared_static_bytes": 1024,
+          "local_static_bytes": 0
+        },
+        "spill_regions": {
+          "pre_mma": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          },
+          "mma_span": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          },
+          "post_mma": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          }
+        }
+      },
+      "spill_free": true,
+      "feasible": true
+    },
+    {
+      "depth": 2,
+      "shape": {
+        "M": 128,
+        "N": 128,
+        "K": 512,
+        "block": [
+          256,
+          1,
+          1
+        ],
+        "grid": [
+          1,
+          1,
+          1
+        ]
+      },
+      "correctness": {
+        "exact": true,
+        "finite": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0
+      },
+      "timing": {
+        "samples_us": [
+          13.792,
+          13.792,
+          13.824,
+          13.76,
+          13.824,
+          13.792,
+          13.984,
+          13.824,
+          13.728,
+          13.76,
+          13.792,
+          13.76,
+          13.792,
+          13.696,
+          13.888,
+          13.888,
+          13.76,
+          13.984,
+          13.888,
+          13.856,
+          13.76,
+          13.888,
+          13.824,
+          13.792,
+          13.792,
+          13.792,
+          13.792,
+          13.696,
+          13.856,
+          13.824,
+          13.728
+        ],
+        "min_us": 13.696,
+        "median_us": 13.792,
+        "max_us": 13.984
+      },
+      "compiler": {
+        "render_ms": 7894.310031086206,
+        "compile_wall_ms": 47.75352589786053,
+        "source": "docs/task_workflow/evidence/nv-q6-oracle-depth-no_da-20260831/artifacts/depth_2/nv_q6_oracle_broad_cta_prefetch_oracle_publisher_d2.cu",
+        "source_bytes": 142212,
+        "cubin": "docs/task_workflow/evidence/nv-q6-oracle-depth-no_da-20260831/artifacts/depth_2/nv_q6_oracle_broad_cta_prefetch_oracle_publisher_d2.cubin",
+        "cubin_sha256": "4581326bff3ade77d8bfbf314a9cf88ea2be97072bb09acd91f060d022c2fdde"
+      },
+      "sass": {
+        "instruction_total": 4024,
+        "families": {
+          "BAR": 5,
+          "BRA": 2,
+          "CS2R": 27,
+          "EXIT": 1,
+          "FFMA": 512,
+          "FMUL": 512,
+          "HADD2": 4,
+          "I2FP": 512,
+          "IADD": 68,
+          "IDP": 1,
+          "IMAD": 1045,
+          "IMMA": 256,
+          "LDC": 4,
+          "LDCU": 2,
+          "LDG": 105,
+          "LDL": 8,
+          "LDS": 168,
+          "LDSM": 32,
+          "LEA": 47,
+          "LOP3": 210,
+          "MOV": 98,
+          "NOP": 12,
+          "PRMT": 85,
+          "S2R": 5,
+          "S2UR": 2,
+          "SHF": 141,
+          "STG": 64,
+          "STL": 16,
+          "STS": 71,
+          "UIADD3": 2,
+          "ULEA": 2,
+          "UMOV": 2,
+          "UPLOP3": 3
+        },
+        "resources": {
+          "registers": 255,
+          "stack_bytes": 32,
+          "shared_static_bytes": 1024,
+          "local_static_bytes": 0
+        },
+        "spill_regions": {
+          "pre_mma": {
+            "LDL": 1,
+            "STL": 8,
+            "pcs": [
+              "0x70",
+              "0xb0",
+              "0xf0",
+              "0x130",
+              "0x170",
+              "0x1b0",
+              "0x1f0",
+              "0x230",
+              "0x3e0"
+            ],
+            "stack_offsets": {
+              "0x0": 1,
+              "0x4": 1,
+              "0x8": 1,
+              "0xc": 1,
+              "0x10": 2,
+              "0x14": 1,
+              "0x18": 1,
+              "0x1c": 1
+            }
+          },
+          "mma_span": {
+            "LDL": 7,
+            "STL": 0,
+            "pcs": [
+              "0x5210",
+              "0x5230",
+              "0x5980",
+              "0x6b00",
+              "0x6ba0",
+              "0x6c00",
+              "0x7e80"
+            ],
+            "stack_offsets": {
+              "0x0": 1,
+              "0x4": 1,
+              "0x8": 1,
+              "0xc": 1,
+              "0x14": 1,
+              "0x18": 1,
+              "0x1c": 1
+            }
+          },
+          "post_mma": {
+            "LDL": 0,
+            "STL": 8,
+            "pcs": [
+              "0xf180",
+              "0xf1a0",
+              "0xf1c0",
+              "0xf1e0",
+              "0xf200",
+              "0xf220",
+              "0xf240",
+              "0xf270"
+            ],
+            "stack_offsets": {
+              "0x0": 1,
+              "0x4": 1,
+              "0x8": 1,
+              "0xc": 1,
+              "0x10": 1,
+              "0x14": 1,
+              "0x18": 1,
+              "0x1c": 1
+            }
+          }
+        }
+      },
+      "spill_free": false,
+      "feasible": false
+    },
+    {
+      "depth": 4,
+      "shape": {
+        "M": 128,
+        "N": 128,
+        "K": 1024,
+        "block": [
+          256,
+          1,
+          1
+        ],
+        "grid": [
+          1,
+          1,
+          1
+        ]
+      },
+      "correctness": {
+        "exact": true,
+        "finite": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0
+      },
+      "timing": {
+        "samples_us": [
+          24.032,
+          23.744,
+          23.936,
+          23.904,
+          24.0,
+          24.096,
+          24.032,
+          23.936,
+          23.872,
+          24.128,
+          24.128,
+          24.0,
+          23.968,
+          23.968,
+          24.096,
+          24.096,
+          23.872,
+          23.808,
+          23.872,
+          24.192,
+          23.904,
+          24.096,
+          24.0,
+          23.936,
+          23.872,
+          23.872,
+          23.904,
+          23.936,
+          23.808,
+          24.128,
+          23.904
+        ],
+        "min_us": 23.744,
+        "median_us": 23.936,
+        "max_us": 24.192
+      },
+      "compiler": {
+        "render_ms": 8121.300328988582,
+        "compile_wall_ms": 48.162815161049366,
+        "source": "docs/task_workflow/evidence/nv-q6-oracle-depth-no_da-20260831/artifacts/depth_4/nv_q6_oracle_broad_cta_prefetch_oracle_publisher_d4.cu",
+        "source_bytes": 142212,
+        "cubin": "docs/task_workflow/evidence/nv-q6-oracle-depth-no_da-20260831/artifacts/depth_4/nv_q6_oracle_broad_cta_prefetch_oracle_publisher_d4.cubin",
+        "cubin_sha256": "a63834753258cebaec211737ca85a4f4c1628533c5a5fed0fc23fbaa097a59bd"
+      },
+      "sass": {
+        "instruction_total": 4024,
+        "families": {
+          "BAR": 5,
+          "BRA": 2,
+          "CS2R": 26,
+          "EXIT": 1,
+          "FFMA": 512,
+          "FMUL": 512,
+          "HADD2": 4,
+          "I2FP": 512,
+          "IADD": 76,
+          "IDP": 1,
+          "IMAD": 1044,
+          "IMMA": 256,
+          "LDC": 4,
+          "LDCU": 1,
+          "LDG": 105,
+          "LDL": 9,
+          "LDS": 168,
+          "LDSM": 32,
+          "LEA": 45,
+          "LOP3": 211,
+          "MOV": 91,
+          "NOP": 14,
+          "PRMT": 84,
+          "S2R": 5,
+          "S2UR": 2,
+          "SHF": 144,
+          "STG": 64,
+          "STL": 14,
+          "STS": 71,
+          "UIADD3": 3,
+          "UISETP": 1,
+          "ULEA": 2,
+          "UMOV": 3
+        },
+        "resources": {
+          "registers": 255,
+          "stack_bytes": 32,
+          "shared_static_bytes": 1024,
+          "local_static_bytes": 0
+        },
+        "spill_regions": {
+          "pre_mma": {
+            "LDL": 2,
+            "STL": 7,
+            "pcs": [
+              "0x80",
+              "0xc0",
+              "0x100",
+              "0x140",
+              "0x180",
+              "0x1c0",
+              "0x200",
+              "0x910",
+              "0xbc0"
+            ],
+            "stack_offsets": {
+              "0x0": 1,
+              "0x4": 2,
+              "0x8": 1,
+              "0xc": 1,
+              "0x10": 2,
+              "0x14": 1,
+              "0x18": 1
+            }
+          },
+          "mma_span": {
+            "LDL": 5,
+            "STL": 2,
+            "pcs": [
+              "0x5310",
+              "0x5330",
+              "0x5360",
+              "0x5f00",
+              "0x6b80",
+              "0xa290",
+              "0xc540"
+            ],
+            "stack_offsets": {
+              "0x0": 1,
+              "0x4": 1,
+              "0x8": 1,
+              "0xc": 1,
+              "0x10": 1,
+              "0x14": 1,
+              "0x18": 1
+            }
+          },
+          "post_mma": {
+            "LDL": 2,
+            "STL": 5,
+            "pcs": [
+              "0xef90",
+              "0xefc0",
+              "0xeff0",
+              "0xf030",
+              "0xf060",
+              "0xf5d0",
+              "0xf5f0"
+            ],
+            "stack_offsets": {
+              "0x0": 1,
+              "0x4": 1,
+              "0x8": 1,
+              "0xc": 1,
+              "0x10": 1,
+              "0x14": 1,
+              "0x18": 1
+            }
+          }
+        }
+      },
+      "spill_free": false,
+      "feasible": false
+    },
+    {
+      "depth": 8,
+      "shape": {
+        "M": 128,
+        "N": 128,
+        "K": 2048,
+        "block": [
+          256,
+          1,
+          1
+        ],
+        "grid": [
+          1,
+          1,
+          1
+        ]
+      },
+      "correctness": {
+        "exact": true,
+        "finite": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0
+      },
+      "timing": {
+        "samples_us": [
+          44.992,
+          44.96,
+          44.736,
+          44.704,
+          44.832,
+          44.8,
+          44.704,
+          45.024,
+          44.768,
+          44.832,
+          44.992,
+          44.928,
+          44.992,
+          44.928,
+          44.96,
+          44.64,
+          44.896,
+          44.864,
+          45.024,
+          44.896,
+          44.736,
+          44.928,
+          44.928,
+          44.704,
+          44.704,
+          44.928,
+          44.928,
+          44.864,
+          44.864,
+          44.768,
+          44.928
+        ],
+        "min_us": 44.64,
+        "median_us": 44.896,
+        "max_us": 45.024
+      },
+      "compiler": {
+        "render_ms": 8034.111574757844,
+        "compile_wall_ms": 48.12312126159668,
+        "source": "docs/task_workflow/evidence/nv-q6-oracle-depth-no_da-20260831/artifacts/depth_8/nv_q6_oracle_broad_cta_prefetch_oracle_publisher_d8.cu",
+        "source_bytes": 142282,
+        "cubin": "docs/task_workflow/evidence/nv-q6-oracle-depth-no_da-20260831/artifacts/depth_8/nv_q6_oracle_broad_cta_prefetch_oracle_publisher_d8.cubin",
+        "cubin_sha256": "eb86307d5ab801baf3ed6790204e67216369fabb9c8aaab0dd598f6252743ef2"
+      },
+      "sass": {
+        "instruction_total": 4024,
+        "families": {
+          "BAR": 5,
+          "BRA": 2,
+          "CS2R": 26,
+          "EXIT": 1,
+          "FFMA": 512,
+          "FMUL": 512,
+          "HADD2": 4,
+          "I2FP": 512,
+          "IADD": 76,
+          "IDP": 1,
+          "IMAD": 1044,
+          "IMMA": 256,
+          "LDC": 4,
+          "LDCU": 1,
+          "LDG": 105,
+          "LDL": 9,
+          "LDS": 168,
+          "LDSM": 32,
+          "LEA": 45,
+          "LOP3": 211,
+          "MOV": 91,
+          "NOP": 14,
+          "PRMT": 84,
+          "S2R": 5,
+          "S2UR": 2,
+          "SHF": 144,
+          "STG": 64,
+          "STL": 14,
+          "STS": 71,
+          "UIADD3": 3,
+          "UISETP": 1,
+          "ULEA": 2,
+          "UMOV": 3
+        },
+        "resources": {
+          "registers": 255,
+          "stack_bytes": 32,
+          "shared_static_bytes": 1024,
+          "local_static_bytes": 0
+        },
+        "spill_regions": {
+          "pre_mma": {
+            "LDL": 2,
+            "STL": 7,
+            "pcs": [
+              "0x80",
+              "0xc0",
+              "0x100",
+              "0x140",
+              "0x180",
+              "0x1c0",
+              "0x200",
+              "0x910",
+              "0xbc0"
+            ],
+            "stack_offsets": {
+              "0x0": 1,
+              "0x4": 2,
+              "0x8": 1,
+              "0xc": 1,
+              "0x10": 2,
+              "0x14": 1,
+              "0x18": 1
+            }
+          },
+          "mma_span": {
+            "LDL": 5,
+            "STL": 2,
+            "pcs": [
+              "0x5310",
+              "0x5330",
+              "0x5360",
+              "0x5f00",
+              "0x6b80",
+              "0xa290",
+              "0xc540"
+            ],
+            "stack_offsets": {
+              "0x0": 1,
+              "0x4": 1,
+              "0x8": 1,
+              "0xc": 1,
+              "0x10": 1,
+              "0x14": 1,
+              "0x18": 1
+            }
+          },
+          "post_mma": {
+            "LDL": 2,
+            "STL": 5,
+            "pcs": [
+              "0xef90",
+              "0xefc0",
+              "0xeff0",
+              "0xf030",
+              "0xf060",
+              "0xf5d0",
+              "0xf5f0"
+            ],
+            "stack_offsets": {
+              "0x0": 1,
+              "0x4": 1,
+              "0x8": 1,
+              "0xc": 1,
+              "0x10": 1,
+              "0x14": 1,
+              "0x18": 1
+            }
+          }
+        }
+      },
+      "spill_free": false,
+      "feasible": false
+    },
+    {
+      "depth": 16,
+      "shape": {
+        "M": 128,
+        "N": 128,
+        "K": 4096,
+        "block": [
+          256,
+          1,
+          1
+        ],
+        "grid": [
+          1,
+          1,
+          1
+        ]
+      },
+      "correctness": {
+        "exact": true,
+        "finite": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0
+      },
+      "timing": {
+        "samples_us": [
+          86.688,
+          86.464,
+          86.496,
+          86.496,
+          86.656,
+          86.464,
+          86.528,
+          86.528,
+          86.368,
+          86.464,
+          86.432,
+          86.464,
+          86.72,
+          86.624,
+          86.464,
+          86.304,
+          86.432,
+          86.624,
+          86.656,
+          86.368,
+          86.432,
+          86.624,
+          86.72,
+          86.496,
+          86.336,
+          86.432,
+          86.4,
+          86.4,
+          86.624,
+          86.592,
+          86.208
+        ],
+        "min_us": 86.208,
+        "median_us": 86.464,
+        "max_us": 86.72
+      },
+      "compiler": {
+        "render_ms": 8138.848188333213,
+        "compile_wall_ms": 47.26801300421357,
+        "source": "docs/task_workflow/evidence/nv-q6-oracle-depth-no_da-20260831/artifacts/depth_16/nv_q6_oracle_broad_cta_prefetch_oracle_publisher_d16.cu",
+        "source_bytes": 142321,
+        "cubin": "docs/task_workflow/evidence/nv-q6-oracle-depth-no_da-20260831/artifacts/depth_16/nv_q6_oracle_broad_cta_prefetch_oracle_publisher_d16.cubin",
+        "cubin_sha256": "42586fc6813eda4a07c5f0ea9bfb41ff52f2917f6153190a261ef670b7de4e06"
+      },
+      "sass": {
+        "instruction_total": 4024,
+        "families": {
+          "BAR": 5,
+          "BRA": 2,
+          "CS2R": 26,
+          "EXIT": 1,
+          "FFMA": 512,
+          "FMUL": 512,
+          "HADD2": 4,
+          "I2FP": 512,
+          "IADD": 76,
+          "IDP": 1,
+          "IMAD": 1044,
+          "IMMA": 256,
+          "LDC": 4,
+          "LDCU": 1,
+          "LDG": 105,
+          "LDL": 9,
+          "LDS": 168,
+          "LDSM": 32,
+          "LEA": 45,
+          "LOP3": 211,
+          "MOV": 91,
+          "NOP": 14,
+          "PRMT": 84,
+          "S2R": 5,
+          "S2UR": 2,
+          "SHF": 144,
+          "STG": 64,
+          "STL": 14,
+          "STS": 71,
+          "UIADD3": 3,
+          "UISETP": 1,
+          "ULEA": 2,
+          "UMOV": 3
+        },
+        "resources": {
+          "registers": 255,
+          "stack_bytes": 32,
+          "shared_static_bytes": 1024,
+          "local_static_bytes": 0
+        },
+        "spill_regions": {
+          "pre_mma": {
+            "LDL": 2,
+            "STL": 7,
+            "pcs": [
+              "0x80",
+              "0xc0",
+              "0x100",
+              "0x140",
+              "0x180",
+              "0x1c0",
+              "0x200",
+              "0x910",
+              "0xbc0"
+            ],
+            "stack_offsets": {
+              "0x0": 1,
+              "0x4": 2,
+              "0x8": 1,
+              "0xc": 1,
+              "0x10": 2,
+              "0x14": 1,
+              "0x18": 1
+            }
+          },
+          "mma_span": {
+            "LDL": 5,
+            "STL": 2,
+            "pcs": [
+              "0x5310",
+              "0x5330",
+              "0x5360",
+              "0x5f00",
+              "0x6b80",
+              "0xa290",
+              "0xc540"
+            ],
+            "stack_offsets": {
+              "0x0": 1,
+              "0x4": 1,
+              "0x8": 1,
+              "0xc": 1,
+              "0x10": 1,
+              "0x14": 1,
+              "0x18": 1
+            }
+          },
+          "post_mma": {
+            "LDL": 2,
+            "STL": 5,
+            "pcs": [
+              "0xef90",
+              "0xefc0",
+              "0xeff0",
+              "0xf030",
+              "0xf060",
+              "0xf5d0",
+              "0xf5f0"
+            ],
+            "stack_offsets": {
+              "0x0": 1,
+              "0x4": 1,
+              "0x8": 1,
+              "0xc": 1,
+              "0x10": 1,
+              "0x14": 1,
+              "0x18": 1
+            }
+          }
+        }
+      },
+      "spill_free": false,
+      "feasible": false
+    },
+    {
+      "depth": 36,
+      "shape": {
+        "M": 128,
+        "N": 128,
+        "K": 9216,
+        "block": [
+          256,
+          1,
+          1
+        ],
+        "grid": [
+          1,
+          1,
+          1
+        ]
+      },
+      "correctness": {
+        "exact": true,
+        "finite": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0
+      },
+      "timing": {
+        "samples_us": [
+          190.72,
+          190.624,
+          190.56,
+          190.592,
+          190.496,
+          190.592,
+          190.784,
+          190.56,
+          190.88,
+          190.56,
+          190.56,
+          190.688,
+          190.592,
+          190.752,
+          190.56,
+          190.4,
+          190.336,
+          190.4,
+          190.592,
+          190.464,
+          190.464,
+          190.72,
+          190.272,
+          190.592,
+          190.464,
+          190.368,
+          190.688,
+          190.592,
+          190.496,
+          190.656,
+          190.656
+        ],
+        "min_us": 190.272,
+        "median_us": 190.592,
+        "max_us": 190.88
+      },
+      "compiler": {
+        "render_ms": 8397.615005262196,
+        "compile_wall_ms": 46.89803812652826,
+        "source": "docs/task_workflow/evidence/nv-q6-oracle-depth-no_da-20260831/artifacts/depth_36/nv_q6_oracle_broad_cta_prefetch_oracle_publisher_d36.cu",
+        "source_bytes": 142321,
+        "cubin": "docs/task_workflow/evidence/nv-q6-oracle-depth-no_da-20260831/artifacts/depth_36/nv_q6_oracle_broad_cta_prefetch_oracle_publisher_d36.cubin",
+        "cubin_sha256": "356f6141aa977a8a4c55481fecab61d538a6737e8ee974a3b445b3298ac4d0fb"
+      },
+      "sass": {
+        "instruction_total": 4024,
+        "families": {
+          "BAR": 5,
+          "BRA": 2,
+          "CS2R": 26,
+          "EXIT": 1,
+          "FFMA": 512,
+          "FMUL": 512,
+          "HADD2": 4,
+          "I2FP": 512,
+          "IADD": 76,
+          "IDP": 1,
+          "IMAD": 1044,
+          "IMMA": 256,
+          "LDC": 4,
+          "LDCU": 1,
+          "LDG": 105,
+          "LDL": 9,
+          "LDS": 168,
+          "LDSM": 32,
+          "LEA": 45,
+          "LOP3": 211,
+          "MOV": 91,
+          "NOP": 14,
+          "PRMT": 84,
+          "S2R": 5,
+          "S2UR": 2,
+          "SHF": 144,
+          "STG": 64,
+          "STL": 14,
+          "STS": 71,
+          "UIADD3": 3,
+          "UISETP": 1,
+          "ULEA": 2,
+          "UMOV": 3
+        },
+        "resources": {
+          "registers": 255,
+          "stack_bytes": 32,
+          "shared_static_bytes": 1024,
+          "local_static_bytes": 0
+        },
+        "spill_regions": {
+          "pre_mma": {
+            "LDL": 2,
+            "STL": 7,
+            "pcs": [
+              "0x80",
+              "0xc0",
+              "0x100",
+              "0x140",
+              "0x180",
+              "0x1c0",
+              "0x200",
+              "0x910",
+              "0xbc0"
+            ],
+            "stack_offsets": {
+              "0x0": 1,
+              "0x4": 2,
+              "0x8": 1,
+              "0xc": 1,
+              "0x10": 2,
+              "0x14": 1,
+              "0x18": 1
+            }
+          },
+          "mma_span": {
+            "LDL": 5,
+            "STL": 2,
+            "pcs": [
+              "0x5310",
+              "0x5330",
+              "0x5360",
+              "0x5f00",
+              "0x6b80",
+              "0xa290",
+              "0xc540"
+            ],
+            "stack_offsets": {
+              "0x0": 1,
+              "0x4": 1,
+              "0x8": 1,
+              "0xc": 1,
+              "0x10": 1,
+              "0x14": 1,
+              "0x18": 1
+            }
+          },
+          "post_mma": {
+            "LDL": 2,
+            "STL": 5,
+            "pcs": [
+              "0xef90",
+              "0xefc0",
+              "0xeff0",
+              "0xf030",
+              "0xf060",
+              "0xf5d0",
+              "0xf5f0"
+            ],
+            "stack_offsets": {
+              "0x0": 1,
+              "0x4": 1,
+              "0x8": 1,
+              "0xc": 1,
+              "0x10": 1,
+              "0x14": 1,
+              "0x18": 1
+            }
+          }
+        }
+      },
+      "spill_free": false,
+      "feasible": false
+    },
+    {
+      "depth": 37,
+      "shape": {
+        "M": 128,
+        "N": 128,
+        "K": 9472,
+        "block": [
+          256,
+          1,
+          1
+        ],
+        "grid": [
+          1,
+          1,
+          1
+        ]
+      },
+      "correctness": {
+        "exact": true,
+        "finite": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0
+      },
+      "timing": {
+        "samples_us": [
+          196.064,
+          195.904,
+          196.0,
+          195.936,
+          195.776,
+          195.872,
+          195.84,
+          195.872,
+          195.488,
+          195.968,
+          195.936,
+          195.744,
+          195.296,
+          195.776,
+          195.872,
+          195.84,
+          195.808,
+          195.552,
+          195.744,
+          195.36,
+          195.872,
+          195.648,
+          195.776,
+          195.712,
+          195.712,
+          195.616,
+          195.232,
+          195.616,
+          195.424,
+          195.904,
+          195.776
+        ],
+        "min_us": 195.232,
+        "median_us": 195.776,
+        "max_us": 196.064
+      },
+      "compiler": {
+        "render_ms": 8285.969412885606,
+        "compile_wall_ms": 47.95577609911561,
+        "source": "docs/task_workflow/evidence/nv-q6-oracle-depth-no_da-20260831/artifacts/depth_37/nv_q6_oracle_broad_cta_prefetch_oracle_publisher_d37.cu",
+        "source_bytes": 142321,
+        "cubin": "docs/task_workflow/evidence/nv-q6-oracle-depth-no_da-20260831/artifacts/depth_37/nv_q6_oracle_broad_cta_prefetch_oracle_publisher_d37.cubin",
+        "cubin_sha256": "77872b75ef3eac0b4ddd3ec516686a10144f5c61c168a5c285b84d747c68e0aa"
+      },
+      "sass": {
+        "instruction_total": 4024,
+        "families": {
+          "BAR": 5,
+          "BRA": 2,
+          "CS2R": 26,
+          "EXIT": 1,
+          "FFMA": 512,
+          "FMUL": 512,
+          "HADD2": 4,
+          "I2FP": 512,
+          "IADD": 76,
+          "IDP": 1,
+          "IMAD": 1044,
+          "IMMA": 256,
+          "LDC": 4,
+          "LDCU": 1,
+          "LDG": 105,
+          "LDL": 9,
+          "LDS": 168,
+          "LDSM": 32,
+          "LEA": 45,
+          "LOP3": 211,
+          "MOV": 91,
+          "NOP": 14,
+          "PRMT": 84,
+          "S2R": 5,
+          "S2UR": 2,
+          "SHF": 144,
+          "STG": 64,
+          "STL": 14,
+          "STS": 71,
+          "UIADD3": 3,
+          "UISETP": 1,
+          "ULEA": 2,
+          "UMOV": 3
+        },
+        "resources": {
+          "registers": 255,
+          "stack_bytes": 32,
+          "shared_static_bytes": 1024,
+          "local_static_bytes": 0
+        },
+        "spill_regions": {
+          "pre_mma": {
+            "LDL": 2,
+            "STL": 7,
+            "pcs": [
+              "0x80",
+              "0xc0",
+              "0x100",
+              "0x140",
+              "0x180",
+              "0x1c0",
+              "0x200",
+              "0x910",
+              "0xbc0"
+            ],
+            "stack_offsets": {
+              "0x0": 1,
+              "0x4": 2,
+              "0x8": 1,
+              "0xc": 1,
+              "0x10": 2,
+              "0x14": 1,
+              "0x18": 1
+            }
+          },
+          "mma_span": {
+            "LDL": 5,
+            "STL": 2,
+            "pcs": [
+              "0x5310",
+              "0x5330",
+              "0x5360",
+              "0x5f00",
+              "0x6b80",
+              "0xa290",
+              "0xc540"
+            ],
+            "stack_offsets": {
+              "0x0": 1,
+              "0x4": 1,
+              "0x8": 1,
+              "0xc": 1,
+              "0x10": 1,
+              "0x14": 1,
+              "0x18": 1
+            }
+          },
+          "post_mma": {
+            "LDL": 2,
+            "STL": 5,
+            "pcs": [
+              "0xef90",
+              "0xefc0",
+              "0xeff0",
+              "0xf030",
+              "0xf060",
+              "0xf5d0",
+              "0xf5f0"
+            ],
+            "stack_offsets": {
+              "0x0": 1,
+              "0x4": 1,
+              "0x8": 1,
+              "0xc": 1,
+              "0x10": 1,
+              "0x14": 1,
+              "0x18": 1
+            }
+          }
+        }
+      },
+      "spill_free": false,
+      "feasible": false
+    }
+  ]
+}

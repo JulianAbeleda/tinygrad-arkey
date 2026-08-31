@@ -1,0 +1,37 @@
+{
+  "schema": "tinygrad.nv_q6_oracle_depth_full_route_decision.v1",
+  "decision": "NO_GO_FULL_BROAD_ROUTE",
+  "depth": {
+    "exact_depths": [1, 2, 4, 8, 16, 36, 37],
+    "fit_method": "theil_sen_pairwise_median",
+    "intercept_us": 3.684571428571445,
+    "slope_us_per_k256": 5.741714285714285,
+    "llama_gross_epoch_us": 5.57,
+    "investment_bar_5pct_us": 5.8485,
+    "investment_passed": true
+  },
+  "full_route": {
+    "owners": 170,
+    "owner_work_lengths": [36, 37],
+    "segments": 294,
+    "main_r9_median_us": 284.16,
+    "main_r31_median_us": 285.6,
+    "fixup_r9_median_us": 25.792,
+    "fixup_r31_median_us": 25.6,
+    "pair_r9_median_us": 310.016,
+    "pair_r31_median_us": 311.36,
+    "llama_main_us": 201.216,
+    "llama_pair_us": 209.856,
+    "main_within_5pct": false,
+    "pair_within_5pct": false,
+    "registers": 255,
+    "stack_bytes": 288,
+    "ldl": 251,
+    "stl": 377,
+    "gpu_fixup_cpu_exact": true,
+    "reference_max_abs": 0.1871337890625,
+    "reference_mean_abs": 0.01368770468980074,
+    "reference_gate_passed": false
+  },
+  "correction": "The prior T1 multiplication projection is withdrawn; persistent depth passed investment, while the measured full route independently failed."
+}
