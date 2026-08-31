@@ -224,7 +224,7 @@ class CUDARenderer(CStyleLanguage):
     Ops.EXP2: lambda x,dtype: f"hexp2({x})" if dtype in (dtypes.half, dtypes.bfloat16) else f"exp2({x})",
     Ops.SQRT: lambda x,dtype: f"hsqrt({x})" if dtype in (dtypes.half, dtypes.bfloat16) else f"sqrt({x})",
     Ops.RECIPROCAL: lambda x,dtype: f"hrcp({x})" if dtype in (dtypes.half, dtypes.bfloat16) else f"(1/{x})",
-    Ops.PRECISE_DIV: lambda a,b,dtype: f"({a}/{b})" }
+    Ops.PRECISE_DIV: lambda a,b,dtype: f"({a}/{b})", Ops.ROUND_AWAY: lambda x,dtype: f"roundf({x})" }
   type_map = {dtypes.bfloat16: "nv_bfloat16", dtypes.fp8e4m3: "__nv_fp8_e4m3", dtypes.fp8e5m2: "__nv_fp8_e5m2"}
   # CUDA ships native vector types (and make_ constructors) for 2/3/4 lanes of the common
   # scalars; half is native only as half2. Everything else gets the custom struct emitted

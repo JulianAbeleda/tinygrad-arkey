@@ -9,6 +9,8 @@ from dataclasses import dataclass
 import numpy as np
 from tinygrad import dtypes, Tensor
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
+from tinygrad.codegen.late.warp_reduce import _staged_shfl, _warp_reduce_sum_staged, warp_reduce_max
+from tinygrad.llm.shared_q8_attention import _pack4
 from .nv_q8_ds4_native_producer_spec import DS4ProducerSpec
 
 @dataclass(frozen=True)
@@ -119,34 +121,66 @@ def cpu_pack_ds4(x: np.ndarray) -> np.ndarray:
 def emit_ds4_q8_producer(spec: DS4ProducerSpec = DS4ProducerSpec()):
   """Return a tinygrad UOp kernel function for the scheduler.
 
-  The reduction is deliberately serial/portable at this first checkpoint;
-  scheduler lowering can place the accumulators in shared scratch and insert
-  CTA barriers without changing the record mapping.
+  One CTA owns one 128-value record.  The local geometry is four real wave32
+  warps, so all reductions stay in registers and the record remains in the
+  llama segment-major ABI.
   """
   spec.validate(); SCHEDULE.validate(); rows, k = spec.M, spec.K
   def kernel(out: UOp, x: UOp) -> UOp:
-    row, seg = UOp.range(rows, 0), UOp.range(k//128, 1)
-    lane = UOp.range(128, 2, axis_type=AxisType.REDUCE)
-    base = row*k + seg*128 + lane
+    record = UOp.special(rows*(k//128), "gidx0")
+    lane = UOp.special(32, "lidx0")
+    warp = UOp.special(4, "lidx1")
+    row, seg = record % rows, record // rows
+    base = row*k + seg*128 + warp*32 + lane
     val = x[base].cast(dtypes.float32)
-    peak = val.abs().reduce(lane, arg=Ops.MAX)
-    d = (peak != 0.0).where(peak * (1.0/127.0), UOp.const(dtypes.float32, 1.0))
-    q = (val / d).round().maximum(-128.0).minimum(127.0).cast(dtypes.int8)
-    rec = seg*rows + row
-    # Aligned uint16 carrier: two signed q bytes per word.  The physical
-    # record remains 16 metadata bytes + 128 q bytes = 72 uint16 words.
-    q2 = (x[base+1].cast(dtypes.float32) / d).round().maximum(-128.0).minimum(127.0).cast(dtypes.int16)
-    packed = (q.cast(dtypes.uint16) & 255) | ((q2.cast(dtypes.uint16) & 255) << 8)
-    qword = rec*72 + 8 + (lane//2)
-    # Metadata is emitted by the first lane of each 32-value subgroup.  The
-    # scheduler lowers these gated stores to its shared-scratch/barrier plan.
-    subgroup = lane // 32
-    first = (lane % 32).eq(0)
-    mword = rec*72 + subgroup*2
-    addr = first.where(mword, qword)
-    value = first.where(d.cast(dtypes.float16).bitcast(dtypes.uint16), packed)
-    body = out[addr].store(value).end(row, seg, lane)
+    peak = warp_reduce_max(val.abs(), lane, 32)
+    dinv = (peak != 0.0).where(UOp.const(dtypes.float32, 127.0).alu(Ops.PRECISE_DIV, peak), UOp.const(dtypes.float32, 127.0))
+    d = (peak != 0.0).where(UOp.const(dtypes.float32, 1.0).alu(Ops.PRECISE_DIV, dinv), UOp.const(dtypes.float32, 1.0))
+    q = (val * dinv).alu(Ops.ROUND_AWAY).maximum(-128.0).minimum(127.0).cast(dtypes.int8)
+    raw_sum = _warp_reduce_sum_staged(val, lane, 32)
+    first = lane.eq(0)
+    q1 = _staged_shfl(q.cast(dtypes.int32), 1, lane, 180)
+    q2 = _staged_shfl(q.cast(dtypes.int32), 2, lane, 181)
+    q3 = _staged_shfl(q.cast(dtypes.int32), 3, lane, 182)
+    packed = _pack4((q.cast(dtypes.int32), q1, q2, q3))
+    owner = lane.bitwise_and(3).eq(0)
+    qidx = record*36 + 4 + warp*8 + (lane//4)
+    qstore = out[qidx].store(packed, owner)
+    dbits = d.cast(dtypes.float16).bitcast(dtypes.uint16).cast(dtypes.uint32)
+    sbits = raw_sum.cast(dtypes.float16).bitcast(dtypes.uint16).cast(dtypes.uint32)
+    midx = record*36 + warp
+    meta = out[midx].store(dbits | (sbits << 16), first)
+    body = UOp.group(qstore, meta)
     return body.sink(arg=KernelInfo(name="q8_ds4_native_scheduler", opts_to_apply=()))
   return kernel
 
-__all__ = ["NativeDS4Schedule", "DS4MetadataWorkspace", "metadata_workspace", "realize_ds4_metadata", "flat_ds4_inputs", "SCHEDULE", "cpu_pack_ds4", "emit_ds4_q8_producer", "emit_ds4_metadata_stage", "emit_ds4_pack_stage"]
+def emit_ds4_q8_producer_llama(spec: DS4ProducerSpec = DS4ProducerSpec()):
+  """Llama-shaped producer: one CTA owns four records, one record per warp."""
+  spec.validate(); SCHEDULE.validate(); rows, k, records = spec.M, spec.K, spec.records
+  if records % 4: raise ValueError("four-record DS4 producer requires a record count divisible by four")
+  def kernel(out: UOp, x: UOp) -> UOp:
+    cta = UOp.special(records//4, "gidx0")
+    lane = UOp.special(32, "lidx0")
+    warp = UOp.special(4, "lidx1")
+    record = cta*4 + warp
+    row, seg = record % rows, record // rows
+    first, owner = lane.eq(0), lane.bitwise_and(3).eq(0)
+    stores = []
+    for subgroup in range(4):
+      value = x[row*k + seg*128 + subgroup*32 + lane].cast(dtypes.float32)
+      peak = warp_reduce_max(value.abs(), lane, 32, slot_base=100+subgroup*8)
+      dinv = (peak != 0.0).where(UOp.const(dtypes.float32, 127.0).alu(Ops.PRECISE_DIV, peak), UOp.const(dtypes.float32, 127.0))
+      d = (peak != 0.0).where(UOp.const(dtypes.float32, 1.0).alu(Ops.PRECISE_DIV, dinv), UOp.const(dtypes.float32, 1.0))
+      q = (value*dinv).alu(Ops.ROUND_AWAY).maximum(-128.0).minimum(127.0).cast(dtypes.int8)
+      raw_sum = _warp_reduce_sum_staged(value, lane, 32, slot_base=160+subgroup)
+      q1 = _staged_shfl(q.cast(dtypes.int32), 1, lane, 200+subgroup*3)
+      q2 = _staged_shfl(q.cast(dtypes.int32), 2, lane, 201+subgroup*3)
+      q3 = _staged_shfl(q.cast(dtypes.int32), 3, lane, 202+subgroup*3)
+      stores.append(out[record*36 + 4 + subgroup*8 + lane//4].store(_pack4((q.cast(dtypes.int32),q1,q2,q3)), owner))
+      dbits = d.cast(dtypes.float16).bitcast(dtypes.uint16).cast(dtypes.uint32)
+      sbits = raw_sum.cast(dtypes.float16).bitcast(dtypes.uint16).cast(dtypes.uint32)
+      stores.append(out[record*36 + subgroup].store(dbits | (sbits << 16), first))
+    return UOp.group(*stores).sink(arg=KernelInfo(name="q8_ds4_native_llama_shape", opts_to_apply=()))
+  return kernel
+
+__all__ = ["NativeDS4Schedule", "DS4MetadataWorkspace", "metadata_workspace", "realize_ds4_metadata", "flat_ds4_inputs", "SCHEDULE", "cpu_pack_ds4", "emit_ds4_q8_producer", "emit_ds4_q8_producer_llama", "emit_ds4_metadata_stage", "emit_ds4_pack_stage"]

@@ -194,6 +194,7 @@ spec_shared = PatternMatcher([
   (UPat((Ops.SHL, Ops.SHR), src=(UPat.var("x"), UPat.var("y")), name="a"), lambda a,x,y: a.dtype == x.dtype and y.dtype in (x.dtype, dtypes.uint)),
   (UPat((Ops.CDIV, Ops.CMOD, Ops.FLOORDIV, Ops.FLOORMOD), name="x"), lambda x: None if dtypes.is_int(x.dtype) else False),
   (UPat(Ops.PRECISE_DIV, dtype=dtypes.float32, src=(UPat(dtype=dtypes.float32), UPat(dtype=dtypes.float32))), lambda: True),
+  (UPat(Ops.ROUND_AWAY, dtype=dtypes.float32, src=(UPat(dtype=dtypes.float32),)), lambda: True),
   (UPat(GroupOp.ALU, name="x"), lambda x: all(x.dtype.base == y.dtype.base for y in x.src)),
 
   # CAST
