@@ -86,7 +86,8 @@ def q6_packed_two_k16_kernel(out, dot0, dot1, blocks, b0, b1, dB):
   row=lr+8*(r>>1); base=row*210; z0,z1=c0.gep(r),c1.gep(r)
   scale0=byte(base+192).cast(dtypes.char).cast(dtypes.float32); scale1=byte(base+193).cast(dtypes.char).cast(dtypes.float32)
   wd=blocks[(base+208)//2].bitcast(dtypes.half).cast(dtypes.float32)
-  value=(wd*dB[0].cast(dtypes.float32))*(scale0*z0.cast(dtypes.float32)+scale1*z1.cast(dtypes.float32))
+  col=2*lc+(r&1)
+  value=(wd*dB[col].cast(dtypes.float32))*(scale0*z0.cast(dtypes.float32)+scale1*z1.cast(dtypes.float32))
   writes += [dot0[idx].store(z0),dot1[idx].store(z1),out[idx].store(value)]
  return UOp.sink(*writes,arg=KernelInfo(name='nv_native_fragment_q6_packed_two_k16',opts_to_apply=()))
 

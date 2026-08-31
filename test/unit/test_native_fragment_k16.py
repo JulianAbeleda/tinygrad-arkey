@@ -54,14 +54,15 @@ def test_q6_two_k16_scale_semantics():
 def test_q6_direct_packed_two_k16():
   ph=lambda n,dt,i:UOp.placeholder((n,),dt,i)
   args=(ph(128,dtypes.float32,0),ph(128,dtypes.int32,1),ph(128,dtypes.int32,2),ph(16*105,dtypes.uint16,3),
-        ph(128,dtypes.int8,4),ph(128,dtypes.int8,5),ph(1,dtypes.float32,6))
+        ph(128,dtypes.int8,4),ph(128,dtypes.int8,5),ph(8,dtypes.float32,6))
   p=to_program(q6_packed_two_k16_kernel(*args),CUDARenderer(Target.parse('NV:CUDA:sm_120'))); src=next(x.arg for x in p.src if x.op is Ops.SOURCE)
   assert src.count('__WMMA_8_16_16_signed_char_int(')==3 and '1680' in src
   rng=np.random.default_rng(20260902); blocks=rng.integers(0,256,(16,210),dtype=np.uint8)
   blocks[:,208:210]=np.frombuffer(np.float16(.03125).tobytes(),np.uint8)
   b0=rng.integers(-127,128,(16,8),dtype=np.int8); b1=rng.integers(-127,128,(16,8),dtype=np.int8)
   q,scales,wd=q6_first_two_k16_numpy(blocks.tobytes()); ref0=q[:,0].astype(np.int32)@b0.astype(np.int32); ref1=q[:,1].astype(np.int32)@b1.astype(np.int32)
-  db=np.array([.0625],np.float32); ref=(wd[:,None]*db[0])*(scales[:,0,None].astype(np.float32)*ref0+scales[:,1,None].astype(np.float32)*ref1)
+  db=np.array([.0625,.03125,.125,.015625,.25,.0078125,.5,.00390625],np.float32)
+  ref=(wd[:,None]*db[None,:])*(scales[:,0,None].astype(np.float32)*ref0+scales[:,1,None].astype(np.float32)*ref1)
   dev=Device['NV']; host=(np.empty(128,np.float32),np.empty(128,np.int32),np.empty(128,np.int32),blocks,b0,b1,db)
   bufs=[dev.allocator._alloc(x.nbytes,BufferSpec()) for x in host]
   for buf,x in zip(bufs[3:],host[3:]): dev.allocator._copyin(buf,memoryview(x.tobytes()))
