@@ -21,7 +21,8 @@ def _lower(ctx, x:UOp) -> UOp|None:
   return provider(*x.src)
 
 def _project(x:UOp, value:UOp) -> UOp|None:
-  if not (isinstance(value.arg,str) and "tg_ldmatrix_x4(" in value.arg and len(x.arg)==1 and 0 <= x.arg[0] < 4): return None
+  width=4 if isinstance(value.arg,str) and "tg_ldmatrix_x4(" in value.arg else 2 if isinstance(value.arg,str) and "tg_ldmatrix_x2(" in value.arg else 0
+  if not width or len(x.arg)!=1 or not 0 <= x.arg[0] < width: return None
   return UOp(Ops.CUSTOMI,dtypes.uint32,(value,),arg=f"({{0}}).{'xyzw'[x.arg[0]]}")
 
 def _bitcast(ctx, x:UOp, value:UOp) -> UOp|None:

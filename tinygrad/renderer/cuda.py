@@ -220,7 +220,7 @@ class CUDARenderer(CStyleLanguage):
   native_fragment_x4 = staticmethod(lambda buffer,index: UOp(Ops.CUSTOMI, dtypes.uint32.vec(4), (buffer,index),
     arg="tg_ldmatrix_x4((const void*)({0}+{1}))"))
   native_fragment_x2 = staticmethod(lambda buffer,index: UOp(Ops.CUSTOMI, dtypes.uint32.vec(2), (buffer,index),
-    arg="tg_ldmatrix_x2((const void*)({0}+{1}))"))
+    arg="tg_ldmatrix_x2((const void*)((const char*)({0})+({1})*4))"))
   native_fragment_bitcast = staticmethod(lambda value,dtype: UOp(Ops.CUSTOMI,dtype,(value,),arg="tg_bitcast<signed_char16>({0})"))
   code_for_op = { **CStyleLanguage.code_for_op,
     Ops.TRUNC: lambda x,dtype: f"htrunc({x})" if dtype in (dtypes.half, dtypes.bfloat16) else f"trunc({x})",

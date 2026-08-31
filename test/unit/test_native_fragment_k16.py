@@ -9,7 +9,7 @@ from tinygrad.uop.ops import Ops,UOp
 from extra.llm_research.prefill.nv_native_fragment_k16_gate import kernel
 def test_native_k16_descriptor():
   assert cuda_81616_i8[0].dims == (8,16,16)
-  assert cuda_81616_i8[0].elements_per_thread == (8,4,2)
+  assert cuda_81616_i8[0].elements_per_thread == (8,4,4)
   assert native_fragment_x2
   assert cuda_81616_i8[0] not in __import__('tinygrad.codegen.opt.tc',fromlist=['cuda_sm89']).cuda_sm89
 def test_native_k16_renders_and_compiles():
