@@ -27,6 +27,7 @@ def main() -> int:
   ap.add_argument("--owners", type=int, default=170)
   ap.add_argument("--force-partials", action="store_true")
   ap.add_argument("--persistent-q6-cache", action="store_true")
+  ap.add_argument("--unroll", type=int, choices=(1, 2, 4, 8), default=None)
   ap.add_argument("--out", required=True)
   ap.add_argument("--artifacts", required=True)
   args = ap.parse_args()
@@ -42,7 +43,7 @@ def main() -> int:
   direct = _run("wide_direct", M, N, K, halfs, record, args.rounds, artifacts, (128, 128, 2, 4, 256))
   source = (artifacts / "wide_direct.cu").read_text()
   owners = args.owners
-  main_source = transform_compiler_q6k_wide_to_streamk(source, owners=owners, force_partials=args.force_partials)
+  main_source = transform_compiler_q6k_wide_to_streamk(source, owners=owners, force_partials=args.force_partials, unroll=args.unroll)
   if args.persistent_q6_cache: main_source = transform_compiler_q6k_wide_persistent_b(main_source)
   fixup_source = wide_active_fixup_source()
   (artifacts / "main.cu").write_text(main_source); (artifacts / "fixup.cu").write_text(fixup_source)
