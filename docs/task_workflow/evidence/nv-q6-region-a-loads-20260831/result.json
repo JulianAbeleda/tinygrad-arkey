@@ -1,0 +1,189 @@
+{
+  "schema": "tinygrad.nv_q6_region_a.v1",
+  "shape": {
+    "M": 512,
+    "N": 4096,
+    "K": 12288
+  },
+  "population": {
+    "ctas": 128,
+    "k256_blocks_per_cta": 48
+  },
+  "structural_census": {
+    "full_ldg_q6": 36,
+    "full_ldg_q8": 12,
+    "full_buf1_stores": 368,
+    "producer_ldg_q6": 36,
+    "producer_ldg_q8": 12,
+    "producer_buf1_stores": 0
+  },
+  "correctness": {
+    "readback_finite": true,
+    "decoded_nonzero": 128,
+    "decoded_sample": [
+      1051986304.0,
+      1052045376.0,
+      1052015936.0,
+      1052044992.0,
+      1052022016.0,
+      331998496.0,
+      1052017472.0,
+      1052012352.0
+    ]
+  },
+  "timing": {
+    "diagnostic_bulk_readback": {
+      "samples_us": [
+        184.864,
+        183.744,
+        185.28,
+        182.496,
+        183.2,
+        186.272,
+        182.208,
+        183.52,
+        184.096
+      ],
+      "min_us": 182.208,
+      "median_us": 183.744,
+      "max_us": 186.272
+    },
+    "live_sink": {
+      "samples_us": [
+        176.16,
+        176.288,
+        175.168,
+        175.36,
+        175.552,
+        174.848,
+        175.744,
+        175.84,
+        174.208
+      ],
+      "min_us": 174.208,
+      "median_us": 175.552,
+      "max_us": 176.288,
+      "sample_finite": true
+    }
+  },
+  "compiler": {
+    "sha256": "e266dd53985cd9e5b5eee679e0d667564dd616fa3e22bbb8476e53a4cf08b4e2",
+    "sass": {
+      "cubin": "docs/task_workflow/evidence/nv-q6-region-a-loads-20260831/artifacts/region_a.cubin",
+      "sass": "docs/task_workflow/evidence/nv-q6-region-a-loads-20260831/artifacts/region_a.sass",
+      "returncode": 0,
+      "imma": 0,
+      "bar": 0,
+      "ldsm": 0,
+      "local_load": 0,
+      "local_store": 0,
+      "resources": {
+        "registers": 40,
+        "stack_bytes": 0,
+        "shared_bytes": 0,
+        "local_bytes": 0
+      }
+    },
+    "timing_sass": {
+      "cubin": "docs/task_workflow/evidence/nv-q6-region-a-loads-20260831/artifacts/region_a_timing.cubin",
+      "sass": "docs/task_workflow/evidence/nv-q6-region-a-loads-20260831/artifacts/region_a_timing.sass",
+      "returncode": 0,
+      "imma": 0,
+      "bar": 0,
+      "ldsm": 0,
+      "local_load": 0,
+      "local_store": 0,
+      "resources": {
+        "registers": 40,
+        "stack_bytes": 0,
+        "shared_bytes": 0,
+        "local_bytes": 0
+      }
+    },
+    "no_imma": true,
+    "no_local_spills": true
+  },
+  "full_route": {
+    "shape": {
+      "M": 512,
+      "N": 4096,
+      "K": 12288
+    },
+    "identity": "f5b8b338a3a068d3805a067a8b7ab74b945d5064bde80e5371abf9da7dd05a36",
+    "geometry": {
+      "tile": [
+        128,
+        128,
+        64
+      ],
+      "waves": [
+        2,
+        4
+      ],
+      "threads": 256,
+      "global_size": [
+        32,
+        4,
+        1
+      ],
+      "local_size": [
+        32,
+        2,
+        4
+      ],
+      "ctas": 128
+    },
+    "correctness": {
+      "finite": true,
+      "reference_finite": true,
+      "unwritten_sentinels": 0,
+      "nonzero": 2097152,
+      "max_abs": 0.001220703125,
+      "mean_abs": 3.766872760024853e-05,
+      "allclose_rtol2e5_atol2e3": true,
+      "tensor_path_matches_direct": true
+    },
+    "compiler": {
+      "ordinary_matmul": true,
+      "expanded_global_weight_allocation": false,
+      "group_partial_allocation": false,
+      "candidate_identity": "f5b8b338a3a068d3805a067a8b7ab74b945d5064bde80e5371abf9da7dd05a36",
+      "candidate_identity_exact": true,
+      "signed_imma": true,
+      "sass": {
+        "cubin": "docs/task_workflow/evidence/nv-q6-region-a-loads-20260831/artifacts/region_a_base.cubin",
+        "sass": "docs/task_workflow/evidence/nv-q6-region-a-loads-20260831/artifacts/region_a_base.sass",
+        "returncode": 0,
+        "imma": 64,
+        "bar": 2,
+        "ldsm": 0,
+        "local_load": 0,
+        "local_store": 0,
+        "resources": {
+          "registers": 214,
+          "stack_bytes": 0,
+          "shared_bytes": 21504,
+          "local_bytes": 0
+        }
+      }
+    },
+    "timing": {
+      "samples_us": [
+        494.94399999999996,
+        459.552,
+        459.072,
+        458.112,
+        458.208,
+        459.84,
+        459.744,
+        459.968,
+        458.912
+      ],
+      "min_us": 458.112,
+      "median_us": 459.552,
+      "max_us": 494.94399999999996
+    },
+    "passed": true
+  },
+  "passed": true
+}

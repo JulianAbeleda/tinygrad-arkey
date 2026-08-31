@@ -28,8 +28,33 @@ def region_a_source(source: str, *, bulk_readback: bool = True) -> str:
   body = ('''\n    for (int z=lidx0+32*lidx1+64*lidx2; z<20480; z+=256)\n      data0_2097152[(blockIdx.x+32*blockIdx.y)*20480 + z] = (float)((unsigned char)buf1[z]);\n  }\n  }\n''' if bulk_readback else '''\n    if (lidx0==0 && lidx1==0 && lidx2==0)\n      data0_2097152[blockIdx.x+32*blockIdx.y] = (float)((unsigned char)buf1[64]);\n  }\n  }\n''')
   return prefix+body
 
+def region_a_loads_source(source: str) -> str:
+  """Retain producer index arithmetic and global Q6/Q8 loads only."""
+  start=source.find('  for (int Ridx0 = 0;')
+  if start < 0: raise ValueError('producer loop not found')
+  end=source.find('    __syncthreads();', start)
+  if end < 0: raise ValueError('producer barrier not found')
+  loop=source[start:end]
+  # Keep address declarations and global load declarations; all decode and
+  # shared publication are deliberately excluded from this causal arm.
+  kept=[]
+  for line in loop.splitlines():
+    stripped=line.strip()
+    if stripped.startswith('int alu') or stripped.startswith('unsigned short val') or stripped.startswith('unsigned int val'):
+      kept.append(line)
+  if not kept: raise ValueError('no global loads retained')
+  vals=[re.search(r'\b(val\d+)\b', x).group(1) for x in kept if ' val' in x]
+  sink='    unsigned int load_sink = 0;\n'
+  sink += ''.join(f'    load_sink ^= (unsigned int){v};\n' for v in vals)
+  sink += '    data0_2097152[blockIdx.x+32*blockIdx.y] = (float)load_sink;\n'
+  body='  for (int Ridx0 = 0; Ridx0 < 192; Ridx0++) {\n'+'\n'.join(kept)+'\n'+sink+'  }\n  }\n'
+  sig_end=source.find('{', start)
+  prefix=source[:start]
+  return prefix+body
+
 def main() -> int:
   ap=argparse.ArgumentParser(); ap.add_argument('--model',default='/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf')
+  ap.add_argument('--loads-only', action='store_true')
   ap.add_argument('--rounds',type=int,default=9); ap.add_argument('--out',required=True); ap.add_argument('--artifacts',required=True)
   a=ap.parse_args();
   if a.rounds<9: raise ValueError('R9 required')
@@ -38,13 +63,13 @@ def main() -> int:
   if info.typ != GGML_Q6_K: raise RuntimeError('fixture is not Q6_K')
   halfs=packed_u16_slice(model,meta,info,device='NV').contiguous().realize(); record=Tensor(_record(M,K)[0],device='NV').contiguous().realize()
   direct=_run('region_a_base',M,N,K,halfs,record,a.rounds,art,(128,128,2,4,256))
-  src=region_a_source((art/'region_a_base.cu').read_text()); (art/'region_a.cu').write_text(src)
+  src=region_a_loads_source((art/'region_a_base.cu').read_text()) if a.loads_only else region_a_source((art/'region_a_base.cu').read_text()); (art/'region_a.cu').write_text(src)
   binary=Device['NV'].compiler.compile(src); sass=_sass(binary,art/'region_a')
   name=re.search(r'__launch_bounds__\(256\) (\w+)\(',src).group(1); p=NVProgram(Device['NV'],name,binary)
-  out=Tensor.full((128*20480,),float('nan'),device='NV').contiguous().realize(); buf=out.uop.buffer.get_buf('NV')
+  out=Tensor.full((128 if a.loads_only else 128*20480,),float('nan'),device='NV').contiguous().realize(); buf=out.uop.buffer.get_buf('NV')
   samples=[p(buf,record.uop.buffer.get_buf('NV'),halfs.uop.buffer.get_buf('NV'),global_size=(32,4,1),local_size=(32,2,4),wait=True)*1e6 for _ in range(a.rounds)]
-  got=out.numpy(); checksum_slots=np.arange(128*20480,dtype=np.int64)
-  timing_src=region_a_source((art/'region_a_base.cu').read_text(),bulk_readback=False); (art/'region_a_timing.cu').write_text(timing_src)
+  got=out.numpy(); checksum_slots=np.arange(128,dtype=np.int64) if a.loads_only else np.arange(128*20480,dtype=np.int64)
+  timing_src=region_a_loads_source((art/'region_a_base.cu').read_text()) if a.loads_only else region_a_source((art/'region_a_base.cu').read_text(),bulk_readback=False); (art/'region_a_timing.cu').write_text(timing_src)
   timing_binary=Device['NV'].compiler.compile(timing_src); timing_sass=_sass(timing_binary,art/'region_a_timing')
   timing_name=re.search(r'__launch_bounds__\(256\) (\w+)\(',timing_src).group(1); timing_p=NVProgram(Device['NV'],timing_name,timing_binary)
   timing_out=Tensor.full((128,),float('nan'),device='NV').contiguous().realize(); timing_buf=timing_out.uop.buffer.get_buf('NV')
