@@ -151,3 +151,19 @@ the oracle's 58,880-byte launch allocation.
 - resources: 255 registers/thread, 58,880 shared bytes, 936 local bytes/thread;
 - status: Q8 staging is validated and improves the prior 1338.643-us baseline,
   but remains unpromoted pending owner scheduling.
+
+## Generated 170-owner checkpoint
+
+Commits `b7621deed`, `83db48d75`, and `80e2265d7` generate the exact 170-owner
+partition with runtime segment bounds, dynamic tile/activation addressing, and
+an owner-ordered 128x3 fixup map. At the representative shape, all 5,570,560
+partial FP32 values match the established exact slot producer after converting
+its column-major workspace tiles to the new row-major fixup ABI; maximum absolute
+error is zero and all 340 tile IDs match.
+
+The correct two-body implementation is not performant: two 64-accumulator banks
+cause 4,808 bytes/thread of local spill and approximately 8.75 ms main time.
+Explicitly sequencing the two bodies while aliasing their register allocation
+still spills 4,568 bytes/thread and takes approximately 8.82 ms. That experiment
+is rejected. The required next body is one dynamic 36-37-unit loop with a single
+accumulator bank, an in-loop tile-boundary flush/reset, and one final write.
