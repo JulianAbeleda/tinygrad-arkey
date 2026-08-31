@@ -384,6 +384,10 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
 
       case Ops.CUSTOMI if isinstance(self.arg, tuple) and self.arg[:1] in {("state_loop_read_v1",)}:
         return (self.dtype.count,) if self.dtype.count > 1 else ()
+      case Ops.CUSTOMI if isinstance(self.tag, tuple) and len(self.tag) == 3 and self.tag[:1] == ("native_fragment_carrier_v1",):
+        return ()
+      case Ops.CUSTOMI if self.arg in (("native_fragment_materialized_x2_v1",), ("native_fragment_bitcast_v1",)):
+        return ()
       case Ops.CUSTOMI: return self.src[0]._shape if len(self.src) else None
 
       # passthrough ops

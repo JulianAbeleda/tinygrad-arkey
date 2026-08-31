@@ -32,6 +32,8 @@ def test_generated_170_owner_partials_compile_with_dynamic_segments():
   src=next(x.arg for x in to_program(ast,CUDARenderer(Target.parse('NV:CUDA:sm_120'))).src if x.op is Ops.SOURCE)
   assert 'nv_generated_q6k_streamk_owner_partials' in src
   assert 'mma.sync.aligned.m16n8k16.row.col.s32.s8.s8.s32' in src
+  assert src.count('tg_ldmatrix_x2(')-1 == 32
+  assert src.count('__WMMA_8_16_16_signed_char_int(')-1 == 256
 
 def test_owner_q8_phase1_loads_are_after_phase0_barrier():
   """The second Q8 record cannot be sourced before phase-0 completion."""

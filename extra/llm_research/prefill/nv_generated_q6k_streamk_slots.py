@@ -2,6 +2,7 @@
 from tinygrad import dtypes
 from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, RuntimeLocalAllocation, UOp
+from tinygrad.codegen.late.native_fragment import native_fragment_bitcast, native_fragment_materialized_x2
 from extra.llm_research.prefill.nv_native_fragment_k16_gate import native_fragment_x2, packed_i8_sub
 
 def q6_streamk_slot_kernel(partials, tile_ids, descriptors, blocks, b, dB,
@@ -118,11 +119,18 @@ def q6_streamk_owner_kernel(partials,tile_ids,blocks,b,dB,total_k_blocks=48,owne
        b[(phase_base+i*4+3)*512+mt*128+qcol].cast(dtypes.uint32).bitwise_and(255).lshift(24)),gate=(lane<16)) for i in range(32))
    qscales=tuple(ydst[qcol*36+i].store(dB[(abs_blk*8+kphase*4+i)*512+mt*128+qcol].bitcast(dtypes.uint32),gate=(lane<16)) for i in range(4))
    ready_y=UOp.barrier(UOp.group(*qwords,*qscales))
+   av_cache={}; bv_cache={}; d_cache={}; scale_cache={}; yscale_cache={}
    def mma(cg,n,g,dep):
-    sx=sh.after(ready_q6).after(dep) if dep is not None else sh.after(ready_q6); sy=shq.after(ready_y).after(dep) if dep is not None else shq.after(ready_y)
-    av=native_fragment_x2(sx,(band*32+n*16+(lane&15))*76+(kphase*8+g)*4).bitcast(dtypes.char.vec(8))
-    lcol=cg*16+warp_phase*8+lr; qv=sy[lcol*36+4+g*4+lc]
-    bv=UOp(Ops.STACK,dtypes.char.vec(4),tuple(qv.rshift(8*q).bitwise_and(255).cast(dtypes.char) for q in range(4)))
+    if (n,g) not in av_cache:
+     # Fragment residency is established by the phase barrier. Do not attach
+     # the per-consumer accumulator dependency: it creates a distinct UOp for
+     # every WMMA consumer and defeats carrier CSE.
+     sx=sh.after(ready_q6)
+     av_cache[n,g]=native_fragment_bitcast(native_fragment_materialized_x2(sx,(band*32+n*16+(lane&15))*76+(kphase*8+g)*4), dtypes.char.vec(8))
+    if (cg,g) not in bv_cache:
+     sy=shq.after(ready_y).after(dep) if dep is not None else shq.after(ready_y); lcol=cg*16+warp_phase*8+lr; qv=sy[lcol*36+4+g*4+lc]
+     bv_cache[cg,g]=UOp(Ops.STACK,dtypes.char.vec(4),tuple(qv.rshift(8*q).bitwise_and(255).cast(dtypes.char) for q in range(4)))
+    av=av_cache[n,g]; bv=bv_cache[cg,g]
     axes=(tuple((900+i,2) for i in range(3)),tuple((910+i,2) for i in range(2)),tuple((920+i,2) for i in range(2)))
     return UOp(Ops.WMMA,dtypes.int.vec(4),(av,bv,UOp.const(dtypes.int.vec(4),0)),("WMMA_8_16_16_signed_char_int",(8,16,16),dtypes.char,dtypes.int,"NV",32,axes,()))
    for cg in range(8):
@@ -131,11 +139,14 @@ def q6_streamk_owner_kernel(partials,tile_ids,blocks,b,dB,total_k_blocks=48,owne
      for r in range(4):
       ai=cg*8+n*4+r; lrow=band*32+n*16+lr+8*(r>>1); lcol=cg*16+warp_phase*8+2*lc+(r&1)
       sx=sh.after(ready_q6).after(update) if update is not None else sh.after(ready_q6); sy=shq.after(ready_y).after(update) if update is not None else shq.after(ready_y)
-      wd=sx[lrow*76+64].bitwise_and(0xffff).cast(dtypes.uint16).bitcast(dtypes.half).cast(dtypes.float32); term=UOp.const(dtypes.float32,0.0)
+      if lrow not in d_cache: d_cache[lrow]=sx[lrow*76+64].bitwise_and(0xffff).cast(dtypes.uint16).bitcast(dtypes.half).cast(dtypes.float32)
+      wd=d_cache[lrow]; term=UOp.const(dtypes.float32,0.0)
       for p in range(4):
        sp=kphase*4+p; sw=sx[lrow*76+65+sp//2]
-       s0=sw.rshift((2*sp%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.float32); s1=sw.rshift(((2*sp+1)%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.float32)
-       term=term+wd*sy[lcol*36+p].bitcast(dtypes.float32)*(s0*cs[2*p].gep(r).cast(dtypes.float32)+s1*cs[2*p+1].gep(r).cast(dtypes.float32))
+       if (lrow,sp) not in scale_cache: scale_cache[lrow,sp]=(sw.rshift((2*sp%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.float32),sw.rshift(((2*sp+1)%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.float32))
+       s0,s1=scale_cache[lrow,sp]
+       if (lcol,p) not in yscale_cache: yscale_cache[lcol,p]=sy[lcol*36+p].bitcast(dtypes.float32)
+       term=term+wd*yscale_cache[lcol,p]*(s0*cs[2*p].gep(r).cast(dtypes.float32)+s1*cs[2*p+1].gep(r).cast(dtypes.float32))
       carrier=acc[ai].after(blk if update is None else update); outidx=owner*2*16384+lrow*128+lcol
       flush=partials[outidx].store(carrier[0],gate=boundary)
       update=carrier.after(flush)[0].store(boundary.where(term,carrier[0]+term))

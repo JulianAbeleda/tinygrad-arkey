@@ -28,7 +28,7 @@ from tinygrad.codegen.late.fdot2 import pm_fdot2, line_lower_fdot2
 from tinygrad.codegen.late.warp_reduce import pm_warp_reduce, pm_lower_warp_shfl_xor, pm_lower_warp_bpermute
 from tinygrad.codegen.late.flash_decode_intrinsics import pm_lower_flash_decode_intrinsics
 from tinygrad.codegen.late.int8_dot import pm_lower_int8x4_dot
-from tinygrad.codegen.late.native_fragment import pm_lower_native_fragment
+from tinygrad.codegen.late.native_fragment import pm_lower_native_fragment, is_native_fragment_carrier, is_native_fragment_marker
 from tinygrad.codegen.plan import PLAN_GATES, observed_gate_values  # noqa: F401  (PLAN_GATES re-exported for callers)
 from tinygrad.codegen.opt.postrange import apply_opts
 from tinygrad.codegen.late.gater import pm_move_gates_from_index
@@ -90,7 +90,7 @@ pm_remove_vec_dtypes = PatternMatcher([
   (UPat(Ops.LOAD, name="x"), lambda x: x.src[0] if x.src[0].addrspace == AddrSpace.REG else None),
   # remove all vec dtypes
   (UPat(GroupOp.All-{Ops.PARAM, Ops.BUFFER, Ops.DEFINE_LOCAL, Ops.DEFINE_REG}, name="x"),
-   lambda x: x.replace(dtype=x.dtype.base.scalar().base)),
+   lambda x: None if is_native_fragment_carrier(x) or is_native_fragment_marker(x) else x.replace(dtype=x.dtype.base.scalar().base)),
   # replace DEFINE_LOCAL/DEFINE_REG with BUFFER
   (UPat((Ops.DEFINE_LOCAL, Ops.DEFINE_REG), name="x"), lambda x:
    x.replace(op=Ops.BUFFER, arg=ParamArg(x.arg, addrspace=AddrSpace.LOCAL if x.op == Ops.DEFINE_LOCAL else AddrSpace.REG))),

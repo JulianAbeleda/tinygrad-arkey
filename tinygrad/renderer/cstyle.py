@@ -479,7 +479,9 @@ class CStyleLanguage(Renderer):
         r[u] = l
       else:
         if u.op not in {Ops.RANGE, Ops.DEFINE_LOCAL, Ops.STORE, Ops.DEFINE_REG, Ops.BUFFER} and u.dtype != dtypes.void:
-          l = f"{self.render_type(u)} {r[u]} = {l}" + (";" if u.op is not Ops.SPECIAL else "")
+          native_fragment_value = isinstance(u.tag, tuple) and u.tag[:1] == ("native_fragment_carrier_v1",)
+          dtype = self.render_vector_dtype(u.dtype, u.dtype.count) if native_fragment_value else self.render_type(u)
+          l = f"{dtype} {r[u]} = {l}" + (";" if u.op is not Ops.SPECIAL else "")
         kernel.append("  "*depth + l)
         if prefix: c[prefix] += 1  # if it was used, increment
       if u.op in {Ops.IF, Ops.RANGE}: depth += 1

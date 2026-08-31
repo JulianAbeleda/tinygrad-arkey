@@ -4,7 +4,10 @@ from tinygrad.uop.ops import Ops, PatternMatcher, UOp, UPat
 
 NATIVE_FRAGMENT_X4 = "native_fragment_x4_v1"
 NATIVE_FRAGMENT_X2 = "native_fragment_x2_v1"
+NATIVE_FRAGMENT_MATERIALIZED_X2 = "native_fragment_materialized_x2_v1"
 PACKED_I8_SUB = "packed_i8_sub_v1"
+_NATIVE_FRAGMENT_TAG = "native_fragment_carrier_v1"
+NATIVE_FRAGMENT_BITCAST = "native_fragment_bitcast_v1"
 def packed_i8_sub(value:UOp, bias:UOp) -> UOp:
   if value.dtype != dtypes.uint32 or bias.dtype != dtypes.uint32: raise TypeError("packed i8 subtraction requires uint32 operands")
   return UOp(Ops.CUSTOMI,dtypes.uint32,(value,bias),arg=(PACKED_I8_SUB,))
@@ -12,21 +15,43 @@ def native_fragment_x2(buffer:UOp, index:UOp) -> UOp:
   if not hasattr(buffer.dtype,"addrspace") or buffer.dtype.addrspace is None: raise TypeError("native fragment load requires an address-space pointer")
   return UOp(Ops.CUSTOMI, dtypes.uint32.vec(2), (buffer,index), arg=(NATIVE_FRAGMENT_X2,))
 
+def native_fragment_materialized_x2(buffer:UOp, index:UOp) -> UOp:
+  if not hasattr(buffer.dtype,"addrspace") or buffer.dtype.addrspace is None: raise TypeError("native fragment load requires an address-space pointer")
+  return UOp(Ops.CUSTOMI, dtypes.uint32.vec(2), (buffer,index), arg=(NATIVE_FRAGMENT_MATERIALIZED_X2,))
+
 def native_fragment_x4(buffer:UOp, index:UOp) -> UOp:
   if not hasattr(buffer.dtype,"addrspace") or buffer.dtype.addrspace is None:
     raise TypeError("native fragment load requires an address-space pointer")
   if index.dtype.scalar() not in (dtypes.int,dtypes.weakint,dtypes.uint): raise TypeError("native fragment index must be integer")
   return UOp(Ops.CUSTOMI, dtypes.uint32.vec(4), (buffer,index), arg=(NATIVE_FRAGMENT_X4,))
 
+def native_fragment_bitcast(value:UOp, dtype) -> UOp:
+  if not is_native_fragment_carrier(value) and not (isinstance(value.arg, tuple) and value.arg in ((NATIVE_FRAGMENT_MATERIALIZED_X2,),)):
+    raise TypeError("native fragment bitcast requires a native fragment carrier")
+  width = value.dtype.count
+  if dtype.scalar().itemsize * dtype.count != value.dtype.scalar().itemsize * value.dtype.count:
+    raise TypeError("native fragment bitcast must preserve byte size")
+  return UOp(Ops.CUSTOMI, dtype, (value,), arg=(NATIVE_FRAGMENT_BITCAST,))
+
 def _lower(ctx, x:UOp) -> UOp|None:
   if x.arg == (PACKED_I8_SUB,):
     provider=getattr(ctx,"packed_i8_sub",None)
     if provider is None: raise NotImplementedError(f"packed i8 subtraction is unavailable on {type(ctx).__name__}")
     return provider(*x.src)
-  if x.arg not in ((NATIVE_FRAGMENT_X4,),(NATIVE_FRAGMENT_X2,)): return None
+  if x.arg not in ((NATIVE_FRAGMENT_X4,),(NATIVE_FRAGMENT_X2,),(NATIVE_FRAGMENT_MATERIALIZED_X2,)): return None
   width=4 if x.arg==(NATIVE_FRAGMENT_X4,) else 2; provider=getattr(ctx,f"native_fragment_x{width}",None)
   if provider is None: raise NotImplementedError(f"native x{width} fragment loads are unavailable on {type(ctx).__name__}")
-  return provider(*x.src)
+  lowered=provider(*x.src)
+  return lowered.replace(tag=(_NATIVE_FRAGMENT_TAG, width)) if x.arg==(NATIVE_FRAGMENT_MATERIALIZED_X2,) else lowered
+
+def _is_carrier(value:UOp, width:int) -> bool:
+  return value.tag == (_NATIVE_FRAGMENT_TAG, width)
+
+def is_native_fragment_carrier(value:UOp) -> bool:
+  return isinstance(value.tag, tuple) and len(value.tag) in (2,3) and value.tag[0] == _NATIVE_FRAGMENT_TAG and value.tag[1] in (2, 4)
+
+def is_native_fragment_marker(value:UOp) -> bool:
+  return value.op is Ops.CUSTOMI and value.arg == (NATIVE_FRAGMENT_BITCAST,)
 
 def _project(x:UOp, value:UOp) -> UOp|None:
   width=4 if isinstance(value.arg,str) and "tg_ldmatrix_x4(" in value.arg else 2 if isinstance(value.arg,str) and "tg_ldmatrix_x2(" in value.arg else 0
@@ -40,10 +65,20 @@ def _bitcast(ctx, x:UOp, value:UOp) -> UOp|None:
   if provider is None: raise NotImplementedError(f"native fragment bitcasts are unavailable on {type(ctx).__name__}")
   return provider(value,x.dtype)
 
+def _lower_bitcast(ctx, x:UOp) -> UOp|None:
+  if x.arg != (NATIVE_FRAGMENT_BITCAST,): return None
+  value=x.src[0]
+  width=4 if is_native_fragment_carrier(value) and value.tag[1] == 4 else 2 if is_native_fragment_carrier(value) else 0
+  if not width: return None
+  provider=getattr(ctx,"native_fragment_bitcast",None)
+  if provider is None: raise NotImplementedError(f"native fragment bitcasts are unavailable on {type(ctx).__name__}")
+  return provider(value,x.dtype).replace(tag=(_NATIVE_FRAGMENT_TAG, width, "bitcast"))
+
 pm_lower_native_fragment = PatternMatcher([
+  (UPat(Ops.CUSTOMI, name="x"), _lower_bitcast),
   (UPat(Ops.BITCAST, src=(UPat(Ops.CUSTOMI, name="value"),), name="x"), _bitcast),
   (UPat(Ops.GEP, src=(UPat(Ops.CUSTOMI, name="value"),), name="x"), _project),
   (UPat(Ops.CUSTOMI, name="x"), _lower),
 ])
 
-__all__ = ["native_fragment_x2", "native_fragment_x4", "packed_i8_sub", "pm_lower_native_fragment"]
+__all__ = ["native_fragment_x2", "native_fragment_x4", "native_fragment_materialized_x2", "native_fragment_bitcast", "packed_i8_sub", "is_native_fragment_carrier", "is_native_fragment_marker", "pm_lower_native_fragment"]

@@ -508,6 +508,16 @@ spec_tensor = PatternMatcher([
 
 # these ops can exist in programs but not the tensor spec. example: LOAD
 spec_program = PatternMatcher([
+  # Backend-neutral native fragment carriers retain a vector register-file ABI
+  # while their provider has scalar address/ordering operands.  The semantic
+  # tag is the contract; the renderer spelling is intentionally irrelevant.
+  (UPat(Ops.CUSTOMI, name="x"),
+   lambda x: True if ((isinstance(x.tag, tuple) and len(x.tag) == 2 and x.tag[0] == "native_fragment_carrier_v1"
+   and x.tag[1] in (2, 4) and x.dtype == dtypes.uint.vec(x.tag[1])
+   and len(x.src) == 2 and x.src[0].dtype.scalar() in {dtypes.uint, dtypes.int, dtypes.weakint}
+   and x.src[1].dtype.scalar() in {dtypes.int, dtypes.uint, dtypes.weakint})
+   or any((isinstance(s.tag, tuple) and len(s.tag) == 2 and s.tag[0] == "native_fragment_carrier_v1")
+          or (s.op is Ops.CUSTOMI and s.arg in (("native_fragment_x2_v1",), ("native_fragment_x4_v1",))) for s in x.src)) else None),
   (UPat(Ops.COOPERATIVE_STAGE_BEGIN, dtypes.void, name="x"), lambda x: hasattr(x.arg, "validate") and x.arg.validate() is x.arg and len(x.src) == 2 and x.src[0] == x.arg.loop_axis and x.src[1].dtype.scalar() in {dtypes.int,dtypes.weakint}),
   (UPat(Ops.AFTER, name="x"), lambda x: (type(getattr(x, "tag", None)).__name__ != "SharedTileOwnerSpec") or (x.tag.validate() is x.tag and len(x.src) >= 2 and any(s.op is Ops.BARRIER for s in x.src))),
   (UPat(Ops.COOPERATIVE_TILE_LOAD, name="x"), lambda x: hasattr(x.arg, "validate") and x.arg.validate() is x.arg and len(x.src) == 2 and x.src[0].op is Ops.PARAM and isinstance(x.src[0].dtype, PtrDType) and x.src[0].ptrdtype.base is dtypes.half and x.src[1].dtype.scalar() in {dtypes.int,dtypes.weakint} and isinstance(x.dtype, PtrDType) and x.dtype.addrspace is AddrSpace.LOCAL and x.ptrdtype.base is dtypes.half and x.ptrdtype.size == 2048),
