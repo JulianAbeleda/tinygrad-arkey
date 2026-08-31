@@ -170,18 +170,19 @@ def q6_streamk_owner_kernel(partials,tile_ids,blocks,q8_record,total_k_blocks=48
   return UOp.sink(*stores,arg=KernelInfo(name=kernel_name,opts_to_apply=()))
 
 def q6_streamk_owner_segmented_kernel(partials,tile_ids,blocks,q8_record,total_k_blocks=48,owners=170,
-                                      kernel_name="nv_generated_q6k_streamk_owner_segmented",tile_m=128):
-  """Two sequential owner segments sharing one accumulator bank.
+                                      kernel_name="nv_generated_q6k_streamk_owner_segmented",tile_m=128,max_segments=2):
+  """Sequential owner segments sharing one accumulator bank.
 
   This mirrors llama's control boundary: writeback/reset occurs outside each K
   loop, so the hot body contains no transition predicate or partial stores.
   """
+  if tile_m < 16 or 512%tile_m or tile_m%16: raise ValueError("tile_m must divide 512 in 16-column groups")
+  if max_segments < 1: raise ValueError("max_segments must be positive")
   owner=UOp.special(owners,"gidx0"); lid=UOp.special(256,"lidx0")
   warp,lane=lid//32,lid%32; lr,lc=lane>>2,lane&3; band,phase=warp>>1,warp&1
   cg_count,tiles,slot_values=tile_m//16,(512//tile_m)*32,tile_m*128
   total=UOp.const(dtypes.int32,tiles*total_k_blocks); lo=(owner*total)//owners; hi=((owner+1)*total)//owners
-  tile0=lo//total_k_blocks; tile_end=(tile0+1)*total_k_blocks
-  split=(hi<tile_end).where(hi,tile_end); crossed=split<hi
+  tile0=lo//total_k_blocks
   q8_base=128*76; arena=UOp.placeholder((q8_base+128*36,),dtypes.uint32,1050,addrspace=AddrSpace.LOCAL).replace(
     tag=RuntimeLocalAllocation((q8_base+128*36)*dtypes.uint32.itemsize))
   sh,shq=arena,arena[q8_base:]
@@ -208,7 +209,12 @@ def q6_streamk_owner_segmented_kernel(partials,tile_ids,blocks,q8_record,total_k
     phase_gate=UOp.barrier(UOp.group(update)) if update is not None else None
     ydst=shq.after(phase_gate) if phase_gate is not None else shq.after(dep)
     record_base=((abs_blk*2+kphase)*512+mt*tile_m)*36
-    qwords=tuple(ydst[lid+i*256].store(q8_record[record_base+lid+i*256]) for i in range(tile_m*36//256))
+    qword_count=tile_m*36
+    qwords=[]
+    for i in range((qword_count+255)//256):
+     qidx=lid+i*256; qvalid=qidx<qword_count; safe_qidx=qvalid.where(qidx,lid*0)
+     qwords.append(ydst[qidx].store(q8_record[record_base+safe_qidx],gate=qvalid))
+    qwords=tuple(qwords)
     ready_y=UOp.barrier(UOp.group(*qwords)); av_cache={}; bv_cache={}
     def mma(cg,n,g,mdep):
      if (n,g) not in av_cache:
@@ -250,10 +256,15 @@ def q6_streamk_owner_segmented_kernel(partials,tile_ids,blocks,q8_record,total_k
       stores.append(partials[slot*slot_values+lrow*tile_m+lcol].store(acc[ai].after(done)[0]))
    return UOp.group(*stores)
 
-  first=run_segment(lo,split,tile0,owner*2,61,init)
-  reset=UOp.group(*(acc[i].after(first)[0].store(0.0) for i in range(cg_count*8)))
-  second=run_segment(split,hi,(hi-1)//total_k_blocks,owner*2+1,62,reset)
-  ids=(tile_ids[owner*2].store(tile0),tile_ids[owner*2+1].store(crossed.where((hi-1)//total_k_blocks,-1)))
-  return UOp.sink(first,second,*ids,arg=KernelInfo(name=kernel_name,opts_to_apply=()))
+  segments=[]; ids=[]; dep=init
+  for segment in range(max_segments):
+   tile=tile0+segment; raw_lo=lo if segment == 0 else tile*total_k_blocks
+   seg_lo=(raw_lo<hi).where(raw_lo,hi); boundary=(tile+1)*total_k_blocks
+   seg_hi=(hi<boundary).where(hi,boundary); seg_hi=(seg_lo<seg_hi).where(seg_hi,seg_lo); valid=seg_lo<seg_hi
+   part=run_segment(seg_lo,seg_hi,tile,owner*max_segments+segment,61+segment,dep)
+   segments.append(part); ids.append(tile_ids[owner*max_segments+segment].store(valid.where(tile,UOp.const(dtypes.int32,-1))))
+   if segment+1 < max_segments:
+    dep=UOp.group(*(acc[i].after(part)[0].store(0.0) for i in range(cg_count*8)))
+  return UOp.sink(*segments,*ids,arg=KernelInfo(name=kernel_name,opts_to_apply=()))
 
 __all__=["q6_streamk_slot_kernel","q6_streamk_owner_kernel","q6_streamk_owner_segmented_kernel"]

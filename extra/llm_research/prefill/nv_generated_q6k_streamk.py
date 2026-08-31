@@ -93,6 +93,11 @@ def generated_q6k_streamk_owner_partials_m64(partials, tile_ids, blocks, q8_reco
   return q6_streamk_owner_segmented_kernel(partials,tile_ids,blocks,q8_record,total_k_blocks=K_BLOCKS,owners=340,
     kernel_name="nv_generated_q6k_streamk_owner_partials_m64",tile_m=64)
 
+def generated_q6k_streamk_owner_partials_m32(partials, tile_ids, blocks, q8_record):
+  """170-CTA, 32-column oracle-topology candidate with four ordered segments."""
+  return q6_streamk_owner_segmented_kernel(partials,tile_ids,blocks,q8_record,total_k_blocks=K_BLOCKS,owners=OWNERS,
+    kernel_name="nv_generated_q6k_streamk_owner_partials_m32",tile_m=32,max_segments=4)
+
 __all__=["OWNERS","SLOTS","ACTIVE_SLOTS","TILES","K_BLOCKS","OwnerSegment","owner_bounds","owner_work_units","streamk_segments",
          "tile_coordinates","owner_metadata","fixup_slot_map","generated_owner_boundary_gate","generated_q6k_streamk_owner_partials",
-         "generated_q6k_streamk_owner_partials_m64"]
+         "generated_q6k_streamk_owner_partials_m64","generated_q6k_streamk_owner_partials_m32"]
