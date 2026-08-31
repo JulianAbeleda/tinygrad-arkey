@@ -17,7 +17,7 @@ def native_fragment_x4(buffer:UOp, index:UOp) -> UOp:
 def _lower(ctx, x:UOp) -> UOp|None:
   if x.arg not in ((NATIVE_FRAGMENT_X4,),(NATIVE_FRAGMENT_X2,)): return None
   width=4 if x.arg==(NATIVE_FRAGMENT_X4,) else 2; provider=getattr(ctx,f"native_fragment_x{width}",None)
-  if provider is None: raise NotImplementedError(f"native x4 fragment loads are unavailable on {type(ctx).__name__}")
+  if provider is None: raise NotImplementedError(f"native x{width} fragment loads are unavailable on {type(ctx).__name__}")
   return provider(*x.src)
 
 def _project(x:UOp, value:UOp) -> UOp|None:

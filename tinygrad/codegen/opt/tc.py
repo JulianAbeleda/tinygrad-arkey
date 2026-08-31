@@ -139,8 +139,10 @@ cuda_8168_tf32 = [TensorCore(dims=(8,16,8), threads=32, elements_per_thread=(4,2
 cuda_sm75: list[TensorCore] = cuda_8168_f16
 cuda_sm80: list[TensorCore] = cuda_81616 + cuda_8168_f16 + cuda_8168_tf32
 cuda_81616_i8 = [TensorCore(dims=(8,16,16), threads=32, elements_per_thread=(8,4,4), dtype_in=dtypes.char, dtype_out=dtypes.int,
-  opts=cuda_tc_opts, swizzle=cuda_81632_i8[0].swizzle)]
-cuda_sm89: list[TensorCore] = cuda_sm80 + cuda_81632_f8 + cuda_81632_i8 + cuda_81616_i8
+  opts=("u0","l0","l0","l1","l1","l1","u1"),
+  swizzle=((('r1', 'r2', 'l2', 'l3', 'l4'), ('u1', 'r3'), ('l0', 'l1', 'u0', 'r0')),
+           (('r1', 'r2', 'u0', 'l0', 'l1'), ('r0', 'r3'), ('l2', 'l3', 'l4', 'u1'))))]
+cuda_sm89: list[TensorCore] = cuda_sm80 + cuda_81632_f8 + cuda_81632_i8
 
 def get_cuda(arch):
   # Accept both the runtime's "sm_120" spelling (ops_nv.py) and the campaign's "sm120" spelling.
