@@ -12,7 +12,8 @@ SHARED_BYTES = (Q6_WORDS+Q8_WORDS)*4
 
 
 def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefetch_second_panel:bool=True,
-                               combined_initial_publish:bool=False):
+                               combined_initial_publish:bool=False, factor_dA:bool=False,
+                               oracle_publisher:bool=False):
   """One exact llama-normalized 128x128xK256 work unit per CTA.
 
   ``blocks`` is 128 canonical Q6_K rows. ``q8_record`` is two canonical
@@ -28,21 +29,45 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
   sh,shq=arena,arena[Q6_WORDS:]
 
   # Expand all 128 canonical Q6 rows into llama's 76-word shared layout.
-  sr=UOp.range(16,1501); srow=warp+8*sr; hbase=srow*105; txi=lane
-  ql=blocks[hbase+2*txi].cast(dtypes.uint32).bitwise_or(blocks[hbase+2*txi+1].cast(dtypes.uint32).lshift(16))
-  qhi=(txi//16)*8+txi%8
-  qh=blocks[hbase+64+2*qhi].cast(dtypes.uint32).bitwise_or(blocks[hbase+64+2*qhi+1].cast(dtypes.uint32).lshift(16))
-  qshift=txi.bitwise_and(8)>>2
-  q0=ql.bitwise_and(0x0f0f0f0f).bitwise_or(qh.rshift(qshift).lshift(4).bitwise_and(0x30303030))
-  q1=ql.rshift(4).bitwise_and(0x0f0f0f0f).bitwise_or(qh.rshift(qshift).bitwise_and(0x30303030))
-  kq0=2*txi-txi%16
-  staged=UOp.group(
-    sh[srow*Q6_STRIDE+kq0].store(packed_i8_sub(q0,UOp.const(dtypes.uint32,0x20202020))),
-    sh[srow*Q6_STRIDE+kq0+16].store(packed_i8_sub(q1,UOp.const(dtypes.uint32,0x20202020))),
-    sh[srow*Q6_STRIDE+64].store(blocks[hbase+104].cast(dtypes.uint32),gate=(lane<1)),
-    *(sh[srow*Q6_STRIDE+65+i].store(blocks[hbase+96+2*i].cast(dtypes.uint32).bitwise_or(
-      blocks[hbase+97+2*i].cast(dtypes.uint32).lshift(16)),gate=((lane>=i)&(lane<i+1))) for i in range(4))).end(sr)
-  published_q6=UOp.group(staged)
+  txi=lane
+  if oracle_publisher:
+    quant_stores=[]
+    for sri in range(16):
+      srow=warp+8*sri; hbase=srow*105
+      ql=blocks[hbase+2*txi].cast(dtypes.uint32).bitwise_or(blocks[hbase+2*txi+1].cast(dtypes.uint32).lshift(16))
+      qhi=(txi//16)*8+txi%8
+      qh=blocks[hbase+64+2*qhi].cast(dtypes.uint32).bitwise_or(blocks[hbase+64+2*qhi+1].cast(dtypes.uint32).lshift(16))
+      qshift=txi.bitwise_and(8)>>2
+      q0=ql.bitwise_and(0x0f0f0f0f).bitwise_or(qh.rshift(qshift).lshift(4).bitwise_and(0x30303030))
+      q1=ql.rshift(4).bitwise_and(0x0f0f0f0f).bitwise_or(qh.rshift(qshift).bitwise_and(0x30303030))
+      kq0=2*txi-txi%16
+      quant_stores.extend((
+        sh[srow*Q6_STRIDE+kq0].store(packed_i8_sub(q0,UOp.const(dtypes.uint32,0x20202020))),
+        sh[srow*Q6_STRIDE+kq0+16].store(packed_i8_sub(q1,UOp.const(dtypes.uint32,0x20202020)))))
+    drow=(warp*32+lane)%128; dhbase=drow*105
+    d_store=sh[drow*Q6_STRIDE+64].store(blocks[dhbase+104].cast(dtypes.uint32))
+    scale_stores=[]
+    for i0 in (0,64):
+      srow=i0+warp*8+lane//4; hbase=srow*105; si=lane%4
+      scale=blocks[hbase+96+2*si].cast(dtypes.uint32).bitwise_or(blocks[hbase+97+2*si].cast(dtypes.uint32).lshift(16))
+      scale_stores.append(sh[srow*Q6_STRIDE+65+si].store(scale))
+    published_q6=UOp.group(*quant_stores,d_store,*scale_stores)
+  else:
+    sr=UOp.range(16,1501); srow=warp+8*sr; hbase=srow*105
+    ql=blocks[hbase+2*txi].cast(dtypes.uint32).bitwise_or(blocks[hbase+2*txi+1].cast(dtypes.uint32).lshift(16))
+    qhi=(txi//16)*8+txi%8
+    qh=blocks[hbase+64+2*qhi].cast(dtypes.uint32).bitwise_or(blocks[hbase+64+2*qhi+1].cast(dtypes.uint32).lshift(16))
+    qshift=txi.bitwise_and(8)>>2
+    q0=ql.bitwise_and(0x0f0f0f0f).bitwise_or(qh.rshift(qshift).lshift(4).bitwise_and(0x30303030))
+    q1=ql.rshift(4).bitwise_and(0x0f0f0f0f).bitwise_or(qh.rshift(qshift).bitwise_and(0x30303030))
+    kq0=2*txi-txi%16
+    staged=UOp.group(
+      sh[srow*Q6_STRIDE+kq0].store(packed_i8_sub(q0,UOp.const(dtypes.uint32,0x20202020))),
+      sh[srow*Q6_STRIDE+kq0+16].store(packed_i8_sub(q1,UOp.const(dtypes.uint32,0x20202020))),
+      sh[srow*Q6_STRIDE+64].store(blocks[hbase+104].cast(dtypes.uint32),gate=(lane<1)),
+      *(sh[srow*Q6_STRIDE+65+i].store(blocks[hbase+96+2*i].cast(dtypes.uint32).bitwise_or(
+        blocks[hbase+97+2*i].cast(dtypes.uint32).lshift(16)),gate=((lane>=i)&(lane<i+1))) for i in range(4))).end(sr)
+    published_q6=UOp.group(staged)
   ready_q6=None if combined_initial_publish else UOp.barrier(published_q6)
 
   # The first Q8 panel is published exactly once. Each lane owns 18 words.
@@ -76,7 +101,14 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
       for r in range(4):
         row=band*32+n*16+lr+8*(r>>1)
         meta[n,r]=(sx[row*Q6_STRIDE+64],sx[row*Q6_STRIDE+65+kphase*2],sx[row*Q6_STRIDE+66+kphase*2])
-    update=dep
+    if factor_dA:
+      tmp=[UOp.placeholder((1,),dtypes.float32,1700+kphase*64+i,addrspace=AddrSpace.REG) for i in range(64)]
+      tmp_init=UOp.group(*((x.after(dep)[0].store(0.0) if dep is not None else x[0].store(0.0)) for x in tmp))
+      tmp=[x.after(tmp_init) for x in tmp]
+      update=tmp_init
+    else:
+      tmp=[]
+      update=dep
     for cg in range(8):
       for n in range(2):
         for p in range(4):
@@ -95,9 +127,22 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
             s1=sw.rshift(((2*sp+1)%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.int32)
             wd=dw.bitwise_and(0xffff).cast(dtypes.uint16).bitcast(dtypes.half).cast(dtypes.float32)
             yscale=sy[col*Q8_STRIDE+p].bitcast(dtypes.float32)
-            term=wd*yscale*(s0*c0.gep(r)+s1*c1.gep(r)).cast(dtypes.float32)
-            carrier=acc[ai].after(update) if update is not None else acc[ai]
-            update=carrier[0].store(carrier[0]+term)
+            dot=(s0*c0.gep(r)+s1*c1.gep(r)).cast(dtypes.float32)
+            if factor_dA:
+              carrier=tmp[ai].after(update)
+              update=carrier[0].store(carrier[0]+yscale*dot)
+            else:
+              carrier=acc[ai].after(update) if update is not None else acc[ai]
+              update=carrier[0].store(carrier[0]+wd*yscale*dot)
+    if factor_dA:
+      for n in range(2):
+        for r in range(4):
+          dw=meta[n,r][0]
+          wd=dw.bitwise_and(0xffff).cast(dtypes.uint16).bitcast(dtypes.half).cast(dtypes.float32)
+          for cg in range(8):
+            ai=cg*8+n*4+r
+            carrier=acc[ai].after(update)
+            update=carrier[0].store(carrier[0]+tmp[ai].after(update)[0]*wd)
     return update
 
   phase0=consume(0,ready_y0,None)
@@ -117,6 +162,8 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
         stores.append(out[bid*ROWS*COLS+row*COLS+col].store(acc[ai].after(lifecycle_end)[0]))
   suffix="prefetch" if prefetch_second_panel else "serial"
   if combined_initial_publish: suffix += "_combined_publish"
+  if factor_dA: suffix += "_factor_da"
+  if oracle_publisher: suffix += "_oracle_publisher"
   return UOp.sink(*stores,arg=KernelInfo(name=f"nv_q6_oracle_broad_cta_{suffix}",opts_to_apply=()))
 
 

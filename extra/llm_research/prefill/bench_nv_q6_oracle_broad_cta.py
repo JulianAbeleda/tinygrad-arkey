@@ -30,15 +30,18 @@ def _record(q:np.ndarray, scales:np.ndarray) -> np.ndarray:
   return out
 
 
-def _arm(prefetch:bool, rounds:int, replicas:int, root:pathlib.Path, combined_initial_publish:bool=False) -> dict[str,object]:
+def _arm(prefetch:bool, rounds:int, replicas:int, root:pathlib.Path, combined_initial_publish:bool=False,
+         factor_dA:bool=False, oracle_publisher:bool=False) -> dict[str,object]:
   ph=lambda n,dt,i: UOp.placeholder((n,),dt,i)
   ast=q6_oracle_broad_cta_kernel(ph(replicas*ROWS*COLS,dtypes.float32,0),ph(ROWS*105,dtypes.uint16,1),
     ph(2*COLS*36,dtypes.uint32,2),replicas=replicas,prefetch_second_panel=prefetch,
-    combined_initial_publish=combined_initial_publish)
+    combined_initial_publish=combined_initial_publish,factor_dA=factor_dA,oracle_publisher=oracle_publisher)
   render_start=time.perf_counter(); program=to_program(ast,CUDARenderer(Target.parse("NV:CUDA:sm_120")))
   source=next(x.arg for x in program.src if x.op is Ops.SOURCE); render_ms=(time.perf_counter()-render_start)*1e3
   name=f"nv_q6_oracle_broad_cta_{'prefetch' if prefetch else 'serial'}"
   if combined_initial_publish: name += "_combined_publish"
+  if factor_dA: name += "_factor_da"
+  if oracle_publisher: name += "_oracle_publisher"
   arm_dir=root/name; arm_dir.mkdir(parents=True,exist_ok=True); source_path=arm_dir/f"{name}.cu"; source_path.write_text(source)
   compile_start=time.perf_counter(); binary=Device["NV"].compiler.compile(source); compile_ms=(time.perf_counter()-compile_start)*1e3
   cubin_path=arm_dir/f"{name}.cubin"; cubin_path.write_bytes(binary); census=analyze_cubin(cubin_path,arm_dir/"sass",name)["summary"]
@@ -60,7 +63,8 @@ def _arm(prefetch:bool, rounds:int, replicas:int, root:pathlib.Path, combined_in
   exact=bool(np.array_equal(got,np.broadcast_to(reference,got.shape)))
   feasible=bool(exact and resources.get("registers",256)<=255 and resources.get("stack_bytes",1)==0 and
     resources.get("local_static_bytes",1)==0 and LAUNCH_SHARED_BYTES<=58_880)
-  return {"prefetch_second_panel":prefetch,"combined_initial_publish":combined_initial_publish,
+  return {"prefetch_second_panel":prefetch,"combined_initial_publish":combined_initial_publish,"factor_dA":factor_dA,
+    "oracle_publisher":oracle_publisher,
     "shape":{"rows":ROWS,"cols":COLS,"k":K,"replicas":replicas,
       "block":[256,1,1],"payload_shared_bytes":SHARED_BYTES,"launch_shared_bytes":LAUNCH_SHARED_BYTES},
     "correctness":{"exact":exact,"finite":bool(np.isfinite(got).all()),"max_abs":float(np.max(np.abs(got-reference)))},
@@ -75,11 +79,22 @@ def _arm(prefetch:bool, rounds:int, replicas:int, root:pathlib.Path, combined_in
 def main() -> int:
   ap=argparse.ArgumentParser(); ap.add_argument("--rounds",type=int,default=9); ap.add_argument("--replicas",type=int,default=1)
   ap.add_argument("--combined-publish-ab",action="store_true")
+  ap.add_argument("--factor-da-ab",action="store_true")
+  ap.add_argument("--publisher-ab",action="store_true")
+  ap.add_argument("--publisher-factor-da-ab",action="store_true")
   ap.add_argument("--out",type=pathlib.Path,required=True); ap.add_argument("--artifacts",type=pathlib.Path,required=True); args=ap.parse_args()
   if args.rounds < 9: raise ValueError("qualification requires R9 or greater")
-  arms=([_arm(True,args.rounds,args.replicas,args.artifacts,False),
+  if sum((args.combined_publish_ab,args.factor_da_ab,args.publisher_ab,args.publisher_factor_da_ab)) > 1:
+    raise ValueError("select only one A/B")
+  arms=([_arm(True,args.rounds,args.replicas,args.artifacts,False,False),
          _arm(True,args.rounds,args.replicas,args.artifacts,True)] if args.combined_publish_ab else
-        [_arm(False,args.rounds,args.replicas,args.artifacts),_arm(True,args.rounds,args.replicas,args.artifacts)])
+        ([_arm(True,args.rounds,args.replicas,args.artifacts,False,False),
+          _arm(True,args.rounds,args.replicas,args.artifacts,False,True)] if args.factor_da_ab else
+         ([_arm(True,args.rounds,args.replicas,args.artifacts,False,False,False),
+           _arm(True,args.rounds,args.replicas,args.artifacts,False,False,True)] if args.publisher_ab else
+          ([_arm(True,args.rounds,args.replicas,args.artifacts,False,False,False),
+            _arm(True,args.rounds,args.replicas,args.artifacts,False,True,True)] if args.publisher_factor_da_ab else
+           [_arm(False,args.rounds,args.replicas,args.artifacts),_arm(True,args.rounds,args.replicas,args.artifacts)]))))
   candidate=arms[1]; recovery=float(candidate["projection"]["projected_recovery_us"])
   passed=bool(candidate["feasible"] and recovery>=REQUIRED_RECOVERY_US)
   result={"schema":"tinygrad.nv_q6_oracle_broad_cta.v1","baselines":{"current_main_us":CURRENT_MAIN_US,

@@ -1,0 +1,35 @@
+{
+  "schema": "tinygrad.nv_q6_normalized_body_phase_audit.v1",
+  "llama_cubin_sha256": "04eb9bcb2edef62c672b5496d743a98c57e3236558b88f2ff117964b7fbb91ca",
+  "generated_cubin_sha256": "f671af44721251d41179dda925b0a3b3c4cd1ba4b7937974b55dee3c521c86f7",
+  "normalization": {
+    "logical_shape": [128, 128, 256],
+    "generated_q6_loop_pc": ["0x0210", "0x06d0"],
+    "generated_q6_loop_trips": 16,
+    "generated_writeback_excluded_pc": ["0xd9a0", "0xdd90"],
+    "llama_direct_body_pc": ["0x0d80", "0xeb50"]
+  },
+  "producer": {
+    "generated": {"total": 1390, "LDG": 244, "STS": 114, "IMAD": 91, "IADD": 131, "LEA": 105, "SHF": 121, "LOP3": 202, "PRMT": 69, "BRA": 80, "BRX": 32, "BSSY": 16, "BSYNC": 16},
+    "llama": {"total": 685, "LDG": 87, "STS": 53, "IMAD": 55, "IADD": 85, "LEA": 59, "SHF": 64, "LOP3": 201, "PRMT": 64, "BRA": 0, "BRX": 0, "BSSY": 0, "BSYNC": 0},
+    "generated_minus_llama_total": 706,
+    "q6_only": {"generated_LDG": 208, "llama_LDG": 69, "generated_STS": 96, "llama_STS": 35}
+  },
+  "consumer": {
+    "generated": {"total": 3246, "IMMA": 256, "LDSM": 32, "I2FP": 512, "FMUL": 512, "FFMA": 512, "IMAD": 1027, "LDS": 168, "MOV": 66},
+    "llama": {"total": 2864, "IMMA": 256, "LDSM": 32, "I2FP": 512, "FMUL": 0, "FFMA": 640, "IMAD": 1028, "LDS": 176, "MOV": 35},
+    "generated_minus_llama_total": 382
+  },
+  "body": {"generated_estimated_issued": 4636, "llama_static_unrolled": 3549, "generated_minus_llama": 1087},
+  "lifetimes": {
+    "generated_q8_panel1": {"pc": ["0x0850", "0x5fc0"], "static_instruction_span": 1400},
+    "llama_q8_panel1": {"pc": ["0x80e0", "0x8870"], "static_instruction_span": 122}
+  },
+  "closed": {
+    "combined_publication": {"commit": "d5793a93c", "control_median_us": 18.848, "candidate_median_us": 19.168, "decision": "NO_GO"},
+    "factor_dA": {"control_median_us": 18.816, "candidate_median_us": 18.304, "projected_recovery_us": 18.504, "required_recovery_us": 23.5, "decision": "NO_GO_INTEGRATION"},
+    "oracle_publisher": {"control_median_us": 18.88, "candidate_median_us": 14.208, "projected_recovery_us": 168.852, "candidate_full_projection_us": 372.929, "decision": "CAUSAL_PASS_NO_BROAD_ROUTE_INTEGRATION"},
+    "oracle_publisher_factor_dA": {"control_median_us": 18.848, "candidate_median_us": 14.112, "candidate_full_projection_us": 369.46, "decision": "NO_BROAD_ROUTE_INTEGRATION"}
+  },
+  "next_test": "apply_oracle_publisher_to_current_wide_route_without_broad_cta_projection"
+}

@@ -1,0 +1,98 @@
+{
+  "schema": "tinygrad.nv_q6_sass_census.v1",
+  "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-publisher-1-20260831/artifacts/nv_q6_oracle_broad_cta_prefetch_oracle_publisher/nv_q6_oracle_broad_cta_prefetch_oracle_publisher.cubin",
+  "cubin_sha256": "a2d902a7264a6515561ec32a7be5536ecb29ce49e0de73a50bc5feef92569dc2",
+  "symbol": "nv_q6_oracle_broad_cta_prefetch_oracle_publisher",
+  "instruction_total": 3976,
+  "families": {
+    "BAR": 4,
+    "BRA": 1,
+    "EXIT": 1,
+    "FFMA": 512,
+    "FMUL": 512,
+    "HADD2": 4,
+    "I2FP": 512,
+    "IADD": 65,
+    "IDP": 1,
+    "IMAD": 1042,
+    "IMMA": 256,
+    "LDC": 4,
+    "LDCU": 1,
+    "LDG": 105,
+    "LDS": 168,
+    "LDSM": 32,
+    "LEA": 44,
+    "LOP3": 205,
+    "MOV": 130,
+    "NOP": 13,
+    "PRMT": 86,
+    "S2R": 4,
+    "SHF": 139,
+    "STG": 64,
+    "STS": 71
+  },
+  "opcodes": {
+    "BAR.SYNC.DEFER_BLOCKING": 4,
+    "BRA": 1,
+    "EXIT": 1,
+    "FFMA": 512,
+    "FMUL": 512,
+    "HADD2.F32": 4,
+    "I2FP.F32.S32": 512,
+    "IADD": 34,
+    "IADD.64": 31,
+    "IDP.2A.LO.U16.U8": 1,
+    "IMAD": 1035,
+    "IMAD.WIDE.U32": 7,
+    "IMMA.16816.S8.S8": 256,
+    "LDC": 1,
+    "LDC.64": 3,
+    "LDCU.64": 1,
+    "LDG.E": 36,
+    "LDG.E.U16": 69,
+    "LDS": 132,
+    "LDS.128": 36,
+    "LDSM.16.M88.2": 32,
+    "LEA": 44,
+    "LOP3.LUT": 205,
+    "MOV": 130,
+    "NOP": 13,
+    "PRMT": 86,
+    "S2R": 4,
+    "SHF.L.U32": 51,
+    "SHF.R.S32.HI": 49,
+    "SHF.R.U32.HI": 39,
+    "STG.E": 64,
+    "STS": 71
+  },
+  "resources": {
+    "registers": 255,
+    "stack_bytes": 0,
+    "shared_static_bytes": 1024,
+    "local_static_bytes": 0
+  },
+  "spill_regions": {
+    "pre_mma": {
+      "LDL": 0,
+      "STL": 0,
+      "pcs": [],
+      "stack_offsets": {}
+    },
+    "mma_span": {
+      "LDL": 0,
+      "STL": 0,
+      "pcs": [],
+      "stack_offsets": {}
+    },
+    "post_mma": {
+      "LDL": 0,
+      "STL": 0,
+      "pcs": [],
+      "stack_offsets": {}
+    }
+  },
+  "notes": [
+    "Static instruction census only; these are not hardware performance counters.",
+    "pre_mma/mma_span/post_mma are bounded by the first and last IMMA PCs and are not source-level attribution."
+  ]
+}
