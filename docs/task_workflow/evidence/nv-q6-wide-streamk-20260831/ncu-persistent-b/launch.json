@@ -1,0 +1,33 @@
+{
+  "block": [
+    32,
+    2,
+    4
+  ],
+  "buf_bytes": 67108864,
+  "buf_sizes": [
+    8388608,
+    22282240,
+    1360,
+    41287680,
+    7864320
+  ],
+  "condition_mib": 0,
+  "cubin": "docs/task_workflow/evidence/nv-q6-wide-streamk-20260831/persistent-b-r2-qualified/main.cubin",
+  "cubin_sha256": "86a4b79f1bd395256baf740d9f1ce7d4fe92bb7dfa73ca23ecc909aaf2d1877d",
+  "event_us_per_launch": 707562.8662109375,
+  "grid": [
+    170,
+    1,
+    1
+  ],
+  "n_bufs": 5,
+  "reps": 1,
+  "schema": "tinygrad.nv_cubin_ncu_launcher.v1",
+  "shared_mem": 0,
+  "symbol": "q6k_imma_stream",
+  "val_groups": [],
+  "vals": [],
+  "verdict": "CUDA_LAUNCH_OK",
+  "warmup": 20
+}

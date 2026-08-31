@@ -1,0 +1,182 @@
+{
+  "schema": "tinygrad.nv_compiler_q6k_wide_streamk.v1",
+  "shape": {
+    "M": 512,
+    "N": 4096,
+    "K": 12288
+  },
+  "fixture": {
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "weight": "blk.0.ffn_down.weight",
+    "format": "Q6_K"
+  },
+  "owners": 170,
+  "segment_census": {
+    "1": 0,
+    "2": 94,
+    "3": 34
+  },
+  "correctness": {
+    "finite": true,
+    "max_abs": 1692.6575927734375,
+    "mean_abs": 80.86119079589844,
+    "allclose_rtol2e5_atol2e3": false,
+    "cpu_fixup_max_abs": 969.448974609375,
+    "segmented_math_max_abs": 1692.6575927734375
+  },
+  "timing": {
+    "main": {
+      "samples_us": [
+        380.704,
+        375.968,
+        374.304,
+        374.56,
+        374.336,
+        373.984,
+        375.744,
+        376.32,
+        374.912
+      ],
+      "min_us": 373.984,
+      "median_us": 374.912,
+      "max_us": 380.704
+    },
+    "fixup": {
+      "samples_us": [
+        14.624,
+        11.584,
+        11.52,
+        11.584,
+        11.552,
+        11.552,
+        11.584,
+        11.584,
+        11.552
+      ],
+      "min_us": 11.52,
+      "median_us": 11.584,
+      "max_us": 14.624
+    },
+    "pair_min_sum_us": 385.50399999999996,
+    "pair_median_sum_us": 386.496
+  },
+  "compiler": {
+    "direct": {
+      "shape": {
+        "M": 512,
+        "N": 4096,
+        "K": 12288
+      },
+      "identity": "f5b8b338a3a068d3805a067a8b7ab74b945d5064bde80e5371abf9da7dd05a36",
+      "geometry": {
+        "tile": [
+          128,
+          128,
+          64
+        ],
+        "waves": [
+          2,
+          4
+        ],
+        "threads": 256,
+        "global_size": [
+          32,
+          4,
+          1
+        ],
+        "local_size": [
+          32,
+          2,
+          4
+        ],
+        "ctas": 128
+      },
+      "correctness": {
+        "finite": true,
+        "reference_finite": true,
+        "unwritten_sentinels": 0,
+        "nonzero": 2097152,
+        "max_abs": 0.001220703125,
+        "mean_abs": 3.766872760024853e-05,
+        "allclose_rtol2e5_atol2e3": true,
+        "tensor_path_matches_direct": true
+      },
+      "compiler": {
+        "ordinary_matmul": true,
+        "expanded_global_weight_allocation": false,
+        "group_partial_allocation": false,
+        "candidate_identity": "f5b8b338a3a068d3805a067a8b7ab74b945d5064bde80e5371abf9da7dd05a36",
+        "candidate_identity_exact": true,
+        "signed_imma": true,
+        "sass": {
+          "cubin": "docs/task_workflow/evidence/nv-q6-wide-streamk-20260831/diagnosed/wide_direct.cubin",
+          "sass": "docs/task_workflow/evidence/nv-q6-wide-streamk-20260831/diagnosed/wide_direct.sass",
+          "returncode": 0,
+          "imma": 64,
+          "bar": 2,
+          "ldsm": 0,
+          "local_load": 0,
+          "local_store": 0,
+          "resources": {
+            "registers": 214,
+            "stack_bytes": 0,
+            "shared_bytes": 21504,
+            "local_bytes": 0
+          }
+        }
+      },
+      "timing": {
+        "samples_us": [
+          491.424,
+          459.68,
+          458.528,
+          458.112,
+          458.208,
+          458.08,
+          458.08,
+          457.6,
+          457.792
+        ],
+        "min_us": 457.6,
+        "median_us": 458.112,
+        "max_us": 491.424
+      },
+      "passed": true
+    },
+    "main_sass": {
+      "cubin": "docs/task_workflow/evidence/nv-q6-wide-streamk-20260831/diagnosed/main.cubin",
+      "sass": "docs/task_workflow/evidence/nv-q6-wide-streamk-20260831/diagnosed/main.sass",
+      "returncode": 0,
+      "imma": 64,
+      "bar": 2,
+      "ldsm": 0,
+      "local_load": 0,
+      "local_store": 0,
+      "resources": {
+        "registers": 212,
+        "stack_bytes": 0,
+        "shared_bytes": 21504,
+        "local_bytes": 0
+      }
+    },
+    "fixup_sass": {
+      "cubin": "docs/task_workflow/evidence/nv-q6-wide-streamk-20260831/diagnosed/fixup.cubin",
+      "sass": "docs/task_workflow/evidence/nv-q6-wide-streamk-20260831/diagnosed/fixup.sass",
+      "returncode": 0,
+      "imma": 0,
+      "bar": 0,
+      "ldsm": 0,
+      "local_load": 0,
+      "local_store": 0,
+      "resources": {
+        "registers": 32,
+        "stack_bytes": 0,
+        "shared_bytes": 0,
+        "local_bytes": 0
+      }
+    },
+    "llama_dependency": false,
+    "canonical_packed_inputs": true
+  },
+  "passed": false
+}
