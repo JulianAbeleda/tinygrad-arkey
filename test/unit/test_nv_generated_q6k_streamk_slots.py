@@ -14,7 +14,8 @@ def test_streamk_slot_boundary_segment_runtime():
   ast=q6_streamk_slot_kernel(ph(16384,dtypes.float32,0),ph(1,dtypes.int32,1),ph(3,dtypes.int32,2),
     ph(128*2*105,dtypes.uint16,3),ph(2*256*512,dtypes.int8,4),ph(2*8*512,dtypes.float32,5),
     total_k_blocks=2,slots=1,max_segment_blocks=1)
-  src=next(x.arg for x in to_program(ast,CUDARenderer(Target.parse('NV:CUDA:sm_120'))).src if x.op is Ops.SOURCE)
+      src=next(x.arg for x in to_program(ast,CUDARenderer(Target.parse('NV:CUDA:sm_120'))).src if x.op is Ops.SOURCE)
+      assert 'float buf1[1]' not in src
   rng=np.random.default_rng(20260907); raw=rng.integers(0,256,(128,2,210),dtype=np.uint8)
   raw[:,:,208:210]=np.frombuffer(np.float16(.03125).tobytes(),np.uint8); blocks=raw.view(np.uint16).reshape(-1)
   b=rng.integers(-4,5,(2*256,512),dtype=np.int8); db=np.full((2,8,512),.0625,np.float32)

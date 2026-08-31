@@ -339,6 +339,9 @@ class CStyleLanguage(Renderer):
     return prg if prefix is None else "\n".join(prefix)+f"\n{prg}"
 
   def render_index(self, x:UOp, buf:UOp, idx:UOp):
+    if buf.addrspace == AddrSpace.REG and buf.max_numel() == 1:
+      assert idx.op is Ops.CONST and idx.arg == 0, f"scalar REG index must be constant zero, got {idx}"
+      return self[buf]
     if buf.addrspace == AddrSpace.REG and buf.op not in {Ops.AFTER, Ops.BUFFER}:
       # this is lane access in C
       assert idx.op is Ops.CONST, f"{idx.op} must be CONST"
@@ -352,7 +355,7 @@ class CStyleLanguage(Renderer):
     shp = x.src[0].as_shape
     lanes = 1
     prefix = f"{self.smem_align}{self.smem_prefix}" if x.addrspace == AddrSpace.LOCAL else ""
-    suffix = f"[{shp[0]}]" if len(shp) else ""
+    suffix = f"[{shp[0]}]" if len(shp) and not (x.addrspace == AddrSpace.REG and shp[0] == 1) else ""
     return f"{prefix}{self._render_dtype(x.dtype, sz=lanes)} {self[x]}{suffix};"
 
   def render_scalar_dtype(self, dtype:DType) -> str:
