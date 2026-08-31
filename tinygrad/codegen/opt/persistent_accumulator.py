@@ -42,7 +42,8 @@ def owner_segments(schedule:StreamKSchedule, owner:int,
     hi=min(stop,(tile+1)*schedule.k_blocks)
     direct=lo == tile*schedule.k_blocks and hi == (tile+1)*schedule.k_blocks
     tail=hi == stop and hi != (tile+1)*schedule.k_blocks
-    slot=None if direct else owner*abi.partial_slots_per_owner+int(tail)
+    has_head=start%schedule.k_blocks != 0
+    slot=None if direct else owner*abi.partial_slots_per_owner+int(tail and has_head)
     segments.append(PersistentSegment(owner,tile,lo,hi,direct,slot))
   return tuple(segments)
 
@@ -58,7 +59,8 @@ def persistent_work_item(schedule:StreamKSchedule, owner:int, serial:int,
   reset=serial == 0 or k_block == 0
   direct=tile_end and saw_tile_start
   partial=(tile_end and not saw_tile_start) or (owner_end and not tile_end)
-  slot=owner*abi.partial_slots_per_owner+int(owner_end and not tile_end) if partial else None
+  has_head=start%schedule.k_blocks != 0
+  slot=owner*abi.partial_slots_per_owner+int(owner_end and not tile_end and has_head) if partial else None
   return PersistentWorkItem(owner,serial,linear,tile,k_block,reset,direct,partial,slot)
 
 def fixup_contributors(schedule:StreamKSchedule, output_tile:int) -> tuple[PersistentWorkItem, ...]:

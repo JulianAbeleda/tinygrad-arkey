@@ -34,6 +34,14 @@ def test_each_tile_has_direct_output_or_reverse_owner_fixup():
 def test_workspace_abi_is_fp32_head_tail():
   assert PersistentAccumulatorABI() == PersistentAccumulatorABI("float32",2)
 
+def test_partial_slots_match_llama_fixup_oracle():
+  expected={2:(0,2),4:(3,4),6:(5,6),11:(8,10),13:(11,12),15:(13,14)}
+  actual={tile:[] for tile in expected}
+  for owner in range(SCHEDULE.owners):
+    for segment in owner_segments(SCHEDULE,owner):
+      if segment.output_tile in actual and not segment.direct: actual[segment.output_tile].append(segment.partial_slot)
+  assert {tile:tuple(slots) for tile,slots in actual.items()} == expected
+
 def test_owner_intervals_split_into_bounded_register_reductions():
   for owner in range(SCHEDULE.owners):
     start,stop=SCHEDULE.interval(owner)
