@@ -8,6 +8,7 @@ from typing import Callable, TypeAlias, TYPE_CHECKING
 from tinygrad.codegen.opt.packed_weight import (PackedWeightTransform, Q4KInt8FragmentProvider, Q6KInt8FragmentProvider,
                                                 Q8ActivationRecordTransform, Q8Int8FragmentProvider)
 from tinygrad.codegen.opt.tc import LaneMap
+from tinygrad.codegen.late.native_fragment import PackedFragmentSpec
 from tinygrad.dtype import AddrSpace, PtrDType, dtypes
 from tinygrad.uop.ops import AxisType, Ops, UOp
 if TYPE_CHECKING: from tinygrad.uop.ops import KernelLDSWindow, KernelTileGeometry
@@ -299,6 +300,7 @@ class PackedPrecontractOperandTemplate:
   k_axis: UOp
   row_tile_base: UOp
   fragment_provider: Q4KInt8FragmentProvider|Q6KInt8FragmentProvider|Q8Int8FragmentProvider|None = None
+  fragment_spec: PackedFragmentSpec|None = None
 
 
 PrecontractOperand: TypeAlias = PrecontractOperandTemplate | PackedPrecontractOperandTemplate
@@ -332,6 +334,7 @@ class PrecontractLDSStage:
   fragment_a: UOp
   fragment_b: UOp
   fragment_b_k16: tuple[UOp, UOp]|None = None
+  fragment_b_spec: PackedFragmentSpec|None = None
 
 
 
@@ -391,10 +394,12 @@ class PrecontractCandidateContract:
     return cls(context, tc, factors, register_mode)
 
   def assemble(self, *, in0:UOp, in1:UOp, original_axes:tuple[UOp, UOp, UOp], outer_n:UOp, outer_m:UOp,
+               logical_outer_n:UOp|None = None,
                wave_m:UOp, wave_n:UOp, lane:UOp, tc_upcast_axes:tuple[tuple[tuple[int, int], ...], ...],
                range_by_id:dict[int, UOp], allocation_id:Callable[[], int]|None
                ) -> tuple[tuple[PrecontractOperand, ...], PrecontractThreadAxes, tuple[PrecontractContractSpec, ...], UOp|None]:
     geometry, tc = self.context.geometry, self.tc
+    packed_outer_n = outer_n if logical_outer_n is None else logical_outer_n
     contracts = []
     for operand_idx, role in enumerate(("A", "B")):
       axes = tuple(range_by_id[a] for a, size in tc_upcast_axes[operand_idx] if size == 2)
@@ -449,8 +454,9 @@ class PrecontractCandidateContract:
       if fragment_provider is not None and (not isinstance(fragment_provider, (Q4KInt8FragmentProvider, Q6KInt8FragmentProvider)) or
                                              fragment_provider.transform != packed_weight):
         raise ValueError("packed fragment provider does not own the admitted packed-weight transform")
+      fragment_spec = PackedFragmentSpec.q6k_k64() if isinstance(fragment_provider, Q6KInt8FragmentProvider) else None
       operand_b = PackedPrecontractOperandTemplate("B", packed_params[0], packed_weight, original_axes[0], original_axes[2],
-                                                   outer_n*geometry.tile[1], fragment_provider)
+                                                   packed_outer_n*geometry.tile[1], fragment_provider, fragment_spec)
     operands:tuple[PrecontractOperand, ...] = (operand_a, operand_b)
     validate_precontract_operand_templates(operands, dtype_in=tc.dtype_in, context="candidate")
     return operands, PrecontractThreadAxes(wave_m, wave_n, lane), contracts, allocation
@@ -991,4 +997,5 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
   q6_b = isinstance(operands[1], PackedPrecontractOperandTemplate) and \
     isinstance(operands[1].fragment_provider,Q6KInt8FragmentProvider)
   fragment_b_k16 = tuple(_fragment("B",subtile_n,wave_n,factors.subtiles_n,contracts[1],half) for half in (0,1)) if q6_b else None
-  return PrecontractLDSStage(allocation,producer,barrier,fragment_a,fragment_b,fragment_b_k16)
+  fragment_b_spec = operands[1].fragment_spec if isinstance(operands[1], PackedPrecontractOperandTemplate) else None
+  return PrecontractLDSStage(allocation,producer,barrier,fragment_a,fragment_b,fragment_b_k16,fragment_b_spec)

@@ -1,5 +1,6 @@
 import random, struct
 from tinygrad.codegen.opt.q6_mma_tile import Q6KMMATile
+from tinygrad.codegen.late.native_fragment import PackedFragmentSpec
 
 def test_q6_mma_tile_stages_every_code_and_metadata_exactly():
   rng=random.Random(7); tile=Q6KMMATile()
@@ -23,3 +24,7 @@ def test_q6_mma_tile_stages_every_code_and_metadata_exactly():
 def test_q6_mma_tile_cuda_lowering_uses_packed_lane_map():
   src=Q6KMMATile().emit_cuda()
   assert src.count("__vsubss4") == 2 and "tile[4864]" in src and "row*76" in src
+
+def test_q6_fragment_layout_contract_publishes_one_k64_phase():
+  spec=PackedFragmentSpec.q6k_k64()
+  assert spec.format == "Q6_K" and spec.width == 2 and spec.lane_layout == "mma_b"
