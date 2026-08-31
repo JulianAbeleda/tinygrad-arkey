@@ -1,0 +1,41 @@
+{
+  "schema": "tinygrad.generated_quantized_linear_gate.v1",
+  "date": "2026-08-30",
+  "target": "nvidia_sm120",
+  "authority": {
+    "generator": "BoltBeam boltbeam.full_kernel_candidate.v3 primitive plans",
+    "lowerer": "tinygrad native compiler",
+    "weight_input": "canonical packed Q4_K/Q6_K",
+    "external_kernel_binary": false
+  },
+  "contract_tests": {"passed": 19, "failed": 0},
+  "decode_canary": {
+    "shape": {"m": 1, "n": 32, "k": 1024},
+    "oracle": "canonical GGUF dequantization plus numpy fp32 matvec",
+    "Q4_K": {"pass": true, "max_abs_error": 9.5367431640625e-7, "scalar_median_ns": 7867808, "vector_median_ns": 6391583},
+    "Q6_K": {"pass": true, "max_abs_error": 3.814697265625e-6, "median_ns": 8098485},
+    "timing_use": "adapter gate only; includes non-representative small-shape overhead"
+  },
+  "prefill_canary": {
+    "shape": {"m": 64, "n": 32, "k": 1024},
+    "Q4_K": {"pass": true, "max_abs_error": 0.0015459060668945312},
+    "Q6_K": {"pass": true, "max_abs_error": 0.009050369262695312},
+    "tail_probe_m16": {"pass": false, "reason": "non-finite output; target lowerer now requires tile-aligned M/N/K"}
+  },
+  "representative_prefill": {
+    "shape": {"m": 512, "n": 12288, "k": 4096},
+    "role": "ffn_gate_up",
+    "quant_format": "Q4_K",
+    "timing_mode": "TinyJit replay synchronized wall clock",
+    "geometries": [
+      {"geometry": [64, 32, 32, 2, 1, 1], "median_ns": 1015494},
+      {"geometry": [128, 32, 32, 4, 1, 1], "median_ns": 1013911},
+      {"geometry": [256, 64, 32, 8, 1, 1], "median_ns": 1012508},
+      {"geometry": [256, 128, 32, 8, 2, 2], "median_ns": 1011736}
+    ],
+    "llama_representative_ns": 219200,
+    "best_vs_llama_ratio": 4.615583941605839,
+    "decision": "do_not_invest_in_more_geometry_search",
+    "next_hypothesis": "generated contraction body and packed operand lowering, not tile geometry"
+  }
+}
