@@ -56,16 +56,17 @@ def q6_first_two_k16_numpy(block):
  d=np.frombuffer(raw[:,208:210].tobytes(),dtype='<f2').astype(np.float32)
  return (q[0],scales[0],float(d[0])) if len(raw)==1 else (q,scales,d)
 
-def q6_packed_two_k16_kernel(dot0, dot1, blocks, b0, b1):
+def q6_packed_two_k16_kernel(out, dot0, dot1, blocks, b0, b1, dB):
  """Direct packed Q6_K gate: sixteen canonical blocks, no expanded A input."""
  lane=UOp.special(32,"lidx0")
+ def byte(off): return blocks[off//2].cast(dtypes.uint32).rshift((off%2)*8).bitwise_and(255)
  def one(b, slot):
   sh=UOp.placeholder((64,),dtypes.uint32,30+slot,addrspace=__import__('tinygrad.dtype',fromlist=['AddrSpace']).AddrSpace.LOCAL)
   stores=[]
   for i in range(2):
    z=lane+32*i; row=z>>2; word=z&3; base=row*210+4*word; vals=[]
    for q in range(4):
-    lo=blocks[base+q].cast(dtypes.uint32); hi=blocks[base+128+q].cast(dtypes.uint32)
+    lo=byte(base+q); hi=byte(base+128+q)
     hbits=hi.bitwise_and(3).lshift(4) if slot==0 else hi.bitwise_and(0x30)
     v=(lo.bitwise_and(15) if slot==0 else lo.rshift(4).bitwise_and(15)).bitwise_or(hbits).alu(
       Ops.SUB,UOp.const(dtypes.uint32,32)).cast(dtypes.char)
@@ -82,7 +83,11 @@ def q6_packed_two_k16_kernel(dot0, dot1, blocks, b0, b1):
  lr,lc=lane>>2,lane&3; writes=[]
  for r in range(4):
   idx=(lr+8*(r>>1))*8+2*lc+(r&1)
-  writes += [dot0[idx].store(c0.gep(r)),dot1[idx].store(c1.gep(r))]
+  row=lr+8*(r>>1); base=row*210; z0,z1=c0.gep(r),c1.gep(r)
+  scale0=byte(base+192).cast(dtypes.char).cast(dtypes.float32); scale1=byte(base+193).cast(dtypes.char).cast(dtypes.float32)
+  wd=blocks[(base+208)//2].bitcast(dtypes.half).cast(dtypes.float32)
+  value=(wd*dB[0].cast(dtypes.float32))*(scale0*z0.cast(dtypes.float32)+scale1*z1.cast(dtypes.float32))
+  writes += [dot0[idx].store(z0),dot1[idx].store(z1),out[idx].store(value)]
  return UOp.sink(*writes,arg=KernelInfo(name='nv_native_fragment_q6_packed_two_k16',opts_to_apply=()))
 
 __all__=['kernel','q6_two_k16_kernel','q6_packed_two_k16_kernel','q6_first_two_k16_numpy']

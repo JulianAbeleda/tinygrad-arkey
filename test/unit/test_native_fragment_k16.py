@@ -53,18 +53,21 @@ def test_q6_two_k16_scale_semantics():
 
 def test_q6_direct_packed_two_k16():
   ph=lambda n,dt,i:UOp.placeholder((n,),dt,i)
-  args=(ph(128,dtypes.int32,0),ph(128,dtypes.int32,1),ph(16*210,dtypes.uint8,2),ph(128,dtypes.int8,3),ph(128,dtypes.int8,4))
+  args=(ph(128,dtypes.float32,0),ph(128,dtypes.int32,1),ph(128,dtypes.int32,2),ph(16*105,dtypes.uint16,3),
+        ph(128,dtypes.int8,4),ph(128,dtypes.int8,5),ph(1,dtypes.float32,6))
   p=to_program(q6_packed_two_k16_kernel(*args),CUDARenderer(Target.parse('NV:CUDA:sm_120'))); src=next(x.arg for x in p.src if x.op is Ops.SOURCE)
-  assert src.count('__WMMA_8_16_16_signed_char_int(')==3 and 'data2_3360' in src
+  assert src.count('__WMMA_8_16_16_signed_char_int(')==3 and '1680' in src
   rng=np.random.default_rng(20260902); blocks=rng.integers(0,256,(16,210),dtype=np.uint8)
+  blocks[:,208:210]=np.frombuffer(np.float16(.03125).tobytes(),np.uint8)
   b0=rng.integers(-127,128,(16,8),dtype=np.int8); b1=rng.integers(-127,128,(16,8),dtype=np.int8)
-  q,_,_=q6_first_two_k16_numpy(blocks.tobytes()); ref0=q[:,0].astype(np.int32)@b0.astype(np.int32); ref1=q[:,1].astype(np.int32)@b1.astype(np.int32)
-  dev=Device['NV']; host=(np.empty(128,np.int32),np.empty(128,np.int32),blocks,b0,b1)
+  q,scales,wd=q6_first_two_k16_numpy(blocks.tobytes()); ref0=q[:,0].astype(np.int32)@b0.astype(np.int32); ref1=q[:,1].astype(np.int32)@b1.astype(np.int32)
+  db=np.array([.0625],np.float32); ref=(wd[:,None]*db[0])*(scales[:,0,None].astype(np.float32)*ref0+scales[:,1,None].astype(np.float32)*ref1)
+  dev=Device['NV']; host=(np.empty(128,np.float32),np.empty(128,np.int32),np.empty(128,np.int32),blocks,b0,b1,db)
   bufs=[dev.allocator._alloc(x.nbytes,BufferSpec()) for x in host]
-  for buf,x in zip(bufs[2:],host[2:]): dev.allocator._copyin(buf,memoryview(x.tobytes()))
+  for buf,x in zip(bufs[3:],host[3:]): dev.allocator._copyin(buf,memoryview(x.tobytes()))
   NVProgram(dev,'nv_native_fragment_q6_packed_two_k16',NVRTCCompiler(dev.arch,ptx=False,cache_key='q6_packed_two_k16_runtime').compile(src))(
     *bufs,global_size=(1,1,1),local_size=(32,1,1),wait=True)
   got=[]
-  for buf in bufs[:2]:
-    mv=memoryview(bytearray(buf.size)); dev.allocator._copyout(mv,buf); got.append(np.frombuffer(mv,np.int32,count=128).reshape(16,8))
-  assert np.array_equal(got[0],ref0) and np.array_equal(got[1],ref1)
+  for buf,dt in zip(bufs[:3],(np.float32,np.int32,np.int32)):
+    mv=memoryview(bytearray(buf.size)); dev.allocator._copyout(mv,buf); got.append(np.frombuffer(mv,dt,count=128).reshape(16,8))
+  assert np.array_equal(got[1],ref0) and np.array_equal(got[2],ref1) and np.array_equal(got[0],ref)
