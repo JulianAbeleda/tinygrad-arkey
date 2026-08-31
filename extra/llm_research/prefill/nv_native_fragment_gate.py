@@ -1,6 +1,6 @@
 """Research gate for the neutral four-register native fragment load."""
 from tinygrad import dtypes
-from tinygrad.codegen.late.native_fragment import native_fragment_x4
+from tinygrad.codegen.late.native_fragment import PackedFragmentSpec, native_fragment_x2, native_fragment_x4, packed_fragment_load
 from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import KernelInfo,Ops,UOp
 
@@ -30,4 +30,15 @@ def emit_native_fragment_imma():
     return UOp.sink(*writes,arg=KernelInfo(name="nv_native_fragment_x4_imma",opts_to_apply=()))
   return kernel
 
-__all__=["emit_native_fragment_imma","emit_native_fragment_readback"]
+def emit_q6k_k64_fragment_readback():
+  """Causal Q6 K64 packed-B load gate; arithmetic is deliberately identity."""
+  def kernel(out:UOp, source:UOp) -> UOp:
+    lane=UOp.special(32,"lidx0")
+    shared=UOp.placeholder((128,),dtypes.uint32,20,addrspace=AddrSpace.LOCAL)
+    ready=UOp.barrier(UOp.group(*(shared[lane+32*i].store(source[lane+32*i]) for i in range(4))))
+    frag=packed_fragment_load(shared.after(ready),(lane&15)*8+(lane>>4)*4,PackedFragmentSpec.q6k_k64())
+    writes=tuple(out[lane*2+i].store(frag.gep(i)) for i in range(2))
+    return UOp.sink(*writes,arg=KernelInfo(name="nv_q6k_k64_fragment_readback",opts_to_apply=()))
+  return kernel
+
+__all__=["emit_native_fragment_imma","emit_native_fragment_readback","emit_q6k_k64_fragment_readback"]
