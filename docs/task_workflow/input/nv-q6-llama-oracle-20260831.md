@@ -117,3 +117,37 @@ more shared bytes while retaining the same 255-register ceiling. Pinned llama
 loads two 128-K halves of the canonical Q8 record into `tile_y`, consuming each
 half from shared before overwriting it. The generated baseline loads Q8 fragments
 and scales directly from global memory for every warp band.
+
+## Stream-K execution semantics, source-audited 2026-08-31
+
+The pinned source assigns each CUDA block one contiguous interval in the linear
+`tile/K` space:
+
+```c++
+kbc      = blockIdx.x     * total_work / gridDim.x;
+kbc_stop = (blockIdx.x+1) * total_work / gridDim.x;
+```
+
+It then aligns both endpoints to `blocks_per_iter`. For Q6_K, `qk=256` and
+`MMQ_ITER_K=256`, therefore `blocks_per_iter=1`: the representative 170-owner
+launch executes exactly 36 or 37 useful Q6 blocks per CTA. A CTA walks complete
+output-tile portions in a loop and writes them directly to `dst`; only its final
+incomplete tile portion is written to `tmp_fixup`. The fixup CTA walks backward
+over preceding owners, reducing the ordered partials only when the final tile
+has multiple contributors. This is the ownership and writeback contract for the
+generated owner kernel. It rules out the intermediate 340-slot design's fixed
+37-iteration loop: that design issues MMA work for 12,580 block iterations to
+cover 6,144 useful units.
+
+## Generated Q8-shared measurement, 2026-08-31
+
+Commit `5655abc8b` adds a backend-neutral runtime workgroup-local arena with a
+CUDA `extern __shared__` lowering. The Q6 producer now stages both Q6 rows and
+two canonical Q8 128-K record halves in the same 57,344-byte arena and reserves
+the oracle's 58,880-byte launch allocation.
+
+- focused boundary-segment runtime test: exact pass;
+- generated producer: minimum 1165.023 us, median 1172.972 us;
+- resources: 255 registers/thread, 58,880 shared bytes, 936 local bytes/thread;
+- status: Q8 staging is validated and improves the prior 1338.643-us baseline,
+  but remains unpromoted pending owner scheduling.
