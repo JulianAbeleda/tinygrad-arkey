@@ -189,7 +189,8 @@ def q6_cta_geometry():
          "promotion": "research_only"}
 
 def q6_packed_cta_kernel(out, blocks, b, dB, k_blocks:int, col_groups:int=1,
-                         block_start:int=0, segment_blocks:int=None, total_k_blocks:int=None):
+                         block_start:int=0, segment_blocks:int=None, total_k_blocks:int=None,
+                         activation_stride:int=None, activation_offset:int|UOp=0, allocation_base:int=0, axis_base:int=0):
  """Generated 128x(16*col_groups) eight-warp CTA gate matching llama warp ownership."""
  if k_blocks < 1 or col_groups < 1: raise ValueError("k_blocks and col_groups must be positive")
  if segment_blocks is None: segment_blocks=k_blocks
@@ -201,14 +202,16 @@ def q6_packed_cta_kernel(out, blocks, b, dB, k_blocks:int, col_groups:int=1,
   if block_start < 0 or segment_blocks < 1 or block_start+segment_blocks > total_k_blocks:
    raise ValueError("invalid K-block segment")
  cols=16*col_groups
+ if activation_stride is None: activation_stride=cols
+ def access(buf, idx): return buf.index(idx) if buf.ndim == 0 else buf[idx]
  lid=UOp.special(256,"lidx0"); warp,lane=lid//32,lid%32; lr,lc=lane>>2,lane&3; band,phase=warp>>1,warp&1
- blk=UOp.range(segment_blocks,0,axis_type=AxisType.REDUCE)
+ blk=UOp.range(segment_blocks,axis_base,axis_type=AxisType.REDUCE)
  abs_blk=(UOp.const(dtypes.int32,block_start) if isinstance(block_start,int) else block_start.cast(dtypes.int32))+blk
- sh=UOp.placeholder((Q6_CTA_ROWS*Q6_CTA_WEIGHT_STRIDE,),dtypes.uint32,500,
+ sh=UOp.placeholder((Q6_CTA_ROWS*Q6_CTA_WEIGHT_STRIDE,),dtypes.uint32,500+allocation_base,
    addrspace=__import__('tinygrad.dtype',fromlist=['AddrSpace']).AddrSpace.LOCAL)
- sr=UOp.range(16,1,axis_type=AxisType.LOOP); srow=warp+8*sr; hbase=(srow*total_k_blocks+abs_blk)*105; txi=lane
- ql=blocks[hbase+2*txi].cast(dtypes.uint32).bitwise_or(blocks[hbase+2*txi+1].cast(dtypes.uint32).lshift(16))
- qhi=(txi//16)*8+txi%8; qh=blocks[hbase+64+2*qhi].cast(dtypes.uint32).bitwise_or(blocks[hbase+64+2*qhi+1].cast(dtypes.uint32).lshift(16))
+ sr=UOp.range(16,axis_base+1,axis_type=AxisType.LOOP); srow=warp+8*sr; hbase=(srow*total_k_blocks+abs_blk)*105; txi=lane
+ ql=access(blocks,hbase+2*txi).cast(dtypes.uint32).bitwise_or(access(blocks,hbase+2*txi+1).cast(dtypes.uint32).lshift(16))
+ qhi=(txi//16)*8+txi%8; qh=access(blocks,hbase+64+2*qhi).cast(dtypes.uint32).bitwise_or(access(blocks,hbase+64+2*qhi+1).cast(dtypes.uint32).lshift(16))
  qshift=txi.bitwise_and(8)>>2
  q0=ql.bitwise_and(0x0f0f0f0f).bitwise_or(qh.rshift(qshift).lshift(4).bitwise_and(0x30303030))
  q1=ql.rshift(4).bitwise_and(0x0f0f0f0f).bitwise_or(qh.rshift(qshift).bitwise_and(0x30303030)); kq0=2*txi-txi%16
@@ -218,25 +221,25 @@ def q6_packed_cta_kernel(out, blocks, b, dB, k_blocks:int, col_groups:int=1,
  def mma(cg,n,g):
   row0=band*32+n*16
   av=native_fragment_x2(sh.after(ready),(row0+(lane&15))*76+g*4).bitcast(dtypes.char.vec(8))
-  bv=UOp(Ops.STACK,dtypes.char.vec(4),tuple(b[(abs_blk*256+g*16+4*lc+q)*cols+cg*16+phase*8+lr] for q in range(4)))
+  bv=UOp(Ops.STACK,dtypes.char.vec(4),tuple(access(b,(abs_blk*256+g*16+4*lc+q)*activation_stride+activation_offset+cg*16+phase*8+lr) for q in range(4)))
   axes=(tuple((600+i,2) for i in range(3)),tuple((610+i,2) for i in range(2)),tuple((620+i,2) for i in range(2)))
   arg=("WMMA_8_16_16_signed_char_int",(8,16,16),dtypes.char,dtypes.int,"NV",32,axes,())
   return UOp(Ops.WMMA,dtypes.int.vec(4),(av,bv,UOp.const(dtypes.int.vec(4),0)),arg)
  cs=[[[mma(cg,n,g) for g in range(16)] for n in range(2)] for cg in range(col_groups)]
- acc=UOp.placeholder((8*col_groups,),dtypes.float32,700,addrspace=__import__('tinygrad.dtype',fromlist=['AddrSpace']).AddrSpace.REG)
+ acc=UOp.placeholder((8*col_groups,),dtypes.float32,700+allocation_base,addrspace=__import__('tinygrad.dtype',fromlist=['AddrSpace']).AddrSpace.REG)
  init=UOp.group(*(acc[i].store(0.0) for i in range(8*col_groups))); acc=acc.after(init); update=None
  for cg in range(col_groups):
   for n in range(2):
    for r in range(4):
     ai=cg*8+n*4+r; row=band*32+n*16+lr+8*(r>>1); col=cg*16+phase*8+2*lc+(r&1); base=(row*total_k_blocks+abs_blk)*210; term=UOp.const(dtypes.float32,0.0)
-    wd=blocks[(base+208)//2].bitcast(dtypes.half).cast(dtypes.float32)
+    wd=access(blocks,(base+208)//2).bitcast(dtypes.half).cast(dtypes.float32)
     for p in range(8):
-     def byte(off): return blocks[off//2].cast(dtypes.uint32).rshift((off%2)*8).bitwise_and(255)
+     def byte(off): return access(blocks,off//2).cast(dtypes.uint32).rshift((off%2)*8).bitwise_and(255)
      s0=byte(base+192+2*p).cast(dtypes.char).cast(dtypes.float32); s1=byte(base+193+2*p).cast(dtypes.char).cast(dtypes.float32)
-     term=term+(wd*dB[(abs_blk*8+p)*cols+col])*(s0*cs[cg][n][2*p].gep(r).cast(dtypes.float32)+s1*cs[cg][n][2*p+1].gep(r).cast(dtypes.float32))
+    term=term+(wd*access(dB,(abs_blk*8+p)*activation_stride+activation_offset+col))*(s0*cs[cg][n][2*p].gep(r).cast(dtypes.float32)+s1*cs[cg][n][2*p+1].gep(r).cast(dtypes.float32))
     update=acc.after(blk if update is None else update)[ai].store(acc.after(blk)[ai]+term)
  done=update.end(blk)
- return UOp.sink(*(out[(band*32+n*16+lr+8*(r>>1))*cols+cg*16+phase*8+2*lc+(r&1)].store(acc.after(done)[cg*8+n*4+r])
+ return UOp.sink(*(access(out,(band*32+n*16+lr+8*(r>>1))*cols+cg*16+phase*8+2*lc+(r&1)).store(acc.after(done)[cg*8+n*4+r])
    for cg in range(col_groups) for n in range(2) for r in range(4)),
    arg=KernelInfo(name=f'nv_native_fragment_q6_cta_128x{cols}x{k_blocks*256}',opts_to_apply=()))
 
