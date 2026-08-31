@@ -1,4 +1,4 @@
-from tinygrad.codegen.opt.persistent_accumulator import PersistentAccumulatorABI, fixup_contributors, persistent_work_item
+from tinygrad.codegen.opt.persistent_accumulator import PersistentAccumulatorABI, fixup_contributors, owner_segments, persistent_work_item
 from tinygrad.codegen.opt.stream_k import StreamKSchedule
 
 SCHEDULE=StreamKSchedule(512,12288,4096,128,128,64,170,8)
@@ -33,3 +33,16 @@ def test_each_tile_has_direct_output_or_reverse_owner_fixup():
 
 def test_workspace_abi_is_fp32_head_tail():
   assert PersistentAccumulatorABI() == PersistentAccumulatorABI("float32",2)
+
+def test_owner_intervals_split_into_bounded_register_reductions():
+  for owner in range(SCHEDULE.owners):
+    start,stop=SCHEDULE.interval(owner)
+    segments=owner_segments(SCHEDULE,owner)
+    assert 1 <= len(segments) <= 4
+    assert segments[0].linear_start == start and segments[-1].linear_stop == stop
+    assert all(left.linear_stop == right.linear_start for left,right in zip(segments,segments[1:]))
+    for segment in segments:
+      tile_start=segment.output_tile*SCHEDULE.k_blocks
+      assert tile_start <= segment.linear_start < segment.linear_stop <= tile_start+SCHEDULE.k_blocks
+      assert segment.direct == (segment.linear_start == tile_start and segment.linear_stop == tile_start+SCHEDULE.k_blocks)
+      assert (segment.partial_slot is None) == segment.direct

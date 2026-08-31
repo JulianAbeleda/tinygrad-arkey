@@ -23,6 +23,29 @@ class PersistentWorkItem:
   partial: bool
   partial_slot: int|None
 
+@dataclass(frozen=True)
+class PersistentSegment:
+  owner: int
+  output_tile: int
+  linear_start: int
+  linear_stop: int
+  direct: bool
+  partial_slot: int|None
+
+def owner_segments(schedule:StreamKSchedule, owner:int,
+                   abi:PersistentAccumulatorABI=PersistentAccumulatorABI()) -> tuple[PersistentSegment, ...]:
+  start,stop=schedule.interval(owner)
+  first,last=start//schedule.k_blocks,(stop-1)//schedule.k_blocks
+  segments=[]
+  for tile in range(first,last+1):
+    lo=max(start,tile*schedule.k_blocks)
+    hi=min(stop,(tile+1)*schedule.k_blocks)
+    direct=lo == tile*schedule.k_blocks and hi == (tile+1)*schedule.k_blocks
+    tail=hi == stop and hi != (tile+1)*schedule.k_blocks
+    slot=None if direct else owner*abi.partial_slots_per_owner+int(tail)
+    segments.append(PersistentSegment(owner,tile,lo,hi,direct,slot))
+  return tuple(segments)
+
 def persistent_work_item(schedule:StreamKSchedule, owner:int, serial:int,
                          abi:PersistentAccumulatorABI=PersistentAccumulatorABI()) -> PersistentWorkItem:
   start,stop=schedule.interval(owner)
