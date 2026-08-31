@@ -156,5 +156,28 @@ def transform_compiler_q6k_wide_live_publication(source:str) -> str:
     source = source[:first.start()] + replacement + source[last.end():]
   return source
 
+def transform_compiler_q6k_wide_straightline_k256(source:str) -> str:
+  """Express each aligned K256 epoch as four scoped, constant-phase K64 bodies.
+
+  Wide Stream-K owner boundaries are rounded to eight K64 work units, so every
+  segment is K256 aligned.  Scoping each clone prevents phase-local decoded
+  values from remaining live across the following consumer barrier.
+  """
+  loop="  for (int Ridx0 = k_begin; Ridx0 < k_end; Ridx0++) {"
+  if source.count(loop) != 1: raise ValueError("compiler wide Q6 phase loop not found exactly once")
+  start=source.index(loop); body_start=start+len(loop); depth=1; pos=body_start
+  while pos < len(source) and depth:
+    if source[pos] == "{": depth += 1
+    elif source[pos] == "}": depth -= 1
+    pos += 1
+  if depth: raise ValueError("unterminated compiler wide Q6 phase loop")
+  body=source[body_start:pos-1]
+  if body.count("__syncthreads();") != 2: raise ValueError("wide Q6 phase body lost its two lifecycle barriers")
+  if body.count("Ridx0") < 4: raise ValueError("wide Q6 phase body lost its phase selectors")
+  clones="".join(f"    {{ const int Ridx0 = Kepoch+{phase};{body}    }}\n" for phase in range(4))
+  replacement="  for (int Kepoch = k_begin; Kepoch < k_end; Kepoch += 4) {\n"+clones+"  }"
+  return source[:start]+replacement+source[pos:]
+
 __all__=["active_fixup_source","transform_compiler_q6k_to_streamk","transform_compiler_q6k_wide_to_streamk",
-         "transform_compiler_q6k_wide_live_publication","transform_compiler_q6k_wide_persistent_b","wide_active_fixup_source"]
+         "transform_compiler_q6k_wide_live_publication","transform_compiler_q6k_wide_persistent_b",
+         "transform_compiler_q6k_wide_straightline_k256","wide_active_fixup_source"]

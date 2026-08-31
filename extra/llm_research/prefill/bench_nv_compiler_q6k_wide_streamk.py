@@ -11,7 +11,7 @@ from extra.llm_research.layout import GGML_Q6_K, packed_u16_slice, read_metadata
 from extra.llm_research.prefill.nv_compiler_q6k_imma_gate import _record, _run, _sass
 from extra.llm_research.prefill.nv_compiler_q6k_streamk_transform import (
   transform_compiler_q6k_wide_live_publication, transform_compiler_q6k_wide_persistent_b,
-  transform_compiler_q6k_wide_to_streamk, wide_active_fixup_source)
+  transform_compiler_q6k_wide_straightline_k256, transform_compiler_q6k_wide_to_streamk, wide_active_fixup_source)
 
 M, N, K = 512, 4096, 12288
 OUTPUT_TILES, TILE_ELEMENTS, MAX_SEGMENTS = 128, 16384, 3
@@ -29,6 +29,7 @@ def main() -> int:
   ap.add_argument("--force-partials", action="store_true")
   ap.add_argument("--persistent-q6-cache", action="store_true")
   ap.add_argument("--live-publication", action="store_true")
+  ap.add_argument("--straightline-k256", action="store_true")
   ap.add_argument("--unroll", type=int, choices=(1, 2, 4, 8), default=None)
   ap.add_argument("--out", required=True)
   ap.add_argument("--artifacts", required=True)
@@ -45,7 +46,9 @@ def main() -> int:
   direct = _run("wide_direct", M, N, K, halfs, record, args.rounds, artifacts, (128, 128, 2, 4, 256))
   source = (artifacts / "wide_direct.cu").read_text()
   owners = args.owners
-  main_source = transform_compiler_q6k_wide_to_streamk(source, owners=owners, force_partials=args.force_partials, unroll=args.unroll)
+  main_source = transform_compiler_q6k_wide_to_streamk(source, owners=owners, force_partials=args.force_partials,
+    unroll=None if args.straightline_k256 else args.unroll)
+  if args.straightline_k256: main_source = transform_compiler_q6k_wide_straightline_k256(main_source)
   if args.persistent_q6_cache: main_source = transform_compiler_q6k_wide_persistent_b(main_source)
   if args.live_publication: main_source = transform_compiler_q6k_wide_live_publication(main_source)
   fixup_source = wide_active_fixup_source()
@@ -111,6 +114,7 @@ def main() -> int:
     "fixture": {"model": str(model), "weight": info.name, "format": "Q6_K"}, "owners": owners,
     "persistent_q6_cache": args.persistent_q6_cache,
     "live_publication": args.live_publication,
+    "straightline_k256": args.straightline_k256,
     "segment_census": {str(n): sum(len(x) == n for x in slots) for n in range(1, MAX_SEGMENTS + 1)},
     "correctness": correctness, "timing": {"main": main_t, "fixup": fixup_t,
       "pair_min_sum_us": main_t["min_us"] + fixup_t["min_us"],
