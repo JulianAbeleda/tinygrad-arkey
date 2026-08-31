@@ -9,7 +9,7 @@ SCHEMA_VERSION = "boltbeam.full_kernel_candidate.v3"
 PLAN_KIND = "tinygrad_primitive_graph.v1"
 SUPPORTED_OPS = frozenset({"global_load", "global_store", "workgroup_load", "workgroup_store", "workgroup_barrier", "abs", "add", "sub",
   "mul", "div", "precise_div", "select", "round_away", "clamp", "cast", "bitcast", "and", "or", "shift", "subgroup_shuffle",
-  "subgroup_reduce_max", "subgroup_reduce_sum", "pack_bytes", "unpack_bits", "matrix_mma", "online_softmax"})
+  "subgroup_reduce_max", "subgroup_reduce_sum", "pack_bytes", "unpack_bits", "dot", "matrix_mma", "online_softmax"})
 
 class PlanError(ValueError): pass
 
@@ -37,7 +37,8 @@ def validate(candidate: Mapping[str, Any], expected_hash: str | None = None) -> 
   row = json.loads(canonical_json(candidate))
   if expected_hash is not None and candidate_hash(row) != expected_hash: raise PlanError("candidate hash does not match canonical bytes")
   workload, schedule = row.get("workload"), row.get("schedule")
-  if not isinstance(workload, dict) or workload.get("operation") != "quantize_q8_1_ds4": raise PlanError("unsupported primitive workload")
+  if not isinstance(workload, dict) or workload.get("operation") not in ("quantize_q8_1_ds4", "quantized_linear"):
+    raise PlanError("unsupported primitive workload")
   if not isinstance(schedule, dict) or schedule.get("plan_kind") != PLAN_KIND: raise PlanError("unsupported primitive plan kind")
   launch = schedule.get("launch", {})
   if any(not isinstance(launch.get(key), list) or len(launch[key]) != 3 or any(not isinstance(x, int) or x <= 0 for x in launch[key]) for key in ("dispatch", "workgroup")):
@@ -51,12 +52,138 @@ def validate(candidate: Mapping[str, Any], expected_hash: str | None = None) -> 
     if node["id"] in available or any(ref not in available for ref in node["inputs"]): raise PlanError("primitive graph is not a forward DAG")
     available.add(node["id"])
   params = schedule.get("parameters")
-  required = {"records_per_workgroup", "subgroups_per_record", "values_per_lane", "store_width_bytes", "record_order"}
-  if not isinstance(params, dict) or set(params) != required: raise PlanError("DS4 plan parameters are incomplete")
-  if params["records_per_workgroup"] * params["subgroups_per_record"] != 4: raise PlanError("DS4 workgroup must account for four target subgroups")
-  if params["subgroups_per_record"] * params["values_per_lane"] != 4: raise PlanError("DS4 ownership must cover 128 values per record")
-  if params["record_order"] != "segment_major": raise PlanError("DS4 output must remain segment-major")
+  if workload["operation"] == "quantize_q8_1_ds4":
+    required = {"records_per_workgroup", "subgroups_per_record", "values_per_lane", "store_width_bytes", "record_order"}
+    if not isinstance(params, dict) or set(params) != required: raise PlanError("DS4 plan parameters are incomplete")
+    if params["records_per_workgroup"] * params["subgroups_per_record"] != 4: raise PlanError("DS4 workgroup must account for four target subgroups")
+    if params["subgroups_per_record"] * params["values_per_lane"] != 4: raise PlanError("DS4 ownership must cover 128 values per record")
+    if params["record_order"] != "segment_major": raise PlanError("DS4 output must remain segment-major")
+  else:
+    shape = workload.get("shape", {})
+    if set(shape) != {"m", "n", "k"} or any(not isinstance(shape[x], int) or shape[x] <= 0 for x in shape):
+      raise PlanError("quantized linear requires positive named M/N/K axes")
+    quant = workload.get("operands", {}).get("packed_weight", {}).get("quantization")
+    if quant not in ("Q4_K", "Q6_K") or shape["k"] % 256: raise PlanError("quantized linear requires canonical Q4_K/Q6_K blocks")
+    phase = workload.get("phase")
+    algorithm = params.get("algorithm") if isinstance(params, dict) else None
+    if (phase, algorithm) not in (("decode", "subgroup_dot"), ("prefill", "matrix_mma")):
+      raise PlanError("quantized linear phase and algorithm disagree")
   return PrimitivePlan(row)
+
+def _quantized_linear_decode_program(plan: PrimitivePlan):
+  from tinygrad import Device, Tensor, dtypes
+  from tinygrad.codegen import to_program
+  from tinygrad.uop.ops import Ops
+  from tinygrad.llm.decode_kernels import q4k_g3_lanemap_gemv_kernel, q6k_spec_for_role, emit_q6k_gemv_kernel
+  shape=plan.workload["shape"]; rows,k=shape["n"],shape["k"]
+  quant=plan.workload["operands"]["packed_weight"]["quantization"]
+  x=Tensor.empty(k, dtype=dtypes.float16, device="NV")
+  if quant == "Q4_K":
+    out=Tensor.empty(rows, dtype=dtypes.float32, device="NV")
+    style="vector" if plan.parameters.get("load_width")==4 else "scalar"
+    if plan.parameters.get("rows_per_workgroup") != 1: raise PlanError("NV Q4_K lowerer does not yet implement multi-row ownership")
+    weight=Tensor.empty(rows*(k//256)*36, dtype=dtypes.uint32, device="NV")
+    emitter=q4k_g3_lanemap_gemv_kernel(rows,k,load_style=style)
+  else:
+    if plan.parameters.get("rows_per_workgroup") != 1: raise PlanError("NV Q6_K lowerer does not yet implement multi-row ownership")
+    spec=q6k_spec_for_role(rows,k,parts=1,row_tile=1,use_coop=True,reduction="in_kernel",opts=())
+    out=Tensor.empty(rows, dtype=dtypes.float32, device="NV")
+    weight=Tensor.empty(rows*(k//256)*105, dtype=dtypes.uint16, device="NV")
+    emitter=emit_q6k_gemv_kernel(spec)
+  output=out.uop_program(weight,x,fxn=emitter)[0]
+  calls=[u for u in output.schedule_linear().src if u.op is Ops.CALL]
+  if len(calls) != 1: raise PlanError(f"quantized-linear primitive plan must lower to one call, got {len(calls)}")
+  try: program=to_program(calls[0].src[0],Device["NV"].renderer)
+  except Exception as exc: raise PlanError(f"compiler lowering failed: {type(exc).__name__}: {exc}") from exc
+  source=next((u.arg for u in program.src if u.op is Ops.SOURCE),None)
+  binary=next((u.arg for u in program.src if u.op is Ops.BINARY),None)
+  if not isinstance(source,str) or not isinstance(binary,bytes): raise PlanError("compiled quantized-linear program lacks source or binary")
+  return program,source,binary
+
+def compile_quantized_linear(payload:Mapping[str, Any], plan:PrimitivePlan) -> Mapping[str, Any]:
+  if plan.workload["phase"] != "decode":
+    from tinygrad.llm.packed_wmma_prefill import PackedWmmaRoute, _candidate_context
+    shape=plan.workload["shape"]; p=plan.parameters
+    geometry=(p["tile_m"],p["tile_n"],p["tile_k"],p["subgroups_m"],p["subgroups_n"],p["buffer_count"])
+    row=PackedWmmaRoute(plan.workload["operands"]["packed_weight"]["quantization"],plan.workload["role"],
+                        (shape["m"],shape["n"],shape["k"]),geometry,candidate_hash(plan.candidate))
+    context,transform=_candidate_context(row)
+    return {"compile_status":"lowering_context_ready", "candidate_plan_hash":candidate_hash(plan.candidate),
+            "canonical_identity":context.canonical_identity, "packed_weight_transform":transform.to_json(),
+            "geometry":{"tile":list(context.geometry.tile),"subgroups":list(context.geometry.waves),"threads":context.geometry.threads}}
+  program,source,binary=_quantized_linear_decode_program(plan)
+  return {"compile_status":"binary_ready", "compiler":type(__import__("tinygrad").Device["NV"].compiler).__name__,
+          "program_name":program.arg.name, "source_sha256":hashlib.sha256(source.encode()).hexdigest(),
+          "binary_sha256":hashlib.sha256(binary).hexdigest(), "candidate_plan_hash":candidate_hash(plan.candidate),
+          "source_bytes":len(source), "binary_bytes":len(binary)}
+
+def compile_generated(payload:Mapping[str, Any], plan:PrimitivePlan) -> Mapping[str, Any]:
+  return compile_ds4(payload,plan) if plan.workload["operation"] == "quantize_q8_1_ds4" else compile_quantized_linear(payload,plan)
+
+def _run_quantized_linear_decode(plan:PrimitivePlan):
+  import numpy as np
+  from tinygrad import Tensor, dtypes
+  from tinygrad.llm.decode_kernels import q4k_g3_lanemap_gemv_kernel, q6k_spec_for_role, emit_q6k_gemv_kernel
+  from extra.llm_research.decode.route_class_numerics import _make_q4k_words, _make_q6k_halfs
+  from extra.llm_research.layout import q4_k_reference, q6_k_reference
+  shape=plan.workload["shape"]; rows,k=shape["n"],shape["k"]
+  quant=plan.workload["operands"]["packed_weight"]["quantization"]
+  x_np=np.random.default_rng(20260830).normal(0,0.2,k).astype(np.float16)
+  x=Tensor(x_np.copy(),dtype=dtypes.float16,device="NV").contiguous().realize()
+  if quant == "Q4_K":
+    words,raw=_make_q4k_words(rows,k,20260830)
+    weight=Tensor(words.copy(),dtype=dtypes.uint32,device="NV").contiguous().realize()
+    out=Tensor.empty(rows,dtype=dtypes.float32,device="NV").realize()
+    style="vector" if plan.parameters.get("load_width")==4 else "scalar"
+    if plan.parameters.get("rows_per_workgroup") != 1: raise PlanError("NV Q4_K lowerer does not yet implement multi-row ownership")
+    emitter=q4k_g3_lanemap_gemv_kernel(rows,k,load_style=style); reference=q4_k_reference
+  else:
+    halfs=_make_q6k_halfs(rows,k,20260830); raw=halfs.view(np.uint8)
+    weight=Tensor(halfs.copy(),dtype=dtypes.uint16,device="NV").contiguous().realize()
+    spec=q6k_spec_for_role(rows,k,parts=1,row_tile=1,use_coop=True,reduction="in_kernel",opts=())
+    out=Tensor.empty(rows,dtype=dtypes.float32,device="NV").realize()
+    emitter=emit_q6k_gemv_kernel(spec); reference=q6_k_reference
+  result=out.uop_program(weight,x,fxn=emitter)[0].realize()
+  got=result.numpy().astype(np.float32).reshape(rows)
+  weights=reference(Tensor(raw.reshape(-1).copy(),dtype=dtypes.uint8),rows*k).numpy().astype(np.float32).reshape(rows,k)
+  want=weights@x_np.astype(np.float32)
+  return got,want,result,weight,x,emitter,raw
+
+def check_quantized_linear(payload:Mapping[str, Any], plan:PrimitivePlan) -> Mapping[str, Any]:
+  import numpy as np
+  if plan.workload["phase"] != "decode":
+    return {"correct":False,"reason":"prefill requires compiled contraction evidence; lowering context alone is not correctness evidence",
+            "candidate_plan_hash":candidate_hash(plan.candidate)}
+  try: got,want,*_=_run_quantized_linear_decode(plan)
+  except Exception as exc: raise PlanError(f"quantized-linear execution failed: {type(exc).__name__}: {exc}") from exc
+  max_abs=float(np.max(np.abs(got-want))); scale=float(np.max(np.abs(want)))
+  atol=max(1e-3,scale*2e-4)
+  return {"correct":bool(np.allclose(got,want,rtol=2e-4,atol=atol)),"oracle":"canonical GGUF dequantization plus numpy fp32 matvec",
+          "max_abs_error":max_abs,"atol":atol,"rtol":2e-4,"elements":int(got.size),
+          "candidate_plan_hash":candidate_hash(plan.candidate)}
+
+def measure_quantized_linear(payload:Mapping[str, Any], plan:PrimitivePlan) -> Mapping[str, Any]:
+  import statistics,time
+  from tinygrad import Device
+  checked=check_quantized_linear(payload,plan)
+  if not checked["correct"]: raise PlanError("incorrect quantized-linear candidate cannot be measured")
+  got,want,out,weight,x,emitter,raw=_run_quantized_linear_decode(plan)
+  execution=payload.get("execution",{}); warmups=int(execution.get("warmups",2)); samples=int(execution.get("samples",9))
+  def launch(): out.uop_program(weight,x,fxn=emitter)[0].realize()
+  for _ in range(warmups): launch()
+  Device["NV"].synchronize(); values=[]
+  for _ in range(samples):
+    Device["NV"].synchronize(); start=time.perf_counter_ns(); launch(); Device["NV"].synchronize(); values.append(time.perf_counter_ns()-start)
+  shape=plan.workload["shape"]
+  return {"timing_mode":"synchronized_wall_ns","warmups":warmups,"samples_ns":values,
+          "summary_ns":{"min":min(values),"mean":sum(values)/len(values),"median":statistics.median(values),"max":max(values),"range":max(values)-min(values)},
+          "work_bytes":{"status":"exact","bytes":int(raw.nbytes+shape["k"]*2+shape["n"]*4)}}
+
+def check_generated(payload:Mapping[str, Any], plan:PrimitivePlan) -> Mapping[str, Any]:
+  return check_ds4(payload,plan) if plan.workload["operation"] == "quantize_q8_1_ds4" else check_quantized_linear(payload,plan)
+
+def measure_generated(payload:Mapping[str, Any], plan:PrimitivePlan) -> Mapping[str, Any]:
+  return measure_ds4(payload,plan) if plan.workload["operation"] == "quantize_q8_1_ds4" else measure_quantized_linear(payload,plan)
 
 def _ds4_program(plan: PrimitivePlan):
   from tinygrad import Device, Tensor, dtypes
@@ -122,4 +249,6 @@ def measure_ds4(payload: Mapping[str, Any], plan: PrimitivePlan) -> Mapping[str,
           "work_bytes":{"status":"exact","provenance":"DS4 144-byte output records plus fp16 activation input",
                         "bytes":spec.M*spec.K*2+spec.records*144}}
 
-__all__ = ["PLAN_KIND", "PlanError", "PrimitivePlan", "SCHEMA_VERSION", "candidate_hash", "canonical_json", "check_ds4", "compile_ds4", "measure_ds4", "validate"]
+__all__ = ["PLAN_KIND", "PlanError", "PrimitivePlan", "SCHEMA_VERSION", "candidate_hash", "canonical_json", "check_ds4", "check_generated",
+           "check_quantized_linear", "compile_ds4", "compile_generated", "compile_quantized_linear", "measure_ds4", "measure_generated",
+           "measure_quantized_linear", "validate"]
