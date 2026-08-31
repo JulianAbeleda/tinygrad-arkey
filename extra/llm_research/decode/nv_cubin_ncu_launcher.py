@@ -27,10 +27,12 @@ def main() -> int:
   ap.add_argument("--block-x", type=int, default=32)
   ap.add_argument("--grid", help="comma-separated grid x,y,z (overrides --grid-x)")
   ap.add_argument("--block", help="comma-separated block x,y,z (overrides --block-x)")
+  ap.add_argument("--shared-mem", type=int, default=0, help="dynamic shared-memory bytes")
   ap.add_argument("--n-bufs", type=int, default=4)
   ap.add_argument("--buf-bytes", type=int, default=64 << 20)
   ap.add_argument("--buf-sizes", help="comma-separated exact byte sizes, one per buffer")
   ap.add_argument("--vals", help="comma-separated integer scalar kernel arguments (after pointers)")
+  ap.add_argument("--val-groups", help="comma-separated scalar parameter widths; use 3 for uint3")
   ap.add_argument("--reps", type=int, default=3)
   ap.add_argument("--warmup", type=int, default=20)
   ap.add_argument("--condition-mib", type=int, default=0,
@@ -64,6 +66,8 @@ def main() -> int:
   try:
     check(cuda.cuModuleLoadData(ctypes.byref(module), blob))
     check(cuda.cuModuleGetFunction(ctypes.byref(function), module, args.symbol.encode()))
+    if args.shared_mem:
+      check(cuda.cuFuncSetAttribute(function, cuda.CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES, args.shared_mem))
 
     bufs = []
     for i in range(args.n_bufs):
@@ -74,11 +78,13 @@ def main() -> int:
 
     # Pointer parameters (EIATTR ordinals 0..n-1), then any scalar int args.
     vals = [int(x) for x in args.vals.split(",")] if args.vals else []
-    scalar_ptrs = []
-    for v in vals:
-      holder = ctypes.c_int32(v)
-      scalar_ptrs.append(ctypes.cast(ctypes.pointer(holder), ctypes.c_void_p))
-    params = (ctypes.c_void_p * (args.n_bufs + len(vals)))(
+    groups = [int(x) for x in args.val_groups.split(",")] if args.val_groups else [1] * len(vals)
+    if sum(groups) != len(vals): raise SystemExit(f"--val-groups covers {sum(groups)} values, expected {len(vals)}")
+    scalar_holders, scalar_ptrs, cursor = [], [], 0
+    for width in groups:
+      holder = (ctypes.c_int32 * width)(*vals[cursor:cursor+width]); cursor += width; scalar_holders.append(holder)
+      scalar_ptrs.append(ctypes.cast(holder, ctypes.c_void_p))
+    params = (ctypes.c_void_p * (args.n_bufs + len(groups)))(
       *[ctypes.cast(ctypes.pointer(b), ctypes.c_void_p) for b in bufs],
       *scalar_ptrs,
     )
@@ -103,11 +109,11 @@ extern "C" __global__ void flash_common_condition(const float *src, unsigned lon
         condition_params = (ctypes.c_void_p * 3)(ctypes.cast(ctypes.pointer(condition_bufs[0]), ctypes.c_void_p),
           ctypes.cast(ctypes.pointer(words), ctypes.c_void_p), ctypes.cast(ctypes.pointer(condition_bufs[1]), ctypes.c_void_p))
       def launch_sequence():
-        check(cuda.cuLaunchKernel(function, grid[0], grid[1], grid[2], block[0], block[1], block[2], 0, stream, params, None))
+        check(cuda.cuLaunchKernel(function, grid[0], grid[1], grid[2], block[0], block[1], block[2], args.shared_mem, stream, params, None))
         if condition_function is not None:
           blocks = (((args.condition_mib << 20)//4 + 255)//256)
           check(cuda.cuLaunchKernel(condition_function, blocks, 1, 1, 256, 1, 1, 0, stream, condition_params, None))
-          check(cuda.cuLaunchKernel(function, grid[0], grid[1], grid[2], block[0], block[1], block[2], 0, stream, params, None))
+          check(cuda.cuLaunchKernel(function, grid[0], grid[1], grid[2], block[0], block[1], block[2], args.shared_mem, stream, params, None))
       for _ in range(args.warmup):
         launch_sequence()
       check(cuda.cuStreamSynchronize(stream))
@@ -133,10 +139,12 @@ extern "C" __global__ void flash_common_condition(const float *src, unsigned lon
       "symbol": args.symbol,
       "grid": grid,
       "block": block,
+      "shared_mem": args.shared_mem,
       "n_bufs": args.n_bufs,
       "buf_bytes": args.buf_bytes,
       "buf_sizes": buf_sizes or [args.buf_bytes] * args.n_bufs,
       "vals": vals,
+      "val_groups": groups,
       "reps": args.reps,
       "warmup": args.warmup,
       "condition_mib": args.condition_mib,

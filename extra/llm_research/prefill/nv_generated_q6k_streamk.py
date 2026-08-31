@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from tinygrad import dtypes
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
 from extra.llm_research.prefill.nv_native_fragment_k16_gate import q6_packed_cta_kernel
-from extra.llm_research.prefill.nv_generated_q6k_streamk_slots import q6_streamk_owner_kernel
+from extra.llm_research.prefill.nv_generated_q6k_streamk_slots import q6_streamk_owner_kernel, q6_streamk_owner_segmented_kernel
 
 OWNERS, SLOTS, ACTIVE_SLOTS, TILES, K_BLOCKS = 170, 340, 294, 128, 48
 TILE_M, TILE_N = 4, 32
@@ -78,15 +78,21 @@ def generated_owner_boundary_gate(out, values):
   final=out[owner*2+crossed.cast(dtypes.int32)].store(acc.after(done)[0])
   return UOp.sink(final,arg=KernelInfo(name="nv_generated_q6_owner_boundary_gate",opts_to_apply=()))
 
-def generated_q6k_streamk_owner_partials(partials, tile_ids, blocks, b, dB):
+def generated_q6k_streamk_owner_partials(partials, tile_ids, blocks, q8_record):
   """170-CTA exact Stream-K main which emits at most two ordered tile partials.
 
   This is the schedule substrate: each owner has one mandatory segment and an
   optional second segment. A later writeback/fixup pass decides direct output
   versus reduction ownership; no inactive fixed-length MMA loop is emitted.
   """
-  return q6_streamk_owner_kernel(partials,tile_ids,blocks,b,dB,total_k_blocks=K_BLOCKS,owners=OWNERS,
+  return q6_streamk_owner_segmented_kernel(partials,tile_ids,blocks,q8_record,total_k_blocks=K_BLOCKS,owners=OWNERS,
     kernel_name="nv_generated_q6k_streamk_owner_partials")
 
+def generated_q6k_streamk_owner_partials_m64(partials, tile_ids, blocks, q8_record):
+  """340-CTA, 64-column-tile candidate with 32 FP32 accumulators/thread."""
+  return q6_streamk_owner_segmented_kernel(partials,tile_ids,blocks,q8_record,total_k_blocks=K_BLOCKS,owners=340,
+    kernel_name="nv_generated_q6k_streamk_owner_partials_m64",tile_m=64)
+
 __all__=["OWNERS","SLOTS","ACTIVE_SLOTS","TILES","K_BLOCKS","OwnerSegment","owner_bounds","owner_work_units","streamk_segments",
-         "tile_coordinates","owner_metadata","fixup_slot_map","generated_owner_boundary_gate","generated_q6k_streamk_owner_partials"]
+         "tile_coordinates","owner_metadata","fixup_slot_map","generated_owner_boundary_gate","generated_q6k_streamk_owner_partials",
+         "generated_q6k_streamk_owner_partials_m64"]
