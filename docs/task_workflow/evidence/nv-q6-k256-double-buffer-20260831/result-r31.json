@@ -1,0 +1,145 @@
+{
+  "schema": "tinygrad.nv_q6_k256_double_buffer.v1",
+  "shape": {
+    "M": 512,
+    "N": 4096,
+    "K_epoch": 256
+  },
+  "fixture": {
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "weight": "blk.0.ffn_down.weight",
+    "format": "Q6_K"
+  },
+  "correctness": {
+    "finite": true,
+    "max_abs": 0.0,
+    "mean_abs": 0.0,
+    "array_equal": true,
+    "allclose_rtol2e5_atol2e3": true
+  },
+  "timing": {
+    "control": {
+      "samples_us": [
+        13.024,
+        12.96,
+        12.928,
+        12.992,
+        12.928,
+        12.96,
+        12.992,
+        13.024,
+        12.96,
+        12.992,
+        12.992,
+        12.992,
+        12.992,
+        12.928,
+        12.992,
+        12.96,
+        12.896,
+        12.992,
+        13.024,
+        12.96,
+        12.96,
+        12.96,
+        12.928,
+        13.024,
+        13.024,
+        12.992,
+        12.896,
+        12.928,
+        12.928,
+        12.992,
+        12.992
+      ],
+      "min_us": 12.896,
+      "median_us": 12.992,
+      "max_us": 13.024
+    },
+    "candidate": {
+      "samples_us": [
+        13.76,
+        13.824,
+        13.76,
+        13.824,
+        13.824,
+        13.664,
+        13.728,
+        13.76,
+        13.76,
+        13.792,
+        13.856,
+        13.76,
+        13.728,
+        13.856,
+        13.76,
+        13.792,
+        13.728,
+        13.696,
+        13.696,
+        13.696,
+        13.76,
+        13.696,
+        13.728,
+        13.824,
+        13.888,
+        13.792,
+        13.728,
+        13.856,
+        13.728,
+        13.824,
+        13.792
+      ],
+      "min_us": 13.664,
+      "median_us": 13.76,
+      "max_us": 13.888
+    },
+    "median_speedup_fraction": -0.05911330049261075
+  },
+  "sass": {
+    "control": {
+      "cubin": "docs/task_workflow/evidence/nv-q6-k256-double-buffer-20260831/artifacts-r31/control.cubin",
+      "sass": "docs/task_workflow/evidence/nv-q6-k256-double-buffer-20260831/artifacts-r31/control.sass",
+      "returncode": 0,
+      "imma": 128,
+      "bar": 4,
+      "ldsm": 0,
+      "local_load": 0,
+      "local_store": 0,
+      "resources": {
+        "registers": 254,
+        "stack_bytes": 0,
+        "shared_bytes": 21504,
+        "local_bytes": 0
+      }
+    },
+    "candidate": {
+      "cubin": "docs/task_workflow/evidence/nv-q6-k256-double-buffer-20260831/artifacts-r31/candidate.cubin",
+      "sass": "docs/task_workflow/evidence/nv-q6-k256-double-buffer-20260831/artifacts-r31/candidate.sass",
+      "returncode": 0,
+      "imma": 128,
+      "bar": 2,
+      "ldsm": 0,
+      "local_load": 0,
+      "local_store": 0,
+      "resources": {
+        "registers": 220,
+        "stack_bytes": 0,
+        "shared_bytes": 41984,
+        "local_bytes": 0
+      }
+    }
+  },
+  "gates": {
+    "exact": true,
+    "finite": true,
+    "faster": false,
+    "no_local_load": true,
+    "no_local_store": true,
+    "zero_stack": true,
+    "imma_preserved": true,
+    "two_buffers": true,
+    "one_pipeline_barrier": true
+  },
+  "passed": false
+}
