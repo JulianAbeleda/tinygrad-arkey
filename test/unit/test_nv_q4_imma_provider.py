@@ -10,7 +10,7 @@ def test_provider_is_shape_locked_and_one_symbol_per_cubin():
   main, fixup = main_source(), fixup_source()
   assert main.count('extern "C" __global__') == 1
   assert fixup.count('extern "C" __global__') == 1
-  assert "total=6144,owners=170" in main
+  assert "total=6144,owners=min(170,total)" in main
   assert "bar.sync 0, 256" in main
   assert "atomicAdd" not in fixup
 
