@@ -9,7 +9,7 @@ from tinygrad.device import BufferSpec
 from tinygrad.runtime.ops_nv import NVProgram
 from tinygrad.runtime.support.compiler_cuda import NVRTCCompiler
 from tinygrad.uop.ops import Ops,UOp
-from extra.llm_research.prefill.nv_native_fragment_k16_gate import kernel,q6_two_k16_kernel
+from extra.llm_research.prefill.nv_native_fragment_k16_gate import kernel,q6_two_k16_kernel,q6_packed_two_k16_kernel,q6_first_two_k16_numpy
 def test_native_k16_descriptor():
   assert cuda_81616_i8[0].dims == (8,16,16)
   assert cuda_81616_i8[0].elements_per_thread == (8,4,4)
@@ -50,3 +50,21 @@ def test_q6_two_k16_scale_semantics():
   ref0=a0.astype(np.int32)@b0.astype(np.int32); ref1=a1.astype(np.int32)@b1.astype(np.int32)
   ref=(dv[0]*dbv[0])*(np.float32(sv0[0])*ref0.astype(np.float32)+np.float32(sv1[0])*ref1.astype(np.float32))
   assert np.array_equal(got[1],ref0) and np.array_equal(got[2],ref1) and np.array_equal(got[0],ref)
+
+def test_q6_direct_packed_two_k16():
+  ph=lambda n,dt,i:UOp.placeholder((n,),dt,i)
+  args=(ph(128,dtypes.int32,0),ph(128,dtypes.int32,1),ph(16*210,dtypes.uint8,2),ph(128,dtypes.int8,3),ph(128,dtypes.int8,4))
+  p=to_program(q6_packed_two_k16_kernel(*args),CUDARenderer(Target.parse('NV:CUDA:sm_120'))); src=next(x.arg for x in p.src if x.op is Ops.SOURCE)
+  assert src.count('__WMMA_8_16_16_signed_char_int(')==3 and 'data2_3360' in src
+  rng=np.random.default_rng(20260902); blocks=rng.integers(0,256,(16,210),dtype=np.uint8)
+  b0=rng.integers(-127,128,(16,8),dtype=np.int8); b1=rng.integers(-127,128,(16,8),dtype=np.int8)
+  q,_,_=q6_first_two_k16_numpy(blocks.tobytes()); ref0=q[:,0].astype(np.int32)@b0.astype(np.int32); ref1=q[:,1].astype(np.int32)@b1.astype(np.int32)
+  dev=Device['NV']; host=(np.empty(128,np.int32),np.empty(128,np.int32),blocks,b0,b1)
+  bufs=[dev.allocator._alloc(x.nbytes,BufferSpec()) for x in host]
+  for buf,x in zip(bufs[2:],host[2:]): dev.allocator._copyin(buf,memoryview(x.tobytes()))
+  NVProgram(dev,'nv_native_fragment_q6_packed_two_k16',NVRTCCompiler(dev.arch,ptx=False,cache_key='q6_packed_two_k16_runtime').compile(src))(
+    *bufs,global_size=(1,1,1),local_size=(32,1,1),wait=True)
+  got=[]
+  for buf in bufs[:2]:
+    mv=memoryview(bytearray(buf.size)); dev.allocator._copyout(mv,buf); got.append(np.frombuffer(mv,np.int32,count=128).reshape(16,8))
+  assert np.array_equal(got[0],ref0) and np.array_equal(got[1],ref1)

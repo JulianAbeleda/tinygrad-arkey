@@ -1,5 +1,6 @@
 """Generated-UOp K16 native fragment gate."""
 import numpy as np
+import struct
 from tinygrad import Tensor,dtypes,Device
 from tinygrad.codegen.late.native_fragment import native_fragment_x2
 from tinygrad.uop.ops import KernelInfo,Ops,UOp
@@ -43,4 +44,45 @@ def q6_two_k16_kernel(out, dot0, dot1, a0, b0, s0, d, a1, b1, s1, dB):
   writes += [dot0[idx].store(z0), dot1[idx].store(z1), out[idx].store(gain*(scale0*z0.cast(dtypes.float32)+scale1*z1.cast(dtypes.float32)))]
  return UOp.sink(*writes,arg=KernelInfo(name='nv_native_fragment_q6_two_k16',opts_to_apply=()))
 
-__all__=['kernel','q6_two_k16_kernel']
+def q6_first_two_k16_numpy(block):
+ """Decode the first two canonical Q6_K K16 groups (the tile contract oracle)."""
+ if len(block) not in (210,16*210): raise ValueError("expected one or sixteen canonical Q6_K blocks")
+ raw=np.frombuffer(block,dtype=np.uint8).reshape(-1,210)
+ ql,qh=raw[:,:128],raw[:,128:192]
+ q0=(ql[:,:16]&15) | ((qh[:,:16]&3)<<4)
+ q1=((ql[:,:16]>>4)&15) | (qh[:,:16]&0x30)
+ q=np.stack((q0,q1),axis=1).astype(np.int8)-32
+ scales=raw[:,192:194].view(np.int8)
+ d=np.frombuffer(raw[:,208:210].tobytes(),dtype='<f2').astype(np.float32)
+ return (q[0],scales[0],float(d[0])) if len(raw)==1 else (q,scales,d)
+
+def q6_packed_two_k16_kernel(dot0, dot1, blocks, b0, b1):
+ """Direct packed Q6_K gate: sixteen canonical blocks, no expanded A input."""
+ lane=UOp.special(32,"lidx0")
+ def one(b, slot):
+  sh=UOp.placeholder((64,),dtypes.uint32,30+slot,addrspace=__import__('tinygrad.dtype',fromlist=['AddrSpace']).AddrSpace.LOCAL)
+  stores=[]
+  for i in range(2):
+   z=lane+32*i; row=z>>2; word=z&3; base=row*210+4*word; vals=[]
+   for q in range(4):
+    lo=blocks[base+q].cast(dtypes.uint32); hi=blocks[base+128+q].cast(dtypes.uint32)
+    hbits=hi.bitwise_and(3).lshift(4) if slot==0 else hi.bitwise_and(0x30)
+    v=(lo.bitwise_and(15) if slot==0 else lo.rshift(4).bitwise_and(15)).bitwise_or(hbits).alu(
+      Ops.SUB,UOp.const(dtypes.uint32,32)).cast(dtypes.char)
+    vals.append(v)
+   stores.append(sh[z].store(UOp(Ops.STACK,dtypes.char.vec(4),tuple(vals)).bitcast(dtypes.uint32)))
+  ready=UOp.barrier(UOp.group(*stores))
+  av=native_fragment_x2(sh.after(ready),(lane&15)*4+(lane>>4)*2).bitcast(dtypes.char.vec(8))
+  lr,lc=lane>>2,lane&3
+  bv=UOp(Ops.STACK,dtypes.char.vec(4),tuple(b[(4*lc+q)*8+lr] for q in range(4)))
+  axes=(tuple((200+i,2) for i in range(3)),tuple((210+i,2) for i in range(2)),tuple((220+i,2) for i in range(2)))
+  arg=("WMMA_8_16_16_signed_char_int",(8,16,16),dtypes.char,dtypes.int,"NV",32,axes,())
+  return UOp(Ops.WMMA,dtypes.int.vec(4),(av,bv,UOp.const(dtypes.int.vec(4),0)),arg)
+ c0=one(b0,0); c1=one(b1,1)
+ lr,lc=lane>>2,lane&3; writes=[]
+ for r in range(4):
+  idx=(lr+8*(r>>1))*8+2*lc+(r&1)
+  writes += [dot0[idx].store(c0.gep(r)),dot1[idx].store(c1.gep(r))]
+ return UOp.sink(*writes,arg=KernelInfo(name='nv_native_fragment_q6_packed_two_k16',opts_to_apply=()))
+
+__all__=['kernel','q6_two_k16_kernel','q6_packed_two_k16_kernel','q6_first_two_k16_numpy']
