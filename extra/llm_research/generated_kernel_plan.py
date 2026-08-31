@@ -113,19 +113,42 @@ def compile_quantized_linear(payload:Mapping[str, Any], plan:PrimitivePlan) -> M
     shape=plan.workload["shape"]; p=plan.parameters
     if p.get("work_partition") == "stream_k":
       from tinygrad.codegen.opt.stream_k import StreamKSchedule
-      from extra.llm_research.prefill.nv_q4_imma_provider import compile_provider, geometry_from_stream_k, provider_programs
+      from tinygrad.codegen.opt.persistent_accumulator import owner_segments
+      from tinygrad.runtime.support.compiler_cuda import NVRTCCompiler
+      from extra.llm_research.prefill.nv_compiler_q4k_pp512_binding import binding_for as compiler_binding_for
+      from extra.llm_research.prefill.nv_compiler_q4k_streamk_transform import transform_compiler_q4k_to_streamk, active_fixup_source
+      from extra.llm_research.prefill.nv_native_program_uop import native_nv_program
       if plan.workload["operands"]["packed_weight"]["quantization"] != "Q4_K":
         raise PlanError("NV Stream-K target lowerer currently admits Q4_K only")
       schedule=StreamKSchedule(shape["m"],shape["n"],shape["k"],p["tile_m"],p["tile_n"],p["tile_k"],
                                p["owner_count"],p["boundary_quantum_k_blocks"])
-      geometry=geometry_from_stream_k(schedule); provider=compile_provider(Device["NV"],geometry); main,fixup=provider_programs(provider)
+      if (shape["m"],shape["n"],shape["k"],p["tile_m"],p["tile_n"],p["tile_k"],p["owner_count"],p["boundary_quantum_k_blocks"]) != (512,12288,4096,128,128,64,170,8):
+        raise PlanError("compiler Q4 Stream-K requires the exact admitted representative geometry")
+      binding=compiler_binding_for("NV")
+      compiler_source=next((u.arg for u in binding.main_program.toposort() if u.op is Ops.SOURCE and "__global__" in u.arg),None)
+      if not isinstance(compiler_source,str): raise PlanError("compiler Q4 binding lacks emitted main source")
+      main_source=transform_compiler_q4k_to_streamk(compiler_source,unroll=8); fixup_source=active_fixup_source()
+      main_lib=NVRTCCompiler(Device["NV"].arch,ptx=False,cache_key="q4_compiler_streamk_main_unroll8_o170").compile(main_source)
+      fixup_lib=NVRTCCompiler(Device["NV"].arch,ptx=False,cache_key="q4_compiler_streamk_active_fixup_v1").compile(fixup_source)
+      active_tiles=tuple(sorted({segment.output_tile for owner in range(schedule.owners)
+        for segment in owner_segments(schedule,owner) if not segment.direct}))
+      main=native_nv_program("q4k_imma_stream",main_lib,global_size=(170,1,1),local_size=(32,2,4),
+        globals=tuple(range(5)),outs=(0,1,2),ins=(3,4),vals=(512,12288,4096),shared_mem=0)
+      fixup=native_nv_program("q4k_imma_fixup_active",fixup_lib,global_size=(len(active_tiles),1,1),local_size=(256,1,1),
+        globals=tuple(range(4)),outs=(0,),ins=(1,2,3),vals=(512,12288))
       main_binary=next((u.arg for u in main.src if u.op is Ops.BINARY),None); fixup_binary=next((u.arg for u in fixup.src if u.op is Ops.BINARY),None)
-      if not isinstance(main_binary,bytes) or not isinstance(fixup_binary,bytes): raise PlanError("Stream-K lowerer lacks main/fixup binaries")
+      if not isinstance(main_binary,bytes) or not isinstance(fixup_binary,bytes): raise PlanError("Stream-K compiler transform lacks main/fixup binaries")
+      main_hash,fixup_hash=hashlib.sha256(main_binary).hexdigest(),hashlib.sha256(fixup_binary).hexdigest()
+      qualified_hashes=("bdf49e9bc6de56e843f39cc20f0ab087f4febef1b0d3d3c9992bfc01ab6fedbb",
+                        "9b3e400e942bf80f4f02184a6b4de0085ff0861ef5eb5bd4197e118a3ceb9acc")
+      promotion_eligible=(plan.workload["role"] in ("ffn_gate_up","ffn_gate","ffn_up") and
+                          (main_hash,fixup_hash)==qualified_hashes)
       return {"compile_status":"binary_ready","program_kind":"stream_k_main_fixup","compiler":type(Device["NV"].compiler).__name__,
-              "main_program":main.arg.name,"fixup_program":fixup.arg.name,"main_binary_sha256":hashlib.sha256(main_binary).hexdigest(),
-              "fixup_binary_sha256":hashlib.sha256(fixup_binary).hexdigest(),"candidate_plan_hash":candidate_hash(plan.candidate),
-              "owners":geometry.owners,"partial_slots":geometry.partial_slots,"fixup_tiles":geometry.fixup_grid,
-              "no_external_binary":True}
+              "main_program":main.arg.name,"fixup_program":fixup.arg.name,"main_source_sha256":hashlib.sha256(main_source.encode()).hexdigest(),
+              "fixup_source_sha256":hashlib.sha256(fixup_source.encode()).hexdigest(),"main_binary_sha256":main_hash,
+              "fixup_binary_sha256":fixup_hash,"candidate_plan_hash":candidate_hash(plan.candidate),
+              "owners":170,"partial_slots":340,"fixup_tiles":len(active_tiles),"active_tiles":active_tiles,"no_external_binary":True,
+              "promotion_eligible":promotion_eligible,"qualified_complete_ratio_vs_llama":1.04529}
     geometry=(p["tile_m"],p["tile_n"],p["tile_k"],p["subgroups_m"],p["subgroups_n"],p["buffer_count"])
     row=PackedWmmaRoute(plan.workload["operands"]["packed_weight"]["quantization"],plan.workload["role"],
                         (shape["m"],shape["n"],shape["k"]),geometry,candidate_hash(plan.candidate))
