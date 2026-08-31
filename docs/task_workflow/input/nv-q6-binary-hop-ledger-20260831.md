@@ -101,3 +101,33 @@ without canonical Q6 decode or FP32 scaling. With 4096 independent replicas:
 This proves the fragment-preparation plus IMMA subgraph is exact and spill-free.
 It is a diagnostic lower-level measurement and must not be summed with Regions
 A or C; the full-route causal test remains required.
+
+## Final Region A causal split (R9)
+
+The combined Region A producer was split at the decode/publication boundary
+with the same 128-CTA, 256-thread, 192-iteration population.
+
+| arm | median | minimum | retained SASS | excluded SASS |
+|---|---:|---:|---|---|
+| canonical Q6 load + low/high decode | 115.968 us | 115.360 us | 32 LDG, 139 LOP3 | 0 STS, 0 BAR, 0 IMMA |
+| deterministic predecoded publication | 93.168 us | 92.992 us | exactly 80 STS, 2 BAR, 1 LDS | 0 canonical Q6/Q8 decode, 0 IMMA |
+
+The decode arm has zero shared allocation, 40 registers, and no stack/local
+traffic. It retains all 36 canonical Q6 source-load statements and all 32
+low/high decoded outputs for one generated producer phase. Every distributed
+sink is nonzero and two executions are bit-identical.
+
+The publication arm has a logical 20,480-byte shared window (21,504 bytes in
+the hardware allocation granule), 128 registers, and no stack/local traffic.
+Its distributed output is bit-exact against a CPU recurrence and repeat-exact.
+The runtime-selected predecoded slot makes every one of the 80 static shared
+publication sites observable without introducing canonical Q6/Q8 work.
+
+These diagnostic medians must not be added: the two arms use different live
+sinks and the production kernel can overlap their work. They do establish that
+the Region A cost is not publication alone. Canonical Q6 load/decode is the
+larger isolated arm and is by itself on the scale of the 117.584 us main gap;
+shared publication remains a second material cost. The next full-route A/B
+should therefore reduce canonical decode/address work first while preserving
+the exact 80-store publication contract, then test publication compaction as a
+separate change.

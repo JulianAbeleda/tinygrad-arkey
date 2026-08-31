@@ -1,0 +1,160 @@
+{
+  "schema": "tinygrad.nv_q6_region_a_final_split.v1",
+  "shape": {
+    "M": 512,
+    "N": 4096,
+    "K": 12288
+  },
+  "launch": {
+    "ctas": 128,
+    "threads": 256,
+    "local_size": [
+      32,
+      2,
+      4
+    ],
+    "iterations": 192,
+    "rounds": 9
+  },
+  "decode_only": {
+    "logical": {
+      "canonical_q6_load_statements": 36,
+      "decode_output_expressions": 32,
+      "register_sinks": 8
+    },
+    "sass": {
+      "sha256": "620609a7d32dce9b04969db8a244e21ad5463d9a9d2985ea3f34cb8a069a59e7",
+      "returncode": 0,
+      "counts": {
+        "ldg": 32,
+        "lds": 0,
+        "sts": 0,
+        "bar": 0,
+        "imma": 0,
+        "ldl": 0,
+        "stl": 0,
+        "prmt": 0,
+        "lop3": 139
+      },
+      "resources": {
+        "registers": 40,
+        "stack_bytes": 0,
+        "shared_bytes": 0,
+        "local_bytes": 0
+      },
+      "cubin": "docs/task_workflow/evidence/nv-q6-region-a-final-split-20260831-r9/decode_only.cubin",
+      "sass": "docs/task_workflow/evidence/nv-q6-region-a-final-split-20260831-r9/decode_only.sass"
+    },
+    "run": {
+      "timing": {
+        "samples_us": [
+          119.232,
+          116.544,
+          116.576,
+          116.608,
+          115.968,
+          115.392,
+          116.576,
+          115.36,
+          115.968
+        ],
+        "warmup_discarded": 3,
+        "min_us": 115.36,
+        "median_us": 115.968,
+        "max_us": 116.608
+      },
+      "repeat_exact": true,
+      "nonzero": 32768,
+      "sample": [
+        1805998046,
+        684370024,
+        1811165020,
+        3799802751,
+        2580560594,
+        3536186838,
+        3775114330,
+        1325799975
+      ]
+    },
+    "gates": {
+      "zero_shared_allocation": true,
+      "zero_sts": true,
+      "zero_bar": true,
+      "zero_imma": true,
+      "zero_q8_source": true,
+      "canonical_q6_source": true,
+      "no_local_spills": true
+    }
+  },
+  "publication_only": {
+    "logical": {
+      "shared_store_statements": 80,
+      "barriers": 2
+    },
+    "sass": {
+      "sha256": "2b70906bc4d649c22c9d492e9b2ab34f16e0bd7f13ec0d8e32c6fa6810e56137",
+      "returncode": 0,
+      "counts": {
+        "ldg": 1,
+        "lds": 1,
+        "sts": 80,
+        "bar": 2,
+        "imma": 0,
+        "ldl": 0,
+        "stl": 0,
+        "prmt": 3,
+        "lop3": 3
+      },
+      "resources": {
+        "registers": 128,
+        "stack_bytes": 0,
+        "shared_bytes": 21504,
+        "local_bytes": 0
+      },
+      "cubin": "docs/task_workflow/evidence/nv-q6-region-a-final-split-20260831-r9/publication_only.cubin",
+      "sass": "docs/task_workflow/evidence/nv-q6-region-a-final-split-20260831-r9/publication_only.sass"
+    },
+    "run": {
+      "timing": {
+        "samples_us": [
+          93.44,
+          93.28,
+          93.152,
+          93.216,
+          93.184,
+          93.152,
+          93.12,
+          93.184,
+          92.992
+        ],
+        "warmup_discarded": 3,
+        "min_us": 92.992,
+        "median_us": 93.168,
+        "max_us": 93.216
+      },
+      "repeat_exact": true,
+      "nonzero": 32768,
+      "sample": [
+        3265766149,
+        2227355780,
+        726783495,
+        1017556870,
+        120698625,
+        3924886656,
+        1556562691,
+        3262894466
+      ],
+      "cpu_exact": true
+    },
+    "gates": {
+      "logical_shared_stores_80": true,
+      "sass_sts_80": true,
+      "sass_bar_2": true,
+      "zero_imma": true,
+      "zero_canonical_source": true,
+      "shared_allocation_covers_20480": true,
+      "no_local_spills": true
+    }
+  },
+  "passed": true
+}
