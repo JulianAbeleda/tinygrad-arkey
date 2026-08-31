@@ -7,6 +7,7 @@ from tinygrad.helpers import strip_parens, getenv, prod, dedup, Target, CPU_COUN
 from tinygrad.dtype import ImageDType, dtypes, DType, PtrDType, AddrSpace, truncate, float_to_bf16
 from tinygrad.renderer import Renderer
 from tinygrad.codegen.late.devectorizer import no_vectorized_alu
+from tinygrad.codegen.late.native_fragment import NATIVE_FRAGMENT_TAG
 
 
 def _render_arg_format(ctx, x:UOp) -> str:
@@ -469,8 +470,13 @@ class CStyleLanguage(Renderer):
       # verified rather than assumed: extra/llm_research/decode/decode_codegen_identity_check.py compiles the real decode
       # graph both ways and compares code-object sha256 for both decode-admitted geometries (8B Hq=32 and
       # 14B Hq=40) -- byte-identical. Re-run it if you touch this predicate.
-      customi_inline = u.op is not Ops.CUSTOMI or not (child_count[u] > 1 and (u.dtype.count > 1 or
-        (getenv("PREFILL_SOFTMAX_REDUCE_FUSE", 1) and u.dtype is dtypes.float)))
+      # Native fragment providers return typed vector values (uint2/uint4).  They are
+      # expensive register loads, so preserve one SSA materialization when reused;
+      # ordinary vector CUSTOMI remains inline as before.
+      native_fragment_reuse = isinstance(u.tag, tuple) and u.tag[:1] == (NATIVE_FRAGMENT_TAG,)
+      customi_inline = u.op is not Ops.CUSTOMI or not (child_count[u] > 1 and
+        (native_fragment_reuse or u.dtype.count > 1 or
+         (getenv("PREFILL_SOFTMAX_REDUCE_FUSE", 1) and u.dtype is dtypes.float)))
       if (u.op is not Ops.CAST or u.dtype.vcount == 1) and ((u.op in {Ops.CONST, Ops.GEP, Ops.INDEX, Ops.SHRINK, Ops.CUSTOMI} and customi_inline) or \
         (u.op is Ops.LOAD and u.src[0].addrspace == AddrSpace.REG) or \
         (u.op is Ops.CAST and u.addrspace in (AddrSpace.GLOBAL, AddrSpace.LOCAL)) or \
@@ -479,7 +485,11 @@ class CStyleLanguage(Renderer):
         r[u] = l
       else:
         if u.op not in {Ops.RANGE, Ops.DEFINE_LOCAL, Ops.STORE, Ops.DEFINE_REG, Ops.BUFFER} and u.dtype != dtypes.void:
-          l = f"{self.render_type(u)} {r[u]} = {l}" + (";" if u.op is not Ops.SPECIAL else "")
+          # CUSTOMI carries its source shape, which is scalar for native fragment
+          # loads even though the typed result is uint2/uint4. Use the semantic
+          # dtype width for this explicitly materialized value.
+          dtype = self._render_dtype(u.dtype, u.dtype.count) if native_fragment_reuse else self.render_type(u)
+          l = f"{dtype} {r[u]} = {l}" + (";" if u.op is not Ops.SPECIAL else "")
         kernel.append("  "*depth + l)
         if prefix: c[prefix] += 1  # if it was used, increment
       if u.op in {Ops.IF, Ops.RANGE}: depth += 1
