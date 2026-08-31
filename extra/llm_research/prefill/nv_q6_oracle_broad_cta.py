@@ -11,7 +11,8 @@ Q6_WORDS, Q8_WORDS = ROWS*Q6_STRIDE, COLS*Q8_STRIDE
 SHARED_BYTES = (Q6_WORDS+Q8_WORDS)*4
 
 
-def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefetch_second_panel:bool=True):
+def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefetch_second_panel:bool=True,
+                               combined_initial_publish:bool=False):
   """One exact llama-normalized 128x128xK256 work unit per CTA.
 
   ``blocks`` is 128 canonical Q6_K rows. ``q8_record`` is two canonical
@@ -41,11 +42,17 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
     sh[srow*Q6_STRIDE+64].store(blocks[hbase+104].cast(dtypes.uint32),gate=(lane<1)),
     *(sh[srow*Q6_STRIDE+65+i].store(blocks[hbase+96+2*i].cast(dtypes.uint32).bitwise_or(
       blocks[hbase+97+2*i].cast(dtypes.uint32).lshift(16)),gate=((lane>=i)&(lane<i+1))) for i in range(4))).end(sr)
-  ready_q6=UOp.barrier(UOp.group(staged))
+  published_q6=UOp.group(staged)
+  ready_q6=None if combined_initial_publish else UOp.barrier(published_q6)
 
   # The first Q8 panel is published exactly once. Each lane owns 18 words.
   panel0=tuple(q8_record[lid+i*256] for i in range(18))
-  ready_y0=UOp.barrier(UOp.group(*(shq[lid+i*256].store(panel0[i]) for i in range(18))))
+  y0_target=shq.after(published_q6) if combined_initial_publish else shq
+  published_y0=UOp.group(*(y0_target[lid+i*256].store(panel0[i]) for i in range(18)))
+  if combined_initial_publish:
+    ready_q6=ready_y0=UOp.barrier(published_y0)
+  else:
+    ready_y0=UOp.barrier(published_y0)
   if prefetch_second_panel:
     panel1_raw=tuple(q8_record[Q8_WORDS+lid+i*256].load() for i in range(18))
     panel1_reg=tuple(UOp.placeholder((1,),dtypes.uint32,1510+i,addrspace=AddrSpace.REG) for i in range(18))
@@ -100,14 +107,16 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
     panel1=tuple(ordered_record[Q8_WORDS+lid+i*256].load() for i in range(18))
   ready_y1=UOp.barrier(UOp.group(*(shq.after(before_overwrite)[lid+i*256].store(panel1[i]) for i in range(18))))
   phase1=consume(1,ready_y1,phase0)
+  lifecycle_end=UOp.barrier(UOp.group(phase1)) if combined_initial_publish else phase1
 
   stores=[]
   for cg in range(8):
     for n in range(2):
       for r in range(4):
         ai=cg*8+n*4+r; row=band*32+n*16+lr+8*(r>>1); col=cg*16+warp_phase*8+2*lc+(r&1)
-        stores.append(out[bid*ROWS*COLS+row*COLS+col].store(acc[ai].after(phase1)[0]))
+        stores.append(out[bid*ROWS*COLS+row*COLS+col].store(acc[ai].after(lifecycle_end)[0]))
   suffix="prefetch" if prefetch_second_panel else "serial"
+  if combined_initial_publish: suffix += "_combined_publish"
   return UOp.sink(*stores,arg=KernelInfo(name=f"nv_q6_oracle_broad_cta_{suffix}",opts_to_apply=()))
 
 
