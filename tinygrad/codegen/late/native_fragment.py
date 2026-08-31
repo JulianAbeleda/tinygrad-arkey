@@ -26,7 +26,8 @@ def _project(x:UOp, value:UOp) -> UOp|None:
   return UOp(Ops.CUSTOMI,dtypes.uint32,(value,),arg=f"({{0}}).{'xyzw'[x.arg[0]]}")
 
 def _bitcast(ctx, x:UOp, value:UOp) -> UOp|None:
-  if not (isinstance(value.arg,str) and "tg_ldmatrix_x4(" in value.arg and x.dtype == dtypes.char.vec(16)): return None
+  width=4 if isinstance(value.arg,str) and "tg_ldmatrix_x4(" in value.arg else 2 if isinstance(value.arg,str) and "tg_ldmatrix_x2(" in value.arg else 0
+  if not width or x.dtype != dtypes.char.vec(width*4): return None
   provider=getattr(ctx,"native_fragment_bitcast",None)
   if provider is None: raise NotImplementedError(f"native fragment bitcasts are unavailable on {type(ctx).__name__}")
   return provider(value,x.dtype)
