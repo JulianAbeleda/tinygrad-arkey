@@ -50,7 +50,7 @@ def q6_first_two_k16_numpy(block):
  raw=np.frombuffer(block,dtype=np.uint8).reshape(-1,210)
  ql,qh=raw[:,:128],raw[:,128:192]
  q0=(ql[:,:16]&15) | ((qh[:,:16]&3)<<4)
- q1=((ql[:,:16]>>4)&15) | (qh[:,:16]&0x30)
+ q1=(ql[:,16:32]&15) | ((qh[:,16:32]&3)<<4)
  q=np.stack((q0,q1),axis=1).astype(np.int8)-32
  scales=raw[:,192:194].view(np.int8)
  d=np.frombuffer(raw[:,208:210].tobytes(),dtype='<f2').astype(np.float32)
@@ -64,11 +64,12 @@ def q6_packed_two_k16_kernel(out, dot0, dot1, blocks, b0, b1, dB):
   sh=UOp.placeholder((64,),dtypes.uint32,30+slot,addrspace=__import__('tinygrad.dtype',fromlist=['AddrSpace']).AddrSpace.LOCAL)
   stores=[]
   for i in range(2):
-   z=lane+32*i; row=z>>2; word=z&3; base=row*210+4*word; vals=[]
+   z=lane+32*i; row=z>>2; word=z&3; base=row*210; vals=[]
+   ql_off=(slot//8)*64+(slot%4)*16; qh_off=(slot//8)*32+(slot%2)*16; qh_shift=(slot%8//2)*2
    for q in range(4):
-    lo=byte(base+q); hi=byte(base+128+q)
-    hbits=hi.bitwise_and(3).lshift(4) if slot==0 else hi.bitwise_and(0x30)
-    v=(lo.bitwise_and(15) if slot==0 else lo.rshift(4).bitwise_and(15)).bitwise_or(hbits).alu(
+    lo=byte(base+ql_off+4*word+q); hi=byte(base+128+qh_off+4*word+q)
+    lbits=lo.rshift(4 if slot%8>=4 else 0).bitwise_and(15); hbits=hi.rshift(qh_shift).bitwise_and(3).lshift(4)
+    v=lbits.bitwise_or(hbits).alu(
       Ops.SUB,UOp.const(dtypes.uint32,32)).cast(dtypes.char)
     vals.append(v)
    stores.append(sh[z].store(UOp(Ops.STACK,dtypes.char.vec(4),tuple(vals)).bitcast(dtypes.uint32)))
