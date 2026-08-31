@@ -14,8 +14,9 @@ def test_streamk_slot_boundary_segment_runtime():
   ast=q6_streamk_slot_kernel(ph(16384,dtypes.float32,0),ph(1,dtypes.int32,1),ph(3,dtypes.int32,2),
     ph(128*2*105,dtypes.uint16,3),ph(2*256*512,dtypes.int8,4),ph(2*8*512,dtypes.float32,5),
     total_k_blocks=2,slots=1,max_segment_blocks=1)
-      src=next(x.arg for x in to_program(ast,CUDARenderer(Target.parse('NV:CUDA:sm_120'))).src if x.op is Ops.SOURCE)
-      assert 'float buf1[1]' not in src
+  src=next(x.arg for x in to_program(ast,CUDARenderer(Target.parse('NV:CUDA:sm_120'))).src if x.op is Ops.SOURCE)
+  assert 'float buf1[1]' not in src
+  assert 'extern __shared__ __align__(16)' in src
   rng=np.random.default_rng(20260907); raw=rng.integers(0,256,(128,2,210),dtype=np.uint8)
   raw[:,:,208:210]=np.frombuffer(np.float16(.03125).tobytes(),np.uint8); blocks=raw.view(np.uint16).reshape(-1)
   b=rng.integers(-4,5,(2*256,512),dtype=np.int8); db=np.full((2,8,512),.0625,np.float32)
@@ -31,7 +32,8 @@ def test_streamk_slot_boundary_segment_runtime():
   dev=Device['NV']; host=(np.empty(16384,np.float32),np.empty(1,np.int32),np.array([0,1,2],np.int32),blocks,b,db)
   bufs=[dev.allocator._alloc(x.nbytes,BufferSpec()) for x in host]
   for buf,x in zip(bufs[2:],host[2:]): dev.allocator._copyin(buf,memoryview(x.tobytes()))
-  NVProgram(dev,'nv_generated_q6k_streamk_slots',NVRTCCompiler(dev.arch,ptx=False,cache_key='q6_streamk_slots_runtime').compile(src))(*bufs,global_size=(1,1,1),local_size=(256,1,1),wait=True)
+  NVProgram(dev,'nv_generated_q6k_streamk_slots',NVRTCCompiler(dev.arch,ptx=False,cache_key='q6_streamk_slots_runtime_q8_shared_v2').compile(src),
+    shared_mem=58880)(*bufs,global_size=(1,1,1),local_size=(256,1,1),wait=True)
   mv=memoryview(bytearray(bufs[0].size)); dev.allocator._copyout(mv,bufs[0]); got=np.frombuffer(mv,np.float32,count=16384).reshape(128,128).T
   mid=memoryview(bytearray(bufs[1].size)); dev.allocator._copyout(mid,bufs[1])
   assert np.array_equal(got,ref); assert np.frombuffer(mid,np.int32,count=1)[0] == 0

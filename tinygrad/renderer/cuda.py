@@ -194,6 +194,7 @@ class CUDARenderer(CStyleLanguage):
 
   kernel_typedef = 'extern "C" __global__ void __launch_bounds__({launch_bounds})'
   smem_prefix = "__shared__ __align__(16) "
+  runtime_local_prefix = "extern __shared__ __align__({alignment}) "
   smem_prefix_for_cast = False
   barrier = "__syncthreads();"
   float4 = "make_float4"

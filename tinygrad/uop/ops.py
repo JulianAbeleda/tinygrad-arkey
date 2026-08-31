@@ -2365,6 +2365,18 @@ class ScheduleHints:
       raise ValueError("ScheduleHints.name must be None or a non-empty string")
 
 @dataclass(frozen=True)
+class RuntimeLocalAllocation:
+  """A workgroup-local arena whose storage is supplied by the launch ABI."""
+  size_bytes: int
+  alignment: int = 16
+
+  def __post_init__(self):
+    if not isinstance(self.size_bytes, int) or isinstance(self.size_bytes, bool) or self.size_bytes <= 0:
+      raise ValueError("runtime local allocation size must be a positive integer")
+    if not isinstance(self.alignment, int) or isinstance(self.alignment, bool) or self.alignment <= 0 or self.alignment & (self.alignment-1):
+      raise ValueError("runtime local allocation alignment must be a positive power of two")
+
+@dataclass(frozen=True)
 class ProgramInfo:
   name: str = "test"
   global_size: tuple[int|float, ...] = (1, 1, 1)

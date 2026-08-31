@@ -2,7 +2,7 @@ from typing import Literal, Callable, cast
 import math, sys, struct, re
 from collections import defaultdict, Counter
 from tinygrad.codegen.opt import tc
-from tinygrad.uop.ops import GroupOp, Ops, UOp, PatternMatcher, UPat, range_str, axis_letters
+from tinygrad.uop.ops import GroupOp, Ops, UOp, PatternMatcher, UPat, RuntimeLocalAllocation, range_str, axis_letters
 from tinygrad.helpers import strip_parens, getenv, prod, dedup, Target, CPU_COUNT, IMAGE, FLOAT16
 from tinygrad.dtype import ImageDType, dtypes, DType, PtrDType, AddrSpace, truncate, float_to_bf16
 from tinygrad.renderer import Renderer
@@ -286,6 +286,7 @@ class CStyleLanguage(Renderer):
   smem_align: str = ""
   smem_prefix: str = ""
   smem_prefix_for_cast: bool = True
+  runtime_local_prefix: str|None = None
   arg_int_prefix: str = "const int"
   barrier: str = ""
   code_for_workitem: dict[Literal["g", "l", "i"], Callable] = {}
@@ -354,6 +355,10 @@ class CStyleLanguage(Renderer):
   def render_buffer(self, x:UOp):
     shp = x.src[0].as_shape
     lanes = 1
+    if isinstance(x.tag, RuntimeLocalAllocation):
+      if self.runtime_local_prefix is None: raise RuntimeError(f"{type(self).__name__} cannot lower runtime workgroup-local storage")
+      if x.tag.size_bytes != shp[0] * x.dtype.itemsize: raise ValueError("runtime local allocation descriptor disagrees with buffer size")
+      return f"{self.runtime_local_prefix.format(alignment=x.tag.alignment)}{self._render_dtype(x.dtype, sz=lanes)} {self[x]}[];"
     prefix = f"{self.smem_align}{self.smem_prefix}" if x.addrspace == AddrSpace.LOCAL else ""
     suffix = f"[{shp[0]}]" if len(shp) and not (x.addrspace == AddrSpace.REG and shp[0] == 1) else ""
     return f"{prefix}{self._render_dtype(x.dtype, sz=lanes)} {self[x]}{suffix};"
