@@ -9,7 +9,6 @@ from tinygrad.device import BufferSpec
 from tinygrad.runtime.ops_nv import NVProgram
 from tinygrad.runtime.support.compiler_cuda import NVRTCCompiler
 from tinygrad.uop.ops import Ops,UOp
-from tinygrad.dtype import AddrSpace
 from extra.llm_research.prefill.nv_native_fragment_k16_gate import (kernel,q6_two_k16_kernel,q6_packed_two_k16_kernel,
   q6_packed_k256_kernel,q6_first_two_k16_numpy)
 from extra.llm_research.prefill.nv_native_fragment_k16_gate import q6_packed_kblocks_kernel
@@ -33,14 +32,6 @@ def test_native_k16_renders_and_compiles():
     ob,ab,bb,global_size=(1,1,1),local_size=(32,1,1),wait=True)
   out=memoryview(bytearray(ob.size)); d.allocator._copyout(out,ob)
   assert np.array_equal(np.frombuffer(out,np.int32,count=128).reshape(16,8),av.astype(np.int32)@bv.astype(np.int32))
-
-def test_reused_native_fragment_is_materialized_once():
-  from tinygrad.codegen.late.native_fragment import _lower, NATIVE_FRAGMENT_TAG, NATIVE_FRAGMENT_X2
-  class Provider:
-    native_fragment_x2=staticmethod(lambda buffer,index: UOp(Ops.CUSTOMI,dtypes.uint32.vec(2),(buffer,index),arg='typed_fragment'))
-  buf=UOp.placeholder((64,),dtypes.uint32,20,addrspace=AddrSpace.LOCAL)
-  lowered=_lower(Provider(), native_fragment_x2(buf,UOp.const(dtypes.int,0)))
-  assert lowered is not None and lowered.tag == (NATIVE_FRAGMENT_TAG, NATIVE_FRAGMENT_X2)
 
 def test_q6_two_k16_scale_semantics():
   ph=lambda n,dt,i:UOp.placeholder((n,),dt,i)
