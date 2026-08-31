@@ -9,7 +9,8 @@ from tinygrad.device import BufferSpec
 from tinygrad.runtime.ops_nv import NVProgram
 from tinygrad.runtime.support.compiler_cuda import NVRTCCompiler
 from tinygrad.uop.ops import Ops,UOp
-from extra.llm_research.prefill.nv_native_fragment_k16_gate import kernel,q6_two_k16_kernel,q6_packed_two_k16_kernel,q6_first_two_k16_numpy
+from extra.llm_research.prefill.nv_native_fragment_k16_gate import (kernel,q6_two_k16_kernel,q6_packed_two_k16_kernel,
+  q6_packed_k256_kernel,q6_first_two_k16_numpy)
 def test_native_k16_descriptor():
   assert cuda_81616_i8[0].dims == (8,16,16)
   assert cuda_81616_i8[0].elements_per_thread == (8,4,4)
@@ -72,3 +73,29 @@ def test_q6_direct_packed_two_k16():
   for buf,dt in zip(bufs[:3],(np.float32,np.int32,np.int32)):
     mv=memoryview(bytearray(buf.size)); dev.allocator._copyout(mv,buf); got.append(np.frombuffer(mv,dt,count=128).reshape(16,8))
   assert np.array_equal(got[1],ref0) and np.array_equal(got[2],ref1) and np.array_equal(got[0],ref)
+
+def test_q6_direct_packed_full_block():
+  ph=lambda n,dt,i:UOp.placeholder((n,),dt,i)
+  args=(ph(128,dtypes.float32,0),ph(128,dtypes.float32,1),ph(16*105,dtypes.uint16,2),ph(256*8,dtypes.int8,3),ph(8*8,dtypes.float32,4))
+  p=to_program(q6_packed_k256_kernel(*args),CUDARenderer(Target.parse('NV:CUDA:sm_120'))); src=next(x.arg for x in p.src if x.op is Ops.SOURCE)
+  assert src.count('__WMMA_8_16_16_signed_char_int(')==17
+  rng=np.random.default_rng(20260903); blocks=rng.integers(0,256,(16,210),dtype=np.uint8)
+  blocks[:,208:210]=np.frombuffer(np.float16(.03125).tobytes(),np.uint8); b=rng.integers(-8,9,(256,8),dtype=np.int8)
+  db=np.full((8,8),.0625,np.float32); raw=blocks
+  q=np.empty((16,16,16),np.int8)
+  for g in range(16):
+    half,pgrp=g//8,g%8; qi=half*64+(pgrp%4)*16; hi=half*32+(pgrp%2)*16
+    q[:,g]=((((raw[:,qi:qi+16]>>(4 if pgrp>=4 else 0))&15)|
+      (((raw[:,128+hi:128+hi+16]>>((pgrp//2)*2))&3)<<4)).astype(np.int16)-32).astype(np.int8)
+  scales=raw[:,192:208].view(np.int8); wd=np.full((16,),.03125,np.float32); ref=np.zeros((16,8),np.float32)
+  for pidx in range(8):
+    z0=q[:,2*pidx].astype(np.int32)@b[32*pidx:32*pidx+16].astype(np.int32)
+    z1=q[:,2*pidx+1].astype(np.int32)@b[32*pidx+16:32*pidx+32].astype(np.int32)
+    ref += (wd[:,None]*db[pidx])*(scales[:,2*pidx,None].astype(np.float32)*z0+scales[:,2*pidx+1,None].astype(np.float32)*z1)
+  dev=Device['NV']; host=(np.empty(128,np.float32),np.empty(128,np.float32),blocks,b,db)
+  bufs=[dev.allocator._alloc(x.nbytes,BufferSpec()) for x in host]
+  for buf,x in zip(bufs[2:],host[2:]): dev.allocator._copyin(buf,memoryview(x.tobytes()))
+  NVProgram(dev,'nv_native_fragment_q6_packed_k256',NVRTCCompiler(dev.arch,ptx=False,cache_key='q6_packed_k256_runtime').compile(src))(
+    *bufs,global_size=(1,1,1),local_size=(32,1,1),wait=True)
+  mv=memoryview(bytearray(bufs[0].size)); dev.allocator._copyout(mv,bufs[0]); got=np.frombuffer(mv,np.float32,count=128).reshape(16,8)
+  assert np.array_equal(got,ref)

@@ -92,4 +92,36 @@ def q6_packed_two_k16_kernel(out, dot0, dot1, blocks, b0, b1, dB):
   writes += [dot0[idx].store(z0),dot1[idx].store(z1),out[idx].store(value)]
  return UOp.sink(*writes,arg=KernelInfo(name='nv_native_fragment_q6_packed_two_k16',opts_to_apply=()))
 
-__all__=['kernel','q6_two_k16_kernel','q6_packed_two_k16_kernel','q6_first_two_k16_numpy']
+def q6_packed_k256_kernel(out, dot, blocks, b, dB):
+ """Full one-block Q6_K K=256 gate, unrolled as sixteen K16 MMAs."""
+ lane=UOp.special(32,"lidx0"); lr,lc=lane>>2,lane&3
+ def byte(off): return blocks[off//2].cast(dtypes.uint32).rshift((off%2)*8).bitwise_and(255)
+ def group(g):
+  sh=UOp.placeholder((64,),dtypes.uint32,100+g,addrspace=__import__('tinygrad.dtype',fromlist=['AddrSpace']).AddrSpace.LOCAL)
+  stores=[]; ql_off=(g//8)*64+(g%4)*16; qh_off=(g//8)*32+(g%2)*16; qh_shift=((g%8)//2)*2
+  for i in range(2):
+   z=lane+32*i; row=z>>2; word=z&3; base=row*210; vals=[]
+   for q in range(4):
+    lo=byte(base+ql_off+4*word+q); hi=byte(base+128+qh_off+4*word+q)
+    vals.append(lo.rshift(4 if g%8>=4 else 0).bitwise_and(15).bitwise_or(hi.rshift(qh_shift).bitwise_and(3).lshift(4)).alu(
+      Ops.SUB,UOp.const(dtypes.uint32,32)).cast(dtypes.char))
+   stores.append(sh[z].store(UOp(Ops.STACK,dtypes.char.vec(4),tuple(vals)).bitcast(dtypes.uint32)))
+  ready=UOp.barrier(UOp.group(*stores)); av=native_fragment_x2(sh.after(ready),(lane&15)*4+(lane>>4)*2).bitcast(dtypes.char.vec(8))
+  bv=UOp(Ops.STACK,dtypes.char.vec(4),tuple(b[(g*16+4*lc+q)*8+lr] for q in range(4)))
+  axes=(tuple((300+i,2) for i in range(3)),tuple((310+i,2) for i in range(2)),tuple((320+i,2) for i in range(2)))
+  arg=("WMMA_8_16_16_signed_char_int",(8,16,16),dtypes.char,dtypes.int,"NV",32,axes,())
+  return UOp(Ops.WMMA,dtypes.int.vec(4),(av,bv,UOp.const(dtypes.int.vec(4),0)),arg)
+ cs=[group(g) for g in range(16)]; writes=[]
+ for r in range(4):
+  idx=(lr+8*(r>>1))*8+2*lc+(r&1); row=lr+8*(r>>1); base=row*210; col=2*lc+(r&1)
+  acc=None
+  for p in range(8):
+   z=cs[2*p].gep(r); z1=cs[2*p+1].gep(r)
+   s0=byte(base+192+2*p).cast(dtypes.char).cast(dtypes.float32); s1=byte(base+193+2*p).cast(dtypes.char).cast(dtypes.float32)
+   term=(s0*z.cast(dtypes.float32)+s1*z1.cast(dtypes.float32))*(blocks[(base+208)//2].bitcast(dtypes.half).cast(dtypes.float32)*dB[p*8+col])
+   acc=term if acc is None else acc+term
+  writes.append(dot[idx].store(acc))
+  writes.append(out[idx].store(acc))
+ return UOp.sink(*writes,arg=KernelInfo(name='nv_native_fragment_q6_packed_k256',opts_to_apply=()))
+
+__all__=['kernel','q6_two_k16_kernel','q6_packed_two_k16_kernel','q6_packed_k256_kernel','q6_first_two_k16_numpy']
