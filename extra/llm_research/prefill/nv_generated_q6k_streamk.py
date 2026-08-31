@@ -53,6 +53,15 @@ def owner_metadata():
     rows.extend(OwnerSegment(owner,-1,0,0,owner*2+i) for i in range(len(segs),2))
   return tuple(rows)
 
+def fixup_slot_map():
+  """Return the deterministic [128,3] owner-ordered partial-slot map."""
+  by_tile=[[] for _ in range(TILES)]
+  for seg in owner_metadata():
+    if seg.tile_id >= 0: by_tile[seg.tile_id].append(seg.slot)
+  if max(map(len,by_tile)) > 3 or min(map(len,by_tile)) < 2:
+    raise AssertionError("representative Q6 tile contributor bound changed")
+  return tuple(tuple(slots+[-1]*(3-len(slots))) for slots in by_tile)
+
 def generated_q6k_streamk_owner_partials(partials, tile_ids, blocks, b, dB):
   """170-CTA exact Stream-K main which emits at most two ordered tile partials.
 
@@ -76,4 +85,4 @@ def generated_q6k_streamk_owner_partials(partials, tile_ids, blocks, b, dB):
   return UOp.sink(*(body0.src+body1.src+meta.src),arg=KernelInfo(name="nv_generated_q6k_streamk_owner_partials",opts_to_apply=()))
 
 __all__=["OWNERS","SLOTS","ACTIVE_SLOTS","TILES","K_BLOCKS","OwnerSegment","owner_bounds","owner_work_units","streamk_segments",
-         "tile_coordinates","owner_metadata","generated_q6k_streamk_owner_partials"]
+         "tile_coordinates","owner_metadata","fixup_slot_map","generated_q6k_streamk_owner_partials"]

@@ -18,6 +18,8 @@ def test_streamk_m_major_tile_mapping_and_partial_metadata():
   md=owner_metadata(); assert len(md)==340
   assert {s.slot for s in md} == set(range(340))
   assert all(s.tile_id < TILES for s in md if s.end > s.begin)
+  fmap=fixup_slot_map(); assert len(fmap)==128
+  assert {len([x for x in row if x >= 0]) for row in fmap} == {2,3}
 
 def test_generated_170_owner_partials_compile_with_dynamic_segments():
   ph=lambda n,dt,i: UOp.placeholder((n,),dt,i)
