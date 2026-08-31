@@ -57,7 +57,8 @@ def active_fixup_source() -> str:
       out[(mb+r)*N+nb+c]=partials[s0*2048+z]+(s1>=0?partials[s1*2048+z]:0); }
   }'''
 
-def transform_compiler_q6k_wide_to_streamk(source:str, *, unroll:int|None=None, owners:int=170, force_partials:bool=False) -> str:
+def transform_compiler_q6k_wide_to_streamk(source:str, *, unroll:int|None=None, owners:int=170,
+                                            force_partials:bool=False, aligned_pair:bool=True) -> str:
   if not 1 <= owners <= 256: raise ValueError("wide Q6 Stream-K owners must be in [1, 256]")
   signature=re.search(r'(extern "C" __global__ void __launch_bounds__\(256\) \w+\()'
                       r'(float\* data0_2097152, unsigned int\* data1_1966080, unsigned short\* data2_20643840)(\) \{)',source)
@@ -95,7 +96,12 @@ def transform_compiler_q6k_wide_to_streamk(source:str, *, unroll:int|None=None, 
   if force_partials: owner_loop=owner_loop.replace("bool direct=(k_begin==0&&k_end==192)", "bool direct=false")
   stores=("    if (direct) {\n"+direct+"    } else {\n"
           "      if (threadIdx.x==0&&threadIdx.y==0&&threadIdx.z==0) partial_ids[slot]=tile;\n"+partial+"    }\n")
-  return source[:body_start]+owner_loop+math+stores+"  }\n}\n"
+  transformed=source[:body_start]+owner_loop+math+stores+"  }\n}\n"
+  # The owner boundary quantum and tile K are both even.  Make that invariant
+  # explicit instead of retaining NVRTC's unreachable odd-trip cleanup body.
+  if unroll == 2 and aligned_pair:
+    transformed=transform_compiler_q6k_wide_pair_reuse(transformed,"control",owners=owners)
+  return transformed
 
 def wide_active_fixup_source() -> str:
   return r'''extern "C" __global__ void q6k_imma_fixup_active(float *out,const float *partials,const int *map,const int *active,int M,int N) {
@@ -104,6 +110,26 @@ def wide_active_fixup_source() -> str:
       float v=partials[s0*16384+z]; if(s1>=0)v+=partials[s1*16384+z]; if(s2>=0)v+=partials[s2*16384+z];
       out[(mb+r)*N+nb+c]=v; }
   }'''
+
+def wide_pair_alignment_proof(owners:int) -> dict[str,object]:
+  """Enumerate the exact owner/tile ranges used by the wide Stream-K route."""
+  if not 1 <= owners <= 256: raise ValueError("wide Q6 Stream-K owners must be in [1, 256]")
+  work_units, tile_k, quantum = 128*192, 192, 8
+  rows=[]; violations=[]
+  for owner in range(owners):
+    owner_start=((owner*work_units//owners)//quantum)*quantum
+    owner_stop=work_units if owner == owners-1 else ((((owner+1)*work_units//owners)//quantum)*quantum)
+    for tile in range(owner_start//tile_k, (owner_stop-1)//tile_k+1):
+      segment_start=max(owner_start,tile*tile_k); segment_stop=min(owner_stop,(tile+1)*tile_k)
+      k_begin=segment_start-tile*tile_k; k_end=segment_stop-tile*tile_k
+      row={"owner":owner,"tile":tile,"k_begin":k_begin,"k_end":k_end,"length":k_end-k_begin}
+      rows.append(row)
+      if (k_begin|k_end|(k_end-k_begin))&1: violations.append(row)
+  return {"owners":owners,"segments":len(rows),"boundary_quantum":quantum,"tile_k":tile_k,
+          "all_pair_aligned":not violations,"violations":violations,
+          "distinct_k_begin":sorted({int(x["k_begin"]) for x in rows}),
+          "distinct_k_end":sorted({int(x["k_end"]) for x in rows}),
+          "distinct_lengths":sorted({int(x["length"]) for x in rows})}
 
 def transform_compiler_q6k_wide_persistent_b(source:str) -> str:
   """Cache one canonical 128-row Q6_K K256 block across four K64 phases."""
@@ -178,6 +204,70 @@ def transform_compiler_q6k_wide_straightline_k256(source:str) -> str:
   replacement="  for (int Kepoch = k_begin; Kepoch < k_end; Kepoch += 4) {\n"+clones+"  }"
   return source[:start]+replacement+source[pos:]
 
+def transform_compiler_q6k_wide_pair_reuse(source:str, mode:str, *, owners:int=170) -> str:
+  """Fail-closed adjacent-K64 reuse probes for the wide Q6 consumer.
+
+  Owner boundaries are multiples of eight K64 phases.  Adjacent phases share
+  the K256 block address, high-bit words, low-bit words, and D.  The two scale
+  words and all Q8 records are phase-specific and deliberately remain inside
+  each phase scope.  Each arm changes only one lifetime class.
+  """
+  selected = {
+    "control": (),
+    "metadata": (34, 35),
+    "high": tuple(range(16)),
+    "address": (),
+    # One symmetric word from each Q6 plane stays within the five-register
+    # control headroom: high planes val0/8 and low planes val16/23.
+    "word_pair": (0, 8, 16, 23),
+  }
+  if mode not in selected: raise ValueError(f"unsupported wide Q6 pair reuse mode {mode!r}")
+  proof=wide_pair_alignment_proof(owners)
+  if not proof["all_pair_aligned"]: raise ValueError(f"wide Q6 pair alignment proof failed: {proof['violations'][:4]}")
+  loop="  for (int Ridx0 = k_begin; Ridx0 < k_end; Ridx0++) {"
+  if source.count(loop) != 1: raise ValueError("compiler wide Q6 phase loop not found exactly once")
+  start=source.index(loop); body_start=start+len(loop); depth=1; pos=body_start
+  while pos < len(source) and depth:
+    if source[pos] == "{": depth += 1
+    elif source[pos] == "}": depth -= 1
+    pos += 1
+  if depth: raise ValueError("unterminated compiler wide Q6 phase loop")
+  body=source[body_start:pos-1]
+  if body.count("__syncthreads();") != 2: raise ValueError("wide Q6 phase body lost its two lifecycle barriers")
+
+  roots = {
+    77: "((lidx1*161280)+(lidx2*40320)+(alu0*5040)+(gidx0*645120)+((Kpair>>2)*105))",
+    78: "((Kpair>>1)&1)",
+    79: "(pair_alu77+((lidx0&1)<<3)+(pair_alu78<<4))",
+    80: "(pair_alu77+(alu3<<3)+(pair_alu78<<5))",
+  }
+  pair_lines=[]
+  needed_roots=(77,78,79,80) if mode == "address" else (77,78,79,80) if selected[mode] else ()
+  for idx in needed_roots: pair_lines.append(f"    int pair_alu{idx} = {roots[idx]};")
+
+  phase_body=body
+  if mode == "address":
+    for idx in (77,78,79,80):
+      pattern=rf"^    int alu{idx} = .*?;\n"
+      if len(re.findall(pattern,phase_body,re.MULTILINE)) != 1: raise ValueError(f"wide Q6 address root alu{idx} not found")
+      phase_body=re.sub(pattern,"",phase_body,count=1,flags=re.MULTILINE)
+      phase_body=re.sub(rf"\balu{idx}\b",f"pair_alu{idx}",phase_body)
+  else:
+    for idx in selected[mode]:
+      pattern=rf"^    unsigned short val{idx} = (.*);$"
+      match=re.search(pattern,phase_body,re.MULTILINE)
+      if match is None: raise ValueError(f"wide Q6 word val{idx} not found")
+      rhs=match.group(1)
+      for root in (77,78,79,80): rhs=re.sub(rf"\balu{root}\b",f"pair_alu{root}",rhs)
+      pair_lines.append(f"    unsigned short pair_val{idx} = {rhs};")
+      phase_body=re.sub(pattern,"",phase_body,count=1,flags=re.MULTILINE)
+      phase_body=re.sub(rf"\bval{idx}\b",f"pair_val{idx}",phase_body)
+
+  clones="".join(f"    {{ const int Ridx0 = Kpair+{phase};{phase_body}    }}\n" for phase in range(2))
+  replacement="  for (int Kpair = k_begin; Kpair < k_end; Kpair += 2) {\n"+"\n".join(pair_lines)+"\n"+clones+"  }"
+  return source[:start]+replacement+source[pos:]
+
 __all__=["active_fixup_source","transform_compiler_q6k_to_streamk","transform_compiler_q6k_wide_to_streamk",
          "transform_compiler_q6k_wide_live_publication","transform_compiler_q6k_wide_persistent_b",
-         "transform_compiler_q6k_wide_straightline_k256","wide_active_fixup_source"]
+         "transform_compiler_q6k_wide_pair_reuse","transform_compiler_q6k_wide_straightline_k256",
+         "wide_active_fixup_source","wide_pair_alignment_proof"]
