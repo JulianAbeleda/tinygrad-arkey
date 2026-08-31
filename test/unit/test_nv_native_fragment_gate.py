@@ -4,7 +4,14 @@ from tinygrad.helpers import Target
 from tinygrad.renderer.cuda import CUDARenderer
 from tinygrad.runtime.support.compiler_cuda import NVRTCCompiler
 from tinygrad.uop.ops import Ops,UOp
+from tinygrad.codegen.late.native_fragment import PackedFragmentSpec
 from extra.llm_research.prefill.nv_native_fragment_gate import emit_native_fragment_imma,emit_native_fragment_readback
+
+def test_q6k_packed_fragment_spec_rejects_non_single_phase():
+  assert PackedFragmentSpec.q6k_k64().fragment_shape == (8,8)
+  try: PackedFragmentSpec("Q6_K", 2, (8,8), "mma_b", phases=4).validate()
+  except ValueError: pass
+  else: raise AssertionError("multi-phase Q6 fragment contract must fail closed")
 
 def test_native_fragment_x4_renders_one_ldmatrix_and_compiles():
   out=UOp.placeholder((128,),dtypes.uint32,0); source=UOp.placeholder((128,),dtypes.uint32,1)
