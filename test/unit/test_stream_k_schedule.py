@@ -9,6 +9,9 @@ def test_llama_shaped_stream_k_is_an_exact_deterministic_cover():
     begin,end=schedule.interval(owner)
     assert begin%8==end%8==0 and begin<=end
     assert schedule.fixup_predecessors(owner)==tuple(sorted(schedule.fixup_predecessors(owner),reverse=True))
+  from extra.llm_research.prefill.nv_q4_imma_provider import geometry_from_stream_k
+  target=geometry_from_stream_k(schedule)
+  assert (target.owners,target.total_work,target.partial_slots,target.fixup_grid)==(170,6144,340,384)
 
 
 def test_stream_k_rejects_invalid_geometry_and_owner():

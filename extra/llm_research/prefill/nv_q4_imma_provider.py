@@ -27,6 +27,19 @@ class Geometry:
 
 DEFAULT_GEOMETRY = Geometry()
 
+def geometry_from_stream_k(schedule) -> Geometry:
+  """Translate the backend-neutral K64 schedule into this Q4_K target lowerer's block units."""
+  from tinygrad.codegen.opt.stream_k import StreamKSchedule
+  if not isinstance(schedule,StreamKSchedule): raise TypeError("Q4 provider requires a typed Stream-K schedule")
+  schedule.validate_exact_cover()
+  if (schedule.m,schedule.n,schedule.k,schedule.tile_m,schedule.tile_n,schedule.tile_k)!=(M,N,K,128,128,64):
+    raise ValueError("Q4 provider requires the exact admitted representative geometry")
+  q4_block_elems=256
+  if q4_block_elems%schedule.tile_k: raise ValueError("Q4 provider requires tile_k to divide one Q4_K block")
+  tiles_per_q4_block=q4_block_elems//schedule.tile_k
+  if schedule.boundary_quantum_k_blocks%tiles_per_q4_block: raise ValueError("Q4 provider boundary must contain whole Q4_K blocks")
+  return Geometry(schedule.owners,schedule.work_units//tiles_per_q4_block,2*schedule.owners,schedule.output_tiles)
+
 
 def main_source(geometry:Geometry=DEFAULT_GEOMETRY) -> str:
   geometry.validate()

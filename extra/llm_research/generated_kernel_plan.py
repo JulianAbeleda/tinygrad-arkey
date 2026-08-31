@@ -111,6 +111,21 @@ def compile_quantized_linear(payload:Mapping[str, Any], plan:PrimitivePlan) -> M
     from tinygrad.codegen.opt.postrange import warmstart_candidate_state
     from tinygrad.llm.packed_wmma_prefill import PackedWmmaRoute, generated_warmstart_entry, packed_half_carrier
     shape=plan.workload["shape"]; p=plan.parameters
+    if p.get("work_partition") == "stream_k":
+      from tinygrad.codegen.opt.stream_k import StreamKSchedule
+      from extra.llm_research.prefill.nv_q4_imma_provider import compile_provider, geometry_from_stream_k, provider_programs
+      if plan.workload["operands"]["packed_weight"]["quantization"] != "Q4_K":
+        raise PlanError("NV Stream-K target lowerer currently admits Q4_K only")
+      schedule=StreamKSchedule(shape["m"],shape["n"],shape["k"],p["tile_m"],p["tile_n"],p["tile_k"],
+                               p["owner_count"],p["boundary_quantum_k_blocks"])
+      geometry=geometry_from_stream_k(schedule); provider=compile_provider(Device["NV"],geometry); main,fixup=provider_programs(provider)
+      main_binary=next((u.arg for u in main.src if u.op is Ops.BINARY),None); fixup_binary=next((u.arg for u in fixup.src if u.op is Ops.BINARY),None)
+      if not isinstance(main_binary,bytes) or not isinstance(fixup_binary,bytes): raise PlanError("Stream-K lowerer lacks main/fixup binaries")
+      return {"compile_status":"binary_ready","program_kind":"stream_k_main_fixup","compiler":type(Device["NV"].compiler).__name__,
+              "main_program":main.arg.name,"fixup_program":fixup.arg.name,"main_binary_sha256":hashlib.sha256(main_binary).hexdigest(),
+              "fixup_binary_sha256":hashlib.sha256(fixup_binary).hexdigest(),"candidate_plan_hash":candidate_hash(plan.candidate),
+              "owners":geometry.owners,"partial_slots":geometry.partial_slots,"fixup_tiles":geometry.fixup_grid,
+              "no_external_binary":True}
     geometry=(p["tile_m"],p["tile_n"],p["tile_k"],p["subgroups_m"],p["subgroups_n"],p["buffer_count"])
     row=PackedWmmaRoute(plan.workload["operands"]["packed_weight"]["quantization"],plan.workload["role"],
                         (shape["m"],shape["n"],shape["k"]),geometry,candidate_hash(plan.candidate))
