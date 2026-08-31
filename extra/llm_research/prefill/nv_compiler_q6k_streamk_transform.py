@@ -132,5 +132,29 @@ def transform_compiler_q6k_wide_persistent_b(source:str) -> str:
 '''
   return source.replace(loop,cache,1)
 
+def transform_compiler_q6k_wide_live_publication(source:str) -> str:
+  """Publish only bytes consumed by the wide Q6 MMA body.
+
+  The producer's four scale planes reserve sixteen bytes per 80-byte row.
+  Collective consumer-address enumeration proves that planes zero and one use
+  bytes {0,1,8,9}, while planes two and three use bytes {0..3,8..11}.
+  The payload planes remain byte-complete and are deliberately untouched.
+  """
+  planes = (
+    (64, 2), (5184, 2), (10304, 4), (15424, 4),
+  )
+  for base, width in planes:
+    lines = []
+    for off in range(4):
+      match = re.search(rf"^    \*\(buf1\+\(alu5\+{base+off}\)\) = .*;$", source, re.MULTILINE)
+      if match is None: raise ValueError(f"wide Q6 publication store {base+off} not found")
+      if off < width: lines.append(match.group(0))
+    first = re.search(rf"^    \*\(buf1\+\(alu5\+{base}\)\) = .*;$", source, re.MULTILINE)
+    last = re.search(rf"^    \*\(buf1\+\(alu5\+{base+3}\)\) = .*;$", source, re.MULTILINE)
+    assert first is not None and last is not None
+    replacement = "    if ((alu3&1)==0) {\n" + "\n".join("  "+line for line in lines) + "\n    }"
+    source = source[:first.start()] + replacement + source[last.end():]
+  return source
+
 __all__=["active_fixup_source","transform_compiler_q6k_to_streamk","transform_compiler_q6k_wide_to_streamk",
-         "transform_compiler_q6k_wide_persistent_b","wide_active_fixup_source"]
+         "transform_compiler_q6k_wide_live_publication","transform_compiler_q6k_wide_persistent_b","wide_active_fixup_source"]
