@@ -1,9 +1,11 @@
+import ast
+from pathlib import Path
 import pytest
 from extra.llm_research.boltbeam_authority import load_promoted_routes, ticket_for_authority, tickets_for_candidate
 
 def test_authority_ledger_has_promoted_routes():
   routes = load_promoted_routes()
-  assert len(routes) == 33
+  assert len(routes) == 34
   assert routes["q6_ffn_down_streamk_destination.v1"]["state"] == "exact"
 
 def test_ticket_for_authority_is_fail_closed():
@@ -36,3 +38,14 @@ def test_attention_and_norm_authorities_exist():
   routes = load_promoted_routes()
   assert set(routes["custom_kernel_prefill_attention"]["components"]) == {"flash_prefill_score", "flash_prefill_combine"}
   assert "decode_rmsnorm" in routes["decode_rmsnorm_native_lowering"]["components"]
+
+def test_generated_kernel_programs_carry_boltbeam_tickets():
+  misses = []
+  for path in (Path(__file__).parents[2] / "tinygrad" / "llm").glob("*.py"):
+    tree = ast.parse(path.read_text())
+    for node in ast.walk(tree):
+      if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name) or node.func.id != "KernelProgram": continue
+      provenance = ast.unparse(node.args[2]) if len(node.args) > 2 else ""
+      if "RESEARCH_ONLY" in provenance: continue
+      if not any(keyword.arg == "boltbeam_ticket" for keyword in node.keywords): misses.append(f"{path.name}:{node.lineno}")
+  assert misses == []

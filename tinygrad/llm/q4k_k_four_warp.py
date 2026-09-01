@@ -16,6 +16,7 @@ from typing import Any
 from tinygrad import Tensor, dtypes
 from tinygrad.llm.kernel_program import (
   KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program)
+from extra.llm_research.boltbeam_authority import tickets_for_candidate
 
 ROWS, K = 1024, 4096
 
@@ -40,7 +41,9 @@ def q4k_k_four_warp_call(admission: object, linear: Any, x: Tensor, binding: Any
   xv = x[:, 0, :].reshape(K).cast(dtypes.float16).contiguous()
   consumer = KernelProgram("decode_q4k_k_four_warp", f"blk{admission.block_index}.gemv",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emit_q4k_exact_four_warp(ROWS, K),
-    output_spec=OutputSpec((ROWS,), dtypes.float32))
+    output_spec=OutputSpec((ROWS,), dtypes.float32),
+    boltbeam_ticket=tickets_for_candidate({"family":"q4_k_four_warp.v1","rows":ROWS,"k":K},
+      (("decode_q4k_k_four_warp","q4_k_four_warp"),)))
   out = execute_promoted_program(Tensor.empty((ROWS,), dtype=dtypes.float32, device=x.device),
     words, xv, program=consumer)
   return out.reshape(1, 1, ROWS)
