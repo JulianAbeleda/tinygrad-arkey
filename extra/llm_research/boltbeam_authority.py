@@ -1,6 +1,7 @@
 """Read-only bridge to the authoritative BoltBeam route ledger."""
 import json
 import os
+import hashlib
 from pathlib import Path
 
 DEFAULT_LEDGER = Path(__file__).resolve().parents[3] / "BoltBeam" / "boltbeam" / "data" / "nv_sm120_kernel_authority.json"
@@ -18,4 +19,14 @@ def load_promoted_routes(path: str | os.PathLike | None = None) -> dict[str, dic
     result[route_id] = route
   return result
 
-__all__ = ["DEFAULT_LEDGER", "load_promoted_routes"]
+def ticket_for_authority(route_id: str, component: str, candidate_hash: str,
+                         target_identity: str, provider_revision: str = "semantic-lowering-v1"):
+  from extra.llm_research.boltbeam_runtime_ticket import BoltbeamKernelTicket
+  route = load_promoted_routes().get(route_id)
+  if route is None: raise ValueError(f"route is not present in BoltBeam authority ledger: {route_id}")
+  if component not in route.get("components", ()): raise ValueError(f"component {component} is not authorized for {route_id}")
+  if route.get("state") == "blocked": raise ValueError(f"route is blocked in BoltBeam authority ledger: {route_id}")
+  route_hash = hashlib.sha256((route_id + "\0" + component).encode()).hexdigest()
+  return BoltbeamKernelTicket(candidate_hash, route_hash, component, target_identity, provider_revision)
+
+__all__ = ["DEFAULT_LEDGER", "load_promoted_routes", "ticket_for_authority"]
