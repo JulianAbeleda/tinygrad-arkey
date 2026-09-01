@@ -783,12 +783,15 @@ def shared_q8_attention_call(admission, q_linear, k_linear, v_linear, x:Tensor, 
   if marker is not None and norm_weight is not None and tuple(norm_weight.shape) == (_K,) and norm_weight.dtype == dtypes.float16:
     marker_uop,spec=marker
     route_kind="q4q4q4" if isinstance(v_linear,Q4KPrimitiveLinear) else "q4q4q6"
+    emitter,ticket=lower_authorized_candidate({"family":"rmsnorm_q8_provider.v1","rows":spec.rows,"dim":spec.dim,
+      "eps":spec.eps,"recipe":spec.recipe,"warps":spec.warps,"x_dtype":str(marker_uop.src[1].dtype),
+      "weight_dtype":str(norm_weight.dtype),"spec_binding":"reduce_output_spec"},
+      (("decode_shared_q8_attention","shared_q8_provider"),
+       ("decode_reduce_output_rmsnorm","reduce_output_rmsnorm")),lowering_bindings={"reduce_output_spec":spec})
     provider=KernelProgram("decode_shared_q8_attention",f"{route_kind}.blk{admission.block_index}.rmsnorm_provider",
-      KernelProgramProvenance.MACHINE_SEARCH_GENERATED,_emit_rmsnorm_q8_provider(spec,marker_uop.src[1].dtype,norm_weight.dtype),
+      KernelProgramProvenance.MACHINE_SEARCH_GENERATED,emitter,
       output_spec=OutputSpec((_Q8_PACKS+_Q8_GROUPS,),dtypes.uint32),
-      boltbeam_ticket=tickets_for_candidate({"family":"q8_1_provider.v1","source":"fused_rmsnorm","k":_K},
-        (("decode_shared_q8_attention","shared_q8_provider"),
-         ("decode_reduce_output_rmsnorm","reduce_output_rmsnorm"))))
+      boltbeam_ticket=ticket)
     xp=execute_promoted_program(None,Tensor(marker_uop.src[1]).reshape(_K),norm_weight,program=provider)
   else:
     route_kind="q4q4q4" if isinstance(v_linear,Q4KPrimitiveLinear) else "q4q4q6"

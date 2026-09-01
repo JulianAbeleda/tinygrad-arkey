@@ -58,3 +58,14 @@ def test_multi_output_symbolic_provider():
     (("decode_shared_q8_q4kv_pair","shared_q8_q4_kv_pair"),),
     lowering_bindings={"cooperative_blocks":UOp.const(dtypes.weakint,4)})
   assert callable(emitter) and ticket.tickets[0].component == "shared_q8_q4_kv_pair"
+
+def test_rmsnorm_q8_checked_spec_binding():
+  from tinygrad import dtypes
+  from tinygrad.uop.ops import Ops, ReduceOutputSpec
+  spec=ReduceOutputSpec(rows=1,dim=4096,eps=1e-6,out_dtype=dtypes.float32,affine=True,
+    recipe="sumsq_rsqrt_affine",reduce_op=Ops.ADD,warps=16,lanes=32,per_lane=8)
+  emitter,_=lower_authorized_candidate({"family":"rmsnorm_q8_provider.v1","rows":1,"dim":4096,"eps":1e-6,
+    "recipe":"sumsq_rsqrt_affine","warps":16,"x_dtype":"dtypes.float","weight_dtype":"dtypes.half",
+    "spec_binding":"reduce_output_spec"},(("decode_shared_q8_attention","shared_q8_provider"),),
+    lowering_bindings={"reduce_output_spec":spec})
+  assert callable(emitter)

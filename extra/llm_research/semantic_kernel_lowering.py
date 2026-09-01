@@ -204,6 +204,19 @@ def build_registered_llm_emitter(family: str, parameters: dict[str, Any], bindin
       warps_per_row=parameters["warps_per_row"],x_dtype=x_dtype,weight_dtype=weight_dtype,
       out_dtype=out_dtype,x_rank=parameters["x_rank"])
     return emit_decode_rmsnorm_kernel(spec)
+  if family == "rmsnorm_q8_provider.v1":
+    required={"rows","dim","eps","recipe","warps","x_dtype","weight_dtype","spec_binding"}
+    if set(parameters) != required: raise ValueError("rmsnorm_q8_provider.v1 parameters are invalid")
+    name=parameters["spec_binding"]
+    if not isinstance(name,str) or not bindings or name not in bindings: raise ValueError("RMSNorm Q8 spec binding is missing")
+    spec=bindings[name]
+    for field in ("rows","dim","eps","recipe","warps"):
+      if getattr(spec,field) != parameters[field]: raise ValueError(f"RMSNorm Q8 spec {field} drift")
+    dtype_map={"dtypes.half":dtypes.float16,"dtypes.float":dtypes.float32}
+    try: x_dtype,weight_dtype=dtype_map[parameters["x_dtype"]],dtype_map[parameters["weight_dtype"]]
+    except KeyError as exc: raise ValueError("rmsnorm_q8_provider.v1 dtype is invalid") from exc
+    from tinygrad.llm.shared_q8_attention import _emit_rmsnorm_q8_provider
+    return _emit_rmsnorm_q8_provider(spec,x_dtype,weight_dtype)
   raise ValueError(f"no registered tinygrad LLM emitter for family {family!r}")
 
 
