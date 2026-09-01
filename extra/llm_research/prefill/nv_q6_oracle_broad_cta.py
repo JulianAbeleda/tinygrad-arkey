@@ -17,7 +17,8 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
                                fp32_scale_grouping:str="legacy", fp32_p_tree:str="legacy",
                                fp32_contraction:str="implicit",
                                weight_scale_contract:str="legacy", trace=None, trace_config:tuple[int,int]|None=None,
-                               streamk_owners:int|None=None, streamk_segment:int=0, streamk_segments_in_cta:bool=False):
+                               streamk_owners:int|None=None, streamk_segment:int=0, streamk_segments_in_cta:bool=False,
+                               partial_output_layout:str="tile_row_major"):
   """One exact llama-normalized 128x128xK256 work unit per CTA.
 
   ``blocks`` is 128 canonical Q6_K rows. ``q8_record`` is two canonical
@@ -25,6 +26,10 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
   across the first consumer or loaded after it for a causal A/B.
   """
   if replicas < 1: raise ValueError("replicas must be positive")
+  if partial_output_layout not in ("tile_row_major","destination_major"):
+    raise ValueError(f"unknown partial output layout {partial_output_layout!r}")
+  if partial_output_layout != "tile_row_major" and (streamk_owners is None or tile_grid is not None):
+    raise ValueError("destination-major partial output requires Stream-K scratch output")
   if depth < 1: raise ValueError("depth must be positive")
   if streamk_owners is not None and (not 1 <= streamk_owners <= 256 or streamk_segment not in (0,1)):
     raise ValueError("streamk requires 1..256 owners and segment zero or one")
@@ -397,7 +402,8 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
     for n in range(2):
       for r in range(4):
         ai=cg*8+n*4+r; row=band*32+n*16+lr+8*(r>>1); col=cg*16+warp_phase*8+2*lc+(r&1)
-        out_index=(output_slot*ROWS*COLS+row*COLS+col if tile_grid is None else
+        partial_index=row*COLS+col if partial_output_layout == "tile_row_major" else col*ROWS+row
+        out_index=(output_slot*ROWS*COLS+partial_index if tile_grid is None else
           (tile_m*COLS+col)*(tiles_n*ROWS)+tile_n*ROWS+row)
         stores.append(out[out_index].store(acc[ai].after(loop_end)[0],gate=active))
   suffix="prefetch" if prefetch_second_panel else "serial"
