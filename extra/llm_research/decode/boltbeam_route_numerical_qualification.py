@@ -81,7 +81,7 @@ def qualify_q4_down(reps:int) -> dict:
   residual=Tensor(residual_np.copy(),dtype=dtypes.float32,device="NV").realize()
   candidate={"family":"q4_ffn_down.v1","block_count":3,"resadd":True,"load_style":"vector"}
   emitter,ticket=lower_authorized_candidate(candidate,
-    (("decode_q4k_ffn_down_fp16_geometry","q4_ffn_down_fp16"),))
+    (("decode_q4k_ffn_down_fp16_geometry","q4_ffn_down_fp16"),("decode_ffn_down_resadd","q4_ffn_down_resadd")))
   ast=emitter(UOp.placeholder((rows,),dtypes.float32,0),
     UOp.placeholder(words_np.shape,dtypes.uint32,1),UOp.placeholder((k,),dtypes.float16,2),
     UOp.placeholder((rows,),dtypes.float32,3))

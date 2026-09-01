@@ -78,7 +78,7 @@ def test_q4_ffn_down_provider_matches_direct_uop_artifact():
   from tinygrad.llm.q4k_ffn_down_mmvq import emit_four_warp_fp16_direct
   blocks=UOp.const(dtypes.weakint,3)
   provider,_=lower_authorized_candidate({"family":"q4_ffn_down.v1","block_count":3,"resadd":True,"load_style":"vector"},
-    (("decode_q4k_ffn_down_fp16_geometry","q4_ffn_down_fp16"),))
+    (("decode_q4k_ffn_down_fp16_geometry","q4_ffn_down_fp16"),("decode_ffn_down_resadd","q4_ffn_down_resadd")))
   args=(_buf(4096,dtypes.float32),_buf(4096*48*36,dtypes.uint32),_buf(12288,dtypes.float16),_buf(4096,dtypes.float32))
   assert provider(*args).key == emit_four_warp_fp16_direct(blocks,resadd=True,load_style="vector")(*args).key
 
