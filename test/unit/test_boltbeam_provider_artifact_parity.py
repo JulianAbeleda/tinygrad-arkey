@@ -118,6 +118,22 @@ def test_q6_ffn_down_provider_matches_direct_uop_artifact():
   direct=emit_q6k_four_warp_fp16_direct(rows_per_block=8,packed_lanemap=False,unroll_blocks=None,split_weight_stream=False)
   assert provider(*args).key == direct(*args).key
 
+
+def test_q6_ffn_down_variant_providers_match_direct_uop_artifacts():
+  from tinygrad.llm.q6k_ffn_down_mmvq import emit_q6k_four_warp_fp16_direct
+  args=(_buf(4096,dtypes.float32),_buf(4096*48*105,dtypes.uint16),_buf(12288,dtypes.float16),_buf(4096,dtypes.float32))
+  base=(("decode_q6k_ffn_down_fp16_geometry","q6_ffn_down_fp16"),("decode_ffn_down_resadd","q6_ffn_down_resadd"))
+  cases=((True,None,base+(("decode_q6k_ffn_down_packed_lanemap","q6_ffn_down_packed_lanemap"),)),
+         (True,12,base+(("decode_q6k_ffn_down_packed_lanemap","q6_ffn_down_packed_lanemap"),
+                        ("decode_q6k_ffn_down_unroll","q6_ffn_down_packed_unroll"))))
+  for packed_lanemap,unroll_blocks,authorities in cases:
+    candidate={"family":"q6_ffn_down.v1","rows_per_block":1,"packed_lanemap":packed_lanemap,
+      "unroll_blocks":unroll_blocks,"split_weight_stream":False}
+    provider,_=lower_authorized_candidate(candidate,authorities)
+    direct=emit_q6k_four_warp_fp16_direct(rows_per_block=1,packed_lanemap=packed_lanemap,
+      unroll_blocks=unroll_blocks,split_weight_stream=False)
+    assert provider(*args).key == direct(*args).key
+
 def test_decode_rmsnorm_provider_matches_direct_uop_artifact():
   from tinygrad.llm.decode_kernels import DecodeRMSNormSpec, emit_decode_rmsnorm_kernel
   spec=DecodeRMSNormSpec(rows=1,dim=4096,eps=1e-6,warps_per_row=16,x_dtype=dtypes.float32,
