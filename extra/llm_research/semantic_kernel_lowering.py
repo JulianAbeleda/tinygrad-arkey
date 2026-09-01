@@ -240,6 +240,18 @@ def build_registered_llm_emitter(family: str, parameters: dict[str, Any], bindin
       if getattr(spec,field) != value: raise ValueError(f"Q6 spec {field} drift")
     from tinygrad.llm.decode_kernels import emit_q6k_gemv_kernel, emit_q6k_vocab_scalar_reduce_kernel
     return emit_q6k_gemv_kernel(spec) if family == "q6_gemv_route.v1" else emit_q6k_vocab_scalar_reduce_kernel(spec)
+  if family == "qk_norm_rope_cache_sink.v1":
+    required={"spec_repr","producer_dtype","weight_dtype","cache_dtype","max_context","spec_binding"}
+    if set(parameters) != required: raise ValueError("qk_norm_rope_cache_sink.v1 parameters are invalid")
+    name=parameters["spec_binding"]
+    if not bindings or name not in bindings: raise ValueError("cache-sink spec binding is missing")
+    spec=bindings[name]
+    if repr(spec) != parameters["spec_repr"]: raise ValueError("cache-sink spec drift")
+    dtype_map={"dtypes.half":dtypes.float16,"dtypes.float":dtypes.float32}
+    try: producer_dtype,weight_dtype,cache_dtype=(dtype_map[parameters[x]] for x in ("producer_dtype","weight_dtype","cache_dtype"))
+    except KeyError as exc: raise ValueError("cache-sink dtype is invalid") from exc
+    from tinygrad.llm.producer_kv_cache_sink import emit_reduce_output_rope_kv_cache
+    return emit_reduce_output_rope_kv_cache(spec,producer_dtype,weight_dtype,cache_dtype,parameters["max_context"])
   raise ValueError(f"no registered tinygrad LLM emitter for family {family!r}")
 
 

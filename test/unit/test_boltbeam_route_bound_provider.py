@@ -77,3 +77,14 @@ def test_q6_checked_spec_binding():
     "reduction":"in_kernel","epilogue":"","spec_binding":"q6_spec"},
     (("decode_q6k_coop_generated","q6_gemv"),),lowering_bindings={"q6_spec":spec})
   assert callable(emitter)
+
+def test_cache_sink_checked_spec_binding():
+  from tinygrad import dtypes
+  from tinygrad.uop.ops import Ops, ReduceOutputSpec
+  spec=ReduceOutputSpec(rows=8,dim=128,eps=1e-6,out_dtype=dtypes.float32,affine=True,
+    recipe="sumsq_rsqrt_affine",reduce_op=Ops.ADD,warps=8,lanes=32,per_lane=4,epilogue="rope")
+  emitter,_=lower_authorized_candidate({"family":"qk_norm_rope_cache_sink.v1","spec_repr":repr(spec),
+    "producer_dtype":"dtypes.float","weight_dtype":"dtypes.half","cache_dtype":"dtypes.half","max_context":4096,
+    "spec_binding":"reduce_output_spec"},(("decode_producer_kv_cache_sink","qk_norm_rope_cache_sink"),),
+    lowering_bindings={"reduce_output_spec":spec})
+  assert callable(emitter)

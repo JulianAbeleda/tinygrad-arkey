@@ -13,7 +13,7 @@ from tinygrad import Tensor, dtypes
 from tinygrad.codegen.late.reduce_output import emit_reduce_output_rope_kv_cache
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, execute_promoted_program
 from tinygrad.uop.ops import Ops, ReduceOutputSpec
-from extra.llm_research.boltbeam_authority import tickets_for_candidate
+from extra.llm_research.boltbeam_authority import lower_authorized_candidate
 
 
 @dataclass(frozen=True)
@@ -58,13 +58,13 @@ def producer_kv_cache_sink_call(admission, cache:Tensor, k_input:Tensor, v_input
   spec = ReduceOutputSpec(rows=8, dim=128, eps=float(norm.eps), out_dtype=dtypes.float32,
                           affine=True, recipe="sumsq_rsqrt_affine", reduce_op=Ops.ADD,
                           warps=8, lanes=32, per_lane=4, epilogue="rope")
+  emitter,ticket=lower_authorized_candidate({"family":"qk_norm_rope_cache_sink.v1","spec_repr":repr(spec),
+    "producer_dtype":str(k_producer.dtype),"weight_dtype":str(weight.dtype),"cache_dtype":str(cache.dtype),
+    "max_context":max_context,"spec_binding":"reduce_output_spec"},
+    (("decode_producer_kv_cache_sink","qk_norm_rope_cache_sink"),),lowering_bindings={"reduce_output_spec":spec})
   program = KernelProgram("decode_producer_kv_cache_sink", f"blk{admission.block_index}.k_terminal_cache_sink",
                           KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED,
-                          emit_reduce_output_rope_kv_cache(spec, k_producer.dtype, weight.dtype,
-                                                           cache.dtype, max_context), output_spec=None,
-                          boltbeam_ticket=tickets_for_candidate({"family":"qk_norm_rope_cache_sink.v1",
-                            "max_context":max_context,"cache_dtype":str(cache.dtype)},
-                            (("decode_producer_kv_cache_sink","qk_norm_rope_cache_sink"),)))
+                          emitter, output_spec=None, boltbeam_ticket=ticket)
   return execute_promoted_program(cache, k_producer, weight, v_producer, freqs, program=program)
 
 
