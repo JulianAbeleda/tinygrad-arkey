@@ -216,11 +216,11 @@ def q4k_qkv_call(admission:object, q_linear:Any, k_linear:Any, v_linear:Any, x:T
   if not mixed and (packed_words is None or packed_words.shape != (expected,)): return None
   qw=q_linear.q4k_storage.words.to(x.device).contiguous() if q_linear.q4k_storage.mode == "q4_ondemand" else q_linear.q4k_storage.words.to(x.device)
   xv=x[:,0,:].reshape(K).cast(dtypes.float16).contiguous()
-  emitter=emit_q4k_q4k_q6_qkv_full() if mixed else emit_q4k_qkv_full()
+  emitter,ticket=lower_authorized_candidate({"family":"q4q4_qkv_full.v1","mixed_q6_v":mixed},
+    (("decode_q4k_q4q4_qkv_full","q4q4_qkv_full"),))
   program=KernelProgram("decode_q4k_qkv",f"blk{admission.block_index}.qkv_full{'_mixed' if mixed else ''}",
     KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED,emitter,output_spec=OutputSpec((Q_ROWS,),dtypes.float32),
-    boltbeam_ticket=tickets_for_candidate({"family":"q4q4_qkv_full.v1","mixed_q6_v":mixed},
-      (("decode_q4k_q4q4_qkv_full","q4q4_qkv_full"),)))
+    boltbeam_ticket=ticket)
   q_out=Tensor.empty((Q_ROWS,),dtype=dtypes.float32,device=x.device)
   k_out=Tensor.empty((ROWS,),dtype=dtypes.float32,device=x.device)
   v_out=Tensor.empty((ROWS,),dtype=dtypes.float32,device=x.device)

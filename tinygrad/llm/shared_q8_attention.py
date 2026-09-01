@@ -821,11 +821,13 @@ def shared_q8_attention_call(admission, q_linear, k_linear, v_linear, x:Tensor, 
     if admission.q4_qkv_triple_output and not isinstance(v_linear,Q4KPrimitiveLinear): return None
     if admission.q4_q6_qkv_triple_output and not isinstance(v_linear,Q6KPrimitiveLinear): return None
     if admission.q4_q6_qkv_triple_output:
+      emitter,ticket=lower_authorized_candidate({"family":"shared_q8_multi_output.v1","variant":"q4q6_qkv",
+        "rows":_KV_ROWS,"block_count_binding":"cooperative_blocks"},
+        (("decode_shared_q8_q4q6_kv_pair","shared_q8_q4q6_kv_pair"),),lowering_bindings={"cooperative_blocks":cooperative_blocks})
       program=KernelProgram("decode_shared_q8_attention",f"q4q4q6.blk{admission.block_index}.qkv_full.coop_direct",
-        KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED,_emit_q4_q6_cooperative_qkv_full(cooperative_blocks),
+        KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED,emitter,
         output_spec=OutputSpec((_Q_ROWS,),dtypes.float32),
-        boltbeam_ticket=tickets_for_candidate({"family":"shared_q8_q4q6_qkv_full.v1"},
-          (("decode_shared_q8_q4q6_kv_pair","shared_q8_q4q6_kv_pair"),)))
+        boltbeam_ticket=ticket)
       q_out=Tensor.empty((_Q_ROWS,),dtype=dtypes.float32,device=x.device)
       k_out=Tensor.empty((_KV_ROWS,),dtype=dtypes.float32,device=x.device)
       v_out=Tensor.empty((_KV_ROWS,),dtype=dtypes.float32,device=x.device)
@@ -834,11 +836,13 @@ def shared_q8_attention_call(admission, q_linear, k_linear, v_linear, x:Tensor, 
       return tuple(out.reshape(1,1,rows) for out,rows in zip(outputs,(_Q_ROWS,_KV_ROWS,_KV_ROWS)))
     packed_words=getattr(q_linear,"_shared_q8_qkv_words",None)
     if packed_words is None or tuple(packed_words.shape) != (2*_KV_ROWS*(_K//256)*Q4K_WORDS_PER_BLOCK,): return None
+    emitter,ticket=lower_authorized_candidate({"family":"shared_q8_multi_output.v1","variant":"q4q4_qkv",
+      "rows":_KV_ROWS,"block_count_binding":"cooperative_blocks"},
+      (("decode_shared_q8_q4q4_qkv_full","shared_q8_q4q4_qkv_full"),),lowering_bindings={"cooperative_blocks":cooperative_blocks})
     program=KernelProgram("decode_shared_q8_attention",f"q4q4q4.blk{admission.block_index}.qkv_full.coop_direct",
-      KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED,_emit_q4_cooperative_qkv_full(cooperative_blocks),
+      KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED,emitter,
       output_spec=OutputSpec((_Q_ROWS,),dtypes.float32),
-      boltbeam_ticket=tickets_for_candidate({"family":"shared_q8_q4q4_qkv_full.v1"},
-        (("decode_shared_q8_q4q4_qkv_full","shared_q8_q4q4_qkv_full"),)))
+      boltbeam_ticket=ticket)
     q_out=Tensor.empty((_Q_ROWS,),dtype=dtypes.float32,device=x.device)
     k_out=Tensor.empty((_KV_ROWS,),dtype=dtypes.float32,device=x.device)
     v_out=Tensor.empty((_KV_ROWS,),dtype=dtypes.float32,device=x.device)
@@ -852,12 +856,15 @@ def shared_q8_attention_call(admission, q_linear, k_linear, v_linear, x:Tensor, 
     if admission.q4_kv_pair_output and not isinstance(v_linear,Q4KPrimitiveLinear): return None
     if admission.q4_q6_kv_pair_output and not isinstance(v_linear,Q6KPrimitiveLinear): return None
     emitter=_emit_q4_cooperative_pair if admission.q4_kv_pair_output else _emit_q4_q6_cooperative_pair
+    authorities=(("decode_shared_q8_q4q6_kv_pair","shared_q8_q4q6_kv_pair"),) if admission.q4_q6_kv_pair_output else \
+      (("decode_shared_q8_q4kv_pair","shared_q8_q4_kv_pair"),)
+    emitter,ticket=lower_authorized_candidate({"family":"shared_q8_multi_output.v1",
+      "variant":"q4q6_pair" if admission.q4_q6_kv_pair_output else "q4kv_pair","rows":_KV_ROWS,
+      "block_count_binding":"cooperative_blocks"},authorities,lowering_bindings={"cooperative_blocks":cooperative_blocks})
     pair=KernelProgram("decode_shared_q8_attention",f"{route_kind}.blk{admission.block_index}.kv_pair.coop_direct",
-      KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED,emitter(_KV_ROWS,cooperative_blocks),
+      KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED,emitter,
       output_spec=OutputSpec((_KV_ROWS,),dtypes.float32),
-      boltbeam_ticket=tickets_for_candidate({"family":"shared_q8_kv_pair.v1","mixed_q6_v":admission.q4_q6_kv_pair_output},
-        (("decode_shared_q8_q4q6_kv_pair","shared_q8_q4q6_kv_pair"),) if admission.q4_q6_kv_pair_output else
-         (("decode_shared_q8_q4kv_pair","shared_q8_q4_kv_pair"),)))
+      boltbeam_ticket=ticket)
     k_out=Tensor.empty((_KV_ROWS,),dtype=dtypes.float32,device=x.device)
     v_out=Tensor.empty((_KV_ROWS,),dtype=dtypes.float32,device=x.device)
     v_storage=v_linear.q4k_storage.words if isinstance(v_linear,Q4KPrimitiveLinear) else v_linear.q6k_storage.halfs

@@ -164,6 +164,22 @@ def build_registered_llm_emitter(family: str, parameters: dict[str, Any], bindin
     name = parameters["block_count_binding"]
     if not isinstance(name, str) or not bindings or name not in bindings: raise ValueError("cooperative block-count binding is missing")
     return _emit_q4_cooperative(parameters["rows"], bindings[name], direct_output=parameters["direct_output"])
+  if family == "shared_q8_multi_output.v1":
+    if set(parameters) != {"variant", "rows", "block_count_binding"} or parameters["variant"] not in (
+        "q4q6_qkv", "q4q4_qkv", "q4kv_pair", "q4q6_pair"):
+      raise ValueError("shared_q8_multi_output.v1 parameters are invalid")
+    name=parameters["block_count_binding"]
+    if not isinstance(name,str) or not bindings or name not in bindings: raise ValueError("multi-output block-count binding is missing")
+    from tinygrad.llm.shared_q8_attention import (_emit_q4_q6_cooperative_qkv_full, _emit_q4_cooperative_qkv_full,
+      _emit_q4_cooperative_pair, _emit_q4_q6_cooperative_pair)
+    if parameters["variant"] == "q4q6_qkv": return _emit_q4_q6_cooperative_qkv_full(bindings[name])
+    if parameters["variant"] == "q4q4_qkv": return _emit_q4_cooperative_qkv_full(bindings[name])
+    emitter=_emit_q4_cooperative_pair if parameters["variant"] == "q4kv_pair" else _emit_q4_q6_cooperative_pair
+    return emitter(parameters["rows"],bindings[name])
+  if family == "q4q4_qkv_full.v1":
+    if set(parameters) != {"mixed_q6_v"} or not isinstance(parameters["mixed_q6_v"],bool): raise ValueError("q4q4_qkv_full.v1 parameters are invalid")
+    from tinygrad.llm.q4k_kv_pair import emit_q4k_q4k_q6_qkv_full, emit_q4k_qkv_full
+    return emit_q4k_q4k_q6_qkv_full() if parameters["mixed_q6_v"] else emit_q4k_qkv_full()
   if family == "finite_argmax.v1":
     if set(parameters) != {"n", "threads", "host_mirror"} or not isinstance(parameters["host_mirror"], bool):
       raise ValueError("finite_argmax.v1 parameters are invalid")

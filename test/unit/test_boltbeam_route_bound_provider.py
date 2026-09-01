@@ -46,3 +46,12 @@ def test_symbolic_lowering_binding_is_outside_candidate_identity():
   first,ticket1=lower_authorized_candidate(candidate,authorities,lowering_bindings={"cooperative_blocks":UOp.const(dtypes.weakint,4)})
   second,ticket2=lower_authorized_candidate(candidate,authorities,lowering_bindings={"cooperative_blocks":UOp.const(dtypes.weakint,8)})
   assert callable(first) and callable(second) and ticket1.tickets[0].candidate_hash == ticket2.tickets[0].candidate_hash
+
+def test_multi_output_symbolic_provider():
+  from tinygrad import dtypes
+  from tinygrad.uop.ops import UOp
+  emitter,ticket=lower_authorized_candidate({"family":"shared_q8_multi_output.v1","variant":"q4kv_pair",
+    "rows":1024,"block_count_binding":"cooperative_blocks"},
+    (("decode_shared_q8_q4kv_pair","shared_q8_q4_kv_pair"),),
+    lowering_bindings={"cooperative_blocks":UOp.const(dtypes.weakint,4)})
+  assert callable(emitter) and ticket.tickets[0].component == "shared_q8_q4_kv_pair"
