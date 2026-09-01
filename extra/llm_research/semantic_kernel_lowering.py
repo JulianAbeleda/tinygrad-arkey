@@ -86,4 +86,67 @@ def default_registry() -> SemanticLoweringRegistry:
   return registry
 
 
-__all__ = ["LoweredSemanticProgram", "PrimitiveNode", "SemanticLoweringRegistry", "default_registry"]
+def build_registered_llm_emitter(family: str, parameters: dict[str, Any]):
+  """Adapt a closed Boltbeam family to an existing tinygrad UOp builder."""
+  if not isinstance(family, str) or not isinstance(parameters, dict): raise ValueError("LLM emitter family and parameters are required")
+  from tinygrad import dtypes
+  from tinygrad.uop.ops import UOp
+  if family == "q8_1_provider.v1":
+    if set(parameters) != {"k", "source_dtype"} or parameters["source_dtype"] not in ("fp16", "fp32"):
+      raise ValueError("q8_1_provider.v1 parameters are invalid")
+    from tinygrad.llm.q4k_ffn_down_mmvq import emit_q8_provider
+    source_dtype = dtypes.float16 if parameters["source_dtype"] == "fp16" else dtypes.float32
+    return emit_q8_provider(source_dtype, k=parameters["k"])
+  if family == "q4_g3_gemv.v1":
+    required = {"rows", "k", "lanes", "load_style", "epilogue"}
+    if set(parameters) != required or parameters["load_style"] not in ("scalar", "vector", "quad"):
+      raise ValueError("q4_g3_gemv.v1 parameters are invalid")
+    from tinygrad.llm.decode_kernels import Q4KGEMVEpilogue, q4k_g3_lanemap_gemv_kernel
+    return q4k_g3_lanemap_gemv_kernel(parameters["rows"], parameters["k"], lanes=parameters["lanes"],
+      epilogue=Q4KGEMVEpilogue(parameters["epilogue"]), load_style=parameters["load_style"])
+  if family == "q4_w1w3.v1":
+    required = {"rows", "k", "load_style", "store_fp16"}
+    if set(parameters) != required or parameters["load_style"] not in ("scalar", "vector", "quad") or not isinstance(parameters["store_fp16"], bool):
+      raise ValueError("q4_w1w3.v1 parameters are invalid")
+    from tinygrad.llm.decode_kernels import q4k_g3_lanemap_gemv_w1w3_kernel
+    return q4k_g3_lanemap_gemv_w1w3_kernel(parameters["rows"], parameters["k"], load_style=parameters["load_style"], store_fp16=parameters["store_fp16"])
+  if family == "q4_gate_up.v1":
+    if set(parameters) != {"vector_loads"} or not isinstance(parameters["vector_loads"], bool): raise ValueError("q4_gate_up.v1 parameters are invalid")
+    from tinygrad.llm.q4k_gate_up_four_warp_mmvq import emit_q4k_gate_up_four_warp_fp16
+    return emit_q4k_gate_up_four_warp_fp16(parameters["vector_loads"])
+  if family == "q4_ffn_down.v1":
+    if set(parameters) != {"block_count", "resadd", "load_style"} or parameters["load_style"] not in ("scalar", "vector"):
+      raise ValueError("q4_ffn_down.v1 parameters are invalid")
+    from tinygrad.llm.q4k_ffn_down_mmvq import emit_four_warp_fp16_direct
+    return emit_four_warp_fp16_direct(UOp.const(dtypes.weakint, parameters["block_count"]), resadd=parameters["resadd"], load_style=parameters["load_style"])
+  if family == "q4_kv_pair.v1":
+    if set(parameters) != {"rows", "k"}: raise ValueError("q4_kv_pair.v1 parameters are invalid")
+    from tinygrad.llm.q4k_kv_pair import emit_q4k_kv_pair_vector
+    return emit_q4k_kv_pair_vector(parameters["rows"], parameters["k"])
+  if family == "q6_ffn_down.v1":
+    required = {"rows_per_block", "packed_lanemap", "unroll_blocks", "split_weight_stream"}
+    if set(parameters) != required or not isinstance(parameters["rows_per_block"], int) or not all(
+        isinstance(parameters[x], bool) for x in ("packed_lanemap", "split_weight_stream")) or (
+        parameters["unroll_blocks"] is not None and not isinstance(parameters["unroll_blocks"], int)):
+      raise ValueError("q6_ffn_down.v1 parameters are invalid")
+    from tinygrad.llm.q6k_ffn_down_mmvq import emit_q6k_four_warp_fp16_direct
+    return emit_q6k_four_warp_fp16_direct(rows_per_block=parameters["rows_per_block"], packed_lanemap=parameters["packed_lanemap"],
+      unroll_blocks=parameters["unroll_blocks"], split_weight_stream=parameters["split_weight_stream"])
+  if family == "q6_v.v1":
+    if parameters: raise ValueError("q6_v.v1 takes no parameters")
+    from tinygrad.llm.q6k_v_mmvq import emit_q6k_v_four_warp_fp16_direct
+    return emit_q6k_v_four_warp_fp16_direct()
+  if family == "shared_q8_consumer.v1":
+    required = {"rows", "block_count", "direct_output", "residual_add", "quant"}
+    if set(parameters) != required or parameters["quant"] not in ("q4", "q6"):
+      raise ValueError("shared_q8_consumer.v1 parameters are invalid")
+    from tinygrad.llm.shared_q8_attention import _emit_q4_cooperative, _emit_q6
+    if parameters["quant"] == "q4":
+      return _emit_q4_cooperative(parameters["rows"], UOp.const(dtypes.weakint, parameters["block_count"]),
+        direct_output=parameters["direct_output"], residual_add=parameters["residual_add"])
+    if parameters["direct_output"] or parameters["residual_add"]: raise ValueError("shared Q6 consumer has no Q4 epilogue flags")
+    return _emit_q6(parameters["rows"])
+  raise ValueError(f"no registered tinygrad LLM emitter for family {family!r}")
+
+
+__all__ = ["LoweredSemanticProgram", "PrimitiveNode", "SemanticLoweringRegistry", "build_registered_llm_emitter", "default_registry"]
