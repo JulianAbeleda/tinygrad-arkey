@@ -2,6 +2,7 @@
 import json
 import os
 import hashlib
+import json
 from pathlib import Path
 
 DEFAULT_LEDGER = Path(__file__).resolve().parents[3] / "BoltBeam" / "boltbeam" / "data" / "nv_sm120_kernel_authority.json"
@@ -29,4 +30,11 @@ def ticket_for_authority(route_id: str, component: str, candidate_hash: str,
   route_hash = hashlib.sha256((route_id + "\0" + component).encode()).hexdigest()
   return BoltbeamKernelTicket(candidate_hash, route_hash, component, target_identity, provider_revision)
 
-__all__ = ["DEFAULT_LEDGER", "load_promoted_routes", "ticket_for_authority"]
+def tickets_for_candidate(candidate: dict, authorities: tuple[tuple[str, str], ...], target_identity: str = "nvidia_sm120"):
+  from extra.llm_research.boltbeam_runtime_ticket import BoltbeamKernelTicketBundle
+  encoded = json.dumps(candidate, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode("ascii")
+  candidate_hash = hashlib.sha256(encoded).hexdigest()
+  return BoltbeamKernelTicketBundle(tuple(ticket_for_authority(route, component, candidate_hash, target_identity)
+                                          for route, component in authorities))
+
+__all__ = ["DEFAULT_LEDGER", "load_promoted_routes", "ticket_for_authority", "tickets_for_candidate"]

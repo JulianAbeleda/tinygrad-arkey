@@ -26,6 +26,7 @@ from tinygrad.llm.decode_kernels import (
 from tinygrad.llm.kernel_program import (DeclaredTypedOutput, KernelProgram, KernelProgramProvenance,
   OutputSpec, ResidualViewRequest, TypedLayout, TypedViewRequest, execute_promoted_program)
 from tinygrad.uop.ops import AxisType, KernelInfo, UOp
+from extra.llm_research.boltbeam_authority import tickets_for_candidate
 
 ROWS, K = 4096, 12288
 WARP, WARPS_PER_ROW, POS = 32, 4, 16
@@ -169,6 +170,10 @@ def q6k_ffn_down_mmvq_call(admission:object, linear:Any, x:Tensor, binding:Any,
   xv = x[:, 0, :].reshape(K).cast(dtypes.float16).contiguous()
   residual = epilogue_inputs["normed_h"][:, 0, :].reshape(ROWS).cast(dtypes.float32)
   split_weight_stream = os.environ.get("NV_Q6_FFN_DOWN_SPLIT_WEIGHT_STREAM", "0") == "1"
+  authorities = (("decode_q6k_ffn_down_fp16_geometry", "q6_ffn_down_fp16"),
+                 ("decode_ffn_down_resadd", "q6_ffn_down_resadd"))
+  if admission.packed_lanemap: authorities += (("decode_q6k_ffn_down_packed_lanemap", "q6_ffn_down_packed_lanemap"),)
+  if admission.unroll_blocks is not None: authorities += (("decode_q6k_ffn_down_unroll", "q6_ffn_down_packed_unroll"),)
   consumer = KernelProgram("decode_q6k_ffn_down_mmvq", f"blk{admission.block_index}.gemv",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
     emit_q6k_four_warp_fp16_direct(rows_per_block=admission.rows_per_block, packed_lanemap=admission.packed_lanemap,
@@ -179,7 +184,10 @@ def q6k_ffn_down_mmvq_call(admission:object, linear:Any, x:Tensor, binding:Any,
     typed_input_views=(TypedViewRequest(slot=1, dtype=dtypes.float16, flat_shape=(K,), route_role="ffn_down",
       requires_combine_fusion=False, requires_epilogue_absorption=True),),
     residual_input_views=(ResidualViewRequest(slot=2, dtype=dtypes.float32, flat_shape=(ROWS,),
-      route_role="ffn_down", kind="residual_add"),))
+      route_role="ffn_down", kind="residual_add"),),
+    boltbeam_ticket=tickets_for_candidate({"family":"q6_ffn_down.v1","rows_per_block":admission.rows_per_block,
+      "packed_lanemap":admission.packed_lanemap,"unroll_blocks":admission.unroll_blocks,
+      "split_weight_stream":split_weight_stream}, authorities))
   weights = linear.q6k_storage.halfs.to(x.device)
   inputs = (weights, weights, xv, residual) if split_weight_stream else (weights, xv, residual)
   out = execute_promoted_program(Tensor.empty((ROWS,), dtype=dtypes.float32, device=x.device), *inputs, program=consumer)

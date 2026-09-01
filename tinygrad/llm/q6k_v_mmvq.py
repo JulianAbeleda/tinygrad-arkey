@@ -21,6 +21,7 @@ from tinygrad.llm.decode_kernels import (
 from tinygrad.llm.kernel_program import (
   KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program)
 from tinygrad.uop.ops import AxisType, KernelInfo, UOp
+from extra.llm_research.boltbeam_authority import tickets_for_candidate
 
 ROWS, K = 1024, 4096
 WARP, WARPS_PER_ROW, POS = 32, 4, Q6K_POS_EXTENT
@@ -78,7 +79,9 @@ def q6k_v_four_warp_call(admission:object, linear:Any, x:Tensor, binding:Any) ->
   xv = x[:, 0, :].reshape(K).cast(dtypes.float16).contiguous()
   consumer = KernelProgram("decode_q6k_v_four_warp", f"blk{admission.block_index}.gemv",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emit_q6k_v_four_warp_fp16_direct(),
-    output_spec=OutputSpec((ROWS,), dtypes.float32))
+    output_spec=OutputSpec((ROWS,), dtypes.float32),
+    boltbeam_ticket=tickets_for_candidate({"family":"q6_v.v1"},
+      (("decode_q6k_v_four_warp_fp16_geometry","q6_v_four_warp_fp16"),)))
   out = execute_promoted_program(Tensor.empty((ROWS,), dtype=dtypes.float32, device=x.device),
     halfs, xv, program=consumer)
   return out.reshape(1, 1, ROWS)

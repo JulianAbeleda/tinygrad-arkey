@@ -17,6 +17,7 @@ from tinygrad.llm.decode_kernels import (LanePartition, Q4KGateUpLaneMap, Q4K_WO
 from tinygrad.llm.kernel_program import (KernelProgram, KernelProgramProvenance, OutputSpec,
   execute_promoted_program_outputs)
 from tinygrad.uop.ops import AxisType, KernelInfo, UOp
+from extra.llm_research.boltbeam_authority import tickets_for_candidate
 
 ROWS, K, WARP = 1024, 4096, 32
 Q_ROWS = 4096
@@ -190,7 +191,9 @@ def q4k_kv_pair_call(admission:object, k_linear:Any, v_linear:Any, x:Tensor) -> 
   xv = x[:, 0, :].reshape(K).cast(dtypes.float16).contiguous()
   program = KernelProgram("decode_q4k_kv_pair", f"blk{admission.block_index}.kv_pair",
     KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED, emit_q4k_kv_pair_vector(),
-    output_spec=OutputSpec((ROWS,), dtypes.float32))
+    output_spec=OutputSpec((ROWS,), dtypes.float32),
+    boltbeam_ticket=tickets_for_candidate({"family":"q4_kv_pair.v1","rows":ROWS,"k":K},
+      (("decode_q4k_kv_pair","q4_kv_pair"),)))
   k_out=Tensor.empty((ROWS,),dtype=dtypes.float32,device=x.device)
   v_out=Tensor.empty((ROWS,),dtype=dtypes.float32,device=x.device)
   outputs=execute_promoted_program_outputs(k_out,v_out,kw,vw,xv,program=program)
@@ -214,7 +217,9 @@ def q4k_qkv_call(admission:object, q_linear:Any, k_linear:Any, v_linear:Any, x:T
   xv=x[:,0,:].reshape(K).cast(dtypes.float16).contiguous()
   emitter=emit_q4k_q4k_q6_qkv_full() if mixed else emit_q4k_qkv_full()
   program=KernelProgram("decode_q4k_qkv",f"blk{admission.block_index}.qkv_full{'_mixed' if mixed else ''}",
-    KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED,emitter,output_spec=OutputSpec((Q_ROWS,),dtypes.float32))
+    KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED,emitter,output_spec=OutputSpec((Q_ROWS,),dtypes.float32),
+    boltbeam_ticket=tickets_for_candidate({"family":"q4q4_qkv_full.v1","mixed_q6_v":mixed},
+      (("decode_q4k_q4q4_qkv_full","q4q4_qkv_full"),)))
   q_out=Tensor.empty((Q_ROWS,),dtype=dtypes.float32,device=x.device)
   k_out=Tensor.empty((ROWS,),dtype=dtypes.float32,device=x.device)
   v_out=Tensor.empty((ROWS,),dtype=dtypes.float32,device=x.device)
