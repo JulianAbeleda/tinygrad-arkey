@@ -70,6 +70,16 @@ def test_rmsnorm_q8_checked_spec_binding():
     lowering_bindings={"reduce_output_spec":spec})
   assert callable(emitter)
 
+def test_reduce_output_checked_spec_binding():
+  from tinygrad import dtypes
+  from tinygrad.uop.ops import Ops, ReduceOutputSpec
+  spec=ReduceOutputSpec(rows=8,dim=128,eps=1e-6,out_dtype=dtypes.float32,affine=True,
+    recipe="sumsq_rsqrt_affine",reduce_op=Ops.ADD,warps=8,lanes=32,per_lane=4,epilogue="rope")
+  emitter,_=lower_authorized_candidate({"family":"reduce_output.v1","spec_repr":repr(spec),
+    "x_dtype":"dtypes.float","weight_dtype":"dtypes.half","spec_binding":"reduce_output_spec"},
+    (("decode_qk_norm_rope","qk_reduce_norm_rope"),),lowering_bindings={"reduce_output_spec":spec})
+  assert callable(emitter)
+
 def test_q6_checked_spec_binding():
   from tinygrad.llm.decode_kernels import q6k_spec_for_role
   spec=q6k_spec_for_role(4096,12288,parts=1,row_tile=2,use_coop=True,target="NV:sm_120",reduction="in_kernel",epilogue="")

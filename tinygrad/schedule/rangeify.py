@@ -803,15 +803,20 @@ def lower_reduce_output_store(store:UOp, carrier:UOp|None=None, marker:UOp|None=
     w_buf = w_buffer.after(w_buffer.store(weight))
   if w_buf is None: reject("weight_not_identity"); return None
   try:
-    from tinygrad.codegen.late.reduce_output import emit_reduce_output
+    from tinygrad.llm.boltbeam_authority import lower_authorized_candidate
+    authority=("decode_qk_norm_rope","qk_reduce_norm_rope") if spec.epilogue == "rope" else \
+      ("decode_reduce_output_rmsnorm","reduce_output_rmsnorm")
+    emitter,_=lower_authorized_candidate({"family":"reduce_output.v1","spec_repr":repr(spec),
+      "x_dtype":str(x.dtype),"weight_dtype":str(weight.dtype),"spec_binding":"reduce_output_spec"},
+      (authority,),lowering_bindings={"reduce_output_spec":spec})
     out_ph = UOp.placeholder((spec.rows*spec.dim,), spec.out_dtype, 0)
     x_ph = UOp.placeholder((spec.rows*spec.dim,), x.dtype, 1)
     w_ph = UOp.placeholder((spec.dim,), weight.dtype, 2)
     if spec.epilogue == "rope":
       f_ph = UOp.placeholder(freqs.shape, freqs.dtype, 3)
-      body = emit_reduce_output(spec, x.dtype, weight.dtype)(out_ph, x_ph, w_ph, f_ph)
+      body = emitter(out_ph, x_ph, w_ph, f_ph)
     else:
-      body = emit_reduce_output(spec, x.dtype, weight.dtype)(out_ph, x_ph, w_ph)
+      body = emitter(out_ph, x_ph, w_ph)
   except ValueError:
     reject("emitter_rejected"); return None
   trace_reduce_output("selector", "accepted")

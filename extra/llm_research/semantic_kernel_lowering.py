@@ -205,6 +205,18 @@ def build_registered_llm_emitter(family: str, parameters: dict[str, Any], bindin
       warps_per_row=parameters["warps_per_row"],x_dtype=x_dtype,weight_dtype=weight_dtype,
       out_dtype=out_dtype,x_rank=parameters["x_rank"])
     return emit_decode_rmsnorm_kernel(spec)
+  if family == "reduce_output.v1":
+    required={"spec_repr","x_dtype","weight_dtype","spec_binding"}
+    if set(parameters) != required: raise ValueError("reduce_output.v1 parameters are invalid")
+    name=parameters["spec_binding"]
+    if not bindings or name not in bindings: raise ValueError("reduce-output spec binding is missing")
+    spec=bindings[name]
+    if repr(spec) != parameters["spec_repr"]: raise ValueError("reduce-output spec drift")
+    dtype_map={"dtypes.half":dtypes.float16,"dtypes.float":dtypes.float32}
+    try: x_dtype,weight_dtype=dtype_map[parameters["x_dtype"]],dtype_map[parameters["weight_dtype"]]
+    except KeyError as exc: raise ValueError("reduce_output.v1 dtype is invalid") from exc
+    from tinygrad.codegen.late.reduce_output import emit_reduce_output
+    return emit_reduce_output(spec,x_dtype,weight_dtype)
   if family == "rmsnorm_q8_provider.v1":
     required={"rows","dim","eps","recipe","warps","x_dtype","weight_dtype","spec_binding"}
     if set(parameters) != required: raise ValueError("rmsnorm_q8_provider.v1 parameters are invalid")

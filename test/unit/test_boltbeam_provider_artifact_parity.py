@@ -224,6 +224,24 @@ def test_decode_rmsnorm_provider_matches_direct_uop_artifact():
   args=(_buf(4096,dtypes.float32),_buf(4096,dtypes.float32),_buf(4096,dtypes.float16))
   assert provider(*args).key == emit_decode_rmsnorm_kernel(spec)(*args).key
 
+def test_reduce_output_providers_match_direct_uop_artifacts():
+  from tinygrad.codegen.late.reduce_output import emit_reduce_output
+  from tinygrad.uop.ops import Ops, ReduceOutputSpec
+  cases=((1,4096,16,8,"identity",("decode_reduce_output_rmsnorm","reduce_output_rmsnorm")),
+         (8,128,8,4,"identity",("decode_reduce_output_rmsnorm","reduce_output_rmsnorm")),
+         (32,128,32,4,"identity",("decode_reduce_output_rmsnorm","reduce_output_rmsnorm")),
+         (8,128,8,4,"rope",("decode_qk_norm_rope","qk_reduce_norm_rope")),
+         (32,128,32,4,"rope",("decode_qk_norm_rope","qk_reduce_norm_rope")))
+  for rows,dim,warps,per_lane,epilogue,authority in cases:
+    spec=ReduceOutputSpec(rows=rows,dim=dim,eps=1e-6,out_dtype=dtypes.float32,affine=True,
+      recipe="sumsq_rsqrt_affine",reduce_op=Ops.ADD,warps=warps,lanes=32,per_lane=per_lane,epilogue=epilogue)
+    candidate={"family":"reduce_output.v1","spec_repr":repr(spec),"x_dtype":"dtypes.float",
+      "weight_dtype":"dtypes.half","spec_binding":"reduce_output_spec"}
+    provider,_=lower_authorized_candidate(candidate,(authority,),lowering_bindings={"reduce_output_spec":spec})
+    args=(_buf(rows*dim,dtypes.float32),_buf(rows*dim,dtypes.float32),_buf(dim,dtypes.float16))
+    if epilogue == "rope": args += (_buf(19*dim,dtypes.float32).reshape(19,dim),)
+    assert provider(*args).key == emit_reduce_output(spec,dtypes.float32,dtypes.float16)(*args).key
+
 def test_cache_sink_provider_matches_direct_uop_artifact():
   from tinygrad.uop.ops import Ops, ReduceOutputSpec
   from tinygrad.llm.producer_kv_cache_sink import emit_reduce_output_rope_kv_cache
