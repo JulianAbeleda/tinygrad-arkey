@@ -43,4 +43,15 @@ def tickets_for_candidate(candidate: dict, authorities: tuple[tuple[str, str], .
   return BoltbeamKernelTicketBundle(tuple(ticket_for_authority(route, component, candidate_hash, target_identity)
                                           for route, component in authorities))
 
-__all__ = ["BOLTBEAM_SOURCE_LEDGER", "DEFAULT_LEDGER", "load_promoted_routes", "ticket_for_authority", "tickets_for_candidate"]
+def lower_authorized_candidate(candidate: dict, authorities: tuple[tuple[str, str], ...], target_identity: str = "nvidia_sm120"):
+  """Return the provider-selected emitter and its inseparable authority ticket bundle."""
+  tickets = tickets_for_candidate(candidate, authorities, target_identity)
+  envelope = {"schema":"boltbeam.route_bound_candidate.v1","target":target_identity,"family":candidate["family"],
+              "parameters":{key:value for key,value in candidate.items() if key != "family"},
+              "authorities":[{"route_id":route,"component":component} for route,component in authorities]}
+  from extra.llm_research.boltbeam_kernel_provider import generate_route_bound_candidate
+  generated = generate_route_bound_candidate(envelope, tickets.tickets[0].candidate_hash)
+  return generated.artifact, tickets
+
+__all__ = ["BOLTBEAM_SOURCE_LEDGER", "DEFAULT_LEDGER", "load_promoted_routes", "lower_authorized_candidate",
+           "ticket_for_authority", "tickets_for_candidate"]

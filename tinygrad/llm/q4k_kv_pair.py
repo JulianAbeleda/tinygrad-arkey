@@ -17,7 +17,7 @@ from tinygrad.llm.decode_kernels import (LanePartition, Q4KGateUpLaneMap, Q4K_WO
 from tinygrad.llm.kernel_program import (KernelProgram, KernelProgramProvenance, OutputSpec,
   execute_promoted_program_outputs)
 from tinygrad.uop.ops import AxisType, KernelInfo, UOp
-from extra.llm_research.boltbeam_authority import tickets_for_candidate
+from extra.llm_research.boltbeam_authority import lower_authorized_candidate, tickets_for_candidate
 
 ROWS, K, WARP = 1024, 4096, 32
 Q_ROWS = 4096
@@ -189,11 +189,12 @@ def q4k_kv_pair_call(admission:object, k_linear:Any, v_linear:Any, x:Tensor) -> 
   vw = v_linear.q4k_storage.words.to(x.device).contiguous() if v_linear.q4k_storage.mode == "q4_ondemand" \
     else v_linear.q4k_storage.words.to(x.device)
   xv = x[:, 0, :].reshape(K).cast(dtypes.float16).contiguous()
+  emitter,ticket=lower_authorized_candidate({"family":"q4_kv_pair.v1","rows":ROWS,"k":K},
+    (("decode_q4k_kv_pair","q4_kv_pair"),))
   program = KernelProgram("decode_q4k_kv_pair", f"blk{admission.block_index}.kv_pair",
-    KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED, emit_q4k_kv_pair_vector(),
+    KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED, emitter,
     output_spec=OutputSpec((ROWS,), dtypes.float32),
-    boltbeam_ticket=tickets_for_candidate({"family":"q4_kv_pair.v1","rows":ROWS,"k":K},
-      (("decode_q4k_kv_pair","q4_kv_pair"),)))
+    boltbeam_ticket=ticket)
   k_out=Tensor.empty((ROWS,),dtype=dtypes.float32,device=x.device)
   v_out=Tensor.empty((ROWS,),dtype=dtypes.float32,device=x.device)
   outputs=execute_promoted_program_outputs(k_out,v_out,kw,vw,xv,program=program)

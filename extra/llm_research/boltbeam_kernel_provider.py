@@ -7,6 +7,7 @@ from typing import Any, Callable
 
 KERNEL_CANDIDATE_SCHEMA = "boltbeam.kernel_candidate.v1"
 KERNEL_ROUTE_SCHEMA = "boltbeam.kernel_route.v1"
+ROUTE_BOUND_CANDIDATE_SCHEMA = "boltbeam.route_bound_candidate.v1"
 
 
 def _canonical(value: Any) -> str:
@@ -116,4 +117,25 @@ def generate_route(route: dict[str, Any], claimed_hash: str | None = None) -> tu
   return tuple(generated)
 
 
-__all__ = ["GeneratedKernel", "candidate_hash", "generate_kernel", "generate_route", "register_emitter"]
+def generate_route_bound_candidate(candidate: dict[str, Any], claimed_hash: str | None = None) -> GeneratedKernel:
+  """Lower a canonical BoltBeam route-bound candidate through the registered tinygrad family adapter."""
+  if not isinstance(candidate, dict) or set(candidate) != {"schema", "target", "family", "parameters", "authorities"}:
+    raise ValueError("route-bound candidate fields do not match the v1 contract")
+  if candidate["schema"] != ROUTE_BOUND_CANDIDATE_SCHEMA: raise ValueError("unsupported route-bound candidate")
+  identity = candidate_hash(candidate)
+  if claimed_hash is not None and claimed_hash != identity: raise ValueError("route-bound candidate hash mismatch")
+  if candidate["target"] != "nvidia_sm120": raise ValueError("unsupported route-bound candidate target")
+  from extra.llm_research.boltbeam_authority import load_promoted_routes
+  routes = load_promoted_routes()
+  if not isinstance(candidate["authorities"], list) or not candidate["authorities"]: raise ValueError("candidate authorities are required")
+  for authority in candidate["authorities"]:
+    if not isinstance(authority, dict) or set(authority) != {"route_id", "component"}: raise ValueError("invalid candidate authority")
+    route = routes.get(authority["route_id"])
+    if route is None or authority["component"] not in route["components"] or route["state"] == "blocked":
+      raise ValueError("candidate authority is not admitted")
+  from extra.llm_research.semantic_kernel_lowering import build_registered_llm_emitter
+  emitter = build_registered_llm_emitter(candidate["family"], candidate["parameters"])
+  return GeneratedKernel(identity, identity, candidate["family"], "uop", emitter, {})
+
+
+__all__ = ["GeneratedKernel", "candidate_hash", "generate_kernel", "generate_route", "generate_route_bound_candidate", "register_emitter"]

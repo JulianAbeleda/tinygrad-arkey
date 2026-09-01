@@ -28,7 +28,7 @@ from tinygrad.llm.kernel_program import (
   DeclaredTypedOutput, KernelProgram, KernelProgramProvenance, OutputSpec, TypedLayout,
   execute_promoted_program)
 from tinygrad.uop.ops import AxisType, KernelInfo, UOp
-from extra.llm_research.boltbeam_authority import tickets_for_candidate
+from extra.llm_research.boltbeam_authority import lower_authorized_candidate
 
 ROWS, K = 12288, 4096
 WARP, WARPS_PER_ROW = 32, 4
@@ -103,11 +103,12 @@ def q4k_gate_up_four_warp_call(admission:object, gate:Any, up:Any, x:Tensor) -> 
   typed_output = DeclaredTypedOutput(TypedLayout(dtypes.float16, (ROWS,), (1, 1, ROWS)),
                                      combine_fusion_admitted=False,
                                      epilogue_absorption_admitted=True)
+  emitter,ticket=lower_authorized_candidate({"family":"q4_gate_up.v1","vector_loads":admission.vector_loads},
+    (("decode_q4k_gate_up_four_warp_vector","q4_gate_up_four_warp"),))
   consumer = KernelProgram("decode_q4k_gate_up_four_warp", f"blk{admission.block_index}.gate_up",
-    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emit_q4k_gate_up_four_warp_fp16(admission.vector_loads),
+    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emitter,
     output_spec=OutputSpec((ROWS,), dtypes.float16, typed_output=typed_output),
-    boltbeam_ticket=tickets_for_candidate({"family":"q4_gate_up.v1","vector_loads":admission.vector_loads},
-      (("decode_q4k_gate_up_four_warp_vector","q4_gate_up_four_warp"),)))
+    boltbeam_ticket=ticket)
   out = execute_promoted_program(None, gw, uw, xv, program=consumer)
   return out.reshape(1, 1, ROWS)
 
