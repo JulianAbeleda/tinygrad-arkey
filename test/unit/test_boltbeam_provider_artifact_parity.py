@@ -27,6 +27,15 @@ def test_q4_kv_pair_provider_matches_direct_uop_artifact():
     _buf(1024*16*36,dtypes.uint32),_buf(4096,dtypes.float16))
   assert provider(*args).key == emit_q4k_kv_pair_vector(1024,4096)(*args).key
 
+
+def test_q4q4_qkv_full_provider_matches_direct_uop_artifact():
+  from tinygrad.llm.q4k_kv_pair import emit_q4k_qkv_full
+  provider,_=lower_authorized_candidate({"family":"q4q4_qkv_full.v1","mixed_q6_v":False},
+    (("decode_q4k_q4q4_qkv_full","q4q4_qkv_full"),))
+  args=(_buf(4096,dtypes.float32),_buf(1024,dtypes.float32),_buf(1024,dtypes.float32),
+    _buf(4096*16*36,dtypes.uint32),_buf(2*1024*16*36,dtypes.uint32),_buf(4096,dtypes.float16))
+  assert provider(*args).key == emit_q4k_qkv_full()(*args).key
+
 def test_q4_ffn_down_provider_matches_direct_uop_artifact():
   from tinygrad.llm.q4k_ffn_down_mmvq import emit_four_warp_fp16_direct
   blocks=UOp.const(dtypes.weakint,3)
