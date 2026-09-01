@@ -24,9 +24,14 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from extra.llm_research.decode.nv_gateup_fourwarp_profile_closure import (
   MODEL, LOCK, PYTHON, canon, _replay_metrics, _per_name_table,
   _gpu_state, _install_graph_tracker, _flush_final_timestamps)
-from extra.llm_research.decode.nv_q6k_down_packed_lanemap_profile import _current_decode_replays
-
 SCHEMA = "tinygrad.nv_phase0_current_ledger.v1"
+
+def _endpoint_replays(lines: list[dict]) -> list[list[dict]]:
+  """Recover the selected four-group endpoint and reject every other graph."""
+  signature = (32, 64, 128, 194)
+  sizes = [len(row.get("entries", ())) for row in lines]
+  return [[entry for row in lines[i:i+4] for entry in row.get("entries", ())]
+          for i in range(0, len(lines)-3, 4) if tuple(sizes[i:i+4]) == signature]
 
 
 def _verify_production_routes(model) -> dict:
@@ -81,8 +86,6 @@ def run_child(depth: int, count: int, max_context: int, reps: int,
   dev = Device["NV"]
   model = _load(MODEL, max_context)
   routes = _verify_production_routes(model)
-  model._decode_direct_greedy_promoted = True
-  model._decode_feedback_pingpong_promoted = True
   gen = model.generate(_prompt(MODEL, depth), chunk_size=32, temperature=0.0)
   try:
     settled = _settled_continuous_windows(gen, dev, count, reps)
@@ -105,7 +108,7 @@ def run_child(depth: int, count: int, max_context: int, reps: int,
 def analyze(profile_jsonl: pathlib.Path, settled: dict, warmup: int) -> dict:
   lines = [json.loads(line) for line in profile_jsonl.read_text(encoding="utf-8").splitlines() if line.strip()]
   sizes = [len(x.get("entries", [])) for x in lines]
-  replays = _current_decode_replays(lines)
+  replays = _endpoint_replays(lines)
   steady = replays[warmup:] if len(replays) > warmup else replays
   # Compute raw medians first; round only at the end so the node_sum/union/
   # overlap identity closes to exactly zero rather than accumulating rounding.

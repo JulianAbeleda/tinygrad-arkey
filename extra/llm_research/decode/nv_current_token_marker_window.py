@@ -35,8 +35,10 @@ def main():
   HCQGraph.__call__=wrapped
 
   model=_load(a.model,a.max_context)
-  model._decode_direct_greedy_promoted=True; model._decode_feedback_pingpong_promoted=True
-  model._decode_submit_ahead_promoted=a.submit_ahead
+  # Observe the selected production policy unchanged. Forcing direct greedy,
+  # feedback ping-pong, or submit-ahead here can construct a route different
+  # from the endpoint this diagnostic is intended to partition.
+  if a.submit_ahead: model._decode_submit_ahead_promoted=True
   gen=model.generate(_prompt(a.model,a.depth),chunk_size=32,temperature=0.0)
   tokens=[]; walls=[]; windows=[]; pre_first=[]; post_last=[]
   try:
