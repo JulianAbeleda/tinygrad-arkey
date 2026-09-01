@@ -99,3 +99,10 @@ def test_flash_spec_checked_binding():
     "spec_repr":repr(spec),"spec_binding":"flash_spec"},
     (("decode_flash_llama_vec_wide","flash_decode_combine"),),lowering_bindings={"flash_spec":spec})
   assert callable(emitter)
+
+def test_wide_flash_combine_provider():
+  emitter,_=lower_authorized_candidate({"family":"flash_decode_wide_combine.v1","candidate_id":"wide",
+    "Hd":128,"Hq":32,"splits":32,"output_fp16":True,"register_weights":False,
+    "successor_prefetch_groups":0,"output_q8":False,"output_q8_fine":False},
+    (("decode_flash_llama_vec_wide","flash_decode_combine"),))
+  assert callable(emitter)

@@ -263,6 +263,29 @@ def build_registered_llm_emitter(family: str, parameters: dict[str, Any], bindin
     tc_name=parameters["tc_binding"]
     if tc_name not in bindings or repr(bindings[tc_name]) != parameters["tc_repr"]: raise ValueError("flash-decode tile count drift")
     return spec.emit_tile(bindings[tc_name])
+  if family == "flash_decode_wide_tile.v1":
+    required={"candidate_id","Hd","Hq","Hkv","max_context","splits","wide_q_f32","token_bound",
+              "query_group_size","v_pipeline_tail","tc_repr","tc_binding"}
+    if set(parameters) != required: raise ValueError("wide flash tile parameters are invalid")
+    name=parameters["tc_binding"]
+    if not bindings or name not in bindings or repr(bindings[name]) != parameters["tc_repr"]: raise ValueError("wide flash tile count drift")
+    from tinygrad.llm.flash_decode_attention import flash_vec_llama_score_pv_kernel
+    return flash_vec_llama_score_pv_kernel(parameters["Hd"],parameters["Hq"],parameters["Hkv"],parameters["max_context"],
+      parameters["splits"],bindings[name],wide_kv=True,wide_q=False,wide_q_f32=parameters["wide_q_f32"],
+      token_bound=parameters["token_bound"],query_group_size=parameters["query_group_size"],
+      v_pipeline_tail=parameters["v_pipeline_tail"])
+  if family == "flash_decode_wide_combine.v1":
+    required={"candidate_id","Hd","Hq","splits","output_fp16","register_weights","successor_prefetch_groups","output_q8","output_q8_fine"}
+    if set(parameters) != required: raise ValueError("wide flash combine parameters are invalid")
+    from tinygrad.llm.flash_decode_attention import flash_fused_gmax_combine_kernel
+    emitter=flash_fused_gmax_combine_kernel(parameters["Hd"],parameters["Hq"],parameters["splits"],
+      output_fp16=parameters["output_fp16"],lane_width=128,register_weights=parameters["register_weights"],
+      successor_prefetch_groups=parameters["successor_prefetch_groups"],output_q8=parameters["output_q8"],
+      output_q8_fine=parameters["output_q8_fine"])
+    if parameters["output_q8"] or parameters["output_q8_fine"]:
+      from tinygrad.llm.decode_routes import _flash_combine_q8_outputs_emitter
+      emitter=_flash_combine_q8_outputs_emitter(emitter)
+    return emitter
   raise ValueError(f"no registered tinygrad LLM emitter for family {family!r}")
 
 

@@ -723,30 +723,27 @@ def _flash_llama_vec_wide_research_call(q:Tensor, assigned_kv:Tensor, Tc:UOp, bi
   q_arg = Tensor(q.uop.bitcast(dtypes.uint32)) if wide_q_f32 else q
   provenance = KernelProgramProvenance.MACHINE_SEARCH_GENERATED if promoted else KernelProgramProvenance.RESEARCH_ONLY
   execute = execute_promoted_program if promoted else execute_research_program
+  v_pipeline_tail=getenv("NV_FLASH_V_PIPELINE_TAIL",1)
+  tile_emitter,tile_ticket=lower_authorized_candidate({"family":"flash_decode_wide_tile.v1","candidate_id":binding.candidate_id,
+    "Hd":binding.Hd,"Hq":binding.Hq,"Hkv":binding.Hkv,"max_context":MAXC,"splits":S,"wide_q_f32":wide_q_f32,
+    "token_bound":token_bound,"query_group_size":query_group_size,"v_pipeline_tail":v_pipeline_tail,
+    "tc_repr":repr(Tc),"tc_binding":"tile_count"},(("decode_flash_llama_vec_wide","flash_decode_score_pv"),),
+    lowering_bindings={"tile_count":Tc})
   tile_program = KernelProgram(binding.route_id, f"{binding.candidate_id}.llama_vec_wide.tile",
-    provenance,
-    flash_vec_llama_score_pv_kernel(binding.Hd, binding.Hq, binding.Hkv, MAXC, S, Tc, wide_kv=True, wide_q=False,
-                                    wide_q_f32=wide_q_f32, token_bound=token_bound,
-                                    query_group_size=query_group_size,
-                                    v_pipeline_tail=getenv("NV_FLASH_V_PIPELINE_TAIL", 1)),
+    provenance, tile_emitter,
     output_spec=OutputSpec((binding.Hq * S * (binding.Hd + 2),), dtypes.float32),
-    boltbeam_ticket=tickets_for_candidate({"family":"flash_decode_tile.v1","candidate_id":binding.candidate_id,
-      "max_context":MAXC,"splits":S,"token_bound":token_bound},
-      (("decode_flash_llama_vec_wide","flash_decode_score_pv"),)))
+    boltbeam_ticket=tile_ticket)
   partial = execute(None, q_arg.reshape(binding.Hq * binding.Hd), cache_bits, program=tile_program)
-  combine_emitter=flash_fused_gmax_combine_kernel(binding.Hd, binding.Hq, S, output_fp16=output_fp16, lane_width=128,
-                                    register_weights=combine_register_weights,
-                                    successor_prefetch_groups=successor_prefetch_groups,output_q8=output_q8,
-                                    output_q8_fine=output_q8_fine)
-  if output_q8 or output_q8_fine: combine_emitter=_flash_combine_q8_outputs_emitter(combine_emitter)
+  combine_emitter,combine_ticket=lower_authorized_candidate({"family":"flash_decode_wide_combine.v1",
+    "candidate_id":binding.candidate_id,"Hd":binding.Hd,"Hq":binding.Hq,"splits":S,"output_fp16":output_fp16,
+    "register_weights":combine_register_weights,"successor_prefetch_groups":successor_prefetch_groups,
+    "output_q8":output_q8,"output_q8_fine":output_q8_fine},
+    (("decode_flash_llama_vec_wide","flash_decode_combine"),("decode_flash_combine_fusion","flash_decode_combine")))
   combine_program = KernelProgram(binding.route_id, f"{binding.candidate_id}.llama_vec_wide.combine",
     provenance,
     combine_emitter,
     output_spec=OutputSpec((binding.Hq * binding.Hd,), dtypes.float16 if output_fp16 else dtypes.float32),
-    boltbeam_ticket=tickets_for_candidate({"family":"flash_decode_combine.v1","candidate_id":binding.candidate_id,
-      "splits":S,"output_fp16":output_fp16,"output_q8":output_q8,"output_q8_fine":output_q8_fine},
-      (("decode_flash_llama_vec_wide","flash_decode_combine"),
-       ("decode_flash_combine_fusion","flash_decode_combine"))))
+    boltbeam_ticket=combine_ticket)
   if output_q8 or output_q8_fine:
     out=Tensor.empty((binding.Hq*binding.Hd,),dtype=dtypes.float16,device=q.device)
     q8=Tensor.empty((1280 if output_q8_fine else 1152,),dtype=dtypes.uint32,device=q.device)
