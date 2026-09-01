@@ -12,3 +12,7 @@ def test_ticket_enforcement(monkeypatch):
   monkeypatch.setenv("TINYGRAD_BOLTBEAM_ENFORCE", "1")
   with pytest.raises(ValueError): require_promoted_ticket(None, "r", "p")
   require_promoted_ticket(BoltbeamKernelTicket("a" * 64, "b" * 64, "x", "y", "z"), "r", "p")
+
+def test_ticket_enforcement_is_default_on(monkeypatch):
+  monkeypatch.delenv("TINYGRAD_BOLTBEAM_ENFORCE", raising=False)
+  with pytest.raises(ValueError): require_promoted_ticket(None, "r", "p")

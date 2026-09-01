@@ -32,6 +32,6 @@ class BoltbeamKernelTicketBundle:
       raise ValueError("BoltBeam ticket bundle contains duplicate authority")
 
 def require_promoted_ticket(ticket, route_id: str, program_id: str):
-  if not int(os.environ.get("TINYGRAD_BOLTBEAM_ENFORCE", "0")): return
+  if not int(os.environ.get("TINYGRAD_BOLTBEAM_ENFORCE", "1")): return
   if not isinstance(ticket, (BoltbeamKernelTicket, BoltbeamKernelTicketBundle)):
     raise ValueError(f"{route_id}/{program_id} requires a promoted BoltBeam ticket")
