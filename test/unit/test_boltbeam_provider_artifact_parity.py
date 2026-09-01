@@ -11,6 +11,15 @@ def test_q4_gate_up_provider_matches_direct_uop_artifact():
   args=(_buf(12288,dtypes.float16),_buf(12288*16*36,dtypes.uint32),_buf(12288*16*36,dtypes.uint32),_buf(4096,dtypes.float16))
   assert provider(*args).key == emit_q4k_gate_up_four_warp_fp16(True)(*args).key
 
+
+def test_q4_g3_generated_provider_matches_direct_uop_artifact():
+  from tinygrad.llm.decode_kernels import q4k_g3_lanemap_gemv_kernel
+  candidate={"family":"q4_g3_route.v1","rows":4096,"k":4096,"load_style":"vector",
+    "epilogue_kind":"","epilogue_binding":None}
+  provider,_=lower_authorized_candidate(candidate,(("decode_q4k_g3_generated","q4_g3_gemv"),))
+  args=(_buf(4096,dtypes.float32),_buf(4096*16*36,dtypes.uint32),_buf(4096,dtypes.float16))
+  assert provider(*args).key == q4k_g3_lanemap_gemv_kernel(4096,4096,load_style="vector")(*args).key
+
 def test_q6_v_provider_matches_direct_uop_artifact():
   from tinygrad.llm.q6k_v_mmvq import emit_q6k_v_four_warp_fp16_direct
   provider,_=lower_authorized_candidate({"family":"q6_v.v1"},

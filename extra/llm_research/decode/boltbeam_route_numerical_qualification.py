@@ -127,14 +127,34 @@ def qualify_q4_w1w3(reps:int) -> list[dict]:
   return results
 
 
+def qualify_q4_g3(reps:int) -> dict:
+  rows,k,seed=4096,4096,202609015;selected=(0,1,7,127,2047,4095)
+  words_np,raw_matrix=_make_q4k_words(rows,k,seed);raw=np.ascontiguousarray(raw_matrix.reshape(-1))
+  x_np=np.random.default_rng(seed+1).normal(0,.2,k).astype(np.float16)
+  out=Tensor.empty(rows,dtype=dtypes.float32,device="NV").realize();words=Tensor(words_np.copy(),dtype=dtypes.uint32,device="NV").realize()
+  x=Tensor(x_np.copy(),dtype=dtypes.float16,device="NV").realize()
+  candidate={"family":"q4_g3_route.v1","rows":rows,"k":k,"load_style":"vector","epilogue_kind":"","epilogue_binding":None}
+  emitter,ticket=lower_authorized_candidate(candidate,(("decode_q4k_g3_generated","q4_g3_gemv"),))
+  ast=emitter(UOp.placeholder((rows,),dtypes.float32,0),UOp.placeholder(words_np.shape,dtypes.uint32,1),
+    UOp.placeholder((k,),dtypes.float16,2));program,run=_runner(ast,(out,words,x));timing=_timing(run,reps)
+  got=out.numpy()[list(selected)];ref=_selected_reference(raw,x_np,selected,(k//256)*144,"q4")
+  err=np.abs(got-ref);atol=np.maximum(2e-3,np.abs(ref)*5e-4)
+  return {"route_id":"decode_q4k_g3_generated","candidate_family":"q4_g3_route.v1",
+    "tickets":[item.to_dict() for item in ticket.tickets],"program_key":_program_key(program),"selected_rows":selected,
+    "payload_sha256":hashlib.sha256(raw.tobytes()+x_np.tobytes()).hexdigest(),
+    "correctness":{"pass":bool(np.all(err<=atol)),"max_abs":float(err.max()),"max_allowed":float(atol.max()),
+      "finite":bool(np.isfinite(got).all())},"timing_us":{"samples":timing,"median":statistics.median(timing)}}
+
+
 def main() -> int:
-  parser=argparse.ArgumentParser();parser.add_argument("--route",choices=("q6-v","q4-down","q4-w1w3","all"),default="all")
+  parser=argparse.ArgumentParser();parser.add_argument("--route",choices=("q6-v","q4-down","q4-w1w3","q4-g3","all"),default="all")
   parser.add_argument("--reps",type=int,default=11);parser.add_argument("--out",required=True);args=parser.parse_args()
   if not str(Device.DEFAULT).startswith("NV"): raise RuntimeError(f"native NV required, got {Device.DEFAULT}")
   rows=[]
   if args.route in ("q6-v","all"): rows.append(qualify_q6_v(args.reps))
   if args.route in ("q4-down","all"): rows.append(qualify_q4_down(args.reps))
   if args.route in ("q4-w1w3","all"): rows.extend(qualify_q4_w1w3(args.reps))
+  if args.route in ("q4-g3","all"): rows.append(qualify_q4_g3(args.reps))
   report={"schema":"tinygrad.boltbeam_route_numerical_qualification.v1","device":str(Device.DEFAULT),
     "git_commit":subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),"routes":rows,
     "pass":all(row["correctness"]["pass"] for row in rows)}
