@@ -1,7 +1,7 @@
 """Broad 128x128xK256 generated Q6_K CTA matching the pinned llama schedule."""
 from tinygrad import dtypes
 from tinygrad.dtype import AddrSpace
-from tinygrad.uop.ops import KernelInfo, Ops, RuntimeLocalAllocation, UOp
+from tinygrad.uop.ops import AxisType, KernelInfo, Ops, RuntimeLocalAllocation, UOp
 from tinygrad.codegen.late.native_fragment import native_fragment_bitcast, native_fragment_materialized_x2
 from extra.llm_research.prefill.nv_native_fragment_k16_gate import packed_i8_sub
 
@@ -17,7 +17,7 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
                                fp32_scale_grouping:str="legacy", fp32_p_tree:str="legacy",
                                fp32_contraction:str="implicit",
                                weight_scale_contract:str="legacy", trace=None, trace_config:tuple[int,int]|None=None,
-                               streamk_owners:int|None=None, streamk_segment:int=0):
+                               streamk_owners:int|None=None, streamk_segment:int=0, streamk_segments_in_cta:bool=False):
   """One exact llama-normalized 128x128xK256 work unit per CTA.
 
   ``blocks`` is 128 canonical Q6_K rows. ``q8_record`` is two canonical
@@ -28,6 +28,8 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
   if depth < 1: raise ValueError("depth must be positive")
   if streamk_owners is not None and (not 1 <= streamk_owners <= 256 or streamk_segment not in (0,1)):
     raise ValueError("streamk requires 1..256 owners and segment zero or one")
+  if streamk_segments_in_cta and (streamk_owners is None or streamk_segment != 0 or trace is not None):
+    raise ValueError("in-CTA Stream-K segments require owners, segment zero, and no trace")
   if tile_grid is not None:
     if streamk_owners is not None: raise ValueError("tile_grid and streamk are mutually exclusive")
     if len(tile_grid) != 2: raise ValueError("tile_grid requires tiles_m and tiles_n")
@@ -68,6 +70,7 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
   lr,lc=lane>>2,lane&3; band,warp_phase=warp>>1,warp&1
   grid=streamk_owners if streamk_owners is not None else replicas
   bid=UOp.special(grid,"gidx0") if grid > 1 else UOp.const(dtypes.int32,0)
+  segment_loop=None
   arena=UOp.placeholder((Q6_WORDS+Q8_WORDS,),dtypes.uint32,1500,addrspace=AddrSpace.LOCAL).replace(
     tag=RuntimeLocalAllocation(SHARED_BYTES))
   sh,shq=arena,arena[Q6_WORDS:]
@@ -85,17 +88,25 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
     work_units,tiles_m,k_blocks=128*48,4,48
     owner_start=bid*work_units//streamk_owners; owner_stop=(bid+1)*work_units//streamk_owners
     tile0=owner_start//k_blocks; boundary=(tile0+1)*k_blocks; first_stop=owner_stop.minimum(boundary)
-    if streamk_segment == 0:
-      tile=tile0; epoch_start=owner_start-tile0*k_blocks; segment_depth=first_stop-owner_start
-      active=UOp.const(dtypes.bool,True)
+    if streamk_segments_in_cta:
+      segment_count=1+(owner_stop>boundary).cast(dtypes.int32)
+      segment_loop=UOp.range(segment_count,1498,axis_type=AxisType.LOOP); second=segment_loop>0
+      tile=second.where(tile0+1,tile0); epoch_start=second.where(owner_start*0,owner_start-tile0*k_blocks)
+      segment_depth=second.where(owner_stop-first_stop,first_stop-owner_start)
+      active=UOp.const(dtypes.bool,True); output_slot=segment_loop*streamk_owners+bid
     else:
-      tile=tile0+1; epoch_start=UOp.const(dtypes.int32,0); segment_depth=owner_stop-first_stop
-      active=owner_stop>boundary
-    epoch=UOp.range(segment_depth,1499); tile_m=tile%tiles_m; tile_n=tile//tiles_m
+      if streamk_segment == 0:
+        tile=tile0; epoch_start=owner_start-tile0*k_blocks; segment_depth=first_stop-owner_start
+        active=UOp.const(dtypes.bool,True)
+      else:
+        tile=tile0+1; epoch_start=UOp.const(dtypes.int32,0); segment_depth=owner_stop-first_stop
+        active=owner_stop>boundary
+      output_slot=streamk_segment*streamk_owners+bid
+    epoch=(UOp.range(segment_depth,1499,axis_type=AxisType.LOOP) if streamk_segments_in_cta else UOp.range(segment_depth,1499))
+    tile_m=tile%tiles_m; tile_n=tile//tiles_m
     block_row_stride=k_blocks*105
     block_epoch=tile_n*ROWS*k_blocks*105+(epoch_start+epoch)*105
     q8_epoch=(tile_m*k_blocks+epoch_start+epoch)*(2*Q8_WORDS)
-    output_slot=streamk_segment*streamk_owners+bid
 
   # Expand all 128 canonical Q6 rows into llama's 76-word shared layout.
   txi=lane
@@ -194,7 +205,8 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
   header=() if trace is None else tuple(trace[i].store(UOp.const(dtypes.uint32,v),gate=lane_gate(trace_thread)) for i,v in enumerate(
     (0x51365452,1,trace_row,trace_col,trace_thread,trace_warp,trace_lane,trace_band,trace_warp_phase,trace_lr,trace_lc,
      trace_cg,trace_n,trace_r,trace_ai,248)))
-  init=UOp.group(*(x[0].store(0.0) for x in acc),*header); acc=[x.after(init) for x in acc]
+  init=UOp.group(*((x.after(segment_loop)[0].store(0.0) if segment_loop is not None else x[0].store(0.0)) for x in acc),*header)
+  acc=[x.after(init) for x in acc]
 
   def consume(kphase:int, ready_y, dep):
     # One warp retains the 16 Q6 fragments for this K128 half. The rolling
@@ -397,6 +409,9 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
   if weight_scale_contract == "trusted_fp16_packed": suffix += "_trusted_fp16_packed_ws"
   if trace is not None: suffix += "_trace"
   if tile_grid is not None: suffix += f"_tiles{tiles_m}x{tiles_n}"
+  if streamk_segments_in_cta:
+    stores=[UOp.group(*stores).end(segment_loop)]
+    suffix += "_segments_in_cta"
   suffix += f"_streamk_s{streamk_segment}" if streamk_owners is not None else f"_d{depth}"
   return UOp.sink(*stores,arg=KernelInfo(name=f"nv_q6_oracle_broad_cta_{suffix}",opts_to_apply=()))
 
