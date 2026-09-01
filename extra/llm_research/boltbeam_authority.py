@@ -5,7 +5,8 @@ import hashlib
 import json
 from pathlib import Path
 
-DEFAULT_LEDGER = Path(__file__).resolve().parents[3] / "BoltBeam" / "boltbeam" / "data" / "nv_sm120_kernel_authority.json"
+DEFAULT_LEDGER = Path(__file__).resolve().parents[2] / "tinygrad" / "llm" / "generated" / "boltbeam-nv-sm120-kernel-authority.json"
+BOLTBEAM_SOURCE_LEDGER = Path(__file__).resolve().parents[3] / "BoltBeam" / "boltbeam" / "data" / "nv_sm120_kernel_authority.json"
 
 def load_promoted_routes(path: str | os.PathLike | None = None) -> dict[str, dict]:
   ledger_path = Path(path or os.environ.get("BOLTBEAM_NV_AUTHORITY_LEDGER", DEFAULT_LEDGER))
@@ -37,4 +38,4 @@ def tickets_for_candidate(candidate: dict, authorities: tuple[tuple[str, str], .
   return BoltbeamKernelTicketBundle(tuple(ticket_for_authority(route, component, candidate_hash, target_identity)
                                           for route, component in authorities))
 
-__all__ = ["DEFAULT_LEDGER", "load_promoted_routes", "ticket_for_authority", "tickets_for_candidate"]
+__all__ = ["BOLTBEAM_SOURCE_LEDGER", "DEFAULT_LEDGER", "load_promoted_routes", "ticket_for_authority", "tickets_for_candidate"]

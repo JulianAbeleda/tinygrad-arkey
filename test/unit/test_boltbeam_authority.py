@@ -1,12 +1,16 @@
 import ast
 from pathlib import Path
 import pytest
-from extra.llm_research.boltbeam_authority import load_promoted_routes, ticket_for_authority, tickets_for_candidate
+from extra.llm_research.boltbeam_authority import (BOLTBEAM_SOURCE_LEDGER, DEFAULT_LEDGER, load_promoted_routes,
+                                                   ticket_for_authority, tickets_for_candidate)
 
 def test_authority_ledger_has_promoted_routes():
   routes = load_promoted_routes()
   assert len(routes) == 34
   assert routes["q6_ffn_down_streamk_destination.v1"]["state"] == "exact"
+
+def test_bundled_authority_matches_boltbeam_source():
+  if BOLTBEAM_SOURCE_LEDGER.exists(): assert DEFAULT_LEDGER.read_bytes() == BOLTBEAM_SOURCE_LEDGER.read_bytes()
 
 def test_ticket_for_authority_is_fail_closed():
   ticket = ticket_for_authority("decode_shared_q8_attention", "shared_q8_provider", "a" * 64, "sm120")
