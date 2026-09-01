@@ -13,7 +13,7 @@ from tinygrad import Tensor, dtypes
 from tinygrad.dtype import AddrSpace
 from tinygrad.helpers import getenv
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
-from extra.llm_research.boltbeam_authority import lower_authorized_candidate
+from tinygrad.llm.boltbeam_authority import lower_authorized_candidate
 from tinygrad.codegen.late.warp_reduce import _staged_shfl, _warp_reduce_sum_staged, warp_reduce_max
 from tinygrad.llm.kernel_program import (DeclaredTypedOutput, KernelProgram, KernelProgramProvenance, OutputSpec,
                                          TypedLayout, execute_promoted_program)

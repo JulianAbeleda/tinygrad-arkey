@@ -20,7 +20,7 @@ from tinygrad.llm.packed_argmax import packed_argmax_from_tile_keys
 from tinygrad.llm.qk_layout import Q4_K, Q6_K, QuantFormat
 from tinygrad.llm.route_selection import parse_route_mode
 from tinygrad.uop.ops import Ops
-from extra.llm_research.boltbeam_authority import lower_authorized_candidate, tickets_for_candidate
+from tinygrad.llm.boltbeam_authority import lower_authorized_candidate, tickets_for_candidate
 
 def decode_route_mode(getenv_fn=getenv) -> str:
   canonical = str(getenv_fn("TINYGRAD_DECODE_ROUTE", "")).strip()

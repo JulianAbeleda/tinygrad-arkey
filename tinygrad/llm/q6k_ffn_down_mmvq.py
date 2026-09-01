@@ -26,7 +26,7 @@ from tinygrad.llm.decode_kernels import (
 from tinygrad.llm.kernel_program import (DeclaredTypedOutput, KernelProgram, KernelProgramProvenance,
   OutputSpec, ResidualViewRequest, TypedLayout, TypedViewRequest, execute_promoted_program)
 from tinygrad.uop.ops import AxisType, KernelInfo, UOp
-from extra.llm_research.boltbeam_authority import lower_authorized_candidate
+from tinygrad.llm.boltbeam_authority import lower_authorized_candidate
 
 ROWS, K = 4096, 12288
 WARP, WARPS_PER_ROW, POS = 32, 4, 16

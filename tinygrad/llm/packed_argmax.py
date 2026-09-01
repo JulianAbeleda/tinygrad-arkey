@@ -14,7 +14,7 @@ from tinygrad.dtype import AddrSpace
 from tinygrad.helpers import cdiv
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
 from tinygrad.uop.ops import AxisType, KernelInfo, UOp
-from extra.llm_research.boltbeam_authority import lower_authorized_candidate
+from tinygrad.llm.boltbeam_authority import lower_authorized_candidate
 
 
 def make_native_argmax_host_mirror(device:str, memory:str="host") -> Tensor:

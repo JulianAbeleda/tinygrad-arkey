@@ -16,7 +16,7 @@ from typing import Any
 from tinygrad import Tensor, dtypes
 from tinygrad.llm.kernel_program import (
   KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program)
-from extra.llm_research.boltbeam_authority import lower_authorized_candidate
+from tinygrad.llm.boltbeam_authority import lower_authorized_candidate
 
 ROWS, K = 1024, 4096
 

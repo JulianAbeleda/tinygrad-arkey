@@ -13,7 +13,7 @@ from tinygrad import Tensor, dtypes
 from tinygrad.codegen.late.reduce_output import emit_reduce_output_rope_kv_cache
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, execute_promoted_program
 from tinygrad.uop.ops import Ops, ReduceOutputSpec
-from extra.llm_research.boltbeam_authority import lower_authorized_candidate
+from tinygrad.llm.boltbeam_authority import lower_authorized_candidate
 
 
 @dataclass(frozen=True)

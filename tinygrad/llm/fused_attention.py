@@ -65,7 +65,7 @@ from typing import Any
 from tinygrad import Tensor, dtypes
 from tinygrad.device import Device
 from tinygrad.uop.ops import AttentionGridSpec, SharedAttentionCandidateContext
-from extra.llm_research.boltbeam_authority import lower_authorized_candidate
+from tinygrad.llm.boltbeam_authority import lower_authorized_candidate
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
 
 # ADMITTED GEOMETRIES (Hq, Hkv, q_tokens) for which the fragment-model kernel exists /

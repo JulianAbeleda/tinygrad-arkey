@@ -20,7 +20,7 @@ from tinygrad.llm.kernel_program import (DeclaredTypedOutput, KernelProgram, Ker
   OutputSpec, ResidualViewRequest, TypedLayout, TypedViewRequest, execute_promoted_program,
   execute_research_program)
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
-from extra.llm_research.boltbeam_authority import lower_authorized_candidate
+from tinygrad.llm.boltbeam_authority import lower_authorized_candidate
 
 ROWS, K, QK = 4096, 12288, 256
 WARP, WARPS_PER_ROW = 32, 4

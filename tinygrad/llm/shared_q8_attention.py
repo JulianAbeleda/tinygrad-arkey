@@ -19,7 +19,7 @@ from tinygrad.llm.decode_kernels import (Q4K_WORDS_PER_BLOCK, Q6K_HALFWORDS_PER_
 from tinygrad.llm.kernel_program import (KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program,
   execute_promoted_program_outputs, execute_research_program)
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, ReduceOutputSpec, UOp
-from extra.llm_research.boltbeam_authority import lower_authorized_candidate, tickets_for_candidate
+from tinygrad.llm.boltbeam_authority import lower_authorized_candidate, tickets_for_candidate
 
 _K, _Q_ROWS, _KV_ROWS = 4096, 4096, 1024
 _Q8_PACKS, _Q8_GROUPS = _K//4, _K//32

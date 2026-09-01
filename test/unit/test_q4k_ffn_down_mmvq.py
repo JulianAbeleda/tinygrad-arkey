@@ -184,7 +184,8 @@ def test_owned_boundary_strips_equal_span_reshapes_to_the_after_without_a_copy()
   assert "owned_uop.op is not Ops.AFTER" in body and "owned_uop.shape != (K,)" in body and "owned_uop.dtype != x.dtype" in body
 
 
-def test_owned_boundary_is_an_exact_three_call_replacement_in_isolated_cpu_schedules():
+def test_owned_boundary_is_an_exact_three_call_replacement_in_isolated_cpu_schedules(monkeypatch):
+  monkeypatch.setenv("TINYGRAD_BOLTBEAM_ENFORCE", "0")
   # Build each arm from a fresh graph. Scheduling mutates Tensor graphs into
   # concrete buffer identities, so sharing one producer across arm schedules
   # would make the second census invalid.
@@ -220,7 +221,8 @@ def test_owned_boundary_is_an_exact_three_call_replacement_in_isolated_cpu_sched
   assert candidate[1:] == ["q8_1_llama_provider_12288","q4k_q8_mmvq_direct_4096_12288"]
 
 
-def test_closed_fp16_resadd_route_folds_both_transports_to_zero_materialize():
+def test_closed_fp16_resadd_route_folds_both_transports_to_zero_materialize(monkeypatch):
+  monkeypatch.setenv("TINYGRAD_BOLTBEAM_ENFORCE", "0")
   # The closed (non-owned) resadd spelling has TWO boundary folds that must both
   # land or the candidate pays two extra transport kernels: the fp16 z provider
   # input (typed epilogue-absorption view) and the fp32 normed_h residual slot
@@ -282,7 +284,8 @@ def test_direct_consumer_keeps_four_warps_runtime_loop_dp4a_and_final_store():
   assert "st.global" in ptx
 
 
-def test_fp16_resadd_route_folds_both_transports_to_zero_materialize():
+def test_fp16_resadd_route_folds_both_transports_to_zero_materialize(monkeypatch):
+  monkeypatch.setenv("TINYGRAD_BOLTBEAM_ENFORCE", "0")
   # The fp16 geometry route has the same two boundary folds as the closed Q8
   # resadd route: the fp16 z activation (typed epilogue-absorption view, slot 1)
   # and the fp32 normed_h residual (residual view, slot 2). Both producers

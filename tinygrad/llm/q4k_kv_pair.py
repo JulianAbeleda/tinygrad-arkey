@@ -17,7 +17,7 @@ from tinygrad.llm.decode_kernels import (LanePartition, Q4KGateUpLaneMap, Q4K_WO
 from tinygrad.llm.kernel_program import (KernelProgram, KernelProgramProvenance, OutputSpec,
   execute_promoted_program_outputs)
 from tinygrad.uop.ops import AxisType, KernelInfo, UOp
-from extra.llm_research.boltbeam_authority import lower_authorized_candidate, tickets_for_candidate
+from tinygrad.llm.boltbeam_authority import lower_authorized_candidate, tickets_for_candidate
 
 ROWS, K, WARP = 1024, 4096, 32
 Q_ROWS = 4096
