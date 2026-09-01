@@ -17,3 +17,9 @@ def test_composite_candidate_authority():
     ("decode_q6k_ffn_down_packed_lanemap", "q6_ffn_down_packed_lanemap")))
   assert len(bundle.tickets) == 2
   assert len({ticket.candidate_hash for ticket in bundle.tickets}) == 1
+
+def test_bound_reduction_and_cache_authorities_exist():
+  routes = load_promoted_routes()
+  assert "q4_ffn_down_resadd" in routes["decode_ffn_down_resadd"]["components"]
+  assert "finite_fp32_argmax" in routes["decode_native_argmax"]["components"]
+  assert "qk_norm_rope_cache_sink" in routes["decode_producer_kv_cache_sink"]["components"]

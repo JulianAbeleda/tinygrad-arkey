@@ -14,6 +14,7 @@ from tinygrad.dtype import AddrSpace
 from tinygrad.helpers import cdiv
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
 from tinygrad.uop.ops import AxisType, KernelInfo, UOp
+from extra.llm_research.boltbeam_authority import tickets_for_candidate
 
 
 def make_native_argmax_host_mirror(device:str, memory:str="host") -> Tensor:
@@ -106,7 +107,9 @@ def native_argmax_finite_fp32(x:Tensor, threads:int=1024) -> Tensor:
   n = x.shape[1]
   program = KernelProgram("decode_native_finite_fp32_argmax", f"vocab_{n}_t{threads}",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emit_native_finite_fp32_argmax(n, threads),
-    output_spec=OutputSpec((1,), dtypes.int32))
+    output_spec=OutputSpec((1,), dtypes.int32),
+    boltbeam_ticket=tickets_for_candidate({"family":"finite_argmax.v1","n":n,"threads":threads,"host_mirror":False},
+      (("decode_native_argmax","finite_fp32_argmax"),)))
   # The held decode return must not be a view of the custom program's internal
   # allocation: that allocation participates in the next replay's memory plan.
   return execute_promoted_program(None, x.reshape(n).contiguous(), program=program).reshape(1, 1).clone()
@@ -122,7 +125,9 @@ def native_argmax_finite_fp32_host_mirror(x:Tensor, mirror:Tensor, threads:int=1
   n = x.shape[1]
   program = KernelProgram("decode_native_finite_fp32_argmax", f"vocab_{n}_t{threads}.host_mirror",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emit_native_finite_fp32_argmax(n, threads, host_mirror=True),
-    output_spec=OutputSpec((1,), dtypes.int32))
+    output_spec=OutputSpec((1,), dtypes.int32),
+    boltbeam_ticket=tickets_for_candidate({"family":"finite_argmax.v1","n":n,"threads":threads,"host_mirror":True},
+      (("decode_native_argmax","finite_fp32_argmax"),)))
   out = Tensor.empty(1, dtype=dtypes.int32, device=x.device)
   results = out.uop_program(mirror, x.reshape(n).contiguous(), fxn=program.emitter)
   return results[0].reshape(1, 1).clone(), results[1]
