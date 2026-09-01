@@ -105,26 +105,27 @@ def test_flash_decode_descriptor_providers_match_direct_uop_artifacts():
 
 def test_flash_decode_wide_providers_match_direct_uop_artifacts():
   from tinygrad.llm.flash_decode_attention import flash_fused_gmax_combine_kernel, flash_vec_llama_score_pv_kernel
-  tc=UOp.const(dtypes.int,513)
-  tile_candidate={"family":"flash_decode_wide_tile.v1","candidate_id":"wide","Hd":128,"Hq":32,"Hkv":8,
-    "max_context":4608,"splits":4,"wide_q_f32":False,"token_bound":None,"query_group_size":4,
-    "v_pipeline_tail":0,"tc_repr":repr(tc),"tc_binding":"tile_count"}
-  tile,_=lower_authorized_candidate(tile_candidate,(("decode_flash_llama_vec_wide","flash_decode_score_pv"),),
-    lowering_bindings={"tile_count":tc})
-  tile_args=(_buf(32*4*130,dtypes.float32),_buf(32*128,dtypes.float16),
-    _buf(2*8*4608*64,dtypes.uint32).reshape(2,1,8,4608,64))
-  direct_tile=flash_vec_llama_score_pv_kernel(128,32,8,4608,4,tc,wide_kv=True,wide_q=False,wide_q_f32=False,
-    token_bound=None,query_group_size=4,v_pipeline_tail=0)
-  assert tile(*tile_args).key == direct_tile(*tile_args).key
-  combine_candidate={"family":"flash_decode_wide_combine.v1","candidate_id":"wide","Hd":128,"Hq":32,
-    "splits":4,"output_fp16":True,"register_weights":False,"successor_prefetch_groups":0,
-    "output_q8":False,"output_q8_fine":False}
-  combine,_=lower_authorized_candidate(combine_candidate,(("decode_flash_llama_vec_wide","flash_decode_combine"),
-    ("decode_flash_combine_fusion","flash_decode_combine")))
-  combine_args=(_buf(32*128,dtypes.float16),_buf(32*4*130,dtypes.float32))
-  direct_combine=flash_fused_gmax_combine_kernel(128,32,4,output_fp16=True,lane_width=128,
-    register_weights=False,successor_prefetch_groups=0,output_q8=False,output_q8_fine=False)
-  assert combine(*combine_args).key == direct_combine(*combine_args).key
+  for splits,tc_value,token_bound,register_weights in ((6,641,768,False),(8,769,None,True)):
+    tc=UOp.const(dtypes.int,tc_value)
+    tile_candidate={"family":"flash_decode_wide_tile.v1","candidate_id":"wide","Hd":128,"Hq":32,"Hkv":8,
+      "max_context":1024,"splits":splits,"wide_q_f32":False,"token_bound":token_bound,"query_group_size":1,
+      "v_pipeline_tail":1,"tc_repr":repr(tc),"tc_binding":"tile_count"}
+    tile,_=lower_authorized_candidate(tile_candidate,(("decode_flash_llama_vec_wide","flash_decode_score_pv"),),
+      lowering_bindings={"tile_count":tc})
+    tile_args=(_buf(32*splits*130,dtypes.float32),_buf(32*128,dtypes.float16),
+      _buf(2*8*1024*64,dtypes.uint32).reshape(2,1,8,1024,64))
+    direct_tile=flash_vec_llama_score_pv_kernel(128,32,8,1024,splits,tc,wide_kv=True,wide_q=False,
+      wide_q_f32=False,token_bound=token_bound,query_group_size=1,v_pipeline_tail=1)
+    assert tile(*tile_args).key == direct_tile(*tile_args).key
+    combine_candidate={"family":"flash_decode_wide_combine.v1","candidate_id":"wide","Hd":128,"Hq":32,
+      "splits":splits,"output_fp16":True,"register_weights":register_weights,"successor_prefetch_groups":0,
+      "output_q8":False,"output_q8_fine":False}
+    combine,_=lower_authorized_candidate(combine_candidate,(("decode_flash_llama_vec_wide","flash_decode_combine"),
+      ("decode_flash_combine_fusion","flash_decode_combine")))
+    combine_args=(_buf(32*128,dtypes.float16),_buf(32*splits*130,dtypes.float32))
+    direct_combine=flash_fused_gmax_combine_kernel(128,32,splits,output_fp16=True,lane_width=128,
+      register_weights=register_weights,successor_prefetch_groups=0,output_q8=False,output_q8_fine=False)
+    assert combine(*combine_args).key == direct_combine(*combine_args).key
 
 def test_flash_prefill_provider_matches_direct_uop_artifact():
   from tinygrad.schedule.wmma.flash_prefill import FlashPrefillAttentionSpec
