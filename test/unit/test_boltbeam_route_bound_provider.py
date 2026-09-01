@@ -23,6 +23,9 @@ def _candidate(family, parameters, route, component):
   _candidate("q4_k_four_warp.v1", {"rows":1024,"k":4096}, "decode_q4k_k_four_warp", "q4_k_four_warp"),
   _candidate("shared_q8_provider.v1", {"k":4096,"source_dtype":"fp16"},
     "decode_shared_q8_attention", "shared_q8_provider"),
+  _candidate("decode_rmsnorm.v1", {"rows":1,"dim":4096,"eps":1e-6,"warps_per_row":16,
+    "x_dtype":"dtypes.float","weight_dtype":"dtypes.half","out_dtype":"dtypes.float","x_rank":1},
+    "decode_rmsnorm_native_lowering", "decode_rmsnorm"),
 ])
 def test_route_bound_packed_family_generates_registered_emitter(candidate):
   generated = generate_route_bound_candidate(candidate, candidate_hash(candidate))

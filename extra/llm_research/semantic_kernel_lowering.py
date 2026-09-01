@@ -193,6 +193,17 @@ def build_registered_llm_emitter(family: str, parameters: dict[str, Any], bindin
     if set(parameters) != {"rows", "k"}: raise ValueError("q4_k_four_warp.v1 parameters are invalid")
     from extra.llm_research.decode.q4k_exact_group_factorized import emit_q4k_exact_four_warp
     return emit_q4k_exact_four_warp(parameters["rows"], parameters["k"])
+  if family == "decode_rmsnorm.v1":
+    required={"rows","dim","eps","warps_per_row","x_dtype","weight_dtype","out_dtype","x_rank"}
+    if set(parameters) != required: raise ValueError("decode_rmsnorm.v1 parameters are invalid")
+    dtype_map={"dtypes.half":dtypes.float16,"dtypes.float":dtypes.float32}
+    try: x_dtype,weight_dtype,out_dtype=(dtype_map[parameters[name]] for name in ("x_dtype","weight_dtype","out_dtype"))
+    except KeyError as exc: raise ValueError("decode_rmsnorm.v1 dtype is invalid") from exc
+    from tinygrad.llm.decode_kernels import DecodeRMSNormSpec, emit_decode_rmsnorm_kernel
+    spec=DecodeRMSNormSpec(rows=parameters["rows"],dim=parameters["dim"],eps=parameters["eps"],
+      warps_per_row=parameters["warps_per_row"],x_dtype=x_dtype,weight_dtype=weight_dtype,
+      out_dtype=out_dtype,x_rank=parameters["x_rank"])
+    return emit_decode_rmsnorm_kernel(spec)
   raise ValueError(f"no registered tinygrad LLM emitter for family {family!r}")
 
 
