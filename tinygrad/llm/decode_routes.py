@@ -20,6 +20,7 @@ from tinygrad.llm.packed_argmax import packed_argmax_from_tile_keys
 from tinygrad.llm.qk_layout import Q4_K, Q6_K, QuantFormat
 from tinygrad.llm.route_selection import parse_route_mode
 from tinygrad.uop.ops import Ops
+from extra.llm_research.boltbeam_authority import tickets_for_candidate
 
 def decode_route_mode(getenv_fn=getenv) -> str:
   canonical = str(getenv_fn("TINYGRAD_DECODE_ROUTE", "")).strip()
@@ -225,12 +226,19 @@ class _Q4KDecodeCandidate:
       # higher achieved rate, and two production reverse brackets plus a depth-128 bracket pass
       # once the vector residual-output transport is elided. Keep a scalar rollback/control arm.
       q4k_load_style = _q4k_single_projection_load_style(linear)
+    authorities=(("decode_q4k_g3_generated","q4_g3_gemv"),)
+    if epi_spec is not None: authorities += (("decode_q4k_epilogue_fusion","q4_gemv_epilogue"),)
+    if epi_spec is not None and epi_spec.kind in ("ffn_down_resadd","residual_add"):
+      authorities += (("decode_q4k_epilogue_resadd","q4_gemv_residual_epilogue"),)
+      if route_role == "ffn_down": authorities += (("decode_ffn_down_resadd","q4_ffn_down_resadd"),)
     program = KernelProgram(binding.route_id, f"{binding.candidate_id}.gemv",
       KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
       q4k_g3_lanemap_gemv_kernel(binding.N, binding.K, epilogue=epi_spec, load_style=q4k_load_style),
       output_spec=OutputSpec((binding.N,), out_dtype, typed_output=typed_output),
       typed_input_views=typed_input_views,
-      residual_input_views=residual_input_views)
+      residual_input_views=residual_input_views,
+      boltbeam_ticket=tickets_for_candidate({"family":"q4_g3_gemv.v1","rows":binding.N,"k":binding.K,
+        "load_style":q4k_load_style,"epilogue":getattr(epi_spec,"kind","")},authorities))
     return execute_promoted_program(None, *prog_inputs, program=program).reshape(1, 1, binding.N)
 
 # This is a statically promoted result of offline machine search, not an online
@@ -288,7 +296,11 @@ def q4k_gate_up_primitive_linear_call(gate:Any, up:Any, x:Tensor, fallback:Calla
   program = KernelProgram(g_bind.route_id, f"{g_bind.candidate_id}.w1w3_fused",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
     q4k_g3_lanemap_gemv_w1w3_kernel(g_bind.N, g_bind.K, load_style=load_style, store_fp16=store_fp16),
-    output_spec=OutputSpec((g_bind.N,), out_dtype, typed_output=typed_output))
+    output_spec=OutputSpec((g_bind.N,), out_dtype, typed_output=typed_output),
+    boltbeam_ticket=tickets_for_candidate({"family":"q4_w1w3.v1","rows":g_bind.N,"k":g_bind.K,
+      "load_style":load_style,"store_fp16":store_fp16},
+      (("decode_q4k_w1w3_fusion","q4_w1w3_fused"),) +
+      ((("decode_q4k_w1w3_fp16_store","q4_w1w3_fused_fp16"),) if store_fp16 else ())))
   return execute_promoted_program(None, gw, uw, xv, program=program).reshape(1, 1, g_bind.N)
 
 def q4k_gate_up_rms_affine_qualification_call(gate:Any, up:Any, raw_x:Tensor, norm_weight:Tensor, eps:float,
@@ -379,7 +391,9 @@ def decode_kv_store_route(cache:Tensor, k:Tensor, v:Tensor, freqs:Tensor, Hkv:in
   if vparts == 1 and tuple(v.shape) != (Hkv * Hd,): v = v.reshape(Hkv * Hd)
   program = KernelProgram("decode_kv_store_fusion", "decode_kv_rope_store",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
-    decode_kv_rope_store_kernel(Hkv, Hd, MAXC, VPART=vparts), output_spec=None)
+    decode_kv_rope_store_kernel(Hkv, Hd, MAXC, VPART=vparts), output_spec=None,
+    boltbeam_ticket=tickets_for_candidate({"family":"kv_rope_store.v1","Hkv":Hkv,"Hd":Hd,"max_context":MAXC,"vparts":vparts},
+      (("decode_kv_store_fusion","kv_rope_store"),)))
   return execute_promoted_program(cache, k.reshape(Hkv * Hd), v, freqs, program=program)
 
 @dataclass(frozen=True)
@@ -478,6 +492,9 @@ class _Q6KDecodeCandidate:
                                         combine_fusion_admitted=False,
                                         epilogue_absorption_admitted=True)
                     if epilogue == "ffn_down_resadd" else None)
+    authorities=(("decode_q6k_coop_generated","q6_gemv"),)
+    if fusion_admitted: authorities += (("decode_epilogue_fusion","q6_gemv_epilogue"),)
+    if epilogue == "ffn_down_resadd": authorities += (("decode_ffn_down_resadd","q6_ffn_down_resadd"),)
     gemv_program = KernelProgram(binding.route_id, f"{binding.candidate_id}.gemv",
       KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emit_q6k_gemv_kernel(spec),
       output_spec=OutputSpec((binding.N,) if reduction == "in_kernel" else (binding.N, spec.partial_axis_extent),
@@ -485,7 +502,9 @@ class _Q6KDecodeCandidate:
       typed_input_views=typed_input_views,
       residual_input_views=((ResidualViewRequest(slot=2, dtype=dtypes.float32, flat_shape=(binding.N,),
                                                  route_role="ffn_down", kind="residual_add"),)
-                           if epilogue == "ffn_down_resadd" else ()))
+                           if epilogue == "ffn_down_resadd" else ()),
+      boltbeam_ticket=tickets_for_candidate({"family":"q6_gemv.v1","rows":binding.N,"k":binding.K,
+        "row_tile":binding.row_tile,"reduction":reduction,"epilogue":epilogue},authorities))
     if epilogue:
       h_vec = epi_inputs["normed_h"][:, 0, :].reshape(binding.N).cast(dtypes.float32)
       return execute_promoted_program(None, linear.q6k_storage.halfs.to(x.device), x_vec, h_vec,
@@ -499,7 +518,9 @@ class _Q6KDecodeCandidate:
     if q6k_vocab_scalar_reduce_eligible(spec):
       reduce_program = KernelProgram(binding.route_id, f"{binding.candidate_id}.vocab_reduce",
         KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emit_q6k_vocab_scalar_reduce_kernel(spec),
-        output_spec=OutputSpec((binding.N,), dtypes.float32))
+        output_spec=OutputSpec((binding.N,), dtypes.float32),
+        boltbeam_ticket=tickets_for_candidate({"family":"q6_vocab_reduce.v1","rows":binding.N,"partial_axis":spec.partial_axis_extent},
+          (("decode_q6k_coop_generated","q6_vocab_reduce"),)))
       return execute_promoted_program(None, partial, program=reduce_program).reshape(1, 1, binding.N)
     return partial.sum(axis=1).reshape(1, 1, binding.N)
 
@@ -700,7 +721,10 @@ def _flash_llama_vec_wide_research_call(q:Tensor, assigned_kv:Tensor, Tc:UOp, bi
                                     wide_q_f32=wide_q_f32, token_bound=token_bound,
                                     query_group_size=query_group_size,
                                     v_pipeline_tail=getenv("NV_FLASH_V_PIPELINE_TAIL", 1)),
-    output_spec=OutputSpec((binding.Hq * S * (binding.Hd + 2),), dtypes.float32))
+    output_spec=OutputSpec((binding.Hq * S * (binding.Hd + 2),), dtypes.float32),
+    boltbeam_ticket=tickets_for_candidate({"family":"flash_decode_tile.v1","candidate_id":binding.candidate_id,
+      "max_context":MAXC,"splits":S,"token_bound":token_bound},
+      (("decode_flash_llama_vec_wide","flash_decode_score_pv"),)))
   partial = execute(None, q_arg.reshape(binding.Hq * binding.Hd), cache_bits, program=tile_program)
   combine_emitter=flash_fused_gmax_combine_kernel(binding.Hd, binding.Hq, S, output_fp16=output_fp16, lane_width=128,
                                     register_weights=combine_register_weights,
@@ -710,7 +734,11 @@ def _flash_llama_vec_wide_research_call(q:Tensor, assigned_kv:Tensor, Tc:UOp, bi
   combine_program = KernelProgram(binding.route_id, f"{binding.candidate_id}.llama_vec_wide.combine",
     provenance,
     combine_emitter,
-    output_spec=OutputSpec((binding.Hq * binding.Hd,), dtypes.float16 if output_fp16 else dtypes.float32))
+    output_spec=OutputSpec((binding.Hq * binding.Hd,), dtypes.float16 if output_fp16 else dtypes.float32),
+    boltbeam_ticket=tickets_for_candidate({"family":"flash_decode_combine.v1","candidate_id":binding.candidate_id,
+      "splits":S,"output_fp16":output_fp16,"output_q8":output_q8,"output_q8_fine":output_q8_fine},
+      (("decode_flash_llama_vec_wide","flash_decode_combine"),
+       ("decode_flash_combine_fusion","flash_decode_combine"))))
   if output_q8 or output_q8_fine:
     out=Tensor.empty((binding.Hq*binding.Hd,),dtype=dtypes.float16,device=q.device)
     q8=Tensor.empty((1280 if output_q8_fine else 1152,),dtype=dtypes.uint32,device=q.device)
