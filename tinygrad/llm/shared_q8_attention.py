@@ -802,17 +802,18 @@ def shared_q8_attention_call(admission, q_linear, k_linear, v_linear, x:Tensor, 
     cooperative=admission.cooperative_q4 and emitter is _emit_q4
     q4_direct=cooperative and admission.q4_direct_output
     q6_direct=admission.q6_direct_output and emitter is _emit_q6
-    emitted=(lambda rows:_emit_q4_cooperative(rows,cooperative_blocks,direct_output=q4_direct)) if cooperative else \
-      (_emit_q6_warp_direct if q6_direct else emitter)
+    variant="q4_cooperative" if cooperative else "q6_warp_direct" if q6_direct else "q4_scalar" if emitter is _emit_q4 else "q6"
+    emitted,ticket=lower_authorized_candidate({"family":"shared_q8_attention_consumer.v1","rows":rows,
+      "variant":variant,"direct_output":q4_direct,"block_count_binding":"cooperative_blocks" if cooperative else None},
+      (("decode_shared_q8_attention","shared_q8_q4_consumer" if emitter is _emit_q4 else "shared_q8_q6_consumer"),) +
+      ((("decode_q4_direct_shared_q8_attention","shared_q8_q4_direct"),) if q4_direct else ()) +
+      ((("decode_q6_direct_shared_q8_attention","shared_q8_q6_direct"),) if q6_direct else ()),
+      lowering_bindings={"cooperative_blocks":cooperative_blocks} if cooperative else None)
     shape=(rows,4) if cooperative and not q4_direct else (rows,)
     suffix='.coop_direct' if q4_direct else '.coop' if cooperative else '.q6_direct' if q6_direct else ''
     program=KernelProgram("decode_shared_q8_attention", f"{route_kind}.blk{admission.block_index}.{rows}{suffix}",
-      KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emitted(rows), output_spec=OutputSpec(shape,dtypes.float32),
-      boltbeam_ticket=tickets_for_candidate({"family":"shared_q8_consumer.v1","route_kind":route_kind,
-        "rows":rows,"cooperative":cooperative,"direct_output":q4_direct or q6_direct},
-        (("decode_shared_q8_attention","shared_q8_q4_consumer" if emitter is _emit_q4 else "shared_q8_q6_consumer"),) +
-        ((("decode_q4_direct_shared_q8_attention","shared_q8_q4_direct"),) if q4_direct else ()) +
-        ((("decode_q6_direct_shared_q8_attention","shared_q8_q6_direct"),) if q6_direct else ())))
+      KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emitted, output_spec=OutputSpec(shape,dtypes.float32),
+      boltbeam_ticket=ticket)
     ret=execute_promoted_program(None,storage.to(x.device),xp,program=program)
     if cooperative and not q4_direct: ret=ret.sum(axis=1).contiguous()
     return ret.reshape(1,1,rows)

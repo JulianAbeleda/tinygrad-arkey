@@ -36,3 +36,13 @@ def test_lowering_returns_emitter_and_matching_ticket():
   emitter,ticket = lower_authorized_candidate({"family":"q6_v.v1"},
     (("decode_q6k_v_four_warp_fp16_geometry","q6_v_four_warp_fp16"),))
   assert callable(emitter) and ticket.tickets[0].component == "q6_v_four_warp_fp16"
+
+def test_symbolic_lowering_binding_is_outside_candidate_identity():
+  from tinygrad import dtypes
+  from tinygrad.uop.ops import UOp
+  candidate={"family":"shared_q8_attention_consumer.v1","rows":1024,"variant":"q4_cooperative",
+             "direct_output":True,"block_count_binding":"cooperative_blocks"}
+  authorities=(("decode_q4_direct_shared_q8_attention","shared_q8_q4_direct"),)
+  first,ticket1=lower_authorized_candidate(candidate,authorities,lowering_bindings={"cooperative_blocks":UOp.const(dtypes.weakint,4)})
+  second,ticket2=lower_authorized_candidate(candidate,authorities,lowering_bindings={"cooperative_blocks":UOp.const(dtypes.weakint,8)})
+  assert callable(first) and callable(second) and ticket1.tickets[0].candidate_hash == ticket2.tickets[0].candidate_hash

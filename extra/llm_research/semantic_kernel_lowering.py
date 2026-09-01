@@ -87,7 +87,7 @@ def default_registry() -> SemanticLoweringRegistry:
   return registry
 
 
-def build_registered_llm_emitter(family: str, parameters: dict[str, Any]):
+def build_registered_llm_emitter(family: str, parameters: dict[str, Any], bindings: dict[str, Any] | None = None):
   """Adapt a closed Boltbeam family to an existing tinygrad UOp builder."""
   if not isinstance(family, str) or not isinstance(parameters, dict): raise ValueError("LLM emitter family and parameters are required")
   from tinygrad import dtypes
@@ -152,6 +152,18 @@ def build_registered_llm_emitter(family: str, parameters: dict[str, Any]):
         direct_output=parameters["direct_output"], residual_add=parameters["residual_add"])
     if parameters["direct_output"] or parameters["residual_add"]: raise ValueError("shared Q6 consumer has no Q4 epilogue flags")
     return _emit_q6(parameters["rows"])
+  if family == "shared_q8_attention_consumer.v1":
+    required = {"rows", "variant", "direct_output", "block_count_binding"}
+    if set(parameters) != required or parameters["variant"] not in ("q4_scalar", "q4_cooperative", "q6", "q6_warp_direct"):
+      raise ValueError("shared_q8_attention_consumer.v1 parameters are invalid")
+    from tinygrad.llm.shared_q8_attention import _emit_q4, _emit_q4_cooperative, _emit_q6, _emit_q6_warp_direct
+    variant = parameters["variant"]
+    if variant == "q4_scalar": return _emit_q4(parameters["rows"])
+    if variant == "q6": return _emit_q6(parameters["rows"])
+    if variant == "q6_warp_direct": return _emit_q6_warp_direct(parameters["rows"])
+    name = parameters["block_count_binding"]
+    if not isinstance(name, str) or not bindings or name not in bindings: raise ValueError("cooperative block-count binding is missing")
+    return _emit_q4_cooperative(parameters["rows"], bindings[name], direct_output=parameters["direct_output"])
   if family == "finite_argmax.v1":
     if set(parameters) != {"n", "threads", "host_mirror"} or not isinstance(parameters["host_mirror"], bool):
       raise ValueError("finite_argmax.v1 parameters are invalid")

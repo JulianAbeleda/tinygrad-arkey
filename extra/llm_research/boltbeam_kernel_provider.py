@@ -117,7 +117,8 @@ def generate_route(route: dict[str, Any], claimed_hash: str | None = None) -> tu
   return tuple(generated)
 
 
-def generate_route_bound_candidate(candidate: dict[str, Any], claimed_hash: str | None = None) -> GeneratedKernel:
+def generate_route_bound_candidate(candidate: dict[str, Any], claimed_hash: str | None = None,
+                                   lowering_bindings: dict[str, Any] | None = None) -> GeneratedKernel:
   """Lower a canonical BoltBeam route-bound candidate through the registered tinygrad family adapter."""
   if not isinstance(candidate, dict) or set(candidate) != {"schema", "target", "family", "parameters", "authorities"}:
     raise ValueError("route-bound candidate fields do not match the v1 contract")
@@ -134,7 +135,7 @@ def generate_route_bound_candidate(candidate: dict[str, Any], claimed_hash: str 
     if route is None or authority["component"] not in route["components"] or route["state"] == "blocked":
       raise ValueError("candidate authority is not admitted")
   from extra.llm_research.semantic_kernel_lowering import build_registered_llm_emitter
-  emitter = build_registered_llm_emitter(candidate["family"], candidate["parameters"])
+  emitter = build_registered_llm_emitter(candidate["family"], candidate["parameters"], lowering_bindings)
   return GeneratedKernel(identity, identity, candidate["family"], "uop", emitter, {})
 
 

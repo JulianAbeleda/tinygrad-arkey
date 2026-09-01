@@ -4,6 +4,7 @@ import os
 import hashlib
 import json
 from pathlib import Path
+from typing import Any
 
 DEFAULT_LEDGER = Path(__file__).resolve().parents[2] / "tinygrad" / "llm" / "generated" / "boltbeam-nv-sm120-kernel-authority.json"
 BOLTBEAM_SOURCE_LEDGER = Path(__file__).resolve().parents[3] / "BoltBeam" / "boltbeam" / "data" / "nv_sm120_kernel_authority.json"
@@ -43,14 +44,15 @@ def tickets_for_candidate(candidate: dict, authorities: tuple[tuple[str, str], .
   return BoltbeamKernelTicketBundle(tuple(ticket_for_authority(route, component, candidate_hash, target_identity)
                                           for route, component in authorities))
 
-def lower_authorized_candidate(candidate: dict, authorities: tuple[tuple[str, str], ...], target_identity: str = "nvidia_sm120"):
+def lower_authorized_candidate(candidate: dict, authorities: tuple[tuple[str, str], ...], target_identity: str = "nvidia_sm120",
+                               lowering_bindings: dict[str, Any] | None = None):
   """Return the provider-selected emitter and its inseparable authority ticket bundle."""
   tickets = tickets_for_candidate(candidate, authorities, target_identity)
   envelope = {"schema":"boltbeam.route_bound_candidate.v1","target":target_identity,"family":candidate["family"],
               "parameters":{key:value for key,value in candidate.items() if key != "family"},
               "authorities":[{"route_id":route,"component":component} for route,component in authorities]}
   from extra.llm_research.boltbeam_kernel_provider import generate_route_bound_candidate
-  generated = generate_route_bound_candidate(envelope, tickets.tickets[0].candidate_hash)
+  generated = generate_route_bound_candidate(envelope, tickets.tickets[0].candidate_hash, lowering_bindings)
   return generated.artifact, tickets
 
 __all__ = ["BOLTBEAM_SOURCE_LEDGER", "DEFAULT_LEDGER", "load_promoted_routes", "lower_authorized_candidate",
