@@ -286,6 +286,17 @@ def build_registered_llm_emitter(family: str, parameters: dict[str, Any], bindin
       from tinygrad.llm.decode_routes import _flash_combine_q8_outputs_emitter
       emitter=_flash_combine_q8_outputs_emitter(emitter)
     return emitter
+  if family == "flash_prefill_spec.v1":
+    required={"identity","spec_repr","spec_binding"}
+    if set(parameters) != required: raise ValueError("flash prefill parameters are invalid")
+    name=parameters["spec_binding"]
+    if not bindings or name not in bindings: raise ValueError("flash prefill spec binding is missing")
+    spec=bindings[name]
+    if repr(spec) != parameters["spec_repr"]: raise ValueError("flash prefill spec drift")
+    from tinygrad.llm.fused_attention import _PREFILL_EMITTERS
+    try: emitter=_PREFILL_EMITTERS[spec.target]
+    except KeyError as exc: raise ValueError("flash prefill target has no emitter") from exc
+    return emitter(spec)
   raise ValueError(f"no registered tinygrad LLM emitter for family {family!r}")
 
 

@@ -65,7 +65,7 @@ from typing import Any
 from tinygrad import Tensor, dtypes
 from tinygrad.device import Device
 from tinygrad.uop.ops import AttentionGridSpec, SharedAttentionCandidateContext
-from extra.llm_research.boltbeam_authority import tickets_for_candidate
+from extra.llm_research.boltbeam_authority import lower_authorized_candidate
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
 
 # ADMITTED GEOMETRIES (Hq, Hkv, q_tokens) for which the fragment-model kernel exists /
@@ -238,11 +238,8 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
     spec.validate()
   except ValueError as e:
     raise NotImplementedError(f"custom_kernel_attention: spec rejected geometry ({e})")
-  try:
-    emitter = _PREFILL_EMITTERS[spec.target]
-  except KeyError:
+  if spec.target not in _PREFILL_EMITTERS:
     raise NotImplementedError(f"custom_kernel_attention: no emitter registered for target {spec.target!r}")
-  fxn = emitter(spec)
 
   q_flat = q.cast(dtypes.float16).reshape(Hq * T * Hd)
   k_flat = k.cast(dtypes.float16).reshape(Hkv * KV * Hd)
@@ -255,12 +252,14 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
             else v.cast(dtypes.float16).reshape(Hkv * KV * Hd))
   identity = (f"{spec.target}_q16_grid_hd128_loop_attention:role=attention_tile,"
               f"Hq={Hq},Hkv={Hkv},q_tokens={T},kv_tokens={KV},Hd={Hd}")
+  fxn,ticket=lower_authorized_candidate({"family":"flash_prefill_spec.v1","identity":identity,
+    "spec_repr":repr(spec),"spec_binding":"prefill_spec"},
+    (("custom_kernel_prefill_attention","flash_prefill_score"),
+     ("custom_kernel_prefill_attention","flash_prefill_combine")),lowering_bindings={"prefill_spec":spec})
   program = KernelProgram("prefill_flash_attention_generated", f"prefill_flash_attention.{identity}",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED, fxn,
     output_spec=OutputSpec((Hq * T * Hd,), dtypes.float16),
-    boltbeam_ticket=tickets_for_candidate({"family":"flash_prefill.v1","identity":identity,"kv_tokens":KV},
-      (("custom_kernel_prefill_attention","flash_prefill_score"),
-       ("custom_kernel_prefill_attention","flash_prefill_combine"))))
+    boltbeam_ticket=ticket)
   result = execute_promoted_program(None, q_flat, k_flat, v_flat, program=program)
   # Record the dispatch AFTER every geometry/spec gate above has passed (i.e. only
   # once we know this call is committed to the fused custom-kernel route, not a

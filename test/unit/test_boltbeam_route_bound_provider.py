@@ -106,3 +106,10 @@ def test_wide_flash_combine_provider():
     "successor_prefetch_groups":0,"output_q8":False,"output_q8_fine":False},
     (("decode_flash_llama_vec_wide","flash_decode_combine"),))
   assert callable(emitter)
+
+def test_direct_provider_queue_is_empty():
+  from pathlib import Path
+  root=Path(__file__).parents[2] / "tinygrad" / "llm"
+  misses=[f"{path.name}:{line_no}" for path in root.glob("*.py") for line_no,line in enumerate(path.read_text().splitlines(),1)
+          if "boltbeam_ticket=tickets_for_candidate" in line]
+  assert misses == []
