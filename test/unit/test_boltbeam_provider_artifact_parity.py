@@ -36,6 +36,23 @@ def test_q4q4_qkv_full_provider_matches_direct_uop_artifact():
     _buf(4096*16*36,dtypes.uint32),_buf(2*1024*16*36,dtypes.uint32),_buf(4096,dtypes.float16))
   assert provider(*args).key == emit_q4k_qkv_full()(*args).key
 
+
+def test_shared_q8_pair_providers_match_direct_uop_artifacts():
+  from tinygrad.llm.shared_q8_attention import _emit_q4_cooperative_pair, _emit_q4_q6_cooperative_pair
+  blocks=UOp.const(dtypes.weakint,4); packed=4096//4+4096//32
+  cases=(
+    ("q4kv_pair","decode_shared_q8_q4kv_pair","shared_q8_q4_kv_pair",_emit_q4_cooperative_pair(1024,blocks),
+      (_buf(1024,dtypes.float32),_buf(1024,dtypes.float32),_buf(1024*16*36,dtypes.uint32),
+       _buf(1024*16*36,dtypes.uint32),_buf(packed,dtypes.uint32))),
+    ("q4q6_pair","decode_shared_q8_q4q6_kv_pair","shared_q8_q4q6_kv_pair",_emit_q4_q6_cooperative_pair(1024,blocks),
+      (_buf(1024,dtypes.float32),_buf(1024,dtypes.float32),_buf(1024*16*36,dtypes.uint32),
+       _buf(1024*16*110,dtypes.uint16),_buf(packed,dtypes.uint32))))
+  for variant,route,component,direct,args in cases:
+    candidate={"family":"shared_q8_multi_output.v1","variant":variant,"rows":1024,
+      "block_count_binding":"cooperative_blocks"}
+    provider,_=lower_authorized_candidate(candidate,((route,component),),lowering_bindings={"cooperative_blocks":blocks})
+    assert provider(*args).key == direct(*args).key
+
 def test_q4_ffn_down_provider_matches_direct_uop_artifact():
   from tinygrad.llm.q4k_ffn_down_mmvq import emit_four_warp_fp16_direct
   blocks=UOp.const(dtypes.weakint,3)
