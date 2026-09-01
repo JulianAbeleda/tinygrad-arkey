@@ -20,6 +20,21 @@ def test_q4_g3_generated_provider_matches_direct_uop_artifact():
   args=(_buf(4096,dtypes.float32),_buf(4096*16*36,dtypes.uint32),_buf(4096,dtypes.float16))
   assert provider(*args).key == q4k_g3_lanemap_gemv_kernel(4096,4096,load_style="vector")(*args).key
 
+def test_q4_g3_epilogue_providers_match_direct_uop_artifacts():
+  from tinygrad.llm.decode_kernels import Q4KGEMVEpilogue, q4k_g3_lanemap_gemv_kernel
+  cases=((1024,4096,"fp16_cast",dtypes.float16,()),
+         (4096,4096,"residual_add",dtypes.float32,(_buf(4096,dtypes.float32),)))
+  for rows,k,kind,out_dtype,extra in cases:
+    epi=Q4KGEMVEpilogue(kind)
+    candidate={"family":"q4_g3_route.v1","rows":rows,"k":k,"load_style":"vector",
+      "epilogue_kind":kind,"epilogue_binding":"epilogue_spec"}
+    authorities=(("decode_q4k_g3_generated","q4_g3_gemv"),
+      ("decode_q4k_epilogue_fusion","q4_gemv_epilogue"))
+    if kind == "residual_add": authorities += (("decode_q4k_epilogue_resadd","q4_gemv_residual_epilogue"),)
+    provider,_=lower_authorized_candidate(candidate,authorities,lowering_bindings={"epilogue_spec":epi})
+    args=(_buf(rows,out_dtype),_buf(rows*(k//256)*36,dtypes.uint32),_buf(k,dtypes.float16),*extra)
+    assert provider(*args).key == q4k_g3_lanemap_gemv_kernel(rows,k,epilogue=epi,load_style="vector")(*args).key
+
 def test_q6_v_provider_matches_direct_uop_artifact():
   from tinygrad.llm.q6k_v_mmvq import emit_q6k_v_four_warp_fp16_direct
   provider,_=lower_authorized_candidate({"family":"q6_v.v1"},
@@ -45,6 +60,19 @@ def test_q6_generated_gemv_and_vocab_reduce_match_direct_uop_artifacts():
   reduce_args=(_buf(vocab.rows,dtypes.float32),
     _buf(vocab.rows*vocab.partial_axis_extent,dtypes.float32).reshape(vocab.rows,vocab.partial_axis_extent))
   assert reducer(*reduce_args).key == emit_q6k_vocab_scalar_reduce_kernel(vocab)(*reduce_args).key
+
+def test_q6_epilogue_provider_matches_direct_uop_artifact():
+  from tinygrad.llm.decode_kernels import emit_q6k_gemv_kernel, q6k_spec_for_role
+  spec=q6k_spec_for_role(4096,12288,role="ffn_down",row_tile=2,reduction="in_kernel",
+    target="NV:sm_120",epilogue="ffn_down_resadd")
+  candidate={"family":"q6_gemv_route.v1","rows":spec.rows,"k":spec.k,"row_tile":spec.row_tile,
+    "reduction":spec.reduction,"epilogue":spec.epilogue,"spec_binding":"q6_spec"}
+  authorities=(("decode_q6k_coop_generated","q6_gemv"),
+    ("decode_epilogue_fusion","q6_gemv_epilogue"),("decode_ffn_down_resadd","q6_ffn_down_resadd"))
+  provider,_=lower_authorized_candidate(candidate,authorities,lowering_bindings={"q6_spec":spec})
+  args=(_buf(4096,dtypes.float32),_buf(4096*48*105,dtypes.uint16),_buf(12288,dtypes.float16),
+    _buf(4096,dtypes.float32))
+  assert provider(*args).key == emit_q6k_gemv_kernel(spec)(*args).key
 
 
 def test_q4_kv_pair_provider_matches_direct_uop_artifact():

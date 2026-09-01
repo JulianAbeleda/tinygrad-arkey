@@ -146,8 +146,76 @@ def qualify_q4_g3(reps:int) -> dict:
       "finite":bool(np.isfinite(got).all())},"timing_us":{"samples":timing,"median":statistics.median(timing)}}
 
 
+def qualify_q4_epilogues(reps:int) -> list[dict]:
+  from tinygrad.llm.decode_kernels import Q4KGEMVEpilogue
+  seed=202609016;results=[]
+  for rows,k,kind in ((1024,4096,"fp16_cast"),(4096,4096,"residual_add")):
+    selected=(0,1,7,127,rows//2,rows-1)
+    words_np,raw_matrix=_make_q4k_words(rows,k,seed);raw=np.ascontiguousarray(raw_matrix.reshape(-1))
+    x_np=np.random.default_rng(seed+1).normal(0,.2,k).astype(np.float16)
+    residual_np=np.random.default_rng(seed+2).normal(0,.1,rows).astype(np.float32)
+    out_dtype=dtypes.float16 if kind == "fp16_cast" else dtypes.float32
+    out=Tensor.empty(rows,dtype=out_dtype,device="NV").realize()
+    words=Tensor(words_np.copy(),dtype=dtypes.uint32,device="NV").realize()
+    x=Tensor(x_np.copy(),dtype=dtypes.float16,device="NV").realize()
+    residual=Tensor(residual_np.copy(),dtype=dtypes.float32,device="NV").realize()
+    epi=Q4KGEMVEpilogue(kind)
+    candidate={"family":"q4_g3_route.v1","rows":rows,"k":k,"load_style":"vector",
+      "epilogue_kind":kind,"epilogue_binding":"epilogue_spec"}
+    authorities=(("decode_q4k_g3_generated","q4_g3_gemv"),
+      ("decode_q4k_epilogue_fusion","q4_gemv_epilogue"))
+    if kind == "residual_add": authorities += (("decode_q4k_epilogue_resadd","q4_gemv_residual_epilogue"),)
+    emitter,ticket=lower_authorized_candidate(candidate,authorities,lowering_bindings={"epilogue_spec":epi})
+    placeholders=[UOp.placeholder((rows,),out_dtype,0),UOp.placeholder(words_np.shape,dtypes.uint32,1),
+      UOp.placeholder((k,),dtypes.float16,2)];tensors=[out,words,x]
+    if kind == "residual_add":
+      placeholders.append(UOp.placeholder((rows,),dtypes.float32,3));tensors.append(residual)
+    ast=emitter(*placeholders);program,run=_runner(ast,tuple(tensors));timing=_timing(run,reps)
+    got=out.numpy()[list(selected)].astype(np.float32)
+    base=_selected_reference(raw,x_np,selected,(k//256)*144,"q4")
+    ref=base.astype(np.float16).astype(np.float32) if kind == "fp16_cast" else base+residual_np[list(selected)]
+    err=np.abs(got-ref);atol=np.maximum(2e-3,np.abs(ref)*5e-4)
+    results.append({"route_id":"decode_q4k_epilogue_resadd" if kind == "residual_add" else "decode_q4k_epilogue_fusion",
+      "candidate_family":"q4_g3_route.v1","epilogue":kind,"tickets":[item.to_dict() for item in ticket.tickets],
+      "program_key":_program_key(program),"selected_rows":selected,
+      "payload_sha256":hashlib.sha256(raw.tobytes()+x_np.tobytes()+(residual_np.tobytes() if kind == "residual_add" else b"")).hexdigest(),
+      "correctness":{"pass":bool(np.all(err<=atol)),"max_abs":float(err.max()),"max_allowed":float(atol.max()),
+        "finite":bool(np.isfinite(got).all())},"timing_us":{"samples":timing,"median":statistics.median(timing)}})
+    seed += 10
+  return results
+
+
+def qualify_q6_epilogue(reps:int) -> dict:
+  from tinygrad.llm.decode_kernels import q6k_spec_for_role
+  rows,k,seed=4096,12288,202609017;selected=(0,1,7,127,2047,4095)
+  halfs_np=_make_q6k_halfs(rows,k,seed);raw=np.ascontiguousarray(halfs_np.view(np.uint8).reshape(-1))
+  x_np=np.random.default_rng(seed+1).normal(0,.2,k).astype(np.float16)
+  residual_np=np.random.default_rng(seed+2).normal(0,.1,rows).astype(np.float32)
+  out=Tensor.empty(rows,dtype=dtypes.float32,device="NV").realize()
+  halfs=Tensor(halfs_np.copy(),dtype=dtypes.uint16,device="NV").realize()
+  x=Tensor(x_np.copy(),dtype=dtypes.float16,device="NV").realize()
+  residual=Tensor(residual_np.copy(),dtype=dtypes.float32,device="NV").realize()
+  spec=q6k_spec_for_role(rows,k,role="ffn_down",row_tile=2,reduction="in_kernel",
+    target="NV:sm_120",epilogue="ffn_down_resadd")
+  candidate={"family":"q6_gemv_route.v1","rows":rows,"k":k,"row_tile":spec.row_tile,
+    "reduction":spec.reduction,"epilogue":spec.epilogue,"spec_binding":"q6_spec"}
+  authorities=(("decode_q6k_coop_generated","q6_gemv"),("decode_epilogue_fusion","q6_gemv_epilogue"),
+    ("decode_ffn_down_resadd","q6_ffn_down_resadd"))
+  emitter,ticket=lower_authorized_candidate(candidate,authorities,lowering_bindings={"q6_spec":spec})
+  ast=emitter(UOp.placeholder((rows,),dtypes.float32,0),UOp.placeholder(halfs_np.shape,dtypes.uint16,1),
+    UOp.placeholder((k,),dtypes.float16,2),UOp.placeholder((rows,),dtypes.float32,3))
+  program,run=_runner(ast,(out,halfs,x,residual));timing=_timing(run,reps);got=out.numpy()[list(selected)]
+  ref=_selected_reference(raw,x_np,selected,(k//256)*210,"q6")+residual_np[list(selected)]
+  err=np.abs(got-ref);atol=np.maximum(3e-3,np.abs(ref)*8e-4)
+  return {"route_id":"decode_epilogue_fusion","candidate_family":"q6_gemv_route.v1","epilogue":spec.epilogue,
+    "tickets":[item.to_dict() for item in ticket.tickets],"program_key":_program_key(program),"selected_rows":selected,
+    "payload_sha256":hashlib.sha256(raw.tobytes()+x_np.tobytes()+residual_np.tobytes()).hexdigest(),
+    "correctness":{"pass":bool(np.all(err<=atol)),"max_abs":float(err.max()),"max_allowed":float(atol.max()),
+      "finite":bool(np.isfinite(got).all())},"timing_us":{"samples":timing,"median":statistics.median(timing)}}
+
+
 def main() -> int:
-  parser=argparse.ArgumentParser();parser.add_argument("--route",choices=("q6-v","q4-down","q4-w1w3","q4-g3","all"),default="all")
+  parser=argparse.ArgumentParser();parser.add_argument("--route",choices=("q6-v","q4-down","q4-w1w3","q4-g3","q4-epilogues","q6-epilogue","all"),default="all")
   parser.add_argument("--reps",type=int,default=11);parser.add_argument("--out",required=True);args=parser.parse_args()
   if not str(Device.DEFAULT).startswith("NV"): raise RuntimeError(f"native NV required, got {Device.DEFAULT}")
   rows=[]
@@ -155,6 +223,8 @@ def main() -> int:
   if args.route in ("q4-down","all"): rows.append(qualify_q4_down(args.reps))
   if args.route in ("q4-w1w3","all"): rows.extend(qualify_q4_w1w3(args.reps))
   if args.route in ("q4-g3","all"): rows.append(qualify_q4_g3(args.reps))
+  if args.route in ("q4-epilogues","all"): rows.extend(qualify_q4_epilogues(args.reps))
+  if args.route in ("q6-epilogue","all"): rows.append(qualify_q6_epilogue(args.reps))
   report={"schema":"tinygrad.boltbeam_route_numerical_qualification.v1","device":str(Device.DEFAULT),
     "git_commit":subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),"routes":rows,
     "pass":all(row["correctness"]["pass"] for row in rows)}
