@@ -28,6 +28,25 @@ def test_q6_v_provider_matches_direct_uop_artifact():
   assert provider(*args).key == emit_q6k_v_four_warp_fp16_direct()(*args).key
 
 
+def test_q6_generated_gemv_and_vocab_reduce_match_direct_uop_artifacts():
+  from tinygrad.llm.decode_kernels import (emit_q6k_gemv_kernel,emit_q6k_vocab_scalar_reduce_kernel,q6k_spec_for_role)
+  gemv=q6k_spec_for_role(1024,4096,role="attn_kv",parts=1,row_tile=2,use_coop=True,reduction="in_kernel")
+  gemv_candidate={"family":"q6_gemv_route.v1","rows":gemv.rows,"k":gemv.k,"row_tile":gemv.row_tile,
+    "reduction":gemv.reduction,"epilogue":gemv.epilogue,"spec_binding":"q6_spec"}
+  provider,_=lower_authorized_candidate(gemv_candidate,(("decode_q6k_coop_generated","q6_gemv"),),
+    lowering_bindings={"q6_spec":gemv})
+  gemv_args=(_buf(1024,dtypes.float32),_buf(1024*16*105,dtypes.uint16),_buf(4096,dtypes.float16))
+  assert provider(*gemv_args).key == emit_q6k_gemv_kernel(gemv)(*gemv_args).key
+  vocab=q6k_spec_for_role(131072,256)
+  vocab_candidate={"family":"q6_vocab_reduce_route.v1","rows":vocab.rows,"k":vocab.k,"row_tile":vocab.row_tile,
+    "reduction":vocab.reduction,"epilogue":vocab.epilogue,"spec_binding":"q6_spec"}
+  reducer,_=lower_authorized_candidate(vocab_candidate,(("decode_q6k_coop_generated","q6_vocab_reduce"),),
+    lowering_bindings={"q6_spec":vocab})
+  reduce_args=(_buf(vocab.rows,dtypes.float32),
+    _buf(vocab.rows*vocab.partial_axis_extent,dtypes.float32).reshape(vocab.rows,vocab.partial_axis_extent))
+  assert reducer(*reduce_args).key == emit_q6k_vocab_scalar_reduce_kernel(vocab)(*reduce_args).key
+
+
 def test_q4_kv_pair_provider_matches_direct_uop_artifact():
   from tinygrad.llm.q4k_kv_pair import emit_q4k_kv_pair_vector
   provider,_=lower_authorized_candidate({"family":"q4_kv_pair.v1","rows":1024,"k":4096},
