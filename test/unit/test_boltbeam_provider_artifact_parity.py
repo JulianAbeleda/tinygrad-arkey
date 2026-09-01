@@ -82,6 +82,18 @@ def test_shared_q8_pair_providers_match_direct_uop_artifacts():
     assert provider(*args).key == direct(*args).key
 
 
+def test_shared_q8_q4q4_qkv_full_provider_matches_direct_uop_artifact():
+  from tinygrad.llm.shared_q8_attention import _emit_q4_cooperative_qkv_full
+  blocks=UOp.const(dtypes.weakint,4);packed=4096//4+4096//32
+  candidate={"family":"shared_q8_multi_output.v1","variant":"q4q4_qkv","rows":1024,
+    "block_count_binding":"cooperative_blocks"}
+  provider,_=lower_authorized_candidate(candidate,
+    (("decode_shared_q8_q4q4_qkv_full","shared_q8_q4q4_qkv_full"),),lowering_bindings={"cooperative_blocks":blocks})
+  args=(_buf(4096,dtypes.float32),_buf(1024,dtypes.float32),_buf(1024,dtypes.float32),
+    _buf(4096*16*36,dtypes.uint32),_buf(2*1024*16*36,dtypes.uint32),_buf(packed,dtypes.uint32))
+  assert provider(*args).key == _emit_q4_cooperative_qkv_full(blocks)(*args).key
+
+
 def test_shared_q8_provider_and_direct_consumers_match_direct_uop_artifacts():
   from tinygrad.llm.shared_q8_attention import _emit_q8_provider, _emit_q4_cooperative, _emit_q6_warp_direct
   blocks=UOp.const(dtypes.weakint,4); packed=4096//4+4096//32
