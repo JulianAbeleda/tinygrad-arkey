@@ -74,6 +74,17 @@ def test_q6_epilogue_provider_matches_direct_uop_artifact():
     _buf(4096,dtypes.float32))
   assert provider(*args).key == emit_q6k_gemv_kernel(spec)(*args).key
 
+def test_kv_rope_store_provider_matches_direct_uop_artifacts():
+  from tinygrad.llm.decode_kernels import decode_kv_rope_store_kernel
+  for cache_dtype in (dtypes.float16,dtypes.float32):
+    for vparts in (1,4):
+      candidate={"family":"kv_rope_store.v1","Hkv":8,"Hd":128,"max_context":19,"vparts":vparts}
+      provider,_=lower_authorized_candidate(candidate,(("decode_kv_store_fusion","kv_rope_store"),))
+      args=(_buf(2*8*19*128,cache_dtype).reshape(2,1,8,19,128),_buf(1024,dtypes.float32),
+        _buf(1024*vparts,dtypes.float32).reshape(1024,vparts) if vparts > 1 else _buf(1024,dtypes.float32),
+        _buf(19*128,dtypes.float32).reshape(19,128))
+      assert provider(*args).key == decode_kv_rope_store_kernel(8,128,19,VPART=vparts)(*args).key
+
 
 def test_q4_kv_pair_provider_matches_direct_uop_artifact():
   from tinygrad.llm.q4k_kv_pair import emit_q4k_kv_pair_vector

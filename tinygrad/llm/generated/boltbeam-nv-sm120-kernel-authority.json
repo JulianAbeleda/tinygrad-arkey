@@ -33,7 +33,7 @@
     {"route_policy": "decode-shared-q8-attention-route-policy.json", "route_id": "decode_shared_q8_attention", "phase": "decode", "components": ["shared_q8_provider", "shared_q8_q4_consumer", "shared_q8_q6_consumer"], "choke_point": "kernel_program", "state": "exact"},
     {"route_policy": "decode-shared-q8-q4kv-pair-route-policy.json", "route_id": "decode_shared_q8_q4kv_pair", "phase": "decode", "components": ["shared_q8_q4_kv_pair"], "choke_point": "kernel_program", "state": "exact"},
     {"route_policy": "decode-shared-q8-q4q6-kv-pair-route-policy.json", "route_id": "decode_shared_q8_q4q6_kv_pair", "phase": "decode", "components": ["shared_q8_q4q6_kv_pair"], "choke_point": "kernel_program", "state": "exact"},
-    {"route_policy": "decode-kv-store-fusion-route-policy.json", "route_id": "decode_kv_store_fusion", "phase": "decode", "components": ["kv_rope_store"], "choke_point": "kernel_program", "state": "template"},
+    {"route_policy": "decode-kv-store-fusion-route-policy.json", "route_id": "decode_kv_store_fusion", "phase": "decode", "components": ["kv_rope_store"], "choke_point": "kernel_program", "state": "exact"},
     {"route_policy": "decode-norm-fusion-route-policy.json", "route_id": "decode_norm_fusion", "phase": "decode", "components": ["decode_norm_fusion"], "choke_point": "kernel_program", "state": "exact"},
     {"route_policy": "decode-q4k-epilogue-fusion-route-policy.json", "route_id": "decode_q4k_epilogue_fusion", "phase": "decode", "components": ["q4_gemv_epilogue"], "choke_point": "kernel_program", "state": "exact"},
     {"route_policy": "decode-q4k-q4q4-qkv-full-route-policy.json", "route_id": "decode_q4k_q4q4_qkv_full", "phase": "decode", "components": ["q4q4_qkv_full"], "choke_point": "kernel_program", "state": "exact"},
