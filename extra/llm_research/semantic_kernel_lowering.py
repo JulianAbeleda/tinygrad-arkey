@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib, json
 from typing import Any, Callable
+from extra.llm_research.boltbeam_runtime_ticket import BoltbeamKernelTicket
 
 SEMANTIC_PROGRAM_SCHEMA = "boltbeam.semantic_kernel_program.v1"
 _OPS = frozenset({
@@ -149,4 +150,10 @@ def build_registered_llm_emitter(family: str, parameters: dict[str, Any]):
   raise ValueError(f"no registered tinygrad LLM emitter for family {family!r}")
 
 
-__all__ = ["LoweredSemanticProgram", "PrimitiveNode", "SemanticLoweringRegistry", "build_registered_llm_emitter", "default_registry"]
+def make_boltbeam_ticket(program_hash: str, route_hash: str, family: str, target_identity: str,
+                         provider_revision: str = "semantic-lowering-v1") -> BoltbeamKernelTicket:
+  """Create the runtime provenance token after BoltBeam has authorized a candidate."""
+  return BoltbeamKernelTicket(program_hash, route_hash, family, target_identity, provider_revision)
+
+
+__all__ = ["LoweredSemanticProgram", "PrimitiveNode", "SemanticLoweringRegistry", "build_registered_llm_emitter", "default_registry", "make_boltbeam_ticket"]
