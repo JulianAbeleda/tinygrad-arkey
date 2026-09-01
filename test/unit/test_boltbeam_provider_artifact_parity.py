@@ -82,6 +82,19 @@ def test_q4_ffn_down_provider_matches_direct_uop_artifact():
   args=(_buf(4096,dtypes.float32),_buf(4096*48*36,dtypes.uint32),_buf(12288,dtypes.float16),_buf(4096,dtypes.float32))
   assert provider(*args).key == emit_four_warp_fp16_direct(blocks,resadd=True,load_style="vector")(*args).key
 
+
+def test_q4_w1w3_providers_match_direct_uop_artifacts():
+  from tinygrad.llm.decode_kernels import q4k_g3_lanemap_gemv_w1w3_kernel
+  args32=(_buf(12288,dtypes.float32),_buf(12288*16*36,dtypes.uint32),
+    _buf(12288*16*36,dtypes.uint32),_buf(4096,dtypes.float16))
+  args16=(_buf(12288,dtypes.float16),)+args32[1:]
+  for store_fp16,args in ((False,args32),(True,args16)):
+    authorities=(("decode_q4k_w1w3_fusion","q4_w1w3_fused"),)+(
+      (("decode_q4k_w1w3_fp16_store","q4_w1w3_fused_fp16"),) if store_fp16 else ())
+    candidate={"family":"q4_w1w3.v1","rows":12288,"k":4096,"load_style":"vector","store_fp16":store_fp16}
+    provider,_=lower_authorized_candidate(candidate,authorities)
+    assert provider(*args).key == q4k_g3_lanemap_gemv_w1w3_kernel(12288,4096,load_style="vector",store_fp16=store_fp16)(*args).key
+
 def test_argmax_provider_matches_direct_uop_artifact():
   from tinygrad.llm.packed_argmax import emit_native_finite_fp32_argmax
   provider,_=lower_authorized_candidate({"family":"finite_argmax.v1","n":151936,"threads":1024,"host_mirror":False},

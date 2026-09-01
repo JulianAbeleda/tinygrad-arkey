@@ -96,13 +96,45 @@ def qualify_q4_down(reps:int) -> dict:
     "timing_us":{"samples":timing,"median":statistics.median(timing)}}
 
 
+def qualify_q4_w1w3(reps:int) -> list[dict]:
+  rows,k,seed=12288,4096,202609014
+  selected=(0,1,7,127,4095,12287)
+  gate_words,gate_raw_matrix=_make_q4k_words(rows,k,seed);up_words,up_raw_matrix=_make_q4k_words(rows,k,seed+1)
+  gate_raw=np.ascontiguousarray(gate_raw_matrix.reshape(-1));up_raw=np.ascontiguousarray(up_raw_matrix.reshape(-1))
+  x_np=np.random.default_rng(seed+2).normal(0,.2,k).astype(np.float16)
+  gate=Tensor(gate_words.copy(),dtype=dtypes.uint32,device="NV").realize()
+  up=Tensor(up_words.copy(),dtype=dtypes.uint32,device="NV").realize();x=Tensor(x_np.copy(),dtype=dtypes.float16,device="NV").realize()
+  gate_ref=_selected_reference(gate_raw,x_np,selected,(k//256)*144,"q4")
+  up_ref=_selected_reference(up_raw,x_np,selected,(k//256)*144,"q4")
+  reference=(gate_ref/(1.0+np.exp(-gate_ref))*up_ref).astype(np.float32);results=[]
+  for store_fp16 in (False,True):
+    dtype=dtypes.float16 if store_fp16 else dtypes.float32;out=Tensor.empty(rows,dtype=dtype,device="NV").realize()
+    authorities=(("decode_q4k_w1w3_fusion","q4_w1w3_fused"),)+(
+      (("decode_q4k_w1w3_fp16_store","q4_w1w3_fused_fp16"),) if store_fp16 else ())
+    candidate={"family":"q4_w1w3.v1","rows":rows,"k":k,"load_style":"vector","store_fp16":store_fp16}
+    emitter,ticket=lower_authorized_candidate(candidate,authorities)
+    ast=emitter(UOp.placeholder((rows,),dtype,0),UOp.placeholder(gate_words.shape,dtypes.uint32,1),
+      UOp.placeholder(up_words.shape,dtypes.uint32,2),UOp.placeholder((k,),dtypes.float16,3))
+    program,run=_runner(ast,(out,gate,up,x));timing=_timing(run,reps);got=out.numpy()[list(selected)].astype(np.float32)
+    ref=reference.astype(np.float16).astype(np.float32) if store_fp16 else reference
+    err=np.abs(got-ref);atol=np.maximum(3e-3,np.abs(ref)*1e-3)
+    results.append({"route_id":"decode_q4k_w1w3_fp16_store" if store_fp16 else "decode_q4k_w1w3_fusion",
+      "candidate_family":"q4_w1w3.v1","store_fp16":store_fp16,"tickets":[item.to_dict() for item in ticket.tickets],
+      "program_key":_program_key(program),"selected_rows":selected,
+      "payload_sha256":hashlib.sha256(gate_raw.tobytes()+up_raw.tobytes()+x_np.tobytes()).hexdigest(),
+      "correctness":{"pass":bool(np.all(err<=atol)),"max_abs":float(err.max()),"max_allowed":float(atol.max()),
+        "finite":bool(np.isfinite(got).all())},"timing_us":{"samples":timing,"median":statistics.median(timing)}})
+  return results
+
+
 def main() -> int:
-  parser=argparse.ArgumentParser();parser.add_argument("--route",choices=("q6-v","q4-down","all"),default="all")
+  parser=argparse.ArgumentParser();parser.add_argument("--route",choices=("q6-v","q4-down","q4-w1w3","all"),default="all")
   parser.add_argument("--reps",type=int,default=11);parser.add_argument("--out",required=True);args=parser.parse_args()
   if not str(Device.DEFAULT).startswith("NV"): raise RuntimeError(f"native NV required, got {Device.DEFAULT}")
   rows=[]
   if args.route in ("q6-v","all"): rows.append(qualify_q6_v(args.reps))
   if args.route in ("q4-down","all"): rows.append(qualify_q4_down(args.reps))
+  if args.route in ("q4-w1w3","all"): rows.extend(qualify_q4_w1w3(args.reps))
   report={"schema":"tinygrad.boltbeam_route_numerical_qualification.v1","device":str(Device.DEFAULT),
     "git_commit":subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),"routes":rows,
     "pass":all(row["correctness"]["pass"] for row in rows)}
