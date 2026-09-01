@@ -821,7 +821,9 @@ def shared_q8_attention_call(admission, q_linear, k_linear, v_linear, x:Tensor, 
     if admission.q4_q6_qkv_triple_output:
       program=KernelProgram("decode_shared_q8_attention",f"q4q4q6.blk{admission.block_index}.qkv_full.coop_direct",
         KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED,_emit_q4_q6_cooperative_qkv_full(cooperative_blocks),
-        output_spec=OutputSpec((_Q_ROWS,),dtypes.float32))
+        output_spec=OutputSpec((_Q_ROWS,),dtypes.float32),
+        boltbeam_ticket=tickets_for_candidate({"family":"shared_q8_q4q6_qkv_full.v1"},
+          (("decode_shared_q8_q4q6_kv_pair","shared_q8_q4q6_kv_pair"),)))
       q_out=Tensor.empty((_Q_ROWS,),dtype=dtypes.float32,device=x.device)
       k_out=Tensor.empty((_KV_ROWS,),dtype=dtypes.float32,device=x.device)
       v_out=Tensor.empty((_KV_ROWS,),dtype=dtypes.float32,device=x.device)
@@ -832,7 +834,9 @@ def shared_q8_attention_call(admission, q_linear, k_linear, v_linear, x:Tensor, 
     if packed_words is None or tuple(packed_words.shape) != (2*_KV_ROWS*(_K//256)*Q4K_WORDS_PER_BLOCK,): return None
     program=KernelProgram("decode_shared_q8_attention",f"q4q4q4.blk{admission.block_index}.qkv_full.coop_direct",
       KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED,_emit_q4_cooperative_qkv_full(cooperative_blocks),
-      output_spec=OutputSpec((_Q_ROWS,),dtypes.float32))
+      output_spec=OutputSpec((_Q_ROWS,),dtypes.float32),
+      boltbeam_ticket=tickets_for_candidate({"family":"shared_q8_q4q4_qkv_full.v1"},
+        (("decode_shared_q8_q4q4_qkv_full","shared_q8_q4q4_qkv_full"),)))
     q_out=Tensor.empty((_Q_ROWS,),dtype=dtypes.float32,device=x.device)
     k_out=Tensor.empty((_KV_ROWS,),dtype=dtypes.float32,device=x.device)
     v_out=Tensor.empty((_KV_ROWS,),dtype=dtypes.float32,device=x.device)
@@ -848,7 +852,10 @@ def shared_q8_attention_call(admission, q_linear, k_linear, v_linear, x:Tensor, 
     emitter=_emit_q4_cooperative_pair if admission.q4_kv_pair_output else _emit_q4_q6_cooperative_pair
     pair=KernelProgram("decode_shared_q8_attention",f"{route_kind}.blk{admission.block_index}.kv_pair.coop_direct",
       KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED,emitter(_KV_ROWS,cooperative_blocks),
-      output_spec=OutputSpec((_KV_ROWS,),dtypes.float32))
+      output_spec=OutputSpec((_KV_ROWS,),dtypes.float32),
+      boltbeam_ticket=tickets_for_candidate({"family":"shared_q8_kv_pair.v1","mixed_q6_v":admission.q4_q6_kv_pair_output},
+        (("decode_shared_q8_q4q6_kv_pair","shared_q8_q4q6_kv_pair"),) if admission.q4_q6_kv_pair_output else
+         (("decode_shared_q8_q4kv_pair","shared_q8_q4_kv_pair"),)))
     k_out=Tensor.empty((_KV_ROWS,),dtype=dtypes.float32,device=x.device)
     v_out=Tensor.empty((_KV_ROWS,),dtype=dtypes.float32,device=x.device)
     v_storage=v_linear.q4k_storage.words if isinstance(v_linear,Q4KPrimitiveLinear) else v_linear.q6k_storage.halfs

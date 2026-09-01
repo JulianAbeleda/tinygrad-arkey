@@ -29,3 +29,5 @@ def test_shared_q8_composite_authority():
     ("decode_shared_q8_attention","shared_q8_q4_consumer"),
     ("decode_q4_direct_shared_q8_attention","shared_q8_q4_direct")))
   assert len(bundle.tickets) == 2
+  routes = load_promoted_routes()
+  assert "shared_q8_q4q4_qkv_full" in routes["decode_shared_q8_q4q4_qkv_full"]["components"]
