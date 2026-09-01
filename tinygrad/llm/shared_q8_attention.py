@@ -19,6 +19,7 @@ from tinygrad.llm.decode_kernels import (Q4K_WORDS_PER_BLOCK, Q6K_HALFWORDS_PER_
 from tinygrad.llm.kernel_program import (KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program,
   execute_promoted_program_outputs, execute_research_program)
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, ReduceOutputSpec, UOp
+from extra.llm_research.boltbeam_authority import tickets_for_candidate
 
 _K, _Q_ROWS, _KV_ROWS = 4096, 4096, 1024
 _Q8_PACKS, _Q8_GROUPS = _K//4, _K//32
@@ -784,12 +785,17 @@ def shared_q8_attention_call(admission, q_linear, k_linear, v_linear, x:Tensor, 
     route_kind="q4q4q4" if isinstance(v_linear,Q4KPrimitiveLinear) else "q4q4q6"
     provider=KernelProgram("decode_shared_q8_attention",f"{route_kind}.blk{admission.block_index}.rmsnorm_provider",
       KernelProgramProvenance.MACHINE_SEARCH_GENERATED,_emit_rmsnorm_q8_provider(spec,marker_uop.src[1].dtype,norm_weight.dtype),
-      output_spec=OutputSpec((_Q8_PACKS+_Q8_GROUPS,),dtypes.uint32))
+      output_spec=OutputSpec((_Q8_PACKS+_Q8_GROUPS,),dtypes.uint32),
+      boltbeam_ticket=tickets_for_candidate({"family":"q8_1_provider.v1","source":"fused_rmsnorm","k":_K},
+        (("decode_shared_q8_attention","shared_q8_provider"),
+         ("decode_reduce_output_rmsnorm","reduce_output_rmsnorm"))))
     xp=execute_promoted_program(None,Tensor(marker_uop.src[1]).reshape(_K),norm_weight,program=provider)
   else:
     route_kind="q4q4q4" if isinstance(v_linear,Q4KPrimitiveLinear) else "q4q4q6"
     provider=KernelProgram("decode_shared_q8_attention",f"{route_kind}.blk{admission.block_index}.provider",
-      KernelProgramProvenance.MACHINE_SEARCH_GENERATED,_emit_q8_provider(),output_spec=OutputSpec((_Q8_PACKS+_Q8_GROUPS,),dtypes.uint32))
+      KernelProgramProvenance.MACHINE_SEARCH_GENERATED,_emit_q8_provider(),output_spec=OutputSpec((_Q8_PACKS+_Q8_GROUPS,),dtypes.uint32),
+      boltbeam_ticket=tickets_for_candidate({"family":"q8_1_provider.v1","source":"fp16","k":_K},
+        (("decode_shared_q8_attention","shared_q8_provider"),)))
     xp=execute_promoted_program(None,x[:,0,:].reshape(_K),program=provider)
   def run(linear, rows, emitter, storage):
     cooperative=admission.cooperative_q4 and emitter is _emit_q4
@@ -800,7 +806,12 @@ def shared_q8_attention_call(admission, q_linear, k_linear, v_linear, x:Tensor, 
     shape=(rows,4) if cooperative and not q4_direct else (rows,)
     suffix='.coop_direct' if q4_direct else '.coop' if cooperative else '.q6_direct' if q6_direct else ''
     program=KernelProgram("decode_shared_q8_attention", f"{route_kind}.blk{admission.block_index}.{rows}{suffix}",
-      KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emitted(rows), output_spec=OutputSpec(shape,dtypes.float32))
+      KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emitted(rows), output_spec=OutputSpec(shape,dtypes.float32),
+      boltbeam_ticket=tickets_for_candidate({"family":"shared_q8_consumer.v1","route_kind":route_kind,
+        "rows":rows,"cooperative":cooperative,"direct_output":q4_direct or q6_direct},
+        (("decode_shared_q8_attention","shared_q8_q4_consumer" if emitter is _emit_q4 else "shared_q8_q6_consumer"),) +
+        ((("decode_q4_direct_shared_q8_attention","shared_q8_q4_direct"),) if q4_direct else ()) +
+        ((("decode_q6_direct_shared_q8_attention","shared_q8_q6_direct"),) if q6_direct else ())))
     ret=execute_promoted_program(None,storage.to(x.device),xp,program=program)
     if cooperative and not q4_direct: ret=ret.sum(axis=1).contiguous()
     return ret.reshape(1,1,rows)

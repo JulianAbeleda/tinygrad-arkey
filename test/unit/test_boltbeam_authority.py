@@ -23,3 +23,9 @@ def test_bound_reduction_and_cache_authorities_exist():
   assert "q4_ffn_down_resadd" in routes["decode_ffn_down_resadd"]["components"]
   assert "finite_fp32_argmax" in routes["decode_native_argmax"]["components"]
   assert "qk_norm_rope_cache_sink" in routes["decode_producer_kv_cache_sink"]["components"]
+
+def test_shared_q8_composite_authority():
+  bundle = tickets_for_candidate({"family":"shared_q8_consumer.v1","quant":"q4"}, (
+    ("decode_shared_q8_attention","shared_q8_q4_consumer"),
+    ("decode_q4_direct_shared_q8_attention","shared_q8_q4_direct")))
+  assert len(bundle.tickets) == 2
