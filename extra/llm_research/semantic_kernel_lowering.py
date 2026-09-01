@@ -121,7 +121,8 @@ def build_registered_llm_emitter(family: str, parameters: dict[str, Any], bindin
     from tinygrad.llm.q4k_gate_up_four_warp_mmvq import emit_q4k_gate_up_four_warp_fp16
     return emit_q4k_gate_up_four_warp_fp16(parameters["vector_loads"])
   if family == "q4_ffn_down.v1":
-    if set(parameters) != {"block_count", "resadd", "load_style"} or parameters["load_style"] not in ("scalar", "vector"):
+    if (set(parameters) != {"block_count", "resadd", "load_style"} or parameters["block_count"] != 3 or
+        parameters["load_style"] not in ("scalar", "vector")):
       raise ValueError("q4_ffn_down.v1 parameters are invalid")
     from tinygrad.llm.q4k_ffn_down_mmvq import emit_four_warp_fp16_direct
     return emit_four_warp_fp16_direct(UOp.const(dtypes.weakint, parameters["block_count"]), resadd=parameters["resadd"], load_style=parameters["load_style"])
