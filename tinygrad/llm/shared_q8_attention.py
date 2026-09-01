@@ -19,7 +19,7 @@ from tinygrad.llm.decode_kernels import (Q4K_WORDS_PER_BLOCK, Q6K_HALFWORDS_PER_
 from tinygrad.llm.kernel_program import (KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program,
   execute_promoted_program_outputs, execute_research_program)
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, ReduceOutputSpec, UOp
-from extra.llm_research.boltbeam_authority import tickets_for_candidate
+from extra.llm_research.boltbeam_authority import lower_authorized_candidate, tickets_for_candidate
 
 _K, _Q_ROWS, _KV_ROWS = 4096, 4096, 1024
 _Q8_PACKS, _Q8_GROUPS = _K//4, _K//32
@@ -792,10 +792,11 @@ def shared_q8_attention_call(admission, q_linear, k_linear, v_linear, x:Tensor, 
     xp=execute_promoted_program(None,Tensor(marker_uop.src[1]).reshape(_K),norm_weight,program=provider)
   else:
     route_kind="q4q4q4" if isinstance(v_linear,Q4KPrimitiveLinear) else "q4q4q6"
+    emitter,ticket=lower_authorized_candidate({"family":"shared_q8_provider.v1","source_dtype":"fp16","k":_K},
+      (("decode_shared_q8_attention","shared_q8_provider"),))
     provider=KernelProgram("decode_shared_q8_attention",f"{route_kind}.blk{admission.block_index}.provider",
-      KernelProgramProvenance.MACHINE_SEARCH_GENERATED,_emit_q8_provider(),output_spec=OutputSpec((_Q8_PACKS+_Q8_GROUPS,),dtypes.uint32),
-      boltbeam_ticket=tickets_for_candidate({"family":"q8_1_provider.v1","source":"fp16","k":_K},
-        (("decode_shared_q8_attention","shared_q8_provider"),)))
+      KernelProgramProvenance.MACHINE_SEARCH_GENERATED,emitter,output_spec=OutputSpec((_Q8_PACKS+_Q8_GROUPS,),dtypes.uint32),
+      boltbeam_ticket=ticket)
     xp=execute_promoted_program(None,x[:,0,:].reshape(_K),program=provider)
   def run(linear, rows, emitter, storage):
     cooperative=admission.cooperative_q4 and emitter is _emit_q4

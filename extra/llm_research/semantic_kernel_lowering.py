@@ -98,6 +98,11 @@ def build_registered_llm_emitter(family: str, parameters: dict[str, Any]):
     from tinygrad.llm.q4k_ffn_down_mmvq import emit_q8_provider
     source_dtype = dtypes.float16 if parameters["source_dtype"] == "fp16" else dtypes.float32
     return emit_q8_provider(source_dtype, k=parameters["k"])
+  if family == "shared_q8_provider.v1":
+    if set(parameters) != {"k", "source_dtype"} or parameters != {"k":4096, "source_dtype":"fp16"}:
+      raise ValueError("shared_q8_provider.v1 parameters are invalid")
+    from tinygrad.llm.shared_q8_attention import _emit_q8_provider
+    return _emit_q8_provider()
   if family == "q4_g3_gemv.v1":
     required = {"rows", "k", "lanes", "load_style", "epilogue"}
     if set(parameters) != required or parameters["load_style"] not in ("scalar", "vector", "quad"):
