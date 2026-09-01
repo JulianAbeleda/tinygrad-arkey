@@ -69,3 +69,11 @@ def test_rmsnorm_q8_checked_spec_binding():
     "spec_binding":"reduce_output_spec"},(("decode_shared_q8_attention","shared_q8_provider"),),
     lowering_bindings={"reduce_output_spec":spec})
   assert callable(emitter)
+
+def test_q6_checked_spec_binding():
+  from tinygrad.llm.decode_kernels import q6k_spec_for_role
+  spec=q6k_spec_for_role(4096,12288,parts=1,row_tile=2,use_coop=True,target="NV:sm_120",reduction="in_kernel",epilogue="")
+  emitter,_=lower_authorized_candidate({"family":"q6_gemv_route.v1","rows":4096,"k":12288,"row_tile":2,
+    "reduction":"in_kernel","epilogue":"","spec_binding":"q6_spec"},
+    (("decode_q6k_coop_generated","q6_gemv"),),lowering_bindings={"q6_spec":spec})
+  assert callable(emitter)

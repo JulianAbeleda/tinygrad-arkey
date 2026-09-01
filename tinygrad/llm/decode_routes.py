@@ -231,14 +231,17 @@ class _Q4KDecodeCandidate:
     if epi_spec is not None and epi_spec.kind in ("ffn_down_resadd","residual_add"):
       authorities += (("decode_q4k_epilogue_resadd","q4_gemv_residual_epilogue"),)
       if route_role == "ffn_down": authorities += (("decode_ffn_down_resadd","q4_ffn_down_resadd"),)
+    candidate={"family":"q4_g3_route.v1","rows":binding.N,"k":binding.K,"load_style":q4k_load_style,
+      "epilogue_kind":getattr(epi_spec,"kind",""),"epilogue_binding":"epilogue_spec" if epi_spec is not None else None}
+    emitter,ticket=lower_authorized_candidate(candidate,authorities,
+      lowering_bindings={"epilogue_spec":epi_spec} if epi_spec is not None else None)
     program = KernelProgram(binding.route_id, f"{binding.candidate_id}.gemv",
       KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
-      q4k_g3_lanemap_gemv_kernel(binding.N, binding.K, epilogue=epi_spec, load_style=q4k_load_style),
+      emitter,
       output_spec=OutputSpec((binding.N,), out_dtype, typed_output=typed_output),
       typed_input_views=typed_input_views,
       residual_input_views=residual_input_views,
-      boltbeam_ticket=tickets_for_candidate({"family":"q4_g3_gemv.v1","rows":binding.N,"k":binding.K,
-        "load_style":q4k_load_style,"epilogue":getattr(epi_spec,"kind","")},authorities))
+      boltbeam_ticket=ticket)
     return execute_promoted_program(None, *prog_inputs, program=program).reshape(1, 1, binding.N)
 
 # This is a statically promoted result of offline machine search, not an online
@@ -496,16 +499,18 @@ class _Q6KDecodeCandidate:
     authorities=(("decode_q6k_coop_generated","q6_gemv"),)
     if fusion_admitted: authorities += (("decode_epilogue_fusion","q6_gemv_epilogue"),)
     if epilogue == "ffn_down_resadd": authorities += (("decode_ffn_down_resadd","q6_ffn_down_resadd"),)
+    candidate={"family":"q6_gemv_route.v1","rows":binding.N,"k":binding.K,"row_tile":binding.row_tile,
+      "reduction":reduction,"epilogue":epilogue,"spec_binding":"q6_spec"}
+    emitter,ticket=lower_authorized_candidate(candidate,authorities,lowering_bindings={"q6_spec":spec})
     gemv_program = KernelProgram(binding.route_id, f"{binding.candidate_id}.gemv",
-      KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emit_q6k_gemv_kernel(spec),
+      KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emitter,
       output_spec=OutputSpec((binding.N,) if reduction == "in_kernel" else (binding.N, spec.partial_axis_extent),
                              dtypes.float32, typed_output=typed_output),
       typed_input_views=typed_input_views,
       residual_input_views=((ResidualViewRequest(slot=2, dtype=dtypes.float32, flat_shape=(binding.N,),
                                                  route_role="ffn_down", kind="residual_add"),)
                            if epilogue == "ffn_down_resadd" else ()),
-      boltbeam_ticket=tickets_for_candidate({"family":"q6_gemv.v1","rows":binding.N,"k":binding.K,
-        "row_tile":binding.row_tile,"reduction":reduction,"epilogue":epilogue},authorities))
+      boltbeam_ticket=ticket)
     if epilogue:
       h_vec = epi_inputs["normed_h"][:, 0, :].reshape(binding.N).cast(dtypes.float32)
       return execute_promoted_program(None, linear.q6k_storage.halfs.to(x.device), x_vec, h_vec,
@@ -517,11 +522,13 @@ class _Q6KDecodeCandidate:
       # external_sum fallback: reproduce the ordinary h+ffn_out fp32 add over the reduced partials.
       return (partial.sum(axis=1) + epi_inputs["normed_h"][:, 0, :].reshape(binding.N)).reshape(1, 1, binding.N)
     if q6k_vocab_scalar_reduce_eligible(spec):
+      emitter,ticket=lower_authorized_candidate({"family":"q6_vocab_reduce_route.v1","rows":binding.N,"k":binding.K,
+        "row_tile":binding.row_tile,"reduction":reduction,"epilogue":epilogue,"spec_binding":"q6_spec"},
+        (("decode_q6k_coop_generated","q6_vocab_reduce"),),lowering_bindings={"q6_spec":spec})
       reduce_program = KernelProgram(binding.route_id, f"{binding.candidate_id}.vocab_reduce",
-        KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emit_q6k_vocab_scalar_reduce_kernel(spec),
+        KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emitter,
         output_spec=OutputSpec((binding.N,), dtypes.float32),
-        boltbeam_ticket=tickets_for_candidate({"family":"q6_vocab_reduce.v1","rows":binding.N,"partial_axis":spec.partial_axis_extent},
-          (("decode_q6k_coop_generated","q6_vocab_reduce"),)))
+        boltbeam_ticket=ticket)
       return execute_promoted_program(None, partial, program=reduce_program).reshape(1, 1, binding.N)
     return partial.sum(axis=1).reshape(1, 1, binding.N)
 

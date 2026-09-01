@@ -217,6 +217,29 @@ def build_registered_llm_emitter(family: str, parameters: dict[str, Any], bindin
     except KeyError as exc: raise ValueError("rmsnorm_q8_provider.v1 dtype is invalid") from exc
     from tinygrad.llm.shared_q8_attention import _emit_rmsnorm_q8_provider
     return _emit_rmsnorm_q8_provider(spec,x_dtype,weight_dtype)
+  if family == "q4_g3_route.v1":
+    required={"rows","k","load_style","epilogue_kind","epilogue_binding"}
+    if set(parameters) != required: raise ValueError("q4_g3_route.v1 parameters are invalid")
+    epilogue=None
+    if parameters["epilogue_binding"] is not None:
+      name=parameters["epilogue_binding"]
+      if not bindings or name not in bindings: raise ValueError("Q4 epilogue binding is missing")
+      epilogue=bindings[name]
+      if getattr(epilogue,"kind",None) != parameters["epilogue_kind"]: raise ValueError("Q4 epilogue kind drift")
+    elif parameters["epilogue_kind"]: raise ValueError("Q4 epilogue binding is required")
+    from tinygrad.llm.decode_kernels import q4k_g3_lanemap_gemv_kernel
+    return q4k_g3_lanemap_gemv_kernel(parameters["rows"],parameters["k"],epilogue=epilogue,load_style=parameters["load_style"])
+  if family in ("q6_gemv_route.v1","q6_vocab_reduce_route.v1"):
+    required={"rows","k","row_tile","reduction","epilogue","spec_binding"}
+    if set(parameters) != required: raise ValueError("Q6 route parameters are invalid")
+    name=parameters["spec_binding"]
+    if not bindings or name not in bindings: raise ValueError("Q6 spec binding is missing")
+    spec=bindings[name]
+    for field,value in (("rows",parameters["rows"]),("k",parameters["k"]),("row_tile",parameters["row_tile"]),
+                        ("reduction",parameters["reduction"]),("epilogue",parameters["epilogue"])):
+      if getattr(spec,field) != value: raise ValueError(f"Q6 spec {field} drift")
+    from tinygrad.llm.decode_kernels import emit_q6k_gemv_kernel, emit_q6k_vocab_scalar_reduce_kernel
+    return emit_q6k_gemv_kernel(spec) if family == "q6_gemv_route.v1" else emit_q6k_vocab_scalar_reduce_kernel(spec)
   raise ValueError(f"no registered tinygrad LLM emitter for family {family!r}")
 
 
