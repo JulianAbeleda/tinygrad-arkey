@@ -5,6 +5,7 @@ residual chain ``epi_inputs["residual"][:, 0, :].reshape(N).cast(fp32)`` folds t
 view of the ordinary block-output producer. The ABI is closed-default; every validator failure
 rejects back to the generic flat-buffer ABI, which keeps its materializing copy. The combined
 M4 record and the M5 combine ABI are untouched."""
+import pytest
 from extra.llm_research.decode.m4_residual_boundary_fold_probe import _block_output_producer, residual_chain
 from tinygrad import Tensor, dtypes
 from tinygrad.llm.decode_kernels import Q4KGEMVEpilogue, q4k_g3_lanemap_gemv_kernel
@@ -16,6 +17,10 @@ from tinygrad.uop.ops import Ops
 N = 4096
 EPI_RESADD = f"q4k_g3_lanemap_gemv_epi_resadd_{N}_{N}"
 LEGACY = f"q4k_g3_lanemap_gemv_{N}_{N}"
+
+@pytest.fixture(autouse=True)
+def _synthetic_programs_bypass_boltbeam(monkeypatch):
+  monkeypatch.setenv("TINYGRAD_BOLTBEAM_ENFORCE", "0")
 
 
 def _gemv_program(opt_in: bool = True, route_role: str = "attn_qo", kind: str = "residual_add",
