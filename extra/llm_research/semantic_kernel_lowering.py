@@ -147,6 +147,19 @@ def build_registered_llm_emitter(family: str, parameters: dict[str, Any]):
         direct_output=parameters["direct_output"], residual_add=parameters["residual_add"])
     if parameters["direct_output"] or parameters["residual_add"]: raise ValueError("shared Q6 consumer has no Q4 epilogue flags")
     return _emit_q6(parameters["rows"])
+  if family == "finite_argmax.v1":
+    if set(parameters) != {"n", "threads", "host_mirror"} or not isinstance(parameters["host_mirror"], bool):
+      raise ValueError("finite_argmax.v1 parameters are invalid")
+    from tinygrad.llm.packed_argmax import emit_native_finite_fp32_argmax
+    return emit_native_finite_fp32_argmax(parameters["n"], parameters["threads"], host_mirror=parameters["host_mirror"])
+  if family == "kv_rope_store.v1":
+    if set(parameters) != {"Hkv", "Hd", "max_context", "vparts"}: raise ValueError("kv_rope_store.v1 parameters are invalid")
+    from tinygrad.llm.decode_routes import decode_kv_rope_store_kernel
+    return decode_kv_rope_store_kernel(parameters["Hkv"], parameters["Hd"], parameters["max_context"], VPART=parameters["vparts"])
+  if family == "q4_k_four_warp.v1":
+    if set(parameters) != {"rows", "k"}: raise ValueError("q4_k_four_warp.v1 parameters are invalid")
+    from extra.llm_research.decode.q4k_exact_group_factorized import emit_q4k_exact_four_warp
+    return emit_q4k_exact_four_warp(parameters["rows"], parameters["k"])
   raise ValueError(f"no registered tinygrad LLM emitter for family {family!r}")
 
 

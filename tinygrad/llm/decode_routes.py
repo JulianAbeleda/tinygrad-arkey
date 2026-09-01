@@ -390,11 +390,11 @@ def decode_kv_store_route(cache:Tensor, k:Tensor, v:Tensor, freqs:Tensor, Hkv:in
   if vparts > 1 and tuple(v.shape) != (Hkv * Hd, vparts):
     raise ValueError(f"decode_kv_store_route vparts={vparts} requires v shape {(Hkv*Hd, vparts)}, got {tuple(v.shape)}")
   if vparts == 1 and tuple(v.shape) != (Hkv * Hd,): v = v.reshape(Hkv * Hd)
+  emitter,ticket=lower_authorized_candidate({"family":"kv_rope_store.v1","Hkv":Hkv,"Hd":Hd,"max_context":MAXC,"vparts":vparts},
+    (("decode_kv_store_fusion","kv_rope_store"),))
   program = KernelProgram("decode_kv_store_fusion", "decode_kv_rope_store",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
-    decode_kv_rope_store_kernel(Hkv, Hd, MAXC, VPART=vparts), output_spec=None,
-    boltbeam_ticket=tickets_for_candidate({"family":"kv_rope_store.v1","Hkv":Hkv,"Hd":Hd,"max_context":MAXC,"vparts":vparts},
-      (("decode_kv_store_fusion","kv_rope_store"),)))
+    emitter, output_spec=None, boltbeam_ticket=ticket)
   return execute_promoted_program(cache, k.reshape(Hkv * Hd), v, freqs, program=program)
 
 @dataclass(frozen=True)

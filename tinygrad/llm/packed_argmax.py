@@ -14,7 +14,7 @@ from tinygrad.dtype import AddrSpace
 from tinygrad.helpers import cdiv
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
 from tinygrad.uop.ops import AxisType, KernelInfo, UOp
-from extra.llm_research.boltbeam_authority import tickets_for_candidate
+from extra.llm_research.boltbeam_authority import lower_authorized_candidate
 
 
 def make_native_argmax_host_mirror(device:str, memory:str="host") -> Tensor:
@@ -105,11 +105,12 @@ def native_argmax_finite_fp32(x:Tensor, threads:int=1024) -> Tensor:
     raise ValueError(f"native argmax needs one static fp32 row, got shape={x.shape} dtype={x.dtype}")
   if not str(x.device).startswith("NV"): raise ValueError(f"native argmax is NV-only, got {x.device}")
   n = x.shape[1]
+  emitter,ticket=lower_authorized_candidate({"family":"finite_argmax.v1","n":n,"threads":threads,"host_mirror":False},
+    (("decode_native_argmax","finite_fp32_argmax"),))
   program = KernelProgram("decode_native_finite_fp32_argmax", f"vocab_{n}_t{threads}",
-    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emit_native_finite_fp32_argmax(n, threads),
+    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emitter,
     output_spec=OutputSpec((1,), dtypes.int32),
-    boltbeam_ticket=tickets_for_candidate({"family":"finite_argmax.v1","n":n,"threads":threads,"host_mirror":False},
-      (("decode_native_argmax","finite_fp32_argmax"),)))
+    boltbeam_ticket=ticket)
   # The held decode return must not be a view of the custom program's internal
   # allocation: that allocation participates in the next replay's memory plan.
   return execute_promoted_program(None, x.reshape(n).contiguous(), program=program).reshape(1, 1).clone()
@@ -123,11 +124,12 @@ def native_argmax_finite_fp32_host_mirror(x:Tensor, mirror:Tensor, threads:int=1
     raise ValueError(f"native argmax mirror needs one int32 on {x.device}, got {mirror.shape=} {mirror.dtype=} {mirror.device=}")
   if not str(x.device).startswith("NV"): raise ValueError(f"native argmax is NV-only, got {x.device}")
   n = x.shape[1]
+  emitter,ticket=lower_authorized_candidate({"family":"finite_argmax.v1","n":n,"threads":threads,"host_mirror":True},
+    (("decode_native_argmax","finite_fp32_argmax"),))
   program = KernelProgram("decode_native_finite_fp32_argmax", f"vocab_{n}_t{threads}.host_mirror",
-    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emit_native_finite_fp32_argmax(n, threads, host_mirror=True),
+    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emitter,
     output_spec=OutputSpec((1,), dtypes.int32),
-    boltbeam_ticket=tickets_for_candidate({"family":"finite_argmax.v1","n":n,"threads":threads,"host_mirror":True},
-      (("decode_native_argmax","finite_fp32_argmax"),)))
+    boltbeam_ticket=ticket)
   out = Tensor.empty(1, dtype=dtypes.int32, device=x.device)
   results = out.uop_program(mirror, x.reshape(n).contiguous(), fxn=program.emitter)
   return results[0].reshape(1, 1).clone(), results[1]
