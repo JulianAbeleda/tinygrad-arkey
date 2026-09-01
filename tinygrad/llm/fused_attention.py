@@ -65,6 +65,7 @@ from typing import Any
 from tinygrad import Tensor, dtypes
 from tinygrad.device import Device
 from tinygrad.uop.ops import AttentionGridSpec, SharedAttentionCandidateContext
+from extra.llm_research.boltbeam_authority import tickets_for_candidate
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
 
 # ADMITTED GEOMETRIES (Hq, Hkv, q_tokens) for which the fragment-model kernel exists /
@@ -256,7 +257,10 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
               f"Hq={Hq},Hkv={Hkv},q_tokens={T},kv_tokens={KV},Hd={Hd}")
   program = KernelProgram("prefill_flash_attention_generated", f"prefill_flash_attention.{identity}",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED, fxn,
-    output_spec=OutputSpec((Hq * T * Hd,), dtypes.float16))
+    output_spec=OutputSpec((Hq * T * Hd,), dtypes.float16),
+    boltbeam_ticket=tickets_for_candidate({"family":"flash_prefill.v1","identity":identity,"kv_tokens":KV},
+      (("custom_kernel_prefill_attention","flash_prefill_score"),
+       ("custom_kernel_prefill_attention","flash_prefill_combine"))))
   result = execute_promoted_program(None, q_flat, k_flat, v_flat, program=program)
   # Record the dispatch AFTER every geometry/spec gate above has passed (i.e. only
   # once we know this call is committed to the fused custom-kernel route, not a

@@ -72,6 +72,7 @@ from tinygrad.llm.model_route_plan import (build_model_route_plan, decode_norm_f
 from tinygrad.llm.prefill_candidate_runtime import decode_prefill_graph_candidate_set, automatic_promoted_prefill_graph_policy
 from tinygrad.llm.physical_memory_ledger import AllocationOwner, bind_allocation_owner
 from tinygrad.uop.ops import Ops, resolve
+from extra.llm_research.boltbeam_authority import tickets_for_candidate
 
 _MEMORY_ADAPTIVE_MEASUREMENT_AUTHORITY = contextvars.ContextVar("_memory_adaptive_measurement_authority", default=None)
 _GENERIC_LLM_CONTROL = contextvars.ContextVar("_generic_llm_control", default=False)
@@ -544,7 +545,11 @@ def _decode_rmsnorm(norm, x:Tensor, promoted:bool, out_dtype=dtypes.float32) -> 
   spec = DecodeRMSNormSpec(rows=rows, dim=dim, eps=norm.eps, warps_per_row=warps,
                            x_dtype=x.dtype, weight_dtype=dtypes.float16, out_dtype=out_dtype, x_rank=x_rank)
   program = KernelProgram("decode_norm", spec.kernel_name, KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
-                          emit_decode_rmsnorm_kernel(spec), output_spec=OutputSpec((numel,), out_dtype))
+                          emit_decode_rmsnorm_kernel(spec), output_spec=OutputSpec((numel,), out_dtype),
+                          boltbeam_ticket=tickets_for_candidate({"family":"decode_rmsnorm.v1","rows":rows,
+                            "dim":dim,"warps_per_row":warps,"out_dtype":str(out_dtype)},
+                            (("decode_rmsnorm_native_lowering","decode_rmsnorm"),
+                             ("decode_norm_fusion","decode_norm_fusion"))))
   out = execute_promoted_program(None, x_in, w, program=program)
   return out.reshape(x.shape)
 

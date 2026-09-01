@@ -31,3 +31,8 @@ def test_shared_q8_composite_authority():
   assert len(bundle.tickets) == 2
   routes = load_promoted_routes()
   assert "shared_q8_q4q4_qkv_full" in routes["decode_shared_q8_q4q4_qkv_full"]["components"]
+
+def test_attention_and_norm_authorities_exist():
+  routes = load_promoted_routes()
+  assert set(routes["custom_kernel_prefill_attention"]["components"]) == {"flash_prefill_score", "flash_prefill_combine"}
+  assert "decode_rmsnorm" in routes["decode_rmsnorm_native_lowering"]["components"]
