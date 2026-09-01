@@ -252,6 +252,17 @@ def build_registered_llm_emitter(family: str, parameters: dict[str, Any], bindin
     except KeyError as exc: raise ValueError("cache-sink dtype is invalid") from exc
     from tinygrad.llm.producer_kv_cache_sink import emit_reduce_output_rope_kv_cache
     return emit_reduce_output_rope_kv_cache(spec,producer_dtype,weight_dtype,cache_dtype,parameters["max_context"])
+  if family in ("flash_decode_spec_tile.v1","flash_decode_spec_combine.v1"):
+    required={"candidate_id","spec_repr","spec_binding"} | ({"tc_repr","tc_binding"} if family.endswith("tile.v1") else set())
+    if set(parameters) != required: raise ValueError("flash-decode spec parameters are invalid")
+    name=parameters["spec_binding"]
+    if not bindings or name not in bindings: raise ValueError("flash-decode spec binding is missing")
+    spec=bindings[name]
+    if repr(spec) != parameters["spec_repr"]: raise ValueError("flash-decode spec drift")
+    if family.endswith("combine.v1"): return spec.emit_combine()
+    tc_name=parameters["tc_binding"]
+    if tc_name not in bindings or repr(bindings[tc_name]) != parameters["tc_repr"]: raise ValueError("flash-decode tile count drift")
+    return spec.emit_tile(bindings[tc_name])
   raise ValueError(f"no registered tinygrad LLM emitter for family {family!r}")
 
 

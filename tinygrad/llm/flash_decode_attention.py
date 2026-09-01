@@ -13,7 +13,7 @@ from tinygrad import Tensor, dtypes
 from tinygrad.dtype import AddrSpace
 from tinygrad.helpers import getenv
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
-from extra.llm_research.boltbeam_authority import tickets_for_candidate
+from extra.llm_research.boltbeam_authority import lower_authorized_candidate
 from tinygrad.codegen.late.warp_reduce import _staged_shfl, _warp_reduce_sum_staged, warp_reduce_max
 from tinygrad.llm.kernel_program import (DeclaredTypedOutput, KernelProgram, KernelProgramProvenance, OutputSpec,
                                          TypedLayout, execute_promoted_program)
@@ -1278,12 +1278,13 @@ def flash_decode_live_split_block_tile(q:Tensor, cache_kv:Tensor, Tc:UOp, Hd:int
                                          reduce_structure=reduce_structure, dot_pair_width=dot_pair_width,
                                          combine_lane_width=combine_lane_width,
                                          combine_fp16=combine_fp16)
+  tile_emitter,tile_ticket=lower_authorized_candidate({"family":"flash_decode_spec_tile.v1","candidate_id":route.candidate_id,
+    "spec_repr":repr(spec),"spec_binding":"flash_spec","tc_repr":repr(Tc),"tc_binding":"tile_count"},
+    (("decode_flash_llama_vec_wide","flash_decode_score_pv"),),lowering_bindings={"flash_spec":spec,"tile_count":Tc})
   tile_program = KernelProgram(route.route_id, f"{route.candidate_id}.tile",
-    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, spec.emit_tile(Tc),
+    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, tile_emitter,
     output_spec=OutputSpec((Hq * S * (Hd + 2),), dtypes.float32),
-    boltbeam_ticket=tickets_for_candidate({"family":"flash_decode_tile.v1","candidate_id":route.candidate_id,
-      "Hq":Hq,"Hkv":Hkv,"Hd":Hd,"max_context":MAXC,"splits":S,"tile_context":Tc},
-      (("decode_flash_llama_vec_wide","flash_decode_score_pv"),)))
+    boltbeam_ticket=tile_ticket)
   partial = execute_promoted_program(None, *inputs, program=tile_program)
   # M5 typed boundary (m5-variant-reopen-boundary-p0-scope-20260803.md section 3.1): the fp16
   # combine declares its typed output layout -- fp16 (Hq*Hd,) row-major, viewable as (Hq, Hd),
@@ -1295,13 +1296,14 @@ def flash_decode_live_split_block_tile(q:Tensor, cache_kv:Tensor, Tc:UOp, Hd:int
   if combine_fp16:
     combine_typed = DeclaredTypedOutput(TypedLayout(dtypes.float16, (Hq * Hd,), (Hq, Hd)),
                                         combine_fusion_admitted=combine_fp16)
+  combine_emitter,combine_ticket=lower_authorized_candidate({"family":"flash_decode_spec_combine.v1",
+    "candidate_id":route.candidate_id,"spec_repr":repr(spec),"spec_binding":"flash_spec"},
+    (("decode_flash_llama_vec_wide","flash_decode_combine"),
+     ("decode_flash_combine_fusion","flash_decode_combine")),lowering_bindings={"flash_spec":spec})
   combine_program = KernelProgram(route.route_id, f"{route.candidate_id}.combine",
-    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, spec.emit_combine(),
+    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, combine_emitter,
     output_spec=OutputSpec((Hq * Hd,), dtypes.float16 if combine_fp16 else dtypes.float32,
                            typed_output=combine_typed),
-    boltbeam_ticket=tickets_for_candidate({"family":"flash_decode_combine.v1","candidate_id":route.candidate_id,
-      "Hq":Hq,"Hd":Hd,"splits":S,"fp16":combine_fp16},
-      (("decode_flash_llama_vec_wide","flash_decode_combine"),
-       ("decode_flash_combine_fusion","flash_decode_combine"))))
+    boltbeam_ticket=combine_ticket)
   out = execute_promoted_program(None, partial, program=combine_program)
   return out.reshape(Hq, Hd)

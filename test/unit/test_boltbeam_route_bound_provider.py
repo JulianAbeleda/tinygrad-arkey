@@ -88,3 +88,14 @@ def test_cache_sink_checked_spec_binding():
     "spec_binding":"reduce_output_spec"},(("decode_producer_kv_cache_sink","qk_norm_rope_cache_sink"),),
     lowering_bindings={"reduce_output_spec":spec})
   assert callable(emitter)
+
+def test_flash_spec_checked_binding():
+  class Spec:
+    def __repr__(self): return "flash-spec-v1"
+    def emit_tile(self, tc): return lambda *args: tc
+    def emit_combine(self): return lambda *args: None
+  spec=Spec()
+  emitter,_=lower_authorized_candidate({"family":"flash_decode_spec_combine.v1","candidate_id":"flash.candidate",
+    "spec_repr":repr(spec),"spec_binding":"flash_spec"},
+    (("decode_flash_llama_vec_wide","flash_decode_combine"),),lowering_bindings={"flash_spec":spec})
+  assert callable(emitter)
