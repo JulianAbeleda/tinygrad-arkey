@@ -85,6 +85,58 @@ def test_kv_rope_store_provider_matches_direct_uop_artifacts():
         _buf(19*128,dtypes.float32).reshape(19,128))
       assert provider(*args).key == decode_kv_rope_store_kernel(8,128,19,VPART=vparts)(*args).key
 
+def test_flash_decode_descriptor_providers_match_direct_uop_artifacts():
+  from tinygrad.llm.flash_decode_attention import describe_flash_decode_attention
+  spec=describe_flash_decode_attention(32,128,8,4608,4,combine_fp16=True)
+  tc=UOp.const(dtypes.int,513)
+  tile_candidate={"family":"flash_decode_spec_tile.v1","candidate_id":"flash.g4","spec_repr":repr(spec),
+    "spec_binding":"flash_spec","tc_repr":repr(tc),"tc_binding":"tile_count"}
+  tile,_=lower_authorized_candidate(tile_candidate,(("decode_flash_llama_vec_wide","flash_decode_score_pv"),),
+    lowering_bindings={"flash_spec":spec,"tile_count":tc})
+  tile_args=(_buf(32*4*130,dtypes.float32),_buf(32*128,dtypes.float16),
+    _buf(2*8*4608*128,dtypes.float16).reshape(2,1,8,4608,128))
+  assert tile(*tile_args).key == spec.emit_tile(tc)(*tile_args).key
+  combine_candidate={"family":"flash_decode_spec_combine.v1","candidate_id":"flash.g4",
+    "spec_repr":repr(spec),"spec_binding":"flash_spec"}
+  combine,_=lower_authorized_candidate(combine_candidate,(("decode_flash_llama_vec_wide","flash_decode_combine"),
+    ("decode_flash_combine_fusion","flash_decode_combine")),lowering_bindings={"flash_spec":spec})
+  combine_args=(_buf(32*128,dtypes.float16),_buf(32*4*130,dtypes.float32))
+  assert combine(*combine_args).key == spec.emit_combine()(*combine_args).key
+
+def test_flash_decode_wide_providers_match_direct_uop_artifacts():
+  from tinygrad.llm.flash_decode_attention import flash_fused_gmax_combine_kernel, flash_vec_llama_score_pv_kernel
+  tc=UOp.const(dtypes.int,513)
+  tile_candidate={"family":"flash_decode_wide_tile.v1","candidate_id":"wide","Hd":128,"Hq":32,"Hkv":8,
+    "max_context":4608,"splits":4,"wide_q_f32":False,"token_bound":None,"query_group_size":4,
+    "v_pipeline_tail":0,"tc_repr":repr(tc),"tc_binding":"tile_count"}
+  tile,_=lower_authorized_candidate(tile_candidate,(("decode_flash_llama_vec_wide","flash_decode_score_pv"),),
+    lowering_bindings={"tile_count":tc})
+  tile_args=(_buf(32*4*130,dtypes.float32),_buf(32*128,dtypes.float16),
+    _buf(2*8*4608*64,dtypes.uint32).reshape(2,1,8,4608,64))
+  direct_tile=flash_vec_llama_score_pv_kernel(128,32,8,4608,4,tc,wide_kv=True,wide_q=False,wide_q_f32=False,
+    token_bound=None,query_group_size=4,v_pipeline_tail=0)
+  assert tile(*tile_args).key == direct_tile(*tile_args).key
+  combine_candidate={"family":"flash_decode_wide_combine.v1","candidate_id":"wide","Hd":128,"Hq":32,
+    "splits":4,"output_fp16":True,"register_weights":False,"successor_prefetch_groups":0,
+    "output_q8":False,"output_q8_fine":False}
+  combine,_=lower_authorized_candidate(combine_candidate,(("decode_flash_llama_vec_wide","flash_decode_combine"),
+    ("decode_flash_combine_fusion","flash_decode_combine")))
+  combine_args=(_buf(32*128,dtypes.float16),_buf(32*4*130,dtypes.float32))
+  direct_combine=flash_fused_gmax_combine_kernel(128,32,4,output_fp16=True,lane_width=128,
+    register_weights=False,successor_prefetch_groups=0,output_q8=False,output_q8_fine=False)
+  assert combine(*combine_args).key == direct_combine(*combine_args).key
+
+def test_flash_prefill_provider_matches_direct_uop_artifact():
+  from tinygrad.schedule.wmma.flash_prefill import FlashPrefillAttentionSpec
+  spec=FlashPrefillAttentionSpec(32,8,16,16,True,128**-0.5,valid_kv=16,query_start=0,target="nv_sm120")
+  identity="nv_sm120_q16_grid_hd128_loop_attention:role=attention_tile,Hq=32,Hkv=8,q_tokens=16,kv_tokens=16,Hd=128"
+  provider,_=lower_authorized_candidate({"family":"flash_prefill_spec.v1","identity":identity,
+    "spec_repr":repr(spec),"spec_binding":"prefill_spec"},(("custom_kernel_prefill_attention","flash_prefill_score"),
+    ("custom_kernel_prefill_attention","flash_prefill_combine")),lowering_bindings={"prefill_spec":spec})
+  args=(UOp.placeholder((32*16*128,),dtypes.float16,0),UOp.placeholder((32*16*128,),dtypes.float16,1),
+    UOp.placeholder((8*16*128,),dtypes.float16,2),UOp.placeholder((8*16*128,),dtypes.float16,3))
+  assert provider(*args).key == spec.emit()(*args).key
+
 
 def test_q4_kv_pair_provider_matches_direct_uop_artifact():
   from tinygrad.llm.q4k_kv_pair import emit_q4k_kv_pair_vector
