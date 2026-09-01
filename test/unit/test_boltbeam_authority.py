@@ -24,6 +24,11 @@ def test_composite_candidate_authority():
   assert len(bundle.tickets) == 2
   assert len({ticket.candidate_hash for ticket in bundle.tickets}) == 1
 
+def test_route_bound_candidate_hash_matches_boltbeam_contract():
+  bundle = tickets_for_candidate({"family":"q4_gate_up.v1","vector_loads":False},
+    (("decode_q4k_gate_up_four_warp_vector","q4_gate_up_four_warp"),))
+  assert bundle.tickets[0].candidate_hash == "35fbdea5a94b1458a1fca1229003829979ffe3377fb9bf576bf7d69bbf1981fb"
+
 def test_bound_reduction_and_cache_authorities_exist():
   routes = load_promoted_routes()
   assert "q4_ffn_down_resadd" in routes["decode_ffn_down_resadd"]["components"]

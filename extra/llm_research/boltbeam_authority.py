@@ -33,7 +33,12 @@ def ticket_for_authority(route_id: str, component: str, candidate_hash: str,
 
 def tickets_for_candidate(candidate: dict, authorities: tuple[tuple[str, str], ...], target_identity: str = "nvidia_sm120"):
   from extra.llm_research.boltbeam_runtime_ticket import BoltbeamKernelTicketBundle
-  encoded = json.dumps(candidate, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode("ascii")
+  if not isinstance(candidate, dict) or not isinstance(candidate.get("family"), str) or not candidate["family"]:
+    raise ValueError("route-bound candidate requires a family")
+  envelope = {"schema":"boltbeam.route_bound_candidate.v1","target":target_identity,"family":candidate["family"],
+              "parameters":{key:value for key,value in candidate.items() if key != "family"},
+              "authorities":[{"route_id":route,"component":component} for route,component in authorities]}
+  encoded = json.dumps(envelope, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode("ascii")
   candidate_hash = hashlib.sha256(encoded).hexdigest()
   return BoltbeamKernelTicketBundle(tuple(ticket_for_authority(route, component, candidate_hash, target_identity)
                                           for route, component in authorities))
