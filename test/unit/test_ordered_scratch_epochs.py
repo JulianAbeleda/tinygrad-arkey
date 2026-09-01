@@ -12,7 +12,8 @@ import numpy as np
 import pytest
 
 from tinygrad import Tensor, TinyJit, UOp, dtypes
-from tinygrad.schedule.rangeify import _after_writes_buffer
+from tinygrad.uop import RUNTIME_INPUT
+from tinygrad.schedule.rangeify import _after_writes_buffer, _validate_repeated_write_epochs
 from tinygrad.uop.ops import KernelInfo, Ops, ProgramInfo
 
 
@@ -64,6 +65,19 @@ def test_raw_shared_workspace_without_epoch_order_fails_closed():
   outputs, _ = _chains([_input(0), _input(100)], Tensor.empty(N, device="PYTHON").realize(), ordered=False)
   with pytest.raises(RuntimeError, match="unordered repeated write epochs"):
     Tensor.realize(*outputs)
+
+
+def test_repeated_param_writes_remain_on_ordinary_war_path():
+  # A replay return may be rebound as the next invocation's input. The input
+  # assignment and final output then write one PARAM, which is not reusable
+  # graph-owned scratch and must retain the ordinary WAR-repair path.
+  param = UOp.param(0, dtypes.float, (N,), device="PYTHON")
+  p = UOp.placeholder((N,), dtypes.float, 0)
+  i = UOp.range(N, 0)
+  input_write = p[i].store(1).end(i).sink(arg=KernelInfo(name="runtime_input_write", memory_semantic_slots=((0, RUNTIME_INPUT),)))
+  output_write = p[i].store(2).end(i).sink(arg=KernelInfo(name="runtime_output_write"))
+  epochs = [param.after(input_write.call(param)), param.after(output_write.call(param))]
+  assert _validate_repeated_write_epochs(epochs, set(epochs)) == set()
 
 
 def test_72_ordered_chains_need_one_workspace_and_remain_exact():

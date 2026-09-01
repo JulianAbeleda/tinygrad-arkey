@@ -101,6 +101,18 @@ def _after_has_precise_call_access(after:UOp) -> bool:
   return any(dependency.op is Ops.CALL and dependency.src[0].op in {Ops.PROGRAM, Ops.SINK, Ops.COPY, Ops.SLICE}
              for dependency in after.src[1:])
 
+def _after_has_runtime_input_write(after:UOp) -> bool:
+  """Whether this write initializes an invocation-owned runtime input."""
+  from tinygrad.uop import RUNTIME_INPUT
+  for dependency in after.src[1:]:
+    if dependency.op is not Ops.CALL: continue
+    args, slots = _call_arg_uops(dependency), {}
+    for carrier in (dependency.src[0].arg, dependency.arg):
+      slots.update(getattr(carrier, "memory_semantic_slots", ()))
+    for slot in _call_output_slots(dependency):
+      if slot < len(args) and args[slot].buf_uop is after.buf_uop and slots.get(slot) == RUNTIME_INPUT: return True
+  return False
+
 def _validate_repeated_write_epochs(afters:list[UOp], write_afters:set[UOp]) -> set[UOp]:
   """Prove buffers with repeated writers have one explicit ordered epoch chain.
 
@@ -124,6 +136,10 @@ def _validate_repeated_write_epochs(afters:list[UOp], write_afters:set[UOp]) -> 
   repeated:set[UOp] = set()
   for buf, writes in writers.items():
     if len(writes) < 2: continue
+    # A replay return can become the next invocation's runtime input, producing
+    # an input assignment followed by an output write to the same physical
+    # buffer. This is ordinary WAR reuse, not graph-owned reusable scratch.
+    if any(_after_has_runtime_input_write(write) for write in writes): continue
     repeated.add(buf)
     epochs = accesses[buf]
     # ``afters`` is already in topological order.  Requiring every adjacent
