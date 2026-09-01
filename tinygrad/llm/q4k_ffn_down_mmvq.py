@@ -20,7 +20,7 @@ from tinygrad.llm.kernel_program import (DeclaredTypedOutput, KernelProgram, Ker
   OutputSpec, ResidualViewRequest, TypedLayout, TypedViewRequest, execute_promoted_program,
   execute_research_program)
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
-from extra.llm_research.boltbeam_authority import tickets_for_candidate
+from extra.llm_research.boltbeam_authority import lower_authorized_candidate
 
 ROWS, K, QK = 4096, 12288, 256
 WARP, WARPS_PER_ROW = 32, 4
@@ -300,10 +300,11 @@ def q4k_ffn_down_mmvq_call(admission:object, linear:Any, x:Tensor, binding:Any,
     # to the materializing flat-buffer ABI (two extra transport kernels per block).
     authorities=(("decode_q4k_ffn_down_fp16_geometry","q4_ffn_down_fp16"),) + (
       (("decode_ffn_down_resadd","q4_ffn_down_resadd"),) if resadd else ())
+    emitter,ticket=lower_authorized_candidate({"family":"q4_ffn_down.v1","block_count":SUB_BLOCKS,
+      "resadd":resadd,"load_style":"vector" if admission.vector_loads else "scalar"},authorities)
     consumer=KernelProgram("decode_q4k_ffn_down_mmvq",f"blk{admission.block_index}.gemv",
       KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
-      emit_four_warp_fp16_direct(UOp.const(dtypes.weakint,SUB_BLOCKS),resadd=resadd,
-        load_style="vector" if admission.vector_loads else "scalar"),
+      emitter,
       output_spec=OutputSpec((ROWS,),dtypes.float32,
         typed_output=(DeclaredTypedOutput(TypedLayout(dtypes.float32,(ROWS,),(1,1,ROWS)),
           combine_fusion_admitted=False,epilogue_absorption_admitted=True) if resadd else None)),
@@ -311,8 +312,7 @@ def q4k_ffn_down_mmvq_call(admission:object, linear:Any, x:Tensor, binding:Any,
         requires_combine_fusion=False,requires_epilogue_absorption=True),),
       residual_input_views=((ResidualViewRequest(slot=2,dtype=dtypes.float32,flat_shape=(ROWS,),
         route_role="ffn_down",kind="residual_add"),) if resadd else ()),
-      boltbeam_ticket=tickets_for_candidate({"family":"q4_ffn_down.v1","block_count":SUB_BLOCKS,
-        "resadd":resadd,"load_style":"vector" if admission.vector_loads else "scalar"},authorities))
+      boltbeam_ticket=ticket)
     out=execute_promoted_program(Tensor.empty((ROWS,),dtype=dtypes.float32,device=x.device),
       words,xv,*((residual,) if resadd else ()),program=consumer)
     return out.reshape(1,1,ROWS)

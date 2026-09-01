@@ -20,7 +20,7 @@ from tinygrad.llm.packed_argmax import packed_argmax_from_tile_keys
 from tinygrad.llm.qk_layout import Q4_K, Q6_K, QuantFormat
 from tinygrad.llm.route_selection import parse_route_mode
 from tinygrad.uop.ops import Ops
-from extra.llm_research.boltbeam_authority import tickets_for_candidate
+from extra.llm_research.boltbeam_authority import lower_authorized_candidate, tickets_for_candidate
 
 def decode_route_mode(getenv_fn=getenv) -> str:
   canonical = str(getenv_fn("TINYGRAD_DECODE_ROUTE", "")).strip()
@@ -293,14 +293,15 @@ def q4k_gate_up_primitive_linear_call(gate:Any, up:Any, x:Tensor, fallback:Calla
   # accumulation order and shifts; only the global load widths change from scalar LDG to uint4/half4).
   # TINYGRAD_Q4K_W1W3_SCALAR_LOAD=1 restores the scalar spelling for reverse-bracket control arms.
   load_style = "scalar" if getenv("TINYGRAD_Q4K_W1W3_SCALAR_LOAD", 0) else "vector"
+  authorities=(("decode_q4k_w1w3_fusion","q4_w1w3_fused"),) + (
+    (("decode_q4k_w1w3_fp16_store","q4_w1w3_fused_fp16"),) if store_fp16 else ())
+  emitter,ticket=lower_authorized_candidate({"family":"q4_w1w3.v1","rows":g_bind.N,"k":g_bind.K,
+    "load_style":load_style,"store_fp16":store_fp16},authorities)
   program = KernelProgram(g_bind.route_id, f"{g_bind.candidate_id}.w1w3_fused",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
-    q4k_g3_lanemap_gemv_w1w3_kernel(g_bind.N, g_bind.K, load_style=load_style, store_fp16=store_fp16),
+    emitter,
     output_spec=OutputSpec((g_bind.N,), out_dtype, typed_output=typed_output),
-    boltbeam_ticket=tickets_for_candidate({"family":"q4_w1w3.v1","rows":g_bind.N,"k":g_bind.K,
-      "load_style":load_style,"store_fp16":store_fp16},
-      (("decode_q4k_w1w3_fusion","q4_w1w3_fused"),) +
-      ((("decode_q4k_w1w3_fp16_store","q4_w1w3_fused_fp16"),) if store_fp16 else ())))
+    boltbeam_ticket=ticket)
   return execute_promoted_program(None, gw, uw, xv, program=program).reshape(1, 1, g_bind.N)
 
 def q4k_gate_up_rms_affine_qualification_call(gate:Any, up:Any, raw_x:Tensor, norm_weight:Tensor, eps:float,

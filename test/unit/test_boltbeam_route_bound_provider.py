@@ -12,6 +12,10 @@ def _candidate(family, parameters, route, component):
   _candidate("q6_v.v1", {}, "decode_q6k_v_four_warp_fp16_geometry", "q6_v_four_warp_fp16"),
   _candidate("q6_ffn_down.v1", {"rows_per_block":1,"packed_lanemap":True,"unroll_blocks":None,
     "split_weight_stream":False}, "decode_q6k_ffn_down_fp16_geometry", "q6_ffn_down_fp16"),
+  _candidate("q4_ffn_down.v1", {"block_count":12,"resadd":True,"load_style":"vector"},
+    "decode_q4k_ffn_down_fp16_geometry", "q4_ffn_down_fp16"),
+  _candidate("q4_w1w3.v1", {"rows":12288,"k":4096,"load_style":"vector","store_fp16":False},
+    "decode_q4k_w1w3_fusion", "q4_w1w3_fused"),
 ])
 def test_route_bound_packed_family_generates_registered_emitter(candidate):
   generated = generate_route_bound_candidate(candidate, candidate_hash(candidate))
