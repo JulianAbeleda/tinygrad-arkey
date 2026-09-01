@@ -1,0 +1,242 @@
+{
+  "schema": "tinygrad.nv_q6_admitted_binary_delta_audit.v1",
+  "date": "2026-08-31",
+  "mode": "read_only",
+  "admitted_commits": [
+    "0eb13c2ab",
+    "0edb2dac3",
+    "7857aa86e"
+  ],
+  "candidate": {
+    "main": {
+      "cubin_sha256": "6eb663b3a3fd628e3394a0ce8f8780e108e47f40b887b0a75a0756dcf33e9137",
+      "symbol": "nv_q6_oracle_broad_cta_prefetch_combined_publish_oracle_publisher_trusted_fp16_packed_ws_segments_in_cta_streamk_s0",
+      "grid": [170, 1, 1],
+      "block": [256, 1, 1],
+      "dynamic_shared_bytes": 58368,
+      "median_us": 231.232,
+      "normalized_k256": {
+        "instructions": 4885,
+        "IMMA": 256,
+        "LDSM": 32,
+        "LDS": 176,
+        "BAR": 4,
+        "LDG": 109,
+        "STS": 73,
+        "STG": 64,
+        "I2FP": 1024,
+        "FMUL": 1544,
+        "FADD": 1024,
+        "FFMA": 0,
+        "IMAD": 14,
+        "registers": 255,
+        "stack_bytes": 0,
+        "LDL": 0,
+        "STL": 0
+      }
+    },
+    "fixup": {
+      "cubin_sha256": "483de2ee3eed3597932a8632f9892377ce054e77bfe34c2420fe5a5d54ff5514",
+      "symbol": "nv_q6_ordered_fixup_all_partials",
+      "grid": [128, 1, 1],
+      "block": [256, 1, 1],
+      "physical_blocks": 128,
+      "active_warps": 1024,
+      "outputs_per_active_thread": 64,
+      "median_us": 25.056,
+      "instructions": 672,
+      "registers": 255,
+      "stack_bytes": 16,
+      "LDL": 4,
+      "STL": 8,
+      "LDG": 196,
+      "STG": 64,
+      "FADD": 192
+    },
+    "total_median_us": 256.256
+  },
+  "llama": {
+    "commit": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a",
+    "main": {
+      "cubin_sha256": "04eb9bcb2edef62c672b5496d743a98c57e3236558b88f2ff117964b7fbb91ca",
+      "grid": [170, 1, 1],
+      "block": [32, 8, 1],
+      "dynamic_shared_bytes": 58880,
+      "median_us": 201.216,
+      "normalized_direct_k256": {
+        "instructions": 3550,
+        "IMMA": 256,
+        "LDSM": 32,
+        "LDS": 176,
+        "BAR": 4,
+        "q6_u16_LDG": 69,
+        "q8_u32_LDG": 36,
+        "STS": 71,
+        "I2FP": 512,
+        "FMUL": 0,
+        "FADD": 0,
+        "FFMA": 640,
+        "IMAD": 1083,
+        "LDL": 0,
+        "STL": 0
+      },
+      "normalized_partial_instructions": 3569,
+      "normalized_partial_LDL": 13,
+      "normalized_partial_STL": 6,
+      "registers": 255,
+      "stack_bytes": 72
+    },
+    "fixup": {
+      "cubin_sha256": "d301a14086b54feab53f9d0dd65d49d9b4fb6564830b8f7684e50e7720feffcb",
+      "grid": [170, 4, 1],
+      "block": [32, 4, 1],
+      "physical_blocks": 680,
+      "active_blocks": 512,
+      "active_warps": 2048,
+      "outputs_per_active_thread": 32,
+      "median_us": 8.640,
+      "entry_instructions": 606,
+      "instructions_with_div_helpers": 752,
+      "registers": 84,
+      "stack_bytes": 0,
+      "LDL": 0,
+      "STL": 0,
+      "LDG": 64,
+      "STG": 32,
+      "FADD": 64
+    },
+    "total_median_us": 209.856
+  },
+  "residual_us": {
+    "main": 30.016,
+    "fixup": 16.416,
+    "total": 46.400,
+    "fixup_fraction_percent": 35.38
+  },
+  "main_dependency_spans": {
+    "candidate": {
+      "first_to_last_IMMA": 4039,
+      "median_adjacent_IMMA_delta": 11,
+      "first_16_LDSM_window": 297,
+      "second_16_LDSM_window": 680,
+      "q8_panel1_load_to_store": 2225
+    },
+    "llama": {
+      "first_to_last_IMMA": 2703,
+      "median_adjacent_IMMA_delta": 8,
+      "first_16_LDSM_window": 69,
+      "second_16_LDSM_window": 200,
+      "q8_panel1_load_to_store": 96
+    }
+  },
+  "traffic_mib": {
+    "candidate": {
+      "scratch_allocation": 21.25,
+      "active_scratch": 18.375,
+      "main_scratch_write": 18.375,
+      "fixup_scratch_read": 18.375,
+      "fixup_destination_write": 8.0,
+      "descriptor_payload": 0.5,
+      "full_route": 45.25
+    },
+    "llama": {
+      "scratch_allocation": 10.625,
+      "active_scratch": 10.375,
+      "main_scratch_write": 10.375,
+      "main_destination_write": 8.0,
+      "fixup_scratch_read": 10.375,
+      "fixup_destination_read": 8.0,
+      "fixup_destination_write": 8.0,
+      "full_route": 44.75
+    }
+  },
+  "ranked_gaps": [
+    {
+      "rank": 1,
+      "gap": "expanded trusted FP16 scale fold and low IMMA density",
+      "evidence": "candidate recurring body has 1335 more instructions and 512 more I2FP plus 1544 FMUL plus 1024 FADD",
+      "classification": "binary difference proven; timing dominance inferred",
+      "action": "do not reassociate because the packed FP16 rounding contract is required for correctness"
+    },
+    {
+      "rank": 2,
+      "gap": "Q8 panel1 lifetime and dependency placement",
+      "evidence": "2225 instruction candidate load-to-store span versus 96 in llama",
+      "classification": "binary difference proven; scheduling cost inferred",
+      "action": "run true late panel1 prefetch on the combined-publication anchor"
+    },
+    {
+      "rank": 3,
+      "gap": "fixup destination dispersion and grid granularity",
+      "evidence": "candidate warp stores are 16 KiB-strided and exposes 1024 active warps versus llama contiguous 128 B warp stores and 2048 active warps",
+      "classification": "access and geometry difference proven; relative cost unknown",
+      "action": "run a geometry-only four-slice fixup before changing coalescing"
+    }
+  ],
+  "next_experiment": {
+    "name": "true_late_q8_panel1_on_combined_anchor",
+    "correctness": {
+      "trusted_reference_failures": 0,
+      "partials_uint32_exact": true,
+      "final_uint32_exact": true,
+      "gpu_fixup_cpu_exact": true
+    },
+    "sass": {
+      "panel1_LDG": 18,
+      "panel1_STS": 18,
+      "panel1_span_max": 160,
+      "IMMA": 256,
+      "LDSM": 32,
+      "LDS": 176,
+      "LDG": 109,
+      "STS": 73,
+      "STG": 64,
+      "BAR": 4,
+      "I2FP": 1024,
+      "FMUL": 1544,
+      "FADD": 1024,
+      "FFMA": 0,
+      "instructions_max": 5144,
+      "registers_max": 255,
+      "stack_bytes": 0,
+      "LDL": 0,
+      "STL": 0
+    },
+    "timing": {
+      "rounds": 31,
+      "main_delta_us_max": -3.0,
+      "total_delta_us_max": -3.0,
+      "minimum_wins": 24
+    },
+    "frozen_fixup_sha256": "483de2ee3eed3597932a8632f9892377ce054e77bfe34c2420fe5a5d54ff5514"
+  },
+  "second_experiment_if_main_gate_stops": {
+    "name": "four_slice_scattered_fixup_geometry",
+    "grid": [128, 4, 1],
+    "block": [128, 1, 1],
+    "outputs_per_thread": 32,
+    "preserve": [
+      "all_partials ABI",
+      "descriptor and fold order",
+      "scratch layout and traffic",
+      "scattered destination mapping"
+    ],
+    "resource_gates": {
+      "registers_max": 84,
+      "stack_bytes": 0,
+      "LDL": 0,
+      "STL": 0
+    },
+    "timing_gates": {
+      "r9_delta_us_max": -3.0,
+      "r9_minimum_wins": 7,
+      "r31_delta_us_max": -3.0,
+      "r31_minimum_wins": 24,
+      "r31_effect_size": "improvement >= 3*MAD"
+    }
+  },
+  "component_evidence": {
+    "main": "main.json",
+    "fixup": "fixup.json"
+  }
+}
