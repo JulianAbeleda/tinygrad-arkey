@@ -2,8 +2,9 @@
 
 from tinygrad import dtypes
 from tinygrad.dtype import AddrSpace
+from tinygrad.codegen.late.linearizer import pm_split_ends
 from tinygrad.codegen.simplify import flatten_range, pm_flatten_range, pm_simplify_ranges, simplify_merge_adjacent
-from tinygrad.uop.ops import AxisType, Ops, UOp, graph_rewrite
+from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp, graph_rewrite
 
 
 def _range(root:UOp, axis_id:int) -> UOp:
@@ -91,3 +92,26 @@ def test_adjacent_merge_preserves_independent_rectangular_ranges():
   merged=simplify_merge_adjacent(ended)
   bare=tuple(x for x in merged.ended_ranges if x.op is Ops.RANGE)
   assert len(bare) == 1 and bare[0].src[0].op is Ops.CONST and bare[0].src[0].arg == 6
+
+
+def test_final_end_split_keeps_nested_runtime_range_lexical():
+  owner=UOp.special(170, "gidx0")
+  segment=UOp.range((owner<1).where(2,1), 1498, axis_type=AxisType.LOOP)
+  epoch=UOp.range((segment>0).where(1,2), 1499, axis_type=AxisType.LOOP)
+  acc=UOp.placeholder((1,), dtypes.float32, 90, addrspace=AddrSpace.REG)
+  out=UOp.placeholder((340,), dtypes.float32, 0)
+
+  reset=acc.after(segment)[0].store(0.0)
+  carrier=acc.after(reset).after(epoch)
+  update=carrier[0].store(carrier[0]+1.0)
+  inner_end=UOp.group(UOp.barrier(update)).end(epoch)
+  partial=out[segment*170+owner].store(acc.after(inner_end)[0])
+  root=UOp.sink(UOp.group(partial).end(segment), arg=KernelInfo(name="nested_runtime_range_split"))
+
+  rewritten=graph_rewrite(root, pm_split_ends)
+  ends=[x for x in rewritten.toposort() if x.op is Ops.END]
+  inner=next(x for x in ends if epoch in x.ended_ranges)
+  outer=next(x for x in ends if segment in x.ended_ranges)
+  assert tuple(x for x in inner.ended_ranges if x.op is Ops.RANGE) == (epoch,)
+  assert tuple(x for x in outer.ended_ranges if x.op is Ops.RANGE) == (segment,)
+  assert inner in outer.src[0].backward_slice_with_self

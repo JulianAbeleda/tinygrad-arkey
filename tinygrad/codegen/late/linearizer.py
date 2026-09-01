@@ -187,8 +187,13 @@ pm_add_control_flow = PatternMatcher([
 ])
 
 def do_split_ends(e:UOp):
+  # Preserve lexical nesting for runtime-sized loops.  `RANGE.ranges` includes
+  # ranges used by its extent, but those are enclosing dependencies, not ranges
+  # closed by this END.  Reuse the normal END flattening rule before splitting.
+  from tinygrad.codegen.simplify import flatten_range
+  if (flat:=flatten_range(e)) is not None: e = flat
   ret = e.src[0]
-  for r in sorted(UOp.sink(*e.src[1:]).ranges, key=lambda x: x.arg, reverse=True): ret = ret.end(r)
+  for r in sorted((x for x in e.ended_ranges if x.op is Ops.RANGE), key=lambda x: x.arg, reverse=True): ret = ret.end(r)
   return ret
 
 pm_split_ends = PatternMatcher([
