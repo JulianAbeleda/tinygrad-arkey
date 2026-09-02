@@ -167,16 +167,22 @@ def build_packed_one_body_ast(segment_order:str="ascending", partial_output_layo
                               region_load_bridge_q8_panel1:bool=False, fp32_contraction:str="implicit",
                               weight_scale_contract:str="trusted_fp16_packed", factor_dA:bool=False,
                               fp32_p_tree:str="legacy", fp32_scale_grouping:str="legacy",
-                              q6_fragment_schedule:str="preload") -> UOp:
+                              q6_fragment_schedule:str="preload", q6_metadata_schedule:str="preload",
+                              strict_after_q8_panel1:bool=False, q8_panel1_anchor_cg:int=5,
+                              q6_d_storage:str="fp16_bits",
+                              streamk_segments_in_cta:bool=True, streamk_segment:int=0) -> UOp:
   if segment_order not in ("ascending","nonfinal_first"): raise ValueError(segment_order)
   if segment_order == "nonfinal_first" and not supports_nonfinal_first():
     raise RuntimeError(SEGMENT_ORDER_BUILDER_PATCH["reason"])
   ph=lambda n,dt,i:UOp.placeholder((n,),dt,i)
-  kwargs={"prefetch_second_panel":not region_load_bridge_q8_panel1,"combined_initial_publish":True,"factor_dA":factor_dA,"oracle_publisher":True,
+  kwargs={"prefetch_second_panel":not region_load_bridge_q8_panel1 and not strict_after_q8_panel1,"combined_initial_publish":True,"factor_dA":factor_dA,"oracle_publisher":True,
     "weight_scale_contract":weight_scale_contract,"fp32_p_tree":fp32_p_tree,"fp32_scale_grouping":fp32_scale_grouping,
     "q6_fragment_schedule":q6_fragment_schedule,
-    "streamk_owners":OWNERS,"streamk_segment":0,
-    "streamk_segments_in_cta":True,"partial_output_layout":partial_output_layout,
+    "q6_metadata_schedule":q6_metadata_schedule,
+    "strict_after_q8_panel1":strict_after_q8_panel1,"q8_panel1_anchor_cg":q8_panel1_anchor_cg,
+    "q6_d_storage":q6_d_storage,
+    "streamk_owners":OWNERS,"streamk_segment":streamk_segment,
+    "streamk_segments_in_cta":streamk_segments_in_cta,"partial_output_layout":partial_output_layout,
     "region_load_bridge_q8_panel1":region_load_bridge_q8_panel1,"fp32_contraction":fp32_contraction}
   if supports_nonfinal_first(): kwargs["streamk_segment_order"]=segment_order
   return q6_oracle_broad_cta_kernel(ph(2*OWNERS*TILE_ELEMS,dtypes.float32,0),ph(N*K256*105,dtypes.uint16,1),

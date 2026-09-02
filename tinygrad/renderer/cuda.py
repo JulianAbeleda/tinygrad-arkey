@@ -223,7 +223,7 @@ class CUDARenderer(CStyleLanguage):
       if not isinstance(group,int) or group < 1 or group > 18: raise RuntimeError("CUDA region load bridge group must be 1..18 words")
       if self.region_load_bridge_loads_after_barrier:
         for start in range(0,18,group):
-          fused += [f'  "ld.global.u32 region_bridge_copy{i}, [{"region_bridge_ordered_address" if dep_expr is not None else "%0"}{offset(global_offsets[i])}];\\n\\t"' for i in range(start,min(start+group,18))]
+          fused += [f'  "ld.global.nc.u32 region_bridge_copy{i}, [{"region_bridge_ordered_address" if dep_expr is not None else "%0"}{offset(global_offsets[i])}];\\n\\t"' for i in range(start,min(start+group,18))]
           fused += [f'  "st.shared.u32 [%1{offset(local_offsets[i])}], region_bridge_copy{i};\\n\\t"' for i in range(start,min(start+group,18))]
       else:
         fused += [f'  "ld.global.u32 region_bridge_copy{i}, [{"region_bridge_ordered_address" if dep_expr is not None else "%0"}{offset(off)}];\\n\\t"' for i,off in enumerate(global_offsets)]

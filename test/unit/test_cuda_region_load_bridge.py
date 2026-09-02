@@ -74,10 +74,11 @@ def _bridge_ast(copies:int=18, *, large:bool=False, qualified:bool=False, mutabl
   return UOp.sink(*roots,arg=KernelInfo(name="cuda_region_load_bridge",opts_to_apply=()))
 
 
-def _source(ast:UOp, *, fused:bool=False, warp_fence:bool=False) -> str:
+def _source(ast:UOp, *, fused:bool=False, warp_fence:bool=False, loads_after_barrier:bool=False) -> str:
   class FusedCUDARenderer(CUDARenderer):
     region_load_bridge_owns_barrier=True
     region_load_bridge_warp_fence=warp_fence
+    region_load_bridge_loads_after_barrier=loads_after_barrier
   renderer=(FusedCUDARenderer if fused else CUDARenderer)(TARGET)
   program=to_program(ast,renderer)
   return next(x.arg for x in program.src if x.op is Ops.SOURCE)
@@ -135,6 +136,14 @@ def test_fused_bridge_warp_fence_is_explicit_and_inside_the_region():
   source=_source(_bridge_ast(large=True),fused=True,warp_fence=True)
   fence=source.index("bar.warp.sync 0xffffffff");first_load=source.index("ld.global.u32");barrier=source.index("bar.sync 0")
   assert fence < first_load < barrier and source.count("bar.warp.sync 0xffffffff")==1
+
+
+def test_fused_bridge_explicit_post_barrier_load_mode_uses_readonly_noncoherent_loads():
+  source=_source(_bridge_ast(large=True),fused=True,loads_after_barrier=True)
+  barrier=source.index("bar.sync 0");first_load=source.index("ld.global.nc.u32");first_store=source.index("st.shared.u32")
+  assert barrier < first_load < first_store
+  assert source.count("ld.global.nc.u32")==source.count("st.shared.u32")==18
+  assert "ld.global.u32" not in source
 
 
 def test_ordered_bridge_threads_materialized_phase_completion_into_ptx_address():

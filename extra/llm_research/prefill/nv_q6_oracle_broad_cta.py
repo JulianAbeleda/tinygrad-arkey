@@ -19,7 +19,9 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
                                weight_scale_contract:str="legacy", trace=None, trace_config:tuple[int,int]|None=None,
                                streamk_owners:int|None=None, streamk_segment:int=0, streamk_segments_in_cta:bool=False,
                                region_load_bridge_q8_panel1:bool=False, strict_after_q8_panel1:bool=False,
-                               partial_output_layout:str="tile_row_major", q6_fragment_schedule:str="preload"):
+                               partial_output_layout:str="tile_row_major", q6_fragment_schedule:str="preload",
+                               q6_metadata_schedule:str="preload", q8_panel1_anchor_cg:int=5,
+                               q6_d_storage:str="fp16_bits"):
   """One exact llama-normalized 128x128xK256 work unit per CTA.
 
   ``blocks`` is 128 canonical Q6_K rows. ``q8_record`` is two canonical
@@ -29,12 +31,16 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
   if replicas < 1: raise ValueError("replicas must be positive")
   if region_load_bridge_q8_panel1 and prefetch_second_panel:
     raise ValueError("region-load bridge owns panel1 transport and requires prefetch_second_panel=False")
-  if strict_after_q8_panel1 and (prefetch_second_panel or region_load_bridge_q8_panel1 or factor_dA):
-    raise ValueError("strict-after panel1 requires direct arithmetic with prefetch and region bridge disabled")
+  if strict_after_q8_panel1 and (prefetch_second_panel or region_load_bridge_q8_panel1):
+    raise ValueError("strict-after panel1 requires prefetch and region bridge disabled")
+  if not 0 <= q8_panel1_anchor_cg < 8: raise ValueError("panel1 anchor column group must be in [0, 8)")
   if partial_output_layout not in ("tile_row_major","destination_major"):
     raise ValueError(f"unknown partial output layout {partial_output_layout!r}")
-  if q6_fragment_schedule not in ("preload","round"):
+  if q6_fragment_schedule not in ("preload","round","tile2","tile4","tile8"):
     raise ValueError(f"unknown Q6 fragment schedule {q6_fragment_schedule!r}")
+  if q6_metadata_schedule not in ("preload","late_d","pair","phase"):
+    raise ValueError(f"unknown Q6 metadata schedule {q6_metadata_schedule!r}")
+  if q6_d_storage not in ("fp16_bits","fp32"): raise ValueError(f"unknown Q6 d storage {q6_d_storage!r}")
   if partial_output_layout != "tile_row_major" and (streamk_owners is None or tile_grid is not None):
     raise ValueError("destination-major partial output requires Stream-K scratch output")
   if depth < 1: raise ValueError("depth must be positive")
@@ -52,8 +58,8 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
     if fp32_scale_grouping != "legacy": raise ValueError("factored dA has one scale grouping")
     if fp32_p_tree == "legacy":
       if fp32_contraction != "implicit": raise ValueError("legacy factored dA requires implicit contraction")
-    elif fp32_p_tree == "ssa_vector":
-      if fp32_contraction != "both": raise ValueError("SSA-vector factored dA requires both contractions")
+    elif fp32_p_tree in ("ssa_vector","register_bank"):
+      if fp32_contraction != "both": raise ValueError("exact factored dA requires both contractions")
     elif fp32_p_tree not in ("left","inner_left","inner_right","right","balanced") or \
          fp32_contraction not in ("none","tmp_only","final_only","both"):
       raise ValueError("illegal factored FP32 tree or contraction")
@@ -67,6 +73,8 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
   fp_mul=lambda a,b: UOp(Ops.CUSTOMI,dtypes.float32,(a,b),arg="__fmul_rn({0},{1})")
   fp_add=lambda a,b: UOp(Ops.CUSTOMI,dtypes.float32,(a,b),arg="__fadd_rn({0},{1})")
   fp_fma=lambda a,b,c: UOp(Ops.CUSTOMI,dtypes.float32,(a,b,c),arg="__fmaf_rn({0},{1},{2})")
+  d_is_fp32=weight_scale_contract != "legacy" or q6_d_storage == "fp32"
+  decode_d=lambda x:x.bitcast(dtypes.float32) if d_is_fp32 else x.bitwise_and(0xffff).cast(dtypes.uint16).bitcast(dtypes.half).cast(dtypes.float32)
   if weight_scale_contract not in ("legacy","trusted_fp16","trusted_fp16_packed"): raise ValueError("unknown weight scale contract")
   trusted_contractions=("implicit","trusted_inner","trusted_outer","trusted_both")
   if weight_scale_contract != "legacy" and (factor_dA or fp32_contraction not in trusted_contractions):
@@ -150,7 +158,7 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
         sh[srow*Q6_STRIDE+kq0+16].store(packed_i8_sub(q1,UOp.const(dtypes.uint32,0x20202020)))))
     drow=(warp*32+lane)%128; dhbase=block_epoch+drow*block_row_stride
     dword=(blocks[dhbase+104].bitcast(dtypes.half).cast(dtypes.float32).bitcast(dtypes.uint32)
-           if weight_scale_contract != "legacy" else blocks[dhbase+104].cast(dtypes.uint32))
+           if d_is_fp32 else blocks[dhbase+104].cast(dtypes.uint32))
     d_store=sh[drow*Q6_STRIDE+64].store(dword)
     scale_stores=[]
     if packed_weight_scales:
@@ -182,7 +190,7 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
       sh[srow*Q6_STRIDE+kq0].store(packed_i8_sub(q0,UOp.const(dtypes.uint32,0x20202020))),
       sh[srow*Q6_STRIDE+kq0+16].store(packed_i8_sub(q1,UOp.const(dtypes.uint32,0x20202020))),
       sh[srow*Q6_STRIDE+64].store((blocks[hbase+104].bitcast(dtypes.half).cast(dtypes.float32).bitcast(dtypes.uint32)
-        if weight_scale_contract != "legacy" else blocks[hbase+104].cast(dtypes.uint32)),gate=(lane<1)),*scale_stores).end(sr)
+        if d_is_fp32 else blocks[hbase+104].cast(dtypes.uint32)),gate=(lane<1)),*scale_stores).end(sr)
     published_q6=staged
   ready_q6=None if combined_initial_publish else UOp.barrier(published_q6)
 
@@ -204,8 +212,7 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
     q6_dump=UOp.group(*(trace[trace_epoch+i].store(sh.after(marked_ready)[trace_row*Q6_STRIDE+i],gate=lane_gate(i)) for i in range(76)))
     ready_q6=UOp.barrier(q6_dump)
     dword=sh.after(ready_q6)[trace_row*Q6_STRIDE+64]
-    dfp=(dword.bitcast(dtypes.float32) if weight_scale_contract != "legacy" else
-         dword.bitwise_and(0xffff).cast(dtypes.uint16).bitcast(dtypes.half).cast(dtypes.float32))
+    dfp=decode_d(dword)
     trace_d=trace[trace_epoch+148].store(dfp.bitcast(dtypes.uint32),gate=lane_gate(trace_thread))
     trace_y0=UOp.group(trace_d,*(trace[trace_epoch+76+i].store(shq.after(ready_y0)[trace_col*Q8_STRIDE+i],gate=lane_gate(i)) for i in range(36)))
   if prefetch_second_panel:
@@ -230,10 +237,15 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
     # One warp retains the 16 Q6 fragments for this K128 half. The rolling
     # band schedule folds two IMMA results immediately into the 64 FP32 bank.
     sx=sh.after(ready_q6)
-    def load_fragment(n,g): return native_fragment_bitcast(native_fragment_materialized_x2(sx,
-      (band*32+n*16+(lane&15))*Q6_STRIDE+(kphase*8+g)*4),dtypes.char.vec(8))
-    av=({(n,g):load_fragment(n,g) for n in range(2) for g in range(8)} if q6_fragment_schedule == "preload" else {})
-    def fragment(n,g): return av[n,g] if q6_fragment_schedule == "preload" else load_fragment(n,g)
+    def load_fragment(n,g,round_dep=None):
+      index=(band*32+n*16+(lane&15))*Q6_STRIDE+(kphase*8+g)*4
+      if round_dep is not None: index=index.cast(dtypes.int).strict_after(round_dep)
+      return native_fragment_bitcast(native_fragment_materialized_x2(sx,index),dtypes.char.vec(8))
+    register_ready=None
+    av=({(n,g):load_fragment(n,g) for n in range(2) for g in range(8)} if q6_fragment_schedule != "round" else {})
+    def fragment(n,g,round_dep=None):
+      if q6_fragment_schedule == "round": return load_fragment(n,g,round_dep)
+      return av[n,g]
     meta={}
     for n in range(2):
       for r in range(4):
@@ -291,6 +303,112 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
                   carrier[0].bitcast(dtypes.uint32),next_value.bitcast(dtypes.uint32)))
                 update=UOp.group(update,*(trace[tb+i].store(v,gate=lane_gate(trace_thread)) for i,v in enumerate(vals)))
       return update
+    if factor_dA and fp32_p_tree == "ssa_vector" and q6_fragment_schedule in ("tile2","tile4","tile8"):
+      update=dep;cg_tile=int(q6_fragment_schedule[-1])
+      for cg_base in range(0,8,cg_tile):
+        cg_end=min(cg_base+cg_tile,8)
+        tmpvs={(cg,n):UOp(Ops.STACK,dtypes.float.vec(4),tuple(UOp.const(dtypes.float32,0.0) for _ in range(4)))
+               for cg in range(cg_base,cg_end) for n in range(2)}
+        phase_scales={}
+        for p in range(4):
+          g0,g1=2*p,2*p+1
+          round_dep=None if p == 0 else tmpvs[cg_end-1,1].gep(3)
+          phase_fragments={(n,g):load_fragment(n,g,round_dep) for n in range(2) for g in (g0,g1)}
+          if q6_metadata_schedule == "phase" or (q6_metadata_schedule == "pair" and p%2 == 0):
+            phase_scales={}
+            for n in range(2):
+              for r in range(4):
+                row=band*32+n*16+lr+8*(r>>1);scale_index=row*Q6_STRIDE+65+kphase*2+p//2
+                if round_dep is not None: scale_index=scale_index.cast(dtypes.int).strict_after(round_dep)
+                phase_scales[n,r]=sx[scale_index]
+          for cg in range(cg_base,cg_end):
+            for n in range(2):
+              tmpv=tmpvs[cg,n];lfrag_col=cg*16+warp_phase*8+lr
+              sy=shq.after(ready_y).after(preload) if preload is not None and kphase == 0 else shq.after(ready_y)
+              qv0,qv1=sy[lfrag_col*Q8_STRIDE+4+g0*4+lc],sy[lfrag_col*Q8_STRIDE+4+g1*4+lc]
+              def bv(qv): return UOp(Ops.STACK,dtypes.char.vec(4),tuple(qv.rshift(8*q).bitwise_and(255).cast(dtypes.char) for q in range(4)))
+              axes=(tuple((1600+i,2) for i in range(3)),tuple((1610+i,2) for i in range(2)),tuple((1620+i,2) for i in range(2)))
+              arg=("WMMA_8_16_16_signed_char_int",(8,16,16),dtypes.char,dtypes.int,"NV",32,axes,())
+              c0=UOp(Ops.WMMA,dtypes.int.vec(4),(phase_fragments[n,g0],bv(qv0),UOp.const(dtypes.int.vec(4),0)),arg)
+              c1=UOp(Ops.WMMA,dtypes.int.vec(4),(phase_fragments[n,g1],bv(qv1),UOp.const(dtypes.int.vec(4),0)),arg)
+              values=[]
+              for r in range(4):
+                col=cg*16+warp_phase*8+2*lc+(r&1);sp=kphase*4+p
+                if q6_metadata_schedule in ("phase","pair"): sw=phase_scales[n,r]
+                else:
+                  _,sw0,sw1=meta[n,r];sw=(sw0,sw1)[p//2]
+                s0=sw.rshift((2*sp%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.int32)
+                s1=sw.rshift(((2*sp+1)%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.int32)
+                yscale=sy[col*Q8_STRIDE+p].bitcast(dtypes.float32)
+                dot=(s0*c0.gep(r)+s1*c1.gep(r)).cast(dtypes.float32)
+                values.append(fp_fma(yscale,dot,tmpv.gep(r)))
+              tmpvs[cg,n]=UOp(Ops.STACK,dtypes.float.vec(4),tuple(values))
+        late_d={}
+        if q6_metadata_schedule in ("late_d","pair","phase"):
+          final_dep=tmpvs[cg_end-1,1].gep(3)
+          for n in range(2):
+            for r in range(4):
+              row=band*32+n*16+lr+8*(r>>1)
+              late_d[n,r]=sx[(row*Q6_STRIDE+64).cast(dtypes.int).strict_after(final_dep)]
+        for cg in range(cg_base,cg_end):
+          for n in range(2):
+            for r in range(4):
+              ai=cg*8+n*4+r;dw=late_d[n,r] if q6_metadata_schedule in ("late_d","pair","phase") else meta[n,r][0]
+              wd=decode_d(dw)
+              carrier=acc[ai].after(update) if update is not None else acc[ai]
+              next_value=fp_fma(tmpvs[cg,n].gep(r),wd,carrier[0]);update=carrier[0].store(next_value)
+              if strict_after_q8_panel1 and kphase == 0 and cg == q8_panel1_anchor_cg and n == 1 and r == 3:
+                panel1_dependency.append(next_value)
+      return update
+    if factor_dA and fp32_p_tree == "register_bank":
+      if q6_fragment_schedule != "tile8" or q6_metadata_schedule != "phase":
+        raise ValueError("register-bank exact path requires tile8 fragments and phase metadata")
+      tmp=[UOp.placeholder((1,),dtypes.float32,1800+kphase*64+i,addrspace=AddrSpace.REG) for i in range(64)]
+      phase_dep=UOp.group(*(x.after(dep)[0].store(0.0) for x in tmp))
+      for p in range(4):
+        g0,g1=2*p,2*p+1
+        round_dep=None if p == 0 else tmp[-1].after(phase_dep)[0]
+        phase_fragments={(n,g):load_fragment(n,g,round_dep) for n in range(2) for g in (g0,g1)}
+        phase_scales={}
+        for n in range(2):
+          for r in range(4):
+            row=band*32+n*16+lr+8*(r>>1);scale_index=row*Q6_STRIDE+65+kphase*2+p//2
+            if round_dep is not None: scale_index=scale_index.cast(dtypes.int).strict_after(round_dep)
+            phase_scales[n,r]=sx[scale_index]
+        round_stores=[]
+        for cg in range(8):
+          for n in range(2):
+            lfrag_col=cg*16+warp_phase*8+lr
+            sy=shq.after(ready_y).after(preload) if preload is not None and kphase == 0 else shq.after(ready_y)
+            qv0,qv1=sy[lfrag_col*Q8_STRIDE+4+g0*4+lc],sy[lfrag_col*Q8_STRIDE+4+g1*4+lc]
+            def bv(qv): return UOp(Ops.STACK,dtypes.char.vec(4),tuple(qv.rshift(8*q).bitwise_and(255).cast(dtypes.char) for q in range(4)))
+            axes=(tuple((1600+i,2) for i in range(3)),tuple((1610+i,2) for i in range(2)),tuple((1620+i,2) for i in range(2)))
+            arg=("WMMA_8_16_16_signed_char_int",(8,16,16),dtypes.char,dtypes.int,"NV",32,axes,())
+            c0=UOp(Ops.WMMA,dtypes.int.vec(4),(phase_fragments[n,g0],bv(qv0),UOp.const(dtypes.int.vec(4),0)),arg)
+            c1=UOp(Ops.WMMA,dtypes.int.vec(4),(phase_fragments[n,g1],bv(qv1),UOp.const(dtypes.int.vec(4),0)),arg)
+            for r in range(4):
+              ai=cg*8+n*4+r;col=cg*16+warp_phase*8+2*lc+(r&1);sw=phase_scales[n,r];sp=kphase*4+p
+              s0=sw.rshift((2*sp%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.int32)
+              s1=sw.rshift(((2*sp+1)%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.int32)
+              yscale=sy[col*Q8_STRIDE+p].bitcast(dtypes.float32)
+              dot=(s0*c0.gep(r)+s1*c1.gep(r)).cast(dtypes.float32)
+              round_stores.append(tmp[ai].after(phase_dep)[0].store(fp_fma(yscale,dot,tmp[ai].after(phase_dep)[0])))
+        phase_dep=UOp.group(*round_stores)
+      final_dep=tmp[-1].after(phase_dep)[0]
+      late_d={}
+      for n in range(2):
+        for r in range(4):
+          row=band*32+n*16+lr+8*(r>>1)
+          late_d[n,r]=sx[(row*Q6_STRIDE+64).cast(dtypes.int).strict_after(final_dep)]
+      update=phase_dep
+      for cg in range(8):
+        for n in range(2):
+          for r in range(4):
+            ai=cg*8+n*4+r;dw=late_d[n,r]
+            wd=decode_d(dw)
+            carrier=acc[ai].after(update) if update is not None else acc[ai]
+            update=carrier[0].store(fp_fma(tmp[ai].after(phase_dep)[0],wd,carrier[0]))
+      return update
     if factor_dA and fp32_p_tree == "ssa_vector":
       update=dep
       for cg in range(8):
@@ -303,12 +421,14 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
             def bv(qv): return UOp(Ops.STACK,dtypes.char.vec(4),tuple(qv.rshift(8*q).bitwise_and(255).cast(dtypes.char) for q in range(4)))
             axes=(tuple((1600+i,2) for i in range(3)),tuple((1610+i,2) for i in range(2)),tuple((1620+i,2) for i in range(2)))
             arg=("WMMA_8_16_16_signed_char_int",(8,16,16),dtypes.char,dtypes.int,"NV",32,axes,())
-            a0,a1=fragment(n,g0),fragment(n,g1)
+            round_dep=None if p == 0 else tmpv.gep(3)
+            a0,a1=fragment(n,g0,round_dep),fragment(n,g1,round_dep)
             c0=UOp(Ops.WMMA,dtypes.int.vec(4),(a0,bv(qv0),UOp.const(dtypes.int.vec(4),0)),arg)
             c1=UOp(Ops.WMMA,dtypes.int.vec(4),(a1,bv(qv1),UOp.const(dtypes.int.vec(4),0)),arg)
             values=[]
             for r in range(4):
-              col=cg*16+warp_phase*8+2*lc+(r&1);_,sw0,sw1=meta[n,r];sw=(sw0,sw1)[p//2];sp=kphase*4+p
+              col=cg*16+warp_phase*8+2*lc+(r&1);sp=kphase*4+p
+              _,sw0,sw1=meta[n,r];sw=(sw0,sw1)[p//2]
               s0=sw.rshift((2*sp%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.int32)
               s1=sw.rshift(((2*sp+1)%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.int32)
               yscale=sy[col*Q8_STRIDE+p].bitcast(dtypes.float32)
@@ -317,7 +437,7 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
             tmpv=UOp(Ops.STACK,dtypes.float.vec(4),tuple(values))
           for r in range(4):
             ai=cg*8+n*4+r;dw=meta[n,r][0]
-            wd=dw.bitwise_and(0xffff).cast(dtypes.uint16).bitcast(dtypes.half).cast(dtypes.float32)
+            wd=decode_d(dw)
             carrier=acc[ai].after(update) if update is not None else acc[ai]
             update=carrier[0].store(fp_fma(tmpv.gep(r),wd,carrier[0]))
       return update
@@ -359,7 +479,7 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
             update=carrier[0].store(eval_tree(trees[fp32_p_tree]))
           for r in range(4):
             ai=cg*8+n*4+r; dw=meta[n,r][0]
-            wd=dw.bitwise_and(0xffff).cast(dtypes.uint16).bitcast(dtypes.half).cast(dtypes.float32)
+            wd=decode_d(dw)
             value=tmp[r].after(update)[0]; carrier=acc[ai].after(update)
             next_value=(fp_fma(value,wd,carrier[0]) if fp32_contraction in ("final_only","both") else
                         fp_add(carrier[0],fp_mul(value,wd)))
@@ -395,7 +515,7 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
               carrier=tmp[r].after(update); update=carrier[0].store(carrier[0]+yscale*dot)
           for r in range(4):
             ai=cg*8+n*4+r; dw=meta[n,r][0]
-            wd=dw.bitwise_and(0xffff).cast(dtypes.uint16).bitcast(dtypes.half).cast(dtypes.float32)
+            wd=decode_d(dw)
             carrier=acc[ai].after(update); update=carrier[0].store(carrier[0]+tmp[r].after(update)[0]*wd)
       return update
 
@@ -417,7 +537,7 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
             dw,sw0,sw1=meta[n,r]; sw=(sw0,sw1)[p//2]; sp=kphase*4+p
             s0=sw.rshift((2*sp%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.int32)
             s1=sw.rshift(((2*sp+1)%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.int32)
-            wd=dw.bitwise_and(0xffff).cast(dtypes.uint16).bitcast(dtypes.half).cast(dtypes.float32)
+            wd=decode_d(dw)
             yscale=sy[col*Q8_STRIDE+p].bitcast(dtypes.float32)
             z0,z1=c0.gep(r),c1.gep(r); dot0=s0*z0; dot1=s1*z1; dot=(dot0+dot1).cast(dtypes.float32)
             carrier=acc[ai].after(update) if update is not None else acc[ai]
@@ -476,7 +596,9 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
           (tile_m*COLS+col)*(tiles_n*ROWS)+tile_n*ROWS+row)
         stores.append(out[out_index].store(acc[ai].after(loop_end)[0],gate=active))
   suffix="prefetch" if prefetch_second_panel else "serial"
-  if q6_fragment_schedule == "round": suffix += "_q6_round_fragments"
+  if q6_fragment_schedule != "preload": suffix += f"_q6_{q6_fragment_schedule}_fragments"
+  if q6_metadata_schedule != "preload": suffix += f"_q6_{q6_metadata_schedule}_metadata"
+  if q6_d_storage != "fp16_bits": suffix += f"_q6_d_{q6_d_storage}"
   if combined_initial_publish: suffix += "_combined_publish"
   if factor_dA: suffix += "_factor_da"
   if oracle_publisher: suffix += "_oracle_publisher"

@@ -1,34 +1,43 @@
-"""Default-off compiler-owned Qwen3-8B pp512 Q6_K V/down binding.
+"""Compiler-owned Qwen3-8B pp512 Q6_K V/down binding.
 
 The route consumes canonical Q6_K halfwords and a scheduler-owned compact-Q8
 record.  It admits only the model's Q6 population: 18 attention V and 18 FFN
 down projections.  Q4 V/down tensors are deliberately outside the contract.
+Only exact FFN-down is promoted; attention-V remains an explicit research role.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-import hashlib
+from dataclasses import dataclass, replace
+import hashlib, re
 from types import MappingProxyType
 from typing import Mapping, Any
 import time
 
 from tinygrad import Device, Tensor, dtypes
+from tinygrad.codegen import to_program
 from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.codegen.opt.packed_weight import (PackedWeightTransform, Q6KInt8FragmentProvider,
   Q8ActivationRecordTransform, Q8Int8FragmentProvider, Q6KQ8SubgroupAccumulatorContract)
 from tinygrad.codegen.opt.postrange import warmstart_key
+from tinygrad.helpers import Target
+from tinygrad.renderer.cuda import CUDARenderer
 from tinygrad.runtime.support.compiler_cuda import NVRTCCompiler
 from tinygrad.uop.ops import Ops, UOp
 from extra.llm_research.kernel_vocabulary import KernelLDSWindow, KernelTileGeometry
 from extra.llm_research.prefill.nv_native_program_uop import native_nv_program
 from extra.llm_research.prefill.nv_q8_compact_producer_gate import SRC_FP16
 from extra.llm_research.prefill.nv_compiler_q6_schedule_config import CompilerQ6ScheduleConfig
+from extra.llm_research.prefill.nv_q6_destination_partial import BLOCK as Q6_FIXUP_BLOCK, GRID as Q6_FIXUP_GRID, SYMBOL as Q6_FIXUP_SYMBOL, destination_major_fixup_source
+from extra.llm_research.prefill.nv_q6_oracle_broad_cta import SHARED_BYTES as Q6_MAIN_SHARED_BYTES
+from extra.llm_research.prefill.nv_q6_oracle_reduction_policy import OWNERS as Q6_OWNERS, TILE_ELEMS as Q6_TILE_ELEMS, build_packed_one_body_ast, build_reduction_schedule
 
 M, TILE_K = 512, 64
 ROLE_SHAPES = MappingProxyType({"attn_v": (1024, 4096), "ffn_down": (4096, 12288)})
 ROLE_COUNTS = MappingProxyType({"attn_v": 18, "ffn_down": 18})
 PROJECTIONS_PER_MODEL = sum(ROLE_COUNTS.values())
 _BINDINGS: dict[str, "CompilerQ6PP512Binding"] = {}
+Q6_STREAMK_RECORD_U32 = 4*48*2*128*36
+Q6_STREAMK_PARTIAL_FLOATS = 2*Q6_OWNERS*Q6_TILE_ELEMS
 
 # Packet-local diagnostic ABI.  This is deliberately not part of the route ABI:
 # it describes only work that was actually present in the captured PROGRAM list.
@@ -187,6 +196,52 @@ def _record_source(k:int, name:str) -> str:
   return src.replace("base=row*4096+i;", f"base=row*{k}+i;") \
     .replace("int g=row*128+seg*16+t/8;", f"int g=row*{k//32}+seg*16+t/8;")
 
+def _streamk_record_source() -> str:
+  return r'''#include <cuda_fp16.h>
+struct __align__(4) block_q8_1_d4 { float d[4]; signed char qs[128]; };
+extern "C" __global__ void q8_streamk_record_fp16_q6_ffn_down(const half *x, block_q8_1_d4 *y) {
+  const int row=blockIdx.x,i0=(blockIdx.y*128+threadIdx.x)*4;
+  const half2 a=*(const half2 *)(x+row*12288+i0),b=*(const half2 *)(x+row*12288+i0+2);
+  const float4 v=make_float4(__half2float(__low2half(a)),__half2float(__high2half(a)),__half2float(__low2half(b)),__half2float(__high2half(b)));
+  float amax=fmaxf(fmaxf(fabsf(v.x),fabsf(v.y)),fmaxf(fabsf(v.z),fabsf(v.w)));
+  #pragma unroll
+  for(int off=4;off>0;off>>=1) amax=fmaxf(amax,__shfl_xor_sync(0xffffffff,amax,off));
+  const float dinv=127.0f/amax;char4 q=make_char4(roundf(v.x*dinv),roundf(v.y*dinv),roundf(v.z*dinv),roundf(v.w*dinv));
+  const int iqs=i0&127,k128=i0>>7,tile_m=row>>7,local_row=row&127;
+  const int ib=(((tile_m*48+(k128>>1))*2+(k128&1))*128+local_row);
+  ((char4 *)y[ib].qs)[iqs>>2]=q;
+  if((iqs&31)==0)y[ib].d[iqs>>5]=1.0f/dinv;
+}
+'''
+
+def _attach_candidate_context(program:UOp, context:"_Context") -> UOp:
+  sink=program.src[0]
+  return program.replace(src=(sink.replace(arg=replace(sink.arg,candidate_context=context)),*program.src[1:]))
+
+def _compile_streamk_down(dev, context:"_Context"):
+  ast=build_packed_one_body_ast(partial_output_layout="destination_major",region_load_bridge_q8_panel1=True,
+    fp32_contraction="both",weight_scale_contract="legacy",factor_dA=True,fp32_p_tree="ssa_vector",
+    q6_fragment_schedule="tile8",q6_metadata_schedule="phase")
+  renderer=CUDARenderer(Target.parse(f"NV:CUDA:{dev.arch}"))
+  # This immutable Q8 panel is not needed until the accumulator has finished
+  # consuming the shared tile.  Spell that phase order in the compiler
+  # contract rather than relying on ptxas to move non-coherent loads itself.
+  renderer.region_load_bridge_owns_barrier=True
+  renderer.region_load_bridge_loads_after_barrier=True
+  rendered=to_program(ast,renderer)
+  source=next(x.arg for x in rendered.src if x.op is Ops.SOURCE)
+  match=re.search(r'extern "C" __global__ void (?:__launch_bounds__\(\d+\) )?(\w+)\(',source)
+  if match is None: raise RuntimeError("generated Q6 Stream-K symbol missing")
+  main_binary=dev.compiler.compile(source)
+  main=native_nv_program(match.group(1),main_binary,global_size=(Q6_OWNERS,1,1),local_size=(256,1,1),
+    globals=(0,1,2),outs=(0,),ins=(1,2),shared_mem=Q6_MAIN_SHARED_BYTES+1024)
+  main=_attach_candidate_context(main,context)
+  fixup_binary=NVRTCCompiler(dev.arch,ptx=False,cache_key="nv_q6_destination_major_fixup_v1").compile(destination_major_fixup_source())
+  fixup=native_nv_program(Q6_FIXUP_SYMBOL,fixup_binary,global_size=Q6_FIXUP_GRID,local_size=Q6_FIXUP_BLOCK,
+    globals=(0,1,2,3),outs=(0,),ins=(1,2,3))
+  slots,counts,_=build_reduction_schedule().arrays()
+  return main,fixup,Tensor(slots.reshape(-1),device="NV").contiguous().realize(),Tensor(counts,device="NV").contiguous().realize()
+
 def _build_role_expression(record:Tensor, halfs:Tensor, context:_Context) -> Tensor:
   """Construct the exact packed Q6 carrier expression before compiler capture."""
   return _activation_carrier(record, context.packed_activation).matmul(
@@ -203,6 +258,9 @@ class _RoleAsset:
   activation: Q8ActivationRecordTransform
   context: _Context
   warmstart_key: tuple
+  fixup_program: object | None = None
+  reduction_slots: Tensor | None = None
+  reduction_counts: Tensor | None = None
 
   @property
   def candidate_identity(self) -> str: return self.context.canonical_identity
@@ -225,6 +283,13 @@ def _compile_role(dev, role:str, output_dtype=dtypes.float32, schedule:CompilerQ
   lib = NVRTCCompiler(dev.arch, ptx=False, cache_key=f"{name}_v1").compile(_record_source(k, name))
   producer = native_nv_program(name, lib, global_size=(M, k//512, 1), local_size=(128, 1, 1),
                                globals=(0, 1), outs=(1,), ins=(0,))
+
+  if role == "ffn_down":
+    record_name="q8_streamk_record_fp16_q6_ffn_down"
+    record_lib=NVRTCCompiler(dev.arch,ptx=False,cache_key=f"{record_name}_v1").compile(_streamk_record_source())
+    producer=native_nv_program(record_name,record_lib,global_size=(M,k//512,1),local_size=(128,1,1),globals=(0,1),outs=(1,),ins=(0,))
+    main_program,fixup_program,reduction_slots,reduction_counts=_compile_streamk_down(dev,context)
+    return _RoleAsset(role,producer,main_program,wt,at,context,key,fixup_program,reduction_slots,reduction_counts)
 
   from tinygrad.codegen import to_program_cache
   from tinygrad.codegen.opt.postrange import warmstart_candidate_state
@@ -328,16 +393,19 @@ def _project(binding:CompilerQ6PP512Binding, x:Tensor, halfs:Tensor, *, model_fa
   if x.dtype != dtypes.float16 or halfs.dtype != dtypes.uint16:
     raise ValueError("compiler Q6 route requires fp16 activation and canonical uint16 Q6_K halfwords")
   asset = binding.roles[role]
-  record_u32 = (M*k + 2*M*(k//32)*4)//4
+  record_u32 = Q6_STREAMK_RECORD_U32 if asset.fixup_program is not None else (M*k + 2*M*(k//32)*4)//4
   record = Tensor.empty(record_u32, dtype=dtypes.uint32, device=x.device)
   _, record = x.uop_program(record, fxn=lambda *_:asset.producer)
-  # Both roles use the pinned compiler PROGRAM.  In particular, V must not
-  # fall back to a carrier matmul: that would discard the candidate context,
-  # permit an epilogue rewrite, and make V depend on a different compiler path
-  # than FFN-down.  The records, output, and canonical weight remain lazy and
-  # scheduler-owned in both cases.
+  # Both roles use compiler-owned PROGRAMs.  The records, output, canonical
+  # weight, and Stream-K workspace remain lazy and scheduler-owned.
   out = Tensor.empty(M*n, dtype=binding.roles[role].context.output_dtype, device=x.device)
-  out, record, halfs = out.uop_program(record, halfs, fxn=lambda *_:asset.main_program)
+  if asset.fixup_program is not None:
+    if asset.reduction_slots is None or asset.reduction_counts is None: raise RuntimeError("Q6 Stream-K reduction metadata missing")
+    partial=Tensor.empty(Q6_STREAMK_PARTIAL_FLOATS,dtype=dtypes.float32,device=x.device)
+    partial,halfs,record=partial.uop_program(halfs,record,fxn=lambda *_:asset.main_program)
+    out,partial,slots,counts=out.uop_program(partial,asset.reduction_slots,asset.reduction_counts,fxn=lambda *_:asset.fixup_program)
+  else:
+    out, record, halfs = out.uop_program(record, halfs, fxn=lambda *_:asset.main_program)
   result = out.reshape(M, n)
   if output_dtype not in (dtypes.float32, dtypes.float16):
     raise ValueError("research Q6 output_dtype must be float32 or float16")
