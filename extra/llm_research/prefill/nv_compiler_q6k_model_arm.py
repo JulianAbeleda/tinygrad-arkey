@@ -86,7 +86,7 @@ def main() -> None:
   ap=argparse.ArgumentParser();ap.add_argument("--arm",choices=("candidate","control","compare"),required=True)
   ap.add_argument("--model",default=MODEL);ap.add_argument("--max-context",type=int,default=4608)
   ap.add_argument("--warmups",type=int,default=3);ap.add_argument("--rounds",type=int,default=9)
-  ap.add_argument("--roles",default="attn_v,ffn_down")
+  ap.add_argument("--roles",default="ffn_down")
   ap.add_argument("--structural-only",action="store_true")
   ap.add_argument("--out",required=True);ap.add_argument("--logits-npz",default="");ap.add_argument("--boundary-probe-out",default="")
   ap.add_argument("--candidate-json",default="");ap.add_argument("--candidate-npz",default="")
@@ -123,11 +123,11 @@ def main() -> None:
       or os.environ.get("NV_Q4_IMMA_PP512") is not None:
     raise SystemExit("both arms require compiler gate/up+K and no raw binding")
   q6_env=os.environ.get("NV_COMPILER_Q6_IMMA_PP512")
-  if (args.arm=="candidate")!=(q6_env=="1") or (args.arm=="control" and q6_env is not None):
-    raise SystemExit("candidate requires Q6 env=1; control requires Q6 env unset")
+  if (args.arm=="candidate" and q6_env not in (None,"1")) or (args.arm=="control" and q6_env!="0"):
+    raise SystemExit("candidate uses the promoted Q6 default (or env=1); control requires Q6 env=0")
   active_roles=frozenset(args.roles.split(","))
   if not active_roles or not active_roles.issubset({"attn_v","ffn_down"}):raise SystemExit("roles must be attn_v and/or ffn_down")
-  if args.arm=="candidate" and os.environ.get("NV_COMPILER_Q6_IMMA_PP512_ROLES","attn_v,ffn_down")!=args.roles:
+  if args.arm=="candidate" and os.environ.get("NV_COMPILER_Q6_IMMA_PP512_ROLES","ffn_down")!=args.roles:
     raise SystemExit("candidate role selector env must exactly match --roles")
 
   from tinygrad.llm.generate import load_model_and_tokenizer
@@ -193,8 +193,10 @@ def main() -> None:
   q6_all=q6_mains["attn_v"]+q6_mains["ffn_down"]
   canonical_q6={lin.prefill_packed_weight().uop.buf_uop for block in model.blk for lin in (block.attn_v,block.ffn_down)
                 if isinstance(lin,Q6KPrimitiveLinear)}
-  weight_args=[_buf_uop(c.src[3]) for c in q6_all if len(c.src)>3]
-  record_args={_buf_uop(c.src[2]) for c in q6_all if len(c.src)>2}
+  weight_args=[_buf_uop(c.src[3]) for c in q6_mains["attn_v"] if len(c.src)>3]
+  weight_args += [_buf_uop(c.src[2]) for c in q6_mains["ffn_down"] if len(c.src)>3]
+  record_args={_buf_uop(c.src[2]) for c in q6_mains["attn_v"] if len(c.src)>2}
+  record_args |= {_buf_uop(c.src[3]) for c in q6_mains["ffn_down"] if len(c.src)>3}
   producer_names=set() if q6_asset is None else {a.producer.arg.name for a in q6_asset.roles.values()}
   q6_producers=[c for c in calls if _call_name(c) in producer_names]
   q6_v_overlays=sum(getattr(block.attn_v,"_pf16_w",None) is not None for block in model.blk if isinstance(block.attn_v,Q6KPrimitiveLinear))
@@ -203,17 +205,19 @@ def main() -> None:
                        if isinstance(lin,Q4KPrimitiveLinear))
   geometries={role:[(c.src[0].arg.global_size,c.src[0].arg.local_size) for c in mains] for role,mains in q6_mains.items()}
   total_q8=sum(names.get(name,0) for name in set([gate_asset.producer.arg.name,k_asset.producer.arg.name])|producer_names)
+  q6_fixups=names.get("nv_q6_destination_major_fixup",0)
+  q6_partial_workspace_bytes=q6_fixups*2*170*128*128*4
   census={"gate_up_main":len(gate_mains),"k_main":len(k_mains),"total_q8_producer":total_q8,
-    "q6_v_producer":names.get("q8_compact_record_fp16_q6_attn_v",0),
-    "q6_down_producer":names.get("q8_compact_record_fp16_q6_ffn_down",0),
+    "q6_v_producer":0 if q6_asset is None else names.get(q6_asset.roles["attn_v"].producer.arg.name,0),
+    "q6_down_producer":0 if q6_asset is None else names.get(q6_asset.roles["ffn_down"].producer.arg.name,0),
     "q6_v_main":len(q6_mains["attn_v"]),"q6_down_main":len(q6_mains["ffn_down"]),
     "q6_candidate_weight_args":len(weight_args),"q6_unique_weight_bases":len(set(weight_args)),
     "q6_all_weights_canonical":bool(weight_args and all(w in canonical_q6 for w in weight_args)),
     "q6_records":len(record_args),"q6_v_fp16_overlays":q6_v_overlays,"q6_down_fp16_overlays":q6_down_overlays,
     "q4_v_down_fp16_overlays":q4_v_down_overlays,"q6_weight_copy_kernels":0 if weight_args and all(w in canonical_q6 for w in weight_args) else -1,
-    "q6_old_fixup":names.get("q6k_imma_fixup",0),"q6_partial_workspace_bytes":0,
+    "q6_old_fixup":names.get("q6k_imma_fixup",0),"q6_streamk_fixup":q6_fixups,"q6_partial_workspace_bytes":q6_partial_workspace_bytes,
     "q6_v_all_256cta":bool(geometries["attn_v"] and all(g==((32,8,1),(32,2,2)) for g in geometries["attn_v"])),
-    "q6_down_all_1024cta":bool(geometries["ffn_down"] and all(g==((128,8,1),(32,2,2)) for g in geometries["ffn_down"]))}
+    "q6_down_all_170cta":bool(geometries["ffn_down"] and all(g==((170,1,1),(256,1,1)) for g in geometries["ffn_down"]))}
   replay_pass=all(replay[k] for k in ("finite","same_token","same_logits_exact","same_activation_exact","distinct_activation_output"))
   forced_cut = os.environ.get("NV_Q6DOWN_FORCED_CUT") in ("producer", "main", "publication", "residual")
   if args.arm=="candidate" and forced_cut:
@@ -221,7 +225,7 @@ def main() -> None:
       census["q6_v_producer"]==0,census["q6_down_producer"]==18,census["q6_v_main"]==0,census["q6_down_main"]==18,
       census["q6_candidate_weight_args"]==18,census["q6_unique_weight_bases"]==18,census["q6_all_weights_canonical"],
       census["q6_records"]==18,census["q6_down_fp16_overlays"]==0,census["q6_weight_copy_kernels"]==0,
-      census["q6_old_fixup"]==0,census["q6_partial_workspace_bytes"]==0,census["q6_down_all_1024cta"]))
+      census["q6_old_fixup"]==0,census["q6_streamk_fixup"]==18,census["q6_partial_workspace_bytes"]==18*2*170*128*128*4,census["q6_down_all_170cta"]))
   elif args.arm=="candidate":
     expected={role:(18 if role in active_roles else 0) for role in ("attn_v","ffn_down")};expected_total=sum(expected.values())
     passed=replay_pass and all((census["gate_up_main"]==72,census["k_main"]==36,census["total_q8_producer"]==108+expected_total,
@@ -231,8 +235,8 @@ def main() -> None:
       census["q6_records"]==expected_total,census["q6_v_fp16_overlays"]==18-expected["attn_v"],
       census["q6_down_fp16_overlays"]==18-expected["ffn_down"],
       census["q4_v_down_fp16_overlays"]==(0 if forced_cut and os.environ.get("NV_Q6DOWN_FORCED_CUT")=="residual" else 36),census["q6_weight_copy_kernels"]==0,census["q6_old_fixup"]==0,
-      census["q6_partial_workspace_bytes"]==0,
-      census["q6_v_all_256cta"]==(expected["attn_v"]>0),census["q6_down_all_1024cta"]==(expected["ffn_down"]>0)))
+      census["q6_streamk_fixup"]==expected["ffn_down"],census["q6_partial_workspace_bytes"]==expected["ffn_down"]*2*170*128*128*4,
+      census["q6_v_all_256cta"]==(expected["attn_v"]>0),census["q6_down_all_170cta"]==(expected["ffn_down"]>0)))
   else:
     passed=replay_pass and all((census["gate_up_main"]==72,census["k_main"]==36,census["total_q8_producer"]==108,
       census["q6_v_producer"]==0,census["q6_down_producer"]==0,census["q6_v_main"]==0,census["q6_down_main"]==0,
