@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unprofiled reverse wall bracket for the closed S6/wide-KV flash lease."""
+"""Unprofiled reverse wall bracket for the wide-KV vector Flash route."""
 from __future__ import annotations
 
 import argparse, json, os, pathlib, statistics, subprocess, sys
@@ -20,8 +20,11 @@ def run_child(arm:str, depth:int, count:int, max_context:int, reps:int, out:path
   dev = Device["NV"]
   model = _load(MODEL, max_context)
   _install(model, arm == "candidate", max_context)
-  model._decode_direct_greedy_promoted = True
-  model._decode_feedback_pingpong_promoted = True
+  # This harness isolates flash geometry. Keep both arms on the supported
+  # full-logits path, matching the profiled qualification harness; the current
+  # direct-greedy/native-argmax pairing is not valid with this research loader.
+  model._decode_direct_greedy_promoted = False
+  model._decode_feedback_pingpong_promoted = False
   gen = model.generate(_prompt(MODEL, depth), chunk_size=32, temperature=0.0)
   try: settled = _settled_continuous_windows(gen, dev, count, reps)
   finally: gen.close()

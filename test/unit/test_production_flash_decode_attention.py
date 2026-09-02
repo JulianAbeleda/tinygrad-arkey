@@ -214,16 +214,21 @@ def test_adaptive_s64_context_band_is_bounded():
   assert _adaptive_flash_split_count(False, 800, 1024) is None
   assert _adaptive_flash_split_count(True, 800, 2048) is None
 
-def test_active_horizon_s6_selector_and_geometry_are_bounded():
+def test_active_horizon_wide_selector_and_geometry_are_bounded():
   from tinygrad.llm.model import _active_horizon_flash_split_count, _flash_decode_geometry_for_split
   assert _active_horizon_flash_split_count(True, 511, 1024) is None
   assert _active_horizon_flash_split_count(True, 512, 1024) == 6    # Tc=513
   assert _active_horizon_flash_split_count(True, 767, 1024) == 6    # Tc=768
-  assert _active_horizon_flash_split_count(True, 768, 1024) is None # Tc=769 -> installed S8
+  assert _active_horizon_flash_split_count(True, 768, 4352) == 8
+  assert _active_horizon_flash_split_count(True, 1024, 4352) == 10
+  assert _active_horizon_flash_split_count(True, 1280, 4352) == 18
+  assert _active_horizon_flash_split_count(True, 2304, 4352) == 34
+  assert _active_horizon_flash_split_count(True, 4352, 4352) is None
   assert _active_horizon_flash_split_count(False, 700, 1024) is None
-  assert _active_horizon_flash_split_count(True, 700, 2048) is None
   assert _flash_decode_geometry_for_split({}, 6) == {
-    "split_count":6, "llama_vec_wide":True, "token_bound":768}
+    "split_count":6, "llama_vec_wide":True, "token_bound":768, "policy_selected":True}
+  assert _flash_decode_geometry_for_split({}, 18) == {
+    "split_count":18, "llama_vec_wide":True, "token_bound":2304, "policy_selected":True}
   assert _flash_decode_geometry_for_split({"sentinel":1}, None) == {"sentinel":1}
   assert _flash_decode_geometry_for_split({}, 64) == {"split_count":64}
 

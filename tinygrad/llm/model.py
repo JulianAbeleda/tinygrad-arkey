@@ -192,26 +192,31 @@ def _adaptive_flash_split_count(enabled:bool,start_pos:int,max_context:int)->int
   return 64 if enabled and max_context <= 1024 and 768 <= start_pos < max_context else None
 
 def _active_horizon_flash_split_count(enabled:bool,start_pos:int,max_context:int)->int|None:
-  """Closed-lease wide-Flash selector: S6 through Tc=768, then the installed S8 graph.
-
-  ``start_pos`` is the zero-based KV position written by this decode call, so
-  its active context is Tc=start_pos+1. The lease is deliberately exact to
-  the measured 1024-token dense-decode workload and never changes the default
-  graph when disabled.
-  """
-  return 6 if enabled and max_context == 1024 and 512 <= start_pos < 768 else None
+  """Promoted live-context selector for the llama-derived wide vector Flash family."""
+  if not enabled: return None
+  tc = start_pos + 1
+  if tc <= 512 or tc > min(max_context, 4352): return None
+  if tc <= 768: return 6
+  if tc <= 1024: return 8
+  if tc <= 1280: return 10
+  if tc <= 2304: return 18
+  return 34
 
 def _flash_decode_geometry_for_split(base:dict, split_count:int|None) -> dict:
   """Translate a graph-identity split into the geometry lease it was qualified for."""
   geometry = dict(base)
-  if split_count == 6:
-    geometry.update(split_count=6, llama_vec_wide=True, token_bound=768)
+  if split_count in (6, 8, 10, 18, 34):
+    geometry.update(split_count=split_count, llama_vec_wide=True,
+                    token_bound={6:768, 8:1024, 10:1280, 18:2304, 34:4352}[split_count],
+                    policy_selected=True)
   elif split_count is not None:
     geometry["split_count"] = split_count
   return geometry
 
-def _flash_jit_variant(split_count:int|None, default, s6, s64):
-  return s6 if split_count == 6 else s64 if split_count == 64 else default
+def _flash_jit_variant(split_count:int|None, default, s6, s64, live_variants:dict|None=None):
+  if split_count == 6: return s6
+  if split_count == 64: return s64
+  return (live_variants or {}).get(split_count, default)
 
 def _flash_block_geometry(model, index:int, base:dict) -> dict:
   """Merge research block-local Flash geometry after the model-wide lease.
@@ -1538,12 +1543,14 @@ class Transformer:
     self.rollout_jit_flash = TinyJit(self.forward)
     self.rollout_jit_flash_s6 = TinyJit(self.forward)
     self.rollout_jit_flash_s64 = TinyJit(self.forward)
+    self.rollout_jit_flash_live = {s:TinyJit(self.forward) for s in (8, 10, 18, 34)}
     self.prefill_greedy_jit = TinyJit(self.forward_greedy)
     self.prefill_v2_greedy_jit = TinyJit(self.forward_greedy)
     self.rollout_greedy_jit = TinyJit(self.forward_greedy)
     self.rollout_greedy_jit_flash = TinyJit(self.forward_greedy)
     self.rollout_greedy_jit_flash_s6 = TinyJit(self.forward_greedy)
     self.rollout_greedy_jit_flash_s64 = TinyJit(self.forward_greedy)
+    self.rollout_greedy_jit_flash_live = {s:TinyJit(self.forward_greedy) for s in (8, 10, 18, 34)}
     # Closed-default P5 experiment: two captures can form an alias-free
     # device-resident feedback ring.  A harness must explicitly promote the
     # route and provide the alternating slot; ordinary callers retain the
@@ -1552,6 +1559,8 @@ class Transformer:
     self.rollout_greedy_pingpong_jits_flash = tuple(TinyJit(self.forward_greedy) for _ in range(2))
     self.rollout_greedy_pingpong_jits_flash_s6 = tuple(TinyJit(self.forward_greedy) for _ in range(2))
     self.rollout_greedy_pingpong_jits_flash_s64 = tuple(TinyJit(self.forward_greedy) for _ in range(2))
+    self.rollout_greedy_pingpong_jits_flash_live = {
+      s:tuple(TinyJit(self.forward_greedy) for _ in range(2)) for s in (8, 10, 18, 34)}
     # Diagnostic-only captures return the already-computed decode logits beside
     # the sampled token. They are separate so the production sampled graph's
     # return/lifetime contract remains byte-for-byte unchanged.
@@ -1559,14 +1568,18 @@ class Transformer:
     self.rollout_logits_jit_flash = TinyJit(self.forward_with_logits)
     self.rollout_logits_jit_flash_s6 = TinyJit(self.forward_with_logits)
     self.rollout_logits_jit_flash_s64 = TinyJit(self.forward_with_logits)
+    self.rollout_logits_jit_flash_live = {s:TinyJit(self.forward_with_logits) for s in (8, 10, 18, 34)}
     self.rollout_greedy_logits_jit = TinyJit(self.forward_greedy_with_logits)
     self.rollout_greedy_logits_jit_flash = TinyJit(self.forward_greedy_with_logits)
     self.rollout_greedy_logits_jit_flash_s6 = TinyJit(self.forward_greedy_with_logits)
     self.rollout_greedy_logits_jit_flash_s64 = TinyJit(self.forward_greedy_with_logits)
+    self.rollout_greedy_logits_jit_flash_live = {s:TinyJit(self.forward_greedy_with_logits) for s in (8, 10, 18, 34)}
     self.rollout_greedy_logits_pingpong_jits = tuple(TinyJit(self.forward_greedy_with_logits) for _ in range(2))
     self.rollout_greedy_logits_pingpong_jits_flash = tuple(TinyJit(self.forward_greedy_with_logits) for _ in range(2))
     self.rollout_greedy_logits_pingpong_jits_flash_s6 = tuple(TinyJit(self.forward_greedy_with_logits) for _ in range(2))
     self.rollout_greedy_logits_pingpong_jits_flash_s64 = tuple(TinyJit(self.forward_greedy_with_logits) for _ in range(2))
+    self.rollout_greedy_logits_pingpong_jits_flash_live = {
+      s:tuple(TinyJit(self.forward_greedy_with_logits) for _ in range(2)) for s in (8, 10, 18, 34)}
     self.rollout_jit_ring = TinyJit(self.forward_ring)        # ring FILL phase (ctx<N): read [0:start_pos+T], identity freqs
     self.rollout_jit_ring_full = TinyJit(self.forward_ring)   # ring FULL phase (ctx>=N): read [0:N], wrapped write slot + gathered freqs
     # The selected prefill candidate gets a separate concrete-M capture.
@@ -1857,15 +1870,18 @@ class Transformer:
     if feedback_slot not in (None, 0, 1): raise ValueError("feedback_slot must be None, 0, or 1")
     pingpong = bool(getattr(self, "_decode_feedback_pingpong_promoted", False)) and feedback_slot is not None
     greedy_flash_pair = _flash_jit_variant(flash_split_count, self.rollout_greedy_logits_pingpong_jits_flash,
-      self.rollout_greedy_logits_pingpong_jits_flash_s6, self.rollout_greedy_logits_pingpong_jits_flash_s64)
+      self.rollout_greedy_logits_pingpong_jits_flash_s6, self.rollout_greedy_logits_pingpong_jits_flash_s64,
+      self.rollout_greedy_logits_pingpong_jits_flash_live)
     greedy_flash = _flash_jit_variant(flash_split_count, self.rollout_greedy_logits_jit_flash,
-      self.rollout_greedy_logits_jit_flash_s6, self.rollout_greedy_logits_jit_flash_s64)
+      self.rollout_greedy_logits_jit_flash_s6, self.rollout_greedy_logits_jit_flash_s64,
+      self.rollout_greedy_logits_jit_flash_live)
     greedy_jit = ((greedy_flash_pair if use_flash else self.rollout_greedy_logits_pingpong_jits)[feedback_slot]
                   if pingpong else (greedy_flash if use_flash else self.rollout_greedy_logits_jit))
     direct_greedy = bool(getattr(self, "_decode_direct_greedy_promoted", False))
     jit = greedy_jit if direct_greedy and float(temperature.item()) == 0.0 else \
           (_flash_jit_variant(flash_split_count, self.rollout_logits_jit_flash, self.rollout_logits_jit_flash_s6,
-                              self.rollout_logits_jit_flash_s64) if use_flash else self.rollout_logits_jit)
+                              self.rollout_logits_jit_flash_s64, self.rollout_logits_jit_flash_live)
+           if use_flash else self.rollout_logits_jit)
     with prefill_route_scope(False), self._decode_callify_substrate(), self._decode_flash_load_schedule_substrate(use_flash):
       return jit(tokens, start_pos, temperature)
 
@@ -1969,11 +1985,11 @@ class Transformer:
       _nv_compiler_k_binding = k_binding_for("NV")
       _nv_compiler_k_binding.prepare_records(len(self.blk))
       _nv_compiler_k_binding.install_warmstart(self)
-    if is_prefill_v2 and getenv("NV_LLAMA_PACKED_Q6K_DOWN_PP512",0):
+    if is_prefill_v2 and _nv_llama_packed_q6k_down_enabled(self.config):
       if not _nv_llama_packed_q6k_down_enabled(self.config):raise RuntimeError("llama Q6 down requires the exact llama Q4 gate/up Qwen3-8B arm")
       from extra.llm_research.prefill.nv_llama_packed_q6k_down_pp512_binding import binding_for as q6_down_binding_for
       _nv_llama_q6_down_binding=q6_down_binding_for("NV");_nv_llama_q6_down_binding.prepare_records(18)
-    if is_prefill_v2 and getenv("NV_LLAMA_PACKED_Q4K_DOWN_PP512",0):
+    if is_prefill_v2 and _nv_llama_packed_q4k_down_enabled(self.config):
       if not _nv_llama_packed_q4k_down_enabled(self.config):raise RuntimeError("llama Q4 down requires the exact llama Q4 gate/up Qwen3-8B arm")
       from extra.llm_research.prefill.nv_llama_packed_q4k_down_pp512_binding import binding_for as q4_down_binding_for
       _nv_llama_q4_down_binding=q4_down_binding_for("NV");_nv_llama_q4_down_binding.prepare_records(18)
@@ -1997,15 +2013,18 @@ class Transformer:
     else:
       pingpong = bool(getattr(self, "_decode_feedback_pingpong_promoted", False)) and feedback_slot is not None
       greedy_flash_pair = _flash_jit_variant(flash_split_count, self.rollout_greedy_pingpong_jits_flash,
-        self.rollout_greedy_pingpong_jits_flash_s6, self.rollout_greedy_pingpong_jits_flash_s64)
+        self.rollout_greedy_pingpong_jits_flash_s6, self.rollout_greedy_pingpong_jits_flash_s64,
+        self.rollout_greedy_pingpong_jits_flash_live)
       greedy_flash = _flash_jit_variant(flash_split_count, self.rollout_greedy_jit_flash,
-        self.rollout_greedy_jit_flash_s6, self.rollout_greedy_jit_flash_s64)
+        self.rollout_greedy_jit_flash_s6, self.rollout_greedy_jit_flash_s64,
+        self.rollout_greedy_jit_flash_live)
       rollout_greedy = ((greedy_flash_pair if use_flash else self.rollout_greedy_pingpong_jits)[feedback_slot]
                         if pingpong else (greedy_flash if use_flash else self.rollout_greedy_jit))
       jit = ((self.prefill_v2_greedy_jit if greedy else self.prefill_v2_jit) if is_prefill_v2 else (self.prefill_greedy_jit if greedy else self.prefill_jit)) if is_prefill else \
             (rollout_greedy if greedy else
              (_flash_jit_variant(flash_split_count, self.rollout_jit_flash, self.rollout_jit_flash_s6,
-                                 self.rollout_jit_flash_s64) if use_flash else self.rollout_jit))
+                                 self.rollout_jit_flash_s64, self.rollout_jit_flash_live)
+              if use_flash else self.rollout_jit))
     if _nv_compiler_binding is not None:
       # The compiled PROGRAM is cached once per device, but every model/JIT
       # owns a distinct trace identity. Mutable graph storage is allocated
@@ -2307,7 +2326,7 @@ class Transformer:
       decode_flash_llama_vec_wide_promoted((_norm_cap.backend, _norm_cap.architecture)) and
       not getenv("TINYGRAD_FLASH_LOAD_SCHEDULE_DISABLE", 0) and config.num_experts == 0 and
       config.num_blocks == 36 and config.n_heads == 32 and config.n_kv_heads == 8 and
-      config.head_dim == 128 and config.max_context == 1024)
+      config.head_dim == 128 and config.max_context >= 513)
     # Active-horizon selection is inseparable from explicit capture placement:
     # without both S6/S8 ping-pong pairs prewarmed, the Tc=769 lazy capture
     # spike erases the steady-state saving. `generate` therefore activates
@@ -2762,25 +2781,26 @@ class Transformer:
       try: self(dummy, v_sp.bind(ctx), temp, use_flash=True).realize()
       except Exception: return
 
-  def _prewarm_active_horizon_flash_pairs(self) -> None:
-    """Capture the qualified S6/S8 greedy ping-pong pairs once per model.
-
-    The selector crosses from S6 to S8 at Tc=769. Letting either pair capture
-    at that crossing converts compilation into a token-latency spike, so the
-    booked throughput policy explicitly moves both captures to request warmup.
-    The dummy KV writes are overwritten by the following prompt.
-    """
+  def _prewarm_active_horizon_flash_pairs(self, prompt_len:int=0, expected_output_tokens:int|None=None) -> None:
+    """Capture every reachable promoted live-context graph before token timing."""
     if getattr(self, "_flash_decode_active_horizon_prewarmed", False): return
-    if not getattr(self, "_flash_decode_active_horizon_lease", False) or self.max_context != 1024: return
-    if not getattr(self, "_decode_direct_greedy_promoted", False) or \
-       not getattr(self, "_decode_feedback_pingpong_promoted", False): return
+    if not getattr(self, "_flash_decode_active_horizon_lease", False): return
     v_sp = UOp.variable("start_pos", 0, self.max_context-1)
     dummy = Tensor([[0]], dtype="int32").contiguous()
     temp = Tensor([0.0]).contiguous()
-    for split_count, ctx in ((6, 700), (None, 800)):
-      for slot in (0, 1):
+    variants = ((6,700),(8,900),(10,1100),(18,2000),(34,4000))
+    horizon = self.max_context if expected_output_tokens is None else min(self.max_context, prompt_len + expected_output_tokens)
+    lo = max(513, prompt_len)
+    probes = (lo, horizon, 769, 1025, 1281, 2305)
+    required = {_active_horizon_flash_split_count(True, tc-1, self.max_context) for tc in probes if lo <= tc <= horizon}
+    required.discard(None)
+    for split_count, ctx in ((s,min(ctx,self.max_context-1)) for s,ctx in variants if min(ctx,self.max_context-1) >= 511):
+      if expected_output_tokens is not None and split_count not in required: continue
+      direct = bool(getattr(self, "_decode_direct_greedy_promoted", False))
+      slots = (0, 1) if direct and getattr(self, "_decode_feedback_pingpong_promoted", False) else (None,)
+      for slot in slots:
         for _ in range(3):
-          self(dummy, v_sp.bind(ctx), temp, use_flash=True, greedy=True,
+          self(dummy, v_sp.bind(ctx), temp, use_flash=True, greedy=direct,
                feedback_slot=slot, flash_split_count=split_count).realize()
     self.reset_generation_state()
     self._flash_decode_active_horizon_prewarmed = True
@@ -2819,7 +2839,7 @@ class Transformer:
                          f"evicts during generation, not prefill. Shorten the prompt to <={self.max_context} tokens, or "
                          f"use a model/quant that admits a larger window.")
     if not _ring and not diagnostic_full_logits and temperature == 0.0:
-      self._prewarm_active_horizon_flash_pairs()
+      self._prewarm_active_horizon_flash_pairs(len(tokens), expected_output_tokens)
     for _b in self.blk: _b._ring_active = _ring   # make prefill ALSO store un-roped K when the ring is on
     v_start_pos = UOp.variable("start_pos", 0, self.max_context-1)
     v_toks = UOp.variable("toks", 1, chunk_size)

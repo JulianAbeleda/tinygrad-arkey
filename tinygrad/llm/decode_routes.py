@@ -727,7 +727,7 @@ def _flash_llama_vec_wide_research_call(q:Tensor, assigned_kv:Tensor, Tc:UOp, bi
                                          output_q8:bool=False, output_q8_fine:bool=False) -> Tensor|tuple[Tensor,Tensor]:
   """Extent-derived wide-KV flash at the approved research/promotion admission boundary."""
   extent_split = MAXC // 128 if MAXC % 128 == 0 else None
-  bounded = token_bound is not None and token_bound % 128 == 0 and token_bound <= MAXC and \
+  bounded = token_bound is not None and token_bound % 128 == 0 and \
     S == (token_bound // 128) * query_group_size
   if (binding.Hq, binding.Hkv, binding.Hd) != (32, 8, 128) or (S != extent_split and not bounded) or \
       assigned_kv.dtype != dtypes.float16:
@@ -829,6 +829,7 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
   output_fp16 = bool(binding.combine_fusion or combine_fp16)
   wide_lease = bool(geom.get("llama_vec_wide", False))
   wide_promoted = _flash_llama_vec_wide_installed_admitted(binding.llama_vec_wide, geom, MAXC)
+  wide_policy = bool(binding.llama_vec_wide and geom.get("policy_selected", False))
   if wide_promoted: split_size = MAXC // 128
   if wide_lease or wide_promoted:
     if kv_scale is not None or freqs is not None:
@@ -841,7 +842,7 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
     if (successor_weights is not None) != bool(successor_prefetch_groups):
       raise ValueError("O successor weights and prefetch group lease must be supplied together")
     return _flash_llama_vec_wide_research_call(q, assigned_kv, _tc, binding, MAXC, split_size, output_fp16,
-                                                promoted=wide_promoted and not successor_prefetch_groups and not output_q8 and not output_q8_fine, token_bound=geom.get("token_bound"),
+                                                promoted=(wide_promoted or wide_policy) and not successor_prefetch_groups and not output_q8 and not output_q8_fine, token_bound=geom.get("token_bound"),
                                                 wide_q_f32=bool(geom.get("wide_q_f32", False)),
                                                 combine_register_weights=_flash_combine_register_weights_admitted(
                                                   wide_promoted, geom),
