@@ -7,7 +7,8 @@ from tinygrad.renderer.cuda import CUDARenderer
 from tinygrad.runtime.support.compiler_cuda import NVRTCCompiler
 from tinygrad.uop.ops import Ops, UOp
 from tinygrad.llm.decode_routes import _Q6KDecodeCandidate
-from tinygrad.llm.model_route_plan import decode_q6k_v_four_warp_fp16_geometry_promoted
+from tinygrad.llm.model_route_plan import (decode_q6k_v_four_warp_fp16_geometry_promoted,
+  decode_q6k_vocab_four_warp_fp16_promoted)
 from tinygrad.llm.q6k_v_mmvq import (K, ROWS, Q6KVFourWarpAdmission,
   emit_q6k_v_four_warp_fp16_direct, q6k_v_four_warp_call)
 
@@ -56,3 +57,18 @@ def test_route_policy_promotes_nv_sm120_only():
   assert decode_q6k_v_four_warp_fp16_geometry_promoted(("NV", "sm_120"))
   assert not decode_q6k_v_four_warp_fp16_geometry_promoted(("AMD", "gfx1100"))
   assert not decode_q6k_v_four_warp_fp16_geometry_promoted(("CUDA", "sm_120"))
+
+def test_vocab_route_policy_and_exact_geometry():
+  rows = 151936
+  assert decode_q6k_vocab_four_warp_fp16_promoted(("NV", "sm_120"))
+  assert not decode_q6k_vocab_four_warp_fp16_promoted(("AMD", "gfx1100"))
+  ast = emit_q6k_v_four_warp_fp16_direct(rows=rows,
+    kernel_name=f"q6k_vocab_four_warp_fp16_direct_{rows}_{K}")(
+      UOp.placeholder((rows,), dtypes.float32, 0),
+      UOp.placeholder((rows * (K // 256) * 105,), dtypes.uint16, 1),
+      UOp.placeholder((K,), dtypes.float16, 2))
+  program = to_program(ast, CUDARenderer(Target.parse("NV:CUDA:sm_120")))
+  source = next(u.arg for u in program.src if u.op is Ops.SOURCE)
+  assert program.arg.global_size == (rows, 1, 1)
+  assert program.arg.local_size == (128, 1, 1)
+  assert f"q6k_vocab_four_warp_fp16_direct_{rows}_{K}" in source

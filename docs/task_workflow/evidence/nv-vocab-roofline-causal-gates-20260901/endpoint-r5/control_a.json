@@ -1,0 +1,44 @@
+{
+  "CUDA_GRAPH_STREAMS": null,
+  "DEV": "NV",
+  "accepted_samples_ms_per_token": [
+    4.039769833333334,
+    4.043945166666666,
+    4.077598333333333,
+    4.055612916666666,
+    4.0644461666666665
+  ],
+  "commit": "5f4e554f1815b5706cad45914d89f69397bdfd23",
+  "count": 12,
+  "depth": 512,
+  "external_contention_high_limit_ms": 4.305612916666666,
+  "median_ms_per_token": 4.055612916666666,
+  "prelude_token": 13876,
+  "rejected_high_samples_ms_per_token": [],
+  "reps": 5,
+  "samples_ms_per_token": [
+    4.039769833333334,
+    4.043945166666666,
+    4.077598333333333,
+    4.055612916666666,
+    4.0644461666666665
+  ],
+  "schema": "tinygrad.dense_route_endpoint.v1",
+  "timed_token_count": 60,
+  "token_hashes": [
+    "f7cf348f26306df073f3f6360dc83e9369e5c97096f383d6f08d1a930b66ec19",
+    "f7cf348f26306df073f3f6360dc83e9369e5c97096f383d6f08d1a930b66ec19",
+    "f7cf348f26306df073f3f6360dc83e9369e5c97096f383d6f08d1a930b66ec19",
+    "f7cf348f26306df073f3f6360dc83e9369e5c97096f383d6f08d1a930b66ec19",
+    "f7cf348f26306df073f3f6360dc83e9369e5c97096f383d6f08d1a930b66ec19"
+  ],
+  "token_stream_hash": "6700c07ac628c8d6758a1b16144602fe55b82feae49741c4a3133ab10a091aa6",
+  "warmup_tokens": [
+    38835,
+    34208,
+    13,
+    279,
+    3974,
+    13876
+  ]
+}

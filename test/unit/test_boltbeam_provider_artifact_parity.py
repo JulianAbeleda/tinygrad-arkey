@@ -42,6 +42,16 @@ def test_q6_v_provider_matches_direct_uop_artifact():
   args=(_buf(1024,dtypes.float32),_buf(1024*16*105,dtypes.uint16),_buf(4096,dtypes.float16))
   assert provider(*args).key == emit_q6k_v_four_warp_fp16_direct()(*args).key
 
+def test_q6_vocab_four_warp_provider_matches_direct_uop_artifact():
+  from tinygrad.llm.q6k_v_mmvq import emit_q6k_v_four_warp_fp16_direct
+  rows,k=151936,4096
+  provider,_=lower_authorized_candidate({"family":"q6_vocab_four_warp.v1","rows":rows,"k":k},
+    (("decode_q6k_vocab_four_warp_fp16","q6_vocab_four_warp_fp16"),))
+  args=(_buf(rows,dtypes.float32),_buf(rows*16*105,dtypes.uint16),_buf(k,dtypes.float16))
+  direct=emit_q6k_v_four_warp_fp16_direct(rows=rows,
+    kernel_name=f"q6k_vocab_four_warp_fp16_direct_{rows}_{k}")
+  assert provider(*args).key == direct(*args).key
+
 
 def test_q6_generated_gemv_and_vocab_reduce_match_direct_uop_artifacts():
   from tinygrad.llm.decode_kernels import (emit_q6k_gemv_kernel,emit_q6k_vocab_scalar_reduce_kernel,q6k_spec_for_role)

@@ -418,6 +418,21 @@ def decode_q6k_v_four_warp_fp16_geometry_promoted(target:Target) -> bool:
   """Policy authority for the Q6_K attention-V four-warp fp16 geometry route (closed default)."""
   return target in _DECODE_Q6K_V_FOUR_WARP_FP16_GEOMETRY_PROMOTED_TARGETS
 
+def load_decode_q6k_vocab_four_warp_fp16_promotion(path:str) -> frozenset[Target]:
+  """Read the exact-shape Q6_K vocabulary four-warp FP16 promotion record."""
+  policy_path=pathlib.Path(path).expanduser(); data=json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  return frozenset((t.get("backend"),t.get("architecture")) for t in (data.get("promoted_targets") or ()))
+
+_DECODE_Q6K_VOCAB_FOUR_WARP_FP16_RECORD = pathlib.Path(__file__).with_name("generated") / \
+  "decode-q6k-vocab-four-warp-fp16-route-policy.json"
+_DECODE_Q6K_VOCAB_FOUR_WARP_FP16_TARGETS = load_decode_q6k_vocab_four_warp_fp16_promotion(
+  _DECODE_Q6K_VOCAB_FOUR_WARP_FP16_RECORD)
+
+def decode_q6k_vocab_four_warp_fp16_promoted(target:Target,getenv_fn=getenv) -> bool:
+  """Resolve the exact vocabulary route with an explicit load-time rollback."""
+  return target in _DECODE_Q6K_VOCAB_FOUR_WARP_FP16_TARGETS and not getenv_fn("TINYGRAD_Q6K_VOCAB_FOUR_WARP_DISABLE",0)
+
 def load_decode_q4k_w1w3_fusion_promotion(path:str) -> frozenset[Target]:
   """Read the w1+w3 fused gate/up decode GEMV promotion record (boltbeam.route_policy.v1, same schema
   family as `load_decode_q4k_epilogue_fusion_promotion`). CLOSED default; deliberately a SEPARATE record

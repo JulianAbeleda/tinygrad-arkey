@@ -38,10 +38,12 @@ class Q6KVFourWarpAdmission:
       raise ValueError("Q6_K attention-V four-warp block index must be a non-negative integer")
 
 
-def emit_q6k_v_four_warp_fp16_direct() -> callable:
+def emit_q6k_v_four_warp_fp16_direct(*, rows:int=ROWS, kernel_name:str|None=None) -> callable:
   """Q6_K attention-V four-warp fp16-direct consumer (128 threads/row, no Q8)."""
+  if not isinstance(rows, int) or rows <= 0: raise ValueError("rows must be a positive integer")
+  name = kernel_name or f"q6k_v_four_warp_fp16_direct_{rows}_{K}"
   def kernel(out:UOp, halfs:UOp, x:UOp) -> UOp:
-    row = UOp.special(ROWS, "gidx0")
+    row = UOp.special(rows, "gidx0")
     lid = UOp.special(WARP * WARPS_PER_ROW, "lidx0")
     warp, lane = lid // WARP, lid % WARP
     sub, pos = lane // POS, lane % POS
@@ -64,7 +66,7 @@ def emit_q6k_v_four_warp_fp16_direct() -> callable:
     for wi in range(WARPS_PER_ROW):
       merged = merged + smem.after(ready)[wi]
     return out[row].store(merged, lid.eq(0)).sink(
-      arg=KernelInfo(name="q6k_v_four_warp_fp16_direct_1024_4096", opts_to_apply=()))
+      arg=KernelInfo(name=name, opts_to_apply=()))
   return kernel
 
 

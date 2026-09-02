@@ -15,7 +15,7 @@ from tinygrad.llm.kernel_program import (ActivationViewRequest, DeclaredTypedOut
                                          TypedViewRequest, execute_promoted_program, execute_research_program)
 from tinygrad.llm.kernel_program import execute_research_program_outputs
 from tinygrad.llm.model_route_plan import (decode_epilogue_fusion_promoted, decode_flash_combine_fusion_promoted,
-                                           decode_flash_llama_vec_wide_promoted)
+                                           decode_flash_llama_vec_wide_promoted, decode_q6k_vocab_four_warp_fp16_promoted)
 from tinygrad.llm.packed_argmax import packed_argmax_from_tile_keys
 from tinygrad.llm.qk_layout import Q4_K, Q6_K, QuantFormat
 from tinygrad.llm.route_selection import parse_route_mode
@@ -453,6 +453,21 @@ class _Q6KDecodeCandidate:
     target = f"{capability.backend}:{capability.architecture}" if capability is not None and \
       getattr(capability, "backend", None) is not None and getattr(capability, "architecture", None) is not None \
       else self.target
+    target_tuple = (getattr(capability,"backend",None),getattr(capability,"architecture",None))
+    # Exact-shape Boltbeam-promoted vocabulary route. Small projections retain
+    # their existing policies: widening only wins once the compulsory stream is
+    # the 510 MB 151936x4096 LM head. The policy resolver owns rollback.
+    if (decode_q6k_vocab_four_warp_fp16_promoted(target_tuple) and route_role == "lm_head" and
+        binding.N == 151936 and binding.K == 4096 and str(x.device).startswith("NV")):
+      emitter,ticket=lower_authorized_candidate(
+        {"family":"q6_vocab_four_warp.v1","rows":binding.N,"k":binding.K},
+        (("decode_q6k_vocab_four_warp_fp16","q6_vocab_four_warp_fp16"),))
+      vocab_program = KernelProgram("decode_q6k_vocab_four_warp_fp16", "q6k_vocab_four_warp_fp16",
+        KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emitter,
+        output_spec=OutputSpec((binding.N,), dtypes.float32), boltbeam_ticket=ticket)
+      vocab_x = x[:, 0, :].reshape(binding.K).cast(dtypes.float16).contiguous()
+      return execute_promoted_program(Tensor.empty((binding.N,), dtype=dtypes.float32, device=x.device),
+        linear.q6k_storage.halfs.to(x.device), vocab_x, program=vocab_program).reshape(1, 1, binding.N)
     # L1 M2 (l1-decode-plumbing-fusion-design-20260802.md section 6, classes 9/10): the in-kernel merge is
     # admitted only through the closed-default epilogue-fusion promotion record; the legacy external_sum
     # route (generic partial.sum(axis=1) merge chain) is untouched and remains the default.

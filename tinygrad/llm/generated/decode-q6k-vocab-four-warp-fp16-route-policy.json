@@ -1,0 +1,8 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_q6k_vocab_four_warp_fp16",
+  "description": "Q6_K vocabulary four-warp FP16 promotion. Exact decode shape M=1,N=151936,K=4096 on NV sm_120; canonical packed Q6_K input, direct FP16 activation, 128 threads/four warps per output row, shared cross-warp reduction, direct FP32 logits, no provider or weight expansion. Full-shape A/B/A recovered 11.546 us of body time (309.974 us candidate). Frozen d512 R9x24 reverse bracket: control A 4.067713 / candidate 4.035563 / control C 4.060289 ms/token, -28.438 us/token versus control midpoint, +0.705%, 27/27 windows accepted, identical 216-token hashes. TINYGRAD_Q6K_VOCAB_FOUR_WARP_DISABLE=1 restores the prior cooperative row-tile-2 route.",
+  "promoted_targets": [
+    {"backend": "NV", "architecture": "sm_120"}
+  ]
+}

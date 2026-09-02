@@ -143,6 +143,12 @@ def build_registered_llm_emitter(family: str, parameters: dict[str, Any], bindin
     if parameters: raise ValueError("q6_v.v1 takes no parameters")
     from tinygrad.llm.q6k_v_mmvq import emit_q6k_v_four_warp_fp16_direct
     return emit_q6k_v_four_warp_fp16_direct()
+  if family == "q6_vocab_four_warp.v1":
+    if set(parameters) != {"rows", "k"} or parameters["rows"] != 151936 or parameters["k"] != 4096:
+      raise ValueError("q6_vocab_four_warp.v1 requires the promoted 151936x4096 shape")
+    from tinygrad.llm.q6k_v_mmvq import emit_q6k_v_four_warp_fp16_direct
+    return emit_q6k_v_four_warp_fp16_direct(rows=parameters["rows"],
+      kernel_name=f"q6k_vocab_four_warp_fp16_direct_{parameters['rows']}_{parameters['k']}")
   if family == "shared_q8_consumer.v1":
     required = {"rows", "block_count", "direct_output", "residual_add", "quant"}
     if set(parameters) != required or parameters["quant"] not in ("q4", "q6"):

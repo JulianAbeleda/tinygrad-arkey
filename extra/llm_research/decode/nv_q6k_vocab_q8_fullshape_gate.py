@@ -18,6 +18,7 @@ from tinygrad.llm.decode_kernels import emit_q6k_gemv_kernel, q6k_spec_for_role
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_research_program
 from tinygrad.llm.shared_q8_attention import _emit_q8_provider
 import extra.llm_research.decode.q6k_q8_warp_direct_microgate as q8direct
+import tinygrad.llm.q6k_v_mmvq as fp16four
 
 ROWS, K = 151936, 4096
 Q8_WORDS = K // 4 + K // 32
@@ -28,7 +29,7 @@ def _program(family: str, name: str, emitter, shape: tuple[int, ...], dtype=dtyp
                        output_spec=OutputSpec(shape, dtype))
 
 
-def run(replays: int, reps: int) -> dict:
+def run(replays: int, reps: int, variant: str = "direct") -> dict:
   dev = Device.DEFAULT
   if str(dev) != "NV": raise RuntimeError(f"DEV=NV required, got {dev}")
 
@@ -40,8 +41,12 @@ def run(replays: int, reps: int) -> dict:
     emit_q6k_gemv_kernel(control_spec), (ROWS,))
   provider_program = _program("research.q6k_vocab_q8_fullshape", "q8_provider_4096",
     _emit_q8_provider(), (Q8_WORDS,), dtypes.uint32)
+  if variant not in ("direct", "lane-stage", "fp16-four-warp"): raise ValueError(variant)
+  fp16four.ROWS = ROWS
+  candidate_emitter = (q8direct.emit_q6k_q8_warp_direct() if variant == "direct" else
+    q8direct.emit_q6k_q8_warp_lane_stage() if variant == "lane-stage" else fp16four.emit_q6k_v_four_warp_fp16_direct())
   candidate_program = _program("research.q6k_vocab_q8_fullshape",
-    f"q6k_q8_warp_direct_{ROWS}_{K}", q8direct.emit_q6k_q8_warp_direct(), (ROWS,))
+    f"q6k_q8_warp_{variant}_{ROWS}_{K}", candidate_emitter, (ROWS,))
 
   # Deterministic zero input is sufficient for this timing-only discriminator;
   # the exact nonzero arithmetic/oracle gate belongs to the reused primitive.
@@ -55,6 +60,9 @@ def run(replays: int, reps: int) -> dict:
 
   @TinyJit
   def candidate(w, xx):
+    if variant == "fp16-four-warp":
+      return execute_research_program(Tensor.empty((ROWS,), dtype=dtypes.float32, device=dev),
+        w, xx, program=candidate_program)
     packed = execute_research_program(Tensor.empty((Q8_WORDS,), dtype=dtypes.uint32, device=dev),
       xx, program=provider_program)
     # The direct emitter consumes payload and scales as two views of the same packet.
@@ -86,9 +94,11 @@ def run(replays: int, reps: int) -> dict:
   return {
     "schema": "tinygrad.nv_q6k_vocab_q8_fullshape_gate.v1",
     "git_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+    "variant": variant,
     "shape": {"rows": ROWS, "k": K, "weight_bytes": ROWS * (K // 256) * 210},
     "contract": {"control": "installed Q6_K FP16 in-kernel reduction",
-      "candidate": "Q8 provider + four-warp Q6_K/Q8_1 direct output",
+      "candidate": ("four-warp Q6_K/FP16 direct output" if variant == "fp16-four-warp" else
+        f"Q8 provider + four-warp Q6_K/Q8_1 {variant} output"),
       "production_route_changed": False, "quality_credit": False},
     "correctness": {"zero_input_exact": exact_zero,
       "nonzero_primitive_authority": "q6k_q8_warp_direct_microgate"},
@@ -103,7 +113,8 @@ def run(replays: int, reps: int) -> dict:
 def main() -> int:
   ap = argparse.ArgumentParser(); ap.add_argument("--replays", type=int, default=32)
   ap.add_argument("--reps", type=int, default=9); ap.add_argument("--out", type=pathlib.Path, required=True)
-  args = ap.parse_args(); result = run(args.replays, args.reps)
+  ap.add_argument("--variant", choices=("direct", "lane-stage", "fp16-four-warp"), default="direct")
+  args = ap.parse_args(); result = run(args.replays, args.reps, args.variant)
   args.out.parent.mkdir(parents=True, exist_ok=True)
   args.out.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
   print(json.dumps(result, indent=2, sort_keys=True)); return 0
