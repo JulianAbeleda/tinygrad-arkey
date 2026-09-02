@@ -163,14 +163,21 @@ def supports_nonfinal_first() -> bool:
   return "streamk_segment_order" in inspect.signature(q6_oracle_broad_cta_kernel).parameters
 
 
-def build_packed_one_body_ast(segment_order:str="ascending", partial_output_layout:str="tile_row_major") -> UOp:
+def build_packed_one_body_ast(segment_order:str="ascending", partial_output_layout:str="tile_row_major", *,
+                              region_load_bridge_q8_panel1:bool=False, fp32_contraction:str="implicit",
+                              weight_scale_contract:str="trusted_fp16_packed", factor_dA:bool=False,
+                              fp32_p_tree:str="legacy", fp32_scale_grouping:str="legacy",
+                              q6_fragment_schedule:str="preload") -> UOp:
   if segment_order not in ("ascending","nonfinal_first"): raise ValueError(segment_order)
   if segment_order == "nonfinal_first" and not supports_nonfinal_first():
     raise RuntimeError(SEGMENT_ORDER_BUILDER_PATCH["reason"])
   ph=lambda n,dt,i:UOp.placeholder((n,),dt,i)
-  kwargs={"prefetch_second_panel":True,"combined_initial_publish":True,"factor_dA":False,"oracle_publisher":True,
-    "weight_scale_contract":"trusted_fp16_packed","streamk_owners":OWNERS,"streamk_segment":0,
-    "streamk_segments_in_cta":True,"partial_output_layout":partial_output_layout}
+  kwargs={"prefetch_second_panel":not region_load_bridge_q8_panel1,"combined_initial_publish":True,"factor_dA":factor_dA,"oracle_publisher":True,
+    "weight_scale_contract":weight_scale_contract,"fp32_p_tree":fp32_p_tree,"fp32_scale_grouping":fp32_scale_grouping,
+    "q6_fragment_schedule":q6_fragment_schedule,
+    "streamk_owners":OWNERS,"streamk_segment":0,
+    "streamk_segments_in_cta":True,"partial_output_layout":partial_output_layout,
+    "region_load_bridge_q8_panel1":region_load_bridge_q8_panel1,"fp32_contraction":fp32_contraction}
   if supports_nonfinal_first(): kwargs["streamk_segment_order"]=segment_order
   return q6_oracle_broad_cta_kernel(ph(2*OWNERS*TILE_ELEMS,dtypes.float32,0),ph(N*K256*105,dtypes.uint16,1),
     ph(TILES_M*K256*2*COLS*36,dtypes.uint32,2),**kwargs)

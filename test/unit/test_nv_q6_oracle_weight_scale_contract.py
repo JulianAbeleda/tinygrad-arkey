@@ -32,3 +32,11 @@ def test_packed_contract_is_explicit_and_default_compatible():
   assert 'trusted_fp16_packed' in source
   assert 'packed_weight_pair' in source
   assert '65+kphase*4+p' in source
+
+
+def test_trusted_contract_exposes_legal_inner_and_outer_fma_modes():
+  source=inspect.getsource(q6_oracle_broad_cta_kernel)
+  assert '"trusted_inner","trusted_outer","trusted_both"' in source
+  assert 'fp_fma(ws0,z0.cast(dtypes.float32),dot1)' in source
+  assert 'fp_fma(yscale,weighted,carrier[0])' in source
+  assert 'fp32_contraction not in trusted_contractions' in source

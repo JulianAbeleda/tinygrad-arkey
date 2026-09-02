@@ -19,7 +19,7 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
                                weight_scale_contract:str="legacy", trace=None, trace_config:tuple[int,int]|None=None,
                                streamk_owners:int|None=None, streamk_segment:int=0, streamk_segments_in_cta:bool=False,
                                region_load_bridge_q8_panel1:bool=False, strict_after_q8_panel1:bool=False,
-                               partial_output_layout:str="tile_row_major"):
+                               partial_output_layout:str="tile_row_major", q6_fragment_schedule:str="preload"):
   """One exact llama-normalized 128x128xK256 work unit per CTA.
 
   ``blocks`` is 128 canonical Q6_K rows. ``q8_record`` is two canonical
@@ -33,6 +33,8 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
     raise ValueError("strict-after panel1 requires direct arithmetic with prefetch and region bridge disabled")
   if partial_output_layout not in ("tile_row_major","destination_major"):
     raise ValueError(f"unknown partial output layout {partial_output_layout!r}")
+  if q6_fragment_schedule not in ("preload","round"):
+    raise ValueError(f"unknown Q6 fragment schedule {q6_fragment_schedule!r}")
   if partial_output_layout != "tile_row_major" and (streamk_owners is None or tile_grid is not None):
     raise ValueError("destination-major partial output requires Stream-K scratch output")
   if depth < 1: raise ValueError("depth must be positive")
@@ -50,21 +52,25 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
     if fp32_scale_grouping != "legacy": raise ValueError("factored dA has one scale grouping")
     if fp32_p_tree == "legacy":
       if fp32_contraction != "implicit": raise ValueError("legacy factored dA requires implicit contraction")
+    elif fp32_p_tree == "ssa_vector":
+      if fp32_contraction != "both": raise ValueError("SSA-vector factored dA requires both contractions")
     elif fp32_p_tree not in ("left","inner_left","inner_right","right","balanced") or \
          fp32_contraction not in ("none","tmp_only","final_only","both"):
       raise ValueError("illegal factored FP32 tree or contraction")
   else:
     if fp32_p_tree != "legacy": raise ValueError("direct dA has no local p reduction tree")
     if fp32_scale_grouping == "legacy":
-      if fp32_contraction != "implicit": raise ValueError("legacy direct dA requires implicit contraction")
+      if fp32_contraction != "implicit" and weight_scale_contract == "legacy":
+        raise ValueError("legacy direct dA requires implicit contraction")
     elif fp32_scale_grouping not in ("wd_yscale_then_dot","wd_then_yscale_dot") or fp32_contraction not in ("none","final"):
       raise ValueError("illegal direct FP32 grouping or contraction")
   fp_mul=lambda a,b: UOp(Ops.CUSTOMI,dtypes.float32,(a,b),arg="__fmul_rn({0},{1})")
   fp_add=lambda a,b: UOp(Ops.CUSTOMI,dtypes.float32,(a,b),arg="__fadd_rn({0},{1})")
   fp_fma=lambda a,b,c: UOp(Ops.CUSTOMI,dtypes.float32,(a,b,c),arg="__fmaf_rn({0},{1},{2})")
   if weight_scale_contract not in ("legacy","trusted_fp16","trusted_fp16_packed"): raise ValueError("unknown weight scale contract")
-  if weight_scale_contract != "legacy" and (factor_dA or fp32_contraction != "implicit"):
-    raise ValueError("trusted weight scale contract requires legacy direct accumulation")
+  trusted_contractions=("implicit","trusted_inner","trusted_outer","trusted_both")
+  if weight_scale_contract != "legacy" and (factor_dA or fp32_contraction not in trusted_contractions):
+    raise ValueError(f"trusted weight scale contract requires factor_dA=False and contraction in {trusted_contractions}")
   packed_weight_scales=weight_scale_contract == "trusted_fp16_packed"
   if (trace is None) != (trace_config is None): raise ValueError("trace and trace_config must be supplied together")
   if trace_config is not None:
@@ -224,8 +230,10 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
     # One warp retains the 16 Q6 fragments for this K128 half. The rolling
     # band schedule folds two IMMA results immediately into the 64 FP32 bank.
     sx=sh.after(ready_q6)
-    av={(n,g):native_fragment_bitcast(native_fragment_materialized_x2(sx,
-      (band*32+n*16+(lane&15))*Q6_STRIDE+(kphase*8+g)*4),dtypes.char.vec(8)) for n in range(2) for g in range(8)}
+    def load_fragment(n,g): return native_fragment_bitcast(native_fragment_materialized_x2(sx,
+      (band*32+n*16+(lane&15))*Q6_STRIDE+(kphase*8+g)*4),dtypes.char.vec(8))
+    av=({(n,g):load_fragment(n,g) for n in range(2) for g in range(8)} if q6_fragment_schedule == "preload" else {})
+    def fragment(n,g): return av[n,g] if q6_fragment_schedule == "preload" else load_fragment(n,g)
     meta={}
     for n in range(2):
       for r in range(4):
@@ -243,8 +251,9 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
             def bv(qv): return UOp(Ops.STACK,dtypes.char.vec(4),tuple(qv.rshift(8*q).bitwise_and(255).cast(dtypes.char) for q in range(4)))
             axes=(tuple((1600+i,2) for i in range(3)),tuple((1610+i,2) for i in range(2)),tuple((1620+i,2) for i in range(2)))
             arg=("WMMA_8_16_16_signed_char_int",(8,16,16),dtypes.char,dtypes.int,"NV",32,axes,())
-            c0=UOp(Ops.WMMA,dtypes.int.vec(4),(av[n,g0],bv(qv0),UOp.const(dtypes.int.vec(4),0)),arg)
-            c1=UOp(Ops.WMMA,dtypes.int.vec(4),(av[n,g1],bv(qv1),UOp.const(dtypes.int.vec(4),0)),arg)
+            a0,a1=fragment(n,g0),fragment(n,g1)
+            c0=UOp(Ops.WMMA,dtypes.int.vec(4),(a0,bv(qv0),UOp.const(dtypes.int.vec(4),0)),arg)
+            c1=UOp(Ops.WMMA,dtypes.int.vec(4),(a1,bv(qv1),UOp.const(dtypes.int.vec(4),0)),arg)
             for r in range(4):
               ai=cg*8+n*4+r; col=cg*16+warp_phase*8+2*lc+(r&1); yscale=sy[col*Q8_STRIDE+p].bitcast(dtypes.float32)
               z0,z1=c0.gep(r),c1.gep(r)
@@ -252,7 +261,9 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
                 sw=meta[n,r][p]
                 ws0=sw.bitwise_and(0xffff).cast(dtypes.uint16).bitcast(dtypes.half).cast(dtypes.float32)
                 ws1=sw.rshift(16).cast(dtypes.uint16).bitcast(dtypes.half).cast(dtypes.float32)
-                dot0=fp_mul(ws0,z0.cast(dtypes.float32)); dot1=fp_mul(ws1,z1.cast(dtypes.float32)); weighted=fp_add(dot0,dot1)
+                dot0=fp_mul(ws0,z0.cast(dtypes.float32)); dot1=fp_mul(ws1,z1.cast(dtypes.float32))
+                weighted=(fp_fma(ws0,z0.cast(dtypes.float32),dot1)
+                          if fp32_contraction in ("trusted_inner","trusted_both") else fp_add(dot0,dot1))
               else:
                 dw,sw0,sw1=meta[n,r]; sw=(sw0,sw1)[p//2]; sp=kphase*4+p
                 s0=sw.rshift((2*sp%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.int32)
@@ -260,9 +271,13 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
                 wd=dw.bitcast(dtypes.float32); dot0=s0*z0; dot1=s1*z1; dot=dot0+dot1
                 ws0=(wd*s0.cast(dtypes.float32)).cast(dtypes.half).cast(dtypes.float32)
                 ws1=(wd*s1.cast(dtypes.float32)).cast(dtypes.half).cast(dtypes.float32)
-                weighted=fp_add(fp_mul(ws0,z0.cast(dtypes.float32)),fp_mul(ws1,z1.cast(dtypes.float32)))
+                scaled_dot0=fp_mul(ws0,z0.cast(dtypes.float32)); scaled_dot1=fp_mul(ws1,z1.cast(dtypes.float32))
+                weighted=(fp_fma(ws0,z0.cast(dtypes.float32),scaled_dot1)
+                          if fp32_contraction in ("trusted_inner","trusted_both") else fp_add(scaled_dot0,scaled_dot1))
               carrier=acc[ai].after(update) if update is not None else acc[ai]
-              next_value=fp_add(carrier[0],fp_mul(yscale,weighted))
+              next_value=(fp_fma(yscale,weighted,carrier[0])
+                          if fp32_contraction in ("trusted_outer","trusted_both")
+                          else fp_add(carrier[0],fp_mul(yscale,weighted)))
               update=carrier[0].store(next_value)
               if strict_after_q8_panel1 and kphase == 0 and cg == 7 and n == 0 and p == 2 and r == 3:
                 panel1_dependency.append(next_value)
@@ -276,6 +291,37 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
                   carrier[0].bitcast(dtypes.uint32),next_value.bitcast(dtypes.uint32)))
                 update=UOp.group(update,*(trace[tb+i].store(v,gate=lane_gate(trace_thread)) for i,v in enumerate(vals)))
       return update
+    if factor_dA and fp32_p_tree == "ssa_vector":
+      update=dep
+      for cg in range(8):
+        for n in range(2):
+          tmpv=UOp(Ops.STACK,dtypes.float.vec(4),tuple(UOp.const(dtypes.float32,0.0) for _ in range(4)))
+          for p in range(4):
+            g0,g1=2*p,2*p+1;lfrag_col=cg*16+warp_phase*8+lr
+            sy=shq.after(ready_y).after(preload) if preload is not None and kphase == 0 else shq.after(ready_y)
+            qv0,qv1=sy[lfrag_col*Q8_STRIDE+4+g0*4+lc],sy[lfrag_col*Q8_STRIDE+4+g1*4+lc]
+            def bv(qv): return UOp(Ops.STACK,dtypes.char.vec(4),tuple(qv.rshift(8*q).bitwise_and(255).cast(dtypes.char) for q in range(4)))
+            axes=(tuple((1600+i,2) for i in range(3)),tuple((1610+i,2) for i in range(2)),tuple((1620+i,2) for i in range(2)))
+            arg=("WMMA_8_16_16_signed_char_int",(8,16,16),dtypes.char,dtypes.int,"NV",32,axes,())
+            a0,a1=fragment(n,g0),fragment(n,g1)
+            c0=UOp(Ops.WMMA,dtypes.int.vec(4),(a0,bv(qv0),UOp.const(dtypes.int.vec(4),0)),arg)
+            c1=UOp(Ops.WMMA,dtypes.int.vec(4),(a1,bv(qv1),UOp.const(dtypes.int.vec(4),0)),arg)
+            values=[]
+            for r in range(4):
+              col=cg*16+warp_phase*8+2*lc+(r&1);_,sw0,sw1=meta[n,r];sw=(sw0,sw1)[p//2];sp=kphase*4+p
+              s0=sw.rshift((2*sp%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.int32)
+              s1=sw.rshift(((2*sp+1)%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.int32)
+              yscale=sy[col*Q8_STRIDE+p].bitcast(dtypes.float32)
+              dot=(s0*c0.gep(r)+s1*c1.gep(r)).cast(dtypes.float32)
+              values.append(fp_fma(yscale,dot,tmpv.gep(r)))
+            tmpv=UOp(Ops.STACK,dtypes.float.vec(4),tuple(values))
+          for r in range(4):
+            ai=cg*8+n*4+r;dw=meta[n,r][0]
+            wd=dw.bitwise_and(0xffff).cast(dtypes.uint16).bitcast(dtypes.half).cast(dtypes.float32)
+            carrier=acc[ai].after(update) if update is not None else acc[ai]
+            update=carrier[0].store(fp_fma(tmpv.gep(r),wd,carrier[0]))
+      return update
+
     if factor_dA and fp32_p_tree != "legacy":
       update=dep
       trees={"left":(((0,1),2),3),"inner_left":((0,(1,2)),3),"inner_right":(0,((1,2),3)),
@@ -291,8 +337,9 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
             def bv(qv): return UOp(Ops.STACK,dtypes.char.vec(4),tuple(qv.rshift(8*q).bitwise_and(255).cast(dtypes.char) for q in range(4)))
             axes=(tuple((1600+i,2) for i in range(3)),tuple((1610+i,2) for i in range(2)),tuple((1620+i,2) for i in range(2)))
             arg=("WMMA_8_16_16_signed_char_int",(8,16,16),dtypes.char,dtypes.int,"NV",32,axes,())
-            c0=UOp(Ops.WMMA,dtypes.int.vec(4),(av[n,g0],bv(qv0),UOp.const(dtypes.int.vec(4),0)),arg)
-            c1=UOp(Ops.WMMA,dtypes.int.vec(4),(av[n,g1],bv(qv1),UOp.const(dtypes.int.vec(4),0)),arg)
+            a0,a1=fragment(n,g0),fragment(n,g1)
+            c0=UOp(Ops.WMMA,dtypes.int.vec(4),(a0,bv(qv0),UOp.const(dtypes.int.vec(4),0)),arg)
+            c1=UOp(Ops.WMMA,dtypes.int.vec(4),(a1,bv(qv1),UOp.const(dtypes.int.vec(4),0)),arg)
             for r in range(4):
               col=cg*16+warp_phase*8+2*lc+(r&1); _,sw0,sw1=meta[n,r]; sw=(sw0,sw1)[p//2]; sp=kphase*4+p
               s0=sw.rshift((2*sp%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.int32)
@@ -336,8 +383,9 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
             def bv(qv): return UOp(Ops.STACK,dtypes.char.vec(4),tuple(qv.rshift(8*q).bitwise_and(255).cast(dtypes.char) for q in range(4)))
             axes=(tuple((1600+i,2) for i in range(3)),tuple((1610+i,2) for i in range(2)),tuple((1620+i,2) for i in range(2)))
             arg=("WMMA_8_16_16_signed_char_int",(8,16,16),dtypes.char,dtypes.int,"NV",32,axes,())
-            c0=UOp(Ops.WMMA,dtypes.int.vec(4),(av[n,g0],bv(qv0),UOp.const(dtypes.int.vec(4),0)),arg)
-            c1=UOp(Ops.WMMA,dtypes.int.vec(4),(av[n,g1],bv(qv1),UOp.const(dtypes.int.vec(4),0)),arg)
+            a0,a1=fragment(n,g0),fragment(n,g1)
+            c0=UOp(Ops.WMMA,dtypes.int.vec(4),(a0,bv(qv0),UOp.const(dtypes.int.vec(4),0)),arg)
+            c1=UOp(Ops.WMMA,dtypes.int.vec(4),(a1,bv(qv1),UOp.const(dtypes.int.vec(4),0)),arg)
             for r in range(4):
               col=cg*16+warp_phase*8+2*lc+(r&1); _,sw0,sw1=meta[n,r]; sw=(sw0,sw1)[p//2]; sp=kphase*4+p
               s0=sw.rshift((2*sp%4)*8).bitwise_and(255).cast(dtypes.char).cast(dtypes.int32)
@@ -361,8 +409,9 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
           def bv(qv): return UOp(Ops.STACK,dtypes.char.vec(4),tuple(qv.rshift(8*q).bitwise_and(255).cast(dtypes.char) for q in range(4)))
           axes=(tuple((1600+i,2) for i in range(3)),tuple((1610+i,2) for i in range(2)),tuple((1620+i,2) for i in range(2)))
           arg=("WMMA_8_16_16_signed_char_int",(8,16,16),dtypes.char,dtypes.int,"NV",32,axes,())
-          c0=UOp(Ops.WMMA,dtypes.int.vec(4),(av[n,g0],bv(qv0),UOp.const(dtypes.int.vec(4),0)),arg)
-          c1=UOp(Ops.WMMA,dtypes.int.vec(4),(av[n,g1],bv(qv1),UOp.const(dtypes.int.vec(4),0)),arg)
+          a0,a1=fragment(n,g0),fragment(n,g1)
+          c0=UOp(Ops.WMMA,dtypes.int.vec(4),(a0,bv(qv0),UOp.const(dtypes.int.vec(4),0)),arg)
+          c1=UOp(Ops.WMMA,dtypes.int.vec(4),(a1,bv(qv1),UOp.const(dtypes.int.vec(4),0)),arg)
           for r in range(4):
             ai=cg*8+n*4+r; col=cg*16+warp_phase*8+2*lc+(r&1)
             dw,sw0,sw1=meta[n,r]; sw=(sw0,sw1)[p//2]; sp=kphase*4+p
@@ -395,7 +444,8 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
   if not prefetch_second_panel:
     if region_load_bridge_q8_panel1:
       region=before_overwrite.post_barrier_region(UOp.const(dtypes.bool,True),workgroup_uniform=True)
-      panel1=tuple(q8_record[q8_epoch+Q8_WORDS+lid+i*256].load().load_in_region_bridge(region) for i in range(18))
+      panel1=tuple(q8_record[q8_epoch+Q8_WORDS+lid+i*256].load().load_in_region_bridge(
+        region,order_after_anchor=True) for i in range(18))
     elif strict_after_q8_panel1:
       if len(panel1_dependency) != 1: raise RuntimeError("strict-after panel1 dependency token was not captured exactly once")
       panel1_base=(q8_epoch+Q8_WORDS+lid).cast(dtypes.int).strict_after(panel1_dependency[0])
@@ -426,6 +476,7 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
           (tile_m*COLS+col)*(tiles_n*ROWS)+tile_n*ROWS+row)
         stores.append(out[out_index].store(acc[ai].after(loop_end)[0],gate=active))
   suffix="prefetch" if prefetch_second_panel else "serial"
+  if q6_fragment_schedule == "round": suffix += "_q6_round_fragments"
   if combined_initial_publish: suffix += "_combined_publish"
   if factor_dA: suffix += "_factor_da"
   if oracle_publisher: suffix += "_oracle_publisher"

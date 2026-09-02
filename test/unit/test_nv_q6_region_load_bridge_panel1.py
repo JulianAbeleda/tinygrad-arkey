@@ -24,6 +24,7 @@ def test_q8_panel1_bridge_has_exact_region_contract():
   ends=[x for x in topo if x.op is Ops.ENDIF and isinstance(x.arg,PostBarrierRegion)]
   assert len(regions)==len(markers)==len(ends)==1 and len(loads)==len(stores)==18
   assert markers[0].src==(regions[0],) and all(markers[0] not in x.src[0].backward_slice_with_self for x in loads)
+  assert markers[0].arg.order_after_anchor
   assert ends[0].src[0] is regions[0] and set(ends[0].src[1:])==set(stores)
 
 
