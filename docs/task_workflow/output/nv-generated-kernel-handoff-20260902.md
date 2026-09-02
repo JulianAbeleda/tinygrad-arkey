@@ -250,3 +250,52 @@ context bands, with no llama cubin in the selected graph.
 The practical correction is to keep route selection, arithmetic equivalence,
 graph ownership, and lifecycle performance as four separate gates.  Passing one
 must never imply the others.
+
+## Overall progress estimate
+
+Progress must be tracked on two axes.  Implementation progress measures whether
+the required substrate and candidate kernels exist.  Qualification progress
+measures whether those kernels are selected, correct, cubin-free, competitive
+over their complete lifecycle, and proven in the full model.
+
+| Scope | Current estimate |
+|---|---:|
+| Foundational substrate | 70-80% complete |
+| Kernel implementations | 45-60% complete |
+| Strictly qualified routes | 25-35% complete |
+| Complete decode and prefill goal | 40-50% complete |
+
+### Prefill
+
+Estimated 30-40% complete under the final standard.  Q6 FFN-down is fully
+qualified.  Generated gate/up and K implementations exist, but the remaining
+Q4 down population, both V populations, Q/O, complete attention lifecycle,
+ordinary generated selection, and context/depth coverage remain.
+
+### Decode
+
+Estimated 55-70% implemented and 30-40% strictly qualified.  Most projection,
+fusion, KV, attention, normalization, vocab, and argmax building blocks exist.
+The remaining work is graph census, route-by-route ownership proof, removal of
+llama-backed selections, vocab/token lifecycle closure, context-band coverage,
+and a clean endpoint comparison.
+
+### Remaining milestones
+
+1. Make independently qualified generated role selection the ordinary path.
+2. Complete Q4 FFN-down and the Q4/Q6 attention-V populations.
+3. Requalify Q, K, O, and the complete prefill attention lifecycle.
+4. Census and reconnect the existing decode primitives.
+5. Close the vocab-to-token lifecycle.
+6. Prove that neither captured production graph contains a llama PROGRAM.
+7. Run context-length and layer-depth sweeps.
+8. Demonstrate reproducible end-to-end llama parity or a win for both decode
+   and prefill.
+
+### Schedule estimate
+
+With one benchmark GPU and continuous focused work, the estimated remaining
+effort is 10-20 working days.  The lower bound assumes the existing decode and
+Q4 substrates reconnect without new compiler work.  The upper bound allows for
+one additional compiler-level gap in Q4 down or attention.  GPU qualification is
+the serial bottleneck even when audits and implementation are parallelized.
