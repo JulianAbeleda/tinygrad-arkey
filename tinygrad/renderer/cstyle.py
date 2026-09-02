@@ -465,6 +465,14 @@ class CStyleLanguage(Renderer):
     if not positions[anchor] < positions[region] < min(positions[x] for pair in pairs for x in pair) or \
        max(positions[x] for pair in pairs for x in pair) >= positions[end]:
       raise RuntimeError("region load bridge lifecycle is not anchor < region copies < ENDIF")
+    order_dependency=None
+    if marker.arg.order_after_anchor:
+      if len(anchor.src) != 1 or anchor.src[0].op is not Ops.STORE:
+        raise RuntimeError("ordered region load bridge requires one final STORE at its anchor")
+      order_dependency=anchor.src[0].src[0]
+      if order_dependency.addrspace is not AddrSpace.REG or order_dependency.dtype not in {dtypes.int,dtypes.uint,dtypes.float} or \
+         order_dependency.dtype.vcount != 1:
+        raise RuntimeError("ordered region load bridge requires one scalar32 REG completion value")
     suppressed={region,marker,end,*(x for pair in pairs for x in pair)}
     allowed=GroupOp.ALU|{Ops.NOOP,Ops.CONST,Ops.PARAM,Ops.DEFINE_VAR,Ops.DEFINE_LOCAL,Ops.BUFFER,Ops.SPECIAL,
                          Ops.INDEX,Ops.SHRINK,Ops.GEP,Ops.CAST,Ops.BITCAST}
@@ -477,7 +485,7 @@ class CStyleLanguage(Renderer):
     if invalid:
       kinds=Counter(u.op for u in invalid)
       raise RuntimeError(f"region load bridge body contains non-address work outside its direct copies: {dict(kinds)}")
-    return anchor,end,pairs,suppressed
+    return anchor,end,pairs,suppressed,order_dependency
 
   def __getitem__(self, key): return self.r[key]  # hacky helper
   def _render(self, uops:list[UOp]) -> tuple[str, list[str], list[tuple[str,tuple[UOp,bool]]]]:
@@ -491,7 +499,8 @@ class CStyleLanguage(Renderer):
     # find which PARAMs are stored to with a single toposort
     writable_params = {p for u in uops if u.op is Ops.STORE for p in u.src[0].pointer_base_params()}
     bridge_plan=self._region_load_bridge_plan(uops,child_count,writable_params)
-    bridge_anchor,bridge_end,bridge_pairs,bridge_suppressed = bridge_plan if bridge_plan is not None else (None,None,[],set())
+    bridge_anchor,bridge_end,bridge_pairs,bridge_suppressed,bridge_dependency = \
+      bridge_plan if bridge_plan is not None else (None,None,[],set(),None)
     bridge_barrier=None
     direct_region_loads: set[UOp] = set()
     for u in uops:
@@ -525,7 +534,7 @@ class CStyleLanguage(Renderer):
           if bridge_barrier is None: raise RuntimeError("region load bridge anchor was not rendered before its ENDIF")
           if (render_bridge:=getattr(self,"render_region_load_bridge",None)) is None:
             raise RuntimeError(f"{type(self).__name__} has no split region-load bridge lowering")
-          before,after=render_bridge(bridge_pairs)
+          before,after=render_bridge(bridge_pairs,bridge_dependency)
           kernel.extend("  "*depth+x for x in before)
           if not getattr(self,"region_load_bridge_owns_barrier",False): kernel.append("  "*depth+bridge_barrier)
           kernel.extend("  "*depth+x for x in after)

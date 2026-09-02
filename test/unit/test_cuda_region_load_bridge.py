@@ -39,7 +39,8 @@ def _unmarked_ast():
   return UOp.sink(out[lid].store(source[lid].load()),arg=KernelInfo(name="bridge_unmarked_control",opts_to_apply=()))
 
 
-def _bridge_ast(copies:int=18, *, large:bool=False, qualified:bool=False, mutable:bool=False, extra_consumer:bool=False):
+def _bridge_ast(copies:int=18, *, large:bool=False, qualified:bool=False, mutable:bool=False, extra_consumer:bool=False,
+                materialized:bool=False):
   lid=UOp.special(256,"lidx0"); out=UOp.placeholder((256,),dtypes.uint,0)
   source=UOp.placeholder((18*256,),dtypes.uint,1)
   if qualified: source=source.const_restrict()
@@ -51,9 +52,14 @@ def _bridge_ast(copies:int=18, *, large:bool=False, qualified:bool=False, mutabl
       mul=1.0001+((i*7+rnd*3)%29)*0.000013; add=0.125+((i*13+rnd*11)%127)*0.03125
       acc=UOp(Ops.CUSTOMI,dtypes.float,(acc,),f"__fmaf_rn({{0}}, {mul:.9f}f, {add:.9f}f)")
     accs.append(acc)
-  anchor=UOp(Ops.BARRIER,dtypes.void,tuple(accs))
+  if materialized:
+    regs=[UOp.placeholder((1,),dtypes.float,100+i,addrspace=AddrSpace.REG) for i in range(len(accs))]
+    update=UOp.group(*(reg[0].store(acc) for reg,acc in zip(regs,accs)))
+    anchor=UOp(Ops.BARRIER,dtypes.void,(update.src[-1],))
+    accs=[reg.after(update)[0] for reg in regs]
+  else: anchor=UOp(Ops.BARRIER,dtypes.void,tuple(accs))
   region=anchor.post_barrier_region(UOp.const(dtypes.bool,True),workgroup_uniform=True)
-  loads=[source[lid+i*256].load().load_in_region_bridge(region) for i in range(copies)]
+  loads=[source[lid+i*256].load().load_in_region_bridge(region,order_after_anchor=materialized) for i in range(copies)]
   stores=[scratch[lid+i*256].store(load) for i,load in enumerate(loads)]
   if extra_consumer: stores.append(scratch[lid+copies*256].store(loads[0]))
   ended=region.end_region(*stores)
@@ -131,6 +137,16 @@ def test_fused_bridge_warp_fence_is_explicit_and_inside_the_region():
   assert fence < first_load < barrier and source.count("bar.warp.sync 0xffffffff")==1
 
 
+def test_ordered_bridge_threads_materialized_phase_completion_into_ptx_address():
+  source=_source(_bridge_ast(large=True,materialized=True))
+  last_store=source.rindex(" = __fmaf_rn(",0,source.index("ld.global.u32"))
+  first_load=source.index("ld.global.u32")
+  assert last_store < first_load
+  assert source.count("region_bridge_order_dependency")==4
+  assert source.count("xor.b64 region_bridge_ordered_address")==2
+  assert '"r"(__float_as_uint(' in source
+
+
 def test_bridge_fails_closed_for_unsupported_or_malformed_groups():
   renderer=CUDARenderer(TARGET); renderer.supports_region_load_bridge=False
   with pytest.raises(RuntimeError,match="cannot preserve split region-load"):
@@ -154,7 +170,9 @@ def test_bridge_api_requires_constant_true_uniform_region_and_scalar32_load():
 
 @pytest.mark.skipif(not NVDISASM.is_file() or not CUOBJDUMP.is_file(),reason="CUDA disassembly tools unavailable")
 def test_bridge_large_body_nv_sass_matches_split_microgate_contract():
-  source=_large_source()
+  # Materialize the accumulator bank before the bridge, matching the real Q6
+  # phase boundary rather than the older inline-expression fixture.
+  source=_source(_bridge_ast(large=True,materialized=True))
   with _timeout(45):
     binaries=[NVRTCCompiler("sm_120",ptx=False,cache_key=f"cuda_region_load_bridge_r{i}").compile(source) for i in range(3)]
     hashes=[hashlib.sha256(x).hexdigest() for x in binaries]

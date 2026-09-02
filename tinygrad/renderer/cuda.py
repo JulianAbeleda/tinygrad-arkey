@@ -178,7 +178,7 @@ class CUDARenderer(CStyleLanguage):
   region_load_bridge_loads_after_barrier = False
   region_load_bridge_group_words = 18
 
-  def render_region_load_bridge(self, pairs:list[tuple[UOp,UOp]]) -> tuple[list[str],list[str]]:
+  def render_region_load_bridge(self, pairs:list[tuple[UOp,UOp]], order_dependency:UOp|None=None) -> tuple[list[str],list[str]]:
     if len(pairs) != 18: raise RuntimeError("CUDA region load bridge requires exactly 18 copies")
     def delta(a:UOp,b:UOp) -> int:
       d=(a-b).simplify()
@@ -203,28 +203,43 @@ class CUDARenderer(CStyleLanguage):
     local_ref=next(store for _,store in pairs if store.src[0].src[1] is ref_local)
     shared_address=self[local_ref.src[0]]
     names=[f"region_bridge_copy{i}" for i in range(18)]
+    dep_expr=None
+    if order_dependency is not None:
+      dep_expr=(f"__float_as_uint({self[order_dependency]})" if order_dependency.dtype is dtypes.float else
+                f"((unsigned int)({self[order_dependency]}))")
+    def ordered_address(address_operand:str, dependency_operand:str) -> list[str]:
+      return (["  .reg .u64 region_bridge_ordered_address;\\n\\t",
+               "  .reg .u64 region_bridge_order_dependency;\\n\\t",
+               f"  cvt.u64.u32 region_bridge_order_dependency, {dependency_operand};\\n\\t",
+               f"  xor.b64 region_bridge_ordered_address, {address_operand}, region_bridge_order_dependency;\\n\\t",
+               "  xor.b64 region_bridge_ordered_address, region_bridge_ordered_address, region_bridge_order_dependency;\\n\\t"]
+              if dep_expr is not None else [])
     if self.region_load_bridge_owns_barrier:
       fused=["asm volatile(", '  "{\\n\\t"', '  ".reg .u32 region_bridge_copy<18>;\\n\\t"']
+      fused += [f'  "{line}"' for line in ordered_address("%0","%2")]
       if self.region_load_bridge_warp_fence: fused += ['  "bar.warp.sync 0xffffffff;\\n\\t"']
       if self.region_load_bridge_loads_after_barrier: fused += ['  "bar.sync 0;\\n\\t"']
       group=self.region_load_bridge_group_words
       if not isinstance(group,int) or group < 1 or group > 18: raise RuntimeError("CUDA region load bridge group must be 1..18 words")
       if self.region_load_bridge_loads_after_barrier:
         for start in range(0,18,group):
-          fused += [f'  "ld.global.u32 region_bridge_copy{i}, [%0{offset(global_offsets[i])}];\\n\\t"' for i in range(start,min(start+group,18))]
+          fused += [f'  "ld.global.u32 region_bridge_copy{i}, [{"region_bridge_ordered_address" if dep_expr is not None else "%0"}{offset(global_offsets[i])}];\\n\\t"' for i in range(start,min(start+group,18))]
           fused += [f'  "st.shared.u32 [%1{offset(local_offsets[i])}], region_bridge_copy{i};\\n\\t"' for i in range(start,min(start+group,18))]
       else:
-        fused += [f'  "ld.global.u32 region_bridge_copy{i}, [%0{offset(off)}];\\n\\t"' for i,off in enumerate(global_offsets)]
+        fused += [f'  "ld.global.u32 region_bridge_copy{i}, [{"region_bridge_ordered_address" if dep_expr is not None else "%0"}{offset(off)}];\\n\\t"' for i,off in enumerate(global_offsets)]
         fused += ['  "bar.sync 0;\\n\\t"']
         fused += [f'  "st.shared.u32 [%1{offset(off)}], region_bridge_copy{i};\\n\\t"' for i,off in enumerate(local_offsets)]
       fused += ['  "}\\n"', '  :',
-                f'  : "l"((unsigned long long)({global_address})), "r"((unsigned int)__cvta_generic_to_shared({shared_address}))',
+                f'  : "l"((unsigned long long)({global_address})), "r"((unsigned int)__cvta_generic_to_shared({shared_address}))'+
+                (f', "r"({dep_expr})' if dep_expr is not None else ''),
                 '  : "memory");']
       return fused,[]
     before=[f"unsigned int {', '.join(names)};", "asm volatile("]
-    before += [f'  "ld.global.u32 %{i}, [%18{offset(off)}];\\n\\t"' for i,off in enumerate(global_offsets)]
+    before += [f'  "{line}"' for line in ordered_address("%18","%19")]
+    before += [f'  "ld.global.u32 %{i}, [{"region_bridge_ordered_address" if dep_expr is not None else "%18"}{offset(off)}];\\n\\t"' for i,off in enumerate(global_offsets)]
     before += ["  : "+", ".join(f'"=r"({name})' for name in names),
-               f'  : "l"((unsigned long long)({global_address}))', '  : "memory");']
+               f'  : "l"((unsigned long long)({global_address}))'+(f', "r"({dep_expr})' if dep_expr is not None else ''),
+               '  : "memory");']
     after=["asm volatile("]
     after += [f'  "st.shared.u32 [%0{offset(off)}], %{i+1};\\n\\t"' for i,off in enumerate(local_offsets)]
     after += ["  :", f'  : "r"((unsigned int)__cvta_generic_to_shared({shared_address})), '+

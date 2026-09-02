@@ -175,6 +175,7 @@ REGION_LOAD = RegionLoad()
 @dataclass(frozen=True)
 class RegionLoadBridge:
   """CUDA-only split register bridge across one existing region anchor barrier."""
+  order_after_anchor: bool = False
 
 REGION_LOAD_BRIDGE = RegionLoadBridge()
 
@@ -698,7 +699,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
       raise ValueError("LOAD already has a load region")
     token=UOp(Ops.AFTER, dtypes.void, (region,), arg=REGION_LOAD)
     return self.replace(src=self.src+(token,))
-  def load_in_region_bridge(self, region:UOp):
+  def load_in_region_bridge(self, region:UOp, *, order_after_anchor:bool=False):
     """Opt this LOAD into the validated CUDA split-PTX region bridge."""
     if self.op is not Ops.LOAD: raise ValueError("load_in_region_bridge is only valid on LOAD")
     if not isinstance(region, UOp) or region.op is not Ops.IF or not isinstance(region.arg, PostBarrierRegion):
@@ -709,7 +710,8 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
       raise ValueError(f"load_in_region_bridge requires a scalar 32-bit LOAD, got {self.dtype}")
     if any(s.op is Ops.AFTER and isinstance(s.arg, (RegionLoad, RegionLoadBridge)) for s in self.src[1:]):
       raise ValueError("LOAD already has a load region mode")
-    token=UOp(Ops.AFTER, dtypes.void, (region,), arg=REGION_LOAD_BRIDGE)
+    token=UOp(Ops.AFTER, dtypes.void, (region,),
+              arg=RegionLoadBridge(order_after_anchor=True) if order_after_anchor else REGION_LOAD_BRIDGE)
     return self.replace(src=self.src+(token,))
   def pointer_base_params(self) -> set[UOp]:
     """PARAM owners on this address expression's pointer-producing base lineage.
