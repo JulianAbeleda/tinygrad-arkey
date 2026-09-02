@@ -294,8 +294,55 @@ and a clean endpoint comparison.
 
 ### Schedule estimate
 
-With one benchmark GPU and continuous focused work, the estimated remaining
-effort is 10-20 working days.  The lower bound assumes the existing decode and
-Q4 substrates reconnect without new compiler work.  The upper bound allows for
-one additional compiler-level gap in Q4 down or attention.  GPU qualification is
-the serial bottleneck even when audits and implementation are parallelized.
+The earlier 10-20 working-day estimate was too conservative.  It treated the
+remaining routes too much like independent greenfield implementations and did
+not give enough weight to the reusable substrate, existing decode candidates,
+automated gates, or demonstrated route-binding speed.
+
+Observed branch pace from August 27 through September 2:
+
+- 178 relevant NVIDIA/LLM commits
+- 57 relevant commits on August 31
+- 55 relevant commits on September 1
+- 14 relevant commits on September 2 through this handoff
+- The final Q6 arithmetic-map-to-promotion sequence completed in approximately
+  2.5 hours on September 2
+- Approximately 20 BoltBeam artifact-gating commits landed in a 90-minute window
+  on September 1
+
+Commit count is not equivalent to completed functionality, but it demonstrates
+that existing-route binding and qualification are hour-scale tasks.  GPU
+qualification remains serial even when audits and implementation are parallel.
+
+#### Revised prefill estimate
+
+| Work | Estimate |
+|---|---:|
+| Inventory and default route planner | 2-4 hours |
+| Gate/up and K requalification | 2-4 hours |
+| Q4 FFN-down | 6-12 hours |
+| Q4/Q6 attention-V | 6-12 hours |
+| Q and O lifecycle qualification | 4-8 hours |
+| Attention lifecycle integration | 4-8 hours |
+| Context/depth sweeps and final census | 4-8 hours |
+
+- Prefill pp512 completion: approximately 1-2 continuous working days
+- Prefill with context/depth coverage: approximately 2-4 continuous working days
+
+#### Revised decode estimate
+
+| Work | Estimate |
+|---|---:|
+| Graph census and ownership classification | 2-4 hours |
+| Requalify existing generated routes | 6-12 hours |
+| Close vocab/token and attention gaps | 6-12 hours |
+| Context/depth sweeps | 4-8 hours |
+
+Decode completion is estimated at 1-3 continuous working days because most of
+the required primitives and fused candidates already exist.
+
+#### Revised overall estimate
+
+- Likely: 3-5 continuous working days
+- With one additional compiler-level gap: 5-8 continuous working days
+- The previous 10-20 working-day estimate is not supported by demonstrated pace
