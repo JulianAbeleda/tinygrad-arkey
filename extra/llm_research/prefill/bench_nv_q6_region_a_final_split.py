@@ -87,6 +87,25 @@ def _publication_source() -> str:
 }}
 '''
 
+def _publication_compact_source() -> str:
+  return '''extern "C" __global__ void __launch_bounds__(256) nv_q6_region_a_publication_compact(unsigned int *out, const unsigned char *predecoded_selector) {
+  __shared__ unsigned char shared_bytes[20480];
+  volatile unsigned char *published = shared_bytes;
+  int tid = threadIdx.x + 32*threadIdx.y + 64*threadIdx.z;
+  int cta = blockIdx.x + 32*blockIdx.y;
+  unsigned int selected = (unsigned int)(predecoded_selector[tid] % 80);
+  unsigned int sink = 2166136261u ^ (unsigned int)(cta*256+tid);
+  #pragma unroll 1
+  for (int Ridx0 = 0; Ridx0 < 192; Ridx0++) {
+    __syncthreads();
+    published[selected*256+tid] = (unsigned char)((tid*17 + selected*29) & 255);
+    __syncthreads();
+    sink = sink * 16777619u ^ (unsigned int)published[selected*256+tid];
+  }
+  out[cta*256+tid] = sink;
+}
+'''
+
 
 def _sass(binary: bytes, stem: pathlib.Path) -> tuple[dict[str, object], str]:
   cubin, sass_path = stem.with_suffix(".cubin"), stem.with_suffix(".sass")
@@ -143,7 +162,8 @@ def main() -> int:
   art = pathlib.Path(args.artifacts); art.mkdir(parents=True, exist_ok=True)
   base = pathlib.Path(args.base_source).read_text(); decode_src, decode_logical = _decode_source(base)
   publication_src = _publication_source()
-  (art/"decode_only.cu").write_text(decode_src); (art/"publication_only.cu").write_text(publication_src)
+  compact_src = _publication_compact_source()
+  (art/"decode_only.cu").write_text(decode_src); (art/"publication_only.cu").write_text(publication_src); (art/"publication_compact.cu").write_text(compact_src)
 
   model = pathlib.Path(args.model); meta = read_metadata(model); info = next(i for i in meta.infos if i.name == "blk.0.ffn_down.weight")
   if info.typ != GGML_Q6_K: raise RuntimeError("fixture is not canonical Q6_K")
@@ -155,6 +175,8 @@ def main() -> int:
   published, published_sass, published_run = _launch("nv_q6_region_a_publication_only", publication_src, (selector.uop.buffer.get_buf("NV"),), args.rounds, art/"publication_only")
   publication_ref = _publication_reference(selector_np)
   published_run["cpu_exact"] = bool(np.array_equal(published, publication_ref))
+  compact, compact_sass, compact_run = _launch("nv_q6_region_a_publication_compact", compact_src, (selector.uop.buffer.get_buf("NV"),), args.rounds, art/"publication_compact")
+  compact_run["cpu_exact"] = bool(np.array_equal(compact, publication_ref))
 
   dc, dr = decoded_sass["counts"], decoded_sass["resources"]
   pc, pr = published_sass["counts"], published_sass["resources"]
@@ -168,7 +190,8 @@ def main() -> int:
   result = {"schema": "tinygrad.nv_q6_region_a_final_split.v1", "shape": {"M":M,"N":N,"K":K},
             "launch": {"ctas":CTAS,"threads":THREADS,"local_size":[32,2,4],"iterations":ITERATIONS,"rounds":args.rounds},
             "decode_only": {"logical":decode_logical,"sass":decoded_sass,"run":decoded_run,"gates":decode_gates},
-            "publication_only": {"logical":{"shared_store_statements":80,"barriers":2},"sass":published_sass,"run":published_run,"gates":publication_gates}}
+            "publication_only": {"logical":{"shared_store_statements":80,"barriers":2},"sass":published_sass,"run":published_run,"gates":publication_gates},
+            "publication_compact": {"logical":{"shared_store_statements":1,"barriers":2},"sass":compact_sass,"run":compact_run}}
   result["passed"] = all(decode_gates.values()) and all(publication_gates.values()) and decoded_run["repeat_exact"] and decoded_run["nonzero"] == CTAS*THREADS and published_run["repeat_exact"] and published_run["cpu_exact"] and published_run["nonzero"] == CTAS*THREADS
   pathlib.Path(args.out).write_text(json.dumps(result, indent=2)+"\n"); print(json.dumps(result, sort_keys=True))
   return 0 if result["passed"] else 1

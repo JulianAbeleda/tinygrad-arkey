@@ -1,6 +1,6 @@
 import math
 from typing import cast, Any
-from tinygrad.uop.ops import PatternMatcher, UPat, GroupOp, Ops, UOp, AxisType, KernelInfo, ParamArg, ScheduleHints, StateHandle, CompositeReduceTag, PostBarrierRegion, native_attention_abi
+from tinygrad.uop.ops import PatternMatcher, UPat, GroupOp, Ops, UOp, AxisType, KernelInfo, ParamArg, ScheduleHints, StateHandle, CompositeReduceTag, PostBarrierRegion, LoadSchedule, StrictAfter, RegionLoad, RegionLoadBridge, native_attention_abi
 from tinygrad.uop.render import print_uops, pyrender
 from tinygrad.dtype import DType, ImageDType, dtypes, PtrDType, AddrSpace, Invalid, ConstFloat
 from tinygrad.helpers import DEBUG, Context, prod, SPEC, Metadata, panic, CHECK_OOB, all_same
@@ -222,6 +222,20 @@ spec_shared = PatternMatcher([
   # TOOD: these should be buffer with different addrspace
   (UPat((Ops.DEFINE_LOCAL, Ops.DEFINE_REG)), lambda: True),
 
+  # STRICT_AFTER is a scalar compiler-order edge, not a synchronization primitive.
+  (UPat(Ops.AFTER, name="x"), lambda x: True if isinstance(x.arg, StrictAfter) and len(x.src) == 2 and x.dtype == x.src[0].dtype and
+    x.src[0].dtype in {dtypes.weakint, dtypes.int, dtypes.uint} and x.src[1].dtype in {dtypes.int, dtypes.uint, dtypes.float} else None),
+  # LOAD_SCHEDULE is an opaque scalar scheduling token, not a value operation or synchronization primitive.
+  (UPat(Ops.AFTER, name="x"), lambda x: True if isinstance(x.arg, LoadSchedule) and len(x.src) == 1 and x.dtype == x.src[0].dtype and
+    x.dtype in {dtypes.int, dtypes.uint, dtypes.float} else None),
+  (UPat(Ops.AFTER, name="x"), lambda x: True if isinstance(x.arg, RegionLoad) and len(x.src) == 1 and
+    x.dtype is dtypes.void and x.src[0].op is Ops.IF and isinstance(x.src[0].arg, PostBarrierRegion) else None),
+  (UPat(Ops.AFTER, name="x"), lambda x: True if isinstance(x.arg, RegionLoadBridge) and len(x.src) == 1 and
+    x.dtype is dtypes.void and x.src[0].op is Ops.IF and isinstance(x.src[0].arg, PostBarrierRegion) else None),
+  (UPat(Ops.LOAD, src=(UPat(Ops.INDEX, name="idx"), UPat(Ops.AFTER, name="phase")), name="x"), lambda x,idx,phase:
+    True if isinstance(phase.arg, LoadSchedule) and x.dtype == idx.dtype and x.dtype in {dtypes.int, dtypes.uint, dtypes.float} else None),
+  (UPat(Ops.LOAD, src=(UPat(Ops.INDEX, name="idx"), UPat(Ops.AFTER, name="region")), name="x"), lambda x,idx,region:
+    True if isinstance(region.arg, (RegionLoad,RegionLoadBridge)) and x.dtype == idx.dtype and x.dtype in {dtypes.int, dtypes.uint, dtypes.float} else None),
   # AFTER on Movement Op, PARAM, BUFFER, CONTIGUOUS, or another AFTER
   (UPat(Ops.AFTER, src=(UPat(GroupOp.Movement.union({Ops.PARAM, Ops.BUFFER, Ops.CONTIGUOUS, Ops.DEFINE_REG, Ops.DEFINE_LOCAL, Ops.AFTER, Ops.MULTI,
                                                      Ops.BITCAST, Ops.INS, Ops.STACK, Ops.INDEX, Ops.LOAD, Ops.WAIT, Ops.WMMA,
@@ -514,7 +528,8 @@ spec_program = PatternMatcher([
   (UPat(Ops.CUSTOMI, name="x"),
    lambda x: True if ((isinstance(x.tag, tuple) and len(x.tag) == 2 and x.tag[0] == "native_fragment_carrier_v1"
    and x.tag[1] in (2, 4) and x.dtype == dtypes.uint.vec(x.tag[1])
-   and len(x.src) == 2 and x.src[0].dtype.scalar() in {dtypes.uint, dtypes.int, dtypes.weakint}
+   and len(x.src) == 2 and (x.src[0].dtype.scalar() in {dtypes.uint, dtypes.int, dtypes.weakint} or
+     (isinstance(x.src[0].dtype,PtrDType) and x.src[0].dtype.addrspace is AddrSpace.LOCAL))
    and x.src[1].dtype.scalar() in {dtypes.int, dtypes.uint, dtypes.weakint})
    or any((isinstance(s.tag, tuple) and len(s.tag) == 2 and s.tag[0] == "native_fragment_carrier_v1")
           or (s.op is Ops.CUSTOMI and s.arg in (("native_fragment_x2_v1",), ("native_fragment_x4_v1",))) for s in x.src)) else None),

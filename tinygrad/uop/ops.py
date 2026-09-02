@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Any, Callable, cast, TYPE_CHECKING, Type, Sequence, Iterable, Final, Iterator, NamedTuple
 import sys, time, functools, itertools, math, operator, hashlib, os, types, pickle, pathlib, inspect, weakref, collections, struct
-from dataclasses import dataclass
+from dataclasses import dataclass, replace as dataclass_replace
 from enum import Enum, auto
 from tinygrad.uop import Ops, GroupOp, MemorySemanticOwner
 from tinygrad.uop import trace as _lower_trace   # LR-010 lowering trace; inert unless LOWER_TRACE is set
@@ -43,8 +43,9 @@ class ParamArg:
   addrspace: AddrSpace = AddrSpace.GLOBAL
   axis: int|None = None
   device: str|tuple[str, ...]|None = None
+  const_restrict: bool = False
   def __repr__(self):
-    fields = (("vmin_vmax", None), ("name", None), ("addrspace", AddrSpace.GLOBAL), ("axis", None), ("device", None))
+    fields = (("vmin_vmax", None), ("name", None), ("addrspace", AddrSpace.GLOBAL), ("axis", None), ("device", None), ("const_restrict", False))
     args = [repr(self.slot)] + [f"{k}={v!r}" for k,default in fields if (v:=getattr(self, k)) != default]
     return f"ParamArg({', '.join(args)})"
 axis_letters = {AxisType.GLOBAL: "g", AxisType.THREAD: "t", AxisType.LOCAL: "l", AxisType.WARP: "w", AxisType.LOOP: "L", AxisType.UPCAST: "u",
@@ -152,6 +153,30 @@ class recursive_property(property):
 # we import this late so we can use resolve/smax in mixins
 from tinygrad.mixin import OpMixin
 from tinygrad.mixin.rand import RandMixin
+
+@dataclass(frozen=True)
+class StrictAfter:
+  """Value-preserving compiler-order edge. This is not device synchronization or a memory fence."""
+
+STRICT_AFTER = StrictAfter()
+
+@dataclass(frozen=True)
+class LoadSchedule:
+  """Opaque phase token for immutable scalar loads, carried beside and never inside their INDEX."""
+
+LOAD_SCHEDULE = LoadSchedule()
+
+@dataclass(frozen=True)
+class RegionLoad:
+  """Opaque lexical-region marker for an immutable scalar LOAD."""
+
+REGION_LOAD = RegionLoad()
+
+@dataclass(frozen=True)
+class RegionLoadBridge:
+  """CUDA-only split register bridge across one existing region anchor barrier."""
+
+REGION_LOAD_BRIDGE = RegionLoadBridge()
 
 # NOTE: this should be frozen, but frozen is slower
 @dataclass(eq=False, slots=True)
@@ -650,6 +675,81 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     return UOp(Ops.WAIT, dtypes.void, (self, self.const_like(src) if not isinstance(src, UOp) else src), **kwargs)
   def end(self, *src:UOp): return UOp(Ops.END, src=(self,)+src) if len(src) else self
   def after(self, *src:UOp, **kwargs): return UOp(Ops.AFTER, self.dtype, (self,)+src, **kwargs) if len(src) else self
+  def strict_after(self, dependency:UOp):
+    """Return this value while retaining one compiler-visible ordering dependency."""
+    if not isinstance(dependency, UOp): raise TypeError("strict_after dependency must be a UOp")
+    return UOp(Ops.AFTER, self.dtype, (self, dependency), arg=STRICT_AFTER)
+  def schedule_after(self, dependency:UOp):
+    """Schedule this immutable scalar LOAD after dependency without changing its graph-level value or INDEX."""
+    if self.op is not Ops.LOAD: raise ValueError("schedule_after is only valid on LOAD")
+    if not isinstance(dependency, UOp): raise TypeError("schedule_after dependency must be a UOp")
+    if any(s.op is Ops.AFTER and isinstance(s.arg, LoadSchedule) for s in self.src[1:]):
+      raise ValueError("LOAD already has a schedule_after boundary")
+    token=UOp(Ops.AFTER, dependency.dtype, (dependency,), arg=LOAD_SCHEDULE)
+    return self.replace(src=self.src+(token,))
+  def load_in_region(self, region:UOp):
+    """Keep this scalar LOAD lexically in a typed post-barrier region."""
+    if self.op is not Ops.LOAD: raise ValueError("load_in_region is only valid on LOAD")
+    if not isinstance(region, UOp) or region.op is not Ops.IF or not isinstance(region.arg, PostBarrierRegion):
+      raise ValueError("load_in_region requires a typed PostBarrierRegion")
+    if self.dtype not in {dtypes.int, dtypes.uint, dtypes.float} or self.dtype.vcount != 1:
+      raise ValueError(f"load_in_region requires a scalar 32-bit LOAD, got {self.dtype}")
+    if any(s.op is Ops.AFTER and isinstance(s.arg, RegionLoad) for s in self.src[1:]):
+      raise ValueError("LOAD already has a load region")
+    token=UOp(Ops.AFTER, dtypes.void, (region,), arg=REGION_LOAD)
+    return self.replace(src=self.src+(token,))
+  def load_in_region_bridge(self, region:UOp):
+    """Opt this LOAD into the validated CUDA split-PTX region bridge."""
+    if self.op is not Ops.LOAD: raise ValueError("load_in_region_bridge is only valid on LOAD")
+    if not isinstance(region, UOp) or region.op is not Ops.IF or not isinstance(region.arg, PostBarrierRegion):
+      raise ValueError("load_in_region_bridge requires a typed PostBarrierRegion")
+    if not region.arg.workgroup_uniform or region.src[0].op is not Ops.CONST or region.src[0].dtype is not dtypes.bool or region.src[0].arg is not True:
+      raise ValueError("load_in_region_bridge requires a constant-true workgroup-uniform PostBarrierRegion")
+    if self.dtype not in {dtypes.int, dtypes.uint, dtypes.float} or self.dtype.vcount != 1:
+      raise ValueError(f"load_in_region_bridge requires a scalar 32-bit LOAD, got {self.dtype}")
+    if any(s.op is Ops.AFTER and isinstance(s.arg, (RegionLoad, RegionLoadBridge)) for s in self.src[1:]):
+      raise ValueError("LOAD already has a load region mode")
+    token=UOp(Ops.AFTER, dtypes.void, (region,), arg=REGION_LOAD_BRIDGE)
+    return self.replace(src=self.src+(token,))
+  def pointer_base_params(self) -> set[UOp]:
+    """PARAM owners on this address expression's pointer-producing base lineage.
+
+    INDEX indices/validity and AFTER dependencies are not address owners. Pointer
+    expressions with multiple possible bases are rejected rather than guessed.
+    """
+    owners:set[UOp] = set()
+    seen:set[UOp] = set()
+    stack:list[UOp] = [self]
+    # New-style lowering scalarizes pointer PARAM dtypes before CStyle rendering.
+    # A PARAM reached through the base-only lineage of an address expression is
+    # still its buffer owner; never apply this relaxation to a bare scalar value.
+    lowered_address = self.op in {Ops.INDEX, Ops.SHRINK, Ops.GEP} or isinstance(self.dtype, PtrDType)
+    base_only = {Ops.INDEX, Ops.AFTER, Ops.SHRINK, Ops.GEP, Ops.CAST, Ops.BITCAST}
+    while stack:
+      x = stack.pop()
+      if x in seen: continue
+      seen.add(x)
+      if x.op is Ops.PARAM and isinstance(x.arg, ParamArg):
+        if isinstance(x.dtype, PtrDType) or lowered_address: owners.add(x)
+        continue
+      if x.op in base_only and x.src:
+        stack.append(x.src[0])
+        continue
+      if isinstance(x.dtype, PtrDType):
+        pointer_srcs = [s for s in x.src if isinstance(s.dtype, PtrDType)]
+        if len(pointer_srcs) > 1: raise RuntimeError("pointer expression has ambiguous PARAM ownership")
+        stack.extend(pointer_srcs)
+    return owners
+  def const_restrict(self):
+    """Promise that this immutable GLOBAL parameter does not alias another accessed pointer."""
+    if self.op is not Ops.PARAM or not isinstance(self.arg, ParamArg) or not isinstance(self.dtype, PtrDType):
+      raise ValueError("const_restrict is only valid on a pointer PARAM owner")
+    if self.addrspace is not AddrSpace.GLOBAL or self.arg.addrspace is not AddrSpace.GLOBAL:
+      raise ValueError("const_restrict requires a GLOBAL pointer PARAM")
+    if self.dtype.base not in {dtypes.int, dtypes.uint, dtypes.float} or self.dtype.base.vcount != 1:
+      raise ValueError(f"const_restrict requires a scalar 32-bit pointee, got {self.dtype.base}")
+    if self.arg.const_restrict: raise ValueError("pointer PARAM is already const_restrict")
+    return self.replace(arg=dataclass_replace(self.arg, const_restrict=True))
   def barrier(self, *src:UOp): return UOp(Ops.BARRIER, src=(self,)+src)
   def post_barrier_region(self, gate:UOp, *, workgroup_uniform:bool=False) -> UOp:
     if self.op is not Ops.BARRIER: raise ValueError("post_barrier_region must be anchored by an Ops.BARRIER")
@@ -1318,16 +1418,18 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
   # TODO: this should replace placeholder
   @staticmethod
   def param(slot:int, dtype:DType, shape:tuple[sint, ...]|None=None, device=None, vmin_vmax:tuple[PyConst, PyConst]|None=None, name=None,
-            addrspace=AddrSpace.GLOBAL, axis:int|None=None):
+            addrspace=AddrSpace.GLOBAL, axis:int|None=None, const_restrict:bool=False):
     if shape is not None and axis is not None and isinstance(device, tuple):
       shape = tuple(s*len(device) if i == axis else s for i,s in enumerate(shape))
     src: tuple[UOp, ...] = (UOp(Ops.NOOP) if shape is None else shape_to_shape_arg(shape),)
-    return UOp(Ops.PARAM, dtype, src, arg=ParamArg(slot, vmin_vmax, name, addrspace, axis, device))
+    return UOp(Ops.PARAM, dtype, src, arg=ParamArg(slot, vmin_vmax, name, addrspace, axis, device, const_restrict))
   def param_like(self, slot:int):
     addrspace = self.addrspace if isinstance(self.dtype, (PtrDType, ImageDType)) else AddrSpace.GLOBAL
     if self.op is Ops.BIND:
       return UOp.param(slot, self.dtype, self._shape, self.device, cast(tuple[int, int], self._min_max), self.src[0].arg[0], addrspace)
-    return UOp.param(slot, self.dtype, self.shard_shape if self.axis is not None else self._shape, self.device, addrspace=addrspace, axis=self.axis)
+    const_restrict = self.arg.const_restrict if self.op is Ops.PARAM and isinstance(self.arg, ParamArg) else False
+    return UOp.param(slot, self.dtype, self.shard_shape if self.axis is not None else self._shape, self.device,
+                     addrspace=addrspace, axis=self.axis, const_restrict=const_restrict)
 
   # opaque bodies stay as Ops.CALL; value-producing bodies become Ops.FUNCTION (wrapped in TUPLE)
   _OPAQUE_CALL_BODIES = {Ops.SINK, Ops.PROGRAM, Ops.LINEAR, Ops.COPY, Ops.SLICE, Ops.CUSTOM_FUNCTION}

@@ -2,7 +2,7 @@ from typing import cast, Callable
 import struct
 from collections import defaultdict
 from tinygrad.codegen.opt import tc
-from tinygrad.uop.ops import Ops, UOp, PatternMatcher, UPat, GroupOp
+from tinygrad.uop.ops import Ops, UOp, PatternMatcher, UPat, GroupOp, RuntimeLocalAllocation
 from tinygrad.dtype import dtypes, DType, PtrDType, AddrSpace
 from tinygrad.renderer import Renderer
 from tinygrad.renderer.cuda import CUDARenderer
@@ -62,7 +62,31 @@ def render_wmma(ctx: "PTXRenderer", wmma: UOp):
   assert ctx.wmma_r, "registry values for wmma must be populated"
   (N, M, K), dtype_in, dtype_out = wmma.arg[1], wmma.arg[2], wmma.arg[3]
 
-  for src, regs in zip(wmma.src, ctx.wmma_r):
+  q6_native = dtype_in is dtypes.char and dtype_out is dtypes.int and isinstance(wmma.src[0].tag,tuple) and \
+    wmma.src[0].tag[:3] == ("native_fragment_carrier_v1",2,"bitcast")
+  if q6_native:
+    vals=ctx.r[wmma.src[1]]; packed=ctx.wmma_r[1]
+    for i,reg in enumerate(packed):
+      lanes=vals[i*4:(i+1)*4]; temps=ctx.wmma_pack[1][i*2:(i+1)*2]
+      yield f"mov.b32 {temps[0]}, {{{lanes[0]}, {lanes[1]}}};"
+      yield f"mov.b32 {temps[1]}, {{{lanes[2]}, {lanes[3]}}};"
+      yield f"prmt.b32 {reg}, {temps[0]}, {temps[1]}, 0x6420;"
+    yield f'mma.sync.aligned.m{M}n{N}k{K}.row.col.s32.s8.s8.s32 '+\
+      f'{{{", ".join(ctx.r[wmma])}}}, {{{", ".join(ctx.r[wmma.src[0]])}}}, {{{", ".join(packed)}}}, '+\
+      f'{{{", ".join(ctx.r[wmma.src[2]])}}};'
+    return
+
+  for src_idx,(src, regs) in enumerate(zip(wmma.src, ctx.wmma_r)):
+    if isinstance(src.tag,tuple) and src.tag[:3] == ("native_fragment_carrier_v1",2,"bitcast"):
+      for i,reg in enumerate(regs): yield f"mov.b32 {reg}, {ctx.r[src][i]};"
+      continue
+    if src.dtype.scalar() is dtypes.char:
+      for i,reg in enumerate(regs):
+        vals=ctx.r[src][i*4:(i+1)*4]; temps=ctx.wmma_pack[src_idx][i*2:(i+1)*2]
+        yield f"mov.b32 {temps[0]}, {{{vals[0]}, {vals[1]}}};"
+        yield f"mov.b32 {temps[1]}, {{{vals[2]}, {vals[3]}}};"
+        yield f"prmt.b32 {reg}, {temps[0]}, {temps[1]}, 0x6420;"
+      continue
     for i, reg in enumerate(regs): # pack input and acc registers
       if (elems_per_reg := 4 // src.dtype.scalar().itemsize) == 1: yield f"mov.b32 {reg}, {ctx.r[src][i]};"
       else: yield f"mov.b32 {reg}, {{{', '.join(ctx.r[src][i * elems_per_reg : (i+1) * elems_per_reg])}}};"
@@ -79,10 +103,21 @@ def render_wmma(ctx: "PTXRenderer", wmma: UOp):
 def modifier(a: DType, b: DType): return '.rzi' if dtypes.is_int(a) and dtypes.is_float(b) else '.rn' if dtypes.is_float(a) and \
   (a.itemsize < b.itemsize or dtypes.is_int(b) or b == dtypes.bool) else ''
 
+def render_customi(ctx:"PTXRenderer", x:UOp):
+  if x.arg == ("ptx_ldmatrix_x2_v1",):
+    return [f"cvt.s64.{ctx.types[x.src[1].dtype]} {ctx.fragment_addr[x]}, {ctx.r[x.src[1]]};",
+      f"mad.lo.s64 {ctx.fragment_addr[x]}, {ctx.fragment_addr[x]}, {x.src[0].dtype.base.itemsize}, {ctx.r[x.src[0]]};",
+      f"ldmatrix.sync.aligned.m8n8.x2.shared.b16 {{{', '.join(ctx.r[x])}}}, [{ctx.fragment_addr[x]}];"]
+  if x.arg == ("ptx_fragment_bitcast_v1",): return []
+  exact={"__fmul_rn({0},{1})":"mul.rn.f32", "__fadd_rn({0},{1})":"add.rn.f32", "__fmaf_rn({0},{1},{2})":"fma.rn.f32"}
+  if x.arg in exact: return f"{exact[x.arg]} {ctx.r[x]}, {', '.join(ctx.r[s] for s in x.src)};"
+  return None
+
 string_rewrite = PatternMatcher([
   (UPat.cvar("x", dtypes.bool), lambda ctx, x: f"setp.ne.s16 {ctx.r[x]}, {render_val(x.arg, x.dtype)}, 0;"),
   (UPat.cvar("x"), lambda ctx, x: f"mov.b{ctx.types[x.dtype][1:]} {ctx.r[x]}, {render_val(x.arg, x.dtype)};"),
   (UPat(Ops.SPECIAL, name="x"), lambda ctx,x: f"mov.u32 %{x.arg}, %{'ctaid' if x.arg[0] == 'g' else 'tid'}.{chr(120+int(x.arg[-1]))};"),
+  (UPat(Ops.CUSTOMI, name="x"), render_customi),
   (UPat(Ops.PARAM, name="x"), lambda ctx, x:
    f"ld.param.{ctx.types[dtypes.ulong] if x.addrspace is AddrSpace.GLOBAL else ctx.mem_types[x.dtype]} {ctx.r[x]}, [data{x.arg.slot}+0];"),
   # address computation: addr = buf + idx*itemsize
@@ -139,6 +174,15 @@ class PTXRenderer(Renderer):
   tc_sm80 = [x for x in tc.cuda_sm80 if x.dtype_in in [dtypes.half, dtypes.float]]
   code_for_op = asm_for_op
   extra_matcher = ptx_matcher
+  # Q6_K staging subtracts 0x20 from bytes known to be in [0, 63]. Setting
+  # each byte's high bit prevents inter-byte borrow; toggling it afterward
+  # restores the exact signed-byte two's-complement result.
+  packed_i8_sub = staticmethod(lambda value,bias:
+    (((value | UOp.const(dtypes.uint32,0x80808080))-bias) ^ UOp.const(dtypes.uint32,0x80808080)))
+  native_fragment_x2 = staticmethod(lambda buffer,index:
+    UOp(Ops.CUSTOMI,dtypes.uint32.vec(2),(buffer,index.cast(dtypes.int32)),arg=("ptx_ldmatrix_x2_v1",)))
+  native_fragment_bitcast = staticmethod(lambda value,dtype:
+    UOp(Ops.CUSTOMI,dtype,(value,),arg=("ptx_fragment_bitcast_v1",)))
   def __init__(self, target:Target):
     super().__init__(target)
     from tinygrad.runtime.support.compiler_cuda import NVPTXCompiler, PTXCompiler
@@ -165,15 +209,19 @@ class PTXRenderer(Renderer):
     local_dims = [u.src[0] for u in uops if u.op is Ops.SPECIAL and u.arg[0] == "l"]
     launch_bounds = prod([d.vmax for d in local_dims])
     params = ',\n\t'.join([f".param .{'u64' if u.addrspace is AddrSpace.GLOBAL else self.types[u.dtype]} {name}" for name,u in bufs])
-    return f"{self.kernel_prefix.format(launch_bounds=launch_bounds)} {function_name} (\n\t{params}\n)\n.maxntid {launch_bounds}\n{{\n{kernel}\n}}"
+    prefix=self.kernel_prefix.format(launch_bounds=launch_bounds)
+    if self.module_shared: prefix=prefix.replace(".visible .entry",'\n'.join(self.module_shared)+"\n.visible .entry")
+    return f"{prefix} {function_name} (\n\t{params}\n)\n.maxntid {launch_bounds}\n{{\n{kernel}\n}}"
 
   def render(self, uops:list[UOp]) -> str:
     kernel:list[str] = []
     bufs = []
+    self.module_shared:list[str] = []
 
     c: defaultdict[str, int] = defaultdict(int)
     r: dict[UOp, list[str]|str] = {}
     self.r = r
+    self.fragment_addr: dict[UOp,str] = {}
     self.uops = uops
 
     def ssa(prefix:str, u:UOp|None=None, dtype:str|None=None) -> str:
@@ -217,7 +265,8 @@ class PTXRenderer(Renderer):
         # LDS windows arrive as DEFINE_LOCAL on the old-style path.  Emit the shared
         # declaration (byte-sized from the element dtype, not the pointer) plus the u64 base.
         slot = u.arg
-        kernel.append(f".shared .align 16 .b8 local{slot}[{u.max_numel()*u.dtype.base.itemsize}];")
+        if isinstance(u.tag,RuntimeLocalAllocation): self.module_shared.append(f".extern .shared .align 16 .b8 local{slot}[];")
+        else: kernel.append(f".shared .align 16 .b8 local{slot}[{u.max_numel()*u.dtype.base.itemsize}];")
         r[u] = ssa("local", u, "u64")
         kernel.append(f"mov.u64 {r[u]}, local{slot}[0];")
         continue
@@ -231,10 +280,21 @@ class PTXRenderer(Renderer):
       elif u.op is Ops.PARAM: bufs.append((f"data{u.arg.slot}", u))
       elif u.op is Ops.WMMA:
         # registers for packing/unpacking input and acc
-        self.wmma_r = [[ssa("wmma_in", dtype="b32") for _ in range(0, len(r[u.src[0]]), 4 // u.src[0].dtype.scalar().itemsize)],
-                       [ssa("wmma_in", dtype="b32") for _ in range(0, len(r[u.src[1]]), 4 // u.src[0].dtype.scalar().itemsize)],
+        packed_count=lambda src: len(r[src]) if isinstance(src.tag,tuple) and src.tag[:3] == \
+          ("native_fragment_carrier_v1",2,"bitcast") else len(range(0,len(r[src]),4//src.dtype.scalar().itemsize))
+        self.wmma_r = [[ssa("wmma_in", dtype="b32") for _ in range(packed_count(u.src[0]))],
+                       [ssa("wmma_in", dtype="b32") for _ in range(packed_count(u.src[1]))],
                        [ssa("wmma_acc", dtype="b32") for _ in range(0, len(r[u.src[2]]), 4 // u.dtype.scalar().itemsize)]]
+        self.wmma_pack = [[ssa("wmma_pack",dtype="b32") for _ in range(2*packed_count(src))]
+                          if src.dtype.scalar() is dtypes.char and not (isinstance(src.tag,tuple) and src.tag[:3] ==
+                            ("native_fragment_carrier_v1",2,"bitcast")) else [] for src in u.src]
         r[u] = [ssa("wmma", dtype=self.types[u.dtype.scalar()]) for _ in range(u.max_numel())]
+      elif u.op is Ops.CUSTOMI and isinstance(u.tag,tuple) and u.tag[:2] == ("native_fragment_carrier_v1",2):
+        if len(u.tag)>=3 and u.tag[2]=="bitcast": r[u] = r[u.src[0]]
+        else:
+          r[u] = [ssa("fragment",dtype="u32") for _ in range(2)]
+          self.fragment_addr[u] = ssa("fragment_addr",dtype="s64")
+      elif u.op is Ops.CUSTOMI: r[u] = ssa("custom",u)
       prefix, dtype = {Ops.CAST: ("cast", None), Ops.BITCAST: ("cast", None), Ops.END: ("pred", "pred"), Ops.RANGE: ("ridx", None),
         Ops.CONST: ("const", None), Ops.BUFFER: ("local", "u64"), Ops.INDEX: ("bidx", "u64"), Ops.SHRINK: ("bidx", "u64"),
         Ops.PARAM: ("dat", "u64" if u.addrspace is AddrSpace.GLOBAL else None), **{op: ("alu", None) for op in GroupOp.ALU}}.get(u.op, (None, None))

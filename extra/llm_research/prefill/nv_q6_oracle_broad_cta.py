@@ -18,6 +18,7 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
                                fp32_contraction:str="implicit",
                                weight_scale_contract:str="legacy", trace=None, trace_config:tuple[int,int]|None=None,
                                streamk_owners:int|None=None, streamk_segment:int=0, streamk_segments_in_cta:bool=False,
+                               region_load_bridge_q8_panel1:bool=False, strict_after_q8_panel1:bool=False,
                                partial_output_layout:str="tile_row_major"):
   """One exact llama-normalized 128x128xK256 work unit per CTA.
 
@@ -26,6 +27,10 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
   across the first consumer or loaded after it for a causal A/B.
   """
   if replicas < 1: raise ValueError("replicas must be positive")
+  if region_load_bridge_q8_panel1 and prefetch_second_panel:
+    raise ValueError("region-load bridge owns panel1 transport and requires prefetch_second_panel=False")
+  if strict_after_q8_panel1 and (prefetch_second_panel or region_load_bridge_q8_panel1 or factor_dA):
+    raise ValueError("strict-after panel1 requires direct arithmetic with prefetch and region bridge disabled")
   if partial_output_layout not in ("tile_row_major","destination_major"):
     raise ValueError(f"unknown partial output layout {partial_output_layout!r}")
   if partial_output_layout != "tile_row_major" and (streamk_owners is None or tile_grid is not None):
@@ -213,6 +218,8 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
   init=UOp.group(*((x.after(segment_loop)[0].store(0.0) if segment_loop is not None else x[0].store(0.0)) for x in acc),*header)
   acc=[x.after(init) for x in acc]
 
+  panel1_dependency=[]
+
   def consume(kphase:int, ready_y, dep):
     # One warp retains the 16 Q6 fragments for this K128 half. The rolling
     # band schedule folds two IMMA results immediately into the 64 FP32 bank.
@@ -257,6 +264,8 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
               carrier=acc[ai].after(update) if update is not None else acc[ai]
               next_value=fp_add(carrier[0],fp_mul(yscale,weighted))
               update=carrier[0].store(next_value)
+              if strict_after_q8_panel1 and kphase == 0 and cg == 7 and n == 0 and p == 2 and r == 3:
+                panel1_dependency.append(next_value)
               if trace is not None and cg==trace_cg and n==trace_n and r==trace_r:
                 tb=trace_epoch+149+kphase*48+p*12
                 vals=((qv0,qv1,yscale.bitcast(dtypes.uint32),ws0.bitcast(dtypes.uint32),ws1.bitcast(dtypes.uint32),
@@ -384,9 +393,19 @@ def q6_oracle_broad_cta_kernel(out, blocks, q8_record, *, replicas:int=1, prefet
     acc[trace_ai].after(phase0)[0].bitcast(dtypes.uint32),gate=lane_gate(trace_thread))
   before_overwrite=UOp.barrier(trace_p0 if trace_p0 is not None else phase0)
   if not prefetch_second_panel:
-    ordered_record=q8_record.after(before_overwrite)
-    panel1=tuple(ordered_record[q8_epoch+Q8_WORDS+lid+i*256].load() for i in range(18))
-  ready_y1=UOp.barrier(UOp.group(*(shq.after(before_overwrite)[lid+i*256].store(panel1[i]) for i in range(18))))
+    if region_load_bridge_q8_panel1:
+      region=before_overwrite.post_barrier_region(UOp.const(dtypes.bool,True),workgroup_uniform=True)
+      panel1=tuple(q8_record[q8_epoch+Q8_WORDS+lid+i*256].load().load_in_region_bridge(region) for i in range(18))
+    elif strict_after_q8_panel1:
+      if len(panel1_dependency) != 1: raise RuntimeError("strict-after panel1 dependency token was not captured exactly once")
+      panel1_base=(q8_epoch+Q8_WORDS+lid).cast(dtypes.int).strict_after(panel1_dependency[0])
+      panel1=tuple(q8_record[panel1_base+i*256].load() for i in range(18))
+    else:
+      ordered_record=q8_record.after(before_overwrite)
+      panel1=tuple(ordered_record[q8_epoch+Q8_WORDS+lid+i*256].load() for i in range(18))
+  panel1_publications=tuple(shq.after(before_overwrite)[lid+i*256].store(panel1[i]) for i in range(18))
+  published_panel1=region.end_region(*panel1_publications) if region_load_bridge_q8_panel1 else UOp.group(*panel1_publications)
+  ready_y1=UOp.barrier(published_panel1)
   trace_y1=None if trace is None else UOp.group(*(trace[trace_epoch+112+i].store(shq.after(ready_y1)[trace_col*Q8_STRIDE+i],gate=lane_gate(i)) for i in range(36)))
   phase1=consume(1,ready_y1,trace_y1 if trace_y1 is not None else phase0)
   # The final barrier protects shared Q6/Q8 from the next K256 epoch. Closing

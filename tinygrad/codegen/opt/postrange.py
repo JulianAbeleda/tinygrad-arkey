@@ -563,6 +563,8 @@ class Scheduler:
             if candidate_axes is not None:
               from tinygrad.codegen.opt.kernel_lds import PrecontractKAxis, build_precontract_lds_stage
               subtile_m, subtile_n, wave_m, wave_n, k_substep, outer_n, outer_m, outer_k, lane = candidate_axes
+              physical_outer_n = outer_n
+              streamk_ctx = None
               if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1":
                 streamk_ctx = getattr(getattr(self.ast.arg, "candidate_context", None), "streamk", None)
                 if streamk_ctx is not None:
@@ -573,16 +575,18 @@ class Scheduler:
                     owner = UOp.range(owners, next(self.opt_range), AxisType.GLOBAL)
                     serial = UOp.range(4, next(self.opt_range), AxisType.LOOP)
                     mapped_outer_n = owner * 4 + serial
-                    self.ast = self.ast.substitute({outer_n: mapped_outer_n}, name="streamk owner serial N")
-                    object.__setattr__(streamk_ctx, "range_state", StreamKRangeState(owner, serial, mapped_outer_n))
+                    object.__setattr__(streamk_ctx, "range_state", StreamKRangeState(owner, serial, mapped_outer_n, True, True, False, False))
                     object.__setattr__(streamk_ctx, "selected_n_key", mapped_outer_n.key)
-                    outer_n = mapped_outer_n
               range_by_id = {r.arg[0]:r for r in self.rngs}
               try: operands, thread_axes, contracts, allocation = candidate_contract.assemble(
-                in0=in0, in1=in1, original_axes=original_axes, outer_n=outer_n, outer_m=outer_m, wave_m=wave_m, wave_n=wave_n, lane=lane,
+                in0=in0, in1=in1, original_axes=original_axes, outer_n=outer_n, outer_m=outer_m, logical_outer_n=(streamk_ctx.range_state.mapped_outer_n if streamk_ctx is not None and getattr(streamk_ctx, "range_state", None) is not None else None), wave_m=wave_m, wave_n=wave_n, lane=lane,
                 tc_upcast_axes=tc_upcast_axes, range_by_id=range_by_id, allocation_id=None if candidate_contract.register_mode else lambda: _candidate_lds_buffer_id(self))
               except (TypeError, ValueError) as exc: raise KernelOptError(str(exc)) from exc
+              if os.environ.get("TINYGRAD_STREAMK_OWNER") == "1" and streamk_ctx is not None and getattr(streamk_ctx, "range_state", None) is not None:
+                state = streamk_ctx.range_state
+                object.__setattr__(state, "precontract_built", True)
               if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1" and getattr(getattr(self.ast.arg, "candidate_context", None), "streamk", None) is not None:
+                semantic_outer_n = (streamk_ctx.range_state.mapped_outer_n if getattr(streamk_ctx, "range_state", None) is not None and streamk_ctx.range_state.mapped_outer_n is not None else outer_n)
                 from extra.llm_research.prefill.nv_compiler_streamk_codegen import record_range_provenance
                 record_range_provenance(tuple(operands), output_ranges=tuple(self._output_rngs()))
               factors, candidate_pipeline, register_mode = candidate_contract.factors, candidate_contract.pipeline, candidate_contract.register_mode
@@ -658,14 +662,14 @@ class Scheduler:
                 # cooperative store -- never a per-target snapshot living here or in kernel_lds.py.
                 if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1" and getattr(getattr(self.ast.arg, "candidate_context", None), "streamk", None) is not None:
                   packed_b = next((o for o in operands if getattr(o, "role", None) == "B"), None)
-                  if packed_b is None or (outer_n*candidate_geometry.tile[1]).key != packed_b.row_tile_base.key:
+                  if packed_b is None or (semantic_outer_n*candidate_geometry.tile[1]).key != packed_b.row_tile_base.key:
                     raise KernelOptError("Stream-K packed-B identity row base mismatch")
                 stage = build_precontract_lds_stage(candidate_geometry, tc=tc, allocation=allocation, operands=operands,
                   threads=thread_axes,k_axis=PrecontractKAxis(outer_k,k_substep,outer_k*candidate_geometry.tile[2],k_substep),
                   subtile_m=subtile_m,subtile_n=subtile_n,contracts=tuple(contracts),pipeline_plan=None,
                   lds_bank_dwords=self.ren.lds_bank_dwords,lds_bank_cycle_lanes=self.ren.lds_bank_cycle_lanes,
                   lds_read_before_next_write_ordered=self.ren.lds_read_before_next_write_ordered,
-                  logical_row_tile_bases=({"A":next(o.row_tile_base for o in operands if o.role == "A"), "B":outer_n*candidate_geometry.tile[1]} if
+                    logical_row_tile_bases=({"A":next(o.row_tile_base for o in operands if o.role == "A"), "B":semantic_outer_n*candidate_geometry.tile[1]} if
                     os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1" and
                     getattr(getattr(self.ast.arg, "candidate_context", None), "streamk", None) is not None else None))
                 wmma_srcs = [stage.fragment_a, stage.fragment_b]
@@ -727,7 +731,7 @@ class Scheduler:
               c_elem = fold_binary_axes(c_axes)
               local_m = wave_m*(factors.subtiles_m*tc.dims[1]) + subtile_m*tc.dims[1] + lane//4 + 8*(c_elem//2)
               local_n = wave_n*(factors.subtiles_n*tc.dims[0]) + subtile_n*tc.dims[0] + 2*(lane%4) + c_elem%2
-              logical_m, logical_n = outer_m*candidate_geometry.tile[0]+local_m, outer_n*candidate_geometry.tile[1]+local_n
+              logical_m, logical_n = outer_m*candidate_geometry.tile[0]+local_m, (semantic_outer_n if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1" else outer_n)*candidate_geometry.tile[1]+local_n
               metadata_bytes_per_row = factors.vectors_per_row*4
               windows = {window.role:window for window in candidate_geometry.lds_windows}
               if all(windows[role].stride_bytes >= candidate_geometry.tile[2]+metadata_bytes_per_row for role in ("A", "B")):

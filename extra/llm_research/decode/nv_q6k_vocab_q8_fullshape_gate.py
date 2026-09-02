@@ -19,6 +19,7 @@ from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, 
 from tinygrad.llm.shared_q8_attention import _emit_q8_provider
 import extra.llm_research.decode.q6k_q8_warp_direct_microgate as q8direct
 import tinygrad.llm.q6k_v_mmvq as fp16four
+import tinygrad.llm.shared_q8_attention as shared_q8
 
 ROWS, K = 151936, 4096
 Q8_WORDS = K // 4 + K // 32
@@ -41,10 +42,15 @@ def run(replays: int, reps: int, variant: str = "direct") -> dict:
     emit_q6k_gemv_kernel(control_spec), (ROWS,))
   provider_program = _program("research.q6k_vocab_q8_fullshape", "q8_provider_4096",
     _emit_q8_provider(), (Q8_WORDS,), dtypes.uint32)
-  if variant not in ("direct", "lane-stage", "fp16-four-warp"): raise ValueError(variant)
+  if variant not in ("direct", "lane-stage", "fp16-four-warp", "packed-word", "packed-word-warp-provider"): raise ValueError(variant)
   fp16four.ROWS = ROWS
+  shared_q8._KV_ROWS = ROWS
   candidate_emitter = (q8direct.emit_q6k_q8_warp_direct() if variant == "direct" else
     q8direct.emit_q6k_q8_warp_lane_stage() if variant == "lane-stage" else fp16four.emit_q6k_v_four_warp_fp16_direct())
+  if variant in ("packed-word", "packed-word-warp-provider"): candidate_emitter = shared_q8._emit_q6_warp_direct(ROWS)
+  if variant == "packed-word-warp-provider":
+    provider_program = _program("research.q6k_vocab_q8_fullshape", "q8_provider_warp32_4096",
+      shared_q8._emit_q8_provider_warp32(), (Q8_WORDS,), dtypes.uint32)
   candidate_program = _program("research.q6k_vocab_q8_fullshape",
     f"q6k_q8_warp_{variant}_{ROWS}_{K}", candidate_emitter, (ROWS,))
 
@@ -65,6 +71,9 @@ def run(replays: int, reps: int, variant: str = "direct") -> dict:
         w, xx, program=candidate_program)
     packed = execute_research_program(Tensor.empty((Q8_WORDS,), dtype=dtypes.uint32, device=dev),
       xx, program=provider_program)
+    if variant in ("packed-word", "packed-word-warp-provider"):
+      return execute_research_program(Tensor.empty((ROWS,), dtype=dtypes.float32, device=dev),
+        w, packed, program=candidate_program)
     # The direct emitter consumes payload and scales as two views of the same packet.
     return execute_research_program(Tensor.empty((ROWS,), dtype=dtypes.float32, device=dev),
       w, packed[:K//4], packed[K//4:].bitcast(dtypes.float16), program=candidate_program)
@@ -113,7 +122,7 @@ def run(replays: int, reps: int, variant: str = "direct") -> dict:
 def main() -> int:
   ap = argparse.ArgumentParser(); ap.add_argument("--replays", type=int, default=32)
   ap.add_argument("--reps", type=int, default=9); ap.add_argument("--out", type=pathlib.Path, required=True)
-  ap.add_argument("--variant", choices=("direct", "lane-stage", "fp16-four-warp"), default="direct")
+  ap.add_argument("--variant", choices=("direct", "lane-stage", "fp16-four-warp", "packed-word", "packed-word-warp-provider"), default="direct")
   args = ap.parse_args(); result = run(args.replays, args.reps, args.variant)
   args.out.parent.mkdir(parents=True, exist_ok=True)
   args.out.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")

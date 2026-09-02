@@ -10,6 +10,7 @@ from tinygrad.runtime.ops_nv import NVProgram
 from tinygrad.runtime.support.compiler_cuda import NVRTCCompiler
 from tinygrad.uop.ops import Ops, UOp
 from extra.llm_research.prefill.nv_generated_q6k_streamk import generated_q6k_streamk_owner_partials, owner_metadata
+from extra.llm_research.prefill.nv_generated_q6k_streamk_slots import q6_streamk_owner_kernel
 from extra.llm_research.prefill.nv_generated_q6k_streamk_slots import q6_streamk_slot_kernel
 
 M, N, K = 512, 4096, 12288
@@ -19,7 +20,7 @@ LLAMA_MAIN_US, LLAMA_TOTAL_US = 201.216, 209.856
 def _source(ast):
   return next(x.arg for x in to_program(ast,CUDARenderer(Target.parse('NV:CUDA:sm_120'))).src if x.op is Ops.SOURCE)
 
-def run(samples=9, artifact_dir:pathlib.Path|None=None):
+def run(samples=9, artifact_dir:pathlib.Path|None=None, legacy=False):
   descriptors=np.array([(s.tile_id,s.begin,s.end) for s in owner_metadata()],dtype=np.int32).reshape(-1)
   rng=np.random.default_rng(20260908)
   blocks=rng.integers(0,256,(N,K_BLOCKS,210),dtype=np.uint8).view(np.uint16).reshape(-1)
@@ -34,8 +35,10 @@ def run(samples=9, artifact_dir:pathlib.Path|None=None):
   payload[:,:,:4]=np.ascontiguousarray(q8_scales.reshape(K//32,M).reshape(K//128,4,M).transpose(0,2,1)).view(np.uint32)
   payload.view(np.uint8).reshape(K//128,M,144)[:,:,16:144]=q8.reshape(K//128,128,M).transpose(0,2,1).view(np.uint8)
   ph=lambda n,dt,i: UOp.placeholder((n,),dt,i)
-  owner_ast=generated_q6k_streamk_owner_partials(ph(SLOTS*TILE_VALUES,dtypes.float32,0),ph(SLOTS,dtypes.int32,1),
+  owner_args=(ph(SLOTS*TILE_VALUES,dtypes.float32,0),ph(SLOTS,dtypes.int32,1),
     ph(blocks.size,dtypes.uint16,2),ph(q8_record.size,dtypes.uint32,3))
+  owner_ast=(q6_streamk_owner_kernel(*owner_args, kernel_name="nv_generated_q6k_streamk_owner_legacy")
+             if legacy else generated_q6k_streamk_owner_partials(*owner_args))
   slot_ast=q6_streamk_slot_kernel(ph(SLOTS*TILE_VALUES,dtypes.float32,0),ph(SLOTS,dtypes.int32,1),
     ph(SLOTS*3,dtypes.int32,2),ph(blocks.size,dtypes.uint16,3),ph(q8.size,dtypes.int8,4),
     ph(q8_scales.size,dtypes.float32,5),K_BLOCKS,SLOTS,37)
@@ -48,8 +51,9 @@ def run(samples=9, artifact_dir:pathlib.Path|None=None):
   for buf,x in zip((*owner_bufs,*slot_bufs,desc_buf,blocks_buf,q8_buf,scales_buf,record_buf),
                    (*owner_host,*slot_host,descriptors,blocks,q8,q8_scales,q8_record)):
     dev.allocator._copyin(buf,memoryview(x.tobytes()))
-  owner_cubin=NVRTCCompiler(dev.arch,ptx=False,cache_key='q6_streamk_owner_qualification_v1').compile(owner_src)
-  owner=NVProgram(dev,'nv_generated_q6k_streamk_owner_partials',owner_cubin,shared_mem=58880)
+  owner_name='nv_generated_q6k_streamk_owner_legacy' if legacy else 'nv_generated_q6k_streamk_owner_partials'
+  owner_cubin=NVRTCCompiler(dev.arch,ptx=False,cache_key='q6_streamk_owner_qualification_legacy_v1' if legacy else 'q6_streamk_owner_qualification_v1').compile(owner_src)
+  owner=NVProgram(dev,owner_name,owner_cubin,shared_mem=58880)
   slot=NVProgram(dev,'nv_generated_q6k_streamk_slots',
     NVRTCCompiler(dev.arch,ptx=False,cache_key='q6_streamk_slots_qualification_v1').compile(slot_src),shared_mem=58880)
   slot(*slot_bufs,desc_buf,blocks_buf,q8_buf,scales_buf,global_size=(SLOTS,1,1),local_size=(256,1,1),wait=True,timeout=120000)
@@ -76,7 +80,7 @@ def run(samples=9, artifact_dir:pathlib.Path|None=None):
     owner(*owner_bufs,blocks_buf,record_buf,global_size=(OWNERS,1,1),local_size=(256,1,1),wait=True,timeout=120000)
     timings.append((time.perf_counter()-start)*1e6)
   minimum=min(timings); median=statistics.median(timings)
-  ret={"schema":"tinygrad.nv_generated_q6k_streamk_owner_qualification.v1","status":"PASS" if minimum<=LLAMA_MAIN_US*1.05 else "FAIL_PERFORMANCE",
+  ret={"schema":"tinygrad.nv_generated_q6k_streamk_owner_qualification.v1","route":"legacy_owner" if legacy else "segmented_owner","status":"PASS" if minimum<=LLAMA_MAIN_US*1.05 else "FAIL_PERFORMANCE",
     "shape":{"M":M,"N":N,"K":K,"weight":"Q6_K","owners":OWNERS},
     "correctness":{"values_compared":int(owner_values.size),"values_exact":values_exact,"tile_ids_exact":ids_exact,"max_abs":max_abs},
     "timing_us":{"samples":timings,"min":minimum,"median":median,"llama_main":LLAMA_MAIN_US,"llama_main_5pct_gate":LLAMA_MAIN_US*1.05,
@@ -95,7 +99,7 @@ def run(samples=9, artifact_dir:pathlib.Path|None=None):
   return ret
 
 if __name__ == '__main__':
-  parser=argparse.ArgumentParser(); parser.add_argument('--samples',type=int,default=9)
+  parser=argparse.ArgumentParser(); parser.add_argument('--samples',type=int,default=9); parser.add_argument('--legacy',action='store_true')
   parser.add_argument('--artifact-dir',type=pathlib.Path)
   args=parser.parse_args()
-  print(json.dumps(run(args.samples,args.artifact_dir),indent=2))
+  print(json.dumps(run(args.samples,args.artifact_dir,args.legacy),indent=2))

@@ -27,22 +27,26 @@ def _buf(t:Tensor): return t.uop.buffer.get_buf("NV")
 def _stats(x:list[float]): return {"samples_us":x,"min_us":min(x),"median_us":statistics.median(x),"max_us":max(x)}
 
 
-def _render(segment:int, artifacts:pathlib.Path):
+def _render(segment:int, artifacts:pathlib.Path, factor_dA:bool=True):
   ph=lambda n,dt,i: UOp.placeholder((n,),dt,i)
   ast=q6_oracle_broad_cta_kernel(ph(2*OWNERS*TILE_ELEMS,dtypes.float32,0),ph(N*K256*105,dtypes.uint16,1),
-    ph(TILES_M*K256*2*COLS*36,dtypes.uint32,2),prefetch_second_panel=True,factor_dA=True,
+    ph(TILES_M*K256*2*COLS*36,dtypes.uint32,2),prefetch_second_panel=True,factor_dA=factor_dA,
     oracle_publisher=True,depth=37,streamk_owners=OWNERS,streamk_segment=segment)
   started=time.perf_counter(); program=to_program(ast,CUDARenderer(Target.parse("NV:CUDA:sm_120")))
   source=next(x.arg for x in program.src if x.op is Ops.SOURCE); render_ms=(time.perf_counter()-started)*1e3
-  name=f"nv_q6_oracle_broad_cta_prefetch_factor_da_oracle_publisher_streamk_s{segment}"
+  da_suffix="_factor_da" if factor_dA else ""
+  name=f"nv_q6_oracle_broad_cta_prefetch{da_suffix}_oracle_publisher_streamk_s{segment}"
   path=artifacts/f"{name}.cu"; path.write_text(source)
   started=time.perf_counter(); binary=Device["NV"].compiler.compile(source); compile_ms=(time.perf_counter()-started)*1e3
-  cubin=artifacts/f"{name}.cubin"; cubin.write_bytes(binary); census=analyze_cubin(cubin,artifacts/f"sass_s{segment}",name)["summary"]
+  cubin=artifacts/f"{name}.cubin"; cubin.write_bytes(binary)
+  census_artifact=analyze_cubin(cubin,artifacts/f"sass_{'factored_da' if factor_dA else 'direct_da'}_s{segment}",name)
+  census=census_artifact["summary"]
   return name,binary,{"render_ms":render_ms,"compile_ms":compile_ms,"source":str(path),"source_bytes":len(source),
-    "cubin":str(cubin),"cubin_sha256":hashlib.sha256(binary).hexdigest(),"sass":census}
+    "cubin":str(cubin),"cubin_sha256":hashlib.sha256(binary).hexdigest(),"sass":census,
+    "sass_artifacts":{k:census_artifact[k] for k in ("sass_json","disassembly","resources")}}
 
 
-def _combine_sources(source0:str,source1:str,artifacts:pathlib.Path):
+def _combine_sources(source0:str,source1:str,artifacts:pathlib.Path, arm:str|None=None):
   pattern=r'extern "C" __global__ void __launch_bounds__\(256\) \w+\((.*?)\) \{\n  int gidx0 = blockIdx.x; /\* 170 \*/\n'
   parts=[]; preamble=None; params=None
   for index,source in enumerate((source0,source1)):
@@ -52,7 +56,7 @@ def _combine_sources(source0:str,source1:str,artifacts:pathlib.Path):
     elif params!=match.group(1): raise RuntimeError("generated segment ABIs differ")
     parts.append(f"__device__ __forceinline__ void q6_segment_{index}({match.group(1)}, int gidx0) {{\n"+source[match.end():])
   assert preamble is not None and params is not None
-  name="nv_q6_oracle_broad_streamk_170"
+  name=f"nv_q6_oracle_broad_streamk_170{f'_{arm}' if arm is not None else ''}"
   wrapper=(preamble+"\n".join(parts)+f'''\nextern "C" __global__ void __launch_bounds__(256) {name}({params}) {{
     int owner=blockIdx.x;
     q6_segment_0(data0_5570560,data1_20643840,data2_1769472,owner);
@@ -61,9 +65,11 @@ def _combine_sources(source0:str,source1:str,artifacts:pathlib.Path):
   }}\n''')
   path=artifacts/f"{name}.cu";path.write_text(wrapper);started=time.perf_counter();binary=Device["NV"].compiler.compile(wrapper)
   compile_ms=(time.perf_counter()-started)*1e3;cubin=artifacts/f"{name}.cubin";cubin.write_bytes(binary)
-  census=analyze_cubin(cubin,artifacts/"sass_full",name)["summary"]
+  census_artifact=analyze_cubin(cubin,artifacts/(f"sass_full_{arm}" if arm is not None else "sass_full"),name)
+  census=census_artifact["summary"]
   return name,binary,{"compile_ms":compile_ms,"source":str(path),"source_bytes":len(wrapper),"cubin":str(cubin),
-    "cubin_sha256":hashlib.sha256(binary).hexdigest(),"sass":census}
+    "cubin_sha256":hashlib.sha256(binary).hexdigest(),"sass":census,
+    "sass_artifacts":{k:census_artifact[k] for k in ("sass_json","disassembly","resources")}}
 
 
 def _ownership():
@@ -115,52 +121,103 @@ def main() -> int:
     global_size=(32,4,1),local_size=(32,2,4),wait=True)
   expected=reference.numpy()
 
-  n0,b0,c0=_render(0,args.artifacts); n1,b1,c1=_render(1,args.artifacts)
-  full_name,full_binary,full_compiler=_combine_sources(pathlib.Path(c0["source"]).read_text(),pathlib.Path(c1["source"]).read_text(),args.artifacts)
-  main_program=NVProgram(Device["NV"],full_name,full_binary,shared_mem=LAUNCH_SHARED_BYTES)
-  partials=Tensor.full((2*OWNERS*TILE_ELEMS,),float("nan"),device="NV").contiguous().realize()
-  main_program(_buf(partials),_buf(halfs),_buf(q8),global_size=(OWNERS,1,1),local_size=(256,1,1),wait=True,timeout=120000)
+  arm_states={}
+  for arm,factor_dA in (("direct_da",False),("factored_da",True)):
+    _,_,c0=_render(0,args.artifacts,factor_dA); _,_,c1=_render(1,args.artifacts,factor_dA)
+    full_name,full_binary,full_compiler=_combine_sources(pathlib.Path(c0["source"]).read_text(),
+      pathlib.Path(c1["source"]).read_text(),args.artifacts,arm)
+    arm_states[arm]={"factor_dA":factor_dA,
+      "program":NVProgram(Device["NV"],full_name,full_binary,shared_mem=LAUNCH_SHARED_BYTES),
+      "partials":Tensor.full((2*OWNERS*TILE_ELEMS,),float("nan"),device="NV").contiguous().realize(),
+      "compiler":{"full":full_compiler,"segment0_diagnostic":c0,"segment1_diagnostic":c1}}
 
   slots,ownership=_ownership(); max_segments=max(map(len,slots)); slot_map=np.full((TILES,max_segments),-1,np.int32)
   for tile,tile_slots in enumerate(slots): slot_map[tile,:len(tile_slots)]=tile_slots
   slot_map_t=Tensor(slot_map.reshape(-1),device="NV").contiguous().realize()
   fix_source=_fixup_source(max_segments); (args.artifacts/"fixup.cu").write_text(fix_source)
   fix_binary=compiler.compile(fix_source); fix_cubin=args.artifacts/"fixup.cubin"; fix_cubin.write_bytes(fix_binary)
-  fix_census=analyze_cubin(fix_cubin,args.artifacts/"sass_fixup","q6_oracle_fixup")["summary"]
+  fix_census_artifact=analyze_cubin(fix_cubin,args.artifacts/"sass_fixup","q6_oracle_fixup")
+  fix_census=fix_census_artifact["summary"]
+  fix_compiler={"source":str(args.artifacts/"fixup.cu"),"source_bytes":len(fix_source),"cubin":str(fix_cubin),
+    "cubin_sha256":hashlib.sha256(fix_binary).hexdigest(),"sass":fix_census,
+    "sass_artifacts":{k:fix_census_artifact[k] for k in ("sass_json","disassembly","resources")}}
   fix=NVProgram(Device["NV"],"q6_oracle_fixup",fix_binary)
-  output=Tensor.full((M,N),float("nan"),device="NV").contiguous().realize()
-  fix(_buf(output),_buf(partials),_buf(slot_map_t),global_size=(TILES,1,1),local_size=(256,1,1),wait=True)
-  got=output.numpy(); raw=partials.numpy().reshape(2*OWNERS,ROWS,COLS)
-  cpu=np.empty((M,N),np.float32)
-  for tile,tile_slots in enumerate(slots):
-    mt,nt=tile%TILES_M,tile//TILES_M; reduced=sum((raw[s] for s in tile_slots[1:]),raw[tile_slots[0]].copy())
-    cpu[mt*COLS:(mt+1)*COLS,nt*ROWS:(nt+1)*ROWS]=reduced.T
-  fix_diff=np.abs(got-cpu); ref_diff=np.abs(got-expected)
+  def cpu_fixup(raw):
+    raw=raw.reshape(2*OWNERS,ROWS,COLS); cpu=np.empty((M,N),np.float32)
+    for tile,tile_slots in enumerate(slots):
+      mt,nt=tile%TILES_M,tile//TILES_M; reduced=raw[tile_slots[0]].copy()
+      for slot in tile_slots[1:]: reduced+=raw[slot]
+      cpu[mt*COLS:(mt+1)*COLS,nt*ROWS:(nt+1)*ROWS]=reduced.T
+    return cpu
 
-  main=[]; fix_samples=[]
-  for _ in range(args.rounds):
-    main.append(main_program(_buf(partials),_buf(halfs),_buf(q8),global_size=(OWNERS,1,1),local_size=(256,1,1),wait=True,timeout=120000)*1e6)
-    fix_samples.append(fix(_buf(output),_buf(partials),_buf(slot_map_t),global_size=(TILES,1,1),local_size=(256,1,1),wait=True)*1e6)
+  arm_correctness={}; arm_outputs={}
+  for arm,state in arm_states.items():
+    state["output"]=Tensor.full((M,N),float("nan"),device="NV").contiguous().realize()
+    state["program"](_buf(state["partials"]),_buf(halfs),_buf(q8),global_size=(OWNERS,1,1),local_size=(256,1,1),
+      wait=True,timeout=120000)
+    fix(_buf(state["output"]),_buf(state["partials"]),_buf(slot_map_t),global_size=(TILES,1,1),local_size=(256,1,1),wait=True)
+    got=state["output"].numpy(); cpu=cpu_fixup(state["partials"].numpy()); fix_diff=np.abs(got-cpu)
+    ref_diff=np.abs(got-expected); ref_ok=np.isclose(got,expected,rtol=2e-5,atol=2e-3)
+    arm_outputs[arm]=got
+    arm_correctness[arm]={"finite":bool(np.isfinite(got).all()),"gpu_fixup_cpu_exact":bool(np.array_equal(got,cpu)),
+      "gpu_fixup_cpu_max_abs":float(fix_diff.max()),"trusted_reference":"compiler_wide_direct",
+      "reference_max_abs":float(ref_diff.max()),"reference_mean_abs":float(ref_diff.mean()),
+      "reference_failing_count_rtol2e5_atol2e3":int(np.count_nonzero(~ref_ok)),
+      "reference_allclose_rtol2e5_atol2e3":bool(ref_ok.all())}
+
+  samples={arm:{"main":[],"fixup":[],"pair":[]} for arm in arm_states}
+  for round_idx in range(args.rounds):
+    order=("direct_da","factored_da") if round_idx%2==0 else ("factored_da","direct_da")
+    for arm in order:
+      state=arm_states[arm]
+      main_us=state["program"](_buf(state["partials"]),_buf(halfs),_buf(q8),global_size=(OWNERS,1,1),
+        local_size=(256,1,1),wait=True,timeout=120000)*1e6
+      fix_us=fix(_buf(state["output"]),_buf(state["partials"]),_buf(slot_map_t),global_size=(TILES,1,1),
+        local_size=(256,1,1),wait=True)*1e6
+      samples[arm]["main"].append(main_us); samples[arm]["fixup"].append(fix_us)
+      samples[arm]["pair"].append(main_us+fix_us)
   def windows(xs): return {"r9":_stats(xs[:9]),"r31":_stats(xs)}
-  pair=[a+b for a,b in zip(main,fix_samples)]; main_med=statistics.median(main); fix_med=statistics.median(fix_samples)
-  result={"schema":"tinygrad.nv_q6_oracle_full_streamk.v1","shape":{"M":M,"N":N,"K":K},"owners":OWNERS,
+  direct_samples,factored_samples=samples["direct_da"],samples["factored_da"]
+  paired_main=[d-f for d,f in zip(direct_samples["main"],factored_samples["main"])]
+  paired_pair=[d-f for d,f in zip(direct_samples["pair"],factored_samples["pair"])]
+  main,fix_samples,pair=factored_samples["main"],factored_samples["fixup"],factored_samples["pair"]
+  main_med=statistics.median(main); fix_med=statistics.median(fix_samples)
+  arm_diff=np.abs(arm_outputs["direct_da"]-arm_outputs["factored_da"])
+  arm_results={arm:{"factor_dA":state["factor_dA"],"correctness":arm_correctness[arm],
+    "timing":{kind:windows(values) for kind,values in samples[arm].items()},"compiler":state["compiler"]}
+    for arm,state in arm_states.items()}
+  legacy_correctness=arm_correctness["factored_da"]
+  result={"schema":"tinygrad.nv_q6_oracle_full_streamk.factor_da_gate0.v1",
+    "legacy_schema":"tinygrad.nv_q6_oracle_full_streamk.v1","shape":{"M":M,"N":N,"K":K},"owners":OWNERS,
     "ownership":{"work_units":TILES*K256,"owner_work_lengths":sorted({((owner+1)*TILES*K256//OWNERS)-(owner*TILES*K256//OWNERS) for owner in range(OWNERS)}),
       "segment_lengths":sorted({r["k_end"]-r["k_begin"] for r in ownership}),
       "segment_count":len(ownership),"max_segments_per_tile":max_segments,
       "segment_census":{str(n):sum(len(x)==n for x in slots) for n in range(1,max_segments+1)}},
-    "correctness":{"finite":bool(np.isfinite(got).all()),"gpu_fixup_cpu_exact":bool(np.array_equal(got,cpu)),
-      "gpu_fixup_cpu_max_abs":float(fix_diff.max()),"reference_max_abs":float(ref_diff.max()),"reference_mean_abs":float(ref_diff.mean()),
-      "reference_allclose_rtol2e5_atol2e3":bool(np.allclose(got,expected,rtol=2e-5,atol=2e-3))},
+    "correctness":legacy_correctness,
     "timing":{"main":windows(main),"fixup":windows(fix_samples),"pair":windows(pair)},
+    "arms":arm_results,
+    "paired":{"alternated_call_order":True,"rounds":args.rounds,
+      "main_direct_minus_factored_us":windows(paired_main),"pair_direct_minus_factored_us":windows(paired_pair),
+      "factored_main_wins":sum(x>0 for x in paired_main),"factored_pair_wins":sum(x>0 for x in paired_pair)},
+    "direct_vs_factored":{"exact":bool(np.array_equal(arm_outputs["direct_da"],arm_outputs["factored_da"])),
+      "max_abs":float(arm_diff.max()),"mean_abs":float(arm_diff.mean())},
     "baselines":{"llama_main_us":LLAMA_MAIN_US,"llama_pair_us":LLAMA_MAIN_US+LLAMA_FIXUP_US,
       "llama_main_5pct_us":LLAMA_MAIN_US*1.05,"llama_pair_5pct_us":(LLAMA_MAIN_US+LLAMA_FIXUP_US)*1.05},
     "comparison":{"main_median_us":main_med,"pair_median_us":statistics.median(pair),
       "main_vs_llama_ratio":main_med/LLAMA_MAIN_US,"pair_vs_llama_ratio":statistics.median(pair)/(LLAMA_MAIN_US+LLAMA_FIXUP_US),
-      "main_within_5pct":main_med<=LLAMA_MAIN_US*1.05,"pair_within_5pct":statistics.median(pair)<=(LLAMA_MAIN_US+LLAMA_FIXUP_US)*1.05},
-    "compiler":{"full":full_compiler,"segment0_diagnostic":c0,"segment1_diagnostic":c1,
-      "fixup":{"sass":fix_census},"direct":direct},"passed":False}
-  result["passed"]=bool(result["correctness"]["finite"] and result["correctness"]["gpu_fixup_cpu_exact"] and
-    result["correctness"]["reference_allclose_rtol2e5_atol2e3"])
+      "main_within_5pct":main_med<=LLAMA_MAIN_US*1.05,"pair_within_5pct":statistics.median(pair)<=(LLAMA_MAIN_US+LLAMA_FIXUP_US)*1.05,
+      "direct_main_median_us":statistics.median(direct_samples["main"]),
+      "direct_pair_median_us":statistics.median(direct_samples["pair"]),
+      "paired_main_direct_minus_factored_median_us":statistics.median(paired_main),
+      "paired_pair_direct_minus_factored_median_us":statistics.median(paired_pair)},
+    "compiler":{"full":arm_states["factored_da"]["compiler"]["full"],
+      "segment0_diagnostic":arm_states["factored_da"]["compiler"]["segment0_diagnostic"],
+      "segment1_diagnostic":arm_states["factored_da"]["compiler"]["segment1_diagnostic"],
+      "fixup":fix_compiler,"direct":direct},
+    "reference":{"kind":"compiler_wide_direct","trusted":bool(direct["passed"]),"result":direct},
+    "gpu_lock":{"mode":"outer_flock_required","path":"/tmp/nv-q6-oracle-gpu.lock"},"passed":False}
+  result["passed"]=bool(direct["passed"] and all(c["finite"] and c["gpu_fixup_cpu_exact"] and
+    c["reference_failing_count_rtol2e5_atol2e3"]==0 for c in arm_correctness.values()))
   args.out.parent.mkdir(parents=True,exist_ok=True);args.out.write_text(json.dumps(result,indent=2)+"\n")
   print(json.dumps(result,sort_keys=True));return 0 if result["passed"] else 1
 

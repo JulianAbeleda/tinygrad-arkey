@@ -137,6 +137,31 @@ def _emit_q8_provider():
     return UOp.group(*qstores,mstore).end(group).sink(arg=KernelInfo(name="q8_1_llama_provider_4096",opts_to_apply=()))
   return kernel
 
+def _emit_q8_provider_warp32():
+  """Warp-owned Q8_1 provider: one 32-lane CTA per activation group."""
+  def kernel(out, x):
+    group = UOp.special(_Q8_GROUPS, "gidx0")
+    lane = UOp.special(32, "lidx0")
+    rounded = x[group*32+lane].cast(dtypes.float16).cast(dtypes.float32)
+    amax = warp_reduce_max(rounded.abs(), lane, 32, 100)
+    d = amax / UOp.const(dtypes.float32, 127.0)
+    inv = d.eq(0).where(UOp.const(dtypes.float32, 0.), d.reciprocal())
+    q = (rounded*inv).round().maximum(UOp.const(dtypes.float32, -128.)).minimum(
+      UOp.const(dtypes.float32, 127.)).cast(dtypes.int8).cast(dtypes.uint8).cast(dtypes.uint32)
+    xsum = _warp_reduce_sum_staged(rounded, lane, 32, 120)
+    smem = UOp.placeholder((32,), dtypes.uint32, 230, addrspace=AddrSpace.LOCAL)
+    ready = UOp.barrier(UOp.group(smem[lane].store(q)))
+    stores = []
+    for pack in range(8):
+      word = UOp.const(dtypes.uint32, 0)
+      for i in range(4): word = word.bitwise_or(smem.after(ready)[pack*4+i].lshift(8*i))
+      stores.append(out[group*8+pack].store(word, lane.eq(0)))
+    dh = d.cast(dtypes.float16).bitcast(dtypes.uint16).cast(dtypes.uint32)
+    sh = xsum.cast(dtypes.float16).bitcast(dtypes.uint16).cast(dtypes.uint32)
+    stores.append(out[_Q8_PACKS+group].store(dh.bitwise_or(sh.lshift(16)), lane.eq(0)))
+    return UOp.group(*stores).sink(arg=KernelInfo(name="q8_1_llama_provider_warp32_4096", opts_to_apply=()))
+  return kernel
+
 def _emit_rmsnorm_q8_provider(spec:ReduceOutputSpec, x_dtype, weight_dtype):
   """One-block RMSNorm -> llama-CUDA Q8_1 provider.
 
@@ -716,7 +741,7 @@ def _emit_q6_warp_direct(rows):
   against the shared Q8_1 packets.  Blocks are strided across warps
   (``block = warp + 4*block_rel``), so each warp owns one Q6 block per loop.
   """
-  if rows != _KV_ROWS: raise ValueError("Q6 direct shared-Q8 consumer requires the exact 1024x4096 V shape")
+  if not isinstance(rows, int) or rows <= 0: raise ValueError("Q6 direct shared-Q8 consumer requires a positive row count")
   def kernel(out,h,xp):
     row,lid=UOp.special(rows,"gidx0"),UOp.special(128,"lidx0")
     warp,lane=lid//32,lid%32

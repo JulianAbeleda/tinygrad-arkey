@@ -1,10 +1,10 @@
 import os
 
 from tinygrad.codegen.opt import tc
-from tinygrad.dtype import DType, dtypes
+from tinygrad.dtype import AddrSpace, DType, dtypes
 from tinygrad.helpers import NV_FLASH_LOAD_SCHEDULE, Target, dedup, prod
 from tinygrad.renderer.cstyle import CStyleLanguage, base_rewrite, create_non_native_float_pats, uops_to_dtypes, wmma_args, _install_native_attention_bindings
-from tinygrad.uop.ops import Ops, PatternMatcher, UPat, UOp
+from tinygrad.uop.ops import LoadSchedule, Ops, PatternMatcher, RegionLoad, StrictAfter, UPat, UOp
 
 _nms = list("xyzwabcdefghijkl") + [f'v{i}' for i in range(16, 32)]
 
@@ -168,6 +168,109 @@ def _nv_min_blocks_source(name:str, source:str) -> str:
 
 
 class CUDARenderer(CStyleLanguage):
+  supports_strict_after = True
+  supports_load_schedule = True
+  supports_region_load = True
+  supports_region_load_bridge = True
+  supports_const_restrict_pointer = True
+  region_load_bridge_owns_barrier = False
+  region_load_bridge_warp_fence = False
+  region_load_bridge_loads_after_barrier = False
+  region_load_bridge_group_words = 18
+
+  def render_region_load_bridge(self, pairs:list[tuple[UOp,UOp]]) -> tuple[list[str],list[str]]:
+    if len(pairs) != 18: raise RuntimeError("CUDA region load bridge requires exactly 18 copies")
+    def delta(a:UOp,b:UOp) -> int:
+      d=(a-b).simplify()
+      if d.vmin != d.vmax or not isinstance(d.vmin,int):
+        raise RuntimeError("CUDA region load bridge requires constant affine INDEX deltas")
+      return d.vmin
+    def offset(x:int) -> str: return f"+{x}" if x > 0 else str(x) if x < 0 else ""
+    global_base=pairs[0][0].src[0].src[0]
+    local_base=pairs[0][1].src[0].src[0]
+    if any(load.src[0].src[0] is not global_base or store.src[0].src[0] is not local_base for load,store in pairs):
+      raise RuntimeError("CUDA region load bridge requires common direct GLOBAL and LOCAL bases")
+    ref_global=pairs[0][0].src[0].src[1]
+    global_deltas=[delta(load.src[0].src[1],ref_global) for load,_ in pairs]
+    pairs=[pair for _,pair in sorted(zip(global_deltas,pairs),key=lambda x:x[0])]
+    ref_global=pairs[0][0].src[0].src[1]
+    ref_local=min(pairs,key=lambda pair:delta(pair[1].src[0].src[1],pairs[0][1].src[0].src[1]))[1].src[0].src[1]
+    global_offsets=[delta(load.src[0].src[1],ref_global)*4 for load,_ in pairs]
+    local_offsets=[delta(store.src[0].src[1],ref_local)*4 for _,store in pairs]
+    if len(set(global_offsets)) != 18 or len(set(local_offsets)) != 18 or any(abs(x) >= 2**31 for x in (*global_offsets,*local_offsets)):
+      raise RuntimeError("CUDA region load bridge requires 18 distinct signed-32-bit affine offsets")
+    global_address=self[pairs[0][0].src[0]]
+    local_ref=next(store for _,store in pairs if store.src[0].src[1] is ref_local)
+    shared_address=self[local_ref.src[0]]
+    names=[f"region_bridge_copy{i}" for i in range(18)]
+    if self.region_load_bridge_owns_barrier:
+      fused=["asm volatile(", '  "{\\n\\t"', '  ".reg .u32 region_bridge_copy<18>;\\n\\t"']
+      if self.region_load_bridge_warp_fence: fused += ['  "bar.warp.sync 0xffffffff;\\n\\t"']
+      if self.region_load_bridge_loads_after_barrier: fused += ['  "bar.sync 0;\\n\\t"']
+      group=self.region_load_bridge_group_words
+      if not isinstance(group,int) or group < 1 or group > 18: raise RuntimeError("CUDA region load bridge group must be 1..18 words")
+      if self.region_load_bridge_loads_after_barrier:
+        for start in range(0,18,group):
+          fused += [f'  "ld.global.u32 region_bridge_copy{i}, [%0{offset(global_offsets[i])}];\\n\\t"' for i in range(start,min(start+group,18))]
+          fused += [f'  "st.shared.u32 [%1{offset(local_offsets[i])}], region_bridge_copy{i};\\n\\t"' for i in range(start,min(start+group,18))]
+      else:
+        fused += [f'  "ld.global.u32 region_bridge_copy{i}, [%0{offset(off)}];\\n\\t"' for i,off in enumerate(global_offsets)]
+        fused += ['  "bar.sync 0;\\n\\t"']
+        fused += [f'  "st.shared.u32 [%1{offset(off)}], region_bridge_copy{i};\\n\\t"' for i,off in enumerate(local_offsets)]
+      fused += ['  "}\\n"', '  :',
+                f'  : "l"((unsigned long long)({global_address})), "r"((unsigned int)__cvta_generic_to_shared({shared_address}))',
+                '  : "memory");']
+      return fused,[]
+    before=[f"unsigned int {', '.join(names)};", "asm volatile("]
+    before += [f'  "ld.global.u32 %{i}, [%18{offset(off)}];\\n\\t"' for i,off in enumerate(global_offsets)]
+    before += ["  : "+", ".join(f'"=r"({name})' for name in names),
+               f'  : "l"((unsigned long long)({global_address}))', '  : "memory");']
+    after=["asm volatile("]
+    after += [f'  "st.shared.u32 [%0{offset(off)}], %{i+1};\\n\\t"' for i,off in enumerate(local_offsets)]
+    after += ["  :", f'  : "r"((unsigned int)__cvta_generic_to_shared({shared_address})), '+
+              ", ".join(f'"r"({name})' for name in names), '  : "memory");']
+    return before,after
+
+  def render_const_restrict_pointer(self, u:UOp) -> str:
+    if u.addrspace is not AddrSpace.GLOBAL or u.dtype not in {dtypes.int, dtypes.uint, dtypes.float} or u.dtype.vcount != 1:
+      raise RuntimeError(f"CUDA const_restrict requires a scalar 32-bit GLOBAL parameter, got {u.dtype}")
+    return f"const {self.render_scalar_dtype(u.dtype)} *__restrict__"
+
+  def render_load_schedule(self, u:UOp, name:str) -> str:
+    if len(u.src) != 2 or u.src[1].op is not Ops.AFTER or not isinstance(u.src[1].arg, LoadSchedule):
+      raise RuntimeError("CUDA schedule_after requires one unmasked LOAD and one opaque phase token")
+    idx, token = u.src
+    if idx.addrspace is not AddrSpace.GLOBAL: raise RuntimeError("CUDA schedule_after requires an immutable GLOBAL LOAD")
+    if u.dtype not in {dtypes.int, dtypes.uint, dtypes.float} or u.dtype.vcount != 1:
+      raise RuntimeError(f"CUDA schedule_after requires a scalar 32-bit LOAD, got {u.dtype}")
+    if len(idx.src) != 2 or idx.src[1].dtype not in {dtypes.weakint, dtypes.int, dtypes.uint} or idx.src[1].dtype.vcount != 1:
+      raise RuntimeError("CUDA schedule_after requires one scalar 32-bit INDEX")
+    dep=token.src[0]
+    if dep.dtype not in {dtypes.int, dtypes.uint, dtypes.float} or dep.dtype.vcount != 1:
+      raise RuntimeError(f"CUDA schedule_after requires a scalar 32-bit phase token, got {dep.dtype}")
+    dep_expr=f"__float_as_uint({self[dep]})" if dep.dtype is dtypes.float else self[dep]
+    index_expr, address=self[idx.src[1]], self[idx]
+    if not index_expr or address.count(index_expr) != 1:
+      raise RuntimeError("CUDA schedule_after cannot isolate the rendered scalar INDEX")
+    index_name=f"{name}_schedule_index"
+    ordered_address=address.replace(index_expr, index_name, 1)
+    return (f'{self.render_type(idx.src[1])} {index_name} = {index_expr}; '
+      f'asm volatile("xor.b32 %0, %0, %1; xor.b32 %0, %0, %1;" : "+r"({index_name}) : "r"({dep_expr}) : "memory"); '
+      f'{self.render_type(u)} {name} = (*{ordered_address});')
+
+  def render_strict_after(self, u:UOp) -> tuple[str, str]:
+    if len(u.src) != 2: raise RuntimeError("strict_after requires exactly one dependency")
+    value, dep = u.src
+    if value.dtype not in {dtypes.weakint, dtypes.int, dtypes.uint} or value.dtype.vcount != 1:
+      raise RuntimeError(f"CUDA strict_after requires a scalar 32-bit integer value, got {value.dtype}")
+    if dep.dtype not in {dtypes.int, dtypes.uint, dtypes.float} or dep.dtype.vcount != 1:
+      raise RuntimeError(f"CUDA strict_after requires a scalar 32-bit dependency, got {dep.dtype}")
+    dep_expr = f"__float_as_uint({self[dep]})" if dep.dtype is dtypes.float else self[dep]
+    name = f"strict_after_{sum(x.op is Ops.AFTER and isinstance(x.arg, StrictAfter) for x in self.r)}"
+    statement = (f'{self.render_type(u)} {name} = {self[value]}; '
+      f'asm volatile("xor.b32 %0, %0, %1; xor.b32 %0, %0, %1;" : "+r"({name}) : "r"({dep_expr}) : "memory");')
+    return statement, name
+
   supports_post_barrier_regions = True
   global_max = (2147483647, 65535, 65535)
   local_max = (1024, 1024, 64)

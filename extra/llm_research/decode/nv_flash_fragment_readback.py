@@ -9,7 +9,7 @@ from tinygrad.renderer.isa.amd_attention_abi import lower_cooperative_tile_load,
 
 N, HEAD_BLOCKS, LANES = 2048, 8, 32
 FRAGS = LANES * HEAD_BLOCKS * 16
-MODES = ("k-global", "k-shared", "v-global", "v-shared")
+MODES = ("q-global", "q-shared", "k-global", "k-shared", "v-global", "v-shared")
 
 def emitter(fragment_mode):
   if fragment_mode not in MODES: raise ValueError(fragment_mode)

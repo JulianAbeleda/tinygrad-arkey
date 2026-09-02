@@ -2,7 +2,7 @@
 import math, struct
 from collections import defaultdict
 from enum import Enum
-from tinygrad.uop.ops import Ops, PatternMatcher, UPat, UOp, GroupOp, exec_alu
+from tinygrad.uop.ops import Ops, PatternMatcher, UPat, UOp, GroupOp, LoadSchedule, StrictAfter, RegionLoad, RegionLoadBridge, exec_alu
 from tinygrad.dtype import ConstType, dtypes, PtrDType, can_lossless_cast, Invalid
 from tinygrad.helpers import partition, all_same, prod, flatten, get_single_element, unwrap, IMAGE, dedup
 from tinygrad.uop.decompositions import threefry2x32, xpow
@@ -234,12 +234,17 @@ def _commutative_key(u:UOp) -> tuple:
   normalizing enums to their values makes every key comparable without
   changing the relative order of any pair the direct comparison could already
   order (enum comparison is value comparison)."""
-  def norm(v) -> tuple:
-    if isinstance(v, UOp): return (v.op.value, norm(v.arg), v.dtype, tuple(norm(s) for s in v.src))
+  def norm(v):
+    if isinstance(v, UOp): return key(v)
     if isinstance(v, tuple): return tuple(norm(x) for x in v)
     if isinstance(v, Enum): return v.value
     return v
-  return norm(u.tuplize)
+  def key(v:UOp) -> tuple:
+    # STRICT_AFTER is value-identical for index canonicalization. Its dependency is a late compiler-order edge,
+    # and recursively tuplizing that edge can expand an entire compute phase into every affine address comparison.
+    if v.op is Ops.AFTER and isinstance(v.arg, StrictAfter): return key(v.src[0])
+    return (v.op.value, norm(v.arg), v.dtype, *(key(s) for s in v.src))
+  return key(u)
 
 commutative = PatternMatcher([
   # ** COMMUTATIVE flipping (only for index) **
@@ -318,11 +323,11 @@ symbolic = symbolic_simple+commutative+PatternMatcher([
     x.cast(dtypes.int).alu(u.op, y.cast(dtypes.int)).cast(u.dtype) if not any(v.overflows(dtypes.int) for v in (u,x,y)) else None),
   ((UPat.var("x", dtypes.weakint) + UPat.cvar("c")).cast(dtypes.sints, name="cast"), lambda x,c,cast:x.cast(cast.dtype)+c.cast(cast.dtype)),
   # only RANGE/IF/STORE/KERNEL have side effects
-  (UPat(Ops.AFTER, name="x"), lambda x: x.replace(src=(x.src[0],)+
+  (UPat(Ops.AFTER, name="x"), lambda x: None if isinstance(x.arg, (StrictAfter, LoadSchedule, RegionLoad, RegionLoadBridge)) else x.replace(src=(x.src[0],)+
     tuple(dedup(flatten([(y,) if y.op in {Ops.RANGE, Ops.IF, Ops.STORE, Ops.CALL, Ops.FUNCTION, Ops.BARRIER, Ops.END, Ops.UNROLL, Ops.LINEAR, Ops.STAGE}
                         else y.src for y in x.src[1:]]))))),
   # after with 1 src is just src[0]
-  (UPat(Ops.AFTER, src=(UPat.var("s"),)), lambda s: s),
+  (UPat(Ops.AFTER, src=(UPat.var("s"),), name="x"), lambda x,s: None if isinstance(x.arg, (LoadSchedule, RegionLoad, RegionLoadBridge)) else s),
   # VECTORIZE/CONST
   (UPat(Ops.STACK, src=UPat(Ops.CONST), name="vec"),
     lambda vec: UOp.const(vec.dtype, tuple(x.arg for x in vec.src)) if len(vec.src) > 0 else None),

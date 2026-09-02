@@ -4,7 +4,7 @@ from dataclasses import replace
 import itertools
 from tinygrad.helpers import DISABLE_FAST_IDIV, TRANSCENDENTAL, SPEC, DEBUG, VIZ, IMAGE, NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, getenv
 from tinygrad.helpers import ALLOW_TF32, TracingKey, Context, panic
-from tinygrad.uop.ops import PatternMatcher, graph_rewrite, UOp, pm_lower_index_dtype, Ops, UPat, track_rewrites, KernelInfo, ProgramInfo, GroupOp, PostBarrierRegion
+from tinygrad.uop.ops import PatternMatcher, graph_rewrite, UOp, pm_lower_index_dtype, Ops, UPat, track_rewrites, KernelInfo, ProgramInfo, GroupOp, PostBarrierRegion, LoadSchedule, StrictAfter, RegionLoad, RegionLoadBridge
 from tinygrad.uop.ops import AttentionWMMARole, WMMARoleLedger, FinalLinearMetadata, get_attention_wmma_role, set_attention_wmma_role
 from tinygrad.uop.ops import ParamArg
 from tinygrad.uop.render import pyrender
@@ -107,6 +107,32 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
     if _inv.ENABLED: _inv.set_stage(_prev_stage)
 
 def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
+  params = [x for x in ast.backward_slice_with_self if x.op is Ops.PARAM and isinstance(x.arg, ParamArg)]
+  const_restrict = [x for x in params if x.arg.const_restrict]
+  if const_restrict and not getattr(ren, "supports_const_restrict_pointer", False):
+    raise RuntimeError(f"{type(ren).__name__} cannot preserve const_restrict pointer qualification")
+  if const_restrict:
+    if len(const_restrict) != 1: raise RuntimeError("const_restrict requires exactly one annotated pointer PARAM per kernel")
+    owner = const_restrict[0]
+    if not isinstance(owner.dtype, PtrDType) or owner.addrspace is not AddrSpace.GLOBAL or owner.arg.addrspace is not AddrSpace.GLOBAL or \
+       owner.dtype.base not in {dtypes.int, dtypes.uint, dtypes.float} or owner.dtype.base.vcount != 1:
+      raise RuntimeError("const_restrict requires one scalar 32-bit GLOBAL pointer PARAM")
+    if sum(x.arg.slot == owner.arg.slot for x in params) != 1:
+      raise RuntimeError("const_restrict pointer PARAM has ambiguous ABI-slot ownership")
+    writable = {p for x in ast.backward_slice_with_self if x.op is Ops.STORE for p in x.src[0].pointer_base_params()}
+    if owner in writable: raise RuntimeError("const_restrict pointer PARAM is written in this kernel")
+  if any(x.op is Ops.AFTER and isinstance(x.arg, StrictAfter) for x in ast.backward_slice_with_self) and \
+     not getattr(ren, "supports_strict_after", False):
+    raise RuntimeError(f"{type(ren).__name__} cannot preserve strict_after compiler ordering")
+  if any(x.op is Ops.AFTER and isinstance(x.arg, LoadSchedule) for x in ast.backward_slice_with_self) and \
+     not getattr(ren, "supports_load_schedule", False):
+    raise RuntimeError(f"{type(ren).__name__} cannot preserve schedule_after load ordering")
+  if any(x.op is Ops.AFTER and isinstance(x.arg, RegionLoad) for x in ast.backward_slice_with_self) and \
+     not getattr(ren, "supports_region_load", False):
+    raise RuntimeError(f"{type(ren).__name__} cannot preserve lexical load regions")
+  if any(x.op is Ops.AFTER and isinstance(x.arg, RegionLoadBridge) for x in ast.backward_slice_with_self) and \
+     not getattr(ren, "supports_region_load_bridge", False):
+    raise RuntimeError(f"{type(ren).__name__} cannot preserve split region-load register bridges")
   if VIZ: graph_rewrite(ast, PatternMatcher([]), name="View Base AST")
   if DEBUG >= 5: print(pyrender(ast))
   # Resolve any renderer-lowered warp_shfl_xor (codegen/late/warp_reduce.py) against `ren` as early as possible,
@@ -237,7 +263,8 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
           if s in users: users[s].append(u)
       stale = {r for r, us in users.items() if r not in ended_ranges and all(u.op is Ops.AFTER for u in us)}
       if stale:
-        sink = sink.substitute({u: u.replace(src=tuple(s for s in u.src if s not in stale)) for u in topo if u.op is Ops.AFTER})
+        sink = sink.substitute({u: u.replace(src=tuple(s for s in u.src if s not in stale)) for u in topo
+                                if u.op is Ops.AFTER and not isinstance(u.arg, (StrictAfter, LoadSchedule))})
   # A composite REDUCE lowered during the pass above can be shared by several
   # REDUCE_SLOT users. Resolve those projections after the structured TUPLE is
   # present, then let dead graph nodes disappear naturally.

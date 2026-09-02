@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from tinygrad.uop.ops import AxisType, Ops, UOp
+from tinygrad.dtype import dtypes
 
 STREAMK_RANGE_PROVENANCE: dict[str, dict[str, tuple[bytes, ...]]] = {}
 
@@ -18,6 +19,10 @@ class StreamKRangeState:
   owner: UOp|None = None
   serial: UOp|None = None
   mapped_outer_n: UOp|None = None
+  entered_tc: bool = False
+  axes_bound: bool = False
+  precontract_built: bool = False
+  optimized: bool = False
 
 
 def one_pass_substitute(root: UOp, substitutions: dict[UOp, UOp]) -> UOp:
@@ -74,6 +79,47 @@ def complete_tile_owner_map(owner: UOp, serial: UOp, *, tiles: int, owners: int)
     raise ValueError("invalid complete-tile owner map")
   if tiles % owners: raise ValueError("complete-tile owner map requires an even owner partition")
   return owner * (tiles // owners) + serial
+
+def persistent_output_tile(owner: UOp, serial: UOp, geometry: StreamKGeometry) -> tuple[UOp, UOp, UOp, UOp, UOp, UOp]:
+  """Compiler-native persistent carriers: ``(tile, k_block, reset, direct, partial, slot)``.
+
+  Owners remain physical launch axes.  The flattened owner interval is mapped to
+  logical output-tile/K64 coordinates.  An owner-entry fragment resets even when
+  it starts mid-tile.  Direct output is legal only when that owner also observed
+  K-block zero.  Boundary fragments use deterministic ``2*owner + head/tail``
+  slots, matching the two-partial-slots-per-owner workspace ABI.
+  """
+  if not isinstance(owner, UOp) or not isinstance(serial, UOp): raise TypeError("persistent tile carriers require UOp ranges")
+  if not isinstance(geometry, StreamKGeometry): raise TypeError("persistent tile mapping requires StreamKGeometry")
+  owner_start = owner * geometry.work_units // geometry.owners
+  owner_stop = (owner + 1) * geometry.work_units // geometry.owners
+  linear = owner_start + serial
+  tile, k_block = linear // geometry.k_blocks, linear % geometry.k_blocks
+  reset = serial.eq(0) | k_block.eq(0)
+  tile_end = k_block.eq(geometry.k_blocks - 1)
+  owner_end = linear.eq(owner_stop - 1)
+  owner_saw_tile_start = owner_start <= tile * geometry.k_blocks
+  direct = tile_end & owner_saw_tile_start
+  partial = (tile_end & ~owner_saw_tile_start) | (owner_end & ~tile_end)
+  tail = owner_end & ~tile_end
+  slot = owner * 2 + tail.cast(dtypes.int)
+  return tile, k_block, reset, direct, partial, slot
+
+def persistent_segments(owner: int, geometry: StreamKGeometry) -> tuple[dict[str, int|bool|None], ...]:
+  """Split one owner interval into fixed-output-tile K segments for segmented lowering."""
+  if not isinstance(owner, int) or not 0 <= owner < geometry.owners: raise IndexError(owner)
+  start, stop = geometry.interval(owner)
+  out = []
+  first_tile, last_tile = start // geometry.k_blocks, (stop - 1) // geometry.k_blocks
+  for tile in range(first_tile, last_tile + 1):
+    lo, hi = max(start, tile * geometry.k_blocks), min(stop, (tile + 1) * geometry.k_blocks)
+    if lo >= hi: continue
+    head, tail = lo == tile * geometry.k_blocks, hi == (tile + 1) * geometry.k_blocks
+    out.append({"tile": tile, "lo": lo, "hi": hi, "k_begin": lo % geometry.k_blocks,
+                "k_end": hi % geometry.k_blocks if not tail else geometry.k_blocks,
+                "head": head, "tail": tail, "direct": head and tail,
+                "partial": not (head and tail), "slot": None if head and tail else owner * 2 + int(tail)})
+  return tuple(out)
 
 
 def record_range_provenance(operands: tuple[Any, ...], *, output_ranges: tuple[UOp, ...] = ()) -> None:
