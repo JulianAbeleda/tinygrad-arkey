@@ -218,6 +218,7 @@ def test_active_horizon_wide_selector_and_geometry_are_bounded():
   from tinygrad.llm.model import _active_horizon_flash_split_count, _flash_decode_geometry_for_split
   assert _active_horizon_flash_split_count(True, 511, 1024) is None
   assert _active_horizon_flash_split_count(True, 512, 1024) == 6    # Tc=513
+  assert _active_horizon_flash_split_count(True, 512, 640) is None  # physical cache cannot hold the S6 band
   assert _active_horizon_flash_split_count(True, 767, 1024) == 6    # Tc=768
   assert _active_horizon_flash_split_count(True, 768, 4352) == 8
   assert _active_horizon_flash_split_count(True, 1024, 4352) == 10

@@ -196,11 +196,9 @@ def _active_horizon_flash_split_count(enabled:bool,start_pos:int,max_context:int
   if not enabled: return None
   tc = start_pos + 1
   if tc <= 512 or tc > min(max_context, 4352): return None
-  if tc <= 768: return 6
-  if tc <= 1024: return 8
-  if tc <= 1280: return 10
-  if tc <= 2304: return 18
-  return 34
+  split_count, token_bound = ((6,768) if tc <= 768 else (8,1024) if tc <= 1024 else
+                              (10,1280) if tc <= 1280 else (18,2304) if tc <= 2304 else (34,4352))
+  return split_count if token_bound <= max_context else None
 
 def _flash_decode_geometry_for_split(base:dict, split_count:int|None) -> dict:
   """Translate a graph-identity split into the geometry lease it was qualified for."""
@@ -2790,7 +2788,9 @@ class Transformer:
     temp = Tensor([0.0]).contiguous()
     variants = ((6,700),(8,900),(10,1100),(18,2000),(34,4000))
     horizon = self.max_context if expected_output_tokens is None else min(self.max_context, prompt_len + expected_output_tokens)
-    lo = max(513, prompt_len)
+    # Prefill produces the token at ``prompt_len``; the first one-token decode
+    # writes that token and observes Tc=prompt_len+1.
+    lo = max(513, prompt_len+1)
     probes = (lo, horizon, 769, 1025, 1281, 2305)
     required = {_active_horizon_flash_split_count(True, tc-1, self.max_context) for tc in probes if lo <= tc <= horizon}
     required.discard(None)

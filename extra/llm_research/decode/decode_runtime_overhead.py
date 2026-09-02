@@ -82,9 +82,10 @@ def _reset(model) -> None:
   reset()
 
 
-def _prefill(model, prompt:list[int], chunk_size:int):
+def _prefill(model, prompt:list[int], chunk_size:int, expected_output_tokens:int|None=None):
   """Populate exact prompt KV through production generate and return its first sampled token."""
-  gen = model.generate(prompt.copy(), chunk_size=chunk_size, temperature=0.0)
+  gen = model.generate(prompt.copy(), chunk_size=chunk_size, temperature=0.0,
+                       expected_output_tokens=expected_output_tokens)
   first = int(next(gen))
   return gen, first
 
@@ -94,20 +95,20 @@ def _route(model, start_pos, token_extent:int) -> bool:
   return bool(model.config.flash_decode and should_use_flash_decode(start_pos, token_extent))
 
 
-def _warm_depth(model, prompt:list[int], chunk_size:int, warmup_decode:int) -> None:
+def _warm_depth(model, prompt:list[int], chunk_size:int, warmup_decode:int, request_scoped_prewarm:bool=False) -> None:
   _reset(model)
-  gen, _ = _prefill(model, prompt, chunk_size)
+  gen, _ = _prefill(model, prompt, chunk_size, warmup_decode+1 if request_scoped_prewarm else None)
   try:
     for _ in range(warmup_decode): next(gen)
   finally: gen.close()
 
 
-def capture_decode_graph(model, prompt:list[int], chunk_size:int, warmup_decode:int):
+def capture_decode_graph(model, prompt:list[int], chunk_size:int, warmup_decode:int, request_scoped_prewarm:bool=False):
   """Capture the second greedy SDPA rollout and retain its runtime-only call bindings."""
   from tinygrad.engine.jit import observe_graph_admissions
   from tinygrad.helpers import Context
   _reset(model)
-  gen, _ = _prefill(model, prompt, chunk_size)
+  gen, _ = _prefill(model, prompt, chunk_size, warmup_decode+1 if request_scoped_prewarm else None)
   try:
     census = None
     for index in range(warmup_decode):
@@ -129,9 +130,9 @@ def capture_decode_graph(model, prompt:list[int], chunk_size:int, warmup_decode:
   return census
 
 
-def _warm_depth_with_graph_census(model, prompt:list[int], chunk_size:int, warmup_decode:int):
+def _warm_depth_with_graph_census(model, prompt:list[int], chunk_size:int, warmup_decode:int, request_scoped_prewarm:bool=False):
   """Serialize exactly the second SDPA rollout capture; prefill remains unobserved."""
-  census = capture_decode_graph(model, prompt, chunk_size, warmup_decode)
+  census = capture_decode_graph(model, prompt, chunk_size, warmup_decode, request_scoped_prewarm)
   payload = census.to_dict()
   from tinygrad import UOp
   use_flash = _route(model, UOp.variable("capture_start_pos", 0, model.max_context - 1).bind(len(prompt)), 1)
@@ -140,9 +141,9 @@ def _warm_depth_with_graph_census(model, prompt:list[int], chunk_size:int, warmu
   return payload
 
 
-def _measure_w(model, dev, prompt:list[int], chunk_size:int, nmeas:int) -> tuple[float, list[float], list[int], int]:
+def _measure_w(model, dev, prompt:list[int], chunk_size:int, nmeas:int, request_scoped_prewarm:bool=False) -> tuple[float, list[float], list[int], int]:
   _reset(model)
-  gen, prelude = _prefill(model, prompt, chunk_size)
+  gen, prelude = _prefill(model, prompt, chunk_size, nmeas+1 if request_scoped_prewarm else None)
   latencies, generated = [], []
   try:
     dev.synchronize()
@@ -154,10 +155,10 @@ def _measure_w(model, dev, prompt:list[int], chunk_size:int, nmeas:int) -> tuple
   return sum(latencies), latencies, generated, prelude
 
 
-def _measure_d(model, dev, prompt:list[int], chunk_size:int, nmeas:int, max_context:int):
+def _measure_d(model, dev, prompt:list[int], chunk_size:int, nmeas:int, max_context:int, request_scoped_prewarm:bool=False):
   from tinygrad import Tensor, UOp
   _reset(model)
-  gen, first = _prefill(model, prompt, chunk_size)
+  gen, first = _prefill(model, prompt, chunk_size, 1 if request_scoped_prewarm else None)
   gen.close()
   start = len(prompt)
   v_sp = UOp.variable("start_pos", 0, max_context - 1)
@@ -190,6 +191,10 @@ def main(argv:list[str] | None=None) -> int:
                   help="optional atomic tinygrad.graph_admission_census.v1 export from second SDPA rollout warmup")
   ap.add_argument("--skip-dispatch-diagnostic", action="store_true",
                   help="omit D so W is the final GPU interval for external system tracing")
+  ap.add_argument("--request-scoped-prewarm", action="store_true",
+                  help="pass each request's measured output horizon to production generate prewarming")
+  ap.add_argument("--single-graph-live-bands", action="store_true",
+                  help="diagnostic: disable direct-greedy/ping-pong capture and use the qualified full-logits graph")
   ap.add_argument("--out", required=True, help="unique output JSON for this invocation")
   args = ap.parse_args(argv)
   if args.reps < 1: raise ValueError("reps must be positive")
@@ -203,6 +208,9 @@ def main(argv:list[str] | None=None) -> int:
 
   dev = Device[Device.DEFAULT]
   model, tokenizer = load_model_and_tokenizer(args.model, profile.max_context, seed=20260617)
+  if args.single_graph_live_bands:
+    model._decode_direct_greedy_promoted = False
+    model._decode_feedback_pingpong_promoted = False
   base_ids = (tokenizer.prefix() if hasattr(tokenizer, "prefix") else []) + \
              tokenizer.encode("the quick brown fox jumps. " * 800)
 
@@ -212,13 +220,13 @@ def main(argv:list[str] | None=None) -> int:
     prompt = _make_prompt(base_ids, depth)
     if args.graph_admission_out is not None:
       if graph_census is not None: raise ValueError("--graph-admission-out requires exactly one checkpoint")
-      graph_census = _warm_depth_with_graph_census(model, prompt, args.chunk_size, args.warmup_decode)
+      graph_census = _warm_depth_with_graph_census(model, prompt, args.chunk_size, args.warmup_decode, args.request_scoped_prewarm)
       graph_census["capture"]["fixed_depth"] = depth
-    else: _warm_depth(model, prompt, args.chunk_size, args.warmup_decode)
+    else: _warm_depth(model, prompt, args.chunk_size, args.warmup_decode, args.request_scoped_prewarm)
     w_reps, d_reps = [], []
     route_reps, prelude_reps, token_reps = [], [], []
     for rep in range(args.reps):
-      w_elapsed, per_token, generated, prelude = _measure_w(model, dev, prompt, args.chunk_size, profile.nmeas)
+      w_elapsed, per_token, generated, prelude = _measure_w(model, dev, prompt, args.chunk_size, profile.nmeas, args.request_scoped_prewarm)
       w_reps.append({"rep": rep, "elapsed_s": w_elapsed, "tok_s": profile.nmeas / w_elapsed,
                      "per_token_ms": [x * 1e3 for x in per_token]})
       if args.skip_dispatch_diagnostic:
@@ -226,7 +234,8 @@ def main(argv:list[str] | None=None) -> int:
         route_sp = UOp.variable("reported_start_pos", 0, profile.max_context - 1).bind(len(prompt))
         routes = ["flash" if _route(model, route_sp, 1) else "sdpa"]
       else:
-        d_elapsed, routes, final_token = _measure_d(model, dev, prompt, args.chunk_size, profile.nmeas, profile.max_context)
+        d_elapsed, routes, final_token = _measure_d(model, dev, prompt, args.chunk_size, profile.nmeas, profile.max_context,
+                                                    args.request_scoped_prewarm)
         d_reps.append({"rep": rep, "elapsed_s": d_elapsed, "tok_s": profile.nmeas / d_elapsed,
                        "final_token_id": final_token})
       route_reps.append(routes)
@@ -291,7 +300,9 @@ def main(argv:list[str] | None=None) -> int:
               "workload": {"ckpts": list(profile.ckpts), "max_context": profile.max_context,
                            "decode_tokens": profile.nmeas, "reps": args.reps, "warmup_decode": args.warmup_decode,
                            "chunk_size": args.chunk_size, "temperature": 0.0, "seed": 20260617,
-                           "dispatch_diagnostic":not args.skip_dispatch_diagnostic},
+                           "dispatch_diagnostic":not args.skip_dispatch_diagnostic,
+                           "request_scoped_prewarm":args.request_scoped_prewarm,
+                           "single_graph_live_bands":args.single_graph_live_bands},
               "runtime_settings": {"kv_cache": "int8+fp16_scale" if model.config.kv_quant else "fp16",
                                    "flash_decode_capable": bool(model.config.flash_decode),
                                    "flash_decode_mode": os.environ.get("FLASH_DECODE", "auto"),
