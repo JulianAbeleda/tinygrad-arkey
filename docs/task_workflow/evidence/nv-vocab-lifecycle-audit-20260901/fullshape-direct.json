@@ -1,0 +1,57 @@
+{
+  "contract": {
+    "candidate": "Q8 provider + four-warp Q6_K/Q8_1 direct output",
+    "control": "installed Q6_K FP16 in-kernel reduction",
+    "production_route_changed": false,
+    "quality_credit": false
+  },
+  "correctness": {
+    "nonzero_primitive_authority": "q6k_q8_warp_direct_microgate",
+    "zero_input_exact": true
+  },
+  "git_commit": "4597201c13c32684ef6e32fabb930b8634a96add",
+  "schema": "tinygrad.nv_q6k_vocab_q8_fullshape_gate.v1",
+  "shape": {
+    "k": 4096,
+    "rows": 151936,
+    "weight_bytes": 510504960
+  },
+  "timing": {
+    "candidate_b": [
+      2904.2741875,
+      2681.770625,
+      1368.4640625,
+      1372.4164375,
+      1370.6538125
+    ],
+    "candidate_median_us": 1372.4164375,
+    "control_a": [
+      587.940875,
+      587.315375,
+      322.1854375,
+      323.0695625,
+      322.362
+    ],
+    "control_c": [
+      520.3963125,
+      327.256875,
+      327.094,
+      327.5668125,
+      327.948125
+    ],
+    "control_midpoint_median_us": 325.3181875,
+    "delta_us": 1047.09825,
+    "gate": "STOP",
+    "paired_candidate_minus_control": [
+      2350.10559375,
+      2224.4845,
+      1043.82434375,
+      1047.09825,
+      1045.49875
+    ],
+    "replays": 16,
+    "reps": 5
+  },
+  "variant": "direct",
+  "verdict": "NO_GO_FULLSHAPE"
+}

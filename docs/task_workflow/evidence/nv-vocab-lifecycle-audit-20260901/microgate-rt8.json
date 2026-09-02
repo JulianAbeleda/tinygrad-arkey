@@ -1,0 +1,45 @@
+{
+  "correctness": {
+    "atol": 0.4677861213684082,
+    "baseline_max_abs_ref": 2.956390380859375e-05,
+    "candidate_max_abs_ref": 0.17308998107910156,
+    "candidate_vs_baseline_max_abs": 0.17308616638183594,
+    "pass": true
+  },
+  "device": "NV",
+  "git_commit": "4597201c13c32684ef6e32fabb930b8634a96add",
+  "payload": {
+    "q6_sha256": "653c9331685e40d02af27d1a2cc60747ca5b7c9a00b0135caed9f31573b03881",
+    "x_sha256": "b859acf14292c4299bdbb2fe826389dbf62ae589355801b44dc67ee34d5ccc3f"
+  },
+  "schema": "tinygrad.q6k_q8_dp4a_microgate.v1",
+  "timing": {
+    "candidate_b": [
+      251.88317999999998,
+      252.63178,
+      261.61388999999997,
+      281.38417000000004,
+      180.03533
+    ],
+    "candidate_median": 252.63178,
+    "control_a": [
+      386.89894,
+      387.15552,
+      379.03956,
+      338.01158000000004,
+      281.11767
+    ],
+    "control_c": [
+      208.85505,
+      208.46011,
+      176.5568,
+      98.46671,
+      97.15475
+    ],
+    "control_midpoint_median": 277.79818,
+    "delta": -25.16640000000001,
+    "replays": 100,
+    "reps": 5,
+    "unit": "us_per_graph_replay"
+  }
+}

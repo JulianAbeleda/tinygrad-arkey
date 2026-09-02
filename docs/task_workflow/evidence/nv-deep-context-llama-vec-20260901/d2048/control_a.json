@@ -1,0 +1,39 @@
+{
+  "arm": "control_a",
+  "count": 8,
+  "depth": 2048,
+  "max_context": 2304,
+  "reps": 3,
+  "schema": "tinygrad.nv_flash_llama_vec_wide_wall.v1",
+  "settled": {
+    "accepted_samples_ms_per_token": [
+      4.4096,
+      4.411969375,
+      4.410348875
+    ],
+    "external_contention_high_limit_ms": 4.660348875,
+    "median_ms_per_token": 4.410348875,
+    "prelude_token": 13876,
+    "rejected_high_samples_ms_per_token": [],
+    "samples_ms_per_token": [
+      4.4096,
+      4.411969375,
+      4.410348875
+    ],
+    "timed_token_count": 24,
+    "token_hashes": [
+      "9e6664fd1d67a6124e786daaa1d895bdb64b972c3991c54dd5fcc6cea16f6881",
+      "09e23af5efdd347a236110c102ad9fd8d6881bdaa2d929dffac8ec50a28da44a",
+      "faf6becf355abfb3e205616ec6b89b045e0ab34702848f223d525e2ffed91891"
+    ],
+    "token_stream_hash": "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+    "warmup_tokens": [
+      38835,
+      34208,
+      13,
+      279,
+      3974,
+      13876
+    ]
+  }
+}

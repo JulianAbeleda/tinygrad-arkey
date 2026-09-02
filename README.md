@@ -80,6 +80,33 @@ imports the sibling repository as a fallback.
 
 ## Current performance state
 
+### NVIDIA experimental batch-1 decode
+
+On the retained strict Qwen3-8B Q4_K_M NVIDIA protocol, one promoted tinygrad
+run measured **4.035563 ms/token (approximately 247.80 tok/s)** versus a
+retained llama run at **4.058359 ms/token (246.405 tok/s)**. This is evidence
+of parity, not a universal endpoint win: the runs were not a same-session
+thermal bracket, and historical llama results span approximately 240.6--250.7
+tok/s.
+
+The regional active-body ledger favors tinygrad by 169.896 us/token: gate/up
+26.220, FFN down 41.164, QKV/provider 16.385, norms 92.898, and Flash score
+4.608 us/token, offset by losses of 3.007 in O projection and 8.372 in the
+vocabulary lifecycle. Full accounting, roofline limits, and caveats are in
+[the NVIDIA batch-1 decode ledger](docs/task_workflow/output/nv-batch1-decode-ledger-20260901.md).
+
+The original fixed-depth comparison is recorded at
+[the NVIDIA tinygrad-versus-llama depth sweep](docs/task_workflow/output/nv-tinygrad-vs-llama-depth-sweep-20260901.md).
+It exposed tinygrad's steeper context-depth decay. The promoted live-context
+wide-Flash bands then measured **246.60 / 244.92 / 238.42 / 226.96 tok/s** at
+depths 512 / 1024 / 2048 / 4096, versus llama's retained **247.78 / 244.34 /
+234.71 / 226.02 tok/s**. The candidate recovered **80.428 / 188.176 / 234.535 /
+399.893 us/token** against its paired controls with exact token-stream hashes;
+see [the promotion record](docs/task_workflow/output/nv-live-context-wide-flash-promotion-20260901.md).
+The remaining operational cost is compiling several bounded JIT graph
+identities, not an artificial runtime context cap. NVIDIA prefill remains the
+next unclosed ledger.
+
 Machine: RX 7900 XTX (24 GB), AMD gfx1100. **Decode re-measured from promoted master on 2026-07-27**;
 the last complete four-point prefill curve is from **2026-07-24**, with newer bounded 14B endpoint checks
 reported separately below. Comparisons use the same box and GGUFs.

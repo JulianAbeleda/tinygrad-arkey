@@ -1,0 +1,143 @@
+{
+  "all_token_hashes_equal": true,
+  "arms": [
+    {
+      "arm": "control_a",
+      "count": 8,
+      "depth": 1024,
+      "max_context": 1280,
+      "reps": 3,
+      "schema": "tinygrad.nv_flash_llama_vec_wide_wall.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          4.259616375,
+          4.26023125,
+          4.25702025
+        ],
+        "external_contention_high_limit_ms": 4.509616375,
+        "median_ms_per_token": 4.259616375,
+        "prelude_token": 34208,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          4.259616375,
+          4.26023125,
+          4.25702025
+        ],
+        "timed_token_count": 24,
+        "token_hashes": [
+          "09e23af5efdd347a236110c102ad9fd8d6881bdaa2d929dffac8ec50a28da44a",
+          "faf6becf355abfb3e205616ec6b89b045e0ab34702848f223d525e2ffed91891",
+          "9e6664fd1d67a6124e786daaa1d895bdb64b972c3991c54dd5fcc6cea16f6881"
+        ],
+        "token_stream_hash": "e8a4d53f4b96389ee1a3eda00decbf75c22826806136cef60072ef2cf5b8804f",
+        "warmup_tokens": [
+          13,
+          279,
+          3974,
+          13876,
+          38835,
+          34208
+        ]
+      }
+    },
+    {
+      "arm": "candidate",
+      "count": 8,
+      "depth": 1024,
+      "max_context": 1280,
+      "reps": 3,
+      "schema": "tinygrad.nv_flash_llama_vec_wide_wall.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          4.124024125,
+          4.08301325,
+          4.080811625
+        ],
+        "external_contention_high_limit_ms": 4.33301325,
+        "median_ms_per_token": 4.08301325,
+        "prelude_token": 34208,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          4.124024125,
+          4.08301325,
+          4.080811625
+        ],
+        "timed_token_count": 24,
+        "token_hashes": [
+          "09e23af5efdd347a236110c102ad9fd8d6881bdaa2d929dffac8ec50a28da44a",
+          "faf6becf355abfb3e205616ec6b89b045e0ab34702848f223d525e2ffed91891",
+          "9e6664fd1d67a6124e786daaa1d895bdb64b972c3991c54dd5fcc6cea16f6881"
+        ],
+        "token_stream_hash": "e8a4d53f4b96389ee1a3eda00decbf75c22826806136cef60072ef2cf5b8804f",
+        "warmup_tokens": [
+          13,
+          279,
+          3974,
+          13876,
+          38835,
+          34208
+        ]
+      }
+    },
+    {
+      "arm": "control_c",
+      "count": 8,
+      "depth": 1024,
+      "max_context": 1280,
+      "reps": 3,
+      "schema": "tinygrad.nv_flash_llama_vec_wide_wall.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          4.2749365,
+          4.28276125,
+          4.30391725
+        ],
+        "external_contention_high_limit_ms": 4.53276125,
+        "median_ms_per_token": 4.28276125,
+        "prelude_token": 34208,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          4.2749365,
+          4.28276125,
+          4.30391725
+        ],
+        "timed_token_count": 24,
+        "token_hashes": [
+          "09e23af5efdd347a236110c102ad9fd8d6881bdaa2d929dffac8ec50a28da44a",
+          "faf6becf355abfb3e205616ec6b89b045e0ab34702848f223d525e2ffed91891",
+          "9e6664fd1d67a6124e786daaa1d895bdb64b972c3991c54dd5fcc6cea16f6881"
+        ],
+        "token_stream_hash": "e8a4d53f4b96389ee1a3eda00decbf75c22826806136cef60072ef2cf5b8804f",
+        "warmup_tokens": [
+          13,
+          279,
+          3974,
+          13876,
+          38835,
+          34208
+        ]
+      }
+    }
+  ],
+  "count": 8,
+  "depth": 1024,
+  "max_context": 1280,
+  "mode": "reverse-bracket-unprofiled",
+  "reps": 3,
+  "schema": "tinygrad.nv_flash_llama_vec_wide_wall.v1",
+  "token_stream_hashes": [
+    "e8a4d53f4b96389ee1a3eda00decbf75c22826806136cef60072ef2cf5b8804f"
+  ],
+  "tokens_per_second": {
+    "candidate": 244.91715768985077,
+    "candidate_delta": 10.79030357527401,
+    "control_midpoint": 234.12685411457676
+  },
+  "walls_us_per_token": {
+    "candidate": 4083.0132499999995,
+    "candidate_delta": -188.17556250000098,
+    "control_a": 4259.6163750000005,
+    "control_c": 4282.7612500000005,
+    "control_midpoint": 4271.1888125000005
+  }
+}

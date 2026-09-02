@@ -1,0 +1,70 @@
+[
+  {
+    "build_commit": "ac4cddeb0",
+    "build_number": 9592,
+    "cpu_info": "AMD Ryzen 7 5800X 8-Core Processor",
+    "gpu_info": "NVIDIA GeForce RTX 5090",
+    "backends": "CUDA",
+    "model_filename": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "model_type": "qwen3 8B Q4_K - Medium",
+    "model_size": 5021827072,
+    "model_n_params": 8190735360,
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "n_threads": 8,
+    "cpu_mask": "0x0",
+    "cpu_strict": false,
+    "poll": 50,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_gpu_layers": 99,
+    "n_cpu_moe": 0,
+    "split_mode": "layer",
+    "main_gpu": 0,
+    "no_kv_offload": false,
+    "flash_attn": 1,
+    "devices": "auto",
+    "tensor_split": "0.00",
+    "tensor_buft_overrides": "none",
+    "use_mmap": true,
+    "use_direct_io": false,
+    "embeddings": false,
+    "no_op_offload": 0,
+    "no_host": false,
+    "fit_target": 0,
+    "fit_min_ctx": 0,
+    "n_prompt": 512,
+    "n_gen": 0,
+    "n_depth": 128,
+    "test_time": "2026-09-02T01:10:23Z",
+    "avg_ns": 37728902,
+    "stddev_ns": 4165629,
+    "avg_ts": 13675.020127,
+    "stddev_ts": 1420.054498,
+    "samples_ns": [ 35485107, 42535431, 35166168 ],
+    "samples_ts": [ 14428.6, 12037, 14559.4 ]
+  }[New LWP 1184500]
+[New LWP 1184499]
+[New LWP 1184498]
+[New LWP 1184427]
+
+This GDB supports auto-downloading debuginfo from the following URLs:
+  <https://debuginfod.ubuntu.com>
+Enable debuginfod for this session? (y or [n]) [answered N; input not from terminal]
+Debuginfod has been disabled.
+To make this setting permanent, add 'set debuginfod enabled off' to .gdbinit.
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0x0000754078b10913 in __GI___wait4 (pid=1184502, stat_loc=0x0, options=0, usage=0x0) at ../sysdeps/unix/sysv/linux/wait4.c:30
+#0  0x0000754078b10913 in __GI___wait4 (pid=1184502, stat_loc=0x0, options=0, usage=0x0) at ../sysdeps/unix/sysv/linux/wait4.c:30
+30	in ../sysdeps/unix/sysv/linux/wait4.c
+#1  0x0000754079154663 in ggml_print_backtrace () from /home/ubuntu/env/llama.cpp/build-cuda/bin/libggml-base.so.0
+#2  0x000075407915480b in ggml_abort () from /home/ubuntu/env/llama.cpp/build-cuda/bin/libggml-base.so.0
+#3  0x0000754079167098 in ggml_graph_dump_dot () from /home/ubuntu/env/llama.cpp/build-cuda/bin/libggml-base.so.0
+#4  0x00007540780ea1d9 in llama_context::decode(llama_batch const&) () from /home/ubuntu/env/llama.cpp/build-cuda/bin/libllama.so.0
+#5  0x00007540780eadef in llama_decode () from /home/ubuntu/env/llama.cpp/build-cuda/bin/libllama.so.0
+#6  0x00007540792801e7 in llama_bench(int, char**) () from /home/ubuntu/env/llama.cpp/build-cuda/bin/libllama-bench-impl.so
+#7  0x0000754078a2a1ca in __libc_start_call_main (main=main@entry=0x64f18c60b270 <main>, argc=argc@entry=17, argv=argv@entry=0x7fffb7db1f08) at ../sysdeps/nptl/libc_start_call_main.h:58
+#8  0x0000754078a2a28b in __libc_start_main_impl (main=0x64f18c60b270 <main>, argc=17, argv=0x7fffb7db1f08, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffb7db1ef8) at ../csu/libc-start.c:360
+#9  0x000064f18c60b2a5 in _start ()
+[Inferior 1 (process 1184410) detached]
