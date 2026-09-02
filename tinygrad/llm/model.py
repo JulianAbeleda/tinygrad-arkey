@@ -138,8 +138,12 @@ def _nv_llama_packed_o_capture(model,jit,binding):
   return captures[jit]
 
 def _nv_llama_packed_q6k_down_enabled(config)->bool:
-  return (_nv_llama_full_packed_pp512_enabled(config) or
-          (bool(getenv("NV_LLAMA_PACKED_Q6K_DOWN_PP512",0)) and _nv_q4_imma_pp512_mode()=="llama" and _nv_compiler_q4_imma_pp512_qualified(config)))
+  # The exact generated Stream-K route owns Q6 FFN-down whenever the
+  # qualified compiler gate/up+K stack is active.  Setting its lease to zero
+  # is the explicit rollback to the existing llama route.
+  return (not _nv_compiler_q6_imma_role_enabled(config, "ffn_down") and
+          (_nv_llama_full_packed_pp512_enabled(config) or
+          (bool(getenv("NV_LLAMA_PACKED_Q6K_DOWN_PP512",0)) and _nv_q4_imma_pp512_mode()=="llama" and _nv_compiler_q4_imma_pp512_qualified(config))))
 
 def _nv_llama_packed_q6k_down_capture(model,jit,binding):
   captures=getattr(model,"_nv_llama_packed_q6k_down_pp512_captures",None)
@@ -171,11 +175,13 @@ def _nv_compiler_q4_imma_k_capture(model, jit, binding):
   return captures[jit]
 
 def _nv_compiler_q6_imma_pp512_enabled(config) -> bool:
-  """Default-off Q6 V/down lease, stacked only on the qualified gate/up+K arm."""
-  return bool(getenv("NV_COMPILER_Q6_IMMA_PP512", 0)) and _nv_compiler_q4_imma_k_pp512_enabled(config)
+  """Generated Q6 lease, active by default only inside the qualified compiler gate/up+K arm."""
+  return bool(getenv("NV_COMPILER_Q6_IMMA_PP512", 1)) and _nv_compiler_q4_imma_k_pp512_enabled(config)
 
 def _nv_compiler_q6_imma_role_enabled(config, role:str) -> bool:
-  roles = frozenset(str(getenv("NV_COMPILER_Q6_IMMA_PP512_ROLES", "attn_v,ffn_down")).split(","))
+  # FFN-down passed the exact live-oracle and full-model gates.  Attention-V
+  # remains research-only until it independently clears those gates.
+  roles = frozenset(str(getenv("NV_COMPILER_Q6_IMMA_PP512_ROLES", "ffn_down")).split(","))
   return _nv_compiler_q6_imma_pp512_enabled(config) and role in roles
 
 def _nv_compiler_q6_imma_capture(model, jit, binding):
@@ -763,6 +769,13 @@ class FFNBlock:
             _binding.project(_flat, self.ffn_up.prefill_packed_weight(), model_family="qwen3_8b", role="ffn_up"))
         if not (_mode == "llama" and _nv_llama_packed_gate_up_epilogue_enabled(self.config)):
           h = _prefill_semantic(_prefill, prefill_activation, (g.silu() * u).contiguous())
+        if _nv_compiler_q6_imma_role_enabled(self.config,"ffn_down") and isinstance(self.ffn_down, Q6KPrimitiveLinear):
+          # The ordinary overlay route casts this post-SiLU product before
+          # GEMM. Preserve that exact boundary for the native fp16 producer.
+          down_input = h.reshape(512, 12288).cast(dtypes.float16).contiguous()
+          return _prefill_semantic(_prefill, prefill_activation,
+            self._nv_compiler_q6_imma_pp512_binding.project(down_input, self.ffn_down.prefill_packed_weight(),
+              model_family="qwen3_8b", role="ffn_down").reshape(x.shape[:-1]+(4096,)))
         if _nv_llama_packed_q6k_down_enabled(self.config) and isinstance(self.ffn_down,Q6KPrimitiveLinear):
           down_input=h.reshape(512,12288).cast(dtypes.float16).contiguous()
           return _prefill_semantic(_prefill,prefill_activation,self._nv_llama_packed_q6k_down_pp512_binding.project(
@@ -771,13 +784,6 @@ class FFNBlock:
           down_input=h.reshape(512,12288).cast(dtypes.float16).contiguous()
           return _prefill_semantic(_prefill,prefill_activation,self._nv_llama_packed_q4k_down_pp512_binding.project(
             down_input,self.ffn_down.prefill_packed_weight(),model_family="qwen3_8b",role="ffn_down").reshape(x.shape[:-1]+(4096,)))
-        if _nv_compiler_q6_imma_role_enabled(self.config,"ffn_down") and isinstance(self.ffn_down, Q6KPrimitiveLinear):
-          # The ordinary overlay route casts this post-SiLU product before
-          # GEMM. Preserve that exact boundary for the native fp16 producer.
-          down_input = h.reshape(512, 12288).cast(dtypes.float16).contiguous()
-          return _prefill_semantic(_prefill, prefill_activation,
-            self._nv_compiler_q6_imma_pp512_binding.project(down_input, self.ffn_down.prefill_packed_weight(),
-              model_family="qwen3_8b", role="ffn_down").reshape(x.shape[:-1]+(4096,)))
         _down_in = h.reshape(x.shape[:-1]+(12288,))
         _down_out = _pf16(self.ffn_down, _down_in).contiguous()
         if getattr(self, "_research_capture_down_io", False) and tuple(_down_in.shape[-2:]) == (512,12288):
@@ -1991,7 +1997,7 @@ class Transformer:
       if not _nv_llama_packed_q4k_down_enabled(self.config):raise RuntimeError("llama Q4 down requires the exact llama Q4 gate/up Qwen3-8B arm")
       from extra.llm_research.prefill.nv_llama_packed_q4k_down_pp512_binding import binding_for as q4_down_binding_for
       _nv_llama_q4_down_binding=q4_down_binding_for("NV");_nv_llama_q4_down_binding.prepare_records(18)
-    if is_prefill_v2 and getenv("NV_COMPILER_Q6_IMMA_PP512",0):
+    if is_prefill_v2 and _nv_compiler_q6_imma_pp512_enabled(self.config):
       if _nv_q4_imma_pp512_mode() != "compiler" or not _nv_compiler_q6_imma_pp512_enabled(self.config):
         raise RuntimeError("NV compiler Q6 V/down pp512 route requires the exact compiler gate/up+K Qwen3-8B arm")
       from extra.llm_research.prefill.nv_compiler_q6k_pp512_binding import binding_for as q6_binding_for
