@@ -1,0 +1,27 @@
+{
+  "authority": {
+    "candidate": "docs/task_workflow/evidence/nv-q6-generated-streamk-production-20260902/promoted-candidate-r9.json",
+    "control": "docs/task_workflow/evidence/nv-q6-generated-streamk-production-20260902/promoted-control-r9.json"
+  },
+  "correctness": {
+    "allclose_rtol_0p02_atol_0p5": true,
+    "candidate_token": 198,
+    "control_token": 198,
+    "finite": true,
+    "max_abs": 0.1250767707824707,
+    "mean_abs": 0.02871313877403736,
+    "same_token": true
+  },
+  "performance": {
+    "candidate_faster": true
+  },
+  "schema": "tinygrad.nv_compiler_q6k_model_compare.v1",
+  "status": "PASS",
+  "wall": {
+    "candidate_min_ms": 65.107056,
+    "candidate_minus_control_ms": -5.249437999999998,
+    "candidate_tok_s": 7863.970995708975,
+    "control_min_ms": 70.356494,
+    "control_tok_s": 7277.224473408241
+  }
+}
